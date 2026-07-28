@@ -143,6 +143,7 @@ class BlockedRecommendation:
     evidence_identity: str
     license_identity: str
     recommendation_sha256: str
+    research_summary: JsonObject | None = None
 
 
 AuthorResult: TypeAlias = (
@@ -766,6 +767,13 @@ def _validate_author_result_mapping(
             license_identity=str(payload["license_identity"]),
             recommendation_sha256=str(payload["recommendation_sha256"]),
         )
+    research_summary = payload.get("research_summary")
+    if payload.get("reason_code") == "needs-higher-tier" and not isinstance(
+        research_summary, Mapping
+    ):
+        raise AuthorDispatchError(
+            "BLOCKED(needs-higher-tier) requires a typed stage-1 research_summary"
+        )
     return BlockedRecommendation(
         binding=binding,
         stage=str(payload["stage"]),
@@ -777,6 +785,9 @@ def _validate_author_result_mapping(
         evidence_identity=str(payload["evidence_identity"]),
         license_identity=str(payload["license_identity"]),
         recommendation_sha256=str(payload["recommendation_sha256"]),
+        research_summary=(
+            deepcopy(dict(research_summary)) if isinstance(research_summary, Mapping) else None
+        ),
     )
 
 

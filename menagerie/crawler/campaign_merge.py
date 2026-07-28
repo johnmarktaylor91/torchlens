@@ -18,6 +18,13 @@ from menagerie.crawler.partitioner import (
     assert_campaign_partition,
     load_campaign_bindings,
 )
+from menagerie.crawler.promotion import (
+    PromotionError,
+    load_promotion_rows,
+    promotion_extension_path,
+    promotion_intake_identity,
+    promotion_records_root,
+)
 from menagerie.crawler.recordio import scan_jsonl
 from menagerie.crawler.reducer import default_ledger_paths, project_dependency_current
 from menagerie.crawler.status import (
@@ -234,7 +241,18 @@ def _canonical_input_paths(records_root: Path) -> tuple[Path, ...]:
         ledgers.artifacts,
         canonical_operational_ledger_path(ledgers.models),
         records_root / "operational" / "requeue-grants.jsonl",
+        promotion_extension_path(records_root),
     }
+    promoted = default_ledger_paths(promotion_records_root(records_root))
+    fixed.update(
+        {
+            promoted.models,
+            promoted.attempts,
+            promoted.gates,
+            promoted.artifacts,
+            canonical_operational_ledger_path(promoted.models),
+        }
+    )
     discovered: set[Path] = set()
     for directory in ("models", "attempts", "gates", "artifacts", "operational"):
         discovered.update((records_root / directory).glob("*.jsonl"))
@@ -459,6 +477,151 @@ def _global_partition_precheck(
         )
 
 
+def _promotion_current(
+    source: CampaignSource,
+    binding: CampaignBinding,
+    promotions: Sequence[Mapping[str, Any]],
+) -> Mapping[str, JsonObject]:
+    """Replay consumed C3 promotions under an isolated Opus authority root.
+
+    Parameters
+    ----------
+    source:
+        Physical C3 campaign source.
+    binding:
+        Frozen C3 author/checker identity binding.
+    promotions:
+        Typed promotion intake rows collected from the Sonnet campaigns.
+
+    Returns
+    -------
+    Mapping[str, dict[str, Any]]
+        Dependency-current consumed promotion terminals. Missing rows are honest,
+        unconsumed deferrals and therefore are not an error.
+
+    Raises
+    ------
+    CampaignMergeError
+        If promoted ledgers contain ungranted work, stale authority, or a nonterminal
+        result.
+    """
+
+    promoted_root = promotion_records_root(source.records_root)
+    ledgers = default_ledger_paths(promoted_root)
+    raw_models = scan_jsonl(ledgers.models, validate=False)
+    if not raw_models:
+        return {}
+    promotion_ids = {str(row["stable_id"]) for row in promotions}
+    raw_ids = {str(record.get("stable_id")) for record in raw_models}
+    if not raw_ids.issubset(promotion_ids):
+        raise CampaignMergeError(
+            "C3 promotion records contain work outside the typed intake extension: "
+            f"{sorted(raw_ids - promotion_ids)}"
+        )
+    author_version, checker_version = _assert_author_binding(
+        binding.spec.campaign_id, raw_models, binding
+    )
+    snapshot_id, snapshot_sha256, intake_rows = promotion_intake_identity(promotions)
+    attempts = scan_jsonl(ledgers.attempts)
+    operational = scan_jsonl(canonical_operational_ledger_path(ledgers.models))
+    context = build_authority_context(
+        active_intake_snapshot_id=snapshot_id,
+        active_intake_snapshot_sha256=snapshot_sha256,
+        intake_rows=intake_rows,
+        author_model=binding.spec.author_model,
+        author_version=author_version,
+        checker_model=binding.spec.checker_model,
+        checker_version=checker_version,
+        environment_generations=_environment_generations(attempts, operational),
+    )
+    projection = project_dependency_current(ledgers, context=context)
+    if projection.stale_reasons:
+        raise CampaignMergeError(
+            "C3 promotion reducer replay rejected current rows: "
+            f"{dict(sorted(projection.stale_reasons.items()))}"
+        )
+    consumed = completeness_report(raw_ids, projection.current_records)
+    if not consumed.complete:
+        raise CampaignMergeError(
+            "C3 promotion checkpoint validation failed: "
+            f"missing={sorted(consumed.partition.missing_ids)}, "
+            f"extra={sorted(consumed.partition.extra_ids)}, "
+            f"issues={dict(consumed.incomplete_by_issue)}"
+        )
+    deferred = sorted(
+        stable_id
+        for stable_id, record in projection.current_records.items()
+        if str(record["status"]["code"]) == "deferred:needs-opus-tier"
+    )
+    if deferred:
+        raise CampaignMergeError(
+            f"C3 promotion terminals cannot defer to their own author tier: {deferred}"
+        )
+    return projection.current_records
+
+
+def resolve_promotion_supersession(
+    current_by_campaign: Mapping[str, Mapping[str, JsonObject]],
+    promotions: Sequence[Mapping[str, Any]],
+    c3_promoted: Mapping[str, JsonObject],
+) -> tuple[Mapping[str, JsonObject], tuple[str, ...], tuple[str, ...]]:
+    """Resolve C3 terminals over their exact originating deferrals.
+
+    Parameters
+    ----------
+    current_by_campaign:
+        Dependency-current base campaign records.
+    promotions:
+        Typed C3 intake-extension rows.
+    c3_promoted:
+        Dependency-current terminals authored under the isolated C3 promotion intake.
+
+    Returns
+    -------
+    tuple[Mapping[str, dict[str, Any]], tuple[str, ...], tuple[str, ...]]
+        Final stable-ID map, superseded promotion IDs, and unconsumed promotion IDs.
+
+    Raises
+    ------
+    CampaignMergeError
+        If a promotion does not name an exact originating Opus-tier deferral or a C3
+        terminal lacks a promotion row.
+    """
+
+    merged: dict[str, JsonObject] = {
+        stable_id: record
+        for campaign_id in sorted(current_by_campaign)
+        for stable_id, record in current_by_campaign[campaign_id].items()
+    }
+    promotion_by_id = {str(row["stable_id"]): row for row in promotions}
+    if set(c3_promoted) - set(promotion_by_id):
+        raise CampaignMergeError(
+            "C3 terminal lacks a typed promotion row: "
+            f"{sorted(set(c3_promoted) - set(promotion_by_id))}"
+        )
+    superseded: list[str] = []
+    unconsumed: list[str] = []
+    for stable_id, promotion in sorted(promotion_by_id.items()):
+        source_campaign = str(promotion["source_campaign_id"])
+        source = current_by_campaign.get(source_campaign, {}).get(stable_id)
+        if source is None or source.get("status", {}).get("code") != "deferred:needs-opus-tier":
+            raise CampaignMergeError(
+                f"promotion {promotion['promotion_id']} has no matching source-campaign "
+                "deferred:needs-opus-tier terminal"
+            )
+        c3_terminal = c3_promoted.get(stable_id)
+        if c3_terminal is None:
+            unconsumed.append(str(promotion["promotion_id"]))
+            continue
+        merged[stable_id] = c3_terminal
+        superseded.append(str(promotion["promotion_id"]))
+    return (
+        {stable_id: merged[stable_id] for stable_id in sorted(merged)},
+        tuple(superseded),
+        tuple(unconsumed),
+    )
+
+
 def _status_report(records: Sequence[Mapping[str, Any]]) -> JsonObject:
     """Build exact terminal status counts and explicitly defined rates.
 
@@ -521,7 +684,17 @@ def _view_payloads(
     deferred = [
         record
         for record in current
+        if str(record["status"]["code"]).startswith("deferred:")
+    ]
+    deferred_linux = [
+        record
+        for record in deferred
         if str(record["status"]["code"]) in {"deferred:needs-cuda", "deferred:needs-x86"}
+    ]
+    deferred_promotions = [
+        record
+        for record in deferred
+        if str(record["status"]["code"]) == "deferred:needs-opus-tier"
     ]
 
     def jsonl(rows: Sequence[Mapping[str, Any]]) -> bytes:
@@ -538,7 +711,8 @@ def _view_payloads(
     return {
         "current-models/current.jsonl": jsonl(current),
         "release-models.jsonl": jsonl(release),
-        "deferred-linux.jsonl": jsonl(deferred),
+        "deferred-linux.jsonl": jsonl(deferred_linux),
+        "deferred-promotions.jsonl": jsonl(deferred_promotions),
         "status-summary.json": canonical_json_bytes(status_summary) + b"\n",
         "merge-report.json": canonical_json_bytes(report) + b"\n",
     }
@@ -595,6 +769,15 @@ def merge_campaigns(
         raise CampaignMergeError("frozen campaign intake snapshots contain duplicate stable_ids")
 
     before = _ledger_fingerprint(sources)
+    try:
+        promotions = load_promotion_rows(
+            tuple(
+                promotion_extension_path(source.records_root)
+                for source in sorted(sources, key=lambda item: item.campaign_id)
+            )
+        )
+    except PromotionError as exc:
+        raise CampaignMergeError(str(exc)) from exc
     raw_models_by_id: dict[str, list[JsonObject]] = {}
     actual_snapshots: dict[str, IntakeSnapshot] = {}
     for campaign_id, source in sorted(source_by_id.items()):
@@ -634,13 +817,14 @@ def merge_campaigns(
             raw_models_by_id[campaign_id],
         )
 
-    merged_by_id = {
-        stable_id: record
-        for campaign_id in sorted(current_by_campaign)
-        for stable_id, record in current_by_campaign[campaign_id].items()
-    }
-    if len(merged_by_id) != sum(len(records) for records in current_by_campaign.values()):
-        raise CampaignMergeError("global reducer projection contains duplicate stable_ids")
+    c3_promoted = _promotion_current(
+        source_by_id["c3-classics"],
+        binding_by_id["c3-classics"],
+        promotions,
+    )
+    merged_by_id, superseded_promotions, unconsumed_promotions = (
+        resolve_promotion_supersession(current_by_campaign, promotions, c3_promoted)
+    )
     final = completeness_report(expected_ids, merged_by_id)
     if not final.complete:
         raise CampaignMergeError(
@@ -678,6 +862,13 @@ def merge_campaigns(
         "campaigns": per_campaign,
         "total": _status_report(current),
         "throughput": throughput,
+        "promotions": {
+            "intake_count": len(promotions),
+            "consumed_count": len(superseded_promotions),
+            "superseded_promotion_ids": list(superseded_promotions),
+            "unconsumed_count": len(unconsumed_promotions),
+            "unconsumed_promotion_ids": list(unconsumed_promotions),
+        },
     }
     payloads = _view_payloads(current, report)
     after_reads = _ledger_fingerprint(sources)

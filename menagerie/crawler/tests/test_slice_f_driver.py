@@ -22,12 +22,14 @@ import menagerie.crawler.cli as cli_module
 import menagerie.crawler.driver as driver_module
 import menagerie.crawler.driver_admission as driver_admission_module
 import menagerie.crawler.reducer as reducer_module
+from menagerie.crawler.campaign_merge import resolve_promotion_supersession
 from menagerie.crawler.artifact_transactions import (
     ArtifactEventKind,
     StagedArtifact,
 )
 from menagerie.crawler.author_dispatch import (
     AuthorEffortGrant,
+    BlockedRecommendation,
     DeferRecommendation,
     HandoffExecution,
     ProposedAuthorResult,
@@ -64,6 +66,15 @@ from menagerie.crawler.driver_admission import (
 )
 from menagerie.crawler.driver_contracts import RetryableOperatorError
 from menagerie.crawler.driver_contracts import AuthorEffortCapExceeded
+from menagerie.crawler.discovery import (
+    DiscoveryError,
+    FoundDiscovery,
+    HigherTierDiscovery,
+    NegativeDiscovery,
+    RetryableToolFailureDiscovery,
+    materialize_discovery_artifact,
+    validate_source_discovery,
+)
 from menagerie.crawler.driver import (
     AuthorArtifact,
     AuthorLane,
@@ -132,9 +143,14 @@ from menagerie.crawler.models import LedgerPaths
 from menagerie.crawler.mirrors import MirrorStore
 from menagerie.crawler.policy import SandboxUnavailableError
 from menagerie.crawler.proposal import DEFAULT_GATED_CLAIMS, model_code_manifest
+from menagerie.crawler.promotion import (
+    materialize_promotion_intake,
+    promotion_records_root,
+)
 from menagerie.crawler.recordio import JsonlLedger, payload_hash, scan_jsonl
 from menagerie.crawler.reducer import (
     CanonicalReducer,
+    default_ledger_paths,
     project_dependency_current,
 )
 from menagerie.crawler.status import (
@@ -532,6 +548,51 @@ class FakeAuthor(ScriptedAuthor):
     """Compatibility name for the canonical unscripted synthetic author."""
 
 
+class NeedsOpusAuthor(AuthorLane):
+    """Return the typed stage-1 higher-tier arm for every scheduled model."""
+
+    def author(
+        self,
+        item: WorkItem,
+        work_root: Path,
+        config: DriverConfig,
+        context: AuthorityContext,
+    ) -> AuthorArtifact:
+        """Materialize a byte-backed typed Opus promotion."""
+
+        del config
+        raw = {
+            "schema_version": "menagerie.crawler.source-discovery.v1",
+            "stable_id": item.stable_id,
+            "work_id": item.active_work_id,
+            "arm": "NEEDS_HIGHER_TIER",
+            "payload": {
+                "arm": "NEEDS_HIGHER_TIER",
+                "research_summary": {
+                    "queries": ["ExampleNet architecture implementation"],
+                    "places": ["upstream repositories", "introducing paper"],
+                    "candidate_links": ["https://example.com/model.txt"],
+                    "languages": ["English"],
+                    "conclusion": (
+                        "The source is real, but faithful authoring requires the Opus tier."
+                    ),
+                },
+            },
+        }
+        discovery = validate_source_discovery(
+            raw,
+            stable_id=item.stable_id,
+            work_id=item.active_work_id,
+        )
+        assert isinstance(discovery, HigherTierDiscovery)
+        return materialize_discovery_artifact(
+            discovery,
+            item=item,
+            context=context,
+            root=work_root / item.stable_id / "author",
+        )
+
+
 _TERMINAL_OUTCOME_SCRIPT = AuthorScript(
     terminal_outcomes=(
         ("platform", "cuda"),
@@ -838,16 +899,22 @@ class ScriptedChecker(CheckerLane):
 
         del work_root
         result = artifact.author_result
-        assert isinstance(result, (DeferRecommendation, SkipRecommendation))
+        assert isinstance(
+            result, (DeferRecommendation, SkipRecommendation, BlockedRecommendation)
+        )
         binding = result.binding
         predicate = (
             f"needs-{result.platform}"
             if isinstance(result, DeferRecommendation)
+            else "blocked-prerequisite"
+            if isinstance(result, BlockedRecommendation)
             else result.status_code.split(":", 1)[1]
         )
         kind = (
             "DEFER_RECOMMENDATION"
             if isinstance(result, DeferRecommendation)
+            else "BLOCKED"
+            if isinstance(result, BlockedRecommendation)
             else "SKIP_RECOMMENDATION"
         )
         gate = make_gate(
@@ -881,7 +948,14 @@ class ScriptedChecker(CheckerLane):
             "predicate": predicate,
             "verdict": "accepted",
             "source_manifest_identity": binding.source_manifest_identity,
-            "source_ids": list(result.source_ids),
+            "source_ids": (
+                [
+                    str(source["source_id"])
+                    for source in artifact.source_manifest["sources"]
+                ]
+                if isinstance(result, BlockedRecommendation)
+                else list(result.source_ids)
+            ),
             "evidence_identity": result.evidence_identity,
             "evidence_ids": list(result.evidence_ids),
             "license_identity": result.license_identity,
@@ -2055,6 +2129,219 @@ def test_author_source_handshake_freezes_nonempty_cas_manifest(
         lane._fetch_author_sources(item, tmp_path / "empty-author")
 
 
+def test_true_no_source_reaches_checked_r5_without_fetch_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A bounded negative discovery bypasses fetch and becomes a checked R5 record."""
+
+    snapshot = _snapshot(tmp_path, count=1)
+    fetch_calls = 0
+
+    def forbidden_fetch(targets: Any, root: Path) -> dict[str, object]:
+        """Fail if a non-FIND discovery arm enters controlled fetch."""
+
+        del targets, root
+        nonlocal fetch_calls
+        fetch_calls += 1
+        raise AssertionError("negative discovery must not invent a fetch target")
+
+    class NegativeDiscoveryAuthor(AuthorLane):
+        """Simulate the executor publishing the typed stage-1 negative arm."""
+
+        def author(
+            self,
+            item: WorkItem,
+            work_root: Path,
+            config: DriverConfig,
+            context: AuthorityContext,
+        ) -> AuthorArtifact:
+            """Materialize a no-source result without constructing a fetch target."""
+
+            del config
+            raw = {
+                "schema_version": "menagerie.crawler.source-discovery.v1",
+                "stable_id": item.stable_id,
+                "work_id": item.active_work_id,
+                "arm": "NO_USABLE_SOURCE",
+                "payload": {
+                    "arm": "NO_USABLE_SOURCE",
+                    "search_evidence": {
+                        "queries": [
+                            "ExampleNet architecture",
+                            "\"ExampleNet\" neural network",
+                        ],
+                        "places": ["publisher index", "code hosts", "web archive"],
+                        "candidate_links": [],
+                        "languages": ["en", "zh"],
+                        "conclusion": (
+                            "No usable architecture source exists after the bounded search."
+                        ),
+                    },
+                },
+            }
+            discovery = validate_source_discovery(
+                raw,
+                stable_id=item.stable_id,
+                work_id=item.active_work_id,
+            )
+            assert isinstance(discovery, NegativeDiscovery)
+            return materialize_discovery_artifact(
+                discovery,
+                item=item,
+                context=context,
+                root=work_root / item.stable_id / "author",
+            )
+
+    monkeypatch.setattr(driver_module, "fetch_targets", forbidden_fetch)
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=NegativeDiscoveryAuthor(),
+    ).run()
+
+    assert result.status == "terminal-partition-complete"
+    assert fetch_calls == 0
+    paths = _paths(tmp_path, snapshot)
+    model = scan_jsonl(paths.ledgers.models)[0]
+    assert model["status"]["code"] == "skipped:no-description"
+    assert model["source_resolution"]["rung"] == "R5_SKIP"
+    assert model["source_resolution"]["mandatory_link_status"] == "failed"
+    assert model["source_resolution"]["sources"][0]["kind"] == "discovery-evidence"
+    assert model["source_resolution"]["sources"][0]["url"].startswith(
+        "urn:menagerie:source-discovery:"
+    )
+    gates = scan_jsonl(paths.ledgers.gates)
+    assert gates[0]["gate_kind"] == "terminal_disposition"
+    assert gates[0]["items"][0]["terminal_disposition"]["verdict"] == "accepted"
+
+
+@pytest.mark.parametrize(
+    ("arm", "payload", "expected_type"),
+    [
+        (
+            "FOUND",
+            {
+                "arm": "FOUND",
+                "sources": [
+                    {
+                        "source_id": "source-1",
+                        "url": "https://example.com/model.py",
+                        "revision": "v1",
+                        "media_type": "text/x-python",
+                    }
+                ],
+            },
+            FoundDiscovery,
+        ),
+        (
+            "NO_USABLE_SOURCE",
+            {
+                "arm": "NO_USABLE_SOURCE",
+                "search_evidence": {
+                    "queries": ["model architecture"],
+                    "places": ["code hosts"],
+                    "candidate_links": [],
+                    "languages": ["en"],
+                    "conclusion": "No source exists.",
+                },
+            },
+            NegativeDiscovery,
+        ),
+        (
+            "INSUFFICIENT_DESCRIPTION",
+            {
+                "arm": "INSUFFICIENT_DESCRIPTION",
+                "search_evidence": {
+                    "queries": ["model paper"],
+                    "places": ["publisher"],
+                    "candidate_links": ["https://example.com/abstract"],
+                    "languages": ["en"],
+                    "conclusion": "Only an abstract was found.",
+                },
+                "retained_vague_text": "We use a novel neural architecture.",
+            },
+            NegativeDiscovery,
+        ),
+        (
+            "NOT_A_MODEL",
+            {
+                "arm": "NOT_A_MODEL",
+                "search_evidence": {
+                    "queries": ["named item"],
+                    "places": ["project site"],
+                    "candidate_links": ["https://example.com/tool"],
+                    "languages": ["en"],
+                    "conclusion": "The item is a dataset, not a neural model.",
+                },
+            },
+            NegativeDiscovery,
+        ),
+        (
+            "NEEDS_HIGHER_TIER",
+            {
+                "arm": "NEEDS_HIGHER_TIER",
+                "research_summary": {
+                    "queries": ["ambiguous historical model"],
+                    "places": ["archives"],
+                    "candidate_links": [],
+                    "languages": ["en", "de"],
+                    "conclusion": "The identity requires deeper adjudication.",
+                },
+            },
+            HigherTierDiscovery,
+        ),
+        (
+            "RETRYABLE_TOOL_FAILURE",
+            {
+                "arm": "RETRYABLE_TOOL_FAILURE",
+                "tool_name": "web_search_exa",
+                "tool_spelling": "mcp__exa__web_search_exa",
+                "error": "connection reset",
+            },
+            RetryableToolFailureDiscovery,
+        ),
+    ],
+)
+def test_typed_source_discovery_union_accepts_each_closed_arm(
+    arm: str,
+    payload: dict[str, Any],
+    expected_type: type[object],
+) -> None:
+    """Every governed stage-1 arm is schema-valid and retains its discriminator."""
+
+    value = {
+        "schema_version": "menagerie.crawler.source-discovery.v1",
+        "stable_id": "m_discovery",
+        "work_id": "work-m_discovery",
+        "arm": arm,
+        "payload": payload,
+    }
+    result = validate_source_discovery(
+        value,
+        stable_id="m_discovery",
+        work_id="work-m_discovery",
+    )
+    assert isinstance(result, expected_type)
+
+
+def test_found_discovery_alone_requires_a_nonempty_fetch_set() -> None:
+    """The nonempty-target tripwire is scoped strictly inside ``FOUND``."""
+
+    value = {
+        "schema_version": "menagerie.crawler.source-discovery.v1",
+        "stable_id": "m_discovery",
+        "work_id": "work-m_discovery",
+        "arm": "FOUND",
+        "payload": {"arm": "FOUND", "sources": []},
+    }
+    with pytest.raises(DiscoveryError):
+        validate_source_discovery(
+            value,
+            stable_id="m_discovery",
+            work_id="work-m_discovery",
+        )
+
+
 def test_a_hung_author_command_is_bounded_retryable_and_leaves_no_orphan(
     tmp_path: Path,
 ) -> None:
@@ -2738,6 +3025,10 @@ def _driver(
     run_repair_max: int = 2,
     registry: Optional[EnvironmentRegistry] = None,
     author_concurrency: Optional[int] = None,
+    campaign_id: Optional[str] = None,
+    author_model: Optional[str] = None,
+    checker_model: Optional[str] = None,
+    paths_override: Optional[DriverPaths] = None,
 ) -> CrawlerDriver:
     """Build a fully fake deterministic driver."""
 
@@ -2755,7 +3046,7 @@ def _driver(
         (lambda _definition: None) if pause_scheduler is not None else None,
     )
     return CrawlerDriver(
-        _paths(tmp_path, snapshot),
+        paths_override or _paths(tmp_path, snapshot),
         DriverConfig(
             target="osx-arm64",
             phase=phase,
@@ -2764,6 +3055,9 @@ def _driver(
             review_checkpoint_at=review_at,
             progress_milestones=milestones,
             run_repair_max=run_repair_max,
+            campaign_id=campaign_id,
+            author_model=author_model or DriverConfig().author_model,
+            checker_model=checker_model or DriverConfig().checker_model,
             author_concurrency=(
                 DriverConfig().author_concurrency
                 if author_concurrency is None
@@ -4941,6 +5235,84 @@ def test_private_deferral_avoids_public_promotion(tmp_path: Path) -> None:
         repository_materialization = tmp_path / claim["logical_path"]
         assert not public_object.exists()
         assert not repository_materialization.exists()
+
+
+def test_needs_higher_tier_is_deferred_and_appended_to_c3_intake(
+    tmp_path: Path,
+) -> None:
+    """A checked Sonnet escalation is durable in both source and C3 lineages."""
+
+    snapshot = _snapshot(tmp_path, count=1)
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=NeedsOpusAuthor(),
+        campaign_id="c1-mech",
+    ).run()
+
+    assert result.status == "terminal-partition-complete"
+    paths = _paths(tmp_path, snapshot)
+    model = scan_jsonl(paths.ledgers.models)[0]
+    assert model["status"]["code"] == "deferred:needs-opus-tier"
+    promotion_path = (
+        paths.ledgers.models.parent.parent
+        / "intake-extensions"
+        / "c3-classics.jsonl"
+    )
+    promotions = scan_jsonl(promotion_path, validate=False)
+    assert len(promotions) == 1
+    promotion = promotions[0]
+    assert promotion["stable_id"] == snapshot.items[0].stable_id
+    assert promotion["destination_campaign_id"] == "c3-classics"
+    assert promotion["source_manifest"]["sources"]
+    assert promotion["stage1_research_summary"]["queries"]
+    assert promotion["prior_attempt"]["kind"] == "BLOCKED"
+
+    promoted_snapshot = materialize_promotion_intake(
+        promotions,
+        tmp_path / "promotion-intake",
+    )
+    promotion_binding = cli_module._optional_campaign_binding(
+        Path.cwd(),
+        promoted_snapshot,
+    )
+    assert promotion_binding is not None
+    assert promotion_binding.spec.campaign_id == "c3-classics"
+    assert promotion_binding.spec.author_model == "claude-opus-5"
+    launch_paths = cli_module._driver_paths_for_snapshot(Path.cwd(), promoted_snapshot)
+    assert "promotion-campaigns/c3-classics" in launch_paths.ledgers.models.as_posix()
+    promoted_paths = DriverPaths(
+        tmp_path / "promotion-runtime",
+        promoted_snapshot.root,
+        default_ledger_paths(
+            promotion_records_root(paths.ledgers.models.parent)
+        ),
+    )
+    c3_result = _driver(
+        tmp_path,
+        promoted_snapshot,
+        author=FakeAuthor(),
+        campaign_id="c3-classics",
+        author_model="claude-opus-5",
+        checker_model="gpt-5.6-sol",
+        paths_override=promoted_paths,
+    ).run()
+    assert c3_result.status == "complete"
+    c3_terminal = scan_jsonl(promoted_paths.ledgers.models)[0]
+    merged, superseded, unconsumed = resolve_promotion_supersession(
+        {
+            "c1-mech": {model["stable_id"]: model},
+            "c2-disco": {},
+            "c3-classics": {},
+            "c4-native": {},
+        },
+        promotions,
+        {c3_terminal["stable_id"]: c3_terminal},
+    )
+    assert list(merged) == [model["stable_id"]]
+    assert merged[model["stable_id"]]["provenance"]["author_model"] == "claude-opus-5"
+    assert superseded == (promotion["promotion_id"],)
+    assert unconsumed == ()
 
 
 def test_assert_known_event_kinds_rejects_vacuous_negative_typos() -> None:

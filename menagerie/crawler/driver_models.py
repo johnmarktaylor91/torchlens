@@ -1488,10 +1488,29 @@ def _assemble_terminal_model(
         else:
             raise DriverIntegrationError("unknown terminal author-result arm")
         retained_sources = []
+        discovery_evidence: Optional[JsonObject] = None
         for value in artifact.source_manifest.get("sources", []):
             if not isinstance(value, Mapping) or value.get("source_id") not in terminal_source_ids:
                 continue
             retained = deepcopy(dict(value))
+            if retained.get("source_kind") == "discovery-evidence-v1":
+                discovery_evidence = deepcopy(retained)
+                retained = {
+                    "source_id": str(retained["source_id"]),
+                    "role": "documentation",
+                    "kind": "discovery-evidence",
+                    "url": str(retained["url"]),
+                    "revision_kind": "source-discovery-sha256",
+                    "revision": str(retained["revision"]),
+                    "locator": "source-discovery-v1#/payload",
+                    "content_sha256": str(retained["content_sha256"]),
+                    "byte_count": int(retained["fetched_bytes_len"]),
+                    "media_type": str(retained["media_type"]),
+                    "retrieved_at": created_at,
+                    "fetch_recipe": "driver-materialized typed stage-1 discovery evidence",
+                    "mirror_class": "private-machine-evidence",
+                    "mirror_digest": str(retained["content_sha256"]),
+                }
             retained.pop("cas_path", None)
             retained_sources.append(retained)
         if not retained_sources:
@@ -1506,6 +1525,61 @@ def _assemble_terminal_model(
                 "sources": retained_sources,
             }
         )
+        discovery_excerpt_text = evidence_text
+        if discovery_evidence is not None:
+            search_evidence = discovery_evidence.get("search_evidence")
+            if not isinstance(search_evidence, Mapping):
+                raise DriverIntegrationError(
+                    "typed discovery lost its bounded search evidence"
+                )
+            retained_vague_text = discovery_evidence.get("retained_vague_text")
+            search_report: JsonObject = {
+                "queries": list(search_evidence["queries"]),
+                "places_checked": list(search_evidence["places"]),
+                "links_checked": list(search_evidence["candidate_links"]),
+                "languages_checked": list(search_evidence["languages"]),
+                "archives_checked": [],
+                "started_at": created_at,
+                "finished_at": created_at,
+                "conclusion": str(search_evidence["conclusion"]),
+            }
+            facts["source_resolution"].update(
+                {
+                    "rung": "R5_SKIP",
+                    "searched_at": created_at,
+                    "search_report": search_report,
+                    "mandatory_link_status": "failed",
+                }
+            )
+            discovery_excerpt_text = str(search_evidence["conclusion"])
+        if discovery_evidence is not None and isinstance(terminal_result, SkipRecommendation):
+            retained_vague_text = discovery_evidence.get("retained_vague_text")
+            insufficient = terminal_result.status_code == "skipped:insufficient-description"
+            if insufficient and not isinstance(retained_vague_text, str):
+                raise DriverIntegrationError(
+                    "insufficient-description discovery lost its retained vague text"
+                )
+            if insufficient:
+                discovery_excerpt_text = str(retained_vague_text)
+            facts["source_resolution"].update(
+                {
+                    "decision": "bounded typed discovery recommends an independently checked skip",
+                    "sufficiency_gap": (
+                        "retained description lacks implementation detail needed for faithful "
+                        "reimplementation"
+                        if insufficient
+                        else None
+                    ),
+                    "attempted_rungs": [
+                        {
+                            "rung": "R5_SKIP",
+                            "result": "bounded-negative-discovery",
+                            "reason_code": terminal_predicate,
+                            "evidence_ids": list(terminal_evidence_ids),
+                        }
+                    ],
+                }
+            )
         facts["evidence"].update(
             {
                 "evidence_identity": terminal_result.evidence_identity,
@@ -1513,12 +1587,20 @@ def _assemble_terminal_model(
                     {
                         "evidence_id": evidence_id,
                         "source_id": terminal_source_ids[index % len(terminal_source_ids)],
-                        "locator": "terminal-author-result",
-                        "text": evidence_text,
-                        "text_sha256": hash_bytes(evidence_text.encode()),
+                        "locator": (
+                            "source-discovery-v1#/payload"
+                            if discovery_evidence is not None
+                            else "terminal-author-result"
+                        ),
+                        "text": discovery_excerpt_text,
+                        "text_sha256": hash_bytes(discovery_excerpt_text.encode()),
                         "supports": [terminal_predicate],
                         "family_level": False,
-                        "disposition": "supporting",
+                        "disposition": (
+                            "insufficient-for-faithful-reimpl"
+                            if terminal_predicate == "insufficient-description"
+                            else "supporting"
+                        ),
                         "license_disposition": "short-excerpt-committed",
                     }
                     for index, evidence_id in enumerate(terminal_evidence_ids)

@@ -849,15 +849,15 @@
             "paper",
             "web-page",
             "archive",
-            "intake-snapshot"
+            "intake-snapshot",
+            "discovery-evidence"
           ],
           "description": "Mandatory record or status kind."
         },
         "url": {
           "type": "string",
           "format": "uri",
-          "pattern": "^https?://",
-          "description": "Mandatory public source URL when available."
+          "description": "Mandatory public source URL, except for typed machine discovery evidence."
         },
         "revision_kind": {
           "$ref": "#/$defs/nonempty_string",
@@ -902,6 +902,38 @@
         }
       },
       "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "discovery-evidence"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "url": {
+                "pattern": "^urn:menagerie:source-discovery:[0-9a-f]{64}$"
+              },
+              "revision_kind": {
+                "const": "source-discovery-sha256"
+              },
+              "content_sha256": {
+                "$ref": "#/$defs/hash"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "url": {
+                "pattern": "^https?://"
+              }
+            }
+          }
+        },
         {
           "if": {
             "properties": {
@@ -1971,6 +2003,7 @@
         "runs",
         "deferred:needs-cuda",
         "deferred:needs-x86",
+        "deferred:needs-opus-tier",
         "skipped:insufficient-description",
         "skipped:no-description",
         "skipped:not-a-real-NN",

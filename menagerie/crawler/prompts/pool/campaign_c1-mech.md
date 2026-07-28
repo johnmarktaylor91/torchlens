@@ -24,11 +24,14 @@ already exists and is installed**, not because the standards are lower.
   forbidden outright.
 - Do not silently escalate a hard model in place. This campaign's author identity is
   frozen to sonnet for its entire run; a model that genuinely needs deeper reasoning gets
-  a typed `BLOCKED` result with a clear reason so it can be requeued into `c3-classics`.
+  `NEEDS_HIGHER_TIER` at stage 1, or
+  `BLOCKED(stage=author, reason_code=needs-higher-tier)` if discovered after fetch. Include
+  the bounded research summary; the engine durably defers C1 and appends a typed
+  promotion to `c3-classics`.
   Quietly trying harder here produces a worse proposal *and* a wrong provenance record.
 
 ### Budget shape
 
 Target roughly 5 minutes and well under the tool-call grant. If a model in this campaign
-is eating the whole grant, that is itself the signal: it is not mechanical. Emit `BLOCKED`
-with the reason and move on.
+is eating the whole grant, that is itself the signal: it is not mechanical. Emit the
+typed higher-tier arm with the bounded research summary and move on.

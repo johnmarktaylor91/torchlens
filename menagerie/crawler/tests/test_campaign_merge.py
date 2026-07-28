@@ -16,6 +16,7 @@ from menagerie.crawler.campaign_merge import (
     CampaignMergeError,
     CampaignSource,
     merge_campaigns,
+    resolve_promotion_supersession,
 )
 from menagerie.crawler.identity import canonical_json_bytes, payload_hash
 from menagerie.crawler.intake import load_intake_snapshot
@@ -299,3 +300,73 @@ def test_author_model_mismatch_fails_loudly(
     ):
         merge_campaigns(fixture.manifest, fixture.sources, fixture.output_root)
     assert not fixture.output_root.exists()
+
+
+def test_c3_terminal_supersedes_exact_source_campaign_deferral() -> None:
+    """A consumed promotion resolves to one Opus-authored canonical lineage."""
+
+    stable_id = "m_promoted"
+    deferral: JsonObject = {
+        "stable_id": stable_id,
+        "status": {"code": "deferred:needs-opus-tier"},
+        "provenance": {"author_model": "claude-sonnet"},
+    }
+    c3_terminal: JsonObject = {
+        "stable_id": stable_id,
+        "status": {"code": "runs"},
+        "provenance": {"author_model": "claude-opus-5"},
+    }
+    promotion: JsonObject = {
+        "promotion_id": "promotion-0123456789abcdef0123",
+        "stable_id": stable_id,
+        "source_campaign_id": "c1-mech",
+    }
+
+    merged, superseded, unconsumed = resolve_promotion_supersession(
+        {
+            "c1-mech": {stable_id: deferral},
+            "c2-disco": {},
+            "c3-classics": {},
+            "c4-native": {},
+        },
+        [promotion],
+        {stable_id: c3_terminal},
+    )
+
+    assert list(merged) == [stable_id]
+    assert merged[stable_id] == c3_terminal
+    assert merged[stable_id]["provenance"]["author_model"] == "claude-opus-5"
+    assert superseded == (promotion["promotion_id"],)
+    assert unconsumed == ()
+
+
+def test_unconsumed_opus_deferral_remains_honestly_labeled() -> None:
+    """A promotion without a C3 terminal remains visible as a deferral."""
+
+    stable_id = "m_waiting_for_opus"
+    deferral: JsonObject = {
+        "stable_id": stable_id,
+        "status": {"code": "deferred:needs-opus-tier"},
+        "provenance": {"author_model": "claude-sonnet"},
+    }
+    promotion: JsonObject = {
+        "promotion_id": "promotion-fedcba98765432100123",
+        "stable_id": stable_id,
+        "source_campaign_id": "c2-disco",
+    }
+
+    merged, superseded, unconsumed = resolve_promotion_supersession(
+        {
+            "c1-mech": {},
+            "c2-disco": {stable_id: deferral},
+            "c3-classics": {},
+            "c4-native": {},
+        },
+        [promotion],
+        {},
+    )
+
+    assert merged[stable_id] == deferral
+    assert merged[stable_id]["status"]["code"] == "deferred:needs-opus-tier"
+    assert superseded == ()
+    assert unconsumed == (promotion["promotion_id"],)

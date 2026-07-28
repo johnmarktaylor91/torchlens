@@ -601,10 +601,6 @@
           "$ref": "#/$defs/hash",
           "description": "Exact proposed license disposition identity."
         },
-        "research_summary": {
-          "$ref": "#/$defs/research_summary",
-          "description": "Bounded stage-1 research retained for a higher-tier promotion."
-        },
         "recommendation_sha256": {
           "$ref": "#/$defs/hash",
           "description": "Digest of the closed recommendation payload."
@@ -712,6 +708,10 @@
         "license_identity": {
           "$ref": "#/$defs/hash",
           "description": "Exact proposed license disposition identity."
+        },
+        "research_summary": {
+          "$ref": "#/$defs/research_summary",
+          "description": "Bounded stage-1 research retained for a higher-tier promotion."
         },
         "recommendation_sha256": {
           "$ref": "#/$defs/hash",

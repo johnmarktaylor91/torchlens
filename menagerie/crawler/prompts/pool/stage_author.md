@@ -31,6 +31,10 @@ identity and re-hashes every cited artifact. So:
   material choice is a **gap you report**, not a hole you fill.
 - Honest `SKIP_RECOMMENDATION`, `DEFER_RECOMMENDATION`, and `BLOCKED` results are fully
   acceptable outcomes and are recorded as such. An unsupported claim is not.
+- If deeper reasoning is required after sources were fetched in C1, C2, or C4, emit
+  `BLOCKED` with `stage=author`, `reason_code=needs-higher-tier`, and the complete bounded
+  stage-1 `research_summary`. The engine records an honest source-campaign deferral and
+  appends the typed C3/Opus promotion; do not manually copy or author the row in place.
 - Never guess a license, a year, a country, or an author. A fact you cannot establish is
   declared, not omitted: empty the field and record a typed
   `external_metadata.availability.<field>` state (`not-found-after-search` with your

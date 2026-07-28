@@ -38,6 +38,7 @@ from menagerie.crawler.authority import (
     derive_dependency_vector,
     derive_family_authority,
     derive_mode_summary,
+    derive_per_mode_attempt_ids,
     derive_per_mode_run,
     derive_terminal_observation,
     derive_terminal_proof,
@@ -47,6 +48,9 @@ from menagerie.crawler.authority import (
     load_current_gate_proof,
     resolve_exact_gate_item_membership,
     validate_currency,
+    _terminal_gate,
+    _validate_terminal_gate_identities,
+    _validate_terminal_references,
 )
 
 from menagerie.crawler.constants import (
@@ -132,6 +136,135 @@ def cold_forward_policy(stable_id: str, rung: object) -> ColdForwardPolicy:
     if int.from_bytes(canary_digest, "big") % 100 < 2:
         return ColdForwardPolicy("mechanical-canary", 2)
     return ColdForwardPolicy("single-mechanical", 1)
+
+
+def _derive_opus_deferral_proof(
+    *,
+    stable_id: str,
+    work_id: str,
+    attempts: Sequence[Mapping[str, Any]],
+    gates: Sequence[Mapping[str, Any]],
+    source_manifest: Sequence[Mapping[str, Any]],
+    evidence_excerpts: Sequence[Mapping[str, Any]],
+    source_manifest_identity: Optional[str],
+    evidence_identity: Optional[str],
+    license_identity: Optional[str],
+    meaningful_modes: Iterable[str],
+    proof_rule_identity: str,
+) -> TerminalProof:
+    """Derive the additive author-capability deferral proof.
+
+    The frozen platform-deferral rule remains unchanged and continues to prove only
+    CUDA/x86 handoffs. This separate reducer rule reuses its exact terminal-gate
+    identity and reference validators for an accepted ``BLOCKED(needs-higher-tier)``
+    result, but deliberately carries no platform claim or execution attempt.
+
+    Parameters
+    ----------
+    stable_id, work_id:
+        Exact promoted model and work generation.
+    attempts, gates:
+        Current canonical authority records.
+    source_manifest, evidence_excerpts:
+        Frozen source and evidence rows retained by the blocked result.
+    source_manifest_identity, evidence_identity, license_identity:
+        Exact terminal-disposition identity axes.
+    meaningful_modes:
+        Declared modes retained by the common proof projection.
+    proof_rule_identity:
+        Frozen terminal-policy identity.
+
+    Returns
+    -------
+    TerminalProof
+        Reducer-derived proof of the accepted higher-tier deferral.
+
+    Raises
+    ------
+    AuthorityDerivationError
+        If the gate or any referenced identity differs.
+    """
+
+    gate, item, disposition = _terminal_gate(
+        gates,
+        stable_id=stable_id,
+        work_id=work_id,
+        predicate="blocked-prerequisite",
+    )
+    if disposition.get("kind") != "BLOCKED" or disposition.get("verdict") != "accepted":
+        raise AuthorityDerivationError(
+            "Opus-tier deferral requires an accepted BLOCKED terminal disposition"
+        )
+    _validate_terminal_gate_identities(
+        disposition,
+        source_manifest_identity=source_manifest_identity,
+        evidence_identity=evidence_identity,
+        license_identity=license_identity,
+    )
+    source_ids, evidence_ids = _validate_terminal_references(
+        disposition,
+        predicate="blocked-prerequisite",
+        source_manifest=source_manifest,
+        evidence_excerpts=evidence_excerpts,
+    )
+    per_mode = derive_per_mode_attempt_ids(
+        attempts,
+        stable_id=stable_id,
+        work_id=work_id,
+        meaningful_modes=meaningful_modes,
+    )
+    terminal_observation_sha256 = stable_hash(
+        derive_terminal_observation(attempts, stable_id=stable_id, work_id=work_id)
+    )
+    gate_id = str(gate["gate_id"])
+    proof_payload = {
+        "proof_rule_identity": proof_rule_identity,
+        "stable_id": stable_id,
+        "work_id": work_id,
+        "status_code": "deferred:needs-opus-tier",
+        "decisive_attempt_ids": [],
+        "gate_id": gate_id,
+        "source_ids": list(source_ids),
+        "evidence_ids": list(evidence_ids),
+        "failure_stage": DependencyState.NOT_APPLICABLE,
+        "reason_code": DependencyState.NOT_APPLICABLE,
+        "root_cause_fingerprint": DependencyState.NOT_APPLICABLE,
+        "platform_claim": DependencyState.NOT_APPLICABLE,
+        "per_mode_attempt_ids": [list(value) for value in per_mode],
+        "terminal_observation_sha256": terminal_observation_sha256,
+        "gate_proof_identity": stable_hash({"gate_id": gate_id, "item": item}),
+        "resolved_reference_identity": stable_hash(
+            {
+                "sources": [
+                    source
+                    for source in source_manifest
+                    if str(source.get("source_id")) in source_ids
+                ],
+                "evidence": [
+                    excerpt
+                    for excerpt in evidence_excerpts
+                    if str(excerpt.get("evidence_id")) in evidence_ids
+                ],
+            }
+        ),
+    }
+    return TerminalProof(
+        proof_id=stable_hash(proof_payload),
+        proof_rule_identity=proof_rule_identity,
+        stable_id=stable_id,
+        work_id=work_id,
+        status_code="deferred:needs-opus-tier",
+        decisive_attempt_ids=(),
+        gate_id=gate_id,
+        source_ids=source_ids,
+        evidence_ids=evidence_ids,
+        failure_stage=DependencyState.NOT_APPLICABLE,
+        reason_code=DependencyState.NOT_APPLICABLE,
+        root_cause_fingerprint=DependencyState.NOT_APPLICABLE,
+        platform_claim=DependencyState.NOT_APPLICABLE,
+        per_mode_attempt_ids=per_mode,
+        terminal_observation_sha256=terminal_observation_sha256,
+    )
 
 
 class _ReplayLedger:
@@ -1123,25 +1256,43 @@ class _ModelAuthorityPipeline:
         try:
             self.current_attempts = self.reducer._current_attempt_records()
             current_gates = self.reducer._current_gate_records()
-            self.terminal_proof = derive_terminal_proof(
-                self.stable_id,
-                self.work_id,
-                str(self.model.get("status", {}).get("code")),
-                attempts=self.current_attempts,
-                gates=current_gates,
-                source_manifest=self.source_manifest,
-                evidence_excerpts=self.evidence_excerpts,
-                source_resolution=self.source_resolution,
-                source_manifest_identity=self.source_manifest_identity,
-                evidence_identity=(
-                    str(self.evidence_identity) if self.evidence_identity is not None else None
-                ),
-                license_identity=(
-                    str(self.license_identity) if self.license_identity is not None else None
-                ),
-                meaningful_modes=self.meaningful_modes,
-                proof_rule_identity=self.reducer.context.terminal_policy_identity,
+            status_code = str(self.model.get("status", {}).get("code"))
+            resolved_evidence_identity = (
+                str(self.evidence_identity) if self.evidence_identity is not None else None
             )
+            resolved_license_identity = (
+                str(self.license_identity) if self.license_identity is not None else None
+            )
+            if status_code == "deferred:needs-opus-tier":
+                self.terminal_proof = _derive_opus_deferral_proof(
+                    stable_id=self.stable_id,
+                    work_id=self.work_id,
+                    attempts=self.current_attempts,
+                    gates=current_gates,
+                    source_manifest=self.source_manifest,
+                    evidence_excerpts=self.evidence_excerpts,
+                    source_manifest_identity=self.source_manifest_identity,
+                    evidence_identity=resolved_evidence_identity,
+                    license_identity=resolved_license_identity,
+                    meaningful_modes=self.meaningful_modes,
+                    proof_rule_identity=self.reducer.context.terminal_policy_identity,
+                )
+            else:
+                self.terminal_proof = derive_terminal_proof(
+                    self.stable_id,
+                    self.work_id,
+                    status_code,
+                    attempts=self.current_attempts,
+                    gates=current_gates,
+                    source_manifest=self.source_manifest,
+                    evidence_excerpts=self.evidence_excerpts,
+                    source_resolution=self.source_resolution,
+                    source_manifest_identity=self.source_manifest_identity,
+                    evidence_identity=resolved_evidence_identity,
+                    license_identity=resolved_license_identity,
+                    meaningful_modes=self.meaningful_modes,
+                    proof_rule_identity=self.reducer.context.terminal_policy_identity,
+                )
             representative: Optional[Mapping[str, Any]] = None
             binding = self.reducer.context.family_bindings.get(self.stable_id)
             if isinstance(binding, Mapping):
@@ -2813,9 +2964,11 @@ class CanonicalReducer:
     def _validate_source(self, model: Mapping[str, Any]) -> None:
         """Enforce the mandatory public source-link invariant.
 
-        The guarantee this protects is about *catalogued* models: every record we publish as
-        a success must carry a real, exact, public primary source link, and must not
-        misreport that it has one. That guarantee is enforced here unconditionally.
+        The guarantee this protects is about *catalogued* models: every completed record we
+        publish must carry a real, exact, public primary source link, and must not misreport
+        that it has one. The sole non-failure exception is a typed R5 discovery disposition
+        whose primary source is the content-addressed discovery result itself. Such a record
+        is either an epistemic skip or an unconsumed Opus-tier deferral, never a completion.
 
         A **failure** record is a different object. It exists precisely to record that the
         model could not be completed, and the failure itself is frequently what prevented a
@@ -2849,17 +3002,60 @@ class CanonicalReducer:
             and str(source.get("url", "")).startswith(("http://", "https://"))
             for source in sources
         )
+        status_code = model.get("status", {}).get("code")
+        typed_discovery = (
+            status_code
+            in {
+                "skipped:insufficient-description",
+                "skipped:no-description",
+                "skipped:not-a-real-NN",
+                "deferred:needs-opus-tier",
+            }
+            and resolution.get("rung") == "R5_SKIP"
+            and len(sources) == 1
+            and isinstance(sources[0], Mapping)
+            and sources[0].get("source_id") == primary
+            and sources[0].get("kind") == "discovery-evidence"
+            and str(sources[0].get("url", "")).startswith(
+                "urn:menagerie:source-discovery:"
+            )
+            and sources[0].get("revision_kind") == "source-discovery-sha256"
+            and sources[0].get("revision") == sources[0].get("content_sha256")
+            and sources[0].get("mirror_digest") == sources[0].get("content_sha256")
+        )
+        if typed_discovery:
+            search_report = resolution.get("search_report")
+            if not isinstance(search_report, Mapping) or not all(
+                isinstance(search_report.get(field), list)
+                and bool(search_report.get(field))
+                and all(
+                    isinstance(value, str) and bool(value)
+                    for value in search_report.get(field, [])
+                )
+                for field in ("queries", "places_checked", "languages_checked")
+            ):
+                raise ReductionError(
+                    "typed discovery disposition lacks bounded query/place/language evidence"
+                )
+            if not isinstance(search_report.get("conclusion"), str) or not search_report.get(
+                "conclusion"
+            ):
+                raise ReductionError("typed discovery disposition lacks a bounded conclusion")
         # ``kind`` is validated against the code prefix by ``_validate_status``, so it is the
         # reliable discriminator across every terminal failure code.
         failed = model.get("status", {}).get("kind") == "failed"
-        if not failed and not exact_primary:
+        if not failed and not exact_primary and not typed_discovery:
             raise ReductionError("missing mandatory exact public primary source link")
         if failed and resolution.get("mandatory_link_status") != (
             "ok" if exact_primary else "failed"
         ):
             raise ReductionError("failure mandatory-link status contradicts source evidence")
-        if not failed and resolution.get("mandatory_link_status") != "ok":
-            raise ReductionError("successful terminal records require mandatory_link_status=ok")
+        if not failed and resolution.get("mandatory_link_status") != (
+            "failed" if typed_discovery else "ok"
+        ):
+            raise ReductionError(
+                "terminal mandatory-link status contradicts its exact source evidence"
+            )
 
     def _gate_item(
         self, gate_id: Optional[str], stable_id: str

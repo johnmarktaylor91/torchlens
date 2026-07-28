@@ -51,7 +51,9 @@ read deeply once, do not skim twice.
    Prefer a page that carries the resolvable identifier -- an arXiv ID such as
    `1905.09791`, or a DOI -- because an exact identifier is far stronger evidence than a
    title you matched by eye. This costs one fetch target out of `max_sources`.
-7. Emit the **exact pinned source targets** you want retrieved. For implementation
+7. Emit exactly one arm of the typed discovery union below. Only `FOUND` carries fetch
+   targets. A bounded negative finding must use its negative arm without inventing a URL
+   merely to satisfy the transport. For implementation
    sources name files and revisions, not landing pages -- the paper/project page in the
    rule above is the deliberate exception, since the page IS the artifact there. Never
    cite a search-results page. Never invent a URL. Pin what is
@@ -94,24 +96,58 @@ any one URL. This pipeline demands verbatim excerpts at exact URLs, which is wha
 unconfigured, disconnected, permission-blocked, or erroring research tool means this stage
 cannot do the one thing it exists to do. Do not fall back on recollection, do not pin a
 plausible-looking URL you did not open, and do not emit a thinner set of targets as if it were
-a research result. Stop, and report the failure verbatim -- name which tool, which spelling you
-called, and the exact error -- so the pool can record a typed retryable failure and requeue this
-model. A grounded proposal delayed by one cycle is cheap; an ungrounded one is the exact defect
+a research result. Write `RETRYABLE_TOOL_FAILURE` with the tool name, exact registered
+spelling you called, and verbatim error so the pool can requeue this model. A grounded
+proposal delayed by one cycle is cheap; an ungrounded one is the exact defect
 this whole lane exists to prevent.
 
 ### What to write
 
-Write ONE JSON object to the exact `required_output_path` from JOB FACTS:
+Write ONE `menagerie.crawler.source-discovery.v1` JSON object to the exact
+`required_output_path` from JOB FACTS. Every arm repeats the request's exact `stable_id`
+and `work_id`:
 
 ```json
-{"sources": [{"source_id": "...", "url": "https://...", "revision": "<commit|tag|version>",
-              "expected_sha256": "",
-              "media_type": "text/x-python"}]}
+{
+  "schema_version": "menagerie.crawler.source-discovery.v1",
+  "stable_id": "<exact request stable_id>",
+  "work_id": "<exact request work_id>",
+  "arm": "FOUND",
+  "payload": {
+    "arm": "FOUND",
+    "sources": [
+      {
+        "source_id": "...",
+        "url": "https://...",
+        "revision": "<commit|tag|version>",
+        "expected_sha256": "",
+        "media_type": "text/x-python"
+      }
+    ]
+  }
+}
 ```
 
-- **At least one** target, and **at most `max_sources`**. The engine refuses more than the
+- `FOUND`: the only fetch arm. It requires **at least one** target and at most
+  `max_sources`. The engine refuses more than the
   grant, so an over-long list fails the whole model rather than getting trimmed.
-- Every URL must be a direct, stable, machine-retrievable artifact.
+- `NO_USABLE_SOURCE`: payload is
+  `{"arm":"NO_USABLE_SOURCE","search_evidence":{...}}`.
+- `INSUFFICIENT_DESCRIPTION`: the same bounded `search_evidence` plus the exact non-empty
+  `retained_vague_text` that was found but cannot specify a faithful forward.
+- `NOT_A_MODEL`: payload is `{"arm":"NOT_A_MODEL","search_evidence":{...}}`.
+- `NEEDS_HIGHER_TIER`: payload is
+  `{"arm":"NEEDS_HIGHER_TIER","research_summary":{...}}`; use this when the bounded
+  Sonnet campaign cannot adjudicate the row. The summary is carried durably into C3/Opus.
+- `RETRYABLE_TOOL_FAILURE`: payload names non-empty `tool_name`, exact `tool_spelling`,
+  and verbatim `error`.
+
+Every `search_evidence` or `research_summary` object has exactly: `queries` (non-empty),
+`places` (non-empty), `candidate_links` (possibly empty exact HTTP(S) links), `languages`
+(non-empty), and a non-empty `conclusion`. The three negative arms are real findings that
+proceed to the independent R5 terminal checker; they do not carry a fetch target.
+
+- For `FOUND`, every URL must be a direct, stable, machine-retrievable artifact.
 - **Prefer an immutable commit SHA to a floating tag.** A tag or branch can be repointed at
   different bytes; a commit SHA cannot, even in principle. Resolve whatever release or tag
   you found to its commit SHA and pin that SHA in `revision`, and in the URL wherever the
@@ -149,5 +185,6 @@ campaign.
   queue state, environment specs, or another model's work. The repository root in JOB
   FACTS is **read-only**.
 - Never install a package or mutate an environment.
-- Stay inside the effort grant in JOB FACTS. If you are running out, stop researching and
-  emit the best pinned set you have rather than blowing the budget with nothing to show.
+- Stay inside the effort grant in JOB FACTS. If you are running out, emit the accurate
+  union arm supported by the bounded work already done. Never manufacture a `FOUND`
+  target because the grant is expiring.

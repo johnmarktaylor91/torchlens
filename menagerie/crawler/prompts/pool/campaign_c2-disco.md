@@ -33,8 +33,10 @@ apparent dead ends are renames.
 - Do not write a from-scratch approximation to make a row "work". If real source exists,
   use it; if it does not, a faithful reimplementation is allowed **only** from a detailed
   primary description, and otherwise the answer is `R5_SKIP`.
-- Do not escalate a hard model in place. This campaign is frozen to sonnet; emit a typed
-  `BLOCKED` so the row can be requeued into `c3-classics`.
+- Do not escalate a hard model in place. This campaign is frozen to sonnet; emit
+  `NEEDS_HIGHER_TIER` at stage 1, or
+  `BLOCKED(stage=author, reason_code=needs-higher-tier)` after fetch, with the bounded
+  research summary. The engine durably defers C2 and appends the typed C3 intake promotion.
 
 ### Budget shape
 

@@ -203,5 +203,8 @@ proposal hash, code-manifest identity (the empty-list digest for declarative rec
 identity, and compute handoff_sha256 over those exact preceding fields. SKIP_RECOMMENDATION may recommend
 only one closed R5 status and binds its exact search,
 source/evidence/license identities. BLOCKED binds one closed stage/reason and exact prerequisite evidence.
+`BLOCKED(stage=author, reason_code=needs-higher-tier)` also carries the complete bounded
+stage-1 `research_summary`; the driver durably defers the source campaign and appends a typed
+C3/Opus intake promotion without changing the campaign's frozen author identity.
 Compute every arm's recommendation/result hash over the exact closed payload. Do not output runs, accurate,
 a fidelity verdict, or a terminal award. End after result.json is written.

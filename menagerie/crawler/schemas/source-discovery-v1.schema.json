@@ -1,0 +1,203 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://torchlens.org/schemas/menagerie/crawler/source-discovery-v1.schema.json",
+  "title": "Menagerie crawler typed source discovery v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "stable_id", "work_id", "arm", "payload"],
+  "properties": {
+    "schema_version": {
+      "const": "menagerie.crawler.source-discovery.v1"
+    },
+    "stable_id": {
+      "$ref": "#/$defs/nonempty_string"
+    },
+    "work_id": {
+      "$ref": "#/$defs/nonempty_string"
+    },
+    "arm": {
+      "enum": [
+        "FOUND",
+        "NO_USABLE_SOURCE",
+        "INSUFFICIENT_DESCRIPTION",
+        "NOT_A_MODEL",
+        "NEEDS_HIGHER_TIER",
+        "RETRYABLE_TOOL_FAILURE"
+      ]
+    },
+    "payload": {
+      "oneOf": [
+        {"$ref": "#/$defs/found"},
+        {"$ref": "#/$defs/no_usable_source"},
+        {"$ref": "#/$defs/insufficient_description"},
+        {"$ref": "#/$defs/not_a_model"},
+        {"$ref": "#/$defs/needs_higher_tier"},
+        {"$ref": "#/$defs/retryable_tool_failure"}
+      ]
+    }
+  },
+  "$defs": {
+    "nonempty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "nonempty_string_array": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/nonempty_string"
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "url", "revision", "media_type"],
+      "properties": {
+        "source_id": {
+          "$ref": "#/$defs/nonempty_string"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https?://"
+        },
+        "revision": {
+          "$ref": "#/$defs/nonempty_string"
+        },
+        "expected_sha256": {
+          "type": ["string", "null"],
+          "pattern": "^(|(?:sha256:)?[0-9a-f]{64})$"
+        },
+        "media_type": {
+          "$ref": "#/$defs/nonempty_string"
+        }
+      }
+    },
+    "search_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "queries",
+        "places",
+        "candidate_links",
+        "languages",
+        "conclusion"
+      ],
+      "properties": {
+        "queries": {
+          "$ref": "#/$defs/nonempty_string_array"
+        },
+        "places": {
+          "$ref": "#/$defs/nonempty_string_array"
+        },
+        "candidate_links": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https?://"
+          }
+        },
+        "languages": {
+          "$ref": "#/$defs/nonempty_string_array"
+        },
+        "conclusion": {
+          "$ref": "#/$defs/nonempty_string"
+        }
+      }
+    },
+    "found": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["arm", "sources"],
+      "properties": {
+        "arm": {
+          "const": "FOUND"
+        },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/source"
+          }
+        }
+      }
+    },
+    "no_usable_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["arm", "search_evidence"],
+      "properties": {
+        "arm": {
+          "const": "NO_USABLE_SOURCE"
+        },
+        "search_evidence": {
+          "$ref": "#/$defs/search_evidence"
+        }
+      }
+    },
+    "insufficient_description": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["arm", "search_evidence", "retained_vague_text"],
+      "properties": {
+        "arm": {
+          "const": "INSUFFICIENT_DESCRIPTION"
+        },
+        "search_evidence": {
+          "$ref": "#/$defs/search_evidence"
+        },
+        "retained_vague_text": {
+          "$ref": "#/$defs/nonempty_string"
+        }
+      }
+    },
+    "not_a_model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["arm", "search_evidence"],
+      "properties": {
+        "arm": {
+          "const": "NOT_A_MODEL"
+        },
+        "search_evidence": {
+          "$ref": "#/$defs/search_evidence"
+        }
+      }
+    },
+    "needs_higher_tier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["arm", "research_summary"],
+      "properties": {
+        "arm": {
+          "const": "NEEDS_HIGHER_TIER"
+        },
+        "research_summary": {
+          "$ref": "#/$defs/search_evidence"
+        }
+      }
+    },
+    "retryable_tool_failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["arm", "tool_name", "tool_spelling", "error"],
+      "properties": {
+        "arm": {
+          "const": "RETRYABLE_TOOL_FAILURE"
+        },
+        "tool_name": {
+          "$ref": "#/$defs/nonempty_string"
+        },
+        "tool_spelling": {
+          "$ref": "#/$defs/nonempty_string"
+        },
+        "error": {
+          "$ref": "#/$defs/nonempty_string"
+        }
+      }
+    }
+  }
+}

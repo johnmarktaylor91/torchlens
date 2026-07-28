@@ -27,6 +27,8 @@ from menagerie.crawler.constants import (
     MODEL_SCHEMA_VERSION,
     MODEL_SCHEMA_VERSION_V3,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
+    PROMOTION_SCHEMA_VERSION,
+    SOURCE_DISCOVERY_SCHEMA_VERSION,
 )
 
 SCHEMA_DIRECTORY = Path(__file__).with_name("schemas")
@@ -41,6 +43,8 @@ SCHEMA_FILES = {
     AUTHOR_PROPOSAL_SCHEMA_VERSION_V3: "author-proposal-v3.schema.json",
     AUTHOR_RESULT_SCHEMA_VERSION_V3: "author-result-v3.schema.json",
     AUTHOR_RESULT_SCHEMA_VERSION: "author-result-v4.schema.json",
+    PROMOTION_SCHEMA_VERSION: "promotion-v1.schema.json",
+    SOURCE_DISCOVERY_SCHEMA_VERSION: "source-discovery-v1.schema.json",
     ARTIFACT_EVENT_SCHEMA_VERSION: "artifact-event-v1.schema.json",
     OPERATIONAL_EVENT_SCHEMA_VERSION: "operational-event-v1.schema.json",
 }

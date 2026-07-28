@@ -62,10 +62,15 @@ from menagerie.crawler.partitioner import (
     CampaignBinding,
     emit_campaign_partitions,
     find_campaign_binding,
+    load_campaign_bindings,
+)
+from menagerie.crawler.promotion import (
+    promotion_records_root,
+    promotion_snapshot_destination,
 )
 from menagerie.crawler.recordio import SingleWriterError
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
-from menagerie.crawler.reducer import materialize_current
+from menagerie.crawler.reducer import default_ledger_paths, materialize_current
 from menagerie.crawler.routing import phase_routes, route_model
 from menagerie.crawler.status import funnel_counts, partition_report, wakeup_status
 from menagerie.crawler.wakeup import (
@@ -596,8 +601,8 @@ def _default_driver_factory(args: argparse.Namespace) -> CrawlerDriver:
     )
     checker_command = _required_command(args.checker_command, "checker")
     environment_command = _required_command(args.environment_command, "environment")
-    paths = default_driver_paths(args.repo_root.resolve(), args.intake.resolve())
     snapshot = load_intake_snapshot(args.intake.resolve())
+    paths = _driver_paths_for_snapshot(args.repo_root.resolve(), snapshot)
     campaign_binding = _optional_campaign_binding(args.repo_root.resolve(), snapshot)
     _validate_campaign_launch_policy(args, campaign_binding)
     default_config = DriverConfig()
@@ -1026,7 +1031,49 @@ def _optional_campaign_binding(
     manifest_path = repo_root / DEFAULT_CAMPAIGN_MANIFEST
     if not manifest_path.is_file():
         return None
-    return find_campaign_binding(manifest_path, snapshot)
+    binding = find_campaign_binding(manifest_path, snapshot)
+    if binding is not None:
+        return binding
+    destination = promotion_snapshot_destination(snapshot)
+    if destination is None:
+        return None
+    matches = [
+        candidate
+        for candidate in load_campaign_bindings(manifest_path)
+        if candidate.spec.campaign_id == destination
+    ]
+    if len(matches) != 1:
+        raise ValueError(
+            f"promotion destination {destination!r} has {len(matches)} campaign bindings"
+        )
+    return matches[0]
+
+
+def _driver_paths_for_snapshot(repo_root: Path, snapshot: IntakeSnapshot) -> DriverPaths:
+    """Return isolated canonical paths for ordinary or promoted campaign work.
+
+    Parameters
+    ----------
+    repo_root:
+        Campaign repository root.
+    snapshot:
+        Loaded hash-verified intake snapshot.
+
+    Returns
+    -------
+    DriverPaths
+        Ordinary paths, or the isolated C3 promotion ledger/runtime roots.
+    """
+
+    paths = default_driver_paths(repo_root, snapshot.root)
+    if promotion_snapshot_destination(snapshot) is None:
+        return paths
+    records_root = paths.ledgers.models.parent.parent
+    return replace(
+        paths,
+        runtime_root=paths.runtime_root / "promotion-campaigns" / "c3-classics",
+        ledgers=default_ledger_paths(promotion_records_root(records_root)),
+    )
 
 
 def _snapshot_driver_config(repo_root: Path, snapshot: IntakeSnapshot) -> DriverConfig:
@@ -1047,7 +1094,7 @@ def _status_command(args: argparse.Namespace) -> int:
 
     snapshot = load_intake_snapshot(args.intake)
     records_root = args.records_root or args.repo_root / "menagerie" / "crawler" / "records"
-    paths = default_driver_paths(args.repo_root, args.intake).ledgers
+    paths = _driver_paths_for_snapshot(args.repo_root, snapshot).ledgers
     if records_root != args.repo_root / "menagerie" / "crawler" / "records":
         paths = DriverPaths(args.repo_root / ".crawl-local", args.intake, paths).ledgers
         paths = type(paths)(

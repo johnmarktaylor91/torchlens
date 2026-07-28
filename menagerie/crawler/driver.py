@@ -184,6 +184,12 @@ from menagerie.crawler.modes import classify_observed_mode_receipts
 from menagerie.crawler.models import JsonObject, LedgerPaths as LedgerPaths
 from menagerie.crawler.mirrors import ArtifactOrigin, MirrorClass, MirrorStore
 from menagerie.crawler.proposal import ProposalValidationError, model_code_manifest
+from menagerie.crawler.promotion import (
+    PROMOTION_SOURCE_CAMPAIGNS,
+    append_promotion_row,
+    build_promotion_row,
+    promotion_extension_path,
+)
 from menagerie.crawler.recordio import (
     JsonlLedger,
     SingleWriterError,
@@ -1448,8 +1454,15 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             status_code = artifact.author_result.status_code
             reason_code = None
         elif isinstance(artifact.author_result, BlockedRecommendation):
-            status_code = f"failed:{artifact.author_result.stage}"
-            reason_code = artifact.author_result.reason_code
+            if (
+                artifact.author_result.reason_code == "needs-higher-tier"
+                and self.config.campaign_id in PROMOTION_SOURCE_CAMPAIGNS
+            ):
+                status_code = "deferred:needs-opus-tier"
+                reason_code = None
+            else:
+                status_code = f"failed:{artifact.author_result.stage}"
+                reason_code = artifact.author_result.reason_code
         else:
             raise DriverIntegrationError("unknown terminal author-result arm")
         if not decision.accepted:
@@ -1458,6 +1471,23 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
                 "inaccurate-cap-exhausted"
                 if gate_item.get("terminal_disposition", {}).get("verdict") == "rejected"
                 else "cannot-verify-cap-exhausted"
+            )
+        elif status_code == "deferred:needs-opus-tier":
+            if self._intake_snapshot is None:
+                raise DriverIntegrationError("promotion routing has no active intake snapshot")
+            if not isinstance(artifact.author_result, BlockedRecommendation):
+                raise DriverIntegrationError("Opus-tier deferral lost its BLOCKED result")
+            promotion = build_promotion_row(
+                source_campaign_id=str(self.config.campaign_id),
+                snapshot=self._intake_snapshot,
+                item=item.intake,
+                result=artifact.author_result,
+                source_manifest=artifact.source_manifest,
+                created_at=artifact.author_result.binding.created_at,
+            )
+            append_promotion_row(
+                promotion_extension_path(self.paths.ledgers.models.parent.parent),
+                promotion,
             )
         self._terminalize(
             item,
