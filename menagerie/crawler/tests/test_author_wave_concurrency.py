@@ -82,12 +82,19 @@ class ObservedAuthor(ScriptedAuthor):
         self,
         *,
         hold: Optional[Callable[[str], None]] = None,
+        after: Optional[Callable[[str], None]] = None,
         **kwargs: Any,
     ) -> None:
-        """Bind the in-session hold and the shared observation state."""
+        """Bind the in-session hold, the post-completion hook, and observation state.
+
+        ``after`` fires once this session's completion has been recorded, which is
+        what lets a test CHAIN sessions into an exact completion order instead of
+        hoping a sleep produces one.
+        """
 
         super().__init__(**kwargs)
         self._hold = hold or (lambda _stable_id: None)
+        self._after = after or (lambda _stable_id: None)
         self._lock = threading.Lock()
         self._live = 0
         self.intervals: list[_Interval] = []
@@ -115,6 +122,9 @@ class ObservedAuthor(ScriptedAuthor):
                 self._live -= 1
                 self.intervals.append(_Interval(item.stable_id, started, time.monotonic()))
                 self.completed.append(item.stable_id)
+            # Strictly after the completion is recorded, so a waiter released here
+            # can never race ahead of the record it is waiting on.
+            self._after(item.stable_id)
 
 
 def _max_overlap(intervals: list[_Interval]) -> int:
@@ -404,15 +414,44 @@ def test_usage_pause_with_siblings_in_flight_pauses_without_discarding_them(
 # ---------------------------------------------------------------------------
 
 
-def _reverse_completion_hold(order: dict[str, int], unit: float = 0.03) -> Callable[[str], None]:
-    """Return a hold that makes sessions finish in exactly reverse work order."""
+class _ReverseCompletionChain:
+    """Force a wave's sessions to complete in exactly reverse work order.
 
-    def hold(stable_id: str) -> None:
-        """Sleep longer the earlier the model is scheduled."""
+    Ordering threads by sleeping is not synchronization: it only biases a race, and
+    under load the bias loses. An earlier revision of this fixture used a sleep
+    ladder and was flaky at ~1-in-2 under a full-tier run -- the *precondition*
+    failed, so the equality assertion it exists to set up never even ran.
 
-        time.sleep(unit * (len(order) - order[stable_id]))
+    This chains the sessions instead. Session ``i`` blocks until session ``i + 1``
+    has recorded its completion, so the completion order is reverse work order by
+    construction, with no timing assumption at all. The chain is also a concurrency
+    assertion in its own right: it can only resolve if every session is in flight at
+    once, so a serial lane fails here loudly (timeout) rather than passing quietly.
+    """
 
-    return hold
+    def __init__(self, order: dict[str, int], *, timeout: float = 60.0) -> None:
+        """Bind the scheduled work order and the per-link deadline."""
+
+        self._order = order
+        self._timeout = timeout
+        self._done = [threading.Event() for _ in order]
+
+    def hold(self, stable_id: str) -> None:
+        """Block until every later-scheduled session has already completed."""
+
+        successor = self._order[stable_id] + 1
+        if successor >= len(self._done):
+            return
+        if not self._done[successor].wait(timeout=self._timeout):
+            raise AssertionError(
+                f"session {self._order[stable_id]} waited {self._timeout:g}s for its "
+                f"successor: the wave is not running its sessions concurrently"
+            )
+
+    def after(self, stable_id: str) -> None:
+        """Release the predecessor once this session's completion is recorded."""
+
+        self._done[self._order[stable_id]].set()
 
 
 _DIGEST_PATTERN = re.compile(r"(?<![0-9a-fA-F])[0-9a-f]{24,}")
@@ -493,16 +532,19 @@ def test_reverse_completion_order_yields_the_serial_result_exactly(tmp_path: Pat
         author=ObservedAuthor(),
         author_concurrency=1,
     ).run()
-    concurrent_author = ObservedAuthor(hold=_reverse_completion_hold(order))
+    chain = _ReverseCompletionChain(order)
+    concurrent_author = ObservedAuthor(hold=chain.hold, after=chain.after)
     concurrent = _driver(
         concurrent_root,
         concurrent_snapshot,
         author=concurrent_author,
-        author_concurrency=6,
+        author_concurrency=len(order),
     ).run()
 
     assert serial.status == concurrent.status == "complete"
-    # The hold really did invert completion order relative to scheduling order.
+    # Guaranteed by construction rather than by timing: the chain cannot resolve in
+    # any other order. Asserted anyway so a broken chain can never silently weaken
+    # the equality check below into a same-order comparison.
     scheduled = [item.stable_id for item in concurrent_snapshot.items]
     assert concurrent_author.completed == list(reversed(scheduled))
 
