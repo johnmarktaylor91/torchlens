@@ -630,6 +630,7 @@ class _AuthorLaneBase:
     ) -> AuthorArtifact:
         """Build and execute one frozen author envelope."""
 
+        from menagerie.crawler.author_attempts import prior_attempts_summary
         from menagerie.crawler.author_dispatch import write_envelope_atomic
 
         root = work_root / item.stable_id / "author"
@@ -648,6 +649,10 @@ class _AuthorLaneBase:
             source_manifest=source_manifest,
             allowed_model_dir=model_dir,
             output_path=result_path,
+            # The ONE retry feedback channel: requeues and checker repairs
+            # alike surface every prior attempt's outcome, failure reason, and
+            # verbatim checker findings to the next author session.
+            prior_attempts=prior_attempts_summary(root),
         )
         envelope_path = write_envelope_atomic(envelope, root / "request.json")
         self._dispatch(
@@ -812,13 +817,29 @@ class CommandAuthorLane(_AuthorLaneBase):
         command: Sequence[str],
         *,
         effort_grant: Optional[AuthorEffortGrant] = None,
+        require_receipt: bool = False,
     ) -> None:
-        """Store a non-shell Claude Code command prefix and its effort grant."""
+        """Store a non-shell Claude Code command prefix and its effort grant.
+
+        Parameters
+        ----------
+        command:
+            Wrapper argv prefix; the absolute request path is appended.
+        effort_grant:
+            Per-session effort budget.
+        require_receipt:
+            When true, every successful round trip must print an executor
+            publication receipt whose digest matches the published bytes.
+            Set for the headless author executor; fixture wrappers that
+            predate the receipt protocol leave it off, and any receipt they
+            *do* print is still verified.
+        """
 
         if not command:
             raise ValueError("author command cannot be empty")
         self.command = tuple(command)
         self.effort_grant = effort_grant or AuthorEffortGrant()
+        self.require_receipt = require_receipt
 
     def _dispatch(
         self,
@@ -832,7 +853,7 @@ class CommandAuthorLane(_AuthorLaneBase):
     ) -> None:
         """Invoke the wrapper with one absolute request path and classify its exit."""
 
-        del config, work_id, output_path
+        del config, work_id
         completed = subprocess.run(
             [*self.command, str(request_path)], check=False, capture_output=True, text=True
         )
@@ -842,6 +863,84 @@ class CommandAuthorLane(_AuthorLaneBase):
             completed.returncode,
             completed.stdout or "",
             completed.stderr or "",
+        )
+        _verify_executor_receipt(
+            completed.stdout or "",
+            output_path,
+            stable_id=item.stable_id,
+            required=self.require_receipt,
+        )
+
+
+def _verify_executor_receipt(
+    stdout: str,
+    output_path: Path,
+    *,
+    stable_id: str,
+    required: bool,
+) -> None:
+    """Verify an executor publication receipt against the bytes now on disk.
+
+    The supersession discipline (SEAM_REDESIGN 3.4): completion is bound to
+    the attempt nonce it started with, and the lane re-verifies the receipt
+    digest against the bytes it is about to read, so a late writer racing the
+    published result — the TOCTOU half of the nonce-laundering class — is a
+    typed integration failure, never a silently consumed result.
+
+    Parameters
+    ----------
+    stdout:
+        Wrapper stdout; the receipt is its last JSON object line.
+    output_path:
+        The envelope's required output path.
+    stable_id:
+        Model identity, for diagnostics.
+    required:
+        Whether a missing receipt is itself a failure.
+
+    Raises
+    ------
+    DriverIntegrationError
+        On a missing-but-required, unbound, or digest-mismatched receipt.
+    """
+
+    from menagerie.crawler.author_executor import RECEIPT_VERSION
+
+    receipt: Optional[Mapping[str, Any]] = None
+    for line in reversed(stdout.splitlines()):
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            parsed = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, Mapping) and parsed.get("receipt_version") == RECEIPT_VERSION:
+            receipt = parsed
+            break
+    if receipt is None:
+        if required:
+            raise DriverIntegrationError(
+                f"author executor printed no publication receipt for {stable_id}"
+            )
+        return
+    nonce = str(receipt.get("attempt_nonce", ""))
+    digest = str(receipt.get("result_sha256", ""))
+    if not nonce or not digest:
+        raise DriverIntegrationError(
+            f"author executor receipt for {stable_id} is not attempt-bound"
+        )
+    try:
+        actual = hash_bytes(Path(output_path).read_bytes())
+    except OSError as exc:
+        raise DriverIntegrationError(
+            f"author executor receipt for {stable_id} names an unreadable result: {exc}"
+        ) from exc
+    if actual != digest:
+        raise DriverIntegrationError(
+            f"author result bytes for {stable_id} do not match the executor receipt "
+            f"digest (receipt {digest}, on disk {actual}); refusing a possibly "
+            "laundered or raced result"
         )
 
 

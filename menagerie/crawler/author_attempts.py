@@ -30,7 +30,7 @@ import re
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Mapping, Optional, Union
+from typing import Any, Callable, Mapping, Optional, Sequence, Union
 
 from menagerie.crawler.identity import fsync_directory, hash_bytes, utc_now
 from menagerie.crawler.models import JsonObject
@@ -413,6 +413,64 @@ def latest_attempt(
             continue
         return handle
     return None
+
+
+def record_checker_findings(
+    author_root: Union[str, Path],
+    *,
+    gate_kind: str,
+    generation: int,
+    required_repairs: Sequence[str],
+    root_cause_fingerprint: Optional[str] = None,
+) -> bool:
+    """Attach verbatim checker findings to the rejected generation's attempt.
+
+    This is the checker half of the ONE feedback channel: the repair loop
+    records what the checker rejected onto the newest attempt record, and the
+    next attempt's ``prior_attempts`` summary — on the envelope and rendered
+    into the brief — carries it to the repairing author verbatim. Before this
+    channel existed the findings went to a file no author ever read.
+
+    Parameters
+    ----------
+    author_root:
+        The lane's per-model author directory.
+    gate_kind:
+        Rejecting gate (``metadata_batch`` or ``fidelity``).
+    generation:
+        One-based repair generation the findings open.
+    required_repairs:
+        Verbatim checker findings.
+    root_cause_fingerprint:
+        Optional stable fingerprint of the failure class.
+
+    Returns
+    -------
+    bool
+        Whether an attempt record existed to carry the findings.
+    """
+
+    for handle in reversed(list_attempts(author_root)):
+        if handle.record.get("status") == "created":
+            continue
+        entries = list(handle.record.get("checker_findings") or [])
+        entries.append(
+            {
+                "gate_kind": gate_kind,
+                "generation": generation,
+                "required_repairs": list(required_repairs),
+                "root_cause_fingerprint": root_cause_fingerprint,
+                "recorded_at": utc_now(),
+            }
+        )
+        handle.record["checker_findings"] = entries
+        handle.record["updated_at"] = utc_now()
+        _write_json_atomic(handle.paths.record, handle.record)
+        handle.event(
+            "checker-findings-recorded", gate_kind=gate_kind, generation=generation
+        )
+        return True
+    return False
 
 
 def prior_attempts_summary(

@@ -50,6 +50,7 @@ from menagerie.crawler.artifact_transactions import (
     staged_artifact_for_result,
     validate_artifact_checkpoint,
 )
+from menagerie.crawler.author_attempts import record_checker_findings
 from menagerie.crawler.author_dispatch import (
     AuthorResult as AuthorResult,
     BlockedRecommendation,
@@ -1526,6 +1527,17 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         }
         if not repair_path.is_file():
             _write_json_atomic(repair_path, request)
+        # The ONE feedback channel (SEAM_REDESIGN 3.4): the checker's verbatim
+        # findings attach to the rejected generation's attempt record, and the
+        # repairing author's envelope + brief carry them under prior_attempts.
+        # Before this, findings went to a file no author ever read.
+        record_checker_findings(
+            self.paths.work_root / item.stable_id / "author",
+            gate_kind=gate_kind,
+            generation=generation,
+            required_repairs=list(gate_item.get("required_repairs", [])),
+            root_cause_fingerprint=str(_gate_item_fingerprint(gate_item)),
+        )
         repaired = self.dependencies.author.author(
             item, self.paths.work_root, self.config, reducer.context
         )

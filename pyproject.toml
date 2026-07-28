@@ -164,7 +164,7 @@ include = ["torchlens*", "menagerie*"]
 
 [tool.setuptools.package-data]
 torchlens = ["autoroute/data/*.json", "autoroute/data/*.md", "schemas/*.json"]
-menagerie = ["crawler/prompts/pool/*"]
+menagerie = ["crawler/prompts/pool/*", "crawler/prompts/executor/*"]
 
 [tool.pytest.ini_options]
 markers = [

@@ -9,7 +9,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Any, Mapping, Optional, TypeAlias, Union
+from typing import Any, Mapping, Optional, Sequence, TypeAlias, Union
 
 from menagerie.crawler.authority import AuthorityContext
 from menagerie.crawler.constants import (
@@ -326,6 +326,7 @@ def build_author_envelope(
     source_manifest: Mapping[str, Any],
     allowed_model_dir: Union[str, Path],
     output_path: Union[str, Path],
+    prior_attempts: Optional[Sequence[Mapping[str, Any]]] = None,
 ) -> JsonObject:
     """Build one v3 author packet from the mandatory active authority context.
 
@@ -345,6 +346,11 @@ def build_author_envelope(
         Staged-code path sandbox for this model.
     output_path:
         Exact atomic result path the author must write.
+    prior_attempts:
+        The ONE retry feedback channel (SEAM_REDESIGN 3.4): per earlier
+        attempt, its outcome, failure reason, verbatim checker findings, and
+        prior result hash. Every retry kind — infrastructure requeues and
+        checker repairs alike — rides here, hash-bound with the envelope.
 
     Returns
     -------
@@ -392,6 +398,7 @@ def build_author_envelope(
             "identity": prompt_identity,
         },
         "author_schema_identity": context.author_schema_identity,
+        "prior_attempts": [deepcopy(dict(entry)) for entry in (prior_attempts or ())],
         "expected_result": expected_result,
         "allowed_model_dir": str(Path(allowed_model_dir).resolve()),
         "allowed_output_root": str(Path(output_path).resolve().parent),
