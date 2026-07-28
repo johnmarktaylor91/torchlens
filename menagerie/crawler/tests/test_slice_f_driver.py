@@ -147,6 +147,7 @@ from menagerie.crawler.tests.conftest import (
     NOW,
     RealEnvironmentFixture,
     RealEnvironmentLane,
+    attach_paper_evidence,
     make_attempt,
     make_author_proposal,
     make_gate,
@@ -460,7 +461,8 @@ class ScriptedAuthor(AuthorLane):
         )
         source_manifest_row = dict(source)
         source_manifest_row["cas_path"] = str(source_path)
-        source_manifest = {"sources": [source_manifest_row]}
+        source_manifest: dict[str, Any] = {"sources": [source_manifest_row]}
+        attach_paper_evidence(proposal, source_manifest, source_path.parent)
         source_manifest["manifest_sha256"] = stable_hash(source_manifest["sources"])
         proposal["source_manifest_identity"] = source_manifest["manifest_sha256"]
         proposal["verified_hashes"]["source_manifest"] = source_manifest["manifest_sha256"]

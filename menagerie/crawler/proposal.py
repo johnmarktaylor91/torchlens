@@ -39,6 +39,16 @@ DEFAULT_GATED_CLAIMS = frozenset(
         "input_contract",
     }
 )
+#: Source roles whose bytes are the *paper*, not the implementation. Paper metadata
+#: (`authors`, `institution`, `country`, `venue`, `year`, `era`, `citation`) essentially
+#: never appears verbatim in implementation code, so a proposal that asserts a citation
+#: must bring the paper itself through the controlled fetcher and ground the citation
+#: there. See `_validate_paper_evidence_source`.
+PAPER_EVIDENCE_ROLES = frozenset({"introducing-paper", "supplement", "project-page"})
+#: Citation fields that carry a resolvable, machine-checkable identifier. When the author
+#: declares one it must occur in the excerpt text: an exact identifier is a strictly
+#: stronger anchor than title-token overlap, so requiring it tightens the gate.
+CITATION_IDENTIFIER_FIELDS = ("arxiv_id", "doi", "openreview_id")
 VERIFIED_HASH_CODE_MANIFEST_KEY = "code_manifest"
 _AUTHOR_VERIFIED_HASH_SPEC = required_field_projection_spec(
     RequiredFieldProjection.AUTHOR_PROPOSAL_VERIFIED_HASH
@@ -269,6 +279,7 @@ def validate_author_proposal(
     known_evidence = evidence_ids(evidence)
     _validate_citation(facts, known_evidence)
     _validate_citation_consistency(facts)
+    _validate_paper_evidence_source(facts, evidence, source_manifest)
     implementation = _mapping(facts.get("implementation"), "implementation")
     allowed_dir = Path(allowed_model_dir).resolve()
     _validate_author_read_grants(facts, allowed_dir)
@@ -485,6 +496,110 @@ def _validate_citation_consistency(facts: Mapping[str, Any]) -> None:
         )
 
 
+def _validate_paper_evidence_source(
+    facts: Mapping[str, Any],
+    evidence: Mapping[str, Any],
+    source_manifest: Union[Mapping[str, Any], Sequence[Mapping[str, Any]]],
+) -> None:
+    """Require an asserted citation to be grounded in controlled-fetched paper bytes.
+
+    Twenty-seven claims are gated on literal excerpts drawn from the frozen source
+    manifest, and roughly half of them -- ``authors``, ``institution``, ``country``,
+    ``venue``, ``year``, ``era``, ``citation`` -- are paper metadata that does not occur
+    in implementation code. An author whose manifest holds only code therefore cannot
+    ground them from any honest excerpt. The remedy is more evidence, never a looser
+    check: when the proposal asserts an introducing work, that work's own page must be a
+    controlled-fetch source in the frozen manifest, and the citation must be grounded on
+    its exact bytes. This also removes a real fabrication surface, because a citation URL
+    the author merely recalled can no longer support the claim.
+
+    Parameters
+    ----------
+    facts:
+        Complete proposed fact tree.
+    evidence:
+        Literal evidence block already verified against controlled source bytes.
+    source_manifest:
+        Exact controlled-fetch source rows.
+
+    Raises
+    ------
+    ProposalValidationError
+        If a present citation names no fetched paper-role source, or no excerpt from
+        such a source supports the citation claim.
+    """
+
+    if not _citation_is_present(facts):
+        return
+    resolution = _mapping(facts.get("source_resolution"), "source_resolution")
+    declared = resolution.get("sources")
+    if not isinstance(declared, list):
+        raise ProposalValidationError("source_resolution.sources must be a list")
+    fetched = _source_manifest_index(source_manifest)
+    paper_source_ids = {
+        str(source["source_id"])
+        for source in declared
+        if isinstance(source, Mapping)
+        and source.get("role") in PAPER_EVIDENCE_ROLES
+        and isinstance(source.get("source_id"), str)
+        and _is_controlled_fetch(fetched.get(str(source["source_id"])))
+    }
+    if not paper_source_ids:
+        raise ProposalValidationError(
+            "a present citation requires the introducing paper or landing page as a "
+            "controlled-fetched source (role in "
+            f"{sorted(PAPER_EVIDENCE_ROLES)}); paper metadata such as authors, venue, "
+            "institution, country, and year does not occur in implementation code and "
+            "cannot be grounded from it"
+        )
+    excerpts = evidence.get("excerpts")
+    if not isinstance(excerpts, list):
+        raise ProposalValidationError("evidence.excerpts must be a list")
+    grounded = any(
+        isinstance(excerpt, Mapping)
+        and str(excerpt.get("source_id")) in paper_source_ids
+        and any(
+            _SUPPORT_ALIASES.get(support, support) == "external_metadata.citation"
+            for support in excerpt.get("supports", [])
+            if isinstance(support, str)
+        )
+        for excerpt in excerpts
+    )
+    if not grounded:
+        raise ProposalValidationError(
+            "external_metadata.citation must be supported by a literal excerpt from the "
+            "controlled-fetched paper source, not only from implementation code"
+        )
+
+
+def _is_controlled_fetch(source: Optional[Mapping[str, Any]]) -> bool:
+    """Return whether one manifest row names hash-bound controlled-fetch bytes.
+
+    Parameters
+    ----------
+    source:
+        Candidate frozen manifest row, or ``None`` when the identifier is absent.
+
+    Returns
+    -------
+    bool
+        True when the row records a completed retrieval bound to a content digest.
+    """
+
+    if not isinstance(source, Mapping):
+        return False
+    digest = source.get("content_sha256")
+    status = source.get("retrieval_status")
+    # Presence in the frozen manifest is itself the controlled-fetch record, so the
+    # binding requirement is the content digest. A declared retrieval status may
+    # corroborate it but must never contradict it.
+    return (
+        isinstance(digest, str)
+        and bool(digest)
+        and (status is None or status in {"fetched", "already-present"})
+    )
+
+
 def _validate_claim_support(
     facts: Mapping[str, Any], evidence: Mapping[str, Any], required_claims: Iterable[str]
 ) -> None:
@@ -620,7 +735,15 @@ def _text_supports_claim(claim: str, value: object, text: str) -> bool:
     if claim.endswith(".citation") and isinstance(value, Mapping):
         title = value.get("title")
         year = value.get("year")
-        return _scalar_matches(title, normalized_text) and _scalar_matches(year, normalized_text)
+        # A declared arXiv ID, DOI, or OpenReview ID is an exact resolvable anchor and a
+        # strictly stronger check than title-token overlap, so it is required in addition
+        # to -- never instead of -- the title and year. Absent identifiers match trivially.
+        identifiers = [value.get(field) for field in CITATION_IDENTIFIER_FIELDS]
+        return (
+            _scalar_matches(title, normalized_text)
+            and _scalar_matches(year, normalized_text)
+            and all(_scalar_matches(identifier, normalized_text) for identifier in identifiers)
+        )
     if claim.endswith(".modes") and isinstance(value, Mapping):
         return _matches_any_scalar(value.get("meaningful_modes"), normalized_text)
     scalars = _positive_scalars(value)

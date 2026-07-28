@@ -38,8 +38,23 @@ read deeply once, do not skim twice.
    intended architecture rather than its neighbor's: differing defaults (for BEiTv2,
    `init_values=0.1` against BEiT's `1e-5`) and a distinct weight-URL namespace are the
    usual tell.
-6. Emit the **exact pinned source targets** you want retrieved. Name files and revisions,
-   not landing pages. Never cite a search-results page. Never invent a URL. Pin what is
+6. **Pin the paper too, not only the code.** Stage 2 may quote ONLY bytes the controlled
+   fetcher retrieved, and roughly half the fields it must fill -- `authors`,
+   `institution`, `country`, `venue`, `year`, `era`, and the structured `citation` --
+   are paper metadata that does not appear anywhere in implementation source. A manifest
+   holding only code therefore CANNOT be grounded and the model is lost, however well you
+   understood it. So whenever the model has an introducing work, pin its own page as a
+   separate target alongside the implementation: the arXiv `abs` page, the DOI or
+   publisher page, the OpenReview forum page, the proceedings entry, or the lab's project
+   page. Scientific software routinely cites by key plus author, year, and a link with no
+   title (pykeen's `mure.py` is exactly this), so the code alone will not carry it.
+   Prefer a page that carries the resolvable identifier -- an arXiv ID such as
+   `1905.09791`, or a DOI -- because an exact identifier is far stronger evidence than a
+   title you matched by eye. This costs one fetch target out of `max_sources`.
+7. Emit the **exact pinned source targets** you want retrieved. For implementation
+   sources name files and revisions, not landing pages -- the paper/project page in the
+   rule above is the deliberate exception, since the page IS the artifact there. Never
+   cite a search-results page. Never invent a URL. Pin what is
    needed to construct and trace the architecture -- the model definition and the modules
    it actually builds from -- not every transitive import. Inference wrappers,
    pre-processing, and transform helpers that a repository imports at module level but the

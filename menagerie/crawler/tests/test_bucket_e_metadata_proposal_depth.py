@@ -25,7 +25,11 @@ from menagerie.crawler.proposal import (
     model_code_manifest,
     validate_author_proposal,
 )
-from menagerie.crawler.tests.conftest import make_author_proposal, make_model
+from menagerie.crawler.tests.conftest import (
+    attach_paper_evidence,
+    make_author_proposal,
+    make_model,
+)
 
 NEWLY_GATED_EXTERNAL_FIELDS = (
     "field",
@@ -372,6 +376,7 @@ def _proposal_source(
             }
         ]
     }
+    attach_paper_evidence(proposal, manifest, tmp_path)
     return proposal, manifest
 
 

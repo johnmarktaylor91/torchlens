@@ -31,7 +31,11 @@ from menagerie.crawler.proposal import (
     model_code_manifest,
     validate_author_proposal,
 )
-from menagerie.crawler.tests.conftest import bind_handoff_execution, make_author_proposal
+from menagerie.crawler.tests.conftest import (
+    attach_paper_evidence,
+    bind_handoff_execution,
+    make_author_proposal,
+)
 
 import shutil
 import sys
@@ -107,6 +111,7 @@ def _ground_proposal(tmp_path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     }
     manifest["manifest_sha256"] = stable_hash(manifest["sources"])
     proposal["verified_hashes"]["source_manifest"] = manifest["manifest_sha256"]
+    attach_paper_evidence(proposal, manifest, tmp_path)
     return proposal, manifest
 
 
@@ -171,6 +176,139 @@ def _make_r4(
     manifest["sources"][0].pop("role", None)
     proposal["verified_hashes"]["code"] = hash_bytes(code.encode())
     proposal["verified_hashes"]["code_manifest"] = stable_hash(code_manifest)
+
+
+def _strip_paper_evidence(proposal: dict[str, Any], manifest: dict[str, Any]) -> None:
+    """Reduce a grounded fixture to the historical code-only evidence set.
+
+    This is the exact shape every R1/R2 model had before source triage pinned the
+    paper: implementation bytes in the manifest, and the citation grounded on the
+    code's own docstring-style mention.
+
+    Parameters
+    ----------
+    proposal, manifest:
+        Grounded proposal and controlled-fetch manifest mutated in place.
+    """
+
+    facts = proposal["proposed_facts"]
+    facts["source_resolution"]["sources"] = [
+        source
+        for source in facts["source_resolution"]["sources"]
+        if source["source_id"] != "source-paper"
+    ]
+    facts["evidence"]["excerpts"] = [
+        excerpt
+        for excerpt in facts["evidence"]["excerpts"]
+        if excerpt["source_id"] != "source-paper"
+    ]
+    facts["citation"]["source_evidence_ids"] = ["evidence-1"]
+    facts["external_metadata"]["citation"]["source_evidence_ids"] = ["evidence-1"]
+    manifest["sources"] = [
+        source for source in manifest["sources"] if source["source_id"] != "source-paper"
+    ]
+    manifest["manifest_sha256"] = stable_hash(manifest["sources"])
+    proposal["verified_hashes"]["source_manifest"] = manifest["manifest_sha256"]
+
+
+def test_citation_without_a_fetched_paper_source_is_refused(tmp_path: Path) -> None:
+    """Paper metadata cannot be grounded in an implementation-only evidence set.
+
+    Twenty-seven claims are gated on the frozen manifest, and the provenance half of
+    them lives in the paper, not the code. An author whose manifest holds only code is
+    structurally unable to ground them, so the gate demands the paper itself.
+    """
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    _strip_paper_evidence(proposal, manifest)
+    with pytest.raises(ProposalValidationError, match="introducing paper"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_citation_grounded_only_in_implementation_code_is_refused(tmp_path: Path) -> None:
+    """Fetching the paper is not enough; the citation must be grounded on its bytes."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    facts = proposal["proposed_facts"]
+    paper_excerpt = next(
+        excerpt
+        for excerpt in facts["evidence"]["excerpts"]
+        if excerpt["source_id"] == "source-paper"
+    )
+    paper_excerpt["supports"] = ["external_metadata.venue"]
+    with pytest.raises(ProposalValidationError, match="controlled-fetched paper source"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_fabricated_citation_title_is_still_refused(tmp_path: Path) -> None:
+    """Adding the paper to the evidence set does not soften the accuracy gate.
+
+    The paper is now present and fetched, and the citation is bound to its excerpt --
+    every structural requirement is satisfied. An invented title must still fail,
+    because the excerpt does not contain it.
+    """
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    for citation in (
+        proposal["proposed_facts"]["citation"],
+        proposal["proposed_facts"]["external_metadata"]["citation"],
+    ):
+        citation["title"] = "Imaginary Hypernetwork Transformer"
+    with pytest.raises(ProposalValidationError, match="do not substantively support"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_fabricated_citation_year_is_still_refused(tmp_path: Path) -> None:
+    """A year absent from the fetched paper text is not grounded."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    for citation in (
+        proposal["proposed_facts"]["citation"],
+        proposal["proposed_facts"]["external_metadata"]["citation"],
+    ):
+        citation["year"] = 1997
+    with pytest.raises(ProposalValidationError, match="do not substantively support"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_declared_arxiv_identifier_must_occur_in_the_cited_text(tmp_path: Path) -> None:
+    """A resolvable identifier is an exact anchor and is required when declared.
+
+    ``1905.09791`` is strictly more checkable than title-token overlap, so declaring
+    one and failing to show it in the fetched paper text is a grounding gap.
+    """
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    for citation in (
+        proposal["proposed_facts"]["citation"],
+        proposal["proposed_facts"]["external_metadata"]["citation"],
+    ):
+        citation["arxiv_id"] = "1905.09791"
+    with pytest.raises(ProposalValidationError, match="do not substantively support"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_arxiv_identifier_present_in_the_fetched_paper_grounds_the_citation(
+    tmp_path: Path,
+) -> None:
+    """The pykeen shape: a citation keyed on an arXiv ID the paper page carries."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    text = (
+        "arXiv:1905.09791. Example Model. A. Author, Example Lab, US. "
+        "Published at TestConf in 2020."
+    )
+    _strip_paper_evidence(proposal, manifest)
+    attach_paper_evidence(proposal, manifest, tmp_path, text=text, source_id="source-arxiv")
+    for citation in (
+        proposal["proposed_facts"]["citation"],
+        proposal["proposed_facts"]["external_metadata"]["citation"],
+    ):
+        citation["arxiv_id"] = "1905.09791"
+    report = validate_author_proposal(
+        proposal, allowed_model_dir=tmp_path, source_manifest=manifest
+    )
+    assert report.rung.value == "R1_LIBRARY"
 
 
 def test_valid_typed_r1_proposal_passes(tmp_path: Path) -> None:

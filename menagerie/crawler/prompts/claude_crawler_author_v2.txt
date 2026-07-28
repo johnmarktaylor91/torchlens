@@ -80,7 +80,15 @@ Before finishing, fill every source-reading field in author-proposal.v3:
    one key-contribution line;
 3. implementation, paper, project, documentation, affiliation, and license links; exact revisions,
    paths/symbols, paper versions/locators, content hashes, and fetch recipes;
-4. structured citation: title, authors[], year, venue, arxiv_id, doi, openreview_id, url, and bibtex;
+4. structured citation: title, authors[], year, venue, arxiv_id, doi, openreview_id, url, and bibtex.
+   Paper metadata -- citation, authors, institution, country, venue, year, era -- does not occur in
+   implementation code, and evidence may quote only controlled-fetched bytes. So when an introducing
+   work exists, its own page (arXiv abs, DOI/publisher, OpenReview, proceedings, or project page) must
+   be pinned through the controlled fetcher as an introducing-paper source ALONGSIDE the implementation
+   source, and the citation must be grounded on a verbatim excerpt of that page. A citation grounded
+   only in code is refused. Any arxiv_id, doi, or openreview_id you declare must itself appear in the
+   cited text: an exact resolvable identifier is stronger evidence than a matched title, so declare one
+   only when the fetched page shows it;
 5. first-public year/date basis; authors, labs, institutions; institutional origin countries as ISO alpha-2,
    confidence, basis, and note. Never infer nationality or country from a name;
 6. code, paper-text, weight, and data license facts. Use NOASSERTION, null, or not-found-after-search rather

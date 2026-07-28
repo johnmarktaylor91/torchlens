@@ -2683,6 +2683,109 @@ def make_author_proposal(stable_id: str = "m_example") -> dict[str, Any]:
     return proposal
 
 
+#: Exact text a controlled-fetched introducing-paper landing page would carry for the
+#: canonical fixture citation. It is the paper's own metadata -- title, authors,
+#: affiliation, country, venue, year -- none of which occurs in implementation code.
+PAPER_SOURCE_TEXT = (
+    "Example Model. A. Author, Example Lab, US. Published at TestConf in 2020. "
+    "Abstract: ExampleNet is a small convolutional network."
+)
+PAPER_SOURCE_ID = "source-paper"
+
+
+def attach_paper_evidence(
+    proposal: dict[str, Any],
+    manifest: dict[str, Any],
+    tmp_path: Path,
+    *,
+    text: str = PAPER_SOURCE_TEXT,
+    role: str = "introducing-paper",
+    source_id: str = PAPER_SOURCE_ID,
+) -> str:
+    """Pin the introducing paper as a controlled-fetched citation evidence source.
+
+    A proposal that asserts a citation must ground it on the paper's own bytes, so
+    every honest fixture carries the paper alongside its implementation source. This
+    helper performs exactly what an author's source triage now does: declare the paper
+    page, retrieve it through the controlled fetcher, and excerpt it verbatim.
+
+    Parameters
+    ----------
+    proposal:
+        Author proposal mutated in place.
+    manifest:
+        Controlled-fetch manifest mutated in place.
+    tmp_path:
+        Directory holding the simulated CAS object.
+    text:
+        Exact paper-page bytes and verbatim excerpt.
+    role:
+        Declared source role.
+    source_id:
+        Declared and fetched source identifier.
+
+    Returns
+    -------
+    str
+        Identifier of the added paper source.
+    """
+
+    digest = hash_bytes(text.encode())
+    path = tmp_path / f"{source_id}.txt"
+    path.write_text(text)
+    facts = proposal["proposed_facts"]
+    facts["source_resolution"]["sources"].append(
+        {
+            "source_id": source_id,
+            "role": role,
+            "kind": "paper",
+            "url": "https://example.com/paper",
+            "revision_kind": "version",
+            "revision": "v1",
+            "locator": "abstract",
+            "content_sha256": digest,
+            "byte_count": len(text.encode()),
+            "media_type": "text/html",
+            "retrieved_at": NOW,
+            "fetch_recipe": "https-get",
+            "mirror_class": "public",
+            "mirror_digest": digest,
+        }
+    )
+    facts["evidence"]["excerpts"].append(
+        {
+            "evidence_id": f"evidence-{source_id}",
+            "source_id": source_id,
+            "locator": f"bytes:0-{len(text.encode())}",
+            "text": text,
+            "text_sha256": digest,
+            "supports": ["external_metadata.citation"],
+            "family_level": False,
+            "disposition": "supporting",
+            "license_disposition": "short-excerpt-committed",
+        }
+    )
+    facts["citation"]["source_evidence_ids"] = [f"evidence-{source_id}"]
+    facts["external_metadata"]["citation"]["source_evidence_ids"] = [f"evidence-{source_id}"]
+    sources = manifest.setdefault("sources", [])
+    sources.append(
+        {
+            "source_id": source_id,
+            "url": "https://example.com/paper",
+            "revision": "v1",
+            "content_sha256": digest,
+            "fetched_bytes_len": len(text.encode()),
+            "media_type": "text/html",
+            "cas_path": str(path),
+            "retrieval_status": "fetched",
+        }
+    )
+    if "manifest_sha256" in manifest:
+        manifest["manifest_sha256"] = stable_hash(sources)
+        proposal["verified_hashes"]["source_manifest"] = manifest["manifest_sha256"]
+    return source_id
+
+
 def bind_handoff_execution(
     proposal: dict[str, Any],
     *,
