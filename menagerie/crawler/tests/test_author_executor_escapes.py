@@ -243,5 +243,10 @@ def test_real_harness_denies_escape_before_bytes_change(
     assert after == before, f"escape case {case_name} changed bytes outside the attempt"
     forged = sibling / "result.json"
     assert not forged.exists()
-    escape_report = json.dumps(after)
+    # ``after`` is keyed by Path, and ``json.dumps`` rejects non-primitive keys -- so this
+    # line raised TypeError on every live case, *after* the two assertions above had already
+    # passed. The suite therefore reported six failures while confinement was actually
+    # holding: a defect in the measurement, not in the mechanism. Stringify the keys so the
+    # verdict this test exists to deliver is the one it actually reports.
+    escape_report = json.dumps({str(root): entries for root, entries in after.items()})
     assert "escaped.txt" not in escape_report
