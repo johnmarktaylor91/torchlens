@@ -292,6 +292,7 @@ FAILURE_REASON_CODES: dict[str, frozenset[str]] = {
             "identity-unresolved",
             "missing-mandatory-link",
             "source-model-mismatch",
+            "source-target-invalid",
             "higher-rung-unresolved",
             "effort-cap-exhausted",
         }

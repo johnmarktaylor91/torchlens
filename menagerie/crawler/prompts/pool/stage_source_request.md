@@ -27,7 +27,7 @@ Write ONE JSON object to the exact `required_output_path` from JOB FACTS:
 
 ```json
 {"sources": [{"source_id": "...", "url": "https://...", "revision": "<commit|tag|version>",
-              "expected_sha256": "<64 hex, or empty when genuinely unknown>",
+              "expected_sha256": "",
               "media_type": "text/x-python"}]}
 ```
 
@@ -35,6 +35,15 @@ Write ONE JSON object to the exact `required_output_path` from JOB FACTS:
   grant, so an over-long list fails the whole model rather than getting trimmed.
 - Every URL must be a direct, stable, machine-retrievable artifact.
 - Order matters only for your own reading; the fetcher retrieves all of them.
+- `expected_sha256` is **optional, and empty is the normal answer.** You do not fetch these
+  bytes, so you cannot honestly digest them; the coordinator's controlled fetch computes the
+  digest and pins exactly what it retrieved. Supply one **only** when you read the digest
+  off an authoritative record for that exact artifact -- a release manifest, a lockfile, a
+  PyPI file record. A supplied digest is enforced byte-exactly and a mismatch fails this
+  model, so **never guess, reconstruct, or copy a digest from a different artifact.** Accepted
+  spellings are `sha256:<64 hex>` and a bare `<64 hex>`; use `""` (or omit the key) when
+  unknown. Pin immutability through the URL and `revision` instead: prefer a URL that embeds
+  an exact commit or released version.
 
 You do **not** fetch these yourself. The coordinator performs the controlled fetch into
 the campaign's content-addressed store and freezes a manifest; stage 2 reads the bytes from

@@ -206,7 +206,7 @@ Free-form detail supplements but never replaces it.
 | Stage | Allowed reasons |
 | --- | --- |
 | `intake` | `schema-invalid`, `stable-id-conflict`, `duplicate-revision-conflict`, `migration-invariant` |
-| `source` | `identity-unresolved`, `missing-mandatory-link`, `source-model-mismatch`, `higher-rung-unresolved`, `effort-cap-exhausted` |
+| `source` | `identity-unresolved`, `missing-mandatory-link`, `source-model-mismatch`, `source-target-invalid`, `higher-rung-unresolved`, `effort-cap-exhausted` |
 | `fetch` | `unreachable`, `revision-missing`, `hash-mismatch`, `access-denied`, `artifact-missing`, `effort-cap-exhausted` |
 | `evidence` | `locator-missing`, `excerpt-mismatch`, `insufficient-detail`, `coverage-incomplete`, `search-incomplete`, `effort-cap-exhausted` |
 | `accuracy-gate` | `inaccurate-cap-exhausted`, `cannot-verify-cap-exhausted`, `identity-mismatch`, `checker-contract-invalid`, `effort-cap-exhausted` |
@@ -458,7 +458,15 @@ callable string is accepted.
 There are three deliberately separate network postures: author research is web-enabled through WebSearch
 and Exa solely to locate and ground sources; controlled fetch is pinned-network-only through `fetcher.py`
 for exact URLs/revisions into the local CAS; and model execution is offline. The offline policy applies to
-the execution subprocess, not the author's research phase. Web-search capability never enters
+the execution subprocess, not the author's research phase. Because the author never fetches source into the
+campaign, it cannot compute a content digest for a target it has not read: `expected_sha256` is therefore
+optional on a source target. When the author supplies one -- from a release manifest, lockfile, or package
+index -- it is enforced byte-exactly and a mismatch fails the model. When it is genuinely absent the
+controlled fetch is what learns the digest, and the frozen manifest pins exactly the bytes retrieved. Either
+way `content_sha256` in the manifest is the digest of the verified CAS bytes, and every downstream consumer
+re-verifies against it. A target the fetch contract cannot accept at all is `failed:source` /
+`source-target-invalid`; an unretrievable one is `failed:fetch` / `unreachable`; bytes that contradict a
+supplied digest are `failed:fetch` / `hash-mismatch`. Web-search capability never enters
 `worker.py` or `worker_supervisor.py`, so a forward cannot depend on a network, checkpoint, or credential.
 
 Every meaningful-mode forward uses a fresh process with seeded framework/Python/NumPy RNGs, the explicit

@@ -114,6 +114,73 @@ def test_fetcher_rejects_unpinned_and_mismatched_without_cas_write(tmp_path: Pat
     assert not cas_path(tmp_path, expected).exists()
 
 
+def test_fetcher_accepts_an_absent_digest_and_pins_what_it_retrieved(tmp_path: Path) -> None:
+    """The author cannot digest bytes it never fetched, so the fetch learns the pin."""
+
+    content = b"a source the author named but never read"
+    digest = hash_bytes(content)
+    target = FetchTarget("s1", "test://source/model", "commit-1")
+    assert target.expected_sha256 == ""
+
+    manifest = fetch_target(target, tmp_path, fetch_bytes=lambda _url: content)
+
+    assert manifest["content_sha256"] == digest
+    assert manifest["retrieval_status"] == "fetched"
+    assert manifest["fetched_bytes_len"] == len(content)
+    assert Path(str(manifest["cas_path"])) == cas_path(tmp_path, digest)
+    assert cas_path(tmp_path, digest).read_bytes() == content
+
+
+def test_fetcher_accepts_the_bare_hex_digest_the_source_brief_advertises(tmp_path: Path) -> None:
+    """`<64 hex>` and `sha256:<64 hex>` are the same pin and both are enforced."""
+
+    content = b"exact pinned source"
+    digest = hash_bytes(content)
+    bare = digest.removeprefix("sha256:")
+
+    manifest = fetch_target(
+        FetchTarget("s1", "test://source/model", "commit-1", bare),
+        tmp_path,
+        fetch_bytes=lambda _url: content,
+    )
+    assert manifest["content_sha256"] == digest
+
+    upper = fetch_target(
+        FetchTarget("s1", "test://source/model", "commit-1", bare.upper()),
+        tmp_path,
+        fetch_bytes=lambda _url: content,
+    )
+    assert upper["content_sha256"] == digest
+
+
+def test_fetcher_still_fails_loudly_on_a_wrong_supplied_digest(tmp_path: Path) -> None:
+    """A digest the author did supply is enforced exactly, in every spelling."""
+
+    content = b"the bytes actually served"
+    wrong = hash_bytes(b"the bytes the author claimed")
+    for declared in (wrong, wrong.removeprefix("sha256:")):
+        with pytest.raises(FetchHashMismatchError):
+            fetch_target(
+                FetchTarget("s1", "test://source/model", "commit-1", declared),
+                tmp_path,
+                fetch_bytes=lambda _url: content,
+            )
+    assert not cas_path(tmp_path, wrong).exists()
+    assert not cas_path(tmp_path, hash_bytes(content)).exists()
+
+
+def test_fetcher_rejects_a_malformed_digest_instead_of_ignoring_it(tmp_path: Path) -> None:
+    """A garbled pin is a contract defect, never silently downgraded to absence."""
+
+    for declared in ("sha256:not-hex", "abc123", hash_bytes(b"x") + "0", "sha256:"):
+        with pytest.raises(UnpinnedTargetError, match="expected_sha256"):
+            fetch_target(
+                FetchTarget("s1", "test://source/model", "commit-1", declared),
+                tmp_path,
+                fetch_bytes=lambda _url: b"content",
+            )
+
+
 def test_evidence_verbatim_locator_and_support_coverage(tmp_path: Path) -> None:
     """A matching literal excerpt at a fetched locator grounds its claim."""
 

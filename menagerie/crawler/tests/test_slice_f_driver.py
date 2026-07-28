@@ -50,9 +50,13 @@ from menagerie.crawler.cli import build_parser, main as cli_main
 from menagerie.crawler.constants import (
     CheckerPauseReason,
     EnvironmentPhase,
+    FAILURE_REASON_CODES,
     MODEL_SCHEMA_VERSION_V3,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
+    TERMINAL_STATUS_CODES,
 )
+from menagerie.crawler.driver_admission import _author_lane_failure
+from menagerie.crawler.driver_contracts import AuthorEffortCapExceeded
 from menagerie.crawler.driver import (
     AuthorArtifact,
     AuthorLane,
@@ -110,7 +114,12 @@ from menagerie.crawler.intake import (
     trusted_identity_fields,
 )
 from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
-from menagerie.crawler.fetcher import fetch_targets as controlled_fetch_targets
+from menagerie.crawler.fetcher import (
+    FetchHashMismatchError,
+    FetchRetrievalError,
+    UnpinnedTargetError,
+    fetch_targets as controlled_fetch_targets,
+)
 from menagerie.crawler.metadata import authored_fact_leaves, recompute_accepted_identities
 from menagerie.crawler.models import LedgerPaths
 from menagerie.crawler.mirrors import MirrorStore
@@ -2037,6 +2046,93 @@ def test_author_source_handshake_freezes_nonempty_cas_manifest(
         lane._fetch_author_sources(item, tmp_path / "empty-author")
 
 
+@pytest.mark.parametrize("declared", ["", None])
+def test_author_source_handshake_accepts_an_undigested_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, declared: Optional[str]
+) -> None:
+    """An author forbidden from fetching may honestly decline to name a digest."""
+
+    snapshot = _snapshot(tmp_path)
+    driver = _driver(tmp_path, snapshot)
+    item = driver._ordered_work(snapshot, {})[0]
+    content = b"ExampleNet is a source-grounded architecture."
+    digest = hash_bytes(content)
+
+    def fake_run(argv: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        """Write one exact target whose content digest the author cannot know.
+
+        Parameters
+        ----------
+        argv:
+            Operator argv whose final element is the request envelope path.
+        kwargs:
+            Ignored subprocess options.
+
+        Returns
+        -------
+        subprocess.CompletedProcess[str]
+            Successful operator exit.
+        """
+
+        del kwargs
+        request = json.loads(Path(argv[-1]).read_text(encoding="utf-8"))
+        source: dict[str, Any] = {
+            "source_id": "source-1",
+            "url": "https://example.com/model.txt",
+            "revision": "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c",
+            "media_type": "text/plain",
+        }
+        if declared is not None:
+            source["expected_sha256"] = declared
+        Path(request["required_output_path"]).write_text(
+            json.dumps({"sources": [source]}), encoding="utf-8"
+        )
+        return subprocess.CompletedProcess(list(argv), 0, "", "")
+
+    monkeypatch.setattr(driver_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        driver_module,
+        "fetch_targets",
+        lambda targets, root: controlled_fetch_targets(
+            targets, root, fetch_bytes=lambda _url: content
+        ),
+    )
+    manifest = CommandAuthorLane(("fake-author",))._fetch_author_sources(item, tmp_path / "author")
+
+    frozen = manifest["sources"][0]
+    assert frozen["content_sha256"] == digest
+    assert Path(frozen["cas_path"]).read_bytes() == content
+
+
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        (AuthorEffortCapExceeded("cap"), ("source", "effort-cap-exhausted")),
+        (FetchHashMismatchError("mismatch"), ("fetch", "hash-mismatch")),
+        (FetchRetrievalError("unreachable"), ("fetch", "unreachable")),
+        (UnpinnedTargetError("bad pin"), ("source", "source-target-invalid")),
+        (RuntimeError("no implementation anywhere"), ("source", "identity-unresolved")),
+    ],
+)
+def test_author_lane_failure_names_the_real_cause(
+    error: Exception, expected: tuple[str, str]
+) -> None:
+    """A fetch-contract rejection must not be misreported as an unresolved identity.
+
+    Parameters
+    ----------
+    error:
+        Exception observed while resolving, fetching, or authoring one model.
+    expected:
+        Closed ``(stage, reason_code)`` the operator should be shown.
+    """
+
+    stage, reason_code = _author_lane_failure(error)
+    assert (stage, reason_code) == expected
+    assert reason_code in FAILURE_REASON_CODES[stage]
+    assert f"failed:{stage}" in TERMINAL_STATUS_CODES
+
+
 def test_command_checker_lane_validates_real_proposal_digest_binding(tmp_path: Path) -> None:
     """A schema-valid production checker result echoes the request's exact six-hash pack."""
 
@@ -3949,6 +4045,64 @@ def test_author_failure_without_source_is_honest_and_later_models_continue(
         models[failed_id]["implementation"]["torchlens_import_static_check"]
         == "not-applicable-no-code"
     )
+
+
+def test_fetch_contract_rejection_terminalizes_with_its_own_reason(tmp_path: Path) -> None:
+    """The operator is told the pinned target was rejected, not that identity is unknown.
+
+    Parameters
+    ----------
+    tmp_path:
+        Campaign root for this driver run.
+    """
+
+    class _UnpinnedAuthor(ScriptedAuthor):
+        """Fail exactly one model the way the controlled fetcher rejects a target."""
+
+        def author(
+            self,
+            item: WorkItem,
+            work_root: Path,
+            config: DriverConfig,
+            context: AuthorityContext,
+        ) -> AuthorArtifact:
+            """Raise the fetch-contract rejection for the scripted model.
+
+            Parameters
+            ----------
+            item, work_root, config, context:
+                Standard author-lane arguments.
+
+            Returns
+            -------
+            AuthorArtifact
+                Canonical synthetic artifact for every other model.
+            """
+
+            if item.stable_id == self.script.failed_id:
+                raise UnpinnedTargetError(
+                    "expected_sha256 must be sha256:<64 hex> or <64 hex>, or omitted when unknown"
+                )
+            return super().author(item, work_root, config, context)
+
+    snapshot = _snapshot(tmp_path, count=3)
+    failed_id = snapshot.items[0].stable_id
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=_UnpinnedAuthor(AuthorScript(failed_id=failed_id)),
+    ).run()
+
+    assert result.status == "terminal-partition-complete"
+    models = {
+        record["stable_id"]: record
+        for record in scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
+    }
+    status = models[failed_id]["status"]
+    assert status["code"] == "failed:source"
+    assert status["reason_code"] == "source-target-invalid"
+    assert status["stage"] == "source"
+    assert sum(record["status"]["code"] == "runs" for record in models.values()) == 2
 
 
 def test_author_failure_retains_exact_intake_discovery_url(tmp_path: Path) -> None:

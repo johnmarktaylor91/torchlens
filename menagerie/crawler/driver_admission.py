@@ -110,7 +110,12 @@ from menagerie.crawler.env_lifecycle import (
     validate_probe_receipts,
 )
 from menagerie.crawler.effort import StageCap
-from menagerie.crawler.fetcher import FetchTarget
+from menagerie.crawler.fetcher import (
+    FetchHashMismatchError,
+    FetchRetrievalError,
+    FetchTarget,
+    UnpinnedTargetError,
+)
 from menagerie.crawler.family_templates import (
     FamilyTemplateError,
     instantiate_size_variant,
@@ -291,6 +296,41 @@ def _current_fetch_targets(
     """
 
     return _driver_admission_dependencies().fetch_targets(targets, cas_root)
+
+
+def _author_lane_failure(exc: Exception) -> tuple[str, str]:
+    """Map one model-local author-lane exception to its closed stage and reason.
+
+    The default arm is deliberately last. Everything ahead of it names a cause an
+    operator can act on; collapsing a controlled-fetch rejection into
+    ``identity-unresolved`` sent operators hunting for a missing implementation
+    when the real cause was the author's pinned-target declaration or the
+    retrieval itself.
+
+    Parameters
+    ----------
+    exc:
+        Exception raised while resolving, fetching, or authoring this model.
+
+    Returns
+    -------
+    tuple[str, str]
+        Closed ``(stage, reason_code)`` pair from ``FAILURE_REASON_CODES``.
+    """
+
+    # PLAN.md LP-13.2: cap exhaustion is `failed:<actual-stage>` with
+    # `effort-cap-exhausted`, distinct from an unresolved identity.
+    if isinstance(exc, AuthorEffortCapExceeded):
+        return "source", "effort-cap-exhausted"
+    if isinstance(exc, FetchHashMismatchError):
+        return "fetch", "hash-mismatch"
+    if isinstance(exc, FetchRetrievalError):
+        return "fetch", "unreachable"
+    if isinstance(exc, UnpinnedTargetError):
+        # The author named a target the controlled fetch contract cannot accept.
+        # That is a declaration defect, not an unresolvable identity.
+        return "source", "source-target-invalid"
+    return "source", "identity-unresolved"
 
 
 # Reviewed runtime roots. ``_runner_identity`` discovers their transitive local call
@@ -725,7 +765,11 @@ class _AuthorLaneBase:
                     source_id=str(raw.get("source_id", "")),
                     url=str(raw.get("url", "")),
                     revision=str(raw.get("revision", "")),
-                    expected_sha256=str(raw.get("expected_sha256", "")),
+                    # An absent digest is legitimate and expected: the author lane
+                    # is structurally forbidden from fetching source into the
+                    # campaign, so it can only pin a digest it read from an
+                    # external record. `null` and a missing key both mean absent.
+                    expected_sha256=str(raw.get("expected_sha256") or ""),
                     media_type=str(raw.get("media_type", "application/octet-stream")),
                 )
             )
@@ -2189,17 +2233,11 @@ class AdmissionEnvironmentMixin:
             except RetryableOperatorError:
                 raise
             except Exception as exc:  # noqa: BLE001 -- author failure belongs to this model
-                # PLAN.md LP-13.2: cap exhaustion is `failed:<actual-stage>` with
-                # `effort-cap-exhausted`, distinct from an unresolved identity.
-                reason_code = (
-                    "effort-cap-exhausted"
-                    if isinstance(exc, AuthorEffortCapExceeded)
-                    else "identity-unresolved"
-                )
+                stage, reason_code = _author_lane_failure(exc)
                 attempt = _driver_failure_attempt(
                     item,
                     None,
-                    "source",
+                    stage,
                     reason_code,
                     exc,
                     self.config,
@@ -2211,7 +2249,7 @@ class AdmissionEnvironmentMixin:
                 self._terminalize(
                     item,
                     None,
-                    "failed:source",
+                    f"failed:{stage}",
                     reason_code,
                     str(exc),
                     (persisted,),

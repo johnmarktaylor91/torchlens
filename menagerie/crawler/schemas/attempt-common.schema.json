@@ -103,6 +103,7 @@
         "identity-unresolved",
         "missing-mandatory-link",
         "source-model-mismatch",
+        "source-target-invalid",
         "higher-rung-unresolved",
         "unreachable",
         "revision-missing",
