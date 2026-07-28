@@ -25,6 +25,8 @@ GATE_SCHEMA_VERSION_V3 = "menagerie.crawler.gate.v3"
 AUTHOR_PROPOSAL_SCHEMA_VERSION_V3 = "menagerie.crawler.author-proposal.v3"
 AUTHOR_RESULT_SCHEMA_VERSION_V3 = "menagerie.crawler.author-result.v3"
 AUTHOR_RESULT_SCHEMA_VERSION = "menagerie.crawler.author-result.v4"
+PROMOTION_SCHEMA_VERSION = "menagerie.crawler.promotion.v1"
+SOURCE_DISCOVERY_SCHEMA_VERSION = "menagerie.crawler.source-discovery.v1"
 ARTIFACT_EVENT_SCHEMA_VERSION = "menagerie.crawler.artifact-event.v1"
 
 CURRENT_SCHEMA_VERSIONS = frozenset(
@@ -290,6 +292,7 @@ TERMINAL_STATUS_CODES = frozenset(
         "runs",
         "deferred:needs-cuda",
         "deferred:needs-x86",
+        "deferred:needs-opus-tier",
         *SKIPPED_STATUS_CODES,
         *(f"failed:{stage.value}" for stage in FailureStage),
     }

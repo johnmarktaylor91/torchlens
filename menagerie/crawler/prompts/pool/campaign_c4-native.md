@@ -32,8 +32,10 @@ exactly the "approximation instead of the real source" failure the project forbi
 
 - Do not port, translate, or "equivalently reimplement" into PyTorch.
 - Do not convert weights or seek checkpoints; construction is random-initialized.
-- Do not escalate in place. This campaign is frozen to sonnet; a genuinely hard row gets a
-  typed `BLOCKED` for requeue into `c3-classics`.
+- Do not escalate in place. This campaign is frozen to sonnet; a genuinely hard row gets
+  `NEEDS_HIGHER_TIER` at stage 1, or
+  `BLOCKED(stage=author, reason_code=needs-higher-tier)` after fetch, with the bounded
+  research summary. The engine durably defers C4 and appends the typed C3 intake promotion.
 
 ### Budget shape
 

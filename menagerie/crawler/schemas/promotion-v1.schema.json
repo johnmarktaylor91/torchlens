@@ -1,0 +1,261 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://torchlens.org/schemas/menagerie/crawler/promotion-v1.schema.json",
+  "title": "Menagerie crawler C3 intake promotion v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "promotion_id",
+    "promotion_sha256",
+    "stable_id",
+    "source_campaign_id",
+    "destination_campaign_id",
+    "created_at",
+    "source_intake",
+    "source_manifest",
+    "source_manifest_identity",
+    "stage1_research_summary",
+    "prior_attempt"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "menagerie.crawler.promotion.v1"
+    },
+    "promotion_id": {
+      "type": "string",
+      "pattern": "^promotion-[0-9a-f]{20}$"
+    },
+    "promotion_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "stable_id": {
+      "$ref": "#/$defs/nonempty_string"
+    },
+    "source_campaign_id": {
+      "enum": ["c1-mech", "c2-disco", "c4-native"]
+    },
+    "destination_campaign_id": {
+      "const": "c3-classics"
+    },
+    "created_at": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "source_intake": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "snapshot_id",
+        "snapshot_sha256",
+        "item_sha256",
+        "item"
+      ],
+      "properties": {
+        "snapshot_id": {
+          "$ref": "#/$defs/nonempty_string"
+        },
+        "snapshot_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "item_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "item": {
+          "$ref": "#/$defs/intake_item"
+        }
+      }
+    },
+    "source_manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sources", "manifest_sha256"],
+      "properties": {
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object"
+          }
+        },
+        "manifest_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "source_manifest_identity": {
+      "$ref": "#/$defs/hash"
+    },
+    "stage1_research_summary": {
+      "$ref": "#/$defs/research_summary"
+    },
+    "prior_attempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result_id",
+        "result_sha256",
+        "work_id",
+        "kind",
+        "reason_code",
+        "author_result"
+      ],
+      "properties": {
+        "result_id": {
+          "$ref": "#/$defs/nonempty_string"
+        },
+        "result_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "work_id": {
+          "$ref": "#/$defs/nonempty_string"
+        },
+        "kind": {
+          "const": "BLOCKED"
+        },
+        "reason_code": {
+          "const": "needs-higher-tier"
+        },
+        "author_result": {
+          "$ref": "https://torchlens.org/schemas/menagerie/crawler/author-result-v4.schema.json"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "nonempty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "nonempty_string_array": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/nonempty_string"
+      }
+    },
+    "intake_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stable_id",
+        "name",
+        "zoo",
+        "variant",
+        "discovery_source",
+        "legacy_row_sha256",
+        "preserved_legacy_flags",
+        "variant_scope",
+        "family_representative_id",
+        "family",
+        "era",
+        "routing_requirements"
+      ],
+      "properties": {
+        "stable_id": {
+          "$ref": "#/$defs/nonempty_string"
+        },
+        "name": {
+          "$ref": "#/$defs/nonempty_string"
+        },
+        "zoo": {
+          "$ref": "#/$defs/nonempty_string"
+        },
+        "variant": {
+          "type": "string"
+        },
+        "discovery_source": {
+          "$ref": "#/$defs/nonempty_string"
+        },
+        "legacy_row_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "preserved_legacy_flags": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/nonempty_string"
+          }
+        },
+        "variant_scope": {
+          "$ref": "#/$defs/nonempty_string"
+        },
+        "family_representative_id": {
+          "$ref": "#/$defs/nonempty_string"
+        },
+        "family": {
+          "type": ["string", "null"]
+        },
+        "era": {
+          "type": ["string", "null"]
+        },
+        "routing_requirements": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["packages", "exact_repository", "legacy_torch"],
+          "properties": {
+            "packages": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/nonempty_string"
+              }
+            },
+            "exact_repository": {
+              "type": "boolean"
+            },
+            "legacy_torch": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "research_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "queries",
+        "places",
+        "candidate_links",
+        "languages",
+        "conclusion"
+      ],
+      "properties": {
+        "queries": {
+          "$ref": "#/$defs/nonempty_string_array"
+        },
+        "places": {
+          "$ref": "#/$defs/nonempty_string_array"
+        },
+        "candidate_links": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https?://"
+          }
+        },
+        "languages": {
+          "$ref": "#/$defs/nonempty_string_array"
+        },
+        "conclusion": {
+          "$ref": "#/$defs/nonempty_string"
+        },
+        "retained_description": {
+          "type": ["string", "null"]
+        }
+      }
+    }
+  }
+}

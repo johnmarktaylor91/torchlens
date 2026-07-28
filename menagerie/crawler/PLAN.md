@@ -696,15 +696,15 @@ fragment both fail; `python -m menagerie.crawler.tools.verify_prompts` remains t
 reuses. Editing any of these files stales its digest by construction: re-pin the literal row here in the
 same change.
 
-- `claude_crawler_author_v2.txt`: `sha256:aa9ba4cc1ff7fec02de0b569aad761c33ba54edd41acd31b046376cee34ffbcc`
+- `claude_crawler_author_v2.txt`: `sha256:6c06edf90e203af6fff4248d1c0e62c26939cf4eee808156a8b231dcb20a6c1d`
 - `codex_accuracy_checker_v2.txt`: `sha256:56d6423314dbaf750012a4faee6751b74338dd4520912caf79ca76e2fe038f1e`
-- `campaign_c1-mech.md`: `sha256:c4f38a682416ed82b995a7d06941d04d6559d4ec10f8a5bb0ee6d5436b00b1e8`
-- `campaign_c2-disco.md`: `sha256:3ffbfaf9ab56c713b301f28071ff019e1173aa44a7d3e0ed890a980f59daafd1`
+- `campaign_c1-mech.md`: `sha256:ec13e8573035065734b53d60f9b3f235e2758a60e13e459a01ac06f14e311a7c`
+- `campaign_c2-disco.md`: `sha256:d176f8298d8a0ecdfd2519a4905e5047cb214aff377545b34c653b7448ecd5b5`
 - `campaign_c3-classics.md`: `sha256:e6a277891824b72e378c52b1e472357d968d30a91a87b1b8d562ab923b5a11a4`
-- `campaign_c4-native.md`: `sha256:b9ff9531f0f330dfabe09275c61aaa72d0a699a29b2c5cd463cae6f439c36683`
-- `stage_author.md`: `sha256:1ee450d3c98cea998c827cd11bfa628078e793885bfa9848c791c5e1d6d69195`
+- `campaign_c4-native.md`: `sha256:266d60f05cf9e54d15a882ea77e4143b2941ccacfdfdb6a4841433da92afb051`
+- `stage_author.md`: `sha256:8b6d32ab1589fb6b2592f8c3e50e814cca9db5b85074b39293ca3a8bbf007b52`
 - `stage_capability_probe.md`: `sha256:1f59abfc6f76beb4f10510a1f85373384be5ae5907c9fb198b3c2677f7781d01`
-- `stage_source_request.md`: `sha256:6c04a08dd1dcd92be988e529b29b33d78d12242000e79f9993ff8513078151c0`
+- `stage_source_request.md`: `sha256:be86a502f42e5acf0a1a9b820c2fd3c5a5783d4a2c63ae7e6cc6a17f80809c98`
 
 ## 21. Acceptance tests
 
