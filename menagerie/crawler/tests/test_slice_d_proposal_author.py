@@ -26,7 +26,9 @@ from menagerie.crawler.constants import (
 )
 from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.proposal import (
+    CHECKER_EVALUATED_CLAIMS,
     DEFAULT_GATED_CLAIMS,
+    VALUE_MATCHED_CLAIMS,
     ProposalValidationError,
     model_code_manifest,
     validate_author_proposal,
@@ -308,6 +310,142 @@ def test_arxiv_identifier_present_in_the_fetched_paper_grounds_the_citation(
     report = validate_author_proposal(
         proposal, allowed_model_dir=tmp_path, source_manifest=manifest
     )
+    assert report.rung.value == "R1_LIBRARY"
+
+
+def _blank_search_report(proposal: dict[str, Any]) -> None:
+    """Remove the bounded search that would justify an unanswered field."""
+
+    proposal["proposed_facts"]["source_resolution"]["search_report"]["queries"] = []
+
+
+def test_country_and_era_are_judged_by_the_checker_not_by_token_overlap() -> None:
+    """Two claims move off a matcher that could only lie about them or refuse them.
+
+    Measured against real prose, ``country = "US"`` passed by matching the English
+    pronoun "us", while ``GB``, ``CN``, and ``DE`` could never pass however correct the
+    evidence was. Neither outcome is a judgement. They are not dropped: the accuracy
+    checker must still return ``accurate`` for every mandatory external field.
+    """
+
+    from menagerie.crawler.metadata import MANDATORY_EXTERNAL_FIELDS
+
+    assert CHECKER_EVALUATED_CLAIMS <= DEFAULT_GATED_CLAIMS
+    assert {claim.removeprefix("external_metadata.") for claim in CHECKER_EVALUATED_CLAIMS} <= set(
+        MANDATORY_EXTERNAL_FIELDS
+    )
+    assert not (CHECKER_EVALUATED_CLAIMS & VALUE_MATCHED_CLAIMS)
+
+
+@pytest.mark.parametrize("field", ["country", "era"])
+def test_checker_evaluated_fields_are_still_mandatory_at_the_accuracy_gate(field: str) -> None:
+    """The claim the excerpt matcher stopped judging is still gated, by the checker."""
+
+    from menagerie.crawler.metadata import (
+        MANDATORY_EXTERNAL_FIELDS,
+        MetadataValidationError,
+        _validate_external_field_checks,
+    )
+
+    checks = [
+        {"field": f"external_metadata.{name}", "verdict": "accurate"}
+        for name in MANDATORY_EXTERNAL_FIELDS
+        if name != field
+    ]
+    with pytest.raises(MetadataValidationError, match="ungated mandatory external metadata"):
+        _validate_external_field_checks(checks)
+
+
+def test_checker_evaluated_claims_still_require_evidence_provenance(tmp_path: Path) -> None:
+    """Moving the value verdict does not remove the requirement to cite a source."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    excerpt = proposal["proposed_facts"]["evidence"]["excerpts"][0]
+    excerpt["supports"] = [
+        support for support in excerpt["supports"] if support != "external_metadata.country"
+    ]
+    with pytest.raises(ProposalValidationError, match="ungrounded claim categories"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_diacritics_no_longer_break_a_correct_author_claim(tmp_path: Path) -> None:
+    """The same author spelled two real ways must ground the same claim.
+
+    ``Balazevic`` and ``Balazevic`` with diacritics previously normalized to different
+    token sets, so a correct claim failed exactly as if it had been fabricated.
+    """
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    text = (
+        "Example Model. Ivana Balažević, Example Lab, US. "
+        "Published at TestConf in 2020."
+    )
+    attach_paper_evidence(proposal, manifest, tmp_path, text=text, source_id="source-authors")
+    facts = proposal["proposed_facts"]
+    excerpt = next(
+        item
+        for item in facts["evidence"]["excerpts"]
+        if item["source_id"] == "source-authors"
+    )
+    excerpt["supports"] = ["external_metadata.authors", "external_metadata.citation"]
+    facts["external_metadata"]["authors"] = ["Ivana Balazevic"]
+
+    report = validate_author_proposal(
+        proposal, allowed_model_dir=tmp_path, source_manifest=manifest
+    )
+
+    assert report.rung.value == "R1_LIBRARY"
+
+
+def test_omitting_the_citation_without_a_recorded_search_is_refused(tmp_path: Path) -> None:
+    """Declaring "no paper" must cost the search that establishes it.
+
+    The gate returned early on any non-present citation, so omission was the cheapest
+    way past every check. A campaign that completes with its citations silently blank
+    is worse than one that stops, because nothing surfaces it.
+    """
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    _strip_paper_evidence(proposal, manifest)
+    for citation in (
+        proposal["proposed_facts"]["citation"],
+        proposal["proposed_facts"]["external_metadata"]["citation"],
+    ):
+        citation.update(
+            {
+                "status": "not-found-after-search",
+                "title": None,
+                "authors": [],
+                "year": None,
+                "venue": None,
+                "url": None,
+            }
+        )
+    _blank_search_report(proposal)
+    with pytest.raises(ProposalValidationError, match="bounded search"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_hollow_gated_field_without_a_recorded_search_is_refused(tmp_path: Path) -> None:
+    """A null value is no longer free support for the claim it empties."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    proposal["proposed_facts"]["external_metadata"]["venue"] = None
+    _blank_search_report(proposal)
+    with pytest.raises(ProposalValidationError, match="left empty without a recorded"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_hollow_gated_field_behind_a_recorded_search_is_accepted(tmp_path: Path) -> None:
+    """Emptiness stays possible, but only as an accountable, recorded outcome."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    proposal["proposed_facts"]["external_metadata"]["venue"] = None
+
+    report = validate_author_proposal(
+        proposal, allowed_model_dir=tmp_path, source_manifest=manifest
+    )
+
     assert report.rung.value == "R1_LIBRARY"
 
 

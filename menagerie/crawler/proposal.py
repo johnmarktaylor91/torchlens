@@ -6,6 +6,7 @@ import ast
 import hashlib
 import re
 import tarfile
+import unicodedata
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -37,6 +38,41 @@ DEFAULT_GATED_CLAIMS = frozenset(
         "source_resolution.rung",
         "taxonomy",
         "input_contract",
+    }
+)
+#: Gated claims whose VALUE cannot be judged by literal token overlap, because the value
+#: is an inference over the source rather than anything the source says. Deciding these
+#: with the deterministic matcher was worse than not deciding them: measured against real
+#: text, ``country = "US"`` passes by matching the English pronoun "us" -- grounding
+#: theater that reports success while proving nothing -- while ``GB``, ``CN``, and ``DE``
+#: can never pass however correct the evidence is, and ``era`` is a controlled-vocabulary
+#: bucket that essentially never occurs verbatim.
+#:
+#: They are NOT ungated. The excerpt-provenance requirement is unchanged -- an excerpt
+#: must still name the claim -- and the Codex accuracy checker must still return
+#: ``accurate`` for every mandatory external field before any canonical write
+#: (:func:`menagerie.crawler.metadata._validate_external_field_checks`). What moves is
+#: only the *verdict on the value*, from a matcher that cannot evaluate entailment to the
+#: component that can.
+CHECKER_EVALUATED_CLAIMS = frozenset(
+    {
+        "external_metadata.country",
+        "external_metadata.era",
+    }
+)
+#: Gated claims whose value is a verbatim fact and stays under the deterministic matcher.
+VALUE_MATCHED_CLAIMS = DEFAULT_GATED_CLAIMS - CHECKER_EVALUATED_CLAIMS
+#: Keys inside a structured claim that record provenance or disposition rather than the
+#: fact itself, and so cannot make an otherwise-empty block look answered.
+_HOLLOW_BOOKKEEPING_KEYS = frozenset(
+    {"status", "source_evidence_ids", "evidence_ids", "basis", "confidence", "note"}
+)
+#: Value-matched claims for which an empty collection is a true, ordinary fact rather
+#: than an unfilled field. Everything else must justify its emptiness.
+EMPTIABLE_CLAIMS = frozenset(
+    {
+        "external_metadata.lineage",
+        "external_metadata.predecessors",
     }
 )
 #: Source roles whose bytes are the *paper*, not the implementation. Paper metadata
@@ -462,6 +498,11 @@ def _validate_citation(facts: Mapping[str, Any], known_evidence: frozenset[str])
 
     citation = _mapping(facts.get("citation"), "citation")
     if citation.get("status") != "present":
+        # Declaring no citation must cost at least the search that establishes it. The
+        # gate previously returned here unconditionally, which made "there is no paper"
+        # the cheapest possible answer and the one an author under budget pressure is
+        # trained to give.
+        _validate_absence_is_searched(facts, ["citation"])
         return
     if not all(
         isinstance(citation.get(field), str) and str(citation[field]).strip()
@@ -637,16 +678,104 @@ def _validate_claim_support(
                 support_texts.setdefault(canonical, []).append(text)
 
     unsupported: list[str] = []
+    hollow: list[str] = []
     for claim in required_claims:
         canonical = _SUPPORT_ALIASES.get(claim, claim)
         texts = support_texts.get(canonical, [])
         value = _claim_value(facts, canonical)
-        if not texts or not _text_supports_claim(canonical, value, "\n".join(texts)):
+        if not texts:
             unsupported.append(canonical)
+            continue
+        if canonical in CHECKER_EVALUATED_CLAIMS:
+            # Provenance is still required; the value verdict belongs to the checker.
+            continue
+        if _claim_is_hollow(canonical, value):
+            hollow.append(canonical)
+            continue
+        if not _text_supports_claim(canonical, value, "\n".join(texts)):
+            unsupported.append(canonical)
+    if hollow:
+        _validate_absence_is_searched(facts, hollow)
     if unsupported:
         raise ProposalValidationError(
             "evidence excerpts do not substantively support claimed values: "
             f"{sorted(set(unsupported))}"
+        )
+
+
+def _claim_is_hollow(claim: str, value: object) -> bool:
+    """Return whether a gated claim was left empty rather than answered.
+
+    An empty value used to satisfy the gate for free, which made omission the cheapest
+    way past every check the campaign exists to enforce. A run that completes with its
+    metadata silently blank is a worse outcome than one that stops, because nothing
+    surfaces it.
+
+    Parameters
+    ----------
+    claim:
+        Canonical claim path.
+    value:
+        Proposed value at that path.
+
+    Returns
+    -------
+    bool
+        True when the claim carries no answer and emptiness is not a real fact for it.
+    """
+
+    if claim in EMPTIABLE_CLAIMS:
+        return False
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip()
+    if isinstance(value, Mapping):
+        # A structured block is hollow when every leaf it is judged on is absent.
+        # Bookkeeping keys are not answers: a citation carrying nothing but a status
+        # and the evidence IDs that point at nothing is exactly the hollow case.
+        return not _positive_scalars(
+            {key: item for key, item in value.items() if key not in _HOLLOW_BOOKKEEPING_KEYS}
+        )
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        return not _positive_scalars(value)
+    return False
+
+
+def _validate_absence_is_searched(facts: Mapping[str, Any], hollow: Sequence[str]) -> None:
+    """Require an empty gated claim to sit behind a bounded search that could find it.
+
+    This does not make emptiness free and does not make it impossible. It makes it
+    *accountable*: a proposal may report that a fact is not there, but only after
+    recording the search that looked for it, so an unfilled field is distinguishable
+    from a genuinely absent one.
+
+    Parameters
+    ----------
+    facts:
+        Complete proposed fact tree.
+    hollow:
+        Gated claims left empty.
+
+    Raises
+    ------
+    ProposalValidationError
+        If the bounded search report does not record a real search.
+    """
+
+    resolution = _mapping(facts.get("source_resolution"), "source_resolution")
+    search_report = resolution.get("search_report")
+    queries = search_report.get("queries") if isinstance(search_report, Mapping) else None
+    conclusion = search_report.get("conclusion") if isinstance(search_report, Mapping) else None
+    if (
+        not isinstance(queries, list)
+        or not any(isinstance(query, str) and query.strip() for query in queries)
+        or not isinstance(conclusion, str)
+        or not conclusion.strip()
+    ):
+        raise ProposalValidationError(
+            "gated claims were left empty without a recorded bounded search that could "
+            f"have found them: {sorted(set(hollow))}"
         )
 
 
@@ -860,7 +989,13 @@ def _normalize_support_text(value: str) -> str:
         Lowercase alphanumeric tokens separated by single spaces.
     """
 
-    return " ".join(re.findall(r"[a-z0-9]+", value.lower()))
+    # Compatibility-decompose and drop combining marks first. Without this the regex
+    # splits on the diacritic itself, so "Balazevic" and "Balažević" -- the
+    # same author, spelled the two ways real sources actually spell them -- normalize to
+    # different token sets and a correct claim fails as if it were fabricated.
+    decomposed = unicodedata.normalize("NFKD", value)
+    folded = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return " ".join(re.findall(r"[a-z0-9]+", folded.lower()))
 
 
 def _validate_code(

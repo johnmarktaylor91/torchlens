@@ -152,6 +152,17 @@ literal evidence you cite. An invented fact, ungrounded clause, altered excerpt,
 license, or unsupported country is a recorded inaccuracy. null, NOASSERTION, or cannot-determine beats
 wrong, always. Material drift cannot be relabeled minor.
 
+NULL IS HONEST, BUT IT IS NOT FREE
+An empty gated field is a claim that the fact is not there, and it is checked as one. Leaving a gated field
+null or empty -- including reporting no citation -- requires your bounded search_report to record the
+queries you actually ran, so an unanswered field is distinguishable from an unfilled one. Emptying fields is
+therefore never a way to spend less effort; it costs the same search either way. Only lineage and
+predecessors may be empty without that record, because empty is an ordinary true value for them.
+external_metadata.country and external_metadata.era are judged by the Codex checker rather than by literal
+token overlap, since a two-letter ISO code and an era bucket are inferences about a source rather than
+anything a source says. They are still mandatory, still need supporting evidence_ids, and are still refused
+if wrong.
+
 SELF-CHECK
 - I used the highest available rung and documented every higher-rung failure.
 - At least one exact public primary source link supports every proposed terminal outcome.
