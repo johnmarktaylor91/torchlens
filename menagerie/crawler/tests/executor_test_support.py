@@ -190,8 +190,94 @@ elif stage == "supplement" and result_path:
     with open(result_path, "w") as fh:
         fh.write(os.environ.get("FAKE_CLAUDE_RESULT") or '{"kind": "PROPOSED"}')
 elif stage == "probe" and required_path:
+    # Default: evidence shaped like a session that GENUINELY exercised all
+    # three tools, derived from the prompt's own challenge facts so the
+    # executor-side proof (nonce echo, live URLs, digest consistency,
+    # version corroboration) can pass. FAKE_CLAUDE_PROBE=hollow writes the
+    # evidence of a session that researched nothing, which the executor must
+    # REFUSE to turn into a receipt.
+    if os.environ.get("FAKE_CLAUDE_PROBE") == "hollow":
+        evidence = {"challenge_id": "test", "tools": {}}
+    else:
+        import hashlib
+        from datetime import datetime, timezone
+
+        package = extract("- challenge package:") or "requests"
+        metadata_url = extract("- challenge metadata URL:") or ""
+        challenge_id = extract("- challenge_id:") or ""
+        nonce_fact = extract("- probe nonce:") or ""
+        now_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        version = "9.9.9"
+        serial = 20260728
+        content = json.dumps(
+            {"info": {"version": version}, "last_serial": serial, "pad": "x" * 900}
+        )
+        common = {"nonce": nonce_fact, "observed_at": now_iso}
+        evidence = {
+            "challenge_id": challenge_id,
+            "tools": {
+                "WebSearch": dict(
+                    common,
+                    registered_tool_name="WebSearch",
+                    query=package + " pypi latest version",
+                    reported_version=version,
+                    results=[
+                        {
+                            "url": "https://pypi.org/project/" + package + "/",
+                            "title": package + " on PyPI",
+                            "excerpt": "latest release " + version,
+                        },
+                        {
+                            "url": "https://libraries.io/pypi/" + package,
+                            "title": package + " release history",
+                            "excerpt": "current version " + version,
+                        },
+                    ],
+                ),
+                "mcp__exa__web_search_exa": dict(
+                    common,
+                    registered_tool_name="mcp__exa__web_search_exa",
+                    query=package + " latest release",
+                    reported_version=version,
+                    results=[
+                        {
+                            "url": "https://snyk.io/advisor/python/" + package,
+                            "title": package + " package health",
+                            "text": (
+                                "The package "
+                                + package
+                                + " has current released version "
+                                + version
+                                + ". "
+                            )
+                            * 8,
+                        },
+                        {
+                            "url": "https://pypi.org/project/"
+                            + package
+                            + "/"
+                            + version
+                            + "/",
+                            "title": package + " " + version,
+                            "text": "release page",
+                        },
+                    ],
+                ),
+                "mcp__exa__web_fetch_exa": dict(
+                    common,
+                    registered_tool_name="mcp__exa__web_fetch_exa",
+                    url=metadata_url,
+                    content=content,
+                    content_sha256=hashlib.sha256(
+                        content.encode("utf-8")
+                    ).hexdigest(),
+                    reported_version=version,
+                    reported_last_serial=serial,
+                ),
+            },
+        }
     with open(required_path, "w") as fh:
-        fh.write(json.dumps({"challenge_id": "test", "tools": {}}))
+        fh.write(json.dumps(evidence))
 if os.environ.get("FAKE_CLAUDE_STDERR_NOISE"):
     print(os.environ["FAKE_CLAUDE_STDERR_NOISE"], file=sys.stderr)
 emit_harness()
@@ -240,6 +326,7 @@ def executor_environment(
     monkeypatch.setenv("FAKE_CLAUDE_DEFAULT_DISCOVERY", json.dumps(DEFAULT_DISCOVERY))
     monkeypatch.setenv("FAKE_CLAUDE_SUPPLEMENT_URL", SUPPLEMENT_URL)
     monkeypatch.delenv("FAKE_CLAUDE_MODE", raising=False)
+    monkeypatch.delenv("FAKE_CLAUDE_PROBE", raising=False)
     monkeypatch.delenv("MENAGERIE_EXECUTOR_PAUSE_AFTER", raising=False)
 
 

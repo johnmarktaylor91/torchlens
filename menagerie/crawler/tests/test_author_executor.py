@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -17,10 +18,12 @@ from menagerie.crawler.author_dispatch import AuthorEffortGrant
 from menagerie.crawler.author_executor import (
     EXIT_BACKOFF,
     EXIT_OK,
+    EXIT_PERMANENT,
     EXIT_RETRYABLE,
     RECEIPT_VERSION,
     main,
 )
+from menagerie.crawler.capability_probe import canonical_tool_name
 from menagerie.crawler.driver_admission import (
     CommandAuthorLane,
     DriverIntegrationError,
@@ -412,25 +415,101 @@ def test_ten_model_rung_headless_with_zero_managing_session(
     assert stages == ["stage1", "stage2"] * 10
 
 
-def test_capability_probe_publishes_evidence_via_executor(rig, capsys) -> None:
-    """The doctor probe runs headless; the executor publishes the evidence."""
+def _write_probe_request(
+    probe_dir: Path, nonce: str, *, drop_requested_at: bool = False
+) -> Path:
+    """Write one doctor-shaped capability request into ``probe_dir``."""
 
-    probe_dir = rig["tmp"] / "probe"
-    probe_dir.mkdir()
-    nonce = "f" * 32
+    probe_dir.mkdir(parents=True, exist_ok=True)
     request = {
         "format": "menagerie.crawler.author-capability-probe.v1",
         "nonce": nonce,
-        "deadline_seconds": 30,
-        "required_output_path": str(probe_dir / "evidence.json"),
+        "requested_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "deadline_seconds": 300,
+        "required_output_path": str(probe_dir / "receipt.json"),
     }
+    if drop_requested_at:
+        del request["requested_at"]
     request_path = probe_dir / "probe-request.json"
     request_path.write_text(json.dumps(request), encoding="utf-8")
+    return request_path
+
+
+def test_capability_probe_publishes_doctor_shaped_receipt(rig, capsys) -> None:
+    """A genuinely-exercised probe publishes the receipt shape the doctor accepts.
+
+    The assertions below replicate the doctor's own acceptance filter
+    (``doctor.author_tools``) field for field: top-level nonce, bounded
+    ``completed_at``, and a ``receipts`` list whose entries only count when
+    they echo the nonce, are ``exercised``, and carry a non-empty receipt
+    string. The receipt is minted by ``validate_capability_evidence`` from the
+    session's evidence — the fake session here produced genuine-shaped,
+    nonce-echoing, digest-consistent observations, which is the ONLY reason
+    ``exercised`` is true.
+    """
+
+    probe_dir = rig["tmp"] / "probe"
+    nonce = "f" * 32
+    request_path = _write_probe_request(probe_dir, nonce)
     assert main([str(request_path)]) == EXIT_OK
-    assert (probe_dir / "evidence.json").is_file()
-    receipt = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
-    assert receipt["kind"] == "capability-probe"
-    assert receipt["attempt_nonce"] == nonce
+    published = probe_dir / "receipt.json"
+    assert published.is_file()
+    receipt = json.loads(published.read_text(encoding="utf-8"))
+    assert receipt["nonce"] == nonce
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    requested_at = datetime.fromisoformat(
+        str(request["requested_at"]).removesuffix("Z") + "+00:00"
+    )
+    completed_at = datetime.fromisoformat(
+        str(receipt["completed_at"]).removesuffix("Z") + "+00:00"
+    )
+    assert requested_at <= completed_at <= requested_at + timedelta(seconds=300)
+    accepted = {
+        canonical_tool_name(value.get("tool"))
+        for value in receipt["receipts"]
+        if isinstance(value, dict)
+        and value.get("nonce") == nonce
+        and value.get("exercised") is True
+        and isinstance(value.get("receipt"), str)
+        and bool(str(value["receipt"]).strip())
+    }
+    assert accepted == {"WebSearch", "web_search_exa", "web_fetch_exa"}
+    publication = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert publication["kind"] == "capability-probe"
+    assert publication["attempt_nonce"] == nonce
+
+
+def test_capability_probe_refuses_unproven_evidence(rig, capsys) -> None:
+    """Evidence without genuine per-tool observations publishes NOTHING.
+
+    A session that researched nothing must not become a passing receipt: the
+    executor may stamp only what it witnessed (its clock, the nonce it was
+    handed), never ``exercised`` for tools whose evidence does not prove the
+    call happened. The refusal is retryable and the doctor's strict check
+    fails, which is the probe working.
+    """
+
+    rig["monkeypatch"].setenv("FAKE_CLAUDE_PROBE", "hollow")
+    probe_dir = rig["tmp"] / "probe"
+    nonce = "f" * 32
+    request_path = _write_probe_request(probe_dir, nonce)
+    assert main([str(request_path)]) == EXIT_RETRYABLE
+    assert not (probe_dir / "receipt.json").exists()
+    assert "capability-probe" not in capsys.readouterr().out
+
+
+def test_capability_probe_requires_requested_at(rig) -> None:
+    """A request without ``requested_at`` is a permanent request defect.
+
+    Without the request instant there is no freshness window to validate
+    against, so the executor refuses before spending a session rather than
+    minting a receipt whose window it cannot anchor.
+    """
+
+    probe_dir = rig["tmp"] / "probe"
+    request_path = _write_probe_request(probe_dir, "f" * 32, drop_requested_at=True)
+    assert main([str(request_path)]) == EXIT_PERMANENT
+    assert not (probe_dir / "receipt.json").exists()
 
 
 def test_lane_receipt_verification_rejects_tampered_bytes(tmp_path: Path) -> None:

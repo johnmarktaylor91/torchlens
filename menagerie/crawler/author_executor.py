@@ -54,7 +54,12 @@ from menagerie.crawler.author_attempts import (
     new_attempt,
     prior_attempts_summary,
 )
-from menagerie.crawler.capability_probe import CAPABILITY_PROBE_FORMAT, derive_challenge
+from menagerie.crawler.capability_probe import (
+    CAPABILITY_PROBE_FORMAT,
+    CapabilityProbeError,
+    derive_challenge,
+    validate_capability_evidence,
+)
 from menagerie.crawler.discovery import (
     DiscoveryError,
     FoundDiscovery,
@@ -63,7 +68,12 @@ from menagerie.crawler.discovery import (
     RetryableToolFailureDiscovery,
     validate_source_discovery,
 )
-from menagerie.crawler.identity import hash_bytes, stable_hash, utc_now
+from menagerie.crawler.identity import (
+    canonical_json_bytes,
+    hash_bytes,
+    stable_hash,
+    utc_now,
+)
 from menagerie.crawler.models import JsonObject
 from menagerie.crawler.constants import (
     AUTHOR_WALL_EXTERNAL_KILL_FACTOR,
@@ -1319,12 +1329,38 @@ def serve_capability_probe(
     request: Mapping[str, Any],
     config: ExecutorConfig,
 ) -> tuple[int, str]:
-    """Serve the doctor's live web-tools probe through the production path."""
+    """Serve the doctor's live web-tools probe through the production path.
+
+    The session researches and writes raw *evidence*; the executor turns it
+    into the doctor-shaped *receipt* through
+    :func:`menagerie.crawler.capability_probe.validate_capability_evidence` —
+    the same proof the pool path applied — and publishes only a receipt that
+    survived every check. The machine/model split is deliberate: the executor
+    stamps only what it knows authoritatively (the top-level nonce it was
+    handed, and ``completed_at`` from its own clock via ``now=``), while every
+    ``exercised``/``receipt`` entry is *derived* from the session's validated
+    per-tool evidence (nonce echo, live URLs, tool-shaped results, corroborated
+    versions). The executor never asserts work it did not witness: evidence
+    that fails validation publishes nothing, and the doctor's strict check
+    fails — the correct outcome for an author path that cannot research.
+    """
 
     nonce = str(request.get("nonce", ""))
     required_output = Path(str(request.get("required_output_path", "")))
     if not nonce or not str(required_output):
         return EXIT_PERMANENT, "capability probe lacks nonce or required_output_path"
+    raw_requested = str(request.get("requested_at") or "").strip()
+    try:
+        requested_at = datetime.fromisoformat(
+            raw_requested.removesuffix("Z") + "+00:00"
+            if raw_requested.endswith("Z")
+            else raw_requested
+        )
+    except ValueError:
+        return EXIT_PERMANENT, "capability probe lacks a parseable requested_at"
+    if requested_at.tzinfo is None:
+        requested_at = requested_at.replace(tzinfo=timezone.utc)
+    requested_at = requested_at.astimezone(timezone.utc)
     deadline = float(request.get("deadline_seconds", 120) or 120)
     challenge = derive_challenge(nonce)
     probe_root = request_path.parent / f"executor-probe-{nonce[:12]}"
@@ -1359,10 +1395,34 @@ def serve_capability_probe(
         return EXIT_RETRYABLE, "capability probe session did not complete"
     if not evidence_path.is_file():
         return EXIT_RETRYABLE, "capability probe session published no evidence"
-    # The session writes only its probe root; the executor publishes to the
-    # doctor's required path and prints the nonce-bound receipt.
-    _publish_bytes(evidence_path, required_output, nonce=nonce, kind="capability-probe")
-    return EXIT_OK, f"capability probe evidence published for nonce {nonce[:12]}"
+    try:
+        evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return EXIT_RETRYABLE, f"capability probe evidence is unreadable: {exc}"
+    if not isinstance(evidence, Mapping):
+        return EXIT_RETRYABLE, "capability probe evidence is not an object"
+    # The receipt is minted ONLY from evidence that survives every proof in
+    # capability_probe: per-tool nonce echo, tool-shaped live results, digest
+    # consistency, cross-tool version agreement, and the freshness window.
+    # `now=` is the executor's own clock — the one fact the machine, not the
+    # session, is the authority on — and becomes the receipt's completed_at.
+    try:
+        receipt = validate_capability_evidence(
+            nonce=nonce,
+            evidence=evidence,
+            requested_at=requested_at,
+            deadline_seconds=int(deadline),
+            now=datetime.now(timezone.utc),
+        )
+    except CapabilityProbeError as exc:
+        return EXIT_RETRYABLE, f"capability probe evidence is unproven: {exc}"
+    receipt_path = probe_root / "receipt.json"
+    receipt_path.write_bytes(canonical_json_bytes(receipt) + b"\n")
+    # The session writes only its probe root; the executor publishes the
+    # validated receipt to the doctor's required path and prints the
+    # nonce-bound publication receipt.
+    _publish_bytes(receipt_path, required_output, nonce=nonce, kind="capability-probe")
+    return EXIT_OK, f"capability probe evidence proven for nonce {nonce[:12]}"
 
 
 # -- CLI -------------------------------------------------------------------
