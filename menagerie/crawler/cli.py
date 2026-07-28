@@ -9,6 +9,7 @@ import os
 import shlex
 import shutil
 import sys
+import traceback
 from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any, Mapping, Optional, Protocol, Sequence
@@ -29,6 +30,7 @@ from menagerie.crawler.checkpoint import (
     create_canonical_checkpoint,
 )
 from menagerie.crawler.constants import (
+    DEFAULT_AUTHOR_WAVE_CONCURRENCY,
     InvocationOrigin,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
     OperationalEventStatus,
@@ -262,7 +264,24 @@ def main(
         )
         return EXIT_OPERATOR_OUTAGE
     except (CheckpointError, DriverError, OSError, ValueError) as exc:
+        # This clause catches a very wide class -- every ``ValueError`` raised anywhere in the
+        # engine lands here, including every ``ReductionError``. Printing only ``str(exc)``
+        # discards the one thing needed to act on it: where it came from.
+        #
+        # A real campaign failure read, in its entirety,
+        #     crawler error: missing mandatory exact public primary source link
+        # with no stack, no file, no line, and no model ID. Diagnosing it took three rounds of
+        # investigation and ultimately required monkeypatching ``ReductionError.__init__`` to
+        # dump a stack, because the message names a symptom that several distinct code paths
+        # can produce. During an unattended multi-week run the operator gets exactly this text
+        # and nothing else, so the traceback is not a debugging luxury -- it is the only
+        # forensic record of why the run stopped.
         print(f"crawler error: {exc}", file=sys.stderr)
+        print(
+            f"exception_type: {type(exc).__module__}.{type(exc).__qualname__}",
+            file=sys.stderr,
+        )
+        traceback.print_exc(file=sys.stderr)
         return EXIT_ERROR
     return EXIT_USAGE
 
@@ -325,6 +344,17 @@ def _add_driver_config_arguments(parser: argparse.ArgumentParser) -> None:
         help=(
             "author-queue root serviced by the managing Claude session; "
             "defaults to MENAGERIE_AUTHOR_QUEUE and replaces --author-command"
+        ),
+    )
+    parser.add_argument(
+        "--author-concurrency",
+        type=int,
+        default=_default_author_concurrency(),
+        help=(
+            "author sessions one wave may keep in flight; defaults to "
+            f"MENAGERIE_AUTHOR_CONCURRENCY or {DEFAULT_AUTHOR_WAVE_CONCURRENCY}. "
+            "Only the sessions overlap: every record is still written one at a "
+            "time, in work order. Use 1 for the historical serial lane."
         ),
     )
     parser.add_argument(
@@ -594,6 +624,7 @@ def _default_driver_factory(args: argparse.Namespace) -> CrawlerDriver:
             campaign_binding.spec.campaign_id if campaign_binding is not None else None
         ),
         author_queue_root=author_queue_root,
+        author_concurrency=args.author_concurrency,
         invocation_origin=(
             InvocationOrigin.WAKE_CALLBACK
             if getattr(args, "wake_episode_id", None) is not None
@@ -916,6 +947,29 @@ def _persisted_environment_generations(
             raise ValueError(f"dry-run attempts contain conflicting generations for {family}")
         generations[family] = generation
     return generations
+
+
+def _default_author_concurrency() -> int:
+    """Return the author-session fan-out bound from the environment or the default.
+
+    Returns
+    -------
+    int
+        ``MENAGERIE_AUTHOR_CONCURRENCY`` when it names a positive integer, else
+        :data:`DEFAULT_AUTHOR_WAVE_CONCURRENCY`. A malformed value is rejected
+        rather than silently ignored: quietly falling back would hide a
+        misconfigured campaign's real throughput bound for a month.
+    """
+
+    raw = os.environ.get("MENAGERIE_AUTHOR_CONCURRENCY")
+    if raw is None or not raw.strip():
+        return DEFAULT_AUTHOR_WAVE_CONCURRENCY
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise ValueError(
+            f"MENAGERIE_AUTHOR_CONCURRENCY must be an integer, not {raw!r}"
+        ) from exc
 
 
 def _optional_author_queue_root(args: argparse.Namespace) -> Optional[Path]:

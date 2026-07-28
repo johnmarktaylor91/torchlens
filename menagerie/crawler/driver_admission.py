@@ -12,6 +12,7 @@ import sys
 import time
 import uuid
 from collections import defaultdict
+from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import nullcontext
 from copy import deepcopy
 from dataclasses import dataclass, replace
@@ -51,6 +52,7 @@ from menagerie.crawler.author_dispatch import (
     build_author_envelope,
     classify_author_response,
     parse_author_reset_at,
+    plausible_author_reset_at,
     serialize_author_result_cache,
     validate_author_result,
     validate_author_result_cache,
@@ -110,7 +112,12 @@ from menagerie.crawler.env_lifecycle import (
     validate_probe_receipts,
 )
 from menagerie.crawler.effort import StageCap
-from menagerie.crawler.fetcher import FetchTarget
+from menagerie.crawler.fetcher import (
+    FetchHashMismatchError,
+    FetchRetrievalError,
+    FetchTarget,
+    UnpinnedTargetError,
+)
 from menagerie.crawler.family_templates import (
     FamilyTemplateError,
     instantiate_size_variant,
@@ -130,8 +137,10 @@ from menagerie.crawler.identity import (
     utc_now,
 )
 from menagerie.crawler.intake import (
+    IntakeError,
     IntakeItem,
     IntakeSnapshot,
+    trusted_identity_fields,
 )
 from menagerie.crawler.metadata import (
     MetadataValidationError,
@@ -140,6 +149,10 @@ from menagerie.crawler.metadata import (
 )
 from menagerie.crawler.models import JsonObject
 from menagerie.crawler.mirrors import MirrorClass, MirrorStore
+from menagerie.crawler.operator_protocol import (
+    OPERATOR_DEADLINE_SECONDS,
+    OPERATOR_MAX_ATTEMPTS,
+)
 from menagerie.crawler.proposal import ProposalValidationError, model_code_manifest
 from menagerie.crawler.recordio import (
     JsonlLedger,
@@ -156,6 +169,11 @@ from menagerie.crawler.routing import (
 )
 from menagerie.crawler.wakeup import WakeupManager, reduce_wake_episodes
 from menagerie.crawler.worker_supervisor import (
+    # The hardened teardown: it proves the group is still ours (unreaped child plus an
+    # unchanged process-start token) before it signals, so a recycled PID can never be
+    # killed. Reused rather than re-derived; there must be exactly one such routine.
+    _kill_process_group as kill_process_group,
+    capture_process_group,
     reconcile_worker_lease,
 )
 
@@ -291,6 +309,43 @@ def _current_fetch_targets(
     return _driver_admission_dependencies().fetch_targets(targets, cas_root)
 
 
+def _author_lane_failure(exc: Exception) -> tuple[str, str]:
+    """Map one model-local author-lane exception to its closed stage and reason.
+
+    The default arm is deliberately last. Everything ahead of it names a cause an
+    operator can act on; collapsing a controlled-fetch rejection into
+    ``identity-unresolved`` sent operators hunting for a missing implementation
+    when the real cause was the author's pinned-target declaration or the
+    retrieval itself.
+
+    Parameters
+    ----------
+    exc:
+        Exception raised while resolving, fetching, or authoring this model.
+
+    Returns
+    -------
+    tuple[str, str]
+        Closed ``(stage, reason_code)`` pair from ``FAILURE_REASON_CODES``.
+    """
+
+    # PLAN.md LP-13.2: cap exhaustion is `failed:<actual-stage>` with a reason from
+    # that stage's vocabulary, distinct from an unresolved identity. The stage travels
+    # on the exception because only the raise site knows whether the source had
+    # already been resolved and frozen when the budget ran out.
+    if isinstance(exc, AuthorEffortCapExceeded):
+        return exc.stage, exc.reason_code
+    if isinstance(exc, FetchHashMismatchError):
+        return "fetch", "hash-mismatch"
+    if isinstance(exc, FetchRetrievalError):
+        return "fetch", "unreachable"
+    if isinstance(exc, UnpinnedTargetError):
+        # The author named a target the controlled fetch contract cannot accept.
+        # That is a declaration defect, not an unresolvable identity.
+        return "source", "source-target-invalid"
+    return "author", "session-crashed"
+
+
 # Reviewed runtime roots. ``_runner_identity`` discovers their transitive local call
 # graph and hashes semantic AST nodes, not whole modules or operational schemas.
 _RUNNER_COMMON_EXECUTION_CLOSURE = {
@@ -311,6 +366,7 @@ _AWARD_CLOSURE_SYMBOLS = {
         "_execution_identity",
         "_current_run_is_fresh",
         "_validate_artifact_identities",
+        "_validate_trusted_intake_identity",
         "_read_verified_worker_receipt",
         "_environment_binding",
         "_installed_package_manifest_bytes",
@@ -630,14 +686,55 @@ class _AuthorLaneBase:
     ) -> AuthorArtifact:
         """Build and execute one frozen author envelope."""
 
-        from menagerie.crawler.author_attempts import prior_attempts_summary
-        from menagerie.crawler.author_dispatch import write_envelope_atomic
-
         root = work_root / item.stable_id / "author"
         model_dir = root / "model"
         model_dir.mkdir(parents=True, exist_ok=True)
         result_path = root / "result.json"
         source_manifest = self._fetch_author_sources(item, root, config)
+        # Past this line the model's sources are resolved, fetched, and hash-frozen, so a
+        # later cap exhaustion can never honestly be a source failure. This is the one
+        # boundary that knows it, so it is where the stage is re-attributed for both lanes.
+        try:
+            return self._author_from_frozen_sources(
+                item, config, context, root, model_dir, result_path, source_manifest
+            )
+        except AuthorEffortCapExceeded as exc:
+            raise AuthorEffortCapExceeded(
+                *exc.args,
+                stage="author",
+                dimension=exc.dimension,
+            ) from exc
+
+    def _author_from_frozen_sources(
+        self,
+        item: WorkItem,
+        config: DriverConfig,
+        context: AuthorityContext,
+        root: Path,
+        model_dir: Path,
+        result_path: Path,
+        source_manifest: JsonObject,
+    ) -> AuthorArtifact:
+        """Run and validate one author session against an already-frozen manifest.
+
+        Parameters
+        ----------
+        item, config, context:
+            Work item, frozen campaign configuration, and authority context.
+        root, model_dir, result_path:
+            Model-local author root, staged-code directory, and required result path.
+        source_manifest:
+            Exact controlled-fetch manifest this session must quote from.
+
+        Returns
+        -------
+        AuthorArtifact
+            Validated author result bound to the frozen manifest.
+        """
+
+        from menagerie.crawler.author_attempts import prior_attempts_summary
+        from menagerie.crawler.author_dispatch import write_envelope_atomic
+
         work_id = item.active_work_id
         envelope = build_author_envelope(
             context=context,
@@ -727,7 +824,11 @@ class _AuthorLaneBase:
                     source_id=str(raw.get("source_id", "")),
                     url=str(raw.get("url", "")),
                     revision=str(raw.get("revision", "")),
-                    expected_sha256=str(raw.get("expected_sha256", "")),
+                    # An absent digest is legitimate and expected: the author lane
+                    # is structurally forbidden from fetching source into the
+                    # campaign, so it can only pin a digest it read from an
+                    # external record. `null` and a missing key both mean absent.
+                    expected_sha256=str(raw.get("expected_sha256") or ""),
                     media_type=str(raw.get("media_type", "application/octet-stream")),
                 )
             )
@@ -792,7 +893,9 @@ def classify_author_exit(
     combined = f"{stderr}\n{stdout}".strip()
     label = "author command failed" if kind == "author" else "author source request failed"
     tail = combined[-STDIO_TAIL_MAX_CHARS:]
-    signal = classify_author_response(returncode, combined)
+    signal = classify_author_response(returncode, stdout)
+    if signal is None:
+        signal = classify_author_response(returncode, stderr)
     if signal is not None:
         raise AuthorBackoffError(signal)
     if returncode in (AUTHOR_EXIT_RETRYABLE, AUTHOR_EXIT_UNAVAILABLE):
@@ -807,6 +910,70 @@ def classify_author_exit(
     # ``_is_infrastructure_error`` already treats as one retryable transport
     # failure rather than an immediate permanent model failure.
     raise DriverIntegrationError(f"{label} for {stable_id}: {tail}")
+
+
+def _run_operator_command(
+    argv: Sequence[str], *, timeout_seconds: float
+) -> subprocess.CompletedProcess[str]:
+    """Run one operator command in its own process group under a hard wall bound.
+
+    An operator wrapper is an interactive agent session behind a subprocess, and an
+    unbounded one blocks the single-threaded driver forever: in a month-long unattended
+    campaign a single hung session is a silent total stall with no recovery. The bound is
+    external because the wrapper is exactly the thing that may have stopped making
+    progress, so its own deadline cannot be trusted to fire.
+
+    The child leads its own session, so the timeout tears down the **whole group**. A
+    wrapper typically spawns the real agent as a grandchild; killing only the direct child
+    would leave that grandchild holding its file handles, its lease, and its provider
+    session.
+
+    Parameters
+    ----------
+    argv:
+        Exact non-shell operator argv.
+    timeout_seconds:
+        Wall-clock ceiling for the round trip.
+
+    Returns
+    -------
+    subprocess.CompletedProcess[str]
+        Captured exit status and streams, for the caller's own exit classification.
+
+    Raises
+    ------
+    subprocess.TimeoutExpired
+        When the command outlives the bound. The group is force-terminated and reaped
+        before this is raised, and whatever the wrapper managed to emit is attached.
+    """
+
+    # Argv-only and shell-free, exactly like every other operator invocation in this module.
+    process = subprocess.Popen(
+        list(argv),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    group = capture_process_group(process)
+    try:
+        stdout, stderr = process.communicate(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        kill_process_group(group)
+        # The group has been SIGKILLed, so this drains the pipes and reaps the root child
+        # rather than blocking. Reaping here is what keeps the timeout from leaking a
+        # zombie on top of the hang it just resolved.
+        stdout, stderr = process.communicate()
+        raise subprocess.TimeoutExpired(
+            list(argv), timeout_seconds, output=stdout, stderr=stderr
+        ) from None
+    return subprocess.CompletedProcess(
+        list(argv),
+        process.returncode if process.returncode is not None else 0,
+        stdout,
+        stderr,
+    )
 
 
 class CommandAuthorLane(_AuthorLaneBase):
@@ -853,10 +1020,27 @@ class CommandAuthorLane(_AuthorLaneBase):
     ) -> None:
         """Invoke the wrapper with one absolute request path and classify its exit."""
 
+        # ``output_path`` stays live: the executor's publication receipt is
+        # verified against the bytes at that path after a clean exit.
         del config, work_id
-        completed = subprocess.run(
-            [*self.command, str(request_path)], check=False, capture_output=True, text=True
-        )
+        argv = [*self.command, str(request_path)]
+        try:
+            completed = _run_operator_command(
+                argv,
+                # The bound is the lane's own published grant, not a new number: the
+                # session was told this exact wall ceiling, so one that is still running
+                # past it has already broken the contract it was dispatched under.
+                timeout_seconds=self.effort_grant.wall_seconds,
+            )
+        except subprocess.TimeoutExpired as exc:
+            # Typed and retryable, like every other transport failure this lane classifies.
+            # A hung session is stalled infrastructure; burning the model permanently for
+            # it would turn one transient hang into a lost model.
+            raise RetryableOperatorError(
+                f"author {kind} for {item.stable_id} exceeded its "
+                f"{self.effort_grant.wall_seconds:g}s wall grant and its process group was "
+                f"terminated: {str(exc.stderr or exc.output or '')[-STDIO_TAIL_MAX_CHARS:]}"
+            ) from exc
         classify_author_exit(
             kind,
             item.stable_id,
@@ -1044,7 +1228,12 @@ class QueueAuthorLane(_AuthorLaneBase):
             stall_timeout_seconds=self.stall_timeout_seconds,
             attempt_nonce=self._nonce_factory(),
             author_model=None if config is None else config.author_model,
-            campaign_id=_campaign_id_for_item(item),
+            # Two distinct identities, never one. The repair scope is this item's bounded
+            # authority lineage (``campaign-<stable_id>``); the tier campaign is the run's
+            # frozen partitioner campaign, which is what selects the pool's author model
+            # and standards prompt.
+            repair_campaign_id=_campaign_id_for_item(item),
+            tier_campaign_id=None if config is None else config.campaign_id,
             enqueued_at=self._clock(),
         )
         job = author_queue.QueueJob.from_mapping(descriptor)
@@ -1249,7 +1438,8 @@ class QueueAuthorLane(_AuthorLaneBase):
             if float(raw) > limit:
                 raise AuthorEffortCapExceeded(
                     f"author session for {job.stable_id} consumed {metric} "
-                    f"{float(raw):g}, exceeding its {limit:g} grant"
+                    f"{float(raw):g}, exceeding its {limit:g} grant",
+                    dimension=metric.replace("_", "-"),
                 )
 
     def _discard_job_files(self, paths: Mapping[str, Path]) -> None:
@@ -1303,7 +1493,11 @@ def _author_backoff_from_signal(payload: Mapping[str, Any]) -> AuthorBackoffSign
             f"author backoff names an unsupported pause reason: {raw_reason!r}"
         ) from exc
     raw_reset = payload.get("reset_at")
-    reset_at = str(raw_reset) if isinstance(raw_reset, str) and raw_reset.strip() else None
+    reset_at = (
+        plausible_author_reset_at(raw_reset)
+        if isinstance(raw_reset, str) and raw_reset.strip()
+        else None
+    )
     if reset_at is None:
         reset_at = parse_author_reset_at(excerpt)
     raw_retry = payload.get("retry_after_seconds")
@@ -1321,15 +1515,74 @@ def _author_backoff_from_signal(payload: Mapping[str, Any]) -> AuthorBackoffSign
     )
 
 
+# The checker wrapper polices itself to the ``deadline_at`` this lane stamps into every
+# envelope: it refuses to start an attempt past it and clamps each attempt to the time
+# remaining. Above that ceiling it may still sleep its inter-attempt backoff and needs room
+# to start an interpreter, validate the request, and publish atomically. The lane bound is
+# therefore the published deadline plus exactly that declared slack, so the lane is the
+# backstop that fires only once the wrapper has genuinely failed to police itself -- never
+# the primary limit.
+CHECKER_LANE_WALL_GRACE_SECONDS = 60.0
+# The wrapper's own inter-attempt backoff sleeps (2**0 + ... + 2**(n-2)) are the one part of
+# its budget that is not clamped by the deadline, so they are added on top of it.
+CHECKER_LANE_BACKOFF_SLACK_SECONDS = float(2 ** (OPERATOR_MAX_ATTEMPTS - 1) - 1)
+
+
+def _checker_wall_bound(
+    envelope: Mapping[str, Any],
+    *,
+    grace_seconds: float = CHECKER_LANE_WALL_GRACE_SECONDS,
+    now: Optional[datetime] = None,
+) -> float:
+    """Derive the lane's wall bound from the deadline the envelope already publishes.
+
+    Parameters
+    ----------
+    envelope:
+        Frozen checker envelope, whose ``deadline_at`` is the exact ceiling the wrapper
+        was told to hold itself to.
+    grace_seconds:
+        Allowance above the wrapper's own ceiling for interpreter start, request
+        validation, and atomic publication.
+    now:
+        Optional timezone-aware instant, for deterministic tests.
+
+    Returns
+    -------
+    float
+        Wall-clock ceiling, strictly greater than the wrapper's internal budget.
+    """
+
+    remaining = float(OPERATOR_DEADLINE_SECONDS)
+    declared = envelope.get("deadline_at")
+    if isinstance(declared, str) and declared.strip():
+        try:
+            deadline: Optional[datetime] = datetime.fromisoformat(declared.replace("Z", "+00:00"))
+        except ValueError:
+            # A malformed deadline is a wrapper-contract problem the wrapper itself
+            # rejects; the lane still needs a bound, so it falls back to the same
+            # constant the published deadline is minted from.
+            deadline = None
+        if deadline is not None and deadline.tzinfo is not None:
+            instant = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+            remaining = (deadline.astimezone(timezone.utc) - instant).total_seconds()
+    return max(remaining, 0.0) + CHECKER_LANE_BACKOFF_SLACK_SECONDS + grace_seconds
+
+
 class CommandCheckerLane:
     """Checker lane that uses frozen envelopes and an argv-only executor."""
 
-    def __init__(self, command: Sequence[str]) -> None:
-        """Store a non-shell Codex command prefix."""
+    def __init__(
+        self, command: Sequence[str], *, wall_grace_seconds: float = CHECKER_LANE_WALL_GRACE_SECONDS
+    ) -> None:
+        """Store a non-shell Codex command prefix and its wall-bound grace."""
 
         if not command:
             raise ValueError("checker command cannot be empty")
+        if wall_grace_seconds < 0:
+            raise ValueError("checker wall grace cannot be negative")
         self.command = tuple(command)
+        self.wall_grace_seconds = float(wall_grace_seconds)
 
     def check_metadata(
         self, artifacts: Sequence[AuthorArtifact], work_root: Path, config: DriverConfig
@@ -1411,9 +1664,27 @@ class CommandCheckerLane:
 
         root.mkdir(parents=True, exist_ok=True)
         request_path = write_envelope_atomic(envelope, root / "request.json")
-        completed = subprocess.run(
-            [*self.command, str(request_path)], check=False, capture_output=True, text=True
-        )
+        try:
+            completed = _run_operator_command(
+                [*self.command, str(request_path)],
+                timeout_seconds=_checker_wall_bound(
+                    envelope, grace_seconds=self.wall_grace_seconds
+                ),
+            )
+        except subprocess.TimeoutExpired as exc:
+            # Typed retryable, exactly like the author lane. The wrapper bounds its own
+            # Codex attempts, but that does not protect this lane: a wrapper that hangs
+            # before or outside that call would otherwise block the single-threaded
+            # driver forever. A hang is stalled infrastructure, so
+            # ``_is_infrastructure_error`` routes it to the bounded transport retry
+            # rather than permanently burning the model. No checker VERDICT is affected:
+            # a genuine rejection still arrives as a typed exit or a validated gate
+            # result below, and is still a rejection.
+            raise RetryableOperatorError(
+                f"checker command exceeded its {exc.timeout:g}s wall bound and its process "
+                f"group was terminated: "
+                f"{str(exc.stderr or exc.output or '')[-STDIO_TAIL_MAX_CHARS:]}"
+            ) from exc
         signal = classify_checker_response(
             completed.returncode, completed.stderr + "\n" + completed.stdout
         )
@@ -1588,6 +1859,163 @@ def build_command_environment_lane(
         ),
         env_root=runtime_root / "envs",
     )
+
+
+@dataclass(frozen=True)
+class _AuthorDispatchOutcome:
+    """Exactly one completed author-lane round trip, success or typed failure.
+
+    The dispatch phase never interprets an outcome; it only carries it back to the
+    single canonical writer, which re-raises the original exception inside the
+    unchanged routing block so every typed author outcome routes exactly as it does
+    under a serial lane.
+    """
+
+    artifact: Optional[AuthorArtifact] = None
+    error: Optional[BaseException] = None
+
+    def unwrap(self) -> AuthorArtifact:
+        """Return the artifact, or re-raise the lane's own exception in place.
+
+        Returns
+        -------
+        AuthorArtifact
+            Exact artifact the lane produced.
+
+        Raises
+        ------
+        BaseException
+            The exception the lane raised, unchanged in type and payload.
+        """
+
+        if self.error is not None:
+            raise self.error
+        if self.artifact is None:
+            raise DriverIntegrationError("author dispatch outcome carries neither result nor error")
+        return self.artifact
+
+
+class _AuthorWavePool:
+    """Bounded concurrent author-session dispatcher for exactly one wave.
+
+    The author lane is the campaign's throughput ceiling: it is roughly three
+    quarters of all projected work and every session is a multi-minute agent round
+    trip. Running one session at a time caps a four-campaign fleet at four
+    concurrent sessions, which is below what the reconciled schedule needs before
+    anything else goes wrong.
+
+    Only the *sessions* overlap. This object owns the "dispatch and wait" phase and
+    nothing else: it calls the injected author lane, captures whatever that call
+    produced, and hands it back untouched. It never appends to a ledger, never
+    publishes an artifact, and never routes a terminal, so the single canonical
+    writer is entirely unaffected -- the driver still commits every model itself,
+    one at a time, in work order.
+
+    Two properties make that safe:
+
+    * **Exact eligibility, never speculation.** A model is only dispatched when the
+      serial path provably reaches a fresh author session for it. Nothing is
+      started that the serial lane would have resolved from canonical authority, a
+      family representative, or the disposable on-disk cache.
+    * **Nothing is cancelled.** A session that has started has already spent
+      provider budget, so an aborting wave drains its siblings instead of orphaning
+      them, and the driver preserves their validated results for the next run.
+    """
+
+    def __init__(
+        self,
+        degree: int,
+        dispatch: Callable[[WorkItem], AuthorArtifact],
+    ) -> None:
+        """Bind the parallelism bound and the per-model dispatch callable.
+
+        Parameters
+        ----------
+        degree:
+            Maximum author sessions in flight at once. ``1`` disables the pool
+            entirely so the driver keeps its historical fully inline lane.
+        dispatch:
+            Per-model author-lane invocation, including its own bounded retry.
+        """
+
+        self._dispatch = dispatch
+        self._executor = (
+            ThreadPoolExecutor(max_workers=degree, thread_name_prefix="author-wave")
+            if degree > 1
+            else None
+        )
+        self._futures: dict[str, "Future[_AuthorDispatchOutcome]"] = {}
+        self._submitted: list[str] = []
+        self._claimed: set[str] = set()
+
+    @property
+    def enabled(self) -> bool:
+        """Return whether this wave dispatches author sessions concurrently."""
+
+        return self._executor is not None
+
+    def submit(self, item: WorkItem) -> None:
+        """Start one author session for a model the serial path would author."""
+
+        if self._executor is None or item.stable_id in self._futures:
+            return
+        self._futures[item.stable_id] = self._executor.submit(self._run, item)
+        self._submitted.append(item.stable_id)
+
+    def claim(self, item: WorkItem) -> Optional[_AuthorDispatchOutcome]:
+        """Return one model's completed outcome, or ``None`` when never dispatched.
+
+        Blocks until this model's own session finishes. Siblings keep running, so
+        the commit order is always work order regardless of completion order.
+        """
+
+        future = self._futures.get(item.stable_id)
+        if future is None:
+            return None
+        self._claimed.add(item.stable_id)
+        return future.result()
+
+    def drain(self) -> tuple[tuple[str, _AuthorDispatchOutcome], ...]:
+        """Wait for every unclaimed session and return its outcome in submit order.
+
+        Returns
+        -------
+        tuple[tuple[str, _AuthorDispatchOutcome], ...]
+            Unclaimed ``(stable_id, outcome)`` pairs, deterministically ordered by
+            submission (work) order rather than completion order.
+        """
+
+        drained: list[tuple[str, _AuthorDispatchOutcome]] = []
+        for stable_id in self._submitted:
+            if stable_id in self._claimed:
+                continue
+            future = self._futures[stable_id]
+            self._claimed.add(stable_id)
+            try:
+                drained.append((stable_id, future.result()))
+            except BaseException as exc:  # noqa: BLE001 -- a drain must never mask the abort
+                drained.append((stable_id, _AuthorDispatchOutcome(error=exc)))
+        return tuple(drained)
+
+    def close(self) -> None:
+        """Release the worker threads after every session has finished."""
+
+        if self._executor is not None:
+            self._executor.shutdown(wait=True)
+
+    def _run(self, item: WorkItem) -> _AuthorDispatchOutcome:
+        """Run one author session on a worker thread and capture its outcome.
+
+        Every exception is captured rather than propagated so a failing, pausing,
+        or timing-out sibling can never cancel the wave from inside a worker. The
+        driver re-raises it on the writer thread, in work order, inside the exact
+        routing block that owned it before.
+        """
+
+        try:
+            return _AuthorDispatchOutcome(artifact=self._dispatch(item))
+        except BaseException as exc:  # noqa: BLE001 -- routed verbatim by the writer
+            return _AuthorDispatchOutcome(error=exc)
 
 
 class AdmissionEnvironmentMixin:
@@ -2082,7 +2510,140 @@ class AdmissionEnvironmentMixin:
         operational: JsonlLedger,
         state: JsonObject,
     ) -> dict[str, AuthorArtifact]:
-        """Create or reload one privately staged typed author result per model."""
+        """Create or reload one privately staged typed author result per model.
+
+        Author *sessions* run concurrently, up to ``config.author_concurrency``.
+        Everything else -- staging, ledger appends, artifact publication, terminal
+        routing, the returned ``artifacts`` map -- stays on this single writer, in
+        work order, exactly as it was when the lane was serial. Completion order can
+        therefore never influence what is recorded.
+        """
+
+        by_stable_id = {item.stable_id: item for item in work}
+        pool = _AuthorWavePool(
+            max(1, int(self.config.author_concurrency)),
+            lambda item: self._retry_infrastructure_call(
+                lambda: self.dependencies.author.author(
+                    item,
+                    self.paths.work_root,
+                    self.config,
+                    reducer.context,
+                ),
+                admission=("author", item),
+            ),
+        )
+        try:
+            if pool.enabled:
+                for item in work:
+                    # A requested shutdown must not fan out new sessions. Workers
+                    # already re-check this at their own admission boundary, so this
+                    # only avoids paying for work the driver is about to abandon.
+                    if self._shutdown_event.is_set():
+                        break
+                    if self._author_session_is_certain(item, reducer):
+                        pool.submit(item)
+            return self._commit_author_wave(work, pool, reducer, operational, state)
+        finally:
+            # A started session has already spent provider budget, so an aborting
+            # wave never orphans one: drain every sibling, then keep whatever it
+            # produced in the disposable per-model cache so the next run reloads it
+            # instead of re-authoring. This writes no ledger record and publishes
+            # nothing, so an abort's canonical sequence stays identical to serial.
+            for stable_id, outcome in pool.drain():
+                preserved = by_stable_id.get(stable_id)
+                if preserved is not None and outcome.error is None and outcome.artifact is not None:
+                    self._preserve_uncommitted_author_result(preserved, outcome.artifact)
+            pool.close()
+
+    def _author_session_is_certain(self, item: WorkItem, reducer: CanonicalReducer) -> bool:
+        """Return whether the serial path provably reaches a fresh author session.
+
+        This is an exactness gate, not a heuristic: it is ``True`` only when every
+        earlier resolution the serial lane tries -- finalized canonical authority, a
+        usable family representative, and the disposable on-disk result cache -- is
+        already ruled out on inputs that no sibling in this wave can change. A
+        false negative only costs concurrency for one model; a false positive would
+        burn a session the serial lane would never have run, so every check errs
+        toward ``False``.
+
+        Parameters
+        ----------
+        item:
+            Exact scheduled work generation.
+        reducer:
+            Locked reducer exposing canonical authority for the wave.
+
+        Returns
+        -------
+        bool
+            Whether this model may be dispatched ahead of its commit turn.
+        """
+
+        if reducer.artifact_ledger.event_count and reducer.artifact_ledger.has_final_event(
+            item.stable_id, item.active_work_id
+        ):
+            return False
+        if (
+            item.is_family_variant
+            and reducer.current_records.get(item.family_representative_id) is not None
+        ):
+            # Either the representative seeds this variant with no session at all, or
+            # the serial lane raises on unusable representative authority. Both are
+            # decided by the writer, never by a speculative session.
+            return False
+        cache = self.paths.work_root / item.stable_id / "driver-author-artifact.json"
+        return not cache.is_file()
+
+    def _preserve_uncommitted_author_result(
+        self, item: WorkItem, artifact: AuthorArtifact
+    ) -> None:
+        """Cache one dispatched-but-uncommitted author result for the next run.
+
+        Called only when a wave unwinds (usage pause, retryable operator failure,
+        review checkpoint, shutdown) with siblings already finished. It writes the
+        same disposable cache the committed path writes, after the same validation
+        gauntlet, and nothing else: no ledger append, no staging, no artifact map
+        entry. A result that cannot pass validation is simply dropped, so the model
+        is re-authored and terminalized properly rather than reloaded from a cache
+        that skipped a check.
+        """
+
+        try:
+            if not isinstance(artifact.author_result, ProposedAuthorResult):
+                return
+            candidate = _normalize_artifact_modes(artifact, self.config)
+            if candidate.proposal.get("stable_id") != item.stable_id:
+                return
+            if candidate.author_result.binding.work_id != item.active_work_id:
+                return
+            _validate_artifact_identities(candidate, self.config, item=item)
+            _write_json_atomic(
+                self.paths.work_root / item.stable_id / "driver-author-artifact.json",
+                serialize_author_result_cache(
+                    candidate.author_result,
+                    source_manifest=candidate.source_manifest,
+                    model_dir=candidate.model_dir,
+                ),
+            )
+        except Exception:  # noqa: BLE001 -- a best-effort cache must never mask the abort
+            return
+
+    def _commit_author_wave(
+        self,
+        work: Sequence[WorkItem],
+        pool: _AuthorWavePool,
+        reducer: CanonicalReducer,
+        operational: JsonlLedger,
+        state: JsonObject,
+    ) -> dict[str, AuthorArtifact]:
+        """Commit one wave's author results on the single canonical writer.
+
+        Walks ``work`` in its original order and performs every canonical effect --
+        rehydration, family-variant instantiation, cache reload, staging, validation,
+        terminal routing, and the usage-pause unwind -- exactly as the historical
+        serial lane did. The only difference is where a fresh author result comes
+        from: a session this wave already dispatched, or an inline call.
+        """
 
         artifacts: dict[str, AuthorArtifact] = {}
         for item in work:
@@ -2092,7 +2653,7 @@ class AdmissionEnvironmentMixin:
                 if isinstance(canonical_artifact, (ActivatedHandoffArtifact,)) or isinstance(
                     canonical_artifact.author_result, ProposedAuthorResult
                 ):
-                    _validate_artifact_identities(canonical_artifact, self.config)
+                    _validate_artifact_identities(canonical_artifact, self.config, item=item)
                     artifacts[item.stable_id] = canonical_artifact
                     self._family_artifacts[item.stable_id] = canonical_artifact
                 else:
@@ -2125,7 +2686,7 @@ class AdmissionEnvironmentMixin:
                         reducer.context,
                     )
                     variant = self._stage_author_result(item, variant, reducer)
-                    _validate_artifact_identities(variant, self.config)
+                    _validate_artifact_identities(variant, self.config, item=item)
                     artifacts[item.stable_id] = variant
                     self._family_artifacts[item.stable_id] = variant
                     self.dependencies.boundary_hook("after-author", item.stable_id)
@@ -2231,7 +2792,7 @@ class AdmissionEnvironmentMixin:
                         Path(cached_model_dir),
                     )
                     if isinstance(cached_result, ProposedAuthorResult):
-                        _validate_artifact_identities(cached_artifact_v3, self.config)
+                        _validate_artifact_identities(cached_artifact_v3, self.config, item=item)
                     anchored_staged = staged_artifact_for_result(
                         reducer.artifact_ledger,
                         stable_id=item.stable_id,
@@ -2260,14 +2821,19 @@ class AdmissionEnvironmentMixin:
                             raise DriverPaused(pause)
                     continue
             try:
-                artifact = self._retry_infrastructure_call(
-                    lambda: self.dependencies.author.author(
-                        item,
-                        self.paths.work_root,
-                        self.config,
-                        reducer.context,
-                    ),
-                    admission=("author", item),
+                dispatched = pool.claim(item)
+                artifact = (
+                    dispatched.unwrap()
+                    if dispatched is not None
+                    else self._retry_infrastructure_call(
+                        lambda: self.dependencies.author.author(
+                            item,
+                            self.paths.work_root,
+                            self.config,
+                            reducer.context,
+                        ),
+                        admission=("author", item),
+                    )
                 )
                 artifact = self._stage_author_result(item, artifact, reducer)
             except AuthorBackoffError as backoff:
@@ -2280,17 +2846,11 @@ class AdmissionEnvironmentMixin:
             except RetryableOperatorError:
                 raise
             except Exception as exc:  # noqa: BLE001 -- author failure belongs to this model
-                # PLAN.md LP-13.2: cap exhaustion is `failed:<actual-stage>` with
-                # `effort-cap-exhausted`, distinct from an unresolved identity.
-                reason_code = (
-                    "effort-cap-exhausted"
-                    if isinstance(exc, AuthorEffortCapExceeded)
-                    else "identity-unresolved"
-                )
+                stage, reason_code = _author_lane_failure(exc)
                 attempt = _driver_failure_attempt(
                     item,
                     None,
-                    "source",
+                    stage,
                     reason_code,
                     exc,
                     self.config,
@@ -2302,7 +2862,7 @@ class AdmissionEnvironmentMixin:
                 self._terminalize(
                     item,
                     None,
-                    "failed:source",
+                    f"failed:{stage}",
                     reason_code,
                     str(exc),
                     (persisted,),
@@ -2354,7 +2914,7 @@ class AdmissionEnvironmentMixin:
                 )
                 continue
             try:
-                _validate_artifact_identities(artifact, self.config)
+                _validate_artifact_identities(artifact, self.config, item=item)
             except DriverIntegrationError as exc:
                 attempt = _driver_failure_attempt(
                     item,
@@ -4605,7 +5165,46 @@ def _checker_prompt_hash() -> str:
         raise DriverIntegrationError(f"checker prompt bytes are unavailable: {exc}") from exc
 
 
-def _validate_artifact_identities(artifact: AuthorArtifact, config: DriverConfig) -> None:
+def _validate_trusted_intake_identity(facts: Mapping[str, Any], item: WorkItem) -> None:
+    """Reject proposed facts whose identity contradicts trusted intake.
+
+    ``$.identity.variant``, ``$.identity.variant_scope``, and
+    ``$.identity.family_representative_id`` are ``trusted-intake`` leaves. No
+    author lane owns them, so an author-proposed value that differs from the one
+    derived from the trusted roster is a contract violation, not a fact.
+
+    Parameters
+    ----------
+    facts:
+        Proposed or accepted canonical fact block.
+    item:
+        Scheduled work item carrying its trusted intake row.
+
+    Raises
+    ------
+    DriverIntegrationError
+        If the identity block is absent or any trusted leaf differs.
+    """
+
+    identity = facts.get("identity")
+    if not isinstance(identity, Mapping):
+        raise DriverIntegrationError("author proposal has no identity object")
+    try:
+        expected = trusted_identity_fields(item.intake)
+    except IntakeError as exc:
+        raise DriverIntegrationError(str(exc)) from exc
+    mismatches = {
+        field: {"proposed": identity.get(field), "trusted": value}
+        for field, value in expected.items()
+        if identity.get(field) != value
+    }
+    if mismatches:
+        raise DriverIntegrationError(f"identity contradicts trusted intake: {mismatches}")
+
+
+def _validate_artifact_identities(
+    artifact: AuthorArtifact, config: DriverConfig, *, item: WorkItem
+) -> None:
     """Reject an author artifact whose claimed identities do not match accepted facts."""
 
     proposal = artifact.proposal
@@ -4620,6 +5219,7 @@ def _validate_artifact_identities(artifact: AuthorArtifact, config: DriverConfig
     facts = proposal.get("proposed_facts")
     if not isinstance(facts, Mapping):
         raise DriverIntegrationError("author proposal has no proposed_facts object")
+    _validate_trusted_intake_identity(facts, item)
     implementation = facts.get("implementation")
     if isinstance(implementation, Mapping):
         code_value = implementation.get("code_path")
@@ -5351,9 +5951,7 @@ def _instantiate_variant_artifact(
     identity.update(
         {
             "canonical_name": item.intake.name,
-            "variant": item.intake.variant,
-            "variant_scope": "family",
-            "family_representative_id": item.family_representative_id,
+            **trusted_identity_fields(item.intake),
             "duplicate_of": None,
             "alias_of": None,
         }

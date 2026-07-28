@@ -85,9 +85,47 @@ AUTHOR_SESSION_WALL_SECONDS = 30 * 60
 AUTHOR_QUEUE_STALL_SECONDS = 45 * 60
 AUTHOR_QUEUE_POLL_SECONDS = 2.0
 
+# Bounded author-session fan-out per wave. The author lane is ~74% of the campaign's
+# projected work, and a serial lane caps a four-campaign fleet at four concurrent
+# sessions -- below the ~6.2 sustained (~9.5 in flight) the reconciled schedule needs,
+# before anything else goes wrong. Four per campaign puts ~16 sessions in flight across
+# the fleet, ~1.7x the requirement, which absorbs stragglers and quota stalls without
+# assuming a perfect duty cycle. It is also a modest per-host budget: four concurrent
+# `claude -p` subprocesses (command lane) or four concurrent in-session subagents (queue
+# lane) sit well inside both the host's memory and the harness's own subagent ceiling.
+# The right value genuinely differs per lane and per host, so it is configurable; this
+# is only the defensible default.
+DEFAULT_AUTHOR_WAVE_CONCURRENCY = 4
+# Hard ceiling. Past this the bound stops being a bound: a wave would fan out further
+# than any provider tier or host can service, and the failure mode is mass quota
+# exhaustion rather than throughput.
+MAX_AUTHOR_WAVE_CONCURRENCY = 32
+
 # Closed usage-limit provider vocabulary shared by the pause path and the wakeup
 # layer. The checker lane pauses on `openai`, the author lane on `anthropic`.
 USAGE_LIMIT_PROVIDERS = frozenset({"anthropic", "openai"})
+
+# The four frozen TIER campaigns the partitioner emits, each bound to its frozen
+# author model. This is deliberately NOT the same concept as a *repair* campaign
+# (`campaign-<stable_id>` / `campaign-<work_id>`), which is the driver's per-item
+# authority lineage. A tier campaign is a property of the whole campaign run: its
+# `author_model_identity` is frozen for the run, so a model a sonnet campaign finds
+# genuinely hard is emitted as a typed BLOCKED recommendation and requeued into the
+# opus campaign, never escalated in place. Mixing the two identities up would author
+# a model with the wrong tier and corrupt the frozen identity for the whole run, so
+# every boundary that selects an author tier validates against this closed set.
+# `menagerie.crawler.partitioner.CAMPAIGN_SPECS` carries the same binding for the
+# partitioner's own purposes; the two are asserted to agree in the test suite.
+TIER_CAMPAIGN_AUTHOR_MODELS: dict[str, str] = {
+    "c1-mech": "claude-sonnet",
+    "c2-disco": "claude-sonnet",
+    "c3-classics": "claude-opus-5",
+    "c4-native": "claude-sonnet",
+}
+TIER_CAMPAIGN_IDS = frozenset(TIER_CAMPAIGN_AUTHOR_MODELS)
+
+#: Environment variable naming the tier campaign this operator process serves.
+TIER_CAMPAIGN_ENV = "MENAGERIE_CAMPAIGN_ID"
 
 
 class StrEnum(str, Enum):
@@ -125,6 +163,7 @@ class FailureStage(StrEnum):
     INTAKE = "intake"
     SOURCE = "source"
     FETCH = "fetch"
+    AUTHOR = "author"
     EVIDENCE = "evidence"
     ACCURACY_GATE = "accuracy-gate"
     ENVIRONMENT = "environment"
@@ -270,6 +309,7 @@ FAILURE_REASON_CODES: dict[str, frozenset[str]] = {
             "identity-unresolved",
             "missing-mandatory-link",
             "source-model-mismatch",
+            "source-target-invalid",
             "higher-rung-unresolved",
             "effort-cap-exhausted",
         }
@@ -282,6 +322,17 @@ FAILURE_REASON_CODES: dict[str, frozenset[str]] = {
             "access-denied",
             "artifact-missing",
             "effort-cap-exhausted",
+        }
+    ),
+    "author": frozenset(
+        {
+            "effort-exhausted:tool-calls",
+            "effort-exhausted:fetch-targets",
+            "effort-exhausted:wall-seconds",
+            "wall-exceeded",
+            "session-crashed",
+            "research-tools-unavailable",
+            "repair-exhausted",
         }
     ),
     "evidence": frozenset(

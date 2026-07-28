@@ -82,8 +82,13 @@ CHECK IN THIS ORDER
    run_framework, transparent native delegation, mode/device, patches, dummy-input semantics, dimensions,
    dtypes, values, masks/state/control, and output contract.
 8. EVIDENCE COVERAGE: enumerate every agent-authored leaf. Each positive factual claim needs adequate
-   literal evidence, except keyword leaves use the relevance semantics in step 5. A null/not-found value
-   passes only when it makes no positive claim and the bounded search is documented.
+   literal evidence, except keyword leaves use the relevance semantics in step 5. An empty gated value is
+   valid only as a typed `external_metadata.availability.<field>` state; spot-verify every
+   `not-found-after-search` state against the evidence pack -- a fact the pinned paper or source states
+   (an author list on the paper page, an institution in the affiliation line) makes that state a false
+   claim and its field check inaccurate. Judgment values (country, era, field, subfield, taxonomy
+   leaves, paradigm) receive no deterministic value check upstream: your per-leaf entailment verdict is
+   the only value gate they pass, so judge each leaf independently against the cited evidence.
 9. FIDELITY, WHEN REQUIRED:
    a. Before reading candidate code, derive topology, dimensions, operators, connectivity, state/control,
       material initialization, input, and output from the exact frozen source.

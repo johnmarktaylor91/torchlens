@@ -45,7 +45,14 @@ class FetchTarget:
     revision:
         Exact tag, commit, version, or immutable revision identifier.
     expected_sha256:
-        Expected content digest, including the ``sha256:`` prefix.
+        Optional expected content digest, either ``sha256:<64 hex>`` or a bare
+        ``<64 hex>`` digest. Empty means the digest is genuinely unknown to the
+        requester: the author lane is structurally forbidden from fetching source
+        into the campaign, so it can only pin a digest it read from an external
+        record (a release manifest, lockfile, or package index). When a digest is
+        supplied it is enforced byte-exactly; when it is absent the controlled
+        fetch is what learns the digest, and the manifest pins exactly the bytes
+        that were retrieved.
     media_type:
         Declared source media type.
     """
@@ -53,8 +60,45 @@ class FetchTarget:
     source_id: str
     url: str
     revision: str
-    expected_sha256: str
+    expected_sha256: str = ""
     media_type: str = "application/octet-stream"
+
+
+def normalize_expected_sha256(value: Optional[str]) -> str:
+    """Normalize a declared content digest to canonical form, or to absence.
+
+    Both spellings the source-request contract advertises are accepted: the
+    canonical ``sha256:<64 hex>`` and a bare ``<64 hex>`` digest. Hex case is a
+    serialization detail and is folded to lowercase; nothing about the digest
+    value itself is relaxed.
+
+    Parameters
+    ----------
+    value:
+        Declared digest, or ``None``/empty when genuinely unknown.
+
+    Returns
+    -------
+    str
+        Canonical ``sha256:<64 lowercase hex>`` digest, or ``""`` for a
+        legitimately absent digest.
+
+    Raises
+    ------
+    UnpinnedTargetError
+        If a digest is present but is not a well-formed SHA-256 value.
+    """
+
+    candidate = (value or "").strip()
+    if not candidate:
+        return ""
+    digest = candidate[7:] if candidate.lower().startswith("sha256:") else candidate
+    if len(digest) != 64 or any(character not in "0123456789abcdefABCDEF" for character in digest):
+        raise UnpinnedTargetError(
+            "expected_sha256 must be sha256:<64 hex> or <64 hex>, or omitted when unknown; "
+            f"got {value!r}"
+        )
+    return f"sha256:{digest.lower()}"
 
 
 def cas_path(cas_root: Union[str, Path], content_sha256: str) -> Path:
@@ -90,15 +134,19 @@ def fetch_target(
     *,
     fetch_bytes: Optional[FetchBytes] = None,
 ) -> dict[str, object]:
-    """Fetch one pinned target and return its hash-bound source manifest.
+    """Fetch one exact target and return its hash-bound source manifest.
 
-    Existing correct CAS content is reused without a network request. Retrieved
-    bytes are verified before any destination path is created.
+    A supplied digest is enforced byte-exactly and lets existing correct CAS
+    content be reused without a network request. A legitimately absent digest is
+    accepted: the controlled fetch is the step that learns the digest, and the
+    manifest pins exactly the bytes that were retrieved. In both cases the
+    returned ``content_sha256`` is the digest of the verified bytes on disk, so
+    every downstream re-verification is unchanged.
 
     Parameters
     ----------
     target:
-        Exact URL, revision, and expected digest.
+        Exact URL, revision, and optional expected digest.
     cas_root:
         Root of the local content-addressed store.
     fetch_bytes:
@@ -113,23 +161,26 @@ def fetch_target(
     Raises
     ------
     UnpinnedTargetError
-        If any pin or URL constraint is missing.
+        If any pin or URL constraint is missing or malformed.
     FetchHashMismatchError
-        If existing or retrieved bytes do not match the expected digest.
+        If existing or retrieved bytes do not match a supplied digest.
     FetchRetrievalError
         If the exact URL cannot be retrieved.
     """
 
-    _validate_target(target, allow_injected_fetch=fetch_bytes is not None)
-    destination = cas_path(cas_root, target.expected_sha256)
-    if destination.exists():
-        content = destination.read_bytes()
-        actual = hash_bytes(content)
-        if actual != target.expected_sha256:
-            raise FetchHashMismatchError(
-                f"corrupt CAS object {destination}: expected {target.expected_sha256}, got {actual}"
+    expected = _validate_target(target, allow_injected_fetch=fetch_bytes is not None)
+    if expected:
+        destination = cas_path(cas_root, expected)
+        if destination.exists():
+            content = destination.read_bytes()
+            actual = hash_bytes(content)
+            if actual != expected:
+                raise FetchHashMismatchError(
+                    f"corrupt CAS object {destination}: expected {expected}, got {actual}"
+                )
+            return _manifest(
+                target, actual, len(content), RetrievalStatus.ALREADY_PRESENT, destination
             )
-        return _manifest(target, len(content), RetrievalStatus.ALREADY_PRESENT, destination)
 
     retriever = fetch_bytes or _https_get
     try:
@@ -141,11 +192,12 @@ def fetch_target(
     if not isinstance(content, bytes):
         raise FetchRetrievalError("controlled fetcher must return bytes")
     actual = hash_bytes(content)
-    if actual != target.expected_sha256:
+    if expected and actual != expected:
         raise FetchHashMismatchError(
-            f"hash mismatch for {target.url!r}: expected {target.expected_sha256}, got {actual}"
+            f"hash mismatch for {target.url!r}: expected {expected}, got {actual}"
         )
 
+    destination = cas_path(cas_root, actual)
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
     try:
@@ -157,7 +209,7 @@ def fetch_target(
         fsync_directory(destination.parent)
     finally:
         temporary.unlink(missing_ok=True)
-    return _manifest(target, len(content), RetrievalStatus.FETCHED, destination)
+    return _manifest(target, actual, len(content), RetrievalStatus.FETCHED, destination)
 
 
 def fetch_targets(
@@ -187,7 +239,7 @@ def fetch_targets(
     return {"sources": manifests, "manifest_sha256": stable_hash(manifests)}
 
 
-def _validate_target(target: FetchTarget, *, allow_injected_fetch: bool) -> None:
+def _validate_target(target: FetchTarget, *, allow_injected_fetch: bool) -> str:
     """Validate an exact target before touching the CAS.
 
     Parameters
@@ -197,22 +249,29 @@ def _validate_target(target: FetchTarget, *, allow_injected_fetch: bool) -> None
     allow_injected_fetch:
         Whether tests supplied a non-network retriever.
 
+    Returns
+    -------
+    str
+        Canonical expected digest, or ``""`` when the requester legitimately
+        does not know it.
+
     Raises
     ------
     UnpinnedTargetError
-        If the target is not fully pinned or its URL is unsafe.
+        If the target is not exactly identified, its declared digest is
+        malformed, or its URL is unsafe.
     """
 
     if not target.source_id.strip() or not target.revision.strip():
         raise UnpinnedTargetError("source_id and exact revision must be non-empty")
-    if not is_sha256(target.expected_sha256):
-        raise UnpinnedTargetError("expected_sha256 must be sha256:<64 lowercase hex>")
+    expected = normalize_expected_sha256(target.expected_sha256)
     parsed = urlsplit(target.url)
     allowed_schemes = {"https"} if not allow_injected_fetch else {"https", "http", "test"}
     if parsed.scheme not in allowed_schemes or not parsed.netloc:
         raise UnpinnedTargetError("controlled fetch requires an exact absolute URL")
     if parsed.username is not None or parsed.password is not None or parsed.fragment:
         raise UnpinnedTargetError("source URLs cannot contain credentials or fragments")
+    return expected
 
 
 def _https_get(url: str) -> bytes:
@@ -271,6 +330,7 @@ def _https_get(url: str) -> bytes:
 
 def _manifest(
     target: FetchTarget,
+    content_sha256: str,
     length: int,
     status: RetrievalStatus,
     path: Path,
@@ -281,6 +341,10 @@ def _manifest(
     ----------
     target:
         Exact source target.
+    content_sha256:
+        Digest of the exact verified bytes now in the CAS. This is the pin every
+        downstream consumer re-verifies, whether the requester declared it or the
+        controlled fetch learned it.
     length:
         Verified byte length.
     status:
@@ -298,7 +362,7 @@ def _manifest(
         "source_id": target.source_id,
         "url": target.url,
         "revision": target.revision,
-        "content_sha256": target.expected_sha256,
+        "content_sha256": content_sha256,
         "fetched_bytes_len": length,
         "retrieval_status": status.value,
         "media_type": target.media_type,

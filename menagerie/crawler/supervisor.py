@@ -23,7 +23,11 @@ from menagerie.crawler.cli import (
     EXIT_PAUSED,
     EXIT_REVIEW_PAUSED,
 )
-from menagerie.crawler.constants import AUTHOR_QUEUE_STALL_SECONDS
+from menagerie.crawler.constants import (
+    AUTHOR_QUEUE_STALL_SECONDS,
+    DEFAULT_AUTHOR_WAVE_CONCURRENCY,
+    MAX_AUTHOR_WAVE_CONCURRENCY,
+)
 from menagerie.crawler.driver_progress import CommandNotifier
 from menagerie.crawler.identity import atomic_replace_bytes, canonical_json_bytes, stable_hash
 from menagerie.crawler.intake import load_intake_snapshot
@@ -91,6 +95,11 @@ class SupervisorConfig:
     campaign_config_path: Path
     author_queue_root: Optional[Path]
     runtime_root: Path
+    #: Author-session fan-out the supervised driver must keep using. It is carried
+    #: explicitly because it is NOT part of the frozen campaign config: without it a
+    #: supervised restart would silently drop back to the default and quietly halve a
+    #: tuned campaign's throughput for the rest of the month.
+    author_concurrency: int = DEFAULT_AUTHOR_WAVE_CONCURRENCY
     wake_episode_id: Optional[str] = None
     stall_seconds: float = float(AUTHOR_QUEUE_STALL_SECONDS)
     poll_seconds: float = WATCHDOG_POLL_SECONDS
@@ -106,6 +115,11 @@ class SupervisorConfig:
                 raise ValueError(f"supervisor path must be absolute: {path}")
         if self.author_queue_root is not None and not self.author_queue_root.is_absolute():
             raise ValueError("author_queue_root must be absolute")
+        if not 1 <= self.author_concurrency <= MAX_AUTHOR_WAVE_CONCURRENCY:
+            raise ValueError(
+                "author_concurrency must be between 1 and "
+                f"{MAX_AUTHOR_WAVE_CONCURRENCY}, not {self.author_concurrency}"
+            )
         if min(self.stall_seconds, self.poll_seconds, self.notification_retry_seconds) <= 0:
             raise ValueError("supervisor intervals must be positive")
 
@@ -449,6 +463,7 @@ def render_launchd_plist(
     campaign_config_path: Path,
     author_queue_root: Optional[Path],
     python_executable: Path,
+    author_concurrency: int = DEFAULT_AUTHOR_WAVE_CONCURRENCY,
 ) -> bytes:
     """Render one concrete per-campaign launchd agent.
 
@@ -478,6 +493,7 @@ def render_launchd_plist(
     ]
     if author_queue_root is not None:
         arguments.extend(("--author-queue", str(author_queue_root)))
+    arguments.extend(("--author-concurrency", str(author_concurrency)))
     payload = {
         "Label": f"org.torchlens.menagerie-crawler.{campaign_id}",
         "ProgramArguments": arguments,
@@ -509,6 +525,9 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--repo-root", type=Path, required=True)
         command.add_argument("--campaign-config", type=Path, required=True)
         command.add_argument("--author-queue", type=Path)
+        command.add_argument(
+            "--author-concurrency", type=int, default=DEFAULT_AUTHOR_WAVE_CONCURRENCY
+        )
     run = subparsers.choices["run"]
     run.add_argument("--wake-episode-id")
     render = subparsers.choices["render-launchd"]
@@ -552,6 +571,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 campaign_config_path=config_path,
                 author_queue_root=author_queue,
                 python_executable=args.python.resolve(),
+                author_concurrency=args.author_concurrency,
             ),
         )
         return EXIT_OK
@@ -571,6 +591,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             campaign_config_path=config_path,
             author_queue_root=author_queue,
             runtime_root=runtime_root,
+            author_concurrency=args.author_concurrency,
             wake_episode_id=args.wake_episode_id,
         ),
         notifier,
@@ -593,6 +614,7 @@ def _driver_command(config: SupervisorConfig) -> tuple[str, ...]:
     ]
     if config.author_queue_root is not None:
         command.extend(("--author-queue", str(config.author_queue_root)))
+    command.extend(("--author-concurrency", str(config.author_concurrency)))
     if config.wake_episode_id is not None:
         command.extend(("--wake-episode-id", config.wake_episode_id))
     return tuple(command)

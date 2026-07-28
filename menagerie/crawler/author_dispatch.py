@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import json
 import os
@@ -163,6 +164,7 @@ _AUTHOR_RESET_PATTERNS = (
     re.compile(r"try again at ([^.\n]+)", re.IGNORECASE),
     re.compile(r"resets? at ([^.\n]+)", re.IGNORECASE),
 )
+_AUTHOR_RESET_MAX_AHEAD = timedelta(days=8)
 
 
 @dataclass(frozen=True)
@@ -242,13 +244,93 @@ class AuthorEffortGrant:
         }
 
 
-def parse_author_reset_at(response_body: str) -> Optional[str]:
-    """Extract a provider-reported reset instant from free-form response text.
+def _structured_author_error(response_body: str) -> Optional[str]:
+    """Extract only the error-bearing fields from one Claude JSON result.
 
     Parameters
     ----------
     response_body:
-        Provider response text.
+        Exact candidate ``claude -p --output-format json`` result.
+
+    Returns
+    -------
+    str | None
+        Joined structured error fields, or ``None`` when the payload is not a
+        provider-declared error result.
+    """
+
+    try:
+        payload = json.loads(response_body)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(payload, Mapping) or payload.get("is_error") is not True:
+        return None
+    fields: list[str] = []
+    for key in ("result", "message"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            fields.append(value)
+    error = payload.get("error")
+    if isinstance(error, str) and error.strip():
+        fields.append(error)
+    elif isinstance(error, Mapping):
+        for key in ("type", "code", "message"):
+            value = error.get(key)
+            if isinstance(value, str) and value.strip():
+                fields.append(value)
+    return "\n".join(fields) if fields else None
+
+
+def plausible_author_reset_at(
+    reset_at: str,
+    *,
+    now: Optional[datetime] = None,
+) -> Optional[str]:
+    """Admit only a parseable future provider reset in the plausible usage window.
+
+    Parameters
+    ----------
+    reset_at:
+        Candidate ISO-8601 provider reset timestamp.
+    now:
+        Injectable aware UTC clock used by deterministic tests.
+
+    Returns
+    -------
+    str | None
+        The stripped timestamp when it is plausible, otherwise ``None``.
+    """
+
+    candidate = reset_at.strip()
+    try:
+        parsed = datetime.fromisoformat(candidate.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        raise ValueError("author reset validation clock must be timezone-aware")
+    parsed_utc = parsed.astimezone(timezone.utc)
+    current_utc = current.astimezone(timezone.utc)
+    if not current_utc < parsed_utc <= current_utc + _AUTHOR_RESET_MAX_AHEAD:
+        return None
+    return candidate
+
+
+def parse_author_reset_at(
+    response_body: str,
+    *,
+    now: Optional[datetime] = None,
+) -> Optional[str]:
+    """Extract and validate a provider reset from an authoritative error field.
+
+    Parameters
+    ----------
+    response_body:
+        Structured provider error text already established as authoritative.
+    now:
+        Injectable aware UTC clock used by deterministic tests.
 
     Returns
     -------
@@ -261,7 +343,7 @@ def parse_author_reset_at(response_body: str) -> Optional[str]:
         if matched is not None:
             value = matched.group(1).strip()
             if value:
-                return value
+                return plausible_author_reset_at(value, now=now)
     return None
 
 
@@ -280,9 +362,10 @@ def classify_author_response(
     Parameters
     ----------
     status_code:
-        Operator process exit code or provider HTTP status.
+        Typed operator process exit code.
     response_body:
-        Combined operator response text.
+        Exact structured provider JSON result. For typed exit 76 this remains
+        diagnostic-only unless it is valid provider JSON.
     retry_after_seconds:
         Parsed retry delay, if supplied.
     reset_at:
@@ -296,20 +379,29 @@ def classify_author_response(
         Typed pause signal, or ``None`` for non-rate/quota responses.
     """
 
-    lowered = response_body.lower()
+    structured_error = _structured_author_error(response_body)
+    if status_code != AUTHOR_EXIT_BACKOFF and structured_error is None:
+        return None
+    classification_text = structured_error or ""
+    lowered = classification_text.lower()
     reason: Optional[AuthorPauseReason] = None
     if any(marker in lowered for marker in _AUTHOR_QUOTA_MARKERS):
         reason = AuthorPauseReason.QUOTA_EXHAUSTED
-    elif status_code in (AUTHOR_EXIT_BACKOFF, 429) or any(
-        marker in lowered for marker in _AUTHOR_RATE_MARKERS
-    ):
+    elif any(marker in lowered for marker in _AUTHOR_RATE_MARKERS):
         reason = AuthorPauseReason.RATE_LIMIT
-    if reason is None:
+    elif status_code == AUTHOR_EXIT_BACKOFF:
+        reason = AuthorPauseReason.QUOTA_EXHAUSTED
+    else:
         return None
+    validated_reset = (
+        plausible_author_reset_at(reset_at)
+        if reset_at is not None
+        else parse_author_reset_at(classification_text)
+    )
     return AuthorBackoffSignal(
         reason=reason,
         retry_after_seconds=retry_after_seconds,
-        reset_at=reset_at if reset_at is not None else parse_author_reset_at(response_body),
+        reset_at=validated_reset,
         response_excerpt=response_body[:1_500],
         provider=provider,
     )

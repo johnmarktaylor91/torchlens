@@ -38,9 +38,13 @@ from menagerie.crawler.checkpoint import (
     canonical_operational_ledger_path,
 )
 from menagerie.crawler.constants import (
+    DEFAULT_AUTHOR_WAVE_CONCURRENCY,
     DEFAULT_NOTIFY_COMMAND,
     DEFAULT_PROGRESS_MILESTONES,
     DEFAULT_REVIEW_CHECKPOINT_AT,
+    FAILURE_REASON_CODES,
+    MAX_AUTHOR_WAVE_CONCURRENCY,
+    TIER_CAMPAIGN_IDS,
     InvocationOrigin,
 )
 from menagerie.crawler.envs import (
@@ -105,10 +109,49 @@ class AuthorQueueStalled(RetryableOperatorError):
 class AuthorEffortCapExceeded(DriverIntegrationError):
     """Raised when an author session exceeds its declared effort grant.
 
-    ``PLAN.md`` LP-13.2 makes cap exhaustion ``failed:<actual-stage>`` with
-    ``reason_code=effort-cap-exhausted``: a permanent, model-local outcome rather
-    than a retryable operator fault.
+    ``PLAN.md`` LP-13.2 makes cap exhaustion ``failed:<actual-stage>`` with a
+    stage-valid effort reason: a permanent, model-local outcome rather than a
+    retryable operator fault.
+
+    The *actual stage* is carried here because only the raise site knows it. Every
+    cap exhaustion used to be recorded as ``failed:source``, which asserts that the
+    model's source could not be resolved -- routinely false. A session that blew its
+    grant after the controlled fetch froze its manifest had its source resolved,
+    fetched, and read; what ran out was budget at the author stage.
+    Recording that as a source failure would bury models with perfectly good sources
+    under a status that says none exists.
+
+    Parameters
+    ----------
+    args:
+        Standard exception arguments.
+    stage:
+        Closed :data:`~menagerie.crawler.constants.FAILURE_REASON_CODES` stage that
+        was actually in flight. Defaults to ``"source"``, which is correct for a cap
+        hit while the author is still naming sources.
+    dimension:
+        Closed author-effort dimension when ``stage="author"``.
     """
+
+    def __init__(
+        self,
+        *args: object,
+        stage: str = "source",
+        dimension: Optional[str] = None,
+    ) -> None:
+        """Attach the closed failure stage the cap exhaustion actually occurred in."""
+
+        super().__init__(*args)
+        reason_code = (
+            f"effort-exhausted:{dimension}"
+            if stage == "author" and dimension is not None
+            else "effort-cap-exhausted"
+        )
+        if reason_code not in FAILURE_REASON_CODES.get(stage, frozenset()):
+            raise ValueError(f"effort-cap exhaustion cannot be attributed to stage {stage!r}")
+        self.stage = stage
+        self.dimension = dimension
+        self.reason_code = reason_code
 
 
 class DriverPaused(DriverError):
@@ -119,7 +162,7 @@ class AuthorBackoffError(DriverError):
     """Carries a typed author rate/quota pause out of the author lane.
 
     Raised instead of returning an artifact so the driver's blanket
-    ``except Exception -> failed:source`` arm cannot convert Claude usage
+    blanket model-local failure arm cannot convert Claude usage
     exhaustion into a permanent model failure.
     """
 
@@ -265,8 +308,19 @@ class DriverConfig:
     checker_version: str = "current"
     only_status: Optional[str] = None
     campaign_config_path: Optional[Path] = None
+    #: Frozen partitioner TIER campaign this run belongs to (``c1-mech`` ... ``c4-native``),
+    #: or ``None`` when the run is not bound to one. This is the run's author-tier
+    #: identity. It is NOT the per-item repair scope produced by
+    #: :func:`_campaign_id_for_item`, which is ``campaign-<stable_id>`` and is per model.
     campaign_id: Optional[str] = None
     author_queue_root: Optional[Path] = None
+    #: Bounded number of author sessions one wave may keep in flight at once. Only the
+    #: author *sessions* overlap: every ledger append, artifact publication, and terminal
+    #: routing decision stays on the single canonical writer thread, in work order. The
+    #: right value differs by lane -- an in-session queue pool is cheaper to widen than a
+    #: `claude -p` subprocess fan-out -- so it is configurable rather than derived. ``1``
+    #: restores the historical fully serial lane.
+    author_concurrency: int = DEFAULT_AUTHOR_WAVE_CONCURRENCY
     run_repair_max: int = 2
     invocation_origin: InvocationOrigin = InvocationOrigin.ORDINARY_RUN
     wake_episode_id: Optional[str] = None
@@ -297,8 +351,20 @@ class DriverConfig:
             raise ValueError("campaign_config_path must be absolute")
         if self.campaign_id is not None and not self.campaign_id:
             raise ValueError("campaign_id cannot be empty")
+        if self.campaign_id is not None and self.campaign_id not in TIER_CAMPAIGN_IDS:
+            # A per-item repair scope reaching this field would be published to the author
+            # queue as the run's tier and would select the wrong frozen author model.
+            raise ValueError(
+                f"campaign_id must name a frozen tier campaign {sorted(TIER_CAMPAIGN_IDS)}, "
+                f"not {self.campaign_id!r}"
+            )
         if self.author_queue_root is not None and not self.author_queue_root.is_absolute():
             raise ValueError("author_queue_root must be absolute")
+        if not 1 <= self.author_concurrency <= MAX_AUTHOR_WAVE_CONCURRENCY:
+            raise ValueError(
+                "author_concurrency must be between 1 and "
+                f"{MAX_AUTHOR_WAVE_CONCURRENCY}, not {self.author_concurrency}"
+            )
         if not isinstance(self.invocation_origin, InvocationOrigin):
             raise ValueError("invocation_origin must be a closed InvocationOrigin")
         if (
@@ -354,7 +420,14 @@ class WorkItem:
 
 
 def _campaign_id_for_item(item: WorkItem) -> str:
-    """Return the bounded repair campaign rooted at the active work generation."""
+    """Return the bounded repair campaign rooted at the active work generation.
+
+    This is a per-ITEM authority lineage (``campaign-<stable_id>``, or
+    ``campaign-<work_id>`` for a requeue/refresh) -- the value the author envelopes carry
+    as ``campaign_id`` and the ledgers record as ``campaign_root_work_id``. It is
+    unrelated to :attr:`DriverConfig.campaign_id`, the run's frozen partitioner TIER
+    campaign, and it must never be used to select an author model or prompt.
+    """
 
     if item.requeue_work_id is not None or item.refresh_work_id is not None:
         return f"campaign-{item.active_work_id}"

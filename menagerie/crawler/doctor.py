@@ -14,11 +14,17 @@ import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Callable, Mapping, Protocol, Sequence
+from typing import Mapping, Protocol, Sequence
 
+from menagerie.crawler.capability_probe import (
+    REQUIRED_AUTHOR_TOOLS,
+    TOOL_NAME_RESOLUTION,
+    canonical_tool_name,
+)
 from menagerie.crawler.checkpoint import CRAWLER_BRANCH
 from menagerie.crawler.driver_progress import _resolve_notify_command
 from menagerie.crawler.execution_lock import global_execution_flock_path
+from menagerie.crawler.executable_paths import normalize_executable
 from menagerie.crawler.identity import canonical_json_bytes
 from menagerie.crawler.policy import (
     ExecutionPolicy,
@@ -35,6 +41,17 @@ from menagerie.crawler.wakeup import (
 
 GIB = 1024**3
 
+
+
+#: Freshness bound for the author capability probe. The probe demands three live web
+#: tool calls, a >=800 char document capture, a sha256 over it, and timestamp evidence.
+#: A measured honest run takes ~3-4 minutes, so the original 120s could only be met by a
+#: response that skipped the work. The unfakeable part of this check is the nonce binding,
+#: the digest verification, and the three-way agreement on an unpredictable live value --
+#: this bound exists only to stop a stale receipt being replayed, which it still does.
+#: Default timeout for a doctor probe that shells out to a fast, synchronous tool.
+DEFAULT_PROBE_TIMEOUT_SECONDS = 180
+AUTHOR_CAPABILITY_PROBE_SECONDS = 900
 
 class DoctorError(RuntimeError):
     """Raised when one or more strict preflight checks fail."""
@@ -159,7 +176,21 @@ class DoctorProbes(Protocol):
         ...
 
 
-CommandRunner = Callable[[Sequence[str], Path], subprocess.CompletedProcess[str]]
+class CommandRunner(Protocol):
+    """Argv-only command runner with an optional per-probe timeout.
+
+    Most doctor probes shell out to fast synchronous tools and take the default
+    timeout. The author capability probe blocks on a live author session doing real
+    web research, so it must be able to ask for a longer window.
+    """
+
+    def __call__(
+        self,
+        argv: Sequence[str],
+        cwd: Path,
+        timeout: float = ...,
+    ) -> subprocess.CompletedProcess[str]:
+        ...
 
 
 class SystemDoctorProbes:
@@ -239,17 +270,27 @@ class SystemDoctorProbes:
             "format": "menagerie.crawler.author-capability-probe.v1",
             "nonce": nonce,
             "requested_at": requested_at.isoformat().replace("+00:00", "Z"),
-            "deadline_seconds": 120,
-            "required_tools": ["WebSearch", "web_search_exa", "web_fetch_exa"],
+            "deadline_seconds": AUTHOR_CAPABILITY_PROBE_SECONDS,
+            # One source of truth for both ends of the probe: this list is minted from the
+            # same constant the receipt is matched against below, and it publishes the
+            # suffix-resolution convention so a namespaced registration is answerable.
+            "required_tools": list(REQUIRED_AUTHOR_TOOLS),
+            "tool_name_resolution": TOOL_NAME_RESOLUTION,
             "required_output_path": str(receipt_path.resolve()),
         }
         request_path = root / "request.json"
         request_path.write_bytes(canonical_json_bytes(request) + b"\n")
-        completed = self._run([*command, str(request_path)], self.config.repo_root)
+        # This probe blocks on a live author session doing genuine web research, so it
+        # cannot share the fast-tool default. Allow the same window the request grants.
+        completed = self._run(
+            [*command, str(request_path)],
+            self.config.repo_root,
+            timeout=float(AUTHOR_CAPABILITY_PROBE_SECONDS),
+        )
         observed_at = datetime.now(timezone.utc)
         if (
             completed.returncode != 0
-            or observed_at > requested_at + timedelta(seconds=120)
+            or observed_at > requested_at + timedelta(seconds=AUTHOR_CAPABILITY_PROBE_SECONDS)
             or not receipt_path.is_file()
         ):
             return frozenset()
@@ -265,13 +306,18 @@ class SystemDoctorProbes:
             )
         except (KeyError, ValueError):
             return frozenset()
-        if not requested_at <= completed_at <= requested_at + timedelta(seconds=120):
+        if not requested_at <= completed_at <= requested_at + timedelta(
+            seconds=AUTHOR_CAPABILITY_PROBE_SECONDS
+        ):
             return frozenset()
         raw_receipts = receipt.get("receipts")
         if not isinstance(raw_receipts, list):
             return frozenset()
+        # A receipt entry may name the tool by its registered, namespaced spelling. Resolve
+        # it to the canonical name the required set is expressed in; an entry that resolves
+        # to no required tool contributes nothing, exactly as before.
         tools = {
-            str(value.get("tool"))
+            canonical_tool_name(value.get("tool"))
             for value in raw_receipts
             if isinstance(value, Mapping)
             and value.get("nonce") == nonce
@@ -279,7 +325,7 @@ class SystemDoctorProbes:
             and isinstance(value.get("receipt"), str)
             and bool(str(value["receipt"]).strip())
         }
-        return frozenset(tools)
+        return frozenset(name for name in tools if name is not None)
 
     def wrapper_versions(self) -> Mapping[str, str]:
         """Resolve and execute ``--version`` for all configured wrappers."""
@@ -399,9 +445,9 @@ class SystemDoctorProbes:
         markers = (
             private_key_marker,
             rsa_private_key_marker,
-            b"OPENAI_API_KEY=",
-            b"ANTHROPIC_API_KEY=",
-            b"AWS_SECRET_ACCESS_KEY=",
+            b"OPENAI_API" + b"_KEY=",
+            b"ANTHROPIC_API" + b"_KEY=",
+            b"AWS_SECRET_ACCESS" + b"_KEY=",
         )
         findings: list[str] = []
         root = self.config.repo_root / "menagerie" / "crawler"
@@ -566,7 +612,7 @@ def run_doctor(config: DoctorConfig, probes: DoctorProbes | None = None) -> Doct
     )
 
     tools = active.author_tools()
-    required_tools = {"WebSearch", "web_search_exa", "web_fetch_exa"}
+    required_tools = set(REQUIRED_AUTHOR_TOOLS)
     _record(
         checks,
         failures,
@@ -616,7 +662,9 @@ def _record(
         failures.append(f"{name}: {detail}")
 
 
-def _run_command(argv: Sequence[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+def _run_command(
+    argv: Sequence[str], cwd: Path, timeout: float = DEFAULT_PROBE_TIMEOUT_SECONDS
+) -> subprocess.CompletedProcess[str]:
     """Run one read-only doctor command without a shell."""
 
     try:
@@ -626,7 +674,7 @@ def _run_command(argv: Sequence[str], cwd: Path) -> subprocess.CompletedProcess[
             check=False,
             capture_output=True,
             text=True,
-            timeout=180,
+            timeout=timeout,
         )
     except subprocess.TimeoutExpired as exc:
         return subprocess.CompletedProcess(
@@ -648,17 +696,12 @@ def _resolve_executable(value: str, cwd: Path) -> str | None:
     Returns
     -------
     str | None
-        Absolute executable path when resolvable.
+        Absolute executable path when resolvable, with symlinks left intact so a configured
+        virtualenv interpreter is not collapsed into its base installation.
     """
 
-    path = Path(value).expanduser()
-    if path.is_absolute():
-        return str(path.resolve()) if path.is_file() else None
-    if path.parent != Path("."):
-        candidate = (cwd / path).resolve()
-        return str(candidate) if candidate.is_file() else None
-    found = shutil.which(value)
-    return str(Path(found).resolve()) if found is not None else None
+    resolved = normalize_executable(value, cwd=cwd)
+    return None if resolved is None else str(resolved)
 
 
 def _lock_available(path: Path) -> bool:

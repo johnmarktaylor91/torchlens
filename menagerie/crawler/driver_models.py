@@ -40,6 +40,7 @@ from menagerie.crawler.identity import (
 )
 from menagerie.crawler.intake import (
     legacy_requires_fidelity_audit,
+    trusted_identity_fields,
 )
 from menagerie.crawler.metadata import (
     MetadataValidationError,
@@ -1239,10 +1240,46 @@ def _placeholder_facts(
     created_at: str,
     *,
     source: Optional[Mapping[str, Any]] = None,
+    reason_code: Optional[str] = None,
 ) -> JsonObject:
-    """Build unresolved facts using only a retained exact model source, if any."""
+    """Build unresolved facts using only a retained exact model source, if any.
+
+    The narrative fields say what actually happened. ``rung`` is a structurally
+    required enum with no "nothing was selected" member, so ``R5_SKIP`` remains the
+    placeholder; every free-text field around it must therefore refuse to imply that a
+    bounded search concluded no source exists. Cap exhaustion in particular is a budget
+    outcome, not a source verdict, and saying so here is what keeps a later pass from
+    re-deriving that the source was fine.
+
+    Parameters
+    ----------
+    item:
+        Terminal work item.
+    created_at:
+        Revision timestamp.
+    source:
+        Retained exact model source, when one survived.
+    reason_code:
+        Closed failure reason that produced this terminal, used to keep the recorded
+        narrative honest about why no rung was selected.
+    """
 
     exact_source = deepcopy(dict(source)) if isinstance(source, Mapping) else None
+    cap_exhausted = reason_code == "effort-cap-exhausted" or bool(
+        reason_code and reason_code.startswith("effort-exhausted:")
+    )
+    decision = (
+        "the author session exhausted its effort grant before a rung was selected"
+        if cap_exhausted
+        else "source resolution did not complete"
+    )
+    attempt_reason = reason_code if cap_exhausted else "author-lane-failed"
+    conclusion = (
+        "The author session ran out of its effort grant. No bounded search concluded "
+        "that source is unavailable; this model is unfinished, not unresolvable."
+        if cap_exhausted
+        else "The model-local lane failed before source resolution completed."
+    )
     if exact_source is None and item.discovery_source_url is not None:
         exact_source = {
             "source_id": "intake-discovery-record",
@@ -1272,9 +1309,7 @@ def _placeholder_facts(
             "canonical_name": item.intake.name,
             "aliases": [],
             "acronym": None,
-            "variant": item.intake.variant,
-            "variant_scope": "family",
-            "family_representative_id": item.stable_id,
+            **trusted_identity_fields(item.intake),
             "duplicate_of": None,
             "alias_of": None,
         },
@@ -1287,7 +1322,7 @@ def _placeholder_facts(
         "licenses": None,
         "source_resolution": {
             "rung": "R5_SKIP",
-            "decision": "source resolution did not complete",
+            "decision": decision,
             "rung_evidence": source_id,
             "sufficiency_gap": None,
             "searched_at": created_at,
@@ -1295,7 +1330,7 @@ def _placeholder_facts(
                 {
                     "rung": "R5_SKIP",
                     "result": "not-reached",
-                    "reason_code": "author-lane-failed",
+                    "reason_code": attempt_reason,
                     "evidence_ids": ["intake-identity"],
                 }
             ],
@@ -1307,7 +1342,7 @@ def _placeholder_facts(
                 "archives_checked": [],
                 "started_at": created_at,
                 "finished_at": created_at,
-                "conclusion": "The model-local lane failed before source resolution completed.",
+                "conclusion": conclusion,
             },
             "mandatory_link_status": "ok" if exact_source is not None else "failed",
             "primary_source_id": source_id,
@@ -1427,7 +1462,9 @@ def _assemble_terminal_model(
     raw_facts = (
         deepcopy(dict(proposal["proposed_facts"]))
         if proposed and artifact is not None
-        else _placeholder_facts(item, created_at, source=terminal_source)
+        else _placeholder_facts(
+            item, created_at, source=terminal_source, reason_code=reason_code
+        )
     )
     facts = deepcopy(raw_facts)
     if artifact is not None and not proposed:
@@ -1528,7 +1565,9 @@ def _assemble_terminal_model(
             None,
         )
         if proposed or artifact is None:
-            facts = _placeholder_facts(item, created_at, source=exact_source)
+            facts = _placeholder_facts(
+                item, created_at, source=exact_source, reason_code=reason_code
+            )
 
     fidelity_gate = _find_gate(
         gates,

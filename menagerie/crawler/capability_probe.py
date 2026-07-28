@@ -59,7 +59,24 @@ CAPABILITY_PROBE_FORMAT = "menagerie.crawler.author-capability-probe.v1"
 CAPABILITY_RECEIPT_FORMAT = "menagerie.crawler.author-capability-receipt.v1"
 
 #: Tools the author path must genuinely have. The doctor requires a receipt for each.
+#: These are *canonical* names. See :data:`TOOL_NAME_RESOLUTION`.
 REQUIRED_AUTHOR_TOOLS = ("WebSearch", "web_search_exa", "web_fetch_exa")
+
+#: How a canonical name relates to the name a tool is actually *registered* under.
+#:
+#: The Exa tools reach a session through MCP, and the registered name carries a namespace
+#: prefix that depends on how the session was launched: a plugin-loaded server registers
+#: ``mcp__plugin_everything-claude-code_exa__web_search_exa`` while an explicit
+#: ``--mcp-config`` naming the server ``exa`` registers ``mcp__exa__web_search_exa``. Only
+#: the suffix is stable across those contexts, so the suffix -- not any single literal --
+#: is the identity. Both ends of the probe resolve by suffix and record the canonical name,
+#: which is why a namespace change can never read as a missing tool.
+TOOL_NAME_RESOLUTION = "canonical-name-is-the-stable-suffix-of-the-registered-name"
+
+#: Separators a namespace prefix may use before the canonical suffix. Requiring one of
+#: these keeps resolution from accepting an unrelated tool that merely ends in the same
+#: letters (``my_web_search_exa`` is not ``web_search_exa``).
+_TOOL_NAMESPACE_SEPARATORS = ("__", ".", ":", "/")
 
 #: Fixed challenge corpus. Every entry is a long-lived, actively maintained PyPI project
 #: with a stable JSON metadata endpoint. Changing this list changes ``CORPUS_REVISION``,
@@ -200,6 +217,82 @@ def derive_challenge(nonce: str) -> CapabilityChallenge:
     )
 
 
+def canonical_tool_name(observed: Any) -> Optional[str]:
+    """Resolve one registered tool name to the canonical tool it provides.
+
+    Parameters
+    ----------
+    observed:
+        Name a tool is registered under in some execution context, which may carry a
+        namespace prefix (``mcp__exa__web_search_exa``) or be the canonical name itself.
+
+    Returns
+    -------
+    str | None
+        Canonical required-tool name, or ``None`` when the name names no required tool.
+        Resolution is spelling-only: it decides *which* capability an entry claims, never
+        whether the claim is true. Every evidence check still has to pass afterwards.
+    """
+
+    name = str(observed or "").strip()
+    if not name:
+        return None
+    if name in REQUIRED_AUTHOR_TOOLS:
+        return name
+    for canonical in REQUIRED_AUTHOR_TOOLS:
+        if not name.endswith(canonical) or len(name) == len(canonical):
+            continue
+        prefix = name[: -len(canonical)]
+        if prefix.endswith(_TOOL_NAMESPACE_SEPARATORS):
+            return canonical
+    return None
+
+
+def _canonicalize_tool_evidence(
+    tools: Mapping[str, Any]
+) -> dict[str, tuple[str, Mapping[str, Any]]]:
+    """Key per-tool evidence by canonical name, retaining the registered spelling.
+
+    Parameters
+    ----------
+    tools:
+        Session-reported evidence keyed by whatever name the session called the tool by.
+
+    Returns
+    -------
+    dict[str, tuple[str, Mapping[str, Any]]]
+        Canonical tool name to ``(registered_name, evidence)``.
+
+    Raises
+    ------
+    CapabilityProbeError
+        When two keys claim the same canonical tool, or an entry's declared
+        ``registered_tool_name`` resolves to a different tool than its key. Both are
+        refusals: an ambiguous claim is never silently reduced to one of its readings.
+    """
+
+    resolved: dict[str, tuple[str, Mapping[str, Any]]] = {}
+    for raw_name, entry in tools.items():
+        canonical = canonical_tool_name(raw_name)
+        if canonical is None:
+            continue
+        if not isinstance(entry, Mapping):
+            raise CapabilityProbeError(f"{raw_name} evidence is not an object")
+        registered = str(entry.get("registered_tool_name") or raw_name).strip()
+        if canonical_tool_name(registered) != canonical:
+            raise CapabilityProbeError(
+                f"{raw_name} evidence declares registered_tool_name {registered!r}, which is "
+                "not a spelling of the same tool"
+            )
+        if canonical in resolved:
+            raise CapabilityProbeError(
+                f"capability evidence claims {canonical} twice, as "
+                f"{resolved[canonical][0]!r} and {registered!r}"
+            )
+        resolved[canonical] = (registered, entry)
+    return resolved
+
+
 def build_probe_request(
     *,
     nonce: str,
@@ -232,6 +325,7 @@ def build_probe_request(
         "requested_at": requested_at or utc_now(),
         "deadline_seconds": int(deadline_seconds),
         "required_tools": list(REQUIRED_AUTHOR_TOOLS),
+        "tool_name_resolution": TOOL_NAME_RESOLUTION,
         "required_output_path": required_output_path,
     }
 
@@ -542,9 +636,16 @@ def validate_capability_evidence(
     """
 
     challenge = derive_challenge(nonce)
-    tools = evidence.get("tools")
-    if not isinstance(tools, Mapping):
+    raw_tools = evidence.get("tools")
+    if not isinstance(raw_tools, Mapping):
         raise CapabilityProbeError("capability evidence carries no per-tool observations")
+    # A tool's registered name is namespaced and the namespace depends on how the session
+    # was launched, so evidence keyed `mcp__exa__web_search_exa` is the same claim as
+    # evidence keyed `web_search_exa`. Resolving the spelling here means a namespace change
+    # can never masquerade as a missing tool -- and nothing below is relaxed: every entry
+    # still has to carry live, tool-shaped, nonce-bound, corroborated evidence.
+    resolved = _canonicalize_tool_evidence(raw_tools)
+    tools = {name: entry for name, (_registered, entry) in resolved.items()}
     missing = [tool for tool in REQUIRED_AUTHOR_TOOLS if tool not in tools]
     if missing:
         raise CapabilityProbeError(f"capability evidence omits required tools {missing}")
@@ -590,15 +691,20 @@ def validate_capability_evidence(
         )
 
     for tool in REQUIRED_AUTHOR_TOOLS:
+        registered = resolved[tool][0]
         entries.append(
             {
                 "tool": tool,
+                # Audit value: which namespace actually served this campaign's author path.
+                # It is bound into the receipt digest rather than left as loose metadata.
+                "registered_tool_name": registered,
                 "nonce": nonce,
                 "exercised": True,
                 "receipt": stable_hash(
                     {
                         "nonce": nonce,
                         "tool": tool,
+                        "registered_tool_name": registered,
                         "challenge_id": challenge.challenge_id,
                         "evidence": _canonical_tool_evidence(tools[tool]),
                     }
@@ -613,7 +719,12 @@ def validate_capability_evidence(
         "answer": {"version": sorted(distinct)[0], "package": challenge.package},
         "completed_at": observed.isoformat().replace("+00:00", "Z"),
         "receipts": entries,
-        "evidence": _bounded_evidence(tools),
+        "evidence": _bounded_evidence(
+            {
+                name: {**entry, "registered_tool_name": registered}
+                for name, (registered, entry) in resolved.items()
+            }
+        ),
     }
 
 

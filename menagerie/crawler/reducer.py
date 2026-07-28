@@ -2813,6 +2813,28 @@ class CanonicalReducer:
     def _validate_source(self, model: Mapping[str, Any]) -> None:
         """Enforce the mandatory public source-link invariant.
 
+        The guarantee this protects is about *catalogued* models: every record we publish as
+        a success must carry a real, exact, public primary source link, and must not
+        misreport that it has one. That guarantee is enforced here unconditionally.
+
+        A **failure** record is a different object. It exists precisely to record that the
+        model could not be completed, and the failure itself is frequently what prevented a
+        source from ever being resolved -- an author lane that died before source resolution,
+        or a pinned artifact that could not be fetched. Demanding a resolved primary source
+        from such a record demands information the failure is reporting the absence of.
+
+        This distinction previously keyed on the single code ``failed:source`` rather than on
+        the failure *kind*, which made the other eight terminal failure codes unsatisfiable
+        whenever they occurred before source resolution. ``_placeholder_facts`` in
+        ``driver_models`` builds exactly that shape (``sources=[]`` with
+        ``mandatory_link_status="failed"``), so the engine was constructing records its own
+        reducer categorically rejected, and a single unfetchable source aborted the whole
+        campaign instead of recording one failed model.
+
+        Failure records are still not permitted to *lie*: ``mandatory_link_status`` must agree
+        with the source evidence actually present. That consistency check now applies to every
+        failure kind, where it previously covered only ``failed:source``.
+
         Parameters
         ----------
         model:
@@ -2827,17 +2849,17 @@ class CanonicalReducer:
             and str(source.get("url", "")).startswith(("http://", "https://"))
             for source in sources
         )
-        source_failure = model.get("status", {}).get("code") == "failed:source"
-        if not source_failure and not exact_primary:
+        # ``kind`` is validated against the code prefix by ``_validate_status``, so it is the
+        # reliable discriminator across every terminal failure code.
+        failed = model.get("status", {}).get("kind") == "failed"
+        if not failed and not exact_primary:
             raise ReductionError("missing mandatory exact public primary source link")
-        if source_failure and resolution.get("mandatory_link_status") != (
+        if failed and resolution.get("mandatory_link_status") != (
             "ok" if exact_primary else "failed"
         ):
-            raise ReductionError("failed:source mandatory-link status contradicts source evidence")
-        if not source_failure and resolution.get("mandatory_link_status") != "ok":
-            raise ReductionError(
-                "non-source-failure terminal records require mandatory_link_status=ok"
-            )
+            raise ReductionError("failure mandatory-link status contradicts source evidence")
+        if not failed and resolution.get("mandatory_link_status") != "ok":
+            raise ReductionError("successful terminal records require mandatory_link_status=ok")
 
     def _gate_item(
         self, gate_id: Optional[str], stable_id: str
@@ -3022,6 +3044,7 @@ class CanonicalReducer:
             "intake",
             "source",
             "fetch",
+            "author",
             "evidence",
             "accuracy-gate",
             "runner",

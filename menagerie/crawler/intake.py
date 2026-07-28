@@ -20,6 +20,9 @@ from menagerie.crawler.models import JsonObject
 from menagerie.crawler.routing import ModelRequirements, requirements_from_zoo_era
 
 
+VARIANT_SCOPE_FAMILY = "family"
+
+
 class IntakeError(ValueError):
     """Raised when trusted discovery inputs cannot form one consistent snapshot."""
 
@@ -43,6 +46,10 @@ class IntakeItem:
     variant_scope, family_representative_id:
         Explicit family membership used for representative-first scheduling. A
         representative names its own stable ID; a size variant names another row.
+    family:
+        Untrusted legacy grouping label carried verbatim from the discovery row.
+        It is a scheduling and description-reuse hint only; it never gains
+        authority over any authored taxonomy fact.
     """
 
     stable_id: str
@@ -58,6 +65,7 @@ class IntakeItem:
     packages: frozenset[str] = frozenset()
     exact_repository: bool = False
     legacy_torch: bool = False
+    family: Optional[str] = None
 
     @property
     def natural_key(self) -> tuple[str, str, str]:
@@ -70,6 +78,52 @@ class IntakeItem:
         """
 
         return (self.name, self.zoo, self.variant)
+
+    @property
+    def declares_family_variant(self) -> bool:
+        """Return whether this row is a declared size variant of another row.
+
+        Returns
+        -------
+        bool
+            True only when trusted intake binds this row to a *different*
+            representative row inside the ``family`` variant scope.
+        """
+
+        representative = self.family_representative_id or self.stable_id
+        return self.variant_scope == VARIANT_SCOPE_FAMILY and representative != self.stable_id
+
+    @property
+    def variant_designation(self) -> str:
+        """Return this model's non-empty designation inside its variant scope.
+
+        The designation is derived from trusted intake only, by one closed rule:
+
+        * a declared size variant is designated by its trusted intake variant
+          token, because that exact token is what specializes the family
+          representative's recipe; and
+        * every other row -- a row that is its own family representative -- is
+          designated by its own trusted intake name.
+
+        The second branch adds no distinction that the roster does not already
+        contain: the name is the roster's own natural-key component, so siblings
+        of one family stay distinguishable while nothing is invented. The raw
+        ``variant`` column is deliberately *not* promoted for those rows. In this
+        roster it is empty for 96% of rows and, where populated, it carries
+        harvest provenance notes ("PyTorch", "pip install torch", "none (repo
+        code)") rather than variant designations; promoting those would assert a
+        distinction the data does not contain. The column keeps its full weight
+        as part of :attr:`natural_key`, so durable identity is unchanged.
+
+        Returns
+        -------
+        str
+            Non-empty designation inside :attr:`variant_scope`.
+        """
+
+        if self.declares_family_variant:
+            return self.variant
+        return self.name
 
     def to_dict(self) -> JsonObject:
         """Return the canonical JSON representation.
@@ -90,6 +144,7 @@ class IntakeItem:
             "preserved_legacy_flags": list(self.preserved_legacy_flags),
             "variant_scope": self.variant_scope,
             "family_representative_id": self.family_representative_id or self.stable_id,
+            "family": self.family,
             "era": self.era,
             "routing_requirements": {
                 "packages": sorted(self.packages),
@@ -119,6 +174,78 @@ class IntakeItem:
             exact_repository=self.exact_repository,
             legacy_torch=self.legacy_torch,
         )
+
+
+def trusted_identity_fields(item: IntakeItem) -> JsonObject:
+    """Project the three trusted-intake leaves of a model record's identity block.
+
+    ``$.identity.variant``, ``$.identity.variant_scope``, and
+    ``$.identity.family_representative_id`` are declared ``trusted-intake`` by
+    ``model-v3.schema.json`` and are all mandatory non-empty strings. This is the
+    single derivation used by every producer of those leaves, so no lane can
+    invent, blank, or drift them.
+
+    Parameters
+    ----------
+    item:
+        Trusted intake roster member.
+
+    Returns
+    -------
+    dict[str, Any]
+        Exactly the trusted-intake identity leaves, each non-empty.
+
+    Raises
+    ------
+    IntakeError
+        If the derivation cannot produce a non-empty designation.
+    """
+
+    designation = item.variant_designation
+    if not designation.strip():
+        raise IntakeError(f"intake item {item.stable_id!r} has no non-empty variant designation")
+    return {
+        "variant": designation,
+        "variant_scope": item.variant_scope,
+        "family_representative_id": item.family_representative_id or item.stable_id,
+    }
+
+
+def _validate_family_bindings(items: Iterable[IntakeItem], known_ids: Iterable[str]) -> None:
+    """Reject any roster whose declared family bindings cannot be honored.
+
+    Parameters
+    ----------
+    items:
+        Complete assigned roster.
+    known_ids:
+        Every stable ID present in the same roster.
+
+    Raises
+    ------
+    IntakeError
+        If a variant scope is unsupported, a representative is absent, or a
+        declared size variant carries no trusted selector token.
+    """
+
+    resolvable = set(known_ids)
+    for item in items:
+        if item.variant_scope != VARIANT_SCOPE_FAMILY:
+            raise IntakeError(
+                f"unsupported variant scope for {item.stable_id}: {item.variant_scope}"
+            )
+        if (item.family_representative_id or item.stable_id) not in resolvable:
+            raise IntakeError(
+                f"family representative {item.family_representative_id!r} for "
+                f"{item.stable_id!r} is not in intake"
+            )
+        if item.declares_family_variant and not item.variant.strip():
+            # A declared size variant is built by specializing its representative's
+            # recipe with this exact token. An empty token cannot select anything,
+            # so it is a broken binding rather than a value to be defaulted.
+            raise IntakeError(
+                f"declared family variant {item.stable_id!r} has no trusted variant token"
+            )
 
 
 def derive_legacy_risk_flags(
@@ -372,6 +499,9 @@ def _build_items(
             raw_era = row.get("era")
             if raw_era is not None and not isinstance(raw_era, str):
                 raise IntakeError(f"{source} row {key[0]!r} has a non-string era")
+            raw_family = row.get("family")
+            if raw_family is not None and not isinstance(raw_family, str):
+                raise IntakeError(f"{source} row {key[0]!r} has a non-string family")
             routing = requirements_from_zoo_era(key[1], raw_era)
             item = IntakeItem(
                 stable_id=stable_id,
@@ -387,6 +517,7 @@ def _build_items(
                 packages=routing.packages,
                 exact_repository=routing.exact_repository,
                 legacy_torch=routing.legacy_torch,
+                family=raw_family or None,
             )
             existing = by_key.get(key)
             if existing is not None:
@@ -395,16 +526,7 @@ def _build_items(
                 continue
             by_key[key] = item
             by_id[stable_id] = key
-    for item in by_key.values():
-        if item.variant_scope != "family":
-            raise IntakeError(
-                f"unsupported variant scope for {item.stable_id}: {item.variant_scope}"
-            )
-        if item.family_representative_id not in by_id:
-            raise IntakeError(
-                f"family representative {item.family_representative_id!r} for "
-                f"{item.stable_id!r} is not in intake"
-            )
+    _validate_family_bindings(by_key.values(), by_id)
     return tuple(sorted(by_key.values(), key=lambda item: item.stable_id))
 
 
@@ -577,6 +699,17 @@ def load_intake_snapshot(snapshot_root: Path) -> IntakeSnapshot:
             return derive_legacy_risk_flags({}, discovery_source=discovery_source)
         return derive_legacy_risk_flags(legacy_row, discovery_source=discovery_source)
 
+    def loaded_family(row: Mapping[str, Any]) -> Optional[str]:
+        """Load the stored grouping hint or recover it from snapshotted source bytes."""
+
+        raw_family = row.get("family")
+        if raw_family is None:
+            legacy_row = bound_source_row(row)
+            raw_family = legacy_row.get("family") if legacy_row is not None else None
+        if raw_family is not None and not isinstance(raw_family, str):
+            raise IntakeError("intake family hint must be a string or null")
+        return raw_family or None
+
     def loaded_routing(
         row: Mapping[str, Any],
     ) -> tuple[Optional[str], frozenset[str], bool, bool]:
@@ -632,20 +765,11 @@ def load_intake_snapshot(snapshot_root: Path) -> IntakeSnapshot:
                 packages=packages,
                 exact_repository=exact_repository,
                 legacy_torch=legacy_torch,
+                family=loaded_family(row),
             )
         )
     items = tuple(loaded_items)
-    loaded_ids = {item.stable_id for item in items}
-    for item in items:
-        if item.variant_scope != "family":
-            raise IntakeError(
-                f"unsupported variant scope for {item.stable_id}: {item.variant_scope}"
-            )
-        if item.family_representative_id not in loaded_ids:
-            raise IntakeError(
-                f"family representative {item.family_representative_id!r} for "
-                f"{item.stable_id!r} is not in intake"
-            )
+    _validate_family_bindings(items, {item.stable_id for item in items})
     expected = stable_hash(
         {
             key: value

@@ -11,7 +11,7 @@ from menagerie.crawler.doctor import DoctorConfig, DoctorError, run_doctor
 from menagerie.crawler.status import assert_partition
 from menagerie.crawler.tests.conftest import make_model
 from menagerie.crawler.tests.test_slice_f_doctor import FakeDoctorProbes
-from menagerie.crawler.tools.verify_prompts import verify_prompts
+from menagerie.crawler.tools.verify_pool_prompts import verify_prompt_surface
 from .support import fabricated_crawler_locks, repository_root
 
 
@@ -50,15 +50,19 @@ def test_frozen_prompts_and_generated_lock_boundary_pass_release_gate() -> None:
 
     repo_root = repository_root()
     crawler_root = repo_root / "menagerie" / "crawler"
-    digests = verify_prompts(
+    # The dispatch-brief fragments steer every author session, so the release gate pins
+    # the whole prompt surface rather than only the two top-level prompts.
+    pool_root = crawler_root / "prompts" / "pool"
+    digests = verify_prompt_surface(
         crawler_root / "PLAN.md",
         crawler_root / "prompts" / "claude_crawler_author_v2.txt",
         crawler_root / "prompts" / "codex_accuracy_checker_v2.txt",
+        pool_root,
     )
     assert set(digests) == {
         "claude_crawler_author_v2.txt",
         "codex_accuracy_checker_v2.txt",
-    }
+    } | {path.name for path in pool_root.glob("*.md")}
     assert fabricated_crawler_locks(repo_root) == ()
 
 

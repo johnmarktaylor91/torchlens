@@ -31,8 +31,61 @@ identity and re-hashes every cited artifact. So:
   material choice is a **gap you report**, not a hole you fill.
 - Honest `SKIP_RECOMMENDATION`, `DEFER_RECOMMENDATION`, and `BLOCKED` results are fully
   acceptable outcomes and are recorded as such. An unsupported claim is not.
-- Use `NOASSERTION`, `null`, or `not-found-after-search` rather than guessing a license, a
-  year, a country, or an author.
+- Never guess a license, a year, a country, or an author. A fact you cannot establish is
+  declared, not omitted: empty the field and record a typed
+  `external_metadata.availability.<field>` state (`not-found-after-search` with your
+  recorded bounded search, or `not-applicable`). Bare `null` is refused by the gate.
+
+### The interpreter that has the dependencies
+
+The canonical prompt requires you to run the deterministic proposal validator in this same
+session. Run it with the **campaign interpreter**:
+
+```
+<repository root from JOB FACTS>/.venv-crawler/bin/python
+```
+
+The system `python3` does not have `jsonschema` and the import fails before the validator
+runs; that interpreter does. The entry point is
+`menagerie.crawler.author_dispatch.validate_author_result(result_path, envelope)`. Invoking
+that interpreter and importing repository modules is *reading* the read-only root and is
+allowed; installing into it is not. If the interpreter is genuinely absent, say so in your
+result -- never install a dependency, and never skip the validator silently.
+
+### Identity hashes you compute yourself
+
+Every hash below is canonical `stable_hash` from `menagerie.crawler.identity`: sha256 over
+`json.dumps(value, sort_keys=True, separators=(",", ":"))` encoded UTF-8, rendered
+`sha256:<64 lowercase hex>`. Import the helpers rather than re-implementing the
+canonicalization -- one space or one reordered key and the engine rejects the whole result.
+
+- `evidence_identity`: `identity.compute_evidence_identity(excerpts)` over your excerpt list
+  **in order**, which projects exactly `source_id`, `locator`, `text`, `text_sha256`,
+  `supports`, and `source_content_sha256` from each excerpt. The engine re-derives this from
+  your own evidence and rejects a mismatch, so reordering excerpts changes it.
+- `license_identity`: `stable_hash(<the exact licenses block you declare>)`. Every place your
+  result repeats it must repeat it byte-exactly; the terminal gate binds it.
+- `recommendation_sha256`: `stable_hash` of your recommendation payload with the
+  `recommendation_sha256` key itself removed. It must bind the complete arm payload, so
+  compute it last, after every other field of that arm is final.
+- `handoff_sha256` (DEFER only): the canonical prompt names the exact preceding fields it
+  covers; hash exactly those, in that order, with the same helper.
+
+### If a research tool was unreachable
+
+Grounding is the entire point of this lane, so an unreachable research tool is a **typed,
+visible failure, never a quiet degradation**. Tool names are namespaced and the namespace
+varies by launch context, so match on the stable suffixes (`web_search_exa`,
+`web_fetch_exa`): any registered name ending in one after a `__`, `.`, `:`, or `/` separator
+is that tool -- `mcp__exa__web_search_exa` and
+`mcp__plugin_everything-claude-code_exa__web_fetch_exa` are both simply the Exa tools -- and a
+name mismatch is not evidence of absence. If, after actually searching the
+registered names and attempting a call, a tool is genuinely missing, permission-blocked, or
+erroring, do **not** write a proposal from recollection and do not cite a URL you could not
+open. Emit a `BLOCKED` result naming the tool, the exact spelling you called, and the verbatim
+error. Prefer Exa for anything you must quote: `WebSearch` returns the engine's own synthesised
+answer, which frequently cannot be traced to a citable URL, and every factual field here needs
+a verbatim excerpt at an exact URL.
 
 ### Running out of budget
 

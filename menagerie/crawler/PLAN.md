@@ -206,7 +206,7 @@ Free-form detail supplements but never replaces it.
 | Stage | Allowed reasons |
 | --- | --- |
 | `intake` | `schema-invalid`, `stable-id-conflict`, `duplicate-revision-conflict`, `migration-invariant` |
-| `source` | `identity-unresolved`, `missing-mandatory-link`, `source-model-mismatch`, `higher-rung-unresolved`, `effort-cap-exhausted` |
+| `source` | `identity-unresolved`, `missing-mandatory-link`, `source-model-mismatch`, `source-target-invalid`, `higher-rung-unresolved`, `effort-cap-exhausted` |
 | `fetch` | `unreachable`, `revision-missing`, `hash-mismatch`, `access-denied`, `artifact-missing`, `effort-cap-exhausted` |
 | `evidence` | `locator-missing`, `excerpt-mismatch`, `insufficient-detail`, `coverage-incomplete`, `search-incomplete`, `effort-cap-exhausted` |
 | `accuracy-gate` | `inaccurate-cap-exhausted`, `cannot-verify-cap-exhausted`, `identity-mismatch`, `checker-contract-invalid`, `effort-cap-exhausted` |
@@ -458,7 +458,15 @@ callable string is accepted.
 There are three deliberately separate network postures: author research is web-enabled through WebSearch
 and Exa solely to locate and ground sources; controlled fetch is pinned-network-only through `fetcher.py`
 for exact URLs/revisions into the local CAS; and model execution is offline. The offline policy applies to
-the execution subprocess, not the author's research phase. Web-search capability never enters
+the execution subprocess, not the author's research phase. Because the author never fetches source into the
+campaign, it cannot compute a content digest for a target it has not read: `expected_sha256` is therefore
+optional on a source target. When the author supplies one -- from a release manifest, lockfile, or package
+index -- it is enforced byte-exactly and a mismatch fails the model. When it is genuinely absent the
+controlled fetch is what learns the digest, and the frozen manifest pins exactly the bytes retrieved. Either
+way `content_sha256` in the manifest is the digest of the verified CAS bytes, and every downstream consumer
+re-verifies against it. A target the fetch contract cannot accept at all is `failed:source` /
+`source-target-invalid`; an unretrievable one is `failed:fetch` / `unreachable`; bytes that contradict a
+supplied digest are `failed:fetch` / `hash-mismatch`. Web-search capability never enters
 `worker.py` or `worker_supervisor.py`, so a forward cannot depend on a network, checkpoint, or credential.
 
 Every meaningful-mode forward uses a fresh process with seeded framework/Python/NumPy RNGs, the explicit
@@ -678,11 +686,25 @@ completed machine facts deterministically and detects conflicting current revisi
 
 ## 18. Frozen agent prompt identities
 
-The prompt files are authoritative runtime inputs. These independently pinned literal digests are the
-committed drift oracle checked by `python -m menagerie.crawler.tools.verify_prompts`:
+The prompt files are authoritative runtime inputs. The dispatch-brief fragments under `prompts/pool/`
+are equally authoritative: `author_pool.render_dispatch_brief` renders them into every author session,
+so their bytes steer author behavior exactly as the two top-level prompts do and they are pinned the
+same way. These independently pinned literal digests are the committed drift oracle. The whole surface
+is checked by `python -m menagerie.crawler.tools.verify_pool_prompts`, which also proves this pinned
+inventory and the shipped inventory are the same set, so an unpinned new fragment and a deleted pinned
+fragment both fail; `python -m menagerie.crawler.tools.verify_prompts` remains the two-prompt oracle it
+reuses. Editing any of these files stales its digest by construction: re-pin the literal row here in the
+same change.
 
-- `claude_crawler_author_v2.txt`: `sha256:a6ae479df8cf8f3ca06a9df784456e5ecb3abdab279ea7422d7ab353a0b4eae8`
-- `codex_accuracy_checker_v2.txt`: `sha256:93d82284c3f9f250b55d6eb700f3f63d6e1abf586f259a6350920c5912b9f2d8`
+- `claude_crawler_author_v2.txt`: `sha256:aa9ba4cc1ff7fec02de0b569aad761c33ba54edd41acd31b046376cee34ffbcc`
+- `codex_accuracy_checker_v2.txt`: `sha256:56d6423314dbaf750012a4faee6751b74338dd4520912caf79ca76e2fe038f1e`
+- `campaign_c1-mech.md`: `sha256:c4f38a682416ed82b995a7d06941d04d6559d4ec10f8a5bb0ee6d5436b00b1e8`
+- `campaign_c2-disco.md`: `sha256:3ffbfaf9ab56c713b301f28071ff019e1173aa44a7d3e0ed890a980f59daafd1`
+- `campaign_c3-classics.md`: `sha256:e6a277891824b72e378c52b1e472357d968d30a91a87b1b8d562ab923b5a11a4`
+- `campaign_c4-native.md`: `sha256:b9ff9531f0f330dfabe09275c61aaa72d0a699a29b2c5cd463cae6f439c36683`
+- `stage_author.md`: `sha256:1ee450d3c98cea998c827cd11bfa628078e793885bfa9848c791c5e1d6d69195`
+- `stage_capability_probe.md`: `sha256:1f59abfc6f76beb4f10510a1f85373384be5ae5907c9fb198b3c2677f7781d01`
+- `stage_source_request.md`: `sha256:6c04a08dd1dcd92be988e529b29b33d78d12242000e79f9993ff8513078151c0`
 
 ## 21. Acceptance tests
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional, Sequence
 
@@ -35,12 +36,15 @@ from menagerie.crawler.constants import (
     AUTHOR_MAX_TOOL_CALLS,
     AUTHOR_QUEUE_STALL_SECONDS,
     AUTHOR_SESSION_WALL_SECONDS,
+    FAILURE_REASON_CODES,
+    TERMINAL_STATUS_CODES,
     USAGE_LIMIT_PROVIDERS,
     AuthorPauseReason,
     CheckerPauseReason,
     OperationalEventKind,
 )
 import menagerie.crawler.driver as driver_module
+import menagerie.crawler.driver_admission as driver_admission_module
 from menagerie.crawler.driver import (
     AuthorArtifact,
     AuthorLane,
@@ -67,6 +71,9 @@ from menagerie.crawler.tests.test_slice_f_driver import (
 )
 
 pytestmark = pytest.mark.smoke
+AUTHOR_RESET = (
+    datetime.now(timezone.utc).replace(microsecond=0) + timedelta(hours=2)
+).isoformat().replace("+00:00", "Z")
 
 
 # ---------------------------------------------------------------------------
@@ -439,6 +446,49 @@ def test_command_lane_unclassified_exit_keeps_its_retryable_prefix(tmp_path: Pat
     assert driver._is_infrastructure_error(raised.value) is True  # noqa: SLF001
 
 
+def test_github_rate_limit_text_in_author_stderr_does_not_pause() -> None:
+    """An unrelated service's prose is telemetry, not Anthropic pause authority."""
+
+    with pytest.raises(DriverIntegrationError) as raised:
+        classify_author_exit(
+            "author",
+            "m_x",
+            1,
+            "",
+            "GitHub API rate limit exceeded. resets at 2026-07-29T18:00:00Z.",
+        )
+
+    assert not isinstance(raised.value, AuthorBackoffError)
+
+
+def test_exit_76_uses_the_structured_provider_reset_not_stderr_text() -> None:
+    """The typed pause uses Claude's structured error field and its real reset."""
+
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    github_reset = (now + timedelta(hours=1)).isoformat().replace("+00:00", "Z")
+    provider_reset = (now + timedelta(hours=2)).isoformat().replace("+00:00", "Z")
+    structured_error = json.dumps(
+        {
+            "type": "result",
+            "subtype": "error_during_execution",
+            "is_error": True,
+            "result": f"Claude usage limit reached. try again at {provider_reset}.",
+        }
+    )
+
+    with pytest.raises(AuthorBackoffError) as raised:
+        classify_author_exit(
+            "author",
+            "m_x",
+            AUTHOR_EXIT_BACKOFF,
+            structured_error,
+            f"GitHub API rate limit exceeded. try again at {github_reset}.",
+        )
+
+    assert raised.value.signal.reason is AuthorPauseReason.QUOTA_EXHAUSTED
+    assert raised.value.signal.reset_at == provider_reset
+
+
 def test_command_lane_reads_quota_text_from_stdout(tmp_path: Path, monkeypatch: Any) -> None:
     """Structured provider errors on stdout are not masked by a nonempty stderr."""
 
@@ -451,11 +501,18 @@ def test_command_lane_reads_quota_text_from_stdout(tmp_path: Path, monkeypatch: 
         return subprocess.CompletedProcess(
             list(argv),
             1,
-            "Claude usage limit reached. try again at 2026-07-27T18:00:00Z.",
+            json.dumps(
+                {
+                    "type": "result",
+                    "subtype": "error_during_execution",
+                    "is_error": True,
+                    "result": f"Claude usage limit reached. try again at {AUTHOR_RESET}.",
+                }
+            ),
             "Reading additional input from stdin...",
         )
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(driver_admission_module, "_run_operator_command", fake_run)
     lane = CommandAuthorLane(("fake-author",))
 
     with pytest.raises(AuthorBackoffError) as raised:
@@ -463,7 +520,7 @@ def test_command_lane_reads_quota_text_from_stdout(tmp_path: Path, monkeypatch: 
 
     assert raised.value.signal.reason is AuthorPauseReason.QUOTA_EXHAUSTED
     assert raised.value.signal.provider == "anthropic"
-    assert raised.value.signal.reset_at == "2026-07-27T18:00:00Z"
+    assert raised.value.signal.reset_at == AUTHOR_RESET
 
 
 # ---------------------------------------------------------------------------
@@ -584,22 +641,30 @@ def test_classify_author_response_detects_quota_and_extracts_a_reset(tmp_path: P
 
     del tmp_path
     signal = classify_author_response(
-        1, "Claude usage limit reached. try again at 2026-07-27T18:00:00Z."
+        1,
+        json.dumps(
+            {
+                "type": "result",
+                "subtype": "error_during_execution",
+                "is_error": True,
+                "result": f"Claude usage limit reached. try again at {AUTHOR_RESET}.",
+            }
+        ),
     )
 
     assert signal is not None
     assert signal.reason is AuthorPauseReason.QUOTA_EXHAUSTED
     assert signal.provider == "anthropic"
-    assert signal.reset_at == "2026-07-27T18:00:00Z"
+    assert signal.reset_at == AUTHOR_RESET
 
 
 def test_classify_author_response_falls_back_when_no_reset_is_named() -> None:
     """An unparseable reset leaves ``reset_at`` unset for the one-hour re-check."""
 
-    signal = classify_author_response(AUTHOR_EXIT_BACKOFF, "429 rate limit; slow down")
+    signal = classify_author_response(AUTHOR_EXIT_BACKOFF, "")
 
     assert signal is not None
-    assert signal.reason is AuthorPauseReason.RATE_LIMIT
+    assert signal.reason is AuthorPauseReason.QUOTA_EXHAUSTED
     assert signal.reset_at is None
     assert parse_author_reset_at("no reset named here") is None
 
@@ -608,6 +673,33 @@ def test_classify_author_response_ignores_ordinary_failures() -> None:
     """A plain contract error is not a pause signal."""
 
     assert classify_author_response(1, "invalid_request_error: bad schema") is None
+    assert (
+        classify_author_response(
+            1,
+            json.dumps(
+                {
+                    "type": "result",
+                    "subtype": "error_during_execution",
+                    "is_error": True,
+                    "result": "invalid_request_error: bad schema",
+                }
+            ),
+        )
+        is None
+    )
+
+
+def test_author_reset_must_be_future_and_within_the_provider_window() -> None:
+    """Past, unparseable, and implausibly distant reset text uses scheduler fallback."""
+
+    now = datetime(2026, 7, 28, 18, tzinfo=timezone.utc)
+
+    assert parse_author_reset_at("try again at 2026-07-28T19:00:00Z.", now=now) == (
+        "2026-07-28T19:00:00Z"
+    )
+    assert parse_author_reset_at("try again at 2026-07-28T17:00:00Z.", now=now) is None
+    assert parse_author_reset_at("try again at 2026-08-28T18:00:00Z.", now=now) is None
+    assert parse_author_reset_at("try again at tomorrow.", now=now) is None
 
 
 def test_checker_backoff_still_reports_openai() -> None:
@@ -643,7 +735,7 @@ def test_queue_backoff_sidecar_becomes_a_typed_author_pause(tmp_path: Path) -> N
         backoff={
             "provider": "anthropic",
             "reason": "quota-exhausted",
-            "reset_at": "2026-07-27T18:00:00Z",
+            "reset_at": AUTHOR_RESET,
             "response_excerpt": "Claude usage limit reached",
         },
     )
@@ -655,7 +747,7 @@ def test_queue_backoff_sidecar_becomes_a_typed_author_pause(tmp_path: Path) -> N
     signal = raised.value.signal
     assert signal.reason is AuthorPauseReason.QUOTA_EXHAUSTED
     assert signal.provider == "anthropic"
-    assert signal.reset_at == "2026-07-27T18:00:00Z"
+    assert signal.reset_at == AUTHOR_RESET
     # The pause unwinds the job cleanly so a resumed attempt is not served a stale one.
     assert list((queue_root / "pending").glob("*.json")) == []
 
@@ -698,7 +790,7 @@ def test_claude_quota_pauses_the_campaign_instead_of_failing_the_model(
         AuthorBackoffSignal(
             reason=AuthorPauseReason.QUOTA_EXHAUSTED,
             retry_after_seconds=None,
-            reset_at="2026-07-27T18:00:00Z",
+            reset_at=AUTHOR_RESET,
             response_excerpt="Claude usage limit reached",
             provider="anthropic",
         )
@@ -719,7 +811,7 @@ def test_claude_quota_pauses_the_campaign_instead_of_failing_the_model(
     assert state == {
         "status": "paused:usage-limit",
         "provider": "anthropic",
-        "reset_at": "2026-07-27T18:00:00Z",
+        "reset_at": AUTHOR_RESET,
     }
 
 
@@ -733,7 +825,7 @@ def test_author_pause_records_an_anthropic_usage_event_and_wake_episode(
         AuthorBackoffSignal(
             reason=AuthorPauseReason.QUOTA_EXHAUSTED,
             retry_after_seconds=None,
-            reset_at="2026-07-27T18:00:00Z",
+            reset_at=AUTHOR_RESET,
             response_excerpt="Claude usage limit reached",
             provider="anthropic",
         )
@@ -749,7 +841,7 @@ def test_author_pause_records_an_anthropic_usage_event_and_wake_episode(
         if event.get("event_kind") == OperationalEventKind.USAGE_PAUSE.value
     ]
     assert [event["provider"] for event in events] == ["anthropic"]
-    assert [event["reset_at"] for event in events] == ["2026-07-27T18:00:00Z"]
+    assert [event["reset_at"] for event in events] == [AUTHOR_RESET]
 
 
 def test_author_pause_without_a_reset_falls_back_to_a_one_hour_recheck(
@@ -889,8 +981,67 @@ class CapExhaustedAuthor(AuthorLane):
         raise AuthorEffortCapExceeded("author session consumed tool_calls 31, exceeding its 30")
 
 
+class PostSourceCapExhaustedAuthor(AuthorLane):
+    """Author lane that blows its grant AFTER its sources are resolved and frozen."""
+
+    def author(
+        self,
+        item: WorkItem,
+        work_root: Path,
+        config: DriverConfig,
+        context: AuthorityContext,
+    ) -> AuthorArtifact:
+        """Raise the cap failure the real lane re-stamps once the manifest is frozen."""
+
+        del item, work_root, config, context
+        raise AuthorEffortCapExceeded(
+            "author session consumed tool_calls 31, exceeding its 30",
+            stage="author",
+            dimension="tool-calls",
+        )
+
+
+class CrashedAuthor(AuthorLane):
+    """Author lane whose provider session crashes after admission."""
+
+    def author(
+        self,
+        item: WorkItem,
+        work_root: Path,
+        config: DriverConfig,
+        context: AuthorityContext,
+    ) -> AuthorArtifact:
+        """Raise an otherwise-untyped author-session failure."""
+
+        del item, work_root, config, context
+        raise RuntimeError("provider session crashed")
+
+
+def test_author_session_failure_terminalizes_in_the_author_vocabulary(tmp_path: Path) -> None:
+    """An author crash is neither an unresolved identity nor another stage's reason."""
+
+    snapshot = _snapshot(tmp_path, count=1)
+    paths = _paths(tmp_path, snapshot)
+
+    _driver(tmp_path, snapshot, author=CrashedAuthor()).run()
+
+    records = scan_jsonl(paths.ledgers.models)
+    status = records[0]["status"]
+    assert status["code"] == "failed:author"
+    assert status["kind"] == "failed"
+    assert status["reason_code"] == "session-crashed"
+    stage = status["code"].split(":", 1)[1]
+    assert status["code"] in TERMINAL_STATUS_CODES
+    assert status["reason_code"] in FAILURE_REASON_CODES[stage]
+
+
 def test_effort_cap_exhaustion_records_its_own_reason_code(tmp_path: Path) -> None:
-    """LP-13.2: cap exhaustion is failed:source/effort-cap-exhausted, not identity-unresolved."""
+    """LP-13.2: cap exhaustion carries effort-cap-exhausted, not identity-unresolved.
+
+    A cap hit while the author is still naming sources genuinely is a source-stage
+    failure, so this case keeps ``failed:source`` -- distinguished from a real
+    resolution failure by its reason code.
+    """
 
     snapshot = _snapshot(tmp_path, count=1)
     paths = _paths(tmp_path, snapshot)
@@ -900,6 +1051,80 @@ def test_effort_cap_exhaustion_records_its_own_reason_code(tmp_path: Path) -> No
     records = scan_jsonl(paths.ledgers.models)
     assert [record["status"]["code"] for record in records] == ["failed:source"]
     assert [record["status"]["reason_code"] for record in records] == ["effort-cap-exhausted"]
+
+
+def test_cap_exhaustion_after_source_resolution_is_not_a_source_failure(
+    tmp_path: Path,
+) -> None:
+    """A model whose source resolved must never be recorded as having none.
+
+    Observed live on m2323 (PyKEEN-MuRE): source found, fetched, and fully understood
+    at R1, then filed as ``failed:source``. Across 28,482 models that would fill the
+    catalog with "no source found" records for models with perfectly good sources, and
+    a later pass would have to re-derive what the first pass already knew.
+    """
+
+    snapshot = _snapshot(tmp_path, count=1)
+    paths = _paths(tmp_path, snapshot)
+
+    _driver(tmp_path, snapshot, author=PostSourceCapExhaustedAuthor()).run()
+
+    records = scan_jsonl(paths.ledgers.models)
+    assert [record["status"]["code"] for record in records] == ["failed:author"]
+    assert [record["status"]["reason_code"] for record in records] == [
+        "effort-exhausted:tool-calls"
+    ]
+    resolution = records[0]["source_resolution"]
+    assert "effort grant" in resolution["decision"]
+    assert resolution["attempted_rungs"][0]["reason_code"] == "effort-exhausted:tool-calls"
+    # The record must not claim a bounded search established that source is unavailable.
+    assert "unresolvable" not in resolution["search_report"]["conclusion"].replace(
+        "not unresolvable", ""
+    )
+
+
+def test_cap_exhaustion_cannot_be_attributed_to_an_impossible_stage() -> None:
+    """The carried stage is checked against the closed failure vocabulary."""
+
+    with pytest.raises(ValueError, match="cannot be attributed to stage"):
+        AuthorEffortCapExceeded("cap", stage="not-a-stage")
+
+
+def test_lane_reattributes_a_cap_hit_once_the_manifest_is_frozen(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """Past the controlled fetch, a cap failure is an authoring failure by construction.
+
+    The lane is the only boundary that knows the manifest was frozen, so it is where
+    the stage is corrected. Without this the pool's own consumption audit -- which
+    cannot see how far the session got -- would report every over-grant session as a
+    source failure.
+    """
+
+    item = _work_item(tmp_path)
+    queue_root = tmp_path / "author-queue"
+    pool = FakePool(queue_root, result=_source_targets())
+    lane = _queue_lane(queue_root, pool)
+    _stub_controlled_fetch(monkeypatch)
+
+    def blow_the_grant(*args: Any, **kwargs: Any) -> None:
+        """Exceed the grant after the frozen manifest exists."""
+
+        del args, kwargs
+        raise AuthorEffortCapExceeded(
+            "author session consumed tool_calls 31, exceeding its 30",
+            dimension="tool-calls",
+        )
+
+    monkeypatch.setattr(lane, "_author_from_frozen_sources", blow_the_grant)
+    # Config and context reach only the patched authoring half of the lane.
+    unused: Any = None
+
+    with pytest.raises(AuthorEffortCapExceeded) as raised:
+        lane.author(item, tmp_path / "work", unused, unused)
+
+    assert raised.value.stage == "author"
+    assert raised.value.reason_code == "effort-exhausted:tool-calls"
 
 
 def test_cli_selects_the_queue_lane_and_drops_the_author_command_requirement(

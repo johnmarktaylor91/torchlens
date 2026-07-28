@@ -38,6 +38,15 @@ lane is performing, which is the whole point of the declaration.
 *Typed signals.* Anthropic usage exhaustion is a backoff sidecar routed to the scheduler's
 pause path, never a model failure. Everything else is a failure sidecar with an explicit
 ``retryable`` boolean; the lane refuses a sidecar without one rather than guessing.
+
+*Tier selection is never inferred from the job.* A descriptor carries two campaign
+identities (see :mod:`menagerie.crawler.author_queue`): its **repair scope**
+(``repair_campaign_id``, per item, e.g. ``campaign-m1706``) and its **tier campaign**
+(``tier_campaign_id``, one of the frozen four). Only the tier campaign selects the author
+model and the standards prompt. The pool resolves the tier from the descriptor and from
+its own ``--campaign`` configuration, refuses when the two disagree, and refuses when
+neither supplies one. A guessed tier would author a model under the wrong frozen
+``author_model_identity`` for the whole run, which is strictly worse than a loud stop.
 """
 
 from __future__ import annotations
@@ -73,21 +82,22 @@ from menagerie.crawler.capability_probe import (
     derive_challenge,
     validate_capability_evidence,
 )
+from menagerie.crawler.constants import (
+    TIER_CAMPAIGN_AUTHOR_MODELS,
+    TIER_CAMPAIGN_ENV,
+    TIER_CAMPAIGN_IDS,
+)
 from menagerie.crawler.identity import hash_bytes, utc_now
 from menagerie.crawler.models import JsonObject
 
 PROMPT_ROOT = Path(__file__).with_name("prompts") / "pool"
 
-#: Campaign identities produced by the partitioner, each bound to its frozen author tier.
-#: The tier is a *campaign* property: a campaign's ``author_model_identity`` is frozen for
-#: the whole run, so a model a sonnet campaign finds genuinely hard is emitted as a typed
-#: BLOCKED recommendation and requeued into the opus campaign, never escalated in place.
-CAMPAIGN_AUTHOR_MODELS = {
-    "c1-mech": "claude-sonnet",
-    "c2-disco": "claude-sonnet",
-    "c3-classics": "claude-opus-5",
-    "c4-native": "claude-sonnet",
-}
+#: Tier campaign identities produced by the partitioner, each bound to its frozen author
+#: tier. The tier is a *tier campaign* property, never a per-item one: a campaign's
+#: ``author_model_identity`` is frozen for the whole run, so a model a sonnet campaign
+#: finds genuinely hard is emitted as a typed BLOCKED recommendation and requeued into the
+#: opus campaign, never escalated in place.
+CAMPAIGN_AUTHOR_MODELS = dict(TIER_CAMPAIGN_AUTHOR_MODELS)
 
 #: Default lease width. Short enough that a dead session returns work promptly, long
 #: enough to cover a real author session with renewals.
@@ -180,6 +190,92 @@ def classify_usage_limit(text: str) -> Optional[JsonObject]:
     return {"reason": reason, "reset_at": reset_at}
 
 
+def configured_tier_campaign(explicit: Optional[str] = None) -> Optional[str]:
+    """Return the tier campaign this operator process is configured to serve.
+
+    Parameters
+    ----------
+    explicit:
+        Operator-supplied tier campaign, typically ``--campaign``.
+
+    Returns
+    -------
+    str | None
+        The validated tier campaign, or ``None`` when neither the argument nor
+        ``MENAGERIE_CAMPAIGN_ID`` names one.
+
+    Raises
+    ------
+    AuthorPoolError
+        When a value is supplied but is outside the partitioner's closed four. An
+        unrecognized tier is refused here rather than ignored: silently falling back to
+        the descriptor, or to a default, is how a run acquires the wrong frozen author
+        identity.
+    """
+
+    value = explicit if explicit is not None else os.environ.get(TIER_CAMPAIGN_ENV)
+    if value is None or not str(value).strip():
+        return None
+    tier = str(value).strip()
+    if tier not in TIER_CAMPAIGN_IDS:
+        raise AuthorPoolError(
+            f"configured tier campaign {tier!r} is not one of {sorted(TIER_CAMPAIGN_IDS)}"
+        )
+    return tier
+
+
+def resolve_tier_campaign(job: QueueJob, *, configured: Optional[str] = None) -> str:
+    """Resolve the one tier campaign that governs this job's author tier.
+
+    The descriptor's own repair scope (``job.repair_campaign_id``, e.g.
+    ``campaign-m1706``) is deliberately not consulted: it is per-item lineage and carries
+    no tier information at all.
+
+    Parameters
+    ----------
+    job:
+        Job whose tier is being resolved.
+    configured:
+        Tier campaign this operator process was configured with, already validated by
+        :func:`configured_tier_campaign`.
+
+    Returns
+    -------
+    str
+        The resolved tier campaign.
+
+    Raises
+    ------
+    AuthorPoolError
+        When the descriptor and the configuration disagree, when the descriptor names an
+        unknown tier, or when neither supplies one. All three are refusals, never
+        defaults: authoring under the wrong tier corrupts the campaign's frozen
+        ``author_model_identity``, which no later step can detect or repair.
+    """
+
+    declared = job.tier_campaign_id
+    if declared is not None and declared not in TIER_CAMPAIGN_IDS:
+        raise AuthorPoolError(
+            f"author job {job.job_id} names an unknown tier campaign {declared!r}; "
+            f"expected one of {sorted(TIER_CAMPAIGN_IDS)}"
+        )
+    if declared is not None and configured is not None and declared != configured:
+        raise AuthorPoolError(
+            f"author job {job.job_id} is bound to tier campaign {declared!r} but this "
+            f"pool is configured for {configured!r}; servicing it would author under the "
+            "wrong frozen author identity"
+        )
+    tier = declared or configured
+    if tier is None:
+        raise AuthorPoolError(
+            f"author job {job.job_id} names no tier campaign and this pool was not "
+            f"configured with one; pass --campaign (or set {TIER_CAMPAIGN_ENV}) to one of "
+            f"{sorted(TIER_CAMPAIGN_IDS)}. The job's repair scope "
+            f"({job.repair_campaign_id!r}) is per-item lineage and never selects a tier"
+        )
+    return tier
+
+
 class AuthorPool:
     """Queue servicer for one campaign's author subagent pool.
 
@@ -191,6 +287,10 @@ class AuthorPool:
         Managing-session identity recorded on every lease.
     lease_seconds:
         Lease width; an expired lease returns the job to the queue.
+    tier_campaign_id:
+        Frozen tier campaign this pool serves; defaults to ``MENAGERIE_CAMPAIGN_ID``. The
+        tier is a property of the campaign run, not of an individual job, so it is
+        configured once here and cross-checked against every descriptor that declares one.
     clock:
         Injectable wall clock for deterministic tests.
     """
@@ -201,17 +301,40 @@ class AuthorPool:
         *,
         owner: Optional[str] = None,
         lease_seconds: float = DEFAULT_LEASE_SECONDS,
+        tier_campaign_id: Optional[str] = None,
         clock: Optional[Callable[[], datetime]] = None,
     ) -> None:
-        """Bind the queue root, the lease policy, and the session identity."""
+        """Bind the queue root, the lease policy, the tier, and the session identity."""
 
         if lease_seconds <= 0:
             raise ValueError("author pool lease must be positive")
         self.queue_root = Path(queue_root)
         self.owner = owner or default_owner()
         self.lease_seconds = float(lease_seconds)
+        self.tier_campaign_id = configured_tier_campaign(tier_campaign_id)
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self.directories = ensure_author_queue(self.queue_root)
+
+    def tier_campaign(self, job: QueueJob) -> str:
+        """Return the frozen tier campaign governing one job.
+
+        Parameters
+        ----------
+        job:
+            Job to resolve.
+
+        Returns
+        -------
+        str
+            Resolved tier campaign.
+
+        Raises
+        ------
+        AuthorPoolError
+            When the tier is unknown, absent, or disagrees with this pool's configuration.
+        """
+
+        return resolve_tier_campaign(job, configured=self.tier_campaign_id)
 
     # -- reading the queue -------------------------------------------------
 
@@ -305,10 +428,14 @@ class AuthorPool:
         Raises
         ------
         AuthorPoolError
-            When the job is already leased and ``force`` is not set.
+            When the job is already leased and ``force`` is not set, or when its tier
+            campaign is unresolvable. The tier is checked *before* the lease is written:
+            leasing a job this session cannot brief would only park it under a lease
+            nobody can discharge.
         """
 
         job = self.load(job_id)
+        self.tier_campaign(job)
         existing = self.active_claim(job)
         if existing is not None and not force and existing.get("owner") != self.owner:
             raise AuthorPoolError(
@@ -405,10 +532,15 @@ class AuthorPool:
         Raises
         ------
         AuthorPoolError
-            When the job's campaign has no bound prompt.
+            When the job's tier campaign is unresolvable or has no bound prompt.
         """
 
-        return render_dispatch_brief(job, claimed=claimed, repo_root=_repo_root())
+        return render_dispatch_brief(
+            job,
+            claimed=claimed,
+            repo_root=_repo_root(),
+            tier_campaign_id=self.tier_campaign_id,
+        )
 
     def subagent_model(self, job: QueueJob) -> str:
         """Return the Agent-tool model tier for one job.
@@ -422,12 +554,27 @@ class AuthorPool:
         -------
         str
             ``opus`` for the classics campaign, ``sonnet`` otherwise. The tier follows the
-            campaign, never the individual model, because the campaign's author identity
-            is frozen for its whole run.
+            *tier campaign*, never the individual model or the job's repair scope, because
+            the campaign's author identity is frozen for its whole run.
+
+        Raises
+        ------
+        AuthorPoolError
+            When the tier campaign is unresolvable, or when the descriptor declares an
+            author model that contradicts the tier campaign's frozen one. The latter means
+            the producer and this pool disagree about which model authors this run, and
+            dispatching either one would be a coin flip on the run's identity.
         """
 
-        model = job.author_model or CAMPAIGN_AUTHOR_MODELS.get(job.campaign_id or "", "")
-        return "opus" if "opus" in model else "sonnet"
+        tier = self.tier_campaign(job)
+        frozen = CAMPAIGN_AUTHOR_MODELS[tier]
+        declared = job.author_model
+        if declared and declared != frozen:
+            raise AuthorPoolError(
+                f"author job {job.job_id} declares author model {declared!r} but tier "
+                f"campaign {tier!r} is frozen to {frozen!r}"
+            )
+        return "opus" if "opus" in frozen else "sonnet"
 
     # -- answering ---------------------------------------------------------
 
@@ -783,13 +930,13 @@ def _read_prompt(name: str) -> str:
         raise AuthorPoolError(f"author pool prompt {name} is unavailable: {exc}") from exc
 
 
-def campaign_prompt_name(campaign_id: Optional[str]) -> str:
-    """Return the campaign fragment bound to one campaign identity.
+def campaign_prompt_name(tier_campaign_id: Optional[str]) -> str:
+    """Return the standards fragment bound to one tier campaign.
 
     Parameters
     ----------
-    campaign_id:
-        Campaign identity from the job descriptor.
+    tier_campaign_id:
+        Resolved tier campaign -- never a job's per-item repair scope.
 
     Returns
     -------
@@ -799,16 +946,16 @@ def campaign_prompt_name(campaign_id: Optional[str]) -> str:
     Raises
     ------
     AuthorPoolError
-        When the campaign is outside the partitioner's closed set. Guessing a campaign
+        When the tier campaign is outside the partitioner's closed set. Guessing one
         would silently author a hard model with the wrong tier and the wrong standards.
     """
 
-    if campaign_id not in CAMPAIGN_AUTHOR_MODELS:
+    if tier_campaign_id not in CAMPAIGN_AUTHOR_MODELS:
         raise AuthorPoolError(
-            f"author job names an unknown campaign {campaign_id!r}; expected one of "
-            f"{sorted(CAMPAIGN_AUTHOR_MODELS)}"
+            f"author job names an unknown tier campaign {tier_campaign_id!r}; expected "
+            f"one of {sorted(CAMPAIGN_AUTHOR_MODELS)}"
         )
-    return f"campaign_{campaign_id}.md"
+    return f"campaign_{tier_campaign_id}.md"
 
 
 def render_dispatch_brief(
@@ -816,6 +963,7 @@ def render_dispatch_brief(
     *,
     claimed: Optional[ClaimedJob] = None,
     repo_root: Optional[Path] = None,
+    tier_campaign_id: Optional[str] = None,
 ) -> str:
     """Render the complete brief for one author subagent dispatch.
 
@@ -827,16 +975,20 @@ def render_dispatch_brief(
         Active lease, so the brief can state a concrete wall deadline.
     repo_root:
         Repository root quoted in the brief.
+    tier_campaign_id:
+        Tier campaign this servicer is configured for. Cross-checked against the
+        descriptor's own binding; one of the two must supply it.
 
     Returns
     -------
     str
-        Rendered brief: job facts, the stage instructions, and the campaign's standards.
+        Rendered brief: job facts, the stage instructions, and the tier campaign's
+        standards.
 
     Raises
     ------
     AuthorPoolError
-        When the job kind or campaign has no bound prompt.
+        When the job kind has no bound prompt, or when the tier campaign is unresolvable.
     """
 
     stage = {
@@ -846,6 +998,7 @@ def render_dispatch_brief(
     }.get(job.kind)
     if stage is None:
         raise AuthorPoolError(f"author job names an unsupported kind: {job.kind!r}")
+    tier = resolve_tier_campaign(job, configured=tier_campaign_id)
     grant = job.effort_grant
     facts = [
         "## JOB FACTS (binding)",
@@ -854,7 +1007,8 @@ def render_dispatch_brief(
         f"- kind: `{job.kind}`",
         f"- stable_id: `{job.stable_id}`",
         f"- work_id: `{job.work_id}`",
-        f"- campaign: `{job.campaign_id}` (author tier `{job.author_model}`)",
+        f"- tier campaign: `{tier}` (frozen author tier `{CAMPAIGN_AUTHOR_MODELS[tier]}`)",
+        f"- repair scope: `{job.repair_campaign_id}`",
         f"- repository root (READ ONLY): `{repo_root or _repo_root()}`",
         f"- REQUEST envelope to read first: `{job.request_path}`",
         f"- REQUIRED output path, exact: `{job.required_output_path}`",
@@ -878,7 +1032,7 @@ def render_dispatch_brief(
         )
     sections = ["\n".join(facts), _read_prompt(stage)]
     if job.kind != "capability-probe":
-        sections.append(_read_prompt(campaign_prompt_name(job.campaign_id)))
+        sections.append(_read_prompt(campaign_prompt_name(tier)))
     return "\n\n---\n\n".join(sections) + "\n"
 
 
@@ -912,6 +1066,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--queue", required=True, type=Path, help="campaign author-queue root")
     parser.add_argument("--owner", default=None, help="managing-session identity")
+    parser.add_argument(
+        "--campaign",
+        dest="tier_campaign_id",
+        default=None,
+        help=(
+            "frozen tier campaign this session serves, one of "
+            f"{sorted(TIER_CAMPAIGN_IDS)}; defaults to {TIER_CAMPAIGN_ENV}. This is the "
+            "run's tier, never a job's per-item repair scope"
+        ),
+    )
     parser.add_argument(
         "--lease-seconds", type=float, default=DEFAULT_LEASE_SECONDS, help="lease width"
     )
@@ -974,8 +1138,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     """
 
     args = build_parser().parse_args(list(argv) if argv is not None else None)
-    pool = AuthorPool(args.queue, owner=args.owner, lease_seconds=args.lease_seconds)
     try:
+        pool = AuthorPool(
+            args.queue,
+            owner=args.owner,
+            lease_seconds=args.lease_seconds,
+            tier_campaign_id=args.tier_campaign_id,
+        )
         return _dispatch_action(pool, args)
     except (AuthorPoolError, AuthorQueueError, CapabilityProbeError) as exc:
         print(f"author-pool error: {exc}", file=sys.stderr)
@@ -1014,6 +1183,8 @@ def _dispatch_action(pool: AuthorPool, args: argparse.Namespace) -> int:
                 "job_id": claimed.job.job_id,
                 "kind": claimed.job.kind,
                 "stable_id": claimed.job.stable_id,
+                "repair_campaign_id": claimed.job.repair_campaign_id,
+                "tier_campaign_id": pool.tier_campaign(claimed.job),
                 "subagent_model": pool.subagent_model(claimed.job),
                 "claimed_at": _iso(claimed.claimed_at),
                 "deadline_at": _iso(claimed.deadline_at),
@@ -1117,13 +1288,27 @@ def _job_summary(pool: AuthorPool, job: QueueJob) -> JsonObject:
     """
 
     claim = pool.active_claim(job)
+    # ``list`` is the operator's situational awareness, so an unresolvable tier is
+    # reported on the row rather than aborting the whole listing. It is still refused at
+    # every point that would act on it -- brief, claim's printed dispatch, and
+    # subagent_model -- so nothing is dispatched on a guess.
+    tier: Optional[str] = None
+    subagent_model: Optional[str] = None
+    tier_error: Optional[str] = None
+    try:
+        tier = pool.tier_campaign(job)
+        subagent_model = pool.subagent_model(job)
+    except AuthorPoolError as exc:
+        tier_error = str(exc)
     return {
         "job_id": job.job_id,
         "kind": job.kind,
         "stable_id": job.stable_id,
-        "campaign_id": job.campaign_id,
+        "repair_campaign_id": job.repair_campaign_id,
+        "tier_campaign_id": tier,
+        "tier_error": tier_error,
         "author_model": job.author_model,
-        "subagent_model": pool.subagent_model(job) if job.campaign_id else None,
+        "subagent_model": subagent_model,
         "enqueued_at": job.enqueued_at,
         "leased_by": None if claim is None else claim.get("owner"),
         "lease_expires_at": None if claim is None else claim.get("lease_expires_at"),
@@ -1137,11 +1322,16 @@ __all__ = [
     "CAMPAIGN_AUTHOR_MODELS",
     "CAPABILITY_PROBE_FORMAT",
     "ClaimedJob",
+    "TIER_CAMPAIGN_ENV",
+    "TIER_CAMPAIGN_IDS",
     "author_queue_directories",
+    "campaign_prompt_name",
     "classify_usage_limit",
+    "configured_tier_campaign",
     "default_owner",
     "main",
     "render_dispatch_brief",
+    "resolve_tier_campaign",
     "utc_now",
 ]
 

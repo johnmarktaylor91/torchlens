@@ -335,13 +335,22 @@ def test_launchd_plist_keeps_only_unexpected_supervisor_death_alive(tmp_path: Pa
             campaign_config_path=tmp_path / "campaign.json",
             author_queue_root=tmp_path / "queue",
             python_executable=Path(sys.executable),
+            author_concurrency=6,
         )
     )
 
     assert payload["RunAtLoad"] is True
     assert payload["KeepAlive"] == {"SuccessfulExit": False}
     assert payload["ProgramArguments"][0].endswith("tools/crawler_supervisor.sh")
-    assert payload["ProgramArguments"][-2:] == ["--author-queue", str(tmp_path / "queue")]
+    # The author fan-out is carried explicitly: it is not part of the frozen campaign
+    # config, so a supervised restart that dropped it would silently retune the
+    # campaign's throughput back to the default.
+    assert payload["ProgramArguments"][-4:] == [
+        "--author-queue",
+        str(tmp_path / "queue"),
+        "--author-concurrency",
+        "6",
+    ]
 
 
 def test_checkpoint_policy_requires_only_c1_gate_and_advance_notifications(

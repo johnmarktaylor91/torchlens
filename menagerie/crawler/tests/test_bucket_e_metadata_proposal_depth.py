@@ -25,7 +25,11 @@ from menagerie.crawler.proposal import (
     model_code_manifest,
     validate_author_proposal,
 )
-from menagerie.crawler.tests.conftest import make_author_proposal, make_model
+from menagerie.crawler.tests.conftest import (
+    attach_paper_evidence,
+    make_author_proposal,
+    make_model,
+)
 
 NEWLY_GATED_EXTERNAL_FIELDS = (
     "field",
@@ -372,6 +376,7 @@ def _proposal_source(
             }
         ]
     }
+    attach_paper_evidence(proposal, manifest, tmp_path)
     return proposal, manifest
 
 
@@ -396,14 +401,34 @@ def _validate_focused(proposal: dict[str, Any], manifest: dict[str, Any], tmp_pa
     )
 
 
-def test_self_declared_support_without_value_binding_is_refused(tmp_path: Path) -> None:
-    """An unrelated verbatim excerpt cannot support a family merely by its label."""
+def test_family_value_verdict_belongs_to_the_checker_not_token_overlap(
+    tmp_path: Path,
+) -> None:
+    """The family label binds provenance; its value verdict is the checker's.
 
+    The deleted token oracle refused any excerpt that failed to token-match the family
+    string -- the same mechanism that certified ``country="US"`` on the pronoun "us".
+    The deterministic layer now enforces the binding (an excerpt must name the claim)
+    and leaves entailment to the per-leaf accuracy checker, which remains mandatory
+    for every external field.
+    """
+
+    from menagerie.crawler.proposal import CHECKER_EVALUATED_CLAIMS
+
+    assert "external_metadata.family" in CHECKER_EVALUATED_CLAIMS
     proposal, manifest = _proposal_source(
         tmp_path, "Example Model was published at TestConf in 2020 about weather forecasting."
     )
-    with pytest.raises(ProposalValidationError, match="substantively support"):
-        _validate_focused(proposal, manifest, tmp_path)
+    _validate_focused(proposal, manifest, tmp_path)
+    unbound, unbound_manifest = _proposal_source(
+        tmp_path, "Example Model was published at TestConf in 2020 about weather forecasting."
+    )
+    for excerpt in unbound["proposed_facts"]["evidence"]["excerpts"]:
+        excerpt["supports"] = [
+            support for support in excerpt["supports"] if support != "external_metadata.family"
+        ]
+    with pytest.raises(ProposalValidationError, match="ungrounded claim categories"):
+        _validate_focused(unbound, unbound_manifest, tmp_path)
 
 
 def test_excerpt_genuinely_supporting_proposed_value_passes(tmp_path: Path) -> None:
@@ -620,7 +645,9 @@ def test_broadened_approximation_language_is_refused(tmp_path: Path, phrase: str
     proposal, manifest = _proposal_source(
         tmp_path, "Example Model introduced the ExampleNet family at TestConf in 2020."
     )
-    proposal["proposed_facts"]["external_metadata"]["description"] = f"ExampleNet is {phrase}."
+    # Implementation-fidelity surfaces stay armed; descriptions are no longer scanned
+    # because dozens of real roster models are *named* with this vocabulary.
+    proposal["proposed_facts"]["source_resolution"]["decision"] = f"ExampleNet is {phrase}."
     with pytest.raises(ProposalValidationError, match="forbidden approximation language"):
         _validate_focused(proposal, manifest, tmp_path)
 

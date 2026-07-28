@@ -63,6 +63,14 @@ RANDOM-INITIALIZATION AND EXECUTION POLICY
   device policy, constraints, masks/state, and all non-tensor values.
 - Your candidate dev-run is diagnostic only. It does not count toward runs. The deterministic driver will
   execute every accepted recipe independently using the canonical cold-forward policy.
+- identity.variant, identity.variant_scope, and identity.family_representative_id are trusted-intake leaves.
+  You do not own them and must not research, invent, or blank them. Copy them mechanically from the
+  untrusted_hints row by this closed rule, and the driver will reject anything else:
+  variant_scope is the hints' variant_scope ("family"); family_representative_id is the hints'
+  family_representative_id; variant is the hints' variant token when family_representative_id names a
+  DIFFERENT stable_id, and otherwise the hints' name verbatim. Never copy the hints' variant column into
+  identity.variant for a row that is its own representative -- that column carries harvest provenance
+  notes, not variant designations.
 
 DO-IT-ONCE REQUIRED CONTENT
 Before finishing, fill every source-reading field in author-proposal.v3:
@@ -72,7 +80,15 @@ Before finishing, fill every source-reading field in author-proposal.v3:
    one key-contribution line;
 3. implementation, paper, project, documentation, affiliation, and license links; exact revisions,
    paths/symbols, paper versions/locators, content hashes, and fetch recipes;
-4. structured citation: title, authors[], year, venue, arxiv_id, doi, openreview_id, url, and bibtex;
+4. structured citation: title, authors[], year, venue, arxiv_id, doi, openreview_id, url, and bibtex.
+   Paper metadata -- citation, authors, institution, country, venue, year, era -- does not occur in
+   implementation code, and evidence may quote only controlled-fetched bytes. So when an introducing
+   work exists, its own page (arXiv abs, DOI/publisher, OpenReview, proceedings, or project page) must
+   be pinned through the controlled fetcher as an introducing-paper source ALONGSIDE the implementation
+   source, and the citation must be grounded on a verbatim excerpt of that page. A citation grounded
+   only in code is refused. Any arxiv_id, doi, or openreview_id you declare must itself appear in the
+   cited text: an exact resolvable identifier is stronger evidence than a matched title, so declare one
+   only when the fetched page shows it;
 5. first-public year/date basis; authors, labs, institutions; institutional origin countries as ISO alpha-2,
    confidence, basis, and note. Never infer nationality or country from a name;
 6. code, paper-text, weight, and data license facts. Use NOASSERTION, null, or not-found-after-search rather
@@ -135,6 +151,33 @@ country, license, source mapping, input claims, and implementation fidelity, aga
 literal evidence you cite. An invented fact, ungrounded clause, altered excerpt, wrong year, inferred
 license, or unsupported country is a recorded inaccuracy. null, NOASSERTION, or cannot-determine beats
 wrong, always. Material drift cannot be relabeled minor.
+
+UNKNOWN IS HONEST, BUT IT IS A TYPED CLAIM -- BARE NULL NEVER PASSES
+A bare null or empty gated field is refused outright. If a fact genuinely cannot be established, empty the
+field AND declare it in external_metadata.availability.<field> as
+{"status": "not-found-after-search" | "not-applicable", "values": [], "basis": <one of: machine-derived,
+stated-in-paper, stated-in-code, stated-on-website, derived-from-affiliation, judged, search-exhausted,
+not-applicable>, "evidence": [<evidence_ids>]}. A not-found state additionally requires your bounded
+search_report to record the queries you actually ran, so an unanswered field is distinguishable from an
+unfilled one -- emptying fields is never a way to spend less effort. Availability states exist for authors,
+institution, country, era, field, subfield, venue, year, and license. Only lineage, predecessors, and
+taxonomy.novel_ops may be empty without a declaration, because empty is an ordinary true value for them.
+A not-found claim for a fact your own pinned evidence states is a false claim and the checker is directed
+to catch it.
+
+Judgment values -- country, era, field, subfield, taxonomy leaves, paradigm, and the like -- are judged by
+the Codex checker rather than by literal token overlap, since an ISO code or an era bucket is an inference
+about a source rather than anything a source says. They are still mandatory, still need supporting
+evidence_ids, and are still refused if wrong. Taxonomy is gated PER LEAF: every excerpt supporting your
+taxonomy must name the exact leaf it supports (taxonomy.family, taxonomy.domains, taxonomy.tasks,
+taxonomy.modalities, taxonomy.era, taxonomy.architecture_tags, taxonomy.novel_ops); an aggregate
+"taxonomy" label covers nothing.
+
+The citation is gated whenever the introducing paper is a fetched source, not only when you volunteer one,
+and it is checked PER LEAF: title, venue, year, each author, and any declared arXiv/DOI/OpenReview ID must
+occur verbatim in your paper excerpt (Unicode-canonicalized, so diacritic and ASCII spellings of one name
+both ground), and a supplied bibtex must be exactly consistent with those grounded leaves. With the paper
+in hand, "no citation" is a false claim and is refused.
 
 SELF-CHECK
 - I used the highest available rung and documented every higher-rung failure.

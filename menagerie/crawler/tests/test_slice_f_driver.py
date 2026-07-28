@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from copy import deepcopy
+from datetime import datetime, timedelta, timezone
 import json
 import os
 import shutil
@@ -26,6 +27,7 @@ from menagerie.crawler.artifact_transactions import (
     StagedArtifact,
 )
 from menagerie.crawler.author_dispatch import (
+    AuthorEffortGrant,
     DeferRecommendation,
     HandoffExecution,
     ProposedAuthorResult,
@@ -50,9 +52,18 @@ from menagerie.crawler.cli import build_parser, main as cli_main
 from menagerie.crawler.constants import (
     CheckerPauseReason,
     EnvironmentPhase,
+    FAILURE_REASON_CODES,
     MODEL_SCHEMA_VERSION_V3,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
+    TERMINAL_STATUS_CODES,
 )
+from menagerie.crawler.driver_admission import (
+    CHECKER_LANE_BACKOFF_SLACK_SECONDS,
+    _author_lane_failure,
+    _checker_wall_bound,
+)
+from menagerie.crawler.driver_contracts import RetryableOperatorError
+from menagerie.crawler.driver_contracts import AuthorEffortCapExceeded
 from menagerie.crawler.driver import (
     AuthorArtifact,
     AuthorLane,
@@ -103,9 +114,19 @@ from menagerie.crawler.driver_progress import (
     _environment_failure,
     _resolve_notify_command,
 )
-from menagerie.crawler.intake import IntakeSnapshot, create_intake_snapshot, load_intake_snapshot
+from menagerie.crawler.intake import (
+    IntakeSnapshot,
+    create_intake_snapshot,
+    load_intake_snapshot,
+    trusted_identity_fields,
+)
 from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
-from menagerie.crawler.fetcher import fetch_targets as controlled_fetch_targets
+from menagerie.crawler.fetcher import (
+    FetchHashMismatchError,
+    FetchRetrievalError,
+    UnpinnedTargetError,
+    fetch_targets as controlled_fetch_targets,
+)
 from menagerie.crawler.metadata import authored_fact_leaves, recompute_accepted_identities
 from menagerie.crawler.models import LedgerPaths
 from menagerie.crawler.mirrors import MirrorStore
@@ -126,6 +147,7 @@ from menagerie.crawler.tests.conftest import (
     NOW,
     RealEnvironmentFixture,
     RealEnvironmentLane,
+    attach_paper_evidence,
     make_attempt,
     make_author_proposal,
     make_gate,
@@ -273,7 +295,7 @@ def _terminal_fake_author_result(
         payload = {
             "arm": "DEFER_RECOMMENDATION",
             "platform": platform,
-            "source_ids": ["source-1"],
+            "source_ids": ["source-1", "source-paper"],
             "evidence_ids": ["evidence-1"],
             "evidence_identity": evidence_identity,
             "license_identity": license_identity,
@@ -285,7 +307,7 @@ def _terminal_fake_author_result(
         payload = {
             "arm": "SKIP_RECOMMENDATION",
             "status_code": status_code,
-            "source_ids": ["source-1"],
+            "source_ids": ["source-1", "source-paper"],
             "evidence_ids": ["evidence-1"],
             "evidence_identity": evidence_identity,
             "search_report_identity": stable_hash({"search": "bounded-complete"}),
@@ -310,7 +332,7 @@ def _terminal_fake_author_result(
         DeferRecommendation(
             binding,
             str(platform),
-            ("source-1",),
+            ("source-1", "source-paper"),
             ("evidence-1",),
             evidence_identity,
             license_identity,
@@ -327,7 +349,7 @@ def _terminal_fake_author_result(
         else SkipRecommendation(
             binding,
             str(status_code),
-            ("source-1",),
+            ("source-1", "source-paper"),
             ("evidence-1",),
             evidence_identity,
             str(payload["search_report_identity"]),
@@ -397,8 +419,7 @@ class ScriptedAuthor(AuthorLane):
         facts["identity"].update(
             {
                 "canonical_name": item.intake.name,
-                "variant": item.intake.variant,
-                "family_representative_id": item.family_representative_id,
+                **trusted_identity_fields(item.intake),
             }
         )
         facts["modes"]["meaningful_modes"] = ["train", "eval"]
@@ -440,7 +461,8 @@ class ScriptedAuthor(AuthorLane):
         )
         source_manifest_row = dict(source)
         source_manifest_row["cas_path"] = str(source_path)
-        source_manifest = {"sources": [source_manifest_row]}
+        source_manifest: dict[str, Any] = {"sources": [source_manifest_row]}
+        attach_paper_evidence(proposal, source_manifest, source_path.parent)
         source_manifest["manifest_sha256"] = stable_hash(source_manifest["sources"])
         proposal["source_manifest_identity"] = source_manifest["manifest_sha256"]
         proposal["verified_hashes"]["source_manifest"] = source_manifest["manifest_sha256"]
@@ -2005,7 +2027,7 @@ def test_author_source_handshake_freezes_nonempty_cas_manifest(
         )
         return subprocess.CompletedProcess(list(argv), 0, "", "")
 
-    monkeypatch.setattr(driver_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(driver_admission_module, "_run_operator_command", fake_run)
     monkeypatch.setattr(
         driver_module,
         "fetch_targets",
@@ -2028,9 +2050,163 @@ def test_author_source_handshake_freezes_nonempty_cas_manifest(
         )
         return subprocess.CompletedProcess(list(argv), 0, "", "")
 
-    monkeypatch.setattr(driver_module.subprocess, "run", empty_run)
+    monkeypatch.setattr(driver_admission_module, "_run_operator_command", empty_run)
     with pytest.raises(DriverIntegrationError, match="at least one pinned source"):
         lane._fetch_author_sources(item, tmp_path / "empty-author")
+
+
+def test_a_hung_author_command_is_bounded_retryable_and_leaves_no_orphan(
+    tmp_path: Path,
+) -> None:
+    """A hung author session must stall one attempt, not the whole month-long campaign.
+
+    The wrapper here spawns a grandchild that outlives it, which is what a real agent
+    wrapper does. Killing only the direct child would leave that grandchild running with
+    the campaign's file handles and provider session, so the test asserts on the
+    grandchild's PID, not the wrapper's.
+    """
+
+    snapshot = _snapshot(tmp_path)
+    driver = _driver(tmp_path, snapshot)
+    item = driver._ordered_work(snapshot, {})[0]
+    pid_path = tmp_path / "grandchild.pid"
+    wrapper = (
+        "import os, subprocess, sys, time\n"
+        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(600)'])\n"
+        f"open({str(pid_path)!r}, 'w').write(str(child.pid))\n"
+        "sys.stderr.write('wrapper is hung\\n')\n"
+        "sys.stderr.flush()\n"
+        "time.sleep(600)\n"
+    )
+    lane = CommandAuthorLane(
+        (sys.executable, "-c", wrapper),
+        effort_grant=AuthorEffortGrant(wall_seconds=3.0),
+    )
+    root = tmp_path / "hung-author"
+    root.mkdir(parents=True, exist_ok=True)
+    request_path = root / "request.json"
+    request_path.write_text(json.dumps({"envelope_version": "x"}), encoding="utf-8")
+
+    started = time.monotonic()
+    with pytest.raises(RetryableOperatorError) as raised:
+        lane._dispatch(
+            kind="source-request",
+            item=item,
+            config=None,
+            work_id="work-hung",
+            request_path=request_path,
+            output_path=root / "result.json",
+        )
+    elapsed = time.monotonic() - started
+
+    # Bounded by the published grant rather than running forever ...
+    assert elapsed < 60.0
+    assert "wall grant" in str(raised.value)
+    # ... typed retryable, so the driver retries transport instead of burning the model ...
+    assert driver._is_infrastructure_error(raised.value)
+    assert _author_lane_failure(raised.value) == ("source", "identity-unresolved")
+    # ... and the whole process group is gone, grandchild included.
+    grandchild = int(pid_path.read_text(encoding="utf-8"))
+    deadline = time.monotonic() + 10.0
+    while time.monotonic() < deadline:
+        try:
+            os.kill(grandchild, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.1)
+    else:  # pragma: no cover -- only reached when the teardown leaked the grandchild
+        raise AssertionError(f"author timeout leaked grandchild pid {grandchild}")
+
+
+@pytest.mark.parametrize("declared", ["", None])
+def test_author_source_handshake_accepts_an_undigested_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, declared: Optional[str]
+) -> None:
+    """An author forbidden from fetching may honestly decline to name a digest."""
+
+    snapshot = _snapshot(tmp_path)
+    driver = _driver(tmp_path, snapshot)
+    item = driver._ordered_work(snapshot, {})[0]
+    content = b"ExampleNet is a source-grounded architecture."
+    digest = hash_bytes(content)
+
+    def fake_run(argv: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        """Write one exact target whose content digest the author cannot know.
+
+        Parameters
+        ----------
+        argv:
+            Operator argv whose final element is the request envelope path.
+        kwargs:
+            Ignored subprocess options.
+
+        Returns
+        -------
+        subprocess.CompletedProcess[str]
+            Successful operator exit.
+        """
+
+        del kwargs
+        request = json.loads(Path(argv[-1]).read_text(encoding="utf-8"))
+        source: dict[str, Any] = {
+            "source_id": "source-1",
+            "url": "https://example.com/model.txt",
+            "revision": "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c",
+            "media_type": "text/plain",
+        }
+        if declared is not None:
+            source["expected_sha256"] = declared
+        Path(request["required_output_path"]).write_text(
+            json.dumps({"sources": [source]}), encoding="utf-8"
+        )
+        return subprocess.CompletedProcess(list(argv), 0, "", "")
+
+    monkeypatch.setattr(driver_admission_module, "_run_operator_command", fake_run)
+    monkeypatch.setattr(
+        driver_module,
+        "fetch_targets",
+        lambda targets, root: controlled_fetch_targets(
+            targets, root, fetch_bytes=lambda _url: content
+        ),
+    )
+    manifest = CommandAuthorLane(("fake-author",))._fetch_author_sources(item, tmp_path / "author")
+
+    frozen = manifest["sources"][0]
+    assert frozen["content_sha256"] == digest
+    assert Path(frozen["cas_path"]).read_bytes() == content
+
+
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        (AuthorEffortCapExceeded("cap"), ("source", "effort-cap-exhausted")),
+        (
+            AuthorEffortCapExceeded("cap", stage="author", dimension="tool-calls"),
+            ("author", "effort-exhausted:tool-calls"),
+        ),
+        (FetchHashMismatchError("mismatch"), ("fetch", "hash-mismatch")),
+        (FetchRetrievalError("unreachable"), ("fetch", "unreachable")),
+        (UnpinnedTargetError("bad pin"), ("source", "source-target-invalid")),
+        (RuntimeError("provider session crashed"), ("author", "session-crashed")),
+    ],
+)
+def test_author_lane_failure_names_the_real_cause(
+    error: Exception, expected: tuple[str, str]
+) -> None:
+    """A fetch-contract rejection must not be misreported as an unresolved identity.
+
+    Parameters
+    ----------
+    error:
+        Exception observed while resolving, fetching, or authoring one model.
+    expected:
+        Closed ``(stage, reason_code)`` the operator should be shown.
+    """
+
+    stage, reason_code = _author_lane_failure(error)
+    assert (stage, reason_code) == expected
+    assert reason_code in FAILURE_REASON_CODES[stage]
+    assert f"failed:{stage}" in TERMINAL_STATUS_CODES
 
 
 def test_command_checker_lane_validates_real_proposal_digest_binding(tmp_path: Path) -> None:
@@ -2108,6 +2284,92 @@ def test_command_checker_lane_classifies_quota_from_stdout_with_stderr_noise(
 
     assert outcome.backoff is not None
     assert outcome.backoff.reason is CheckerPauseReason.QUOTA_EXHAUSTED
+
+
+def test_checker_wall_bound_sits_above_the_wrapper_own_ceiling() -> None:
+    """The lane bound is a backstop: strictly looser than the wrapper's own budget.
+
+    The wrapper polices itself to the envelope deadline and clamps each Codex attempt to
+    the time remaining, so the lane must only fire once the wrapper has demonstrably
+    failed to police itself. A bound at or below the wrapper's ceiling would cut short
+    checker work that is still legitimately running.
+    """
+
+    from menagerie.crawler.operator_checker import CHECKER_MAX_ATTEMPTS, CHECKER_TIMEOUT_SECONDS
+    from menagerie.crawler.operator_protocol import OPERATOR_DEADLINE_SECONDS
+
+    now = datetime(2026, 7, 28, 12, 0, 0, tzinfo=timezone.utc)
+    deadline = now + timedelta(seconds=OPERATOR_DEADLINE_SECONDS)
+    envelope = {"deadline_at": deadline.isoformat().replace("+00:00", "Z")}
+
+    bound = _checker_wall_bound(envelope, now=now)
+
+    # Strictly above the wrapper's own ceiling: its deadline plus the inter-attempt
+    # backoff sleeps that the deadline does not clamp.
+    assert bound > OPERATOR_DEADLINE_SECONDS + CHECKER_LANE_BACKOFF_SLACK_SECONDS
+    # And above every attempt the wrapper is allowed to make back to back.
+    assert bound > CHECKER_TIMEOUT_SECONDS * CHECKER_MAX_ATTEMPTS
+    # An envelope with no parsable deadline still yields a bound above that same ceiling,
+    # so a malformed contract degrades to a bound rather than to no bound at all.
+    assert _checker_wall_bound({}, now=now) > OPERATOR_DEADLINE_SECONDS
+
+
+def test_a_hung_checker_command_is_bounded_retryable_and_leaves_no_orphan(
+    tmp_path: Path,
+) -> None:
+    """A hung checker session must stall one attempt, not the whole month-long campaign.
+
+    The wrapper bounds its own Codex attempts, but that does not protect the lane: a
+    wrapper that hangs before or outside that call would block the single-threaded driver
+    forever. The wrapper here spawns a grandchild that outlives it, exactly as a real
+    agent wrapper does, so the test asserts on the grandchild's PID -- killing only the
+    direct child would leave it holding the campaign's file handles and provider session.
+    """
+
+    pid_path = tmp_path / "checker-pids.txt"
+    wrapper = (
+        "import os, subprocess, sys, time\n"
+        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(600)'])\n"
+        "open(" + repr(str(pid_path)) + ", 'w').write(str(os.getpid()) + ' ' + str(child.pid))\n"
+        "sys.stderr.write('checker wrapper is hung\\n')\n"
+        "sys.stderr.flush()\n"
+        "time.sleep(600)\n"
+    )
+    # A deadline already in the past collapses the derived bound to its declared slack,
+    # so the real production bound derivation is exercised at test speed.
+    envelope = {
+        "envelope_version": "menagerie.crawler.checker-envelope.v3",
+        "deadline_at": "2026-01-01T00:00:00Z",
+    }
+    lane = CommandCheckerLane((sys.executable, "-c", wrapper), wall_grace_seconds=1.0)
+
+    started = time.monotonic()
+    with pytest.raises(RetryableOperatorError) as raised:
+        lane._run(envelope, tmp_path / "hung-checker")
+    elapsed = time.monotonic() - started
+
+    # Bounded rather than running forever ...
+    assert elapsed < 60.0
+    assert "wall bound" in str(raised.value)
+    # ... typed retryable, so the driver retries transport instead of burning the model ...
+    assert CrawlerDriver._is_infrastructure_error(raised.value)
+    # ... the pipes were drained after the kill, so the wrapper's own output survives ...
+    assert "checker wrapper is hung" in str(raised.value)
+    wrapper_pid, grandchild = (int(value) for value in pid_path.read_text().split())
+    # ... the whole process group is gone, grandchild included ...
+    deadline = time.monotonic() + 10.0
+    while time.monotonic() < deadline:
+        try:
+            os.kill(grandchild, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.1)
+    else:  # pragma: no cover -- only reached when the teardown leaked the grandchild
+        raise AssertionError(f"checker timeout leaked grandchild pid {grandchild}")
+    # ... and the root child was reaped, so the hang did not also leave a zombie. A
+    # zombie still answers signal 0; only a reaped PID raises ProcessLookupError.
+    with pytest.raises(ProcessLookupError):
+        os.kill(wrapper_pid, 0)
 
 
 def test_parent_refuses_observed_adapter_digest_mismatch() -> None:
@@ -2475,6 +2737,7 @@ def _driver(
     phase: Optional[str] = None,
     run_repair_max: int = 2,
     registry: Optional[EnvironmentRegistry] = None,
+    author_concurrency: Optional[int] = None,
 ) -> CrawlerDriver:
     """Build a fully fake deterministic driver."""
 
@@ -2501,6 +2764,11 @@ def _driver(
             review_checkpoint_at=review_at,
             progress_milestones=milestones,
             run_repair_max=run_repair_max,
+            author_concurrency=(
+                DriverConfig().author_concurrency
+                if author_concurrency is None
+                else author_concurrency
+            ),
         ),
         dependencies,
         registry=registry or load_environment_registry(target="osx-arm64"),
@@ -3945,6 +4213,64 @@ def test_author_failure_without_source_is_honest_and_later_models_continue(
         models[failed_id]["implementation"]["torchlens_import_static_check"]
         == "not-applicable-no-code"
     )
+
+
+def test_fetch_contract_rejection_terminalizes_with_its_own_reason(tmp_path: Path) -> None:
+    """The operator is told the pinned target was rejected, not that identity is unknown.
+
+    Parameters
+    ----------
+    tmp_path:
+        Campaign root for this driver run.
+    """
+
+    class _UnpinnedAuthor(ScriptedAuthor):
+        """Fail exactly one model the way the controlled fetcher rejects a target."""
+
+        def author(
+            self,
+            item: WorkItem,
+            work_root: Path,
+            config: DriverConfig,
+            context: AuthorityContext,
+        ) -> AuthorArtifact:
+            """Raise the fetch-contract rejection for the scripted model.
+
+            Parameters
+            ----------
+            item, work_root, config, context:
+                Standard author-lane arguments.
+
+            Returns
+            -------
+            AuthorArtifact
+                Canonical synthetic artifact for every other model.
+            """
+
+            if item.stable_id == self.script.failed_id:
+                raise UnpinnedTargetError(
+                    "expected_sha256 must be sha256:<64 hex> or <64 hex>, or omitted when unknown"
+                )
+            return super().author(item, work_root, config, context)
+
+    snapshot = _snapshot(tmp_path, count=3)
+    failed_id = snapshot.items[0].stable_id
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=_UnpinnedAuthor(AuthorScript(failed_id=failed_id)),
+    ).run()
+
+    assert result.status == "terminal-partition-complete"
+    models = {
+        record["stable_id"]: record
+        for record in scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
+    }
+    status = models[failed_id]["status"]
+    assert status["code"] == "failed:source"
+    assert status["reason_code"] == "source-target-invalid"
+    assert status["stage"] == "source"
+    assert sum(record["status"]["code"] == "runs" for record in models.values()) == 2
 
 
 def test_author_failure_retains_exact_intake_discovery_url(tmp_path: Path) -> None:

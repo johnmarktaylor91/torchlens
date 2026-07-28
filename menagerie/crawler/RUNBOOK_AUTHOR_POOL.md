@@ -20,6 +20,23 @@ The tier is a **campaign** property, not a per-model decision. A campaign's
 genuinely hard is emitted as a typed `BLOCKED` result and requeued into `c3-classics`.
 Escalating in place would fail authority validation on the first opus result.
 
+### Two campaign identities -- do not confuse them
+
+Every queue job carries **two** unrelated campaign identities, and only one of them
+selects an author tier:
+
+| on the job | example | what it is |
+|---|---|---|
+| `tier_campaign_id` | `c1-mech` | the **run's** frozen tier campaign; selects the author model and the standards prompt |
+| `repair_campaign_id` (wire key `campaign_id`) | `campaign-m1706` | the driver's **per-item** repair scope / authority lineage; carries no tier information |
+
+The tier is a property of the campaign run, so you configure it once, with
+`--campaign` (or `MENAGERIE_CAMPAIGN_ID`), on both `author_pool` and `operator_author`.
+When a job also declares a tier, the pool cross-checks it and **refuses** on any
+disagreement. A job with no tier from either side is refused too: guessing one would
+author a model under the wrong frozen `author_model_identity` for the whole run, and
+nothing downstream can detect or repair that.
+
 ---
 
 ## 1. Start
@@ -54,8 +71,8 @@ at that moment nothing is servicing the queue.
 
 In the managing Claude session:
 
-1. `$PY -m menagerie.crawler.author_pool --queue "$QUEUE" list` -- confirm the queue is
-   reachable and see what is waiting.
+1. `$PY -m menagerie.crawler.author_pool --queue "$QUEUE" --campaign "$CAMPAIGN" list`
+   -- confirm the queue is reachable and see what is waiting.
 2. Keep that loop running (see section 2).
 
 ### 1.3 Preflight
@@ -86,10 +103,21 @@ three durable advance notifications:
 cd "$CLONE" && $PY -m menagerie.crawler run \
   --intake .crawl-local/intake --target osx-arm64 \
   --review-checkpoint-at 1000 --progress-milestones 900,950,1000,2000,3000,5000,10000 \
+  --author-concurrency 4 \
   --author-command "$MENAGERIE_AUTHOR_COMMAND" \
   --checker-command "$MENAGERIE_CHECKER_COMMAND" \
   --environment-command "$MENAGERIE_ENVIRONMENT_COMMAND"
 ```
+
+`--author-concurrency` bounds how many author *sessions* one wave keeps in flight
+(default 4, env `MENAGERIE_AUTHOR_CONCURRENCY`, hard ceiling 32). Only the sessions
+overlap: every ledger append, artifact publication, and terminal routing decision stays on
+the single canonical writer, in scheduled work order, so the recorded campaign is
+identical to a serial run. It is a per-lane knob -- the in-session queue pool widens more
+cheaply than a `claude -p` subprocess fan-out -- and `1` restores the historical serial
+lane. It is deliberately NOT part of the frozen campaign config: it is an operational
+throughput setting, not campaign identity, so it must be passed on each launch (or set in
+the environment) rather than inherited.
 
 This first invocation writes the mode-0600 campaign config. Stop it once that config
 exists, then install the supervisor in section 1.5. For `c2-disco`, `c3-classics`, and
@@ -129,16 +157,19 @@ four steps.
 **Step 1 -- see what is waiting.**
 
 ```bash
-$PY -m menagerie.crawler.author_pool --queue "$QUEUE" list
+$PY -m menagerie.crawler.author_pool --queue "$QUEUE" --campaign "$CAMPAIGN" list
 ```
 
 Each row carries `job_id`, `kind` (`source-request`, `author`, or `capability-probe`),
-`stable_id`, `campaign_id`, `subagent_model`, and any live lease.
+`stable_id`, `repair_campaign_id`, `tier_campaign_id`, `subagent_model`, and any live
+lease. A row whose tier could not be resolved carries a `tier_error` instead of a
+`subagent_model`; fix the configuration rather than dispatching it.
 
 **Step 2 -- claim and get the brief.**
 
 ```bash
-$PY -m menagerie.crawler.author_pool --queue "$QUEUE" claim --job "$JOB"
+$PY -m menagerie.crawler.author_pool --queue "$QUEUE" --campaign "$CAMPAIGN" \
+  claim --job "$JOB"
 ```
 
 This writes a lease and prints JSON containing `claimed_at`, `deadline_at`,
@@ -149,16 +180,56 @@ carrying the job's absolute paths, its effort grant, and the campaign's standard
 `subagent_model`, `prompt` = the printed `brief`, `run_in_background: true`. Run 10-16
 concurrently; tune from day-2 telemetry.
 
+The queue holds as many jobs as the driver's `--author-concurrency` allows (default 4 per
+campaign, see section 1.4). If `list` never shows more than one waiting job, the driver is
+running with `--author-concurrency 1` -- the pool cannot be busier than the lane lets it
+be, so raise the driver flag rather than dispatching harder.
+
 **One subagent serves both stages of a model.** After the `source-request` job completes
 and the coordinator's controlled fetch freezes the manifest, the matching `author` job
 appears. Continue the **same subagent** with `SendMessage` and its `author` brief rather
 than dispatching a cold one -- the research context is the expensive part, and reloading it
 is the whole cost this architecture exists to avoid.
 
+### The subagent must actually have the web tools
+
+Grounding is the whole point of this lane, and losing it is **silent**: a session with no Exa
+still finishes and still returns a confident proposal, just an ungrounded one. Two things make
+that happen, and both have been observed.
+
+*Tool names are namespaced, and the namespace depends on how the session was launched.* Only
+the suffixes `web_search_exa` / `web_fetch_exa` are stable. A session whose settings tree loads
+the tools from a plugin registers them as `mcp__plugin_everything-claude-code_exa__web_search_exa`;
+a session launched with an explicit `--mcp-config` naming the server `exa` registers them as
+`mcp__exa__web_search_exa`. The briefs tell the subagent to match on the suffix and forbid it
+from reporting a tool missing on a name mismatch alone, but if a subagent reports "Exa
+unavailable", check the registered names yourself before believing it.
+
+*If you dispatch the author as a `claude -p` subprocess rather than an in-session Agent, every
+flag below is load-bearing:*
+
+```bash
+claude -p "<brief>" \
+  --setting-sources "" \
+  --mcp-config '{"mcpServers":{"exa":{"type":"http","url":"https://mcp.exa.ai/mcp"}}}' \
+  --allowedTools WebSearch mcp__exa__web_search_exa mcp__exa__web_fetch_exa ToolSearch \
+  --output-format json
+```
+
+Without `--mcp-config` there is no Exa at all; without `--allowedTools` all three tools are
+permission-blocked and the run still completes, having researched nothing. `--setting-sources ""`
+also drops cache-creation from roughly 55k tokens to under 3k, so the pinned config is both the
+correct and the cheap configuration.
+
+Prefer Exa for anything that must be quoted. `WebSearch` returns the search engine's own
+synthesised answer, and its claims frequently cannot be traced back to a single URL; Exa returns
+the canonical page with real page text. This pipeline requires verbatim excerpts at exact URLs,
+so Exa is load-bearing and `WebSearch` is corroboration -- they are not interchangeable.
+
 **Step 4 -- commit the answer.**
 
 ```bash
-$PY -m menagerie.crawler.author_pool --queue "$QUEUE" complete \
+$PY -m menagerie.crawler.author_pool --queue "$QUEUE" --campaign "$CAMPAIGN" complete \
   --job "$JOB" --claimed-at "$CLAIMED_AT" --tool-calls "$OBSERVED_TOOL_CALLS"
 ```
 
@@ -172,7 +243,8 @@ produces is requeued, whereas a false receipt corrupts the effort ledger for the
 For long sessions, extend the lease so another servicer does not take the job:
 
 ```bash
-$PY -m menagerie.crawler.author_pool --queue "$QUEUE" renew --job "$JOB"
+$PY -m menagerie.crawler.author_pool --queue "$QUEUE" --campaign "$CAMPAIGN" \
+  renew --job "$JOB"
 ```
 
 ### Handling a bad outcome
@@ -181,6 +253,7 @@ $PY -m menagerie.crawler.author_pool --queue "$QUEUE" renew --job "$JOB"
 |---|---|
 | Claude usage limit | `backoff --job "$JOB" --excerpt "<verbatim provider text>"` -- pauses the scheduler with a reset time; never a model failure |
 | subagent crashed, tools glitched, transient | `fail --job "$JOB" --reason subagent-transient --retryable --detail "..."` |
+| research tools genuinely unreachable (absent, permission-blocked, MCP disconnected) -- verify the registered names first | `fail --job "$JOB" --reason research-tools-unavailable --retryable --detail "<tool, spelling tried, verbatim error>"`; fix the launch config before redispatching. Never `complete` an ungrounded proposal |
 | the model genuinely cannot be authored | prefer a valid `BLOCKED` **result** from the subagent + `complete`; use `fail ... --permanent` only when no result exists |
 | ran out of budget with nothing to show | `fail --job "$JOB" --reason effort-cap-exhausted --permanent` |
 | you claimed it and cannot service it | `release --job "$JOB"` |
@@ -279,3 +352,56 @@ out" all leave no receipt and fail the check.
 
 If either check fails, the answer is to fix the capability. Editing the check is how a
 month-long campaign ships ungrounded proposals and nobody finds out.
+
+---
+
+## 2b. Batch the loop (`tools/pool_batch.py`)
+
+Section 2's four steps are correct but not operable one job at a time -- at 28,482 models
+that is roughly three shell commands plus one dispatch per model, and every hand-run step is
+a chance to mistype a lease owner or lose a `claimed_at`. Use the batch tool instead. It
+collapses the mechanical steps into two calls and leaves exactly one thing to the managing
+session: dispatching the subagents, which is the only part it alone can do.
+
+```bash
+PB="$PY -m menagerie.crawler.tools.pool_batch --queue $QUEUE --repo-root $CLONE --python $PY"
+
+$PB status                                     # compact queue summary
+$PB claim --count 12 --out .crawl-local/rounds/r1
+```
+
+`claim` leases up to N unleased jobs, writes each brief to its own file, and emits
+`manifest.json` with `job_id`, `kind`, `stable_id`, `subagent_model`, `claimed_at`, and
+`brief_path`. Dispatch one Agent subagent per row **in a single message**, using the row's
+`subagent_model` and the contents of its `brief_path`.
+
+Then commit the round:
+
+```bash
+$PB complete --manifest .crawl-local/rounds/r1/manifest.json \
+             --counts   .crawl-local/rounds/r1/counts.json
+```
+
+`counts.json` maps each `job_id` to either a completion or a typed failure:
+
+```json
+{
+  "author-abc123": {"tool_calls": 14},
+  "author-def456": {"tool_calls": 9, "evidence": "/abs/receipt.json"},
+  "author-ghi789": {"failed": true, "reason": "subagent-transient", "retryable": true}
+}
+```
+
+Three properties this deliberately enforces, matching section 2:
+
+- **The lease owner is pinned** (`--owner`, default `pool-manager`). Without a stable owner
+  each shell invocation gets a fresh `host:pid` and a job claimed in one call cannot be
+  completed by the next -- the lease looks foreign.
+- **`tool_calls` is required and never defaulted.** A missing count is an error, not a zero.
+  The engine refuses a receipt declaring more than the grant, and rounding a count down to
+  make a job land corrupts the effort ledger for the whole run.
+- **Failures must be classified.** `retryable` has no default, because guessing turns an
+  infrastructure blip into a permanently burned model.
+
+A job that cannot be claimed this round is reported and skipped rather than aborting the
+batch, so one bad row cannot stall a whole wave.
