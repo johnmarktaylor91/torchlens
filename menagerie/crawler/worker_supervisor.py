@@ -14,6 +14,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from contextlib import contextmanager
@@ -132,6 +133,8 @@ _TERMINAL_TRACE_PATTERN = re.compile(r"\+\+\+ (?:exited with|killed by) .+ \+\+\
 _MACOS_AUDIT_COMPLETION_MARKER = "MENAGERIE_MACOS_SANDBOX_AUDIT_COMPLETE_V1"
 _MACOS_AUDIT_SENTINEL_PREFIX = ".menagerie-seatbelt-audit-"
 _DARWIN_LIBOMP_REGISTRATION_PREFIX = "__KMP_REGISTERED_LIB_"
+_AT_FDCWD = -2
+_RENAME_SWAP = 0x00000002
 _PARENT_COMPLETION_CHALLENGE_ENV = "MENAGERIE_PARENT_COMPLETION_CHALLENGE"
 _WORKER_COMPLETION_PREFIX = "MENAGERIE_WORKER_COMPLETION_V1 "
 _WORKER_COMPLETION_V2_PREFIX = "MENAGERIE_WORKER_COMPLETION_V2 "
@@ -1267,8 +1270,12 @@ def _child_limit(
         if os.getppid() == 1:
             os._exit(126)
     if create_darwin_libomp_blocker:
-        blocker = _darwin_libomp_registration_blocker(os.getpid())
-        blocker_error = _claim_darwin_libomp_registration_blocker(blocker)
+        child_pid = os.getpid()
+        blocker = _darwin_libomp_registration_blocker(child_pid)
+        blocker_error = _claim_darwin_libomp_registration_blocker(
+            blocker,
+            reclaim_stale_regular_file_for_pid=child_pid,
+        )
         if blocker_error is not None:
             _write_child_bootstrap_error(blocker_error)
             os._exit(126)
@@ -1335,18 +1342,27 @@ def _darwin_libomp_registration_blocker(pid: int) -> Path:
     return Path("/private/tmp") / f"{_DARWIN_LIBOMP_REGISTRATION_PREFIX}{pid}"
 
 
-def _claim_darwin_libomp_registration_blocker(path: Path) -> Optional[str]:
+def _claim_darwin_libomp_registration_blocker(
+    path: Path,
+    *,
+    reclaim_stale_regular_file_for_pid: Optional[int] = None,
+) -> Optional[str]:
     """Atomically claim one Darwin LLVM OpenMP registration blocker.
 
     Parameters
     ----------
     path:
         Exact PID-bound path to occupy before entering Seatbelt.
+    reclaim_stale_regular_file_for_pid:
+        The just-forked child's own PID when a pre-existing regular file at its
+        exact registration path may be reclaimed. ``None`` preserves the
+        ordinary fail-closed claim behavior.
 
     Returns
     -------
     str | None
-        ``None`` only for the process whose atomic ``mkdir`` created the blocker.
+        ``None`` only for the process whose atomic ``mkdir`` created the blocker
+        or whose just-forked own-PID stale regular file was atomically reclaimed.
         Otherwise, a path-specific fail-closed diagnostic distinguishing a foreign
         registration file from a supervisor blocker directory.
     """
@@ -1367,6 +1383,18 @@ def _claim_darwin_libomp_registration_blocker(path: Path) -> Optional[str]:
                 f"after EEXIST: {exc}"
             )
         if stat.S_ISREG(status.st_mode):
+            if reclaim_stale_regular_file_for_pid is not None:
+                reclaim_error = _reclaim_stale_darwin_libomp_registration_file(
+                    path,
+                    own_pid=reclaim_stale_regular_file_for_pid,
+                )
+                if reclaim_error is None:
+                    _write_child_bootstrap_notice(
+                        "reclaimed provably stale LLVM OpenMP registration file "
+                        f"at {path} for this just-forked worker PID"
+                    )
+                    return None
+                return reclaim_error
             return (
                 "pre-existing foreign LLVM OpenMP registration file blocks worker startup "
                 f"at {path}; this PID-keyed entry may be stale after abnormal termination"
@@ -1385,6 +1413,143 @@ def _claim_darwin_libomp_registration_blocker(path: Path) -> Optional[str]:
     return None
 
 
+def _reclaim_stale_darwin_libomp_registration_file(path: Path, *, own_pid: int) -> Optional[str]:
+    """Atomically replace one provably stale own-PID libomp file with a blocker.
+
+    Parameters
+    ----------
+    path:
+        Exact registration path whose creation claim observed an existing regular file.
+    own_pid:
+        PID of the child immediately after ``fork`` and before any exec or libomp load.
+
+    Returns
+    -------
+    str | None
+        ``None`` after the stale file was removed and an owned ``0500`` directory
+        continuously occupied ``path``. Otherwise a fail-closed diagnostic.
+    """
+
+    expected_path = _darwin_libomp_registration_blocker(own_pid)
+    if path != expected_path:
+        return (
+            "refusing to reclaim LLVM OpenMP registration entry outside the just-forked "
+            f"worker's own PID path: {path}"
+        )
+    try:
+        stale_status = path.lstat()
+    except OSError as exc:
+        return (
+            "Darwin libomp registration blocker could not be re-inspected for stale-file "
+            f"reclaim at {path}: {exc}"
+        )
+    if not stat.S_ISREG(stale_status.st_mode):
+        return (
+            "LLVM OpenMP registration entry changed before stale-file reclaim at "
+            f"{path}; refusing to replace a non-file entry"
+        )
+
+    try:
+        staging = Path(
+            tempfile.mkdtemp(prefix=f".menagerie-libomp-reclaim-{own_pid}-", dir=path.parent)
+        )
+        staging.chmod(0o500)
+        staging_status = staging.lstat()
+    except OSError as exc:
+        return f"could not prepare atomic stale libomp blocker reclaim at {path}: {exc}"
+    if (
+        not stat.S_ISDIR(staging_status.st_mode)
+        or stat.S_IMODE(staging_status.st_mode) != 0o500
+        or staging_status.st_uid != os.getuid()
+    ):
+        try:
+            staging.rmdir()
+        except OSError:
+            pass
+        return f"prepared stale libomp blocker has invalid ownership or mode at {staging}"
+
+    swap_error = _darwin_atomic_swap(staging, path)
+    if swap_error is not None:
+        try:
+            staging.rmdir()
+        except OSError:
+            pass
+        return f"could not atomically reclaim stale libomp registration file at {path}: {swap_error}"
+
+    try:
+        displaced_status = staging.lstat()
+        claimed_status = path.lstat()
+    except OSError as exc:
+        return (
+            "atomic stale libomp blocker reclaim could not be verified at "
+            f"{path}: {exc}; refusing worker bootstrap"
+        )
+    stale_identity = (stale_status.st_dev, stale_status.st_ino)
+    staging_identity = (staging_status.st_dev, staging_status.st_ino)
+    if (
+        not stat.S_ISREG(displaced_status.st_mode)
+        or (displaced_status.st_dev, displaced_status.st_ino) != stale_identity
+        or not stat.S_ISDIR(claimed_status.st_mode)
+        or stat.S_IMODE(claimed_status.st_mode) != 0o500
+        or claimed_status.st_uid != os.getuid()
+        or (claimed_status.st_dev, claimed_status.st_ino) != staging_identity
+    ):
+        restore_error = _darwin_atomic_swap(staging, path)
+        if restore_error is None:
+            try:
+                staging.rmdir()
+            except OSError:
+                pass
+        return (
+            "atomic stale libomp blocker reclaim changed an unverified entry at "
+            f"{path}; restored the prior entry={restore_error is None} and refusing worker bootstrap"
+        )
+    try:
+        staging.unlink()
+    except OSError as exc:
+        return f"reclaimed stale libomp registration file could not be removed at {staging}: {exc}"
+    return None
+
+
+def _darwin_atomic_swap(source: Path, destination: Path) -> Optional[str]:
+    """Atomically exchange two Darwin filesystem entries without a missing-path window.
+
+    Parameters
+    ----------
+    source, destination:
+        Existing entries on the same Darwin volume to exchange.
+
+    Returns
+    -------
+    str | None
+        ``None`` on a successful ``RENAME_SWAP``; otherwise the operating-system error.
+    """
+
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+        renameatx_np = libc.renameatx_np
+        renameatx_np.argtypes = (
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_uint,
+        )
+        renameatx_np.restype = ctypes.c_int
+    except (AttributeError, OSError) as exc:
+        return f"renameatx_np is unavailable: {exc}"
+    if renameatx_np(
+        _AT_FDCWD,
+        os.fsencode(source),
+        _AT_FDCWD,
+        os.fsencode(destination),
+        _RENAME_SWAP,
+    ) != 0:
+        error_number = ctypes.get_errno()
+        return str(OSError(error_number, os.strerror(error_number)))
+    return None
+
+
 def _write_child_bootstrap_error(message: str) -> None:
     """Write one bounded child-bootstrap diagnostic to the supervised stderr.
 
@@ -1395,6 +1560,24 @@ def _write_child_bootstrap_error(message: str) -> None:
     """
 
     payload = f"menagerie worker bootstrap failed: {message}\n".encode(
+        "utf-8", errors="backslashreplace"
+    )
+    try:
+        os.write(2, payload[:4096])
+    except OSError:
+        pass
+
+
+def _write_child_bootstrap_notice(message: str) -> None:
+    """Write one bounded successful child-bootstrap diagnostic to supervised stderr.
+
+    Parameters
+    ----------
+    message:
+        Specific benign bootstrap event to preserve for later supervision diagnostics.
+    """
+
+    payload = f"menagerie worker bootstrap: {message}\n".encode(
         "utf-8", errors="backslashreplace"
     )
     try:

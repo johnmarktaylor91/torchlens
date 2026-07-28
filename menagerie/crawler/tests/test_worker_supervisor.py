@@ -7,6 +7,7 @@ from dataclasses import replace
 import json
 import os
 import signal
+import stat
 import subprocess
 import sys
 import threading
@@ -346,8 +347,10 @@ def test_live_process_group_members_excludes_reaped_and_zombie_processes() -> No
     zombie.wait(timeout=5)
 
 
-def test_stale_dead_pid_libomp_file_fails_with_bootstrap_diagnostic(tmp_path: Path) -> None:
-    """A foreign libomp file for a dead PID produces a discoverable refusal."""
+def test_child_reclaims_own_pid_stale_libomp_file_without_a_missing_path_window(
+    tmp_path: Path,
+) -> None:
+    """A just-forked child reclaims its own provably stale libomp file."""
 
     exited = subprocess.Popen([sys.executable, "-c", "pass"])
     exited.wait(timeout=5)
@@ -373,14 +376,11 @@ supervisor._child_limit(0, create_darwin_libomp_blocker=True)
         text=True,
     )
 
-    assert result.returncode == 126
-    assert "pre-existing foreign LLVM OpenMP registration file" in result.stderr
+    assert result.returncode == 0
+    assert "reclaimed provably stale LLVM OpenMP registration file" in result.stderr
     assert str(blocker) in result.stderr
-    assert blocker.is_file()
-    with pytest.raises(worker_supervisor_module.SandboxUnavailableError) as exc_info:
-        worker_supervisor_module._verify_darwin_libomp_registration_blocker(blocker)
-    assert "pre-existing foreign LLVM OpenMP registration file" in str(exc_info.value)
-    assert str(blocker) in str(exc_info.value)
+    assert blocker.is_dir()
+    assert stat.S_IMODE(blocker.stat().st_mode) == 0o500
 
 
 def test_live_sibling_libomp_blocker_refuses_duplicate_claim(tmp_path: Path) -> None:
