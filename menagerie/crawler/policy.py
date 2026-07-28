@@ -216,6 +216,14 @@ def _sbpl_regex_literal(pattern: str) -> str:
     nothing, silently voiding the grant. The literal below preserves the single
     backslashes ``re.escape`` produced and refuses any pattern it cannot quote unambiguously.
 
+    Seatbelt's matcher is not Python's. A ``?`` directly after ``(`` is taken as an ordinary
+    literal character rather than opening a non-capturing group, so ``(?:a|b)`` compiles to an
+    alternation whose first branch is the literal text ``?:a``. The grant then silently stops
+    covering everything the first branch named while still appearing correct in the profile.
+    A silently narrowed read grant is indistinguishable from a missing one at runtime, and the
+    forced-report deny rule turns a missing read grant into a SIGKILLed worker, so the spelling
+    is refused outright here instead of being tolerated. Use a plain ``(a|b)`` group.
+
     Parameters
     ----------
     pattern:
@@ -229,11 +237,16 @@ def _sbpl_regex_literal(pattern: str) -> str:
     Raises
     ------
     SandboxUnavailableError
-        If the pattern contains a quote that Seatbelt quoting cannot express.
+        If the pattern contains a quote that Seatbelt quoting cannot express, or a
+        non-capturing group that Seatbelt would silently mis-compile.
     """
 
     if '"' in pattern:
         raise SandboxUnavailableError("sandbox read root is not expressible as a Seatbelt regex")
+    if "(?" in pattern:
+        raise SandboxUnavailableError(
+            "Seatbelt regex grants must use plain groups; '(?' is matched literally"
+        )
     return f'#"{pattern}"'
 
 
@@ -315,6 +328,58 @@ def _derived_bytecode_read_capabilities(
         pattern = f"^{re.escape(str(cache_stem))}\\.[^./]+\\.pyc$"
         capabilities.append((cache_directory, pattern))
     return tuple(capabilities)
+
+
+def _macos_runtime_root_read_patterns(root: Path) -> tuple[str, ...]:
+    """Return anchored read regexes mirroring the runtime-static classifier for one root.
+
+    Parameters
+    ----------
+    root:
+        Resolved environment or verified-source root restricted to runtime reads.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Anchored patterns whose union is the macOS spelling of
+        :func:`_runtime_static_path_allowed`.
+
+    Linux exposes a runtime root read-only inside the namespace and post-filters every
+    observed read through that classifier, so a startup file it accepts is always readable
+    there. Seatbelt has no post-filter: the profile *is* the enforcement, and the forced-report
+    deny rule SIGKILLs the worker on the first read the profile fails to name. A code-suffix
+    regex alone therefore kills the worker on ordinary interpreter and import startup reads
+    that carry no code suffix. Each pattern below mirrors exactly one clause of the classifier
+    so the two authorities cannot drift apart silently. The proven-textual ``site-packages``
+    ``.pth`` clause is deliberately absent: its bounded content proof cannot be expressed as a
+    path regex, so the generator names those files exactly instead.
+    """
+
+    escaped = re.escape(str(root))
+    # Match a file directly beneath the root or at any depth under it. Plain groups only:
+    # see _sbpl_regex_literal for why Seatbelt cannot be given a non-capturing group.
+    descendant = f"{escaped}/(.*/)?"
+    metadata_names = "|".join(re.escape(name) for name in sorted(_RUNTIME_METADATA_NAMES))
+    code_suffixes = "|".join(
+        sorted({*(suffix.lstrip(".") for suffix in _RUNTIME_SOURCE_SUFFIXES), "metallib"})
+    )
+    return (
+        f"^{escaped}/.*\\.({code_suffixes})$",
+        # A versioned shared object carries the same code kind as its bare `.so` spelling.
+        f"^{escaped}/.*\\.so\\.[^/]+$",
+        # importlib.metadata resolves a distribution version during an ordinary import and
+        # reads these fixed names. The classifier confines them to a metadata directory, and
+        # so does this pattern, so no package payload becomes readable.
+        f"^{descendant}[^/]*\\.(dist-info|egg-info)/(.*/)?({metadata_names})$",
+        # A virtual-environment or build-tree interpreter reads these markers during startup.
+        f"^{descendant}(pybuilddir\\.txt|pyvenv\\.cfg)$",
+        # OpenSSL loads its configuration file when the ssl module initializes a context.
+        f"^{descendant}ssl/(.*/)?openssl\\.cnf$",
+        # A frozen standard library ships as lib/python<version>.zip on the interpreter path.
+        f"^{descendant}lib/(.*/)?python[^/]*\\.zip$",
+        # The editable-install path hook is probed by name on each sys.path entry.
+        f"^{descendant}__editable__\\..*\\.__path_hook__$",
+    )
 
 
 def generate_macos_sandbox_profile(
@@ -451,19 +516,29 @@ def generate_macos_sandbox_profile(
         encoded_prefix = json.dumps(str(environment_prefix), ensure_ascii=True)
         lines.append(f"(allow file-read-data (subpath {encoded_prefix}))")
     elif execution_read_manifest is None:
-        runtime_suffixes = "a|c|cc|cpp|cu|cuh|dylib|h|hpp|metallib|py|pyc|pyd|pyi|pyx|so"
         for root in tuple(dict.fromkeys(path.resolve() for path in runtime_read_roots)):
             encoded_root = json.dumps(str(root), ensure_ascii=True)
-            pattern = f"^{re.escape(str(root))}/.*\\.(?:{runtime_suffixes})$"
-            lines.append(f"(allow file-read-data (regex {_sbpl_regex_literal(pattern)}))")
-            # The suffix regex can only ever match a file, so it never grants the directory
-            # reads that the interpreter's path-based finder performs on each search root.
-            # Pin the extra grant to the directory vnode: entry names inside an already
-            # code-readable root become visible, contents of non-code files stay denied.
+            for pattern in _macos_runtime_root_read_patterns(root):
+                lines.append(f"(allow file-read-data (regex {_sbpl_regex_literal(pattern)}))")
+            # Every pattern above can only ever match a file, so none of them grants the
+            # directory reads that the interpreter's path-based finder performs on each
+            # search root. Pin the extra grant to the directory vnode: entry names inside an
+            # already code-readable root become visible, contents of non-code files stay denied.
             lines.append(
                 "(allow file-read-data "
                 f"(require-all (vnode-type DIRECTORY) (subpath {encoded_root})))"
             )
+        # CPython's site module reads every <site-packages>/*.pth path-configuration file
+        # during interpreter startup, before any worker code runs. ".pth" is also a torch
+        # checkpoint suffix, so the runtime-code suffix regex above deliberately excludes it
+        # and _runtime_package_data_paths classifies it as runtime import metadata instead of
+        # package data. Without an exact grant a startup .pth matches neither authority, and
+        # the profile's forced-report deny SIGKILLs the worker inside site before any model
+        # code runs. Name each proven-textual file exactly, mirroring the grant the v3
+        # environment authority already carries as startup_pth_paths.
+        for startup_pth in _runtime_startup_pth_paths(runtime_read_roots):
+            encoded_startup_pth = json.dumps(str(startup_pth), ensure_ascii=True)
+            lines.append(f"(allow file-read-data (literal {encoded_startup_pth}))")
     for root in roots:
         encoded = json.dumps(str(root), ensure_ascii=True)
         lines.append(f"(allow file-write* (literal {encoded}))")
@@ -761,12 +836,7 @@ def _runtime_static_path_allowed(path: Path) -> bool:
         "site-packages",
         "dist-packages",
     }:
-        try:
-            with _ORIGINAL_IO_OPEN(path, "rb") as handle:
-                data = handle.read(1024**2 + 1)
-        except OSError:
-            return False
-        return len(data) <= 1024**2 and b"\x00" not in data
+        return _startup_pth_text_proven(path)
     if name in _RUNTIME_METADATA_NAMES and (
         name in {"pybuilddir.txt", "pyvenv.cfg"}
         or any(part.endswith((".dist-info", ".egg-info")) for part in path.parts)
@@ -976,6 +1046,58 @@ def _installed_package_digest_for_path(site_root: Path, path: Path) -> Optional[
         except (OSError, UnicodeDecodeError, csv.Error):
             continue
     return None
+
+
+def _startup_pth_text_proven(path: Path) -> bool:
+    """Return whether one ``.pth`` file is bounded import text rather than model data.
+
+    Parameters
+    ----------
+    path:
+        Candidate ``.pth`` already proven to sit directly inside an installed-package root.
+
+    Returns
+    -------
+    bool
+        True only for a readable file of at most one mebibyte carrying no NUL byte. A
+        torch checkpoint sharing the suffix is binary and never passes this proof.
+    """
+
+    try:
+        with _ORIGINAL_IO_OPEN(path, "rb") as handle:
+            data = handle.read(1024**2 + 1)
+    except OSError:
+        return False
+    return len(data) <= 1024**2 and b"\x00" not in data
+
+
+def _runtime_startup_pth_paths(runtime_code_roots: Sequence[Path]) -> tuple[Path, ...]:
+    """Return the exact path-configuration files CPython reads during startup.
+
+    Parameters
+    ----------
+    runtime_code_roots:
+        Environment and verified-source roots containing importable code.
+
+    Returns
+    -------
+    tuple[pathlib.Path, ...]
+        Proven-textual ``<site-packages>/*.pth`` files. ``site.addsitedir`` reads only the
+        immediate children of an installed-package root, so the search is not recursive.
+    """
+
+    paths: list[Path] = []
+    for site_root in _runtime_site_roots(runtime_code_roots):
+        try:
+            candidates = sorted(site_root.glob("*.pth"), key=lambda path: str(path))
+        except OSError:
+            continue
+        paths.extend(
+            path.resolve()
+            for path in candidates
+            if path.is_file() and _startup_pth_text_proven(path)
+        )
+    return tuple(dict.fromkeys(paths))
 
 
 def _runtime_package_data_paths(runtime_code_roots: Sequence[Path]) -> tuple[Path, ...]:
