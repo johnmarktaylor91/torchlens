@@ -19,6 +19,7 @@ from typing import Mapping, Protocol, Sequence
 from menagerie.crawler.checkpoint import CRAWLER_BRANCH
 from menagerie.crawler.driver_progress import _resolve_notify_command
 from menagerie.crawler.execution_lock import global_execution_flock_path
+from menagerie.crawler.executable_paths import normalize_executable
 from menagerie.crawler.identity import canonical_json_bytes
 from menagerie.crawler.policy import (
     ExecutionPolicy,
@@ -683,24 +684,12 @@ def _resolve_executable(value: str, cwd: Path) -> str | None:
     Returns
     -------
     str | None
-        Absolute executable path when resolvable.
+        Absolute executable path when resolvable, with symlinks left intact so a configured
+        virtualenv interpreter is not collapsed into its base installation.
     """
 
-    # Normalize without following symlinks. A virtualenv's bin/python is a symlink
-    # chain to the base interpreter, and CPython derives sys.prefix from the path it
-    # was invoked by -- resolving it silently swaps the venv for the base environment
-    # and its site-packages, which is how a correctly configured wrapper appears to be
-    # missing its dependencies. The operator runbook configures these commands as
-    # <clone>/.venv-crawler/bin/python by design, so the configured path is what must
-    # be executed.
-    path = Path(os.path.abspath(os.path.expanduser(value)))
-    if Path(value).expanduser().is_absolute():
-        return str(path) if path.is_file() else None
-    if Path(value).expanduser().parent != Path("."):
-        candidate = Path(os.path.abspath(cwd / Path(value).expanduser()))
-        return str(candidate) if candidate.is_file() else None
-    found = shutil.which(value)
-    return str(Path(os.path.abspath(found))) if found is not None else None
+    resolved = normalize_executable(value, cwd=cwd)
+    return None if resolved is None else str(resolved)
 
 
 def _lock_available(path: Path) -> bool:

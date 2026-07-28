@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 
+from menagerie.crawler.executable_paths import normalize_executable
 from menagerie.crawler.identity import canonical_json_bytes, stable_hash
 
 CAMPAIGN_CONFIG_FORMAT = "menagerie.crawler.campaign-config.v2"
@@ -263,16 +263,12 @@ def resolve_command(command: Sequence[str], *, cwd: Path) -> tuple[str, ...]:
     if not command:
         raise ValueError("cannot resolve an empty command")
     executable = command[0]
-    candidate = Path(executable).expanduser()
-    if candidate.is_absolute() or candidate.parent != Path("."):
-        resolved_executable = candidate.resolve()
-        if not resolved_executable.is_file():
-            raise ValueError(f"command executable is not a file: {executable}")
-    else:
-        found = shutil.which(executable)
-        if found is None:
-            raise ValueError(f"command executable is not resolvable: {executable}")
-        resolved_executable = Path(found).resolve()
+    # Normalize WITHOUT following the final symlink: a virtualenv interpreter must keep
+    # pointing at its own pyvenv.cfg, or the configured venv silently collapses into the
+    # base environment and its site-packages. See menagerie/crawler/executable_paths.py.
+    resolved_executable = normalize_executable(executable, cwd=cwd)
+    if resolved_executable is None:
+        raise ValueError(f"command executable is not resolvable: {executable}")
     resolved: list[str] = [str(resolved_executable)]
     for argument in command[1:]:
         candidate = Path(argument).expanduser()
