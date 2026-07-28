@@ -31,7 +31,6 @@ from typing import (
 
 from menagerie.crawler import author_queue
 from menagerie.crawler.artifact_transactions import (
-    ArtifactBindingError,
     ArtifactCheckpointError,
     ArtifactCheckpointProjection,
     ArtifactEventKind,
@@ -40,6 +39,7 @@ from menagerie.crawler.artifact_transactions import (
     ArtifactTransactionProjection,
     rehydrate_artifact_transaction,
     resolve_final_artifact_transaction,
+    SourceManifestBindingError,
     staged_artifact_for_result,
     validate_artifact_checkpoint,
 )
@@ -364,14 +364,14 @@ def _author_lane_failure(exc: Exception) -> tuple[str, str]:
         # The author named a target the controlled fetch contract cannot accept.
         # That is a declaration defect, not an unresolvable identity.
         return "source", "source-target-invalid"
-    if isinstance(exc, ArtifactBindingError):
-        # The author session ran to a clean typed verdict and the ENGINE then
-        # refused to bind it. Calling that `session-crashed` states a fact that
-        # did not occur, and lands an engine fault in a vocabulary already
-        # carrying the author-transport catch-all -- two unrelated causes in one
-        # field the reducer counts. `runner`/`internal-error` is the existing
-        # closed pair for an engine-side fault, and it points an operator at the
-        # half that actually failed.
+    if isinstance(exc, SourceManifestBindingError):
+        # The author session ran to a clean typed verdict and the ENGINE's own
+        # driver-built manifest then failed its self-consistency checks. Calling
+        # that `session-crashed` states a fact that did not occur, and lands an
+        # engine fault in a vocabulary already carrying the author-transport
+        # catch-all -- two unrelated causes in one field the reducer counts.
+        # Deliberately narrow: the sibling `ArtifactBindingError` arms reject
+        # author-SUPPLIED content and stay author-owned below.
         return "runner", "internal-error"
     return "author", "session-crashed"
 
