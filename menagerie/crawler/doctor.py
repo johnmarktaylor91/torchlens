@@ -662,14 +662,21 @@ def _resolve_executable(value: str, cwd: Path) -> str | None:
         Absolute executable path when resolvable.
     """
 
-    path = Path(value).expanduser()
-    if path.is_absolute():
-        return str(path.resolve()) if path.is_file() else None
-    if path.parent != Path("."):
-        candidate = (cwd / path).resolve()
+    # Normalize without following symlinks. A virtualenv's bin/python is a symlink
+    # chain to the base interpreter, and CPython derives sys.prefix from the path it
+    # was invoked by -- resolving it silently swaps the venv for the base environment
+    # and its site-packages, which is how a correctly configured wrapper appears to be
+    # missing its dependencies. The operator runbook configures these commands as
+    # <clone>/.venv-crawler/bin/python by design, so the configured path is what must
+    # be executed.
+    path = Path(os.path.abspath(os.path.expanduser(value)))
+    if Path(value).expanduser().is_absolute():
+        return str(path) if path.is_file() else None
+    if Path(value).expanduser().parent != Path("."):
+        candidate = Path(os.path.abspath(cwd / Path(value).expanduser()))
         return str(candidate) if candidate.is_file() else None
     found = shutil.which(value)
-    return str(Path(found).resolve()) if found is not None else None
+    return str(Path(os.path.abspath(found))) if found is not None else None
 
 
 def _lock_available(path: Path) -> bool:
