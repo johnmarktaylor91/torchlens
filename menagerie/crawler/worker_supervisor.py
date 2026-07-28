@@ -1179,10 +1179,13 @@ def reconcile_worker_lease(
             return WorkerLeaseRecovery(
                 "failed-closed", lease, "child-group-changed-before-reap", True, False
             )
-        try:
-            os.killpg(lease.child_pgid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+        # Identity was just re-verified above, so this signal targets a group this
+        # recovery provably owns. A denied signal against a drained group is not a
+        # recovery failure; a genuinely surviving group still fails closed below,
+        # because the kernel lock will not release.
+        signal_verified_process_group(
+            lease.child_pid, lease.child_pgid, lease.child_start_token
+        )
         release_deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < release_deadline:
             try:
@@ -1578,19 +1581,356 @@ def _rusage_peak_rss_floor_bytes(
     return max(0, int(usage_after.ru_maxrss)) * scale
 
 
-def _kill_process_group(process: subprocess.Popen[Any]) -> None:
-    """Terminate a complete isolated process group.
+PROCESS_GROUP_SIGNALLED = "signalled"
+PROCESS_GROUP_ALREADY_EXITED = "already-exited"
+PROCESS_GROUP_SKIPPED_REAPED_PID = "skipped-reaped-pid"
+PROCESS_GROUP_SKIPPED_FOREIGN_PID = "skipped-foreign-pid"
+PROCESS_GROUP_PERMISSION_DENIED = "permission-denied"
+BENIGN_PROCESS_GROUP_TEARDOWNS = frozenset(
+    {PROCESS_GROUP_SIGNALLED, PROCESS_GROUP_ALREADY_EXITED}
+)
+
+
+@dataclass(frozen=True)
+class ProcessGroupHandle:
+    """Spawn-time identity of one child's own isolated process group.
 
     Parameters
     ----------
     process:
-        Root child process.
+        Root child launched with ``start_new_session=True``.
+    pid, pgid:
+        Root child PID and the process-group ID it leads. ``setsid`` in the child
+        makes these equal, so the group is knowable the moment the spawn returns.
+    isolated:
+        Whether the child was observed leading its own group. A child that shares
+        a foreign group is never a legal ``killpg`` target.
+    start_token:
+        PID-reuse-resistant OS process-start token sampled while the child was
+        still unreaped, or ``None`` when the host probe was unavailable.
+    """
+
+    process: subprocess.Popen[Any]
+    pid: int
+    pgid: int
+    isolated: bool
+    start_token: Optional[str]
+
+
+@dataclass(frozen=True)
+class ProcessGroupTeardown:
+    """Outcome of one force-teardown attempt against an isolated group.
+
+    Parameters
+    ----------
+    outcome:
+        One frozen outcome name. Only :data:`BENIGN_PROCESS_GROUP_TEARDOWNS`
+        members mean the group is provably gone or was provably signalled.
+    pid, pgid:
+        Targeted root PID and process-group ID.
+    detail:
+        Bounded parent-owned diagnosis.
+    survivors:
+        Non-zombie group members observed after a denied signal.
+    """
+
+    outcome: str
+    pid: int
+    pgid: int
+    detail: str
+    survivors: tuple[int, ...] = ()
+
+    @property
+    def benign(self) -> bool:
+        """Whether teardown reached its goal without an unresolved hazard.
+
+        Returns
+        -------
+        bool
+            True only when the group was signalled or is provably gone.
+        """
+
+        return self.outcome in BENIGN_PROCESS_GROUP_TEARDOWNS
+
+
+def capture_process_group(process: subprocess.Popen[Any]) -> ProcessGroupHandle:
+    """Bind a child's process-group identity while the child is definitely alive.
+
+    Called immediately after the spawn returns, so the PID is still held by this
+    exact child and cannot yet have been recycled. Binding here -- rather than
+    re-deriving a target from ``process.pid`` at teardown time -- is what closes
+    the PID-reuse race at its source.
+
+    Parameters
+    ----------
+    process:
+        Root child launched with ``start_new_session=True``.
+
+    Returns
+    -------
+    ProcessGroupHandle
+        Immutable spawn-time group identity used by every later teardown.
+    """
+
+    pid = process.pid
+    try:
+        observed_pgid: Optional[int] = os.getpgid(pid)
+    except OSError:
+        # Darwin refuses ``getpgid`` for a zombie, so a child that exited during
+        # spawn is unverifiable this way. ``setsid`` still ran before ``exec``,
+        # so the group ID is exactly the PID.
+        observed_pgid = None
+    return ProcessGroupHandle(
+        process=process,
+        pid=pid,
+        pgid=pid,
+        isolated=observed_pgid is None or observed_pgid == pid,
+        start_token=process_start_token(pid),
+    )
+
+
+def _live_process_group_members(pgid: int) -> Optional[tuple[int, ...]]:
+    """Return the non-zombie members of one process group.
+
+    Parameters
+    ----------
+    pgid:
+        Process-group ID to enumerate.
+
+    Returns
+    -------
+    tuple[int, ...] | None
+        Sorted live member PIDs, or ``None`` when the host probe failed and
+        group membership therefore cannot be proven either way.
+    """
+
+    members: list[int] = []
+    if sys.platform.startswith("linux"):
+        try:
+            entries = sorted(Path("/proc").iterdir())
+        except OSError:
+            return None
+        for entry in entries:
+            if not entry.name.isdigit():
+                continue
+            try:
+                stat_text = (entry / "stat").read_text(encoding="ascii")
+            except OSError:
+                # The process exited mid-scan, which is exactly "not a survivor".
+                continue
+            closing = stat_text.rfind(")")
+            fields = stat_text[closing + 2 :].split() if closing >= 0 else []
+            if len(fields) < 3:
+                continue
+            try:
+                member_pgid = int(fields[2])
+            except ValueError:
+                continue
+            if member_pgid == pgid and fields[0] != "Z":
+                members.append(int(entry.name))
+        return tuple(sorted(members))
+    try:
+        completed = subprocess.run(
+            ("ps", "-A", "-o", "pid=,pgid=,state="),
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    for line in completed.stdout.splitlines():
+        columns = line.split(maxsplit=2)
+        if len(columns) < 3:
+            continue
+        try:
+            member_pid = int(columns[0])
+            member_pgid = int(columns[1])
+        except ValueError:
+            continue
+        if member_pgid == pgid and not columns[2].startswith("Z"):
+            members.append(member_pid)
+    return tuple(sorted(members))
+
+
+def _record_process_group_teardown(record: ProcessGroupTeardown) -> ProcessGroupTeardown:
+    """Emit a bounded supervisor diagnostic for a non-benign teardown.
+
+    Parameters
+    ----------
+    record:
+        Teardown outcome to record.
+
+    Returns
+    -------
+    ProcessGroupTeardown
+        The same record, so callers can both record and return in one step.
+    """
+
+    if record.benign:
+        return record
+    payload = (
+        "menagerie supervisor process-group teardown "
+        f"{record.outcome}: pid={record.pid} pgid={record.pgid} "
+        f"detail={record.detail} survivors={list(record.survivors)}\n"
+    ).encode("utf-8", errors="backslashreplace")
+    try:
+        os.write(2, payload[:4096])
+    except OSError:
+        pass
+    return record
+
+
+def _kill_process_group(group: ProcessGroupHandle) -> ProcessGroupTeardown:
+    """Terminate a complete isolated process group we can still prove we own.
+
+    The parent decides to force-terminate from a liveness read that is already
+    stale by the time the signal is delivered, so the group can drain underneath
+    the call. Two distinct hazards follow, and both are resolved here rather than
+    swallowed:
+
+    * Darwin's ``killpg`` skips zombies when it counts signallable members and
+      reports ``EPERM`` -- not ``ESRCH`` -- when none remain. A group whose last
+      member is this parent's own unreaped zombie is therefore *already torn
+      down*, yet raises ``PermissionError``.
+    * Once the root child has been reaped its PID is free for the kernel to hand
+      to an unrelated process. Signalling it would SIGKILL a stranger's group on
+      any host where the parent happened to have permission.
+
+    Ownership is established before any signal by two independent facts: the
+    child has not been reaped by this parent (so the kernel still holds its PID),
+    and its :func:`process_start_token` still matches the token bound at spawn.
+
+    Parameters
+    ----------
+    group:
+        Spawn-time group identity from :func:`capture_process_group`.
+
+    Returns
+    -------
+    ProcessGroupTeardown
+        Structured outcome. ``benign`` is true only when the group was signalled
+        or is provably gone; every other outcome is a recorded cleanup hazard.
+    """
+
+    if not group.isolated:
+        return _record_process_group_teardown(
+            ProcessGroupTeardown(
+                PROCESS_GROUP_SKIPPED_FOREIGN_PID,
+                group.pid,
+                group.pgid,
+                "child-does-not-lead-its-own-process-group",
+            )
+        )
+    # ``returncode`` is set only by this parent's own reap. While it is unset the
+    # kernel still holds the PID for this exact child, so the PID cannot have been
+    # recycled and the group ID bound at spawn is still ours.
+    if group.process.returncode is not None:
+        return _record_process_group_teardown(
+            ProcessGroupTeardown(
+                PROCESS_GROUP_SKIPPED_REAPED_PID,
+                group.pid,
+                group.pgid,
+                "root-child-already-reaped-so-pid-may-be-recycled",
+            )
+        )
+    observed_token = process_start_token(group.pid)
+    if (
+        group.start_token is not None
+        and observed_token is not None
+        and observed_token != group.start_token
+    ):
+        return _record_process_group_teardown(
+            ProcessGroupTeardown(
+                PROCESS_GROUP_SKIPPED_FOREIGN_PID,
+                group.pid,
+                group.pgid,
+                "start-token-changed-while-child-was-unreaped",
+            )
+        )
+    return signal_verified_process_group(group.pid, group.pgid, group.start_token)
+
+
+def signal_verified_process_group(
+    pid: int,
+    pgid: int,
+    expected_start_token: Optional[str],
+) -> ProcessGroupTeardown:
+    """SIGKILL one already-identity-verified process group and classify the result.
+
+    Callers must have proven, immediately before, that ``pid`` still names the
+    process whose group they intend to tear down. This function only classifies
+    what the kernel reports back.
+
+    Parameters
+    ----------
+    pid, pgid:
+        Verified root PID and the process-group ID to signal.
+    expected_start_token:
+        Start token bound when ownership was established, or ``None`` when the
+        host probe was unavailable.
+
+    Returns
+    -------
+    ProcessGroupTeardown
+        Structured outcome; ``benign`` is true only when the group was signalled
+        or is provably gone.
     """
 
     try:
-        os.killpg(process.pid, signal.SIGKILL)
+        os.killpg(pgid, signal.SIGKILL)
     except ProcessLookupError:
-        pass
+        return ProcessGroupTeardown(
+            PROCESS_GROUP_ALREADY_EXITED,
+            pid,
+            pgid,
+            "no-such-process-group",
+        )
+    except PermissionError:
+        survivors = _live_process_group_members(pgid)
+        if survivors == ():
+            # Every member is an exited or zombie process, so the force teardown
+            # this call was asked to perform has already happened.
+            return ProcessGroupTeardown(
+                PROCESS_GROUP_ALREADY_EXITED,
+                pid,
+                pgid,
+                "process-group-drained-before-signal",
+            )
+        recheck_token = process_start_token(pid)
+        if (
+            expected_start_token is not None
+            and recheck_token is not None
+            and recheck_token != expected_start_token
+        ):
+            return _record_process_group_teardown(
+                ProcessGroupTeardown(
+                    PROCESS_GROUP_SKIPPED_FOREIGN_PID,
+                    pid,
+                    pgid,
+                    "pid-recycled-into-a-foreign-process-group",
+                    () if survivors is None else survivors,
+                )
+            )
+        return _record_process_group_teardown(
+            ProcessGroupTeardown(
+                PROCESS_GROUP_PERMISSION_DENIED,
+                pid,
+                pgid,
+                (
+                    "membership-unprovable-after-denied-signal"
+                    if survivors is None
+                    else "live-owned-group-members-refused-the-signal"
+                ),
+                () if survivors is None else survivors,
+            )
+        )
+    return ProcessGroupTeardown(
+        PROCESS_GROUP_SIGNALLED,
+        pid,
+        pgid,
+        "sigkill-delivered-to-process-group",
+    )
 
 
 def _tail(data: bytes) -> str:
@@ -2881,6 +3221,7 @@ class _MacOSAuditChannel:
     path: Path
     expected_identity: tuple[int, int]
     process: subprocess.Popen[Any]
+    process_group: ProcessGroupHandle
     handle: BinaryIO
     worker_pid: Optional[int] = None
     sandbox_executable: Optional[str] = None
@@ -3076,6 +3417,7 @@ def _start_macos_denial_audit(
     )
     handle = path.open("wb")
     process: Optional[subprocess.Popen[Any]] = None
+    process_group: Optional[ProcessGroupHandle] = None
     try:
         profile_text = profile_path.read_text(encoding="utf-8")
         process = subprocess.Popen(
@@ -3094,6 +3436,9 @@ def _start_macos_denial_audit(
             start_new_session=True,
             close_fds=True,
         )
+        # Bind the collector's group identity while it is definitely alive, before
+        # anything can reap it and free its PID for reuse.
+        process_group = capture_process_group(process)
         # A fixed sleep races collector initialization under load. Wait for the
         # parent-owned stream's startup banner before emitting the lifetime sentinel.
         if not _wait_for_macos_audit_collector(process, path):
@@ -3102,6 +3447,7 @@ def _start_macos_denial_audit(
             path,
             identity,
             process,
+            process_group,
             handle,
             sandbox_executable=sandbox_executable,
             profile_path=profile_path,
@@ -3112,11 +3458,13 @@ def _start_macos_denial_audit(
             raise SandboxUnavailableError(FailureStage.SANDBOX_UNAVAILABLE.value)
     except (OSError, SandboxUnavailableError):
         if process is not None and process.poll() is None:
+            if process_group is None:
+                process_group = capture_process_group(process)
             process.terminate()
             try:
                 process.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                _kill_process_group(process)
+                _kill_process_group(process_group)
                 process.wait()
         handle.close()
         raise
@@ -3143,7 +3491,7 @@ def _finish_macos_denial_audit(channel: _MacOSAuditChannel) -> None:
         return_code = channel.process.wait(timeout=5)
         completed = drained and return_code in {0, -signal.SIGTERM}
     except (OSError, subprocess.TimeoutExpired):
-        _kill_process_group(channel.process)
+        _kill_process_group(channel.process_group)
         channel.process.wait()
     finally:
         channel.handle.flush()
@@ -3785,6 +4133,10 @@ def run_isolated_subprocess(
                     sandbox.kind == "sandbox-exec",
                 ),
             )
+            # Bind the worker's group identity before anything else can run, while the
+            # PID provably still belongs to this child. Every later force teardown
+            # signals this bound identity instead of re-reading ``process.pid``.
+            process_group = capture_process_group(process)
             if sandbox.kind == "sandbox-exec":
                 darwin_libomp_blocker_path = _darwin_libomp_registration_blocker(process.pid)
                 try:
@@ -3794,7 +4146,7 @@ def run_isolated_subprocess(
                         )
                     )
                 except SandboxUnavailableError:
-                    _kill_process_group(process)
+                    _kill_process_group(process_group)
                     process.wait()
                     raise
             if worker_lease_handle is not None:
@@ -3810,13 +4162,13 @@ def run_isolated_subprocess(
                 try:
                     worker_lease_handle.lease = _read_worker_lease(worker_lease_handle.record_path)
                 except (OSError, ValueError, json.JSONDecodeError):
-                    _kill_process_group(process)
+                    _kill_process_group(process_group)
                 else:
                     if on_lease_started is not None:
                         try:
                             on_lease_started(worker_lease_handle.lease)
                         except Exception:
-                            _kill_process_group(process)
+                            _kill_process_group(process_group)
             if macos_audit_channel is not None:
                 macos_audit_channel.worker_pid = process.pid
             while True:
@@ -3825,17 +4177,17 @@ def run_isolated_subprocess(
                 peak_rss = max(peak_rss, current_rss)
                 if current_rss and rss_limit_bytes > 0 and current_rss > rss_limit_bytes:
                     rss_exceeded = True
-                    _kill_process_group(process)
+                    _kill_process_group(process_group)
                     break
                 if process.poll() is not None:
                     break
                 if shutdown_event is not None and shutdown_event.is_set():
                     shutdown_requested = True
-                    _kill_process_group(process)
+                    _kill_process_group(process_group)
                     break
                 if elapsed >= timeout_seconds:
                     timed_out = True
-                    _kill_process_group(process)
+                    _kill_process_group(process_group)
                     break
                 time.sleep(0.01)
             process.wait()

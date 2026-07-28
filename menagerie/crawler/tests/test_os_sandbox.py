@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import builtins
+import os
 import socket
 import sys
 from pathlib import Path
@@ -69,8 +70,35 @@ from menagerie.crawler.worker_supervisor import (
     _macos_denial_audit,
     _parse_linux_denial_audit,
     _request_allowed_read_paths,
+    ProcessGroupHandle,
     SupervisorObservation,
 )
+
+
+def _completed_collector_group(process: object) -> ProcessGroupHandle:
+    """Build a teardown handle for a collector fixture that already completed.
+
+    The fixture models a collector this parent has already reaped, so the handle
+    can never reach ``killpg`` -- teardown refuses a reaped PID outright.
+
+    Parameters
+    ----------
+    process:
+        Collector process fixture.
+
+    Returns
+    -------
+    ProcessGroupHandle
+        Handle whose root child is recorded as already reaped.
+    """
+
+    return ProcessGroupHandle(
+        process=process,  # type: ignore[arg-type]
+        pid=os.getpid(),
+        pgid=os.getpid(),
+        isolated=True,
+        start_token=None,
+    )
 
 
 def test_macos_profile_denies_network_and_writes_except_designated_roots(
@@ -851,6 +879,8 @@ def test_macos_audit_finish_drains_delayed_denial_before_completion(
     class _CollectorProcess:
         """Minimal completed log-stream process fixture."""
 
+        returncode: int | None = -15
+
         def terminate(self) -> None:
             """Accept the supervisor's bounded collector shutdown."""
 
@@ -874,10 +904,12 @@ def test_macos_audit_finish_drains_delayed_denial_before_completion(
     path = tmp_path / "macos-seatbelt.ndjson"
     handle = path.open("wb")
     status = path.stat()
+    collector = _CollectorProcess()
     channel = _MacOSAuditChannel(
         path,
         (status.st_dev, status.st_ino),
-        _CollectorProcess(),  # type: ignore[arg-type]
+        collector,  # type: ignore[arg-type]
+        _completed_collector_group(collector),
         handle,
         worker_pid=42,
     )
@@ -931,6 +963,8 @@ def test_macos_missing_post_exit_sentinel_is_telemetry_poison(tmp_path: Path) ->
     class _CollectorProcess:
         """Minimal completed log-stream process fixture."""
 
+        returncode: int | None = -15
+
         def terminate(self) -> None:
             """Accept collector shutdown."""
 
@@ -943,10 +977,12 @@ def test_macos_missing_post_exit_sentinel_is_telemetry_poison(tmp_path: Path) ->
     path = tmp_path / "macos-seatbelt.ndjson"
     handle = path.open("wb")
     status = path.stat()
+    collector = _CollectorProcess()
     channel = _MacOSAuditChannel(
         path,
         (status.st_dev, status.st_ino),
-        _CollectorProcess(),  # type: ignore[arg-type]
+        collector,  # type: ignore[arg-type]
+        _completed_collector_group(collector),
         handle,
         worker_pid=42,
     )

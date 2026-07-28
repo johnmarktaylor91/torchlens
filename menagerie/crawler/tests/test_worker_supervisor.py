@@ -175,6 +175,177 @@ def _detached_lock_holder(
         record_path.unlink(missing_ok=True)
 
 
+def _await_drained_group(pid: int) -> None:
+    """Block until an unreaped child's process group holds no signallable member.
+
+    Parameters
+    ----------
+    pid:
+        Root child PID, which is also its process-group ID.
+    """
+
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        if worker_supervisor_module._live_process_group_members(pid) == ():
+            return
+        time.sleep(0.02)
+    raise AssertionError(f"process group {pid} never drained")
+
+
+def test_teardown_of_a_drained_group_is_benign_and_never_raises() -> None:
+    """A group whose last member is our own zombie is torn down, not an error."""
+
+    child = subprocess.Popen([sys.executable, "-c", "pass"], start_new_session=True)
+    group = worker_supervisor_module.capture_process_group(child)
+    _await_drained_group(child.pid)
+    # The child has exited but this parent has deliberately not reaped it, which is
+    # exactly the state the supervision loop reaches when a worker dies between its
+    # last poll and the force-teardown signal.
+    assert child.returncode is None
+
+    record = worker_supervisor_module._kill_process_group(group)
+
+    assert record.benign is True
+    assert record.outcome in {
+        worker_supervisor_module.PROCESS_GROUP_SIGNALLED,
+        worker_supervisor_module.PROCESS_GROUP_ALREADY_EXITED,
+    }
+    assert record.pid == child.pid
+    assert record.pgid == child.pid
+    child.wait(timeout=5)
+
+
+def test_teardown_signals_a_live_group_and_reports_it() -> None:
+    """A live isolated group is still force-killed exactly as before."""
+
+    child = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(60)"],
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    group = worker_supervisor_module.capture_process_group(child)
+
+    record = worker_supervisor_module._kill_process_group(group)
+
+    assert record.outcome == worker_supervisor_module.PROCESS_GROUP_SIGNALLED
+    assert child.wait(timeout=5) == -signal.SIGKILL
+
+
+def test_teardown_never_signals_a_pid_this_parent_already_reaped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A reaped PID may already belong to a stranger, so it is never signalled."""
+
+    child = subprocess.Popen([sys.executable, "-c", "pass"], start_new_session=True)
+    group = worker_supervisor_module.capture_process_group(child)
+    child.wait(timeout=5)
+    signalled: list[tuple[int, int]] = []
+    monkeypatch.setattr(
+        os,
+        "killpg",
+        lambda pgid, signum: signalled.append((pgid, signum)),
+    )
+
+    record = worker_supervisor_module._kill_process_group(group)
+
+    assert signalled == []
+    assert record.outcome == worker_supervisor_module.PROCESS_GROUP_SKIPPED_REAPED_PID
+    assert record.benign is False
+
+
+def test_teardown_fails_closed_when_the_start_token_changed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A PID whose start token moved is foreign and must not be signalled."""
+
+    child = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(60)"],
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    group = worker_supervisor_module.capture_process_group(child)
+    assert group.start_token is not None
+    monkeypatch.setattr(
+        worker_supervisor_module,
+        "process_start_token",
+        lambda _pid: "ps-lstart:Thu Jan  1 00:00:00 1970",
+    )
+    signalled: list[tuple[int, int]] = []
+    monkeypatch.setattr(
+        os,
+        "killpg",
+        lambda pgid, signum: signalled.append((pgid, signum)),
+    )
+
+    record = worker_supervisor_module._kill_process_group(group)
+
+    assert signalled == []
+    assert record.outcome == worker_supervisor_module.PROCESS_GROUP_SKIPPED_FOREIGN_PID
+    assert record.benign is False
+    assert child.poll() is None
+    child.kill()
+    child.wait(timeout=5)
+
+
+def test_denied_signal_against_live_owned_members_stays_an_anomaly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """EPERM with live members of our own group is recorded, not treated as gone."""
+
+    child = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(60)"],
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    group = worker_supervisor_module.capture_process_group(child)
+
+    def deny(pgid: int, signum: int) -> None:
+        """Simulate a kernel EPERM for the targeted group.
+
+        Parameters
+        ----------
+        pgid, signum:
+            Requested process group and signal.
+        """
+
+        del pgid, signum
+        raise PermissionError(1, "Operation not permitted")
+
+    monkeypatch.setattr(os, "killpg", deny)
+
+    record = worker_supervisor_module._kill_process_group(group)
+
+    assert record.outcome == worker_supervisor_module.PROCESS_GROUP_PERMISSION_DENIED
+    assert record.benign is False
+    assert child.pid in record.survivors
+    child.kill()
+    child.wait(timeout=5)
+
+
+def test_live_process_group_members_excludes_reaped_and_zombie_processes() -> None:
+    """The survivor probe counts only processes that can still receive a signal."""
+
+    live = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(60)"],
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    zombie = subprocess.Popen([sys.executable, "-c", "pass"], start_new_session=True)
+    _await_drained_group(zombie.pid)
+
+    assert worker_supervisor_module._live_process_group_members(live.pid) == (live.pid,)
+    assert worker_supervisor_module._live_process_group_members(zombie.pid) == ()
+    assert zombie.returncode is None
+
+    live.kill()
+    live.wait(timeout=5)
+    zombie.wait(timeout=5)
+
+
 def test_stale_dead_pid_libomp_file_fails_with_bootstrap_diagnostic(tmp_path: Path) -> None:
     """A foreign libomp file for a dead PID produces a discoverable refusal."""
 
