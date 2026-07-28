@@ -90,6 +90,7 @@ from menagerie.crawler.constants import (
     MODEL_SCHEMA_VERSION_V3,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
     AUTHOR_WALL_EXTERNAL_KILL_FACTOR,
+    AUTHOR_WALL_SECONDS_ENV,
     OperationalEventKind,
     OperationalEventStatus,
     author_lane_wall_bound,
@@ -1085,7 +1086,10 @@ def classify_author_exit(
 
 
 def _run_operator_command(
-    argv: Sequence[str], *, timeout_seconds: float
+    argv: Sequence[str],
+    *,
+    timeout_seconds: float,
+    env: Optional[Mapping[str, str]] = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run one operator command in its own process group under a hard wall bound.
 
@@ -1106,6 +1110,13 @@ def _run_operator_command(
         Exact non-shell operator argv.
     timeout_seconds:
         Wall-clock ceiling for the round trip.
+    env:
+        Complete environment for the child, or ``None`` to inherit the driver's.
+        Per-invocation values belong here rather than in the driver's own
+        ``os.environ``: a library function that mutates the process environment
+        leaks into every later caller in that process, so a supervised driver
+        handling one campaign would leave that campaign's values visible to the
+        next one.
 
     Returns
     -------
@@ -1122,6 +1133,7 @@ def _run_operator_command(
     # Argv-only and shell-free, exactly like every other operator invocation in this module.
     process = subprocess.Popen(
         list(argv),
+        env=None if env is None else dict(env),
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -1203,6 +1215,27 @@ class CommandAuthorLane(_AuthorLaneBase):
                 )
         self.stall_bound_seconds = stall_bound_seconds
 
+    def _child_environment(self) -> dict[str, str]:
+        """Return the wrapper's complete environment, carrying this lane's grant.
+
+        The executor is a subprocess that reads its wall grant from the
+        environment, so the grant travels in the CHILD's environment and nowhere
+        else. Writing it into the driver's own ``os.environ`` instead would make
+        one campaign's budget visible to everything that runs later in the same
+        process -- including a supervised driver's next campaign, whose correct
+        configuration the startup guard would then refuse.
+
+        Returns
+        -------
+        dict[str, str]
+            The driver's environment overlaid with the resolved grant.
+        """
+
+        return {
+            **os.environ,
+            AUTHOR_WALL_SECONDS_ENV: repr(float(self.effort_grant.wall_seconds)),
+        }
+
     def _dispatch(
         self,
         *,
@@ -1233,7 +1266,9 @@ class CommandAuthorLane(_AuthorLaneBase):
             else float(self.stall_bound_seconds)
         )
         try:
-            completed = _run_operator_command(argv, timeout_seconds=bound)
+            completed = _run_operator_command(
+                argv, timeout_seconds=bound, env=self._child_environment()
+            )
         except subprocess.TimeoutExpired as exc:
             # Typed and retryable, like every other transport failure this lane classifies.
             # A hung session is stalled infrastructure; burning the model permanently for

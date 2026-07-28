@@ -660,7 +660,7 @@ def _default_driver_factory(args: argparse.Namespace) -> CrawlerDriver:
     # Resolved once, before any lane exists, so a misconfigured budget refuses at
     # startup rather than surfacing as truncated sessions deep into the campaign.
     author_effort_grant = AuthorEffortGrant(
-        wall_seconds=_resolve_and_publish_author_wall(args, config.campaign_id)
+        wall_seconds=_resolve_author_wall(args, config.campaign_id)
     )
     dependencies = DriverDependencies(
         author=(
@@ -999,23 +999,28 @@ def _default_author_concurrency() -> int:
         ) from exc
 
 
-def _resolve_and_publish_author_wall(
+def _resolve_author_wall(
     args: argparse.Namespace, campaign_id: Optional[str]
 ) -> float:
-    """Resolve this campaign's wall grant and publish it to the executor.
+    """Resolve this campaign's authoritative wall grant.
 
     One number governs the whole chain: it is the grant published to the author
     session in its envelope, the grant the executor sizes its own per-session
-    kill from, and the base the lane derives its outer stall bound from. The
-    executor is a subprocess that reads the grant from the environment, so the
-    driver *publishes* it here rather than trusting an operator to have written
-    a matching value into the wrapper command by hand.
+    kill from, and the base the lane derives its outer stall bound from.
 
-    A pre-set environment value that disagrees is a startup failure. Letting it
-    win silently is how a campaign runs a month on a budget nobody configured;
-    the previous incoherence -- a 30-minute lane bound under a 60-minute c3
-    grant -- surfaced only as timeouts at minute 30, blind retries that died the
-    same way, and a corrupted p95.
+    Resolution is a PURE read. The grant reaches the executor through the
+    wrapper subprocess's own ``env=`` (see
+    ``CommandAuthorLane._child_environment``), never by writing the driver's
+    ``os.environ``: a process-wide write is order-dependent and outlives its
+    caller, so one campaign's grant would remain visible to whatever ran next in
+    the same process and this very guard would then refuse a correct
+    configuration.
+
+    An operator-set environment value that disagrees is still a startup failure.
+    Letting it win silently is how a campaign runs a month on a budget nobody
+    configured; the incoherence this guard replaced -- a 30-minute lane bound
+    under a 60-minute c3 grant -- surfaced only as timeouts at minute 30, blind
+    retries that died the same way, and a corrupted p95.
 
     Parameters
     ----------
@@ -1033,7 +1038,7 @@ def _resolve_and_publish_author_wall(
     ------
     OperatorOutageError
         If the override is malformed, or a conflicting grant is already set in
-        the environment.
+        the ambient environment.
     """
 
     try:
@@ -1057,7 +1062,6 @@ def _resolve_and_publish_author_wall(
                 f"config is authoritative; unset the variable or pass "
                 f"--author-wall-seconds {preset:g} so one budget governs the run."
             )
-    os.environ[AUTHOR_WALL_SECONDS_ENV] = repr(grant)
     return grant
 
 
