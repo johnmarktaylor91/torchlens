@@ -78,6 +78,15 @@ _DEAD_OPTIONS = {"--scheduled-wake"}
 _SENSITIVE_EDGE_COUNTS = Counter(
     {
         ("AdmissionEnvironmentMixin._ensure_authors", "dependencies.author.author"): 1,
+        # Reviewed and registered deliberately: the concurrent author wave's commit path
+        # authors INLINE exactly when the pool did not dispatch that item
+        # (``pool.claim(item)`` returned ``None``), which is the documented fallback of the
+        # bounded-degree design. It goes through the same ``_retry_infrastructure_call``
+        # wrapper and ``admission=("author", item)`` boundary as the serial edge above, on
+        # the same single canonical writer thread. This closed set exists so that a NEW
+        # sensitive edge cannot appear without a human deciding it is legitimate -- it stayed
+        # red for four commits and the mid tier is what caught it, which is the check working.
+        ("AdmissionEnvironmentMixin._commit_author_wave", "dependencies.author.author"): 1,
         ("CrawlerDriver._repair_author", "dependencies.author.author"): 1,
         ("CrawlerDriver._repair_author_for_detected_modes", "dependencies.author.author"): 1,
         ("AdmissionEnvironmentMixin._ensure_gates", "dependencies.checker.check_metadata"): 2,
