@@ -112,9 +112,16 @@ def test_success_requires_an_exact_public_primary_link(code: str) -> None:
 
 @pytest.mark.parametrize("code", SUCCESS_CODES)
 def test_success_requires_an_honest_link_status(code: str) -> None:
-    """A success may not carry a link while reporting the mandatory link as unresolved."""
+    """A success may not carry a link while reporting the mandatory link as unresolved.
 
-    with pytest.raises(ReductionError, match="require mandatory_link_status=ok"):
+    The regex here deliberately matches on ``mandatory-link``/``mandatory_link_status`` rather
+    than a full sentence. The two consistency arms were later unified into one message, and the
+    original wording ("require mandatory_link_status=ok") stopped matching even though the
+    behaviour was unchanged -- a test failure that said nothing about correctness. Assert the
+    invariant, not the prose.
+    """
+
+    with pytest.raises(ReductionError, match="mandatory[-_]link"):
         _validate(_record(code, with_source=True, link_status="failed"))
 
 
