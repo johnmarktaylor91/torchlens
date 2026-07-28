@@ -36,6 +36,15 @@ from menagerie.crawler.wakeup import (
 GIB = 1024**3
 
 
+
+#: Freshness bound for the author capability probe. The probe demands three live web
+#: tool calls, a >=800 char document capture, a sha256 over it, and timestamp evidence.
+#: A measured honest run takes ~3-4 minutes, so the original 120s could only be met by a
+#: response that skipped the work. The unfakeable part of this check is the nonce binding,
+#: the digest verification, and the three-way agreement on an unpredictable live value --
+#: this bound exists only to stop a stale receipt being replayed, which it still does.
+AUTHOR_CAPABILITY_PROBE_SECONDS = 900
+
 class DoctorError(RuntimeError):
     """Raised when one or more strict preflight checks fail."""
 
@@ -239,7 +248,7 @@ class SystemDoctorProbes:
             "format": "menagerie.crawler.author-capability-probe.v1",
             "nonce": nonce,
             "requested_at": requested_at.isoformat().replace("+00:00", "Z"),
-            "deadline_seconds": 120,
+            "deadline_seconds": AUTHOR_CAPABILITY_PROBE_SECONDS,
             "required_tools": ["WebSearch", "web_search_exa", "web_fetch_exa"],
             "required_output_path": str(receipt_path.resolve()),
         }
@@ -249,7 +258,7 @@ class SystemDoctorProbes:
         observed_at = datetime.now(timezone.utc)
         if (
             completed.returncode != 0
-            or observed_at > requested_at + timedelta(seconds=120)
+            or observed_at > requested_at + timedelta(seconds=AUTHOR_CAPABILITY_PROBE_SECONDS)
             or not receipt_path.is_file()
         ):
             return frozenset()
@@ -265,7 +274,9 @@ class SystemDoctorProbes:
             )
         except (KeyError, ValueError):
             return frozenset()
-        if not requested_at <= completed_at <= requested_at + timedelta(seconds=120):
+        if not requested_at <= completed_at <= requested_at + timedelta(
+            seconds=AUTHOR_CAPABILITY_PROBE_SECONDS
+        ):
             return frozenset()
         raw_receipts = receipt.get("receipts")
         if not isinstance(raw_receipts, list):
