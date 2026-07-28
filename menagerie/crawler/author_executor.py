@@ -65,6 +65,11 @@ from menagerie.crawler.discovery import (
 )
 from menagerie.crawler.identity import hash_bytes, stable_hash, utc_now
 from menagerie.crawler.models import JsonObject
+from menagerie.crawler.constants import (
+    AUTHOR_WALL_EXTERNAL_KILL_FACTOR,
+    AUTHOR_WALL_SECONDS_ENV,
+    resolve_author_wall_seconds,
+)
 from menagerie.crawler.source_broker import (
     BrokerPack,
     SourceBrokerError,
@@ -142,12 +147,12 @@ def stage_tool_rules(
     rules.append(f"Edit({root}/**)")
     return tuple(rules)
 
-#: Per-campaign wall grants (seconds). c3-classics carries the honest tail.
-DEFAULT_WALL_SECONDS = {"c3-classics": 3600.0}
-DEFAULT_WALL_FALLBACK = 1800.0
 #: The external kill fires at grant +10%; the brief carries the deadline so a
 #: session watching its clock can land a typed ``BLOCKED`` instead of a SIGKILL.
-EXTERNAL_KILL_FACTOR = 1.10
+#: Both this factor and the per-campaign grants are single-sourced in
+#: :mod:`menagerie.crawler.constants` so the driver's lane and this executor can
+#: never disagree about one campaign's budget.
+EXTERNAL_KILL_FACTOR = AUTHOR_WALL_EXTERNAL_KILL_FACTOR
 _KILL_GRACE_SECONDS = 10.0
 
 #: Structured harness signals that mean a provider usage pause. Free-text
@@ -209,7 +214,7 @@ class ExecutorConfig:
 
         raw_bin = os.environ.get("MENAGERIE_AUTHOR_CLAUDE_BIN", "claude")
         command = tuple(shlex.split(raw_bin)) or ("claude",)
-        raw_wall = os.environ.get("MENAGERIE_AUTHOR_WALL_SECONDS")
+        raw_wall = os.environ.get(AUTHOR_WALL_SECONDS_ENV)
         return cls(
             claude_command=command,
             author_model=os.environ.get("MENAGERIE_AUTHOR_MODEL") or None,
@@ -219,11 +224,14 @@ class ExecutorConfig:
         )
 
     def wall_seconds(self) -> float:
-        """Return the campaign wall grant in seconds."""
+        """Return the campaign wall grant in seconds.
 
-        if self.wall_seconds_override is not None:
-            return self.wall_seconds_override
-        return DEFAULT_WALL_SECONDS.get(self.campaign_id or "", DEFAULT_WALL_FALLBACK)
+        Resolution is delegated so this executor and the driver's author lane
+        read one table. A driver-published override always names the exact grant
+        the lane also sized its stall bound from.
+        """
+
+        return resolve_author_wall_seconds(self.campaign_id, self.wall_seconds_override)
 
 
 @dataclass(frozen=True)

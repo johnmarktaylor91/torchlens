@@ -87,6 +87,114 @@ AUTHOR_SESSION_WALL_SECONDS = 30 * 60
 AUTHOR_QUEUE_STALL_SECONDS = 45 * 60
 AUTHOR_QUEUE_POLL_SECONDS = 2.0
 
+# ---------------------------------------------------------------------------
+# The author wall budget, single-sourced (SEAM_REDESIGN 3.7)
+#
+# Wall grants are PER CAMPAIGN, not a global constant: c3-classics carries the
+# no-prior-code classics whose mean session is ~25 min with a long tail, and
+# truncating that tail both loses the models and corrupts the very p95 the
+# month's go/no-go depends on. Everything downstream -- the grant published to
+# the session, the executor's own kill, and the lane's outer stall bound --
+# derives from `resolve_author_wall_seconds` so no lower level can silently
+# impose a stricter number of its own.
+# ---------------------------------------------------------------------------
+
+#: Per-campaign wall grants (seconds). Absent campaigns take the default grant.
+AUTHOR_CAMPAIGN_WALL_SECONDS: dict[str, float] = {"c3-classics": 60.0 * 60.0}
+
+#: The executor SIGKILLs its own `claude -p` child at grant x this factor. The
+#: brief carries the deadline itself, so a session watching its clock lands a
+#: typed BLOCKED-with-partial inside the grant and this only catches the ones
+#: that do not.
+AUTHOR_WALL_EXTERNAL_KILL_FACTOR = 1.10
+
+#: Worst-case number of grant-sized `claude -p` sessions ONE executor invocation
+#: may legitimately run. Stage 2 is the worst case: the primary run (1.0), one
+#: cold rerun after a provider resume failure (1.0), and at most one typed
+#: supplementary broker round at half the grant (0.5). The lane's bound must
+#: clear this, or a stage 2 that legitimately took the cold-rerun path is killed
+#: from outside while still inside its budget. `test_author_wall_budget.py` pins
+#: this against the executor's actual session call sites.
+AUTHOR_EXECUTOR_INVOCATION_SESSION_BUDGET = 2.5
+
+#: Slack for the work an invocation does OUTSIDE its `claude -p` children --
+#: broker fetches, hashing, attempt-record writes, publication.
+AUTHOR_LANE_WALL_MARGIN_SECONDS = 120.0
+
+#: Environment variable carrying the resolved grant to the executor subprocess.
+#: The driver PUBLISHES it from the campaign's authoritative grant rather than
+#: trusting the operator to set it consistently by hand; a pre-set value that
+#: disagrees is a startup failure, never a silent winner.
+AUTHOR_WALL_SECONDS_ENV = "MENAGERIE_AUTHOR_WALL_SECONDS"
+
+
+def resolve_author_wall_seconds(
+    campaign_id: "str | None", override: "float | None" = None
+) -> float:
+    """Return the authoritative wall grant for one campaign, in seconds.
+
+    This is the ONLY place a wall grant is chosen. An explicit operator
+    override wins; otherwise the campaign's own grant; otherwise the default.
+
+    Parameters
+    ----------
+    campaign_id:
+        Tier campaign identity, or ``None`` outside a tier campaign.
+    override:
+        Explicit operator grant, when one was configured.
+
+    Returns
+    -------
+    float
+        Strictly positive wall grant in seconds.
+
+    Raises
+    ------
+    ValueError
+        If an override is not a finite, strictly positive number of seconds.
+    """
+
+    if override is not None:
+        value = float(override)
+        if not value > 0.0 or value != value or value in (float("inf"), float("-inf")):
+            raise ValueError(
+                f"author wall grant must be a finite positive number of seconds, not {override!r}"
+            )
+        return value
+    return float(
+        AUTHOR_CAMPAIGN_WALL_SECONDS.get(campaign_id or "", float(AUTHOR_SESSION_WALL_SECONDS))
+    )
+
+
+def author_lane_wall_bound(grant_seconds: float) -> float:
+    """Return the lane's outer stall bound for a given per-session grant.
+
+    The lane bound is a STALL GUARD, not a budget. The budget is the grant, and
+    the executor enforces it per session; the lane only exists to stop a wedged
+    wrapper blocking the driver forever. It must therefore be strictly greater
+    than every inner limit, or it preempts the typed, recoverable outcomes the
+    inner layers produce -- which is exactly the silent 30-minute truncation
+    this derivation replaced.
+
+    Parameters
+    ----------
+    grant_seconds:
+        Authoritative per-session wall grant.
+
+    Returns
+    -------
+    float
+        Bound covering one invocation's worst-case session budget plus the
+        non-session work around it.
+    """
+
+    return (
+        float(grant_seconds)
+        * AUTHOR_EXECUTOR_INVOCATION_SESSION_BUDGET
+        * AUTHOR_WALL_EXTERNAL_KILL_FACTOR
+        + AUTHOR_LANE_WALL_MARGIN_SECONDS
+    )
+
 # Bounded author-session fan-out per wave. The author lane is ~74% of the campaign's
 # projected work, and a serial lane caps a four-campaign fleet at four concurrent
 # sessions -- below the ~6.2 sustained (~9.5 in flight) the reconciled schedule needs,

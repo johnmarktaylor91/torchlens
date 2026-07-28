@@ -2582,9 +2582,13 @@ def test_a_hung_author_command_is_bounded_retryable_and_leaves_no_orphan(
         "sys.stderr.flush()\n"
         "time.sleep(600)\n"
     )
+    # The stall bound is injected so this exercises the teardown path in seconds.
+    # Production derives it from the grant; `test_author_wall_budget.py` pins that
+    # derivation and refuses any bound that would fire inside the session budget.
     lane = CommandAuthorLane(
         (sys.executable, "-c", wrapper),
         effort_grant=AuthorEffortGrant(wall_seconds=3.0),
+        stall_bound_seconds=4.0,
     )
     root = tmp_path / "hung-author"
     root.mkdir(parents=True, exist_ok=True)
@@ -2603,12 +2607,18 @@ def test_a_hung_author_command_is_bounded_retryable_and_leaves_no_orphan(
         )
     elapsed = time.monotonic() - started
 
-    # Bounded by the published grant rather than running forever ...
+    # Bounded rather than running forever ...
     assert elapsed < 60.0
-    assert "wall grant" in str(raised.value)
+    assert "stall bound" in str(raised.value)
     # ... typed retryable, so the driver retries transport instead of burning the model ...
     assert driver._is_infrastructure_error(raised.value)
-    assert _author_lane_failure(raised.value) == ("source", "identity-unresolved")
+    # ... attributed to the author stage, NOT to the source. A wedged wrapper says
+    # nothing about whether the model's implementation exists, and `failed:source`
+    # asserts that it does not -- burying a model with a perfectly good source
+    # under a status claiming none was found. `session-crashed` is the honest
+    # generic here: `wall-exceeded` belongs to the executor, which types its own
+    # budget overruns from inside, and a hung stub never reports one.
+    assert _author_lane_failure(raised.value) == ("author", "session-crashed")
     # ... and the whole process group is gone, grandchild included.
     grandchild = int(pid_path.read_text(encoding="utf-8"))
     deadline = time.monotonic() + 10.0
@@ -4733,8 +4743,11 @@ def test_author_failure_without_source_is_honest_and_later_models_continue(
         record["stable_id"]: record
         for record in scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
     }
-    assert models[failed_id]["status"]["code"] == "failed:source"
-    assert models[failed_id]["status"]["reason_code"] == "identity-unresolved"
+    # The author session failed; nothing established that the model's source does
+    # not exist, so the failure is owned by the author stage rather than asserting
+    # an unresolved identity.
+    assert models[failed_id]["status"]["code"] == "failed:author"
+    assert models[failed_id]["status"]["reason_code"] == "session-crashed"
     assert sum(record["status"]["code"] == "runs" for record in models.values()) == 19
     assert models[failed_id]["source_resolution"]["sources"] == []
     assert models[failed_id]["source_resolution"]["mandatory_link_status"] == "failed"
@@ -4833,9 +4846,9 @@ def test_author_failure_retains_exact_intake_discovery_url(tmp_path: Path) -> No
     assert result.status == "complete"
     model = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)[-1]
     # The retained discovery URL preserves source provenance, but it does not
-    # turn a failed author/source resolution into a runner observation.
-    assert model["status"]["code"] == "failed:source"
-    assert model["status"]["reason_code"] == "identity-unresolved"
+    # turn a failed author session into a runner observation.
+    assert model["status"]["code"] == "failed:author"
+    assert model["status"]["reason_code"] == "session-crashed"
     assert model["source_resolution"]["mandatory_link_status"] == "ok"
     assert model["source_resolution"]["sources"] == [
         {
@@ -4875,9 +4888,11 @@ def test_mode_normalization_failure_terminalizes_and_continues(tmp_path: Path) -
         for record in scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
     }
     # The v3 result union rejects the malformed mode before it can become a
-    # staged proposal or runner input, so the failure remains author/source-owned.
-    assert models[failed_id]["status"]["code"] == "failed:source"
-    assert models[failed_id]["status"]["reason_code"] == "identity-unresolved"
+    # staged proposal or runner input. The author emitted an invalid result, so
+    # the failure is author-owned; claiming the source could not be identified
+    # would be a fact this run never established.
+    assert models[failed_id]["status"]["code"] == "failed:author"
+    assert models[failed_id]["status"]["reason_code"] == "session-crashed"
     assert sum(record["status"]["code"] == "runs" for record in models.values()) == 9
 
 
