@@ -20,6 +20,23 @@ The tier is a **campaign** property, not a per-model decision. A campaign's
 genuinely hard is emitted as a typed `BLOCKED` result and requeued into `c3-classics`.
 Escalating in place would fail authority validation on the first opus result.
 
+### Two campaign identities -- do not confuse them
+
+Every queue job carries **two** unrelated campaign identities, and only one of them
+selects an author tier:
+
+| on the job | example | what it is |
+|---|---|---|
+| `tier_campaign_id` | `c1-mech` | the **run's** frozen tier campaign; selects the author model and the standards prompt |
+| `repair_campaign_id` (wire key `campaign_id`) | `campaign-m1706` | the driver's **per-item** repair scope / authority lineage; carries no tier information |
+
+The tier is a property of the campaign run, so you configure it once, with
+`--campaign` (or `MENAGERIE_CAMPAIGN_ID`), on both `author_pool` and `operator_author`.
+When a job also declares a tier, the pool cross-checks it and **refuses** on any
+disagreement. A job with no tier from either side is refused too: guessing one would
+author a model under the wrong frozen `author_model_identity` for the whole run, and
+nothing downstream can detect or repair that.
+
 ---
 
 ## 1. Start
@@ -54,8 +71,8 @@ at that moment nothing is servicing the queue.
 
 In the managing Claude session:
 
-1. `$PY -m menagerie.crawler.author_pool --queue "$QUEUE" list` -- confirm the queue is
-   reachable and see what is waiting.
+1. `$PY -m menagerie.crawler.author_pool --queue "$QUEUE" --campaign "$CAMPAIGN" list`
+   -- confirm the queue is reachable and see what is waiting.
 2. Keep that loop running (see section 2).
 
 ### 1.3 Preflight
@@ -129,16 +146,19 @@ four steps.
 **Step 1 -- see what is waiting.**
 
 ```bash
-$PY -m menagerie.crawler.author_pool --queue "$QUEUE" list
+$PY -m menagerie.crawler.author_pool --queue "$QUEUE" --campaign "$CAMPAIGN" list
 ```
 
 Each row carries `job_id`, `kind` (`source-request`, `author`, or `capability-probe`),
-`stable_id`, `campaign_id`, `subagent_model`, and any live lease.
+`stable_id`, `repair_campaign_id`, `tier_campaign_id`, `subagent_model`, and any live
+lease. A row whose tier could not be resolved carries a `tier_error` instead of a
+`subagent_model`; fix the configuration rather than dispatching it.
 
 **Step 2 -- claim and get the brief.**
 
 ```bash
-$PY -m menagerie.crawler.author_pool --queue "$QUEUE" claim --job "$JOB"
+$PY -m menagerie.crawler.author_pool --queue "$QUEUE" --campaign "$CAMPAIGN" \
+  claim --job "$JOB"
 ```
 
 This writes a lease and prints JSON containing `claimed_at`, `deadline_at`,
@@ -158,7 +178,7 @@ is the whole cost this architecture exists to avoid.
 **Step 4 -- commit the answer.**
 
 ```bash
-$PY -m menagerie.crawler.author_pool --queue "$QUEUE" complete \
+$PY -m menagerie.crawler.author_pool --queue "$QUEUE" --campaign "$CAMPAIGN" complete \
   --job "$JOB" --claimed-at "$CLAIMED_AT" --tool-calls "$OBSERVED_TOOL_CALLS"
 ```
 
@@ -172,7 +192,8 @@ produces is requeued, whereas a false receipt corrupts the effort ledger for the
 For long sessions, extend the lease so another servicer does not take the job:
 
 ```bash
-$PY -m menagerie.crawler.author_pool --queue "$QUEUE" renew --job "$JOB"
+$PY -m menagerie.crawler.author_pool --queue "$QUEUE" --campaign "$CAMPAIGN" \
+  renew --job "$JOB"
 ```
 
 ### Handling a bad outcome

@@ -41,6 +41,7 @@ from menagerie.crawler.constants import (
     DEFAULT_NOTIFY_COMMAND,
     DEFAULT_PROGRESS_MILESTONES,
     DEFAULT_REVIEW_CHECKPOINT_AT,
+    TIER_CAMPAIGN_IDS,
     InvocationOrigin,
 )
 from menagerie.crawler.envs import (
@@ -265,6 +266,10 @@ class DriverConfig:
     checker_version: str = "current"
     only_status: Optional[str] = None
     campaign_config_path: Optional[Path] = None
+    #: Frozen partitioner TIER campaign this run belongs to (``c1-mech`` ... ``c4-native``),
+    #: or ``None`` when the run is not bound to one. This is the run's author-tier
+    #: identity. It is NOT the per-item repair scope produced by
+    #: :func:`_campaign_id_for_item`, which is ``campaign-<stable_id>`` and is per model.
     campaign_id: Optional[str] = None
     author_queue_root: Optional[Path] = None
     run_repair_max: int = 2
@@ -297,6 +302,13 @@ class DriverConfig:
             raise ValueError("campaign_config_path must be absolute")
         if self.campaign_id is not None and not self.campaign_id:
             raise ValueError("campaign_id cannot be empty")
+        if self.campaign_id is not None and self.campaign_id not in TIER_CAMPAIGN_IDS:
+            # A per-item repair scope reaching this field would be published to the author
+            # queue as the run's tier and would select the wrong frozen author model.
+            raise ValueError(
+                f"campaign_id must name a frozen tier campaign {sorted(TIER_CAMPAIGN_IDS)}, "
+                f"not {self.campaign_id!r}"
+            )
         if self.author_queue_root is not None and not self.author_queue_root.is_absolute():
             raise ValueError("author_queue_root must be absolute")
         if not isinstance(self.invocation_origin, InvocationOrigin):
@@ -354,7 +366,14 @@ class WorkItem:
 
 
 def _campaign_id_for_item(item: WorkItem) -> str:
-    """Return the bounded repair campaign rooted at the active work generation."""
+    """Return the bounded repair campaign rooted at the active work generation.
+
+    This is a per-ITEM authority lineage (``campaign-<stable_id>``, or
+    ``campaign-<work_id>`` for a requeue/refresh) -- the value the author envelopes carry
+    as ``campaign_id`` and the ledgers record as ``campaign_root_work_id``. It is
+    unrelated to :attr:`DriverConfig.campaign_id`, the run's frozen partitioner TIER
+    campaign, and it must never be used to select an author model or prompt.
+    """
 
     if item.requeue_work_id is not None or item.refresh_work_id is not None:
         return f"campaign-{item.active_work_id}"

@@ -29,6 +29,26 @@ to prose:
    refuses a failure sidecar without an explicit boolean ``retryable``. Those refusals are
    what convert a prompt instruction into something the engine can hold the pool to, so
    the builders here require both rather than defaulting them.
+
+Two campaign identities, never one
+----------------------------------
+A job descriptor carries **two** unrelated campaign identities, and conflating them
+authors a model under the wrong frozen author tier:
+
+``campaign_id`` (``QueueJob.repair_campaign_id``)
+    The driver's per-item **repair scope**, ``campaign-<stable_id>`` or
+    ``campaign-<work_id>`` for a requeue/refresh. It is the same value the driver records
+    downstream as ``campaign_root_work_id``, and it is what the author request and result
+    envelopes carry under their own ``campaign_id`` key. It is per *item*, unbounded in
+    cardinality, and says nothing about which model should author the job.
+
+``tier_campaign_id`` (``QueueJob.tier_campaign_id``)
+    One of the four frozen partitioner campaigns (``c1-mech``, ``c2-disco``,
+    ``c3-classics``, ``c4-native``). It is a property of the campaign *run* and it selects
+    the frozen author model and the campaign standards prompt.
+    :func:`build_job_descriptor` refuses to publish one outside the closed vocabulary. It
+    may be absent from the descriptor, in which case the servicing operator supplies it
+    from its own configuration; it may never be *guessed*.
 """
 
 from __future__ import annotations
@@ -42,6 +62,7 @@ from menagerie.crawler.constants import (
     AUTHOR_MAX_FETCH_TARGETS,
     AUTHOR_MAX_TOOL_CALLS,
     AUTHOR_SESSION_WALL_SECONDS,
+    TIER_CAMPAIGN_IDS,
     USAGE_LIMIT_PROVIDERS,
 )
 from menagerie.crawler.identity import (
@@ -230,8 +251,18 @@ class QueueJob:
     job_id, attempt_nonce, kind:
         Job identity, the per-attempt nonce every pool file must echo, and the round-trip
         label.
-    stable_id, work_id, campaign_id, author_model:
-        Model, work generation, campaign, and the campaign's frozen author model.
+    stable_id, work_id:
+        Model identity and the exact scheduled work generation.
+    repair_campaign_id:
+        The driver's per-item repair scope (wire key ``campaign_id``):
+        ``campaign-<stable_id>``, or ``campaign-<work_id>`` for a requeue/refresh. Lineage
+        only. **Never** an author-tier selector -- see the module docstring.
+    tier_campaign_id:
+        The frozen partitioner tier campaign this job belongs to (``c1-mech``,
+        ``c2-disco``, ``c3-classics``, ``c4-native``), or ``None`` when the producer did
+        not bind one and the servicing operator must supply it from its own configuration.
+    author_model:
+        The tier campaign's frozen author model, when the producer knew it.
     request_path, request_sha256:
         Absolute request envelope path and its exact digest.
     required_output_path:
@@ -253,7 +284,8 @@ class QueueJob:
     kind: str
     stable_id: str
     work_id: str
-    campaign_id: Optional[str]
+    repair_campaign_id: Optional[str]
+    tier_campaign_id: Optional[str]
     author_model: Optional[str]
     request_path: Path
     request_sha256: str
@@ -322,7 +354,13 @@ class QueueJob:
             if not path.is_absolute():
                 raise AuthorQueueError(f"author job {name} must be absolute: {path}")
             paths[name] = path
-        campaign = value.get("campaign_id")
+        repair_campaign = value.get("campaign_id")
+        # A bad tier is deliberately NOT a parse error: parse failures make a pending job
+        # invisible to the pool's ``list``, and an invisible job is the one failure mode
+        # an operator cannot act on. Publishing one is refused in ``build_job_descriptor``
+        # and acting on one is refused in ``author_pool.resolve_tier_campaign``, so it
+        # stays visible and loud rather than silently vanishing.
+        tier_campaign = value.get("tier_campaign_id")
         model = value.get("author_model")
         return cls(
             job_id=str(value["job_id"]),
@@ -330,7 +368,8 @@ class QueueJob:
             kind=kind,
             stable_id=str(value["stable_id"]),
             work_id=str(value["work_id"]),
-            campaign_id=None if campaign is None else str(campaign),
+            repair_campaign_id=None if repair_campaign is None else str(repair_campaign),
+            tier_campaign_id=None if tier_campaign is None else str(tier_campaign),
             author_model=None if model is None else str(model),
             request_path=paths["request_path"],
             request_sha256=str(value["request_sha256"]),
@@ -472,7 +511,8 @@ def build_job_descriptor(
     stall_timeout_seconds: float,
     attempt_nonce: str,
     author_model: Optional[str],
-    campaign_id: Optional[str],
+    repair_campaign_id: Optional[str],
+    tier_campaign_id: Optional[str] = None,
     enqueued_at: str,
 ) -> JsonObject:
     """Build the canonical pending-job wire payload.
@@ -491,8 +531,15 @@ def build_job_descriptor(
         Outer lane deadline.
     attempt_nonce:
         Per-attempt nonce every pool-published file must echo.
-    author_model, campaign_id:
-        Frozen campaign bindings when available.
+    author_model:
+        The tier campaign's frozen author model, when the producer knows it.
+    repair_campaign_id:
+        The producer's per-item repair scope, published under the wire key
+        ``campaign_id``. Lineage only; it never selects an author tier.
+    tier_campaign_id:
+        The frozen partitioner tier campaign, when the producer is bound to one. Absent
+        means the servicing operator supplies it from its own configuration -- it is
+        never inferred from ``repair_campaign_id``.
     enqueued_at:
         Lane-side enqueue timestamp.
 
@@ -500,8 +547,18 @@ def build_job_descriptor(
     -------
     dict[str, Any]
         Complete descriptor including its self-check digest.
+
+    Raises
+    ------
+    AuthorQueueError
+        When ``tier_campaign_id`` is outside the closed partitioner vocabulary.
     """
 
+    if tier_campaign_id is not None and tier_campaign_id not in TIER_CAMPAIGN_IDS:
+        raise AuthorQueueError(
+            f"author job names an unknown tier campaign {tier_campaign_id!r}; expected "
+            f"one of {sorted(TIER_CAMPAIGN_IDS)}"
+        )
     resolved_request_path = Path(request_path).resolve()
     request_sha256 = hash_bytes(resolved_request_path.read_bytes())
     job_id = author_job_id(kind, work_id, request_sha256)
@@ -514,7 +571,8 @@ def build_job_descriptor(
         "stable_id": stable_id,
         "work_id": work_id,
         "author_model": author_model,
-        "campaign_id": campaign_id,
+        "campaign_id": repair_campaign_id,
+        "tier_campaign_id": tier_campaign_id,
         "request_path": str(resolved_request_path),
         "request_sha256": request_sha256,
         "required_output_path": str(Path(required_output_path).resolve()),

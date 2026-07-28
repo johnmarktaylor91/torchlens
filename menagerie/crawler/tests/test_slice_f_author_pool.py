@@ -32,6 +32,7 @@ from menagerie.crawler.author_queue import (
     QueueJob,
     author_queue_directories,
     build_failure,
+    build_job_descriptor,
     build_receipt,
     job_paths,
     read_json,
@@ -65,6 +66,17 @@ REQUESTED_AT = datetime(2026, 7, 27, 12, 0, 0, tzinfo=timezone.utc)
 # -- fixtures --------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _unbound_tier_campaign(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unbind the ambient tier campaign so every test states its own.
+
+    The pool falls back to ``MENAGERIE_CAMPAIGN_ID``; an operator shell that exports it
+    would otherwise silently supply (or contradict) the tier a test is asserting about.
+    """
+
+    monkeypatch.delenv(pool_module.TIER_CAMPAIGN_ENV, raising=False)
+
+
 def _write_request(root: Path, payload: dict[str, Any]) -> Path:
     """Write one request envelope and return its path.
 
@@ -89,7 +101,9 @@ def _enqueue(
     queue_root: Path,
     *,
     kind: str = "author",
-    campaign_id: str = "c1-mech",
+    tier_campaign_id: Optional[str] = "c1-mech",
+    repair_campaign_id: str = "campaign-m1",
+    author_model: Optional[str] = None,
     request: Optional[dict[str, Any]] = None,
     grant: Optional[EffortGrant] = None,
     nonce: str = "nonce-1",
@@ -98,8 +112,15 @@ def _enqueue(
 
     Parameters
     ----------
-    queue_root, kind, campaign_id, request, grant, nonce:
-        Queue root, round-trip label, campaign, request body, grant, and attempt nonce.
+    queue_root, kind, request, grant, nonce:
+        Queue root, round-trip label, request body, grant, and attempt nonce.
+    tier_campaign_id:
+        Frozen tier campaign bound on the descriptor, or ``None`` for a descriptor that
+        leaves the tier to the servicing operator.
+    repair_campaign_id:
+        The driver's per-item repair scope, exactly as ``_campaign_id_for_item`` emits it.
+    author_model:
+        Author model recorded on the descriptor; defaults to the tier's frozen model.
 
     Returns
     -------
@@ -113,7 +134,7 @@ def _enqueue(
         "envelope_version": "menagerie.crawler.author-envelope.v3",
         "work_id": "work-m1",
         "stable_id": "m1",
-        "campaign_id": campaign_id,
+        "campaign_id": repair_campaign_id,
         "required_output_path": str(output_path),
     }
     request_path = _write_request(work_root, body)
@@ -127,8 +148,13 @@ def _enqueue(
         "kind": kind,
         "stable_id": str(body.get("stable_id", "probe")),
         "work_id": str(body.get("work_id", "work-probe")),
-        "author_model": CAMPAIGN_AUTHOR_MODELS.get(campaign_id),
-        "campaign_id": campaign_id,
+        "author_model": (
+            author_model
+            if author_model is not None
+            else CAMPAIGN_AUTHOR_MODELS.get(tier_campaign_id or "")
+        ),
+        "campaign_id": body.get("campaign_id"),
+        "tier_campaign_id": tier_campaign_id,
         "request_path": str(request_path.resolve()),
         "request_sha256": hash_bytes(request_path.read_bytes()),
         "required_output_path": str(Path(str(body["required_output_path"])).resolve()),
@@ -447,25 +473,178 @@ def test_usage_limit_text_becomes_a_pause_not_a_model_failure(tmp_path: Path) ->
 # -- dispatch briefs -------------------------------------------------------
 
 
-@pytest.mark.parametrize("campaign_id", sorted(CAMPAIGN_AUTHOR_MODELS))
-def test_every_campaign_has_a_bound_prompt_and_tier(tmp_path: Path, campaign_id: str) -> None:
+@pytest.mark.parametrize("tier_campaign_id", sorted(CAMPAIGN_AUTHOR_MODELS))
+def test_every_campaign_has_a_bound_prompt_and_tier(
+    tmp_path: Path, tier_campaign_id: str
+) -> None:
     """Tier is a campaign property; a missing prompt must fail loudly, not default."""
 
-    job = _enqueue(tmp_path / "queue", campaign_id=campaign_id)
+    job = _enqueue(tmp_path / "queue", tier_campaign_id=tier_campaign_id)
     brief = render_dispatch_brief(job)
-    assert campaign_id in brief
+    assert tier_campaign_id in brief
     assert str(job.required_output_path) in brief
     pool = AuthorPool(tmp_path / "queue", owner="s")
-    expected = "opus" if campaign_id == "c3-classics" else "sonnet"
+    expected = "opus" if tier_campaign_id == "c3-classics" else "sonnet"
     assert pool.subagent_model(job) == expected
+
+
+def test_the_frozen_tier_author_models_are_the_partitioner_bindings() -> None:
+    """The pool's tier table and the partitioner's campaign specs cannot drift apart."""
+
+    from menagerie.crawler.partitioner import CAMPAIGN_SPECS
+
+    assert CAMPAIGN_AUTHOR_MODELS == {
+        "c1-mech": "claude-sonnet",
+        "c2-disco": "claude-sonnet",
+        "c3-classics": "claude-opus-5",
+        "c4-native": "claude-sonnet",
+    }
+    assert CAMPAIGN_AUTHOR_MODELS == {
+        spec.campaign_id: spec.author_model for spec in CAMPAIGN_SPECS
+    }
 
 
 def test_an_unknown_campaign_is_refused_rather_than_guessed(tmp_path: Path) -> None:
     """Guessing a campaign would author a hard model with the wrong tier and standards."""
 
-    job = _enqueue(tmp_path / "queue", campaign_id="c9-unknown")
-    with pytest.raises(AuthorPoolError, match="unknown campaign"):
+    queue_root = tmp_path / "queue"
+    # No producer can publish an unknown tier ...
+    with pytest.raises(AuthorQueueError, match="unknown tier campaign"):
+        build_job_descriptor(
+            queue_root=queue_root,
+            kind="author",
+            stable_id="m1",
+            work_id="work-m1",
+            request_path=_write_request(tmp_path / "work", {"nonce": "n"}),
+            required_output_path=tmp_path / "work" / "result.json",
+            effort_grant=DEFAULT_EFFORT_GRANT,
+            stall_timeout_seconds=2700.0,
+            attempt_nonce="n1",
+            author_model=None,
+            repair_campaign_id="campaign-m1",
+            tier_campaign_id="c9-unknown",
+            enqueued_at="2026-07-27T12:00:00Z",
+        )
+    # ... and one that reached the queue anyway stays visible but is never acted on.
+    job = _enqueue(queue_root, tier_campaign_id="c9-unknown", author_model=None)
+    assert pool_module.AuthorPool(queue_root, owner="s").pending()[0].job_id == job.job_id
+    with pytest.raises(AuthorPoolError, match="unknown tier campaign"):
         render_dispatch_brief(job)
+    with pytest.raises(AuthorPoolError, match="unknown tier campaign"):
+        pool_module.campaign_prompt_name("c9-unknown")
+
+
+# -- repair scope is not a tier -------------------------------------------
+
+
+def test_a_per_item_repair_scope_is_serviceable_under_a_configured_tier(
+    tmp_path: Path,
+) -> None:
+    """The driver's ``campaign-<stable_id>`` scope is lineage, never an author tier.
+
+    Regression for the first real run: the driver publishes a per-item repair scope and
+    the pool read it as a tier campaign, refusing every job with "unknown campaign
+    'campaign-m1706'".
+    """
+
+    queue_root = tmp_path / "queue"
+    job = _enqueue(
+        queue_root,
+        tier_campaign_id=None,
+        repair_campaign_id="campaign-m1706",
+        author_model=None,
+    )
+    assert job.repair_campaign_id == "campaign-m1706"
+    assert job.tier_campaign_id is None
+
+    pool = AuthorPool(queue_root, owner="s", tier_campaign_id="c1-mech")
+    claimed = pool.claim(job.job_id)
+    assert pool.tier_campaign(job) == "c1-mech"
+    assert pool.subagent_model(job) == "sonnet"
+    brief = pool.brief(job, claimed=claimed)
+    assert "c1-mech" in brief
+    assert "campaign-m1706" in brief
+
+    exit_code = pool_module.main(
+        [
+            "--queue",
+            str(queue_root),
+            "--owner",
+            "test",
+            "--campaign",
+            "c1-mech",
+            "claim",
+            "--job",
+            job.job_id,
+            "--force",
+        ]
+    )
+    assert exit_code == 0
+
+
+def test_a_job_with_no_tier_anywhere_is_refused_not_defaulted(tmp_path: Path) -> None:
+    """An absent tier must stop the dispatch; defaulting one is a silent tier swap."""
+
+    queue_root = tmp_path / "queue"
+    job = _enqueue(queue_root, tier_campaign_id=None, author_model=None)
+    pool = AuthorPool(queue_root, owner="s", tier_campaign_id=None)
+    with pytest.raises(AuthorPoolError, match="names no tier campaign"):
+        pool.subagent_model(job)
+    with pytest.raises(AuthorPoolError, match="names no tier campaign"):
+        pool.brief(job)
+    # And no lease is parked on a job this session could never brief.
+    with pytest.raises(AuthorPoolError, match="names no tier campaign"):
+        pool.claim(job.job_id)
+    assert not job.claim_path.exists()
+
+
+def test_an_unknown_configured_tier_is_refused(tmp_path: Path) -> None:
+    """A typo in ``--campaign`` must fail loudly rather than fall through to sonnet."""
+
+    with pytest.raises(AuthorPoolError, match="not one of"):
+        AuthorPool(tmp_path / "queue", owner="s", tier_campaign_id="c9-unknown")
+
+
+def test_a_descriptor_tier_that_contradicts_the_pool_is_refused(tmp_path: Path) -> None:
+    """Servicing another campaign's job would author it under the wrong frozen identity."""
+
+    queue_root = tmp_path / "queue"
+    job = _enqueue(queue_root, tier_campaign_id="c3-classics")
+    pool = AuthorPool(queue_root, owner="s", tier_campaign_id="c1-mech")
+    with pytest.raises(AuthorPoolError, match="wrong frozen author identity"):
+        pool.subagent_model(job)
+
+
+def test_a_declared_author_model_must_match_the_frozen_tier(tmp_path: Path) -> None:
+    """Producer and pool disagreeing on the author model is never a coin flip."""
+
+    queue_root = tmp_path / "queue"
+    job = _enqueue(
+        queue_root, tier_campaign_id="c3-classics", author_model="claude-sonnet"
+    )
+    pool = AuthorPool(queue_root, owner="s")
+    with pytest.raises(AuthorPoolError, match="frozen to 'claude-opus-5'"):
+        pool.subagent_model(job)
+
+
+def test_listing_reports_both_identities_and_never_hides_a_tier_failure(
+    tmp_path: Path,
+) -> None:
+    """``list`` stays usable, but an unresolvable tier is visible on the row."""
+
+    queue_root = tmp_path / "queue"
+    job = _enqueue(
+        queue_root,
+        tier_campaign_id=None,
+        repair_campaign_id="campaign-m1706",
+        author_model=None,
+    )
+    pool = AuthorPool(queue_root, owner="s", tier_campaign_id=None)
+    row = pool_module._job_summary(pool, job)
+    assert row["repair_campaign_id"] == "campaign-m1706"
+    assert row["tier_campaign_id"] is None
+    assert row["subagent_model"] is None
+    assert "names no tier campaign" in str(row["tier_error"])
 
 
 def test_capability_probe_brief_states_the_nonce_derived_challenge(tmp_path: Path) -> None:
@@ -790,7 +969,7 @@ def test_author_wrapper_enqueues_and_reports_the_pool_answer(tmp_path: Path) -> 
             "envelope_version": "menagerie.crawler.author-envelope.v3",
             "work_id": "work-m1",
             "stable_id": "m1",
-            "campaign_id": "c1-mech",
+            "campaign_id": "campaign-m1",
             "required_output_path": str(output),
         },
     )
@@ -801,8 +980,11 @@ def test_author_wrapper_enqueues_and_reports_the_pool_answer(tmp_path: Path) -> 
 
         if answered:
             return
-        pool = AuthorPool(queue_root, owner="s")
+        pool = AuthorPool(queue_root, owner="s", tier_campaign_id="c1-mech")
         job = pool.pending()[0]
+        answered["repair_campaign_id"] = job.repair_campaign_id
+        answered["tier_campaign_id"] = job.tier_campaign_id
+        answered["subagent_model"] = pool.subagent_model(job)
         claimed = pool.claim(job.job_id)
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(json.dumps({"kind": "PROPOSED"}), encoding="utf-8")
@@ -813,11 +995,41 @@ def test_author_wrapper_enqueues_and_reports_the_pool_answer(tmp_path: Path) -> 
     code, detail = operator_author.serve_request(
         request,
         queue_root=queue_root,
+        tier_campaign_id="c1-mech",
         monotonic=lambda: next(ticks),
         sleep=fake_sleep,
     )
     assert code == 0, detail
-    assert answered
+    # ``--campaign`` binds the run's tier; the envelope's ``campaign_id`` stays the
+    # per-item repair scope. Overwriting one with the other is the collision this fixes.
+    assert answered["repair_campaign_id"] == "campaign-m1"
+    assert answered["tier_campaign_id"] == "c1-mech"
+    assert answered["subagent_model"] == "sonnet"
+
+
+def test_author_wrapper_refuses_an_unknown_tier_campaign(tmp_path: Path) -> None:
+    """A mistyped ``--campaign`` must not reach the queue as a frozen tier."""
+
+    request = _write_request(
+        tmp_path / "work",
+        {
+            "envelope_version": "menagerie.crawler.author-envelope.v3",
+            "work_id": "work-m1",
+            "stable_id": "m1",
+            "campaign_id": "campaign-m1",
+            "required_output_path": str(tmp_path / "work" / "result.json"),
+        },
+    )
+    code = operator_author.main(
+        [
+            "--queue",
+            str(tmp_path / "queue"),
+            "--campaign",
+            "campaign-m1706",
+            str(request),
+        ]
+    )
+    assert code == operator_author.EXIT_UNAVAILABLE
 
 
 def test_author_wrapper_maps_a_backoff_to_the_quota_exit_code(tmp_path: Path) -> None:

@@ -945,7 +945,12 @@ class QueueAuthorLane(_AuthorLaneBase):
             stall_timeout_seconds=self.stall_timeout_seconds,
             attempt_nonce=self._nonce_factory(),
             author_model=None if config is None else config.author_model,
-            campaign_id=_campaign_id_for_item(item),
+            # Two distinct identities, never one. The repair scope is this item's bounded
+            # authority lineage (``campaign-<stable_id>``); the tier campaign is the run's
+            # frozen partitioner campaign, which is what selects the pool's author model
+            # and standards prompt.
+            repair_campaign_id=_campaign_id_for_item(item),
+            tier_campaign_id=None if config is None else config.campaign_id,
             enqueued_at=self._clock(),
         )
         job = author_queue.QueueJob.from_mapping(descriptor)

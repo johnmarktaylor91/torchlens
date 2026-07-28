@@ -50,6 +50,7 @@ from menagerie.crawler.author_queue import (
     write_json_atomic,
 )
 from menagerie.crawler.capability_probe import CAPABILITY_PROBE_FORMAT
+from menagerie.crawler.constants import TIER_CAMPAIGN_ENV, TIER_CAMPAIGN_IDS
 from menagerie.crawler.identity import utc_now
 from menagerie.crawler.models import JsonObject
 
@@ -110,7 +111,7 @@ def build_job_descriptor(
     stall_timeout_seconds: float,
     attempt_nonce: Optional[str] = None,
     author_model: Optional[str] = None,
-    campaign_id: Optional[str] = None,
+    tier_campaign_id: Optional[str] = None,
 ) -> JsonObject:
     """Build the pending descriptor for one request.
 
@@ -131,8 +132,12 @@ def build_job_descriptor(
         Outer deadline published to the pool.
     attempt_nonce:
         Per-attempt nonce; generated when absent.
-    author_model, campaign_id:
-        Campaign bindings, defaulted from the envelope or the environment.
+    author_model:
+        The tier campaign's frozen author model, when configured.
+    tier_campaign_id:
+        Frozen tier campaign this wrapper serves (``--campaign``). It is the run's tier
+        and is published on its own descriptor key; it never overwrites the envelope's
+        ``campaign_id``, which is the driver's per-item repair scope.
 
     Returns
     -------
@@ -142,13 +147,19 @@ def build_job_descriptor(
     Raises
     ------
     OperatorAuthorError
-        When the request names no output path.
+        When the request names no output path, or when the configured tier campaign is
+        outside the partitioner's closed four.
     """
 
     kind = classify_request(request)
     output = request.get("required_output_path")
     if not output:
         raise OperatorAuthorError("author request names no required_output_path")
+    if tier_campaign_id is not None and tier_campaign_id not in TIER_CAMPAIGN_IDS:
+        raise OperatorAuthorError(
+            f"configured tier campaign {tier_campaign_id!r} is not one of "
+            f"{sorted(TIER_CAMPAIGN_IDS)}"
+        )
     nonce = str(request.get("nonce", ""))
     stable_id = str(request.get("stable_id") or f"capability-probe-{nonce[:16]}")
     work_id = str(request.get("work_id") or f"probe-{nonce[:16]}")
@@ -163,7 +174,16 @@ def build_job_descriptor(
         stall_timeout_seconds=stall_timeout_seconds,
         attempt_nonce=attempt_nonce or uuid.uuid4().hex,
         author_model=author_model,
-        campaign_id=campaign_id or request.get("campaign_id"),
+        # The envelope's ``campaign_id`` is the driver's per-item repair scope and is the
+        # only thing that may fill this slot. The wrapper's ``--campaign`` is the run's
+        # frozen tier and travels on its own key; letting it overwrite the repair scope is
+        # exactly the conflation that made the pool read a tier out of a repair lineage.
+        repair_campaign_id=(
+            None
+            if request.get("campaign_id") is None
+            else str(request.get("campaign_id"))
+        ),
+        tier_campaign_id=tier_campaign_id,
         enqueued_at=utc_now(),
     )
 
@@ -247,7 +267,7 @@ def serve_request(
     stall_seconds: float = DEFAULT_STALL_SECONDS,
     poll_seconds: float = DEFAULT_POLL_SECONDS,
     author_model: Optional[str] = None,
-    campaign_id: Optional[str] = None,
+    tier_campaign_id: Optional[str] = None,
     monotonic: Any = time.monotonic,
     sleep: Any = time.sleep,
 ) -> tuple[int, str]:
@@ -263,8 +283,9 @@ def serve_request(
         Per-session budget; defaults to the LP-13.2 ceiling.
     stall_seconds, poll_seconds:
         Outer deadline and polling cadence.
-    author_model, campaign_id:
-        Campaign bindings recorded on the job.
+    author_model, tier_campaign_id:
+        Frozen tier-campaign bindings recorded on the job. The job's per-item repair scope
+        comes from the request envelope and is never taken from here.
     monotonic, sleep:
         Injectable time sources.
 
@@ -285,7 +306,7 @@ def serve_request(
         effort_grant=effort_grant or DEFAULT_EFFORT_GRANT,
         stall_timeout_seconds=stall_seconds,
         author_model=author_model,
-        campaign_id=campaign_id,
+        tier_campaign_id=tier_campaign_id,
     )
     job = QueueJob.from_mapping(descriptor)
     if job.kind == "capability-probe":
@@ -357,8 +378,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="store_true", help="print the wrapper version")
     parser.add_argument("--queue", default=None, help="campaign author-queue root")
-    parser.add_argument("--campaign", default=None, help="campaign identity recorded on jobs")
-    parser.add_argument("--author-model", default=None, help="campaign author model")
+    parser.add_argument(
+        "--campaign",
+        dest="tier_campaign_id",
+        default=None,
+        help=(
+            "frozen tier campaign this wrapper serves, one of "
+            f"{sorted(TIER_CAMPAIGN_IDS)}; defaults to {TIER_CAMPAIGN_ENV}. Recorded as "
+            "the job's tier_campaign_id; the job's per-item repair scope always comes "
+            "from the request envelope"
+        ),
+    )
+    parser.add_argument("--author-model", default=None, help="tier campaign author model")
     parser.add_argument(
         "--stall-seconds", type=float, default=DEFAULT_STALL_SECONDS, help="outer deadline"
     )
@@ -398,7 +429,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             stall_seconds=args.stall_seconds,
             poll_seconds=args.poll_seconds,
             author_model=args.author_model or os.environ.get("MENAGERIE_AUTHOR_MODEL"),
-            campaign_id=args.campaign or os.environ.get("MENAGERIE_CAMPAIGN_ID"),
+            tier_campaign_id=args.tier_campaign_id or os.environ.get(TIER_CAMPAIGN_ENV),
         )
     except (OperatorAuthorError, AuthorQueueError) as exc:
         print(f"author operator error: {exc}", file=sys.stderr)
@@ -411,15 +442,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     return code
 
 
-def wrapper_command(queue_root: Path, *, campaign_id: Optional[str] = None) -> str:
+def wrapper_command(queue_root: Path, *, tier_campaign_id: Optional[str] = None) -> str:
     """Return the shell-quoted command the operator should export.
 
     Parameters
     ----------
     queue_root:
         Campaign-local author-queue root.
-    campaign_id:
-        Campaign identity to bind.
+    tier_campaign_id:
+        Frozen tier campaign to bind.
 
     Returns
     -------
@@ -428,8 +459,8 @@ def wrapper_command(queue_root: Path, *, campaign_id: Optional[str] = None) -> s
     """
 
     argv = [sys.executable, "-m", "menagerie.crawler.operator_author", "--queue", str(queue_root)]
-    if campaign_id:
-        argv.extend(["--campaign", campaign_id])
+    if tier_campaign_id:
+        argv.extend(["--campaign", tier_campaign_id])
     return shlex.join(argv)
 
 

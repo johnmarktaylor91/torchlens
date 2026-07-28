@@ -89,6 +89,28 @@ AUTHOR_QUEUE_POLL_SECONDS = 2.0
 # layer. The checker lane pauses on `openai`, the author lane on `anthropic`.
 USAGE_LIMIT_PROVIDERS = frozenset({"anthropic", "openai"})
 
+# The four frozen TIER campaigns the partitioner emits, each bound to its frozen
+# author model. This is deliberately NOT the same concept as a *repair* campaign
+# (`campaign-<stable_id>` / `campaign-<work_id>`), which is the driver's per-item
+# authority lineage. A tier campaign is a property of the whole campaign run: its
+# `author_model_identity` is frozen for the run, so a model a sonnet campaign finds
+# genuinely hard is emitted as a typed BLOCKED recommendation and requeued into the
+# opus campaign, never escalated in place. Mixing the two identities up would author
+# a model with the wrong tier and corrupt the frozen identity for the whole run, so
+# every boundary that selects an author tier validates against this closed set.
+# `menagerie.crawler.partitioner.CAMPAIGN_SPECS` carries the same binding for the
+# partitioner's own purposes; the two are asserted to agree in the test suite.
+TIER_CAMPAIGN_AUTHOR_MODELS: dict[str, str] = {
+    "c1-mech": "claude-sonnet",
+    "c2-disco": "claude-sonnet",
+    "c3-classics": "claude-opus-5",
+    "c4-native": "claude-sonnet",
+}
+TIER_CAMPAIGN_IDS = frozenset(TIER_CAMPAIGN_AUTHOR_MODELS)
+
+#: Environment variable naming the tier campaign this operator process serves.
+TIER_CAMPAIGN_ENV = "MENAGERIE_CAMPAIGN_ID"
+
 
 class StrEnum(str, Enum):
     """String-valued enum compatible with all supported Python versions."""
