@@ -686,11 +686,25 @@ completed machine facts deterministically and detects conflicting current revisi
 
 ## 18. Frozen agent prompt identities
 
-The prompt files are authoritative runtime inputs. These independently pinned literal digests are the
-committed drift oracle checked by `python -m menagerie.crawler.tools.verify_prompts`:
+The prompt files are authoritative runtime inputs. The dispatch-brief fragments under `prompts/pool/`
+are equally authoritative: `author_pool.render_dispatch_brief` renders them into every author session,
+so their bytes steer author behavior exactly as the two top-level prompts do and they are pinned the
+same way. These independently pinned literal digests are the committed drift oracle. The whole surface
+is checked by `python -m menagerie.crawler.tools.verify_pool_prompts`, which also proves this pinned
+inventory and the shipped inventory are the same set, so an unpinned new fragment and a deleted pinned
+fragment both fail; `python -m menagerie.crawler.tools.verify_prompts` remains the two-prompt oracle it
+reuses. Editing any of these files stales its digest by construction: re-pin the literal row here in the
+same change.
 
 - `claude_crawler_author_v2.txt`: `sha256:bc609db91f34a2fb41ae3b14f925c4660db4405bf4b8d97d2b25c71e0f18bd5d`
 - `codex_accuracy_checker_v2.txt`: `sha256:93d82284c3f9f250b55d6eb700f3f63d6e1abf586f259a6350920c5912b9f2d8`
+- `campaign_c1-mech.md`: `sha256:c4f38a682416ed82b995a7d06941d04d6559d4ec10f8a5bb0ee6d5436b00b1e8`
+- `campaign_c2-disco.md`: `sha256:3ffbfaf9ab56c713b301f28071ff019e1173aa44a7d3e0ed890a980f59daafd1`
+- `campaign_c3-classics.md`: `sha256:e6a277891824b72e378c52b1e472357d968d30a91a87b1b8d562ab923b5a11a4`
+- `campaign_c4-native.md`: `sha256:b9ff9531f0f330dfabe09275c61aaa72d0a699a29b2c5cd463cae6f439c36683`
+- `stage_author.md`: `sha256:07e47db576a72fce43d3f09d2b94dad5477b096ef98d5ca8d1b5da2d02d255f4`
+- `stage_capability_probe.md`: `sha256:6eebdcd49603b44335ccc873aa61945e4415664be5275af2ddee212fcc224b0b`
+- `stage_source_request.md`: `sha256:bebdd38c7779efb01e1d0d897ab7940a1cd6235bdd1dfb17ae7966c479394c81`
 
 ## 21. Acceptance tests
 

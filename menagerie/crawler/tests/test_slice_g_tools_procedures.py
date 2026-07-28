@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,11 @@ from menagerie.crawler.tests.conftest import (
 from menagerie.crawler.tools.license_sweep import main as license_sweep_main
 from menagerie.crawler.tools.rebuild_views import main as rebuild_views_main
 from menagerie.crawler.tools.requeue import main as requeue_main
+from menagerie.crawler.tools.verify_pool_prompts import (
+    PIN_SECTION_HEADING,
+    main as verify_pool_prompts_main,
+    verify_prompt_surface,
+)
 from menagerie.crawler.tools.verify_prompts import main as verify_prompts_main
 
 
@@ -53,6 +59,75 @@ def test_verify_prompts_passes_shipped_files_and_rejects_mutation(tmp_path: Path
     mutated = tmp_path / author.name
     mutated.write_bytes(author.read_bytes() + b"mutated\n")
     assert verify_prompts_main(["--author-prompt", str(mutated)]) != 0
+
+
+def _copy_prompt_pool(destination: Path) -> Path:
+    """Copy the shipped pool fragments so a test can mutate them safely.
+
+    Parameters
+    ----------
+    destination:
+        Directory to create as the fragment copy.
+
+    Returns
+    -------
+    Path
+        The populated copy.
+    """
+
+    shipped = Path(__file__).resolve().parents[1] / "prompts" / "pool"
+    shutil.copytree(shipped, destination)
+    return destination
+
+
+def test_verify_pool_prompts_covers_the_whole_shipped_prompt_surface() -> None:
+    """Every top-level prompt and every dispatch-brief fragment is pinned and matches."""
+
+    assert verify_pool_prompts_main([]) == 0
+    crawler_root = Path(__file__).resolve().parents[1]
+    surface = verify_prompt_surface(
+        crawler_root / "PLAN.md",
+        crawler_root / "prompts" / "claude_crawler_author_v2.txt",
+        crawler_root / "prompts" / "codex_accuracy_checker_v2.txt",
+        crawler_root / "prompts" / "pool",
+    )
+    fragments = {path.name for path in (crawler_root / "prompts" / "pool").glob("*.md")}
+    assert fragments
+    assert set(surface) == fragments | {
+        "claude_crawler_author_v2.txt",
+        "codex_accuracy_checker_v2.txt",
+    }
+
+
+def test_verify_pool_prompts_rejects_every_way_a_fragment_can_drift(tmp_path: Path) -> None:
+    """A mutated, an unpinned added, and a deleted pinned fragment each fail."""
+
+    mutated_pool = _copy_prompt_pool(tmp_path / "mutated")
+    fragment = mutated_pool / "stage_source_request.md"
+    fragment.write_bytes(fragment.read_bytes() + b" ")
+    assert verify_pool_prompts_main(["--pool-root", str(mutated_pool)]) != 0
+
+    added_pool = _copy_prompt_pool(tmp_path / "added")
+    (added_pool / "stage_smuggled.md").write_text("unpinned guidance\n", encoding="utf-8")
+    assert verify_pool_prompts_main(["--pool-root", str(added_pool)]) != 0
+
+    deleted_pool = _copy_prompt_pool(tmp_path / "deleted")
+    (deleted_pool / "stage_author.md").unlink()
+    assert verify_pool_prompts_main(["--pool-root", str(deleted_pool)]) != 0
+
+    empty_pool = tmp_path / "empty"
+    empty_pool.mkdir()
+    assert verify_pool_prompts_main(["--pool-root", str(empty_pool)]) != 0
+
+
+def test_verify_pool_prompts_fails_when_the_pinned_section_is_removed(tmp_path: Path) -> None:
+    """Deleting the PLAN oracle section is drift, never a vacuous pass."""
+
+    crawler_root = Path(__file__).resolve().parents[1]
+    plan = (crawler_root / "PLAN.md").read_text(encoding="utf-8")
+    stripped = tmp_path / "PLAN.md"
+    stripped.write_text(plan.replace(PIN_SECTION_HEADING, "## 18. Removed"), encoding="utf-8")
+    assert verify_pool_prompts_main(["--plan", str(stripped)]) != 0
 
 
 def test_rebuild_views_is_deterministic_and_ignores_stale_database(tmp_path: Path) -> None:
