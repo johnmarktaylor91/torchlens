@@ -14,7 +14,7 @@ import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Callable, Mapping, Protocol, Sequence
+from typing import Mapping, Protocol, Sequence
 
 from menagerie.crawler.checkpoint import CRAWLER_BRANCH
 from menagerie.crawler.driver_progress import _resolve_notify_command
