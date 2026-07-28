@@ -611,7 +611,16 @@ def _default_driver_factory(args: argparse.Namespace) -> CrawlerDriver:
         author=(
             QueueAuthorLane(author_queue_root)
             if author_queue_root is not None
-            else CommandAuthorLane(author_command or ())
+            else CommandAuthorLane(
+                author_command or (),
+                # The headless author executor prints an attempt-bound
+                # publication receipt; requiring it makes the lane verify the
+                # published digest on every round trip. Legacy wrappers leave
+                # this unset.
+                require_receipt=(
+                    os.environ.get("MENAGERIE_AUTHOR_REQUIRE_RECEIPT") == "1"
+                ),
+            )
         ),
         checker=CommandCheckerLane(checker_command),
         forward=SupervisedForwardLane(cwd=args.repo_root.resolve()),

@@ -1387,5 +1387,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     return code
 
 
+def wrapper_command(*, campaign_id: Optional[str] = None) -> str:
+    """Return the shell-quoted ``MENAGERIE_AUTHOR_COMMAND`` for this executor.
+
+    Pair it with ``MENAGERIE_AUTHOR_REQUIRE_RECEIPT=1`` so the lane demands
+    the executor's attempt-bound publication receipt on every round trip.
+    """
+
+    argv = [sys.executable, "-m", "menagerie.crawler.author_executor"]
+    if campaign_id:
+        argv.extend(["--campaign", campaign_id])
+    return shlex.join(argv)
+
+
 if __name__ == "__main__":  # pragma: no cover -- executor entry point
     raise SystemExit(main())
