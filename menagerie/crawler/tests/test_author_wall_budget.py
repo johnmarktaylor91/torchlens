@@ -132,25 +132,70 @@ def test_the_executor_resolves_the_same_grant_the_lane_sized_its_bound_from(
     assert config.wall_seconds() == 3600.0
 
 
-def test_a_published_grant_reaches_the_executor_exactly(
+def test_resolving_the_grant_never_mutates_the_parent_environment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The driver publishes the grant; the executor reads back the same float.
+    """Resolution is a pure read (regression).
 
-    The executor is a subprocess that takes its grant from the environment, so
-    a lossy hand-off would reintroduce a disagreement between the number the
-    lane bounded and the number the session was told.
+    Writing the grant into the driver's own ``os.environ`` made resolution
+    order-dependent and process-wide: the value outlived its caller, so the next
+    driver built in the same process inherited a foreign campaign's grant and
+    this module's own startup guard refused a perfectly correct configuration.
+    A test that merely ran later in the file was enough to trip it.
     """
 
-    from menagerie.crawler.cli import _resolve_and_publish_author_wall
+    from menagerie.crawler.cli import _resolve_author_wall
 
     monkeypatch.delenv(AUTHOR_WALL_SECONDS_ENV, raising=False)
-    args = _namespace(author_wall_seconds=None)
-    grant = _resolve_and_publish_author_wall(args, "c3-classics")
+    before = dict(os.environ)
 
-    assert grant == 3600.0
-    # A campaign whose own default differs still gets the published number.
-    assert ExecutorConfig.from_env(campaign_id="c1-mech").wall_seconds() == grant
+    assert _resolve_author_wall(_namespace(author_wall_seconds=None), "c3-classics") == 3600.0
+
+    assert AUTHOR_WALL_SECONDS_ENV not in os.environ
+    assert dict(os.environ) == before
+    # ... so a later, differently-budgeted campaign still resolves its own grant.
+    assert _resolve_author_wall(_namespace(author_wall_seconds=None), "c1-mech") == 1800.0
+
+
+def test_the_grant_travels_in_the_wrapper_childs_environment() -> None:
+    """The executor's grant is subprocess-scoped, explicit, and exact."""
+
+    from menagerie.crawler.driver_admission import CommandAuthorLane
+
+    grant = resolve_author_wall_seconds("c3-classics")
+    lane = CommandAuthorLane(
+        (sys.executable, "-c", "pass"),
+        effort_grant=AuthorEffortGrant(wall_seconds=grant),
+    )
+    child = lane._child_environment()
+
+    assert child[AUTHOR_WALL_SECONDS_ENV] == repr(3600.0)
+    # The child inherits the rest of the environment, and only the child.
+    assert child["PATH"] == os.environ["PATH"]
+    assert AUTHOR_WALL_SECONDS_ENV not in os.environ
+
+
+def test_the_child_grant_round_trips_through_the_executors_own_reader(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """What the lane hands the child is exactly what the executor resolves.
+
+    A lossy hand-off would reintroduce a disagreement between the number the
+    lane sized its stall bound from and the number the session was told.
+    """
+
+    from menagerie.crawler.driver_admission import CommandAuthorLane
+
+    lane = CommandAuthorLane(
+        (sys.executable, "-c", "pass"),
+        effort_grant=AuthorEffortGrant(wall_seconds=resolve_author_wall_seconds("c3-classics")),
+    )
+    child = lane._child_environment()
+
+    # Stand in for the subprocess: the executor reads the env it was handed.
+    monkeypatch.setenv(AUTHOR_WALL_SECONDS_ENV, child[AUTHOR_WALL_SECONDS_ENV])
+    # Even a campaign whose OWN default is 1800 honours the handed-down grant.
+    assert ExecutorConfig.from_env(campaign_id="c1-mech").wall_seconds() == 3600.0
 
 
 def test_a_conflicting_environment_grant_refuses_at_startup(
@@ -162,25 +207,46 @@ def test_a_conflicting_environment_grant_refuses_at_startup(
     disagreement at minute 30 of a 60-minute session, as a timeout.
     """
 
-    from menagerie.crawler.cli import OperatorOutageError, _resolve_and_publish_author_wall
+    from menagerie.crawler.cli import OperatorOutageError, _resolve_author_wall
 
     monkeypatch.setenv(AUTHOR_WALL_SECONDS_ENV, "1800")
     with pytest.raises(OperatorOutageError) as raised:
-        _resolve_and_publish_author_wall(_namespace(author_wall_seconds=None), "c3-classics")
+        _resolve_author_wall(_namespace(author_wall_seconds=None), "c3-classics")
     assert "conflicts with the resolved" in str(raised.value)
 
     monkeypatch.setenv(AUTHOR_WALL_SECONDS_ENV, "not-a-number")
     with pytest.raises(OperatorOutageError):
-        _resolve_and_publish_author_wall(_namespace(author_wall_seconds=None), "c3-classics")
+        _resolve_author_wall(_namespace(author_wall_seconds=None), "c3-classics")
+
+
+def test_resolving_one_campaign_does_not_poison_the_next_driver_in_process(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The exact cross-test ordering failure, pinned.
+
+    Reproduces what the mid tier caught: resolve a 3600s c3 grant, then build a
+    driver for a 1800s campaign in the SAME process, as a supervised driver
+    handling successive campaigns would. Under the defect the second resolution
+    saw the first's leaked variable and raised
+    ``OperatorOutageError: ...=3600 conflicts with the resolved 1800s grant``.
+    """
+
+    from menagerie.crawler.cli import _resolve_author_wall
+
+    monkeypatch.delenv(AUTHOR_WALL_SECONDS_ENV, raising=False)
+    assert _resolve_author_wall(_namespace(author_wall_seconds=None), "c3-classics") == 3600.0
+    # No campaign at all -- the case the wake-callback test exercises.
+    assert _resolve_author_wall(_namespace(author_wall_seconds=None), None) == 1800.0
+    assert _resolve_author_wall(_namespace(author_wall_seconds=None), "c3-classics") == 3600.0
 
 
 def test_a_matching_environment_grant_is_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
     """Agreement is not an error -- only disagreement is."""
 
-    from menagerie.crawler.cli import _resolve_and_publish_author_wall
+    from menagerie.crawler.cli import _resolve_author_wall
 
     monkeypatch.setenv(AUTHOR_WALL_SECONDS_ENV, "3600")
-    assert _resolve_and_publish_author_wall(_namespace(author_wall_seconds=None), "c3-classics") == 3600.0
+    assert _resolve_author_wall(_namespace(author_wall_seconds=None), "c3-classics") == 3600.0
 
 
 def test_a_tuned_grant_survives_a_supervised_restart(tmp_path: Path) -> None:
