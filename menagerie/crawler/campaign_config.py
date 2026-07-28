@@ -12,7 +12,7 @@ from typing import Any, Mapping, Optional, Sequence
 from menagerie.crawler.executable_paths import normalize_executable
 from menagerie.crawler.identity import canonical_json_bytes, stable_hash
 
-CAMPAIGN_CONFIG_FORMAT = "menagerie.crawler.campaign-config.v2"
+CAMPAIGN_CONFIG_FORMAT = "menagerie.crawler.campaign-config.v3"
 
 
 @dataclass(frozen=True)
@@ -34,6 +34,7 @@ class CampaignConfig:
     progress_milestones: tuple[int, ...]
     phase: Optional[str]
     only_status: Optional[str]
+    author_wall_seconds: Optional[float]
 
     def to_dict(self) -> dict[str, Any]:
         """Return the closed JSON representation.
@@ -67,6 +68,7 @@ class CampaignConfig:
             "progress_milestones": list(self.progress_milestones),
             "phase": self.phase,
             "only_status": self.only_status,
+            "author_wall_seconds": self.author_wall_seconds,
         }
 
     @classmethod
@@ -100,6 +102,7 @@ class CampaignConfig:
             "progress_milestones",
             "phase",
             "only_status",
+            "author_wall_seconds",
         }
         if set(value) != expected or value.get("format") != CAMPAIGN_CONFIG_FORMAT:
             raise ValueError("campaign config has an invalid field contract")
@@ -121,6 +124,23 @@ class CampaignConfig:
             not isinstance(review, int) or isinstance(review, bool) or review < 0
         ):
             raise ValueError("campaign config review checkpoint is invalid")
+        # The tuned wall grant is persisted for exactly the reason the tuned
+        # author concurrency is: a supervised restart rebuilds the driver's
+        # invocation from this file, so anything left out of it is silently
+        # reverted to a default mid-campaign. `None` means "take the campaign's
+        # own grant", which the frozen intake still determines on its own.
+        raw_wall = value.get("author_wall_seconds")
+        author_wall_seconds: Optional[float] = None
+        if raw_wall is not None:
+            if (
+                not isinstance(raw_wall, (int, float))
+                or isinstance(raw_wall, bool)
+                or not float(raw_wall) > 0.0
+                or float(raw_wall) in (float("inf"), float("-inf"))
+                or float(raw_wall) != float(raw_wall)
+            ):
+                raise ValueError("campaign config author wall grant is invalid")
+            author_wall_seconds = float(raw_wall)
         target = value.get("target")
         phase = value.get("phase")
         only_status = value.get("only_status")
@@ -164,6 +184,7 @@ class CampaignConfig:
             progress_milestones=tuple(milestones),
             phase=phase,
             only_status=only_status,
+            author_wall_seconds=author_wall_seconds,
         )
 
 

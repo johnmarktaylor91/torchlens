@@ -385,6 +385,7 @@ def test_checkpoint_policy_requires_only_c1_gate_and_advance_notifications(
         private_mirror=tmp_path / "private",
         phase="pytorch",
         only_status=None,
+        author_wall_seconds=None,
     )
     c1 = CampaignConfig(
         **base,

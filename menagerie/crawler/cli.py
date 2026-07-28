@@ -29,11 +29,14 @@ from menagerie.crawler.checkpoint import (
     canonical_operational_ledger_path,
     create_canonical_checkpoint,
 )
+from menagerie.crawler.author_dispatch import AuthorEffortGrant
 from menagerie.crawler.constants import (
+    AUTHOR_WALL_SECONDS_ENV,
     DEFAULT_AUTHOR_WAVE_CONCURRENCY,
     InvocationOrigin,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
     OperationalEventStatus,
+    resolve_author_wall_seconds,
 )
 from menagerie.crawler.doctor import DoctorConfig, DoctorError, DoctorProbes, run_doctor
 from menagerie.crawler.driver import (
@@ -363,6 +366,17 @@ def _add_driver_config_arguments(parser: argparse.ArgumentParser) -> None:
         ),
     )
     parser.add_argument(
+        "--author-wall-seconds",
+        type=float,
+        default=None,
+        help=(
+            "per-session author wall grant in seconds; defaults to this "
+            "campaign's own grant (c3-classics runs the long classics tail). "
+            "The value is frozen into the campaign config and published to the "
+            "author executor, so one number governs the whole chain."
+        ),
+    )
+    parser.add_argument(
         "--checker-command",
         default=os.environ.get("MENAGERIE_CHECKER_COMMAND"),
         help="Codex wrapper command; defaults to MENAGERIE_CHECKER_COMMAND",
@@ -643,12 +657,18 @@ def _default_driver_factory(args: argparse.Namespace) -> CrawlerDriver:
             else None
         ),
     )
+    # Resolved once, before any lane exists, so a misconfigured budget refuses at
+    # startup rather than surfacing as truncated sessions deep into the campaign.
+    author_effort_grant = AuthorEffortGrant(
+        wall_seconds=_resolve_and_publish_author_wall(args, config.campaign_id)
+    )
     dependencies = DriverDependencies(
         author=(
-            QueueAuthorLane(author_queue_root)
+            QueueAuthorLane(author_queue_root, effort_grant=author_effort_grant)
             if author_queue_root is not None
             else CommandAuthorLane(
                 author_command or (),
+                effort_grant=author_effort_grant,
                 # The headless author executor prints an attempt-bound
                 # publication receipt; requiring it makes the lane verify the
                 # published digest on every round trip. Legacy wrappers leave
@@ -741,6 +761,7 @@ def _load_or_persist_campaign_config(args: argparse.Namespace) -> Path:
         progress_milestones=tuple(args.progress_milestones),
         phase=args.phase,
         only_status=getattr(args, "only_status", None),
+        author_wall_seconds=getattr(args, "author_wall_seconds", None),
     )
     config_path = default_campaign_config_path(repo_root, intake_root)
     write_campaign_config(config_path, persisted)
@@ -773,6 +794,7 @@ def _apply_campaign_config(args: argparse.Namespace, config: CampaignConfig) -> 
     args.progress_milestones = config.progress_milestones
     args.phase = config.phase
     args.only_status = config.only_status
+    args.author_wall_seconds = config.author_wall_seconds
     os.environ["MENAGERIE_PUBLIC_MIRROR"] = str(config.public_mirror)
     os.environ["MENAGERIE_PRIVATE_MIRROR"] = str(config.private_mirror)
 
@@ -975,6 +997,68 @@ def _default_author_concurrency() -> int:
         raise ValueError(
             f"MENAGERIE_AUTHOR_CONCURRENCY must be an integer, not {raw!r}"
         ) from exc
+
+
+def _resolve_and_publish_author_wall(
+    args: argparse.Namespace, campaign_id: Optional[str]
+) -> float:
+    """Resolve this campaign's wall grant and publish it to the executor.
+
+    One number governs the whole chain: it is the grant published to the author
+    session in its envelope, the grant the executor sizes its own per-session
+    kill from, and the base the lane derives its outer stall bound from. The
+    executor is a subprocess that reads the grant from the environment, so the
+    driver *publishes* it here rather than trusting an operator to have written
+    a matching value into the wrapper command by hand.
+
+    A pre-set environment value that disagrees is a startup failure. Letting it
+    win silently is how a campaign runs a month on a budget nobody configured;
+    the previous incoherence -- a 30-minute lane bound under a 60-minute c3
+    grant -- surfaced only as timeouts at minute 30, blind retries that died the
+    same way, and a corrupted p95.
+
+    Parameters
+    ----------
+    args:
+        Parsed driver arguments, carrying any explicit operator override.
+    campaign_id:
+        Tier campaign identity, when the intake belongs to one.
+
+    Returns
+    -------
+    float
+        Authoritative per-session wall grant in seconds.
+
+    Raises
+    ------
+    OperatorOutageError
+        If the override is malformed, or a conflicting grant is already set in
+        the environment.
+    """
+
+    try:
+        grant = resolve_author_wall_seconds(
+            campaign_id, getattr(args, "author_wall_seconds", None)
+        )
+    except ValueError as exc:
+        raise OperatorOutageError(str(exc)) from exc
+    existing = os.environ.get(AUTHOR_WALL_SECONDS_ENV)
+    if existing is not None and existing.strip():
+        try:
+            preset = float(existing)
+        except ValueError as exc:
+            raise OperatorOutageError(
+                f"{AUTHOR_WALL_SECONDS_ENV} must be a number of seconds, not {existing!r}"
+            ) from exc
+        if preset != grant:
+            raise OperatorOutageError(
+                f"{AUTHOR_WALL_SECONDS_ENV}={preset:g} conflicts with the resolved "
+                f"{grant:g}s grant for campaign {campaign_id or '<none>'}. The campaign "
+                f"config is authoritative; unset the variable or pass "
+                f"--author-wall-seconds {preset:g} so one budget governs the run."
+            )
+    os.environ[AUTHOR_WALL_SECONDS_ENV] = repr(grant)
+    return grant
 
 
 def _optional_author_queue_root(args: argparse.Namespace) -> Optional[Path]:

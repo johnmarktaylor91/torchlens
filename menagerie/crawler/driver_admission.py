@@ -89,8 +89,10 @@ from menagerie.crawler.constants import (
     InvocationOrigin,
     MODEL_SCHEMA_VERSION_V3,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
+    AUTHOR_WALL_EXTERNAL_KILL_FACTOR,
     OperationalEventKind,
     OperationalEventStatus,
+    author_lane_wall_bound,
 )
 from menagerie.crawler.envs import (
     EnvironmentIntent,
@@ -985,6 +987,7 @@ class CommandAuthorLane(_AuthorLaneBase):
         *,
         effort_grant: Optional[AuthorEffortGrant] = None,
         require_receipt: bool = False,
+        stall_bound_seconds: Optional[float] = None,
     ) -> None:
         """Store a non-shell Claude Code command prefix and its effort grant.
 
@@ -1000,6 +1003,18 @@ class CommandAuthorLane(_AuthorLaneBase):
             Set for the headless author executor; fixture wrappers that
             predate the receipt protocol leave it off, and any receipt they
             *do* print is still verified.
+        stall_bound_seconds:
+            Outer stall bound, mirroring :class:`QueueAuthorLane`'s injectable
+            deadline. Production leaves this ``None`` and takes the bound
+            derived from the grant. It is validated against the executor's own
+            kill so an explicit value can never reintroduce a bound that
+            truncates the campaign's budget from outside.
+
+        Raises
+        ------
+        ValueError
+            If the command is empty, or an explicit stall bound would fire
+            before the executor's own per-session kill.
         """
 
         if not command:
@@ -1007,6 +1022,16 @@ class CommandAuthorLane(_AuthorLaneBase):
         self.command = tuple(command)
         self.effort_grant = effort_grant or AuthorEffortGrant()
         self.require_receipt = require_receipt
+        if stall_bound_seconds is not None:
+            executor_kill = self.effort_grant.wall_seconds * AUTHOR_WALL_EXTERNAL_KILL_FACTOR
+            if float(stall_bound_seconds) <= executor_kill:
+                raise ValueError(
+                    f"author stall bound {float(stall_bound_seconds):g}s would fire at or "
+                    f"before the executor's own {executor_kill:g}s kill for a "
+                    f"{self.effort_grant.wall_seconds:g}s grant, truncating the session "
+                    "budget from outside"
+                )
+        self.stall_bound_seconds = stall_bound_seconds
 
     def _dispatch(
         self,
@@ -1024,22 +1049,30 @@ class CommandAuthorLane(_AuthorLaneBase):
         # verified against the bytes at that path after a clean exit.
         del config, work_id
         argv = [*self.command, str(request_path)]
+        # A STALL GUARD, derived from the published grant -- not a second budget.
+        # The grant is enforced INSIDE the wrapper, per session, where the stage
+        # that overran is known and a typed recoverable outcome can be recorded;
+        # this bound only stops a wedged wrapper blocking the driver forever. It
+        # therefore has to clear every inner limit, including a stage 2 that
+        # legitimately runs a cold rerun and a supplementary round. Bounding at
+        # the bare grant instead silently truncated exactly the long tail the
+        # per-campaign grant exists to cover, and mislabelled it as a timeout.
+        bound = (
+            author_lane_wall_bound(self.effort_grant.wall_seconds)
+            if self.stall_bound_seconds is None
+            else float(self.stall_bound_seconds)
+        )
         try:
-            completed = _run_operator_command(
-                argv,
-                # The bound is the lane's own published grant, not a new number: the
-                # session was told this exact wall ceiling, so one that is still running
-                # past it has already broken the contract it was dispatched under.
-                timeout_seconds=self.effort_grant.wall_seconds,
-            )
+            completed = _run_operator_command(argv, timeout_seconds=bound)
         except subprocess.TimeoutExpired as exc:
             # Typed and retryable, like every other transport failure this lane classifies.
             # A hung session is stalled infrastructure; burning the model permanently for
             # it would turn one transient hang into a lost model.
             raise RetryableOperatorError(
-                f"author {kind} for {item.stable_id} exceeded its "
-                f"{self.effort_grant.wall_seconds:g}s wall grant and its process group was "
-                f"terminated: {str(exc.stderr or exc.output or '')[-STDIO_TAIL_MAX_CHARS:]}"
+                f"author {kind} for {item.stable_id} outlived the {bound:g}s stall bound "
+                f"around its {self.effort_grant.wall_seconds:g}s wall grant and its process "
+                f"group was terminated: "
+                f"{str(exc.stderr or exc.output or '')[-STDIO_TAIL_MAX_CHARS:]}"
             ) from exc
         classify_author_exit(
             kind,

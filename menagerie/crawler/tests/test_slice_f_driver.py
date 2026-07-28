@@ -2365,9 +2365,13 @@ def test_a_hung_author_command_is_bounded_retryable_and_leaves_no_orphan(
         "sys.stderr.flush()\n"
         "time.sleep(600)\n"
     )
+    # The stall bound is injected so this exercises the teardown path in seconds.
+    # Production derives it from the grant; `test_author_wall_budget.py` pins that
+    # derivation and refuses any bound that would fire inside the session budget.
     lane = CommandAuthorLane(
         (sys.executable, "-c", wrapper),
         effort_grant=AuthorEffortGrant(wall_seconds=3.0),
+        stall_bound_seconds=4.0,
     )
     root = tmp_path / "hung-author"
     root.mkdir(parents=True, exist_ok=True)
@@ -2386,9 +2390,9 @@ def test_a_hung_author_command_is_bounded_retryable_and_leaves_no_orphan(
         )
     elapsed = time.monotonic() - started
 
-    # Bounded by the published grant rather than running forever ...
+    # Bounded rather than running forever ...
     assert elapsed < 60.0
-    assert "wall grant" in str(raised.value)
+    assert "stall bound" in str(raised.value)
     # ... typed retryable, so the driver retries transport instead of burning the model ...
     assert driver._is_infrastructure_error(raised.value)
     assert _author_lane_failure(raised.value) == ("source", "identity-unresolved")
