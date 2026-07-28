@@ -279,3 +279,56 @@ out" all leave no receipt and fail the check.
 
 If either check fails, the answer is to fix the capability. Editing the check is how a
 month-long campaign ships ungrounded proposals and nobody finds out.
+
+---
+
+## 2b. Batch the loop (`tools/pool_batch.py`)
+
+Section 2's four steps are correct but not operable one job at a time -- at 28,482 models
+that is roughly three shell commands plus one dispatch per model, and every hand-run step is
+a chance to mistype a lease owner or lose a `claimed_at`. Use the batch tool instead. It
+collapses the mechanical steps into two calls and leaves exactly one thing to the managing
+session: dispatching the subagents, which is the only part it alone can do.
+
+```bash
+PB="$PY -m menagerie.crawler.tools.pool_batch --queue $QUEUE --repo-root $CLONE --python $PY"
+
+$PB status                                     # compact queue summary
+$PB claim --count 12 --out .crawl-local/rounds/r1
+```
+
+`claim` leases up to N unleased jobs, writes each brief to its own file, and emits
+`manifest.json` with `job_id`, `kind`, `stable_id`, `subagent_model`, `claimed_at`, and
+`brief_path`. Dispatch one Agent subagent per row **in a single message**, using the row's
+`subagent_model` and the contents of its `brief_path`.
+
+Then commit the round:
+
+```bash
+$PB complete --manifest .crawl-local/rounds/r1/manifest.json \
+             --counts   .crawl-local/rounds/r1/counts.json
+```
+
+`counts.json` maps each `job_id` to either a completion or a typed failure:
+
+```json
+{
+  "author-abc123": {"tool_calls": 14},
+  "author-def456": {"tool_calls": 9, "evidence": "/abs/receipt.json"},
+  "author-ghi789": {"failed": true, "reason": "subagent-transient", "retryable": true}
+}
+```
+
+Three properties this deliberately enforces, matching section 2:
+
+- **The lease owner is pinned** (`--owner`, default `pool-manager`). Without a stable owner
+  each shell invocation gets a fresh `host:pid` and a job claimed in one call cannot be
+  completed by the next -- the lease looks foreign.
+- **`tool_calls` is required and never defaulted.** A missing count is an error, not a zero.
+  The engine refuses a receipt declaring more than the grant, and rounding a count down to
+  make a job land corrupts the effort ledger for the whole run.
+- **Failures must be classified.** `retryable` has no default, because guessing turns an
+  infrastructure blip into a permanently burned model.
+
+A job that cannot be claimed this round is reported and skipped rather than aborting the
+batch, so one bad row cannot stall a whole wave.
