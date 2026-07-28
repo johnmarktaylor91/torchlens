@@ -256,7 +256,7 @@ def test_fabricated_citation_title_is_still_refused(tmp_path: Path) -> None:
         proposal["proposed_facts"]["external_metadata"]["citation"],
     ):
         citation["title"] = "Imaginary Hypernetwork Transformer"
-    with pytest.raises(ProposalValidationError, match="do not substantively support"):
+    with pytest.raises(ProposalValidationError, match="not grounded verbatim.*title"):
         validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
 
 
@@ -269,7 +269,7 @@ def test_fabricated_citation_year_is_still_refused(tmp_path: Path) -> None:
         proposal["proposed_facts"]["external_metadata"]["citation"],
     ):
         citation["year"] = 1997
-    with pytest.raises(ProposalValidationError, match="do not substantively support"):
+    with pytest.raises(ProposalValidationError, match="not grounded verbatim.*year"):
         validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
 
 
@@ -286,7 +286,7 @@ def test_declared_arxiv_identifier_must_occur_in_the_cited_text(tmp_path: Path) 
         proposal["proposed_facts"]["external_metadata"]["citation"],
     ):
         citation["arxiv_id"] = "1905.09791"
-    with pytest.raises(ProposalValidationError, match="do not substantively support"):
+    with pytest.raises(ProposalValidationError, match="not grounded verbatim.*arxiv_id"):
         validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
 
 
@@ -319,22 +319,169 @@ def _blank_search_report(proposal: dict[str, Any]) -> None:
     proposal["proposed_facts"]["source_resolution"]["search_report"]["queries"] = []
 
 
-def test_country_and_era_are_judged_by_the_checker_not_by_token_overlap() -> None:
-    """Two claims move off a matcher that could only lie about them or refuse them.
+def test_fabricated_citation_authors_venue_and_bibtex_are_refused_per_leaf(
+    tmp_path: Path,
+) -> None:
+    """A citation with fabricated authors, venue, and BibTeX no longer passes.
+
+    The old matcher checked title+year only, so every other leaf was free to invent.
+    Every positive leaf is now grounded against the fetched paper bytes, and BibTeX
+    must be exactly consistent with the grounded title/year/authors.
+    """
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    for citation in (
+        proposal["proposed_facts"]["citation"],
+        proposal["proposed_facts"]["external_metadata"]["citation"],
+    ):
+        citation.update(
+            {
+                "authors": ["J. Fabricated", "N. Invented"],
+                "venue": "NeurIPS",
+                "bibtex": (
+                    "@inproceedings{fabricated2020, title={A Different Paper Entirely}, "
+                    "author={Fabricated, J.}, booktitle={NeurIPS}, year={2019}}"
+                ),
+            }
+        )
+    with pytest.raises(
+        ProposalValidationError, match="not grounded verbatim.*authors.*bibtex.*venue"
+    ):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_fabricated_bibtex_alone_is_refused_by_consistency(tmp_path: Path) -> None:
+    """A BibTeX entry for a different work fails against the grounded leaves."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    for citation in (
+        proposal["proposed_facts"]["citation"],
+        proposal["proposed_facts"]["external_metadata"]["citation"],
+    ):
+        citation["bibtex"] = (
+            "@article{other2019, title={A Different Paper Entirely}, "
+            "author={Somebody, Else}, year={2019}}"
+        )
+    with pytest.raises(ProposalValidationError, match="not grounded verbatim.*bibtex"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_honest_bibtex_consistent_with_grounded_leaves_passes(tmp_path: Path) -> None:
+    """An honest BibTeX carrying the grounded title, year, and authors is accepted."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    for citation in (
+        proposal["proposed_facts"]["citation"],
+        proposal["proposed_facts"]["external_metadata"]["citation"],
+    ):
+        citation["bibtex"] = (
+            "@inproceedings{author2020example, title={Example Model}, "
+            "author={Author, A.}, booktitle={TestConf}, year={2020}}"
+        )
+    report = validate_author_proposal(
+        proposal, allowed_model_dir=tmp_path, source_manifest=manifest
+    )
+    assert report.rung.value == "R1_LIBRARY"
+
+
+def test_omitting_the_citation_while_the_paper_is_bound_is_refused(tmp_path: Path) -> None:
+    """With the introducing paper fetched, "no citation" is a checkable false claim.
+
+    The citation is gated whenever a paper source is bound, not only when the author
+    volunteers one -- supplying a true fact must never be what triggers the check.
+    """
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    for citation in (
+        proposal["proposed_facts"]["citation"],
+        proposal["proposed_facts"]["external_metadata"]["citation"],
+    ):
+        citation.update(
+            {
+                "status": "not-found-after-search",
+                "title": None,
+                "authors": [],
+                "year": None,
+                "venue": None,
+                "url": None,
+            }
+        )
+    with pytest.raises(ProposalValidationError, match="controlled-fetched source"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_taxonomy_leaves_are_gated_individually_never_as_an_aggregate(
+    tmp_path: Path,
+) -> None:
+    """A taxonomy with unsupported leaves no longer rides through on its family name.
+
+    The old aggregate claim passed when the family plus ANY one scalar matched. Every
+    taxonomy leaf now requires its own excerpt binding; an aggregate ``taxonomy``
+    support string covers nothing.
+    """
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    for excerpt in proposal["proposed_facts"]["evidence"]["excerpts"]:
+        excerpt["supports"] = [
+            support for support in excerpt["supports"] if not support.startswith("taxonomy.")
+        ] + ["taxonomy"]
+    with pytest.raises(ProposalValidationError, match="ungrounded claim categories.*taxonomy"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_partially_supported_taxonomy_is_refused(tmp_path: Path) -> None:
+    """Binding only the family leaf leaves every other taxonomy leaf ungrounded."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    for excerpt in proposal["proposed_facts"]["evidence"]["excerpts"]:
+        excerpt["supports"] = [
+            support
+            for support in excerpt["supports"]
+            if not support.startswith("taxonomy.") or support == "taxonomy.family"
+        ]
+    with pytest.raises(
+        ProposalValidationError, match="ungrounded claim categories.*taxonomy.domains"
+    ):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_judgment_claims_move_to_the_checker_and_the_token_oracle_is_deleted() -> None:
+    """The token-entailment matcher is deleted, not tuned.
 
     Measured against real prose, ``country = "US"`` passed by matching the English
     pronoun "us", while ``GB``, ``CN``, and ``DE`` could never pass however correct the
-    evidence was. Neither outcome is a judgement. They are not dropped: the accuracy
-    checker must still return ``accurate`` for every mandatory external field.
+    evidence was, and a fabricated citation passed on title+year alone. Judgment claims
+    keep their provenance requirement and gain per-leaf checker verdicts; the only
+    deterministically value-matched claim left is the citation, per-leaf against the
+    fetched paper bytes.
     """
 
-    from menagerie.crawler.metadata import MANDATORY_EXTERNAL_FIELDS
+    from menagerie.crawler import proposal as proposal_module
 
-    assert CHECKER_EVALUATED_CLAIMS <= DEFAULT_GATED_CLAIMS
-    assert {claim.removeprefix("external_metadata.") for claim in CHECKER_EVALUATED_CLAIMS} <= set(
-        MANDATORY_EXTERNAL_FIELDS
-    )
-    assert not (CHECKER_EVALUATED_CLAIMS & VALUE_MATCHED_CLAIMS)
+    assert not hasattr(proposal_module, "_text_supports_claim")
+    assert not hasattr(proposal_module, "_scalar_matches")
+    assert not hasattr(proposal_module, "_significant_tokens")
+    assert CHECKER_EVALUATED_CLAIMS == DEFAULT_GATED_CLAIMS - {"external_metadata.citation"}
+    assert VALUE_MATCHED_CLAIMS == {"external_metadata.citation"}
+    assert "external_metadata.country" in CHECKER_EVALUATED_CLAIMS
+    assert "external_metadata.era" in CHECKER_EVALUATED_CLAIMS
+
+
+def test_country_iso_codes_pass_with_real_supporting_evidence(tmp_path: Path) -> None:
+    """``GB``/``CN``/``DE``/``UK`` are no longer structurally impossible.
+
+    Under token overlap these codes could never occur in honest prose, so a correct
+    claim was refused however good the evidence; the deterministic layer now checks
+    provenance and structure, and the checker judges the value.
+    """
+
+    for code in ("GB", "CN", "DE", "UK"):
+        proposal, manifest = _ground_proposal(tmp_path)
+        proposal["proposed_facts"]["external_metadata"]["country"] = code
+        report = validate_author_proposal(
+            proposal, allowed_model_dir=tmp_path, source_manifest=manifest
+        )
+        assert report.rung.value == "R1_LIBRARY"
 
 
 @pytest.mark.parametrize("field", ["country", "era"])
@@ -376,16 +523,11 @@ def test_diacritics_no_longer_break_a_correct_author_claim(tmp_path: Path) -> No
     """
 
     proposal, manifest = _ground_proposal(tmp_path)
-    text = (
-        "Example Model. Ivana Balažević, Example Lab, US. "
-        "Published at TestConf in 2020."
-    )
+    text = "Example Model. Ivana Balažević, Example Lab, US. Published at TestConf in 2020."
     attach_paper_evidence(proposal, manifest, tmp_path, text=text, source_id="source-authors")
     facts = proposal["proposed_facts"]
     excerpt = next(
-        item
-        for item in facts["evidence"]["excerpts"]
-        if item["source_id"] == "source-authors"
+        item for item in facts["evidence"]["excerpts"] if item["source_id"] == "source-authors"
     )
     excerpt["supports"] = ["external_metadata.authors", "external_metadata.citation"]
     facts["external_metadata"]["authors"] = ["Ivana Balazevic"]
@@ -426,27 +568,185 @@ def test_omitting_the_citation_without_a_recorded_search_is_refused(tmp_path: Pa
         validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
 
 
-def test_hollow_gated_field_without_a_recorded_search_is_refused(tmp_path: Path) -> None:
-    """A null value is no longer free support for the claim it empties."""
+def _declare_absent(
+    proposal: dict[str, Any],
+    field: str,
+    *,
+    status: str = "not-found-after-search",
+    basis: str = "search-exhausted",
+) -> None:
+    """Empty one gated field and declare its typed availability state."""
+
+    metadata = proposal["proposed_facts"]["external_metadata"]
+    metadata[field] = [] if isinstance(metadata[field], list) else None
+    metadata.setdefault("availability", {})[field] = {
+        "status": status,
+        "values": [],
+        "basis": basis,
+        "evidence": [],
+    }
+
+
+@pytest.mark.parametrize(
+    ("field", "empty_value"),
+    [("venue", None), ("authors", []), ("institution", []), ("country", None)],
+)
+def test_bare_null_or_empty_gated_claim_is_refused(
+    tmp_path: Path, field: str, empty_value: object
+) -> None:
+    """A bare null or empty list never passes a gated claim again.
+
+    The old ``value is None -> passes`` arm made omission the cheapest route past the
+    gate, silently emptying exactly the fields the catalog exists to collect.
+    """
 
     proposal, manifest = _ground_proposal(tmp_path)
-    proposal["proposed_facts"]["external_metadata"]["venue"] = None
-    _blank_search_report(proposal)
-    with pytest.raises(ProposalValidationError, match="left empty without a recorded"):
+    proposal["proposed_facts"]["external_metadata"][field] = empty_value
+    with pytest.raises(ProposalValidationError, match="bare null/empty"):
         validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
 
 
-def test_hollow_gated_field_behind_a_recorded_search_is_accepted(tmp_path: Path) -> None:
-    """Emptiness stays possible, but only as an accountable, recorded outcome."""
+def test_honestly_unknown_authors_and_institution_are_representable(tmp_path: Path) -> None:
+    """An honest unknown is an explicit, searched, typed state -- and it passes.
+
+    The schema previously forbade empty ``authors``/``institution`` while the gate
+    rewarded nulls elsewhere, leaving fabrication as the only path for a fact that
+    genuinely is not findable. The availability state fixes both halves.
+    """
 
     proposal, manifest = _ground_proposal(tmp_path)
-    proposal["proposed_facts"]["external_metadata"]["venue"] = None
+    _strip_paper_evidence(proposal, manifest)
+    for citation in (
+        proposal["proposed_facts"]["citation"],
+        proposal["proposed_facts"]["external_metadata"]["citation"],
+    ):
+        citation.update(
+            {
+                "status": "not-found-after-search",
+                "title": None,
+                "authors": [],
+                "year": None,
+                "venue": None,
+                "url": None,
+            }
+        )
+    for field in ("authors", "institution", "venue", "year"):
+        _declare_absent(proposal, field)
 
     report = validate_author_proposal(
         proposal, allowed_model_dir=tmp_path, source_manifest=manifest
     )
 
     assert report.rung.value == "R1_LIBRARY"
+
+
+def test_not_found_availability_without_a_recorded_search_is_refused(tmp_path: Path) -> None:
+    """Claiming not-found still costs the bounded search that establishes it."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    _declare_absent(proposal, "venue")
+    _blank_search_report(proposal)
+    with pytest.raises(ProposalValidationError, match="recorded bounded search"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_availability_state_contradicting_a_carried_value_is_refused(tmp_path: Path) -> None:
+    """A declared absence over a present value is a false claim, not bookkeeping."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    metadata = proposal["proposed_facts"]["external_metadata"]
+    metadata.setdefault("availability", {})["venue"] = {
+        "status": "not-found-after-search",
+        "values": [],
+        "basis": "search-exhausted",
+        "evidence": [],
+    }
+    with pytest.raises(ProposalValidationError, match="carries a value"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_availability_state_with_noncanonical_vocabulary_is_refused(tmp_path: Path) -> None:
+    """Status and basis are closed vocabularies, not free text."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    _declare_absent(proposal, "venue", basis="vibes")
+    with pytest.raises(ProposalValidationError, match="non-canonical basis"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_availability_state_citing_fabricated_evidence_is_refused(tmp_path: Path) -> None:
+    """Availability evidence IDs must name real hash-verified excerpts."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    _declare_absent(proposal, "venue")
+    proposal["proposed_facts"]["external_metadata"]["availability"]["venue"]["evidence"] = [
+        "invented"
+    ]
+    with pytest.raises(ProposalValidationError, match="missing or fabricated evidence"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_genuine_model_named_with_antislop_vocabulary_passes(tmp_path: Path) -> None:
+    """A model whose NAME is the banned vocabulary can be honestly described.
+
+    Roughly 32 real roster models -- surrogate-gradient SNNs, Neural Mesh
+    Simplification, approximate message passing -- are named with words the anti-slop
+    list bans, so their honest descriptions could never pass. The pattern list is
+    scoped to implementation-fidelity surfaces where the words mean what the tripwire
+    thinks they mean.
+    """
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    metadata = proposal["proposed_facts"]["external_metadata"]
+    website = proposal["proposed_facts"]["website"]
+    honest = (
+        "Neural Mesh Simplification is a surrogate-gradient spiking network for "
+        "approximate message passing over simplified meshes; it is a small "
+        "source-grounded example network."
+    )
+    metadata["description"] = honest
+    website["description"] = honest
+    website["tagline"] = "A surrogate-gradient mesh simplification proxy model"
+
+    report = validate_author_proposal(
+        proposal, allowed_model_dir=tmp_path, source_manifest=manifest
+    )
+
+    assert report.rung.value == "R1_LIBRARY"
+
+
+def test_antislop_vocabulary_on_fidelity_surfaces_is_still_refused(tmp_path: Path) -> None:
+    """The tripwire the rescope preserves: approximation admissions about the CODE."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    proposal["proposed_facts"]["fidelity"]["reason"] = (
+        "the staged code is a simplified approximation of the published architecture"
+    )
+    with pytest.raises(ProposalValidationError, match="forbidden approximation language"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_diacritic_citation_authors_ground_in_both_directions(tmp_path: Path) -> None:
+    """ASCII and diacritic spellings of one author name ground each other."""
+
+    for claimed, published in (
+        ("Ivana Balazevic", "Ivana Balažević"),
+        ("Ivana Balažević", "Ivana Balazevic"),
+    ):
+        proposal, manifest = _ground_proposal(tmp_path)
+        text = f"Example Model. {published}, Example Lab, US. Published at TestConf in 2020."
+        _strip_paper_evidence(proposal, manifest)
+        source_id = f"source-{abs(hash((claimed, published)))}"
+        attach_paper_evidence(proposal, manifest, tmp_path, text=text, source_id=source_id)
+        for citation in (
+            proposal["proposed_facts"]["citation"],
+            proposal["proposed_facts"]["external_metadata"]["citation"],
+        ):
+            citation["authors"] = [claimed]
+        report = validate_author_proposal(
+            proposal, allowed_model_dir=tmp_path, source_manifest=manifest
+        )
+        assert report.rung.value == "R1_LIBRARY"
 
 
 def test_valid_typed_r1_proposal_passes(tmp_path: Path) -> None:

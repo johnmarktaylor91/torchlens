@@ -21,7 +21,13 @@ from menagerie.crawler.evidence import (
 )
 from menagerie.crawler.fetcher import cas_path as source_cas_path
 from menagerie.crawler.identity import hash_bytes
-from menagerie.crawler.metadata import MANDATORY_EXTERNAL_FIELDS
+from menagerie.crawler.metadata import (
+    AVAILABILITY_BASES,
+    AVAILABILITY_FIELDS,
+    AVAILABILITY_RECORD_KEYS,
+    AVAILABILITY_STATUSES,
+    MANDATORY_EXTERNAL_FIELDS,
+)
 from menagerie.crawler.recipe import RecipeError, validate_pretrained_disable_fields
 from menagerie.crawler.schema import (
     PayloadValidationError,
@@ -31,50 +37,66 @@ from menagerie.crawler.schema import (
     validate_payload,
 )
 
+#: Per-leaf taxonomy claims. The old aggregate ``taxonomy`` claim passed whenever ONE
+#: child matched -- a taxonomy with unsupported leaves rode through on its family name
+#: alone. Every leaf now needs its own excerpt binding, and the Codex checker returns a
+#: per-leaf verdict. No aggregate claim ever passes on a child's support.
+TAXONOMY_LEAF_CLAIMS = frozenset(
+    {
+        "taxonomy.family",
+        "taxonomy.domains",
+        "taxonomy.tasks",
+        "taxonomy.modalities",
+        "taxonomy.era",
+        "taxonomy.architecture_tags",
+        "taxonomy.novel_ops",
+    }
+)
 DEFAULT_GATED_CLAIMS = frozenset(
     {f"external_metadata.{field}" for field in MANDATORY_EXTERNAL_FIELDS if field != "keywords"}
     | {
         "external_metadata.description",
         "source_resolution.rung",
-        "taxonomy",
         "input_contract",
     }
+    | TAXONOMY_LEAF_CLAIMS
 )
-#: Gated claims whose VALUE cannot be judged by literal token overlap, because the value
-#: is an inference over the source rather than anything the source says. Deciding these
-#: with the deterministic matcher was worse than not deciding them: measured against real
-#: text, ``country = "US"`` passes by matching the English pronoun "us" -- grounding
-#: theater that reports success while proving nothing -- while ``GB``, ``CN``, and ``DE``
-#: can never pass however correct the evidence is, and ``era`` is a controlled-vocabulary
-#: bucket that essentially never occurs verbatim.
-#:
-#: They are NOT ungated. The excerpt-provenance requirement is unchanged -- an excerpt
-#: must still name the claim -- and the Codex accuracy checker must still return
-#: ``accurate`` for every mandatory external field before any canonical write
-#: (:func:`menagerie.crawler.metadata._validate_external_field_checks`). What moves is
-#: only the *verdict on the value*, from a matcher that cannot evaluate entailment to the
-#: component that can.
-CHECKER_EVALUATED_CLAIMS = frozenset(
-    {
-        "external_metadata.country",
-        "external_metadata.era",
-    }
-)
-#: Gated claims whose value is a verbatim fact and stays under the deterministic matcher.
-VALUE_MATCHED_CLAIMS = DEFAULT_GATED_CLAIMS - CHECKER_EVALUATED_CLAIMS
+#: Judgment claims: every gated claim whose VALUE is an inference over the source rather
+#: than a string the source contains. The deterministic layer can decide structure and
+#: provenance for them -- the claim is bound to hash-verified excerpts, empties carry a
+#: typed availability state -- but it cannot decide entailment. The deleted token-overlap
+#: oracle was simultaneously too weak (``country = "US"`` passed on the English pronoun
+#: "us"; a fabricated citation passed on title+year alone) and too strong (``GB``/``CN``/
+#: ``DE`` and era buckets could never pass honest text), so semantic entailment belongs
+#: to the Codex accuracy checker, which must still return ``accurate`` for every
+#: mandatory external field before any canonical write
+#: (:func:`menagerie.crawler.metadata._validate_external_field_checks`).
+CHECKER_EVALUATED_CLAIMS = DEFAULT_GATED_CLAIMS - {"external_metadata.citation"}
+#: Gated claims whose value is checked deterministically, per-leaf, against evidence
+#: bytes or machine records. Citation leaves must occur (Unicode-canonicalized) verbatim
+#: in the controlled-fetched paper text; see `_validate_citation_leaves`.
+VALUE_MATCHED_CLAIMS = frozenset({"external_metadata.citation"})
 #: Keys inside a structured claim that record provenance or disposition rather than the
 #: fact itself, and so cannot make an otherwise-empty block look answered.
 _HOLLOW_BOOKKEEPING_KEYS = frozenset(
     {"status", "source_evidence_ids", "evidence_ids", "basis", "confidence", "note"}
 )
-#: Value-matched claims for which an empty collection is a true, ordinary fact rather
-#: than an unfilled field. Everything else must justify its emptiness.
+#: Gated claims for which an empty collection is a true, ordinary fact rather than an
+#: unfilled field (a model with no recorded predecessors, lineage, or novel ops is the
+#: common honest case). Every other gated claim must either carry a value or declare a
+#: typed availability state; bare null/empty never passes.
 EMPTIABLE_CLAIMS = frozenset(
     {
         "external_metadata.lineage",
         "external_metadata.predecessors",
+        "taxonomy.novel_ops",
     }
 )
+#: External-metadata claims that may declare a typed availability state instead of a
+#: value (``external_metadata.availability.<field>``). These are exactly the judgment
+#: facts that can be honestly unknowable for a real model. See
+#: :data:`menagerie.crawler.metadata.AVAILABILITY_FIELDS` (single source of truth).
+AVAILABILITY_CLAIMS = frozenset(f"external_metadata.{field}" for field in AVAILABILITY_FIELDS)
 #: Source roles whose bytes are the *paper*, not the implementation. Paper metadata
 #: (`authors`, `institution`, `country`, `venue`, `year`, `era`, `citation`) essentially
 #: never appears verbatim in implementation code, so a proposal that asserts a citation
@@ -299,7 +321,10 @@ def validate_author_proposal(
     _validate_description(facts)
     evidence = _mapping(facts.get("evidence"), "evidence")
     claims = set(required_claims if required_claims is not None else DEFAULT_GATED_CLAIMS)
-    if _citation_is_present(facts):
+    # The citation is gated whenever a paper source is bound, not only when the author
+    # volunteers one: supplying a true fact must never be what triggers extra checks
+    # while omitting it sails through.
+    if _citation_is_present(facts) or _fetched_paper_source_ids(facts, source_manifest):
         claims.add("external_metadata.citation")
     try:
         evidence_report = validate_evidence(
@@ -311,8 +336,8 @@ def validate_author_proposal(
         )
     except EvidenceValidationError as exc:
         raise ProposalValidationError(str(exc)) from exc
-    _validate_claim_support(facts, evidence, claims)
     known_evidence = evidence_ids(evidence)
+    _validate_claim_support(facts, evidence, claims, known_evidence)
     _validate_citation(facts, known_evidence)
     _validate_citation_consistency(facts)
     _validate_paper_evidence_source(facts, evidence, source_manifest)
@@ -570,21 +595,16 @@ def _validate_paper_evidence_source(
         such a source supports the citation claim.
     """
 
+    paper_source_ids = _fetched_paper_source_ids(facts, source_manifest)
     if not _citation_is_present(facts):
+        if paper_source_ids:
+            citation = _mapping(facts.get("citation"), "citation")
+            raise ProposalValidationError(
+                "citation availability cannot be "
+                f"{citation.get('status')!r} while the introducing paper is a "
+                "controlled-fetched source; the fetched paper names its own citation"
+            )
         return
-    resolution = _mapping(facts.get("source_resolution"), "source_resolution")
-    declared = resolution.get("sources")
-    if not isinstance(declared, list):
-        raise ProposalValidationError("source_resolution.sources must be a list")
-    fetched = _source_manifest_index(source_manifest)
-    paper_source_ids = {
-        str(source["source_id"])
-        for source in declared
-        if isinstance(source, Mapping)
-        and source.get("role") in PAPER_EVIDENCE_ROLES
-        and isinstance(source.get("source_id"), str)
-        and _is_controlled_fetch(fetched.get(str(source["source_id"])))
-    }
     if not paper_source_ids:
         raise ProposalValidationError(
             "a present citation requires the introducing paper or landing page as a "
@@ -596,21 +616,64 @@ def _validate_paper_evidence_source(
     excerpts = evidence.get("excerpts")
     if not isinstance(excerpts, list):
         raise ProposalValidationError("evidence.excerpts must be a list")
-    grounded = any(
-        isinstance(excerpt, Mapping)
+    paper_texts = [
+        str(excerpt.get("text"))
+        for excerpt in excerpts
+        if isinstance(excerpt, Mapping)
         and str(excerpt.get("source_id")) in paper_source_ids
+        and isinstance(excerpt.get("text"), str)
         and any(
             _SUPPORT_ALIASES.get(support, support) == "external_metadata.citation"
             for support in excerpt.get("supports", [])
             if isinstance(support, str)
         )
-        for excerpt in excerpts
-    )
-    if not grounded:
+    ]
+    if not paper_texts:
         raise ProposalValidationError(
             "external_metadata.citation must be supported by a literal excerpt from the "
             "controlled-fetched paper source, not only from implementation code"
         )
+    _validate_citation_leaves(_mapping(facts.get("citation"), "citation"), paper_texts)
+
+
+def _fetched_paper_source_ids(
+    facts: Mapping[str, Any],
+    source_manifest: Union[Mapping[str, Any], Sequence[Mapping[str, Any]]],
+) -> frozenset[str]:
+    """Return declared paper-role sources backed by controlled-fetched bytes.
+
+    Parameters
+    ----------
+    facts:
+        Complete proposed fact tree.
+    source_manifest:
+        Exact controlled-fetch source rows.
+
+    Returns
+    -------
+    frozenset[str]
+        Source identifiers whose declared role is a paper role and whose bytes are
+        hash-bound in the frozen manifest.
+
+    Raises
+    ------
+    ProposalValidationError
+        If the declared source list is malformed.
+    """
+
+    resolution = _mapping(facts.get("source_resolution"), "source_resolution")
+    declared = resolution.get("sources")
+    if not isinstance(declared, list):
+        raise ProposalValidationError("source_resolution.sources must be a list")
+    fetched = _source_manifest_index(source_manifest)
+    return frozenset(
+        str(source["source_id"])
+        for source in declared
+        if isinstance(source, Mapping)
+        and source.get("role") in PAPER_EVIDENCE_ROLES
+        and isinstance(source.get("source_id"), str)
+        and _is_controlled_fetch(fetched.get(str(source["source_id"])))
+    )
 
 
 def _is_controlled_fetch(source: Optional[Mapping[str, Any]]) -> bool:
@@ -642,9 +705,22 @@ def _is_controlled_fetch(source: Optional[Mapping[str, Any]]) -> bool:
 
 
 def _validate_claim_support(
-    facts: Mapping[str, Any], evidence: Mapping[str, Any], required_claims: Iterable[str]
+    facts: Mapping[str, Any],
+    evidence: Mapping[str, Any],
+    required_claims: Iterable[str],
+    known_evidence: frozenset[str],
 ) -> None:
-    """Verify that each evidence label is substantively bound to its proposed value.
+    """Validate structure and provenance of every gated claim, per-leaf.
+
+    The deterministic layer decides only what it can actually decide: every gated
+    claim binds at least one hash-verified excerpt, no gated claim is bare null or
+    empty, and an empty judgment claim carries a structurally valid typed availability
+    state. Semantic entailment of judgment values is the Codex checker's job
+    (:data:`CHECKER_EVALUATED_CLAIMS`); citation leaves are value-checked against the
+    fetched paper bytes in :func:`_validate_paper_evidence_source`. The former
+    token-overlap entailment oracle is deleted, not tuned: it certified fabrication
+    (``country="US"`` on the pronoun "us") while refusing honest facts (diacritic
+    spellings, ISO codes, era buckets), and no strictness setting makes that sound.
 
     Parameters
     ----------
@@ -653,12 +729,15 @@ def _validate_claim_support(
     evidence:
         Literal evidence block already verified against source bytes.
     required_claims:
-        Claim paths requiring deterministic content support.
+        Claim paths requiring deterministic support.
+    known_evidence:
+        Valid literal evidence identifiers.
 
     Raises
     ------
     ProposalValidationError
-        If a required label has no excerpt whose text supports the proposed value.
+        If a claim has no bound excerpt, is bare-empty, or declares an invalid
+        availability state.
     """
 
     excerpts = evidence.get("excerpts")
@@ -678,29 +757,199 @@ def _validate_claim_support(
                 support_texts.setdefault(canonical, []).append(text)
 
     unsupported: list[str] = []
-    hollow: list[str] = []
     for claim in required_claims:
         canonical = _SUPPORT_ALIASES.get(claim, claim)
-        texts = support_texts.get(canonical, [])
+        if not support_texts.get(canonical):
+            unsupported.append(canonical)
+            continue
+        if canonical == "external_metadata.citation":
+            # Citation leaves are value-checked against the paper source bytes in
+            # `_validate_paper_evidence_source`; availability is checked in
+            # `_validate_citation`.
+            continue
         value = _claim_value(facts, canonical)
-        if not texts:
-            unsupported.append(canonical)
-            continue
-        if canonical in CHECKER_EVALUATED_CLAIMS:
-            # Provenance is still required; the value verdict belongs to the checker.
-            continue
-        if _claim_is_hollow(canonical, value):
-            hollow.append(canonical)
-            continue
-        if not _text_supports_claim(canonical, value, "\n".join(texts)):
-            unsupported.append(canonical)
-    if hollow:
-        _validate_absence_is_searched(facts, hollow)
+        _validate_claim_state(canonical, value, facts, known_evidence)
     if unsupported:
         raise ProposalValidationError(
             "evidence excerpts do not substantively support claimed values: "
             f"{sorted(set(unsupported))}"
         )
+
+
+def _validate_claim_state(
+    claim: str, value: object, facts: Mapping[str, Any], known_evidence: frozenset[str]
+) -> None:
+    """Require a gated claim to carry a value or a typed availability state.
+
+    A null/omitted value used to satisfy the gate for free, which trained authors to
+    write null: the cheapest route past the gate was to empty exactly the fields the
+    catalog exists to collect, and a run-once campaign would have reported success over
+    hollow records. Omission is now itself a checkable, evidence-carrying assertion.
+
+    Parameters
+    ----------
+    claim:
+        Canonical claim path.
+    value:
+        Proposed value at that path.
+    facts:
+        Complete proposed fact tree.
+    known_evidence:
+        Valid literal evidence identifiers.
+
+    Raises
+    ------
+    ProposalValidationError
+        If the claim is bare-empty, or its availability state is structurally invalid
+        or contradicts the carried value.
+    """
+
+    record = _availability_record(facts, claim)
+    empty = _claim_is_hollow(claim, value)
+    if record is None:
+        if empty:
+            raise ProposalValidationError(
+                f"gated claim {claim} is bare null/empty; a value must be present or the "
+                "claim must declare a typed availability state "
+                "(external_metadata.availability) of not-found-after-search or "
+                "not-applicable with its evidence"
+            )
+        return
+    if claim not in AVAILABILITY_CLAIMS:
+        raise ProposalValidationError(
+            f"availability states are not declarable for gated claim {claim}"
+        )
+    _validate_availability_record(claim, record, value, empty, facts, known_evidence)
+
+
+def _availability_record(facts: Mapping[str, Any], claim: str) -> Optional[Mapping[str, Any]]:
+    """Return the declared availability record for one external-metadata claim.
+
+    Parameters
+    ----------
+    facts:
+        Complete proposed fact tree.
+    claim:
+        Canonical claim path.
+
+    Returns
+    -------
+    Mapping[str, Any] | None
+        Declared availability record, or ``None`` when absent.
+
+    Raises
+    ------
+    ProposalValidationError
+        If the availability block is present but not an object of objects.
+    """
+
+    prefix = "external_metadata."
+    if not claim.startswith(prefix):
+        return None
+    metadata = facts.get("external_metadata")
+    if not isinstance(metadata, Mapping):
+        return None
+    availability = metadata.get("availability")
+    if availability is None:
+        return None
+    if not isinstance(availability, Mapping):
+        raise ProposalValidationError("external_metadata.availability must be an object")
+    record = availability.get(claim.removeprefix(prefix))
+    if record is None:
+        return None
+    if not isinstance(record, Mapping):
+        raise ProposalValidationError(f"availability state for {claim} must be an object")
+    return record
+
+
+def _validate_availability_record(
+    claim: str,
+    record: Mapping[str, Any],
+    value: object,
+    empty: bool,
+    facts: Mapping[str, Any],
+    known_evidence: frozenset[str],
+) -> None:
+    """Validate one typed availability state structurally, per-leaf.
+
+    ``not-found-after-search`` is a positive, evidence-carrying claim: it must sit on
+    the recorded bounded search that could have found the fact, so an honestly-unknown
+    author or institution is exactly as auditable as a present one. Whether the pinned
+    evidence actually *supports* a present value -- or contradicts a claimed absence --
+    is the Codex checker's per-leaf judgment, not token matching.
+
+    Parameters
+    ----------
+    claim:
+        Canonical claim path.
+    record:
+        Declared availability record.
+    value:
+        Proposed claim value.
+    empty:
+        Whether the carried value is empty.
+    facts:
+        Complete proposed fact tree.
+    known_evidence:
+        Valid literal evidence identifiers.
+
+    Raises
+    ------
+    ProposalValidationError
+        If the record is structurally invalid or contradicts the carried value.
+    """
+
+    if set(record) != AVAILABILITY_RECORD_KEYS:
+        raise ProposalValidationError(
+            f"availability state for {claim} must carry exactly {sorted(AVAILABILITY_RECORD_KEYS)}"
+        )
+    status = record.get("status")
+    if status not in AVAILABILITY_STATUSES:
+        raise ProposalValidationError(
+            f"availability state for {claim} has a non-canonical status: {status!r}"
+        )
+    basis = record.get("basis")
+    if basis not in AVAILABILITY_BASES:
+        raise ProposalValidationError(
+            f"availability state for {claim} has a non-canonical basis: {basis!r}"
+        )
+    values = record.get("values")
+    if not isinstance(values, list):
+        raise ProposalValidationError(f"availability state for {claim} values must be a list")
+    cited = record.get("evidence")
+    if not isinstance(cited, list) or not all(
+        isinstance(evidence_id, str) and evidence_id for evidence_id in cited
+    ):
+        raise ProposalValidationError(
+            f"availability state for {claim} evidence must be a list of evidence IDs"
+        )
+    if not set(cited) <= known_evidence:
+        raise ProposalValidationError(
+            f"availability state for {claim} references missing or fabricated evidence"
+        )
+    if status == "present":
+        if empty or not values:
+            raise ProposalValidationError(
+                f"a present availability state for {claim} requires the field to carry "
+                "its non-empty values"
+            )
+        if sorted(map(str, _positive_scalars(value))) != sorted(map(str, values)):
+            raise ProposalValidationError(
+                f"availability state for {claim} does not match the proposed value"
+            )
+        if not cited:
+            raise ProposalValidationError(
+                f"a present availability state for {claim} requires supporting evidence"
+            )
+        return
+    if not empty or values:
+        raise ProposalValidationError(
+            f"availability state for {claim} declares {status} but the field carries a value"
+        )
+    if status == "not-found-after-search":
+        # Until the source broker ships probe receipts, the recorded bounded search IS
+        # the evidence for a not-found state; explicit excerpt IDs may corroborate it.
+        _validate_absence_is_searched(facts, [claim])
 
 
 def _claim_is_hollow(claim: str, value: object) -> bool:
@@ -774,8 +1023,8 @@ def _validate_absence_is_searched(facts: Mapping[str, Any], hollow: Sequence[str
         or not conclusion.strip()
     ):
         raise ProposalValidationError(
-            "gated claims were left empty without a recorded bounded search that could "
-            f"have found them: {sorted(set(hollow))}"
+            "a not-found-after-search state requires a recorded bounded search that "
+            f"could have found the fact: {sorted(set(hollow))}"
         )
 
 
@@ -808,100 +1057,89 @@ def _claim_value(facts: Mapping[str, Any], claim: str) -> object:
     return value
 
 
-def _text_supports_claim(claim: str, value: object, text: str) -> bool:
-    """Return whether literal excerpt text supports a proposed claim value.
+def _validate_citation_leaves(citation: Mapping[str, Any], texts: Sequence[str]) -> None:
+    """Require every positive citation leaf to occur verbatim in the paper text.
+
+    Per-leaf, never aggregate: the old matcher checked title+year only, so a citation
+    with fabricated authors, venue, URL, and BibTeX passed the gate. Each present leaf
+    must now occur -- Unicode-canonicalized, so ``Balazevic`` and the diacritic
+    spelling of the same author ground each other -- in the controlled-fetched paper
+    excerpts bound to the citation claim. BibTeX is checked for exact consistency with
+    the grounded title/year/authors, which an entry for a different work cannot
+    satisfy. ``citation.url`` exact verification is machine-derived work (the source
+    broker's resolver receipt) and is not excerpt-checked here.
 
     Parameters
     ----------
-    claim:
-        Canonical claim path.
-    value:
-        Proposed value at that path.
-    text:
-        Combined literal excerpts explicitly bound to the claim.
+    citation:
+        Present citation block.
+    texts:
+        Verbatim excerpt texts from controlled-fetched paper-role sources bound to the
+        citation claim.
 
-    Returns
-    -------
-    bool
-        True when deterministic value-bearing tokens occur in the excerpt text.
+    Raises
+    ------
+    ProposalValidationError
+        If any positive citation leaf is not grounded in the paper text.
     """
 
-    normalized_text = _normalize_support_text(text)
-    if claim == "source_resolution.rung":
-        rung_terms = {
-            SourceRung.LIBRARY.value: ("library", "package", "registry", "official"),
-            SourceRung.VENDOR.value: ("upstream", "repository", "official", "source code"),
-            SourceRung.PORT.value: ("port", "translation", "source code"),
-            SourceRung.REIMPLEMENT.value: ("layer", "equation", "architecture", "forward"),
-            SourceRung.SKIP.value: ("insufficient", "unavailable", "not found", "search"),
-        }
-        return any(term in normalized_text for term in rung_terms.get(str(value), ()))
-    if value is None or value == []:
-        return True
-    if claim.endswith((".description", ".key_contribution")):
-        expected = _significant_tokens(str(value))
-        overlap = expected & set(normalized_text.split())
-        return len(overlap) >= min(2, len(expected)) if expected else False
-    if claim == "taxonomy":
-        family = value.get("family") if isinstance(value, Mapping) else None
-        if isinstance(family, str) and _normalize_support_text(family) not in normalized_text:
-            return False
-        return _matches_any_scalar(value, normalized_text, excluded={family})
-    if claim == "input_contract":
-        if not isinstance(value, Mapping):
-            return False
-        semantic_values = [
-            value.get("semantic_description"),
-            value.get("expected_output_semantics"),
-            *(
-                item.get("semantic_role")
-                for key in ("args", "kwargs", "non_tensor_values")
-                for item in value.get(key, [])
-                if isinstance(item, Mapping)
-            ),
-        ]
-        return _matches_any_scalar(semantic_values, normalized_text)
-    if claim.endswith(".citation") and isinstance(value, Mapping):
-        title = value.get("title")
-        year = value.get("year")
-        # A declared arXiv ID, DOI, or OpenReview ID is an exact resolvable anchor and a
-        # strictly stronger check than title-token overlap, so it is required in addition
-        # to -- never instead of -- the title and year. Absent identifiers match trivially.
-        identifiers = [value.get(field) for field in CITATION_IDENTIFIER_FIELDS]
-        return (
-            _scalar_matches(title, normalized_text)
-            and _scalar_matches(year, normalized_text)
-            and all(_scalar_matches(identifier, normalized_text) for identifier in identifiers)
+    combined = _normalize_support_text("\n".join(texts))
+    combined_tokens = set(combined.split())
+
+    def phrase_grounded(value: object) -> bool:
+        """Return whether one canonicalized value occurs contiguously in the text."""
+
+        normalized = _normalize_support_text(str(value))
+        return not normalized or f" {normalized} " in f" {combined} "
+
+    def name_grounded(value: object) -> bool:
+        """Return whether every canonical component of one name occurs in the text."""
+
+        tokens = set(_normalize_support_text(str(value)).split())
+        return not tokens or tokens <= combined_tokens
+
+    failures: list[str] = []
+    for leaf in ("title", "venue"):
+        value = citation.get(leaf)
+        if isinstance(value, str) and value.strip() and not phrase_grounded(value):
+            failures.append(leaf)
+    year = citation.get("year")
+    if year is not None and str(year) not in combined_tokens:
+        failures.append("year")
+    authors = citation.get("authors")
+    for index, author in enumerate(authors if isinstance(authors, list) else []):
+        # Name order varies between "Ivana Balazevic" and "Balazevic, Ivana"; exact
+        # per-component membership is required, never overlap thresholds.
+        if isinstance(author, str) and author.strip() and not name_grounded(author):
+            failures.append(f"authors[{index}]")
+    for leaf in CITATION_IDENTIFIER_FIELDS:
+        value = citation.get(leaf)
+        if isinstance(value, str) and value.strip() and not phrase_grounded(value):
+            failures.append(leaf)
+    bibtex = citation.get("bibtex")
+    if isinstance(bibtex, str) and bibtex.strip():
+        bibtex_text = _normalize_support_text(bibtex)
+        bibtex_tokens = set(bibtex_text.split())
+        title = citation.get("title")
+        consistent = (
+            not isinstance(title, str)
+            or not title.strip()
+            or f" {_normalize_support_text(title)} " in f" {bibtex_text} "
         )
-    if claim.endswith(".modes") and isinstance(value, Mapping):
-        return _matches_any_scalar(value.get("meaningful_modes"), normalized_text)
-    scalars = _positive_scalars(value)
-    return all(_scalar_matches(scalar, normalized_text) for scalar in scalars)
-
-
-def _matches_any_scalar(
-    value: object, normalized_text: str, *, excluded: set[object] | None = None
-) -> bool:
-    """Return whether any positive scalar value occurs in normalized excerpt text.
-
-    Parameters
-    ----------
-    value:
-        Nested value whose positive scalar leaves are candidates.
-    normalized_text:
-        Lowercase whitespace-normalized excerpt text.
-    excluded:
-        Optional scalar values not considered for the match.
-
-    Returns
-    -------
-    bool
-        True when at least one candidate scalar is represented.
-    """
-
-    excluded_values = excluded or set()
-    scalars = [scalar for scalar in _positive_scalars(value) if scalar not in excluded_values]
-    return not scalars or any(_scalar_matches(scalar, normalized_text) for scalar in scalars)
+        if year is not None and str(year) not in bibtex_tokens:
+            consistent = False
+        for author in authors if isinstance(authors, list) else []:
+            if isinstance(author, str) and author.strip():
+                author_tokens = set(_normalize_support_text(author).split())
+                if author_tokens and not author_tokens <= bibtex_tokens:
+                    consistent = False
+        if not consistent:
+            failures.append("bibtex")
+    if failures:
+        raise ProposalValidationError(
+            "citation leaves are not grounded verbatim in the fetched paper text: "
+            f"{sorted(set(failures))}"
+        )
 
 
 def _positive_scalars(value: object) -> list[object]:
@@ -925,54 +1163,6 @@ def _positive_scalars(value: object) -> list[object]:
     if isinstance(value, (str, int, float)) and not isinstance(value, bool):
         return [value] if str(value).strip() else []
     return []
-
-
-def _scalar_matches(value: object, normalized_text: str) -> bool:
-    """Return whether one proposed scalar is represented in excerpt text.
-
-    Parameters
-    ----------
-    value:
-        Proposed scalar value.
-    normalized_text:
-        Lowercase whitespace-normalized excerpt text.
-
-    Returns
-    -------
-    bool
-        True when the scalar or its significant tokens occur.
-    """
-
-    if value is None:
-        return True
-    normalized_value = _normalize_support_text(str(value))
-    if not normalized_value:
-        return True
-    if f" {normalized_value} " in f" {normalized_text} ":
-        return True
-    tokens = _significant_tokens(normalized_value)
-    return bool(tokens) and tokens <= set(normalized_text.split())
-
-
-def _significant_tokens(value: str) -> set[str]:
-    """Return distinctive lowercase tokens suitable for evidence matching.
-
-    Parameters
-    ----------
-    value:
-        Proposed or excerpt text.
-
-    Returns
-    -------
-    set[str]
-        Tokens longer than three characters after generic-word removal.
-    """
-
-    return {
-        token
-        for token in _normalize_support_text(value).split()
-        if (len(token) > 3 or token.isdigit()) and token not in _SUPPORT_STOPWORDS
-    }
 
 
 def _normalize_support_text(value: str) -> str:
@@ -2363,7 +2553,7 @@ def _claims_exotic_family(facts: Mapping[str, Any]) -> bool:
 
 
 def _validate_anti_slop(facts: Mapping[str, Any]) -> None:
-    """Reject explicit approximation language in authored implementation claims.
+    """Reject explicit approximation language on implementation-fidelity surfaces.
 
     Parameters
     ----------
@@ -2373,7 +2563,7 @@ def _validate_anti_slop(facts: Mapping[str, Any]) -> None:
     Raises
     ------
     ProposalValidationError
-        If authored text admits a generic or simplified stand-in.
+        If implementation-fidelity text admits a generic or simplified stand-in.
     """
 
     texts = _authored_implementation_texts(facts)
@@ -2388,7 +2578,16 @@ def _validate_anti_slop(facts: Mapping[str, Any]) -> None:
 
 
 def _authored_implementation_texts(facts: Mapping[str, Any]) -> list[str]:
-    """Collect authored prose surfaces that can admit approximation or slop.
+    """Collect implementation-fidelity prose surfaces that can admit slop.
+
+    Scoped to the surfaces where approximation language means what the tripwire
+    thinks it means: the implementation's own rationales, declared choices, patches,
+    fidelity reason/deviations, and the source-resolution decision. Descriptions and
+    website text are deliberately NOT scanned -- dozens of real roster models are
+    *named* with this vocabulary (surrogate-gradient SNNs, Neural Mesh Simplification,
+    approximate message passing) and cannot be honestly described without it. The
+    five-way fidelity verdict and the structural Sequential/MLP tripwire remain fully
+    armed.
 
     Parameters
     ----------
@@ -2398,20 +2597,13 @@ def _authored_implementation_texts(facts: Mapping[str, Any]) -> list[str]:
     Returns
     -------
     list[str]
-        Authored descriptions, decisions, rationales, and fidelity notes.
+        Authored implementation decisions, rationales, and fidelity notes.
     """
 
-    metadata = _mapping(facts.get("external_metadata"), "external_metadata")
-    website = _mapping(facts.get("website"), "website")
     resolution = _mapping(facts.get("source_resolution"), "source_resolution")
     implementation = _mapping(facts.get("implementation"), "implementation")
     fidelity = _mapping(facts.get("fidelity"), "fidelity")
     texts = [
-        metadata.get("description"),
-        metadata.get("key_contribution"),
-        website.get("tagline"),
-        website.get("description"),
-        website.get("key_contribution"),
         resolution.get("decision"),
         _mapping(resolution.get("search_report"), "source_resolution.search_report").get(
             "conclusion"

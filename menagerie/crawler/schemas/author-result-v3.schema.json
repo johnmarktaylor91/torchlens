@@ -240,6 +240,42 @@
     "$.payload.proposal.proposed_facts.evidence.family_grounding_path": "author-gated",
     "$.payload.proposal.proposed_facts.external_metadata.architecture_class[]": "author-gated",
     "$.payload.proposal.proposed_facts.external_metadata.authors[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.authors.basis": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.authors.evidence[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.authors.status": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.authors.values[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.country.basis": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.country.evidence[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.country.status": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.country.values[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.era.basis": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.era.evidence[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.era.status": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.era.values[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.field.basis": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.field.evidence[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.field.status": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.field.values[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.institution.basis": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.institution.evidence[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.institution.status": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.institution.values[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.license.basis": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.license.evidence[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.license.status": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.license.values[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.subfield.basis": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.subfield.evidence[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.subfield.status": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.subfield.values[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.venue.basis": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.venue.evidence[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.venue.status": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.venue.values[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.year.basis": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.year.evidence[]": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.year.status": "author-gated",
+    "$.payload.proposal.proposed_facts.external_metadata.availability.year.values[]": "author-gated",
     "$.payload.proposal.proposed_facts.external_metadata.citation.arxiv_id": "author-gated",
     "$.payload.proposal.proposed_facts.external_metadata.citation.authors[]": "author-gated",
     "$.payload.proposal.proposed_facts.external_metadata.citation.bibtex": "author-gated",
@@ -468,6 +504,12 @@
     "$.payload.proposal.work_id": "author-gated",
     "$.payload.reason_code": "author-gated",
     "$.payload.recommendation_sha256": "author-gated",
+    "$.payload.research_summary.candidate_links[]": "author-gated",
+    "$.payload.research_summary.conclusion": "author-gated",
+    "$.payload.research_summary.languages[]": "author-gated",
+    "$.payload.research_summary.places[]": "author-gated",
+    "$.payload.research_summary.queries[]": "author-gated",
+    "$.payload.research_summary.retained_description": "author-gated",
     "$.payload.search_report_identity": "author-gated",
     "$.payload.source_ids[]": "author-gated",
     "$.payload.stage": "author-gated",
@@ -559,6 +601,10 @@
           "$ref": "#/$defs/hash",
           "description": "Exact proposed license disposition identity."
         },
+        "research_summary": {
+          "$ref": "#/$defs/research_summary",
+          "description": "Bounded stage-1 research retained for a higher-tier promotion."
+        },
         "recommendation_sha256": {
           "$ref": "#/$defs/hash",
           "description": "Digest of the closed recommendation payload."
@@ -639,6 +685,7 @@
           "enum": [
             "source",
             "fetch",
+            "author",
             "evidence",
             "environment",
             "policy",
@@ -669,6 +716,58 @@
         "recommendation_sha256": {
           "$ref": "#/$defs/hash",
           "description": "Digest of the closed recommendation payload."
+        }
+      }
+    },
+    "research_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "queries",
+        "places",
+        "candidate_links",
+        "languages",
+        "conclusion"
+      ],
+      "properties": {
+        "queries": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/nonempty_string"
+          }
+        },
+        "places": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/nonempty_string"
+          }
+        },
+        "candidate_links": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https?://"
+          }
+        },
+        "languages": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/nonempty_string"
+          }
+        },
+        "conclusion": {
+          "$ref": "#/$defs/nonempty_string"
+        },
+        "retained_description": {
+          "type": ["string", "null"]
         }
       }
     }

@@ -630,8 +630,8 @@
           "description": "Mandatory family."
         },
         "era": {
-          "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory era."
+          "$ref": "#/$defs/nullable_string",
+          "description": "Mandatory era; null only with a declared availability state."
         },
         "year": {
           "oneOf": [
@@ -685,6 +685,10 @@
         "modes": {
           "$ref": "#/$defs/external_metadata_modes",
           "description": "Mandatory meaningful runtime-mode record."
+        },
+        "availability": {
+          "$ref": "#/$defs/availability_claims",
+          "description": "Optional typed availability states for judgment facts that can be honestly unknown."
         }
       }
     },
@@ -1484,6 +1488,92 @@
           "description": "Versioned family derivation closure or typed state."
         }
       }
+    },
+    "availability_claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "values",
+        "basis",
+        "evidence"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "present",
+            "not-found-after-search",
+            "not-applicable"
+          ],
+          "description": "Mandatory closed availability disposition."
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/nonempty_string"
+              },
+              {
+                "type": "integer"
+              }
+            ]
+          },
+          "description": "Mandatory values; non-empty exactly when status is present."
+        },
+        "basis": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory closed-vocabulary basis for the disposition."
+        },
+        "evidence": {
+          "$ref": "#/$defs/string_array",
+          "description": "Mandatory evidence-ID list backing the disposition."
+        }
+      },
+      "description": "One typed availability state for a judgment fact."
+    },
+    "availability_claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "authors": {
+          "$ref": "#/$defs/availability_claim",
+          "description": "Optional typed availability state for authors."
+        },
+        "country": {
+          "$ref": "#/$defs/availability_claim",
+          "description": "Optional typed availability state for country."
+        },
+        "era": {
+          "$ref": "#/$defs/availability_claim",
+          "description": "Optional typed availability state for era."
+        },
+        "field": {
+          "$ref": "#/$defs/availability_claim",
+          "description": "Optional typed availability state for field."
+        },
+        "institution": {
+          "$ref": "#/$defs/availability_claim",
+          "description": "Optional typed availability state for institution."
+        },
+        "license": {
+          "$ref": "#/$defs/availability_claim",
+          "description": "Optional typed availability state for license."
+        },
+        "subfield": {
+          "$ref": "#/$defs/availability_claim",
+          "description": "Optional typed availability state for subfield."
+        },
+        "venue": {
+          "$ref": "#/$defs/availability_claim",
+          "description": "Optional typed availability state for venue."
+        },
+        "year": {
+          "$ref": "#/$defs/availability_claim",
+          "description": "Optional typed availability state for year."
+        }
+      },
+      "description": "Optional per-field typed availability states; bare null never passes the gate."
     }
   },
   "x-authority-ownership": {
@@ -1580,6 +1670,42 @@
     "$.execution.network_attempted": "reducer-derived",
     "$.external_metadata.architecture_class[]": "author-gated",
     "$.external_metadata.authors[]": "author-gated",
+    "$.external_metadata.availability.authors.basis": "author-gated",
+    "$.external_metadata.availability.authors.evidence[]": "author-gated",
+    "$.external_metadata.availability.authors.status": "author-gated",
+    "$.external_metadata.availability.authors.values[]": "author-gated",
+    "$.external_metadata.availability.country.basis": "author-gated",
+    "$.external_metadata.availability.country.evidence[]": "author-gated",
+    "$.external_metadata.availability.country.status": "author-gated",
+    "$.external_metadata.availability.country.values[]": "author-gated",
+    "$.external_metadata.availability.era.basis": "author-gated",
+    "$.external_metadata.availability.era.evidence[]": "author-gated",
+    "$.external_metadata.availability.era.status": "author-gated",
+    "$.external_metadata.availability.era.values[]": "author-gated",
+    "$.external_metadata.availability.field.basis": "author-gated",
+    "$.external_metadata.availability.field.evidence[]": "author-gated",
+    "$.external_metadata.availability.field.status": "author-gated",
+    "$.external_metadata.availability.field.values[]": "author-gated",
+    "$.external_metadata.availability.institution.basis": "author-gated",
+    "$.external_metadata.availability.institution.evidence[]": "author-gated",
+    "$.external_metadata.availability.institution.status": "author-gated",
+    "$.external_metadata.availability.institution.values[]": "author-gated",
+    "$.external_metadata.availability.license.basis": "author-gated",
+    "$.external_metadata.availability.license.evidence[]": "author-gated",
+    "$.external_metadata.availability.license.status": "author-gated",
+    "$.external_metadata.availability.license.values[]": "author-gated",
+    "$.external_metadata.availability.subfield.basis": "author-gated",
+    "$.external_metadata.availability.subfield.evidence[]": "author-gated",
+    "$.external_metadata.availability.subfield.status": "author-gated",
+    "$.external_metadata.availability.subfield.values[]": "author-gated",
+    "$.external_metadata.availability.venue.basis": "author-gated",
+    "$.external_metadata.availability.venue.evidence[]": "author-gated",
+    "$.external_metadata.availability.venue.status": "author-gated",
+    "$.external_metadata.availability.venue.values[]": "author-gated",
+    "$.external_metadata.availability.year.basis": "author-gated",
+    "$.external_metadata.availability.year.evidence[]": "author-gated",
+    "$.external_metadata.availability.year.status": "author-gated",
+    "$.external_metadata.availability.year.values[]": "author-gated",
     "$.external_metadata.citation.arxiv_id": "author-gated",
     "$.external_metadata.citation.authors[]": "author-gated",
     "$.external_metadata.citation.bibtex": "author-gated",

@@ -97,6 +97,43 @@ TORCHLENS_DERIVABLE_FIELDS = frozenset(
     }
 )
 
+#: Closed availability-state vocabulary for judgment facts that can be honestly
+#: unknowable. A bare null/empty gated value never passes the proposal gate; the honest
+#: spelling of an unknown is an explicit ``external_metadata.availability.<field>``
+#: record, which is exactly as auditable as a present value.
+AVAILABILITY_STATUSES = frozenset({"present", "not-found-after-search", "not-applicable"})
+#: Closed basis vocabulary declaring where an availability conclusion came from.
+AVAILABILITY_BASES = frozenset(
+    {
+        "machine-derived",
+        "stated-in-paper",
+        "stated-in-code",
+        "stated-on-website",
+        "derived-from-affiliation",
+        "judged",
+        "search-exhausted",
+        "not-applicable",
+    }
+)
+#: External-metadata fields that may declare a typed availability state. These are the
+#: judgment facts a real model can honestly lack; every other mandatory field must
+#: carry a value.
+AVAILABILITY_FIELDS = frozenset(
+    {
+        "authors",
+        "institution",
+        "country",
+        "era",
+        "field",
+        "subfield",
+        "venue",
+        "year",
+        "license",
+    }
+)
+#: Exact key set of one availability record.
+AVAILABILITY_RECORD_KEYS = frozenset({"status", "values", "basis", "evidence"})
+
 _REQUIRED_NONEMPTY_ARRAYS = frozenset(
     {
         "modality",
@@ -509,17 +546,27 @@ def validate_external_metadata(
     missing = [field for field in MANDATORY_EXTERNAL_FIELDS if field not in metadata]
     if missing:
         raise MetadataValidationError(f"missing mandatory external metadata: {missing}")
+    _validate_availability_block(metadata)
     for field in _ARRAY_FIELDS:
         value = metadata[field]
         if not isinstance(value, list) or not all(
             isinstance(item, str) and item.strip() for item in value
         ):
             raise MetadataValidationError(f"external_metadata.{field} must be a string array")
-        if field in _REQUIRED_NONEMPTY_ARRAYS and not value:
+        if (
+            field in _REQUIRED_NONEMPTY_ARRAYS
+            and not value
+            and not _absence_is_declared(metadata, field)
+        ):
             raise MetadataValidationError(f"external_metadata.{field} must be non-empty")
     for field in _REQUIRED_NONEMPTY_STRINGS:
         value = metadata[field]
         if not isinstance(value, str) or not value.strip():
+            # An era (or any availability-capable judgment fact) may be honestly
+            # unknown, but only as an explicit declared availability state -- a bare
+            # null or empty string is never a free pass.
+            if field in AVAILABILITY_FIELDS and _absence_is_declared(metadata, field):
+                continue
             raise MetadataValidationError(f"external_metadata.{field} must be non-empty")
     if not isinstance(metadata["citation"], Mapping):
         raise MetadataValidationError("external_metadata.citation must be an object")
@@ -541,6 +588,84 @@ def validate_external_metadata(
         present_fields=frozenset(MANDATORY_EXTERNAL_FIELDS),
         gated_fields=gated,
         derivable_fields_present=derivable,
+    )
+
+
+def _validate_availability_block(metadata: Mapping[str, Any]) -> None:
+    """Structurally validate declared external-metadata availability states.
+
+    Parameters
+    ----------
+    metadata:
+        Complete external-metadata mapping.
+
+    Raises
+    ------
+    MetadataValidationError
+        If a record names an unsupported field, carries non-canonical keys, status,
+        or basis, or contradicts the value its field carries.
+    """
+
+    availability = metadata.get("availability")
+    if availability is None:
+        return
+    if not isinstance(availability, Mapping):
+        raise MetadataValidationError("external_metadata.availability must be an object")
+    unsupported = set(map(str, availability)) - AVAILABILITY_FIELDS
+    if unsupported:
+        raise MetadataValidationError(
+            f"availability states are not declarable for: {sorted(unsupported)}"
+        )
+    for field, record in availability.items():
+        if not isinstance(record, Mapping) or set(record) != AVAILABILITY_RECORD_KEYS:
+            raise MetadataValidationError(
+                f"availability state for {field} must carry exactly "
+                f"{sorted(AVAILABILITY_RECORD_KEYS)}"
+            )
+        if record.get("status") not in AVAILABILITY_STATUSES:
+            raise MetadataValidationError(
+                f"availability state for {field} has a non-canonical status"
+            )
+        if record.get("basis") not in AVAILABILITY_BASES:
+            raise MetadataValidationError(
+                f"availability state for {field} has a non-canonical basis"
+            )
+        if not isinstance(record.get("values"), list) or not isinstance(
+            record.get("evidence"), list
+        ):
+            raise MetadataValidationError(
+                f"availability state for {field} values/evidence must be lists"
+            )
+        if record.get("status") != "present" and record.get("values"):
+            raise MetadataValidationError(
+                f"availability state for {field} declares absence but carries values"
+            )
+
+
+def _absence_is_declared(metadata: Mapping[str, Any], field: str) -> bool:
+    """Return whether one empty field carries an explicit non-present state.
+
+    Parameters
+    ----------
+    metadata:
+        Complete external-metadata mapping.
+    field:
+        Availability-capable field name.
+
+    Returns
+    -------
+    bool
+        True when a structurally valid non-present availability record exists.
+    """
+
+    availability = metadata.get("availability")
+    if not isinstance(availability, Mapping):
+        return False
+    record = availability.get(field)
+    return (
+        isinstance(record, Mapping)
+        and record.get("status") in AVAILABILITY_STATUSES
+        and record.get("status") != "present"
     )
 
 

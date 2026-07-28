@@ -31,8 +31,10 @@ identity and re-hashes every cited artifact. So:
   material choice is a **gap you report**, not a hole you fill.
 - Honest `SKIP_RECOMMENDATION`, `DEFER_RECOMMENDATION`, and `BLOCKED` results are fully
   acceptable outcomes and are recorded as such. An unsupported claim is not.
-- Use `NOASSERTION`, `null`, or `not-found-after-search` rather than guessing a license, a
-  year, a country, or an author.
+- Never guess a license, a year, a country, or an author. A fact you cannot establish is
+  declared, not omitted: empty the field and record a typed
+  `external_metadata.availability.<field>` state (`not-found-after-search` with your
+  recorded bounded search, or `not-applicable`). Bare `null` is refused by the gate.
 
 ### The interpreter that has the dependencies
 

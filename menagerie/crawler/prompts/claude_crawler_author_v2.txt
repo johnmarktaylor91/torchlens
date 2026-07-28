@@ -152,16 +152,32 @@ literal evidence you cite. An invented fact, ungrounded clause, altered excerpt,
 license, or unsupported country is a recorded inaccuracy. null, NOASSERTION, or cannot-determine beats
 wrong, always. Material drift cannot be relabeled minor.
 
-NULL IS HONEST, BUT IT IS NOT FREE
-An empty gated field is a claim that the fact is not there, and it is checked as one. Leaving a gated field
-null or empty -- including reporting no citation -- requires your bounded search_report to record the
-queries you actually ran, so an unanswered field is distinguishable from an unfilled one. Emptying fields is
-therefore never a way to spend less effort; it costs the same search either way. Only lineage and
-predecessors may be empty without that record, because empty is an ordinary true value for them.
-external_metadata.country and external_metadata.era are judged by the Codex checker rather than by literal
-token overlap, since a two-letter ISO code and an era bucket are inferences about a source rather than
-anything a source says. They are still mandatory, still need supporting evidence_ids, and are still refused
-if wrong.
+UNKNOWN IS HONEST, BUT IT IS A TYPED CLAIM -- BARE NULL NEVER PASSES
+A bare null or empty gated field is refused outright. If a fact genuinely cannot be established, empty the
+field AND declare it in external_metadata.availability.<field> as
+{"status": "not-found-after-search" | "not-applicable", "values": [], "basis": <one of: machine-derived,
+stated-in-paper, stated-in-code, stated-on-website, derived-from-affiliation, judged, search-exhausted,
+not-applicable>, "evidence": [<evidence_ids>]}. A not-found state additionally requires your bounded
+search_report to record the queries you actually ran, so an unanswered field is distinguishable from an
+unfilled one -- emptying fields is never a way to spend less effort. Availability states exist for authors,
+institution, country, era, field, subfield, venue, year, and license. Only lineage, predecessors, and
+taxonomy.novel_ops may be empty without a declaration, because empty is an ordinary true value for them.
+A not-found claim for a fact your own pinned evidence states is a false claim and the checker is directed
+to catch it.
+
+Judgment values -- country, era, field, subfield, taxonomy leaves, paradigm, and the like -- are judged by
+the Codex checker rather than by literal token overlap, since an ISO code or an era bucket is an inference
+about a source rather than anything a source says. They are still mandatory, still need supporting
+evidence_ids, and are still refused if wrong. Taxonomy is gated PER LEAF: every excerpt supporting your
+taxonomy must name the exact leaf it supports (taxonomy.family, taxonomy.domains, taxonomy.tasks,
+taxonomy.modalities, taxonomy.era, taxonomy.architecture_tags, taxonomy.novel_ops); an aggregate
+"taxonomy" label covers nothing.
+
+The citation is gated whenever the introducing paper is a fetched source, not only when you volunteer one,
+and it is checked PER LEAF: title, venue, year, each author, and any declared arXiv/DOI/OpenReview ID must
+occur verbatim in your paper excerpt (Unicode-canonicalized, so diacritic and ASCII spellings of one name
+both ground), and a supplied bibtex must be exactly consistent with those grounded leaves. With the paper
+in hand, "no citation" is a false claim and is refused.
 
 SELF-CHECK
 - I used the highest available rung and documented every higher-rung failure.

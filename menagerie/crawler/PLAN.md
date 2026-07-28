@@ -696,13 +696,13 @@ fragment both fail; `python -m menagerie.crawler.tools.verify_prompts` remains t
 reuses. Editing any of these files stales its digest by construction: re-pin the literal row here in the
 same change.
 
-- `claude_crawler_author_v2.txt`: `sha256:441e1c5c6c037c729dd8c20800c5446309cb109f5a1f0f1c54aa65f426c5d71f`
-- `codex_accuracy_checker_v2.txt`: `sha256:93d82284c3f9f250b55d6eb700f3f63d6e1abf586f259a6350920c5912b9f2d8`
+- `claude_crawler_author_v2.txt`: `sha256:aa9ba4cc1ff7fec02de0b569aad761c33ba54edd41acd31b046376cee34ffbcc`
+- `codex_accuracy_checker_v2.txt`: `sha256:56d6423314dbaf750012a4faee6751b74338dd4520912caf79ca76e2fe038f1e`
 - `campaign_c1-mech.md`: `sha256:c4f38a682416ed82b995a7d06941d04d6559d4ec10f8a5bb0ee6d5436b00b1e8`
 - `campaign_c2-disco.md`: `sha256:3ffbfaf9ab56c713b301f28071ff019e1173aa44a7d3e0ed890a980f59daafd1`
 - `campaign_c3-classics.md`: `sha256:e6a277891824b72e378c52b1e472357d968d30a91a87b1b8d562ab923b5a11a4`
 - `campaign_c4-native.md`: `sha256:b9ff9531f0f330dfabe09275c61aaa72d0a699a29b2c5cd463cae6f439c36683`
-- `stage_author.md`: `sha256:fe8f3f067ce84660c203011ce645dab75a06cd591d78823852bc16590aeaf576`
+- `stage_author.md`: `sha256:1ee450d3c98cea998c827cd11bfa628078e793885bfa9848c791c5e1d6d69195`
 - `stage_capability_probe.md`: `sha256:1f59abfc6f76beb4f10510a1f85373384be5ae5907c9fb198b3c2677f7781d01`
 - `stage_source_request.md`: `sha256:6c04a08dd1dcd92be988e529b29b33d78d12242000e79f9993ff8513078151c0`
 
