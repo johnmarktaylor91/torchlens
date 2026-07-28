@@ -9,6 +9,7 @@ import os
 import shlex
 import shutil
 import sys
+import traceback
 from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any, Mapping, Optional, Protocol, Sequence
@@ -263,7 +264,24 @@ def main(
         )
         return EXIT_OPERATOR_OUTAGE
     except (CheckpointError, DriverError, OSError, ValueError) as exc:
+        # This clause catches a very wide class -- every ``ValueError`` raised anywhere in the
+        # engine lands here, including every ``ReductionError``. Printing only ``str(exc)``
+        # discards the one thing needed to act on it: where it came from.
+        #
+        # A real campaign failure read, in its entirety,
+        #     crawler error: missing mandatory exact public primary source link
+        # with no stack, no file, no line, and no model ID. Diagnosing it took three rounds of
+        # investigation and ultimately required monkeypatching ``ReductionError.__init__`` to
+        # dump a stack, because the message names a symptom that several distinct code paths
+        # can produce. During an unattended multi-week run the operator gets exactly this text
+        # and nothing else, so the traceback is not a debugging luxury -- it is the only
+        # forensic record of why the run stopped.
         print(f"crawler error: {exc}", file=sys.stderr)
+        print(
+            f"exception_type: {type(exc).__module__}.{type(exc).__qualname__}",
+            file=sys.stderr,
+        )
+        traceback.print_exc(file=sys.stderr)
         return EXIT_ERROR
     return EXIT_USAGE
 
