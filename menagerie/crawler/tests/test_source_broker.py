@@ -1,0 +1,347 @@
+"""Source broker: machine-derived exact strings, typed per-target outcomes."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Optional
+
+import pytest
+
+from menagerie.crawler.identity import hash_bytes
+from menagerie.crawler.source_broker import (
+    OUTCOME_BAD_REF,
+    OUTCOME_FETCHED,
+    OUTCOME_OVERSIZED,
+    OUTCOME_PAPER_DERIVATION_ONLY,
+    OUTCOME_PROBED,
+    OUTCOME_REDIRECT_REFUSED,
+    OUTCOME_UNREACHABLE,
+    ROLE_INTRODUCING_PAPER,
+    FixtureTransport,
+    RedirectRefused,
+    SourceBrokerError,
+    TransportResponse,
+    broker_source_pack,
+    derive_paper_metadata,
+    write_broker_outputs,
+)
+
+RESOLVED_SHA = "8379e338134bd33e53340b47f95c13028a4f9dbf"
+COMMITS_URL = "https://api.github.com/repos/pykeen/pykeen/commits/v1.11.1"
+RAW_URL = (
+    "https://raw.githubusercontent.com/pykeen/pykeen/"
+    f"{RESOLVED_SHA}/src/pykeen/models/unimodal/mure.py"
+)
+ARXIV_URL = "https://export.arxiv.org/api/query?id_list=1905.09791"
+
+ARXIV_ATOM = """<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <title>Multi-relational Poincaré Graph Embeddings</title>
+    <author><name>Ivana Balažević</name></author>
+    <author><name>Carl Allen</name></author>
+    <published>2019-05-23T17:59:59Z</published>
+  </entry>
+</feed>
+"""
+
+
+class MapTransport:
+    """In-memory transport: url -> (status, body) or a raised refusal."""
+
+    def __init__(self, responses: dict, refuse: Optional[dict] = None) -> None:
+        self.responses = responses
+        self.refuse = refuse or {}
+        self.requested: list[str] = []
+
+    def __call__(self, url: str, *, max_bytes: int, timeout: float) -> TransportResponse:
+        self.requested.append(url)
+        if url in self.refuse:
+            raise RedirectRefused((url, self.refuse[url]), self.refuse[url])
+        status, body = self.responses.get(url, (0, b""))
+        truncated = len(body) > max_bytes
+        return TransportResponse(
+            status=status,
+            final_url=url,
+            redirect_chain=(url,),
+            body=body[:max_bytes],
+            truncated=truncated,
+            error=None if status else "no route",
+        )
+
+
+def _impl_descriptor() -> dict:
+    return {
+        "source_id": "impl-mure",
+        "kind": "forge-file",
+        "repo": "github.com/pykeen/pykeen",
+        "path": "src/pykeen/models/unimodal/mure.py",
+        "ref": "v1.11.1",
+        "role": "implementation",
+        "media_type": "text/x-python",
+    }
+
+
+def test_forge_ref_resolves_to_machine_derived_sha(tmp_path: Path) -> None:
+    """The manifest revision is the resolver's SHA, never a model string."""
+
+    body = b"class MuRE: pass\n"
+    transport = MapTransport(
+        {
+            COMMITS_URL: (200, json.dumps({"sha": RESOLVED_SHA}).encode()),
+            RAW_URL: (200, body),
+        }
+    )
+    pack = broker_source_pack([_impl_descriptor()], broker_dir=tmp_path, transport=transport)
+    assert len(pack.rows) == 1
+    row = pack.rows[0]
+    assert row["revision"] == RESOLVED_SHA
+    assert row["url"] == RAW_URL
+    assert row["expected_sha256"] == hash_bytes(body)
+    outcome = pack.outcomes[0]
+    assert outcome.outcome == OUTCOME_FETCHED
+    receipt = outcome.resolver_receipt
+    assert receipt is not None and receipt["resolved_sha"] == RESOLVED_SHA
+    assert receipt["endpoint"] == COMMITS_URL
+    assert receipt["response_sha256"] is not None
+
+
+def test_descriptor_smuggling_exact_strings_is_rejected(tmp_path: Path) -> None:
+    """A model-supplied SHA or digest never enters the pack."""
+
+    descriptor = {**_impl_descriptor(), "expected_sha256": "sha256:" + "0" * 64}
+    with pytest.raises(SourceBrokerError, match="machine-owned"):
+        broker_source_pack([descriptor], broker_dir=tmp_path, transport=MapTransport({}))
+
+
+def test_bad_ref_is_a_typed_outcome_with_receipt(tmp_path: Path) -> None:
+    """An unresolvable ref yields ``bad-ref`` plus the forge receipt, no row."""
+
+    transport = MapTransport({COMMITS_URL: (422, b'{"message":"No commit found"}')})
+    pack = broker_source_pack([_impl_descriptor()], broker_dir=tmp_path, transport=transport)
+    assert pack.rows == []
+    outcome = pack.outcomes[0]
+    assert outcome.outcome == OUTCOME_BAD_REF
+    assert outcome.resolver_receipt is not None
+    assert outcome.resolver_receipt["status"] == 422
+
+
+def test_per_target_outcomes_are_independent(tmp_path: Path) -> None:
+    """One dead target never aborts the pack: each yields its own outcome."""
+
+    body = b"ok"
+    transport = MapTransport(
+        {
+            COMMITS_URL: (200, json.dumps({"sha": RESOLVED_SHA}).encode()),
+            RAW_URL: (200, body),
+            "https://example.org/dead": (404, b""),
+        },
+        refuse={"https://example.org/hop": "https://evil.example/x"},
+    )
+    descriptors = [
+        _impl_descriptor(),
+        {
+            "source_id": "doc-dead",
+            "kind": "raw-url",
+            "url": "https://example.org/dead",
+            "role": "documentation",
+        },
+        {
+            "source_id": "doc-hop",
+            "kind": "raw-url",
+            "url": "https://example.org/hop",
+            "role": "documentation",
+        },
+    ]
+    pack = broker_source_pack(descriptors, broker_dir=tmp_path, transport=transport)
+    outcomes = {item.source_id: item.outcome for item in pack.outcomes}
+    assert outcomes == {
+        "impl-mure": OUTCOME_FETCHED,
+        "doc-dead": OUTCOME_UNREACHABLE,
+        "doc-hop": OUTCOME_REDIRECT_REFUSED,
+    }
+    assert [row["source_id"] for row in pack.rows] == ["impl-mure"]
+
+
+def test_oversized_target_is_typed_and_carries_no_digest(tmp_path: Path) -> None:
+    """A body over the ceiling becomes ``oversized`` with no manifest row."""
+
+    transport = MapTransport({"https://example.org/big": (200, b"x" * 4096)})
+    pack = broker_source_pack(
+        [
+            {
+                "source_id": "doc-big",
+                "kind": "raw-url",
+                "url": "https://example.org/big",
+                "role": "documentation",
+            }
+        ],
+        broker_dir=tmp_path,
+        transport=transport,
+        target_byte_ceiling=1024,
+    )
+    assert pack.rows == []
+    assert pack.outcomes[0].outcome == OUTCOME_OVERSIZED
+    assert pack.outcomes[0].sha256 is None
+
+
+def test_probe_targets_yield_probe_receipts_not_rows(tmp_path: Path) -> None:
+    """Negative-proof candidates are probed and receipted, never manifest rows."""
+
+    transport = MapTransport({"https://example.org/candidate": (200, b"page")})
+    pack = broker_source_pack(
+        [
+            {
+                "source_id": "probe-1",
+                "kind": "raw-url",
+                "url": "https://example.org/candidate",
+                "role": "probe",
+            }
+        ],
+        broker_dir=tmp_path,
+        transport=transport,
+    )
+    assert pack.rows == []
+    assert pack.outcomes[0].outcome == OUTCOME_PROBED
+    assert pack.outcomes[0].sha256 is not None
+
+
+def test_paper_role_requires_derived_metadata(tmp_path: Path) -> None:
+    """``introducing-paper`` binds only when the registry derivation succeeds."""
+
+    transport = MapTransport({ARXIV_URL: (200, ARXIV_ATOM.encode("utf-8"))})
+    pack = broker_source_pack(
+        [
+            {
+                "source_id": "paper-mure",
+                "kind": "paper",
+                "url": "https://arxiv.org/abs/1905.09791",
+                "role": "paper",
+            }
+        ],
+        broker_dir=tmp_path,
+        transport=transport,
+    )
+    outcome = pack.outcomes[0]
+    assert outcome.bound_role == ROLE_INTRODUCING_PAPER
+    assert outcome.outcome == OUTCOME_PAPER_DERIVATION_ONLY
+    citation = pack.derived_citations[0]
+    assert citation["title"] == "Multi-relational Poincaré Graph Embeddings"
+    assert citation["authors"] == ["Ivana Balažević", "Carl Allen"]
+    assert citation["year"] == 2019
+    assert citation["identifiers"] == {"arxiv": "1905.09791"}
+
+
+def test_paper_derivation_failure_never_binds_the_paper_role(tmp_path: Path) -> None:
+    """A dead registry means no ``introducing-paper`` role, typed unreachable."""
+
+    pack = broker_source_pack(
+        [
+            {
+                "source_id": "paper-x",
+                "kind": "paper",
+                "url": "https://arxiv.org/abs/1905.09791",
+                "role": "paper",
+            }
+        ],
+        broker_dir=tmp_path,
+        transport=MapTransport({}),
+    )
+    outcome = pack.outcomes[0]
+    assert outcome.bound_role is None
+    assert outcome.outcome == OUTCOME_UNREACHABLE
+    assert pack.derived_citations == []
+
+
+def test_crossref_derivation(tmp_path: Path) -> None:
+    """DOIs derive through Crossref with the raw response digested."""
+
+    doi = "10.5555/12345678"
+    endpoint = f"https://api.crossref.org/works/{doi}"
+    message = {
+        "message": {
+            "title": ["A Very Real Paper"],
+            "author": [{"given": "Ada", "family": "Lovelace"}],
+            "issued": {"date-parts": [[1843]]},
+            "container-title": ["Journal of Engines"],
+        }
+    }
+    transport = MapTransport({endpoint: (200, json.dumps(message).encode())})
+    citation, receipt = derive_paper_metadata(
+        f"https://doi.org/{doi}",
+        transport=transport,
+        evidence_dir=tmp_path / "evidence",
+        clock=lambda: "2026-01-01T00:00:00Z",
+    )
+    assert citation is not None
+    assert citation["title"] == "A Very Real Paper"
+    assert citation["authors"] == ["Ada Lovelace"]
+    assert citation["year"] == 1843
+    assert citation["venue"] == "Journal of Engines"
+    assert receipt["registry"] == "crossref"
+
+
+def test_total_byte_ceiling_stops_later_fetches_typed(tmp_path: Path) -> None:
+    """Exhausting the total budget yields typed outcomes, not silence."""
+
+    transport = MapTransport(
+        {
+            "https://example.org/a": (200, b"a" * 100),
+            "https://example.org/b": (200, b"b" * 100),
+        }
+    )
+    pack = broker_source_pack(
+        [
+            {"source_id": "a", "kind": "raw-url", "url": "https://example.org/a",
+             "role": "documentation"},
+            {"source_id": "b", "kind": "raw-url", "url": "https://example.org/b",
+             "role": "documentation"},
+        ],
+        broker_dir=tmp_path,
+        transport=transport,
+        total_byte_ceiling=100,
+    )
+    assert pack.outcomes[0].outcome == OUTCOME_FETCHED
+    assert pack.outcomes[1].outcome == OUTCOME_UNREACHABLE
+    assert "ceiling" in pack.outcomes[1].detail
+
+
+def test_write_broker_outputs_persists_receipts(tmp_path: Path) -> None:
+    """Receipts persist with the pack version and full outcome table."""
+
+    body = b"class MuRE: pass\n"
+    transport = MapTransport(
+        {
+            COMMITS_URL: (200, json.dumps({"sha": RESOLVED_SHA}).encode()),
+            RAW_URL: (200, body),
+        }
+    )
+    pack = broker_source_pack([_impl_descriptor()], broker_dir=tmp_path, transport=transport)
+    path = write_broker_outputs(pack, tmp_path)
+    persisted = json.loads(path.read_text(encoding="utf-8"))
+    assert persisted["pack_version"].startswith("menagerie.crawler.source-broker-pack")
+    assert persisted["broker"]["outcomes"][0]["resolver_receipt"]["resolved_sha"] == RESOLVED_SHA
+    # Evidence bytes were stored content-addressed.
+    evidence = list((tmp_path / "evidence").iterdir())
+    assert evidence
+
+
+def test_fixture_transport_round_trip(tmp_path: Path) -> None:
+    """The hermetic fixture transport serves the recorded map, nothing else."""
+
+    root = tmp_path / "fixtures"
+    root.mkdir()
+    (root / "index.json").write_text(
+        json.dumps(
+            {
+                "https://example.org/x": {"status": 200, "body_text": "hello"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    transport = FixtureTransport(root)
+    hit = transport("https://example.org/x", max_bytes=100, timeout=1.0)
+    assert hit.status == 200 and hit.body == b"hello"
+    miss = transport("https://example.org/y", max_bytes=100, timeout=1.0)
+    assert miss.status == 0 and miss.error == "no fixture for url"
