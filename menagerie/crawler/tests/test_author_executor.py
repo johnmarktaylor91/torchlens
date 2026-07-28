@@ -48,6 +48,7 @@ from menagerie.crawler.tests.executor_test_support import (
     write_fake_claude,
     write_source_request,
 )
+from menagerie.crawler.tests.conftest import make_author_proposal
 
 
 @pytest.fixture()
@@ -154,6 +155,25 @@ def test_prompt_contract_fixtures_materialize_against_registered_schemas() -> No
     )
     result = _author_result_from_author_payload(result_payload, request)
     validate_payload(result, AUTHOR_RESULT_SCHEMA_VERSION)
+
+    proposed_payload = _prompt_contract_fixture(
+        prompt_root / "stage2_author.md",
+        "stage2-proposed-author-payload",
+    )
+    proposed_fixture = make_author_proposal("m-fixture")
+    proposed_payload["payload"]["proposal"] = proposed_fixture
+    proposed_result = _author_result_from_author_payload(proposed_payload, request)
+    validate_payload(proposed_result, AUTHOR_RESULT_SCHEMA_VERSION)
+
+    defer_payload = _prompt_contract_fixture(
+        prompt_root / "stage2_author.md",
+        "stage2-defer-author-payload",
+    )
+    defer_fixture = make_author_proposal("m-fixture")
+    defer_fixture["proposed_facts"]["implementation"]["code_manifest"] = []
+    defer_payload["payload"]["handoff_execution"]["proposal"] = defer_fixture
+    defer_result = _author_result_from_author_payload(defer_payload, request)
+    validate_payload(defer_result, AUTHOR_RESULT_SCHEMA_VERSION)
 
 
 def test_source_round_publishes_machine_derived_pack(rig, capsys) -> None:
@@ -267,6 +287,12 @@ def test_author_round_resumes_the_stage1_session(rig) -> None:
     assert stage2_call["stage"] == "stage2"
     argv = stage2_call["argv"]
     assert argv[argv.index("--resume") + 1] == stage1_session
+    schema_root = Path(__file__).parents[1] / "schemas"
+    assert f"- PROPOSAL schema, exact: `{schema_root / 'author-proposal-v3.schema.json'}`" in (
+        stage2_call["prompt"]
+    )
+    tools = argv[argv.index("--allowedTools") + 1 : argv.index("--output-format")]
+    assert f"Read(/{schema_root}/**)" in tools
     attempt = latest_attempt(root)
     assert attempt is not None
     assert attempt.status == "completed"

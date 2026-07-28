@@ -109,6 +109,16 @@ Before finishing, fill every source-reading field in author-proposal.v3:
     deviation or source-unspecified choice, and the complete material-choice checklist; and
 12. explicit uncertainties and bounded not-found-after-search results.
 
+The registered proposal schema controls the JSON topology. In a `PROPOSED` result, every
+catalog block above belongs under `payload.proposal.proposed_facts`; none belongs directly
+under `payload.proposal`. Use the schema's exact fourteen fact-block names: identity,
+taxonomy, external_metadata, website, people_and_origin, dates, citation, licenses,
+source_resolution, evidence, implementation, input_contract, modes, and fidelity. For a
+DEFER_RECOMMENDATION, the same complete registered proposal belongs under
+payload.handoff_execution.proposal, and implementation.code_manifest is therefore at
+handoff_execution.proposal.proposed_facts.implementation.code_manifest. Do not invent a
+parallel summary schema.
+
 WEBSITE VOICE
 Use clear, factual, non-promotional English. Say what the architecture is, what mechanism distinguishes it,
 and its sourced task/domain. Do not use marketing language, benchmark claims, "state of the art," vague

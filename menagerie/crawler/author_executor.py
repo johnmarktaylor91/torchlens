@@ -206,6 +206,7 @@ _LIMIT_ERROR_TYPES = frozenset({"rate_limit_error", "overloaded_error"})
 _PROMPT_ROOT = Path(__file__).with_name("prompts")
 _EXECUTOR_PROMPTS = _PROMPT_ROOT / "executor"
 _POOL_PROMPTS = _PROMPT_ROOT / "pool"
+_SCHEMA_ROOT = Path(__file__).with_name("schemas")
 
 _SOURCE_REQUEST_VERSION = "menagerie.crawler.author-source-request.v1"
 _AUTHOR_ENVELOPE_PREFIX = "menagerie.crawler.author-envelope"
@@ -597,6 +598,8 @@ def render_stage2_brief(
             f"- STAGED MODEL dir, exact: `{attempt.paths.directory / 'model'}`",
             f"- envelope allowed_model_dir (executor-mirrored at publication): "
             f"`{request.get('allowed_model_dir')}`",
+            f"- PROPOSAL schema, exact: `{_SCHEMA_ROOT / 'author-proposal-v3.schema.json'}`",
+            f"- REFERENCED schema directory, exact: `{_SCHEMA_ROOT}`",
             f"- wall deadline: `{_deadline_iso(wall)}` (external kill at +10%)",
         ]
     )
@@ -1364,15 +1367,17 @@ def _stage2_attempt(
 
 
 def _stage2_read_roots(author_root: Path, request: Mapping[str, Any]) -> list[Path]:
-    """Return stage-2 readable roots: author root + the envelope's prompt dir.
+    """Return stage-2 readable roots: author root, prompt dir, and schemas.
 
     The envelope's ``allowed_model_dir`` is deliberately NOT writable by the
     session: staged code goes under the attempt's ``model/`` tree and the
     executor mirrors it into the envelope's model dir at publication, so the
-    per-attempt directory stays the sole writable path.
+    per-attempt directory stays the sole writable path. Schemas are readable so
+    the author can follow the registered proposal topology instead of inventing
+    a parallel result shape.
     """
 
-    read_roots: list[Path] = [author_root]
+    read_roots: list[Path] = [author_root, _SCHEMA_ROOT]
     prompt = request.get("prompt")
     if isinstance(prompt, Mapping) and prompt.get("path"):
         read_roots.append(Path(str(prompt["path"])).parent)

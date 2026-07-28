@@ -15,12 +15,15 @@ recorded discovery output is inlined below and you may re-ground what you need.)
    required content, the random-initialization and execution policy, and the evidence
    rules. **Follow it exactly.** This brief adds dispatch context; it does not replace,
    soften, or reinterpret one line of it.
-3. Write ONE atomic JSON result to the exact RESULT output path in JOB FACTS. Write only
+3. Read the exact PROPOSAL schema in JOB FACTS and follow its local `$ref` files in the
+   REFERENCED schema directory. The registered schema, not an inferred summary shape, is
+   authoritative for every proposal key and nesting level.
+4. Write ONE atomic JSON result to the exact RESULT output path in JOB FACTS. Write only
    `kind` and its authored `payload`, in the exact shape below. **That path supersedes the
    envelope's `required_output_path`:** the executor adds the registered result envelope,
    verifies it, and publishes it to the envelope's path itself, so a superseded attempt
    can never overwrite a live one.
-4. Stage adapter code under the STAGED MODEL dir in JOB FACTS (your attempt's own
+5. Stage adapter code under the STAGED MODEL dir in JOB FACTS (your attempt's own
    `model/` tree -- the only tree you can write). The executor mirrors it into the
    envelope's `allowed_model_dir` at publication, so your proposal's `code_manifest`
    paths must name the files **as they will appear under `allowed_model_dir`**.
@@ -66,10 +69,69 @@ supplementary manifest. You get exactly one such round; after it you must write 
 The result file is an author-owned inner object, not `author-result.v4` itself. The
 executor adds the full `expected_result` bindings, `schema_version`, `created_at`,
 `result_id`, `result_sha256`, the redundant payload `arm`, and
-`recommendation_sha256`. For a `PROPOSED` result, `payload` contains only the complete
-`proposal`. For `DEFER_RECOMMENDATION`, `handoff_execution` contains only `proposal`; the
-executor derives its four handoff identity fields. For `SKIP_RECOMMENDATION` and
-`BLOCKED`, write the remaining arm fields required by the canonical prompt.
+`recommendation_sha256`.
+
+For `PROPOSED`, `payload.proposal` is one complete registered
+`menagerie.crawler.author-proposal.v3` object. Its catalog sections do **not** sit directly
+under `proposal`: all fourteen must sit under `proposal.proposed_facts`, using exactly
+these registered keys:
+
+`identity`, `taxonomy`, `external_metadata`, `website`, `people_and_origin`, `dates`,
+`citation`, `licenses`, `source_resolution`, `evidence`, `implementation`,
+`input_contract`, `modes`, and `fidelity`.
+
+Do not emit an informal parallel vocabulary such as `website_english`, `first_public`,
+`rung`, `source_selection`, or `output_contract` beside those registered blocks. A
+proposal with `identity` or `implementation` directly beneath `proposal` is invalid even
+when every claim inside it is excellent.
+
+<!-- CONTRACT_FIXTURE: stage2-proposed-author-payload -->
+```json
+{
+  "kind": "PROPOSED",
+  "payload": {
+    "proposal": {
+      "$complete_author_proposal_v3": "Replace this fixture sentinel with the complete object required by the PROPOSAL schema in JOB FACTS."
+    }
+  }
+}
+```
+
+The `$complete_author_proposal_v3` sentinel documents the insertion point only. Never
+write it literally. The inserted object must contain every top-level proposal field and
+the complete `proposed_facts` object required by the registered schema.
+
+For `DEFER_RECOMMENDATION`, use `platform` (exactly `cuda` or `x86`), not
+`recommended_target`; include `source_ids` and `evidence_ids`; and put the same complete
+registered proposal at `handoff_execution.proposal`. The executor derives the other four
+handoff identity fields. A declarative proposal still carries
+`proposal.proposed_facts.implementation.code_manifest: []`; staged code carries its
+non-empty manifest there. Never put `implementation` directly under `proposal`.
+
+<!-- CONTRACT_FIXTURE: stage2-defer-author-payload -->
+```json
+{
+  "kind": "DEFER_RECOMMENDATION",
+  "payload": {
+    "platform": "cuda",
+    "source_ids": ["impl-main"],
+    "evidence_ids": ["ev-platform"],
+    "evidence_identity": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "license_identity": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "handoff_execution": {
+      "proposal": {
+        "$complete_author_proposal_v3": "Replace this fixture sentinel with the complete registered proposal; code_manifest belongs under proposed_facts.implementation."
+      }
+    }
+  }
+}
+```
+
+For `SKIP_RECOMMENDATION`, the exact authored payload keys are `status_code`,
+`source_ids`, `evidence_ids`, `evidence_identity`, `search_report_identity`, and
+`license_identity`. For `BLOCKED`, they are `stage`, `reason_code`, `prerequisite_ids`,
+`evidence_ids`, `evidence_identity`, and `license_identity`, plus `research_summary` only
+for the higher-tier promotion case described by the canonical prompt.
 
 <!-- CONTRACT_FIXTURE: stage2-author-payload -->
 ```json
