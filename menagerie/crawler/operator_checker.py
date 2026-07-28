@@ -41,6 +41,7 @@ from menagerie.crawler.operator_protocol import (
 CHECKER_TIMEOUT_SECONDS = float(OPERATOR_ATTEMPT_TIMEOUT_SECONDS)
 CHECKER_MAX_ATTEMPTS = OPERATOR_MAX_ATTEMPTS
 CHECKER_EFFORT = OPERATOR_REASONING_EFFORT
+WRAPPER_VERSION = "menagerie-checker-operator 1.0.0"
 METADATA_CHECKER_MODEL = "gpt-5.6-terra"
 FIDELITY_CHECKER_MODEL = "gpt-5.6-sol"
 TERMINAL_CHECKER_MODEL = "gpt-5.6-terra"
@@ -418,6 +419,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     """
 
     arguments = tuple(sys.argv[1:] if argv is None else argv)
+    if arguments == ("--version",):
+        print(WRAPPER_VERSION)
+        return int(OperatorExitCode.SUCCESS)
     if len(arguments) != 1:
         sys.stderr.write(
             "usage: python -m menagerie.crawler.operator_checker /absolute/request.json\n"
