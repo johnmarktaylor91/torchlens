@@ -22,6 +22,8 @@ from menagerie.crawler.constants import (
     EXECUTION_READ_MANIFEST_VERSION_V3,
     FAILURE_REASON_CODES,
     GATE_SCHEMA_VERSION_V3,
+    NO_RUNG_SELECTED,
+    SourceRung,
 )
 from menagerie.crawler.identity import (
     compute_execution_identity,
@@ -4312,7 +4314,16 @@ def _validate_skip_predicate(
         If the accepted facts do not prove the typed skip predicate.
     """
 
-    if source_resolution.get("rung") != "R5_SKIP":
+    # The sentinel is checked before the generic ladder comparison so that "no rung was
+    # ever selected" can never be mistaken for a checked no-source conclusion, and so the
+    # refusal names the actual defect instead of reading as a stale-rung mismatch. R5 is
+    # reserved exclusively for a bounded search that concluded no faithful source path
+    # exists; a record that never walked the ladder has nothing to certify.
+    if source_resolution.get("rung") == NO_RUNG_SELECTED:
+        raise AuthorityDerivationError(
+            "no rung was selected, so no epistemic R5 skip can be proven"
+        )
+    if source_resolution.get("rung") != SourceRung.SKIP.value:
         raise AuthorityDerivationError("skip proof does not resolve to R5 source facts")
     search_report = source_resolution.get("search_report")
     if not isinstance(search_report, Mapping) or not search_report.get("conclusion"):
@@ -4698,8 +4709,16 @@ class _TerminalProofPipeline:
             work_id=self.work_id,
             predicate=predicate,
         )
+        # The gate schema cannot express the sentinel at all, so this is defence in depth
+        # against a hand-built or migrated gate item: an unselected rung is never a checked
+        # R5 decision, and it must refuse under its own name rather than as a generic
+        # mismatch.
+        if item.get("rung_check", {}).get("selected_rung") == NO_RUNG_SELECTED:
+            raise AuthorityDerivationError(
+                "skip gate records no selected rung, which cannot prove an R5 decision"
+            )
         if (
-            item.get("rung_check", {}).get("selected_rung") != "R5_SKIP"
+            item.get("rung_check", {}).get("selected_rung") != SourceRung.SKIP.value
             or item.get("rung_check", {}).get("verdict") != "accurate"
         ):
             raise AuthorityDerivationError("skip gate does not prove an accurate R5 decision")

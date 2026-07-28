@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Sequence
 
 from menagerie.crawler.constants import (
+    NO_RUNG_SELECTED,
+    NO_RUNG_SELECTED_STATUS_KINDS,
     SKIPPED_STATUS_CODES,
     TERMINAL_STATUS_CODES,
     WORKFLOW_STATES,
@@ -253,6 +255,14 @@ def _status_completeness_failures(records: Iterable[Mapping[str, Any]]) -> list[
             status.get("stage") is not None or status.get("reason_code") is not None
         ):
             failures.append(f"{stable_id}:nonfailure-has-failure-fields")
+        # "No rung was selected" is only coherent where work genuinely stopped short.
+        # A ``runs`` record necessarily selected a rung to be runnable, and every
+        # ``skipped:*`` code is an epistemic claim that must carry a checked R5_SKIP with
+        # its certified predicate -- so the sentinel appearing under either is a real
+        # defect, not a labelling nicety.
+        rung = record.get("source_resolution", {}).get("rung")
+        if rung == NO_RUNG_SELECTED and kind not in NO_RUNG_SELECTED_STATUS_KINDS:
+            failures.append(f"{stable_id}:no-rung-selected-under-{kind}")
     return failures
 
 
