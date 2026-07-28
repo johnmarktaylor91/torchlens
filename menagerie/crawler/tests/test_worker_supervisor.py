@@ -175,6 +175,124 @@ def _detached_lock_holder(
         record_path.unlink(missing_ok=True)
 
 
+def test_stale_dead_pid_libomp_file_fails_with_bootstrap_diagnostic(tmp_path: Path) -> None:
+    """A foreign libomp file for a dead PID produces a discoverable refusal."""
+
+    exited = subprocess.Popen([sys.executable, "-c", "pass"])
+    exited.wait(timeout=5)
+    assert process_start_token(exited.pid) is None
+    blocker = tmp_path / f"__KMP_REGISTERED_LIB_{exited.pid}"
+    blocker.write_bytes(b"stale libomp registration")
+    script = """
+from pathlib import Path
+import sys
+import menagerie.crawler.worker_supervisor as supervisor
+
+def blocker_path(_pid: int) -> Path:
+    return Path(sys.argv[1])
+
+supervisor._darwin_libomp_registration_blocker = blocker_path
+supervisor._child_limit(0, create_darwin_libomp_blocker=True)
+"""
+
+    result = subprocess.run(
+        [sys.executable, "-c", script, str(blocker)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 126
+    assert "pre-existing foreign LLVM OpenMP registration file" in result.stderr
+    assert str(blocker) in result.stderr
+    assert blocker.is_file()
+    with pytest.raises(worker_supervisor_module.SandboxUnavailableError) as exc_info:
+        worker_supervisor_module._verify_darwin_libomp_registration_blocker(blocker)
+    assert "pre-existing foreign LLVM OpenMP registration file" in str(exc_info.value)
+    assert str(blocker) in str(exc_info.value)
+
+
+def test_live_sibling_libomp_blocker_refuses_duplicate_claim(tmp_path: Path) -> None:
+    """An existing blocker held by a live sibling remains fail-closed."""
+
+    blocker = tmp_path / "__KMP_REGISTERED_LIB_live"
+    script = """
+from pathlib import Path
+import sys
+import time
+from menagerie.crawler.worker_supervisor import _claim_darwin_libomp_registration_blocker
+
+error = _claim_darwin_libomp_registration_blocker(Path(sys.argv[1]))
+if error is not None:
+    print(error, file=sys.stderr, flush=True)
+    raise SystemExit(126)
+print("ready", flush=True)
+time.sleep(60)
+"""
+    sibling = subprocess.Popen(
+        [sys.executable, "-c", script, str(blocker)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert sibling.stdout is not None
+        assert sibling.stdout.readline().strip() == "ready"
+        assert sibling.poll() is None
+
+        error = worker_supervisor_module._claim_darwin_libomp_registration_blocker(blocker)
+
+        assert error is not None
+        assert "existing supervisor LLVM OpenMP blocker directory" in error
+        assert str(blocker) in error
+        assert sibling.poll() is None
+    finally:
+        sibling.terminate()
+        sibling.wait(timeout=5)
+
+
+def test_two_workers_racing_for_libomp_blocker_have_one_owner(tmp_path: Path) -> None:
+    """Atomic mkdir gives exactly one of two racing workers blocker ownership."""
+
+    blocker = tmp_path / "__KMP_REGISTERED_LIB_race"
+    gate = tmp_path / "start-race"
+    script = """
+from pathlib import Path
+import sys
+import time
+from menagerie.crawler.worker_supervisor import _claim_darwin_libomp_registration_blocker
+
+blocker = Path(sys.argv[1])
+gate = Path(sys.argv[2])
+while not gate.exists():
+    time.sleep(0.001)
+error = _claim_darwin_libomp_registration_blocker(blocker)
+if error is not None:
+    print(error, file=sys.stderr, flush=True)
+    raise SystemExit(126)
+print("claimed", flush=True)
+time.sleep(0.25)
+"""
+    contenders = [
+        subprocess.Popen(
+            [sys.executable, "-c", script, str(blocker), str(gate)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        for _index in range(2)
+    ]
+    gate.write_text("start\n", encoding="utf-8")
+    outcomes = [contender.communicate(timeout=5) for contender in contenders]
+
+    assert sorted(contender.returncode for contender in contenders) == [0, 126]
+    assert sum(stdout.strip() == "claimed" for stdout, _stderr in outcomes) == 1
+    refusals = [stderr for _stdout, stderr in outcomes if stderr]
+    assert len(refusals) == 1
+    assert "existing supervisor LLVM OpenMP blocker directory" in refusals[0]
+    assert blocker.is_dir()
+
+
 def test_supervisor_scrubs_credentials_and_enforces_timeout(tmp_path: Path) -> None:
     """A fresh argv-only child cannot see a secret and is killed at its wall cap."""
 

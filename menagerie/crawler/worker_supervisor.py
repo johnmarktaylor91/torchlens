@@ -1265,9 +1265,9 @@ def _child_limit(
             os._exit(126)
     if create_darwin_libomp_blocker:
         blocker = _darwin_libomp_registration_blocker(os.getpid())
-        try:
-            blocker.mkdir(mode=0o500)
-        except OSError:
+        blocker_error = _claim_darwin_libomp_registration_blocker(blocker)
+        if blocker_error is not None:
+            _write_child_bootstrap_error(blocker_error)
             os._exit(126)
     if lease_record_path is not None and lease is not None:
         child_pid = os.getpid()
@@ -1332,6 +1332,74 @@ def _darwin_libomp_registration_blocker(pid: int) -> Path:
     return Path("/private/tmp") / f"{_DARWIN_LIBOMP_REGISTRATION_PREFIX}{pid}"
 
 
+def _claim_darwin_libomp_registration_blocker(path: Path) -> Optional[str]:
+    """Atomically claim one Darwin LLVM OpenMP registration blocker.
+
+    Parameters
+    ----------
+    path:
+        Exact PID-bound path to occupy before entering Seatbelt.
+
+    Returns
+    -------
+    str | None
+        ``None`` only for the process whose atomic ``mkdir`` created the blocker.
+        Otherwise, a path-specific fail-closed diagnostic distinguishing a foreign
+        registration file from a supervisor blocker directory.
+    """
+
+    try:
+        path.mkdir(mode=0o500)
+    except FileExistsError:
+        try:
+            status = path.lstat()
+        except FileNotFoundError:
+            return (
+                "Darwin libomp registration blocker claim raced with removal at "
+                f"{path}; refusing to start without continuous protection"
+            )
+        except OSError as exc:
+            return (
+                f"Darwin libomp registration blocker at {path} could not be inspected "
+                f"after EEXIST: {exc}"
+            )
+        if stat.S_ISREG(status.st_mode):
+            return (
+                "pre-existing foreign LLVM OpenMP registration file blocks worker startup "
+                f"at {path}; this PID-keyed entry may be stale after abnormal termination"
+            )
+        if stat.S_ISDIR(status.st_mode):
+            return (
+                "existing supervisor LLVM OpenMP blocker directory refused a duplicate claim "
+                f"at {path}; another claimant owns it or its ownership is unverifiable"
+            )
+        return (
+            "invalid pre-existing LLVM OpenMP registration entry blocks worker startup "
+            f"at {path}; mode={stat.S_IFMT(status.st_mode):#o}"
+        )
+    except OSError as exc:
+        return f"Darwin libomp registration blocker could not be created at {path}: {exc}"
+    return None
+
+
+def _write_child_bootstrap_error(message: str) -> None:
+    """Write one bounded child-bootstrap diagnostic to the supervised stderr.
+
+    Parameters
+    ----------
+    message:
+        Specific fail-closed reason to preserve before ``os._exit``.
+    """
+
+    payload = f"menagerie worker bootstrap failed: {message}\n".encode(
+        "utf-8", errors="backslashreplace"
+    )
+    try:
+        os.write(2, payload[:4096])
+    except OSError:
+        pass
+
+
 def _verify_darwin_libomp_registration_blocker(path: Path) -> tuple[int, int]:
     """Verify and return the trusted pre-sandbox OpenMP blocker identity.
 
@@ -1354,13 +1422,23 @@ def _verify_darwin_libomp_registration_blocker(path: Path) -> tuple[int, int]:
     try:
         status = path.lstat()
     except OSError as exc:
-        raise SandboxUnavailableError("Darwin libomp registration blocker is missing") from exc
-    if (
-        not stat.S_ISDIR(status.st_mode)
-        or stat.S_IMODE(status.st_mode) != 0o500
-        or status.st_uid != os.getuid()
-    ):
-        raise SandboxUnavailableError("Darwin libomp registration blocker is invalid")
+        raise SandboxUnavailableError(
+            f"Darwin libomp registration blocker is missing at {path}"
+        ) from exc
+    if stat.S_ISREG(status.st_mode):
+        raise SandboxUnavailableError(
+            "pre-existing foreign LLVM OpenMP registration file prevented worker bootstrap "
+            f"at {path}; this PID-keyed entry may be stale after abnormal termination"
+        )
+    if not stat.S_ISDIR(status.st_mode):
+        raise SandboxUnavailableError(
+            f"Darwin libomp registration blocker at {path} has invalid "
+            f"mode {stat.S_IFMT(status.st_mode):#o}"
+        )
+    if stat.S_IMODE(status.st_mode) != 0o500 or status.st_uid != os.getuid():
+        raise SandboxUnavailableError(
+            f"Darwin libomp registration blocker directory is invalid at {path}"
+        )
     return status.st_dev, status.st_ino
 
 
