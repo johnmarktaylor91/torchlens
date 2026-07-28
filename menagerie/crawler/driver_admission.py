@@ -12,6 +12,7 @@ import sys
 import time
 import uuid
 from collections import defaultdict
+from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import nullcontext
 from copy import deepcopy
 from dataclasses import dataclass, replace
@@ -1708,6 +1709,163 @@ def build_command_environment_lane(
     )
 
 
+@dataclass(frozen=True)
+class _AuthorDispatchOutcome:
+    """Exactly one completed author-lane round trip, success or typed failure.
+
+    The dispatch phase never interprets an outcome; it only carries it back to the
+    single canonical writer, which re-raises the original exception inside the
+    unchanged routing block so every typed author outcome routes exactly as it does
+    under a serial lane.
+    """
+
+    artifact: Optional[AuthorArtifact] = None
+    error: Optional[BaseException] = None
+
+    def unwrap(self) -> AuthorArtifact:
+        """Return the artifact, or re-raise the lane's own exception in place.
+
+        Returns
+        -------
+        AuthorArtifact
+            Exact artifact the lane produced.
+
+        Raises
+        ------
+        BaseException
+            The exception the lane raised, unchanged in type and payload.
+        """
+
+        if self.error is not None:
+            raise self.error
+        if self.artifact is None:
+            raise DriverIntegrationError("author dispatch outcome carries neither result nor error")
+        return self.artifact
+
+
+class _AuthorWavePool:
+    """Bounded concurrent author-session dispatcher for exactly one wave.
+
+    The author lane is the campaign's throughput ceiling: it is roughly three
+    quarters of all projected work and every session is a multi-minute agent round
+    trip. Running one session at a time caps a four-campaign fleet at four
+    concurrent sessions, which is below what the reconciled schedule needs before
+    anything else goes wrong.
+
+    Only the *sessions* overlap. This object owns the "dispatch and wait" phase and
+    nothing else: it calls the injected author lane, captures whatever that call
+    produced, and hands it back untouched. It never appends to a ledger, never
+    publishes an artifact, and never routes a terminal, so the single canonical
+    writer is entirely unaffected -- the driver still commits every model itself,
+    one at a time, in work order.
+
+    Two properties make that safe:
+
+    * **Exact eligibility, never speculation.** A model is only dispatched when the
+      serial path provably reaches a fresh author session for it. Nothing is
+      started that the serial lane would have resolved from canonical authority, a
+      family representative, or the disposable on-disk cache.
+    * **Nothing is cancelled.** A session that has started has already spent
+      provider budget, so an aborting wave drains its siblings instead of orphaning
+      them, and the driver preserves their validated results for the next run.
+    """
+
+    def __init__(
+        self,
+        degree: int,
+        dispatch: Callable[[WorkItem], AuthorArtifact],
+    ) -> None:
+        """Bind the parallelism bound and the per-model dispatch callable.
+
+        Parameters
+        ----------
+        degree:
+            Maximum author sessions in flight at once. ``1`` disables the pool
+            entirely so the driver keeps its historical fully inline lane.
+        dispatch:
+            Per-model author-lane invocation, including its own bounded retry.
+        """
+
+        self._dispatch = dispatch
+        self._executor = (
+            ThreadPoolExecutor(max_workers=degree, thread_name_prefix="author-wave")
+            if degree > 1
+            else None
+        )
+        self._futures: dict[str, "Future[_AuthorDispatchOutcome]"] = {}
+        self._submitted: list[str] = []
+        self._claimed: set[str] = set()
+
+    @property
+    def enabled(self) -> bool:
+        """Return whether this wave dispatches author sessions concurrently."""
+
+        return self._executor is not None
+
+    def submit(self, item: WorkItem) -> None:
+        """Start one author session for a model the serial path would author."""
+
+        if self._executor is None or item.stable_id in self._futures:
+            return
+        self._futures[item.stable_id] = self._executor.submit(self._run, item)
+        self._submitted.append(item.stable_id)
+
+    def claim(self, item: WorkItem) -> Optional[_AuthorDispatchOutcome]:
+        """Return one model's completed outcome, or ``None`` when never dispatched.
+
+        Blocks until this model's own session finishes. Siblings keep running, so
+        the commit order is always work order regardless of completion order.
+        """
+
+        future = self._futures.get(item.stable_id)
+        if future is None:
+            return None
+        self._claimed.add(item.stable_id)
+        return future.result()
+
+    def drain(self) -> tuple[tuple[str, _AuthorDispatchOutcome], ...]:
+        """Wait for every unclaimed session and return its outcome in submit order.
+
+        Returns
+        -------
+        tuple[tuple[str, _AuthorDispatchOutcome], ...]
+            Unclaimed ``(stable_id, outcome)`` pairs, deterministically ordered by
+            submission (work) order rather than completion order.
+        """
+
+        drained: list[tuple[str, _AuthorDispatchOutcome]] = []
+        for stable_id in self._submitted:
+            if stable_id in self._claimed:
+                continue
+            future = self._futures[stable_id]
+            self._claimed.add(stable_id)
+            try:
+                drained.append((stable_id, future.result()))
+            except BaseException as exc:  # noqa: BLE001 -- a drain must never mask the abort
+                drained.append((stable_id, _AuthorDispatchOutcome(error=exc)))
+        return tuple(drained)
+
+    def close(self) -> None:
+        """Release the worker threads after every session has finished."""
+
+        if self._executor is not None:
+            self._executor.shutdown(wait=True)
+
+    def _run(self, item: WorkItem) -> _AuthorDispatchOutcome:
+        """Run one author session on a worker thread and capture its outcome.
+
+        Every exception is captured rather than propagated so a failing, pausing,
+        or timing-out sibling can never cancel the wave from inside a worker. The
+        driver re-raises it on the writer thread, in work order, inside the exact
+        routing block that owned it before.
+        """
+
+        try:
+            return _AuthorDispatchOutcome(artifact=self._dispatch(item))
+        except BaseException as exc:  # noqa: BLE001 -- routed verbatim by the writer
+            return _AuthorDispatchOutcome(error=exc)
+
+
 class AdmissionEnvironmentMixin:
     """Admission, environment, and execution workflow methods for the driver."""
 
@@ -2200,7 +2358,140 @@ class AdmissionEnvironmentMixin:
         operational: JsonlLedger,
         state: JsonObject,
     ) -> dict[str, AuthorArtifact]:
-        """Create or reload one privately staged typed author result per model."""
+        """Create or reload one privately staged typed author result per model.
+
+        Author *sessions* run concurrently, up to ``config.author_concurrency``.
+        Everything else -- staging, ledger appends, artifact publication, terminal
+        routing, the returned ``artifacts`` map -- stays on this single writer, in
+        work order, exactly as it was when the lane was serial. Completion order can
+        therefore never influence what is recorded.
+        """
+
+        by_stable_id = {item.stable_id: item for item in work}
+        pool = _AuthorWavePool(
+            max(1, int(self.config.author_concurrency)),
+            lambda item: self._retry_infrastructure_call(
+                lambda: self.dependencies.author.author(
+                    item,
+                    self.paths.work_root,
+                    self.config,
+                    reducer.context,
+                ),
+                admission=("author", item),
+            ),
+        )
+        try:
+            if pool.enabled:
+                for item in work:
+                    # A requested shutdown must not fan out new sessions. Workers
+                    # already re-check this at their own admission boundary, so this
+                    # only avoids paying for work the driver is about to abandon.
+                    if self._shutdown_event.is_set():
+                        break
+                    if self._author_session_is_certain(item, reducer):
+                        pool.submit(item)
+            return self._commit_author_wave(work, pool, reducer, operational, state)
+        finally:
+            # A started session has already spent provider budget, so an aborting
+            # wave never orphans one: drain every sibling, then keep whatever it
+            # produced in the disposable per-model cache so the next run reloads it
+            # instead of re-authoring. This writes no ledger record and publishes
+            # nothing, so an abort's canonical sequence stays identical to serial.
+            for stable_id, outcome in pool.drain():
+                preserved = by_stable_id.get(stable_id)
+                if preserved is not None and outcome.error is None and outcome.artifact is not None:
+                    self._preserve_uncommitted_author_result(preserved, outcome.artifact)
+            pool.close()
+
+    def _author_session_is_certain(self, item: WorkItem, reducer: CanonicalReducer) -> bool:
+        """Return whether the serial path provably reaches a fresh author session.
+
+        This is an exactness gate, not a heuristic: it is ``True`` only when every
+        earlier resolution the serial lane tries -- finalized canonical authority, a
+        usable family representative, and the disposable on-disk result cache -- is
+        already ruled out on inputs that no sibling in this wave can change. A
+        false negative only costs concurrency for one model; a false positive would
+        burn a session the serial lane would never have run, so every check errs
+        toward ``False``.
+
+        Parameters
+        ----------
+        item:
+            Exact scheduled work generation.
+        reducer:
+            Locked reducer exposing canonical authority for the wave.
+
+        Returns
+        -------
+        bool
+            Whether this model may be dispatched ahead of its commit turn.
+        """
+
+        if reducer.artifact_ledger.event_count and reducer.artifact_ledger.has_final_event(
+            item.stable_id, item.active_work_id
+        ):
+            return False
+        if (
+            item.is_family_variant
+            and reducer.current_records.get(item.family_representative_id) is not None
+        ):
+            # Either the representative seeds this variant with no session at all, or
+            # the serial lane raises on unusable representative authority. Both are
+            # decided by the writer, never by a speculative session.
+            return False
+        cache = self.paths.work_root / item.stable_id / "driver-author-artifact.json"
+        return not cache.is_file()
+
+    def _preserve_uncommitted_author_result(
+        self, item: WorkItem, artifact: AuthorArtifact
+    ) -> None:
+        """Cache one dispatched-but-uncommitted author result for the next run.
+
+        Called only when a wave unwinds (usage pause, retryable operator failure,
+        review checkpoint, shutdown) with siblings already finished. It writes the
+        same disposable cache the committed path writes, after the same validation
+        gauntlet, and nothing else: no ledger append, no staging, no artifact map
+        entry. A result that cannot pass validation is simply dropped, so the model
+        is re-authored and terminalized properly rather than reloaded from a cache
+        that skipped a check.
+        """
+
+        try:
+            if not isinstance(artifact.author_result, ProposedAuthorResult):
+                return
+            candidate = _normalize_artifact_modes(artifact, self.config)
+            if candidate.proposal.get("stable_id") != item.stable_id:
+                return
+            if candidate.author_result.binding.work_id != item.active_work_id:
+                return
+            _validate_artifact_identities(candidate, self.config, item=item)
+            _write_json_atomic(
+                self.paths.work_root / item.stable_id / "driver-author-artifact.json",
+                serialize_author_result_cache(
+                    candidate.author_result,
+                    source_manifest=candidate.source_manifest,
+                    model_dir=candidate.model_dir,
+                ),
+            )
+        except Exception:  # noqa: BLE001 -- a best-effort cache must never mask the abort
+            return
+
+    def _commit_author_wave(
+        self,
+        work: Sequence[WorkItem],
+        pool: _AuthorWavePool,
+        reducer: CanonicalReducer,
+        operational: JsonlLedger,
+        state: JsonObject,
+    ) -> dict[str, AuthorArtifact]:
+        """Commit one wave's author results on the single canonical writer.
+
+        Walks ``work`` in its original order and performs every canonical effect --
+        rehydration, family-variant instantiation, cache reload, staging, validation,
+        terminal routing, and the usage-pause unwind -- exactly as the historical
+        serial lane did. The only difference is where a fresh author result comes
+        from: a session this wave already dispatched, or an inline call.
+        """
 
         artifacts: dict[str, AuthorArtifact] = {}
         for item in work:
@@ -2378,14 +2669,19 @@ class AdmissionEnvironmentMixin:
                             raise DriverPaused(pause)
                     continue
             try:
-                artifact = self._retry_infrastructure_call(
-                    lambda: self.dependencies.author.author(
-                        item,
-                        self.paths.work_root,
-                        self.config,
-                        reducer.context,
-                    ),
-                    admission=("author", item),
+                dispatched = pool.claim(item)
+                artifact = (
+                    dispatched.unwrap()
+                    if dispatched is not None
+                    else self._retry_infrastructure_call(
+                        lambda: self.dependencies.author.author(
+                            item,
+                            self.paths.work_root,
+                            self.config,
+                            reducer.context,
+                        ),
+                        admission=("author", item),
+                    )
                 )
                 artifact = self._stage_author_result(item, artifact, reducer)
             except AuthorBackoffError as backoff:

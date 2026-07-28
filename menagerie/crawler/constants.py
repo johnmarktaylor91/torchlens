@@ -85,6 +85,22 @@ AUTHOR_SESSION_WALL_SECONDS = 30 * 60
 AUTHOR_QUEUE_STALL_SECONDS = 45 * 60
 AUTHOR_QUEUE_POLL_SECONDS = 2.0
 
+# Bounded author-session fan-out per wave. The author lane is ~74% of the campaign's
+# projected work, and a serial lane caps a four-campaign fleet at four concurrent
+# sessions -- below the ~6.2 sustained (~9.5 in flight) the reconciled schedule needs,
+# before anything else goes wrong. Four per campaign puts ~16 sessions in flight across
+# the fleet, ~1.7x the requirement, which absorbs stragglers and quota stalls without
+# assuming a perfect duty cycle. It is also a modest per-host budget: four concurrent
+# `claude -p` subprocesses (command lane) or four concurrent in-session subagents (queue
+# lane) sit well inside both the host's memory and the harness's own subagent ceiling.
+# The right value genuinely differs per lane and per host, so it is configurable; this
+# is only the defensible default.
+DEFAULT_AUTHOR_WAVE_CONCURRENCY = 4
+# Hard ceiling. Past this the bound stops being a bound: a wave would fan out further
+# than any provider tier or host can service, and the failure mode is mass quota
+# exhaustion rather than throughput.
+MAX_AUTHOR_WAVE_CONCURRENCY = 32
+
 # Closed usage-limit provider vocabulary shared by the pause path and the wakeup
 # layer. The checker lane pauses on `openai`, the author lane on `anthropic`.
 USAGE_LIMIT_PROVIDERS = frozenset({"anthropic", "openai"})

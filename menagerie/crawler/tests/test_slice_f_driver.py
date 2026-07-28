@@ -2731,6 +2731,7 @@ def _driver(
     phase: Optional[str] = None,
     run_repair_max: int = 2,
     registry: Optional[EnvironmentRegistry] = None,
+    author_concurrency: Optional[int] = None,
 ) -> CrawlerDriver:
     """Build a fully fake deterministic driver."""
 
@@ -2757,6 +2758,11 @@ def _driver(
             review_checkpoint_at=review_at,
             progress_milestones=milestones,
             run_repair_max=run_repair_max,
+            author_concurrency=(
+                DriverConfig().author_concurrency
+                if author_concurrency is None
+                else author_concurrency
+            ),
         ),
         dependencies,
         registry=registry or load_environment_registry(target="osx-arm64"),

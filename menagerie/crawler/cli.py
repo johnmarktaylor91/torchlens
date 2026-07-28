@@ -29,6 +29,7 @@ from menagerie.crawler.checkpoint import (
     create_canonical_checkpoint,
 )
 from menagerie.crawler.constants import (
+    DEFAULT_AUTHOR_WAVE_CONCURRENCY,
     InvocationOrigin,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
     OperationalEventStatus,
@@ -328,6 +329,17 @@ def _add_driver_config_arguments(parser: argparse.ArgumentParser) -> None:
         ),
     )
     parser.add_argument(
+        "--author-concurrency",
+        type=int,
+        default=_default_author_concurrency(),
+        help=(
+            "author sessions one wave may keep in flight; defaults to "
+            f"MENAGERIE_AUTHOR_CONCURRENCY or {DEFAULT_AUTHOR_WAVE_CONCURRENCY}. "
+            "Only the sessions overlap: every record is still written one at a "
+            "time, in work order. Use 1 for the historical serial lane."
+        ),
+    )
+    parser.add_argument(
         "--checker-command",
         default=os.environ.get("MENAGERIE_CHECKER_COMMAND"),
         help="Codex wrapper command; defaults to MENAGERIE_CHECKER_COMMAND",
@@ -594,6 +606,7 @@ def _default_driver_factory(args: argparse.Namespace) -> CrawlerDriver:
             campaign_binding.spec.campaign_id if campaign_binding is not None else None
         ),
         author_queue_root=author_queue_root,
+        author_concurrency=args.author_concurrency,
         invocation_origin=(
             InvocationOrigin.WAKE_CALLBACK
             if getattr(args, "wake_episode_id", None) is not None
@@ -907,6 +920,29 @@ def _persisted_environment_generations(
             raise ValueError(f"dry-run attempts contain conflicting generations for {family}")
         generations[family] = generation
     return generations
+
+
+def _default_author_concurrency() -> int:
+    """Return the author-session fan-out bound from the environment or the default.
+
+    Returns
+    -------
+    int
+        ``MENAGERIE_AUTHOR_CONCURRENCY`` when it names a positive integer, else
+        :data:`DEFAULT_AUTHOR_WAVE_CONCURRENCY`. A malformed value is rejected
+        rather than silently ignored: quietly falling back would hide a
+        misconfigured campaign's real throughput bound for a month.
+    """
+
+    raw = os.environ.get("MENAGERIE_AUTHOR_CONCURRENCY")
+    if raw is None or not raw.strip():
+        return DEFAULT_AUTHOR_WAVE_CONCURRENCY
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise ValueError(
+            f"MENAGERIE_AUTHOR_CONCURRENCY must be an integer, not {raw!r}"
+        ) from exc
 
 
 def _optional_author_queue_root(args: argparse.Namespace) -> Optional[Path]:

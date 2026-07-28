@@ -38,9 +38,11 @@ from menagerie.crawler.checkpoint import (
     canonical_operational_ledger_path,
 )
 from menagerie.crawler.constants import (
+    DEFAULT_AUTHOR_WAVE_CONCURRENCY,
     DEFAULT_NOTIFY_COMMAND,
     DEFAULT_PROGRESS_MILESTONES,
     DEFAULT_REVIEW_CHECKPOINT_AT,
+    MAX_AUTHOR_WAVE_CONCURRENCY,
     TIER_CAMPAIGN_IDS,
     InvocationOrigin,
 )
@@ -272,6 +274,13 @@ class DriverConfig:
     #: :func:`_campaign_id_for_item`, which is ``campaign-<stable_id>`` and is per model.
     campaign_id: Optional[str] = None
     author_queue_root: Optional[Path] = None
+    #: Bounded number of author sessions one wave may keep in flight at once. Only the
+    #: author *sessions* overlap: every ledger append, artifact publication, and terminal
+    #: routing decision stays on the single canonical writer thread, in work order. The
+    #: right value differs by lane -- an in-session queue pool is cheaper to widen than a
+    #: `claude -p` subprocess fan-out -- so it is configurable rather than derived. ``1``
+    #: restores the historical fully serial lane.
+    author_concurrency: int = DEFAULT_AUTHOR_WAVE_CONCURRENCY
     run_repair_max: int = 2
     invocation_origin: InvocationOrigin = InvocationOrigin.ORDINARY_RUN
     wake_episode_id: Optional[str] = None
@@ -311,6 +320,11 @@ class DriverConfig:
             )
         if self.author_queue_root is not None and not self.author_queue_root.is_absolute():
             raise ValueError("author_queue_root must be absolute")
+        if not 1 <= self.author_concurrency <= MAX_AUTHOR_WAVE_CONCURRENCY:
+            raise ValueError(
+                "author_concurrency must be between 1 and "
+                f"{MAX_AUTHOR_WAVE_CONCURRENCY}, not {self.author_concurrency}"
+            )
         if not isinstance(self.invocation_origin, InvocationOrigin):
             raise ValueError("invocation_origin must be a closed InvocationOrigin")
         if (

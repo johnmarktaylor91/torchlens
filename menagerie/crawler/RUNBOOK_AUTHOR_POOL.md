@@ -103,10 +103,21 @@ three durable advance notifications:
 cd "$CLONE" && $PY -m menagerie.crawler run \
   --intake .crawl-local/intake --target osx-arm64 \
   --review-checkpoint-at 1000 --progress-milestones 900,950,1000,2000,3000,5000,10000 \
+  --author-concurrency 4 \
   --author-command "$MENAGERIE_AUTHOR_COMMAND" \
   --checker-command "$MENAGERIE_CHECKER_COMMAND" \
   --environment-command "$MENAGERIE_ENVIRONMENT_COMMAND"
 ```
+
+`--author-concurrency` bounds how many author *sessions* one wave keeps in flight
+(default 4, env `MENAGERIE_AUTHOR_CONCURRENCY`, hard ceiling 32). Only the sessions
+overlap: every ledger append, artifact publication, and terminal routing decision stays on
+the single canonical writer, in scheduled work order, so the recorded campaign is
+identical to a serial run. It is a per-lane knob -- the in-session queue pool widens more
+cheaply than a `claude -p` subprocess fan-out -- and `1` restores the historical serial
+lane. It is deliberately NOT part of the frozen campaign config: it is an operational
+throughput setting, not campaign identity, so it must be passed on each launch (or set in
+the environment) rather than inherited.
 
 This first invocation writes the mode-0600 campaign config. Stop it once that config
 exists, then install the supervisor in section 1.5. For `c2-disco`, `c3-classics`, and
@@ -168,6 +179,11 @@ carrying the job's absolute paths, its effort grant, and the campaign's standard
 **Step 3 -- dispatch a subagent** with the Agent tool: `model` = the printed
 `subagent_model`, `prompt` = the printed `brief`, `run_in_background: true`. Run 10-16
 concurrently; tune from day-2 telemetry.
+
+The queue holds as many jobs as the driver's `--author-concurrency` allows (default 4 per
+campaign, see section 1.4). If `list` never shows more than one waiting job, the driver is
+running with `--author-concurrency 1` -- the pool cannot be busier than the lane lets it
+be, so raise the driver flag rather than dispatching harder.
 
 **One subagent serves both stages of a model.** After the `source-request` job completes
 and the coordinator's controlled fetch freezes the manifest, the matching `author` job
