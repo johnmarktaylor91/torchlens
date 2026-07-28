@@ -103,7 +103,12 @@ from menagerie.crawler.driver_progress import (
     _environment_failure,
     _resolve_notify_command,
 )
-from menagerie.crawler.intake import IntakeSnapshot, create_intake_snapshot, load_intake_snapshot
+from menagerie.crawler.intake import (
+    IntakeSnapshot,
+    create_intake_snapshot,
+    load_intake_snapshot,
+    trusted_identity_fields,
+)
 from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
 from menagerie.crawler.fetcher import fetch_targets as controlled_fetch_targets
 from menagerie.crawler.metadata import authored_fact_leaves, recompute_accepted_identities
@@ -397,8 +402,7 @@ class ScriptedAuthor(AuthorLane):
         facts["identity"].update(
             {
                 "canonical_name": item.intake.name,
-                "variant": item.intake.variant,
-                "family_representative_id": item.family_representative_id,
+                **trusted_identity_fields(item.intake),
             }
         )
         facts["modes"]["meaningful_modes"] = ["train", "eval"]

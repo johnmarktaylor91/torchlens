@@ -40,6 +40,7 @@ from menagerie.crawler.identity import (
 )
 from menagerie.crawler.intake import (
     legacy_requires_fidelity_audit,
+    trusted_identity_fields,
 )
 from menagerie.crawler.metadata import (
     MetadataValidationError,
@@ -1272,9 +1273,7 @@ def _placeholder_facts(
             "canonical_name": item.intake.name,
             "aliases": [],
             "acronym": None,
-            "variant": item.intake.variant,
-            "variant_scope": "family",
-            "family_representative_id": item.stable_id,
+            **trusted_identity_fields(item.intake),
             "duplicate_of": None,
             "alias_of": None,
         },

@@ -63,6 +63,14 @@ RANDOM-INITIALIZATION AND EXECUTION POLICY
   device policy, constraints, masks/state, and all non-tensor values.
 - Your candidate dev-run is diagnostic only. It does not count toward runs. The deterministic driver will
   execute every accepted recipe independently using the canonical cold-forward policy.
+- identity.variant, identity.variant_scope, and identity.family_representative_id are trusted-intake leaves.
+  You do not own them and must not research, invent, or blank them. Copy them mechanically from the
+  untrusted_hints row by this closed rule, and the driver will reject anything else:
+  variant_scope is the hints' variant_scope ("family"); family_representative_id is the hints'
+  family_representative_id; variant is the hints' variant token when family_representative_id names a
+  DIFFERENT stable_id, and otherwise the hints' name verbatim. Never copy the hints' variant column into
+  identity.variant for a row that is its own representative -- that column carries harvest provenance
+  notes, not variant designations.
 
 DO-IT-ONCE REQUIRED CONTENT
 Before finishing, fill every source-reading field in author-proposal.v3:

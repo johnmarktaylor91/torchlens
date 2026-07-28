@@ -130,8 +130,10 @@ from menagerie.crawler.identity import (
     utc_now,
 )
 from menagerie.crawler.intake import (
+    IntakeError,
     IntakeItem,
     IntakeSnapshot,
+    trusted_identity_fields,
 )
 from menagerie.crawler.metadata import (
     MetadataValidationError,
@@ -311,6 +313,7 @@ _AWARD_CLOSURE_SYMBOLS = {
         "_execution_identity",
         "_current_run_is_fresh",
         "_validate_artifact_identities",
+        "_validate_trusted_intake_identity",
         "_read_verified_worker_receipt",
         "_environment_binding",
         "_installed_package_manifest_bytes",
@@ -1998,7 +2001,7 @@ class AdmissionEnvironmentMixin:
                 if isinstance(canonical_artifact, (ActivatedHandoffArtifact,)) or isinstance(
                     canonical_artifact.author_result, ProposedAuthorResult
                 ):
-                    _validate_artifact_identities(canonical_artifact, self.config)
+                    _validate_artifact_identities(canonical_artifact, self.config, item=item)
                     artifacts[item.stable_id] = canonical_artifact
                     self._family_artifacts[item.stable_id] = canonical_artifact
                 else:
@@ -2031,7 +2034,7 @@ class AdmissionEnvironmentMixin:
                         reducer.context,
                     )
                     variant = self._stage_author_result(item, variant, reducer)
-                    _validate_artifact_identities(variant, self.config)
+                    _validate_artifact_identities(variant, self.config, item=item)
                     artifacts[item.stable_id] = variant
                     self._family_artifacts[item.stable_id] = variant
                     self.dependencies.boundary_hook("after-author", item.stable_id)
@@ -2137,7 +2140,7 @@ class AdmissionEnvironmentMixin:
                         Path(cached_model_dir),
                     )
                     if isinstance(cached_result, ProposedAuthorResult):
-                        _validate_artifact_identities(cached_artifact_v3, self.config)
+                        _validate_artifact_identities(cached_artifact_v3, self.config, item=item)
                     anchored_staged = staged_artifact_for_result(
                         reducer.artifact_ledger,
                         stable_id=item.stable_id,
@@ -2260,7 +2263,7 @@ class AdmissionEnvironmentMixin:
                 )
                 continue
             try:
-                _validate_artifact_identities(artifact, self.config)
+                _validate_artifact_identities(artifact, self.config, item=item)
             except DriverIntegrationError as exc:
                 attempt = _driver_failure_attempt(
                     item,
@@ -4511,7 +4514,46 @@ def _checker_prompt_hash() -> str:
         raise DriverIntegrationError(f"checker prompt bytes are unavailable: {exc}") from exc
 
 
-def _validate_artifact_identities(artifact: AuthorArtifact, config: DriverConfig) -> None:
+def _validate_trusted_intake_identity(facts: Mapping[str, Any], item: WorkItem) -> None:
+    """Reject proposed facts whose identity contradicts trusted intake.
+
+    ``$.identity.variant``, ``$.identity.variant_scope``, and
+    ``$.identity.family_representative_id`` are ``trusted-intake`` leaves. No
+    author lane owns them, so an author-proposed value that differs from the one
+    derived from the trusted roster is a contract violation, not a fact.
+
+    Parameters
+    ----------
+    facts:
+        Proposed or accepted canonical fact block.
+    item:
+        Scheduled work item carrying its trusted intake row.
+
+    Raises
+    ------
+    DriverIntegrationError
+        If the identity block is absent or any trusted leaf differs.
+    """
+
+    identity = facts.get("identity")
+    if not isinstance(identity, Mapping):
+        raise DriverIntegrationError("author proposal has no identity object")
+    try:
+        expected = trusted_identity_fields(item.intake)
+    except IntakeError as exc:
+        raise DriverIntegrationError(str(exc)) from exc
+    mismatches = {
+        field: {"proposed": identity.get(field), "trusted": value}
+        for field, value in expected.items()
+        if identity.get(field) != value
+    }
+    if mismatches:
+        raise DriverIntegrationError(f"identity contradicts trusted intake: {mismatches}")
+
+
+def _validate_artifact_identities(
+    artifact: AuthorArtifact, config: DriverConfig, *, item: WorkItem
+) -> None:
     """Reject an author artifact whose claimed identities do not match accepted facts."""
 
     proposal = artifact.proposal
@@ -4526,6 +4568,7 @@ def _validate_artifact_identities(artifact: AuthorArtifact, config: DriverConfig
     facts = proposal.get("proposed_facts")
     if not isinstance(facts, Mapping):
         raise DriverIntegrationError("author proposal has no proposed_facts object")
+    _validate_trusted_intake_identity(facts, item)
     implementation = facts.get("implementation")
     if isinstance(implementation, Mapping):
         code_value = implementation.get("code_path")
@@ -5257,9 +5300,7 @@ def _instantiate_variant_artifact(
     identity.update(
         {
             "canonical_name": item.intake.name,
-            "variant": item.intake.variant,
-            "variant_scope": "family",
-            "family_representative_id": item.family_representative_id,
+            **trusted_identity_fields(item.intake),
             "duplicate_of": None,
             "alias_of": None,
         }

@@ -1537,7 +1537,7 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             raise DriverIntegrationError("repaired author proposal stable_id does not match intake")
         if repaired.campaign_root_work_id != artifact.campaign_root_work_id:
             raise DriverIntegrationError("repaired author result changed campaign lineage")
-        _validate_artifact_identities(repaired, self.config)
+        _validate_artifact_identities(repaired, self.config, item=item)
         cache = self.paths.work_root / item.stable_id / "driver-author-artifact.json"
         _write_json_atomic(
             cache,
@@ -1638,7 +1638,7 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
                     )
                 if repaired.campaign_root_work_id != artifact.campaign_root_work_id:
                     raise DriverIntegrationError("mode repair changed campaign lineage")
-                _validate_artifact_identities(repaired, self.config)
+                _validate_artifact_identities(repaired, self.config, item=item)
             except RetryableOperatorError:
                 raise
             except Exception as exc:  # noqa: BLE001 -- each generation consumes the bounded cap
