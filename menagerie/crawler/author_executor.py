@@ -128,6 +128,19 @@ def stage_tool_rules(
     injection point moves down the ladder (write-only Seatbelt profile, then
     executor-owned file RPCs) without touching call sites.
 
+    Two rule-form facts are load-bearing, both documented (Claude Code
+    "Configure permissions", verified empirically against claude 2.1.220 in
+    the escape suite's live layer):
+
+    1. **Absolute paths take a double slash.** ``Tool(//Users/x/**)`` anchors
+       at the filesystem root; ``Tool(/Users/x/**)`` anchors at the *settings
+       source* (the session cwd for CLI-passed rules), so a single-slash
+       "absolute" rule matches nothing and every file call auto-denies.
+    2. **File-permission checks match only ``Read(path)`` and ``Edit(path)``
+       rules.** An ``Edit`` rule covers all file-editing tools (Edit, Write,
+       NotebookEdit); a ``Write(path)`` rule is accepted but never matched,
+       so it grants nothing and draws a startup warning.
+
     Parameters
     ----------
     write_root:
@@ -138,13 +151,20 @@ def stage_tool_rules(
         is a deferred residual by design; write scoping is the bar.
     """
 
+    def scoped(tool: str, root: Path) -> str:
+        path = Path(root)
+        if not path.is_absolute():
+            raise ValueError(
+                f"confinement rule roots must be absolute, got {path!r}"
+            )
+        # str(path) begins with "/"; the extra "/" yields the documented
+        # ``//`` filesystem-root anchor.
+        return f"{tool}(/{path}/**)"
+
     rules: list[str] = list(RESEARCH_TOOLS)
-    for root in read_roots:
-        rules.append(f"Read({Path(root)}/**)")
-    root = Path(write_root)
-    rules.append(f"Read({root}/**)")
-    rules.append(f"Write({root}/**)")
-    rules.append(f"Edit({root}/**)")
+    for root in dict.fromkeys(Path(r) for r in (*read_roots, write_root)):
+        rules.append(scoped("Read", root))
+    rules.append(scoped("Edit", write_root))
     return tuple(rules)
 
 #: The external kill fires at grant +10%; the brief carries the deadline so a
