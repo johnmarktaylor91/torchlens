@@ -147,6 +147,10 @@ from menagerie.crawler.metadata import (
 )
 from menagerie.crawler.models import JsonObject
 from menagerie.crawler.mirrors import MirrorClass, MirrorStore
+from menagerie.crawler.operator_protocol import (
+    OPERATOR_DEADLINE_SECONDS,
+    OPERATOR_MAX_ATTEMPTS,
+)
 from menagerie.crawler.proposal import ProposalValidationError, model_code_manifest
 from menagerie.crawler.recordio import (
     JsonlLedger,
@@ -1358,15 +1362,74 @@ def _author_backoff_from_signal(payload: Mapping[str, Any]) -> AuthorBackoffSign
     )
 
 
+# The checker wrapper polices itself to the ``deadline_at`` this lane stamps into every
+# envelope: it refuses to start an attempt past it and clamps each attempt to the time
+# remaining. Above that ceiling it may still sleep its inter-attempt backoff and needs room
+# to start an interpreter, validate the request, and publish atomically. The lane bound is
+# therefore the published deadline plus exactly that declared slack, so the lane is the
+# backstop that fires only once the wrapper has genuinely failed to police itself -- never
+# the primary limit.
+CHECKER_LANE_WALL_GRACE_SECONDS = 60.0
+# The wrapper's own inter-attempt backoff sleeps (2**0 + ... + 2**(n-2)) are the one part of
+# its budget that is not clamped by the deadline, so they are added on top of it.
+CHECKER_LANE_BACKOFF_SLACK_SECONDS = float(2 ** (OPERATOR_MAX_ATTEMPTS - 1) - 1)
+
+
+def _checker_wall_bound(
+    envelope: Mapping[str, Any],
+    *,
+    grace_seconds: float = CHECKER_LANE_WALL_GRACE_SECONDS,
+    now: Optional[datetime] = None,
+) -> float:
+    """Derive the lane's wall bound from the deadline the envelope already publishes.
+
+    Parameters
+    ----------
+    envelope:
+        Frozen checker envelope, whose ``deadline_at`` is the exact ceiling the wrapper
+        was told to hold itself to.
+    grace_seconds:
+        Allowance above the wrapper's own ceiling for interpreter start, request
+        validation, and atomic publication.
+    now:
+        Optional timezone-aware instant, for deterministic tests.
+
+    Returns
+    -------
+    float
+        Wall-clock ceiling, strictly greater than the wrapper's internal budget.
+    """
+
+    remaining = float(OPERATOR_DEADLINE_SECONDS)
+    declared = envelope.get("deadline_at")
+    if isinstance(declared, str) and declared.strip():
+        try:
+            deadline: Optional[datetime] = datetime.fromisoformat(declared.replace("Z", "+00:00"))
+        except ValueError:
+            # A malformed deadline is a wrapper-contract problem the wrapper itself
+            # rejects; the lane still needs a bound, so it falls back to the same
+            # constant the published deadline is minted from.
+            deadline = None
+        if deadline is not None and deadline.tzinfo is not None:
+            instant = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+            remaining = (deadline.astimezone(timezone.utc) - instant).total_seconds()
+    return max(remaining, 0.0) + CHECKER_LANE_BACKOFF_SLACK_SECONDS + grace_seconds
+
+
 class CommandCheckerLane:
     """Checker lane that uses frozen envelopes and an argv-only executor."""
 
-    def __init__(self, command: Sequence[str]) -> None:
-        """Store a non-shell Codex command prefix."""
+    def __init__(
+        self, command: Sequence[str], *, wall_grace_seconds: float = CHECKER_LANE_WALL_GRACE_SECONDS
+    ) -> None:
+        """Store a non-shell Codex command prefix and its wall-bound grace."""
 
         if not command:
             raise ValueError("checker command cannot be empty")
+        if wall_grace_seconds < 0:
+            raise ValueError("checker wall grace cannot be negative")
         self.command = tuple(command)
+        self.wall_grace_seconds = float(wall_grace_seconds)
 
     def check_metadata(
         self, artifacts: Sequence[AuthorArtifact], work_root: Path, config: DriverConfig
@@ -1448,9 +1511,27 @@ class CommandCheckerLane:
 
         root.mkdir(parents=True, exist_ok=True)
         request_path = write_envelope_atomic(envelope, root / "request.json")
-        completed = subprocess.run(
-            [*self.command, str(request_path)], check=False, capture_output=True, text=True
-        )
+        try:
+            completed = _run_operator_command(
+                [*self.command, str(request_path)],
+                timeout_seconds=_checker_wall_bound(
+                    envelope, grace_seconds=self.wall_grace_seconds
+                ),
+            )
+        except subprocess.TimeoutExpired as exc:
+            # Typed retryable, exactly like the author lane. The wrapper bounds its own
+            # Codex attempts, but that does not protect this lane: a wrapper that hangs
+            # before or outside that call would otherwise block the single-threaded
+            # driver forever. A hang is stalled infrastructure, so
+            # ``_is_infrastructure_error`` routes it to the bounded transport retry
+            # rather than permanently burning the model. No checker VERDICT is affected:
+            # a genuine rejection still arrives as a typed exit or a validated gate
+            # result below, and is still a rejection.
+            raise RetryableOperatorError(
+                f"checker command exceeded its {exc.timeout:g}s wall bound and its process "
+                f"group was terminated: "
+                f"{str(exc.stderr or exc.output or '')[-STDIO_TAIL_MAX_CHARS:]}"
+            ) from exc
         signal = classify_checker_response(
             completed.returncode, completed.stderr + "\n" + completed.stdout
         )

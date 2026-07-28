@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from copy import deepcopy
+from datetime import datetime, timedelta, timezone
 import json
 import os
 import shutil
@@ -56,7 +57,11 @@ from menagerie.crawler.constants import (
     OPERATIONAL_EVENT_SCHEMA_VERSION,
     TERMINAL_STATUS_CODES,
 )
-from menagerie.crawler.driver_admission import _author_lane_failure
+from menagerie.crawler.driver_admission import (
+    CHECKER_LANE_BACKOFF_SLACK_SECONDS,
+    _author_lane_failure,
+    _checker_wall_bound,
+)
 from menagerie.crawler.driver_contracts import RetryableOperatorError
 from menagerie.crawler.driver_contracts import AuthorEffortCapExceeded
 from menagerie.crawler.driver import (
@@ -2273,6 +2278,92 @@ def test_command_checker_lane_classifies_quota_from_stdout_with_stderr_noise(
 
     assert outcome.backoff is not None
     assert outcome.backoff.reason is CheckerPauseReason.QUOTA_EXHAUSTED
+
+
+def test_checker_wall_bound_sits_above_the_wrapper_own_ceiling() -> None:
+    """The lane bound is a backstop: strictly looser than the wrapper's own budget.
+
+    The wrapper polices itself to the envelope deadline and clamps each Codex attempt to
+    the time remaining, so the lane must only fire once the wrapper has demonstrably
+    failed to police itself. A bound at or below the wrapper's ceiling would cut short
+    checker work that is still legitimately running.
+    """
+
+    from menagerie.crawler.operator_checker import CHECKER_MAX_ATTEMPTS, CHECKER_TIMEOUT_SECONDS
+    from menagerie.crawler.operator_protocol import OPERATOR_DEADLINE_SECONDS
+
+    now = datetime(2026, 7, 28, 12, 0, 0, tzinfo=timezone.utc)
+    deadline = now + timedelta(seconds=OPERATOR_DEADLINE_SECONDS)
+    envelope = {"deadline_at": deadline.isoformat().replace("+00:00", "Z")}
+
+    bound = _checker_wall_bound(envelope, now=now)
+
+    # Strictly above the wrapper's own ceiling: its deadline plus the inter-attempt
+    # backoff sleeps that the deadline does not clamp.
+    assert bound > OPERATOR_DEADLINE_SECONDS + CHECKER_LANE_BACKOFF_SLACK_SECONDS
+    # And above every attempt the wrapper is allowed to make back to back.
+    assert bound > CHECKER_TIMEOUT_SECONDS * CHECKER_MAX_ATTEMPTS
+    # An envelope with no parsable deadline still yields a bound above that same ceiling,
+    # so a malformed contract degrades to a bound rather than to no bound at all.
+    assert _checker_wall_bound({}, now=now) > OPERATOR_DEADLINE_SECONDS
+
+
+def test_a_hung_checker_command_is_bounded_retryable_and_leaves_no_orphan(
+    tmp_path: Path,
+) -> None:
+    """A hung checker session must stall one attempt, not the whole month-long campaign.
+
+    The wrapper bounds its own Codex attempts, but that does not protect the lane: a
+    wrapper that hangs before or outside that call would block the single-threaded driver
+    forever. The wrapper here spawns a grandchild that outlives it, exactly as a real
+    agent wrapper does, so the test asserts on the grandchild's PID -- killing only the
+    direct child would leave it holding the campaign's file handles and provider session.
+    """
+
+    pid_path = tmp_path / "checker-pids.txt"
+    wrapper = (
+        "import os, subprocess, sys, time\n"
+        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(600)'])\n"
+        "open(" + repr(str(pid_path)) + ", 'w').write(str(os.getpid()) + ' ' + str(child.pid))\n"
+        "sys.stderr.write('checker wrapper is hung\\n')\n"
+        "sys.stderr.flush()\n"
+        "time.sleep(600)\n"
+    )
+    # A deadline already in the past collapses the derived bound to its declared slack,
+    # so the real production bound derivation is exercised at test speed.
+    envelope = {
+        "envelope_version": "menagerie.crawler.checker-envelope.v3",
+        "deadline_at": "2026-01-01T00:00:00Z",
+    }
+    lane = CommandCheckerLane((sys.executable, "-c", wrapper), wall_grace_seconds=1.0)
+
+    started = time.monotonic()
+    with pytest.raises(RetryableOperatorError) as raised:
+        lane._run(envelope, tmp_path / "hung-checker")
+    elapsed = time.monotonic() - started
+
+    # Bounded rather than running forever ...
+    assert elapsed < 60.0
+    assert "wall bound" in str(raised.value)
+    # ... typed retryable, so the driver retries transport instead of burning the model ...
+    assert CrawlerDriver._is_infrastructure_error(raised.value)
+    # ... the pipes were drained after the kill, so the wrapper's own output survives ...
+    assert "checker wrapper is hung" in str(raised.value)
+    wrapper_pid, grandchild = (int(value) for value in pid_path.read_text().split())
+    # ... the whole process group is gone, grandchild included ...
+    deadline = time.monotonic() + 10.0
+    while time.monotonic() < deadline:
+        try:
+            os.kill(grandchild, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.1)
+    else:  # pragma: no cover -- only reached when the teardown leaked the grandchild
+        raise AssertionError(f"checker timeout leaked grandchild pid {grandchild}")
+    # ... and the root child was reaped, so the hang did not also leave a zombie. A
+    # zombie still answers signal 0; only a reaped PID raises ProcessLookupError.
+    with pytest.raises(ProcessLookupError):
+        os.kill(wrapper_pid, 0)
 
 
 def test_parent_refuses_observed_adapter_digest_mismatch() -> None:
