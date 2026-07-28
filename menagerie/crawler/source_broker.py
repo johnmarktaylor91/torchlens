@@ -751,22 +751,39 @@ def _bounded_fetch(
         ``fetched`` so the caller can store it as evidence.
     """
 
-    common = {
-        "source_id": str(descriptor["source_id"]),
-        "kind": str(descriptor["kind"]),
-        "requested_role": str(descriptor["role"]),
-        "bound_role": None,
-        "resolver_receipt": None,
-        "derived_citation": None,
-    }
+    def make(
+        outcome: str,
+        *,
+        final_url: Optional[str],
+        redirect_chain: tuple[str, ...],
+        status: Optional[int],
+        bytes_fetched: int,
+        sha256: Optional[str],
+        detail: str,
+    ) -> BrokerOutcome:
+        return BrokerOutcome(
+            source_id=str(descriptor["source_id"]),
+            kind=str(descriptor["kind"]),
+            requested_role=str(descriptor["role"]),
+            bound_role=None,
+            outcome=outcome,
+            url=url,
+            final_url=final_url,
+            redirect_chain=redirect_chain,
+            status=status,
+            bytes_fetched=bytes_fetched,
+            sha256=sha256,
+            resolver_receipt=None,
+            derived_citation=None,
+            detail=detail,
+        )
+
     try:
         response = transport(url, max_bytes=max_bytes, timeout=timeout)
     except RedirectRefused as exc:
         return (
-            BrokerOutcome(
-                **common,
-                outcome=OUTCOME_REDIRECT_REFUSED,
-                url=url,
+            make(
+                OUTCOME_REDIRECT_REFUSED,
                 final_url=exc.target,
                 redirect_chain=exc.chain,
                 status=None,
@@ -778,10 +795,8 @@ def _bounded_fetch(
         )
     if response.truncated:
         return (
-            BrokerOutcome(
-                **common,
-                outcome=OUTCOME_OVERSIZED,
-                url=url,
+            make(
+                OUTCOME_OVERSIZED,
                 final_url=response.final_url,
                 redirect_chain=response.redirect_chain,
                 status=response.status,
@@ -793,10 +808,8 @@ def _bounded_fetch(
         )
     if response.status != 200 or response.error:
         return (
-            BrokerOutcome(
-                **common,
-                outcome=OUTCOME_UNREACHABLE,
-                url=url,
+            make(
+                OUTCOME_UNREACHABLE,
                 final_url=response.final_url,
                 redirect_chain=response.redirect_chain,
                 status=response.status,
@@ -807,10 +820,8 @@ def _bounded_fetch(
             None,
         )
     return (
-        BrokerOutcome(
-            **common,
-            outcome=OUTCOME_FETCHED,
-            url=url,
+        make(
+            OUTCOME_FETCHED,
             final_url=response.final_url,
             redirect_chain=response.redirect_chain,
             status=response.status,
