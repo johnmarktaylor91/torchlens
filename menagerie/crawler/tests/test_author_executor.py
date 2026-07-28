@@ -17,7 +17,6 @@ from menagerie.crawler.author_dispatch import AuthorEffortGrant
 from menagerie.crawler.author_executor import (
     EXIT_BACKOFF,
     EXIT_OK,
-    EXIT_PERMANENT,
     EXIT_RETRYABLE,
     RECEIPT_VERSION,
     main,
@@ -29,6 +28,7 @@ from menagerie.crawler.driver_admission import (
 )
 from menagerie.crawler.identity import hash_bytes
 from menagerie.crawler.tests.executor_test_support import (
+    DEFAULT_DISCOVERY,
     RESOLVED_SHA,
     executor_environment,
     read_invocations,
@@ -88,6 +88,65 @@ def test_source_round_publishes_machine_derived_pack(rig, capsys) -> None:
     assert attempt is not None
     assert attempt.status == "sources-published"
     assert receipt["attempt_nonce"] == attempt.nonce
+
+
+def test_fabricated_sha_ref_is_bad_ref_before_publication(rig) -> None:
+    """A plausible authored ref is dereferenced and cannot create a manifest row."""
+
+    fabricated_sha = "1" * 40
+    rig["monkeypatch"].setenv(
+        "FAKE_CLAUDE_DISCOVERY",
+        json.dumps(
+            {
+                "schema_version": "menagerie.crawler.source-discovery.v1",
+                "stable_id": "m1",
+                "work_id": "work-m1",
+                "arm": "FOUND",
+                "payload": {
+                    "arm": "FOUND",
+                    "sources": [
+                        {
+                            "source_id": "impl-fabricated",
+                            "kind": "forge-file",
+                            "repo": "github.com/acme/widgets",
+                            "path": "models/net.py",
+                            "ref": fabricated_sha,
+                            "requested_role": "implementation",
+                            "basis": "A locator that still requires machine dereference.",
+                        }
+                    ],
+                },
+            }
+        ),
+    )
+
+    code, root = _run_source_round(rig)
+
+    assert code == EXIT_RETRYABLE
+    assert not (root / "source-targets.json").exists()
+    attempt = latest_attempt(root)
+    assert attempt is not None
+    receipts = json.loads((attempt.paths.broker / "receipts.json").read_text("utf-8"))
+    assert receipts["sources"] == []
+    assert receipts["broker"]["outcomes"][0]["outcome"] == "bad-ref"
+
+
+def test_cross_attempt_discovery_binding_is_rejected(rig) -> None:
+    """The executor rejects a valid discovery envelope bound to another attempt."""
+
+    discovery = json.loads(json.dumps(DEFAULT_DISCOVERY))
+    discovery["stable_id"] = "different-model"
+    discovery["work_id"] = "different-work"
+    rig["monkeypatch"].setenv("FAKE_CLAUDE_DISCOVERY", json.dumps(discovery))
+
+    code, root = _run_source_round(rig)
+
+    assert code == EXIT_RETRYABLE
+    assert not (root / "source-targets.json").exists()
+    attempt = latest_attempt(root)
+    assert attempt is not None
+    assert attempt.record["outcome"]["failure_reason"] == "discovery-contract-invalid"
+    assert "stable_id/work_id" in attempt.record["outcome"]["detail"]["error"]
 
 
 def test_pinned_recipe_flags_are_load_bearing_and_present(rig) -> None:
@@ -186,24 +245,38 @@ def test_session_crash_is_retryable_not_quota(rig) -> None:
     assert attempt.record["outcome"]["failure_reason"] == "session-crashed"
 
 
-def test_negative_discovery_arm_is_typed_permanent(rig) -> None:
-    """A typed negative arm records its evidence and declares exit 64."""
+def test_negative_discovery_arm_is_published_for_lane_materialization(rig) -> None:
+    """A typed negative arm is published intact for the lane's checked R5 path."""
 
     rig["monkeypatch"].setenv(
         "FAKE_CLAUDE_DISCOVERY",
         json.dumps(
             {
-                "discovery_version": "menagerie.crawler.author-discovery.v1",
+                "schema_version": "menagerie.crawler.source-discovery.v1",
+                "stable_id": "m1",
+                "work_id": "work-m1",
                 "arm": "NO_USABLE_SOURCE",
-                "search_evidence": {"queries": ["q"], "places": [], "conclusion": "none"},
+                "payload": {
+                    "arm": "NO_USABLE_SOURCE",
+                    "search_evidence": {
+                        "queries": ["m1 architecture"],
+                        "places": ["code hosts"],
+                        "candidate_links": [],
+                        "languages": ["en"],
+                        "conclusion": "No usable source exists.",
+                    },
+                },
             }
         ),
     )
     code, root = _run_source_round(rig)
-    assert code == EXIT_PERMANENT
+    assert code == EXIT_OK
+    published = json.loads((root / "source-targets.json").read_text("utf-8"))
+    assert published["arm"] == "NO_USABLE_SOURCE"
     attempt = latest_attempt(root)
     assert attempt is not None
-    assert attempt.record["outcome"]["failure_reason"] == "discovery-no-usable-source"
+    assert attempt.status == "completed"
+    assert attempt.record["outcome"]["kind"] == "discovery-published"
 
 
 def test_tool_failure_arm_fails_loudly_retryable(rig) -> None:
@@ -213,10 +286,16 @@ def test_tool_failure_arm_fails_loudly_retryable(rig) -> None:
         "FAKE_CLAUDE_DISCOVERY",
         json.dumps(
             {
-                "discovery_version": "menagerie.crawler.author-discovery.v1",
+                "schema_version": "menagerie.crawler.source-discovery.v1",
+                "stable_id": "m1",
+                "work_id": "work-m1",
                 "arm": "RETRYABLE_TOOL_FAILURE",
-                "tool": "mcp__exa__web_search_exa",
-                "error": "tool not found",
+                "payload": {
+                    "arm": "RETRYABLE_TOOL_FAILURE",
+                    "tool_name": "Exa search",
+                    "tool_spelling": "mcp__exa__web_search_exa",
+                    "error": "tool not found",
+                },
             }
         ),
     )
@@ -226,7 +305,7 @@ def test_tool_failure_arm_fails_loudly_retryable(rig) -> None:
     assert attempt is not None
     outcome = attempt.record["outcome"]
     assert outcome["failure_reason"] == "research-tools-unavailable"
-    assert outcome["detail"]["tool"] == "mcp__exa__web_search_exa"
+    assert outcome["detail"]["tool_spelling"] == "mcp__exa__web_search_exa"
 
 
 def test_supplement_round_is_granted_exactly_once(rig) -> None:

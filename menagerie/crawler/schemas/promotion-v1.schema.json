@@ -241,9 +241,21 @@
           "type": "array",
           "uniqueItems": true,
           "items": {
-            "type": "string",
-            "format": "uri",
-            "pattern": "^https?://"
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["url", "why_rejected"],
+            "properties": {
+              "url": {
+                "type": "string",
+                "format": "uri",
+                "pattern": "^https://",
+                "description": "Requested candidate locator retained for higher-tier work."
+              },
+              "why_rejected": {
+                "$ref": "#/$defs/nonempty_string",
+                "description": "Stage-1 reason the candidate did not satisfy the source need."
+              }
+            }
           }
         },
         "languages": {

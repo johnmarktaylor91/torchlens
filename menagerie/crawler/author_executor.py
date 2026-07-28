@@ -55,7 +55,15 @@ from menagerie.crawler.author_attempts import (
     prior_attempts_summary,
 )
 from menagerie.crawler.capability_probe import CAPABILITY_PROBE_FORMAT, derive_challenge
-from menagerie.crawler.identity import hash_bytes, utc_now
+from menagerie.crawler.discovery import (
+    DiscoveryError,
+    FoundDiscovery,
+    HigherTierDiscovery,
+    NegativeDiscovery,
+    RetryableToolFailureDiscovery,
+    validate_source_discovery,
+)
+from menagerie.crawler.identity import hash_bytes, stable_hash, utc_now
 from menagerie.crawler.models import JsonObject
 from menagerie.crawler.source_broker import (
     BrokerPack,
@@ -67,7 +75,6 @@ from menagerie.crawler.source_broker import (
 
 EXECUTOR_VERSION = "menagerie-author-executor 1.0.0"
 RECEIPT_VERSION = "menagerie.crawler.author-executor-receipt.v1"
-DISCOVERY_VERSION = "menagerie.crawler.author-discovery.v1"
 SUPPLEMENT_VERSION = "menagerie.crawler.author-supplement-request.v1"
 
 # Operator protocol exit codes (identical to the lane's expectations).
@@ -142,17 +149,6 @@ DEFAULT_WALL_FALLBACK = 1800.0
 #: session watching its clock can land a typed ``BLOCKED`` instead of a SIGKILL.
 EXTERNAL_KILL_FACTOR = 1.10
 _KILL_GRACE_SECONDS = 10.0
-
-DISCOVERY_ARMS = frozenset(
-    {
-        "FOUND",
-        "NO_USABLE_SOURCE",
-        "INSUFFICIENT_DESCRIPTION",
-        "NOT_A_MODEL",
-        "NEEDS_HIGHER_TIER",
-        "RETRYABLE_TOOL_FAILURE",
-    }
-)
 
 #: Structured harness signals that mean a provider usage pause. Free-text
 #: marker scanning is deliberately absent: classification authority is the
@@ -517,6 +513,7 @@ def render_stage1_brief(
     facts = _facts(
         [
             f"- stable_id: `{request.get('stable_id')}`",
+            f"- work_id: `{request.get('work_id')}`",
             f"- campaign: `{config.campaign_id}`",
             f"- attempt: `{attempt.number}` nonce `{attempt.nonce}`",
             f"- REQUEST envelope to read first: `{request_path}`",
@@ -734,7 +731,7 @@ def serve_source_request(
         # Crash recovery: stage 1 already completed durably; replay the broker
         # from the recorded discovery output without re-running the session.
         resumable.event("resumed-broker-from-record")
-        return _broker_and_publish(
+        return _complete_source_discovery(
             resumable,
             request=request,
             required_output=required_output,
@@ -794,51 +791,97 @@ def serve_source_request(
         )
 
     discovery_path = attempt.paths.directory / "discovery.json"
-    discovery = _read_json_file(discovery_path)
-    if discovery is None:
+    if _read_json_file(discovery_path) is None:
         attempt.update(stage1=stage1)
         return _fail(
             attempt, stage="stage1", reason="no-discovery-output", exit_code=EXIT_RETRYABLE
         )
-    arm = str(discovery.get("arm", ""))
-    if arm not in DISCOVERY_ARMS:
-        attempt.update(stage1=stage1)
+    attempt.update(status="stage1-complete", stage1=stage1, discovery_path=str(discovery_path))
+    _pause_hook(config, "stage1")
+    return _complete_source_discovery(
+        attempt,
+        request=request,
+        required_output=required_output,
+        max_sources=max_sources,
+        config=config,
+    )
+
+
+def _complete_source_discovery(
+    attempt: AttemptHandle,
+    *,
+    request: Mapping[str, Any],
+    required_output: Path,
+    max_sources: int,
+    config: ExecutorConfig,
+) -> tuple[int, str]:
+    """Validate one recorded envelope and publish its governed machine product.
+
+    Parameters
+    ----------
+    attempt:
+        Attempt carrying the exact stage-1 discovery file.
+    request:
+        Machine source request supplying stable/work binding authority.
+    required_output:
+        Lane-visible publication path.
+    max_sources:
+        Fetch-target ceiling.
+    config:
+        Executor configuration supplying broker collaborators.
+
+    Returns
+    -------
+    tuple[int, str]
+        Operator exit and diagnostic.
+    """
+
+    raw = _read_json_file(attempt.paths.directory / "discovery.json")
+    if raw is None:
         return _fail(
             attempt,
             stage="stage1",
-            reason="unknown-discovery-arm",
+            reason="no-discovery-output",
             exit_code=EXIT_RETRYABLE,
-            detail={"arm": arm},
         )
-    attempt.update(status="stage1-complete", stage1=stage1, discovery_path=str(discovery_path))
-    attempt.event("stage1-complete", arm=arm)
-    _pause_hook(config, "stage1")
-
-    if arm == "RETRYABLE_TOOL_FAILURE":
+    try:
+        discovery = validate_source_discovery(
+            raw,
+            stable_id=str(request.get("stable_id", "")),
+            work_id=str(request.get("work_id", "")),
+        )
+    except DiscoveryError as exc:
+        return _fail(
+            attempt,
+            stage="stage1",
+            reason="discovery-contract-invalid",
+            exit_code=EXIT_RETRYABLE,
+            detail={"error": str(exc)},
+        )
+    attempt.event("stage1-complete", arm=str(raw["arm"]))
+    if isinstance(discovery, RetryableToolFailureDiscovery):
         return _fail(
             attempt,
             stage="stage1",
             reason="research-tools-unavailable",
             exit_code=EXIT_RETRYABLE,
-            detail={"tool": discovery.get("tool"), "error": discovery.get("error")},
+            detail={
+                "tool_name": discovery.tool_name,
+                "tool_spelling": discovery.tool_spelling,
+                "error": discovery.error,
+            },
         )
-    if arm != "FOUND":
-        # Typed negative arms. The engine cannot yet consume them as R5/
-        # promotion records (phase 2); the attempt record keeps the evidence
-        # and the exit is a declared contract outcome, not a transport lie.
-        code, _detail = _fail(
-            attempt,
-            stage="stage1",
-            reason=f"discovery-{arm.lower().replace('_', '-')}",
-            exit_code=EXIT_PERMANENT,
-            detail={"arm": arm},
+    if isinstance(discovery, (NegativeDiscovery, HigherTierDiscovery)):
+        local = attempt.paths.directory / "discovery.json"
+        _publish(attempt, local, required_output, kind="source-discovery")
+        attempt.update(
+            status="completed",
+            outcome={"kind": "discovery-published", "arm": str(raw["arm"])},
         )
-        return code, (
-            f"author discovery concluded {arm} for {stable_id}; "
-            f"evidence in {attempt.paths.record}"
-        )
+        return EXIT_OK, f"source discovery published for {request.get('stable_id')}"
     return _broker_and_publish(
         attempt,
+        discovery=discovery,
         request=request,
         required_output=required_output,
         max_sources=max_sources,
@@ -849,6 +892,7 @@ def serve_source_request(
 def _broker_and_publish(
     attempt: AttemptHandle,
     *,
+    discovery: FoundDiscovery,
     request: Mapping[str, Any],
     required_output: Path,
     max_sources: int,
@@ -856,22 +900,9 @@ def _broker_and_publish(
 ) -> tuple[int, str]:
     """Run the broker over a recorded FOUND discovery and publish the pack."""
 
-    discovery = _read_json_file(attempt.paths.directory / "discovery.json")
-    if discovery is None or str(discovery.get("arm")) != "FOUND":
-        return _fail(
-            attempt,
-            stage="broker",
-            reason="recorded-discovery-unusable",
-            exit_code=EXIT_RETRYABLE,
-        )
-    sources = discovery.get("sources")
-    if not isinstance(sources, list) or not sources:
-        return _fail(
-            attempt, stage="broker", reason="found-arm-empty", exit_code=EXIT_RETRYABLE
-        )
     try:
         pack = broker_source_pack(
-            sources,
+            [descriptor.to_mapping() for descriptor in discovery.descriptors],
             broker_dir=attempt.paths.broker,
             transport=default_transport(),
         )
@@ -902,7 +933,12 @@ def _broker_and_publish(
         )
     rows = _capped_rows(pack, max_sources)
     local = attempt.paths.directory / "source-targets.json"
-    payload = {**pack.to_dict(), "sources": rows}
+    payload = {
+        **pack.to_dict(),
+        "sources": rows,
+        "discovery": discovery.raw_result,
+        "discovery_sha256": stable_hash(discovery.raw_result),
+    }
     local.write_text(
         json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n",
         encoding="utf-8",

@@ -21,20 +21,25 @@ IMPL_BODY = "class Net:\n    pass\n"
 SUPPLEMENT_URL = "https://example.org/extra.txt"
 
 DEFAULT_DISCOVERY = {
-    "discovery_version": "menagerie.crawler.author-discovery.v1",
+    "schema_version": "menagerie.crawler.source-discovery.v1",
+    "stable_id": "m1",
+    "work_id": "work-m1",
     "arm": "FOUND",
-    "sources": [
-        {
-            "source_id": "impl-net",
-            "kind": "forge-file",
-            "repo": "github.com/acme/widgets",
-            "path": "models/net.py",
-            "ref": "v1.0.0",
-            "role": "implementation",
-            "media_type": "text/x-python",
-        }
-    ],
-    "basis": "test discovery",
+    "payload": {
+        "arm": "FOUND",
+        "sources": [
+            {
+                "source_id": "impl-net",
+                "kind": "forge-file",
+                "repo": "github.com/acme/widgets",
+                "path": "models/net.py",
+                "ref": "v1.0.0",
+                "requested_role": "implementation",
+                "media_type_hint": "text/x-python",
+                "basis": "The fixture repository owns the model implementation.",
+            }
+        ],
+    },
 }
 
 DEFAULT_RESULT = {"kind": "PROPOSED", "payload": {"arm": "PROPOSED"}}
@@ -149,7 +154,10 @@ if mode == "resume-fail" and "--resume" in argv:
 if stage == "stage1" and discovery_path:
     payload = os.environ.get("FAKE_CLAUDE_DISCOVERY")
     if not payload:
-        payload = json.dumps(json.loads(os.environ["FAKE_CLAUDE_DEFAULT_DISCOVERY"]))
+        discovery = json.loads(os.environ["FAKE_CLAUDE_DEFAULT_DISCOVERY"])
+        discovery["stable_id"] = extract("- stable_id:")
+        discovery["work_id"] = extract("- work_id:")
+        payload = json.dumps(discovery)
     with open(discovery_path, "w") as fh:
         fh.write(payload)
 elif stage == "stage2" and result_path:
@@ -167,7 +175,8 @@ elif stage == "stage2" and result_path:
                                 "source_id": "supp-1",
                                 "kind": "raw-url",
                                 "url": os.environ["FAKE_CLAUDE_SUPPLEMENT_URL"],
-                                "role": "documentation",
+                                "requested_role": "documentation",
+                                "basis": "Supplementary fixture documentation.",
                             }
                         ],
                         "why": "one more file",
@@ -273,13 +282,7 @@ def write_source_request(root: Path, stable_id: str) -> Path:
         "untrusted_hints": {"name": stable_id, "zoo": "test-zoo"},
         "required_output_path": str(root / "source-targets.json"),
         "max_sources": 8,
-        "required_fields": [
-            "source_id",
-            "url",
-            "revision",
-            "expected_sha256",
-            "media_type",
-        ],
+        "discovery_schema_version": "menagerie.crawler.source-discovery.v1",
     }
     path = root / "source-request.json"
     path.write_text(json.dumps(request), encoding="utf-8")

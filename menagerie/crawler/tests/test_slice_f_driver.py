@@ -158,6 +158,7 @@ from menagerie.crawler.status import (
     completeness_report,
     record_is_release_eligible,
 )
+from menagerie.crawler.source_broker import TransportResponse
 from menagerie.crawler.tests.conftest import (
     HASH,
     NOW,
@@ -561,6 +562,22 @@ class NeedsOpusAuthor(AuthorLane):
         """Materialize a byte-backed typed Opus promotion."""
 
         del config
+
+        def probe_transport(
+            url: str, *, max_bytes: int, timeout: float
+        ) -> TransportResponse:
+            """Return a deterministic typed miss for the retained candidate."""
+
+            del max_bytes, timeout
+            return TransportResponse(
+                status=404,
+                final_url=url,
+                redirect_chain=(url,),
+                body=b"",
+                truncated=False,
+                error="fixture candidate rejected",
+            )
+
         raw = {
             "schema_version": "menagerie.crawler.source-discovery.v1",
             "stable_id": item.stable_id,
@@ -571,7 +588,12 @@ class NeedsOpusAuthor(AuthorLane):
                 "research_summary": {
                     "queries": ["ExampleNet architecture implementation"],
                     "places": ["upstream repositories", "introducing paper"],
-                    "candidate_links": ["https://example.com/model.txt"],
+                    "candidate_links": [
+                        {
+                            "url": "https://example.com/model.txt",
+                            "why_rejected": "The source needs higher-tier adjudication.",
+                        }
+                    ],
                     "languages": ["English"],
                     "conclusion": (
                         "The source is real, but faithful authoring requires the Opus tier."
@@ -590,6 +612,7 @@ class NeedsOpusAuthor(AuthorLane):
             item=item,
             context=context,
             root=work_root / item.stable_id / "author",
+            probe_transport=probe_transport,
         )
 
 
@@ -2083,18 +2106,43 @@ def test_author_source_handshake_freezes_nonempty_cas_manifest(
         del kwargs
         request = json.loads(Path(argv[-1]).read_text(encoding="utf-8"))
         output = Path(request["required_output_path"])
+        discovery = {
+            "schema_version": "menagerie.crawler.source-discovery.v1",
+            "stable_id": request["stable_id"],
+            "work_id": request["work_id"],
+            "arm": "FOUND",
+            "payload": {
+                "arm": "FOUND",
+                "sources": [
+                    {
+                        "source_id": "source-1",
+                        "kind": "raw-url",
+                        "url": "https://example.com/model.py",
+                        "requested_role": "implementation",
+                        "basis": "Fixture implementation source.",
+                    }
+                ],
+            },
+        }
         output.write_text(
             json.dumps(
                 {
+                    "pack_version": "menagerie.crawler.source-broker-pack.v1",
                     "sources": [
                         {
                             "source_id": "source-1",
-                            "url": "https://example.com/model.txt",
-                            "revision": "v1",
+                            "url": "https://example.com/model.py",
+                            "final_url": "https://example.com/model.py",
+                            "revision": digest,
                             "expected_sha256": digest,
-                            "media_type": "text/plain",
+                            "media_type": "text/x-python",
+                            "media_type_method": "path-extension",
+                            "broker_role": "implementation",
                         }
-                    ]
+                    ],
+                    "broker": {"outcomes": [], "derived_citations": [], "total_bytes": 0},
+                    "discovery": discovery,
+                    "discovery_sha256": stable_hash(discovery),
                 }
             ),
             encoding="utf-8",
@@ -2111,6 +2159,7 @@ def test_author_source_handshake_freezes_nonempty_cas_manifest(
     )
     lane = CommandAuthorLane(("fake-author",))
     manifest = lane._fetch_author_sources(item, tmp_path / "author")
+    assert isinstance(manifest, dict)
     assert manifest["sources"]
     assert Path(manifest["sources"][0]["cas_path"]).read_bytes() == content
 
@@ -2119,13 +2168,40 @@ def test_author_source_handshake_freezes_nonempty_cas_manifest(
 
         del kwargs
         request = json.loads(Path(argv[-1]).read_text(encoding="utf-8"))
+        discovery = {
+            "schema_version": "menagerie.crawler.source-discovery.v1",
+            "stable_id": request["stable_id"],
+            "work_id": request["work_id"],
+            "arm": "FOUND",
+            "payload": {
+                "arm": "FOUND",
+                "sources": [
+                    {
+                        "source_id": "source-1",
+                        "kind": "raw-url",
+                        "url": "https://example.com/model.py",
+                        "requested_role": "implementation",
+                        "basis": "Fixture implementation source.",
+                    }
+                ],
+            },
+        }
         Path(request["required_output_path"]).write_text(
-            json.dumps({"sources": []}), encoding="utf-8"
+            json.dumps(
+                {
+                    "pack_version": "menagerie.crawler.source-broker-pack.v1",
+                    "sources": [],
+                    "broker": {"outcomes": [], "derived_citations": [], "total_bytes": 0},
+                    "discovery": discovery,
+                    "discovery_sha256": stable_hash(discovery),
+                }
+            ),
+            encoding="utf-8",
         )
         return subprocess.CompletedProcess(list(argv), 0, "", "")
 
     monkeypatch.setattr(driver_admission_module, "_run_operator_command", empty_run)
-    with pytest.raises(DriverIntegrationError, match="at least one pinned source"):
+    with pytest.raises(DriverIntegrationError, match="at least one fetched source"):
         lane._fetch_author_sources(item, tmp_path / "empty-author")
 
 
@@ -2145,58 +2221,47 @@ def test_true_no_source_reaches_checked_r5_without_fetch_target(
         fetch_calls += 1
         raise AssertionError("negative discovery must not invent a fetch target")
 
-    class NegativeDiscoveryAuthor(AuthorLane):
-        """Simulate the executor publishing the typed stage-1 negative arm."""
+    def publish_negative(
+        argv: Sequence[str], **kwargs: Any
+    ) -> subprocess.CompletedProcess[str]:
+        """Publish the registered negative discovery envelope as the executor would."""
 
-        def author(
-            self,
-            item: WorkItem,
-            work_root: Path,
-            config: DriverConfig,
-            context: AuthorityContext,
-        ) -> AuthorArtifact:
-            """Materialize a no-source result without constructing a fetch target."""
-
-            del config
-            raw = {
-                "schema_version": "menagerie.crawler.source-discovery.v1",
-                "stable_id": item.stable_id,
-                "work_id": item.active_work_id,
-                "arm": "NO_USABLE_SOURCE",
-                "payload": {
+        del kwargs
+        request = json.loads(Path(argv[-1]).read_text(encoding="utf-8"))
+        Path(request["required_output_path"]).write_text(
+            json.dumps(
+                {
+                    "schema_version": "menagerie.crawler.source-discovery.v1",
+                    "stable_id": request["stable_id"],
+                    "work_id": request["work_id"],
                     "arm": "NO_USABLE_SOURCE",
-                    "search_evidence": {
-                        "queries": [
-                            "ExampleNet architecture",
-                            "\"ExampleNet\" neural network",
-                        ],
-                        "places": ["publisher index", "code hosts", "web archive"],
-                        "candidate_links": [],
-                        "languages": ["en", "zh"],
-                        "conclusion": (
-                            "No usable architecture source exists after the bounded search."
-                        ),
+                    "payload": {
+                        "arm": "NO_USABLE_SOURCE",
+                        "search_evidence": {
+                            "queries": [
+                                "ExampleNet architecture",
+                                "\"ExampleNet\" neural network",
+                            ],
+                            "places": ["publisher index", "code hosts", "web archive"],
+                            "candidate_links": [],
+                            "languages": ["en", "zh"],
+                            "conclusion": (
+                                "No usable architecture source exists after the bounded search."
+                            ),
+                        },
                     },
-                },
-            }
-            discovery = validate_source_discovery(
-                raw,
-                stable_id=item.stable_id,
-                work_id=item.active_work_id,
-            )
-            assert isinstance(discovery, NegativeDiscovery)
-            return materialize_discovery_artifact(
-                discovery,
-                item=item,
-                context=context,
-                root=work_root / item.stable_id / "author",
-            )
+                }
+            ),
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(list(argv), 0, "", "")
 
+    monkeypatch.setattr(driver_admission_module, "_run_operator_command", publish_negative)
     monkeypatch.setattr(driver_module, "fetch_targets", forbidden_fetch)
     result = _driver(
         tmp_path,
         snapshot,
-        author=NegativeDiscoveryAuthor(),
+        author=CommandAuthorLane(("fake-author",)),
     ).run()
 
     assert result.status == "terminal-partition-complete"
@@ -2225,9 +2290,12 @@ def test_true_no_source_reaches_checked_r5_without_fetch_target(
                 "sources": [
                     {
                         "source_id": "source-1",
-                        "url": "https://example.com/model.py",
-                        "revision": "v1",
-                        "media_type": "text/x-python",
+                        "kind": "forge-file",
+                        "repo": "github.com/example/model",
+                        "path": "model.py",
+                        "ref": "v1",
+                        "requested_role": "implementation",
+                        "basis": "The repository owns the model implementation.",
                     }
                 ],
             },
@@ -2254,7 +2322,12 @@ def test_true_no_source_reaches_checked_r5_without_fetch_target(
                 "search_evidence": {
                     "queries": ["model paper"],
                     "places": ["publisher"],
-                    "candidate_links": ["https://example.com/abstract"],
+                    "candidate_links": [
+                        {
+                            "url": "https://example.com/abstract",
+                            "why_rejected": "Only an abstract is available.",
+                        }
+                    ],
                     "languages": ["en"],
                     "conclusion": "Only an abstract was found.",
                 },
@@ -2269,7 +2342,12 @@ def test_true_no_source_reaches_checked_r5_without_fetch_target(
                 "search_evidence": {
                     "queries": ["named item"],
                     "places": ["project site"],
-                    "candidate_links": ["https://example.com/tool"],
+                    "candidate_links": [
+                        {
+                            "url": "https://example.com/tool",
+                            "why_rejected": "The item is a dataset tool.",
+                        }
+                    ],
                     "languages": ["en"],
                     "conclusion": "The item is a dataset, not a neural model.",
                 },
@@ -2342,6 +2420,145 @@ def test_found_discovery_alone_requires_a_nonempty_fetch_set() -> None:
         )
 
 
+def test_found_discovery_rejects_an_authored_revision_row() -> None:
+    """The formerly valid authored revision/media row is now unrepresentable."""
+
+    raw = {
+        "schema_version": "menagerie.crawler.source-discovery.v1",
+        "stable_id": "m_discovery",
+        "work_id": "work-m_discovery",
+        "arm": "FOUND",
+        "payload": {
+            "arm": "FOUND",
+            "sources": [
+                {
+                    "source_id": "source-1",
+                    "url": "https://example.com/model.py",
+                    "revision": "a" * 40,
+                    "media_type": "text/x-python",
+                }
+            ],
+        },
+    }
+
+    with pytest.raises(DiscoveryError):
+        validate_source_discovery(
+            raw,
+            stable_id="m_discovery",
+            work_id="work-m_discovery",
+        )
+
+
+@pytest.mark.parametrize("value", ["authored", "", None])
+@pytest.mark.parametrize(
+    "field",
+    [
+        "revision",
+        "commit_sha",
+        "expected_sha256",
+        "content_sha256",
+        "final_url",
+        "redirect_chain",
+        "resolver_receipt",
+        "broker_role",
+        "media_type",
+        "derived_citation",
+    ],
+)
+def test_found_discovery_cannot_express_machine_owned_identity(
+    field: str, value: object
+) -> None:
+    """Every machine-owned descriptor field is rejected on presence."""
+
+    descriptor: dict[str, Any] = {
+        "source_id": "source-1",
+        "kind": "forge-file",
+        "repo": "github.com/example/model",
+        "path": "model.py",
+        "ref": "v1",
+        "requested_role": "implementation",
+        "basis": "The repository owns the model implementation.",
+        field: value,
+    }
+    raw = {
+        "schema_version": "menagerie.crawler.source-discovery.v1",
+        "stable_id": "m_discovery",
+        "work_id": "work-m_discovery",
+        "arm": "FOUND",
+        "payload": {"arm": "FOUND", "sources": [descriptor]},
+    }
+
+    with pytest.raises(DiscoveryError):
+        validate_source_discovery(
+            raw,
+            stable_id="m_discovery",
+            work_id="work-m_discovery",
+        )
+
+
+@pytest.mark.parametrize("source_id", ["", "Uppercase", "has space", "a" * 65])
+def test_found_discovery_rejects_invalid_source_ids(source_id: str) -> None:
+    """Broker correlation labels use the strict bounded schema syntax."""
+
+    raw = {
+        "schema_version": "menagerie.crawler.source-discovery.v1",
+        "stable_id": "m_discovery",
+        "work_id": "work-m_discovery",
+        "arm": "FOUND",
+        "payload": {
+            "arm": "FOUND",
+            "sources": [
+                {
+                    "source_id": source_id,
+                    "kind": "raw-url",
+                    "url": "https://example.com/model.py",
+                    "requested_role": "implementation",
+                    "basis": "Candidate implementation.",
+                }
+            ],
+        },
+    }
+
+    with pytest.raises(DiscoveryError):
+        validate_source_discovery(
+            raw,
+            stable_id="m_discovery",
+            work_id="work-m_discovery",
+        )
+
+
+def test_found_discovery_rejects_duplicate_source_ids() -> None:
+    """Distinct descriptors cannot reuse one model-local correlation label."""
+
+    descriptor = {
+        "source_id": "source-1",
+        "kind": "raw-url",
+        "url": "https://example.com/model.py",
+        "requested_role": "implementation",
+        "basis": "Candidate implementation.",
+    }
+    raw = {
+        "schema_version": "menagerie.crawler.source-discovery.v1",
+        "stable_id": "m_discovery",
+        "work_id": "work-m_discovery",
+        "arm": "FOUND",
+        "payload": {
+            "arm": "FOUND",
+            "sources": [
+                descriptor,
+                {**descriptor, "url": "https://example.com/other.py"},
+            ],
+        },
+    }
+
+    with pytest.raises(DiscoveryError, match="source_id values must be unique"):
+        validate_source_discovery(
+            raw,
+            stable_id="m_discovery",
+            work_id="work-m_discovery",
+        )
+
+
 def test_a_hung_author_command_is_bounded_retryable_and_leaves_no_orphan(
     tmp_path: Path,
 ) -> None:
@@ -2405,20 +2622,17 @@ def test_a_hung_author_command_is_bounded_retryable_and_leaves_no_orphan(
         raise AssertionError(f"author timeout leaked grandchild pid {grandchild}")
 
 
-@pytest.mark.parametrize("declared", ["", None])
-def test_author_source_handshake_accepts_an_undigested_target(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, declared: Optional[str]
+def test_author_source_handshake_rejects_an_undigested_broker_row(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """An author forbidden from fetching may honestly decline to name a digest."""
+    """A machine broker row cannot omit the digest it necessarily observed."""
 
     snapshot = _snapshot(tmp_path)
     driver = _driver(tmp_path, snapshot)
     item = driver._ordered_work(snapshot, {})[0]
-    content = b"ExampleNet is a source-grounded architecture."
-    digest = hash_bytes(content)
 
     def fake_run(argv: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        """Write one exact target whose content digest the author cannot know.
+        """Write a purported broker pack with an empty machine-owned digest.
 
         Parameters
         ----------
@@ -2435,32 +2649,54 @@ def test_author_source_handshake_accepts_an_undigested_target(
 
         del kwargs
         request = json.loads(Path(argv[-1]).read_text(encoding="utf-8"))
-        source: dict[str, Any] = {
-            "source_id": "source-1",
-            "url": "https://example.com/model.txt",
-            "revision": "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c",
-            "media_type": "text/plain",
+        discovery = {
+            "schema_version": "menagerie.crawler.source-discovery.v1",
+            "stable_id": request["stable_id"],
+            "work_id": request["work_id"],
+            "arm": "FOUND",
+            "payload": {
+                "arm": "FOUND",
+                "sources": [
+                    {
+                        "source_id": "source-1",
+                        "kind": "raw-url",
+                        "url": "https://example.com/model.py",
+                        "requested_role": "implementation",
+                        "basis": "Fixture implementation source.",
+                    }
+                ],
+            },
         }
-        if declared is not None:
-            source["expected_sha256"] = declared
         Path(request["required_output_path"]).write_text(
-            json.dumps({"sources": [source]}), encoding="utf-8"
+            json.dumps(
+                {
+                    "pack_version": "menagerie.crawler.source-broker-pack.v1",
+                    "sources": [
+                        {
+                            "source_id": "source-1",
+                            "url": "https://example.com/model.py",
+                            "final_url": "https://example.com/model.py",
+                            "revision": "sha256:" + "a" * 64,
+                            "expected_sha256": "",
+                            "media_type": "text/x-python",
+                            "media_type_method": "path-extension",
+                            "broker_role": "implementation",
+                        }
+                    ],
+                    "broker": {"outcomes": [], "derived_citations": [], "total_bytes": 0},
+                    "discovery": discovery,
+                    "discovery_sha256": stable_hash(discovery),
+                }
+            ),
+            encoding="utf-8",
         )
         return subprocess.CompletedProcess(list(argv), 0, "", "")
 
     monkeypatch.setattr(driver_admission_module, "_run_operator_command", fake_run)
-    monkeypatch.setattr(
-        driver_module,
-        "fetch_targets",
-        lambda targets, root: controlled_fetch_targets(
-            targets, root, fetch_bytes=lambda _url: content
-        ),
-    )
-    manifest = CommandAuthorLane(("fake-author",))._fetch_author_sources(item, tmp_path / "author")
-
-    frozen = manifest["sources"][0]
-    assert frozen["content_sha256"] == digest
-    assert Path(frozen["cas_path"]).read_bytes() == content
+    with pytest.raises(DriverIntegrationError, match="empty or invalid"):
+        CommandAuthorLane(("fake-author",))._fetch_author_sources(
+            item, tmp_path / "author"
+        )
 
 
 @pytest.mark.parametrize(
@@ -5266,7 +5502,15 @@ def test_needs_higher_tier_is_deferred_and_appended_to_c3_intake(
     assert promotion["destination_campaign_id"] == "c3-classics"
     assert promotion["source_manifest"]["sources"]
     assert promotion["stage1_research_summary"]["queries"]
+    assert promotion["stage1_research_summary"]["candidate_links"][0][
+        "why_rejected"
+    ]
     assert promotion["prior_attempt"]["kind"] == "BLOCKED"
+    probe_receipts = list(tmp_path.rglob("discovery-probes/receipts.json"))
+    assert len(probe_receipts) == 1
+    probe_pack = json.loads(probe_receipts[0].read_text(encoding="utf-8"))
+    assert probe_pack["sources"] == []
+    assert probe_pack["broker"]["outcomes"][0]["outcome"] == "unreachable"
 
     promoted_snapshot = materialize_promotion_intake(
         promotions,

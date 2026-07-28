@@ -504,7 +504,8 @@
     "$.payload.proposal.work_id": "author-gated",
     "$.payload.reason_code": "author-gated",
     "$.payload.recommendation_sha256": "author-gated",
-    "$.payload.research_summary.candidate_links[]": "author-gated",
+    "$.payload.research_summary.candidate_links[].url": "author-gated",
+    "$.payload.research_summary.candidate_links[].why_rejected": "author-gated",
     "$.payload.research_summary.conclusion": "author-gated",
     "$.payload.research_summary.languages[]": "author-gated",
     "$.payload.research_summary.places[]": "author-gated",
@@ -750,9 +751,21 @@
           "type": "array",
           "uniqueItems": true,
           "items": {
-            "type": "string",
-            "format": "uri",
-            "pattern": "^https?://"
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["url", "why_rejected"],
+            "properties": {
+              "url": {
+                "type": "string",
+                "format": "uri",
+                "pattern": "^https://",
+                "description": "Requested candidate locator for a machine probe."
+              },
+              "why_rejected": {
+                "$ref": "#/$defs/nonempty_string",
+                "description": "Model-authored reason the candidate did not satisfy the source need."
+              }
+            }
           }
         },
         "languages": {

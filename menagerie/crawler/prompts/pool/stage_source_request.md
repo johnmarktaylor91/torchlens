@@ -1,4 +1,4 @@
-## STAGE 1 OF 2 -- SOURCE TRIAGE (name the exact sources; do not author yet)
+## STAGE 1 OF 2 -- SOURCE TRIAGE (request locators; do not author yet)
 
 You are one author subagent in the Menagerie crawler's author pool. This is the research
 half of ONE model's single expensive source-reading campaign. A second stage continues
@@ -54,7 +54,8 @@ read deeply once, do not skim twice.
 7. Emit exactly one arm of the typed discovery union below. Only `FOUND` carries fetch
    targets. A bounded negative finding must use its negative arm without inventing a URL
    merely to satisfy the transport. For implementation
-   sources name files and revisions, not landing pages -- the paper/project page in the
+   sources name repositories, files, and requested refs, not landing pages -- the
+   paper/project page in the
    rule above is the deliberate exception, since the page IS the artifact there. Never
    cite a search-results page. Never invent a URL. Pin what is
    needed to construct and trace the architecture -- the model definition and the modules
@@ -117,11 +118,21 @@ and `work_id`:
     "arm": "FOUND",
     "sources": [
       {
-        "source_id": "...",
-        "url": "https://...",
-        "revision": "<commit|tag|version>",
-        "expected_sha256": "",
-        "media_type": "text/x-python"
+        "source_id": "impl-main",
+        "kind": "forge-file",
+        "repo": "github.com/OWNER/NAME",
+        "path": "path/to/model.py",
+        "ref": "<observed tag, branch, version, or SHA>",
+        "requested_role": "implementation",
+        "media_type_hint": "text/x-python",
+        "basis": "Why this requested object is the right implementation source."
+      },
+      {
+        "source_id": "paper-1",
+        "kind": "paper",
+        "url": "https://arxiv.org/abs/XXXX.XXXXX",
+        "requested_role": "paper",
+        "basis": "Why this is likely the introducing paper."
       }
     ]
   }
@@ -143,26 +154,27 @@ and `work_id`:
   and verbatim `error`.
 
 Every `search_evidence` or `research_summary` object has exactly: `queries` (non-empty),
-`places` (non-empty), `candidate_links` (possibly empty exact HTTP(S) links), `languages`
-(non-empty), and a non-empty `conclusion`. The three negative arms are real findings that
-proceed to the independent R5 terminal checker; they do not carry a fetch target.
+`places` (non-empty), `candidate_links` (possibly empty objects with exact `https://`
+`url` plus non-empty `why_rejected`), `languages` (non-empty), and a non-empty
+`conclusion`. The three negative arms are real findings that proceed to the independent
+R5 terminal checker; they do not carry a fetch target.
 
-- For `FOUND`, every URL must be a direct, stable, machine-retrievable artifact.
-- **Prefer an immutable commit SHA to a floating tag.** A tag or branch can be repointed at
-  different bytes; a commit SHA cannot, even in principle. Resolve whatever release or tag
-  you found to its commit SHA and pin that SHA in `revision`, and in the URL wherever the
-  host embeds a revision. Pin a version string only when the artifact is itself an
-  immutable released package file.
+- `FOUND` descriptors may carry only locators and authored judgment: `source_id`, `kind`,
+  the kind-specific locator fields, `requested_role`, optional `media_type_hint`, and
+  `basis`.
+- A `forge-file` needs `repo`, normalized relative `path`, and requested `ref`; a
+  `raw-url` needs a direct HTTPS `url`; a `paper` needs one HTTPS URL or supported
+  arXiv/DOI/OpenReview identifier.
+- A requested ref may be a tag, branch, version, or a SHA you actually observed. It is
+  never authoritative: the broker dereferences it independently, retains it as
+  `requested_ref`, and takes `revision` only from the resolver receipt.
+- Never emit `revision`, `commit_sha`, any hash, `final_url`, `redirect_chain`,
+  `resolver_receipt`, `broker_role`, authoritative `media_type`, or
+  `derived_citation`. The strict schema rejects those fields even when empty or null.
+- `requested_role` is your intended use, not the manifest classification. The broker
+  derives `broker_role` from the fetched object. Likewise `media_type_hint` is only a
+  hint; the broker derives `media_type` from transport/path/content observations.
 - Order matters only for your own reading; the fetcher retrieves all of them.
-- `expected_sha256` is **optional, and empty is the normal answer.** You do not fetch these
-  bytes, so you cannot honestly digest them; the coordinator's controlled fetch computes the
-  digest and pins exactly what it retrieved. Supply one **only** when you read the digest
-  off an authoritative record for that exact artifact -- a release manifest, a lockfile, a
-  PyPI file record. A supplied digest is enforced byte-exactly and a mismatch fails this
-  model, so **never guess, reconstruct, or copy a digest from a different artifact.** Accepted
-  spellings are `sha256:<64 hex>` and a bare `<64 hex>`; use `""` (or omit the key) when
-  unknown. Pin immutability through the URL and `revision` instead: prefer a URL that embeds
-  an exact commit or released version.
 
 You do **not** fetch these yourself. The coordinator performs the controlled fetch into
 the campaign's content-addressed store and freezes a manifest; stage 2 reads the bytes from

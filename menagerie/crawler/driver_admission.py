@@ -167,6 +167,13 @@ from menagerie.crawler.routing import (
     phase_routes,
     route_model,
 )
+from menagerie.crawler.source_broker import (
+    BROKER_PACK_VERSION,
+    SourceBrokerError,
+    broker_source_pack,
+    default_transport,
+    write_broker_outputs,
+)
 from menagerie.crawler.wakeup import WakeupManager, reduce_wake_episodes
 from menagerie.crawler.worker_supervisor import (
     # The hardened teardown: it proves the group is still ours (unreaped child plus an
@@ -229,6 +236,16 @@ from menagerie.crawler.driver_progress import (
     _framework_from_intake,
     _read_json,
     _write_json_atomic,
+)
+from menagerie.crawler.discovery import (
+    DiscoveryError,
+    FoundDiscovery,
+    HigherTierDiscovery,
+    NegativeDiscovery,
+    RetryableToolFailureDiscovery,
+    freeze_discovery_evidence,
+    materialize_discovery_artifact,
+    validate_source_discovery,
 )
 
 from menagerie.crawler.driver_receipts import (
@@ -690,7 +707,15 @@ class _AuthorLaneBase:
         model_dir = root / "model"
         model_dir.mkdir(parents=True, exist_ok=True)
         result_path = root / "result.json"
-        source_manifest = self._fetch_author_sources(item, root, config)
+        source_result = self._fetch_author_sources(item, root, config)
+        if isinstance(source_result, (NegativeDiscovery, HigherTierDiscovery)):
+            return materialize_discovery_artifact(
+                source_result,
+                item=item,
+                context=context,
+                root=root,
+            )
+        source_manifest = source_result
         # Past this line the model's sources are resolved, fetched, and hash-frozen, so a
         # later cap exhaustion can never honestly be a source failure. This is the one
         # boundary that knows it, so it is where the stage is re-attributed for both lanes.
@@ -768,12 +793,27 @@ class _AuthorLaneBase:
         item: WorkItem,
         root: Path,
         config: Optional[DriverConfig] = None,
-    ) -> JsonObject:
-        """Ask for exact pins, controlled-fetch them, and freeze a nonempty pack."""
+    ) -> JsonObject | NegativeDiscovery | HigherTierDiscovery:
+        """Validate discovery, broker FOUND locators, and freeze machine source facts.
+
+        Parameters
+        ----------
+        item:
+            Exact scheduled work item.
+        root:
+            Per-model author custody root.
+        config:
+            Optional active driver configuration.
+
+        Returns
+        -------
+        dict[str, Any] | NegativeDiscovery | HigherTierDiscovery
+            Frozen source manifest, or a checked-materialization discovery arm.
+        """
 
         request_path = root / "source-request.json"
         output_path = root / "source-targets.json"
-        work_id = f"work-{item.stable_id}"
+        work_id = item.active_work_id
         body: JsonObject = {
             "envelope_version": "menagerie.crawler.author-source-request.v1",
             "work_id": work_id,
@@ -781,13 +821,7 @@ class _AuthorLaneBase:
             "untrusted_hints": item.intake.to_dict(),
             "required_output_path": str(output_path.resolve()),
             "max_sources": self.effort_grant.fetch_targets,
-            "required_fields": [
-                "source_id",
-                "url",
-                "revision",
-                "expected_sha256",
-                "media_type",
-            ],
+            "discovery_schema_version": "menagerie.crawler.source-discovery.v1",
         }
         request = {**body, "envelope_sha256": stable_hash(body)}
         from menagerie.crawler.author_dispatch import write_envelope_atomic
@@ -802,10 +836,84 @@ class _AuthorLaneBase:
             output_path=output_path,
         )
         value = _read_json(output_path)
+        discovery: FoundDiscovery | NegativeDiscovery | HigherTierDiscovery
+        if value.get("schema_version") == "menagerie.crawler.source-discovery.v1":
+            try:
+                parsed = validate_source_discovery(
+                    value,
+                    stable_id=item.stable_id,
+                    work_id=work_id,
+                )
+            except DiscoveryError as exc:
+                raise DriverIntegrationError(
+                    f"author source discovery violates its registered contract: {exc}"
+                ) from exc
+            if isinstance(parsed, RetryableToolFailureDiscovery):
+                raise RetryableOperatorError(
+                    "author research tool failed "
+                    f"({parsed.tool_spelling}): {parsed.error}"
+                )
+            if isinstance(parsed, (NegativeDiscovery, HigherTierDiscovery)):
+                return parsed
+            discovery = parsed
+            if len(discovery.descriptors) > self.effort_grant.fetch_targets:
+                raise AuthorEffortCapExceeded(
+                    f"author source discovery for {item.stable_id} named "
+                    f"{len(discovery.descriptors)} targets, exceeding the "
+                    f"{self.effort_grant.fetch_targets} controlled-fetch grant"
+                )
+            try:
+                pack = broker_source_pack(
+                    [descriptor.to_mapping() for descriptor in discovery.descriptors],
+                    broker_dir=root / "broker",
+                    transport=default_transport(),
+                )
+            except SourceBrokerError as exc:
+                raise DriverIntegrationError(
+                    f"author source descriptor was rejected by the broker: {exc}"
+                ) from exc
+            write_broker_outputs(pack, root / "broker")
+            if not pack.implementation_rows():
+                raise DriverIntegrationError(
+                    "source broker found no machine-classified implementation object"
+                )
+            value = {
+                **pack.to_dict(),
+                "discovery": discovery.raw_result,
+                "discovery_sha256": stable_hash(discovery.raw_result),
+            }
+        elif value.get("pack_version") == BROKER_PACK_VERSION:
+            raw_discovery = value.get("discovery")
+            if not isinstance(raw_discovery, Mapping):
+                raise DriverIntegrationError(
+                    "source broker pack must retain its registered discovery envelope"
+                )
+            if value.get("discovery_sha256") != stable_hash(raw_discovery):
+                raise DriverIntegrationError(
+                    "source broker pack discovery digest does not match its envelope"
+                )
+            try:
+                parsed = validate_source_discovery(
+                    raw_discovery,
+                    stable_id=item.stable_id,
+                    work_id=work_id,
+                )
+            except DiscoveryError as exc:
+                raise DriverIntegrationError(
+                    f"source broker pack discovery binding is invalid: {exc}"
+                ) from exc
+            if not isinstance(parsed, FoundDiscovery):
+                raise DriverIntegrationError("source broker pack must originate from FOUND")
+            discovery = parsed
+        else:
+            raise DriverIntegrationError(
+                "author source response is neither the registered discovery envelope "
+                "nor a machine broker pack"
+            )
         raw_targets = value.get("sources")
         if not isinstance(raw_targets, list) or not raw_targets:
             raise DriverIntegrationError(
-                "author source request must name at least one pinned source"
+                "source broker pack must carry at least one fetched source"
             )
         # LP-13.2 controlled-fetch ceiling. The lane is the only engine boundary
         # that observes the pinned target count, so it enforces it here rather
@@ -815,27 +923,89 @@ class _AuthorLaneBase:
                 f"author source request for {item.stable_id} named {len(raw_targets)} targets, "
                 f"exceeding the {self.effort_grant.fetch_targets} controlled-fetch grant"
             )
+        if not any(
+            isinstance(raw, Mapping) and raw.get("broker_role") == "implementation"
+            for raw in raw_targets
+        ):
+            raise DriverIntegrationError(
+                "source broker pack has no machine-classified implementation row"
+            )
         targets: list[FetchTarget] = []
         for raw in raw_targets:
             if not isinstance(raw, Mapping):
-                raise DriverIntegrationError("author source targets must be objects")
+                raise DriverIntegrationError("source broker manifest rows must be objects")
+            required = {
+                "source_id",
+                "url",
+                "final_url",
+                "revision",
+                "expected_sha256",
+                "media_type",
+                "media_type_method",
+                "broker_role",
+            }
+            if not required.issubset(raw):
+                raise DriverIntegrationError(
+                    "source broker manifest row lacks machine-derived identity fields"
+                )
+            if any(
+                not isinstance(raw.get(name), str) or not str(raw[name]).strip()
+                for name in required - {"broker_role"}
+            ) or raw.get("broker_role") not in {"implementation", "documentation"}:
+                raise DriverIntegrationError(
+                    "source broker manifest row has empty or invalid machine-derived facts"
+                )
             targets.append(
                 FetchTarget(
                     source_id=str(raw.get("source_id", "")),
                     url=str(raw.get("url", "")),
                     revision=str(raw.get("revision", "")),
-                    # An absent digest is legitimate and expected: the author lane
-                    # is structurally forbidden from fetching source into the
-                    # campaign, so it can only pin a digest it read from an
-                    # external record. `null` and a missing key both mean absent.
                     expected_sha256=str(raw.get("expected_sha256") or ""),
                     media_type=str(raw.get("media_type", "application/octet-stream")),
                 )
             )
-        manifest = _current_fetch_targets(targets, root / "source-cas")
-        if not manifest.get("sources"):
+        fetched = _current_fetch_targets(targets, root / "source-cas")
+        fetched_rows = fetched.get("sources")
+        if not isinstance(fetched_rows, list) or not fetched_rows:
             raise DriverIntegrationError("controlled fetch produced an empty source manifest")
-        return dict(manifest)
+        broker_rows = {
+            str(row["source_id"]): row for row in raw_targets if isinstance(row, Mapping)
+        }
+        if len(broker_rows) != len(raw_targets):
+            raise DriverIntegrationError("source broker manifest source_id values must be unique")
+        merged_rows: list[JsonObject] = []
+        for row in fetched_rows:
+            if not isinstance(row, Mapping):
+                raise DriverIntegrationError("controlled fetch manifest rows must be objects")
+            source_id = str(row.get("source_id", ""))
+            broker_row = broker_rows.get(source_id)
+            if broker_row is None:
+                raise DriverIntegrationError(
+                    "controlled fetch returned a source absent from the broker pack"
+                )
+            merged_rows.append(
+                {
+                    **dict(row),
+                    **{
+                        key: deepcopy(value)
+                        for key, value in broker_row.items()
+                        if key
+                        not in {
+                            "source_id",
+                            "url",
+                            "revision",
+                            "expected_sha256",
+                            "media_type",
+                        }
+                    },
+                }
+            )
+        discovery_evidence = freeze_discovery_evidence(discovery, root)
+        manifest_body: JsonObject = {
+            "sources": merged_rows,
+            "discovery_evidence": discovery_evidence,
+        }
+        return {**manifest_body, "manifest_sha256": stable_hash(manifest_body)}
 
     def _dispatch(
         self,

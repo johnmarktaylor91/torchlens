@@ -7,13 +7,16 @@
   "required": ["schema_version", "stable_id", "work_id", "arm", "payload"],
   "properties": {
     "schema_version": {
-      "const": "menagerie.crawler.source-discovery.v1"
+      "const": "menagerie.crawler.source-discovery.v1",
+      "description": "Machine-defined source-discovery contract discriminator."
     },
     "stable_id": {
-      "$ref": "#/$defs/nonempty_string"
+      "$ref": "#/$defs/nonempty_string",
+      "description": "Exact trusted model identity copied from the source request."
     },
     "work_id": {
-      "$ref": "#/$defs/nonempty_string"
+      "$ref": "#/$defs/nonempty_string",
+      "description": "Exact active work identity copied from the source request."
     },
     "arm": {
       "enum": [
@@ -23,7 +26,8 @@
         "NOT_A_MODEL",
         "NEEDS_HIGHER_TIER",
         "RETRYABLE_TOOL_FAILURE"
-      ]
+      ],
+      "description": "Closed model-judged discovery outcome."
     },
     "payload": {
       "oneOf": [
@@ -33,7 +37,8 @@
         {"$ref": "#/$defs/not_a_model"},
         {"$ref": "#/$defs/needs_higher_tier"},
         {"$ref": "#/$defs/retryable_tool_failure"}
-      ]
+      ],
+      "description": "Strict arm-specific discovery payload."
     }
   },
   "$defs": {
@@ -49,28 +54,157 @@
         "$ref": "#/$defs/nonempty_string"
       }
     },
-    "source": {
+    "source_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+    },
+    "requested_role": {
+      "enum": ["implementation", "paper", "documentation", "probe"]
+    },
+    "https_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://"
+    },
+    "forge_file_descriptor": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["source_id", "url", "revision", "media_type"],
+      "required": [
+        "source_id",
+        "kind",
+        "repo",
+        "path",
+        "ref",
+        "requested_role",
+        "basis"
+      ],
       "properties": {
         "source_id": {
-          "$ref": "#/$defs/nonempty_string"
+          "$ref": "#/$defs/source_id",
+          "description": "Model-local correlation label with no external identity authority."
+        },
+        "kind": {
+          "const": "forge-file",
+          "description": "Request to resolve and fetch one forge-hosted file."
+        },
+        "repo": {
+          "type": "string",
+          "pattern": "^(?:https://)?(?:www\\.)?github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:\\.git)?/?$",
+          "description": "GitHub repository locator to resolve through the forge API."
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?(?:/|$)).+$",
+          "description": "Normalized repository-relative file path."
+        },
+        "ref": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Requested tag, branch, version, or commit-ish to dereference."
+        },
+        "requested_role": {
+          "$ref": "#/$defs/requested_role",
+          "description": "Model judgment about intended use; never an authoritative broker role."
+        },
+        "media_type_hint": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Optional authored hint that never controls the manifest media type."
+        },
+        "basis": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Grounded explanation of why the requested object is relevant."
+        }
+      }
+    },
+    "raw_url_descriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "kind", "url", "requested_role", "basis"],
+      "properties": {
+        "source_id": {
+          "$ref": "#/$defs/source_id",
+          "description": "Model-local correlation label with no external identity authority."
+        },
+        "kind": {
+          "const": "raw-url",
+          "description": "Request to fetch one direct HTTPS object."
         },
         "url": {
-          "type": "string",
-          "format": "uri",
-          "pattern": "^https?://"
+          "$ref": "#/$defs/https_url",
+          "description": "Requested HTTPS locator subject to bounded dereference."
         },
-        "revision": {
-          "$ref": "#/$defs/nonempty_string"
+        "requested_role": {
+          "$ref": "#/$defs/requested_role",
+          "description": "Model judgment about intended use; never an authoritative broker role."
         },
-        "expected_sha256": {
-          "type": ["string", "null"],
-          "pattern": "^(|(?:sha256:)?[0-9a-f]{64})$"
+        "media_type_hint": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Optional authored hint that never controls the manifest media type."
         },
-        "media_type": {
-          "$ref": "#/$defs/nonempty_string"
+        "basis": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Grounded explanation of why the requested object is relevant."
+        }
+      }
+    },
+    "paper_descriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "kind", "requested_role", "basis"],
+      "oneOf": [
+        {"required": ["url"]},
+        {"required": ["identifier"]}
+      ],
+      "properties": {
+        "source_id": {
+          "$ref": "#/$defs/source_id",
+          "description": "Model-local correlation label with no external identity authority."
+        },
+        "kind": {
+          "const": "paper",
+          "description": "Request to resolve paper metadata through an authoritative registry."
+        },
+        "url": {
+          "$ref": "#/$defs/https_url",
+          "description": "Requested paper locator carrying a supported registry identifier."
+        },
+        "identifier": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Requested arXiv, DOI, or OpenReview identifier."
+        },
+        "requested_role": {
+          "$ref": "#/$defs/requested_role",
+          "description": "Model judgment about intended use; never an authoritative broker role."
+        },
+        "media_type_hint": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Optional authored hint that never controls a manifest media type."
+        },
+        "basis": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Grounded explanation of why the requested paper is relevant."
+        }
+      }
+    },
+    "source_descriptor": {
+      "oneOf": [
+        {"$ref": "#/$defs/forge_file_descriptor"},
+        {"$ref": "#/$defs/raw_url_descriptor"},
+        {"$ref": "#/$defs/paper_descriptor"}
+      ]
+    },
+    "candidate_link": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "why_rejected"],
+      "properties": {
+        "url": {
+          "$ref": "#/$defs/https_url",
+          "description": "Requested candidate locator for a machine probe."
+        },
+        "why_rejected": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Model-authored reason the candidate does not satisfy the source need."
         }
       }
     },
@@ -86,25 +220,28 @@
       ],
       "properties": {
         "queries": {
-          "$ref": "#/$defs/nonempty_string_array"
+          "$ref": "#/$defs/nonempty_string_array",
+          "description": "Exact bounded search queries attempted."
         },
         "places": {
-          "$ref": "#/$defs/nonempty_string_array"
+          "$ref": "#/$defs/nonempty_string_array",
+          "description": "Exact indexes, hosts, registries, or archives searched."
         },
         "candidate_links": {
           "type": "array",
           "uniqueItems": true,
           "items": {
-            "type": "string",
-            "format": "uri",
-            "pattern": "^https?://"
-          }
+            "$ref": "#/$defs/candidate_link"
+          },
+          "description": "Candidate locators paired with authored rejection reasons."
         },
         "languages": {
-          "$ref": "#/$defs/nonempty_string_array"
+          "$ref": "#/$defs/nonempty_string_array",
+          "description": "Languages covered by the bounded search."
         },
         "conclusion": {
-          "$ref": "#/$defs/nonempty_string"
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Bounded model judgment supported by the preceding search record."
         }
       }
     },
@@ -114,14 +251,16 @@
       "required": ["arm", "sources"],
       "properties": {
         "arm": {
-          "const": "FOUND"
+          "const": "FOUND",
+          "description": "FOUND payload discriminator."
         },
         "sources": {
           "type": "array",
           "minItems": 1,
           "items": {
-            "$ref": "#/$defs/source"
-          }
+            "$ref": "#/$defs/source_descriptor"
+          },
+          "description": "Strict broker requests containing locators but no derived identities."
         }
       }
     },
@@ -131,10 +270,12 @@
       "required": ["arm", "search_evidence"],
       "properties": {
         "arm": {
-          "const": "NO_USABLE_SOURCE"
+          "const": "NO_USABLE_SOURCE",
+          "description": "NO_USABLE_SOURCE payload discriminator."
         },
         "search_evidence": {
-          "$ref": "#/$defs/search_evidence"
+          "$ref": "#/$defs/search_evidence",
+          "description": "Bounded search evidence supporting the no-source judgment."
         }
       }
     },
@@ -144,13 +285,16 @@
       "required": ["arm", "search_evidence", "retained_vague_text"],
       "properties": {
         "arm": {
-          "const": "INSUFFICIENT_DESCRIPTION"
+          "const": "INSUFFICIENT_DESCRIPTION",
+          "description": "INSUFFICIENT_DESCRIPTION payload discriminator."
         },
         "search_evidence": {
-          "$ref": "#/$defs/search_evidence"
+          "$ref": "#/$defs/search_evidence",
+          "description": "Bounded search evidence supporting the insufficiency judgment."
         },
         "retained_vague_text": {
-          "$ref": "#/$defs/nonempty_string"
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Exact retained text that is too vague to specify the forward pass."
         }
       }
     },
@@ -160,10 +304,12 @@
       "required": ["arm", "search_evidence"],
       "properties": {
         "arm": {
-          "const": "NOT_A_MODEL"
+          "const": "NOT_A_MODEL",
+          "description": "NOT_A_MODEL payload discriminator."
         },
         "search_evidence": {
-          "$ref": "#/$defs/search_evidence"
+          "$ref": "#/$defs/search_evidence",
+          "description": "Bounded search evidence supporting the non-model judgment."
         }
       }
     },
@@ -173,10 +319,12 @@
       "required": ["arm", "research_summary"],
       "properties": {
         "arm": {
-          "const": "NEEDS_HIGHER_TIER"
+          "const": "NEEDS_HIGHER_TIER",
+          "description": "NEEDS_HIGHER_TIER payload discriminator."
         },
         "research_summary": {
-          "$ref": "#/$defs/search_evidence"
+          "$ref": "#/$defs/search_evidence",
+          "description": "Bounded research record carried to the higher-tier campaign."
         }
       }
     },
@@ -186,18 +334,55 @@
       "required": ["arm", "tool_name", "tool_spelling", "error"],
       "properties": {
         "arm": {
-          "const": "RETRYABLE_TOOL_FAILURE"
+          "const": "RETRYABLE_TOOL_FAILURE",
+          "description": "RETRYABLE_TOOL_FAILURE payload discriminator."
         },
         "tool_name": {
-          "$ref": "#/$defs/nonempty_string"
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Human-readable research tool name."
         },
         "tool_spelling": {
-          "$ref": "#/$defs/nonempty_string"
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Exact registered tool spelling used by the session."
         },
         "error": {
-          "$ref": "#/$defs/nonempty_string"
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Verbatim tool error observed by the session."
         }
       }
     }
+  },
+  "x-authority-ownership": {
+    "$.arm": "author-gated",
+    "$.payload.arm": "author-gated",
+    "$.payload.error": "author-gated",
+    "$.payload.research_summary.candidate_links[].url": "author-gated",
+    "$.payload.research_summary.candidate_links[].why_rejected": "author-gated",
+    "$.payload.research_summary.conclusion": "author-gated",
+    "$.payload.research_summary.languages[]": "author-gated",
+    "$.payload.research_summary.places[]": "author-gated",
+    "$.payload.research_summary.queries[]": "author-gated",
+    "$.payload.retained_vague_text": "author-gated",
+    "$.payload.search_evidence.candidate_links[].url": "author-gated",
+    "$.payload.search_evidence.candidate_links[].why_rejected": "author-gated",
+    "$.payload.search_evidence.conclusion": "author-gated",
+    "$.payload.search_evidence.languages[]": "author-gated",
+    "$.payload.search_evidence.places[]": "author-gated",
+    "$.payload.search_evidence.queries[]": "author-gated",
+    "$.payload.sources[].basis": "author-gated",
+    "$.payload.sources[].identifier": "author-gated",
+    "$.payload.sources[].kind": "author-gated",
+    "$.payload.sources[].media_type_hint": "author-gated",
+    "$.payload.sources[].path": "author-gated",
+    "$.payload.sources[].ref": "author-gated",
+    "$.payload.sources[].repo": "author-gated",
+    "$.payload.sources[].requested_role": "author-gated",
+    "$.payload.sources[].source_id": "author-gated",
+    "$.payload.sources[].url": "author-gated",
+    "$.payload.tool_name": "author-gated",
+    "$.payload.tool_spelling": "author-gated",
+    "$.schema_version": "reducer-derived",
+    "$.stable_id": "trusted-intake",
+    "$.work_id": "reducer-derived"
   }
 }

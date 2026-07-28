@@ -1536,7 +1536,11 @@ def _assemble_terminal_model(
             search_report: JsonObject = {
                 "queries": list(search_evidence["queries"]),
                 "places_checked": list(search_evidence["places"]),
-                "links_checked": list(search_evidence["candidate_links"]),
+                "links_checked": [
+                    str(candidate["url"])
+                    for candidate in search_evidence["candidate_links"]
+                    if isinstance(candidate, Mapping)
+                ],
                 "languages_checked": list(search_evidence["languages"]),
                 "archives_checked": [],
                 "started_at": created_at,

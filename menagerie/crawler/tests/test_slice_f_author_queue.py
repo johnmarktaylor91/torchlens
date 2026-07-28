@@ -61,6 +61,7 @@ from menagerie.crawler.driver_contracts import (
     RetryableOperatorError,
     WorkItem,
 )
+from menagerie.crawler.identity import stable_hash
 from menagerie.crawler.recordio import scan_jsonl
 from menagerie.crawler.tests.test_slice_f_driver import (
     FakePauseScheduler,
@@ -216,6 +217,49 @@ def _source_targets(count: int = 1) -> dict[str, Any]:
             }
             for index in range(count)
         ]
+    }
+
+
+def _broker_pack(item: WorkItem, count: int) -> dict[str, Any]:
+    """Return a machine-shaped broker pack bound to one work item."""
+
+    discovery = {
+        "schema_version": "menagerie.crawler.source-discovery.v1",
+        "stable_id": item.stable_id,
+        "work_id": item.active_work_id,
+        "arm": "FOUND",
+        "payload": {
+            "arm": "FOUND",
+            "sources": [
+                {
+                    "source_id": f"src-{index}",
+                    "kind": "raw-url",
+                    "url": f"https://example.invalid/{index}.py",
+                    "requested_role": "implementation",
+                    "basis": "Synthetic queue-lane implementation source.",
+                }
+                for index in range(count)
+            ],
+        },
+    }
+    return {
+        "pack_version": "menagerie.crawler.source-broker-pack.v1",
+        "sources": [
+            {
+                "source_id": f"src-{index}",
+                "url": f"https://example.invalid/{index}.py",
+                "final_url": f"https://example.invalid/{index}.py",
+                "revision": "sha256:" + f"{index:064x}",
+                "expected_sha256": "sha256:" + f"{index:064x}",
+                "media_type": "text/x-python",
+                "media_type_method": "path-extension",
+                "broker_role": "implementation",
+            }
+            for index in range(count)
+        ],
+        "broker": {"outcomes": [], "derived_citations": [], "total_bytes": 0},
+        "discovery": discovery,
+        "discovery_sha256": stable_hash(discovery),
     }
 
 
@@ -533,7 +577,10 @@ def test_fetch_target_cap_is_enforced_by_the_lane(tmp_path: Path) -> None:
 
     item = _work_item(tmp_path)
     queue_root = tmp_path / "author-queue"
-    pool = FakePool(queue_root, result=_source_targets(count=AUTHOR_MAX_FETCH_TARGETS + 1))
+    pool = FakePool(
+        queue_root,
+        result=_broker_pack(item, count=AUTHOR_MAX_FETCH_TARGETS + 1),
+    )
     lane = _queue_lane(queue_root, pool)
 
     with pytest.raises(AuthorEffortCapExceeded, match="controlled-fetch grant"):
@@ -545,12 +592,18 @@ def test_fetch_target_cap_admits_the_full_grant(tmp_path: Path, monkeypatch: Any
 
     item = _work_item(tmp_path)
     queue_root = tmp_path / "author-queue"
-    pool = FakePool(queue_root, result=_source_targets(count=AUTHOR_MAX_FETCH_TARGETS))
+    pool = FakePool(
+        queue_root,
+        result=_broker_pack(item, count=AUTHOR_MAX_FETCH_TARGETS),
+    )
     lane = _queue_lane(queue_root, pool)
     _stub_controlled_fetch(monkeypatch)
 
-    manifest = lane._fetch_author_sources(item, tmp_path / "work" / "author")  # noqa: SLF001
+    manifest = lane._fetch_author_sources(
+        item, tmp_path / "work" / "author"
+    )  # noqa: SLF001
 
+    assert isinstance(manifest, dict)
     assert len(manifest["sources"]) == AUTHOR_MAX_FETCH_TARGETS
 
 
@@ -561,7 +614,7 @@ def test_source_request_publishes_the_fetch_grant_to_the_operator(
 
     item = _work_item(tmp_path)
     queue_root = tmp_path / "author-queue"
-    pool = FakePool(queue_root, result=_source_targets())
+    pool = FakePool(queue_root, result=_broker_pack(item, count=1))
     lane = _queue_lane(queue_root, pool)
     root = tmp_path / "work" / "author"
     _stub_controlled_fetch(monkeypatch)
@@ -1103,7 +1156,7 @@ def test_lane_reattributes_a_cap_hit_once_the_manifest_is_frozen(
 
     item = _work_item(tmp_path)
     queue_root = tmp_path / "author-queue"
-    pool = FakePool(queue_root, result=_source_targets())
+    pool = FakePool(queue_root, result=_broker_pack(item, count=1))
     lane = _queue_lane(queue_root, pool)
     _stub_controlled_fetch(monkeypatch)
 

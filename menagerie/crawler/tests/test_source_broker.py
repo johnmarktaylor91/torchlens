@@ -17,6 +17,7 @@ from menagerie.crawler.source_broker import (
     OUTCOME_PROBED,
     OUTCOME_REDIRECT_REFUSED,
     OUTCOME_UNREACHABLE,
+    ROLE_IMPLEMENTATION,
     ROLE_INTRODUCING_PAPER,
     FixtureTransport,
     RedirectRefused,
@@ -78,8 +79,9 @@ def _impl_descriptor() -> dict:
         "repo": "github.com/pykeen/pykeen",
         "path": "src/pykeen/models/unimodal/mure.py",
         "ref": "v1.11.1",
-        "role": "implementation",
-        "media_type": "text/x-python",
+        "requested_role": "implementation",
+        "media_type_hint": "text/x-python",
+        "basis": "The upstream repository owns the MuRE implementation.",
     }
 
 
@@ -115,6 +117,33 @@ def test_descriptor_smuggling_exact_strings_is_rejected(tmp_path: Path) -> None:
         broker_source_pack([descriptor], broker_dir=tmp_path, transport=MapTransport({}))
 
 
+@pytest.mark.parametrize("value", ["fabricated", "", None])
+@pytest.mark.parametrize(
+    "field",
+    [
+        "revision",
+        "commit_sha",
+        "expected_sha256",
+        "content_sha256",
+        "sha256",
+        "final_url",
+        "redirect_chain",
+        "resolver_receipt",
+        "broker_role",
+        "media_type",
+        "derived_citation",
+    ],
+)
+def test_descriptor_smuggling_is_rejected_on_presence(
+    tmp_path: Path, field: str, value: object
+) -> None:
+    """A forbidden identity field is rejected even when empty or null."""
+
+    descriptor = {**_impl_descriptor(), field: value}
+    with pytest.raises(SourceBrokerError, match="machine-owned"):
+        broker_source_pack([descriptor], broker_dir=tmp_path, transport=MapTransport({}))
+
+
 def test_bad_ref_is_a_typed_outcome_with_receipt(tmp_path: Path) -> None:
     """An unresolvable ref yields ``bad-ref`` plus the forge receipt, no row."""
 
@@ -125,6 +154,57 @@ def test_bad_ref_is_a_typed_outcome_with_receipt(tmp_path: Path) -> None:
     assert outcome.outcome == OUTCOME_BAD_REF
     assert outcome.resolver_receipt is not None
     assert outcome.resolver_receipt["status"] == 422
+
+
+def test_manifest_transport_and_classification_facts_are_broker_derived(
+    tmp_path: Path,
+) -> None:
+    """Requested role/media hints and the pre-redirect URL cannot control a row."""
+
+    requested_url = "https://example.org/readme.md"
+    final_url = "https://raw.githubusercontent.com/acme/widgets/main/model.py"
+    body = b"class Model:\n    pass\n"
+
+    def transport(url: str, *, max_bytes: int, timeout: float) -> TransportResponse:
+        """Return one redirected Python source response."""
+
+        del max_bytes, timeout
+        assert url == requested_url
+        return TransportResponse(
+            status=200,
+            final_url=final_url,
+            redirect_chain=(requested_url, final_url),
+            body=body,
+            truncated=False,
+        )
+
+    pack = broker_source_pack(
+        [
+            {
+                "source_id": "spoof-attempt",
+                "kind": "raw-url",
+                "url": requested_url,
+                "requested_role": "documentation",
+                "media_type_hint": "application/x-authored-spoof",
+                "basis": "The final object is a source file.",
+            }
+        ],
+        broker_dir=tmp_path,
+        transport=transport,
+    )
+
+    assert len(pack.rows) == 1
+    row = pack.rows[0]
+    assert row["url"] == final_url
+    assert row["final_url"] == final_url
+    assert row["broker_role"] == ROLE_IMPLEMENTATION
+    assert row["media_type"] == "text/x-python"
+    assert row["media_type_method"] == "path-extension"
+    assert row["requested_url"] == requested_url
+    assert row["requested_role"] == "documentation"
+    assert row["media_type_hint"] == "application/x-authored-spoof"
+    assert row["revision"] == hash_bytes(body)
+    assert "role" not in row
 
 
 def test_per_target_outcomes_are_independent(tmp_path: Path) -> None:
@@ -145,13 +225,15 @@ def test_per_target_outcomes_are_independent(tmp_path: Path) -> None:
             "source_id": "doc-dead",
             "kind": "raw-url",
             "url": "https://example.org/dead",
-            "role": "documentation",
+            "requested_role": "documentation",
+            "basis": "Candidate documentation endpoint.",
         },
         {
             "source_id": "doc-hop",
             "kind": "raw-url",
             "url": "https://example.org/hop",
-            "role": "documentation",
+            "requested_role": "documentation",
+            "basis": "Candidate documentation endpoint.",
         },
     ]
     pack = broker_source_pack(descriptors, broker_dir=tmp_path, transport=transport)
@@ -174,7 +256,8 @@ def test_oversized_target_is_typed_and_carries_no_digest(tmp_path: Path) -> None
                 "source_id": "doc-big",
                 "kind": "raw-url",
                 "url": "https://example.org/big",
-                "role": "documentation",
+                "requested_role": "documentation",
+                "basis": "Candidate documentation endpoint.",
             }
         ],
         broker_dir=tmp_path,
@@ -196,7 +279,8 @@ def test_probe_targets_yield_probe_receipts_not_rows(tmp_path: Path) -> None:
                 "source_id": "probe-1",
                 "kind": "raw-url",
                 "url": "https://example.org/candidate",
-                "role": "probe",
+                "requested_role": "probe",
+                "basis": "Candidate requested only for a negative-proof probe.",
             }
         ],
         broker_dir=tmp_path,
@@ -217,7 +301,8 @@ def test_paper_role_requires_derived_metadata(tmp_path: Path) -> None:
                 "source_id": "paper-mure",
                 "kind": "paper",
                 "url": "https://arxiv.org/abs/1905.09791",
-                "role": "paper",
+                "requested_role": "paper",
+                "basis": "Candidate introducing paper.",
             }
         ],
         broker_dir=tmp_path,
@@ -242,7 +327,8 @@ def test_paper_derivation_failure_never_binds_the_paper_role(tmp_path: Path) -> 
                 "source_id": "paper-x",
                 "kind": "paper",
                 "url": "https://arxiv.org/abs/1905.09791",
-                "role": "paper",
+                "requested_role": "paper",
+                "basis": "Candidate introducing paper.",
             }
         ],
         broker_dir=tmp_path,
@@ -293,10 +379,20 @@ def test_total_byte_ceiling_stops_later_fetches_typed(tmp_path: Path) -> None:
     )
     pack = broker_source_pack(
         [
-            {"source_id": "a", "kind": "raw-url", "url": "https://example.org/a",
-             "role": "documentation"},
-            {"source_id": "b", "kind": "raw-url", "url": "https://example.org/b",
-             "role": "documentation"},
+            {
+                "source_id": "a",
+                "kind": "raw-url",
+                "url": "https://example.org/a",
+                "requested_role": "documentation",
+                "basis": "First documentation object.",
+            },
+            {
+                "source_id": "b",
+                "kind": "raw-url",
+                "url": "https://example.org/b",
+                "requested_role": "documentation",
+                "basis": "Second documentation object.",
+            },
         ],
         broker_dir=tmp_path,
         transport=transport,

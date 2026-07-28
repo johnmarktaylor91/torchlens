@@ -27,8 +27,8 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ElementTree
 from dataclasses import dataclass, field, replace
-from pathlib import Path
-from typing import Any, Callable, Mapping, Optional, Protocol, Union
+from pathlib import Path, PurePosixPath
+from typing import Any, Callable, Mapping, Optional, Protocol, Sequence, Union
 
 from menagerie.crawler.identity import hash_bytes, utc_now
 from menagerie.crawler.models import JsonObject
@@ -77,6 +77,7 @@ DEFAULT_MAX_REDIRECTS = 5
 _ARXIV_ID_PATTERN = re.compile(r"(?:arxiv\.org/(?:abs|pdf)/|^)(\d{4}\.\d{4,5})(?:v\d+)?")
 _DOI_PATTERN = re.compile(r"\b(10\.\d{4,9}/[^\s\"<>]+?)(?:[.,;]?(?:\s|$))")
 _OPENREVIEW_PATTERN = re.compile(r"openreview\.net/(?:forum|pdf)\?id=([A-Za-z0-9_-]+)")
+_SOURCE_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 _GITHUB_REPO_PATTERN = re.compile(
     r"^(?:https?://)?(?:www\.)?github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?$"
 )
@@ -101,6 +102,23 @@ _MEDIA_TYPES = {
     ".cfg": "text/plain",
     ".prototxt": "text/plain",
 }
+_IMPLEMENTATION_SUFFIXES = frozenset(
+    {
+        ".c",
+        ".cc",
+        ".cfg",
+        ".cpp",
+        ".cu",
+        ".json",
+        ".lua",
+        ".m",
+        ".proto",
+        ".prototxt",
+        ".py",
+        ".yaml",
+        ".yml",
+    }
+)
 
 
 class SourceBrokerError(ValueError):
@@ -342,6 +360,8 @@ class BrokerOutcome:
     status: Optional[int]
     bytes_fetched: int
     sha256: Optional[str]
+    media_type: Optional[str]
+    media_type_method: Optional[str]
     resolver_receipt: Optional[JsonObject]
     derived_citation: Optional[JsonObject]
     detail: str = ""
@@ -361,6 +381,8 @@ class BrokerOutcome:
             "status": self.status,
             "bytes_fetched": self.bytes_fetched,
             "sha256": self.sha256,
+            "media_type": self.media_type,
+            "media_type_method": self.media_type_method,
             "resolver_receipt": self.resolver_receipt,
             "derived_citation": self.derived_citation,
             "detail": self.detail,
@@ -396,7 +418,7 @@ class BrokerPack:
 
 
 def broker_source_pack(
-    descriptors: list[Mapping[str, Any]],
+    descriptors: Sequence[Mapping[str, Any]],
     *,
     broker_dir: Union[str, Path],
     transport: Optional[Transport] = None,
@@ -435,8 +457,13 @@ def broker_source_pack(
     evidence_dir = broker_dir / "evidence"
     evidence_dir.mkdir(parents=True, exist_ok=True)
     pack = BrokerPack()
+    source_ids: set[str] = set()
     for position, raw in enumerate(descriptors):
         descriptor = _validated_descriptor(raw, position)
+        source_id = str(descriptor["source_id"])
+        if source_id in source_ids:
+            raise SourceBrokerError(f"source descriptor {position} duplicates source_id {source_id!r}")
+        source_ids.add(source_id)
         if pack.total_bytes >= total_byte_ceiling:
             pack.outcomes.append(
                 _failure_outcome(
@@ -483,22 +510,7 @@ def broker_source_pack(
             ROLE_IMPLEMENTATION,
             ROLE_DOCUMENTATION,
         ):
-            revision = (
-                outcome.resolver_receipt["resolved_sha"]
-                if outcome.resolver_receipt is not None
-                else f"sha256-{str(outcome.sha256).removeprefix('sha256:')[:12]}"
-            )
-            pack.rows.append(
-                {
-                    "source_id": descriptor["source_id"],
-                    "url": outcome.url,
-                    "revision": revision,
-                    "expected_sha256": outcome.sha256,
-                    "media_type": descriptor["media_type"],
-                    "broker_role": outcome.bound_role,
-                    "broker_outcome": OUTCOME_FETCHED,
-                }
-            )
+            pack.rows.append(_manifest_row(descriptor, outcome))
     return pack
 
 
@@ -534,6 +546,29 @@ def write_broker_outputs(pack: BrokerPack, broker_dir: Union[str, Path]) -> Path
 
 _DESCRIPTOR_KINDS = frozenset({"forge-file", "raw-url", "paper"})
 _REQUESTED_ROLES = frozenset({"implementation", "paper", "documentation", "probe"})
+_COMMON_DESCRIPTOR_FIELDS = frozenset(
+    {"source_id", "kind", "requested_role", "media_type_hint", "basis"}
+)
+_DESCRIPTOR_FIELDS = {
+    "forge-file": _COMMON_DESCRIPTOR_FIELDS | {"repo", "path", "ref"},
+    "raw-url": _COMMON_DESCRIPTOR_FIELDS | {"url"},
+    "paper": _COMMON_DESCRIPTOR_FIELDS | {"url", "identifier"},
+}
+_MACHINE_OWNED_DESCRIPTOR_FIELDS = frozenset(
+    {
+        "revision",
+        "commit_sha",
+        "expected_sha256",
+        "content_sha256",
+        "sha256",
+        "final_url",
+        "redirect_chain",
+        "resolver_receipt",
+        "broker_role",
+        "media_type",
+        "derived_citation",
+    }
+)
 
 
 def _validated_descriptor(raw: Mapping[str, Any], position: int) -> JsonObject:
@@ -551,28 +586,42 @@ def _validated_descriptor(raw: Mapping[str, Any], position: int) -> JsonObject:
     kind = str(raw.get("kind", ""))
     if kind not in _DESCRIPTOR_KINDS:
         raise SourceBrokerError(f"source descriptor {position} kind {kind!r} is not supported")
-    role = str(raw.get("role", "implementation"))
+    role = str(raw.get("requested_role", ""))
     if role not in _REQUESTED_ROLES:
-        raise SourceBrokerError(f"source descriptor {position} role {role!r} is not supported")
+        raise SourceBrokerError(
+            f"source descriptor {position} requested_role {role!r} is not supported"
+        )
     source_id = str(raw.get("source_id", "")).strip()
-    if not source_id:
-        raise SourceBrokerError(f"source descriptor {position} must carry a source_id")
-    for forbidden in ("revision", "expected_sha256", "sha256", "commit_sha"):
-        if raw.get(forbidden):
+    if _SOURCE_ID_PATTERN.fullmatch(source_id) is None:
+        raise SourceBrokerError(
+            f"source descriptor {position} source_id must match "
+            "^[a-z0-9][a-z0-9._-]{0,63}$"
+        )
+    for forbidden in _MACHINE_OWNED_DESCRIPTOR_FIELDS:
+        if forbidden in raw:
             raise SourceBrokerError(
                 f"source descriptor {position} carries machine-owned field {forbidden!r}; "
                 "exact strings are derived by the broker, never authored"
             )
+    unknown = set(raw) - _DESCRIPTOR_FIELDS[kind]
+    if unknown:
+        raise SourceBrokerError(
+            f"source descriptor {position} carries unsupported fields {sorted(unknown)!r}"
+        )
+    basis = str(raw.get("basis", "")).strip()
+    if not basis:
+        raise SourceBrokerError(f"source descriptor {position} must carry a nonempty basis")
     descriptor: JsonObject = {
         "source_id": source_id,
         "kind": kind,
-        "role": role,
+        "requested_role": role,
+        "basis": basis,
         "repo": str(raw.get("repo", "")).strip(),
         "path": str(raw.get("path", "")).strip(),
         "ref": str(raw.get("ref", "")).strip(),
         "url": str(raw.get("url", "")).strip(),
         "identifier": str(raw.get("identifier", "")).strip(),
-        "media_type": str(raw.get("media_type", "")).strip(),
+        "media_type_hint": str(raw.get("media_type_hint", "")).strip(),
     }
     if kind == "forge-file" and not (
         descriptor["repo"] and descriptor["path"] and descriptor["ref"]
@@ -584,16 +633,56 @@ def _validated_descriptor(raw: Mapping[str, Any], position: int) -> JsonObject:
         raise SourceBrokerError(f"raw-url descriptor {position} must name a url")
     if kind == "paper" and not (descriptor["url"] or descriptor["identifier"]):
         raise SourceBrokerError(f"paper descriptor {position} must name a url or identifier")
-    if not descriptor["media_type"]:
-        descriptor["media_type"] = _guess_media_type(descriptor["path"] or descriptor["url"])
+    if descriptor["url"] and urllib.parse.urlsplit(str(descriptor["url"])).scheme != "https":
+        raise SourceBrokerError(f"source descriptor {position} url must use https")
+    if kind == "forge-file":
+        path = str(descriptor["path"])
+        normalized = PurePosixPath(path)
+        if (
+            normalized.is_absolute()
+            or ".." in normalized.parts
+            or "." in normalized.parts
+            or "\\" in path
+            or str(normalized) != path
+        ):
+            raise SourceBrokerError(
+                f"forge-file descriptor {position} path must be normalized and relative"
+            )
     return descriptor
 
 
-def _guess_media_type(name: str) -> str:
-    """Return the media type for a path or URL by extension."""
+def _derive_media_type(name: str, body: bytes) -> tuple[str, str]:
+    """Derive media type from the observed path and fetched bytes.
+
+    Parameters
+    ----------
+    name:
+        Broker-constructed or transport-observed final locator.
+    body:
+        Exact fetched bytes.
+
+    Returns
+    -------
+    tuple[str, str]
+        Authoritative media type and the derivation method.
+    """
 
     suffix = Path(urllib.parse.urlsplit(name).path or name).suffix.lower()
-    return _MEDIA_TYPES.get(suffix, "application/octet-stream")
+    if suffix in _MEDIA_TYPES:
+        return _MEDIA_TYPES[suffix], "path-extension"
+    if body.startswith(b"%PDF-"):
+        return "application/pdf", "content-sniff"
+    try:
+        json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        pass
+    else:
+        return "application/json", "content-sniff"
+    try:
+        body.decode("utf-8")
+    except UnicodeDecodeError:
+        return "application/octet-stream", "content-sniff"
+    return "text/plain", "content-sniff"
 
 
 def _failure_outcome(descriptor: Mapping[str, Any], outcome: str, *, detail: str) -> BrokerOutcome:
@@ -602,7 +691,7 @@ def _failure_outcome(descriptor: Mapping[str, Any], outcome: str, *, detail: str
     return BrokerOutcome(
         source_id=str(descriptor["source_id"]),
         kind=str(descriptor["kind"]),
-        requested_role=str(descriptor["role"]),
+        requested_role=str(descriptor["requested_role"]),
         bound_role=None,
         outcome=outcome,
         url=str(descriptor.get("url") or "") or None,
@@ -611,10 +700,95 @@ def _failure_outcome(descriptor: Mapping[str, Any], outcome: str, *, detail: str
         status=None,
         bytes_fetched=0,
         sha256=None,
+        media_type=None,
+        media_type_method=None,
         resolver_receipt=None,
         derived_citation=None,
         detail=detail,
     )
+
+
+def _manifest_row(
+    descriptor: Mapping[str, Any],
+    outcome: BrokerOutcome,
+) -> JsonObject:
+    """Build a fresh manifest row solely from broker observations and receipts.
+
+    Parameters
+    ----------
+    descriptor:
+        Schema-shaped request retained only in explicitly named provenance fields.
+    outcome:
+        Successful broker result carrying transport and resolver observations.
+
+    Returns
+    -------
+    dict[str, Any]
+        Authoritative row with no spread or merge from the authored descriptor.
+    """
+
+    if outcome.sha256 is None or outcome.media_type is None or outcome.bound_role is None:
+        raise SourceBrokerError("fetched broker outcome lacks machine-derived manifest facts")
+    if outcome.resolver_receipt is not None:
+        revision = outcome.resolver_receipt.get("resolved_sha")
+        if not isinstance(revision, str) or re.fullmatch(r"[0-9a-f]{40}", revision) is None:
+            raise SourceBrokerError("forge manifest revision lacks a valid resolver receipt")
+    else:
+        revision = outcome.sha256
+    kind = str(descriptor["kind"])
+    authoritative_url = (
+        outcome.url if kind == "forge-file" else outcome.final_url
+    )
+    if not authoritative_url or not outcome.final_url:
+        raise SourceBrokerError("fetched broker outcome lacks an authoritative final url")
+    row: JsonObject = {
+        "source_id": str(descriptor["source_id"]),
+        "url": authoritative_url,
+        "final_url": outcome.final_url,
+        "revision": revision,
+        "expected_sha256": outcome.sha256,
+        "media_type": outcome.media_type,
+        "media_type_method": outcome.media_type_method,
+        "broker_role": outcome.bound_role,
+        "broker_outcome": OUTCOME_FETCHED,
+        "redirect_chain": list(outcome.redirect_chain),
+        "requested_role": str(descriptor["requested_role"]),
+        "media_type_hint": str(descriptor.get("media_type_hint") or ""),
+        "basis": str(descriptor["basis"]),
+    }
+    for name in ("repo", "path", "ref", "url", "identifier"):
+        requested = str(descriptor.get(name) or "")
+        if requested:
+            row[f"requested_{name}"] = requested
+    return row
+
+
+def _classify_broker_role(
+    descriptor: Mapping[str, Any],
+    outcome: BrokerOutcome,
+) -> str:
+    """Classify one fetched object without copying the requested role.
+
+    Parameters
+    ----------
+    descriptor:
+        Authored request whose role is a non-authoritative intent.
+    outcome:
+        Machine-observed fetched object.
+
+    Returns
+    -------
+    str
+        Broker-owned role.
+    """
+
+    if descriptor["requested_role"] == "probe":
+        return ROLE_PROBE
+    locator = str(outcome.final_url or outcome.url or "")
+    suffix = Path(urllib.parse.urlsplit(locator).path).suffix.lower()
+    if suffix in _IMPLEMENTATION_SUFFIXES:
+        return ROLE_IMPLEMENTATION
+    return ROLE_DOCUMENTATION
 
 
 # -- forge-file ------------------------------------------------------------
@@ -727,8 +901,7 @@ def _broker_forge_file(
     if fetched.outcome != OUTCOME_FETCHED:
         return replace(fetched, resolver_receipt=receipt)
     _store_evidence(evidence_dir, body or b"")
-    role = str(descriptor["role"])
-    bound = ROLE_IMPLEMENTATION if role == "implementation" else ROLE_DOCUMENTATION
+    bound = _classify_broker_role(descriptor, fetched)
     return replace(fetched, bound_role=bound, resolver_receipt=receipt)
 
 
@@ -764,7 +937,7 @@ def _bounded_fetch(
         return BrokerOutcome(
             source_id=str(descriptor["source_id"]),
             kind=str(descriptor["kind"]),
-            requested_role=str(descriptor["role"]),
+            requested_role=str(descriptor["requested_role"]),
             bound_role=None,
             outcome=outcome,
             url=url,
@@ -773,6 +946,8 @@ def _bounded_fetch(
             status=status,
             bytes_fetched=bytes_fetched,
             sha256=sha256,
+            media_type=None,
+            media_type_method=None,
             resolver_receipt=None,
             derived_citation=None,
             detail=detail,
@@ -819,8 +994,7 @@ def _bounded_fetch(
             ),
             None,
         )
-    return (
-        make(
+    fetched = make(
             OUTCOME_FETCHED,
             final_url=response.final_url,
             redirect_chain=response.redirect_chain,
@@ -828,9 +1002,9 @@ def _bounded_fetch(
             bytes_fetched=len(response.body),
             sha256=hash_bytes(response.body),
             detail="",
-        ),
-        response.body,
-    )
+        )
+    media_type, method = _derive_media_type(response.final_url, response.body)
+    return replace(fetched, media_type=media_type, media_type_method=method), response.body
 
 
 def _broker_raw_url(
@@ -854,10 +1028,9 @@ def _broker_raw_url(
     if fetched.outcome != OUTCOME_FETCHED:
         return fetched
     _store_evidence(evidence_dir, body or b"")
-    role = str(descriptor["role"])
-    if role == "probe":
+    bound = _classify_broker_role(descriptor, fetched)
+    if bound == ROLE_PROBE:
         return replace(fetched, outcome=OUTCOME_PROBED, bound_role=ROLE_PROBE)
-    bound = ROLE_IMPLEMENTATION if role == "implementation" else ROLE_DOCUMENTATION
     return replace(fetched, bound_role=bound)
 
 
@@ -900,7 +1073,7 @@ def _broker_paper(
     return BrokerOutcome(
         source_id=str(descriptor["source_id"]),
         kind="paper",
-        requested_role=str(descriptor["role"]),
+        requested_role=str(descriptor["requested_role"]),
         bound_role=ROLE_INTRODUCING_PAPER,
         outcome=OUTCOME_PAPER_DERIVATION_ONLY,
         url=reference or None,
@@ -909,6 +1082,8 @@ def _broker_paper(
         status=int(receipt["status"]) if receipt.get("status") is not None else None,
         bytes_fetched=int(receipt.get("bytes", 0)),
         sha256=receipt.get("response_sha256"),
+        media_type=None,
+        media_type_method=None,
         resolver_receipt=receipt,
         derived_citation=citation,
         detail="",

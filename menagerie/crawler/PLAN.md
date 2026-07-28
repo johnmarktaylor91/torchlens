@@ -704,7 +704,7 @@ same change.
 - `campaign_c4-native.md`: `sha256:266d60f05cf9e54d15a882ea77e4143b2941ccacfdfdb6a4841433da92afb051`
 - `stage_author.md`: `sha256:8b6d32ab1589fb6b2592f8c3e50e814cca9db5b85074b39293ca3a8bbf007b52`
 - `stage_capability_probe.md`: `sha256:1f59abfc6f76beb4f10510a1f85373384be5ae5907c9fb198b3c2677f7781d01`
-- `stage_source_request.md`: `sha256:be86a502f42e5acf0a1a9b820c2fd3c5a5783d4a2c63ae7e6cc6a17f80809c98`
+- `stage_source_request.md`: `sha256:a642cec7d2a729314881112e2b80591e29c5ce30f76523582ea23fc38cf3b5ec`
 
 ## 21. Acceptance tests
 
