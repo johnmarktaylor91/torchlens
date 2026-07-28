@@ -24,6 +24,7 @@ import menagerie.crawler.driver_admission as driver_admission_module
 import menagerie.crawler.reducer as reducer_module
 from menagerie.crawler.campaign_merge import resolve_promotion_supersession
 from menagerie.crawler.artifact_transactions import (
+    ArtifactBindingError,
     ArtifactEventKind,
     StagedArtifact,
 )
@@ -6337,3 +6338,465 @@ def test_command_notifier_timeout_is_short_and_nonblocking(tmp_path: Path) -> No
     started = time.monotonic()
     assert notifier.notify("milestone 1", idempotency_key=HASH) is False
     assert time.monotonic() - started < 1.0
+
+
+# ---------------------------------------------------------------------------
+# Executor-lane terminal verdicts.
+#
+# The stage-1 discovery arms (NO_USABLE_SOURCE / NEEDS_HIGHER_TIER) are covered
+# above through ``materialize_discovery_artifact``, which never fetches. The
+# tests below cover the OTHER half of the executor lane, which had no coverage
+# at all: stage 1 answers FOUND, the broker fetches and freezes real sources,
+# and only THEN does the author conclude a typed terminal verdict. A live rung
+# recorded exactly that shape as ``failed:author``/``session-crashed`` -- a
+# false crash at the wrong stage -- because the driver-built source manifest
+# published an identity the artifact binder could not accept.
+# ---------------------------------------------------------------------------
+
+_EXECUTOR_LANE_SOURCE = b"ExampleNet is a source-grounded architecture."
+
+
+def _found_broker_pack(request: Mapping[str, Any], digest: str) -> dict[str, Any]:
+    """Return one machine broker pack for a stage-1 ``FOUND`` discovery.
+
+    Parameters
+    ----------
+    request:
+        Source-request envelope published to the executor.
+    digest:
+        Content digest the controlled fetch will observe.
+
+    Returns
+    -------
+    dict[str, Any]
+        Broker pack carrying its registered discovery envelope.
+    """
+
+    discovery = {
+        "schema_version": "menagerie.crawler.source-discovery.v1",
+        "stable_id": request["stable_id"],
+        "work_id": request["work_id"],
+        "arm": "FOUND",
+        "payload": {
+            "arm": "FOUND",
+            "sources": [
+                {
+                    "source_id": "source-1",
+                    "kind": "raw-url",
+                    "url": "https://example.com/model.py",
+                    "requested_role": "implementation",
+                    "basis": "Fixture implementation source.",
+                }
+            ],
+        },
+    }
+    return {
+        "pack_version": "menagerie.crawler.source-broker-pack.v1",
+        "sources": [
+            {
+                "source_id": "source-1",
+                "url": "https://example.com/model.py",
+                "final_url": "https://example.com/model.py",
+                "revision": digest,
+                "expected_sha256": digest,
+                "media_type": "text/x-python",
+                "media_type_method": "path-extension",
+                "broker_role": "implementation",
+            }
+        ],
+        "broker": {"outcomes": [], "derived_citations": [], "total_bytes": 0},
+        "discovery": discovery,
+        "discovery_sha256": stable_hash(discovery),
+    }
+
+
+def _blocked_result_bytes(envelope: Mapping[str, Any], payload: Mapping[str, Any]) -> str:
+    """Return one self-hashed ``BLOCKED`` author result bound to its envelope.
+
+    Parameters
+    ----------
+    envelope:
+        Frozen author envelope the executor was handed.
+    payload:
+        Arm-specific ``BLOCKED`` payload without its recommendation digest.
+
+    Returns
+    -------
+    str
+        Serialized author result ready for the required output path.
+    """
+
+    body = dict(payload)
+    body["recommendation_sha256"] = stable_hash(body)
+    result = {
+        **dict(envelope["expected_result"]),
+        "kind": "BLOCKED",
+        "created_at": "2026-07-28T23:04:25Z",
+        "payload": body,
+    }
+    result["result_id"] = stable_hash(
+        {"kind": "BLOCKED", "stable_id": result["stable_id"], "payload": body}
+    )
+    result["result_sha256"] = stable_hash(result)
+    return json.dumps(result)
+
+
+def _executor_lane_operator(payload: Mapping[str, Any]) -> Any:
+    """Script one executor lane that finds sources and then returns ``BLOCKED``.
+
+    Parameters
+    ----------
+    payload:
+        Stage-2 ``BLOCKED`` payload, minus its recommendation digest.
+
+    Returns
+    -------
+    Callable
+        Replacement for ``_run_operator_command``.
+    """
+
+    digest = hash_bytes(_EXECUTOR_LANE_SOURCE)
+
+    def run(argv: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        """Publish the stage-1 broker pack, then the stage-2 typed verdict."""
+
+        del kwargs
+        envelope = json.loads(Path(argv[-1]).read_text(encoding="utf-8"))
+        output = Path(envelope["required_output_path"])
+        if envelope.get("envelope_version") == "menagerie.crawler.author-source-request.v1":
+            output.write_text(json.dumps(_found_broker_pack(envelope, digest)), encoding="utf-8")
+        else:
+            output.write_text(_blocked_result_bytes(envelope, payload), encoding="utf-8")
+        return subprocess.CompletedProcess(list(argv), 0, "", "")
+
+    return run
+
+
+def _install_executor_lane(monkeypatch: pytest.MonkeyPatch, payload: Mapping[str, Any]) -> None:
+    """Install the scripted executor transport and its controlled fetch.
+
+    Parameters
+    ----------
+    monkeypatch:
+        Active fixture.
+    payload:
+        Stage-2 ``BLOCKED`` payload the scripted executor publishes.
+    """
+
+    monkeypatch.setattr(
+        driver_admission_module, "_run_operator_command", _executor_lane_operator(payload)
+    )
+    monkeypatch.setattr(
+        driver_module,
+        "fetch_targets",
+        lambda targets, root: controlled_fetch_targets(
+            targets, root, fetch_bytes=lambda _url: _EXECUTOR_LANE_SOURCE
+        ),
+    )
+
+
+_BLOCKED_SOURCE_PAYLOAD: dict[str, Any] = {
+    "arm": "BLOCKED",
+    "stage": "source",
+    "reason_code": "missing-material-source",
+    "prerequisite_ids": ["faithful-torch-implementation-at-pinned-revision"],
+    "evidence_ids": ["source-1"],
+    "evidence_identity": "sha256:" + "3" * 64,
+    "license_identity": "sha256:" + "4" * 64,
+}
+
+
+def test_found_manifest_publishes_the_identity_the_binder_requires(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The frozen FOUND manifest identity is the hash of its exact source rows.
+
+    Every other producer and consumer of a source manifest agrees on one
+    contract: ``manifest_sha256 == stable_hash(sources)``. The author echoes
+    that identity, and ``_validate_context_result`` re-derives it before binding
+    private custody. A manifest that publishes any other identity cannot be
+    staged at all, so an otherwise perfect author result dies at the binder.
+
+    Parameters
+    ----------
+    tmp_path, monkeypatch:
+        Active fixtures.
+    """
+
+    snapshot = _snapshot(tmp_path, count=1)
+    driver = _driver(tmp_path, snapshot, author=CommandAuthorLane(("fake-author",)))
+    item = driver._ordered_work(snapshot, {})[0]
+    _install_executor_lane(monkeypatch, _BLOCKED_SOURCE_PAYLOAD)
+
+    manifest = driver.dependencies.author._fetch_author_sources(item, tmp_path / "author")
+
+    assert isinstance(manifest, dict)
+    assert manifest["manifest_sha256"] == stable_hash(manifest["sources"])
+
+
+def test_blocked_source_verdict_keeps_its_own_stage_and_reason(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A typed ``BLOCKED(source)`` terminalizes against source, never as a crash.
+
+    The author named its own stage and reason. Recording that as an
+    author-stage ``session-crashed`` is a lie in a terminal record: nothing
+    crashed, and the catalog would misreport why the model is missing.
+
+    Parameters
+    ----------
+    tmp_path, monkeypatch:
+        Active fixtures.
+    """
+
+    snapshot = _snapshot(tmp_path, count=1)
+    _install_executor_lane(monkeypatch, _BLOCKED_SOURCE_PAYLOAD)
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=CommandAuthorLane(("fake-author",)),
+        campaign_id="c1-mech",
+    ).run()
+
+    assert result.status == "complete"
+    model = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)[0]
+    assert model["status"]["code"] == "failed:source"
+    assert model["status"]["reason_code"] == "missing-material-source"
+    assert model["status"]["stage"] == "source"
+
+
+def test_blocked_needs_higher_tier_promotes_through_the_executor_lane(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A stage-2 escalation reaches the Opus lineage the promotion path built.
+
+    The stage-1 ``NEEDS_HIGHER_TIER`` arm is covered elsewhere. This is the
+    other entry point: sources were found and frozen, and only the authoring
+    itself needs the higher tier. If that arm cannot promote, the mechanism
+    covering the C1/C2 escalation population is dead through the lane that
+    actually runs in production.
+
+    Parameters
+    ----------
+    tmp_path, monkeypatch:
+        Active fixtures.
+    """
+
+    snapshot = _snapshot(tmp_path, count=1)
+    _install_executor_lane(
+        monkeypatch,
+        {
+            **_BLOCKED_SOURCE_PAYLOAD,
+            "stage": "author",
+            "reason_code": "needs-higher-tier",
+            "research_summary": {
+                "queries": ["ExampleNet architecture implementation"],
+                "places": ["upstream repositories", "introducing paper"],
+                "candidate_links": [
+                    {
+                        "url": "https://example.com/model.py",
+                        "why_rejected": "Faithful authoring needs the Opus tier.",
+                    }
+                ],
+                "languages": ["English"],
+                "conclusion": "The source is real; faithful authoring needs the Opus tier.",
+            },
+        },
+    )
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=CommandAuthorLane(("fake-author",)),
+        campaign_id="c1-mech",
+    ).run()
+
+    assert result.status == "complete"
+    paths = _paths(tmp_path, snapshot)
+    model = scan_jsonl(paths.ledgers.models)[0]
+    assert model["status"]["code"] == "deferred:needs-opus-tier"
+    promotions = scan_jsonl(
+        paths.ledgers.models.parent.parent / "intake-extensions" / "c3-classics.jsonl",
+        validate=False,
+    )
+    assert len(promotions) == 1
+    assert promotions[0]["stable_id"] == snapshot.items[0].stable_id
+    assert promotions[0]["destination_campaign_id"] == "c3-classics"
+
+
+def test_blocked_verdict_bytes_survive_into_the_terminal_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A later pass can still read what the author actually concluded.
+
+    The published result is the only record of the author's reasoning. A
+    terminal that discards it leaves the campaign unable to tell a blocked
+    model from a broken one.
+
+    Parameters
+    ----------
+    tmp_path, monkeypatch:
+        Active fixtures.
+    """
+
+    snapshot = _snapshot(tmp_path, count=1)
+    _install_executor_lane(monkeypatch, _BLOCKED_SOURCE_PAYLOAD)
+    _driver(
+        tmp_path,
+        snapshot,
+        author=CommandAuthorLane(("fake-author",)),
+        campaign_id="c1-mech",
+    ).run()
+
+    paths = _paths(tmp_path, snapshot)
+    stable_id = snapshot.items[0].stable_id
+    published = json.loads(
+        (paths.work_root / stable_id / "author" / "result.json").read_text(encoding="utf-8")
+    )
+    assert published["kind"] == "BLOCKED"
+    assert published["payload"]["reason_code"] == "missing-material-source"
+    model = scan_jsonl(paths.ledgers.models)[0]
+    assert model["dependency_vector"]["author_result_identity"] == published["result_id"]
+
+
+def test_top_tier_escalation_fails_honestly_instead_of_crashing_the_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An escalation with nowhere to escalate to is an author failure, not a crash.
+
+    ``c3-classics`` is already the top tier, so no promotion lineage can exist.
+    The verdict still has to land somewhere truthful: it is an author-stage
+    blocker. Before the mapping was made total this pair reached the reducer
+    unrecordable and took the whole run down with it.
+
+    Parameters
+    ----------
+    tmp_path, monkeypatch:
+        Active fixtures.
+    """
+
+    snapshot = _snapshot(tmp_path, count=1)
+    _install_executor_lane(
+        monkeypatch,
+        {
+            **_BLOCKED_SOURCE_PAYLOAD,
+            "stage": "author",
+            "reason_code": "needs-higher-tier",
+            "research_summary": {
+                "queries": ["ExampleNet architecture implementation"],
+                "places": ["upstream repositories"],
+                "candidate_links": [
+                    {
+                        "url": "https://example.com/model.py",
+                        "why_rejected": "Beyond the top authoring tier.",
+                    }
+                ],
+                "languages": ["English"],
+                "conclusion": "Faithful authoring exceeds even the top tier.",
+            },
+        },
+    )
+    _driver(
+        tmp_path,
+        snapshot,
+        author=CommandAuthorLane(("fake-author",)),
+        campaign_id="c3-classics",
+    ).run()
+
+    model = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)[0]
+    assert model["status"]["code"] == "failed:author"
+    assert model["status"]["reason_code"] == "needs-higher-tier"
+
+
+def test_an_unrecordable_blocked_reason_is_named_not_reported_as_a_crash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A well-formed result with an unmappable reason lands on ``malformed-result``.
+
+    The session completed and published valid bytes; only its reason is outside
+    the closed record vocabulary. ``session-crashed`` would assert the session
+    died, and the author reason vocabulary previously had no member for this at
+    all -- so the two causes collapsed onto one code the reducer counts.
+
+    Parameters
+    ----------
+    tmp_path, monkeypatch:
+        Active fixtures.
+    """
+
+    snapshot = _snapshot(tmp_path, count=1)
+    _install_executor_lane(
+        monkeypatch,
+        {**_BLOCKED_SOURCE_PAYLOAD, "reason_code": "some-reason-the-record-cannot-express"},
+    )
+    _driver(
+        tmp_path,
+        snapshot,
+        author=CommandAuthorLane(("fake-author",)),
+        campaign_id="c1-mech",
+    ).run()
+
+    model = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)[0]
+    assert model["status"]["code"] == "failed:author"
+    assert model["status"]["reason_code"] == "malformed-result"
+
+
+def test_a_driver_side_binding_refusal_is_not_a_crashed_session() -> None:
+    """The engine refusing to bind a valid result is an engine fault, not a crash.
+
+    ``session-crashed`` is already the catch-all for the author reason
+    vocabulary. Letting driver-side artifact binding land on it too would make
+    the field describe two unrelated causes, and would report a session that
+    ran to a clean typed verdict as having died.
+    """
+
+    stage, reason_code = _author_lane_failure(ArtifactBindingError("source manifest identity"))
+
+    assert (stage, reason_code) == ("runner", "internal-error")
+    assert reason_code in FAILURE_REASON_CODES[stage]
+    assert f"failed:{stage}" in TERMINAL_STATUS_CODES
+
+
+def test_a_genuinely_crashed_author_session_still_records_session_crashed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The honest crash case keeps the code that names it.
+
+    Parameters
+    ----------
+    tmp_path, monkeypatch:
+        Active fixtures.
+    """
+
+    snapshot = _snapshot(tmp_path, count=1)
+    digest = hash_bytes(_EXECUTOR_LANE_SOURCE)
+
+    def crash_in_stage_two(argv: Sequence[str], **kwargs: Any) -> Any:
+        """Answer stage 1, then die without publishing a result."""
+
+        del kwargs
+        envelope = json.loads(Path(argv[-1]).read_text(encoding="utf-8"))
+        if envelope.get("envelope_version") == "menagerie.crawler.author-source-request.v1":
+            Path(envelope["required_output_path"]).write_text(
+                json.dumps(_found_broker_pack(envelope, digest)), encoding="utf-8"
+            )
+            return subprocess.CompletedProcess(list(argv), 0, "", "")
+        raise RuntimeError("provider session crashed")
+
+    monkeypatch.setattr(driver_admission_module, "_run_operator_command", crash_in_stage_two)
+    monkeypatch.setattr(
+        driver_module,
+        "fetch_targets",
+        lambda targets, root: controlled_fetch_targets(
+            targets, root, fetch_bytes=lambda _url: _EXECUTOR_LANE_SOURCE
+        ),
+    )
+    _driver(
+        tmp_path,
+        snapshot,
+        author=CommandAuthorLane(("fake-author",)),
+        campaign_id="c1-mech",
+    ).run()
+
+    model = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)[0]
+    assert model["status"]["code"] == "failed:author"
+    assert model["status"]["reason_code"] == "session-crashed"

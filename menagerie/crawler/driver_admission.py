@@ -31,6 +31,7 @@ from typing import (
 
 from menagerie.crawler import author_queue
 from menagerie.crawler.artifact_transactions import (
+    ArtifactBindingError,
     ArtifactCheckpointError,
     ArtifactCheckpointProjection,
     ArtifactEventKind,
@@ -363,6 +364,15 @@ def _author_lane_failure(exc: Exception) -> tuple[str, str]:
         # The author named a target the controlled fetch contract cannot accept.
         # That is a declaration defect, not an unresolvable identity.
         return "source", "source-target-invalid"
+    if isinstance(exc, ArtifactBindingError):
+        # The author session ran to a clean typed verdict and the ENGINE then
+        # refused to bind it. Calling that `session-crashed` states a fact that
+        # did not occur, and lands an engine fault in a vocabulary already
+        # carrying the author-transport catch-all -- two unrelated causes in one
+        # field the reducer counts. `runner`/`internal-error` is the existing
+        # closed pair for an engine-side fault, and it points an operator at the
+        # half that actually failed.
+        return "runner", "internal-error"
     return "author", "session-crashed"
 
 
@@ -1003,12 +1013,31 @@ class _AuthorLaneBase:
                     },
                 }
             )
+        # Freeze the exact discovery bytes into the model's CAS and record the
+        # provenance BESIDE the manifest, never inside it. The registered
+        # `source_manifest` shape is closed to `{sources, manifest_sha256}` with
+        # ONE identity contract every producer and consumer shares:
+        # `manifest_sha256 == stable_hash(sources)`. The author echoes that
+        # identity back and `_validate_context_result` re-derives it from the
+        # rows before binding private custody, so a manifest that carries an
+        # extra key or publishes any other digest cannot be staged at all --
+        # a perfectly good typed author result dies at the binder and the model
+        # is terminalized on a cause that never occurred.
         discovery_evidence = freeze_discovery_evidence(discovery, root)
-        manifest_body: JsonObject = {
+        write_envelope_atomic(
+            {
+                "provenance_version": "menagerie.crawler.found-discovery-provenance.v1",
+                "stable_id": item.stable_id,
+                "work_id": work_id,
+                "discovery_evidence": discovery_evidence,
+                "discovery_evidence_sha256": stable_hash(discovery_evidence),
+            },
+            root / "discovery-provenance.json",
+        )
+        return {
             "sources": merged_rows,
-            "discovery_evidence": discovery_evidence,
+            "manifest_sha256": stable_hash(merged_rows),
         }
-        return {**manifest_body, "manifest_sha256": stable_hash(manifest_body)}
 
     def _dispatch(
         self,

@@ -238,6 +238,7 @@ from menagerie.crawler.worker_supervisor import (
 from menagerie.crawler.driver_contracts import (
     ActivatedHandoffArtifact,
     AuthorArtifact,
+    AuthorBlockedPrerequisite,
     AuthorLane as AuthorLane,
     AuthorUsagePause,
     BoundaryHook as BoundaryHook,
@@ -1403,6 +1404,43 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             created_at=self.dependencies.clock(),
         )
 
+    def _blocked_terminal(self, result: BlockedRecommendation) -> tuple[str, Optional[str]]:
+        """Map one checked ``BLOCKED`` verdict onto its truthful closed terminal.
+
+        This is the single crossing between the author's reason vocabulary and
+        the record's, and it is total: every arm returns a pair the reducer can
+        accept. An unmapped pair used to surface as a ``ReductionError`` raised
+        several layers below the decision that produced it, which -- for one odd
+        reason string on one model -- takes the whole campaign down.
+
+        Parameters
+        ----------
+        result:
+            Checked ``BLOCKED`` recommendation from the terminal disposition.
+
+        Returns
+        -------
+        tuple[str, str | None]
+            Closed terminal status code and its record-vocabulary reason.
+        """
+
+        if result.reason_code == "needs-higher-tier":
+            # Escalation is an AUTHORING-tier fact regardless of the stage the
+            # author named, so it routes on the campaign, not on the stage. With
+            # a higher tier available it is a promotion deferral and keeps one
+            # lineage; at the top tier there is nowhere to escalate to, and that
+            # is an honest author-stage failure rather than a lost verdict.
+            if self.config.campaign_id in PROMOTION_SOURCE_CAMPAIGNS:
+                return "deferred:needs-opus-tier", None
+            return "failed:author", "needs-higher-tier"
+        stage = result.stage
+        if result.reason_code in FAILURE_REASON_CODES.get(stage, frozenset()):
+            return f"failed:{stage}", result.reason_code
+        # The result is well formed and the session completed; only its reason
+        # is unrecordable. That is precisely `malformed-result`, and it must not
+        # borrow `session-crashed`, which asserts the session died.
+        return "failed:author", "malformed-result"
+
     def _route_terminal_author_result(
         self,
         item: WorkItem,
@@ -1455,15 +1493,7 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             status_code = artifact.author_result.status_code
             reason_code = None
         elif isinstance(artifact.author_result, BlockedRecommendation):
-            if (
-                artifact.author_result.reason_code == "needs-higher-tier"
-                and self.config.campaign_id in PROMOTION_SOURCE_CAMPAIGNS
-            ):
-                status_code = "deferred:needs-opus-tier"
-                reason_code = None
-            else:
-                status_code = f"failed:{artifact.author_result.stage}"
-                reason_code = artifact.author_result.reason_code
+            status_code, reason_code = self._blocked_terminal(artifact.author_result)
         else:
             raise DriverIntegrationError("unknown terminal author-result arm")
         if not decision.accepted:
@@ -1490,13 +1520,48 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
                 promotion_extension_path(self.paths.ledgers.models.parent.parent),
                 promotion,
             )
+        # A `failed:<stage>` terminal is only reducible when a failed attempt at
+        # that SAME stage witnesses it. Gate-derived stages carry their proof on
+        # the gate; a checked BLOCKED recommendation carries it nowhere, so the
+        # author's own typed verdict is recorded as the attempt it is. Without
+        # this the arm cannot terminalize at all, and the verdict degrades into
+        # whichever generic cause the surrounding handler happens to name.
+        attempts: tuple[Mapping[str, Any], ...] = ()
+        if (
+            decision.accepted
+            and isinstance(artifact.author_result, BlockedRecommendation)
+            and status_code.startswith("failed:")
+        ):
+            # The attempt's stage is the TERMINAL's stage, which is what the
+            # reducer looks for, and is not always the stage the author named:
+            # an escalation with nowhere to escalate to lands on `author` even
+            # when the author named `source` as its blocker.
+            attempts = (
+                reducer.append_attempt(
+                    _driver_failure_attempt(
+                        item,
+                        artifact,
+                        status_code.removeprefix("failed:"),
+                        str(reason_code),
+                        AuthorBlockedPrerequisite(
+                            "author returned a checked BLOCKED recommendation at stage "
+                            f"{artifact.author_result.stage}: {artifact.author_result.reason_code} "
+                            f"(prerequisites: {', '.join(artifact.author_result.prerequisite_ids)})"
+                        ),
+                        self.config,
+                        diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
+                        environment=None,
+                        created_at=self.dependencies.clock(),
+                    )
+                ).record,
+            )
         self._terminalize(
             item,
             artifact,
             status_code,
             reason_code,
             "; ".join(decision.findings) or None,
-            (),
+            attempts,
             reducer,
             operational,
             state,

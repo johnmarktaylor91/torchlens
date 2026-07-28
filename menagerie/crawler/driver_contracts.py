@@ -89,6 +89,19 @@ class VariantRecipeUnsupported(DriverIntegrationError):
     """Raised when a family recipe has no closed mechanical sibling selector."""
 
 
+class AuthorBlockedPrerequisite(DriverError):
+    """One author's typed ``BLOCKED`` verdict, as the cause of its own attempt.
+
+    This is deliberately NOT an operational failure and is never raised: it is
+    the honest cause carried on the attempt record that a checked ``BLOCKED``
+    recommendation produces. A ``failed:<stage>`` terminal must be witnessed by
+    a failed attempt at that same stage, and the witness for this arm is the
+    author's own named prerequisite -- not a crash, a timeout, or an engine
+    fault. Naming the cause explicitly keeps that attempt from having to borrow
+    an unrelated exception type and misreport what happened.
+    """
+
+
 class RetryableOperatorError(DriverIntegrationError):
     """Raised when an operator lane fails transiently and must be retried.
 

@@ -466,6 +466,13 @@ FAILURE_REASON_CODES: dict[str, frozenset[str]] = {
             "source-model-mismatch",
             "source-target-invalid",
             "higher-rung-unresolved",
+            # The author read real, fetched, hash-frozen sources and none of them
+            # materially specifies this architecture. Distinct from every sibling
+            # above: the identity resolved, a mandatory link exists, the sources
+            # are the right model, and the ladder was walked. Recording it as any
+            # of those would state a fact that is false. This is the canonical
+            # BLOCKED source reason in the stage-2 author contract fixture.
+            "missing-material-source",
             "effort-cap-exhausted",
         }
     ),
@@ -485,9 +492,22 @@ FAILURE_REASON_CODES: dict[str, frozenset[str]] = {
             "effort-exhausted:fetch-targets",
             "effort-exhausted:wall-seconds",
             "wall-exceeded",
+            # `session-crashed` means a session actually crashed. It is the
+            # transport catch-all and nothing else may be folded into it: it is
+            # a field the reducer counts, so every unrelated cause it absorbs
+            # makes the campaign's own failure census wrong.
             "session-crashed",
             "research-tools-unavailable",
             "repair-exhausted",
+            # The author escalated but there is no higher tier to escalate to,
+            # so no promotion lineage can exist. A true author-stage blocker,
+            # and NOT a crash.
+            "needs-higher-tier",
+            # The author published a well-formed result naming a reason the
+            # closed record vocabulary cannot express. Previously this had no
+            # member at all and collapsed onto `session-crashed`, reporting a
+            # session that ran to completion as having died.
+            "malformed-result",
         }
     ),
     "evidence": frozenset(

@@ -1515,6 +1515,30 @@ def _assemble_terminal_model(
                     "mirror_class": "private-machine-evidence",
                     "mirror_digest": str(retained["content_sha256"]),
                 }
+            elif retained.get("broker_role") is not None:
+                # A terminal reached AFTER controlled fetch retains real fetched
+                # sources, whose internal broker/fetch row is much wider than the
+                # closed public record shape. Only the discovery-evidence arm had
+                # a projection, so this arm -- the one a BLOCKED verdict takes
+                # once stage 1 answered FOUND -- could not be recorded at all.
+                # Every field below is machine-derived from the frozen row; none
+                # is authored, and none is invented.
+                retained = {
+                    "source_id": str(retained["source_id"]),
+                    "role": str(retained["broker_role"]),
+                    "kind": "repository" if retained.get("requested_repo") else "web-page",
+                    "url": str(retained.get("final_url") or retained["url"]),
+                    "revision_kind": "broker-resolved-sha256",
+                    "revision": str(retained["revision"]),
+                    "locator": f"broker-fetch#{retained['source_id']}",
+                    "content_sha256": str(retained["content_sha256"]),
+                    "byte_count": int(retained["fetched_bytes_len"]),
+                    "media_type": str(retained["media_type"]),
+                    "retrieved_at": created_at,
+                    "fetch_recipe": "machine source broker controlled fetch",
+                    "mirror_class": "private-machine-evidence",
+                    "mirror_digest": str(retained["content_sha256"]),
+                }
             retained.pop("cas_path", None)
             retained_sources.append(retained)
         if not retained_sources:
