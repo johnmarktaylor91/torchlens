@@ -41,6 +41,7 @@ from menagerie.crawler.constants import (
     OperationalEventKind,
 )
 import menagerie.crawler.driver as driver_module
+import menagerie.crawler.driver_admission as driver_admission_module
 from menagerie.crawler.driver import (
     AuthorArtifact,
     AuthorLane,
@@ -455,7 +456,7 @@ def test_command_lane_reads_quota_text_from_stdout(tmp_path: Path, monkeypatch: 
             "Reading additional input from stdin...",
         )
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(driver_admission_module, "_run_operator_command", fake_run)
     lane = CommandAuthorLane(("fake-author",))
 
     with pytest.raises(AuthorBackoffError) as raised:

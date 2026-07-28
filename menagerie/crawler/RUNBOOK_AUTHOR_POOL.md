@@ -175,6 +175,41 @@ appears. Continue the **same subagent** with `SendMessage` and its `author` brie
 than dispatching a cold one -- the research context is the expensive part, and reloading it
 is the whole cost this architecture exists to avoid.
 
+### The subagent must actually have the web tools
+
+Grounding is the whole point of this lane, and losing it is **silent**: a session with no Exa
+still finishes and still returns a confident proposal, just an ungrounded one. Two things make
+that happen, and both have been observed.
+
+*Tool names are namespaced, and the namespace depends on how the session was launched.* Only
+the suffixes `web_search_exa` / `web_fetch_exa` are stable. A session whose settings tree loads
+the tools from a plugin registers them as `mcp__plugin_everything-claude-code_exa__web_search_exa`;
+a session launched with an explicit `--mcp-config` naming the server `exa` registers them as
+`mcp__exa__web_search_exa`. The briefs tell the subagent to match on the suffix and forbid it
+from reporting a tool missing on a name mismatch alone, but if a subagent reports "Exa
+unavailable", check the registered names yourself before believing it.
+
+*If you dispatch the author as a `claude -p` subprocess rather than an in-session Agent, every
+flag below is load-bearing:*
+
+```bash
+claude -p "<brief>" \
+  --setting-sources "" \
+  --mcp-config '{"mcpServers":{"exa":{"type":"http","url":"https://mcp.exa.ai/mcp"}}}' \
+  --allowedTools WebSearch mcp__exa__web_search_exa mcp__exa__web_fetch_exa ToolSearch \
+  --output-format json
+```
+
+Without `--mcp-config` there is no Exa at all; without `--allowedTools` all three tools are
+permission-blocked and the run still completes, having researched nothing. `--setting-sources ""`
+also drops cache-creation from roughly 55k tokens to under 3k, so the pinned config is both the
+correct and the cheap configuration.
+
+Prefer Exa for anything that must be quoted. `WebSearch` returns the search engine's own
+synthesised answer, and its claims frequently cannot be traced back to a single URL; Exa returns
+the canonical page with real page text. This pipeline requires verbatim excerpts at exact URLs,
+so Exa is load-bearing and `WebSearch` is corroboration -- they are not interchangeable.
+
 **Step 4 -- commit the answer.**
 
 ```bash
@@ -202,6 +237,7 @@ $PY -m menagerie.crawler.author_pool --queue "$QUEUE" --campaign "$CAMPAIGN" \
 |---|---|
 | Claude usage limit | `backoff --job "$JOB" --excerpt "<verbatim provider text>"` -- pauses the scheduler with a reset time; never a model failure |
 | subagent crashed, tools glitched, transient | `fail --job "$JOB" --reason subagent-transient --retryable --detail "..."` |
+| research tools genuinely unreachable (absent, permission-blocked, MCP disconnected) -- verify the registered names first | `fail --job "$JOB" --reason research-tools-unavailable --retryable --detail "<tool, spelling tried, verbatim error>"`; fix the launch config before redispatching. Never `complete` an ungrounded proposal |
 | the model genuinely cannot be authored | prefer a valid `BLOCKED` **result** from the subagent + `complete`; use `fail ... --permanent` only when no result exists |
 | ran out of budget with nothing to show | `fail --job "$JOB" --reason effort-cap-exhausted --permanent` |
 | you claimed it and cannot service it | `release --job "$JOB"` |

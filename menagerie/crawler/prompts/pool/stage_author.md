@@ -69,6 +69,22 @@ canonicalization -- one space or one reordered key and the engine rejects the wh
 - `handoff_sha256` (DEFER only): the canonical prompt names the exact preceding fields it
   covers; hash exactly those, in that order, with the same helper.
 
+### If a research tool was unreachable
+
+Grounding is the entire point of this lane, so an unreachable research tool is a **typed,
+visible failure, never a quiet degradation**. Tool names are namespaced and the namespace
+varies by launch context, so match on the stable suffixes (`web_search_exa`,
+`web_fetch_exa`): any registered name ending in one after a `__`, `.`, `:`, or `/` separator
+is that tool -- `mcp__exa__web_search_exa` and
+`mcp__plugin_everything-claude-code_exa__web_fetch_exa` are both simply the Exa tools -- and a
+name mismatch is not evidence of absence. If, after actually searching the
+registered names and attempting a call, a tool is genuinely missing, permission-blocked, or
+erroring, do **not** write a proposal from recollection and do not cite a URL you could not
+open. Emit a `BLOCKED` result naming the tool, the exact spelling you called, and the verbatim
+error. Prefer Exa for anything you must quote: `WebSearch` returns the engine's own synthesised
+answer, which frequently cannot be traced to a citable URL, and every factual field here needs
+a verbatim excerpt at an exact URL.
+
 ### Running out of budget
 
 If the grant in JOB FACTS is about to run out, do **not** go silent and do not rush a

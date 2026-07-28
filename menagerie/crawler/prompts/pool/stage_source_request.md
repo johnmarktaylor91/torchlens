@@ -14,7 +14,8 @@ read deeply once, do not skim twice.
    `preserved_legacy_flags: ["legacy-source-unresolved"]` routinely sits on models whose
    source resolves in one search. Judge from what you actually find; never escalate a
    verdict because a stale flag predicted a dead end.
-2. Research the model with `WebSearch` and Exa (`web_search_exa`, `web_fetch_exa`). Find
+2. Research the model with `WebSearch` and Exa (`web_search_exa`, `web_fetch_exa`) --
+   discovering their real registered names first, per **Your research tools** below. Find
    the real implementation: a maintained library that ships the exact unmodified
    architecture, or the upstream repository, or -- only when neither exists -- the primary
    paper/thesis text that specifies every material forward choice.
@@ -44,6 +45,44 @@ read deeply once, do not skim twice.
    pre-processing, and transform helpers that a repository imports at module level but the
    model factory never calls are not part of the architecture and do not belong in the
    grant.
+
+### Your research tools -- discover the names, never assume them
+
+`WebSearch`, `web_search_exa`, and `web_fetch_exa` are **canonical** names. Only that suffix
+is stable. The Exa tools arrive over MCP and the name they are actually *registered* under
+carries a namespace prefix that depends on how this session was launched:
+
+- launched with an explicit `--mcp-config` naming the server `exa`:
+  `mcp__exa__web_search_exa`, `mcp__exa__web_fetch_exa` -- seeing these means you have found
+  exactly the right tools;
+- launched inside a session whose settings load the tools from a plugin:
+  `mcp__plugin_everything-claude-code_exa__web_search_exa`, and similarly for the fetch tool.
+
+So: **look through the tool names you actually have and match on the suffix.** Any registered
+name ending in a canonical name after a `__`, `.`, `:`, or `/` separator *is* that tool; call
+it by its registered name. If a name is not in front of you, search for it before concluding
+anything.
+
+**A name mismatch is NOT evidence that a tool is missing.** You may report a tool absent only
+after you have (a) actually looked through the registered tool names for the canonical suffix
+and (b) attempted a real call. Reporting a working tool as unavailable is the single worst
+thing you can do here, because it is invisible: the proposal still gets written, it is just
+quietly ungrounded, and nothing downstream can tell the difference.
+
+**Exa is the load-bearing tool; `WebSearch` is corroboration.** `WebSearch` returns the search
+engine's own synthesised answer, and a claim taken from it frequently cannot be traced back to
+any one URL. This pipeline demands verbatim excerpts at exact URLs, which is what
+`web_fetch_exa` and `web_search_exa` return. They are not interchangeable: never cite a
+`WebSearch` summary as the source of a factual field.
+
+**If you genuinely cannot reach the web tools, FAIL LOUDLY -- do not proceed.** A missing,
+unconfigured, disconnected, permission-blocked, or erroring research tool means this stage
+cannot do the one thing it exists to do. Do not fall back on recollection, do not pin a
+plausible-looking URL you did not open, and do not emit a thinner set of targets as if it were
+a research result. Stop, and report the failure verbatim -- name which tool, which spelling you
+called, and the exact error -- so the pool can record a typed retryable failure and requeue this
+model. A grounded proposal delayed by one cycle is cheap; an ungrounded one is the exact defect
+this whole lane exists to prevent.
 
 ### What to write
 
@@ -84,6 +123,8 @@ campaign.
 - the exact number of tool calls you made (the pool declares it to the engine and the
   engine audits it against your grant -- an inflated or omitted count fails the job);
 - whether you hit a Claude usage limit, verbatim, including any reset time;
+- the exact registered names of the research tools you called (for example
+  `mcp__exa__web_search_exa`), and verbatim any tool you could not reach and why;
 - a one-line triage verdict: `SOURCE_AVAILABLE`, `ENV_SETUP`, `REIMPLEMENT`,
   `UNAVAILABLE`, or `NOT_TRACEABLE`.
 

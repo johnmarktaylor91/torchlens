@@ -702,9 +702,9 @@ same change.
 - `campaign_c2-disco.md`: `sha256:3ffbfaf9ab56c713b301f28071ff019e1173aa44a7d3e0ed890a980f59daafd1`
 - `campaign_c3-classics.md`: `sha256:e6a277891824b72e378c52b1e472357d968d30a91a87b1b8d562ab923b5a11a4`
 - `campaign_c4-native.md`: `sha256:b9ff9531f0f330dfabe09275c61aaa72d0a699a29b2c5cd463cae6f439c36683`
-- `stage_author.md`: `sha256:07e47db576a72fce43d3f09d2b94dad5477b096ef98d5ca8d1b5da2d02d255f4`
-- `stage_capability_probe.md`: `sha256:6eebdcd49603b44335ccc873aa61945e4415664be5275af2ddee212fcc224b0b`
-- `stage_source_request.md`: `sha256:bebdd38c7779efb01e1d0d897ab7940a1cd6235bdd1dfb17ae7966c479394c81`
+- `stage_author.md`: `sha256:fe8f3f067ce84660c203011ce645dab75a06cd591d78823852bc16590aeaf576`
+- `stage_capability_probe.md`: `sha256:1f59abfc6f76beb4f10510a1f85373384be5ae5907c9fb198b3c2677f7781d01`
+- `stage_source_request.md`: `sha256:01aef6532f2201eb760749454e0344b4526138591d012d3941e1cdabc10cc800`
 
 ## 21. Acceptance tests
 

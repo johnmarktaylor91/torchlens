@@ -16,6 +16,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Mapping, Protocol, Sequence
 
+from menagerie.crawler.capability_probe import (
+    REQUIRED_AUTHOR_TOOLS,
+    TOOL_NAME_RESOLUTION,
+    canonical_tool_name,
+)
 from menagerie.crawler.checkpoint import CRAWLER_BRANCH
 from menagerie.crawler.driver_progress import _resolve_notify_command
 from menagerie.crawler.execution_lock import global_execution_flock_path
@@ -266,7 +271,11 @@ class SystemDoctorProbes:
             "nonce": nonce,
             "requested_at": requested_at.isoformat().replace("+00:00", "Z"),
             "deadline_seconds": AUTHOR_CAPABILITY_PROBE_SECONDS,
-            "required_tools": ["WebSearch", "web_search_exa", "web_fetch_exa"],
+            # One source of truth for both ends of the probe: this list is minted from the
+            # same constant the receipt is matched against below, and it publishes the
+            # suffix-resolution convention so a namespaced registration is answerable.
+            "required_tools": list(REQUIRED_AUTHOR_TOOLS),
+            "tool_name_resolution": TOOL_NAME_RESOLUTION,
             "required_output_path": str(receipt_path.resolve()),
         }
         request_path = root / "request.json"
@@ -304,8 +313,11 @@ class SystemDoctorProbes:
         raw_receipts = receipt.get("receipts")
         if not isinstance(raw_receipts, list):
             return frozenset()
+        # A receipt entry may name the tool by its registered, namespaced spelling. Resolve
+        # it to the canonical name the required set is expressed in; an entry that resolves
+        # to no required tool contributes nothing, exactly as before.
         tools = {
-            str(value.get("tool"))
+            canonical_tool_name(value.get("tool"))
             for value in raw_receipts
             if isinstance(value, Mapping)
             and value.get("nonce") == nonce
@@ -313,7 +325,7 @@ class SystemDoctorProbes:
             and isinstance(value.get("receipt"), str)
             and bool(str(value["receipt"]).strip())
         }
-        return frozenset(tools)
+        return frozenset(name for name in tools if name is not None)
 
     def wrapper_versions(self) -> Mapping[str, str]:
         """Resolve and execute ``--version`` for all configured wrappers."""
@@ -600,7 +612,7 @@ def run_doctor(config: DoctorConfig, probes: DoctorProbes | None = None) -> Doct
     )
 
     tools = active.author_tools()
-    required_tools = {"WebSearch", "web_search_exa", "web_fetch_exa"}
+    required_tools = set(REQUIRED_AUTHOR_TOOLS)
     _record(
         checks,
         failures,

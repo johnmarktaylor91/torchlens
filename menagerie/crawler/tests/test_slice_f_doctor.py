@@ -6,10 +6,14 @@ from dataclasses import dataclass, field
 import json
 from pathlib import Path
 import subprocess
-from typing import Mapping
+from typing import Callable, Mapping
 
 import pytest
 
+from menagerie.crawler.capability_probe import (
+    REQUIRED_AUTHOR_TOOLS,
+    canonical_tool_name,
+)
 from menagerie.crawler.doctor import (
     DoctorConfig,
     DoctorError,
@@ -229,3 +233,109 @@ def test_author_tools_requires_fresh_nonce_bound_live_receipts(
     probes = SystemDoctorProbes(config, command_runner=runner)
 
     assert probes.author_tools() == frozenset({"WebSearch", "web_search_exa", "web_fetch_exa"})
+
+
+def _capability_probe_probes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    name_for: Callable[[str], str],
+    omit: str = "",
+) -> SystemDoctorProbes:
+    """Build a doctor whose author wrapper publishes a receipt we control.
+
+    Parameters
+    ----------
+    tmp_path, monkeypatch:
+        Pytest fixtures.
+    name_for:
+        Maps each canonical required tool to the spelling the receipt names it by.
+    omit:
+        Canonical tool to leave out of the receipt entirely.
+
+    Returns
+    -------
+    SystemDoctorProbes
+        Probe object whose ``author_tools`` reads that receipt.
+    """
+
+    wrapper = tmp_path / "author-wrapper"
+    wrapper.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    wrapper.chmod(0o755)
+    monkeypatch.setenv("MENAGERIE_AUTHOR_COMMAND", str(wrapper))
+
+    def runner(
+        argv: list[str] | tuple[str, ...], _cwd: Path, timeout: float = 180.0
+    ) -> subprocess.CompletedProcess[str]:
+        """Publish the receipt the parametrized case asks for."""
+
+        del timeout
+        request = json.loads(Path(argv[-1]).read_text(encoding="utf-8"))
+        receipt = {
+            "nonce": request["nonce"],
+            "completed_at": request["requested_at"],
+            "receipts": [
+                {
+                    "tool": name_for(tool),
+                    "nonce": request["nonce"],
+                    "exercised": True,
+                    "receipt": f"{tool}-receipt",
+                }
+                for tool in request["required_tools"]
+                if tool != omit
+            ],
+        }
+        Path(request["required_output_path"]).write_text(json.dumps(receipt), encoding="utf-8")
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    config = DoctorConfig(tmp_path, tmp_path / ".crawl-local", "osx-arm64")
+    return SystemDoctorProbes(config, command_runner=runner)
+
+
+def test_author_tools_accepts_the_registered_namespaced_spelling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The MCP namespace varies by launch context, so it cannot decide availability."""
+
+    probes = _capability_probe_probes(
+        tmp_path,
+        monkeypatch,
+        name_for=lambda tool: tool if tool == "WebSearch" else f"mcp__exa__{tool}",
+    )
+
+    assert probes.author_tools() == frozenset(REQUIRED_AUTHOR_TOOLS)
+
+
+def test_the_probe_still_fails_when_a_required_tool_is_genuinely_absent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Suffix resolution must not become a way for a missing tool to pass."""
+
+    probes = _capability_probe_probes(
+        tmp_path,
+        monkeypatch,
+        name_for=lambda tool: f"mcp__plugin_everything-claude-code_exa__{tool}",
+        omit="web_fetch_exa",
+    )
+
+    observed = probes.author_tools()
+    assert observed == frozenset({"WebSearch", "web_search_exa"})
+
+    report = run_doctor(
+        DoctorConfig(tmp_path, tmp_path / ".crawl-local", "osx-arm64", strict=False),
+        FakeDoctorProbes(tools=observed),
+    )
+    assert report.checks["author-web-tools"].startswith("fail:")
+    assert "web_fetch_exa" in report.checks["author-web-tools"]
+
+
+def test_a_name_that_merely_ends_in_a_tool_name_is_not_that_tool() -> None:
+    """Resolution keys on a namespace separator, not on a trailing substring."""
+
+    assert canonical_tool_name("mcp__exa__web_search_exa") == "web_search_exa"
+    assert canonical_tool_name("plugin:exa:web_fetch_exa") == "web_fetch_exa"
+    assert canonical_tool_name("WebSearch") == "WebSearch"
+    assert canonical_tool_name("my_web_search_exa") is None
+    assert canonical_tool_name("web_search_exa_v2") is None
+    assert canonical_tool_name("") is None
+    assert canonical_tool_name(None) is None

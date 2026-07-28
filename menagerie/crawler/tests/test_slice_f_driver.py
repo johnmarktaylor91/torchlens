@@ -26,6 +26,7 @@ from menagerie.crawler.artifact_transactions import (
     StagedArtifact,
 )
 from menagerie.crawler.author_dispatch import (
+    AuthorEffortGrant,
     DeferRecommendation,
     HandoffExecution,
     ProposedAuthorResult,
@@ -56,6 +57,7 @@ from menagerie.crawler.constants import (
     TERMINAL_STATUS_CODES,
 )
 from menagerie.crawler.driver_admission import _author_lane_failure
+from menagerie.crawler.driver_contracts import RetryableOperatorError
 from menagerie.crawler.driver_contracts import AuthorEffortCapExceeded
 from menagerie.crawler.driver import (
     AuthorArtifact,
@@ -2018,7 +2020,7 @@ def test_author_source_handshake_freezes_nonempty_cas_manifest(
         )
         return subprocess.CompletedProcess(list(argv), 0, "", "")
 
-    monkeypatch.setattr(driver_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(driver_admission_module, "_run_operator_command", fake_run)
     monkeypatch.setattr(
         driver_module,
         "fetch_targets",
@@ -2041,9 +2043,72 @@ def test_author_source_handshake_freezes_nonempty_cas_manifest(
         )
         return subprocess.CompletedProcess(list(argv), 0, "", "")
 
-    monkeypatch.setattr(driver_module.subprocess, "run", empty_run)
+    monkeypatch.setattr(driver_admission_module, "_run_operator_command", empty_run)
     with pytest.raises(DriverIntegrationError, match="at least one pinned source"):
         lane._fetch_author_sources(item, tmp_path / "empty-author")
+
+
+def test_a_hung_author_command_is_bounded_retryable_and_leaves_no_orphan(
+    tmp_path: Path,
+) -> None:
+    """A hung author session must stall one attempt, not the whole month-long campaign.
+
+    The wrapper here spawns a grandchild that outlives it, which is what a real agent
+    wrapper does. Killing only the direct child would leave that grandchild running with
+    the campaign's file handles and provider session, so the test asserts on the
+    grandchild's PID, not the wrapper's.
+    """
+
+    snapshot = _snapshot(tmp_path)
+    driver = _driver(tmp_path, snapshot)
+    item = driver._ordered_work(snapshot, {})[0]
+    pid_path = tmp_path / "grandchild.pid"
+    wrapper = (
+        "import os, subprocess, sys, time\n"
+        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(600)'])\n"
+        f"open({str(pid_path)!r}, 'w').write(str(child.pid))\n"
+        "sys.stderr.write('wrapper is hung\\n')\n"
+        "sys.stderr.flush()\n"
+        "time.sleep(600)\n"
+    )
+    lane = CommandAuthorLane(
+        (sys.executable, "-c", wrapper),
+        effort_grant=AuthorEffortGrant(wall_seconds=3.0),
+    )
+    root = tmp_path / "hung-author"
+    root.mkdir(parents=True, exist_ok=True)
+    request_path = root / "request.json"
+    request_path.write_text(json.dumps({"envelope_version": "x"}), encoding="utf-8")
+
+    started = time.monotonic()
+    with pytest.raises(RetryableOperatorError) as raised:
+        lane._dispatch(
+            kind="source-request",
+            item=item,
+            config=None,
+            work_id="work-hung",
+            request_path=request_path,
+            output_path=root / "result.json",
+        )
+    elapsed = time.monotonic() - started
+
+    # Bounded by the published grant rather than running forever ...
+    assert elapsed < 60.0
+    assert "wall grant" in str(raised.value)
+    # ... typed retryable, so the driver retries transport instead of burning the model ...
+    assert driver._is_infrastructure_error(raised.value)
+    assert _author_lane_failure(raised.value) == ("source", "identity-unresolved")
+    # ... and the whole process group is gone, grandchild included.
+    grandchild = int(pid_path.read_text(encoding="utf-8"))
+    deadline = time.monotonic() + 10.0
+    while time.monotonic() < deadline:
+        try:
+            os.kill(grandchild, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.1)
+    else:  # pragma: no cover -- only reached when the teardown leaked the grandchild
+        raise AssertionError(f"author timeout leaked grandchild pid {grandchild}")
 
 
 @pytest.mark.parametrize("declared", ["", None])
@@ -2089,7 +2154,7 @@ def test_author_source_handshake_accepts_an_undigested_target(
         )
         return subprocess.CompletedProcess(list(argv), 0, "", "")
 
-    monkeypatch.setattr(driver_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(driver_admission_module, "_run_operator_command", fake_run)
     monkeypatch.setattr(
         driver_module,
         "fetch_targets",

@@ -163,6 +163,11 @@ from menagerie.crawler.routing import (
 )
 from menagerie.crawler.wakeup import WakeupManager, reduce_wake_episodes
 from menagerie.crawler.worker_supervisor import (
+    # The hardened teardown: it proves the group is still ours (unreaped child plus an
+    # unchanged process-start token) before it signals, so a recycled PID can never be
+    # killed. Reused rather than re-derived; there must be exactly one such routine.
+    _kill_process_group as kill_process_group,
+    capture_process_group,
     reconcile_worker_lease,
 )
 
@@ -851,6 +856,70 @@ def classify_author_exit(
     raise DriverIntegrationError(f"{label} for {stable_id}: {tail}")
 
 
+def _run_operator_command(
+    argv: Sequence[str], *, timeout_seconds: float
+) -> subprocess.CompletedProcess[str]:
+    """Run one operator command in its own process group under a hard wall bound.
+
+    An operator wrapper is an interactive agent session behind a subprocess, and an
+    unbounded one blocks the single-threaded driver forever: in a month-long unattended
+    campaign a single hung session is a silent total stall with no recovery. The bound is
+    external because the wrapper is exactly the thing that may have stopped making
+    progress, so its own deadline cannot be trusted to fire.
+
+    The child leads its own session, so the timeout tears down the **whole group**. A
+    wrapper typically spawns the real agent as a grandchild; killing only the direct child
+    would leave that grandchild holding its file handles, its lease, and its provider
+    session.
+
+    Parameters
+    ----------
+    argv:
+        Exact non-shell operator argv.
+    timeout_seconds:
+        Wall-clock ceiling for the round trip.
+
+    Returns
+    -------
+    subprocess.CompletedProcess[str]
+        Captured exit status and streams, for the caller's own exit classification.
+
+    Raises
+    ------
+    subprocess.TimeoutExpired
+        When the command outlives the bound. The group is force-terminated and reaped
+        before this is raised, and whatever the wrapper managed to emit is attached.
+    """
+
+    # Argv-only and shell-free, exactly like every other operator invocation in this module.
+    process = subprocess.Popen(
+        list(argv),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    group = capture_process_group(process)
+    try:
+        stdout, stderr = process.communicate(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        kill_process_group(group)
+        # The group has been SIGKILLed, so this drains the pipes and reaps the root child
+        # rather than blocking. Reaping here is what keeps the timeout from leaking a
+        # zombie on top of the hang it just resolved.
+        stdout, stderr = process.communicate()
+        raise subprocess.TimeoutExpired(
+            list(argv), timeout_seconds, output=stdout, stderr=stderr
+        ) from None
+    return subprocess.CompletedProcess(
+        list(argv),
+        process.returncode if process.returncode is not None else 0,
+        stdout,
+        stderr,
+    )
+
+
 class CommandAuthorLane(_AuthorLaneBase):
     """Author lane that writes the frozen envelope and invokes an injected command."""
 
@@ -880,9 +949,24 @@ class CommandAuthorLane(_AuthorLaneBase):
         """Invoke the wrapper with one absolute request path and classify its exit."""
 
         del config, work_id, output_path
-        completed = subprocess.run(
-            [*self.command, str(request_path)], check=False, capture_output=True, text=True
-        )
+        argv = [*self.command, str(request_path)]
+        try:
+            completed = _run_operator_command(
+                argv,
+                # The bound is the lane's own published grant, not a new number: the
+                # session was told this exact wall ceiling, so one that is still running
+                # past it has already broken the contract it was dispatched under.
+                timeout_seconds=self.effort_grant.wall_seconds,
+            )
+        except subprocess.TimeoutExpired as exc:
+            # Typed and retryable, like every other transport failure this lane classifies.
+            # A hung session is stalled infrastructure; burning the model permanently for
+            # it would turn one transient hang into a lost model.
+            raise RetryableOperatorError(
+                f"author {kind} for {item.stable_id} exceeded its "
+                f"{self.effort_grant.wall_seconds:g}s wall grant and its process group was "
+                f"terminated: {str(exc.stderr or exc.output or '')[-STDIO_TAIL_MAX_CHARS:]}"
+            ) from exc
         classify_author_exit(
             kind,
             item.stable_id,

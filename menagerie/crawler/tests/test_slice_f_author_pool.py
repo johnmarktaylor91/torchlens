@@ -488,6 +488,39 @@ def test_every_campaign_has_a_bound_prompt_and_tier(
     assert pool.subagent_model(job) == expected
 
 
+@pytest.mark.parametrize("kind", ["source-request", "author", "capability-probe"])
+def test_every_brief_teaches_tool_discovery_and_forbids_silent_degradation(
+    tmp_path: Path, kind: str
+) -> None:
+    """The registered tool name is namespaced, so no brief may assume a literal.
+
+    A subagent that reads a name mismatch as an absent tool still produces a proposal --
+    just an ungrounded one, indistinguishable downstream from a grounded one. Every brief
+    therefore has to carry both halves: match on the stable suffix, and fail loudly rather
+    than research nothing.
+    """
+
+    request = (
+        build_probe_request(
+            nonce=PROBE_NONCE,
+            required_output_path=str(tmp_path / "work" / "receipt.json"),
+            requested_at="2026-07-27T12:00:00Z",
+        )
+        if kind == "capability-probe"
+        else None
+    )
+    job = _enqueue(tmp_path / "queue", kind=kind, request=request)
+    brief = render_dispatch_brief(job)
+
+    assert "web_search_exa" in brief and "web_fetch_exa" in brief
+    # The suffix is the identity, and the observed namespaces are named outright.
+    assert "suffix" in brief
+    assert "mcp__exa__web_search_exa" in brief or "mcp__exa__web_fetch_exa" in brief
+    # A name mismatch is not absence, and a genuinely absent tool is a loud failure.
+    assert "not evidence" in brief.lower() or "not a missing tool" in brief.lower()
+    assert "permission-blocked" in brief or "BLOCKED" in brief
+
+
 def test_the_frozen_tier_author_models_are_the_partitioner_bindings() -> None:
     """The pool's tier table and the partitioner's campaign specs cannot drift apart."""
 
@@ -701,6 +734,77 @@ def test_a_missing_tool_cannot_be_papered_over(missing: str) -> None:
     evidence = _valid_evidence()
     evidence["tools"].pop(missing)
     with pytest.raises(CapabilityProbeError, match="omits required tools"):
+        validate_capability_evidence(
+            nonce=PROBE_NONCE,
+            evidence=evidence,
+            requested_at=REQUESTED_AT,
+            now=REQUESTED_AT + timedelta(seconds=45),
+        )
+
+
+def test_evidence_keyed_by_the_registered_namespaced_name_is_the_same_claim() -> None:
+    """A namespace change must never read as a missing tool.
+
+    The Exa tools arrive over MCP, and the prefix depends on how the session was launched
+    (`mcp__exa__*` under an explicit `--mcp-config`, a long plugin prefix otherwise). Only
+    the suffix is stable, so the suffix is the identity.
+    """
+
+    evidence = _valid_evidence()
+    evidence["tools"] = {
+        (tool if tool == "WebSearch" else f"mcp__exa__{tool}"): entry
+        for tool, entry in evidence["tools"].items()
+    }
+    receipt = validate_capability_evidence(
+        nonce=PROBE_NONCE,
+        evidence=evidence,
+        requested_at=REQUESTED_AT,
+        now=REQUESTED_AT + timedelta(seconds=45),
+    )
+
+    # The receipt is always canonical, so the doctor's required set matches it unchanged ...
+    assert {entry["tool"] for entry in receipt["receipts"]} == set(REQUIRED_AUTHOR_TOOLS)
+    # ... while retaining which namespace actually served this author path.
+    registered = {entry["tool"]: entry["registered_tool_name"] for entry in receipt["receipts"]}
+    assert registered["web_fetch_exa"] == "mcp__exa__web_fetch_exa"
+    assert registered["WebSearch"] == "WebSearch"
+
+
+def test_a_missing_tool_is_still_missing_under_the_namespaced_spelling() -> None:
+    """Suffix resolution resolves spellings; it never manufactures a report."""
+
+    evidence = _valid_evidence()
+    evidence["tools"]["mcp__exa__web_search_exa"] = evidence["tools"].pop("web_search_exa")
+    evidence["tools"].pop("web_fetch_exa")
+    with pytest.raises(CapabilityProbeError, match="omits required tools"):
+        validate_capability_evidence(
+            nonce=PROBE_NONCE,
+            evidence=evidence,
+            requested_at=REQUESTED_AT,
+            now=REQUESTED_AT + timedelta(seconds=45),
+        )
+
+
+def test_two_spellings_of_one_tool_are_refused_rather_than_silently_merged() -> None:
+    """An ambiguous claim is never reduced to whichever reading happens to pass."""
+
+    evidence = _valid_evidence()
+    evidence["tools"]["mcp__exa__web_search_exa"] = evidence["tools"]["web_search_exa"]
+    with pytest.raises(CapabilityProbeError, match="twice"):
+        validate_capability_evidence(
+            nonce=PROBE_NONCE,
+            evidence=evidence,
+            requested_at=REQUESTED_AT,
+            now=REQUESTED_AT + timedelta(seconds=45),
+        )
+
+
+def test_a_declared_registered_name_must_be_the_same_tool_as_its_key() -> None:
+    """Evidence cannot claim one tool under the key and another in its own metadata."""
+
+    evidence = _valid_evidence()
+    evidence["tools"]["web_search_exa"]["registered_tool_name"] = "mcp__exa__web_fetch_exa"
+    with pytest.raises(CapabilityProbeError, match="not a spelling of the same tool"):
         validate_capability_evidence(
             nonce=PROBE_NONCE,
             evidence=evidence,
