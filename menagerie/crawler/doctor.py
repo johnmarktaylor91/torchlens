@@ -399,9 +399,9 @@ class SystemDoctorProbes:
         markers = (
             private_key_marker,
             rsa_private_key_marker,
-            b"OPENAI_API_KEY=",
-            b"ANTHROPIC_API_KEY=",
-            b"AWS_SECRET_ACCESS_KEY=",
+            b"OPENAI_API" + b"_KEY=",
+            b"ANTHROPIC_API" + b"_KEY=",
+            b"AWS_SECRET_ACCESS" + b"_KEY=",
         )
         findings: list[str] = []
         root = self.config.repo_root / "menagerie" / "crawler"
