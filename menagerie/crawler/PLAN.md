@@ -681,7 +681,7 @@ completed machine facts deterministically and detects conflicting current revisi
 The prompt files are authoritative runtime inputs. These independently pinned literal digests are the
 committed drift oracle checked by `python -m menagerie.crawler.tools.verify_prompts`:
 
-- `claude_crawler_author_v2.txt`: `sha256:a6ae479df8cf8f3ca06a9df784456e5ecb3abdab279ea7422d7ab353a0b4eae8`
+- `claude_crawler_author_v2.txt`: `sha256:bc609db91f34a2fb41ae3b14f925c4660db4405bf4b8d97d2b25c71e0f18bd5d`
 - `codex_accuracy_checker_v2.txt`: `sha256:93d82284c3f9f250b55d6eb700f3f63d6e1abf586f259a6350920c5912b9f2d8`
 
 ## 21. Acceptance tests
