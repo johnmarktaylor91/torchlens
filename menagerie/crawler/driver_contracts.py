@@ -42,6 +42,7 @@ from menagerie.crawler.constants import (
     DEFAULT_NOTIFY_COMMAND,
     DEFAULT_PROGRESS_MILESTONES,
     DEFAULT_REVIEW_CHECKPOINT_AT,
+    FAILURE_REASON_CODES,
     MAX_AUTHOR_WAVE_CONCURRENCY,
     TIER_CAMPAIGN_IDS,
     InvocationOrigin,
@@ -111,7 +112,34 @@ class AuthorEffortCapExceeded(DriverIntegrationError):
     ``PLAN.md`` LP-13.2 makes cap exhaustion ``failed:<actual-stage>`` with
     ``reason_code=effort-cap-exhausted``: a permanent, model-local outcome rather
     than a retryable operator fault.
+
+    The *actual stage* is carried here because only the raise site knows it. Every
+    cap exhaustion used to be recorded as ``failed:source``, which asserts that the
+    model's source could not be resolved -- routinely false. A session that blew its
+    grant after the controlled fetch froze its manifest had its source resolved,
+    fetched, and read; what ran out was budget, at the evidence/authoring stage.
+    Recording that as a source failure would bury models with perfectly good sources
+    under a status that says none exists.
+
+    Parameters
+    ----------
+    args:
+        Standard exception arguments.
+    stage:
+        Closed :data:`~menagerie.crawler.constants.FAILURE_REASON_CODES` stage that
+        was actually in flight. Defaults to ``"source"``, which is correct for a cap
+        hit while the author is still naming sources.
     """
+
+    def __init__(self, *args: object, stage: str = "source") -> None:
+        """Attach the closed failure stage the cap exhaustion actually occurred in."""
+
+        super().__init__(*args)
+        if stage not in FAILURE_REASON_CODES or "effort-cap-exhausted" not in (
+            FAILURE_REASON_CODES[stage]
+        ):
+            raise ValueError(f"effort-cap exhaustion cannot be attributed to stage {stage!r}")
+        self.stage = stage
 
 
 class DriverPaused(DriverError):

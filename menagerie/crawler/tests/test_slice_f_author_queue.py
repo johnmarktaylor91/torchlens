@@ -890,8 +890,32 @@ class CapExhaustedAuthor(AuthorLane):
         raise AuthorEffortCapExceeded("author session consumed tool_calls 31, exceeding its 30")
 
 
+class PostSourceCapExhaustedAuthor(AuthorLane):
+    """Author lane that blows its grant AFTER its sources are resolved and frozen."""
+
+    def author(
+        self,
+        item: WorkItem,
+        work_root: Path,
+        config: DriverConfig,
+        context: AuthorityContext,
+    ) -> AuthorArtifact:
+        """Raise the cap failure the real lane re-stamps once the manifest is frozen."""
+
+        del item, work_root, config, context
+        raise AuthorEffortCapExceeded(
+            "author session consumed tool_calls 31, exceeding its 30",
+            stage="evidence",
+        )
+
+
 def test_effort_cap_exhaustion_records_its_own_reason_code(tmp_path: Path) -> None:
-    """LP-13.2: cap exhaustion is failed:source/effort-cap-exhausted, not identity-unresolved."""
+    """LP-13.2: cap exhaustion carries effort-cap-exhausted, not identity-unresolved.
+
+    A cap hit while the author is still naming sources genuinely is a source-stage
+    failure, so this case keeps ``failed:source`` -- distinguished from a real
+    resolution failure by its reason code.
+    """
 
     snapshot = _snapshot(tmp_path, count=1)
     paths = _paths(tmp_path, snapshot)
@@ -901,6 +925,74 @@ def test_effort_cap_exhaustion_records_its_own_reason_code(tmp_path: Path) -> No
     records = scan_jsonl(paths.ledgers.models)
     assert [record["status"]["code"] for record in records] == ["failed:source"]
     assert [record["status"]["reason_code"] for record in records] == ["effort-cap-exhausted"]
+
+
+def test_cap_exhaustion_after_source_resolution_is_not_a_source_failure(
+    tmp_path: Path,
+) -> None:
+    """A model whose source resolved must never be recorded as having none.
+
+    Observed live on m2323 (PyKEEN-MuRE): source found, fetched, and fully understood
+    at R1, then filed as ``failed:source``. Across 28,482 models that would fill the
+    catalog with "no source found" records for models with perfectly good sources, and
+    a later pass would have to re-derive what the first pass already knew.
+    """
+
+    snapshot = _snapshot(tmp_path, count=1)
+    paths = _paths(tmp_path, snapshot)
+
+    _driver(tmp_path, snapshot, author=PostSourceCapExhaustedAuthor()).run()
+
+    records = scan_jsonl(paths.ledgers.models)
+    assert [record["status"]["code"] for record in records] == ["failed:evidence"]
+    assert [record["status"]["reason_code"] for record in records] == ["effort-cap-exhausted"]
+    resolution = records[0]["source_resolution"]
+    assert "effort grant" in resolution["decision"]
+    assert resolution["attempted_rungs"][0]["reason_code"] == "effort-cap-exhausted"
+    # The record must not claim a bounded search established that source is unavailable.
+    assert "unresolvable" not in resolution["search_report"]["conclusion"].replace(
+        "not unresolvable", ""
+    )
+
+
+def test_cap_exhaustion_cannot_be_attributed_to_an_impossible_stage() -> None:
+    """The carried stage is checked against the closed failure vocabulary."""
+
+    with pytest.raises(ValueError, match="cannot be attributed to stage"):
+        AuthorEffortCapExceeded("cap", stage="not-a-stage")
+
+
+def test_lane_reattributes_a_cap_hit_once_the_manifest_is_frozen(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """Past the controlled fetch, a cap failure is an authoring failure by construction.
+
+    The lane is the only boundary that knows the manifest was frozen, so it is where
+    the stage is corrected. Without this the pool's own consumption audit -- which
+    cannot see how far the session got -- would report every over-grant session as a
+    source failure.
+    """
+
+    item = _work_item(tmp_path)
+    queue_root = tmp_path / "author-queue"
+    pool = FakePool(queue_root, result=_source_targets())
+    lane = _queue_lane(queue_root, pool)
+    _stub_controlled_fetch(monkeypatch)
+
+    def blow_the_grant(*args: Any, **kwargs: Any) -> None:
+        """Exceed the grant after the frozen manifest exists."""
+
+        del args, kwargs
+        raise AuthorEffortCapExceeded("author session consumed tool_calls 31, exceeding its 30")
+
+    monkeypatch.setattr(lane, "_author_from_frozen_sources", blow_the_grant)
+    # Config and context reach only the patched authoring half of the lane.
+    unused: Any = None
+
+    with pytest.raises(AuthorEffortCapExceeded) as raised:
+        lane.author(item, tmp_path / "work", unused, unused)
+
+    assert raised.value.stage == "evidence"
 
 
 def test_cli_selects_the_queue_lane_and_drops_the_author_command_requirement(

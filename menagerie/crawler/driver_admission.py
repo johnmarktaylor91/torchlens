@@ -329,9 +329,11 @@ def _author_lane_failure(exc: Exception) -> tuple[str, str]:
     """
 
     # PLAN.md LP-13.2: cap exhaustion is `failed:<actual-stage>` with
-    # `effort-cap-exhausted`, distinct from an unresolved identity.
+    # `effort-cap-exhausted`, distinct from an unresolved identity. The stage travels
+    # on the exception because only the raise site knows whether the source had
+    # already been resolved and frozen when the budget ran out.
     if isinstance(exc, AuthorEffortCapExceeded):
-        return "source", "effort-cap-exhausted"
+        return exc.stage, "effort-cap-exhausted"
     if isinstance(exc, FetchHashMismatchError):
         return "fetch", "hash-mismatch"
     if isinstance(exc, FetchRetrievalError):
@@ -683,13 +685,50 @@ class _AuthorLaneBase:
     ) -> AuthorArtifact:
         """Build and execute one frozen author envelope."""
 
-        from menagerie.crawler.author_dispatch import write_envelope_atomic
-
         root = work_root / item.stable_id / "author"
         model_dir = root / "model"
         model_dir.mkdir(parents=True, exist_ok=True)
         result_path = root / "result.json"
         source_manifest = self._fetch_author_sources(item, root, config)
+        # Past this line the model's sources are resolved, fetched, and hash-frozen, so a
+        # later cap exhaustion can never honestly be a source failure. This is the one
+        # boundary that knows it, so it is where the stage is re-attributed for both lanes.
+        try:
+            return self._author_from_frozen_sources(
+                item, config, context, root, model_dir, result_path, source_manifest
+            )
+        except AuthorEffortCapExceeded as exc:
+            raise AuthorEffortCapExceeded(*exc.args, stage="evidence") from exc
+
+    def _author_from_frozen_sources(
+        self,
+        item: WorkItem,
+        config: DriverConfig,
+        context: AuthorityContext,
+        root: Path,
+        model_dir: Path,
+        result_path: Path,
+        source_manifest: JsonObject,
+    ) -> AuthorArtifact:
+        """Run and validate one author session against an already-frozen manifest.
+
+        Parameters
+        ----------
+        item, config, context:
+            Work item, frozen campaign configuration, and authority context.
+        root, model_dir, result_path:
+            Model-local author root, staged-code directory, and required result path.
+        source_manifest:
+            Exact controlled-fetch manifest this session must quote from.
+
+        Returns
+        -------
+        AuthorArtifact
+            Validated author result bound to the frozen manifest.
+        """
+
+        from menagerie.crawler.author_dispatch import write_envelope_atomic
+
         work_id = item.active_work_id
         envelope = build_author_envelope(
             context=context,

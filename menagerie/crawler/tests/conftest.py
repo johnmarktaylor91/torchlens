@@ -2734,24 +2734,23 @@ def attach_paper_evidence(
     path = tmp_path / f"{source_id}.txt"
     path.write_text(text)
     facts = proposal["proposed_facts"]
-    facts["source_resolution"]["sources"].append(
-        {
-            "source_id": source_id,
-            "role": role,
-            "kind": "paper",
-            "url": "https://example.com/paper",
-            "revision_kind": "version",
-            "revision": "v1",
-            "locator": "abstract",
-            "content_sha256": digest,
-            "byte_count": len(text.encode()),
-            "media_type": "text/html",
-            "retrieved_at": NOW,
-            "fetch_recipe": "https-get",
-            "mirror_class": "public",
-            "mirror_digest": digest,
-        }
-    )
+    declared = {
+        "source_id": source_id,
+        "role": role,
+        "kind": "paper",
+        "url": f"https://example.com/{source_id}",
+        "revision_kind": "version",
+        "revision": "v1",
+        "locator": "abstract",
+        "content_sha256": digest,
+        "byte_count": len(text.encode()),
+        "media_type": "text/html",
+        "retrieved_at": NOW,
+        "fetch_recipe": "https-get",
+        "mirror_class": "public",
+        "mirror_digest": digest,
+    }
+    facts["source_resolution"]["sources"].append(declared)
     facts["evidence"]["excerpts"].append(
         {
             "evidence_id": f"evidence-{source_id}",
@@ -2767,19 +2766,10 @@ def attach_paper_evidence(
     )
     facts["citation"]["source_evidence_ids"] = [f"evidence-{source_id}"]
     facts["external_metadata"]["citation"]["source_evidence_ids"] = [f"evidence-{source_id}"]
+    # The frozen manifest row mirrors the declared source exactly and adds only the CAS
+    # locator, matching how the canonical author fixtures freeze their sources.
     sources = manifest.setdefault("sources", [])
-    sources.append(
-        {
-            "source_id": source_id,
-            "url": "https://example.com/paper",
-            "revision": "v1",
-            "content_sha256": digest,
-            "fetched_bytes_len": len(text.encode()),
-            "media_type": "text/html",
-            "cas_path": str(path),
-            "retrieval_status": "fetched",
-        }
-    )
+    sources.append({**declared, "cas_path": str(path)})
     if "manifest_sha256" in manifest:
         manifest["manifest_sha256"] = stable_hash(sources)
         proposal["verified_hashes"]["source_manifest"] = manifest["manifest_sha256"]

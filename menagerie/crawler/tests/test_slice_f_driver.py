@@ -295,7 +295,7 @@ def _terminal_fake_author_result(
         payload = {
             "arm": "DEFER_RECOMMENDATION",
             "platform": platform,
-            "source_ids": ["source-1"],
+            "source_ids": ["source-1", "source-paper"],
             "evidence_ids": ["evidence-1"],
             "evidence_identity": evidence_identity,
             "license_identity": license_identity,
@@ -307,7 +307,7 @@ def _terminal_fake_author_result(
         payload = {
             "arm": "SKIP_RECOMMENDATION",
             "status_code": status_code,
-            "source_ids": ["source-1"],
+            "source_ids": ["source-1", "source-paper"],
             "evidence_ids": ["evidence-1"],
             "evidence_identity": evidence_identity,
             "search_report_identity": stable_hash({"search": "bounded-complete"}),
@@ -332,7 +332,7 @@ def _terminal_fake_author_result(
         DeferRecommendation(
             binding,
             str(platform),
-            ("source-1",),
+            ("source-1", "source-paper"),
             ("evidence-1",),
             evidence_identity,
             license_identity,
@@ -349,7 +349,7 @@ def _terminal_fake_author_result(
         else SkipRecommendation(
             binding,
             str(status_code),
-            ("source-1",),
+            ("source-1", "source-paper"),
             ("evidence-1",),
             evidence_identity,
             str(payload["search_report_identity"]),
@@ -2180,6 +2180,10 @@ def test_author_source_handshake_accepts_an_undigested_target(
     ("error", "expected"),
     [
         (AuthorEffortCapExceeded("cap"), ("source", "effort-cap-exhausted")),
+        (
+            AuthorEffortCapExceeded("cap", stage="evidence"),
+            ("evidence", "effort-cap-exhausted"),
+        ),
         (FetchHashMismatchError("mismatch"), ("fetch", "hash-mismatch")),
         (FetchRetrievalError("unreachable"), ("fetch", "unreachable")),
         (UnpinnedTargetError("bad pin"), ("source", "source-target-invalid")),
