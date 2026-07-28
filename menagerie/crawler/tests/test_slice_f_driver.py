@@ -26,6 +26,7 @@ from menagerie.crawler.campaign_merge import resolve_promotion_supersession
 from menagerie.crawler.artifact_transactions import (
     ArtifactBindingError,
     ArtifactEventKind,
+    SourceManifestBindingError,
     StagedArtifact,
 )
 from menagerie.crawler.author_dispatch import (
@@ -6741,19 +6742,25 @@ def test_an_unrecordable_blocked_reason_is_named_not_reported_as_a_crash(
 
 
 def test_a_driver_side_binding_refusal_is_not_a_crashed_session() -> None:
-    """The engine refusing to bind a valid result is an engine fault, not a crash.
+    """Binding refusals are attributed by ownership, and only one side is engine.
 
     ``session-crashed`` is already the catch-all for the author reason
-    vocabulary. Letting driver-side artifact binding land on it too would make
-    the field describe two unrelated causes, and would report a session that
-    ran to a clean typed verdict as having died.
+    vocabulary. Letting the ENGINE's own manifest inconsistency land on it too
+    would make the field describe two unrelated causes, and would report a
+    session that ran to a clean typed verdict as having died. The split must
+    stay narrow in the other direction as well: a binding refusal of content the
+    AUTHOR supplied is still author-owned, and moving it to the engine would
+    hide a real authoring defect behind an engine fault.
     """
 
-    stage, reason_code = _author_lane_failure(ArtifactBindingError("source manifest identity"))
+    engine = _author_lane_failure(SourceManifestBindingError("source manifest identity changed"))
+    author = _author_lane_failure(ArtifactBindingError("invalid typed author result"))
 
-    assert (stage, reason_code) == ("runner", "internal-error")
-    assert reason_code in FAILURE_REASON_CODES[stage]
-    assert f"failed:{stage}" in TERMINAL_STATUS_CODES
+    assert engine == ("runner", "internal-error")
+    assert author == ("author", "session-crashed")
+    for stage, reason_code in (engine, author):
+        assert reason_code in FAILURE_REASON_CODES[stage]
+        assert f"failed:{stage}" in TERMINAL_STATUS_CODES
 
 
 def test_a_genuinely_crashed_author_session_still_records_session_crashed(

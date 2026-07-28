@@ -60,7 +60,24 @@ class ArtifactTransactionError(RuntimeError):
 
 
 class ArtifactBindingError(ArtifactTransactionError):
-    """Raised when supplied bytes or authority do not match frozen inputs."""
+    """Raised when supplied bytes or authority do not match frozen inputs.
+
+    The default reading is AUTHOR-owned: almost every binding refusal is the
+    engine rejecting something the author supplied.
+    """
+
+
+class SourceManifestBindingError(ArtifactBindingError):
+    """Raised when the ENGINE's own frozen source manifest is self-inconsistent.
+
+    Split out because ownership decides how the model is terminalized. The
+    source manifest is built by the driver, not the author -- the author only
+    echoes its identity, and that echo is already verified against the envelope
+    before staging is reached. So a manifest that fails its own shape or
+    identity checks here is an engine fault, and reporting it against the
+    author (as a crashed session) sends operators hunting for a research
+    failure that never happened.
+    """
 
 
 class ArtifactTransitionError(ArtifactTransactionError):
@@ -930,18 +947,22 @@ def _validate_context_result(
         raise ArtifactBindingError("author result is stale against active authority context")
     sources = source_manifest.get("sources")
     if not isinstance(sources, list) or any(not isinstance(row, Mapping) for row in sources):
-        raise ArtifactBindingError("source manifest requires object rows")
+        raise SourceManifestBindingError("source manifest requires object rows")
     source_identity = stable_hash(sources)
-    if (
-        source_manifest.get("manifest_sha256") != source_identity
-        or author_result.get("source_manifest_identity") != source_identity
-    ):
-        raise ArtifactBindingError("source manifest identity changed")
+    # Two checks, deliberately not one: the manifest disagreeing with its own
+    # rows is the ENGINE's fault, while the author's echo disagreeing is the
+    # AUTHOR's. Collapsing them made an engine defect indistinguishable from a
+    # fabricated echo, and every such engine defect was then recorded against
+    # the author as a crashed session.
+    if source_manifest.get("manifest_sha256") != source_identity:
+        raise SourceManifestBindingError("source manifest identity changed")
+    if author_result.get("source_manifest_identity") != source_identity:
+        raise ArtifactBindingError("author result quotes a different source manifest identity")
     source_ids = tuple(sorted(str(row.get("source_id")) for row in sources))
     if any(value in {"", "None"} for value in source_ids) or len(set(source_ids)) != len(
         source_ids
     ):
-        raise ArtifactBindingError("source manifest IDs must be unique and non-empty")
+        raise SourceManifestBindingError("source manifest IDs must be unique and non-empty")
 
     kind = author_result.get("kind")
     payload = author_result.get("payload")
@@ -1077,7 +1098,7 @@ def _validate_artifact_inputs(
         raise ArtifactBindingError("private staging requires at least one artifact byte")
     raw_sources = source_manifest.get("sources")
     if not isinstance(raw_sources, list):
-        raise ArtifactBindingError("source manifest requires source rows")
+        raise SourceManifestBindingError("source manifest requires source rows")
     sources = {str(row.get("source_id")): row for row in raw_sources if isinstance(row, Mapping)}
     source_artifact_ids: set[str] = set()
     seen_paths: dict[str, str] = {}
