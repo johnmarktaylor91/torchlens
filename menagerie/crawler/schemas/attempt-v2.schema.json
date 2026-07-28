@@ -107,7 +107,7 @@
     "attempted_rungs": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/rung"
+        "$ref": "#/$defs/rung_or_no_selection"
       },
       "uniqueItems": true,
       "description": "Mandatory attempted rungs."
@@ -270,6 +270,9 @@
     },
     "rung": {
       "$ref": "attempt-common.schema.json#/$defs/rung"
+    },
+    "rung_or_no_selection": {
+      "$ref": "attempt-common.schema.json#/$defs/rung_or_no_selection"
     },
     "retries": {
       "$ref": "attempt-common.schema.json#/$defs/retries"

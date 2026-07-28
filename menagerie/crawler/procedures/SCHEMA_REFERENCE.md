@@ -204,13 +204,13 @@ External metadata is captured and gated now because it requires source reading, 
 | Field | Type | Presence | Meaning |
 | --- | --- | --- | --- |
 | `source_resolution` | object | Mandatory | Mandatory selected source rung and search record. |
-| `source_resolution.rung` | enum | Mandatory | Mandatory source-resolution ladder rung. |
+| `source_resolution.rung` | enum | Mandatory | Mandatory source-resolution ladder rung, or `NO_RUNG_SELECTED` when work ended before any rung was selected. |
 | `source_resolution.decision` | string | Mandatory | Mandatory source-resolution decision. |
 | `source_resolution.rung_evidence` | string | Mandatory | Mandatory rung evidence. |
 | `source_resolution.sufficiency_gap` | string \| null | Mandatory | Mandatory for insufficient-description skips; names missing implementation detail. |
 | `source_resolution.searched_at` | string | Mandatory | Mandatory searched at. |
 | `source_resolution.attempted_rungs` | array<object> | Mandatory | Mandatory attempted rungs. |
-| `source_resolution.attempted_rungs[].rung` | enum | Mandatory | Mandatory source-resolution ladder rung. |
+| `source_resolution.attempted_rungs[].rung` | enum | Mandatory | Mandatory source-resolution ladder rung, or `NO_RUNG_SELECTED` when the ladder was never walked. |
 | `source_resolution.attempted_rungs[].result` | string | Mandatory | Mandatory immutable attempt outcome. |
 | `source_resolution.attempted_rungs[].reason_code` | string | Mandatory | Mandatory closed reason code when applicable. |
 | `source_resolution.attempted_rungs[].evidence_ids` | array<string> | Mandatory | Mandatory supporting evidence identifiers. |

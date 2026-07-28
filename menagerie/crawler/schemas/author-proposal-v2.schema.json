@@ -329,8 +329,20 @@
           "description": "Best-effort gated source-license metadata."
         },
         "source_resolution": {
-          "$ref": "model-v2.schema.json#/$defs/source_resolution",
-          "description": "Mandatory selected source rung and search record."
+          "allOf": [
+            {
+              "$ref": "model-v2.schema.json#/$defs/source_resolution"
+            },
+            {
+              "properties": {
+                "rung": {
+                  "$ref": "model-common.schema.json#/$defs/rung",
+                  "description": "Mandatory selected source-resolution ladder rung. NO_RUNG_SELECTED is a driver-observed outcome and is never author-selectable."
+                }
+              }
+            }
+          ],
+          "description": "Mandatory selected source rung and search record. An author proposal must name a real ladder rung: the NO_RUNG_SELECTED sentinel is a driver-observed outcome and is structurally inexpressible here."
         },
         "evidence": {
           "$ref": "model-v2.schema.json#/$defs/evidence",

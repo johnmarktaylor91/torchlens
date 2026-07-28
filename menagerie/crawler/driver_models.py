@@ -24,6 +24,8 @@ from menagerie.crawler.constants import (
     ATTEMPT_SCHEMA_VERSION_V3,
     DEFAULT_FORWARD_TIMEOUT_SECONDS,
     MODEL_SCHEMA_VERSION_V3,
+    NO_RUNG_SELECTED,
+    SourceRung,
 )
 from menagerie.crawler.family_templates import (
     FamilyTemplateError,
@@ -1066,7 +1068,7 @@ def _driver_failure_attempt(
         "started_at": created_at,
         "finished_at": created_at,
         "result": "failed",
-        "attempted_rungs": [facts.get("source_resolution", {}).get("rung", "R5_SKIP")],
+        "attempted_rungs": [facts.get("source_resolution", {}).get("rung", NO_RUNG_SELECTED)],
         "retries": {
             "stage_attempt": 1,
             "root_cause_repeat": 0,
@@ -1244,11 +1246,13 @@ def _placeholder_facts(
 ) -> JsonObject:
     """Build unresolved facts using only a retained exact model source, if any.
 
-    The narrative fields say what actually happened. ``rung`` is a structurally
-    required enum with no "nothing was selected" member, so ``R5_SKIP`` remains the
-    placeholder; every free-text field around it must therefore refuse to imply that a
-    bounded search concluded no source exists. Cap exhaustion in particular is a budget
-    outcome, not a source verdict, and saying so here is what keeps a later pass from
+    No rung was selected on this path, so ``rung`` is the explicit
+    ``NO_RUNG_SELECTED`` sentinel rather than ``R5_SKIP``. ``R5_SKIP`` is a checked
+    conclusion that no faithful source path exists and carries a separately certified
+    epistemic predicate; asserting it here would be a false structured fact, and an
+    honest narrative cannot repair it because every consumer counts the structured
+    field. Cap exhaustion in particular is a budget outcome, not a source verdict, and
+    saying so both structurally and in the narrative is what keeps a later pass from
     re-deriving that the source was fine.
 
     Parameters
@@ -1321,14 +1325,14 @@ def _placeholder_facts(
         "citation": None,
         "licenses": None,
         "source_resolution": {
-            "rung": "R5_SKIP",
+            "rung": NO_RUNG_SELECTED,
             "decision": decision,
             "rung_evidence": source_id,
             "sufficiency_gap": None,
             "searched_at": created_at,
             "attempted_rungs": [
                 {
-                    "rung": "R5_SKIP",
+                    "rung": NO_RUNG_SELECTED,
                     "result": "not-reached",
                     "reason_code": attempt_reason,
                     "evidence_ids": ["intake-identity"],
@@ -1525,6 +1529,15 @@ def _assemble_terminal_model(
                 "sources": retained_sources,
             }
         )
+        # A SKIP or a platform DEFER is a checked terminal disposition that walked the
+        # ladder to its end, so it earns R5 and must say so explicitly. It used to inherit
+        # R5_SKIP silently from the unresolved placeholder; now that the placeholder is
+        # honest about having selected nothing, the rung has to be stated where it is
+        # actually concluded. A BLOCKED arm is deliberately excluded: it lands on
+        # ``failed:*`` (or an Opus-tier promotion deferral) with no source verdict reached,
+        # which is precisely the case the sentinel exists for.
+        if isinstance(terminal_result, (SkipRecommendation, DeferRecommendation)):
+            facts["source_resolution"]["rung"] = SourceRung.SKIP.value
         discovery_excerpt_text = evidence_text
         if discovery_evidence is not None:
             search_evidence = discovery_evidence.get("search_evidence")
