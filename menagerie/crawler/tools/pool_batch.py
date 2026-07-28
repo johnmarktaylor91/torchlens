@@ -39,8 +39,21 @@ from typing import Any, Optional
 DEFAULT_OWNER = "pool-manager"
 
 
-def _pool(queue: Path, owner: str, *args: str, repo_root: Path, python: str) -> tuple[int, str, str]:
-    """Run one author_pool subcommand and return (rc, stdout, stderr)."""
+def _pool(
+    queue: Path,
+    owner: str,
+    *args: str,
+    repo_root: Path,
+    python: str,
+    tier_campaign_id: Optional[str] = None,
+) -> tuple[int, str, str]:
+    """Run one author_pool subcommand and return (rc, stdout, stderr).
+
+    ``tier_campaign_id`` is the run's frozen tier campaign, not a job's per-item repair
+    scope. Passing it through explicitly keeps the batch loop honest on a queue whose
+    descriptors do not carry a tier; without it the pool falls back to
+    ``MENAGERIE_CAMPAIGN_ID`` and, failing that, refuses to dispatch on a guess.
+    """
 
     argv = [
         python,
@@ -50,8 +63,10 @@ def _pool(queue: Path, owner: str, *args: str, repo_root: Path, python: str) -> 
         str(queue),
         "--owner",
         owner,
-        *args,
     ]
+    if tier_campaign_id:
+        argv += ["--campaign", tier_campaign_id]
+    argv += list(args)
     done = subprocess.run(argv, cwd=repo_root, capture_output=True, text=True)
     return done.returncode, done.stdout, done.stderr
 
@@ -70,7 +85,12 @@ def cmd_claim(args: argparse.Namespace) -> int:
     out.mkdir(parents=True, exist_ok=True)
 
     rc, stdout, stderr = _pool(
-        args.queue, args.owner, "list", repo_root=args.repo_root, python=args.python
+        args.queue,
+        args.owner,
+        "list",
+        repo_root=args.repo_root,
+        python=args.python,
+        tier_campaign_id=args.tier_campaign_id,
     )
     if rc != 0:
         sys.stderr.write(stderr or "author-pool list failed\n")
@@ -97,6 +117,7 @@ def cmd_claim(args: argparse.Namespace) -> int:
             job_id,
             repo_root=args.repo_root,
             python=args.python,
+            tier_campaign_id=args.tier_campaign_id,
         )
         if rc != 0:
             # A job that cannot be claimed right now is not an error for the batch --
@@ -161,7 +182,12 @@ def cmd_complete(args: argparse.Namespace) -> int:
             if entry.get("detail"):
                 call += ["--detail", str(entry["detail"])]
             rc, stdout, stderr = _pool(
-                args.queue, args.owner, *call, repo_root=args.repo_root, python=args.python
+                args.queue,
+                args.owner,
+                *call,
+                repo_root=args.repo_root,
+                python=args.python,
+                tier_campaign_id=args.tier_campaign_id,
             )
             print(f"{job_id}: fail({reason},{classification[2:]}) rc={rc}")
             failed += 1
@@ -188,7 +214,9 @@ def cmd_complete(args: argparse.Namespace) -> int:
             call += ["--note", str(entry["note"])]
 
         rc, stdout, stderr = _pool(
-            args.queue, args.owner, *call, repo_root=args.repo_root, python=args.python
+            args.queue, args.owner, *call, repo_root=args.repo_root,
+            python=args.python,
+            tier_campaign_id=args.tier_campaign_id,
         )
         if rc == 0:
             ok += 1
@@ -205,7 +233,9 @@ def cmd_status(args: argparse.Namespace) -> int:
     """Print a compact queue summary."""
 
     rc, stdout, stderr = _pool(
-        args.queue, args.owner, "list", repo_root=args.repo_root, python=args.python
+        args.queue, args.owner, "list", repo_root=args.repo_root,
+        python=args.python,
+        tier_campaign_id=args.tier_campaign_id,
     )
     if rc != 0:
         sys.stderr.write(stderr or "author-pool list failed\n")
@@ -228,6 +258,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--queue", type=Path, required=True, help="campaign author-queue root")
     parser.add_argument("--owner", default=DEFAULT_OWNER, help="stable lease owner")
+    parser.add_argument(
+        "--campaign",
+        dest="tier_campaign_id",
+        default=None,
+        help=(
+            "frozen tier campaign this session serves (c1-mech ... c4-native); passed "
+            "through to author_pool, which otherwise falls back to MENAGERIE_CAMPAIGN_ID"
+        ),
+    )
     parser.add_argument("--repo-root", type=Path, default=Path.cwd(), help="campaign clone root")
     parser.add_argument("--python", default=sys.executable, help="interpreter running the pool")
     sub = parser.add_subparsers(dest="command", required=True)
