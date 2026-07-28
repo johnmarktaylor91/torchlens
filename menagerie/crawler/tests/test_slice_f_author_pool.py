@@ -711,7 +711,9 @@ def test_doctor_accepts_the_pool_receipt_end_to_end(tmp_path: Path) -> None:
     config.repo_root.mkdir(parents=True, exist_ok=True)
     captured: dict[str, Any] = {}
 
-    def runner(argv: Any, cwd: Path) -> subprocess.CompletedProcess[str]:
+    def runner(
+        argv: Any, cwd: Path, timeout: float = 180.0
+    ) -> subprocess.CompletedProcess[str]:
         """Stand in for the author wrapper by answering the probe from the pool."""
 
         request_path = Path(argv[-1])
@@ -753,7 +755,9 @@ def test_doctor_rejects_a_receipt_the_pool_never_proved(tmp_path: Path) -> None:
     )
     config.repo_root.mkdir(parents=True, exist_ok=True)
 
-    def runner(argv: Any, cwd: Path) -> subprocess.CompletedProcess[str]:
+    def runner(
+        argv: Any, cwd: Path, timeout: float = 180.0
+    ) -> subprocess.CompletedProcess[str]:
         """Exit zero and write nothing, the way a stubbed probe would."""
 
         return subprocess.CompletedProcess(list(argv), 0, stdout="ok", stderr="")

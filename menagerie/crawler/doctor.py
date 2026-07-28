@@ -43,6 +43,8 @@ GIB = 1024**3
 #: response that skipped the work. The unfakeable part of this check is the nonce binding,
 #: the digest verification, and the three-way agreement on an unpredictable live value --
 #: this bound exists only to stop a stale receipt being replayed, which it still does.
+#: Default timeout for a doctor probe that shells out to a fast, synchronous tool.
+DEFAULT_PROBE_TIMEOUT_SECONDS = 180
 AUTHOR_CAPABILITY_PROBE_SECONDS = 900
 
 class DoctorError(RuntimeError):
@@ -168,7 +170,21 @@ class DoctorProbes(Protocol):
         ...
 
 
-CommandRunner = Callable[[Sequence[str], Path], subprocess.CompletedProcess[str]]
+class CommandRunner(Protocol):
+    """Argv-only command runner with an optional per-probe timeout.
+
+    Most doctor probes shell out to fast synchronous tools and take the default
+    timeout. The author capability probe blocks on a live author session doing real
+    web research, so it must be able to ask for a longer window.
+    """
+
+    def __call__(
+        self,
+        argv: Sequence[str],
+        cwd: Path,
+        timeout: float = ...,
+    ) -> subprocess.CompletedProcess[str]:
+        ...
 
 
 class SystemDoctorProbes:
@@ -254,7 +270,13 @@ class SystemDoctorProbes:
         }
         request_path = root / "request.json"
         request_path.write_bytes(canonical_json_bytes(request) + b"\n")
-        completed = self._run([*command, str(request_path)], self.config.repo_root)
+        # This probe blocks on a live author session doing genuine web research, so it
+        # cannot share the fast-tool default. Allow the same window the request grants.
+        completed = self._run(
+            [*command, str(request_path)],
+            self.config.repo_root,
+            timeout=float(AUTHOR_CAPABILITY_PROBE_SECONDS),
+        )
         observed_at = datetime.now(timezone.utc)
         if (
             completed.returncode != 0
@@ -627,7 +649,9 @@ def _record(
         failures.append(f"{name}: {detail}")
 
 
-def _run_command(argv: Sequence[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+def _run_command(
+    argv: Sequence[str], cwd: Path, timeout: float = DEFAULT_PROBE_TIMEOUT_SECONDS
+) -> subprocess.CompletedProcess[str]:
     """Run one read-only doctor command without a shell."""
 
     try:
@@ -637,7 +661,7 @@ def _run_command(argv: Sequence[str], cwd: Path) -> subprocess.CompletedProcess[
             check=False,
             capture_output=True,
             text=True,
-            timeout=180,
+            timeout=timeout,
         )
     except subprocess.TimeoutExpired as exc:
         return subprocess.CompletedProcess(

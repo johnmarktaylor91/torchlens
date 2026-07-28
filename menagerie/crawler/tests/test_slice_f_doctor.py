@@ -203,7 +203,9 @@ def test_author_tools_requires_fresh_nonce_bound_live_receipts(
     wrapper.chmod(0o755)
     monkeypatch.setenv("MENAGERIE_AUTHOR_COMMAND", str(wrapper))
 
-    def runner(argv: list[str] | tuple[str, ...], _cwd: Path) -> subprocess.CompletedProcess[str]:
+    def runner(
+        argv: list[str] | tuple[str, ...], _cwd: Path, timeout: float = 180.0
+    ) -> subprocess.CompletedProcess[str]:
         """Materialize the exact nonce-bound capability receipt."""
 
         request = json.loads(Path(argv[-1]).read_text(encoding="utf-8"))
