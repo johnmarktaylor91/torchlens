@@ -21,28 +21,32 @@ IMPL_BODY = "class Net:\n    pass\n"
 SUPPLEMENT_URL = "https://example.org/extra.txt"
 
 DEFAULT_DISCOVERY = {
-    "schema_version": "menagerie.crawler.source-discovery.v1",
-    "stable_id": "m1",
-    "work_id": "work-m1",
     "arm": "FOUND",
-    "payload": {
-        "arm": "FOUND",
-        "sources": [
-            {
-                "source_id": "impl-net",
-                "kind": "forge-file",
-                "repo": "github.com/acme/widgets",
-                "path": "models/net.py",
-                "ref": "v1.0.0",
-                "requested_role": "implementation",
-                "media_type_hint": "text/x-python",
-                "basis": "The fixture repository owns the model implementation.",
-            }
-        ],
-    },
+    "sources": [
+        {
+            "source_id": "impl-net",
+            "kind": "forge-file",
+            "repo": "github.com/acme/widgets",
+            "path": "models/net.py",
+            "ref": "v1.0.0",
+            "requested_role": "implementation",
+            "media_type_hint": "text/x-python",
+            "basis": "The fixture repository owns the model implementation.",
+        }
+    ],
 }
 
-DEFAULT_RESULT = {"kind": "PROPOSED", "payload": {"arm": "PROPOSED"}}
+DEFAULT_RESULT = {
+    "kind": "BLOCKED",
+    "payload": {
+        "stage": "source",
+        "reason_code": "missing-material-source",
+        "prerequisite_ids": ["source-needed"],
+        "evidence_ids": ["evidence-gap"],
+        "evidence_identity": "sha256:" + "1" * 64,
+        "license_identity": "sha256:" + "2" * 64,
+    },
+}
 
 _FAKE_CLAUDE_SOURCE = r'''
 import json, os, re, sys, time, uuid
@@ -155,8 +159,6 @@ if stage == "stage1" and discovery_path:
     payload = os.environ.get("FAKE_CLAUDE_DISCOVERY")
     if not payload:
         discovery = json.loads(os.environ["FAKE_CLAUDE_DEFAULT_DISCOVERY"])
-        discovery["stable_id"] = extract("- stable_id:")
-        discovery["work_id"] = extract("- work_id:")
         payload = json.dumps(discovery)
     with open(discovery_path, "w") as fh:
         fh.write(payload)
@@ -167,9 +169,6 @@ elif stage == "stage2" and result_path:
             fh.write(
                 json.dumps(
                     {
-                        "supplement_version": (
-                            "menagerie.crawler.author-supplement-request.v1"
-                        ),
                         "sources": [
                             {
                                 "source_id": "supp-1",
@@ -185,10 +184,16 @@ elif stage == "stage2" and result_path:
             )
     else:
         with open(result_path, "w") as fh:
-            fh.write(os.environ.get("FAKE_CLAUDE_RESULT") or '{"kind": "PROPOSED"}')
+            fh.write(
+                os.environ.get("FAKE_CLAUDE_RESULT")
+                or os.environ["FAKE_CLAUDE_DEFAULT_RESULT"]
+            )
 elif stage == "supplement" and result_path:
     with open(result_path, "w") as fh:
-        fh.write(os.environ.get("FAKE_CLAUDE_RESULT") or '{"kind": "PROPOSED"}')
+        fh.write(
+            os.environ.get("FAKE_CLAUDE_RESULT")
+            or os.environ["FAKE_CLAUDE_DEFAULT_RESULT"]
+        )
 elif stage == "probe" and required_path:
     # Default: evidence shaped like a session that GENUINELY exercised all
     # three tools, derived from the prompt's own challenge facts so the
@@ -324,6 +329,7 @@ def executor_environment(
     monkeypatch.setenv("MENAGERIE_CAMPAIGN_ID", campaign)
     monkeypatch.setenv("FAKE_CLAUDE_LOG", str(log_dir))
     monkeypatch.setenv("FAKE_CLAUDE_DEFAULT_DISCOVERY", json.dumps(DEFAULT_DISCOVERY))
+    monkeypatch.setenv("FAKE_CLAUDE_DEFAULT_RESULT", json.dumps(DEFAULT_RESULT))
     monkeypatch.setenv("FAKE_CLAUDE_SUPPLEMENT_URL", SUPPLEMENT_URL)
     monkeypatch.delenv("FAKE_CLAUDE_MODE", raising=False)
     monkeypatch.delenv("FAKE_CLAUDE_PROBE", raising=False)
@@ -350,6 +356,7 @@ def subprocess_environment(
         "MENAGERIE_CAMPAIGN_ID": campaign,
         "FAKE_CLAUDE_LOG": str(log_dir),
         "FAKE_CLAUDE_DEFAULT_DISCOVERY": json.dumps(DEFAULT_DISCOVERY),
+        "FAKE_CLAUDE_DEFAULT_RESULT": json.dumps(DEFAULT_RESULT),
         "FAKE_CLAUDE_SUPPLEMENT_URL": SUPPLEMENT_URL,
     }
     env.pop("MENAGERIE_EXECUTOR_PAUSE_AFTER", None)
@@ -390,6 +397,19 @@ def write_author_envelope(root: Path, stable_id: str) -> Path:
         "stable_id": stable_id,
         "work_id": f"work-{stable_id}",
         "campaign_id": "c1-mech",
+        "expected_result": {
+            "schema_version": "menagerie.crawler.author-result.v4",
+            "stable_id": stable_id,
+            "work_id": f"work-{stable_id}",
+            "campaign_id": "c1-mech",
+            "author_identity": "sha256:" + "3" * 64,
+            "prompt_identity": "sha256:" + "4" * 64,
+            "dispatcher_identity": "sha256:" + "5" * 64,
+            "source_manifest_identity": "sha256:" + "6" * 64,
+            "intake_snapshot_id": "intake-test",
+            "intake_snapshot_sha256": "sha256:" + "7" * 64,
+            "intake_item_sha256": "sha256:" + "8" * 64,
+        },
         "required_output_path": str(root / "result.json"),
         "allowed_model_dir": str(root / "model"),
         "prompt": {"path": str(root / "prompts" / "author.txt")},

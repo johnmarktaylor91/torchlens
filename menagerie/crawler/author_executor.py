@@ -34,6 +34,7 @@ event.
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
 import json
 import os
 import shlex
@@ -60,6 +61,13 @@ from menagerie.crawler.capability_probe import (
     derive_challenge,
     validate_capability_evidence,
 )
+from menagerie.crawler.constants import (
+    AUTHOR_RESULT_SCHEMA_VERSION,
+    AUTHOR_WALL_EXTERNAL_KILL_FACTOR,
+    AUTHOR_WALL_SECONDS_ENV,
+    SOURCE_DISCOVERY_SCHEMA_VERSION,
+    resolve_author_wall_seconds,
+)
 from menagerie.crawler.discovery import (
     DiscoveryError,
     FoundDiscovery,
@@ -75,11 +83,7 @@ from menagerie.crawler.identity import (
     utc_now,
 )
 from menagerie.crawler.models import JsonObject
-from menagerie.crawler.constants import (
-    AUTHOR_WALL_EXTERNAL_KILL_FACTOR,
-    AUTHOR_WALL_SECONDS_ENV,
-    resolve_author_wall_seconds,
-)
+from menagerie.crawler.schema import PayloadValidationError, validate_payload
 from menagerie.crawler.source_broker import (
     BrokerPack,
     SourceBrokerError,
@@ -748,6 +752,59 @@ def _fail(
 # -- source-request (stage 1 + broker) -------------------------------------
 
 
+def _discovery_envelope_from_author_payload(
+    author_payload: Mapping[str, Any],
+    request: Mapping[str, Any],
+) -> JsonObject:
+    """Wrap one author-owned discovery payload in machine-owned bindings.
+
+    Parameters
+    ----------
+    author_payload:
+        Arm-specific discovery judgment written by the research session.
+    request:
+        Trusted source-request envelope supplying stable and work identities.
+
+    Returns
+    -------
+    dict[str, Any]
+        Complete registered source-discovery envelope.
+    """
+
+    payload = deepcopy(dict(author_payload))
+    arm = payload.get("arm")
+    return {
+        "schema_version": SOURCE_DISCOVERY_SCHEMA_VERSION,
+        "stable_id": str(request.get("stable_id", "")),
+        "work_id": str(request.get("work_id", "")),
+        "arm": arm,
+        "payload": payload,
+    }
+
+
+def _write_json_object(path: Path, value: Mapping[str, Any]) -> None:
+    """Atomically write one canonical JSON object.
+
+    Parameters
+    ----------
+    path:
+        Destination path.
+    value:
+        JSON object to serialize.
+    """
+
+    data = canonical_json_bytes(value) + b"\n"
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        with temporary.open("xb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def serve_source_request(
     request_path: Path,
     request: Mapping[str, Any],
@@ -829,11 +886,32 @@ def serve_source_request(
         )
 
     discovery_path = attempt.paths.directory / "discovery.json"
-    if _read_json_file(discovery_path) is None:
+    authored_discovery = _read_json_file(discovery_path)
+    if authored_discovery is None:
         attempt.update(stage1=stage1)
         return _fail(
             attempt, stage="stage1", reason="no-discovery-output", exit_code=EXIT_RETRYABLE
         )
+    discovery_envelope = _discovery_envelope_from_author_payload(
+        authored_discovery,
+        request,
+    )
+    try:
+        validate_source_discovery(
+            discovery_envelope,
+            stable_id=str(request.get("stable_id", "")),
+            work_id=str(request.get("work_id", "")),
+        )
+    except DiscoveryError as exc:
+        attempt.update(stage1=stage1)
+        return _fail(
+            attempt,
+            stage="stage1",
+            reason="discovery-contract-invalid",
+            exit_code=EXIT_RETRYABLE,
+            detail={"error": str(exc)},
+        )
+    _write_json_object(discovery_path, discovery_envelope)
     attempt.update(status="stage1-complete", stage1=stage1, discovery_path=str(discovery_path))
     _pause_hook(config, "stage1")
     return _complete_source_discovery(
@@ -998,6 +1076,105 @@ def _capped_rows(pack: BrokerPack, max_sources: int) -> list[JsonObject]:
 # -- author (stage 2, resume, supplement) ----------------------------------
 
 
+def _author_result_from_author_payload(
+    authored_result: Mapping[str, Any],
+    request: Mapping[str, Any],
+) -> JsonObject:
+    """Materialize a registered author result from the author's judgment.
+
+    The author owns the result arm and its factual payload. The executor owns
+    the request bindings, redundant discriminator, timestamps, and identities
+    derived from the completed object.
+
+    Parameters
+    ----------
+    authored_result:
+        Exact ``kind`` plus arm-specific ``payload`` written by stage 2.
+    request:
+        Trusted author envelope supplying expected result bindings.
+
+    Returns
+    -------
+    dict[str, Any]
+        Complete schema-valid author-result envelope.
+
+    Raises
+    ------
+    AuthorExecutorError
+        If the authored shape is not exact or the materialized result fails
+        the registered schema.
+    """
+
+    if set(authored_result) != {"kind", "payload"}:
+        raise AuthorExecutorError("stage-2 output must contain exactly kind and payload")
+    kind = authored_result.get("kind")
+    authored_payload = authored_result.get("payload")
+    if not isinstance(kind, str) or not isinstance(authored_payload, Mapping):
+        raise AuthorExecutorError("stage-2 kind must be a string and payload must be an object")
+    forbidden = {"arm", "recommendation_sha256"} & set(authored_payload)
+    if forbidden:
+        raise AuthorExecutorError(
+            f"stage-2 payload carries machine-owned fields {sorted(forbidden)!r}"
+        )
+    expected = request.get("expected_result")
+    if not isinstance(expected, Mapping):
+        raise AuthorExecutorError("author request lacks expected_result bindings")
+
+    payload: JsonObject = {"arm": kind, **deepcopy(dict(authored_payload))}
+    if kind == "DEFER_RECOMMENDATION":
+        handoff = payload.get("handoff_execution")
+        if not isinstance(handoff, Mapping) or set(handoff) != {"proposal"}:
+            raise AuthorExecutorError(
+                "defer payload handoff_execution must contain exactly proposal"
+            )
+        proposal = handoff.get("proposal")
+        if not isinstance(proposal, Mapping):
+            raise AuthorExecutorError("defer handoff proposal must be an object")
+        implementation = proposal.get("proposed_facts")
+        implementation = (
+            implementation.get("implementation")
+            if isinstance(implementation, Mapping)
+            else None
+        )
+        code_manifest = (
+            implementation.get("code_manifest")
+            if isinstance(implementation, Mapping)
+            else None
+        )
+        if not isinstance(code_manifest, list):
+            raise AuthorExecutorError("defer proposal must carry an implementation code_manifest")
+        handoff_body: JsonObject = {
+            "proposal": deepcopy(dict(proposal)),
+            "proposal_sha256": str(proposal.get("proposal_sha256", "")),
+            "code_manifest_identity": stable_hash(code_manifest),
+            "source_manifest_identity": str(expected.get("source_manifest_identity", "")),
+        }
+        handoff_body["handoff_sha256"] = stable_hash(handoff_body)
+        payload["handoff_execution"] = handoff_body
+    if kind != "PROPOSED":
+        payload["recommendation_sha256"] = stable_hash(payload)
+
+    result_seed = {
+        "kind": kind,
+        "expected_result": deepcopy(dict(expected)),
+        "payload": payload,
+    }
+    body: JsonObject = {
+        **deepcopy(dict(expected)),
+        "schema_version": AUTHOR_RESULT_SCHEMA_VERSION,
+        "result_id": stable_hash(result_seed),
+        "kind": kind,
+        "created_at": utc_now(),
+        "payload": payload,
+    }
+    body["result_sha256"] = stable_hash(body)
+    try:
+        validate_payload(body, AUTHOR_RESULT_SCHEMA_VERSION)
+    except PayloadValidationError as exc:
+        raise AuthorExecutorError(str(exc)) from exc
+    return body
+
+
 def serve_author(
     request_path: Path,
     request: Mapping[str, Any],
@@ -1109,10 +1286,21 @@ def serve_author(
             attempt, stage="stage2", reason="no-result-output", exit_code=EXIT_RETRYABLE
         )
     parsed = _read_json_file(result_path)
-    if parsed is None or "kind" not in parsed:
+    if parsed is None:
         return _fail(
             attempt, stage="stage2", reason="result-not-json", exit_code=EXIT_RETRYABLE
         )
+    try:
+        materialized_result = _author_result_from_author_payload(parsed, request)
+    except AuthorExecutorError as exc:
+        return _fail(
+            attempt,
+            stage="stage2",
+            reason="result-contract-invalid",
+            exit_code=EXIT_RETRYABLE,
+            detail={"error": str(exc)},
+        )
+    _write_json_object(result_path, materialized_result)
     model_dir = str(request.get("allowed_model_dir") or "")
     if model_dir:
         _mirror_staged_model(attempt, Path(model_dir))
@@ -1220,6 +1408,62 @@ def _recorded_discovery_text(attempt: AttemptHandle) -> Optional[str]:
     return None
 
 
+def _supplement_request_from_author_payload(
+    author_payload: Mapping[str, Any],
+    request: Mapping[str, Any],
+) -> JsonObject:
+    """Wrap and validate one author-owned supplementary source request.
+
+    Parameters
+    ----------
+    author_payload:
+        Exact ``sources`` plus ``why`` object written by stage 2.
+    request:
+        Trusted author envelope supplying stable and work identities.
+
+    Returns
+    -------
+    dict[str, Any]
+        Machine-versioned supplement request whose descriptors passed the
+        registered source-discovery schema.
+
+    Raises
+    ------
+    AuthorExecutorError
+        If the authored shape or any source descriptor is invalid.
+    """
+
+    if set(author_payload) != {"sources", "why"}:
+        raise AuthorExecutorError(
+            "supplement request must contain exactly sources and why"
+        )
+    sources = author_payload.get("sources")
+    why = author_payload.get("why")
+    if not isinstance(sources, list) or not sources:
+        raise AuthorExecutorError("supplement sources must be a nonempty array")
+    if not isinstance(why, str) or not why.strip():
+        raise AuthorExecutorError("supplement why must be a nonempty string")
+    discovery_envelope = _discovery_envelope_from_author_payload(
+        {"arm": "FOUND", "sources": deepcopy(sources)},
+        request,
+    )
+    try:
+        discovery = validate_source_discovery(
+            discovery_envelope,
+            stable_id=str(request.get("stable_id", "")),
+            work_id=str(request.get("work_id", "")),
+        )
+    except DiscoveryError as exc:
+        raise AuthorExecutorError(str(exc)) from exc
+    if not isinstance(discovery, FoundDiscovery):
+        raise AuthorExecutorError("supplement sources did not produce a FOUND discovery")
+    return {
+        "supplement_version": SUPPLEMENT_VERSION,
+        "sources": [descriptor.to_mapping() for descriptor in discovery.descriptors],
+        "why": why,
+    }
+
+
 def _maybe_supplement_round(
     attempt: AttemptHandle,
     request_path: Path,
@@ -1250,18 +1494,28 @@ def _maybe_supplement_round(
             exit_code=EXIT_RETRYABLE,
         )
     parsed = _read_json_file(supplement_path)
-    sources = parsed.get("sources") if parsed else None
-    if not isinstance(sources, list) or not sources:
+    if parsed is None:
         return _fail(
             attempt,
             stage="supplement",
             reason="supplement-request-untyped",
             exit_code=EXIT_RETRYABLE,
         )
+    try:
+        supplement = _supplement_request_from_author_payload(parsed, request)
+    except AuthorExecutorError as exc:
+        return _fail(
+            attempt,
+            stage="supplement",
+            reason="supplement-request-untyped",
+            exit_code=EXIT_RETRYABLE,
+            detail={"error": str(exc)},
+        )
+    _write_json_object(supplement_path, supplement)
     attempt.update(status="supplement-running", supplement={"requested_at": utc_now()})
     try:
         pack = broker_source_pack(
-            sources,
+            supplement["sources"],
             broker_dir=attempt.paths.broker / "supplement",
             transport=default_transport(),
         )

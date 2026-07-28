@@ -24,6 +24,7 @@ from menagerie.crawler.author_attempts import latest_attempt, list_attempts, new
 from menagerie.crawler.author_executor import EXIT_OK, EXIT_RETRYABLE
 from menagerie.crawler.identity import hash_bytes
 from menagerie.crawler.tests.executor_test_support import (
+    DEFAULT_RESULT,
     read_invocations,
     subprocess_environment,
     write_author_envelope,
@@ -269,13 +270,14 @@ def test_late_completion_from_live_provider_session_is_quarantined(rig: _Rig) ->
     executor.kill()
     executor.wait(timeout=10)
 
-    fresh_payload = '{"kind": "PROPOSED", "from": "fresh-attempt"}'
-    completed = rig.run(author_request, FAKE_CLAUDE_RESULT=fresh_payload)
+    fresh_result = json.loads(json.dumps(DEFAULT_RESULT))
+    fresh_result["payload"]["reason_code"] = "fresh-attempt"
+    completed = rig.run(author_request, FAKE_CLAUDE_RESULT=json.dumps(fresh_result))
     assert completed.returncode == EXIT_OK, completed.stderr
 
     # The published result is the fresh attempt's, receipt-bound to its nonce.
     published = (rig.root / "result.json").read_bytes()
-    assert json.loads(published)["from"] == "fresh-attempt"
+    assert json.loads(published)["payload"]["reason_code"] == "fresh-attempt"
     receipt = json.loads(completed.stdout.strip().splitlines()[-1])
     fresh_attempt = latest_attempt(rig.root)
     assert fresh_attempt is not None

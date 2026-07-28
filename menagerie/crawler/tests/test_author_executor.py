@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -21,15 +22,22 @@ from menagerie.crawler.author_executor import (
     EXIT_PERMANENT,
     EXIT_RETRYABLE,
     RECEIPT_VERSION,
+    SUPPLEMENT_VERSION,
+    _author_result_from_author_payload,
+    _discovery_envelope_from_author_payload,
+    _supplement_request_from_author_payload,
     main,
 )
 from menagerie.crawler.capability_probe import canonical_tool_name
+from menagerie.crawler.constants import AUTHOR_RESULT_SCHEMA_VERSION
+from menagerie.crawler.discovery import validate_source_discovery
 from menagerie.crawler.driver_admission import (
     CommandAuthorLane,
     DriverIntegrationError,
     _verify_executor_receipt,
 )
 from menagerie.crawler.identity import hash_bytes
+from menagerie.crawler.schema import validate_payload
 from menagerie.crawler.tests.executor_test_support import (
     DEFAULT_DISCOVERY,
     RESOLVED_SHA,
@@ -72,6 +80,82 @@ def _run_author_round(rig, stable_id: str = "m1") -> tuple[int, Path]:
     return main([str(request)]), root
 
 
+def _prompt_contract_fixture(path: Path, marker: str) -> dict[str, Any]:
+    """Read the JSON fixture immediately following one prompt marker.
+
+    Parameters
+    ----------
+    path:
+        Prompt file containing the contract fixture.
+    marker:
+        Exact fixture marker name.
+
+    Returns
+    -------
+    dict[str, Any]
+        Parsed fixture object.
+    """
+
+    prompt = path.read_text(encoding="utf-8")
+    marker_text = f"<!-- CONTRACT_FIXTURE: {marker} -->"
+    marked = prompt.split(marker_text, maxsplit=1)[1]
+    fenced = marked.split("```json", maxsplit=1)[1].split("```", maxsplit=1)[0]
+    fixture = json.loads(fenced)
+    assert isinstance(fixture, dict)
+    return fixture
+
+
+def test_prompt_contract_fixtures_materialize_against_registered_schemas() -> None:
+    """Prompt-taught inner shapes stay coupled to executor wrappers and schemas."""
+
+    prompt_root = Path(__file__).parents[1] / "prompts" / "executor"
+    request = {
+        "stable_id": "m-fixture",
+        "work_id": "work-m-fixture",
+        "expected_result": {
+            "schema_version": AUTHOR_RESULT_SCHEMA_VERSION,
+            "stable_id": "m-fixture",
+            "work_id": "work-m-fixture",
+            "campaign_id": "campaign-fixture",
+            "author_identity": "sha256:" + "3" * 64,
+            "prompt_identity": "sha256:" + "4" * 64,
+            "dispatcher_identity": "sha256:" + "5" * 64,
+            "source_manifest_identity": "sha256:" + "6" * 64,
+            "intake_snapshot_id": "intake-fixture",
+            "intake_snapshot_sha256": "sha256:" + "7" * 64,
+            "intake_item_sha256": "sha256:" + "8" * 64,
+        },
+    }
+
+    discovery_payload = _prompt_contract_fixture(
+        prompt_root / "stage1_discovery.md",
+        "stage1-author-payload",
+    )
+    discovery_envelope = _discovery_envelope_from_author_payload(
+        discovery_payload,
+        request,
+    )
+    validate_source_discovery(
+        discovery_envelope,
+        stable_id="m-fixture",
+        work_id="work-m-fixture",
+    )
+
+    supplement_payload = _prompt_contract_fixture(
+        prompt_root / "stage2_author.md",
+        "supplement-author-payload",
+    )
+    supplement = _supplement_request_from_author_payload(supplement_payload, request)
+    assert supplement["supplement_version"] == SUPPLEMENT_VERSION
+
+    result_payload = _prompt_contract_fixture(
+        prompt_root / "stage2_author.md",
+        "stage2-author-payload",
+    )
+    result = _author_result_from_author_payload(result_payload, request)
+    validate_payload(result, AUTHOR_RESULT_SCHEMA_VERSION)
+
+
 def test_source_round_publishes_machine_derived_pack(rig, capsys) -> None:
     """Stage 1 + broker publish a pack whose exact strings are machine-derived."""
 
@@ -101,24 +185,18 @@ def test_fabricated_sha_ref_is_bad_ref_before_publication(rig) -> None:
         "FAKE_CLAUDE_DISCOVERY",
         json.dumps(
             {
-                "schema_version": "menagerie.crawler.source-discovery.v1",
-                "stable_id": "m1",
-                "work_id": "work-m1",
                 "arm": "FOUND",
-                "payload": {
-                    "arm": "FOUND",
-                    "sources": [
-                        {
-                            "source_id": "impl-fabricated",
-                            "kind": "forge-file",
-                            "repo": "github.com/acme/widgets",
-                            "path": "models/net.py",
-                            "ref": fabricated_sha,
-                            "requested_role": "implementation",
-                            "basis": "A locator that still requires machine dereference.",
-                        }
-                    ],
-                },
+                "sources": [
+                    {
+                        "source_id": "impl-fabricated",
+                        "kind": "forge-file",
+                        "repo": "github.com/acme/widgets",
+                        "path": "models/net.py",
+                        "ref": fabricated_sha,
+                        "requested_role": "implementation",
+                        "basis": "A locator that still requires machine dereference.",
+                    }
+                ],
             }
         ),
     )
@@ -134,8 +212,8 @@ def test_fabricated_sha_ref_is_bad_ref_before_publication(rig) -> None:
     assert receipts["broker"]["outcomes"][0]["outcome"] == "bad-ref"
 
 
-def test_cross_attempt_discovery_binding_is_rejected(rig) -> None:
-    """The executor rejects a valid discovery envelope bound to another attempt."""
+def test_author_cannot_supply_discovery_envelope_bindings(rig) -> None:
+    """The executor rejects authored identities instead of trusting their echo."""
 
     discovery = json.loads(json.dumps(DEFAULT_DISCOVERY))
     discovery["stable_id"] = "different-model"
@@ -149,7 +227,7 @@ def test_cross_attempt_discovery_binding_is_rejected(rig) -> None:
     attempt = latest_attempt(root)
     assert attempt is not None
     assert attempt.record["outcome"]["failure_reason"] == "discovery-contract-invalid"
-    assert "stable_id/work_id" in attempt.record["outcome"]["detail"]["error"]
+    assert "'stable_id': 'different-model'" in attempt.record["outcome"]["detail"]["error"]
 
 
 def test_pinned_recipe_flags_are_load_bearing_and_present(rig) -> None:
@@ -255,19 +333,13 @@ def test_negative_discovery_arm_is_published_for_lane_materialization(rig) -> No
         "FAKE_CLAUDE_DISCOVERY",
         json.dumps(
             {
-                "schema_version": "menagerie.crawler.source-discovery.v1",
-                "stable_id": "m1",
-                "work_id": "work-m1",
                 "arm": "NO_USABLE_SOURCE",
-                "payload": {
-                    "arm": "NO_USABLE_SOURCE",
-                    "search_evidence": {
-                        "queries": ["m1 architecture"],
-                        "places": ["code hosts"],
-                        "candidate_links": [],
-                        "languages": ["en"],
-                        "conclusion": "No usable source exists.",
-                    },
+                "search_evidence": {
+                    "queries": ["m1 architecture"],
+                    "places": ["code hosts"],
+                    "candidate_links": [],
+                    "languages": ["en"],
+                    "conclusion": "No usable source exists.",
                 },
             }
         ),
@@ -289,16 +361,10 @@ def test_tool_failure_arm_fails_loudly_retryable(rig) -> None:
         "FAKE_CLAUDE_DISCOVERY",
         json.dumps(
             {
-                "schema_version": "menagerie.crawler.source-discovery.v1",
-                "stable_id": "m1",
-                "work_id": "work-m1",
                 "arm": "RETRYABLE_TOOL_FAILURE",
-                "payload": {
-                    "arm": "RETRYABLE_TOOL_FAILURE",
-                    "tool_name": "Exa search",
-                    "tool_spelling": "mcp__exa__web_search_exa",
-                    "error": "tool not found",
-                },
+                "tool_name": "Exa search",
+                "tool_spelling": "mcp__exa__web_search_exa",
+                "error": "tool not found",
             }
         ),
     )

@@ -143,7 +143,7 @@ PROCESS
 5. Run the deterministic proposal validator and fix schema/evidence errors within this same session.
 6. If candidate execution is authorized, use only the standard candidate-run command. Preserve its receipt;
    do not paraphrase success.
-7. Compute hashes for every staged artifact and atomically write result.json.
+7. Compute hashes for authored staged artifacts and atomically write the inner result.json.
 
 ACCURACY WARNING
 Codex will independently check EVERY field you author, including description, taxonomy, citation, year,
@@ -189,22 +189,24 @@ SELF-CHECK
 - Keywords are non-empty, relevant English user search terms rather than copied or mechanical tags.
 - R3/R4 includes exact source, literal text/code evidence, code path, source map, and declared choices.
 - No pretrained asset, opaque eval/exec string, environment mutation, or invented architecture detail exists.
-- All files are under allowed_output_root and result.json validates against required_result_schema.
+- All files are under allowed_output_root and the inner result follows the executor transport contract.
 
 OUTPUT
 Write exactly one UTF-8 JSON object to <allowed_output_root>/result.json using a temporary file, flush,
-fsync, and atomic rename. Use required_result_schema exactly. Important information must be in typed fields,
-never only prose. Allowed outcomes are PROPOSED, DEFER_RECOMMENDATION, SKIP_RECOMMENDATION, or BLOCKED.
-Every outcome is an advisory author-result.v4 arm and must repeat the envelope's exact stable/work/campaign,
-author/prompt/dispatcher, source-manifest, and intake identities. PROPOSED embeds one complete
-author-proposal.v3. DEFER_RECOMMENDATION may recommend only cuda or x86 and binds exact source/evidence/
-license identities. It must also retain a complete author-proposal.v3 in handoff_execution, bind its
-proposal hash, code-manifest identity (the empty-list digest for declarative recipes), source-manifest
-identity, and compute handoff_sha256 over those exact preceding fields. SKIP_RECOMMENDATION may recommend
-only one closed R5 status and binds its exact search,
-source/evidence/license identities. BLOCKED binds one closed stage/reason and exact prerequisite evidence.
+fsync, and atomic rename. Write only the author-owned inner transport object: exactly `kind` and `payload`.
+The executor supplies the registered author-result.v4 envelope from machine-held request facts, including
+schema_version, stable/work/campaign and author/prompt/dispatcher/source-manifest/intake identities,
+created_at, result_id, result_sha256, the redundant payload arm, and recommendation_sha256. Do not echo or
+derive any of those outer fields. Important information must be in typed fields, never only prose. Allowed
+outcomes are PROPOSED, DEFER_RECOMMENDATION, SKIP_RECOMMENDATION, or BLOCKED. PROPOSED payload contains only
+one complete author-proposal.v3 under `proposal`. DEFER_RECOMMENDATION may recommend only cuda or x86 and
+binds exact source/evidence/license identities. It retains a complete author-proposal.v3 under
+`handoff_execution.proposal`; the executor derives proposal_sha256, code_manifest_identity (the empty-list
+digest for declarative recipes), source_manifest_identity, and handoff_sha256. SKIP_RECOMMENDATION may
+recommend only one closed R5 status and binds its exact search, source/evidence/license identities. BLOCKED
+binds one closed stage/reason and exact prerequisite evidence.
 `BLOCKED(stage=author, reason_code=needs-higher-tier)` also carries the complete bounded
 stage-1 `research_summary`; the driver durably defers the source campaign and appends a typed
 C3/Opus intake promotion without changing the campaign's frozen author identity.
-Compute every arm's recommendation/result hash over the exact closed payload. Do not output runs, accurate,
-a fidelity verdict, or a terminal award. End after result.json is written.
+Do not emit payload `arm` or any recommendation/result/handoff hash. Do not output runs, accurate, a
+fidelity verdict, or a terminal award. End after result.json is written.
