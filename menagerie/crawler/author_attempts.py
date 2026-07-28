@@ -355,6 +355,17 @@ def new_attempt(
     for prior in existing:
         if prior.status not in TERMINAL_STATUSES:
             prior.mark_superseded(by_nonce=nonce, reason="retry")
+        elif prior.status == "superseded":
+            # An orphaned provider session can land its output AFTER the
+            # attempt was superseded; every attempt boundary re-sweeps those
+            # late writes into quarantine so they never look publishable.
+            for name in ("result.json", "source-targets.json"):
+                prior.quarantine(
+                    prior.paths.directory / name, reason="superseded:late-write"
+                )
+                prior.quarantine(
+                    prior.paths.scratch / name, reason="superseded:late-write"
+                )
     return handle
 
 
