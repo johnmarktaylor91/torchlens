@@ -289,13 +289,44 @@ class FailureStage(StrEnum):
 
 
 class SourceRung(StrEnum):
-    """Ordered source-resolution ladder."""
+    """Ordered source-resolution ladder.
+
+    Every member is a *selected* rung: a positive claim that source resolution
+    reached this step of the ladder. ``SKIP`` in particular asserts a checked
+    conclusion that no faithful source path exists, and carries a separately
+    certified epistemic predicate in ``authority``. Nothing outside the ladder
+    belongs in this enum, which is why "no rung was selected" is the distinct
+    ``NO_RUNG_SELECTED`` sentinel below rather than a sixth member: keeping the
+    enum a pure ladder is what makes rung ordering, author-proposal parsing, and
+    the R5 predicate reject the sentinel automatically.
+    """
 
     LIBRARY = "R1_LIBRARY"
     VENDOR = "R2_VENDOR"
     PORT = "R3_PORT"
     REIMPLEMENT = "R4_REIMPLEMENT"
     SKIP = "R5_SKIP"
+
+
+NO_RUNG_SELECTED = "NO_RUNG_SELECTED"
+"""Explicit sentinel for a record where no source rung was ever selected.
+
+Author work can end before the ladder is walked at all -- effort-cap exhaustion, a
+crashed or wedged author session, a lane failure. That outcome is a *budget or
+process* fact, not a *source* verdict, and recording it as ``R5_SKIP`` would assert
+a checked conclusion that no faithful source path exists when none was ever
+checked. Consumers count ``source_resolution.rung`` unconditionally, so the
+structured field -- not the surrounding narrative -- is what every report reads.
+The sentinel makes "no rung was selected" representable and countable as itself.
+
+It is never author-selectable and never satisfies an R5 predicate; see
+``SOURCE_RESOLUTION_RUNG_VALUES`` and ``NO_RUNG_SELECTED_STATUS_KINDS``.
+"""
+
+SOURCE_RESOLUTION_RUNG_VALUES: frozenset[str] = frozenset(
+    {member.value for member in SourceRung} | {NO_RUNG_SELECTED}
+)
+"""Closed vocabulary admitted by ``source_resolution.rung`` and attempted-rung lists."""
 
 
 class GateKind(StrEnum):
@@ -405,6 +436,19 @@ TERMINAL_STATUS_CODES = frozenset(
         *(f"failed:{stage.value}" for stage in FailureStage),
     }
 )
+
+NO_RUNG_SELECTED_STATUS_KINDS: frozenset[str] = frozenset(
+    {StatusKind.FAILED.value, StatusKind.DEFERRED.value}
+)
+"""Status kinds under which ``NO_RUNG_SELECTED`` is a coherent record fact.
+
+A ``runs`` record necessarily selected a rung to be runnable, and every
+``skipped:*`` code is an epistemic claim that must carry a checked ``R5_SKIP``
+with its certified predicate. The sentinel is therefore only valid where work
+genuinely stopped short: ``failed:*`` and ``deferred:*``. Enforcing this makes
+the tripwire stricter than it was -- previously a cap-exhausted record and a
+checked no-source conclusion were indistinguishable in the structured field.
+"""
 
 FAILURE_REASON_CODES: dict[str, frozenset[str]] = {
     "intake": frozenset(

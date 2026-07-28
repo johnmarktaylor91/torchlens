@@ -181,7 +181,19 @@
         "R3_PORT",
         "R4_REIMPLEMENT",
         "R5_SKIP"
-      ]
+      ],
+      "description": "Selected source-resolution ladder rung."
+    },
+    "rung_or_no_selection": {
+      "enum": [
+        "R1_LIBRARY",
+        "R2_VENDOR",
+        "R3_PORT",
+        "R4_REIMPLEMENT",
+        "R5_SKIP",
+        "NO_RUNG_SELECTED"
+      ],
+      "description": "Selected source-resolution ladder rung, or the explicit NO_RUNG_SELECTED sentinel when the attempt ended before any rung was selected."
     },
     "retries": {
       "type": "object",

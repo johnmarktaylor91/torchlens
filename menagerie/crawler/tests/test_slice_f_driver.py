@@ -56,6 +56,7 @@ from menagerie.crawler.constants import (
     EnvironmentPhase,
     FAILURE_REASON_CODES,
     MODEL_SCHEMA_VERSION_V3,
+    NO_RUNG_SELECTED,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
     TERMINAL_STATUS_CODES,
 )
@@ -6028,7 +6029,10 @@ def test_inaccurate_metadata_gate_repairs_are_bounded(tmp_path: Path) -> None:
     models = scan_jsonl(paths.ledgers.models)
     assert {record["status"]["code"] for record in models} == {"failed:accuracy-gate"}
     assert all(record["status"]["human_review"]["required"] for record in models)
-    assert all(record["source_resolution"]["rung"] == "R5_SKIP" for record in models)
+    # The author proposed R1_LIBRARY (see attempted_rungs below) and the metadata gate
+    # refused it three times, so no rung was ever accepted. R5_SKIP would assert a checked
+    # conclusion that no faithful source path exists, which nothing here established.
+    assert all(record["source_resolution"]["rung"] == NO_RUNG_SELECTED for record in models)
     assert all(record["implementation"]["recipe_type"] == "none" for record in models)
     assert all(
         record["input_contract"]["semantic_description"] == "Input contract unresolved."

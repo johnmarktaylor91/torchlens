@@ -662,8 +662,8 @@
       ],
       "properties": {
         "rung": {
-          "$ref": "#/$defs/rung",
-          "description": "Mandatory source-resolution ladder rung."
+          "$ref": "#/$defs/rung_or_no_selection",
+          "description": "Mandatory source-resolution ladder rung, or NO_RUNG_SELECTED when work ended before any rung was selected."
         },
         "decision": {
           "$ref": "#/$defs/nonempty_string",
@@ -727,7 +727,19 @@
         "R3_PORT",
         "R4_REIMPLEMENT",
         "R5_SKIP"
-      ]
+      ],
+      "description": "Selected source-resolution ladder rung. Every member is a positive claim that resolution reached that step; R5_SKIP asserts a checked conclusion that no faithful source path exists."
+    },
+    "rung_or_no_selection": {
+      "enum": [
+        "R1_LIBRARY",
+        "R2_VENDOR",
+        "R3_PORT",
+        "R4_REIMPLEMENT",
+        "R5_SKIP",
+        "NO_RUNG_SELECTED"
+      ],
+      "description": "Selected source-resolution ladder rung, or the explicit NO_RUNG_SELECTED sentinel when author work ended before any rung was selected. The sentinel is never author-selectable and never satisfies an R5 epistemic predicate."
     },
     "attempted_rung": {
       "type": "object",
@@ -740,8 +752,8 @@
       ],
       "properties": {
         "rung": {
-          "$ref": "#/$defs/rung",
-          "description": "Mandatory source-resolution ladder rung."
+          "$ref": "#/$defs/rung_or_no_selection",
+          "description": "Mandatory source-resolution ladder rung, or NO_RUNG_SELECTED when the ladder was never walked."
         },
         "result": {
           "$ref": "#/$defs/nonempty_string",
@@ -2211,7 +2223,7 @@
         "attempted_rungs": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/rung"
+            "$ref": "#/$defs/rung_or_no_selection"
           },
           "uniqueItems": true,
           "description": "Mandatory attempted rungs."
