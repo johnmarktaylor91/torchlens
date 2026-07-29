@@ -1169,6 +1169,24 @@ def _broker_and_publish(
             "receipts_path": str(attempt.paths.broker / "receipts.json"),
         }
     )
+    if pack.blocked_by_rate_limit():
+        # The forge threw us out before it evaluated anything. Reporting this as
+        # `primary-implementation-unfetchable` would say the implementation could
+        # not be found, when nobody ever looked -- and it would send the retry to
+        # repair a reference that was never wrong. Distinct reason so the driver
+        # can pause on a sustained limit instead of grinding every remaining model
+        # into the same wall for an hour.
+        return _fail(
+            attempt,
+            stage="broker",
+            reason="forge-rate-limited",
+            exit_code=EXIT_RETRYABLE,
+            detail={
+                "outcomes": [item.to_dict() for item in pack.outcomes],
+                "retry_after_seconds": pack.retry_after_seconds(),
+                "rate_limit_reset_epoch": pack.rate_limit_reset_epoch(),
+            },
+        )
     if not pack.implementation_rows():
         return _fail(
             attempt,

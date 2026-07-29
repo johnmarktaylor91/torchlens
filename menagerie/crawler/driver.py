@@ -2066,7 +2066,10 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             "provider": provider,
             "reset_at": reset_at,
         }
-        if provider == "research-tools":
+        if provider in ("research-tools", "forge"):
+            # Neither is a usage limit, so `paused:usage-limit` alone would not say
+            # what actually happened or what to do about it. The reason and the
+            # observed detail carry that.
             driver_state.update(
                 {
                     "reason": signal.reason.value,

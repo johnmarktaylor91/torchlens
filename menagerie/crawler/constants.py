@@ -217,14 +217,27 @@ MAX_AUTHOR_WAVE_CONCURRENCY = 32
 # evidence and still fits inside the default author wave width of four.
 RESEARCH_TOOL_OUTAGE_THRESHOLD = 3
 
+# A forge rate limit is global, not per-model: once the hourly budget is gone,
+# every subsequent ref resolution fails until it resets. The same cross-model
+# evidence bar as the research-tool outage applies, for the same reason -- one
+# throttled target can be a single odd host, three consecutive distinct models
+# cannot -- and the individual failures stay retryable in the meantime. Grinding
+# 28,482 models into an hour-long wall is the failure economics this prevents.
+FORGE_RATE_LIMIT_OUTAGE_THRESHOLD = 3
+
 # Closed usage-limit provider vocabulary. The checker lane pauses on `openai` and
 # the author lane on `anthropic`; research-tool outages are not usage limits.
 USAGE_LIMIT_PROVIDERS = frozenset({"anthropic", "openai"})
 
 # Every provider identity the scheduled-recheck layer may wake. A sustained
-# research-tool outage shares the reset/recheck mechanism without misclassifying
-# itself as a usage limit.
-SCHEDULED_RECHECK_PROVIDERS = frozenset({*USAGE_LIMIT_PROVIDERS, "research-tools"})
+# research-tool outage or forge rate limit shares the reset/recheck mechanism
+# without misclassifying itself as a usage limit. `forge` is deliberately its own
+# identity rather than folded into the author provider: throttling by GitHub is
+# not the LLM provider's quota, and saying so would be the same wrong-party
+# defect this pause exists alongside.
+SCHEDULED_RECHECK_PROVIDERS = frozenset(
+    {*USAGE_LIMIT_PROVIDERS, "research-tools", "forge"}
+)
 
 # The four frozen TIER campaigns the partitioner emits, each bound to its frozen
 # author model. This is deliberately NOT the same concept as a *repair* campaign
@@ -393,13 +406,17 @@ class AuthorPauseReason(StrEnum):
     """Closed author responses that require a scheduler pause.
 
     The author-side analogue of :class:`CheckerPauseReason`. Anthropic usage
-    exhaustion and a sustained cross-model research-provider outage are campaign
-    pauses, never model failures.
+    exhaustion, a sustained cross-model research-provider outage, and a sustained
+    forge rate limit are campaign pauses, never model failures.
     """
 
     RATE_LIMIT = "rate-limit"
     QUOTA_EXHAUSTED = "quota-exhausted"
     RESEARCH_TOOLS_UNAVAILABLE = "research-tools-unavailable"
+    # The source forge threw the broker out. Distinct from `RATE_LIMIT`, which is
+    # the author *provider* throttling us: the two have different resets,
+    # different remedies, and blaming one for the other is a false record.
+    FORGE_RATE_LIMITED = "forge-rate-limited"
 
 
 class RunMode(StrEnum):

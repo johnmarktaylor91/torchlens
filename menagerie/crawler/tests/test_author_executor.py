@@ -52,6 +52,7 @@ from menagerie.crawler.driver_admission import (
 from menagerie.crawler.identity import hash_bytes
 from menagerie.crawler.schema import validate_payload
 from menagerie.crawler.tests.executor_test_support import (
+    COMMITS_URL,
     DEFAULT_DISCOVERY,
     FABRICATED_SHA,
     RESOLVED_SHA,
@@ -80,6 +81,7 @@ def rig(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         "log": log_dir,
         "monkeypatch": monkeypatch,
         "tmp": tmp_path,
+        "fixtures": fixtures,
     }
 
 
@@ -244,6 +246,38 @@ def test_fabricated_sha_ref_is_bad_ref_before_publication(rig) -> None:
     receipts = json.loads((attempt.paths.broker / "receipts.json").read_text("utf-8"))
     assert receipts["sources"] == []
     assert receipts["broker"]["outcomes"][0]["outcome"] == "bad-ref"
+
+
+def test_a_throttled_forge_is_not_reported_as_an_unfetchable_implementation(rig) -> None:
+    """The whole point, end to end: nobody looked, so nothing may be said about the ref.
+
+    ``primary-implementation-unfetchable`` asserts the implementation could not be
+    found. Under a rate limit the forge never evaluated the request at all, so that
+    reason is false and the retry it triggers goes to repair a reference that was
+    never wrong. It also has to be a *distinct* reason, because the driver promotes
+    a sustained streak of it to a campaign pause.
+    """
+
+    fixtures = Path(rig["fixtures"])
+    index = json.loads((fixtures / "index.json").read_text(encoding="utf-8"))
+    index[COMMITS_URL] = {
+        "status": 403,
+        "body_text": json.dumps({"message": "API rate limit exceeded"}),
+        "headers": {"x-ratelimit-remaining": "0", "x-ratelimit-reset": "1785000000"},
+    }
+    (fixtures / "index.json").write_text(json.dumps(index), encoding="utf-8")
+
+    code, root = _run_source_round(rig)
+
+    assert code == EXIT_RETRYABLE
+    attempt = latest_attempt(root)
+    assert attempt is not None
+    outcome = attempt.record["outcome"]
+    assert outcome["failure_reason"] == "forge-rate-limited"
+    assert outcome["failure_reason"] != "primary-implementation-unfetchable"
+    assert outcome["detail"]["rate_limit_reset_epoch"] == 1785000000
+    receipts = json.loads((attempt.paths.broker / "receipts.json").read_text("utf-8"))
+    assert receipts["broker"]["outcomes"][0]["outcome"] == "rate-limited"
 
 
 def test_author_cannot_supply_discovery_envelope_bindings(rig) -> None:
