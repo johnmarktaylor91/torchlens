@@ -58,6 +58,7 @@ from menagerie.crawler.driver_contracts import (
     AuthorBackoffError,
     AuthorEffortCapExceeded,
     AuthorQueueStalled,
+    ForgeRateLimitedError,
     ResearchToolsUnavailableError,
     RetryableOperatorError,
     WorkItem,
@@ -487,6 +488,49 @@ def test_command_lane_types_the_exact_research_tool_guard_failure() -> None:
 
     assert raised.value.stable_id == "m_x"
     assert "research-tools-unavailable" in raised.value.detail
+
+
+def test_command_lane_types_the_exact_forge_rate_limit_failure() -> None:
+    """The broker's throttled arm retains its identity at the campaign boundary.
+
+    Without this it lands on the generic ``RetryableOperatorError``, which the wave
+    cannot promote -- so the campaign would grind every remaining model into the
+    same exhausted forge budget for the rest of the hour.
+    """
+
+    with pytest.raises(ForgeRateLimitedError) as raised:
+        classify_author_exit(
+            "source-request",
+            "m_x",
+            AUTHOR_EXIT_RETRYABLE,
+            "",
+            "author executor broker failed: forge-rate-limited (attempt author-attempt-123)",
+        )
+
+    assert raised.value.stable_id == "m_x"
+    assert "forge-rate-limited" in raised.value.detail
+
+
+def test_an_unfetchable_implementation_is_not_mistaken_for_a_forge_limit() -> None:
+    """A genuinely unfetchable primary source must stay an ordinary retryable failure.
+
+    The pause is for a global condition. Promoting a per-model failure to it would
+    stop the campaign over one dead link.
+    """
+
+    with pytest.raises(RetryableOperatorError) as raised:
+        classify_author_exit(
+            "source-request",
+            "m_x",
+            AUTHOR_EXIT_RETRYABLE,
+            "",
+            (
+                "author executor broker failed: primary-implementation-unfetchable "
+                "(attempt author-attempt-123)"
+            ),
+        )
+
+    assert not isinstance(raised.value, ForgeRateLimitedError)
 
 
 def test_command_lane_permanent_exit_is_not_retried(tmp_path: Path) -> None:

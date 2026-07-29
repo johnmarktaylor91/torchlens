@@ -111,7 +111,34 @@ class RetryableOperatorError(DriverIntegrationError):
     """
 
 
-class ResearchToolsUnavailableError(RetryableOperatorError):
+class AuthorOutageError(RetryableOperatorError):
+    """One model's share of a GLOBAL infrastructure condition, not a model failure.
+
+    The distinguishing property of this class is that the cause is shared: a dead
+    research provider and an exhausted forge budget each fail every model that
+    follows, so the individual failure stays retryable while the author-wave
+    coordinator counts consecutive instances across distinct models and promotes
+    only a sustained streak to a campaign pause.
+
+    Subclasses exist so the membership test is typed rather than string-matched,
+    and so each outage keeps its own identity, threshold, and remedy: naming the
+    wrong cause in a durable record is the defect this whole path guards against.
+    """
+
+    #: Model whose attempt observed the outage.
+    stable_id: str
+    #: Exact bounded diagnostic supplied by the trusted operator protocol.
+    detail: str
+
+    def __init__(self, message: str, stable_id: str, detail: str) -> None:
+        """Attach the affected model and bounded operator detail."""
+
+        super().__init__(message)
+        self.stable_id = stable_id
+        self.detail = detail
+
+
+class ResearchToolsUnavailableError(AuthorOutageError):
     """One model's exact fail-loud research-tool guard outcome.
 
     The individual outcome stays retryable. The author-wave coordinator counts
@@ -131,10 +158,35 @@ class ResearchToolsUnavailableError(RetryableOperatorError):
         """
 
         super().__init__(
-            f"research tools unavailable for {stable_id}: {detail}"
+            f"research tools unavailable for {stable_id}: {detail}",
+            stable_id,
+            detail,
         )
-        self.stable_id = stable_id
-        self.detail = detail
+
+
+class ForgeRateLimitedError(AuthorOutageError):
+    """One model's source broker being thrown out by the forge, not a bad reference.
+
+    The individual outcome stays retryable, exactly like
+    :class:`ResearchToolsUnavailableError`: the author named a good reference and
+    we were simply not allowed to dereference it. The author-wave coordinator
+    counts consecutive instances across distinct models and promotes only a
+    sustained limit to a campaign pause, because a forge budget is global -- once
+    it is gone every later model hits the same wall until it resets.
+    """
+
+    def __init__(self, stable_id: str, detail: str) -> None:
+        """Attach the affected model and bounded operator detail.
+
+        Parameters
+        ----------
+        stable_id:
+            Model whose source broker was throttled by the forge.
+        detail:
+            Exact bounded diagnostic supplied by the trusted operator protocol.
+        """
+
+        super().__init__(f"forge rate limited for {stable_id}: {detail}", stable_id, detail)
 
 
 class AuthorQueueStalled(RetryableOperatorError):

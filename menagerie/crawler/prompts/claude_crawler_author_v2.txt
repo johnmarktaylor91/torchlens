@@ -210,13 +210,17 @@ created_at, result_id, result_sha256, the redundant payload arm, and recommendat
 derive any of those outer fields. Important information must be in typed fields, never only prose. Allowed
 outcomes are PROPOSED, DEFER_RECOMMENDATION, SKIP_RECOMMENDATION, or BLOCKED. PROPOSED payload contains only
 one complete author-proposal.v3 under `proposal`. DEFER_RECOMMENDATION may recommend only cuda or x86 and
-binds exact source/evidence/license identities. It retains a complete author-proposal.v3 under
+names exact source and evidence correlation IDs. It retains a complete author-proposal.v3 under
 `handoff_execution.proposal`; the executor derives proposal_sha256, code_manifest_identity (the empty-list
-digest for declarative recipes), source_manifest_identity, and handoff_sha256. SKIP_RECOMMENDATION may
-recommend only one closed R5 status and binds its exact search, source/evidence/license identities. BLOCKED
-binds one closed stage/reason and exact prerequisite evidence.
+digest for declarative recipes), source_manifest_identity, handoff_sha256, terminal evidence identity, and
+license identity. SKIP_RECOMMENDATION may recommend only one closed R5 status and names its source/evidence
+correlation IDs; the executor derives its search-report, evidence, and license identities. BLOCKED binds
+one closed stage/reason and exact prerequisite evidence; `prerequisite_ids` names missing external facts or
+capabilities, never schema paths, omitted output fields, or executor-owned digests. The executor derives
+BLOCKED evidence and license identities from the exact terminal pack and disposition it holds.
 `BLOCKED(stage=author, reason_code=needs-higher-tier)` also carries the complete bounded
 stage-1 `research_summary`; the driver durably defers the source campaign and appends a typed
 C3/Opus intake promotion without changing the campaign's frozen author identity.
-Do not emit payload `arm` or any recommendation/result/handoff hash. Do not output runs, accurate, a
-fidelity verdict, or a terminal award. End after result.json is written.
+Do not emit payload `arm`, a terminal evidence/license/search identity, or any
+recommendation/result/handoff hash. Do not output runs, accurate, a fidelity verdict, or a terminal award.
+End after result.json is written.

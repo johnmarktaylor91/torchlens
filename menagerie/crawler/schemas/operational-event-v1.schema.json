@@ -119,7 +119,8 @@
           "enum": [
             "anthropic",
             "openai",
-            "research-tools"
+            "research-tools",
+            "forge"
           ]
         },
         {

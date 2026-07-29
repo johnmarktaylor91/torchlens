@@ -16,6 +16,12 @@ from pathlib import Path
 
 RESOLVED_SHA = "a" * 39 + "b"
 COMMITS_URL = "https://api.github.com/repos/acme/widgets/commits/v1.0.0"
+#: A ref the forge answers `404` for. This is what a fabricated SHA actually
+#: looks like from GitHub, and the fixture says so explicitly rather than
+#: leaving the URL unmapped: an unmapped URL is a transport failure, which is
+#: *our* problem, and a test must not prove "bad ref" from that.
+FABRICATED_SHA = "1" * 40
+FABRICATED_COMMITS_URL = f"https://api.github.com/repos/acme/widgets/commits/{FABRICATED_SHA}"
 RAW_URL = f"https://raw.githubusercontent.com/acme/widgets/{RESOLVED_SHA}/models/net.py"
 IMPL_BODY = "class Net:\n    pass\n"
 SUPPLEMENT_URL = "https://example.org/extra.txt"
@@ -43,8 +49,6 @@ DEFAULT_RESULT = {
         "reason_code": "missing-material-source",
         "prerequisite_ids": ["source-needed"],
         "evidence_ids": ["evidence-gap"],
-        "evidence_identity": "sha256:" + "1" * 64,
-        "license_identity": "sha256:" + "2" * 64,
     },
 }
 
@@ -340,6 +344,10 @@ def write_broker_fixtures(directory: Path) -> Path:
         COMMITS_URL: {"status": 200, "body_text": json.dumps({"sha": RESOLVED_SHA})},
         RAW_URL: {"status": 200, "body_text": IMPL_BODY},
         SUPPLEMENT_URL: {"status": 200, "body_text": "extra documentation\n"},
+        FABRICATED_COMMITS_URL: {
+            "status": 404,
+            "body_text": json.dumps({"message": "No commit found for SHA"}),
+        },
     }
     (directory / "index.json").write_text(json.dumps(index), encoding="utf-8")
     return directory
@@ -443,6 +451,10 @@ def write_author_envelope(root: Path, stable_id: str) -> Path:
             "intake_snapshot_id": "intake-test",
             "intake_snapshot_sha256": "sha256:" + "7" * 64,
             "intake_item_sha256": "sha256:" + "8" * 64,
+        },
+        "source_manifest": {
+            "manifest_sha256": "sha256:" + "6" * 64,
+            "sources": [{"source_id": "impl-net"}],
         },
         "required_output_path": str(root / "result.json"),
         "allowed_model_dir": str(root / "model"),

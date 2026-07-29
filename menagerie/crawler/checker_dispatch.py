@@ -591,8 +591,11 @@ def _build_envelope(
             if not isinstance(evidence_pack, Mapping):
                 raise CheckerDispatchError("terminal checker item lacks its evidence pack")
             _validate_terminal_evidence_pack(evidence_pack)
-            if not isinstance(item.get("license_pack"), Mapping):
-                raise CheckerDispatchError("terminal checker item lacks its license pack")
+            if not isinstance(item.get("license_disposition"), Mapping):
+                raise CheckerDispatchError(
+                    "terminal checker item lacks the license disposition its "
+                    "license_identity binds"
+                )
             if not isinstance(item.get("recommendation_preimage"), Mapping):
                 raise CheckerDispatchError(
                     "terminal checker item lacks the recommendation preimage its "
@@ -660,11 +663,13 @@ def _build_envelope(
 def _validate_terminal_evidence_pack(evidence_pack: Mapping[str, Any]) -> None:
     """Require a terminal evidence pack to be inspectable or honestly unresolved.
 
-    A checker asked to bless a terminal recommendation must be able to read the
-    literal excerpt behind every evidence ID it is handed. An envelope may
-    therefore carry either grounded, identity-bound excerpt records, or an
-    explicit declaration that they could not be resolved -- never a silently
-    reference-only list that looks like evidence and is not.
+    A checker asked to rule on a terminal recommendation must be able to read the
+    literal excerpt behind every evidence ID it is handed. The envelope carries
+    two separate things and they must never be confused: ``identity_preimage``
+    is the machine-derived citation table whose hash IS ``evidence_identity``,
+    and ``excerpts`` holds only text the machine re-derived from frozen bytes.
+    So a pack either grounds every declared ID with a literal excerpt, or it
+    declares the gap outright -- never a reference-only list dressed as evidence.
 
     Parameters
     ----------
@@ -683,13 +688,20 @@ def _validate_terminal_evidence_pack(evidence_pack: Mapping[str, Any]) -> None:
     excerpts = evidence_pack.get("excerpts")
     if resolution not in {TERMINAL_EVIDENCE_GROUNDED, TERMINAL_EVIDENCE_UNRESOLVED}:
         raise CheckerDispatchError("terminal evidence pack must declare its resolution")
-    if not isinstance(declared, list) or not declared:
+    if not isinstance(declared, list):
         raise CheckerDispatchError("terminal evidence pack must declare its evidence IDs")
+    if not isinstance(evidence_pack.get("identity_preimage"), list):
+        raise CheckerDispatchError(
+            "terminal evidence pack must carry the preimage of its evidence_identity"
+        )
     if not isinstance(excerpts, list):
         raise CheckerDispatchError("terminal evidence pack excerpts must be a list")
     if resolution == TERMINAL_EVIDENCE_UNRESOLVED:
-        unresolved = evidence_pack.get("unresolved_evidence_ids")
-        if not isinstance(unresolved, list) or not unresolved:
+        if excerpts:
+            raise CheckerDispatchError(
+                "unresolved terminal evidence pack cannot ship excerpts it did not verify"
+            )
+        if not isinstance(evidence_pack.get("unresolved_evidence_ids"), list):
             raise CheckerDispatchError(
                 "unresolved terminal evidence pack must name its unresolved evidence IDs"
             )
@@ -698,6 +710,8 @@ def _validate_terminal_evidence_pack(evidence_pack: Mapping[str, Any]) -> None:
                 "unresolved terminal evidence pack must explain why it is unresolved"
             )
         return
+    if not declared:
+        raise CheckerDispatchError("a terminal evidence pack citing nothing cannot be grounded")
     grounded = {
         str(excerpt.get("evidence_id")): excerpt
         for excerpt in excerpts
@@ -707,7 +721,7 @@ def _validate_terminal_evidence_pack(evidence_pack: Mapping[str, Any]) -> None:
         excerpt = grounded.get(str(evidence_id))
         if excerpt is None or any(
             not isinstance(excerpt.get(field), str) or not excerpt.get(field)
-            for field in ("source_id", "locator", "text", "text_sha256")
+            for field in ("source_id", "locator", "text")
         ):
             raise CheckerDispatchError(
                 f"grounded terminal evidence pack has no literal excerpt for {evidence_id}"

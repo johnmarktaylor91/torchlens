@@ -13,6 +13,8 @@ from menagerie.crawler.author_dispatch import (
     DeferRecommendation,
     ProposedAuthorResult,
     SkipRecommendation,
+    derive_terminal_evidence_pack,
+    derive_terminal_license_disposition,
 )
 from menagerie.crawler.authority import (
     AuthorityDerivationError,
@@ -59,12 +61,7 @@ from menagerie.crawler.reducer import (
     cold_forward_policy,
     output_signature_error,
 )
-from menagerie.crawler.terminal_evidence import (
-    resolve_machine_discovery_evidence,
-    resolve_machine_discovery_license,
-    resolve_terminal_evidence,
-    resolve_terminal_license,
-)
+from menagerie.crawler.terminal_evidence import resolve_terminal_evidence
 from menagerie.crawler.driver_contracts import (
     AuthorArtifact,
     CheckerOutcome,
@@ -187,46 +184,59 @@ def _terminal_checker_item(artifact: AuthorArtifact) -> JsonObject:
         source_ids = result.source_ids
         predicate = f"needs-{result.platform}"
         evidence_ids = result.evidence_ids
+        handoff = result.handoff_execution
+        proposal = handoff.proposal if handoff is not None else {}
+        facts = proposal.get("proposed_facts")
+        licenses = facts.get("licenses") if isinstance(facts, Mapping) else None
+        if not isinstance(licenses, Mapping):
+            raise DriverIntegrationError("terminal deferral has no exact license disposition")
     elif isinstance(result, SkipRecommendation):
         source_ids = result.source_ids
         predicate = result.status_code.split(":", 1)[1]
         evidence_ids = result.evidence_ids
+        licenses = None
     elif isinstance(result, BlockedRecommendation):
         source_ids = manifest_ids
         predicate = "blocked-prerequisite"
         evidence_ids = result.evidence_ids
+        licenses = None
     else:
         raise DriverIntegrationError("unknown typed terminal recommendation")
     if not source_ids:
         raise DriverIntegrationError("terminal recommendation has no exact source IDs")
-    # The envelope previously synthesized this pack: each evidence ID was paired
-    # with a source ID by round-robin index and stamped with the typed predicate
-    # as its own support. That is fabricated provenance. It made the driver's own
-    # reference check pass against data the driver had just invented, and it left
-    # the independent checker with identifiers and nothing to read -- so its only
-    # honest verdict was cannot-verify. Resolve the author's frozen records and
-    # bind them to the declared identity instead; when they do not bind, say so.
-    author_root = artifact.model_dir.parent
-    # A driver-derived discovery terminal grounds from the bytes the driver
-    # itself froze; everything else grounds from the author's frozen records.
-    resolved = resolve_machine_discovery_evidence(
-        source_manifest=artifact.source_manifest,
+    evidence_pack = derive_terminal_evidence_pack(
+        source_ids=source_ids,
         evidence_ids=evidence_ids,
-        evidence_identity=result.evidence_identity,
         predicate=predicate,
-    ) or resolve_terminal_evidence(
-        author_root=author_root,
-        evidence_ids=evidence_ids,
-        evidence_identity=result.evidence_identity,
     )
-    license_resolution = resolve_machine_discovery_license(
+    license_disposition = derive_terminal_license_disposition(
+        kind=result.binding.raw_result["kind"],
+        source_manifest_identity=result.binding.source_manifest_identity,
+        licenses=licenses,
+    )
+    if evidence_pack["evidence_identity"] != result.evidence_identity:
+        raise DriverIntegrationError("terminal evidence identity is not machine-derived")
+    if stable_hash(license_disposition) != result.license_identity:
+        raise DriverIntegrationError("terminal license identity is not machine-derived")
+    # ``derive_terminal_evidence_pack`` owns the IDENTITY, and correctly: the
+    # author has no hashing primitive and must never be asked for a digest. But
+    # its rows are a machine-derived CITATION TABLE -- evidence IDs paired with
+    # source IDs by round-robin index, ``supports`` stamped with the predicate.
+    # They carry no excerpt text and assert no verified pairing, so they are
+    # shipped under their own name as the identity preimage. What the checker
+    # needs in order to reach any verdict but cannot-verify is the literal
+    # excerpt and its locator, and it may only be shown text the machine itself
+    # re-derived: the frozen bytes in content-addressed storage.
+    resolved = resolve_terminal_evidence(
         source_manifest=artifact.source_manifest,
-        license_identity=result.license_identity,
-    ) or resolve_terminal_license(
-        author_root=author_root, license_identity=result.license_identity
+        evidence_ids=evidence_ids,
+        predicate=predicate,
+        author_root=artifact.model_dir.parent,
     )
-    evidence_pack: JsonObject = {
-        "evidence_identity": result.evidence_identity,
+    identity_preimage = evidence_pack["excerpts"]
+    evidence_pack = {
+        "evidence_identity": evidence_pack["evidence_identity"],
+        "identity_preimage": identity_preimage,
         "resolution": resolved.resolution,
         "excerpts": [deepcopy(excerpt) for excerpt in resolved.excerpts],
         "declared_evidence_ids": list(evidence_ids),
@@ -234,12 +244,6 @@ def _terminal_checker_item(artifact: AuthorArtifact) -> JsonObject:
         "unresolved_reason": resolved.reason,
         "checked_source_ids": list(source_ids),
         "predicate": predicate,
-    }
-    license_pack: JsonObject = {
-        "license_identity": result.license_identity,
-        "resolution": license_resolution.resolution,
-        "record": deepcopy(license_resolution.record),
-        "unresolved_reason": license_resolution.reason,
     }
     binding = result.binding
     # The recommendation preimage is exactly what ``recommendation_sha256``
@@ -275,7 +279,7 @@ def _terminal_checker_item(artifact: AuthorArtifact) -> JsonObject:
         "author_result": binding.raw_result,
         "source_manifest": artifact.source_manifest,
         "evidence_pack": evidence_pack,
-        "license_pack": license_pack,
+        "license_disposition": license_disposition,
         "license_identity": result.license_identity,
         "recommendation_sha256": result.recommendation_sha256,
         "recommendation_preimage": recommendation_preimage,

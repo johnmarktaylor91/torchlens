@@ -151,6 +151,78 @@ AuthorResult: TypeAlias = (
 )
 
 
+def derive_terminal_evidence_pack(
+    *,
+    source_ids: Sequence[str],
+    evidence_ids: Sequence[str],
+    predicate: str,
+) -> JsonObject:
+    """Build the exact machine-owned terminal evidence pack.
+
+    Parameters
+    ----------
+    source_ids:
+        Manifest-bound sources supporting the terminal recommendation.
+    evidence_ids:
+        Author correlation labels for the cited terminal evidence.
+    predicate:
+        Closed terminal predicate the evidence supports.
+
+    Returns
+    -------
+    dict[str, Any]
+        Evidence pack whose identity is derived from its exact excerpt inventory.
+    """
+
+    normalized_sources = tuple(str(source_id) for source_id in source_ids)
+    if evidence_ids and not normalized_sources:
+        raise AuthorDispatchError("terminal evidence cannot bind IDs without a source")
+    excerpts = [
+        {
+            "evidence_id": str(evidence_id),
+            "source_id": normalized_sources[index % len(normalized_sources)],
+            "supports": [predicate],
+        }
+        for index, evidence_id in enumerate(evidence_ids)
+    ]
+    return {
+        "evidence_identity": stable_hash(excerpts),
+        "excerpts": excerpts,
+    }
+
+
+def derive_terminal_license_disposition(
+    *,
+    kind: str,
+    source_manifest_identity: str,
+    licenses: Mapping[str, Any] | None = None,
+) -> JsonObject:
+    """Return the exact machine-owned terminal license disposition.
+
+    Parameters
+    ----------
+    kind:
+        Closed author-result arm.
+    source_manifest_identity:
+        Frozen source manifest bound by the result.
+    licenses:
+        Exact proposal license facts for a handoff deferral, when present.
+
+    Returns
+    -------
+    dict[str, Any]
+        Exact disposition whose stable hash becomes ``license_identity``.
+    """
+
+    if licenses is not None:
+        return deepcopy(dict(licenses))
+    return {
+        "arm": kind,
+        "disposition": "not-applicable-no-license-claim",
+        "source_manifest_identity": source_manifest_identity,
+    }
+
+
 # Operator protocol exit codes (PLAN_RECONCILED section 3.0). ``0`` publishes a
 # valid result at the exact required path; every other code is a typed refusal.
 AUTHOR_EXIT_OK = 0
@@ -751,7 +823,7 @@ def _validate_author_result_mapping(
             binding=binding,
             platform=str(payload["platform"]),
             source_ids=_nonempty_unique_strings(payload.get("source_ids"), "source_ids"),
-            evidence_ids=_nonempty_unique_strings(payload.get("evidence_ids"), "evidence_ids"),
+            evidence_ids=_unique_strings(payload.get("evidence_ids"), "evidence_ids"),
             evidence_identity=str(payload["evidence_identity"]),
             license_identity=str(payload["license_identity"]),
             recommendation_sha256=str(payload["recommendation_sha256"]),
@@ -768,7 +840,7 @@ def _validate_author_result_mapping(
             binding=binding,
             status_code=str(payload["status_code"]),
             source_ids=_nonempty_unique_strings(payload.get("source_ids"), "source_ids"),
-            evidence_ids=_nonempty_unique_strings(payload.get("evidence_ids"), "evidence_ids"),
+            evidence_ids=_unique_strings(payload.get("evidence_ids"), "evidence_ids"),
             evidence_identity=str(payload["evidence_identity"]),
             search_report_identity=str(payload["search_report_identity"]),
             license_identity=str(payload["license_identity"]),
@@ -788,7 +860,7 @@ def _validate_author_result_mapping(
         prerequisite_ids=_nonempty_unique_strings(
             payload.get("prerequisite_ids"), "prerequisite_ids"
         ),
-        evidence_ids=_nonempty_unique_strings(payload.get("evidence_ids"), "evidence_ids"),
+        evidence_ids=_unique_strings(payload.get("evidence_ids"), "evidence_ids"),
         evidence_identity=str(payload["evidence_identity"]),
         license_identity=str(payload["license_identity"]),
         recommendation_sha256=str(payload["recommendation_sha256"]),
@@ -878,6 +950,31 @@ def _nonempty_unique_strings(value: object, field: str) -> tuple[str, ...]:
         or len(value) != len(set(value))
     ):
         raise AuthorDispatchError(f"author result {field} must be nonempty and duplicate-free")
+    return tuple(value)
+
+
+def _unique_strings(value: object, field: str) -> tuple[str, ...]:
+    """Return a duplicate-free string tuple that may be empty.
+
+    Parameters
+    ----------
+    value:
+        Candidate JSON array.
+    field:
+        Field name used in validation errors.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Exact duplicate-free strings in authored order.
+    """
+
+    if (
+        not isinstance(value, list)
+        or not all(isinstance(item, str) and item for item in value)
+        or len(value) != len(set(value))
+    ):
+        raise AuthorDispatchError(f"author result {field} must be duplicate-free strings")
     return tuple(value)
 
 

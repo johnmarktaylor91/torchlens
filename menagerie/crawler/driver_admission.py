@@ -85,6 +85,7 @@ from menagerie.crawler.constants import (
     AUTHOR_QUEUE_STALL_SECONDS,
     CHECKER_PROMPT_NAME,
     FAILURE_REASON_CODES,
+    FORGE_RATE_LIMIT_OUTAGE_THRESHOLD,
     RESEARCH_TOOL_OUTAGE_THRESHOLD,
     STDIO_TAIL_MAX_CHARS,
     AuthorPauseReason,
@@ -204,6 +205,8 @@ from menagerie.crawler.driver_contracts import (
     DriverPaused,
     DriverResult,
     EnvironmentBinding,
+    AuthorOutageError,
+    ForgeRateLimitedError,
     ResearchToolsUnavailableError,
     RetryableOperatorError,
     VariantRecipeUnsupported,
@@ -1105,11 +1108,17 @@ def classify_author_exit(
         raise AuthorBackoffError(signal)
     if returncode in (AUTHOR_EXIT_RETRYABLE, AUTHOR_EXIT_UNAVAILABLE):
         expected_tool_failure = "author executor stage1 failed: research-tools-unavailable (attempt "
+        expected_forge_limit = "author executor broker failed: forge-rate-limited (attempt "
         if returncode == AUTHOR_EXIT_RETRYABLE and any(
             line.startswith(expected_tool_failure) and line.endswith(")")
             for line in combined.splitlines()
         ):
             raise ResearchToolsUnavailableError(stable_id, tail)
+        if returncode == AUTHOR_EXIT_RETRYABLE and any(
+            line.startswith(expected_forge_limit) and line.endswith(")")
+            for line in combined.splitlines()
+        ):
+            raise ForgeRateLimitedError(stable_id, tail)
         raise RetryableOperatorError(f"{label} for {stable_id} (exit {returncode}): {tail}")
     if returncode == AUTHOR_EXIT_PERMANENT:
         # Deliberately does NOT use the historical retryable prefix: a declared
@@ -1716,6 +1725,8 @@ class QueueAuthorLane(_AuthorLaneBase):
         if retryable:
             if reason == "research-tools-unavailable":
                 raise ResearchToolsUnavailableError(job.stable_id, detail)
+            if reason == "forge-rate-limited":
+                raise ForgeRateLimitedError(job.stable_id, detail)
             raise RetryableOperatorError(message)
         raise DriverIntegrationError(message)
 
@@ -2344,16 +2355,53 @@ class _AuthorWavePool:
             return _AuthorDispatchOutcome(error=exc)
 
 
-def _research_tool_outage_signal(
-    primary: ResearchToolsUnavailableError,
+#: Each sustained infrastructure outage the author wave can promote to a pause.
+#: One mechanism, one streak rule, one place to reason about the economics; the
+#: rows differ only in identity and remedy. Keyed by the typed error the lane
+#: raises, which is the non-string-matched membership test.
+_OUTAGE_PROMOTIONS: tuple[
+    tuple[type[AuthorOutageError], str, AuthorPauseReason, int, str, str], ...
+] = (
+    (
+        ResearchToolsUnavailableError,
+        "research-tools",
+        AuthorPauseReason.RESEARCH_TOOLS_UNAVAILABLE,
+        RESEARCH_TOOL_OUTAGE_THRESHOLD,
+        "the research provider was unreachable",
+        "Restore the configured research MCP/provider, then resume",
+    ),
+    (
+        ForgeRateLimitedError,
+        "forge",
+        AuthorPauseReason.FORGE_RATE_LIMITED,
+        FORGE_RATE_LIMIT_OUTAGE_THRESHOLD,
+        "the source forge rate limited the broker",
+        (
+            "Wait for the forge budget to reset, or supply a credential "
+            "(GH_TOKEN/GITHUB_TOKEN, or `gh auth login`) to raise the ceiling from "
+            "60 to 5,000 requests per hour, then resume"
+        ),
+    ),
+)
+
+
+def _author_outage_signal(
+    primary: BaseException,
     drained: Sequence[tuple[str, _AuthorDispatchOutcome]],
 ) -> Optional[AuthorBackoffSignal]:
-    """Promote a consecutive cross-model tool-failure streak to a provider pause.
+    """Promote a consecutive cross-model infrastructure-failure streak to a pause.
+
+    Both promotable outages are global conditions wearing a per-model disguise: a
+    dead research provider and an exhausted forge budget each fail every model
+    that follows, so retrying the rest of the campaign into them buys nothing and
+    spends the wave. One or two failures stay retryable because they can be
+    transient; a consecutive streak across distinct models is cross-model evidence
+    that the infrastructure, not the model, is the problem.
 
     Parameters
     ----------
     primary:
-        First research-tool failure encountered by the canonical writer.
+        First promotable failure encountered by the canonical writer.
     drained:
         Later uncommitted author outcomes in deterministic work order.
 
@@ -2364,13 +2412,51 @@ def _research_tool_outage_signal(
         reached, otherwise ``None`` so the isolated failure remains retryable.
     """
 
+    for (
+        error_type,
+        provider,
+        reason,
+        threshold,
+        symptom,
+        remedy,
+    ) in _OUTAGE_PROMOTIONS:
+        if not isinstance(primary, error_type):
+            continue
+        signal = _outage_streak_signal(
+            primary=primary,
+            drained=drained,
+            error_type=error_type,
+            provider=provider,
+            reason=reason,
+            threshold=threshold,
+            symptom=symptom,
+            remedy=remedy,
+        )
+        if signal is not None:
+            return signal
+    return None
+
+
+def _outage_streak_signal(
+    *,
+    primary: BaseException,
+    drained: Sequence[tuple[str, _AuthorDispatchOutcome]],
+    error_type: type[AuthorOutageError],
+    provider: str,
+    reason: AuthorPauseReason,
+    threshold: int,
+    symptom: str,
+    remedy: str,
+) -> Optional[AuthorBackoffSignal]:
+    """Count one outage kind's consecutive distinct-model streak."""
+
     ordered: list[tuple[str, Optional[BaseException]]] = [
-        (primary.stable_id, primary),
+        (getattr(primary, "stable_id", ""), primary),
         *((stable_id, outcome.error) for stable_id, outcome in drained),
     ]
-    streak: list[ResearchToolsUnavailableError] = []
+    streak: list[AuthorOutageError] = []
     for stable_id, error in ordered:
-        if not isinstance(error, ResearchToolsUnavailableError):
+        if not isinstance(error, error_type):
             streak.clear()
             continue
         if error.stable_id != stable_id or any(
@@ -2378,21 +2464,21 @@ def _research_tool_outage_signal(
         ):
             streak.clear()
         streak.append(error)
-        if len(streak) < RESEARCH_TOOL_OUTAGE_THRESHOLD:
+        if len(streak) < threshold:
             continue
         affected = ", ".join(failure.stable_id for failure in streak)
         details = "; ".join(failure.detail for failure in streak)
         return AuthorBackoffSignal(
-            reason=AuthorPauseReason.RESEARCH_TOOLS_UNAVAILABLE,
+            reason=reason,
             retry_after_seconds=None,
             reset_at=None,
             response_excerpt=(
-                "Campaign paused because the research provider was unreachable for "
-                f"{len(streak)} consecutive models ({affected}). Restore the configured "
-                "research MCP/provider, then resume; all affected models remain retryable. "
+                f"Campaign paused because {symptom} for "
+                f"{len(streak)} consecutive models ({affected}). {remedy}; "
+                "all affected models remain retryable. "
                 f"Observed failures: {details}"
             )[:1_500],
-            provider="research-tools",
+            provider=provider,
         )
     return None
 
@@ -2911,7 +2997,7 @@ class AdmissionEnvironmentMixin:
                 admission=("author", item),
             ),
         )
-        research_failure: Optional[ResearchToolsUnavailableError] = None
+        outage_failure: Optional[BaseException] = None
         drained: tuple[tuple[str, _AuthorDispatchOutcome], ...] = ()
         try:
             if pool.enabled:
@@ -2924,8 +3010,8 @@ class AdmissionEnvironmentMixin:
                     if self._author_session_is_certain(item, reducer):
                         pool.submit(item)
             return self._commit_author_wave(work, pool, reducer, operational, state)
-        except ResearchToolsUnavailableError as exc:
-            research_failure = exc
+        except (ResearchToolsUnavailableError, ForgeRateLimitedError) as exc:
+            outage_failure = exc
         finally:
             # A started session has already spent provider budget, so an aborting
             # wave never orphans one: drain every sibling, then keep whatever it
@@ -2938,14 +3024,14 @@ class AdmissionEnvironmentMixin:
                 if preserved is not None and outcome.error is None and outcome.artifact is not None:
                     self._preserve_uncommitted_author_result(preserved, outcome.artifact)
             pool.close()
-        if research_failure is None:
-            raise AssertionError("research-tool failure unwind lost its typed cause")
-        outage = _research_tool_outage_signal(research_failure, drained)
+        if outage_failure is None:
+            raise AssertionError("author outage unwind lost its typed cause")
+        outage = _author_outage_signal(outage_failure, drained)
         if outage is not None:
             raise AuthorUsagePause(
                 self._pause_for_usage(outage, operational, len(work))
-            ) from research_failure
-        raise research_failure
+            ) from outage_failure
+        raise outage_failure
 
     def _author_session_is_certain(self, item: WorkItem, reducer: CanonicalReducer) -> bool:
         """Return whether the serial path provably reaches a fresh author session.

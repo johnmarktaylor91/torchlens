@@ -18,6 +18,8 @@ from menagerie.crawler.author_attempts import (
 from menagerie.crawler.author_dispatch import (
     AuthorEffortGrant,
     AuthorPauseReason,
+    BlockedRecommendation,
+    _validate_author_result_mapping,
     classify_author_response,
     plausible_author_reset_at,
 )
@@ -29,6 +31,7 @@ from menagerie.crawler.author_executor import (
     EXIT_RETRYABLE,
     RECEIPT_VERSION,
     SUPPLEMENT_VERSION,
+    AuthorExecutorError,
     _author_result_from_author_payload,
     _discovery_envelope_from_author_payload,
     _supplement_request_from_author_payload,
@@ -49,10 +52,14 @@ from menagerie.crawler.driver_admission import (
     DriverIntegrationError,
     _verify_executor_receipt,
 )
-from menagerie.crawler.identity import hash_bytes
+from menagerie.crawler.driver_contracts import AuthorArtifact
+from menagerie.crawler.driver_models import _terminal_checker_item
+from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.schema import validate_payload
 from menagerie.crawler.tests.executor_test_support import (
+    COMMITS_URL,
     DEFAULT_DISCOVERY,
+    FABRICATED_SHA,
     RESOLVED_SHA,
     executor_environment,
     read_invocations,
@@ -79,6 +86,7 @@ def rig(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         "log": log_dir,
         "monkeypatch": monkeypatch,
         "tmp": tmp_path,
+        "fixtures": fixtures,
     }
 
 
@@ -139,21 +147,34 @@ def test_prompt_contract_fixtures_materialize_against_registered_schemas() -> No
             "intake_snapshot_sha256": "sha256:" + "7" * 64,
             "intake_item_sha256": "sha256:" + "8" * 64,
         },
+        "source_manifest": {
+            "manifest_sha256": "sha256:" + "6" * 64,
+            "sources": [{"source_id": "impl-main"}],
+        },
     }
 
-    discovery_payload = _prompt_contract_fixture(
-        prompt_root / "stage1_discovery.md",
+    discovery_markers = (
         "stage1-author-payload",
+        "stage1-no-usable-source-author-payload",
+        "stage1-insufficient-description-author-payload",
+        "stage1-not-a-model-author-payload",
+        "stage1-needs-higher-tier-author-payload",
+        "stage1-retryable-tool-failure-author-payload",
     )
-    discovery_envelope = _discovery_envelope_from_author_payload(
-        discovery_payload,
-        request,
-    )
-    validate_source_discovery(
-        discovery_envelope,
-        stable_id="m-fixture",
-        work_id="work-m-fixture",
-    )
+    for marker in discovery_markers:
+        discovery_payload = _prompt_contract_fixture(
+            prompt_root / "stage1_discovery.md",
+            marker,
+        )
+        discovery_envelope = _discovery_envelope_from_author_payload(
+            discovery_payload,
+            request,
+        )
+        validate_source_discovery(
+            discovery_envelope,
+            stable_id="m-fixture",
+            work_id="work-m-fixture",
+        )
 
     supplement_payload = _prompt_contract_fixture(
         prompt_root / "stage2_author.md",
@@ -188,6 +209,232 @@ def test_prompt_contract_fixtures_materialize_against_registered_schemas() -> No
     defer_result = _author_result_from_author_payload(defer_payload, request)
     validate_payload(defer_result, AUTHOR_RESULT_SCHEMA_VERSION)
 
+    skip_payload = _prompt_contract_fixture(
+        prompt_root / "stage2_author.md",
+        "stage2-skip-author-payload",
+    )
+    skip_result = _author_result_from_author_payload(skip_payload, request)
+    validate_payload(skip_result, AUTHOR_RESULT_SCHEMA_VERSION)
+
+
+def test_blocked_without_author_identities_materializes_machine_facts(
+    tmp_path: Path,
+) -> None:
+    """BLOCKED transport omits hashes that only the executor can derive."""
+
+    source_manifest_identity = "sha256:" + "6" * 64
+    source_manifest: dict[str, Any] = {
+        "manifest_sha256": source_manifest_identity,
+        "sources": [{"source_id": "impl-main"}],
+    }
+    request = {
+        "expected_result": {
+            "schema_version": AUTHOR_RESULT_SCHEMA_VERSION,
+            "stable_id": "m-blocked",
+            "work_id": "work-m-blocked",
+            "campaign_id": "campaign-blocked",
+            "author_identity": "sha256:" + "3" * 64,
+            "prompt_identity": "sha256:" + "4" * 64,
+            "dispatcher_identity": "sha256:" + "5" * 64,
+            "source_manifest_identity": source_manifest_identity,
+            "intake_snapshot_id": "intake-blocked",
+            "intake_snapshot_sha256": "sha256:" + "7" * 64,
+            "intake_item_sha256": "sha256:" + "8" * 64,
+        },
+        "source_manifest": source_manifest,
+    }
+    authored = {
+        "kind": "BLOCKED",
+        "payload": {
+            "stage": "environment",
+            "reason_code": "missing-runtime-dependency",
+            "prerequisite_ids": ["runtime-dependency"],
+            "evidence_ids": [],
+        },
+    }
+
+    result = _author_result_from_author_payload(authored, request)
+
+    validate_payload(result, AUTHOR_RESULT_SCHEMA_VERSION)
+    assert result["payload"]["evidence_identity"] == stable_hash([])
+    assert result["payload"]["license_identity"] == stable_hash(
+        {
+            "arm": "BLOCKED",
+            "disposition": "not-applicable-no-license-claim",
+            "source_manifest_identity": source_manifest_identity,
+        }
+    )
+    envelope = {
+        "envelope_version": "menagerie.crawler.author-envelope.v3",
+        "expected_result": request["expected_result"],
+        "source_manifest": source_manifest,
+        "allowed_model_dir": str(tmp_path),
+        "required_output_path": str(tmp_path / "result.json"),
+    }
+    envelope["envelope_sha256"] = stable_hash(envelope)
+    parsed = _validate_author_result_mapping(result, envelope, cas_root=None)
+    assert isinstance(parsed, BlockedRecommendation)
+    pack = _terminal_checker_item(AuthorArtifact(parsed, source_manifest, tmp_path))
+    assert pack["evidence_pack"]["evidence_identity"] == result["payload"][
+        "evidence_identity"
+    ]
+    assert stable_hash(pack["license_disposition"]) == result["payload"][
+        "license_identity"
+    ]
+
+
+def test_defer_without_author_identities_materializes_proposal_facts() -> None:
+    """DEFER identities bind the retained proposal evidence and licenses."""
+
+    request = {
+        "expected_result": {
+            "schema_version": AUTHOR_RESULT_SCHEMA_VERSION,
+            "stable_id": "m-fixture",
+            "work_id": "work-m-fixture",
+            "campaign_id": "campaign-fixture",
+            "author_identity": "sha256:" + "3" * 64,
+            "prompt_identity": "sha256:" + "4" * 64,
+            "dispatcher_identity": "sha256:" + "5" * 64,
+            "source_manifest_identity": "sha256:" + "6" * 64,
+            "intake_snapshot_id": "intake-fixture",
+            "intake_snapshot_sha256": "sha256:" + "7" * 64,
+            "intake_item_sha256": "sha256:" + "8" * 64,
+        },
+        "source_manifest": {
+            "manifest_sha256": "sha256:" + "6" * 64,
+            "sources": [{"source_id": "source-1"}],
+        },
+    }
+    proposal = make_author_proposal("m-fixture")
+    proposal["proposed_facts"]["implementation"]["code_manifest"] = []
+    licenses = proposal["proposed_facts"]["licenses"]
+    authored = {
+        "kind": "DEFER_RECOMMENDATION",
+        "payload": {
+            "platform": "cuda",
+            "source_ids": ["source-1"],
+            "evidence_ids": ["evidence-1"],
+            "handoff_execution": {"proposal": proposal},
+        },
+    }
+
+    result = _author_result_from_author_payload(authored, request)
+
+    validate_payload(result, AUTHOR_RESULT_SCHEMA_VERSION)
+    assert result["payload"]["evidence_identity"] == stable_hash(
+        [
+            {
+                "evidence_id": "evidence-1",
+                "source_id": "source-1",
+                "supports": ["needs-cuda"],
+            }
+        ]
+    )
+    assert result["payload"]["license_identity"] == stable_hash(licenses)
+
+
+def test_author_identity_fields_cannot_override_machine_derivation() -> None:
+    """Authored identity assertions are rejected instead of trusted or ignored."""
+
+    request = {
+        "expected_result": {
+            "schema_version": AUTHOR_RESULT_SCHEMA_VERSION,
+            "stable_id": "m-blocked",
+            "work_id": "work-m-blocked",
+            "campaign_id": "campaign-blocked",
+            "author_identity": "sha256:" + "3" * 64,
+            "prompt_identity": "sha256:" + "4" * 64,
+            "dispatcher_identity": "sha256:" + "5" * 64,
+            "source_manifest_identity": "sha256:" + "6" * 64,
+            "intake_snapshot_id": "intake-blocked",
+            "intake_snapshot_sha256": "sha256:" + "7" * 64,
+            "intake_item_sha256": "sha256:" + "8" * 64,
+        },
+        "source_manifest": {
+            "manifest_sha256": "sha256:" + "6" * 64,
+            "sources": [{"source_id": "impl-main"}],
+        },
+    }
+    authored = {
+        "kind": "BLOCKED",
+        "payload": {
+            "stage": "environment",
+            "reason_code": "missing-runtime-dependency",
+            "prerequisite_ids": ["runtime-dependency"],
+            "evidence_ids": [],
+            "evidence_identity": "sha256:" + "a" * 64,
+            "license_identity": "sha256:" + "b" * 64,
+        },
+    }
+
+    with pytest.raises(AuthorExecutorError, match="machine-owned"):
+        _author_result_from_author_payload(authored, request)
+
+
+def test_blocked_prerequisites_are_semantic_ids_not_schema_paths() -> None:
+    """BLOCKED prerequisites name external needs, never omitted output fields."""
+
+    request = {
+        "expected_result": {
+            "schema_version": AUTHOR_RESULT_SCHEMA_VERSION,
+            "stable_id": "m-blocked",
+            "work_id": "work-m-blocked",
+            "campaign_id": "campaign-blocked",
+            "author_identity": "sha256:" + "3" * 64,
+            "prompt_identity": "sha256:" + "4" * 64,
+            "dispatcher_identity": "sha256:" + "5" * 64,
+            "source_manifest_identity": "sha256:" + "6" * 64,
+            "intake_snapshot_id": "intake-blocked",
+            "intake_snapshot_sha256": "sha256:" + "7" * 64,
+            "intake_item_sha256": "sha256:" + "8" * 64,
+        },
+        "source_manifest": {
+            "manifest_sha256": "sha256:" + "6" * 64,
+            "sources": [{"source_id": "impl-main"}],
+        },
+    }
+    authored = {
+        "kind": "BLOCKED",
+        "payload": {
+            "stage": "environment",
+            "reason_code": "missing-runtime-dependency",
+            "prerequisite_ids": ["payload.evidence_identity"],
+            "evidence_ids": [],
+        },
+    }
+
+    with pytest.raises(AuthorExecutorError, match="validation failed"):
+        _author_result_from_author_payload(authored, request)
+
+
+def test_needs_higher_tier_accepts_observed_http_candidate_locator() -> None:
+    """Research summaries retain observed HTTP candidate locators verbatim."""
+
+    payload = {
+        "arm": "NEEDS_HIGHER_TIER",
+        "research_summary": {
+            "queries": ["RENet temporal knowledge graph"],
+            "places": ["Author project page"],
+            "candidate_links": [
+                {
+                    "url": "http://inklab.usc.edu/renet/",
+                    "why_rejected": "Useful project context, but not executable source.",
+                }
+            ],
+            "languages": ["English"],
+            "conclusion": "The exact upstream implementation needs a higher-tier audit.",
+        },
+    }
+    request = {"stable_id": "m11695", "work_id": "work-m11695"}
+
+    envelope = _discovery_envelope_from_author_payload(payload, request)
+
+    validate_source_discovery(
+        envelope,
+        stable_id="m11695",
+        work_id="work-m11695",
+    )
+
 
 def test_source_round_publishes_machine_derived_pack(rig, capsys) -> None:
     """Stage 1 + broker publish a pack whose exact strings are machine-derived."""
@@ -213,7 +460,7 @@ def test_source_round_publishes_machine_derived_pack(rig, capsys) -> None:
 def test_fabricated_sha_ref_is_bad_ref_before_publication(rig) -> None:
     """A plausible authored ref is dereferenced and cannot create a manifest row."""
 
-    fabricated_sha = "1" * 40
+    fabricated_sha = FABRICATED_SHA
     rig["monkeypatch"].setenv(
         "FAKE_CLAUDE_DISCOVERY",
         json.dumps(
@@ -243,6 +490,38 @@ def test_fabricated_sha_ref_is_bad_ref_before_publication(rig) -> None:
     receipts = json.loads((attempt.paths.broker / "receipts.json").read_text("utf-8"))
     assert receipts["sources"] == []
     assert receipts["broker"]["outcomes"][0]["outcome"] == "bad-ref"
+
+
+def test_a_throttled_forge_is_not_reported_as_an_unfetchable_implementation(rig) -> None:
+    """The whole point, end to end: nobody looked, so nothing may be said about the ref.
+
+    ``primary-implementation-unfetchable`` asserts the implementation could not be
+    found. Under a rate limit the forge never evaluated the request at all, so that
+    reason is false and the retry it triggers goes to repair a reference that was
+    never wrong. It also has to be a *distinct* reason, because the driver promotes
+    a sustained streak of it to a campaign pause.
+    """
+
+    fixtures = Path(rig["fixtures"])
+    index = json.loads((fixtures / "index.json").read_text(encoding="utf-8"))
+    index[COMMITS_URL] = {
+        "status": 403,
+        "body_text": json.dumps({"message": "API rate limit exceeded"}),
+        "headers": {"x-ratelimit-remaining": "0", "x-ratelimit-reset": "1785000000"},
+    }
+    (fixtures / "index.json").write_text(json.dumps(index), encoding="utf-8")
+
+    code, root = _run_source_round(rig)
+
+    assert code == EXIT_RETRYABLE
+    attempt = latest_attempt(root)
+    assert attempt is not None
+    outcome = attempt.record["outcome"]
+    assert outcome["failure_reason"] == "forge-rate-limited"
+    assert outcome["failure_reason"] != "primary-implementation-unfetchable"
+    assert outcome["detail"]["rate_limit_reset_epoch"] == 1785000000
+    receipts = json.loads((attempt.paths.broker / "receipts.json").read_text("utf-8"))
+    assert receipts["broker"]["outcomes"][0]["outcome"] == "rate-limited"
 
 
 def test_author_cannot_supply_discovery_envelope_bindings(rig) -> None:

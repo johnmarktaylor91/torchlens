@@ -6,9 +6,12 @@ Two live campaign-killing defects are pinned here (rung 1d, 2026-07-29):
    ``gate_id`` -- a machine-owned identity it could not observe -- and the
    resulting typed contract rejection propagated as an undifferentiated
    ``DriverIntegrationError`` that ended the whole run.
-2. The frozen terminal envelope carried evidence *identifiers* plus synthesized
-   excerpt rows (source IDs assigned by round-robin index, ``supports`` stamped
-   with the typed predicate), so no verdict on it could ever be grounded.
+2. The frozen terminal envelope carried evidence *identifiers* plus a
+   machine-derived citation table (source IDs paired by round-robin index,
+   ``supports`` stamped with the typed predicate) presented as ``excerpts``.
+   That table owns the evidence IDENTITY and is kept, under its own name; what
+   the checker additionally needs, and now gets, is literal excerpt text the
+   machine re-derived verbatim from the frozen source bytes.
 """
 
 from __future__ import annotations
@@ -19,7 +22,12 @@ from typing import Any
 
 import pytest
 
-from menagerie.crawler.author_dispatch import AuthorResultBinding, BlockedRecommendation
+from menagerie.crawler.author_dispatch import (
+    AuthorResultBinding,
+    BlockedRecommendation,
+    derive_terminal_evidence_pack,
+    derive_terminal_license_disposition,
+)
 from menagerie.crawler.checker_dispatch import (
     CheckerDispatchError,
     apply_machine_owned_gate_fields,
@@ -28,55 +36,77 @@ from menagerie.crawler.checker_dispatch import (
     validate_checker_result_mapping,
 )
 from menagerie.crawler.driver_admission import _raise_for_checker_exit
-from menagerie.crawler.driver_contracts import AuthorArtifact, DriverIntegrationError
-from menagerie.crawler.driver_contracts import RetryableOperatorError
+from menagerie.crawler.driver_contracts import (
+    AuthorArtifact,
+    DriverIntegrationError,
+    RetryableOperatorError,
+)
 from menagerie.crawler.driver_models import _terminal_checker_item
-from menagerie.crawler.identity import compute_evidence_identity, stable_hash
+from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.operator_checker import TERMINAL_CHECKER_MODEL
 from menagerie.crawler.terminal_evidence import (
     GROUNDED,
     TERMINAL_EVIDENCE_FILENAME,
-    TERMINAL_LICENSE_FILENAME,
     UNRESOLVED,
     resolve_terminal_evidence,
 )
 from menagerie.crawler.tests.conftest import HASH, make_gate
 
-EXCERPT_TEXT = "activation=leaky\n"
-SECOND_EXCERPT_TEXT = "filters=16\n"
+SOURCE_ONE_BYTES = b"[convolutional]\nbatch_normalize=1\nfilters=16\nactivation=leaky\n"
+SOURCE_TWO_BYTES = b"  [[-1, 1, Conv, [16, 3, 1]],  # 0\n   [-1, 1, nn.MaxPool2d, [2, 2, 0]],\n"
+PREDICATE = "blocked-prerequisite"
+DECLARED_EVIDENCE = ("ev-one", "ev-two")
 
 
 def _excerpts() -> list[dict[str, Any]]:
-    """Return two literal, locator-bearing excerpt records."""
+    """Return two literal excerpt records present verbatim in their sources."""
 
     return [
         {
             "evidence_id": "ev-one",
             "source_id": "source-1",
             "locator": "cfg/yolov3-tiny.cfg lines 25-31",
-            "text": EXCERPT_TEXT,
-            "text_sha256": stable_hash(EXCERPT_TEXT),
-            "supports": ["blocked-prerequisite"],
+            "text": "activation=leaky\n",
+            "supports": ["source_resolution.rung"],
         },
         {
             "evidence_id": "ev-two",
             "source_id": "source-2",
-            "locator": "cfg/yolov3-tiny.cfg lines 32-38",
-            "text": SECOND_EXCERPT_TEXT,
-            "text_sha256": stable_hash(SECOND_EXCERPT_TEXT),
-            "supports": ["blocked-prerequisite"],
+            "locator": "models/yolov3-tiny.yaml lines 13-16",
+            "text": "[-1, 1, nn.MaxPool2d, [2, 2, 0]]",
+            "supports": ["fidelity.deviations"],
         },
     ]
+
+
+def _stage_sources(author_root: Path) -> dict[str, Any]:
+    """Write both frozen sources into the CAS and return their manifest."""
+
+    cas_root = author_root / "source-cas"
+    cas_root.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for source_id, content in (("source-1", SOURCE_ONE_BYTES), ("source-2", SOURCE_TWO_BYTES)):
+        digest = hash_bytes(content)
+        path = cas_root / f"{digest.removeprefix('sha256:')}.source"
+        path.write_bytes(content)
+        rows.append(
+            {
+                "source_id": source_id,
+                "url": f"https://example.org/{source_id}",
+                "content_sha256": digest,
+                "cas_path": str(path),
+            }
+        )
+    return {"manifest_sha256": HASH, "sources": rows}
 
 
 def _blocked_artifact(
     tmp_path: Path,
     *,
     excerpts: list[dict[str, Any]] | None,
-    evidence_identity: str | None = None,
-    license_record: dict[str, Any] | None = None,
+    evidence_ids: tuple[str, ...] = DECLARED_EVIDENCE,
 ) -> AuthorArtifact:
-    """Stage one BLOCKED recommendation with optional frozen author records.
+    """Stage one BLOCKED recommendation with optional frozen author excerpts.
 
     Parameters
     ----------
@@ -84,43 +114,38 @@ def _blocked_artifact(
         Pytest temporary directory used as the campaign work root.
     excerpts:
         Frozen excerpt records to publish, or ``None`` to publish none.
-    evidence_identity:
-        Declared evidence identity; defaults to the identity of ``excerpts``.
-    license_record:
-        Frozen license record to publish, or ``None`` to publish none.
+    evidence_ids:
+        Exact evidence identities the recommendation declares.
 
     Returns
     -------
     AuthorArtifact
-        Privately staged terminal artifact.
+        Privately staged terminal artifact whose identities are machine-derived.
     """
 
     author_root = tmp_path / "work" / "m_example" / "author"
     model_dir = author_root / "model"
     model_dir.mkdir(parents=True)
+    source_manifest = _stage_sources(author_root)
     if excerpts is not None:
         (author_root / TERMINAL_EVIDENCE_FILENAME).write_text(
             json.dumps({"excerpts": excerpts}), encoding="utf-8"
         )
-    if license_record is not None:
-        (author_root / TERMINAL_LICENSE_FILENAME).write_text(
-            json.dumps(license_record), encoding="utf-8"
-        )
-    resolved_identity = (
-        evidence_identity
-        if evidence_identity is not None
-        else compute_evidence_identity(excerpts or [])
+    source_ids = tuple(str(row["source_id"]) for row in source_manifest["sources"])
+    evidence_pack = derive_terminal_evidence_pack(
+        source_ids=source_ids, evidence_ids=evidence_ids, predicate=PREDICATE
+    )
+    license_disposition = derive_terminal_license_disposition(
+        kind="BLOCKED", source_manifest_identity=HASH
     )
     payload = {
         "arm": "BLOCKED",
         "stage": "source",
         "reason_code": "missing-material-source",
         "prerequisite_ids": ["prereq-1"],
-        "evidence_ids": ["ev-one", "ev-two"],
-        "evidence_identity": resolved_identity,
-        "license_identity": (
-            stable_hash(license_record) if license_record is not None else HASH
-        ),
+        "evidence_ids": list(evidence_ids),
+        "evidence_identity": evidence_pack["evidence_identity"],
+        "license_identity": stable_hash(license_disposition),
     }
     payload["recommendation_sha256"] = stable_hash(payload)
     raw_fields = {
@@ -138,24 +163,21 @@ def _blocked_artifact(
         "intake_item_sha256": HASH,
         "created_at": "2026-07-29T00:00:00Z",
     }
-    binding = AuthorResultBinding(raw_result={**raw_fields, "payload": payload}, **raw_fields)
+    binding = AuthorResultBinding(
+        raw_result={**raw_fields, "kind": "BLOCKED", "payload": payload}, **raw_fields
+    )
     result = BlockedRecommendation(
         binding=binding,
         stage="source",
         reason_code="missing-material-source",
         prerequisite_ids=("prereq-1",),
-        evidence_ids=("ev-one", "ev-two"),
-        evidence_identity=resolved_identity,
+        evidence_ids=evidence_ids,
+        evidence_identity=str(payload["evidence_identity"]),
         license_identity=str(payload["license_identity"]),
         recommendation_sha256=str(payload["recommendation_sha256"]),
     )
     return AuthorArtifact(
-        author_result=result,
-        source_manifest={
-            "manifest_sha256": HASH,
-            "sources": [{"source_id": "source-1"}, {"source_id": "source-2"}],
-        },
-        model_dir=model_dir,
+        author_result=result, source_manifest=source_manifest, model_dir=model_dir
     )
 
 
@@ -182,12 +204,12 @@ def _rejected_verdict_body() -> dict[str, Any]:
         "handoff_proposal_id": None,
         "handoff_sha256": None,
         "kind": "BLOCKED",
-        "predicate": "blocked-prerequisite",
+        "predicate": PREDICATE,
         "verdict": "rejected",
         "source_manifest_identity": HASH,
         "source_ids": ["source-1", "source-2"],
         "evidence_identity": HASH,
-        "evidence_ids": ["ev-one", "ev-two"],
+        "evidence_ids": list(DECLARED_EVIDENCE),
         "license_identity": HASH,
         "findings": ["evidence excerpts are not inspectable"],
     }
@@ -213,12 +235,15 @@ def test_verdict_missing_machine_owned_scaffold_is_not_discarded(tmp_path: Path)
     envelope = _terminal_envelope(_terminal_checker_item(artifact), tmp_path)
     verdict = _rejected_verdict_body()
     item = verdict["items"][0]
-    item["work_id"] = envelope["items"][0]["work_id"]
-    item["stable_id"] = envelope["items"][0]["stable_id"]
-    item["family_representative_id"] = envelope["items"][0]["family_representative_id"]
-    item["fidelity_identity"] = envelope["items"][0]["fidelity_identity"]
-    item["vet_identity"] = envelope["items"][0]["vet_identity"]
-    item["verified_hashes"] = envelope["items"][0]["verified_hashes"]
+    for field in (
+        "work_id",
+        "stable_id",
+        "family_representative_id",
+        "fidelity_identity",
+        "vet_identity",
+        "verified_hashes",
+    ):
+        item[field] = envelope["items"][0][field]
     for machine_field in machine_owned_gate_fields(envelope):
         # ``schema_version`` is the one machine field the checker can read off
         # the envelope, so the live omission was exactly the rest of them.
@@ -293,7 +318,7 @@ def test_genuine_checker_execution_failure_still_raises_integration_error() -> N
 
 
 def test_terminal_envelope_carries_literal_excerpts_and_locators(tmp_path: Path) -> None:
-    """Every referenced evidence ID arrives with its verbatim text and locator.
+    """Every referenced evidence ID arrives with verbatim text and its locator.
 
     Parameters
     ----------
@@ -301,25 +326,24 @@ def test_terminal_envelope_carries_literal_excerpts_and_locators(tmp_path: Path)
         Pytest temporary directory.
     """
 
-    license_record = {"source_dispositions": [{"source_id": "source-1", "spdx": "MIT"}]}
-    artifact = _blocked_artifact(
-        tmp_path, excerpts=_excerpts(), license_record=license_record
-    )
+    artifact = _blocked_artifact(tmp_path, excerpts=_excerpts())
     item = _terminal_checker_item(artifact)
     pack = item["evidence_pack"]
     assert pack["resolution"] == GROUNDED
     by_id = {excerpt["evidence_id"]: excerpt for excerpt in pack["excerpts"]}
-    assert set(by_id) == {"ev-one", "ev-two"}
+    assert set(by_id) == set(DECLARED_EVIDENCE)
     for excerpt in by_id.values():
         assert excerpt["locator"]
         assert excerpt["text"]
-        assert excerpt["text_sha256"]
-    # Real provenance, not the round-robin index the envelope used to invent.
+    # Real provenance re-derived from frozen bytes, not the round-robin pairing.
     assert by_id["ev-one"]["source_id"] == "source-1"
     assert by_id["ev-two"]["source_id"] == "source-2"
-    assert compute_evidence_identity(pack["excerpts"]) == artifact.author_result.evidence_identity
-    assert item["license_pack"]["resolution"] == GROUNDED
-    assert item["license_pack"]["record"] == license_record
+    assert by_id["ev-one"]["text"].encode("utf-8") in SOURCE_ONE_BYTES
+    assert by_id["ev-two"]["text"].encode("utf-8") in SOURCE_TWO_BYTES
+    # The identity preimage is kept, under its own name, and still owns the hash.
+    assert pack["evidence_identity"] == stable_hash(pack["identity_preimage"])
+    assert item["license_disposition"]["disposition"] == "not-applicable-no-license-claim"
+    assert stable_hash(item["license_disposition"]) == item["license_identity"]
     preimage = item["recommendation_preimage"]
     assert stable_hash(preimage) == item["recommendation_sha256"]
     envelope = _terminal_envelope(item, tmp_path)
@@ -339,11 +363,9 @@ def test_terminal_envelope_refuses_a_grounded_claim_without_literal_excerpts(
 
     artifact = _blocked_artifact(tmp_path, excerpts=_excerpts())
     item = _terminal_checker_item(artifact)
-    # Exactly the shape the envelope used to ship: identifiers only.
-    item["evidence_pack"]["excerpts"] = [
-        {"evidence_id": "ev-one", "source_id": "source-1", "supports": ["blocked-prerequisite"]},
-        {"evidence_id": "ev-two", "source_id": "source-2", "supports": ["blocked-prerequisite"]},
-    ]
+    # Exactly the shape the envelope used to ship as evidence: the citation
+    # table, which carries no excerpt text at all.
+    item["evidence_pack"]["excerpts"] = item["evidence_pack"]["identity_preimage"]
     with pytest.raises(CheckerDispatchError, match="no literal excerpt"):
         _terminal_envelope(item, tmp_path)
 
@@ -351,10 +373,8 @@ def test_terminal_envelope_refuses_a_grounded_claim_without_literal_excerpts(
 # -- 4. a genuinely incomplete evidence pack is still rejected -----------------
 
 
-def test_unbound_evidence_pack_resolves_unresolved_and_cannot_be_accepted(
-    tmp_path: Path,
-) -> None:
-    """Records that do not recompute to the declared identity are not evidence.
+def test_excerpt_absent_from_its_frozen_source_is_not_evidence(tmp_path: Path) -> None:
+    """Text that does not appear in the frozen bytes is never shown as grounded.
 
     Parameters
     ----------
@@ -362,24 +382,40 @@ def test_unbound_evidence_pack_resolves_unresolved_and_cannot_be_accepted(
         Pytest temporary directory.
     """
 
-    artifact = _blocked_artifact(
-        tmp_path, excerpts=_excerpts(), evidence_identity="sha256:" + "b" * 64
-    )
+    excerpts = _excerpts()
+    excerpts[1]["text"] = "activation=mish  # never appears in the frozen source\n"
+    artifact = _blocked_artifact(tmp_path, excerpts=excerpts)
     item = _terminal_checker_item(artifact)
     pack = item["evidence_pack"]
     assert pack["resolution"] == UNRESOLVED
     assert pack["excerpts"] == []
-    assert set(pack["unresolved_evidence_ids"]) == {"ev-one", "ev-two"}
-    assert "declared" in str(pack["unresolved_reason"])
+    assert set(pack["unresolved_evidence_ids"]) == set(DECLARED_EVIDENCE)
+    assert "did not re-derive" in str(pack["unresolved_reason"])
     # The envelope still builds -- the gap is stated, not hidden -- so the
-    # independent checker sees exactly what it cannot verify, instead of the
-    # synthesized rows that used to make the claim look grounded.
-    envelope = _terminal_envelope(item, tmp_path)
-    shipped = envelope["items"][0]["evidence_pack"]
+    # independent checker sees exactly what it cannot verify.
+    shipped = _terminal_envelope(item, tmp_path)["items"][0]["evidence_pack"]
     assert shipped["resolution"] == UNRESOLVED
     assert shipped["excerpts"] == []
-    assert set(shipped["unresolved_evidence_ids"]) == {"ev-one", "ev-two"}
     assert shipped["unresolved_reason"]
+
+
+def test_excerpt_citing_a_source_outside_the_manifest_is_not_evidence(
+    tmp_path: Path,
+) -> None:
+    """An excerpt may only ground against a source the manifest actually froze.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    """
+
+    excerpts = _excerpts()
+    excerpts[0]["source_id"] = "source-invented"
+    artifact = _blocked_artifact(tmp_path, excerpts=excerpts)
+    pack = _terminal_checker_item(artifact)["evidence_pack"]
+    assert pack["resolution"] == UNRESOLVED
+    assert "outside the frozen source manifest" in str(pack["unresolved_reason"])
 
 
 def test_absent_evidence_records_are_declared_not_invented(tmp_path: Path) -> None:
@@ -391,16 +427,16 @@ def test_absent_evidence_records_are_declared_not_invented(tmp_path: Path) -> No
         Pytest temporary directory.
     """
 
-    artifact = _blocked_artifact(tmp_path, excerpts=None, evidence_identity=HASH)
+    artifact = _blocked_artifact(tmp_path, excerpts=None)
     pack = _terminal_checker_item(artifact)["evidence_pack"]
     assert pack["resolution"] == UNRESOLVED
     assert pack["excerpts"] == []
-    assert set(pack["unresolved_evidence_ids"]) == {"ev-one", "ev-two"}
+    assert set(pack["unresolved_evidence_ids"]) == set(DECLARED_EVIDENCE)
     assert pack["checked_source_ids"] == ["source-1", "source-2"]
 
 
 def test_partial_evidence_records_are_unresolved(tmp_path: Path) -> None:
-    """A pack that binds its identity but omits one excerpt is not grounded.
+    """A pack that omits one excerpt's locator is not grounded.
 
     Parameters
     ----------
@@ -412,9 +448,10 @@ def test_partial_evidence_records_are_unresolved(tmp_path: Path) -> None:
     del excerpts[1]["locator"]
     artifact = _blocked_artifact(tmp_path, excerpts=excerpts)
     resolution = resolve_terminal_evidence(
+        source_manifest=artifact.source_manifest,
+        evidence_ids=DECLARED_EVIDENCE,
+        predicate=PREDICATE,
         author_root=artifact.model_dir.parent,
-        evidence_ids=("ev-one", "ev-two"),
-        evidence_identity=artifact.author_result.evidence_identity,
     )
     assert resolution.resolution == UNRESOLVED
-    assert resolution.unresolved_evidence_ids == ("ev-two",)
+    assert "ev-two has no inspectable excerpt record" in str(resolution.reason)

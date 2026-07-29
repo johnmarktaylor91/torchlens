@@ -66,6 +66,12 @@
       "format": "uri",
       "pattern": "^https://"
     },
+    "observed_web_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https?://",
+      "description": "Observed HTTP(S) research locator; unlike a fetch descriptor, it grants no dereference authority."
+    },
     "forge_file_descriptor": {
       "type": "object",
       "additionalProperties": false,
@@ -199,8 +205,8 @@
       "required": ["url", "why_rejected"],
       "properties": {
         "url": {
-          "$ref": "#/$defs/https_url",
-          "description": "Requested candidate locator for a machine probe."
+          "$ref": "#/$defs/observed_web_url",
+          "description": "Observed research locator retained as evidence, not a fetch request."
         },
         "why_rejected": {
           "$ref": "#/$defs/nonempty_string",

@@ -37,6 +37,8 @@ from menagerie.crawler.author_dispatch import (
     ProposedAuthorResult,
     SkipRecommendation,
     build_author_envelope,
+    derive_terminal_evidence_pack,
+    derive_terminal_license_disposition,
     validate_author_result,
 )
 from menagerie.crawler.authority import (
@@ -300,10 +302,19 @@ def _terminal_fake_author_result(
 
     result = artifact.author_result
     assert isinstance(result, ProposedAuthorResult)
-    evidence_identity = stable_hash({"evidence_ids": ["evidence-1"]})
-    license_identity = stable_hash({"license": "restricted-private"})
+    source_ids = ["source-1", "source-paper"]
     payload: dict[str, Any]
     if platform is not None:
+        evidence_identity = stable_hash(
+            [
+                {
+                    "evidence_id": "evidence-1",
+                    "source_id": source_ids[0],
+                    "supports": [f"needs-{platform}"],
+                }
+            ]
+        )
+        license_identity = stable_hash(artifact.proposal["proposed_facts"]["licenses"])
         handoff = {
             "proposal": artifact.proposal,
             "proposal_sha256": artifact.proposal["proposal_sha256"],
@@ -316,7 +327,7 @@ def _terminal_fake_author_result(
         payload = {
             "arm": "DEFER_RECOMMENDATION",
             "platform": platform,
-            "source_ids": ["source-1", "source-paper"],
+            "source_ids": source_ids,
             "evidence_ids": ["evidence-1"],
             "evidence_identity": evidence_identity,
             "license_identity": license_identity,
@@ -325,10 +336,29 @@ def _terminal_fake_author_result(
         }
     else:
         assert status_code is not None
+        predicate = status_code.removeprefix("skipped:")
+        evidence_identity = stable_hash(
+            [
+                {
+                    "evidence_id": "evidence-1",
+                    "source_id": source_ids[0],
+                    "supports": [predicate],
+                }
+            ]
+        )
+        license_identity = stable_hash(
+            {
+                "arm": "SKIP_RECOMMENDATION",
+                "disposition": "not-applicable-no-license-claim",
+                "source_manifest_identity": artifact.proposal[
+                    "source_manifest_identity"
+                ],
+            }
+        )
         payload = {
             "arm": "SKIP_RECOMMENDATION",
             "status_code": status_code,
-            "source_ids": ["source-1", "source-paper"],
+            "source_ids": source_ids,
             "evidence_ids": ["evidence-1"],
             "evidence_identity": evidence_identity,
             "search_report_identity": stable_hash({"search": "bounded-complete"}),
@@ -6428,7 +6458,30 @@ def _blocked_result_bytes(envelope: Mapping[str, Any], payload: Mapping[str, Any
         Serialized author result ready for the required output path.
     """
 
-    body = dict(payload)
+    body = {
+        key: value
+        for key, value in payload.items()
+        if key not in {"evidence_identity", "license_identity"}
+    }
+    source_manifest = envelope["source_manifest"]
+    source_ids = [
+        str(source["source_id"])
+        for source in source_manifest["sources"]
+        if isinstance(source, Mapping)
+    ]
+    evidence_pack = derive_terminal_evidence_pack(
+        source_ids=source_ids,
+        evidence_ids=[str(value) for value in body["evidence_ids"]],
+        predicate="blocked-prerequisite",
+    )
+    license_disposition = derive_terminal_license_disposition(
+        kind="BLOCKED",
+        source_manifest_identity=str(
+            envelope["expected_result"]["source_manifest_identity"]
+        ),
+    )
+    body["evidence_identity"] = evidence_pack["evidence_identity"]
+    body["license_identity"] = stable_hash(license_disposition)
     body["recommendation_sha256"] = stable_hash(body)
     result = {
         **dict(envelope["expected_result"]),

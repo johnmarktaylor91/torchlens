@@ -281,6 +281,132 @@ class ResearchToolsFailureAuthor(ObservedAuthor):
         raise AssertionError("queue failure classifier did not raise")
 
 
+class ForgeRateLimitFailureAuthor(ObservedAuthor):
+    """Report the queue protocol's typed forge-rate-limit failure for selected models.
+
+    A forge budget is global: once the hour's requests are gone, every following
+    model hits the same wall. Grinding the whole campaign into it -- and recording
+    each one as the author's bad reference -- is the failure this pause prevents.
+    """
+
+    def __init__(self, failing_ids: set[str], **kwargs: Any) -> None:
+        """Bind the models whose broker gets thrown out by the forge."""
+
+        super().__init__(**kwargs)
+        self._failing_ids = failing_ids
+
+    def author(
+        self,
+        item: WorkItem,
+        work_root: Path,
+        config: DriverConfig,
+        context: AuthorityContext,
+    ) -> AuthorArtifact:
+        """Raise the exact error produced by a retryable queue failure sidecar."""
+
+        if item.stable_id not in self._failing_ids:
+            return super().author(item, work_root, config, context)
+        del work_root, config, context
+        with self._lock:
+            self.completed.append(item.stable_id)
+        lane = object.__new__(QueueAuthorLane)
+        lane._raise_operator_failure(  # noqa: SLF001
+            cast(
+                Any,
+                SimpleNamespace(job_id=f"author-{item.stable_id}", stable_id=item.stable_id),
+            ),
+            {
+                "reason": "forge-rate-limited",
+                "retryable": True,
+                "detail": "http 403: forge rate limit reached (remaining=0)",
+            },
+        )
+        raise AssertionError("queue failure classifier did not raise")
+
+
+def test_one_forge_rate_limit_remains_retryable_without_pausing(tmp_path: Path) -> None:
+    """One throttled model is typed and retryable, not a campaign pause.
+
+    A single odd 429 from one host must not stop 28,482 models.
+    """
+
+    snapshot = _snapshot(tmp_path, count=4)
+    failing_id = snapshot.items[0].stable_id
+    paths = _paths(tmp_path, snapshot)
+    author = ForgeRateLimitFailureAuthor(
+        {failing_id},
+        hold=lambda _stable_id: time.sleep(0.02),
+    )
+
+    with pytest.raises(RetryableOperatorError) as raised:
+        _driver(tmp_path, snapshot, author=author, author_concurrency=4).run()
+
+    assert type(raised.value).__name__ == "ForgeRateLimitedError"
+    state = json.loads(paths.driver_state.read_text(encoding="utf-8"))
+    assert state["status"] == "retryable:infrastructure"
+    assert not state["status"].startswith("paused:")
+    assert scan_jsonl(paths.ledgers.models) == []
+
+
+def test_three_consecutive_forge_rate_limits_pause_with_an_actionable_reason(
+    tmp_path: Path,
+) -> None:
+    """Three distinct throttled models establish an exhausted budget and pause.
+
+    The reason is its own identity -- not the author provider's ``rate-limit`` --
+    because the forge and the LLM provider have different resets and different
+    remedies, and naming the wrong one is the same class of false record as
+    calling a rate limit a bad reference.
+    """
+
+    snapshot = _snapshot(tmp_path, count=4)
+    failing_ids = {item.stable_id for item in snapshot.items[:3]}
+    paths = _paths(tmp_path, snapshot)
+    scheduler = FakePauseScheduler(paths.wakeup_root)
+
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=ForgeRateLimitFailureAuthor(failing_ids),
+        author_concurrency=4,
+        pause_scheduler=scheduler,
+    ).run()
+
+    assert result.status == "paused:usage-limit"
+    assert result.paused_reason == "forge-rate-limited"
+    assert scheduler.calls == 1
+    state = json.loads(paths.driver_state.read_text(encoding="utf-8"))
+    assert state["provider"] == "forge"
+    assert state["reason"] == "forge-rate-limited"
+    # The pause has to tell an operator what to actually do about it.
+    assert "gh_token" in state["detail"].lower()
+    assert "retryable" in state["detail"].lower()
+    assert scan_jsonl(paths.ledgers.models) == []
+
+
+def test_a_forge_pause_never_borrows_the_author_providers_identity(
+    tmp_path: Path,
+) -> None:
+    """The forge is not Anthropic, and the pause must not imply our LLM quota died."""
+
+    snapshot = _snapshot(tmp_path, count=4)
+    failing_ids = {item.stable_id for item in snapshot.items[:3]}
+    paths = _paths(tmp_path, snapshot)
+
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=ForgeRateLimitFailureAuthor(failing_ids),
+        author_concurrency=4,
+        pause_scheduler=FakePauseScheduler(paths.wakeup_root),
+    ).run()
+
+    state = json.loads(paths.driver_state.read_text(encoding="utf-8"))
+    assert result.paused_reason != AuthorPauseReason.RATE_LIMIT.value
+    assert result.paused_reason != AuthorPauseReason.QUOTA_EXHAUSTED.value
+    assert state["provider"] not in ("anthropic", "openai")
+
+
 def test_one_failing_sibling_does_not_take_down_the_rest_of_the_wave(tmp_path: Path) -> None:
     """A per-model author failure must terminalize only its own model.
 

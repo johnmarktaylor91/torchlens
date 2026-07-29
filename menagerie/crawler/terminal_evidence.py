@@ -1,19 +1,22 @@
-"""Frozen terminal evidence and license record resolution for checker envelopes.
+"""Literal terminal evidence resolution for the checker envelope.
 
 A terminal recommendation -- ``DEFER_RECOMMENDATION``, ``SKIP_RECOMMENDATION``,
-or ``BLOCKED`` -- declares ``evidence_ids``, ``evidence_identity``, and
-``license_identity``. Those are *identifiers*. An independent checker cannot
-verify a claim from an identifier: it needs the literal excerpt, the source
-locator, and enough canonical bytes to recompute the identity it is asked to
-trust. Handing it identifiers alone guarantees a ``cannot-verify`` verdict, and
-synthesizing plausible-looking excerpt rows to fill the gap is fabrication --
-the exact failure mode the whole evidence design exists to prevent.
+or ``BLOCKED`` -- is judged by an independent checker. That checker cannot verify
+a claim from an identifier: it needs the literal excerpt, the source locator, and
+bytes it can re-derive. Handing it identifiers alone guarantees a
+``cannot-verify`` verdict, and synthesizing plausible excerpt rows to fill the
+gap is fabrication -- the exact failure the evidence design exists to prevent.
 
-This module resolves the author's own frozen records and binds them to the
-declared identities. A record that does not recompute to its declared identity
-is NOT evidence and is never presented as such: the resolution is reported as
-``unresolved``, naming the observed and declared digests, so the gap is visible
-to the checker instead of being papered over.
+The machine-derived citation table from
+:func:`menagerie.crawler.author_dispatch.derive_terminal_evidence_pack` owns the
+evidence IDENTITY, and correctly so: the author has no hashing primitive and must
+never be asked for a digest. That table is not touched here. What this module
+adds is the only thing that turns an identifier into something inspectable, under
+the rule the discovery convergence established -- *a locator the machine can
+verify by dereferencing may be model-supplied.* Every excerpt returned here was
+read back out of content-addressed storage and matched verbatim against the
+frozen source bytes. Nothing that fails that check is presented as evidence; it
+is reported as an explicit, named gap instead.
 """
 
 from __future__ import annotations
@@ -23,37 +26,41 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 
-from menagerie.crawler.identity import compute_evidence_identity, stable_hash
+from menagerie.crawler.evidence import (
+    EvidenceValidationError,
+    _read_source,
+    _validate_locator,
+)
+from menagerie.crawler.identity import hash_bytes
 from menagerie.crawler.models import JsonObject
 
 TERMINAL_EVIDENCE_FILENAME = "evidence-pack.json"
-TERMINAL_LICENSE_FILENAME = "license-pack.json"
 ATTEMPTS_DIRNAME = "attempts"
+SOURCE_CAS_DIRNAME = "source-cas"
 DISCOVERY_EVIDENCE_KIND = "discovery-evidence-v1"
-MACHINE_DISCOVERY_LICENSE_DISPOSITION = "not-applicable-machine-discovery-evidence"
 
 GROUNDED = "grounded"
 UNRESOLVED = "unresolved"
 
-#: Fields an excerpt record must carry before a checker can inspect the claim it
-#: grounds. ``supports`` is included because the typed terminal predicate is
-#: exactly what the checker must see the excerpt support.
-REQUIRED_EXCERPT_FIELDS = ("evidence_id", "source_id", "locator", "text", "text_sha256", "supports")
+#: Fields an excerpt record must carry before the machine can re-derive it.
+REQUIRED_EXCERPT_FIELDS = ("evidence_id", "source_id", "locator", "text")
 
 
 @dataclass(frozen=True)
 class TerminalEvidenceResolution:
-    """Outcome of binding an author's frozen evidence records to its identity.
+    """Outcome of re-deriving an author's cited excerpts from frozen bytes.
 
     Parameters
     ----------
     resolution:
-        ``grounded`` when every declared evidence ID resolved to a literal,
-        identity-bound excerpt record; ``unresolved`` otherwise.
+        ``grounded`` when every declared evidence ID resolved to a literal
+        excerpt the machine matched verbatim against its frozen source;
+        ``unresolved`` otherwise.
     excerpts:
-        Exact frozen excerpt records, in declared order. Empty when unresolved.
+        Exact verified excerpt records, in declared order. Empty when
+        unresolved -- an unverified row is never presented as evidence.
     unresolved_evidence_ids:
-        Declared evidence IDs with no inspectable record.
+        Declared evidence IDs with no inspectable, re-derived record.
     reason:
         Machine-written explanation of an unresolved outcome.
     """
@@ -70,183 +77,105 @@ class TerminalEvidenceResolution:
         return self.resolution == GROUNDED
 
 
-@dataclass(frozen=True)
-class TerminalLicenseResolution:
-    """Outcome of binding an author's frozen license record to its identity.
-
-    Parameters
-    ----------
-    resolution:
-        ``grounded`` or ``unresolved``.
-    record:
-        Exact frozen license record, or ``None`` when unresolved.
-    reason:
-        Machine-written explanation of an unresolved outcome.
-    """
-
-    resolution: str
-    record: Optional[JsonObject]
-    reason: Optional[str]
-
-    @property
-    def grounded(self) -> bool:
-        """Return whether the license record recomputes to its declared identity."""
-
-        return self.resolution == GROUNDED
-
-
 def resolve_terminal_evidence(
     *,
-    author_root: Path,
+    source_manifest: Mapping[str, Any],
     evidence_ids: Sequence[str],
-    evidence_identity: str,
+    predicate: str,
+    author_root: Path,
 ) -> TerminalEvidenceResolution:
-    """Bind the author's frozen excerpt records to its declared evidence identity.
+    """Re-derive every cited terminal excerpt from frozen source bytes.
 
     Parameters
     ----------
-    author_root:
-        Private staging root for one model's author round trips.
+    source_manifest:
+        Frozen source manifest bound by the terminal recommendation.
     evidence_ids:
         Exact evidence identities the recommendation declares.
-    evidence_identity:
-        Exact evidence-pack identity the recommendation declares.
+    predicate:
+        Closed typed terminal predicate the evidence resolves.
+    author_root:
+        Private staging root for one model's author round trips.
 
     Returns
     -------
     TerminalEvidenceResolution
-        Grounded records, or an explicit unresolved declaration.
+        Verified excerpts, or an explicit unresolved declaration.
     """
 
     declared = tuple(str(value) for value in evidence_ids)
-    candidates = _candidate_paths(author_root, TERMINAL_EVIDENCE_FILENAME)
-    if not candidates:
+    if not declared:
         return TerminalEvidenceResolution(
-            UNRESOLVED,
-            (),
-            declared,
-            f"no frozen {TERMINAL_EVIDENCE_FILENAME} was published under {author_root}",
+            UNRESOLVED, (), (), "the terminal recommendation cites no evidence at all"
         )
-    last_reason = ""
-    for path in candidates:
-        record = _read_json_object(path)
-        if record is None:
-            last_reason = f"{path} is not one readable JSON object"
-            continue
-        excerpts = record.get("excerpts")
-        if not isinstance(excerpts, list) or not all(
-            isinstance(excerpt, Mapping) for excerpt in excerpts
-        ):
-            last_reason = f"{path} carries no excerpt list"
-            continue
-        observed = compute_evidence_identity(excerpts)
-        if observed != evidence_identity:
-            # An unbound record is not evidence. Presenting it anyway would let
-            # any excerpt list stand in for the one the author actually hashed.
-            last_reason = (
-                f"{path} recomputes to {observed}, not the declared "
-                f"evidence_identity {evidence_identity}"
-            )
-            continue
-        by_id = {
-            str(excerpt["evidence_id"]): dict(excerpt)
-            for excerpt in excerpts
-            if isinstance(excerpt, Mapping) and isinstance(excerpt.get("evidence_id"), str)
-        }
-        missing = tuple(
-            evidence_id
-            for evidence_id in declared
-            if evidence_id not in by_id or not _is_inspectable(by_id[evidence_id])
-        )
-        if missing:
-            return TerminalEvidenceResolution(
-                UNRESOLVED,
-                (),
-                missing,
-                f"{path} binds its identity but supplies no inspectable excerpt for "
-                f"{', '.join(missing)}",
-            )
-        return TerminalEvidenceResolution(
-            GROUNDED, tuple(by_id[evidence_id] for evidence_id in declared), (), None
-        )
-    return TerminalEvidenceResolution(UNRESOLVED, (), declared, last_reason)
+    discovery = _resolve_machine_discovery(source_manifest, declared, predicate)
+    if discovery is not None:
+        return discovery
+    return _resolve_author_excerpts(source_manifest, declared, author_root)
 
 
-def resolve_machine_discovery_evidence(
-    *,
-    source_manifest: Mapping[str, Any],
-    evidence_ids: Sequence[str],
-    evidence_identity: str,
-    predicate: str,
+def _resolve_machine_discovery(
+    source_manifest: Mapping[str, Any], declared: tuple[str, ...], predicate: str
 ) -> Optional[TerminalEvidenceResolution]:
-    """Ground a driver-derived discovery terminal from its own frozen bytes.
+    """Ground a driver-derived discovery terminal from the bytes it froze.
 
     A machine discovery arm has no author excerpt pack: the driver itself froze
-    the discovery result into content-addressed storage and derived the evidence
-    identity from those exact bytes. Those bytes ARE the literal evidence, and
-    the identity is recomputable from them, so this arm grounds honestly without
-    any model claim -- the excerpt text, its digest, and the claim it supports
-    are all machine facts.
+    the discovery result into content-addressed storage. Those bytes ARE the
+    literal evidence, and their digest is recomputed here before they are shown,
+    so no link in this chain rests on a model claim.
 
     Parameters
     ----------
     source_manifest:
         Frozen one-row discovery-evidence manifest.
-    evidence_ids:
-        Exact evidence identities the recommendation declares.
-    evidence_identity:
-        Exact evidence-pack identity the recommendation declares.
+    declared:
+        Exact declared evidence identities.
     predicate:
-        Closed typed terminal predicate the evidence resolves.
+        Closed typed terminal predicate.
 
     Returns
     -------
     TerminalEvidenceResolution | None
-        Grounded resolution, or ``None`` when this is not a machine discovery
-        manifest so the caller can fall back.
+        Resolution, or ``None`` when this is not a machine discovery manifest.
     """
 
     sources = source_manifest.get("sources")
-    if not isinstance(sources, list) or len(sources) != 1 or len(evidence_ids) != 1:
+    if not isinstance(sources, list) or len(sources) != 1 or len(declared) != 1:
         return None
     row = sources[0]
     if not isinstance(row, Mapping) or row.get("source_kind") != DISCOVERY_EVIDENCE_KIND:
         return None
     cas_path = row.get("cas_path")
-    if not isinstance(cas_path, str):
+    digest = row.get("content_sha256")
+    if not isinstance(cas_path, str) or not isinstance(digest, str):
         return None
     try:
         content = Path(cas_path).read_bytes()
-        discovery = json.loads(content.decode("utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        text = content.decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
         return TerminalEvidenceResolution(
             UNRESOLVED,
             (),
-            tuple(str(value) for value in evidence_ids),
-            f"frozen discovery evidence at {cas_path} is unreadable",
+            declared,
+            f"frozen discovery evidence at {cas_path} is unreadable: {exc}",
         )
-    evidence_id = str(evidence_ids[0])
-    source_id = str(row.get("source_id"))
-    observed = stable_hash(
-        {"source_id": source_id, "evidence_id": evidence_id, "discovery": discovery}
-    )
-    if observed != evidence_identity:
+    observed = hash_bytes(content)
+    if observed != digest:
         return TerminalEvidenceResolution(
             UNRESOLVED,
             (),
-            (evidence_id,),
-            f"frozen discovery evidence recomputes to {observed}, not the declared "
-            f"evidence_identity {evidence_identity}",
+            declared,
+            f"frozen discovery evidence at {cas_path} hashes to {observed}, not {digest}",
         )
     return TerminalEvidenceResolution(
         GROUNDED,
         (
             {
-                "evidence_id": evidence_id,
-                "source_id": source_id,
+                "evidence_id": declared[0],
+                "source_id": str(row.get("source_id")),
                 "locator": str(row.get("url", cas_path)),
-                "text": content.decode("utf-8"),
-                "text_sha256": str(row.get("content_sha256", "")),
+                "text": text,
+                "text_sha256": observed,
                 "supports": [predicate],
                 "origin": "machine-discovery",
             },
@@ -256,85 +185,112 @@ def resolve_machine_discovery_evidence(
     )
 
 
-def resolve_terminal_license(
-    *, author_root: Path, license_identity: str
-) -> TerminalLicenseResolution:
-    """Bind the author's frozen license record to its declared license identity.
+def _resolve_author_excerpts(
+    source_manifest: Mapping[str, Any], declared: tuple[str, ...], author_root: Path
+) -> TerminalEvidenceResolution:
+    """Match every author-cited excerpt verbatim against its frozen source.
 
     Parameters
     ----------
+    source_manifest:
+        Frozen source manifest bound by the terminal recommendation.
+    declared:
+        Exact declared evidence identities.
     author_root:
         Private staging root for one model's author round trips.
-    license_identity:
-        Exact license-disposition identity the recommendation declares.
 
     Returns
     -------
-    TerminalLicenseResolution
-        Grounded record, or an explicit unresolved declaration.
+    TerminalEvidenceResolution
+        Verified excerpts, or an explicit unresolved declaration.
     """
 
-    candidates = _candidate_paths(author_root, TERMINAL_LICENSE_FILENAME)
+    candidates = _candidate_paths(author_root, TERMINAL_EVIDENCE_FILENAME)
     if not candidates:
-        return TerminalLicenseResolution(
+        return TerminalEvidenceResolution(
             UNRESOLVED,
-            None,
-            f"no frozen {TERMINAL_LICENSE_FILENAME} was published under {author_root}",
+            (),
+            declared,
+            f"no frozen {TERMINAL_EVIDENCE_FILENAME} was published under {author_root}",
         )
+    cas_root = author_root / SOURCE_CAS_DIRNAME
     last_reason = ""
     for path in candidates:
         record = _read_json_object(path)
         if record is None:
             last_reason = f"{path} is not one readable JSON object"
             continue
-        observed = stable_hash(record)
-        if observed != license_identity:
-            last_reason = (
-                f"{path} recomputes to {observed}, not the declared "
-                f"license_identity {license_identity}"
-            )
+        excerpts = record.get("excerpts")
+        if not isinstance(excerpts, list):
+            last_reason = f"{path} carries no excerpt list"
             continue
-        return TerminalLicenseResolution(GROUNDED, record, None)
-    return TerminalLicenseResolution(UNRESOLVED, None, last_reason)
+        by_id = {
+            str(excerpt["evidence_id"]): dict(excerpt)
+            for excerpt in excerpts
+            if isinstance(excerpt, Mapping) and isinstance(excerpt.get("evidence_id"), str)
+        }
+        verified: list[JsonObject] = []
+        reasons: list[str] = []
+        for evidence_id in declared:
+            excerpt = by_id.get(evidence_id)
+            if excerpt is None or not _has_required_fields(excerpt):
+                reasons.append(f"{evidence_id} has no inspectable excerpt record")
+                continue
+            try:
+                _verify_against_frozen_source(excerpt, source_manifest, cas_root)
+            except EvidenceValidationError as exc:
+                reasons.append(f"{evidence_id} did not re-derive from its frozen source: {exc}")
+                continue
+            verified.append(excerpt)
+        if len(verified) != len(declared):
+            last_reason = f"{path}: " + "; ".join(reasons)
+            continue
+        return TerminalEvidenceResolution(GROUNDED, tuple(verified), (), None)
+    return TerminalEvidenceResolution(UNRESOLVED, (), declared, last_reason)
 
 
-def resolve_machine_discovery_license(
-    *, source_manifest: Mapping[str, Any], license_identity: str
-) -> Optional[TerminalLicenseResolution]:
-    """Ground the machine-discovery license disposition from its own derivation.
+def _verify_against_frozen_source(
+    excerpt: Mapping[str, Any], source_manifest: Mapping[str, Any], cas_root: Path
+) -> None:
+    """Require one excerpt to appear verbatim in its frozen source bytes.
 
     Parameters
     ----------
+    excerpt:
+        Candidate author excerpt record.
     source_manifest:
-        Frozen one-row discovery-evidence manifest.
-    license_identity:
-        Exact license-disposition identity the recommendation declares.
+        Frozen source manifest bound by the terminal recommendation.
+    cas_root:
+        Content-addressed store holding the fetched source bytes.
 
-    Returns
-    -------
-    TerminalLicenseResolution | None
-        Grounded resolution, or ``None`` when this is not a machine discovery
-        manifest so the caller can fall back.
+    Raises
+    ------
+    EvidenceValidationError
+        If the source is outside the frozen manifest, its bytes are absent or no
+        longer hash-bound, or the claimed text is not present at its locator.
     """
 
+    source_id = str(excerpt["source_id"])
     sources = source_manifest.get("sources")
-    if not isinstance(sources, list) or len(sources) != 1:
-        return None
-    row = sources[0]
-    if not isinstance(row, Mapping) or row.get("source_kind") != DISCOVERY_EVIDENCE_KIND:
-        return None
-    record = {
-        "source_id": str(row.get("source_id")),
-        "disposition": MACHINE_DISCOVERY_LICENSE_DISPOSITION,
-    }
-    if stable_hash(record) != license_identity:
-        return TerminalLicenseResolution(
-            UNRESOLVED,
-            None,
-            "machine discovery license disposition does not recompute to "
-            f"{license_identity}",
-        )
-    return TerminalLicenseResolution(GROUNDED, record, None)
+    if not isinstance(sources, list):
+        raise EvidenceValidationError("terminal source manifest has no sources")
+    row = next(
+        (
+            source
+            for source in sources
+            if isinstance(source, Mapping) and source.get("source_id") == source_id
+        ),
+        None,
+    )
+    if row is None:
+        raise EvidenceValidationError(f"{source_id} is outside the frozen source manifest")
+    content = _read_source(row, cas_root)
+    _validate_locator(
+        str(excerpt["evidence_id"]),
+        str(excerpt["locator"]),
+        str(excerpt["text"]).encode("utf-8"),
+        content,
+    )
 
 
 def _candidate_paths(author_root: Path, filename: str) -> tuple[Path, ...]:
@@ -389,8 +345,8 @@ def _read_json_object(path: Path) -> Optional[JsonObject]:
     return dict(parsed) if isinstance(parsed, dict) else None
 
 
-def _is_inspectable(excerpt: Mapping[str, Any]) -> bool:
-    """Return whether one excerpt record carries everything a checker must read.
+def _has_required_fields(excerpt: Mapping[str, Any]) -> bool:
+    """Return whether one excerpt record carries what re-derivation needs.
 
     Parameters
     ----------
@@ -400,18 +356,10 @@ def _is_inspectable(excerpt: Mapping[str, Any]) -> bool:
     Returns
     -------
     bool
-        Whether the literal text, its locator, its digest, and its supported
-        claims are all present.
+        Whether the literal text, its locator, and its source are all present.
     """
 
-    for field in REQUIRED_EXCERPT_FIELDS:
-        value = excerpt.get(field)
-        if field == "supports":
-            if not isinstance(value, list) or not value:
-                return False
-            if not all(isinstance(claim, str) and claim for claim in value):
-                return False
-            continue
-        if not isinstance(value, str) or not value:
-            return False
-    return True
+    return all(
+        isinstance(excerpt.get(field), str) and excerpt.get(field)
+        for field in REQUIRED_EXCERPT_FIELDS
+    )

@@ -23,7 +23,6 @@ from menagerie.crawler.constants import (
 from menagerie.crawler.identity import stable_hash
 from menagerie.crawler.models import JsonObject
 from menagerie.crawler.schema import PayloadValidationError, validate_payload
-from menagerie.crawler.terminal_evidence import GROUNDED as TERMINAL_EVIDENCE_GROUNDED
 
 
 class GateRoutingError(ValueError):
@@ -465,11 +464,7 @@ def _terminal_result_references(
             result.evidence_ids,
             frozenset({predicate, result.status_code}),
         )
-    source_ids = (
-        _evidence_source_ids(evidence_pack, result.evidence_ids)
-        if _pack_is_grounded(evidence_pack)
-        else _declared_checked_source_ids(evidence_pack)
-    )
+    source_ids = _evidence_source_ids(evidence_pack, result.evidence_ids)
     return (
         "BLOCKED",
         "blocked-prerequisite",
@@ -516,7 +511,7 @@ def _evidence_source_ids(
 ) -> tuple[str, ...]:
     """Resolve exact source IDs for blocked-result evidence references."""
 
-    excerpts = evidence_pack.get("excerpts")
+    excerpts = _citation_table(evidence_pack)
     if not isinstance(excerpts, list):
         raise GateRoutingError("terminal evidence pack has no excerpts")
     by_id = {
@@ -542,27 +537,12 @@ def _validate_terminal_evidence_references(
     source_ids: tuple[str, ...],
     support_claims: frozenset[str],
 ) -> None:
-    """Resolve terminal excerpts and require typed predicate support."""
+    """Resolve the machine-derived citation table and require predicate support."""
 
-    if not _pack_is_grounded(evidence_pack):
-        # No excerpt record binds the declared evidence identity, so there is
-        # nothing here for the DRIVER to resolve -- and the driver was never the
-        # right judge of it. The previous behaviour was strictly weaker: the
-        # driver synthesized excerpt rows (source IDs by round-robin index,
-        # supports stamped with the predicate) and then checked them against
-        # itself, which always passed. The envelope now carries the gap
-        # explicitly, so the independent checker -- the only component that can
-        # read an excerpt and judge whether it grounds the claim -- rules on it,
-        # and its rejection routes through the terminal machinery as the
-        # per-model verdict it is.
-        declared = _declared_checked_source_ids(evidence_pack)
-        if not set(declared).issubset(source_ids):
-            raise GateRoutingError("terminal evidence resolves outside the checked source set")
-        return
     resolved_sources = _evidence_source_ids(evidence_pack, evidence_ids)
     if not set(resolved_sources).issubset(source_ids):
         raise GateRoutingError("terminal evidence resolves outside the checked source set")
-    excerpts = evidence_pack.get("excerpts")
+    excerpts = _citation_table(evidence_pack)
     assert isinstance(excerpts, list)
     by_id = {
         str(excerpt["evidence_id"]): excerpt
@@ -577,8 +557,16 @@ def _validate_terminal_evidence_references(
             )
 
 
-def _pack_is_grounded(evidence_pack: Mapping[str, Any]) -> bool:
-    """Return whether a terminal evidence pack carries identity-bound excerpts.
+def _citation_table(evidence_pack: Mapping[str, Any]) -> object:
+    """Return the machine-derived evidence/source citation table.
+
+    ``derive_terminal_evidence_pack`` owns this table and its hash IS
+    ``evidence_identity``, so it is what the driver's reference check must read.
+    The envelope ships it as ``identity_preimage`` alongside a separate list of
+    literal excerpts the machine re-derived from frozen bytes; those two are not
+    interchangeable, and resolving a source ID from a literal excerpt would make
+    this check depend on whether grounding happened to succeed. Packs supplied
+    directly, without the split, keep their existing meaning.
 
     Parameters
     ----------
@@ -587,41 +575,12 @@ def _pack_is_grounded(evidence_pack: Mapping[str, Any]) -> bool:
 
     Returns
     -------
-    bool
-        ``True`` only for a pack that explicitly declares itself grounded.
-        A pack with no explicit resolution is treated as grounded so that
-        directly supplied literal packs keep their existing meaning.
+    object
+        Citation-table rows, unvalidated; the caller enforces their shape.
     """
 
-    resolution = evidence_pack.get("resolution")
-    if resolution is None:
-        return True
-    return resolution == TERMINAL_EVIDENCE_GROUNDED
-
-
-def _declared_checked_source_ids(evidence_pack: Mapping[str, Any]) -> tuple[str, ...]:
-    """Return the machine-declared source set an ungrounded terminal pack checks.
-
-    Parameters
-    ----------
-    evidence_pack:
-        Terminal evidence pack built for the checker envelope.
-
-    Returns
-    -------
-    tuple[str, ...]
-        Sorted unique source identities.
-
-    Raises
-    ------
-    GateRoutingError
-        If the pack declares no checked source set.
-    """
-
-    declared = evidence_pack.get("checked_source_ids")
-    if not isinstance(declared, list) or not declared:
-        raise GateRoutingError("ungrounded terminal evidence pack declares no checked source set")
-    return _unique_string_tuple(sorted(set(str(value) for value in declared)), "checked_source_ids")
+    preimage = evidence_pack.get("identity_preimage")
+    return evidence_pack.get("excerpts") if preimage is None else preimage
 
 
 def _unique_string_tuple(value: object, field: str) -> tuple[str, ...]:
