@@ -247,6 +247,7 @@ from menagerie.crawler.driver_contracts import (
     Clock as Clock,
     DriverConfig,
     DriverDependencies,
+    AuthorBackoffError,
     DriverError as DriverError,
     DriverIntegrationError,
     DriverLock,
@@ -485,6 +486,10 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         self.dependencies = dependencies
         self.registry = registry or load_environment_registry(target=config.target)
         self._reduced = 0
+        # Per-model count of terminals whose own bookkeeping refused. A model can be
+        # unrecordable more than once in a run (its later lanes still reach it), and
+        # each occurrence is a distinct operational fact with a distinct identity.
+        self._unrecordable_terminals: Counter[str] = Counter()
         self._family_artifacts: dict[str, AuthorArtifact] = {}
         self._final_artifact_transactions: dict[
             tuple[str, str, ArtifactTransactionId], ArtifactTransactionProjection
@@ -1799,7 +1804,227 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             root_cause_fingerprint=_gate_item_fingerprint(gate_item),
         )
 
+    def _current_record_revision(self, item: WorkItem, reducer: CanonicalReducer) -> Optional[str]:
+        """Return the current canonical record revision for one model, if any.
+
+        Parameters
+        ----------
+        item:
+            Work whose canonical record revision is read.
+        reducer:
+            Active canonical writer holding the current records.
+
+        Returns
+        -------
+        Optional[str]
+            Current record revision, or ``None`` when no record exists yet.
+        """
+
+        record = reducer.current_records.get(item.stable_id)
+        if not isinstance(record, Mapping):
+            return None
+        revision = record.get("record_revision")
+        return str(revision) if revision is not None else None
+
+    def _report_unrecordable_terminal(
+        self,
+        item: WorkItem,
+        status_code: str,
+        reason_code: Optional[str],
+        record_error: BaseException,
+        fallback_error: Optional[BaseException],
+        operational: JsonlLedger,
+        *,
+        recorded: bool,
+    ) -> None:
+        """Report on the operational ledger that recording a terminal itself failed.
+
+        A model whose terminal cannot be written is not the same fact as a model that
+        was never reached, and neither is a terminal that landed before its progress
+        bookkeeping refused. Both are recorded here so the loss is visible rather than
+        inferred from a short record count.
+
+        Parameters
+        ----------
+        item:
+            Model whose terminal could not be recorded as intended.
+        status_code, reason_code:
+            Disposition the driver intended to record.
+        record_error:
+            Failure raised by the intended terminal append.
+        fallback_error:
+            Failure raised by the minimal fallback append, when one was attempted.
+        operational:
+            Locked append-only operational ledger.
+        recorded:
+            Whether a canonical revision for this model nonetheless landed.
+        """
+
+        self._unrecordable_terminals[item.stable_id] += 1
+        occurrence = self._unrecordable_terminals[item.stable_id]
+        operational.append(
+            {
+                "schema_version": OPERATIONAL_EVENT_SCHEMA_VERSION,
+                "event_id": "terminal-unrecordable-"
+                + stable_hash(
+                    {
+                        "run_id": self.config.run_id,
+                        "stable_id": item.stable_id,
+                        "work_id": item.active_work_id,
+                        "status_code": status_code,
+                        "record_error": str(record_error),
+                        "recorded": recorded,
+                        "occurrence": occurrence,
+                    }
+                )[7:31],
+                "created_at": self.dependencies.clock(),
+                "event_kind": OperationalEventKind.TERMINAL_UNRECORDABLE.value,
+                "status": OperationalEventStatus.RUNNER_FAILED.value,
+                "provider": None,
+                "observed_response": None,
+                "reset_at": None,
+                "queued_work_counts": {"models": 1},
+                "current_environment": None,
+                "run_id": self.config.run_id,
+                "machine_id": self.config.machine_id,
+                "details": {
+                    "stable_id": item.stable_id,
+                    "work_id": item.active_work_id,
+                    "intended_status_code": status_code,
+                    "intended_reason_code": reason_code,
+                    "record_error_type": type(record_error).__name__,
+                    "record_error": str(record_error),
+                    "fallback_error_type": (
+                        type(fallback_error).__name__ if fallback_error is not None else None
+                    ),
+                    "fallback_error": (
+                        str(fallback_error) if fallback_error is not None else None
+                    ),
+                    "canonical_revision_recorded": recorded,
+                    "occurrence": occurrence,
+                },
+            }
+        )
+
     def _terminalize(
+        self,
+        item: WorkItem,
+        artifact: Optional[AuthorArtifact],
+        status_code: str,
+        reason_code: Optional[str],
+        detail: Optional[str],
+        attempts: Sequence[Mapping[str, Any]],
+        reducer: CanonicalReducer,
+        operational: JsonlLedger,
+        state: JsonObject,
+        *,
+        human_review: bool = False,
+        root_cause_fingerprint: Optional[str] = None,
+        superseded_model: Optional[Mapping[str, Any]] = None,
+    ) -> None:
+        """Record one terminal, surviving a failure in the bookkeeping that records it.
+
+        ``_terminalize`` protects the original per-model failure but not the bookkeeping
+        that writes it down: it appends attempts, authorizes artifacts and calls
+        ``reducer.append_model``, any of which may raise ``ReductionError``,
+        ``DriverIntegrationError``, ``ArtifactBindingError`` or ``MirrorError``. None of
+        those had a handler between here and the CLI catch-all, so the fix for a
+        per-model failure could re-abort inside the handler meant to contain it -- and
+        every scoping fix routes MORE traffic through this path.
+
+        The ladder, in order, is deliberate. A terminal that landed before its progress
+        bookkeeping refused is NOT re-appended: superseding a correct record with a
+        worse one would lose the very fact just recorded. Otherwise one minimal retry is
+        made with the same disposition but no artifact, attempts or derived evidence,
+        since those are the parts that can refuse; it is flagged for human review and
+        cannot publish anything. If even that refuses, the model is reported on the
+        operational ledger, because an unrecordable model is itself a fact and must not
+        become a silent hole in the catalog. No rung can turn a failure into a pass:
+        every one of them writes a ``failed:`` disposition or nothing at all.
+
+        Pauses, retryable transport failures and provider backoff still propagate from
+        every rung -- they are genuinely campaign-level.
+
+        Parameters
+        ----------
+        item, artifact, status_code, reason_code, detail, attempts:
+            Terminal work, retained artifact, disposition, diagnostics, and decisive
+            attempts.
+        reducer, operational, state:
+            Canonical authority, operational ledger, and mutable driver state.
+        human_review:
+            Whether the terminal requires explicit human review before requeue.
+        root_cause_fingerprint:
+            Optional checker-derived failure identity.
+        superseded_model:
+            Exact current predecessor captured before a decisive attempt made it stale.
+        """
+
+        before_revision = self._current_record_revision(item, reducer)
+        try:
+            self._append_terminal_revision(
+                item,
+                artifact,
+                status_code,
+                reason_code,
+                detail,
+                attempts,
+                reducer,
+                operational,
+                state,
+                human_review=human_review,
+                root_cause_fingerprint=root_cause_fingerprint,
+                superseded_model=superseded_model,
+            )
+            return
+        except (DriverPaused, RetryableOperatorError, AuthorBackoffError):
+            raise
+        except Exception as exc:  # noqa: BLE001 -- recording a failure may itself fail
+            record_error: BaseException = exc
+
+        if self._current_record_revision(item, reducer) != before_revision:
+            # The terminal itself landed; only the bookkeeping after the canonical
+            # append refused. Re-appending would supersede a correct record.
+            self._report_unrecordable_terminal(
+                item, status_code, reason_code, record_error, None, operational, recorded=True
+            )
+            return
+
+        fallback_detail = f"terminal bookkeeping failed: {record_error}"
+        if detail:
+            fallback_detail = f"{detail}; {fallback_detail}"
+        try:
+            self._append_terminal_revision(
+                item,
+                None,
+                status_code,
+                reason_code,
+                fallback_detail,
+                (),
+                reducer,
+                operational,
+                state,
+                human_review=True,
+                root_cause_fingerprint=None,
+                superseded_model=None,
+            )
+            return
+        except (DriverPaused, RetryableOperatorError, AuthorBackoffError):
+            raise
+        except Exception as exc:  # noqa: BLE001 -- the minimal terminal may also refuse
+            fallback_error: BaseException = exc
+
+        self._report_unrecordable_terminal(
+            item,
+            status_code,
+            reason_code,
+            record_error,
+            fallback_error,
+            operational,
+            recorded=self._current_record_revision(item, reducer) != before_revision,
+        )
+
+    def _append_terminal_revision(
         self,
         item: WorkItem,
         artifact: Optional[AuthorArtifact],

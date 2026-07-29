@@ -74,6 +74,7 @@ from menagerie.crawler.driver_contracts import (
     DriverPaused,
     DriverShutdown,
     EnvironmentBinding,
+    RetryableOperatorError,
     WorkItem,
 )
 from menagerie.crawler.driver_progress import (
@@ -2525,9 +2526,21 @@ class ReceiptDriverMixin:
                 self.config,
                 representative_model=representative_model,
             )
-        except DriverIntegrationError as exc:
-            if artifact.template_source_revision is None:
-                raise
+        except (DriverPaused, RetryableOperatorError, AuthorBackoffError):
+            # Genuinely campaign-level: a pause, a retryable transport failure, or a
+            # provider backoff must never be recorded as this model's defect.
+            # `RetryableOperatorError` subclasses `DriverIntegrationError`, so it would
+            # otherwise be caught by the arm below.
+            raise
+        except Exception as exc:  # noqa: BLE001 -- run assembly is model-local
+            # Only family VARIANTS used to get a model-local handler here; a
+            # representative re-raised unconditionally and ended the campaign. But
+            # `_assemble_run_model` refuses for conditions that are not variant-specific
+            # -- a missing fidelity gate, worker receipts that disagree with the
+            # proposal-declared meaningful-mode set, accepted attempts that fail the
+            # clean execution policy. Every one of those is a fact about THIS model,
+            # witnessed by its own attempt, exactly like the sibling arms above. The
+            # refusals themselves are unchanged and remain as strict as they were.
             failure = reducer.append_attempt(
                 _driver_failure_attempt(
                     item,
@@ -2577,11 +2590,46 @@ class ReceiptDriverMixin:
         self.dependencies.boundary_hook("award-commit-entered", item.stable_id)
         # Graceful-shutdown atomic award section: publication authorization and
         # materialization must remain check-free through the canonical model append.
-        if model.get("authored_metadata_state") == "accepted" and not isinstance(
-            artifact, ActivatedHandoffArtifact
-        ):
-            self._authorize_and_publish_artifact(artifact, model, gates, reducer)
-        result = reducer.append_model(reducer.prepare_model(model))
+        try:
+            if model.get("authored_metadata_state") == "accepted" and not isinstance(
+                artifact, ActivatedHandoffArtifact
+            ):
+                self._authorize_and_publish_artifact(artifact, model, gates, reducer)
+            result = reducer.append_model(reducer.prepare_model(model))
+        except (DriverPaused, RetryableOperatorError, AuthorBackoffError):
+            raise
+        except Exception as exc:  # noqa: BLE001 -- award bookkeeping is model-local
+            # The canonical award append had no handler between here and the CLI
+            # catch-all either, so a reducer refusal for ONE model -- exactly what the
+            # source-link invariant is for -- ended the whole campaign. The refusal is
+            # unchanged and this model is still NOT awarded: it terminalizes as a runner
+            # protocol violation witnessed by its own attempt. Only the blast radius
+            # shrinks.
+            failure = reducer.append_attempt(
+                _driver_failure_attempt(
+                    item,
+                    artifact,
+                    "runner",
+                    "protocol-violation",
+                    exc,
+                    self.config,
+                    diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
+                    environment=environment.family,
+                    created_at=self.dependencies.clock(),
+                )
+            ).record
+            self._terminalize(
+                item,
+                artifact,
+                "failed:runner",
+                "protocol-violation",
+                str(exc),
+                (*attempts, failure),
+                reducer,
+                operational,
+                state,
+            )
+            return None
         if result.appended:
             self._reduced += 1
         self.dependencies.boundary_hook("post-award-commit", item.stable_id)

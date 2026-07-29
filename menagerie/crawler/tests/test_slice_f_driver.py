@@ -22,6 +22,7 @@ import menagerie.crawler.cli as cli_module
 import menagerie.crawler.driver as driver_module
 import menagerie.crawler.driver_admission as driver_admission_module
 import menagerie.crawler.driver_models as driver_models_module
+import menagerie.crawler.driver_receipts as driver_receipts_module
 import menagerie.crawler.reducer as reducer_module
 from menagerie.crawler.campaign_merge import resolve_promotion_supersession
 from menagerie.crawler.artifact_transactions import (
@@ -64,6 +65,7 @@ from menagerie.crawler.constants import (
     MODEL_SCHEMA_VERSION_V3,
     NO_RUNG_SELECTED,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
+    OperationalEventKind,
     TERMINAL_STATUS_CODES,
 )
 from menagerie.crawler.driver_admission import (
@@ -165,6 +167,7 @@ from menagerie.crawler.reducer import (
     project_dependency_current,
 )
 from menagerie.crawler.status import (
+    PartitionError,
     assert_partition,
     completeness_report,
     record_is_release_eligible,
@@ -7204,3 +7207,201 @@ def test_a_checker_wrapper_that_cannot_run_is_still_an_integration_error(
     root.mkdir(parents=True, exist_ok=True)
     with pytest.raises(DriverIntegrationError):
         lane._run({"envelope_version": "x"}, root)
+
+
+def _model_records(tmp_path: Path, snapshot: IntakeSnapshot) -> dict[str, Mapping[str, Any]]:
+    """Return the current canonical model record for every stable id.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory holding the campaign root.
+    snapshot:
+        Intake snapshot whose ledgers are read.
+
+    Returns
+    -------
+    dict[str, Mapping[str, Any]]
+        Last-write-wins model record per stable id.
+    """
+
+    return {
+        record["stable_id"]: record
+        for record in scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
+    }
+
+
+def test_a_representative_run_assembly_failure_is_model_local(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A representative whose run assembly refuses terminalizes alone.
+
+    ``_assemble_run_model`` raises ``DriverIntegrationError`` for conditions that are
+    not variant-specific -- a missing fidelity gate, worker receipts that disagree with
+    the proposal-declared meaningful-mode set, and accepted attempts that do not satisfy
+    the clean execution policy. Family variants had a model-local handler while
+    representatives re-raised unconditionally, so one worker reporting an unexpected
+    mode ended the campaign.
+
+    The failure is injected at the guarded call itself, which is the exact seam the
+    unconditional re-raise guarded; the message is one the real assembler emits.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    monkeypatch:
+        Fixture used to refuse assembly for exactly one representative.
+    """
+
+    snapshot = _snapshot(tmp_path, count=3)
+    refused_id = sorted(item.stable_id for item in snapshot.items)[1]
+    real = driver_receipts_module._assemble_run_model
+
+    def guard(item: Any, artifact: Any, *args: Any, **kwargs: Any) -> Any:
+        """Refuse assembly for the named model and delegate for every other."""
+
+        if str(artifact.proposal["stable_id"]) == refused_id:
+            raise DriverIntegrationError(
+                "worker receipts differ from the proposal-declared meaningful-mode set"
+            )
+        return real(item, artifact, *args, **kwargs)
+
+    monkeypatch.setattr(driver_receipts_module, "_assemble_run_model", guard)
+    result = _driver(tmp_path, snapshot).run()
+
+    models = _model_records(tmp_path, snapshot)
+    assert len(models) == 3
+    assert models[refused_id]["status"]["code"] == "failed:runner"
+    assert models[refused_id]["status"]["reason_code"] == "protocol-violation"
+    survivors = [record for key, record in models.items() if key != refused_id]
+    assert len(survivors) == 2
+    assert all(record["status"]["kind"] != "failed" for record in survivors)
+    assert result.status in {"complete", "terminal-partition-complete"}
+
+
+class _TerminalBookkeepingFailure(reducer_module.ReductionError):
+    """Synthetic reduction failure raised while recording one model's terminal."""
+
+
+def _refuse_gate_records(gate: Mapping[str, Any]) -> tuple[Mapping[str, Any], ...]:
+    """Refuse every proposed gate record so each model reaches ``_terminalize``.
+
+    Parameters
+    ----------
+    gate:
+        Proposed gate whose records are refused.
+
+    Returns
+    -------
+    tuple[Mapping[str, Any], ...]
+        Never returns; always raises.
+    """
+
+    del gate
+    raise GateRoutingError("synthetic unroutable gate record")
+
+
+def test_a_terminal_whose_bookkeeping_fails_does_not_end_the_campaign(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Recording a failure may itself fail; the model is still recorded.
+
+    ``_terminalize`` protects the original failure but not the bookkeeping that records
+    it: it calls ``reducer.append_model`` and can raise ``ReductionError``, which has no
+    handler anywhere between its raise sites and the CLI catch-all. The fix for a
+    per-model failure could therefore re-abort inside the handler meant to contain it.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    monkeypatch:
+        Fixture used to refuse the first terminal append for one model.
+    """
+
+    snapshot = _snapshot(tmp_path, count=3)
+    victim_id = sorted(item.stable_id for item in snapshot.items)[1]
+    monkeypatch.setattr(driver_admission_module, "emit_gate_records", _refuse_gate_records)
+
+    real_append = reducer_module.CanonicalReducer.append_model
+    seen: dict[str, int] = {}
+
+    def failing_append(self: Any, model: Mapping[str, Any]) -> Any:
+        """Refuse the first terminal append for the named model only."""
+
+        stable_id = str(model["stable_id"])
+        if stable_id == victim_id:
+            seen[stable_id] = seen.get(stable_id, 0) + 1
+            if seen[stable_id] == 1:
+                raise _TerminalBookkeepingFailure("synthetic terminal bookkeeping failure")
+        return real_append(self, model)
+
+    monkeypatch.setattr(reducer_module.CanonicalReducer, "append_model", failing_append)
+    result = _driver(tmp_path, snapshot).run()
+
+    models = _model_records(tmp_path, snapshot)
+    assert set(models) == {item.stable_id for item in snapshot.items}
+    assert len(models) == 3
+    assert models[victim_id]["status"]["kind"] == "failed"
+    assert result.status in {"complete", "terminal-partition-complete"}
+
+
+def test_a_terminal_that_can_never_be_recorded_is_still_reported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unrecordable model is itself a fact, and every other model still lands.
+
+    When EVERY append for a model refuses, no canonical record can exist for it -- so
+    the honest outcome is not a green run. The model must not vanish silently: it is
+    named on the operational ledger with both failures, and the end-of-run terminal
+    partition tripwire still refuses to bless a run that is missing it. What changes is
+    the blast radius: every OTHER model is processed and durably recorded first, where
+    before the campaign died at the first refusal with one record written.
+
+    The partition assertion is deliberately left exactly as strict. Weakening it to let
+    this run report ``complete`` would turn a named, recoverable hole into a silent one.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    monkeypatch:
+        Fixture used to refuse every terminal append for one model.
+    """
+
+    snapshot = _snapshot(tmp_path, count=3)
+    victim_id = sorted(item.stable_id for item in snapshot.items)[1]
+    monkeypatch.setattr(driver_admission_module, "emit_gate_records", _refuse_gate_records)
+
+    real_append = reducer_module.CanonicalReducer.append_model
+
+    def failing_append(self: Any, model: Mapping[str, Any]) -> Any:
+        """Refuse every terminal append for the named model."""
+
+        if str(model["stable_id"]) == victim_id:
+            raise _TerminalBookkeepingFailure("synthetic permanent bookkeeping failure")
+        return real_append(self, model)
+
+    monkeypatch.setattr(reducer_module.CanonicalReducer, "append_model", failing_append)
+    with pytest.raises(PartitionError) as raised:
+        _driver(tmp_path, snapshot).run()
+    assert victim_id in str(raised.value)
+
+    models = _model_records(tmp_path, snapshot)
+    assert victim_id not in models
+    assert len(models) == 2
+    assert all(record["status"]["kind"] != "runs" for record in models.values())
+    events = scan_jsonl(_paths(tmp_path, snapshot).operational_ledger)
+    unrecordable = [
+        event
+        for event in events
+        if event.get("event_kind") == OperationalEventKind.TERMINAL_UNRECORDABLE.value
+    ]
+    assert unrecordable
+    assert {event["details"]["stable_id"] for event in unrecordable} == {victim_id}
+    first = unrecordable[0]["details"]
+    assert first["intended_status_code"].startswith("failed:")
+    assert "synthetic permanent bookkeeping failure" in first["record_error"]
+    assert "synthetic permanent bookkeeping failure" in first["fallback_error"]
+    assert first["canonical_revision_recorded"] is False

@@ -93,6 +93,9 @@ _WAKE_EVENT_TRANSITIONS: dict[OperationalEventKind, _WakeEventTransition] = {
     OperationalEventKind.CAMPAIGN_COMPLETED: _WakeEventTransition.RESOLVE_COMPLETED,
     OperationalEventKind.OPERATOR_CANCELLED: _WakeEventTransition.RESOLVE_CANCELLED,
     OperationalEventKind.WORKER_SHUTDOWN_INTERRUPTED: _WakeEventTransition.OBSERVE,
+    # An unrecordable terminal is a durable per-model fact, never a wake transition:
+    # it must not open, resume, fire or resolve a wake episode.
+    OperationalEventKind.TERMINAL_UNRECORDABLE: _WakeEventTransition.OBSERVE,
 }
 if set(_WAKE_EVENT_TRANSITIONS) != set(OperationalEventKind):
     raise RuntimeError("wakeup event transition table is not exhaustive")
