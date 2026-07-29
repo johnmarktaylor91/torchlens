@@ -105,8 +105,41 @@ The `$complete_author_proposal_v3` sentinel documents the insertion point only. 
 write it literally. The inserted object must contain every top-level proposal field and
 the complete `proposed_facts` object required by the registered schema.
 
+### Every terminal arm carries its excerpts in `evidence_records`
+
+`DEFER_RECOMMENDATION`, `SKIP_RECOMMENDATION`, and `BLOCKED` each cite `evidence_ids`.
+An ID on its own is not inspectable, so every terminal payload also carries
+`evidence_records`: one record per cited ID, holding the literal text you read.
+
+Each record has exactly these keys, and every one of them is something you read and can
+quote:
+
+- `evidence_id` -- your own correlation label; it must match an entry of `evidence_ids`.
+- `source_id` -- the frozen manifest source you read it out of.
+- `locator` -- where in that source it sits. A `bytes:start-end` locator gets checked as
+  an exact byte range; anything else is checked as substring presence.
+- `text` -- the excerpt, **verbatim**. The engine reads the frozen source bytes back out
+  of content-addressed storage and requires your text to appear in them exactly. Text
+  that is paraphrased, reflowed, or reconstructed from memory will not match and the
+  claim will be reported as ungrounded.
+- `supports` -- the claims this excerpt is offered in support of.
+
+`family_level` (boolean) and `disposition` (short string) are optional.
+
+Never put `text_sha256`, `content_sha256`, or `evidence_identity` in a record. You have no
+hashing primitive, you are not asked for a digest, and the engine derives every digest
+itself from the bytes it re-read.
+
+`license_record` is optional and takes `source_id`, `locator`, `text`, and
+`declared_license` -- the license text you actually read at a frozen source. It is quoted
+and grounded the same way; the engine still derives `license_identity` itself.
+
+Omitting `evidence_records` is allowed and is recorded as a **named gap** on the terminal
+envelope: the checker is told plainly that the cited IDs have no inspectable excerpt. It
+is not treated as grounding, and it will not be silently forgiven. Quote what you read.
+
 For `DEFER_RECOMMENDATION`, use `platform` (exactly `cuda` or `x86`), not
-`recommended_target`; include `source_ids` and `evidence_ids`; and put the same complete
+`recommended_target`; include `source_ids`, `evidence_ids`, and `evidence_records`; and put the same complete
 registered proposal at `handoff_execution.proposal`. The executor derives the other four
 handoff identity fields. A declarative proposal still carries
 `proposal.proposed_facts.implementation.code_manifest: []`; staged code carries its
@@ -120,6 +153,15 @@ non-empty manifest there. Never put `implementation` directly under `proposal`.
     "platform": "cuda",
     "source_ids": ["impl-main"],
     "evidence_ids": ["ev-platform"],
+    "evidence_records": [
+      {
+        "evidence_id": "ev-platform",
+        "source_id": "impl-main",
+        "locator": "setup.py lines 41-43",
+        "text": "CUDAExtension(name='deform_conv_cuda'",
+        "supports": ["needs-cuda"]
+      }
+    ],
     "handoff_execution": {
       "proposal": {
         "$complete_author_proposal_v3": "Replace this fixture sentinel with the complete registered proposal; code_manifest belongs under proposed_facts.implementation."
@@ -130,7 +172,7 @@ non-empty manifest there. Never put `implementation` directly under `proposal`.
 ```
 
 For `SKIP_RECOMMENDATION`, the exact authored payload keys are `status_code`,
-`source_ids`, and `evidence_ids`.
+`source_ids`, `evidence_ids`, and `evidence_records`.
 
 <!-- CONTRACT_FIXTURE: stage2-skip-author-payload -->
 ```json
@@ -139,13 +181,22 @@ For `SKIP_RECOMMENDATION`, the exact authored payload keys are `status_code`,
   "payload": {
     "status_code": "skipped:insufficient-description",
     "source_ids": ["impl-main"],
-    "evidence_ids": ["evidence-gap"]
+    "evidence_ids": ["evidence-gap"],
+    "evidence_records": [
+      {
+        "evidence_id": "evidence-gap",
+        "source_id": "impl-main",
+        "locator": "README.md lines 12-13",
+        "text": "architecture details are omitted here",
+        "supports": ["insufficient-description"]
+      }
+    ]
   }
 }
 ```
 
-For `BLOCKED`, the authored keys are `stage`, `reason_code`, `prerequisite_ids`, and
-`evidence_ids`, plus `research_summary` only for the higher-tier promotion case described
+For `BLOCKED`, the authored keys are `stage`, `reason_code`, `prerequisite_ids`,
+`evidence_ids`, and `evidence_records`, plus `research_summary` only for the higher-tier promotion case described
 by the canonical prompt. `prerequisite_ids` names missing external facts or capabilities
 with stable semantic labels such as `runtime-dependency` or `faithful-source`; it never
 lists a schema path, an output field, or a digest the executor owns.
@@ -158,7 +209,16 @@ lists a schema path, an output field, or a digest the executor owns.
     "stage": "source",
     "reason_code": "missing-material-source",
     "prerequisite_ids": ["source-needed"],
-    "evidence_ids": ["evidence-gap"]
+    "evidence_ids": ["evidence-gap"],
+    "evidence_records": [
+      {
+        "evidence_id": "evidence-gap",
+        "source_id": "impl-main",
+        "locator": "README.md lines 4-5",
+        "text": "Code release is pending.",
+        "supports": ["blocked-prerequisite"]
+      }
+    ]
   }
 }
 ```

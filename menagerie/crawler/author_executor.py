@@ -96,6 +96,7 @@ from menagerie.crawler.source_broker import (
     default_transport,
     write_broker_outputs,
 )
+from menagerie.crawler.terminal_evidence import MACHINE_OWNED_EXCERPT_FIELDS
 
 EXECUTOR_VERSION = "menagerie-author-executor 1.0.0"
 RECEIPT_VERSION = "menagerie.crawler.author-executor-receipt.v1"
@@ -1228,6 +1229,28 @@ def _capped_rows(pack: BrokerPack, max_sources: int) -> list[JsonObject]:
 # -- author (stage 2, resume, supplement) ----------------------------------
 
 
+def _authored_excerpt_records(payload: Mapping[str, Any]) -> tuple[Mapping[str, Any], ...]:
+    """Return every authored excerpt-shaped record on one stage-2 payload.
+
+    Parameters
+    ----------
+    payload:
+        Authored stage-2 payload, before machine-owned fields are stamped on.
+
+    Returns
+    -------
+    tuple[Mapping[str, Any], ...]
+        Declared evidence records plus the declared license record, if any.
+    """
+
+    records = payload.get("evidence_records")
+    found = [record for record in records if isinstance(record, Mapping)] if isinstance(records, list) else []
+    license_record = payload.get("license_record")
+    if isinstance(license_record, Mapping):
+        found.append(license_record)
+    return tuple(found)
+
+
 def _author_result_from_author_payload(
     authored_result: Mapping[str, Any],
     request: Mapping[str, Any],
@@ -1274,6 +1297,18 @@ def _author_result_from_author_payload(
         raise AuthorExecutorError(
             f"stage-2 payload carries machine-owned fields {sorted(forbidden)!r}"
         )
+    # ``evidence_records``/``license_record`` are the declared home for excerpts the
+    # author READ, so they are deliberately not forbidden here. What stays machine-owned
+    # inside them is the digest: the author has no hashing primitive, is never asked for
+    # one, and the machine recomputes it from the frozen bytes after dereference. Say so
+    # legibly rather than letting it surface as an opaque additionalProperties rejection.
+    for record in _authored_excerpt_records(authored_payload):
+        owned = sorted(set(MACHINE_OWNED_EXCERPT_FIELDS) & set(record))
+        if owned:
+            raise AuthorExecutorError(
+                f"stage-2 excerpt record carries machine-owned fields {owned!r}; quote the "
+                "text and its locator, the executor derives every digest"
+            )
     expected = request.get("expected_result")
     if not isinstance(expected, Mapping):
         raise AuthorExecutorError("author request lacks expected_result bindings")

@@ -17,6 +17,20 @@ verify by dereferencing may be model-supplied.* Every excerpt returned here was
 read back out of content-addressed storage and matched verbatim against the
 frozen source bytes. Nothing that fails that check is presented as evidence; it
 is reported as an explicit, named gap instead.
+
+Excerpts ARRIVE through the declared ``evidence_records`` channel on the terminal
+payload -- a validated part of the author-result contract, so an author that says
+nothing is a schema-visible silence rather than a missing file nobody declared.
+The channel is where the claim arrives; it is never why the claim is believed.
+An author that quotes text absent from the frozen bytes is refused on the
+declared channel exactly as it would be anywhere else, and a declared channel
+that fails to ground does NOT fall back to a file -- otherwise the file would
+launder what the contract just rejected.
+
+``CANDIDATE_EVIDENCE_FILENAMES`` remains as a compatibility fallback for attempt
+directories written before the channel existed, and is consulted ONLY when the
+payload declares no records at all. It is not the contract; it is a reader for
+history.
 """
 
 from __future__ import annotations
@@ -42,8 +56,19 @@ DISCOVERY_EVIDENCE_KIND = "discovery-evidence-v1"
 GROUNDED = "grounded"
 UNRESOLVED = "unresolved"
 
+#: Closed vocabulary naming where the excerpts a resolution judged arrived from.
+CHANNEL_DECLARED = "declared-payload"
+CHANNEL_ATTEMPT_DIRECTORY = "attempt-directory"
+CHANNEL_MACHINE_DISCOVERY = "machine-discovery"
+CHANNEL_NONE = "none"
+
 #: Fields an excerpt record must carry before the machine can re-derive it.
 REQUIRED_EXCERPT_FIELDS = ("evidence_id", "source_id", "locator", "text")
+
+#: Per-record keys only the machine may own. An author cannot compute a digest,
+#: so it is never asked for one; declaring one anyway is refused rather than
+#: quietly trusted.
+MACHINE_OWNED_EXCERPT_FIELDS = ("text_sha256", "evidence_identity", "content_sha256")
 
 
 @dataclass(frozen=True)
@@ -63,12 +88,17 @@ class TerminalEvidenceResolution:
         Declared evidence IDs with no inspectable, re-derived record.
     reason:
         Machine-written explanation of an unresolved outcome.
+    channel:
+        Closed name of the channel whose records this verdict judged, so a
+        reader can tell a contract-declared grounding from a historical
+        attempt-directory one and from having nothing to judge at all.
     """
 
     resolution: str
     excerpts: tuple[JsonObject, ...]
     unresolved_evidence_ids: tuple[str, ...]
     reason: Optional[str]
+    channel: str = CHANNEL_NONE
 
     @property
     def grounded(self) -> bool:
@@ -83,8 +113,15 @@ def resolve_terminal_evidence(
     evidence_ids: Sequence[str],
     predicate: str,
     author_root: Path,
+    declared_records: Optional[Sequence[Mapping[str, Any]]] = None,
 ) -> TerminalEvidenceResolution:
     """Re-derive every cited terminal excerpt from frozen source bytes.
+
+    The declared channel is authoritative: when the terminal payload carries
+    ``evidence_records``, those records are what gets judged, and their verdict
+    stands. A declared channel that fails to ground never falls through to the
+    attempt-directory reader, because that would let a file re-supply exactly
+    what dereference just refused.
 
     Parameters
     ----------
@@ -96,6 +133,8 @@ def resolve_terminal_evidence(
         Closed typed terminal predicate the evidence resolves.
     author_root:
         Private staging root for one model's author round trips.
+    declared_records:
+        Contract-declared excerpt records from the terminal payload.
 
     Returns
     -------
@@ -106,11 +145,27 @@ def resolve_terminal_evidence(
     declared = tuple(str(value) for value in evidence_ids)
     if not declared:
         return TerminalEvidenceResolution(
-            UNRESOLVED, (), (), "the terminal recommendation cites no evidence at all"
+            UNRESOLVED, (), (), "the terminal recommendation cites no evidence at all", CHANNEL_NONE
         )
     discovery = _resolve_machine_discovery(source_manifest, declared, predicate)
     if discovery is not None:
         return discovery
+    cas_root = author_root / SOURCE_CAS_DIRNAME
+    if declared_records:
+        verified, reasons = _verify_records(
+            list(declared_records), declared, source_manifest, cas_root, CHANNEL_DECLARED
+        )
+        if len(verified) == len(declared):
+            return TerminalEvidenceResolution(
+                GROUNDED, tuple(verified), (), None, CHANNEL_DECLARED
+            )
+        return TerminalEvidenceResolution(
+            UNRESOLVED,
+            (),
+            declared,
+            "declared evidence_records did not ground: " + "; ".join(reasons),
+            CHANNEL_DECLARED,
+        )
     return _resolve_author_excerpts(source_manifest, declared, author_root)
 
 
@@ -177,11 +232,12 @@ def _resolve_machine_discovery(
                 "text": text,
                 "text_sha256": observed,
                 "supports": [predicate],
-                "origin": "machine-discovery",
+                "origin": CHANNEL_MACHINE_DISCOVERY,
             },
         ),
         (),
         None,
+        CHANNEL_MACHINE_DISCOVERY,
     )
 
 
@@ -205,13 +261,16 @@ def _resolve_author_excerpts(
         Verified excerpts, or an explicit unresolved declaration.
     """
 
+    no_channel = "the terminal payload declared no evidence_records"
     candidates = _candidate_paths(author_root, TERMINAL_EVIDENCE_FILENAME)
     if not candidates:
         return TerminalEvidenceResolution(
             UNRESOLVED,
             (),
             declared,
-            f"no frozen {TERMINAL_EVIDENCE_FILENAME} was published under {author_root}",
+            f"{no_channel} and no frozen {TERMINAL_EVIDENCE_FILENAME} was published "
+            f"under {author_root}",
+            CHANNEL_NONE,
         )
     cas_root = author_root / SOURCE_CAS_DIRNAME
     last_reason = ""
@@ -224,29 +283,131 @@ def _resolve_author_excerpts(
         if not isinstance(excerpts, list):
             last_reason = f"{path} carries no excerpt list"
             continue
-        by_id = {
-            str(excerpt["evidence_id"]): dict(excerpt)
-            for excerpt in excerpts
-            if isinstance(excerpt, Mapping) and isinstance(excerpt.get("evidence_id"), str)
-        }
-        verified: list[JsonObject] = []
-        reasons: list[str] = []
-        for evidence_id in declared:
-            excerpt = by_id.get(evidence_id)
-            if excerpt is None or not _has_required_fields(excerpt):
-                reasons.append(f"{evidence_id} has no inspectable excerpt record")
-                continue
-            try:
-                _verify_against_frozen_source(excerpt, source_manifest, cas_root)
-            except EvidenceValidationError as exc:
-                reasons.append(f"{evidence_id} did not re-derive from its frozen source: {exc}")
-                continue
-            verified.append(excerpt)
+        verified, reasons = _verify_records(
+            excerpts, declared, source_manifest, cas_root, CHANNEL_ATTEMPT_DIRECTORY
+        )
         if len(verified) != len(declared):
             last_reason = f"{path}: " + "; ".join(reasons)
             continue
-        return TerminalEvidenceResolution(GROUNDED, tuple(verified), (), None)
-    return TerminalEvidenceResolution(UNRESOLVED, (), declared, last_reason)
+        return TerminalEvidenceResolution(
+            GROUNDED, tuple(verified), (), None, CHANNEL_ATTEMPT_DIRECTORY
+        )
+    return TerminalEvidenceResolution(
+        UNRESOLVED, (), declared, f"{no_channel}; {last_reason}", CHANNEL_ATTEMPT_DIRECTORY
+    )
+
+
+def _verify_records(
+    records: Sequence[Any],
+    declared: tuple[str, ...],
+    source_manifest: Mapping[str, Any],
+    cas_root: Path,
+    origin: str,
+) -> tuple[list[JsonObject], list[str]]:
+    """Match one channel's excerpt records verbatim against their frozen sources.
+
+    This is the single dereference point every channel goes through. A record is
+    only ever returned after its claimed text was found byte-for-byte in the
+    hash-bound source bytes; the digest on the returned row is recomputed here
+    from those bytes, so an author-supplied one can neither be required nor
+    believed.
+
+    Parameters
+    ----------
+    records:
+        Candidate excerpt records from one channel.
+    declared:
+        Exact declared evidence identities, in declared order.
+    source_manifest:
+        Frozen source manifest bound by the terminal recommendation.
+    cas_root:
+        Content-addressed store holding the fetched source bytes.
+    origin:
+        Closed channel name stamped onto every verified row.
+
+    Returns
+    -------
+    tuple[list[dict[str, Any]], list[str]]
+        Verified rows in declared order, and one named reason per gap.
+    """
+
+    by_id = {
+        str(record["evidence_id"]): dict(record)
+        for record in records
+        if isinstance(record, Mapping) and isinstance(record.get("evidence_id"), str)
+    }
+    verified: list[JsonObject] = []
+    reasons: list[str] = []
+    for evidence_id in declared:
+        excerpt = by_id.get(evidence_id)
+        if excerpt is None or not _has_required_fields(excerpt):
+            reasons.append(f"{evidence_id} has no inspectable excerpt record")
+            continue
+        try:
+            _verify_against_frozen_source(excerpt, source_manifest, cas_root)
+        except EvidenceValidationError as exc:
+            reasons.append(f"{evidence_id} did not re-derive from its frozen source: {exc}")
+            continue
+        row = {key: value for key, value in excerpt.items() if key not in MACHINE_OWNED_EXCERPT_FIELDS}
+        row["text_sha256"] = hash_bytes(str(excerpt["text"]).encode("utf-8"))
+        row["origin"] = origin
+        verified.append(row)
+    return verified, reasons
+
+
+def resolve_terminal_license_record(
+    *,
+    source_manifest: Mapping[str, Any],
+    license_record: Optional[Mapping[str, Any]],
+    author_root: Path,
+) -> Optional[JsonObject]:
+    """Ground one declared license excerpt against its frozen source bytes.
+
+    The returned row is presentation only. ``license_identity`` stays derived by
+    :func:`menagerie.crawler.author_dispatch.derive_terminal_license_disposition`
+    from facts the machine owns; quoting license text gives the author's reading a
+    declared, inspectable home without moving that identity to the author.
+
+    Parameters
+    ----------
+    source_manifest:
+        Frozen source manifest bound by the terminal recommendation.
+    license_record:
+        Declared license excerpt from the terminal payload, when present.
+    author_root:
+        Private staging root for one model's author round trips.
+
+    Returns
+    -------
+    dict[str, Any] | None
+        Grounded or explicitly ungrounded license row, or ``None`` when the
+        payload declares no license text at all.
+    """
+
+    if not isinstance(license_record, Mapping) or not license_record:
+        return None
+    row = dict(license_record)
+    if not all(
+        isinstance(row.get(field), str) and row.get(field)
+        for field in ("source_id", "locator", "text")
+    ):
+        return {
+            "resolution": UNRESOLVED,
+            "reason": "the declared license record is not an inspectable excerpt",
+        }
+    probe = {**row, "evidence_id": "license-record"}
+    try:
+        _verify_against_frozen_source(probe, source_manifest, author_root / SOURCE_CAS_DIRNAME)
+    except EvidenceValidationError as exc:
+        return {
+            "resolution": UNRESOLVED,
+            "reason": f"the declared license record did not re-derive from its frozen source: {exc}",
+        }
+    grounded = {key: value for key, value in row.items() if key not in MACHINE_OWNED_EXCERPT_FIELDS}
+    grounded["text_sha256"] = hash_bytes(str(row["text"]).encode("utf-8"))
+    grounded["resolution"] = GROUNDED
+    grounded["origin"] = CHANNEL_DECLARED
+    return grounded
 
 
 def _verify_against_frozen_source(

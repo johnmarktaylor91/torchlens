@@ -61,7 +61,10 @@ from menagerie.crawler.reducer import (
     cold_forward_policy,
     output_signature_error,
 )
-from menagerie.crawler.terminal_evidence import resolve_terminal_evidence
+from menagerie.crawler.terminal_evidence import (
+    resolve_terminal_evidence,
+    resolve_terminal_license_record,
+)
 from menagerie.crawler.driver_contracts import (
     AuthorArtifact,
     CheckerOutcome,
@@ -226,24 +229,37 @@ def _terminal_checker_item(artifact: AuthorArtifact) -> JsonObject:
     # shipped under their own name as the identity preimage. What the checker
     # needs in order to reach any verdict but cannot-verify is the literal
     # excerpt and its locator, and it may only be shown text the machine itself
-    # re-derived: the frozen bytes in content-addressed storage.
+    # re-derived: the frozen bytes in content-addressed storage. Those excerpts
+    # arrive through the payload's declared ``evidence_records`` channel -- a
+    # validated part of the contract, so silence is schema-visible -- and are
+    # still believed only after dereference.
+    author_root = artifact.model_dir.parent
     resolved = resolve_terminal_evidence(
         source_manifest=artifact.source_manifest,
         evidence_ids=evidence_ids,
         predicate=predicate,
-        author_root=artifact.model_dir.parent,
+        author_root=author_root,
+        declared_records=result.evidence_records,
+    )
+    license_excerpt = resolve_terminal_license_record(
+        source_manifest=artifact.source_manifest,
+        license_record=result.license_record,
+        author_root=author_root,
     )
     identity_preimage = evidence_pack["excerpts"]
     evidence_pack = {
         "evidence_identity": evidence_pack["evidence_identity"],
         "identity_preimage": identity_preimage,
         "resolution": resolved.resolution,
+        "evidence_channel": resolved.channel,
+        "declared_record_count": len(result.evidence_records),
         "excerpts": [deepcopy(excerpt) for excerpt in resolved.excerpts],
         "declared_evidence_ids": list(evidence_ids),
         "unresolved_evidence_ids": list(resolved.unresolved_evidence_ids),
         "unresolved_reason": resolved.reason,
         "checked_source_ids": list(source_ids),
         "predicate": predicate,
+        "license_excerpt": license_excerpt,
     }
     binding = result.binding
     # The recommendation preimage is exactly what ``recommendation_sha256``
