@@ -38,7 +38,7 @@ from pathlib import Path
 import pytest
 
 from menagerie.crawler.author_executor import (
-    EXA_MCP_CONFIG,
+    exa_mcp_config,
     stage_tool_rules,
 )
 from menagerie.crawler.tests.executor_test_support import (
@@ -240,7 +240,7 @@ def _run_live_session(prompt: str, *, attempt_dir: Path) -> None:
             "--setting-sources",
             "",
             "--mcp-config",
-            EXA_MCP_CONFIG,
+            exa_mcp_config(),
             "--allowedTools",
             *rules,
             "--output-format",

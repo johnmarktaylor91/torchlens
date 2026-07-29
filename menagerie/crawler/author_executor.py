@@ -43,6 +43,7 @@ import subprocess
 import sys
 import time
 import uuid
+from urllib.parse import quote
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -107,13 +108,40 @@ EXIT_UNAVAILABLE = 78
 #: ``--mcp-config`` Exa is absent, without ``--allowedTools`` every tool is
 #: permission-blocked, and a name mismatch reads as unavailability -- all three
 #: complete "successfully" while researching nothing.
-EXA_MCP_CONFIG = '{"mcpServers":{"exa":{"type":"http","url":"https://mcp.exa.ai/mcp"}}}'
+EXA_MCP_URL = "https://mcp.exa.ai/mcp"
+EXA_API_KEY_ENV = "EXA_API_KEY"
 RESEARCH_TOOLS = (
     "WebSearch",
+    "WebFetch",
     "mcp__exa__web_search_exa",
     "mcp__exa__web_fetch_exa",
     "ToolSearch",
 )
+
+
+def exa_mcp_config(api_key: Optional[str] = None) -> str:
+    """Return the Exa MCP config, authenticated when a key is available.
+
+    The anonymous endpoint is rate limited at roughly 1,400 searches per month --
+    about 230 models -- so it was never viable for a 28,482-model campaign. It
+    exhausted mid-run on 2026-07-28 and cost six of six first attempts to
+    ``research-tools-unavailable`` before the cause was identified.
+
+    An absent key falls back to the anonymous endpoint rather than raising: a
+    machine without the key still runs, degraded exactly as before, and the
+    ``research-tools-unavailable`` guard still fails loudly if the tools cannot be
+    reached. A missing credential must not be the reason a campaign cannot start.
+
+    The key is read from the environment at spawn time and injected only into the
+    child's ``--mcp-config``. It is never written into campaign config, prompts,
+    receipts, manifests or any other serialized artifact -- this repository is
+    public and the crawler serializes a great deal.
+    """
+
+    key = api_key if api_key is not None else os.environ.get(EXA_API_KEY_ENV, "")
+    key = key.strip()
+    url = f"{EXA_MCP_URL}?exaApiKey={quote(key, safe='')}" if key else EXA_MCP_URL
+    return json.dumps({"mcpServers": {"exa": {"type": "http", "url": url}}})
 
 
 def stage_tool_rules(
@@ -375,7 +403,7 @@ def run_claude_session(
         "--setting-sources",
         "",
         "--mcp-config",
-        EXA_MCP_CONFIG,
+        exa_mcp_config(),
         "--allowedTools",
         *stage_tool_rules(write_root=write_root, read_roots=read_roots),
         "--output-format",

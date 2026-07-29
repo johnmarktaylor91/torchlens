@@ -22,6 +22,7 @@ from menagerie.crawler.author_dispatch import (
     plausible_author_reset_at,
 )
 from menagerie.crawler.author_executor import (
+    EXA_API_KEY_ENV,
     EXIT_BACKOFF,
     EXIT_OK,
     EXIT_PERMANENT,
@@ -262,9 +263,19 @@ def test_author_cannot_supply_discovery_envelope_bindings(rig) -> None:
     assert "'stable_id': 'different-model'" in attempt.record["outcome"]["detail"]["error"]
 
 
-def test_pinned_recipe_flags_are_load_bearing_and_present(rig) -> None:
-    """Every flag of the verified web-tools recipe is on the session argv."""
+def test_pinned_recipe_flags_are_load_bearing_and_present(
+    rig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every flag of the verified web-tools recipe is on the session argv.
 
+    The Exa credential is cleared first so this asserts the recipe's SHAPE rather than
+    whatever happens to be in the ambient environment. Without this the assertion embeds a
+    live secret in its failure output -- which is exactly how one got printed into a
+    transcript. Authenticated-vs-anonymous endpoint selection is covered separately, with a
+    sentinel, in ``test_exa_credential.py``.
+    """
+
+    monkeypatch.delenv(EXA_API_KEY_ENV, raising=False)
     code, _root = _run_source_round(rig)
     assert code == EXIT_OK
     argv = read_invocations(rig["log"])[0]["argv"]
