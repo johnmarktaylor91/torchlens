@@ -315,6 +315,7 @@ from menagerie.crawler.driver_progress import (
     _framework_phase,
     _funnel_snapshot,
     _future_reset,
+    _normalize_wake_reset,
     _is_sandbox_unavailable,
     _load_driver_state,
     _progress_summary,
@@ -2025,7 +2026,9 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         """
 
         reset_observation = "observed" if signal.reset_at is not None else "guessed"
-        reset_at = signal.reset_at or _future_reset(self.dependencies.clock(), signal)
+        reset_at = _normalize_wake_reset(
+            signal.reset_at or _future_reset(self.dependencies.clock(), signal)
+        )
         provider = signal.provider
         context = self._context(queued, None)
         created_at = self.dependencies.clock()

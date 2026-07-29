@@ -192,15 +192,40 @@ _KILL_GRACE_SECONDS = 10.0
 #: Structured harness signals that mean a provider usage pause. Free-text
 #: marker scanning is deliberately absent: classification authority is the
 #: parsed harness JSON only (SEAM_REDESIGN section 3.5).
-_LIMIT_SUBTYPES = frozenset(
-    {
-        "error_rate_limit",
-        "rate_limit",
-        "usage_limit",
-        "usage_limit_reached",
-        "error_usage_limit",
-    }
-)
+#:
+#: Every value below is transcribed from the shipped harness rather than assumed.
+#: The prior constants (``usage_limit``, ``usage_limit_reached``,
+#: ``error_usage_limit``, ``error_rate_limit``, ``rate_limit`` as *subtypes*) were
+#: written from assumption and appear nowhere in the harness: not in the Claude
+#: Code 2.1.220 binary, and not in the ``@anthropic-ai/claude-agent-sdk`` 0.3.211
+#: ``subtype`` union. Matching on them could never fire, so the campaign pause was
+#: unreachable and a real limit would have failed every model generically.
+#:
+#: Sources for what replaced them:
+#:   * ``TerminalReason`` union -- claude-agent-sdk 0.3.211 ``sdk.d.ts`` line 6759.
+#:     ``SDKResultSuccess`` and ``SDKResultError`` both carry the optional
+#:     ``terminal_reason`` field (``sdk.d.ts`` lines 4171-4218), and a real captured
+#:     ``--output-format json`` result does emit it (``"terminal_reason":
+#:     "completed"`` on a clean run), so it is a live wire field.
+#:   * ``SDKRateLimitInfo`` -- ``sdk.d.ts`` lines 4149-4168: ``status`` is
+#:     ``allowed | allowed_warning | rejected``, with ``resetsAt`` (unix seconds)
+#:     and ``rateLimitType`` distinguishing ``five_hour`` from the ``seven_day``
+#:     weekly family.
+#:   * ``api_error_status`` -- ``SDKResultSuccess`` (``sdk.d.ts``), observed as
+#:     ``"api_error_status": null`` in a real captured result. HTTP 429 is the
+#:     provider's rate-limit status.
+#:   * ``rate_limit_error`` / ``overloaded_error`` -- the raw Anthropic API error
+#:     envelope; both literals ship in the 2.1.220 binary.
+#:
+#: The subtype union the harness really emits is ``success |
+#: error_during_execution | error_max_turns | error_max_budget_usd |
+#: error_max_structured_output_retries``. None of those names a usage limit on its
+#: own -- ``error_during_execution`` is the *generic* failure subtype, so pausing
+#: the whole campaign on it would turn every ordinary session crash into an outage.
+#: Subtype is therefore deliberately NOT a pause authority; ``terminal_reason`` is.
+_LIMIT_TERMINAL_REASONS = frozenset({"blocking_limit", "rapid_refill_breaker"})
+_LIMIT_RATE_STATUS = "rejected"
+_RATE_LIMITED_HTTP_STATUS = 429
 _LIMIT_ERROR_TYPES = frozenset({"rate_limit_error", "overloaded_error"})
 
 _PROMPT_ROOT = Path(__file__).with_name("prompts")
@@ -444,13 +469,87 @@ def structured_limit_signal(harness: Optional[Mapping[str, Any]]) -> Optional[st
 
     if not harness:
         return None
-    subtype = str(harness.get("subtype", ""))
-    if subtype in _LIMIT_SUBTYPES:
-        return subtype
+    terminal = str(harness.get("terminal_reason", ""))
+    if terminal in _LIMIT_TERMINAL_REASONS:
+        return terminal
+    info = harness.get("rate_limit_info")
+    if isinstance(info, Mapping) and str(info.get("status", "")) == _LIMIT_RATE_STATUS:
+        # ``rateLimitType`` separates the five-hour window from the seven-day
+        # weekly family; both pause identically but the kind is worth recording.
+        kind = str(info.get("rateLimitType", "") or "unspecified")
+        return f"rate_limit_rejected:{kind}"
+    status = harness.get("api_error_status")
+    if not isinstance(status, bool) and status == _RATE_LIMITED_HTTP_STATUS:
+        return f"api_error_status:{_RATE_LIMITED_HTTP_STATUS}"
     error = harness.get("error")
     if isinstance(error, Mapping) and str(error.get("type", "")) in _LIMIT_ERROR_TYPES:
         return str(error["type"])
     return None
+
+
+def structured_limit_reset_at(harness: Optional[Mapping[str, Any]]) -> Optional[str]:
+    """Return the harness's own declared reset instant as an ISO-8601 UTC string.
+
+    Reads ``rate_limit_info.resetsAt`` (unix seconds, claude-agent-sdk 0.3.211
+    ``sdk.d.ts`` line 4153). This is the only authoritative reset the harness
+    offers; when it is absent the driver falls back to a guessed ``now + 1h``,
+    which is right for a five-hour window and badly wrong for a seven-day one.
+    Fractional seconds are truncated so the emitted timestamp never contains a
+    ``.``, which the driver's reset phrase parser treats as a sentence boundary.
+    """
+
+    if not harness:
+        return None
+    info = harness.get("rate_limit_info")
+    if not isinstance(info, Mapping):
+        return None
+    raw = info.get("resetsAt")
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        return None
+    try:
+        moment = datetime.fromtimestamp(int(raw), tz=timezone.utc)
+    except (OSError, OverflowError, ValueError):
+        return None
+    # RFC 3339 ``Z`` form, not ``+00:00``: the wake layer rejects any reset that
+    # does not end in ``Z`` (``wakeup._parse_utc``), so emitting the offset form
+    # here would turn a correctly detected pause into a scheduling crash.
+    return moment.isoformat().replace("+00:00", "Z")
+
+
+def _backoff_detail(limit: str, harness: Optional[Mapping[str, Any]]) -> str:
+    """Announce a provider pause on stdout and return the operator detail line.
+
+    The driver classifies an author backoff from the process's *structured
+    stdout* (``_structured_author_error`` then ``parse_author_reset_at``), so the
+    harness's own reset instant has to travel on that channel or it is lost: the
+    typed exit alone yields a pause with no reset, and the driver then guesses one
+    hour. Emitting it here upgrades the recorded pause from ``guessed`` to
+    ``observed`` -- which for a seven-day weekly limit is the difference between
+    one wake and ~168 futile ones.
+
+    The notice is machine-built from the parsed harness JSON only; no free text
+    from the session influences it.
+    """
+
+    detail = f"author provider pause (structured signal {limit})"
+    message = f"author provider pause: usage limit ({limit})"
+    reset_at = structured_limit_reset_at(harness)
+    if reset_at is not None:
+        detail = f"{detail} resets at {reset_at}"
+        message = f"{message}, resets at {reset_at}"
+    print(
+        json.dumps(
+            {
+                "type": "result",
+                "subtype": "author-provider-pause",
+                "is_error": True,
+                "message": f"{message}.",
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    )
+    return detail
 
 
 def effort_from_session(outcome: SessionOutcome) -> JsonObject:
@@ -881,7 +980,7 @@ def serve_source_request(
     if limit is not None:
         attempt.update(stage1=stage1)
         _fail(attempt, stage="stage1", reason="provider-usage-pause", exit_code=EXIT_BACKOFF)
-        return EXIT_BACKOFF, f"author provider pause (structured signal {limit})"
+        return EXIT_BACKOFF, _backoff_detail(limit, outcome.harness)
     if outcome.returncode != 0:
         attempt.update(stage1=stage1)
         return _fail(
@@ -1270,7 +1369,7 @@ def serve_author(
     limit = structured_limit_signal(outcome.harness)
     if limit is not None:
         _fail(attempt, stage="stage2", reason="provider-usage-pause", exit_code=EXIT_BACKOFF)
-        return EXIT_BACKOFF, f"author provider pause (structured signal {limit})"
+        return EXIT_BACKOFF, _backoff_detail(limit, outcome.harness)
     if outcome.returncode != 0:
         return _fail(
             attempt, stage="stage2", reason="session-crashed", exit_code=EXIT_RETRYABLE
@@ -1649,7 +1748,7 @@ def serve_capability_probe(
     )
     limit = structured_limit_signal(outcome.harness)
     if limit is not None:
-        return EXIT_BACKOFF, f"author provider pause (structured signal {limit})"
+        return EXIT_BACKOFF, _backoff_detail(limit, outcome.harness)
     if outcome.timed_out or outcome.returncode != 0:
         return EXIT_RETRYABLE, "capability probe session did not complete"
     if not evidence_path.is_file():

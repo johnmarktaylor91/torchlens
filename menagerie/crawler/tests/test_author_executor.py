@@ -15,7 +15,12 @@ from menagerie.crawler.author_attempts import (
     new_attempt,
     record_checker_findings,
 )
-from menagerie.crawler.author_dispatch import AuthorEffortGrant
+from menagerie.crawler.author_dispatch import (
+    AuthorEffortGrant,
+    AuthorPauseReason,
+    classify_author_response,
+    plausible_author_reset_at,
+)
 from menagerie.crawler.author_executor import (
     EXIT_BACKOFF,
     EXIT_OK,
@@ -27,6 +32,13 @@ from menagerie.crawler.author_executor import (
     _discovery_envelope_from_author_payload,
     _supplement_request_from_author_payload,
     main,
+    structured_limit_reset_at,
+    structured_limit_signal,
+)
+from menagerie.crawler.driver_progress import _normalize_wake_reset
+from menagerie.crawler.wakeup import (
+    MIN_RETRY_INTERVAL_SECONDS,
+    build_wake_episode,
 )
 from menagerie.crawler.capability_probe import canonical_tool_name
 from menagerie.crawler.constants import AUTHOR_RESULT_SCHEMA_VERSION
@@ -329,6 +341,278 @@ def test_structured_limit_signal_is_the_only_pause_authority(rig) -> None:
     rig["monkeypatch"].setenv("FAKE_CLAUDE_MODE", "limit")
     code, _root = _run_source_round(rig)
     assert code == EXIT_BACKOFF
+
+
+# -- positive limit recognition -------------------------------------------
+#
+# These are the direction the suite was missing. It previously proved only that
+# a limit is *not* falsely detected; nothing proved a real one IS caught, and the
+# constants being matched (``usage_limit``, ``error_usage_limit``, ...) existed
+# nowhere in the shipped harness, so the campaign pause could never fire. Every
+# payload replayed below is a real Claude Code result shape; see
+# ``_LIMIT_TERMINAL_REASONS`` in ``author_executor.py`` for per-field citations.
+
+
+@pytest.mark.parametrize(
+    "shape",
+    ["blocking_limit", "rapid_refill_breaker", "rate_limit_info_only", "api_error_status"],
+)
+def test_real_harness_limit_payloads_pause_the_campaign(rig, shape: str) -> None:
+    """Each observed limit envelope is recognised and exits 76."""
+
+    rig["monkeypatch"].setenv("FAKE_CLAUDE_MODE", "limit")
+    rig["monkeypatch"].setenv("FAKE_CLAUDE_LIMIT_SHAPE", shape)
+    code, _root = _run_source_round(rig)
+    assert code == EXIT_BACKOFF
+
+
+@pytest.mark.parametrize("window", ["five_hour", "seven_day"])
+def test_five_hour_and_weekly_limits_both_pause_and_carry_their_reset(
+    rig, window: str, capsys
+) -> None:
+    """Both limit windows pause, and the harness's own reset reaches the driver.
+
+    The seven-day case is the expensive one: without the declared reset the
+    driver guesses ``now + 1h`` and re-wakes for a week.
+    """
+
+    ahead = timedelta(hours=5) if window == "five_hour" else timedelta(days=7)
+    resets_at = datetime.now(timezone.utc) + ahead
+    rig["monkeypatch"].setenv("FAKE_CLAUDE_MODE", "limit")
+    rig["monkeypatch"].setenv("FAKE_CLAUDE_LIMIT_SHAPE", window)
+    rig["monkeypatch"].setenv(
+        "FAKE_CLAUDE_LIMIT_RESETS_AT", str(int(resets_at.timestamp()))
+    )
+    code, _root = _run_source_round(rig)
+    assert code == EXIT_BACKOFF
+
+    # The executor announces the pause on stdout, which is the channel the driver
+    # classifies. Round-trip it through the real driver-side classifier.
+    notice = _last_json_line(capsys.readouterr().out)
+    assert notice is not None, "executor emitted no structured backoff notice"
+    signal = classify_author_response(EXIT_BACKOFF, json.dumps(notice))
+    assert signal is not None
+    assert signal.reason is AuthorPauseReason.QUOTA_EXHAUSTED
+    assert signal.reset_at is not None, "declared reset was dropped before the driver"
+    parsed = datetime.fromisoformat(signal.reset_at)
+    assert abs((parsed - resets_at).total_seconds()) <= 1
+
+
+def test_generic_session_error_is_not_a_campaign_pause(rig) -> None:
+    """``error_during_execution`` without a limit terminal reason stays a retry.
+
+    This is the over-widening guard. ``error_during_execution`` is the harness's
+    *generic* failure subtype, so treating the subtype itself as a limit would
+    convert every ordinary session crash into a campaign-wide outage.
+    """
+
+    rig["monkeypatch"].setenv("FAKE_CLAUDE_MODE", "limit")
+    rig["monkeypatch"].setenv("FAKE_CLAUDE_LIMIT_SHAPE", "generic_crash")
+    code, _root = _run_source_round(rig)
+    assert code == EXIT_RETRYABLE
+
+
+def test_fabricated_limit_subtypes_are_not_pause_authority() -> None:
+    """The removed constants were fiction and must not silently return.
+
+    None of these appear in the Claude Code 2.1.220 binary or in the
+    claude-agent-sdk 0.3.211 ``subtype`` union. Re-adding one would restore a
+    matcher that can never fire against a real harness while looking correct.
+    """
+
+    for subtype in (
+        "usage_limit",
+        "usage_limit_reached",
+        "error_usage_limit",
+        "error_rate_limit",
+        "rate_limit",
+    ):
+        assert structured_limit_signal({"type": "result", "subtype": subtype}) is None
+
+
+def test_real_success_payload_is_never_a_limit() -> None:
+    """A verbatim captured clean result must not read as a pause."""
+
+    assert (
+        structured_limit_signal(
+            {
+                "type": "result",
+                "subtype": "success",
+                "is_error": False,
+                "terminal_reason": "completed",
+                "api_error_status": None,
+                "result": "ok",
+            }
+        )
+        is None
+    )
+
+
+def test_limit_signal_ignores_free_text_entirely() -> None:
+    """Limit words in payload prose never classify; only structured fields do."""
+
+    assert (
+        structured_limit_signal(
+            {
+                "type": "result",
+                "subtype": "success",
+                "terminal_reason": "completed",
+                "result": "GitHub API rate limit exceeded; usage limit reached",
+            }
+        )
+        is None
+    )
+
+
+def test_declared_reset_is_read_from_the_harness_field_only() -> None:
+    """``resetsAt`` is unix seconds; junk and prose yield no reset."""
+
+    moment = datetime(2026, 8, 4, 12, 0, tzinfo=timezone.utc)
+    declared = structured_limit_reset_at(
+        {"rate_limit_info": {"status": "rejected", "resetsAt": int(moment.timestamp())}}
+    )
+    # RFC 3339 ``Z`` form: ``wakeup._parse_utc`` refuses anything else, so an
+    # offset-form reset would crash the pause it was meant to schedule.
+    assert declared == "2026-08-04T12:00:00Z"
+    assert structured_limit_reset_at({"rate_limit_info": {"status": "rejected"}}) is None
+    assert (
+        structured_limit_reset_at({"result": "resets at 2026-08-04T12:00:00+00:00"}) is None
+    )
+    assert (
+        structured_limit_reset_at({"rate_limit_info": {"resetsAt": "soon"}}) is None
+    )
+
+
+def test_weekly_reset_survives_plausibility_validation() -> None:
+    """A seven-day-out reset is admitted; an implausible one is still refused.
+
+    A weekly limit resets up to seven days ahead. If the validator rejected that
+    as implausible the pause would be silently discarded and the campaign would
+    resume straight into the wall.
+    """
+
+    now = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
+    weekly = (now + timedelta(days=7)).isoformat()
+    assert plausible_author_reset_at(weekly, now=now) == weekly
+    five_hour = (now + timedelta(hours=5)).isoformat()
+    assert plausible_author_reset_at(five_hour, now=now) == five_hour
+    # The tripwire still holds at both ends.
+    assert plausible_author_reset_at((now + timedelta(days=30)).isoformat(), now=now) is None
+    assert plausible_author_reset_at((now - timedelta(hours=1)).isoformat(), now=now) is None
+
+
+def test_observed_offset_form_reset_is_normalized_before_scheduling() -> None:
+    """An observed ``+00:00`` reset must not crash the pause it should schedule.
+
+    ``plausible_author_reset_at`` returns its candidate verbatim, so a provider or
+    harness reset can reach the driver in offset form, while ``wakeup._parse_utc``
+    accepts only ``Z``. Guessed resets already end in ``Z``, so only the *observed*
+    path -- the one a real limit takes -- was exposed.
+    """
+
+    assert _normalize_wake_reset("2026-08-04T12:00:00+00:00") == "2026-08-04T12:00:00Z"
+    assert _normalize_wake_reset("2026-08-04T12:00:00Z") == "2026-08-04T12:00:00Z"
+    assert _normalize_wake_reset("2026-08-04T08:00:00-04:00") == "2026-08-04T12:00:00Z"
+    # Never launder a malformed reset into a well-formed one; the wake layer
+    # must still get its chance to refuse it.
+    assert _normalize_wake_reset("not-a-timestamp") == "not-a-timestamp"
+    assert _normalize_wake_reset("2026-08-04T12:00:00") == "2026-08-04T12:00:00"
+    # End to end: what the executor declares is schedulable as-is.
+    declared = structured_limit_reset_at(
+        {"rate_limit_info": {"status": "rejected", "resetsAt": 1786000000}}
+    )
+    assert declared is not None
+    build_wake_episode(
+        provider="anthropic",
+        reset_at=_normalize_wake_reset(declared),
+        reset_observation="observed",
+        callback_argv=["crawler", "resume"],
+    )
+
+
+def test_wake_episode_accepts_a_weekly_reset() -> None:
+    """The wake machinery can carry a reset a full week out.
+
+    Resumption is a *recurring* guarded poll, not one far-future timer: the
+    episode fires on its retry cadence and the ``not_before`` guard suppresses
+    every fire until the reset passes. So a seven-day reset needs no special
+    scheduling capability -- but the episode must still accept it.
+    """
+
+    reset_at = _normalize_wake_reset(
+        (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+    )
+    episode = build_wake_episode(
+        provider="anthropic",
+        reset_at=reset_at,
+        reset_observation="observed",
+        callback_argv=["crawler", "resume"],
+    )
+    assert episode.reset_at == reset_at
+    assert MIN_RETRY_INTERVAL_SECONDS <= episode.retry_interval_seconds
+
+
+def test_pause_during_stage2_resumes_without_losing_prior_work(rig) -> None:
+    """A usage pause costs nothing already earned; resume is not a cold reread.
+
+    The kill matrix proves this for SIGKILL, but a usage pause leaves a different
+    durable shape: ``_fail`` marks the attempt ``failed`` with a typed
+    ``provider-usage-pause`` reason rather than leaving it mid-stage. This asserts
+    the recovery path is equally lossless -- stage 1 does not re-run, its session
+    identity is inherited by the retry, and the pause is visible as prior-attempt
+    feedback rather than being silently swallowed.
+    """
+
+    assert _run_source_round(rig)[0] == EXIT_OK
+    stage1 = latest_attempt(rig["root"])
+    assert stage1 is not None
+    stage1_session = stage1.record["stage1"]["session_id"]
+    stage1_status = stage1.status
+
+    # Stage 2 hits a real five-hour limit envelope.
+    rig["monkeypatch"].setenv("FAKE_CLAUDE_MODE", "limit")
+    rig["monkeypatch"].setenv("FAKE_CLAUDE_LIMIT_SHAPE", "blocking_limit")
+    assert _run_author_round(rig)[0] == EXIT_BACKOFF
+
+    paused = latest_attempt(rig["root"])
+    assert paused is not None
+    assert paused.record["outcome"]["failure_reason"] == "provider-usage-pause"
+
+    # Stage 1's durable product survives the pause untouched.
+    assert stage1.record["stage1"]["session_id"] == stage1_session
+    assert stage1.status == stage1_status
+
+    # The provider comes back; the campaign resumes.
+    rig["monkeypatch"].delenv("FAKE_CLAUDE_MODE", raising=False)
+    rig["monkeypatch"].delenv("FAKE_CLAUDE_LIMIT_SHAPE", raising=False)
+    before = len(read_invocations(rig["log"]))
+    assert _run_author_round(rig)[0] == EXIT_OK
+
+    resumed = latest_attempt(rig["root"])
+    assert resumed is not None
+    assert resumed.status == "completed"
+    # No cold reread: the retry ran stage 2 only, resuming stage 1's session.
+    replayed = read_invocations(rig["log"])[before:]
+    assert [entry["stage"] for entry in replayed] == ["stage2"]
+    assert resumed.record["inherited"]["stage1"]["session_id"] == stage1_session
+    argv = replayed[-1]["argv"]
+    assert argv[argv.index("--resume") + 1] == stage1_session
+
+
+def _last_json_line(text: str) -> dict[str, Any] | None:
+    """Return the last JSON object printed on a stream, mirroring the driver."""
+
+    for line in reversed(text.splitlines()):
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            parsed = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+    return None
 
 
 def test_rate_limit_stderr_noise_does_not_pause(rig) -> None:

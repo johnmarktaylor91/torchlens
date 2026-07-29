@@ -137,16 +137,50 @@ if mode == "late-write-stage2" and stage == "stage2":
             fh.write(os.environ.get("FAKE_CLAUDE_LATE_RESULT", '{"kind": "STALE"}'))
     sys.exit(0)
 if mode == "limit":
-    print(
-        json.dumps(
-            {
-                "type": "result",
-                "subtype": "error_usage_limit",
-                "is_error": True,
-                "session_id": str(uuid.uuid4()),
-            }
+    # Real Claude Code result envelopes, not invented ones. FAKE_CLAUDE_LIMIT_SHAPE
+    # selects which observed shape to replay; see _LIMIT_TERMINAL_REASONS in
+    # author_executor.py for the citation of every field used here.
+    shape = os.environ.get("FAKE_CLAUDE_LIMIT_SHAPE", "blocking_limit")
+    payload = {
+        "type": "result",
+        "is_error": True,
+        "session_id": str(uuid.uuid4()),
+        "duration_ms": 1234,
+        "num_turns": 1,
+        "total_cost_usd": 0.0,
+    }
+    if shape == "blocking_limit":
+        payload.update(subtype="error_during_execution", terminal_reason="blocking_limit")
+    elif shape == "rapid_refill_breaker":
+        payload.update(
+            subtype="error_during_execution", terminal_reason="rapid_refill_breaker"
         )
-    )
+    elif shape in ("five_hour", "seven_day"):
+        payload.update(
+            subtype="error_during_execution",
+            terminal_reason="blocking_limit",
+            rate_limit_info={
+                "status": "rejected",
+                "rateLimitType": shape,
+                "resetsAt": int(os.environ["FAKE_CLAUDE_LIMIT_RESETS_AT"]),
+            },
+        )
+    elif shape == "rate_limit_info_only":
+        payload.update(
+            subtype="error_during_execution",
+            rate_limit_info={"status": "rejected", "rateLimitType": "seven_day"},
+        )
+    elif shape == "api_error_status":
+        payload.update(subtype="success", api_error_status=429, result="")
+    elif shape == "raw_api_error":
+        payload = {"type": "error", "error": {"type": "rate_limit_error"}}
+    elif shape == "generic_crash":
+        # The generic failure subtype with NO limit terminal reason: an ordinary
+        # session error that must stay a retry, never a campaign-wide pause.
+        payload.update(subtype="error_during_execution", terminal_reason="model_error")
+    else:
+        raise SystemExit(f"unknown FAKE_CLAUDE_LIMIT_SHAPE {shape!r}")
+    print(json.dumps(payload))
     sys.exit(1)
 if mode == "crash":
     print("boom, not json")

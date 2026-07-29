@@ -9,7 +9,7 @@ import subprocess
 import sys
 from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Mapping, Optional
 from menagerie.crawler.author_dispatch import (
@@ -318,6 +318,29 @@ def _future_reset(now: str, signal: CheckerBackoffSignal | AuthorBackoffSignal) 
     instant = datetime.fromisoformat(now.removesuffix("Z") + "+00:00")
     seconds = signal.retry_after_seconds if signal.retry_after_seconds is not None else 3600
     return (instant + timedelta(seconds=seconds)).isoformat().replace("+00:00", "Z")
+
+
+def _normalize_wake_reset(reset_at: str) -> str:
+    """Render one validated reset in the RFC 3339 ``Z`` form the wake layer demands.
+
+    ``plausible_author_reset_at`` deliberately returns its candidate verbatim, so a
+    provider-declared reset can arrive in ``+00:00`` offset form. ``wakeup._parse_utc``
+    rejects anything not ending in ``Z``, which would turn a correctly detected usage
+    pause into a ``WakeupConfigurationError`` at the moment the campaign most needs to
+    park. Guessed resets already end in ``Z`` (see :func:`_future_reset`), so only the
+    observed path was exposed -- i.e. exactly the path that a real limit takes.
+
+    This normalizes representation only. An unparseable value is returned untouched so
+    the wake layer still refuses it rather than having a malformed reset laundered here.
+    """
+
+    try:
+        parsed = datetime.fromisoformat(reset_at.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return reset_at
+    if parsed.tzinfo is None:
+        return reset_at
+    return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _load_driver_state(path: Path) -> JsonObject:
