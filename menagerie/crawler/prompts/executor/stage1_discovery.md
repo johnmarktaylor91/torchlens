@@ -65,24 +65,95 @@ arm-specific payload you own. The executor wraps it with `schema_version`, `stab
 }
 ```
 
-Other arms, each with the evidence shape shown:
+Other arms use these exact complete shapes:
 
-- `NO_USABLE_SOURCE`: write `{"arm":"NO_USABLE_SOURCE","search_evidence":{
-  "queries":[...],"places":[...],"candidate_links":[{"url":"https://...",
-  "why_rejected":"..."}],"languages":[...],"conclusion":"..."}}}` -- when no usable
-  code or sufficiently detailed description exists anywhere.
-- `INSUFFICIENT_DESCRIPTION`: write the same bounded `search_evidence` plus
-  `"retained_vague_text":"..."`.
-  -- material found but too vague to specify the forward pass.
-- `NOT_A_MODEL`: write the same complete `search_evidence`.
-- `NEEDS_HIGHER_TIER`: write `"research_summary"` with exactly the same
-  structured fields as `search_evidence` --
-  the model is real but beyond this tier's standards; your research rides along to the
-  higher tier.
-- `RETRYABLE_TOOL_FAILURE`: write non-empty `tool_name`, exact registered
-  `tool_spelling`, and verbatim `error` -- **use this the moment a research tool is missing,
-  permission-blocked, or erroring.** Never research from memory; a session that cannot
-  reach its tools must fail loudly, not degrade quietly.
+<!-- CONTRACT_FIXTURE: stage1-no-usable-source-author-payload -->
+```json
+{
+  "arm": "NO_USABLE_SOURCE",
+  "search_evidence": {
+    "queries": ["ExampleNet implementation"],
+    "places": ["GitHub"],
+    "candidate_links": [],
+    "languages": ["English"],
+    "conclusion": "No usable implementation or complete specification was found."
+  }
+}
+```
+
+<!-- CONTRACT_FIXTURE: stage1-insufficient-description-author-payload -->
+```json
+{
+  "arm": "INSUFFICIENT_DESCRIPTION",
+  "search_evidence": {
+    "queries": ["ExampleNet architecture"],
+    "places": ["Author project page"],
+    "candidate_links": [
+      {
+        "url": "http://example.org/project",
+        "why_rejected": "The observed page names the model but omits its forward definition."
+      }
+    ],
+    "languages": ["English"],
+    "conclusion": "The retained description is too vague to specify a faithful forward pass."
+  },
+  "retained_vague_text": "We introduce ExampleNet, a novel neural architecture."
+}
+```
+
+<!-- CONTRACT_FIXTURE: stage1-not-a-model-author-payload -->
+```json
+{
+  "arm": "NOT_A_MODEL",
+  "search_evidence": {
+    "queries": ["ExampleNet neural network"],
+    "places": ["arXiv"],
+    "candidate_links": [],
+    "languages": ["English"],
+    "conclusion": "The name refers to a dataset rather than a neural-network model."
+  }
+}
+```
+
+<!-- CONTRACT_FIXTURE: stage1-needs-higher-tier-author-payload -->
+```json
+{
+  "arm": "NEEDS_HIGHER_TIER",
+  "research_summary": {
+    "queries": ["ExampleNet exact architecture"],
+    "places": ["GitHub", "arXiv"],
+    "candidate_links": [
+      {
+        "url": "https://example.org/upstream",
+        "why_rejected": "The source is relevant, but variant fidelity needs higher-tier adjudication."
+      }
+    ],
+    "languages": ["English"],
+    "conclusion": "The model is real and located, but this tier cannot adjudicate it faithfully."
+  }
+}
+```
+
+<!-- CONTRACT_FIXTURE: stage1-retryable-tool-failure-author-payload -->
+```json
+{
+  "arm": "RETRYABLE_TOOL_FAILURE",
+  "tool_name": "Exa search",
+  "tool_spelling": "mcp__exa__web_search_exa",
+  "error": "connection unavailable"
+}
+```
+
+Use `NO_USABLE_SOURCE` when no usable code or sufficiently detailed description exists;
+`INSUFFICIENT_DESCRIPTION` when material exists but cannot specify the forward pass;
+`NOT_A_MODEL` for a grounded non-model finding; and `NEEDS_HIGHER_TIER` when the model is
+real but beyond this tier's standards. `search_evidence` and `research_summary` have the
+same five required fields shown above. Candidate links retain exact observed HTTP or HTTPS
+research locators; they are evidence records, not fetch grants.
+
+Use `RETRYABLE_TOOL_FAILURE` the moment a research tool is missing, permission-blocked,
+or erroring. Never research from memory; a session that cannot reach its tools must fail
+loudly, not degrade quietly.
 
 Every authored object has exactly one `arm`. Do not emit the machine-owned envelope or
 repeat the discriminator anywhere else.

@@ -13,6 +13,8 @@ from menagerie.crawler.author_dispatch import (
     BlockedRecommendation,
     SkipRecommendation,
     build_author_envelope,
+    derive_terminal_evidence_pack,
+    derive_terminal_license_disposition,
     validate_author_result_mapping,
 )
 from menagerie.crawler.authority import AuthorityContext
@@ -521,42 +523,38 @@ def _machine_discovery_author_result(
         raise DriverIntegrationError("machine discovery manifest lost its evidence row")
     source_id = str(sources[0]["source_id"])
     evidence_id = f"discovery-finding-{stable_hash(discovery.raw_result).removeprefix('sha256:')[:16]}"
-    evidence_identity = stable_hash(
-        {
-            "source_id": source_id,
-            "evidence_id": evidence_id,
-            "discovery": discovery.raw_result,
-        }
-    )
-    license_identity = stable_hash(
-        {
-            "source_id": source_id,
-            "disposition": "not-applicable-machine-discovery-evidence",
-        }
-    )
     if isinstance(discovery, NegativeDiscovery):
+        predicate = discovery.status_code.removeprefix("skipped:")
+        kind = "SKIP_RECOMMENDATION"
         payload: JsonObject = {
-            "arm": "SKIP_RECOMMENDATION",
+            "arm": kind,
             "status_code": discovery.status_code,
             "source_ids": [source_id],
             "evidence_ids": [evidence_id],
-            "evidence_identity": evidence_identity,
             "search_report_identity": stable_hash(discovery.search_evidence),
-            "license_identity": license_identity,
         }
-        kind = "SKIP_RECOMMENDATION"
     else:
+        predicate = "blocked-prerequisite"
+        kind = "BLOCKED"
         payload = {
-            "arm": "BLOCKED",
+            "arm": kind,
             "stage": "author",
             "reason_code": "needs-higher-tier",
             "prerequisite_ids": [source_id],
             "evidence_ids": [evidence_id],
-            "evidence_identity": evidence_identity,
-            "license_identity": license_identity,
             "research_summary": deepcopy(discovery.research_summary),
         }
-        kind = "BLOCKED"
+    evidence_pack = derive_terminal_evidence_pack(
+        source_ids=[source_id],
+        evidence_ids=[evidence_id],
+        predicate=predicate,
+    )
+    license_disposition = derive_terminal_license_disposition(
+        kind=kind,
+        source_manifest_identity=str(expected["source_manifest_identity"]),
+    )
+    payload["evidence_identity"] = evidence_pack["evidence_identity"]
+    payload["license_identity"] = stable_hash(license_disposition)
     payload["recommendation_sha256"] = stable_hash(payload)
     body: JsonObject = {
         "schema_version": AUTHOR_RESULT_SCHEMA_VERSION,
