@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -470,7 +470,7 @@ def test_source_round_retains_authored_architecture_observations(rig) -> None:
         "arm": "FOUND",
         "sources": [
             {
-                **DEFAULT_DISCOVERY["sources"][0],
+                **cast(dict[str, Any], DEFAULT_DISCOVERY["sources"][0]),
                 "notes": notes,
             }
         ],
@@ -1056,7 +1056,7 @@ def test_schema_failure_detail_is_rendered_into_the_next_brief(rig) -> None:
         "arm": "FOUND",
         "sources": [
             {
-                **DEFAULT_DISCOVERY["sources"][0],
+                **cast(dict[str, Any], DEFAULT_DISCOVERY["sources"][0]),
                 "undeclared_observation": "No contract home.",
             }
         ],
