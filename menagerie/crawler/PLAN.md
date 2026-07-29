@@ -706,6 +706,14 @@ same change.
 - `stage_capability_probe.md`: `sha256:1f59abfc6f76beb4f10510a1f85373384be5ae5907c9fb198b3c2677f7781d01`
 - `stage_source_request.md`: `sha256:a642cec7d2a729314881112e2b80591e29c5ce30f76523582ea23fc38cf3b5ec`
 
+The headless executor's own stage prompts. These drive every author session on the
+production path; the pool fragments above serve the operator-mediated lane the executor
+replaced. They were unpinned until 2026-07-29, so drift in the two most load-bearing
+prompts was undetectable.
+
+- `stage1_discovery.md`: `sha256:d6e0e68574c9396769ef1bfae4fb89746e4e5d649be29cdb802b615128d17604`
+- `stage2_author.md`: `sha256:38d8bba29143e01046857547942e7c78ebc1ee8d95905700f9b1875370600d87`
+
 ## 21. Acceptance tests
 
 The implementation is not ready for the real crawl until tests prove all of the following.

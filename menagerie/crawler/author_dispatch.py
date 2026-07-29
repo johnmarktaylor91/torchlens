@@ -114,6 +114,8 @@ class DeferRecommendation:
     evidence_identity: str
     license_identity: str
     recommendation_sha256: str
+    evidence_records: tuple[JsonObject, ...] = ()
+    license_record: JsonObject | None = None
     handoff_execution: HandoffExecution | None = None
 
 
@@ -129,6 +131,8 @@ class SkipRecommendation:
     search_report_identity: str
     license_identity: str
     recommendation_sha256: str
+    evidence_records: tuple[JsonObject, ...] = ()
+    license_record: JsonObject | None = None
 
 
 @dataclass(frozen=True)
@@ -143,12 +147,53 @@ class BlockedRecommendation:
     evidence_identity: str
     license_identity: str
     recommendation_sha256: str
+    evidence_records: tuple[JsonObject, ...] = ()
+    license_record: JsonObject | None = None
     research_summary: JsonObject | None = None
 
 
 AuthorResult: TypeAlias = (
     ProposedAuthorResult | DeferRecommendation | SkipRecommendation | BlockedRecommendation
 )
+
+
+def _declared_evidence_records(payload: Mapping[str, Any]) -> tuple[JsonObject, ...]:
+    """Return the terminal payload's declared excerpt channel, defensively copied.
+
+    Parameters
+    ----------
+    payload:
+        Schema-valid terminal payload.
+
+    Returns
+    -------
+    tuple[dict[str, Any], ...]
+        Declared excerpt records, empty when the payload declares none. Absence
+        is a named gap downstream, never a silent claim of grounding.
+    """
+
+    records = payload.get("evidence_records")
+    if not isinstance(records, list):
+        return ()
+    return tuple(deepcopy(dict(record)) for record in records if isinstance(record, Mapping))
+
+
+def _declared_license_record(payload: Mapping[str, Any]) -> JsonObject | None:
+    """Return the terminal payload's declared license excerpt, defensively copied.
+
+    Parameters
+    ----------
+    payload:
+        Schema-valid terminal payload.
+
+    Returns
+    -------
+    dict[str, Any] | None
+        Declared license record, or ``None`` when the payload declares none.
+    """
+
+    record = payload.get("license_record")
+    return deepcopy(dict(record)) if isinstance(record, Mapping) else None
 
 
 def derive_terminal_evidence_pack(
@@ -827,6 +872,8 @@ def _validate_author_result_mapping(
             evidence_identity=str(payload["evidence_identity"]),
             license_identity=str(payload["license_identity"]),
             recommendation_sha256=str(payload["recommendation_sha256"]),
+            evidence_records=_declared_evidence_records(payload),
+            license_record=_declared_license_record(payload),
             handoff_execution=HandoffExecution(
                 proposal=deepcopy(dict(handoff_proposal)),
                 proposal_sha256=proposal_sha256,
@@ -845,6 +892,8 @@ def _validate_author_result_mapping(
             search_report_identity=str(payload["search_report_identity"]),
             license_identity=str(payload["license_identity"]),
             recommendation_sha256=str(payload["recommendation_sha256"]),
+            evidence_records=_declared_evidence_records(payload),
+            license_record=_declared_license_record(payload),
         )
     research_summary = payload.get("research_summary")
     if payload.get("reason_code") == "needs-higher-tier" and not isinstance(
@@ -864,6 +913,8 @@ def _validate_author_result_mapping(
         evidence_identity=str(payload["evidence_identity"]),
         license_identity=str(payload["license_identity"]),
         recommendation_sha256=str(payload["recommendation_sha256"]),
+        evidence_records=_declared_evidence_records(payload),
+        license_record=_declared_license_record(payload),
         research_summary=(
             deepcopy(dict(research_summary)) if isinstance(research_summary, Mapping) else None
         ),
