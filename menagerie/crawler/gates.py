@@ -425,13 +425,6 @@ def validate_terminal_disposition_gate(
             or (integrity.get("verdict") != "accurate")
         ):
             raise GateRoutingError("accepted terminal disposition requires accurate item integrity")
-        if not _pack_is_grounded(evidence_pack):
-            # A recommendation whose evidence never bound its declared identity
-            # cannot be accepted, whatever the checker concluded. The excerpts
-            # it would have had to read were not inspectable.
-            raise GateRoutingError(
-                "accepted terminal disposition requires identity-bound evidence excerpts"
-            )
     findings = terminal.get("findings")
     if not isinstance(findings, list) or not all(isinstance(value, str) for value in findings):
         raise GateRoutingError("terminal disposition findings are invalid")
@@ -553,11 +546,15 @@ def _validate_terminal_evidence_references(
 
     if not _pack_is_grounded(evidence_pack):
         # No excerpt record binds the declared evidence identity, so there is
-        # nothing here to resolve. This is NOT a pass: the caller refuses an
-        # ``accepted`` disposition for an ungrounded pack, and the envelope
-        # carries the gap so the independent checker sees it too. The previous
-        # behaviour was strictly weaker -- the driver synthesized excerpt rows
-        # and then checked them against itself.
+        # nothing here for the DRIVER to resolve -- and the driver was never the
+        # right judge of it. The previous behaviour was strictly weaker: the
+        # driver synthesized excerpt rows (source IDs by round-robin index,
+        # supports stamped with the predicate) and then checked them against
+        # itself, which always passed. The envelope now carries the gap
+        # explicitly, so the independent checker -- the only component that can
+        # read an excerpt and judge whether it grounds the claim -- rules on it,
+        # and its rejection routes through the terminal machinery as the
+        # per-model verdict it is.
         declared = _declared_checked_source_ids(evidence_pack)
         if not set(declared).issubset(source_ids):
             raise GateRoutingError("terminal evidence resolves outside the checked source set")

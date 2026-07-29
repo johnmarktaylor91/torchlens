@@ -47,6 +47,7 @@ from menagerie.crawler.authority import (
     derive_parent_attestation,
 )
 from menagerie.crawler.checker_dispatch import CheckerBackoffSignal
+from menagerie.crawler.gates import GateRoutingError
 from menagerie.crawler.campaign_config import load_campaign_config
 from menagerie.crawler.checkpoint import (
     _externally_controlled_record_text,
@@ -2755,7 +2756,7 @@ def test_command_checker_lane_validates_real_proposal_digest_binding(tmp_path: P
 import json
 import sys
 from pathlib import Path
-from menagerie.crawler.checker_dispatch import compute_result_envelope_sha256
+from menagerie.crawler.checker_dispatch import apply_machine_owned_gate_fields
 from menagerie.crawler.tests.conftest import NOW, make_gate
 
 request = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
@@ -2786,7 +2787,7 @@ for result_item, request_item in zip(gate["items"], request["items"], strict=Tru
     result_item["rung_check"]["highest_applicable"] = result_item["rung_check"][
         "selected_rung"
     ]
-gate["result_envelope_sha256"] = compute_result_envelope_sha256(gate)
+gate = apply_machine_owned_gate_fields(gate, request, started_at=NOW, finished_at=NOW)
 Path(request["required_output_path"]).write_text(json.dumps(gate), encoding="utf-8")
 """
     outcome = CommandCheckerLane((sys.executable, "-c", script)).check_metadata(
@@ -6807,3 +6808,85 @@ def test_a_genuinely_crashed_author_session_still_records_session_crashed(
     model = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)[0]
     assert model["status"]["code"] == "failed:author"
     assert model["status"]["reason_code"] == "session-crashed"
+
+
+class TerminalGateRefusingChecker(FakeChecker):
+    """Refuse every terminal disposition the way a stale gate binding does."""
+
+    def check_terminal(
+        self, artifact: AuthorArtifact, work_root: Path, config: DriverConfig
+    ) -> CheckerOutcome:
+        """Raise the routing error a mismatched terminal gate produces."""
+
+        del artifact, work_root, config
+        raise GateRoutingError("synthetic stale terminal gate binding")
+
+
+def test_terminal_gate_failure_is_model_local_and_the_campaign_continues(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One refused terminal disposition terminalizes its model, not the campaign.
+
+    The terminal arm was the only author outcome with no model-local handler, so
+    a single refused gate unwound the whole run and every other scheduled model
+    was lost with it.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    monkeypatch:
+        Fixture used to publish synthetic discovery envelopes.
+    """
+
+    snapshot = _snapshot(tmp_path, count=2)
+
+    def publish_negative(
+        argv: Sequence[str], **kwargs: Any
+    ) -> subprocess.CompletedProcess[str]:
+        """Publish a registered negative discovery envelope for every request."""
+
+        del kwargs
+        request = json.loads(Path(argv[-1]).read_text(encoding="utf-8"))
+        Path(request["required_output_path"]).write_text(
+            json.dumps(
+                {
+                    "schema_version": "menagerie.crawler.source-discovery.v1",
+                    "stable_id": request["stable_id"],
+                    "work_id": request["work_id"],
+                    "arm": "NO_USABLE_SOURCE",
+                    "payload": {
+                        "arm": "NO_USABLE_SOURCE",
+                        "search_evidence": {
+                            "queries": [
+                                "ExampleNet architecture",
+                                '"ExampleNet" neural network',
+                            ],
+                            "places": ["publisher index", "code hosts", "web archive"],
+                            "candidate_links": [],
+                            "languages": ["en", "zh"],
+                            "conclusion": (
+                                "No usable architecture source exists after the bounded search."
+                            ),
+                        },
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(list(argv), 0, "", "")
+
+    monkeypatch.setattr(driver_admission_module, "_run_operator_command", publish_negative)
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=CommandAuthorLane(("fake-author",)),
+        checker=TerminalGateRefusingChecker(),
+    ).run()
+
+    assert result.status == "terminal-partition-complete"
+    models = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
+    assert len(models) == 2
+    for model in models:
+        assert model["status"]["code"] == "failed:runner"
+        assert model["status"]["reason_code"] == "protocol-violation"

@@ -16,6 +16,7 @@ from menagerie.crawler.checker_dispatch import (
     build_fidelity_envelope,
     build_metadata_vet_envelope,
     compute_result_envelope_sha256,
+    machine_owned_gate_fields,
 )
 from menagerie.crawler.constants import GateKind
 from menagerie.crawler.identity import canonical_json_bytes
@@ -218,7 +219,18 @@ def test_success_uses_settled_argv_and_publishes_atomically(
     )
 
     assert exit_code is OperatorExitCode.SUCCESS
-    assert json.loads((tmp_path / "result.json").read_text(encoding="utf-8")) == result
+    published = json.loads((tmp_path / "result.json").read_text(encoding="utf-8"))
+    # The published gate is the checker's verdict plus the machine-owned
+    # scaffold the wrapper stamps. Identities and wall timings are never taken
+    # from the checker, so they differ from whatever it wrote.
+    envelope = json.loads(request_path.read_text(encoding="utf-8"))
+    scaffold = machine_owned_gate_fields(envelope)
+    assert {key: published[key] for key in scaffold} == scaffold
+    assert published["checker"]["started_at"] <= published["checker"]["finished_at"]
+    checker_owned = set(scaffold) | {"checker", "result_envelope_sha256"}
+    assert {key: value for key, value in published.items() if key not in checker_owned} == {
+        key: value for key, value in result.items() if key not in checker_owned
+    }
     argv = observed[0]
     assert argv[:6] == (
         "codex",

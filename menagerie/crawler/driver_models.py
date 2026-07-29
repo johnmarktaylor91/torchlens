@@ -60,6 +60,8 @@ from menagerie.crawler.reducer import (
     output_signature_error,
 )
 from menagerie.crawler.terminal_evidence import (
+    resolve_machine_discovery_evidence,
+    resolve_machine_discovery_license,
     resolve_terminal_evidence,
     resolve_terminal_license,
 )
@@ -205,12 +207,22 @@ def _terminal_checker_item(artifact: AuthorArtifact) -> JsonObject:
     # honest verdict was cannot-verify. Resolve the author's frozen records and
     # bind them to the declared identity instead; when they do not bind, say so.
     author_root = artifact.model_dir.parent
-    resolved = resolve_terminal_evidence(
+    # A driver-derived discovery terminal grounds from the bytes the driver
+    # itself froze; everything else grounds from the author's frozen records.
+    resolved = resolve_machine_discovery_evidence(
+        source_manifest=artifact.source_manifest,
+        evidence_ids=evidence_ids,
+        evidence_identity=result.evidence_identity,
+        predicate=predicate,
+    ) or resolve_terminal_evidence(
         author_root=author_root,
         evidence_ids=evidence_ids,
         evidence_identity=result.evidence_identity,
     )
-    license_resolution = resolve_terminal_license(
+    license_resolution = resolve_machine_discovery_license(
+        source_manifest=artifact.source_manifest,
+        license_identity=result.license_identity,
+    ) or resolve_terminal_license(
         author_root=author_root, license_identity=result.license_identity
     )
     evidence_pack: JsonObject = {

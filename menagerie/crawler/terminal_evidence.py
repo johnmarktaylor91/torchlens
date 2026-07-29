@@ -29,6 +29,8 @@ from menagerie.crawler.models import JsonObject
 TERMINAL_EVIDENCE_FILENAME = "evidence-pack.json"
 TERMINAL_LICENSE_FILENAME = "license-pack.json"
 ATTEMPTS_DIRNAME = "attempts"
+DISCOVERY_EVIDENCE_KIND = "discovery-evidence-v1"
+MACHINE_DISCOVERY_LICENSE_DISPOSITION = "not-applicable-machine-discovery-evidence"
 
 GROUNDED = "grounded"
 UNRESOLVED = "unresolved"
@@ -170,6 +172,90 @@ def resolve_terminal_evidence(
     return TerminalEvidenceResolution(UNRESOLVED, (), declared, last_reason)
 
 
+def resolve_machine_discovery_evidence(
+    *,
+    source_manifest: Mapping[str, Any],
+    evidence_ids: Sequence[str],
+    evidence_identity: str,
+    predicate: str,
+) -> Optional[TerminalEvidenceResolution]:
+    """Ground a driver-derived discovery terminal from its own frozen bytes.
+
+    A machine discovery arm has no author excerpt pack: the driver itself froze
+    the discovery result into content-addressed storage and derived the evidence
+    identity from those exact bytes. Those bytes ARE the literal evidence, and
+    the identity is recomputable from them, so this arm grounds honestly without
+    any model claim -- the excerpt text, its digest, and the claim it supports
+    are all machine facts.
+
+    Parameters
+    ----------
+    source_manifest:
+        Frozen one-row discovery-evidence manifest.
+    evidence_ids:
+        Exact evidence identities the recommendation declares.
+    evidence_identity:
+        Exact evidence-pack identity the recommendation declares.
+    predicate:
+        Closed typed terminal predicate the evidence resolves.
+
+    Returns
+    -------
+    TerminalEvidenceResolution | None
+        Grounded resolution, or ``None`` when this is not a machine discovery
+        manifest so the caller can fall back.
+    """
+
+    sources = source_manifest.get("sources")
+    if not isinstance(sources, list) or len(sources) != 1 or len(evidence_ids) != 1:
+        return None
+    row = sources[0]
+    if not isinstance(row, Mapping) or row.get("source_kind") != DISCOVERY_EVIDENCE_KIND:
+        return None
+    cas_path = row.get("cas_path")
+    if not isinstance(cas_path, str):
+        return None
+    try:
+        content = Path(cas_path).read_bytes()
+        discovery = json.loads(content.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return TerminalEvidenceResolution(
+            UNRESOLVED,
+            (),
+            tuple(str(value) for value in evidence_ids),
+            f"frozen discovery evidence at {cas_path} is unreadable",
+        )
+    evidence_id = str(evidence_ids[0])
+    source_id = str(row.get("source_id"))
+    observed = stable_hash(
+        {"source_id": source_id, "evidence_id": evidence_id, "discovery": discovery}
+    )
+    if observed != evidence_identity:
+        return TerminalEvidenceResolution(
+            UNRESOLVED,
+            (),
+            (evidence_id,),
+            f"frozen discovery evidence recomputes to {observed}, not the declared "
+            f"evidence_identity {evidence_identity}",
+        )
+    return TerminalEvidenceResolution(
+        GROUNDED,
+        (
+            {
+                "evidence_id": evidence_id,
+                "source_id": source_id,
+                "locator": str(row.get("url", cas_path)),
+                "text": content.decode("utf-8"),
+                "text_sha256": str(row.get("content_sha256", "")),
+                "supports": [predicate],
+                "origin": "machine-discovery",
+            },
+        ),
+        (),
+        None,
+    )
+
+
 def resolve_terminal_license(
     *, author_root: Path, license_identity: str
 ) -> TerminalLicenseResolution:
@@ -210,6 +296,45 @@ def resolve_terminal_license(
             continue
         return TerminalLicenseResolution(GROUNDED, record, None)
     return TerminalLicenseResolution(UNRESOLVED, None, last_reason)
+
+
+def resolve_machine_discovery_license(
+    *, source_manifest: Mapping[str, Any], license_identity: str
+) -> Optional[TerminalLicenseResolution]:
+    """Ground the machine-discovery license disposition from its own derivation.
+
+    Parameters
+    ----------
+    source_manifest:
+        Frozen one-row discovery-evidence manifest.
+    license_identity:
+        Exact license-disposition identity the recommendation declares.
+
+    Returns
+    -------
+    TerminalLicenseResolution | None
+        Grounded resolution, or ``None`` when this is not a machine discovery
+        manifest so the caller can fall back.
+    """
+
+    sources = source_manifest.get("sources")
+    if not isinstance(sources, list) or len(sources) != 1:
+        return None
+    row = sources[0]
+    if not isinstance(row, Mapping) or row.get("source_kind") != DISCOVERY_EVIDENCE_KIND:
+        return None
+    record = {
+        "source_id": str(row.get("source_id")),
+        "disposition": MACHINE_DISCOVERY_LICENSE_DISPOSITION,
+    }
+    if stable_hash(record) != license_identity:
+        return TerminalLicenseResolution(
+            UNRESOLVED,
+            None,
+            "machine discovery license disposition does not recompute to "
+            f"{license_identity}",
+        )
+    return TerminalLicenseResolution(GROUNDED, record, None)
 
 
 def _candidate_paths(author_root: Path, filename: str) -> tuple[Path, ...]:

@@ -3264,9 +3264,47 @@ class AdmissionEnvironmentMixin:
                 )
                 continue
             if not isinstance(artifact.author_result, ProposedAuthorResult):
-                pause = self._route_terminal_author_result(
-                    item, artifact, reducer, operational, state
-                )
+                # The terminal arm was the ONE author outcome with no model-local
+                # handler: every sibling path below records a `protocol-violation`
+                # attempt and moves to the next model, while a stale gate binding
+                # or a refused checker contract on a single terminal recommendation
+                # unwound the whole campaign. A per-model outcome belongs to its
+                # model. Transport failures and campaign pauses still propagate --
+                # they are genuinely campaign-wide.
+                try:
+                    pause = self._route_terminal_author_result(
+                        item, artifact, reducer, operational, state
+                    )
+                except (DriverPaused, RetryableOperatorError, AuthorBackoffError):
+                    raise
+                except Exception as exc:  # noqa: BLE001 -- terminal gating is model-local
+                    attempt = _driver_failure_attempt(
+                        item,
+                        artifact,
+                        "runner",
+                        "protocol-violation",
+                        exc,
+                        self.config,
+                        diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
+                        environment=None,
+                        created_at=self.dependencies.clock(),
+                    )
+                    persisted = reducer.append_attempt(attempt).record
+                    # No artifact is handed to finalization: a terminal arm that
+                    # never obtained its gate has nothing to publish, and the
+                    # sibling stage-failure handler above takes the same shape.
+                    self._terminalize(
+                        item,
+                        None,
+                        "failed:runner",
+                        "protocol-violation",
+                        str(exc),
+                        (persisted,),
+                        reducer,
+                        operational,
+                        state,
+                    )
+                    continue
                 if pause is not None:
                     raise DriverPaused(pause)
                 self.dependencies.boundary_hook("after-author", item.stable_id)

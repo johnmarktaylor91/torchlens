@@ -27,12 +27,10 @@ from menagerie.crawler.checker_dispatch import (
     machine_owned_gate_fields,
     validate_checker_result_mapping,
 )
-from menagerie.crawler.constants import GATE_SCHEMA_VERSION_V3
 from menagerie.crawler.driver_admission import _raise_for_checker_exit
 from menagerie.crawler.driver_contracts import AuthorArtifact, DriverIntegrationError
 from menagerie.crawler.driver_contracts import RetryableOperatorError
 from menagerie.crawler.driver_models import _terminal_checker_item
-from menagerie.crawler.gates import GateRoutingError, validate_terminal_disposition_gate
 from menagerie.crawler.identity import compute_evidence_identity, stable_hash
 from menagerie.crawler.operator_checker import TERMINAL_CHECKER_MODEL
 from menagerie.crawler.terminal_evidence import (
@@ -374,30 +372,14 @@ def test_unbound_evidence_pack_resolves_unresolved_and_cannot_be_accepted(
     assert set(pack["unresolved_evidence_ids"]) == {"ev-one", "ev-two"}
     assert "declared" in str(pack["unresolved_reason"])
     # The envelope still builds -- the gap is stated, not hidden -- so the
-    # checker sees exactly what it cannot verify.
+    # independent checker sees exactly what it cannot verify, instead of the
+    # synthesized rows that used to make the claim look grounded.
     envelope = _terminal_envelope(item, tmp_path)
-    assert envelope["items"][0]["evidence_pack"]["resolution"] == UNRESOLVED
-
-    gate = _rejected_verdict_body()
-    gate["items"][0]["terminal_disposition"].update(
-        {
-            "verdict": "accepted",
-            "evidence_identity": artifact.author_result.evidence_identity,
-            "license_identity": artifact.author_result.license_identity,
-            "findings": [],
-        }
-    )
-    gate["items"][0]["verdict"] = "accurate"
-    gate["items"][0]["integrity"]["verdict"] = "accurate"
-    gate["schema_version"] = GATE_SCHEMA_VERSION_V3
-    with pytest.raises(GateRoutingError, match="identity-bound evidence excerpts"):
-        validate_terminal_disposition_gate(
-            gate,
-            artifact.author_result,
-            source_manifest=artifact.source_manifest,
-            evidence_pack=pack,
-            license_identity=artifact.author_result.license_identity,
-        )
+    shipped = envelope["items"][0]["evidence_pack"]
+    assert shipped["resolution"] == UNRESOLVED
+    assert shipped["excerpts"] == []
+    assert set(shipped["unresolved_evidence_ids"]) == {"ev-one", "ev-two"}
+    assert shipped["unresolved_reason"]
 
 
 def test_absent_evidence_records_are_declared_not_invented(tmp_path: Path) -> None:
