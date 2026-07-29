@@ -5,16 +5,16 @@ from __future__ import annotations
 from copy import deepcopy
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import pytest
 
 from menagerie.crawler.author_dispatch import AuthorResultBinding, DeferRecommendation
 from menagerie.crawler.checker_dispatch import (
     CheckerDispatchError,
+    apply_machine_owned_gate_fields,
     build_metadata_vet_envelope,
     classify_checker_response,
-    compute_result_envelope_sha256,
     validate_checker_result,
 )
 from menagerie.crawler.constants import (
@@ -42,6 +42,18 @@ from menagerie.crawler.tests.conftest import (
     make_gate,
     make_model,
 )
+
+
+def _stamped(gate: dict[str, Any], envelope: Mapping[str, Any]) -> dict[str, Any]:
+    """Apply the machine-owned gate scaffold exactly as the wrapper does."""
+
+    checker = gate.get("checker", {})
+    return apply_machine_owned_gate_fields(
+        gate,
+        envelope,
+        started_at=str(checker.get("started_at", "2026-01-01T00:00:00Z")),
+        finished_at=str(checker.get("finished_at", "2026-01-01T00:00:01Z")),
+    )
 
 
 def _checker_item_pack(item: dict[str, Any]) -> dict[str, Any]:
@@ -169,9 +181,7 @@ def test_metadata_batch_envelope_validates_every_item_result(tmp_path: Path) -> 
         checker_version="test",
         request_nonce="fresh-1",
     )
-    gate["gate_identity"] = envelope["envelope_sha256"]
-    gate["checker"]["prompt_sha256"] = envelope["prompt"]["sha256"]
-    gate["result_envelope_sha256"] = compute_result_envelope_sha256(gate)
+    gate = _stamped(gate, envelope)
     result_path.write_text(json.dumps(gate))
     validated = validate_checker_result(result_path, envelope)
     assert validated["batch_size"] == 10
@@ -201,9 +211,7 @@ def test_metadata_final_tail_requires_explicit_dispatch_flag(tmp_path: Path) -> 
         request_nonce="final-short-batch",
         final_tail=True,
     )
-    gate["gate_identity"] = envelope["envelope_sha256"]
-    gate["checker"]["prompt_sha256"] = envelope["prompt"]["sha256"]
-    gate["result_envelope_sha256"] = compute_result_envelope_sha256(gate)
+    gate = _stamped(gate, envelope)
     result_path.parent.mkdir(parents=True)
     result_path.write_text(json.dumps(gate), encoding="utf-8")
     assert validate_checker_result(result_path, envelope)["batch_size"] == 1
@@ -223,10 +231,8 @@ def test_checker_result_rejects_partial_or_mismatched_item(tmp_path: Path) -> No
         checker_version="test",
         request_nonce="fresh-2",
     )
-    gate["gate_identity"] = envelope["envelope_sha256"]
-    gate["checker"]["prompt_sha256"] = envelope["prompt"]["sha256"]
     gate["items"][0]["verified_hashes"]["evidence"] = "sha256:" + "c" * 64
-    gate["result_envelope_sha256"] = compute_result_envelope_sha256(gate)
+    gate = _stamped(gate, envelope)
     result_path.write_text(json.dumps(gate))
     with pytest.raises(CheckerDispatchError, match="mismatched binding"):
         validate_checker_result(result_path, envelope)

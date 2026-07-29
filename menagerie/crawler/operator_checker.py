@@ -19,6 +19,8 @@ from typing import Any, Callable, Mapping, Sequence, TextIO
 from menagerie.crawler.checker_dispatch import (
     CheckerDispatchError,
     PROMPT_PATH,
+    apply_machine_owned_gate_fields,
+    machine_owned_gate_fields,
     validate_checker_result_mapping,
 )
 from menagerie.crawler.constants import GateKind
@@ -317,7 +319,9 @@ def execute_checker_request(
                     attempt_number - 1,
                     "checker operator deadline expired before the next attempt",
                 )
+            started_at = _utc_timestamp(clock())
             attempt = runner(argv, last_message_path, min(CHECKER_TIMEOUT_SECONDS, remaining))
+            finished_at = _utc_timestamp(clock())
             classification = classify_codex_attempt(attempt)
             last_detail = emit_combined_tail(
                 attempt.stdout,
@@ -337,7 +341,17 @@ def execute_checker_request(
             )
             if classification.kind is FailureKind.SUCCESS:
                 try:
-                    result = _load_last_message(last_message_path)
+                    # The verdict is the checker's; the identities and wall
+                    # timings are the machine's. Stamping first means a complete
+                    # verdict is never thrown away over a scaffold field the
+                    # model could not observe, and it means no model-supplied
+                    # identity is ever believed.
+                    result = apply_machine_owned_gate_fields(
+                        _load_last_message(last_message_path),
+                        envelope,
+                        started_at=started_at,
+                        finished_at=finished_at,
+                    )
                     validate_checker_result_mapping(result, envelope)
                 except (
                     CheckerDispatchError,
@@ -545,13 +559,18 @@ def _build_prompt(envelope: Mapping[str, Any], request_path: Path) -> str:
     """
 
     frozen = PROMPT_PATH.read_text(encoding="utf-8")
+    machine_owned = ", ".join(sorted(machine_owned_gate_fields(envelope)) + ["checker.started_at", "checker.finished_at"])
     return (
         f"{frozen}\n\n"
         f"WORK_ENVELOPE_PATH={request_path}\n"
         "The outer read-only wrapper publishes result.json. Do not write files. "
         "Read the exact envelope at WORK_ENVELOPE_PATH, construct the complete gate.v3 "
         "object, serialize it as compact JSON, and return it in the output schema's sole "
-        "result_json string field."
+        "result_json string field.\n"
+        "These gate fields are MACHINE-OWNED and are stamped by the wrapper from the "
+        f"envelope: {machine_owned}. Omit them; anything you write there is discarded. "
+        "Your authority is the verdict, the per-field checks, the findings, the "
+        "unsupported claims, and the required repairs."
     )
 
 
@@ -662,6 +681,25 @@ def _load_last_message(path: Path) -> JsonObject:
     if not isinstance(value, dict):
         raise CheckerDispatchError("decoded Codex gate must be exactly one JSON object")
     return value
+
+
+def _utc_timestamp(moment: datetime) -> str:
+    """Return one schema-valid RFC 3339 UTC timestamp for a wrapper-observed instant.
+
+    Parameters
+    ----------
+    moment:
+        Instant observed through the injectable clock.
+
+    Returns
+    -------
+    str
+        Timestamp ending in ``Z``.
+    """
+
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _quota_reset(reset_text: str | None, now: datetime) -> tuple[str, str]:

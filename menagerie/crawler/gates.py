@@ -23,6 +23,7 @@ from menagerie.crawler.constants import (
 from menagerie.crawler.identity import stable_hash
 from menagerie.crawler.models import JsonObject
 from menagerie.crawler.schema import PayloadValidationError, validate_payload
+from menagerie.crawler.terminal_evidence import GROUNDED as TERMINAL_EVIDENCE_GROUNDED
 
 
 class GateRoutingError(ValueError):
@@ -424,6 +425,13 @@ def validate_terminal_disposition_gate(
             or (integrity.get("verdict") != "accurate")
         ):
             raise GateRoutingError("accepted terminal disposition requires accurate item integrity")
+        if not _pack_is_grounded(evidence_pack):
+            # A recommendation whose evidence never bound its declared identity
+            # cannot be accepted, whatever the checker concluded. The excerpts
+            # it would have had to read were not inspectable.
+            raise GateRoutingError(
+                "accepted terminal disposition requires identity-bound evidence excerpts"
+            )
     findings = terminal.get("findings")
     if not isinstance(findings, list) or not all(isinstance(value, str) for value in findings):
         raise GateRoutingError("terminal disposition findings are invalid")
@@ -464,7 +472,11 @@ def _terminal_result_references(
             result.evidence_ids,
             frozenset({predicate, result.status_code}),
         )
-    source_ids = _evidence_source_ids(evidence_pack, result.evidence_ids)
+    source_ids = (
+        _evidence_source_ids(evidence_pack, result.evidence_ids)
+        if _pack_is_grounded(evidence_pack)
+        else _declared_checked_source_ids(evidence_pack)
+    )
     return (
         "BLOCKED",
         "blocked-prerequisite",
@@ -539,6 +551,17 @@ def _validate_terminal_evidence_references(
 ) -> None:
     """Resolve terminal excerpts and require typed predicate support."""
 
+    if not _pack_is_grounded(evidence_pack):
+        # No excerpt record binds the declared evidence identity, so there is
+        # nothing here to resolve. This is NOT a pass: the caller refuses an
+        # ``accepted`` disposition for an ungrounded pack, and the envelope
+        # carries the gap so the independent checker sees it too. The previous
+        # behaviour was strictly weaker -- the driver synthesized excerpt rows
+        # and then checked them against itself.
+        declared = _declared_checked_source_ids(evidence_pack)
+        if not set(declared).issubset(source_ids):
+            raise GateRoutingError("terminal evidence resolves outside the checked source set")
+        return
     resolved_sources = _evidence_source_ids(evidence_pack, evidence_ids)
     if not set(resolved_sources).issubset(source_ids):
         raise GateRoutingError("terminal evidence resolves outside the checked source set")
@@ -555,6 +578,53 @@ def _validate_terminal_evidence_references(
             raise GateRoutingError(
                 f"terminal evidence {evidence_id} does not support its typed predicate"
             )
+
+
+def _pack_is_grounded(evidence_pack: Mapping[str, Any]) -> bool:
+    """Return whether a terminal evidence pack carries identity-bound excerpts.
+
+    Parameters
+    ----------
+    evidence_pack:
+        Terminal evidence pack built for the checker envelope.
+
+    Returns
+    -------
+    bool
+        ``True`` only for a pack that explicitly declares itself grounded.
+        A pack with no explicit resolution is treated as grounded so that
+        directly supplied literal packs keep their existing meaning.
+    """
+
+    resolution = evidence_pack.get("resolution")
+    if resolution is None:
+        return True
+    return resolution == TERMINAL_EVIDENCE_GROUNDED
+
+
+def _declared_checked_source_ids(evidence_pack: Mapping[str, Any]) -> tuple[str, ...]:
+    """Return the machine-declared source set an ungrounded terminal pack checks.
+
+    Parameters
+    ----------
+    evidence_pack:
+        Terminal evidence pack built for the checker envelope.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Sorted unique source identities.
+
+    Raises
+    ------
+    GateRoutingError
+        If the pack declares no checked source set.
+    """
+
+    declared = evidence_pack.get("checked_source_ids")
+    if not isinstance(declared, list) or not declared:
+        raise GateRoutingError("ungrounded terminal evidence pack declares no checked source set")
+    return _unique_string_tuple(sorted(set(str(value) for value in declared)), "checked_source_ids")
 
 
 def _unique_string_tuple(value: object, field: str) -> tuple[str, ...]:

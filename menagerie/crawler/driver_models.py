@@ -59,6 +59,10 @@ from menagerie.crawler.reducer import (
     cold_forward_policy,
     output_signature_error,
 )
+from menagerie.crawler.terminal_evidence import (
+    resolve_terminal_evidence,
+    resolve_terminal_license,
+)
 from menagerie.crawler.driver_contracts import (
     AuthorArtifact,
     CheckerOutcome,
@@ -193,18 +197,52 @@ def _terminal_checker_item(artifact: AuthorArtifact) -> JsonObject:
         raise DriverIntegrationError("unknown typed terminal recommendation")
     if not source_ids:
         raise DriverIntegrationError("terminal recommendation has no exact source IDs")
-    evidence_pack = {
+    # The envelope previously synthesized this pack: each evidence ID was paired
+    # with a source ID by round-robin index and stamped with the typed predicate
+    # as its own support. That is fabricated provenance. It made the driver's own
+    # reference check pass against data the driver had just invented, and it left
+    # the independent checker with identifiers and nothing to read -- so its only
+    # honest verdict was cannot-verify. Resolve the author's frozen records and
+    # bind them to the declared identity instead; when they do not bind, say so.
+    author_root = artifact.model_dir.parent
+    resolved = resolve_terminal_evidence(
+        author_root=author_root,
+        evidence_ids=evidence_ids,
+        evidence_identity=result.evidence_identity,
+    )
+    license_resolution = resolve_terminal_license(
+        author_root=author_root, license_identity=result.license_identity
+    )
+    evidence_pack: JsonObject = {
         "evidence_identity": result.evidence_identity,
-        "excerpts": [
-            {
-                "evidence_id": evidence_id,
-                "source_id": source_ids[index % len(source_ids)],
-                "supports": [predicate],
-            }
-            for index, evidence_id in enumerate(evidence_ids)
-        ],
+        "resolution": resolved.resolution,
+        "excerpts": [deepcopy(excerpt) for excerpt in resolved.excerpts],
+        "declared_evidence_ids": list(evidence_ids),
+        "unresolved_evidence_ids": list(resolved.unresolved_evidence_ids),
+        "unresolved_reason": resolved.reason,
+        "checked_source_ids": list(source_ids),
+        "predicate": predicate,
+    }
+    license_pack: JsonObject = {
+        "license_identity": result.license_identity,
+        "resolution": license_resolution.resolution,
+        "record": deepcopy(license_resolution.record),
+        "unresolved_reason": license_resolution.reason,
     }
     binding = result.binding
+    # The recommendation preimage is exactly what ``recommendation_sha256``
+    # binds, so the checker can recompute the digest it is asked to trust rather
+    # than accepting it on the author's word.
+    raw_payload = binding.raw_result.get("payload")
+    recommendation_preimage = (
+        {
+            key: deepcopy(value)
+            for key, value in raw_payload.items()
+            if key != "recommendation_sha256"
+        }
+        if isinstance(raw_payload, Mapping)
+        else None
+    )
     return {
         "work_id": binding.work_id,
         "campaign_root_work_id": binding.campaign_id,
@@ -225,7 +263,10 @@ def _terminal_checker_item(artifact: AuthorArtifact) -> JsonObject:
         "author_result": binding.raw_result,
         "source_manifest": artifact.source_manifest,
         "evidence_pack": evidence_pack,
+        "license_pack": license_pack,
         "license_identity": result.license_identity,
+        "recommendation_sha256": result.recommendation_sha256,
+        "recommendation_preimage": recommendation_preimage,
     }
 
 

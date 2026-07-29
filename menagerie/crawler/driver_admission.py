@@ -157,6 +157,7 @@ from menagerie.crawler.mirrors import MirrorClass, MirrorStore
 from menagerie.crawler.operator_protocol import (
     OPERATOR_DEADLINE_SECONDS,
     OPERATOR_MAX_ATTEMPTS,
+    OperatorExitCode,
 )
 from menagerie.crawler.proposal import ProposalValidationError, model_code_manifest
 from menagerie.crawler.recordio import (
@@ -1122,6 +1123,55 @@ def classify_author_exit(
     raise DriverIntegrationError(f"{label} for {stable_id}: {tail}")
 
 
+def _raise_for_checker_exit(returncode: int, stdout: str, stderr: str) -> None:
+    """Convert one checker-wrapper exit code into its typed lane outcome.
+
+    A checker VERDICT -- accepted, rejected, or cannot-verify -- only ever
+    travels on exit ``0`` as a schema-valid gate result, and is a per-model
+    outcome the terminal machinery already routes. A nonzero exit therefore
+    always means "no verdict exists", but it does NOT always mean the
+    infrastructure is broken, and it must never mean "abandon the campaign".
+    The checker lane previously raised one undifferentiated
+    ``DriverIntegrationError`` for every nonzero exit, so a declared-retryable
+    or service-unavailable wrapper exit -- routine transport weather over a
+    month-long run -- was indistinguishable from a genuine execution failure.
+    This mirrors the author lane's R8 classification exactly.
+
+    Parameters
+    ----------
+    returncode:
+        Checker wrapper exit status.
+    stdout, stderr:
+        Captured wrapper output; structured provider errors appear on either.
+
+    Raises
+    ------
+    RetryableOperatorError
+        On a declared retryable or service-unavailable operator exit.
+    DriverIntegrationError
+        On a declared contract rejection (the wrapper ran but produced no valid
+        gate) or an unclassified exit (a genuine execution failure: missing
+        binary, crash, or absent output).
+    """
+
+    if returncode == 0:
+        return
+    tail = f"{stderr}\n{stdout}".strip()[-STDIO_TAIL_MAX_CHARS:]
+    if returncode in (
+        int(OperatorExitCode.RETRYABLE_INFRASTRUCTURE),
+        int(OperatorExitCode.SERVICE_UNAVAILABLE),
+    ):
+        raise RetryableOperatorError(f"checker command failed (exit {returncode}): {tail}")
+    if returncode == int(OperatorExitCode.PERMANENT_CONTRACT_REJECTION):
+        raise DriverIntegrationError(
+            f"checker wrapper rejected the gate contract (exit {returncode}): {tail}"
+        )
+    # Unclassified exits keep the historical message prefix, which
+    # ``_is_infrastructure_error`` already treats as one retryable transport
+    # failure before it becomes permanent.
+    raise DriverIntegrationError(f"checker command failed: {tail}")
+
+
 def _run_operator_command(
     argv: Sequence[str],
     *,
@@ -1967,8 +2017,7 @@ class CommandCheckerLane:
         )
         if signal is not None:
             return CheckerOutcome(backoff=signal)
-        if completed.returncode != 0:
-            raise DriverIntegrationError(f"checker command failed: {completed.stderr[-1500:]}")
+        _raise_for_checker_exit(completed.returncode, completed.stdout, completed.stderr)
         result = validate_checker_result(root / "result.json", envelope)
         return CheckerOutcome(gate=result)
 

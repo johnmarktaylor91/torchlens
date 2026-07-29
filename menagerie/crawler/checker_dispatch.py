@@ -28,8 +28,35 @@ from menagerie.crawler.schema import (
     required_field_projection_spec,
     validate_payload,
 )
+from menagerie.crawler.terminal_evidence import (
+    GROUNDED as TERMINAL_EVIDENCE_GROUNDED,
+    UNRESOLVED as TERMINAL_EVIDENCE_UNRESOLVED,
+)
 
 PROMPT_PATH = Path(__file__).with_name("prompts") / f"{CHECKER_PROMPT_NAME}.txt"
+
+# Machine-owned gate scaffold. ``gate_id``, the ledger placeholders, and the two
+# component identities are IDENTITIES, not judgments: the checker cannot observe
+# them and has no authority over them, so asking a model to author them turns a
+# complete, well-reasoned verdict into a discarded contract rejection the first
+# time it forgets one. That is exactly what killed a live campaign on
+# 2026-07-29 (``'gate_id' is a required property``). The machine derives them
+# and the wrapper stamps them; the checker owns only its verdict.
+GATE_ID_PREFIX = "gate-"
+PLACEHOLDER_LEDGER_SEQ = 1
+PLACEHOLDER_PAYLOAD_SHA256 = "sha256:" + "0" * 64
+AUTHOR_RESULT_SCHEMA_COMPONENT = "schemas/author-result-v4.schema.json"
+AUTHOR_DISPATCHER_COMPONENT = "author_dispatch.py"
+DETERMINISTIC_GATE_SCAFFOLD_FIELDS = (
+    "schema_version",
+    "gate_id",
+    "gate_kind",
+    "batch_size",
+    "gate_round",
+    "gate_identity",
+    "author_result_schema_identity",
+    "dispatcher_identity",
+)
 
 
 class CheckerDispatchError(ValueError):
@@ -195,6 +222,129 @@ def build_terminal_disposition_envelope(
     )
 
 
+def machine_owned_gate_fields(envelope: Mapping[str, Any]) -> JsonObject:
+    """Derive every gate field the machine owns and a checker must never invent.
+
+    Parameters
+    ----------
+    envelope:
+        Hash-bound metadata, fidelity, or terminal request envelope.
+
+    Returns
+    -------
+    dict[str, Any]
+        Deterministic gate scaffold plus the two ledger placeholders the locked
+        ledger reassigns at append time.
+
+    Raises
+    ------
+    CheckerDispatchError
+        If the envelope binding is invalid or incomplete.
+    """
+
+    _validate_envelope_hash(envelope)
+    items = envelope.get("items")
+    if not isinstance(items, list) or not items:
+        raise CheckerDispatchError("checker envelope has no items")
+    envelope_sha256 = str(envelope.get("envelope_sha256"))
+    gate_seed = stable_hash(
+        {"envelope_sha256": envelope_sha256, "request_nonce": envelope.get("request_nonce")}
+    )
+    return {
+        "schema_version": str(envelope.get("required_result_schema")),
+        "gate_id": GATE_ID_PREFIX + gate_seed.removeprefix("sha256:")[:32],
+        "ledger_seq": PLACEHOLDER_LEDGER_SEQ,
+        "payload_sha256": PLACEHOLDER_PAYLOAD_SHA256,
+        "gate_kind": envelope.get("gate_kind"),
+        "batch_size": len(items),
+        "gate_round": envelope.get("gate_round"),
+        "gate_identity": envelope_sha256,
+        "author_result_schema_identity": component_identity(AUTHOR_RESULT_SCHEMA_COMPONENT),
+        "dispatcher_identity": component_identity(AUTHOR_DISPATCHER_COMPONENT),
+    }
+
+
+def apply_machine_owned_gate_fields(
+    result: Mapping[str, Any],
+    envelope: Mapping[str, Any],
+    *,
+    started_at: str,
+    finished_at: str,
+) -> JsonObject:
+    """Stamp the machine-owned scaffold onto one decoded checker verdict.
+
+    The checker's authority is its verdict, its findings, and its per-field
+    reasoning. Identities and wall timings are the machine's. Stamping happens
+    BEFORE validation so a substantively complete verdict is never discarded for
+    a scaffold field the model had no way to observe, and it is unconditional so
+    a model-supplied identity can never be believed.
+
+    Parameters
+    ----------
+    result:
+        Decoded candidate gate carrying the checker's own verdict.
+    envelope:
+        Hash-bound request envelope owning the scaffold.
+    started_at, finished_at:
+        Wrapper-observed UTC timestamps for the checker round trip.
+
+    Returns
+    -------
+    dict[str, Any]
+        Scaffolded gate whose ``result_envelope_sha256`` binds the stamped body.
+
+    Raises
+    ------
+    CheckerDispatchError
+        If the envelope binding is invalid or the candidate is not an object.
+    """
+
+    if not isinstance(result, Mapping):
+        raise CheckerDispatchError("checker result must contain exactly one JSON object")
+    stamped = dict(result)
+    stamped.update(machine_owned_gate_fields(envelope))
+    expected_checker = _required_mapping(envelope.get("checker"), "envelope checker")
+    checker = dict(stamped.get("checker") or {})
+    checker.update(
+        {
+            "provider": expected_checker.get("provider"),
+            "model": expected_checker.get("model"),
+            "version": expected_checker.get("version"),
+            "prompt_sha256": expected_checker.get("prompt_sha256"),
+            "started_at": started_at,
+            "finished_at": finished_at,
+        }
+    )
+    stamped["checker"] = checker
+    stamped["result_envelope_sha256"] = compute_result_envelope_sha256(stamped)
+    return stamped
+
+
+def component_identity(relative: str) -> str:
+    """Hash one exact shipped crawler component by its package-relative path.
+
+    Parameters
+    ----------
+    relative:
+        Package-relative path of a shipped authority component.
+
+    Returns
+    -------
+    str
+        Content identity, computed identically to the authority context.
+
+    Raises
+    ------
+    CheckerDispatchError
+        If the component is unavailable.
+    """
+
+    try:
+        return hash_bytes((Path(__file__).parent / relative).read_bytes())
+    except OSError as exc:
+        raise CheckerDispatchError(f"checker authority component is unavailable: {relative}") from exc
+
+
 def validate_checker_result(
     result_path: Union[str, Path], envelope: Mapping[str, Any]
 ) -> JsonObject:
@@ -257,12 +407,12 @@ def validate_checker_result_mapping(
         validate_payload(normalized, GATE_SCHEMA_VERSION_V3)
     except PayloadValidationError as exc:
         raise CheckerDispatchError(str(exc)) from exc
-    if normalized.get("gate_kind") != envelope.get("gate_kind"):
-        raise CheckerDispatchError("checker result gate_kind does not match its envelope")
-    if normalized.get("gate_round") != envelope.get("gate_round"):
-        raise CheckerDispatchError("checker result gate_round does not match its envelope")
-    if normalized.get("gate_identity") != envelope.get("envelope_sha256"):
-        raise CheckerDispatchError("checker result gate_identity does not bind its envelope")
+    scaffold = machine_owned_gate_fields(envelope)
+    for field in DETERMINISTIC_GATE_SCAFFOLD_FIELDS:
+        if normalized.get(field) != scaffold[field]:
+            raise CheckerDispatchError(
+                f"checker result {field} is not the machine-owned value for its envelope"
+            )
     result_checker = _required_mapping(normalized.get("checker"), "result checker")
     expected_checker = _required_mapping(envelope.get("checker"), "envelope checker")
     for field in ("provider", "model", "version", "prompt_sha256"):
@@ -437,8 +587,17 @@ def _build_envelope(
                 raise CheckerDispatchError("terminal checker item lacks its author result")
             if not isinstance(item.get("source_manifest"), Mapping):
                 raise CheckerDispatchError("terminal checker item lacks its source manifest")
-            if not isinstance(item.get("evidence_pack"), Mapping):
+            evidence_pack = item.get("evidence_pack")
+            if not isinstance(evidence_pack, Mapping):
                 raise CheckerDispatchError("terminal checker item lacks its evidence pack")
+            _validate_terminal_evidence_pack(evidence_pack)
+            if not isinstance(item.get("license_pack"), Mapping):
+                raise CheckerDispatchError("terminal checker item lacks its license pack")
+            if not isinstance(item.get("recommendation_preimage"), Mapping):
+                raise CheckerDispatchError(
+                    "terminal checker item lacks the recommendation preimage its "
+                    "recommendation_sha256 binds"
+                )
             stable_id = str(item["stable_id"])
             if not stable_id or stable_id in seen:
                 raise CheckerDispatchError(
@@ -496,6 +655,63 @@ def _build_envelope(
         "final_tail": final_tail,
     }
     return {**body, "envelope_sha256": stable_hash(body)}
+
+
+def _validate_terminal_evidence_pack(evidence_pack: Mapping[str, Any]) -> None:
+    """Require a terminal evidence pack to be inspectable or honestly unresolved.
+
+    A checker asked to bless a terminal recommendation must be able to read the
+    literal excerpt behind every evidence ID it is handed. An envelope may
+    therefore carry either grounded, identity-bound excerpt records, or an
+    explicit declaration that they could not be resolved -- never a silently
+    reference-only list that looks like evidence and is not.
+
+    Parameters
+    ----------
+    evidence_pack:
+        Terminal evidence pack supplied by the driver.
+
+    Raises
+    ------
+    CheckerDispatchError
+        If the pack neither grounds every declared evidence ID nor declares the
+        gap explicitly.
+    """
+
+    resolution = evidence_pack.get("resolution")
+    declared = evidence_pack.get("declared_evidence_ids")
+    excerpts = evidence_pack.get("excerpts")
+    if resolution not in {TERMINAL_EVIDENCE_GROUNDED, TERMINAL_EVIDENCE_UNRESOLVED}:
+        raise CheckerDispatchError("terminal evidence pack must declare its resolution")
+    if not isinstance(declared, list) or not declared:
+        raise CheckerDispatchError("terminal evidence pack must declare its evidence IDs")
+    if not isinstance(excerpts, list):
+        raise CheckerDispatchError("terminal evidence pack excerpts must be a list")
+    if resolution == TERMINAL_EVIDENCE_UNRESOLVED:
+        unresolved = evidence_pack.get("unresolved_evidence_ids")
+        if not isinstance(unresolved, list) or not unresolved:
+            raise CheckerDispatchError(
+                "unresolved terminal evidence pack must name its unresolved evidence IDs"
+            )
+        if not isinstance(evidence_pack.get("unresolved_reason"), str):
+            raise CheckerDispatchError(
+                "unresolved terminal evidence pack must explain why it is unresolved"
+            )
+        return
+    grounded = {
+        str(excerpt.get("evidence_id")): excerpt
+        for excerpt in excerpts
+        if isinstance(excerpt, Mapping)
+    }
+    for evidence_id in declared:
+        excerpt = grounded.get(str(evidence_id))
+        if excerpt is None or any(
+            not isinstance(excerpt.get(field), str) or not excerpt.get(field)
+            for field in ("source_id", "locator", "text", "text_sha256")
+        ):
+            raise CheckerDispatchError(
+                f"grounded terminal evidence pack has no literal excerpt for {evidence_id}"
+            )
 
 
 def _validate_item_binding(result_item: Mapping[str, Any], expected: Mapping[str, Any]) -> None:
