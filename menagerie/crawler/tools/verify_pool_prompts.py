@@ -118,6 +118,29 @@ def pool_prompt_paths(pool_root: Path) -> tuple[Path, ...]:
     return paths
 
 
+def _executor_fragments(executor_root: Path) -> tuple[Path, ...]:
+    """Return the executor's own stage prompts, which drive the production author path.
+
+    These were unpinned until 2026-07-29. The pool fragments serve the operator-mediated
+    lane the headless executor replaced, so the *only* prompts still shaping every real
+    author session were the two with no drift detection at all. Three separate
+    prompt/contract drift defects had already cost a rung apiece by then.
+
+    An empty or missing directory is an error for the same reason it is for the pool: an
+    executor that ships no stage prompt cannot author, and reporting that as verified
+    would be a false pass.
+    """
+
+    if not executor_root.is_dir():
+        raise ValueError(f"missing executor prompt directory: {executor_root}")
+    paths = tuple(
+        sorted((path for path in executor_root.glob("*.md") if path.is_file()), key=lambda p: p.name)
+    )
+    if not paths:
+        raise ValueError(f"executor ships no stage prompt: {executor_root}")
+    return paths
+
+
 def verify_prompt_surface(
     plan_path: Path,
     author_path: Path,
@@ -146,8 +169,15 @@ def verify_prompt_surface(
     """
 
     fragments = pool_prompt_paths(pool_root)
-    shipped = {path.name: path for path in (author_path, checker_path, *fragments)}
-    if len(shipped) != 2 + len(fragments):
+    # The executor's stage prompts drive every production author session; the pool
+    # fragments serve the lane it replaced. Verifying only the latter left the two most
+    # load-bearing prompts undetectably driftable.
+    executor_fragments = _executor_fragments(pool_root.parent / "executor")
+    shipped = {
+        path.name: path
+        for path in (author_path, checker_path, *fragments, *executor_fragments)
+    }
+    if len(shipped) != 2 + len(fragments) + len(executor_fragments):
         raise ValueError("prompt file names collide across the pinned surface")
     pinned = set(pinned_prompt_names(plan_path))
     unpinned = sorted(set(shipped) - pinned)
@@ -161,7 +191,7 @@ def verify_prompt_surface(
     # that file's own literal PLAN row. Pairing each fragment with the already-pinned
     # author prompt reuses that oracle verbatim instead of re-deriving a second comparison.
     digests = dict(verify_prompts(plan_path, author_path, checker_path))
-    for fragment in fragments:
+    for fragment in (*fragments, *executor_fragments):
         digests.update(verify_prompts(plan_path, author_path, fragment))
     return digests
 
