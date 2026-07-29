@@ -926,7 +926,7 @@ def _refuse_credential_bearing_locators(serialized: str) -> None:
 _DESCRIPTOR_KINDS = frozenset({"forge-file", "raw-url", "paper"})
 _REQUESTED_ROLES = frozenset({"implementation", "paper", "documentation", "probe"})
 _COMMON_DESCRIPTOR_FIELDS = frozenset(
-    {"source_id", "kind", "requested_role", "media_type_hint", "basis"}
+    {"source_id", "kind", "requested_role", "media_type_hint", "basis", "notes"}
 )
 _DESCRIPTOR_FIELDS = {
     "forge-file": _COMMON_DESCRIPTOR_FIELDS | {"repo", "path", "ref"},
@@ -1001,6 +1001,7 @@ def _validated_descriptor(raw: Mapping[str, Any], position: int) -> JsonObject:
         "url": str(raw.get("url", "")).strip(),
         "identifier": str(raw.get("identifier", "")).strip(),
         "media_type_hint": str(raw.get("media_type_hint", "")).strip(),
+        "notes": str(raw.get("notes", "")).strip(),
     }
     if kind == "forge-file" and not (
         descriptor["repo"] and descriptor["path"] and descriptor["ref"]
@@ -1135,6 +1136,9 @@ def _manifest_row(
         "media_type_hint": str(descriptor.get("media_type_hint") or ""),
         "basis": str(descriptor["basis"]),
     }
+    notes = str(descriptor.get("notes") or "")
+    if notes:
+        row["notes"] = notes
     for name in ("repo", "path", "ref", "url", "identifier"):
         requested = str(descriptor.get(name) or "")
         if requested:

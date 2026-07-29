@@ -520,6 +520,7 @@ def prior_attempts_summary(
                 "outcome": outcome,
                 "failure_stage": outcome.get("failure_stage") if outcome else None,
                 "failure_reason": outcome.get("failure_reason") if outcome else None,
+                "failure_detail": outcome.get("detail") if outcome else None,
                 "checker_findings": record.get("checker_findings"),
                 "prior_result_sha256": published.get("sha256") if published else None,
                 "created_at": record.get("created_at"),

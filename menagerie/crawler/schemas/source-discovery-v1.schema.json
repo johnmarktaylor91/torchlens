@@ -119,6 +119,10 @@
         "basis": {
           "$ref": "#/$defs/nonempty_string",
           "description": "Grounded explanation of why the requested object is relevant."
+        },
+        "notes": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Optional source-specific observations about material architecture, configuration, or inference details found at this locator."
         }
       }
     },
@@ -150,6 +154,10 @@
         "basis": {
           "$ref": "#/$defs/nonempty_string",
           "description": "Grounded explanation of why the requested object is relevant."
+        },
+        "notes": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Optional source-specific observations about material architecture, configuration, or inference details found at this locator."
         }
       }
     },
@@ -189,6 +197,10 @@
         "basis": {
           "$ref": "#/$defs/nonempty_string",
           "description": "Grounded explanation of why the requested paper is relevant."
+        },
+        "notes": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Optional source-specific observations about material architecture, configuration, or inference details found at this locator."
         }
       }
     },
@@ -379,6 +391,7 @@
     "$.payload.sources[].identifier": "author-gated",
     "$.payload.sources[].kind": "author-gated",
     "$.payload.sources[].media_type_hint": "author-gated",
+    "$.payload.sources[].notes": "author-gated",
     "$.payload.sources[].path": "author-gated",
     "$.payload.sources[].ref": "author-gated",
     "$.payload.sources[].repo": "author-gated",

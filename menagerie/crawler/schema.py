@@ -8,10 +8,10 @@ from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Mapping, MutableSet, Union
+from typing import Any, Iterable, Mapping, MutableSet, Union
 
 from jsonschema import Draft202012Validator, FormatChecker
-from jsonschema.exceptions import SchemaError, ValidationError
+from jsonschema.exceptions import SchemaError, ValidationError, best_match
 from referencing import Registry, Resource
 
 from menagerie.crawler.constants import (
@@ -506,14 +506,113 @@ def validate_payload(payload: Mapping[str, Any], schema_version: Union[str, None
             f"schema_version mismatch: expected {expected!r}, received {actual!r}"
         )
     try:
-        get_validator(expected).validate(dict(payload))
-    except (KeyError, ValidationError) as exc:
-        if isinstance(exc, ValidationError):
-            location = ".".join(str(part) for part in exc.absolute_path) or "<root>"
-            message = f"{expected} validation failed at {location}: {exc.message}"
+        validator = get_validator(expected)
+    except KeyError as exc:
+        raise PayloadValidationError(str(exc)) from exc
+    error = _closest_validation_error(validator.iter_errors(dict(payload)))
+    if error is None:
+        return
+    location = _format_json_path(error.absolute_path)
+    schema_location = _format_json_path(error.absolute_schema_path)
+    constraint = str(error.validator)
+    branch_label = (
+        "closest schema branch"
+        if any(part in {"anyOf", "oneOf"} for part in error.absolute_schema_path)
+        else "schema path"
+    )
+    message = (
+        f"{expected} validation failed at {location} "
+        f"({branch_label} {schema_location}; constraint {constraint}): {error.message}"
+    )
+    raise PayloadValidationError(message) from error
+
+
+def _closest_validation_error(errors: Iterable[ValidationError]) -> ValidationError | None:
+    """Select the most actionable leaf from a JSON Schema error tree.
+
+    ``jsonschema.best_match`` deliberately stops at an ambiguous union. When one
+    union branch has strictly fewer leaf violations than its siblings, that branch
+    is the closest match and can be selected without hiding an equally plausible
+    alternative.
+
+    Parameters
+    ----------
+    errors:
+        Top-level errors emitted by ``Draft202012Validator.iter_errors``.
+
+    Returns
+    -------
+    ValidationError | None
+        Most actionable unambiguous leaf, or the best enclosing error when the
+        closest branches tie.
+    """
+
+    selected = best_match(errors)
+    while selected is not None and selected.context:
+        if selected.validator in {"anyOf", "oneOf"}:
+            branch_errors: dict[int, list[ValidationError]] = {}
+            for error in selected.context:
+                schema_path = tuple(error.relative_schema_path)
+                if schema_path and isinstance(schema_path[0], int):
+                    branch_errors.setdefault(schema_path[0], []).append(error)
+            if branch_errors:
+                counts = {
+                    branch: sum(_validation_leaf_count(error) for error in candidates)
+                    for branch, candidates in branch_errors.items()
+                }
+                minimum = min(counts.values())
+                closest = [branch for branch, count in counts.items() if count == minimum]
+                if len(closest) != 1:
+                    return selected
+                selected = best_match(branch_errors[closest[0]])
+                continue
+        nested = best_match(selected.context)
+        if nested is None:
+            return selected
+        selected = nested
+    return selected
+
+
+def _validation_leaf_count(error: ValidationError) -> int:
+    """Count concrete constraint failures beneath one validation error.
+
+    Parameters
+    ----------
+    error:
+        JSON Schema error whose descendants should be counted.
+
+    Returns
+    -------
+    int
+        Number of leaf constraint failures represented by ``error``.
+    """
+
+    if not error.context:
+        return 1
+    return sum(_validation_leaf_count(child) for child in error.context)
+
+
+def _format_json_path(parts: Iterable[object]) -> str:
+    """Render instance or schema path parts without serializing payload values.
+
+    Parameters
+    ----------
+    parts:
+        Path components from a ``jsonschema.ValidationError``.
+
+    Returns
+    -------
+    str
+        Dot-and-index path, or ``<root>`` for an empty path.
+    """
+
+    rendered = ""
+    for part in parts:
+        if isinstance(part, int):
+            rendered += f"[{part}]"
         else:
-            message = str(exc)
-        raise PayloadValidationError(message) from exc
+            rendered += f".{part}" if rendered else str(part)
+    return rendered or "<root>"
 
 
 def schema_leaf_paths(schema: Mapping[str, Any]) -> frozenset[str]:
