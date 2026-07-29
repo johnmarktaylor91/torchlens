@@ -53,6 +53,7 @@ from menagerie.crawler.identity import hash_bytes
 from menagerie.crawler.schema import validate_payload
 from menagerie.crawler.tests.executor_test_support import (
     DEFAULT_DISCOVERY,
+    FABRICATED_SHA,
     RESOLVED_SHA,
     executor_environment,
     read_invocations,
@@ -213,7 +214,7 @@ def test_source_round_publishes_machine_derived_pack(rig, capsys) -> None:
 def test_fabricated_sha_ref_is_bad_ref_before_publication(rig) -> None:
     """A plausible authored ref is dereferenced and cannot create a manifest row."""
 
-    fabricated_sha = "1" * 40
+    fabricated_sha = FABRICATED_SHA
     rig["monkeypatch"].setenv(
         "FAKE_CLAUDE_DISCOVERY",
         json.dumps(

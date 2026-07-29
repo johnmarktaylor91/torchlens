@@ -12,9 +12,16 @@ kills the fabricated-SHA class structurally instead of detecting it after the
 fact.
 
 Per-target outcomes are independent and typed
-(``fetched | oversized | unreachable | redirect-refused | bad-ref``): one dead
-link never aborts the pack, and every failure carries its receipt so stage 2
-and the validators see exactly what exists.
+(``fetched | oversized | unreachable | redirect-refused | rate-limited |
+bad-ref``): one dead link never aborts the pack, and every failure carries its
+receipt so stage 2 and the validators see exactly what exists.
+
+Two of those outcomes are claims about *whose* failure it was, and the
+distinction is load-bearing. ``bad-ref`` says the author supplied a reference
+that does not exist. ``rate-limited`` says the reference was fine and the forge
+throttled *our* client. Recording the second as the first is a false statement
+in a durable record; it also burns retries "repairing" a reference that was
+never wrong, and it would mislead any later triage of what actually needs work.
 """
 
 from __future__ import annotations
@@ -22,6 +29,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -60,8 +68,26 @@ OUTCOME_OVERSIZED = "oversized"
 OUTCOME_UNREACHABLE = "unreachable"
 OUTCOME_REDIRECT_REFUSED = "redirect-refused"
 OUTCOME_BAD_REF = "bad-ref"
+#: The forge throttled us. Attributable to the crawler, never to the author, and
+#: retryable once the window resets.
+OUTCOME_RATE_LIMITED = "rate-limited"
+#: A real reference on a forge this resolver cannot yet address. A limitation of
+#: ours, not a defect in what the author supplied.
+OUTCOME_UNSUPPORTED_FORGE = "unsupported-forge"
 OUTCOME_PAPER_DERIVATION_ONLY = "paper-derivation-only"
 OUTCOME_PROBED = "probed"
+
+#: Outcomes that describe a failure of ours or of the forge rather than a defect
+#: in the reference the author supplied. Nothing in this set justifies asking an
+#: author to fix its reference.
+NON_AUTHOR_FAULT_OUTCOMES = frozenset(
+    {
+        OUTCOME_RATE_LIMITED,
+        OUTCOME_UNREACHABLE,
+        OUTCOME_OVERSIZED,
+        OUTCOME_UNSUPPORTED_FORGE,
+    }
+)
 
 #: Closed bound-role vocabulary. ``introducing-paper`` is broker-assigned only.
 ROLE_IMPLEMENTATION = "implementation"
@@ -121,8 +147,186 @@ _IMPLEMENTATION_SUFFIXES = frozenset(
 )
 
 
+#: Hosts the GitHub credential may be sent to. Deliberately just the API: the raw
+#: and codeload hosts serve public bytes without a credential, and every extra
+#: host a bearer token is offered to is another way for it to escape.
+GITHUB_API_HOST = "api.github.com"
+
+#: Environment names carrying a GitHub credential, in resolution order.
+#: ``GH_TOKEN`` precedes ``GITHUB_TOKEN`` because that is ``gh``'s own documented
+#: precedence, and ``gh auth token`` is our fallback: if the two disagreed we
+#: would authenticate as a different identity than the CLI an operator debugs
+#: with, which is the kind of divergence nobody thinks to check.
+GITHUB_TOKEN_ENV_NAMES = ("GH_TOKEN", "GITHUB_TOKEN")
+
+#: Pinned API version, so a future default shift cannot silently change parsing.
+GITHUB_API_VERSION = "2022-11-28"
+
+#: Statuses a forge uses to throttle. ``429`` *is* "too many requests" by
+#: definition, so it needs no corroboration; ``403`` is ambiguous -- genuinely
+#: forbidden and rate limited share it -- so it is only read as throttling when
+#: the response's own rate-limit headers say so.
+RATE_LIMIT_STATUSES = frozenset({403, 429})
+
+#: Refs the forge answers authoritatively: the ref genuinely does not exist.
+BAD_REF_STATUSES = frozenset({404, 422})
+
+_GH_TOKEN_COMMAND = ("gh", "auth", "token")
+_GH_TOKEN_TIMEOUT_SECONDS = 10.0
+
+
 class SourceBrokerError(ValueError):
     """Raised when a discovery descriptor cannot be brokered at all."""
+
+
+def resolve_github_token() -> Optional[str]:
+    """Return a GitHub credential when one is available, else ``None``.
+
+    Unauthenticated ``api.github.com`` is capped at 60 requests per hour, which
+    cannot support a 28,482-model campaign resolving at least one ref each. The
+    cap was hit in a live rung on 2026-07-29: the forge answered ``403``, the
+    reference was perfectly good, and the model was blamed for it.
+    Authenticated, the same endpoint allows 5,000 requests per hour.
+
+    Resolution order is ``GH_TOKEN``, ``GITHUB_TOKEN``, then ``gh auth token``.
+    The environment comes first because it is the deliberate operator override
+    and costs nothing to read; ``gh`` is last because it spawns a subprocess and
+    depends on an interactive login that may not exist under a supervisor. Among
+    the two variables ``GH_TOKEN`` wins, matching ``gh``'s own precedence, so the
+    broker and the CLI an operator debugs with never authenticate as different
+    identities.
+
+    An absent credential returns ``None`` and the caller proceeds
+    unauthenticated -- degraded exactly as before, never refusing to start. This
+    mirrors :func:`menagerie.crawler.author_executor.exa_mcp_config`: a missing
+    credential must not be why a campaign cannot run.
+
+    Returns
+    -------
+    str | None
+        The credential, or ``None`` when no source supplied one.
+    """
+
+    for name in GITHUB_TOKEN_ENV_NAMES:
+        value = os.environ.get(name, "").strip()
+        if value:
+            return value
+    try:
+        completed = subprocess.run(  # noqa: S603 -- fixed argv, no shell
+            _GH_TOKEN_COMMAND,
+            capture_output=True,
+            text=True,
+            timeout=_GH_TOKEN_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        # `gh` absent, unrunnable, or hung. Never fatal: this is the fallback.
+        return None
+    if completed.returncode != 0:
+        # Deliberately discards stderr rather than recording it. `gh` failure
+        # text is not diagnostic enough to be worth the risk of a credential
+        # fragment reaching a log in a public repository.
+        return None
+    token = completed.stdout.strip()
+    return token or None
+
+
+@dataclass(frozen=True)
+class RateLimitSignal:
+    """Machine-read evidence that a response was throttled rather than refused.
+
+    Parameters
+    ----------
+    status:
+        The observed HTTP status.
+    remaining:
+        ``x-ratelimit-remaining``, when the forge reported it.
+    retry_after_seconds:
+        ``retry-after`` in seconds, when the forge reported it.
+    reset_epoch:
+        ``x-ratelimit-reset`` as a Unix timestamp, when the forge reported it.
+    resource:
+        ``x-ratelimit-resource``, naming which budget was exhausted.
+    """
+
+    status: int
+    remaining: Optional[int] = None
+    retry_after_seconds: Optional[float] = None
+    reset_epoch: Optional[int] = None
+    resource: Optional[str] = None
+
+    def to_dict(self) -> JsonObject:
+        """Return the JSON receipt fragment."""
+
+        return {
+            "status": self.status,
+            "remaining": self.remaining,
+            "retry_after_seconds": self.retry_after_seconds,
+            "reset_epoch": self.reset_epoch,
+            "resource": self.resource,
+        }
+
+
+def _header(headers: Mapping[str, str], name: str) -> Optional[str]:
+    """Return one header case-insensitively, or ``None``."""
+
+    for key, value in headers.items():
+        if key.lower() == name:
+            text = str(value).strip()
+            return text or None
+    return None
+
+
+def _int_header(headers: Mapping[str, str], name: str) -> Optional[int]:
+    """Return one integral header value, or ``None`` when absent or unparseable."""
+
+    raw = _header(headers, name)
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        return None
+
+
+def rate_limit_signal(status: int, headers: Mapping[str, str]) -> Optional[RateLimitSignal]:
+    """Classify one response as throttled, using the forge's own headers.
+
+    A ``403`` is deliberately NOT read as throttling on its own: a private
+    repository, a blocked client, and an exhausted quota all share that status,
+    and guessing would relabel a genuine refusal as a retryable wait. It counts
+    only when the response says ``x-ratelimit-remaining: 0`` (GitHub's primary
+    limit) or carries ``retry-after`` (its secondary limit). ``429`` is
+    unambiguous on its own.
+
+    Parameters
+    ----------
+    status:
+        Final HTTP status.
+    headers:
+        Final response headers.
+
+    Returns
+    -------
+    RateLimitSignal | None
+        The signal when the response was throttled, else ``None``.
+    """
+
+    if status not in RATE_LIMIT_STATUSES:
+        return None
+    remaining = _int_header(headers, "x-ratelimit-remaining")
+    retry_after = _int_header(headers, "retry-after")
+    reset = _int_header(headers, "x-ratelimit-reset")
+    throttled = status == 429 or remaining == 0 or retry_after is not None
+    if not throttled:
+        return None
+    return RateLimitSignal(
+        status=status,
+        remaining=remaining,
+        retry_after_seconds=float(retry_after) if retry_after is not None else None,
+        reset_epoch=reset,
+        resource=_header(headers, "x-ratelimit-resource"),
+    )
 
 
 @dataclass(frozen=True)
@@ -143,6 +347,9 @@ class TransportResponse:
         Whether the byte ceiling cut the body short.
     error:
         Transport-level failure description, or ``None``.
+    headers:
+        Final response headers. These are what let a throttled response be told
+        apart from a genuinely forbidden one instead of guessed at from status.
     """
 
     status: int
@@ -151,6 +358,7 @@ class TransportResponse:
     body: bytes
     truncated: bool
     error: Optional[str] = None
+    headers: Mapping[str, str] = field(default_factory=dict)
 
 
 class Transport(Protocol):
@@ -180,7 +388,13 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 class UrllibTransport:
-    """Streaming HTTPS transport with per-hop redirect policy and byte ceiling."""
+    """Streaming HTTPS transport with per-hop redirect policy and byte ceiling.
+
+    The GitHub credential, when one exists, is attached per hop and only for
+    :data:`GITHUB_API_HOST`. Attaching it once for the whole call would send it
+    onward through any allowlisted redirect that leaves the API host, so the
+    decision is re-made against the URL actually being requested.
+    """
 
     def __init__(
         self,
@@ -188,11 +402,45 @@ class UrllibTransport:
         max_redirects: int = DEFAULT_MAX_REDIRECTS,
         redirect_allowlist: frozenset[str] = REDIRECT_HOST_ALLOWLIST,
         user_agent: str = "menagerie-crawler-source-broker/1",
+        token_resolver: Callable[[], Optional[str]] = resolve_github_token,
     ) -> None:
         self.max_redirects = max_redirects
         self.redirect_allowlist = redirect_allowlist
         self.user_agent = user_agent
+        self._token_resolver = token_resolver
+        self._token: Optional[str] = None
+        self._token_resolved = False
         self._opener = urllib.request.build_opener(_NoRedirect())
+
+    def _github_token(self) -> Optional[str]:
+        """Resolve the credential once per transport, and only when needed.
+
+        Memoized so a pack resolving many refs pays at most one ``gh``
+        subprocess, and lazy so a pack that never touches the forge API pays
+        none at all.
+        """
+
+        if not self._token_resolved:
+            self._token = self._token_resolver()
+            self._token_resolved = True
+        return self._token
+
+    def github_credential_mode(self) -> str:
+        """Report whether forge calls are authenticated, never the credential."""
+
+        return "authenticated" if self._github_token() else "anonymous"
+
+    def _request_headers(self, url: str) -> dict[str, str]:
+        """Build the headers for one hop, credential included only for the API."""
+
+        headers = {"User-Agent": self.user_agent, "Accept": "*/*"}
+        if (urllib.parse.urlsplit(url).hostname or "").lower() != GITHUB_API_HOST:
+            return headers
+        token = self._github_token()
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        headers["X-GitHub-Api-Version"] = GITHUB_API_VERSION
+        return headers
 
     def __call__(self, url: str, *, max_bytes: int, timeout: float) -> TransportResponse:
         """Fetch one URL, following only allowlisted redirects, streaming-bounded."""
@@ -200,10 +448,7 @@ class UrllibTransport:
         chain: list[str] = [url]
         current = url
         for _hop in range(self.max_redirects + 1):
-            request = urllib.request.Request(
-                current,
-                headers={"User-Agent": self.user_agent, "Accept": "*/*"},
-            )
+            request = urllib.request.Request(current, headers=self._request_headers(current))
             try:
                 with self._opener.open(request, timeout=timeout) as response:
                     body, truncated = _read_bounded(response, max_bytes)
@@ -213,6 +458,7 @@ class UrllibTransport:
                         redirect_chain=tuple(chain),
                         body=body,
                         truncated=truncated,
+                        headers=_response_headers(getattr(response, "headers", None)),
                     )
             except urllib.error.HTTPError as exc:
                 if exc.code in (301, 302, 303, 307, 308):
@@ -225,6 +471,7 @@ class UrllibTransport:
                             body=b"",
                             truncated=False,
                             error="redirect without Location",
+                            headers=_response_headers(exc.headers),
                         )
                     target = urllib.parse.urljoin(current, location)
                     host = urllib.parse.urlsplit(target).hostname or ""
@@ -241,6 +488,7 @@ class UrllibTransport:
                     body=body[:max_bytes],
                     truncated=False,
                     error=f"http {exc.code}",
+                    headers=_response_headers(exc.headers),
                 )
             except (urllib.error.URLError, TimeoutError, OSError) as exc:
                 return TransportResponse(
@@ -259,6 +507,36 @@ class UrllibTransport:
             truncated=False,
             error="too many redirects",
         )
+
+
+def _response_headers(headers: Any) -> dict[str, str]:
+    """Normalize a response's headers to a lowercase-keyed mapping.
+
+    Only the small set of rate-limit headers is retained. A response's headers
+    are copied into receipts, and receipts are committed to a public repository,
+    so this is an allowlist rather than a filter: nothing unanticipated can ride
+    along from a forge response into a durable artifact.
+    """
+
+    if headers is None:
+        return {}
+    retained = (
+        "retry-after",
+        "x-ratelimit-limit",
+        "x-ratelimit-remaining",
+        "x-ratelimit-reset",
+        "x-ratelimit-resource",
+        "x-ratelimit-used",
+    )
+    items: dict[str, str] = {}
+    for name in retained:
+        try:
+            value = headers.get(name)
+        except AttributeError:  # pragma: no cover -- defensive
+            return {}
+        if value is not None:
+            items[name] = str(value).strip()
+    return items
 
 
 def _read_bounded(response: Any, max_bytes: int) -> tuple[bytes, bool]:
@@ -282,7 +560,7 @@ class FixtureTransport:
 
     The fixture root holds ``index.json`` mapping URLs to
     ``{"status", "body_text" | "body_file", "redirect_chain", "final_url",
-    "truncated", "error"}``. An unmapped URL is unreachable — the fixture
+    "truncated", "error", "headers"}``. An unmapped URL is unreachable — the fixture
     transport never touches the network, so a test can prove exactly which
     URLs the broker asked for.
     """
@@ -322,6 +600,12 @@ class FixtureTransport:
         target = str(entry.get("refused_redirect_target", ""))
         if target:
             raise RedirectRefused(chain, target)
+        raw_headers = entry.get("headers")
+        headers = (
+            {str(key).lower(): str(value) for key, value in raw_headers.items()}
+            if isinstance(raw_headers, Mapping)
+            else {}
+        )
         return TransportResponse(
             status=int(entry.get("status", 200)),
             final_url=str(entry.get("final_url", url)),
@@ -329,6 +613,7 @@ class FixtureTransport:
             body=body,
             truncated=truncated,
             error=(str(entry["error"]) if entry.get("error") else None),
+            headers=headers,
         )
 
 
@@ -365,6 +650,23 @@ class BrokerOutcome:
     resolver_receipt: Optional[JsonObject]
     derived_citation: Optional[JsonObject]
     detail: str = ""
+    #: Throttling evidence when ``outcome`` is ``rate-limited``. Present so a
+    #: consumer can act on the forge's own reset instant instead of guessing.
+    rate_limit: Optional[JsonObject] = None
+
+    @property
+    def rate_limit_retry_after(self) -> Optional[float]:
+        """Return the requested wait in seconds, when the forge named one."""
+
+        value = (self.rate_limit or {}).get("retry_after_seconds")
+        return float(value) if isinstance(value, (int, float)) else None
+
+    @property
+    def rate_limit_reset_epoch(self) -> Optional[int]:
+        """Return the reset instant as a Unix timestamp, when the forge named one."""
+
+        value = (self.rate_limit or {}).get("reset_epoch")
+        return int(value) if isinstance(value, int) else None
 
     def to_dict(self) -> JsonObject:
         """Return the JSON diagnostic row."""
@@ -386,6 +688,7 @@ class BrokerOutcome:
             "resolver_receipt": self.resolver_receipt,
             "derived_citation": self.derived_citation,
             "detail": self.detail,
+            "rate_limit": self.rate_limit,
         }
 
 
@@ -402,6 +705,42 @@ class BrokerPack:
         """Return the manifest rows bound to the implementation role."""
 
         return [row for row in self.rows if row.get("broker_role") == ROLE_IMPLEMENTATION]
+
+    def rate_limited_outcomes(self) -> list[BrokerOutcome]:
+        """Return the targets the forge threw us out of."""
+
+        return [item for item in self.outcomes if item.outcome == OUTCOME_RATE_LIMITED]
+
+    def blocked_by_rate_limit(self) -> bool:
+        """Report whether throttling, not a bad reference, emptied this pack.
+
+        ``True`` means the pack produced no implementation row AND at least one
+        target was throttled -- the model is not unauthorable, we were simply
+        not allowed to look. Callers use this to keep the failure attributed to
+        the campaign instead of the author.
+        """
+
+        return not self.implementation_rows() and bool(self.rate_limited_outcomes())
+
+    def retry_after_seconds(self) -> Optional[float]:
+        """Return the longest wait any throttled target asked for, if any."""
+
+        waits = [
+            item.rate_limit_retry_after
+            for item in self.rate_limited_outcomes()
+            if item.rate_limit_retry_after is not None
+        ]
+        return max(waits) if waits else None
+
+    def rate_limit_reset_epoch(self) -> Optional[int]:
+        """Return the latest reset instant any throttled target reported, if any."""
+
+        resets = [
+            item.rate_limit_reset_epoch
+            for item in self.rate_limited_outcomes()
+            if item.rate_limit_reset_epoch is not None
+        ]
+        return max(resets) if resets else None
 
     def to_dict(self) -> JsonObject:
         """Return the JSON pack: lane rows plus complete broker diagnostics."""
@@ -528,6 +867,7 @@ def write_broker_outputs(pack: BrokerPack, broker_dir: Union[str, Path]) -> Path
     path = broker_dir / "receipts.json"
     payload = pack.to_dict()
     data = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    _refuse_credential_bearing_locators(data)
     temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     try:
         with temporary.open("x", encoding="utf-8") as handle:
@@ -539,6 +879,45 @@ def write_broker_outputs(pack: BrokerPack, broker_dir: Union[str, Path]) -> Path
     finally:
         temporary.unlink(missing_ok=True)
     return path
+
+
+#: URL shapes that carry a credential: userinfo (``https://user:secret@host``)
+#: or a token-bearing query parameter. The broker authenticates with a request
+#: header precisely so nothing like this can exist, and this pattern is the
+#: tripwire that keeps it true if someone later takes the easier route.
+#:
+#: The query-parameter list is deliberately confined to names that are only ever
+#: credentials. A bare ``token=`` or ``key=`` is left out on purpose: those do
+#: appear in legitimate signed links an author may cite, and refusing the whole
+#: pack over one would trade a real leak guard for a self-inflicted outage.
+_CREDENTIAL_BEARING_LOCATOR = re.compile(
+    r"https?://[^/\s\"]*:[^/\s\"]*@"
+    r"|[?&](?:access_token|api_key|apikey|x-api-key|exaapikey|private_token|"
+    r"client_secret|password)=[^&\s\"]+",
+    re.IGNORECASE,
+)
+
+
+def _refuse_credential_bearing_locators(serialized: str) -> None:
+    """Refuse to persist any receipt payload carrying a credential in a locator.
+
+    ``johnmarktaylor91/torchlens`` is a public repository and broker receipts are
+    durable. A credential that reached an artifact could not be unpublished, so
+    this fails the write rather than emitting it -- the same fail-loud posture
+    the rest of the broker takes.
+
+    Raises
+    ------
+    SourceBrokerError
+        When a credential-bearing locator is present. The offending value is
+        deliberately NOT included in the message.
+    """
+
+    if _CREDENTIAL_BEARING_LOCATOR.search(serialized) is not None:
+        raise SourceBrokerError(
+            "broker receipts carry a credential-bearing locator; refusing to persist "
+            "(the forge credential belongs in a request header, never in a URL)"
+        )
 
 
 # -- descriptor validation -------------------------------------------------
@@ -794,6 +1173,30 @@ def _classify_broker_role(
 # -- forge-file ------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class RefResolution:
+    """One ref-resolution attempt: its SHA, its receipt, and whose failure it was.
+
+    Parameters
+    ----------
+    sha:
+        Machine-derived 40-hex commit SHA, or ``None`` when unresolved.
+    receipt:
+        The resolver receipt, recorded whether or not resolution succeeded.
+    failure_outcome:
+        The typed broker outcome for an unresolved ref. This is the field that
+        keeps the record honest: only a forge answer that genuinely denies the
+        ref earns :data:`OUTCOME_BAD_REF`.
+    rate_limit:
+        The throttling evidence, when the forge threw us out.
+    """
+
+    sha: Optional[str]
+    receipt: JsonObject
+    failure_outcome: Optional[str] = None
+    rate_limit: Optional[RateLimitSignal] = None
+
+
 def resolve_github_ref(
     repo: str,
     ref: str,
@@ -802,8 +1205,17 @@ def resolve_github_ref(
     evidence_dir: Path,
     clock: Callable[[], str],
     timeout: float,
-) -> tuple[Optional[str], JsonObject]:
+) -> RefResolution:
     """Resolve one confirmed ref to its immutable commit SHA, with a receipt.
+
+    Failure is classified by *cause*, never collapsed. Only ``404``/``422`` --
+    the forge stating authoritatively that the ref does not exist -- is a
+    ``bad-ref``, because that is the only answer that is actually a claim about
+    what the author supplied. Throttling is ``rate-limited``; a transport error,
+    a server fault, or an unparseable response is ``unreachable``; a forge we
+    cannot address at all is ``unsupported-forge``. Every one of those is our
+    problem or the forge's, and saying otherwise in a durable record is a lie
+    that also sends retries to repair a reference that was never broken.
 
     Parameters
     ----------
@@ -816,22 +1228,29 @@ def resolve_github_ref(
 
     Returns
     -------
-    tuple[str | None, dict[str, Any]]
-        The resolved 40-hex SHA (or ``None``) and the resolver receipt. The
-        SHA in any manifest row comes from this receipt, never the model.
+    RefResolution
+        The resolved SHA (or ``None``), the receipt, and the typed failure
+        attribution. The SHA in any manifest row comes from this receipt,
+        never the model.
     """
 
     matched = _GITHUB_REPO_PATTERN.match(repo)
     if matched is None:
-        return None, {
-            "receipt_kind": "ref-resolution",
-            "forge": "unsupported",
-            "repo": repo,
-            "ref": ref,
-            "resolved_sha": None,
-            "resolved_at": clock(),
-            "detail": "only github.com repositories are supported by the MVP resolver",
-        }
+        return RefResolution(
+            sha=None,
+            receipt={
+                "receipt_kind": "ref-resolution",
+                "forge": "unsupported",
+                "repo": repo,
+                "ref": ref,
+                "resolved_sha": None,
+                "resolved_at": clock(),
+                "detail": "only github.com repositories are supported by the MVP resolver",
+            },
+            # A GitLab URL is a perfectly good reference we cannot yet
+            # dereference. That is a gap in this resolver, not a bad ref.
+            failure_outcome=OUTCOME_UNSUPPORTED_FORGE,
+        )
     owner, name = matched.group(1), matched.group(2)
     endpoint = (
         "https://api.github.com/repos/"
@@ -839,6 +1258,7 @@ def resolve_github_ref(
         f"{urllib.parse.quote(ref, safe='')}"
     )
     response = transport(endpoint, max_bytes=1024 * 1024, timeout=timeout)
+    throttled = rate_limit_signal(response.status, response.headers)
     receipt: JsonObject = {
         "receipt_kind": "ref-resolution",
         "forge": "github",
@@ -850,20 +1270,62 @@ def resolve_github_ref(
         "resolved_sha": None,
         "resolved_at": clock(),
         "detail": response.error or "",
+        # Whether the client was authenticated is a fact about the run, not a
+        # secret: it is the difference between a 60/hour and a 5,000/hour
+        # ceiling, and a rung that throttles needs it visible. The credential
+        # itself never leaves the request header.
+        "credential_mode": _credential_mode(transport),
+        "rate_limit": throttled.to_dict() if throttled is not None else None,
     }
+    if throttled is not None:
+        receipt["detail"] = (
+            f"http {response.status}: forge rate limit reached "
+            f"(remaining={throttled.remaining}, reset={throttled.reset_epoch}). "
+            "The reference was not evaluated."
+        )
+        return RefResolution(
+            sha=None,
+            receipt=receipt,
+            failure_outcome=OUTCOME_RATE_LIMITED,
+            rate_limit=throttled,
+        )
     if response.status == 200 and response.body:
         _store_evidence(evidence_dir, response.body)
         try:
             parsed = json.loads(response.body.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
             receipt["detail"] = "forge response was not JSON"
-            return None, receipt
+            return RefResolution(sha=None, receipt=receipt, failure_outcome=OUTCOME_UNREACHABLE)
         sha = parsed.get("sha") if isinstance(parsed, Mapping) else None
         if isinstance(sha, str) and re.fullmatch(r"[0-9a-f]{40}", sha):
             receipt["resolved_sha"] = sha
-            return sha, receipt
+            return RefResolution(sha=sha, receipt=receipt)
         receipt["detail"] = "forge response carried no commit sha"
-    return None, receipt
+        return RefResolution(sha=None, receipt=receipt, failure_outcome=OUTCOME_UNREACHABLE)
+    if response.status in BAD_REF_STATUSES:
+        if not receipt["detail"]:
+            receipt["detail"] = f"http {response.status}: the forge has no such ref"
+        return RefResolution(sha=None, receipt=receipt, failure_outcome=OUTCOME_BAD_REF)
+    if not receipt["detail"]:
+        receipt["detail"] = f"http {response.status}"
+    return RefResolution(sha=None, receipt=receipt, failure_outcome=OUTCOME_UNREACHABLE)
+
+
+def _credential_mode(transport: Transport) -> str:
+    """Report *how* a transport authenticates to the forge, never *what* with.
+
+    ``authenticated`` versus ``anonymous`` is the difference between a
+    5,000/hour and a 60/hour ceiling, so a throttled rung needs it recorded --
+    without it, "we were rate limited" cannot be told apart from "we were rate
+    limited because nobody wired up a credential". The credential itself never
+    leaves the request header.
+    """
+
+    reporter = getattr(transport, "github_credential_mode", None)
+    if not callable(reporter):
+        return "unknown"
+    mode = str(reporter())
+    return mode if mode in {"authenticated", "anonymous"} else "unknown"
 
 
 def _broker_forge_file(
@@ -877,7 +1339,7 @@ def _broker_forge_file(
 ) -> BrokerOutcome:
     """Resolve, pin, and fetch one repository file at an immutable SHA."""
 
-    sha, receipt = resolve_github_ref(
+    resolution = resolve_github_ref(
         str(descriptor["repo"]),
         str(descriptor["ref"]),
         transport=transport,
@@ -885,11 +1347,22 @@ def _broker_forge_file(
         clock=clock,
         timeout=timeout,
     )
-    if sha is None:
+    receipt = resolution.receipt
+    if resolution.sha is None:
         failed = _failure_outcome(
-            descriptor, OUTCOME_BAD_REF, detail=str(receipt.get("detail", ""))
+            descriptor,
+            resolution.failure_outcome or OUTCOME_UNREACHABLE,
+            detail=str(receipt.get("detail", "")),
         )
-        return replace(failed, resolver_receipt=receipt)
+        return replace(
+            failed,
+            status=receipt.get("status") if isinstance(receipt.get("status"), int) else None,
+            resolver_receipt=receipt,
+            rate_limit=(
+                resolution.rate_limit.to_dict() if resolution.rate_limit is not None else None
+            ),
+        )
+    sha = resolution.sha
     matched = _GITHUB_REPO_PATTERN.match(str(descriptor["repo"]))
     assert matched is not None  # resolve_github_ref already accepted it
     owner, name = matched.group(1), matched.group(2)
@@ -978,6 +1451,30 @@ def _bounded_fetch(
                 bytes_fetched=len(response.body),
                 sha256=None,
                 detail=f"body exceeded the {max_bytes}-byte ceiling",
+            ),
+            None,
+        )
+    throttled = rate_limit_signal(response.status, response.headers)
+    if throttled is not None:
+        # A throttled fetch is our budget running out, not a dead link. Typing it
+        # as `unreachable` would send an author to look for a different source
+        # when the one it named is fine and will be fetchable in an hour.
+        return (
+            replace(
+                make(
+                    OUTCOME_RATE_LIMITED,
+                    final_url=response.final_url,
+                    redirect_chain=response.redirect_chain,
+                    status=response.status,
+                    bytes_fetched=0,
+                    sha256=None,
+                    detail=(
+                        f"http {response.status}: host rate limit reached "
+                        f"(remaining={throttled.remaining}, reset={throttled.reset_epoch}). "
+                        "The target was not evaluated."
+                    ),
+                ),
+                rate_limit=throttled.to_dict(),
             ),
             None,
         )

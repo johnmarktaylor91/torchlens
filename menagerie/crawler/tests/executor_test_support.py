@@ -16,6 +16,12 @@ from pathlib import Path
 
 RESOLVED_SHA = "a" * 39 + "b"
 COMMITS_URL = "https://api.github.com/repos/acme/widgets/commits/v1.0.0"
+#: A ref the forge answers `404` for. This is what a fabricated SHA actually
+#: looks like from GitHub, and the fixture says so explicitly rather than
+#: leaving the URL unmapped: an unmapped URL is a transport failure, which is
+#: *our* problem, and a test must not prove "bad ref" from that.
+FABRICATED_SHA = "1" * 40
+FABRICATED_COMMITS_URL = f"https://api.github.com/repos/acme/widgets/commits/{FABRICATED_SHA}"
 RAW_URL = f"https://raw.githubusercontent.com/acme/widgets/{RESOLVED_SHA}/models/net.py"
 IMPL_BODY = "class Net:\n    pass\n"
 SUPPLEMENT_URL = "https://example.org/extra.txt"
@@ -340,6 +346,10 @@ def write_broker_fixtures(directory: Path) -> Path:
         COMMITS_URL: {"status": 200, "body_text": json.dumps({"sha": RESOLVED_SHA})},
         RAW_URL: {"status": 200, "body_text": IMPL_BODY},
         SUPPLEMENT_URL: {"status": 200, "body_text": "extra documentation\n"},
+        FABRICATED_COMMITS_URL: {
+            "status": 404,
+            "body_text": json.dumps({"message": "No commit found for SHA"}),
+        },
     }
     (directory / "index.json").write_text(json.dumps(index), encoding="utf-8")
     return directory
