@@ -56,6 +56,10 @@ from menagerie.crawler.author_attempts import (
     new_attempt,
     prior_attempts_summary,
 )
+from menagerie.crawler.author_dispatch import (
+    derive_terminal_evidence_pack,
+    derive_terminal_license_disposition,
+)
 from menagerie.crawler.capability_probe import (
     CAPABILITY_PROBE_FORMAT,
     CapabilityProbeError,
@@ -1259,7 +1263,13 @@ def _author_result_from_author_payload(
     authored_payload = authored_result.get("payload")
     if not isinstance(kind, str) or not isinstance(authored_payload, Mapping):
         raise AuthorExecutorError("stage-2 kind must be a string and payload must be an object")
-    forbidden = {"arm", "recommendation_sha256"} & set(authored_payload)
+    forbidden = {
+        "arm",
+        "evidence_identity",
+        "license_identity",
+        "recommendation_sha256",
+        "search_report_identity",
+    } & set(authored_payload)
     if forbidden:
         raise AuthorExecutorError(
             f"stage-2 payload carries machine-owned fields {sorted(forbidden)!r}"
@@ -1269,6 +1279,24 @@ def _author_result_from_author_payload(
         raise AuthorExecutorError("author request lacks expected_result bindings")
 
     payload: JsonObject = {"arm": kind, **deepcopy(dict(authored_payload))}
+    source_manifest = request.get("source_manifest")
+    manifest_sources = (
+        source_manifest.get("sources") if isinstance(source_manifest, Mapping) else None
+    )
+    manifest_source_ids = (
+        [
+            str(source["source_id"])
+            for source in manifest_sources
+            if isinstance(source, Mapping)
+            and isinstance(source.get("source_id"), str)
+            and source["source_id"]
+        ]
+        if isinstance(manifest_sources, list)
+        else []
+    )
+    source_manifest_identity = str(expected.get("source_manifest_identity", ""))
+    evidence_pack: JsonObject | None = None
+    license_disposition: JsonObject | None = None
     if kind == "DEFER_RECOMMENDATION":
         handoff = payload.get("handoff_execution")
         if not isinstance(handoff, Mapping) or set(handoff) != {"proposal"}:
@@ -1299,7 +1327,58 @@ def _author_result_from_author_payload(
         }
         handoff_body["handoff_sha256"] = stable_hash(handoff_body)
         payload["handoff_execution"] = handoff_body
+        evidence_pack = derive_terminal_evidence_pack(
+            source_ids=[str(value) for value in payload.get("source_ids", [])],
+            evidence_ids=[str(value) for value in payload.get("evidence_ids", [])],
+            predicate=f"needs-{payload.get('platform')}",
+        )
+        facts = proposal.get("proposed_facts")
+        licenses = facts.get("licenses") if isinstance(facts, Mapping) else None
+        if not isinstance(licenses, Mapping):
+            raise AuthorExecutorError("defer proposal must carry exact license facts")
+        license_disposition = derive_terminal_license_disposition(
+            kind=kind,
+            source_manifest_identity=source_manifest_identity,
+            licenses=licenses,
+        )
+    elif kind == "SKIP_RECOMMENDATION":
+        source_ids = [str(value) for value in payload.get("source_ids", [])]
+        evidence_ids = [str(value) for value in payload.get("evidence_ids", [])]
+        status_code = str(payload.get("status_code", ""))
+        predicate = status_code.removeprefix("skipped:")
+        evidence_pack = derive_terminal_evidence_pack(
+            source_ids=source_ids,
+            evidence_ids=evidence_ids,
+            predicate=predicate,
+        )
+        license_disposition = derive_terminal_license_disposition(
+            kind=kind,
+            source_manifest_identity=source_manifest_identity,
+        )
+        payload["search_report_identity"] = stable_hash(
+            {
+                "status_code": status_code,
+                "source_ids": source_ids,
+                "evidence_ids": evidence_ids,
+                "source_manifest_identity": source_manifest_identity,
+            }
+        )
+    elif kind == "BLOCKED":
+        evidence_ids = [str(value) for value in payload.get("evidence_ids", [])]
+        evidence_pack = derive_terminal_evidence_pack(
+            source_ids=manifest_source_ids,
+            evidence_ids=evidence_ids,
+            predicate="blocked-prerequisite",
+        )
+        license_disposition = derive_terminal_license_disposition(
+            kind=kind,
+            source_manifest_identity=source_manifest_identity,
+        )
     if kind != "PROPOSED":
+        if evidence_pack is None or license_disposition is None:
+            raise AuthorExecutorError(f"unsupported stage-2 result kind {kind!r}")
+        payload["evidence_identity"] = evidence_pack["evidence_identity"]
+        payload["license_identity"] = stable_hash(license_disposition)
         payload["recommendation_sha256"] = stable_hash(payload)
 
     result_seed = {

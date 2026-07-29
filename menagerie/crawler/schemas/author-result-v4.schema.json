@@ -31,7 +31,7 @@
         {"$ref": "author-result-v3.schema.json#/$defs/proposed_payload"},
         {"$ref": "#/$defs/defer_payload"},
         {"$ref": "author-result-v3.schema.json#/$defs/skip_payload"},
-        {"$ref": "author-result-v3.schema.json#/$defs/blocked_payload"}
+        {"$ref": "#/$defs/blocked_payload"}
       ],
       "description": "Closed arm-specific result payload."
     }
@@ -72,6 +72,25 @@
         "handoff_execution": {"$ref": "#/$defs/handoff_execution", "description": "Separately authenticated executable handoff authority."},
         "recommendation_sha256": {"$ref": "author-result-v3.schema.json#/$defs/hash", "description": "Digest of the complete recommendation payload."}
       }
+    },
+    "blocked_payload": {
+      "allOf": [
+        {"$ref": "author-result-v3.schema.json#/$defs/blocked_payload"},
+        {
+          "properties": {
+            "prerequisite_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+              },
+              "description": "Stable semantic IDs for missing external facts or capabilities; schema paths and output-field names are forbidden."
+            }
+          }
+        }
+      ]
     }
   },
   "x-authority-ownership-base": "menagerie.crawler.author-result.v3",
@@ -79,9 +98,13 @@
     "$.payload.proposal": "$.payload.handoff_execution.proposal"
   },
   "x-authority-ownership": {
-    "$.payload.handoff_execution.code_manifest_identity": "author-gated",
-    "$.payload.handoff_execution.handoff_sha256": "author-gated",
-    "$.payload.handoff_execution.proposal_sha256": "author-gated",
-    "$.payload.handoff_execution.source_manifest_identity": "author-gated"
+    "$.payload.evidence_identity": "reducer-derived",
+    "$.payload.handoff_execution.code_manifest_identity": "reducer-derived",
+    "$.payload.handoff_execution.handoff_sha256": "reducer-derived",
+    "$.payload.handoff_execution.proposal_sha256": "reducer-derived",
+    "$.payload.handoff_execution.source_manifest_identity": "reducer-derived",
+    "$.payload.license_identity": "reducer-derived",
+    "$.payload.recommendation_sha256": "reducer-derived",
+    "$.payload.search_report_identity": "reducer-derived"
   }
 }

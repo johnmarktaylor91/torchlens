@@ -69,7 +69,11 @@ supplementary manifest. You get exactly one such round; after it you must write 
 The result file is an author-owned inner object, not `author-result.v4` itself. The
 executor adds the full `expected_result` bindings, `schema_version`, `created_at`,
 `result_id`, `result_sha256`, the redundant payload `arm`, and
-`recommendation_sha256`.
+`recommendation_sha256`. For every recommendation arm it also derives
+`evidence_identity` from the exact terminal evidence pack and `license_identity` from the
+exact license disposition. For `SKIP_RECOMMENDATION` it additionally derives
+`search_report_identity`. Never send any of those identity fields: an authored value is
+rejected rather than trusted or allowed to override the machine.
 
 For `PROPOSED`, `payload.proposal` is one complete registered
 `menagerie.crawler.author-proposal.v3` object. Its catalog sections do **not** sit directly
@@ -116,8 +120,6 @@ non-empty manifest there. Never put `implementation` directly under `proposal`.
     "platform": "cuda",
     "source_ids": ["impl-main"],
     "evidence_ids": ["ev-platform"],
-    "evidence_identity": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-    "license_identity": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
     "handoff_execution": {
       "proposal": {
         "$complete_author_proposal_v3": "Replace this fixture sentinel with the complete registered proposal; code_manifest belongs under proposed_facts.implementation."
@@ -128,10 +130,25 @@ non-empty manifest there. Never put `implementation` directly under `proposal`.
 ```
 
 For `SKIP_RECOMMENDATION`, the exact authored payload keys are `status_code`,
-`source_ids`, `evidence_ids`, `evidence_identity`, `search_report_identity`, and
-`license_identity`. For `BLOCKED`, they are `stage`, `reason_code`, `prerequisite_ids`,
-`evidence_ids`, `evidence_identity`, and `license_identity`, plus `research_summary` only
-for the higher-tier promotion case described by the canonical prompt.
+`source_ids`, and `evidence_ids`.
+
+<!-- CONTRACT_FIXTURE: stage2-skip-author-payload -->
+```json
+{
+  "kind": "SKIP_RECOMMENDATION",
+  "payload": {
+    "status_code": "skipped:insufficient-description",
+    "source_ids": ["impl-main"],
+    "evidence_ids": ["evidence-gap"]
+  }
+}
+```
+
+For `BLOCKED`, the authored keys are `stage`, `reason_code`, `prerequisite_ids`, and
+`evidence_ids`, plus `research_summary` only for the higher-tier promotion case described
+by the canonical prompt. `prerequisite_ids` names missing external facts or capabilities
+with stable semantic labels such as `runtime-dependency` or `faithful-source`; it never
+lists a schema path, an output field, or a digest the executor owns.
 
 <!-- CONTRACT_FIXTURE: stage2-author-payload -->
 ```json
@@ -141,15 +158,14 @@ for the higher-tier promotion case described by the canonical prompt.
     "stage": "source",
     "reason_code": "missing-material-source",
     "prerequisite_ids": ["source-needed"],
-    "evidence_ids": ["evidence-gap"],
-    "evidence_identity": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-    "license_identity": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    "evidence_ids": ["evidence-gap"]
   }
 }
 ```
 
-Do not add any outer request identity, payload `arm`, or result/recommendation/handoff
-hash. Those are facts the executor derives from the exact object you authored.
+Do not add any outer request identity, payload `arm`, terminal identity, or
+result/recommendation/handoff hash. Those are facts the executor derives from the exact
+objects it holds.
 
 ### What the checker will do to it
 

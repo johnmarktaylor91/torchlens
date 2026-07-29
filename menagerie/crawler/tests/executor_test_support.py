@@ -49,8 +49,6 @@ DEFAULT_RESULT = {
         "reason_code": "missing-material-source",
         "prerequisite_ids": ["source-needed"],
         "evidence_ids": ["evidence-gap"],
-        "evidence_identity": "sha256:" + "1" * 64,
-        "license_identity": "sha256:" + "2" * 64,
     },
 }
 
@@ -453,6 +451,10 @@ def write_author_envelope(root: Path, stable_id: str) -> Path:
             "intake_snapshot_id": "intake-test",
             "intake_snapshot_sha256": "sha256:" + "7" * 64,
             "intake_item_sha256": "sha256:" + "8" * 64,
+        },
+        "source_manifest": {
+            "manifest_sha256": "sha256:" + "6" * 64,
+            "sources": [{"source_id": "impl-net"}],
         },
         "required_output_path": str(root / "result.json"),
         "allowed_model_dir": str(root / "model"),

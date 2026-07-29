@@ -13,6 +13,8 @@ from menagerie.crawler.author_dispatch import (
     DeferRecommendation,
     ProposedAuthorResult,
     SkipRecommendation,
+    derive_terminal_evidence_pack,
+    derive_terminal_license_disposition,
 )
 from menagerie.crawler.authority import (
     AuthorityDerivationError,
@@ -181,29 +183,40 @@ def _terminal_checker_item(artifact: AuthorArtifact) -> JsonObject:
         source_ids = result.source_ids
         predicate = f"needs-{result.platform}"
         evidence_ids = result.evidence_ids
+        handoff = result.handoff_execution
+        proposal = handoff.proposal if handoff is not None else {}
+        facts = proposal.get("proposed_facts")
+        licenses = facts.get("licenses") if isinstance(facts, Mapping) else None
+        if not isinstance(licenses, Mapping):
+            raise DriverIntegrationError("terminal deferral has no exact license disposition")
     elif isinstance(result, SkipRecommendation):
         source_ids = result.source_ids
         predicate = result.status_code.split(":", 1)[1]
         evidence_ids = result.evidence_ids
+        licenses = None
     elif isinstance(result, BlockedRecommendation):
         source_ids = manifest_ids
         predicate = "blocked-prerequisite"
         evidence_ids = result.evidence_ids
+        licenses = None
     else:
         raise DriverIntegrationError("unknown typed terminal recommendation")
     if not source_ids:
         raise DriverIntegrationError("terminal recommendation has no exact source IDs")
-    evidence_pack = {
-        "evidence_identity": result.evidence_identity,
-        "excerpts": [
-            {
-                "evidence_id": evidence_id,
-                "source_id": source_ids[index % len(source_ids)],
-                "supports": [predicate],
-            }
-            for index, evidence_id in enumerate(evidence_ids)
-        ],
-    }
+    evidence_pack = derive_terminal_evidence_pack(
+        source_ids=source_ids,
+        evidence_ids=evidence_ids,
+        predicate=predicate,
+    )
+    license_disposition = derive_terminal_license_disposition(
+        kind=result.binding.raw_result["kind"],
+        source_manifest_identity=result.binding.source_manifest_identity,
+        licenses=licenses,
+    )
+    if evidence_pack["evidence_identity"] != result.evidence_identity:
+        raise DriverIntegrationError("terminal evidence identity is not machine-derived")
+    if stable_hash(license_disposition) != result.license_identity:
+        raise DriverIntegrationError("terminal license identity is not machine-derived")
     binding = result.binding
     return {
         "work_id": binding.work_id,
@@ -225,6 +238,7 @@ def _terminal_checker_item(artifact: AuthorArtifact) -> JsonObject:
         "author_result": binding.raw_result,
         "source_manifest": artifact.source_manifest,
         "evidence_pack": evidence_pack,
+        "license_disposition": license_disposition,
         "license_identity": result.license_identity,
     }
 
