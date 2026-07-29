@@ -21,6 +21,7 @@ import menagerie.crawler.checkpoint as checkpoint_module
 import menagerie.crawler.cli as cli_module
 import menagerie.crawler.driver as driver_module
 import menagerie.crawler.driver_admission as driver_admission_module
+import menagerie.crawler.driver_models as driver_models_module
 import menagerie.crawler.reducer as reducer_module
 from menagerie.crawler.campaign_merge import resolve_promotion_supersession
 from menagerie.crawler.artifact_transactions import (
@@ -70,7 +71,11 @@ from menagerie.crawler.driver_admission import (
     _author_lane_failure,
     _checker_wall_bound,
 )
-from menagerie.crawler.driver_contracts import RetryableOperatorError
+from menagerie.crawler.driver_contracts import (
+    GateBatchUnusableError,
+    RetryableOperatorError,
+    StaleGateBindingError,
+)
 from menagerie.crawler.driver_contracts import AuthorEffortCapExceeded
 from menagerie.crawler.discovery import (
     DiscoveryError,
@@ -6943,3 +6948,259 @@ def test_terminal_gate_failure_is_model_local_and_the_campaign_continues(
     for model in models:
         assert model["status"]["code"] == "failed:runner"
         assert model["status"]["reason_code"] == "protocol-violation"
+
+
+class FidelityGateRoutingErrorChecker(ScriptedChecker):
+    """Refuse to route the fidelity gate for exactly one named model."""
+
+    def __init__(self, refused_id: str) -> None:
+        """Bind the single model whose fidelity gate cannot be routed."""
+
+        super().__init__()
+        self.refused_id = refused_id
+
+    def check_fidelity(
+        self, artifact: AuthorArtifact, work_root: Path, config: DriverConfig
+    ) -> CheckerOutcome:
+        """Raise the routing error an unroutable fidelity gate produces."""
+
+        if str(artifact.proposal["stable_id"]) == self.refused_id:
+            raise GateRoutingError("synthetic unroutable fidelity gate")
+        return super().check_fidelity(artifact, work_root, config)
+
+
+def test_fidelity_gate_routing_failure_is_model_local_and_the_campaign_continues(
+    tmp_path: Path,
+) -> None:
+    """One unroutable fidelity gate terminalizes its model; the siblings still land.
+
+    The fidelity lane's handler existed but claimed ``failed:fidelity`` /
+    ``identity-mismatch`` with no fidelity gate to witness it, so terminal-proof
+    derivation raised ``AuthorityDerivationError``, which escaped ``_ensure_gates``
+    and ended the run. A lane that never obtained a gate cannot assert a fidelity
+    verdict; the provable fact is a runner protocol violation.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    """
+
+    snapshot = _snapshot(tmp_path, count=3)
+    refused_id = sorted(item.stable_id for item in snapshot.items)[1]
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=FidelityAuthor(),
+        checker=FidelityGateRoutingErrorChecker(refused_id),
+    ).run()
+
+    models = {
+        record["stable_id"]: record
+        for record in scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
+    }
+    assert len(models) == 3
+    assert models[refused_id]["status"]["code"] == "failed:runner"
+    assert models[refused_id]["status"]["reason_code"] == "protocol-violation"
+    survivors = [record for key, record in models.items() if key != refused_id]
+    assert len(survivors) == 2
+    assert all(record["status"]["code"] != "failed:runner" for record in survivors)
+    assert result.status in {"complete", "terminal-partition-complete"}
+
+
+def test_an_unroutable_gate_record_does_not_end_the_campaign(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``emit_gate_records`` raising is attributed to its batch, not to the run.
+
+    ``emit_gate_records`` raises ``GateRoutingError`` and sat OUTSIDE every
+    model-local handler in the metadata lanes, so one unroutable gate record fell
+    through to the CLI catch-all and the campaign ended having written zero model
+    records.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    monkeypatch:
+        Fixture used to make the gate record unroutable.
+    """
+
+    snapshot = _snapshot(tmp_path, count=3)
+
+    def refuse(gate: Mapping[str, Any]) -> tuple[Mapping[str, Any], ...]:
+        """Refuse every proposed gate record the way an invalid payload does."""
+
+        del gate
+        raise GateRoutingError("synthetic unroutable gate record")
+
+    monkeypatch.setattr(driver_admission_module, "emit_gate_records", refuse)
+    result = _driver(tmp_path, snapshot).run()
+
+    models = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
+    assert len(models) == 3
+    assert {record["status"]["code"] for record in models} == {"failed:runner"}
+    assert {record["status"]["reason_code"] for record in models} == {"protocol-violation"}
+    assert result.status in {"complete", "terminal-partition-complete"}
+
+
+class OneStaleBindingChecker(ScriptedChecker):
+    """Return a metadata batch gate whose ONE named item binds a stale identity."""
+
+    def __init__(self, stale_id: str) -> None:
+        """Bind the single model whose gate item goes stale."""
+
+        super().__init__()
+        self.stale_id = stale_id
+
+    def check_metadata(
+        self, artifacts: Sequence[AuthorArtifact], work_root: Path, config: DriverConfig
+    ) -> CheckerOutcome:
+        """Answer the batch, then stale exactly one item's dependent identity."""
+
+        outcome = super().check_metadata(artifacts, work_root, config)
+        gate = outcome.gate
+        assert gate is not None
+        for item in gate["items"]:
+            if item["stable_id"] == self.stale_id:
+                item["vet_identity"] = "sha256:" + "b" * 64
+        gate["result_envelope_sha256"] = stable_hash(
+            {
+                key: value
+                for key, value in gate.items()
+                if key not in {"result_envelope_sha256", "payload_sha256", "ledger_seq"}
+            }
+        )
+        return CheckerOutcome(gate=gate)
+
+
+def test_one_stale_gate_binding_does_not_discard_its_batch_siblings(tmp_path: Path) -> None:
+    """A stale binding belongs to its own item; the rest of the batch proceeds.
+
+    Metadata gates are batched up to twenty models wide, so raising a whole-batch
+    ``DriverIntegrationError`` for one stale member discarded up to nineteen innocent
+    models -- and the same stale member recurred on the retry.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    """
+
+    snapshot = _snapshot(tmp_path, count=4)
+    stale_id = sorted(item.stable_id for item in snapshot.items)[2]
+    result = _driver(tmp_path, snapshot, checker=OneStaleBindingChecker(stale_id)).run()
+
+    models = {
+        record["stable_id"]: record
+        for record in scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
+    }
+    assert len(models) == 4
+    assert models[stale_id]["status"]["code"] == "failed:runner"
+    assert models[stale_id]["status"]["reason_code"] == "protocol-violation"
+    survivors = [record for key, record in models.items() if key != stale_id]
+    assert len(survivors) == 3
+    assert all(record["status"]["kind"] != "failed" for record in survivors)
+    assert result.status in {"complete", "terminal-partition-complete"}
+
+
+@dataclass(frozen=True)
+class _BindingStub:
+    """Minimal artifact stand-in exercising the binding check directly."""
+
+    proposal: Mapping[str, Any]
+    campaign_root_work_id: Optional[str] = None
+
+
+def test_a_gate_that_is_unusable_for_every_member_is_a_named_batch_condition() -> None:
+    """A missing item list is the whole-batch condition; a stale item is not.
+
+    The distinction is structural rather than incidental: ``GateBatchUnusableError``
+    names the case that genuinely costs every member, so no per-item failure can
+    reach that arm as a by-product. Every stale member is also named, so no member
+    is silently dropped by an early return.
+    """
+
+    artifacts = (
+        _BindingStub({"stable_id": "m_alpha", "work_id": "w_alpha"}),
+        _BindingStub({"stable_id": "m_beta", "work_id": "w_beta"}),
+    )
+    with pytest.raises(GateBatchUnusableError):
+        driver_models_module._require_gate_bindings(
+            {"items": None}, artifacts, "metadata_batch"
+        )
+
+    with pytest.raises(StaleGateBindingError) as raised:
+        driver_models_module._require_gate_bindings(
+            {"items": [{"stable_id": "m_alpha"}]}, artifacts, "metadata_batch"
+        )
+    assert set(raised.value.stale_ids) == {"m_alpha", "m_beta"}
+    assert not isinstance(raised.value, GateBatchUnusableError)
+
+
+class RetryableMetadataChecker(ScriptedChecker):
+    """Fail every metadata batch with a typed retryable transport error."""
+
+    def check_metadata(
+        self, artifacts: Sequence[AuthorArtifact], work_root: Path, config: DriverConfig
+    ) -> CheckerOutcome:
+        """Raise the campaign-level retryable operator failure."""
+
+        del artifacts, work_root, config
+        raise RetryableOperatorError("checker command failed (exit 75): transport")
+
+
+def test_campaign_level_signals_still_stop_the_run(tmp_path: Path) -> None:
+    """Retryable-infrastructure and provider backoff are NOT model-local.
+
+    Scoping a per-model failure to its model must not swallow the signals that are
+    genuinely campaign-wide. A retryable transport failure still propagates out of
+    the driver, and a provider backoff still pauses the whole run rather than
+    burning the in-flight models.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    """
+
+    snapshot = _snapshot(tmp_path, count=3)
+    with pytest.raises(RetryableOperatorError):
+        _driver(tmp_path, snapshot, checker=RetryableMetadataChecker()).run()
+    retry_models = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
+    assert all(record["status"]["code"] != "failed:runner" for record in retry_models)
+
+    backoff_root = tmp_path / "backoff"
+    backoff_root.mkdir()
+    backoff_snapshot = _snapshot(backoff_root, count=3)
+    scheduler = FakePauseScheduler(_paths(backoff_root, backoff_snapshot).wakeup_root)
+    paused = _driver(
+        backoff_root,
+        backoff_snapshot,
+        checker=FakeChecker(quota=True),
+        pause_scheduler=scheduler,
+    ).run()
+    assert paused.status == "paused:usage-limit"
+    paused_models = scan_jsonl(_paths(backoff_root, backoff_snapshot).ledgers.models)
+    assert {record["status"]["code"] for record in paused_models} == {"runs"}
+
+
+def test_a_checker_wrapper_that_cannot_run_is_still_an_integration_error(
+    tmp_path: Path,
+) -> None:
+    """A wrapper that cannot execute at all remains a typed integration failure.
+
+    Attributing a per-model failure to its model must not soften a genuine
+    environment/wrapper defect into something that quietly passes.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    """
+
+    lane = CommandCheckerLane((sys.executable, "-c", "import sys; sys.exit(1)"))
+    root = tmp_path / "checker-root"
+    root.mkdir(parents=True, exist_ok=True)
+    with pytest.raises(DriverIntegrationError):
+        lane._run({"envelope_version": "x"}, root)

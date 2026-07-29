@@ -89,6 +89,42 @@ class VariantRecipeUnsupported(DriverIntegrationError):
     """Raised when a family recipe has no closed mechanical sibling selector."""
 
 
+class GateBatchUnusableError(DriverIntegrationError):
+    """Raised when a checker gate is structurally unusable for EVERY batch member.
+
+    This is the distinct, named whole-batch condition. It is deliberately NOT the
+    by-product of one bad member: a single item whose identities went stale raises
+    ``StaleGateBindingError`` and belongs to that item alone. Only a gate that
+    cannot be read as a per-item result at all -- no item list, no routable body --
+    genuinely costs every model in the batch.
+    """
+
+
+class StaleGateBindingError(DriverIntegrationError):
+    """Raised when named gate items no longer bind their current proposal.
+
+    A stale binding is a fact about ONE model: the checker answered a question
+    about a proposal generation the driver no longer holds. Escalating it to the
+    whole batch discards up to twenty innocent models per bad member, and the same
+    bad member recurs on the retry. ``stale_ids`` names exactly the models whose
+    bindings failed so the caller can terminalize them and let their siblings
+    proceed.
+
+    Parameters
+    ----------
+    stale_ids:
+        Stable IDs whose gate item is absent, mis-lineaged, or identity-stale.
+    detail:
+        Human-readable diagnostic naming the same IDs.
+    """
+
+    def __init__(self, stale_ids: Sequence[str], detail: str) -> None:
+        """Bind the exact stale model IDs to their shared diagnostic."""
+
+        super().__init__(detail)
+        self.stale_ids: tuple[str, ...] = tuple(stale_ids)
+
+
 class AuthorBlockedPrerequisite(DriverError):
     """One author's typed ``BLOCKED`` verdict, as the cause of its own attempt.
 

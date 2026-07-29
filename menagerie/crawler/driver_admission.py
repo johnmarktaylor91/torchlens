@@ -209,6 +209,7 @@ from menagerie.crawler.driver_contracts import (
     ForgeRateLimitedError,
     ResearchToolsUnavailableError,
     RetryableOperatorError,
+    StaleGateBindingError,
     VariantRecipeUnsupported,
     WorkItem,
     _campaign_id_for_item,
@@ -3845,6 +3846,10 @@ class AdmissionEnvironmentMixin:
 
             pending_artifacts = [artifacts[stable_id] for stable_id in sorted(pending_ids)]
             requeued: set[str] = set()
+            # Durable progress is "did this round resolve or requeue anything", not
+            # "did it requeue anything". Scoping a stale binding to its own item can
+            # retire one model and leave its siblings pending, which is progress.
+            pending_before_round = set(pending_ids)
             for batch in _metadata_batches(pending_artifacts):
                 batch_ids = tuple(str(artifact.proposal["stable_id"]) for artifact in batch)
                 try:
@@ -3899,6 +3904,47 @@ class AdmissionEnvironmentMixin:
                         for stable_id in batch_ids
                     }
                     decisions = route_metadata_gate(route_ready, counts, max_repairs=2)
+                    # `emit_gate_records` raises `GateRoutingError`, which had no handler
+                    # anywhere between here and the CLI catch-all: one unroutable gate
+                    # ended the campaign with zero records written. It belongs to the
+                    # batch that produced it, like every other gate contract failure.
+                    gate_records = emit_gate_records(route_ready)
+                except StaleGateBindingError as exc:
+                    # A stale binding is a fact about the named items only. Terminalize
+                    # exactly those; the siblings stay pending and are re-batched by the
+                    # enclosing loop, so one bad member no longer discards its batch.
+                    for stable_id in exc.stale_ids:
+                        item = items_by_id[stable_id]
+                        attempt = _driver_failure_attempt(
+                            item,
+                            artifacts[stable_id],
+                            "runner",
+                            "protocol-violation",
+                            exc,
+                            self.config,
+                            diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
+                            environment=None,
+                            created_at=self.dependencies.clock(),
+                        )
+                        persisted_attempt = reducer.append_attempt(attempt).record
+                        self._terminalize(
+                            item,
+                            artifacts[stable_id],
+                            "failed:runner",
+                            "protocol-violation",
+                            str(exc),
+                            (persisted_attempt,),
+                            reducer,
+                            operational,
+                            state,
+                            human_review=False,
+                        )
+                        pending_ids.discard(stable_id)
+                    continue
+                except (DriverPaused, RetryableOperatorError, AuthorBackoffError):
+                    # Genuinely campaign-level: a pause, a retryable transport failure,
+                    # or a provider backoff must never be recorded as a model defect.
+                    raise
                 except Exception as exc:  # noqa: BLE001 -- invalid checker output is per batch
                     for stable_id in batch_ids:
                         item = items_by_id[stable_id]
@@ -3928,7 +3974,7 @@ class AdmissionEnvironmentMixin:
                         )
                         pending_ids.discard(stable_id)
                     continue
-                for record in emit_gate_records(route_ready):
+                for record in gate_records:
                     result = reducer.append_gate(_without_ledger_fields(record))
                     if result.appended:
                         persisted.append(result.record)
@@ -3964,7 +4010,7 @@ class AdmissionEnvironmentMixin:
                     else:
                         requeued.add(stable_id)
                     self.dependencies.boundary_hook("after-gate", stable_id)
-            if pending_ids and not requeued:
+            if pending_ids and not requeued and pending_ids == pending_before_round:
                 raise DriverIntegrationError("metadata gate made no durable routing progress")
 
         for item in work:
@@ -4152,6 +4198,11 @@ class AdmissionEnvironmentMixin:
                                 },
                                 max_repairs=2,
                             )[0]
+                            # Same unhandled `GateRoutingError` as the batch lane above:
+                            # validate the record inside the model-local handler.
+                            metadata_gate_records = emit_gate_records(metadata_ready)
+                        except (DriverPaused, RetryableOperatorError, AuthorBackoffError):
+                            raise
                         except Exception as exc:  # noqa: BLE001 -- invalid checker contract
                             attempt = _driver_failure_attempt(
                                 item,
@@ -4181,7 +4232,7 @@ class AdmissionEnvironmentMixin:
                             )
                             metadata_blocked = True
                             break
-                        for record in emit_gate_records(metadata_ready):
+                        for record in metadata_gate_records:
                             appended = reducer.append_gate(_without_ledger_fields(record))
                             if appended.appended:
                                 persisted.append(appended.record)
@@ -4267,16 +4318,23 @@ class AdmissionEnvironmentMixin:
                         ),
                         admission=("checker", item),
                     )
-                except RetryableOperatorError:
+                except (DriverPaused, RetryableOperatorError, AuthorBackoffError):
                     raise
                 except Exception as exc:  # noqa: BLE001 -- checker failure belongs to this model
+                    # A fidelity lane that never produced a gate cannot claim
+                    # `failed:fidelity`: that status asserts a fidelity gate REJECTED the
+                    # model, and the terminal-proof authority correctly refuses to derive
+                    # it without exact rejected-gate evidence. The old `identity-mismatch`
+                    # spelling therefore turned every fidelity-lane contract failure into
+                    # an AuthorityDerivationError that escaped `_ensure_gates` and ended
+                    # the campaign. The provable fact is that the checker lane violated
+                    # its protocol, which is a runner failure witnessed by this attempt.
                     infrastructure = self._is_infrastructure_error(exc)
-                    stage = "runner" if infrastructure else "fidelity"
-                    reason = "internal-error" if infrastructure else "identity-mismatch"
+                    reason = "internal-error" if infrastructure else "protocol-violation"
                     attempt = _driver_failure_attempt(
                         item,
                         artifact,
-                        stage,
+                        "runner",
                         reason,
                         exc,
                         self.config,
@@ -4288,7 +4346,7 @@ class AdmissionEnvironmentMixin:
                     self._terminalize(
                         item,
                         artifact,
-                        f"failed:{stage}",
+                        "failed:runner",
                         reason,
                         str(exc),
                         (persisted_attempt,),
@@ -4307,12 +4365,20 @@ class AdmissionEnvironmentMixin:
                     _require_gate_bindings(gate, (artifact,), "fidelity")
                     route_ready = _prepare_ledger_record(gate, len(persisted) + 1)
                     route_fidelity_gate(route_ready, artifact.proposal)
+                    # `GateRoutingError` from routing had no handler above this frame
+                    # either; keep the whole gate contract inside the model-local arm.
+                    emit_gate_records(route_ready)
+                except (DriverPaused, RetryableOperatorError, AuthorBackoffError):
+                    raise
                 except Exception as exc:  # noqa: BLE001 -- invalid checker contract is model-local
+                    # A gate that cannot be bound or routed is not a fidelity verdict --
+                    # see the sibling handler above. Claiming `failed:fidelity` here is
+                    # unprovable and aborts the campaign at terminal-proof derivation.
                     attempt = _driver_failure_attempt(
                         item,
                         artifact,
-                        "fidelity",
-                        "identity-mismatch",
+                        "runner",
+                        "protocol-violation",
                         exc,
                         self.config,
                         diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
@@ -4323,8 +4389,8 @@ class AdmissionEnvironmentMixin:
                     self._terminalize(
                         item,
                         artifact,
-                        "failed:fidelity",
-                        "identity-mismatch",
+                        "failed:runner",
+                        "protocol-violation",
                         str(exc),
                         (persisted_attempt,),
                         reducer,

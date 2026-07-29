@@ -68,6 +68,8 @@ from menagerie.crawler.driver_contracts import (
     DriverConfig,
     DriverIntegrationError,
     EnvironmentBinding,
+    GateBatchUnusableError,
+    StaleGateBindingError,
     WorkItem,
 )
 
@@ -319,12 +321,39 @@ def _require_gate(outcome: CheckerOutcome) -> JsonObject:
 def _require_gate_bindings(
     gate: Mapping[str, Any], artifacts: Sequence[AuthorArtifact], kind: str
 ) -> None:
-    """Reject a checker result whose rung or dependent identities are stale."""
+    """Reject a checker result whose rung or dependent identities are stale.
+
+    The check itself is unchanged and is never relaxed: an absent, mis-lineaged, or
+    identity-stale item still refuses. What changed is its SCOPE. A stale binding is
+    a fact about one model, so every stale member is collected and named on
+    ``StaleGateBindingError.stale_ids`` instead of aborting on the first one. Metadata
+    gates are batched up to twenty models wide, so raising a whole-batch error over a
+    single bad member discarded nineteen innocent models -- and the same bad member
+    recurred on the retry. Only a gate that is unusable for EVERY member (no item
+    list at all) raises the distinct whole-batch ``GateBatchUnusableError``.
+
+    Parameters
+    ----------
+    gate:
+        Normalized checker gate record.
+    artifacts:
+        Batch members whose current proposals the gate must bind.
+    kind:
+        ``metadata_batch`` or ``fidelity``.
+
+    Raises
+    ------
+    GateBatchUnusableError
+        If the gate carries no item list, which costs every batch member.
+    StaleGateBindingError
+        If one or more named members no longer bind their current proposal.
+    """
 
     items = gate.get("items")
     if not isinstance(items, list):
-        raise DriverIntegrationError("checker gate has no item list")
+        raise GateBatchUnusableError("checker gate has no item list")
     by_id = {str(item.get("stable_id")): item for item in items if isinstance(item, Mapping)}
+    stale: list[str] = []
     for artifact in artifacts:
         stable_id = str(artifact.proposal["stable_id"])
         item = by_id.get(stable_id)
@@ -333,9 +362,12 @@ def _require_gate_bindings(
             or item.get("campaign_root_work_id") != _artifact_lineage(artifact)
             or not _gate_item_matches_proposal(item, artifact.proposal, kind)
         ):
-            raise DriverIntegrationError(
-                f"checker gate identities or selected rung are stale for {stable_id}"
-            )
+            stale.append(stable_id)
+    if stale:
+        raise StaleGateBindingError(
+            stale,
+            "checker gate identities or selected rung are stale for " + ", ".join(stale),
+        )
 
 
 def _prepare_ledger_record(record: Mapping[str, Any], ledger_seq: int) -> JsonObject:
