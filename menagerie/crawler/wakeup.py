@@ -323,7 +323,8 @@ def build_wake_episode(
     Parameters
     ----------
     provider:
-        Usage-limited provider, ``anthropic`` or ``openai``.
+        Provider requiring a scheduled recheck: ``anthropic``, ``openai``, or
+        ``research-tools``.
     reset_at:
         Provider reset timestamp, whether observed or guessed.
     reset_observation:

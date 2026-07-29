@@ -2058,10 +2058,19 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             )
             if not scheduled.verified:
                 raise DriverIntegrationError("recurring wake projection was not verified")
-        _write_driver_state(
-            self.paths.driver_state,
-            {"status": "paused:usage-limit", "provider": provider, "reset_at": reset_at},
-        )
+        driver_state: JsonObject = {
+            "status": "paused:usage-limit",
+            "provider": provider,
+            "reset_at": reset_at,
+        }
+        if provider == "research-tools":
+            driver_state.update(
+                {
+                    "reason": signal.reason.value,
+                    "detail": signal.response_excerpt,
+                }
+            )
+        _write_driver_state(self.paths.driver_state, driver_state)
         return signal.reason.value
 
     def _handle_progress(

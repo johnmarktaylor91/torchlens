@@ -111,6 +111,32 @@ class RetryableOperatorError(DriverIntegrationError):
     """
 
 
+class ResearchToolsUnavailableError(RetryableOperatorError):
+    """One model's exact fail-loud research-tool guard outcome.
+
+    The individual outcome stays retryable. The author-wave coordinator counts
+    consecutive instances across distinct models and promotes only a sustained
+    outage to a campaign pause.
+    """
+
+    def __init__(self, stable_id: str, detail: str) -> None:
+        """Attach the affected model and bounded operator detail.
+
+        Parameters
+        ----------
+        stable_id:
+            Model whose research session could not reach its required tools.
+        detail:
+            Exact bounded diagnostic supplied by the trusted operator protocol.
+        """
+
+        super().__init__(
+            f"research tools unavailable for {stable_id}: {detail}"
+        )
+        self.stable_id = stable_id
+        self.detail = detail
+
+
 class AuthorQueueStalled(RetryableOperatorError):
     """Raised when the managing author session stops servicing the queue.
 

@@ -85,6 +85,7 @@ from menagerie.crawler.constants import (
     AUTHOR_QUEUE_STALL_SECONDS,
     CHECKER_PROMPT_NAME,
     FAILURE_REASON_CODES,
+    RESEARCH_TOOL_OUTAGE_THRESHOLD,
     STDIO_TAIL_MAX_CHARS,
     AuthorPauseReason,
     InvocationOrigin,
@@ -202,6 +203,7 @@ from menagerie.crawler.driver_contracts import (
     DriverPaused,
     DriverResult,
     EnvironmentBinding,
+    ResearchToolsUnavailableError,
     RetryableOperatorError,
     VariantRecipeUnsupported,
     WorkItem,
@@ -1101,6 +1103,12 @@ def classify_author_exit(
     if signal is not None:
         raise AuthorBackoffError(signal)
     if returncode in (AUTHOR_EXIT_RETRYABLE, AUTHOR_EXIT_UNAVAILABLE):
+        expected_tool_failure = "author executor stage1 failed: research-tools-unavailable (attempt "
+        if returncode == AUTHOR_EXIT_RETRYABLE and any(
+            line.startswith(expected_tool_failure) and line.endswith(")")
+            for line in combined.splitlines()
+        ):
+            raise ResearchToolsUnavailableError(stable_id, tail)
         raise RetryableOperatorError(f"{label} for {stable_id} (exit {returncode}): {tail}")
     if returncode == AUTHOR_EXIT_PERMANENT:
         # Deliberately does NOT use the historical retryable prefix: a declared
@@ -1656,6 +1664,8 @@ class QueueAuthorLane(_AuthorLaneBase):
             )
         message = f"author queue job {job.job_id} failed ({reason}): {detail}"
         if retryable:
+            if reason == "research-tools-unavailable":
+                raise ResearchToolsUnavailableError(job.stable_id, detail)
             raise RetryableOperatorError(message)
         raise DriverIntegrationError(message)
 
@@ -2285,6 +2295,59 @@ class _AuthorWavePool:
             return _AuthorDispatchOutcome(error=exc)
 
 
+def _research_tool_outage_signal(
+    primary: ResearchToolsUnavailableError,
+    drained: Sequence[tuple[str, _AuthorDispatchOutcome]],
+) -> Optional[AuthorBackoffSignal]:
+    """Promote a consecutive cross-model tool-failure streak to a provider pause.
+
+    Parameters
+    ----------
+    primary:
+        First research-tool failure encountered by the canonical writer.
+    drained:
+        Later uncommitted author outcomes in deterministic work order.
+
+    Returns
+    -------
+    AuthorBackoffSignal | None
+        Actionable scheduled-recheck signal once the distinct-model threshold is
+        reached, otherwise ``None`` so the isolated failure remains retryable.
+    """
+
+    ordered: list[tuple[str, Optional[BaseException]]] = [
+        (primary.stable_id, primary),
+        *((stable_id, outcome.error) for stable_id, outcome in drained),
+    ]
+    streak: list[ResearchToolsUnavailableError] = []
+    for stable_id, error in ordered:
+        if not isinstance(error, ResearchToolsUnavailableError):
+            streak.clear()
+            continue
+        if error.stable_id != stable_id or any(
+            previous.stable_id == stable_id for previous in streak
+        ):
+            streak.clear()
+        streak.append(error)
+        if len(streak) < RESEARCH_TOOL_OUTAGE_THRESHOLD:
+            continue
+        affected = ", ".join(failure.stable_id for failure in streak)
+        details = "; ".join(failure.detail for failure in streak)
+        return AuthorBackoffSignal(
+            reason=AuthorPauseReason.RESEARCH_TOOLS_UNAVAILABLE,
+            retry_after_seconds=None,
+            reset_at=None,
+            response_excerpt=(
+                "Campaign paused because the research provider was unreachable for "
+                f"{len(streak)} consecutive models ({affected}). Restore the configured "
+                "research MCP/provider, then resume; all affected models remain retryable. "
+                f"Observed failures: {details}"
+            )[:1_500],
+            provider="research-tools",
+        )
+    return None
+
+
 class AdmissionEnvironmentMixin:
     """Admission, environment, and execution workflow methods for the driver."""
 
@@ -2799,6 +2862,8 @@ class AdmissionEnvironmentMixin:
                 admission=("author", item),
             ),
         )
+        research_failure: Optional[ResearchToolsUnavailableError] = None
+        drained: tuple[tuple[str, _AuthorDispatchOutcome], ...] = ()
         try:
             if pool.enabled:
                 for item in work:
@@ -2810,17 +2875,28 @@ class AdmissionEnvironmentMixin:
                     if self._author_session_is_certain(item, reducer):
                         pool.submit(item)
             return self._commit_author_wave(work, pool, reducer, operational, state)
+        except ResearchToolsUnavailableError as exc:
+            research_failure = exc
         finally:
             # A started session has already spent provider budget, so an aborting
             # wave never orphans one: drain every sibling, then keep whatever it
             # produced in the disposable per-model cache so the next run reloads it
             # instead of re-authoring. This writes no ledger record and publishes
             # nothing, so an abort's canonical sequence stays identical to serial.
-            for stable_id, outcome in pool.drain():
+            drained = pool.drain()
+            for stable_id, outcome in drained:
                 preserved = by_stable_id.get(stable_id)
                 if preserved is not None and outcome.error is None and outcome.artifact is not None:
                     self._preserve_uncommitted_author_result(preserved, outcome.artifact)
             pool.close()
+        if research_failure is None:
+            raise AssertionError("research-tool failure unwind lost its typed cause")
+        outage = _research_tool_outage_signal(research_failure, drained)
+        if outage is not None:
+            raise AuthorUsagePause(
+                self._pause_for_usage(outage, operational, len(work))
+            ) from research_failure
+        raise research_failure
 
     def _author_session_is_certain(self, item: WorkItem, reducer: CanonicalReducer) -> bool:
         """Return whether the serial path provably reaches a fresh author session.

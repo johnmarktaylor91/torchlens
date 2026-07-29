@@ -211,9 +211,17 @@ DEFAULT_AUTHOR_WAVE_CONCURRENCY = 4
 # exhaustion rather than throughput.
 MAX_AUTHOR_WAVE_CONCURRENCY = 32
 
+# Three different models failing the exact research-tool guard in one wave is an
+# infrastructure outage, not independent model trouble. One or two remain retryable:
+# they can be transient namespace/session faults, while three supplies cross-model
+# evidence and still fits inside the default author wave width of four.
+RESEARCH_TOOL_OUTAGE_THRESHOLD = 3
+
 # Closed usage-limit provider vocabulary shared by the pause path and the wakeup
-# layer. The checker lane pauses on `openai`, the author lane on `anthropic`.
-USAGE_LIMIT_PROVIDERS = frozenset({"anthropic", "openai"})
+# layer. The checker lane pauses on `openai`, the author lane on `anthropic`, and a
+# sustained research-tool outage uses the same scheduled-recheck economics under the
+# explicit synthetic provider identity `research-tools`.
+USAGE_LIMIT_PROVIDERS = frozenset({"anthropic", "openai", "research-tools"})
 
 # The four frozen TIER campaigns the partitioner emits, each bound to its frozen
 # author model. This is deliberately NOT the same concept as a *repair* campaign
@@ -382,11 +390,13 @@ class AuthorPauseReason(StrEnum):
     """Closed author responses that require a scheduler pause.
 
     The author-side analogue of :class:`CheckerPauseReason`. Anthropic usage
-    exhaustion is a provider pause with a reset time, never a model failure.
+    exhaustion and a sustained cross-model research-provider outage are campaign
+    pauses, never model failures.
     """
 
     RATE_LIMIT = "rate-limit"
     QUOTA_EXHAUSTED = "quota-exhausted"
+    RESEARCH_TOOLS_UNAVAILABLE = "research-tools-unavailable"
 
 
 class RunMode(StrEnum):
