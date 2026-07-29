@@ -24,7 +24,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, cast
 
 import pytest
 
@@ -268,7 +268,10 @@ class ResearchToolsFailureAuthor(ObservedAuthor):
             self.completed.append(item.stable_id)
         lane = object.__new__(QueueAuthorLane)
         lane._raise_operator_failure(  # noqa: SLF001
-            SimpleNamespace(job_id=f"author-{item.stable_id}", stable_id=item.stable_id),
+            cast(
+                Any,
+                SimpleNamespace(job_id=f"author-{item.stable_id}", stable_id=item.stable_id),
+            ),
             {
                 "reason": "research-tools-unavailable",
                 "retryable": True,

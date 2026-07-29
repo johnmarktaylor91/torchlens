@@ -217,11 +217,14 @@ MAX_AUTHOR_WAVE_CONCURRENCY = 32
 # evidence and still fits inside the default author wave width of four.
 RESEARCH_TOOL_OUTAGE_THRESHOLD = 3
 
-# Closed usage-limit provider vocabulary shared by the pause path and the wakeup
-# layer. The checker lane pauses on `openai`, the author lane on `anthropic`, and a
-# sustained research-tool outage uses the same scheduled-recheck economics under the
-# explicit synthetic provider identity `research-tools`.
-USAGE_LIMIT_PROVIDERS = frozenset({"anthropic", "openai", "research-tools"})
+# Closed usage-limit provider vocabulary. The checker lane pauses on `openai` and
+# the author lane on `anthropic`; research-tool outages are not usage limits.
+USAGE_LIMIT_PROVIDERS = frozenset({"anthropic", "openai"})
+
+# Every provider identity the scheduled-recheck layer may wake. A sustained
+# research-tool outage shares the reset/recheck mechanism without misclassifying
+# itself as a usage limit.
+SCHEDULED_RECHECK_PROVIDERS = frozenset({*USAGE_LIMIT_PROVIDERS, "research-tools"})
 
 # The four frozen TIER campaigns the partitioner emits, each bound to its frozen
 # author model. This is deliberately NOT the same concept as a *repair* campaign
