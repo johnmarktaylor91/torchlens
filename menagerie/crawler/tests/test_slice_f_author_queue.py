@@ -58,6 +58,7 @@ from menagerie.crawler.driver_contracts import (
     AuthorBackoffError,
     AuthorEffortCapExceeded,
     AuthorQueueStalled,
+    ResearchToolsUnavailableError,
     RetryableOperatorError,
     WorkItem,
 )
@@ -467,6 +468,25 @@ def test_command_lane_transient_exit_is_retryable(exit_code: int) -> None:
 
     with pytest.raises(RetryableOperatorError):
         classify_author_exit("author", "m_x", exit_code, "", "upstream unavailable")
+
+
+def test_command_lane_types_the_exact_research_tool_guard_failure() -> None:
+    """The executor's fail-loud tool arm retains its identity at the campaign boundary."""
+
+    with pytest.raises(ResearchToolsUnavailableError) as raised:
+        classify_author_exit(
+            "source-request",
+            "m_x",
+            AUTHOR_EXIT_RETRYABLE,
+            "",
+            (
+                "author executor stage1 failed: research-tools-unavailable "
+                "(attempt author-attempt-123)"
+            ),
+        )
+
+    assert raised.value.stable_id == "m_x"
+    assert "research-tools-unavailable" in raised.value.detail
 
 
 def test_command_lane_permanent_exit_is_not_retried(tmp_path: Path) -> None:
