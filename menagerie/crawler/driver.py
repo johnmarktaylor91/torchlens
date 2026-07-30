@@ -511,6 +511,14 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         # unrecordable more than once in a run (its later lanes still reach it), and
         # each occurrence is a distinct operational fact with a distinct identity.
         self._unrecordable_terminals: Counter[str] = Counter()
+        # Per-model ``ExcType: message`` for the failure that made a terminal
+        # unrecordable. Rung 3 converts an upstream defect from a MISLABELLED
+        # record into a MISSING one -- the better trade -- but the loss then
+        # presents as `PartitionError: missing=[...]`, which reads like a coverage
+        # hole rather than the one-line defect it usually is. Held here so the
+        # completion assertion can name the original exception instead of leaving
+        # it only inside the ``terminal-unrecordable`` operational report.
+        self._unrecordable_diagnostics: dict[str, str] = {}
         self._family_artifacts: dict[str, AuthorArtifact] = {}
         self._final_artifact_transactions: dict[
             tuple[str, str, ArtifactTransactionId], ArtifactTransactionProjection
@@ -903,7 +911,11 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             scoped_current = {
                 stable_id: current[stable_id] for stable_id in in_scope_ids if stable_id in current
             }
-            assert_partition(in_scope_ids, scoped_current)
+            assert_partition(
+                in_scope_ids,
+                scoped_current,
+                unrecordable_diagnostics=self._unrecordable_diagnostics,
+            )
             assert_status_completeness(scoped_current)
             workflows = _completion_workflows(scoped_current)
             report = completeness_report(
@@ -1899,8 +1911,19 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
 
         self._unrecordable_terminals[item.stable_id] += 1
         occurrence = self._unrecordable_terminals[item.stable_id]
+        # The exception TYPE and MESSAGE are the whole diagnostic value here, and
+        # burying them in a nested report is how a one-line `NameError` came to
+        # present as an unexplained partition hole. Summarised once, then surfaced
+        # at the event's top level AND carried to the completion assertion.
+        error_summary = f"{type(record_error).__name__}: {record_error}"
+        if fallback_error is not None:
+            error_summary += (
+                f" (fallback {type(fallback_error).__name__}: {fallback_error})"
+            )
+        self._unrecordable_diagnostics[item.stable_id] = error_summary
         operational.append(
             {
+                "error_summary": error_summary,
                 "schema_version": OPERATIONAL_EVENT_SCHEMA_VERSION,
                 "event_id": "terminal-unrecordable-"
                 + stable_hash(

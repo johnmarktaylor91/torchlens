@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Optional, Sequence
 
 from menagerie.crawler.constants import (
     NO_RUNG_SELECTED,
@@ -159,6 +159,8 @@ def partition_report(
 def assert_partition(
     intake_ids: Iterable[str],
     current_records: Iterable[Mapping[str, Any]] | Mapping[str, Mapping[str, Any]],
+    *,
+    unrecordable_diagnostics: Optional[Mapping[str, str]] = None,
 ) -> PartitionReport:
     """Assert exact terminal partition coverage.
 
@@ -168,6 +170,13 @@ def assert_partition(
         Trusted intake stable IDs.
     current_records:
         Materialized current model revisions.
+    unrecordable_diagnostics:
+        Optional stable-ID-keyed ``ExcType: message`` summaries for terminals whose
+        own append refused. A missing ID is USUALLY not a coverage hole at all but a
+        terminal the driver tried and failed to write, and the exception that stopped
+        it is the actual defect. Naming it here puts the cause in the failure a human
+        reads instead of only in the ``terminal-unrecordable`` operational report.
+        Coverage itself is never relaxed by supplying, or omitting, this argument.
 
     Returns
     -------
@@ -184,11 +193,22 @@ def assert_partition(
     report = partition_report(intake_ids, records)
     invalid = sorted(code for code in report.buckets if code.startswith("invalid:"))
     if not report.valid or invalid:
-        raise PartitionError(
+        message = (
             "terminal partition invalid: "
             f"missing={sorted(report.missing_ids)}, extra={sorted(report.extra_ids)}, "
             f"duplicates={sorted(report.duplicate_ids)}, invalid={invalid}"
         )
+        explained = tuple(
+            f"{stable_id}: {(unrecordable_diagnostics or {})[stable_id]}"
+            for stable_id in sorted(report.missing_ids)
+            if stable_id in (unrecordable_diagnostics or {})
+        )
+        if explained:
+            message += (
+                "; missing because their terminal append itself failed -- "
+                + "; ".join(explained)
+            )
+        raise PartitionError(message)
     return report
 
 

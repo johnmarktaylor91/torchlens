@@ -9,7 +9,11 @@ from typing import Any, Mapping
 
 import pytest
 
-from menagerie.crawler.author_dispatch import AuthorResultBinding, DeferRecommendation
+from menagerie.crawler.author_dispatch import (
+    AuthorResultBinding,
+    DeferRecommendation,
+    HandoffExecution,
+)
 from menagerie.crawler.checker_dispatch import (
     CheckerDispatchError,
     apply_machine_owned_gate_fields,
@@ -491,6 +495,12 @@ def test_terminal_disposition_gate_resolves_exact_advisory_references() -> None:
         "created_at": "2026-07-16T00:00:00Z",
     }
     binding = AuthorResultBinding(raw_result=raw_result, **raw_result)
+    # A deferral MUST carry its executable handoff authority: the deferred platform
+    # later runs this proposal, and its licensing is what ``license_identity`` binds.
+    # This fixture previously omitted it and so described a deferral the wire format
+    # cannot express and the Linux deferred sweep would refuse to start on.
+    handoff_proposal = deepcopy(make_author_proposal())
+    handoff_proposal["proposal_id"] = "proposal-defer-1"
     result = DeferRecommendation(
         binding=binding,
         platform="cuda",
@@ -499,6 +509,13 @@ def test_terminal_disposition_gate_resolves_exact_advisory_references() -> None:
         evidence_identity=HASH,
         license_identity=HASH,
         recommendation_sha256=HASH,
+        handoff_execution=HandoffExecution(
+            proposal=handoff_proposal,
+            proposal_sha256=HASH,
+            code_manifest_identity=HASH,
+            source_manifest_identity=HASH,
+            handoff_sha256=HASH,
+        ),
     )
     gate = make_gate(["m_example"])
     gate.update(
@@ -515,8 +532,8 @@ def test_terminal_disposition_gate_resolves_exact_advisory_references() -> None:
         "author_result_sha256": HASH,
         "kind": "DEFER_RECOMMENDATION",
         "predicate": "needs-cuda",
-        "handoff_proposal_id": None,
-        "handoff_sha256": None,
+        "handoff_proposal_id": "proposal-defer-1",
+        "handoff_sha256": HASH,
         "verdict": "accepted",
         "source_manifest_identity": HASH,
         "source_ids": ["source-1"],

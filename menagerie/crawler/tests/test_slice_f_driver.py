@@ -396,7 +396,11 @@ def _terminal_fake_author_result(
             evidence_identity,
             license_identity,
             str(payload["recommendation_sha256"]),
-            HandoffExecution(
+            # By KEYWORD deliberately. This argument was positional and silently
+            # rebound onto ``evidence_records`` when that field was inserted ahead
+            # of ``handoff_execution``, leaving the deferral with no handoff and no
+            # license disposition.
+            handoff_execution=HandoffExecution(
                 proposal=artifact.proposal,
                 proposal_sha256=str(handoff["proposal_sha256"]),
                 code_manifest_identity=str(handoff["code_manifest_identity"]),

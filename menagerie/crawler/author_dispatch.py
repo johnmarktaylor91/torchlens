@@ -114,9 +114,26 @@ class DeferRecommendation:
     evidence_identity: str
     license_identity: str
     recommendation_sha256: str
+    # REQUIRED, and deliberately ahead of the defaulted fields. A deferral is the
+    # one terminal arm that will later be RUN on the deferred platform and publish
+    # an artifact, so its executable authority -- and therefore its licensing --
+    # must be settled BEFORE it is deferred. ``license_identity`` above is the
+    # stable hash of ``handoff_execution.proposal.proposed_facts.licenses``, which
+    # is why ``_terminal_checker_item`` can only source the license disposition
+    # from here and refuses a deferral that lacks one. Four independent layers
+    # already treat a handoff-less DEFER as invalid: ``defer_payload`` lists
+    # ``handoff_execution`` in ``required`` (author-result-v4) while the skip and
+    # blocked payloads do not, ``parse_author_result`` below refuses it,
+    # ``AuthorArtifact.proposal`` cannot produce an executable proposal without it,
+    # and ``_assert_persisted_handoff_authority_available`` refuses to START the
+    # Linux deferred sweep when any persisted deferral is missing its handoff.
+    # An ``Optional`` here made that unrepresentable state representable; a
+    # TRAILING default additionally let a positionally-supplied handoff silently
+    # rebind onto ``evidence_records`` when that field was later inserted ahead of
+    # it. Keep this field ahead of every defaulted field.
+    handoff_execution: HandoffExecution
     evidence_records: tuple[JsonObject, ...] = ()
     license_record: JsonObject | None = None
-    handoff_execution: HandoffExecution | None = None
 
 
 @dataclass(frozen=True)

@@ -141,6 +141,11 @@
       ],
       "description": "Best-effort observed provider response."
     },
+    "error_summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional top-level 'ExcType: message' for the failure this event reports. Present on terminal-unrecordable events so the original exception is legible without opening the nested details report: a model whose terminal could not be written presents downstream as a partition hole, and the exception type is what identifies it."
+    },
     "reset_at": {
       "oneOf": [
         {
