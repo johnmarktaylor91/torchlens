@@ -35,6 +35,7 @@ from menagerie.crawler.author_executor import (
     SUPPLEMENT_VERSION,
     AuthorExecutorError,
     _author_result_from_author_payload,
+    _stamp_machine_owned_proposal_fields,
     _discovery_envelope_from_author_payload,
     _supplement_request_from_author_payload,
     main,
@@ -702,6 +703,22 @@ def test_stamped_proposal_survives_driver_side_identity_recomputation() -> None:
     )
 
     assert after == before
+
+    # The assertion above only bites while stamping leaves the evidence
+    # projection alone, and a proposal that already carries its digests would
+    # not notice a stamp being re-added. So check the decision directly: given
+    # excerpts with no digest at all, stamping must not invent one.
+    # ``compute_evidence_identity`` projects ``text_sha256``, so filling it in
+    # here would move every evidence identity the driver recomputes.
+    undigested = _author_owned_proposal("m-fixture")
+    for excerpt in undigested["proposed_facts"]["evidence"]["excerpts"]:
+        excerpt.pop("text_sha256", None)
+    stamped = _stamp_machine_owned_proposal_fields(undigested, request["expected_result"])
+
+    assert all(
+        "text_sha256" not in excerpt
+        for excerpt in stamped["proposed_facts"]["evidence"]["excerpts"]
+    )
 
 
 def test_author_identity_fields_cannot_override_machine_derivation() -> None:
