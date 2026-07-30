@@ -67,6 +67,7 @@ from menagerie.crawler.capability_probe import (
     validate_capability_evidence,
 )
 from menagerie.crawler.constants import (
+    AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
     AUTHOR_RESULT_SCHEMA_VERSION,
     AUTHOR_WALL_EXTERNAL_KILL_FACTOR,
     AUTHOR_WALL_SECONDS_ENV,
@@ -87,7 +88,7 @@ from menagerie.crawler.identity import (
     stable_hash,
     utc_now,
 )
-from menagerie.crawler.models import JsonObject
+from menagerie.crawler.models import JsonObject, bounded_json_repr
 from menagerie.crawler.schema import PayloadValidationError, validate_payload
 from menagerie.crawler.source_broker import (
     BrokerPack,
@@ -1284,6 +1285,197 @@ def _authored_excerpt_records(payload: Mapping[str, Any]) -> tuple[Mapping[str, 
     return tuple(found)
 
 
+#: Proposal keys the request envelope already fixes. Every one of them is a value
+#: the executor is handed verbatim in ``expected_result``; asking the author to
+#: transcribe it buys nothing and invites a plausible-looking wrong copy.
+_PROPOSAL_BINDING_KEYS = (
+    "campaign_id",
+    "stable_id",
+    "work_id",
+    "intake_snapshot_id",
+    "intake_snapshot_sha256",
+    "intake_item_sha256",
+    "source_manifest_identity",
+    "dispatcher_identity",
+)
+
+
+def _required_proposal(value: object, field: str) -> Mapping[str, Any]:
+    """Return one authored proposal object or fail typed.
+
+    Parameters
+    ----------
+    value:
+        Candidate authored proposal.
+    field:
+        Field name used in the refusal message.
+
+    Returns
+    -------
+    Mapping[str, Any]
+        The proposal object.
+
+    Raises
+    ------
+    AuthorExecutorError
+        If the value is not a JSON object.
+    """
+
+    if not isinstance(value, Mapping):
+        raise AuthorExecutorError(f"stage-2 {field} must be an object")
+    return value
+
+
+def _refuse_conflicting_machine_owned(
+    machine: Mapping[str, Any], supplied: Mapping[str, Any], *, prefix: str
+) -> None:
+    """Refuse an authored value that disagrees with the machine's own.
+
+    Omission is free: a field the author was never able to observe is filled in
+    below. What is refused is a CONFLICTING value, and the distinction is the
+    whole point. Silently overwriting would erase the evidence that a wrong
+    value was ever supplied -- exactly the failure the checker lane's
+    ``apply_machine_owned_gate_fields`` was fixed for on 2026-07-29, where an
+    unconditional overwrite let a proposal templated from a repository test
+    fixture arrive carrying that fixture's placeholder identities and be
+    laundered into a well-formed one.
+
+    Parameters
+    ----------
+    machine, supplied:
+        Machine-owned values and the authored object they are stamped onto.
+    prefix:
+        Dotted path prefix used in the refusal message.
+    """
+
+    for key, value in machine.items():
+        if key in supplied and supplied[key] != value:
+            raise AuthorExecutorError(
+                f"stage-2 proposal supplies machine-owned {prefix}{key} as "
+                f"{bounded_json_repr(supplied[key])}, but the machine holds "
+                f"{bounded_json_repr(value)}"
+            )
+
+
+def _stamp_machine_owned_proposal_fields(
+    proposal: Mapping[str, Any], expected: Mapping[str, Any]
+) -> JsonObject:
+    """Stamp every proposal leaf the machine can derive from what it already holds.
+
+    The author's authority is its JUDGMENT -- which rung, what the evidence
+    says, which source, what the architecture is. It is not the machine's own
+    request bindings, and it is not a digest: the ruling rule this lane
+    converged on is *a locator the machine can verify by dereferencing may be
+    model-supplied; an identity the machine can derive must be machine-derived.*
+    A required field the machine could compute is both a fabrication invitation
+    and a needless failure mode, and it had become the dominant one.
+
+    Three classes move here, and only these three:
+
+    * the eight request bindings plus ``schema_version``, all handed to the
+      executor verbatim in ``expected_result``;
+    * ``proposed_facts.modes.per_mode_run``, which names attempts that do not
+      exist at proposal time. ``model-v3`` calls these leaves reducer-derived
+      and ``authored_fact_leaves`` documents excluding them, so the proposal
+      schema's ``author-gated`` annotation was the outlier;
+    * ``proposal_sha256``, the whole-object self-hash, derived last.
+
+    What deliberately does NOT move, and why it matters:
+
+    ``source_identity``, ``evidence_identity``, ``recipe_revision``,
+    ``vet_identity``, and ``fidelity_identity`` all LOOK derivable -- each is a
+    pure function of the declared facts -- and are not free to stamp.
+    ``driver_admission`` recomputes all five and refuses a mismatch, which is
+    the live catch for a proposal that lifted an identity from somewhere its
+    own facts do not produce. Stamping them would make that comparison compare
+    the machine against itself.
+
+    ``proposed_facts.evidence.excerpts[].text_sha256`` looks like the purest
+    case of all -- a self-hash of the sibling ``text``, and the terminal
+    ``evidence_records`` channel does refuse it from an author outright. It is
+    still NOT stamped here, because ``compute_evidence_identity`` projects it:
+    filling it in for an author who omitted it silently changes the evidence
+    identity the driver recomputes, so a proposal that was merely missing a
+    digest would arrive as an identity mismatch instead. The two channels
+    disagree for a reason, and closing that gap means moving
+    ``evidence_identity`` too, not this leaf on its own.
+
+    Parameters
+    ----------
+    proposal:
+        Complete authored ``author-proposal.v3`` object.
+    expected:
+        Trusted ``expected_result`` bindings from the request envelope.
+
+    Returns
+    -------
+    dict[str, Any]
+        Stamped proposal whose ``proposal_sha256`` binds the stamped body.
+
+    Raises
+    ------
+    AuthorExecutorError
+        If the proposal is not an object, or supplies a machine-owned value
+        that conflicts with the one the machine holds.
+    """
+
+    if not isinstance(proposal, Mapping):
+        raise AuthorExecutorError("stage-2 proposal must be one JSON object")
+    stamped = deepcopy(dict(proposal))
+    bindings: JsonObject = {
+        "schema_version": AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
+        **{key: expected[key] for key in _PROPOSAL_BINDING_KEYS if key in expected},
+    }
+    _refuse_conflicting_machine_owned(bindings, stamped, prefix="proposal.")
+    stamped.update(bindings)
+
+    facts = stamped.get("proposed_facts")
+    if isinstance(facts, dict):
+        _stamp_proposal_per_mode_run(facts)
+
+    # Derived LAST and unconditionally, because it is the one field whose
+    # authored value cannot be meaningfully compared: any legitimate machine
+    # fill above invalidates it by construction, through no fault of the
+    # author's judgment. Nothing is lost -- a self-hash only ever caught the
+    # author's own arithmetic, and the driver still recomputes and compares it
+    # after publication, which is where it can still catch a real edit.
+    stamped.pop("proposal_sha256", None)
+    stamped["proposal_sha256"] = stable_hash(stamped)
+    return stamped
+
+
+def _stamp_proposal_per_mode_run(facts: JsonObject) -> None:
+    """Declare the empty proposal-time per-mode outcome map.
+
+    Nothing has run when a proposal is authored, so the only honest value is
+    the empty map. Filling it in is not permissiveness: a NON-empty authored
+    value is a claim about attempts that do not exist, and it is refused here
+    rather than carried forward as an ordinary fact.
+
+    Parameters
+    ----------
+    facts:
+        Mutable ``proposed_facts`` block.
+
+    Raises
+    ------
+    AuthorExecutorError
+        If the author claims per-mode run outcomes at proposal time.
+    """
+
+    modes = facts.get("modes")
+    if not isinstance(modes, dict):
+        return
+    supplied = modes.get("per_mode_run")
+    if isinstance(supplied, Mapping) and supplied:
+        raise AuthorExecutorError(
+            "stage-2 proposal claims modes.per_mode_run "
+            f"{bounded_json_repr(dict(supplied))}; no attempt has run when a "
+            "proposal is authored, so no per-mode outcome exists to report"
+        )
+    modes["per_mode_run"] = {}
+
+
 def _author_result_from_author_payload(
     authored_result: Mapping[str, Any],
     request: Mapping[str, Any],
@@ -1347,6 +1539,10 @@ def _author_result_from_author_payload(
         raise AuthorExecutorError("author request lacks expected_result bindings")
 
     payload: JsonObject = {"arm": kind, **deepcopy(dict(authored_payload))}
+    if kind == "PROPOSED":
+        payload["proposal"] = _stamp_machine_owned_proposal_fields(
+            _required_proposal(payload.get("proposal"), "proposed payload proposal"), expected
+        )
     source_manifest = request.get("source_manifest")
     manifest_sources = (
         source_manifest.get("sources") if isinstance(source_manifest, Mapping) else None
@@ -1371,9 +1567,9 @@ def _author_result_from_author_payload(
             raise AuthorExecutorError(
                 "defer payload handoff_execution must contain exactly proposal"
             )
-        proposal = handoff.get("proposal")
-        if not isinstance(proposal, Mapping):
-            raise AuthorExecutorError("defer handoff proposal must be an object")
+        proposal = _stamp_machine_owned_proposal_fields(
+            _required_proposal(handoff.get("proposal"), "defer handoff proposal"), expected
+        )
         implementation = proposal.get("proposed_facts")
         implementation = (
             implementation.get("implementation")
@@ -1389,7 +1585,9 @@ def _author_result_from_author_payload(
             raise AuthorExecutorError("defer proposal must carry an implementation code_manifest")
         handoff_body: JsonObject = {
             "proposal": deepcopy(dict(proposal)),
-            "proposal_sha256": str(proposal.get("proposal_sha256", "")),
+            # Read off the STAMPED proposal, so the wrapper's copy and the
+            # proposal's own digest cannot drift apart by construction.
+            "proposal_sha256": str(proposal["proposal_sha256"]),
             "code_manifest_identity": stable_hash(code_manifest),
             "source_manifest_identity": str(expected.get("source_manifest_identity", "")),
         }

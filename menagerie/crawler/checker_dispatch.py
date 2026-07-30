@@ -19,7 +19,7 @@ from menagerie.crawler.constants import (
     GateKind,
 )
 from menagerie.crawler.identity import hash_bytes, stable_hash
-from menagerie.crawler.models import JsonObject
+from menagerie.crawler.models import JsonObject, bounded_json_repr
 from menagerie.crawler.operator_protocol import build_operator_fields
 from menagerie.crawler.proposal import ProposalValidationError, required_verified_hash_keys
 from menagerie.crawler.schema import (
@@ -346,31 +346,6 @@ def apply_machine_owned_gate_fields(
     return stamped
 
 
-def _bounded_json_repr(value: object, *, limit: int = 120) -> str:
-    """Render one offending value compactly and boundedly for an error message.
-
-    Parameters
-    ----------
-    value:
-        Model-supplied or machine-owned value.
-    limit:
-        Maximum rendered characters.
-
-    Returns
-    -------
-    str
-        Compact JSON rendering, truncated with an explicit marker.
-    """
-
-    try:
-        rendered = json.dumps(value, sort_keys=True, separators=(",", ":"))
-    except (TypeError, ValueError):
-        rendered = repr(value)
-    if len(rendered) > limit:
-        return rendered[:limit] + "...<truncated>"
-    return rendered
-
-
 def _refuse_conflicting_machine_owned(
     scaffold: Mapping[str, Any], supplied: Mapping[str, Any], *, prefix: str
 ) -> None:
@@ -402,8 +377,8 @@ def _refuse_conflicting_machine_owned(
             continue
         raise CheckerDispatchError(
             f"checker supplied the machine-owned field {prefix}{field}="
-            f"{_bounded_json_repr(supplied[field])} but the machine-owned value for this "
-            f"envelope is {_bounded_json_repr(machine_value)}; the checker's authority is its "
+            f"{bounded_json_repr(supplied[field])} but the machine-owned value for this "
+            f"envelope is {bounded_json_repr(machine_value)}; the checker's authority is its "
             "verdict, not the gate scaffold, so a conflicting scaffold value is evidence the "
             "gate was templated rather than derived"
         )

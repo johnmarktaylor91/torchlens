@@ -6,7 +6,7 @@ import json
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Mapping, cast
 
 import pytest
 
@@ -49,7 +49,9 @@ from menagerie.crawler.wakeup import (
 from menagerie.crawler.capability_probe import canonical_tool_name
 from menagerie.crawler.constants import (
     ACCESS_BLOCKED_REASON_CODE,
+    AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
     AUTHOR_RESULT_SCHEMA_VERSION,
+    MODEL_SCHEMA_VERSION_V3,
     EnvironmentPhase,
 )
 from menagerie.crawler.discovery import (
@@ -70,6 +72,7 @@ from menagerie.crawler.driver_admission import (
 from menagerie.crawler.driver_contracts import AuthorArtifact, WorkItem
 from menagerie.crawler.driver_models import _terminal_checker_item
 from menagerie.crawler.identity import hash_bytes, stable_hash
+from menagerie.crawler.metadata import recompute_accepted_identities
 from menagerie.crawler.intake import IntakeItem
 from menagerie.crawler.routing import IntentRoute
 from menagerie.crawler.schema import validate_payload
@@ -227,6 +230,81 @@ def _refusing_probe_transport(
     )
 
 
+#: Proposal keys the executor now derives, so an author is never asked for them.
+_MACHINE_OWNED_PROPOSAL_KEYS = (
+    "schema_version",
+    "proposal_sha256",
+    "campaign_id",
+    "stable_id",
+    "work_id",
+    "intake_snapshot_id",
+    "intake_snapshot_sha256",
+    "intake_item_sha256",
+    "source_manifest_identity",
+    "dispatcher_identity",
+)
+
+
+def _author_owned_proposal(stable_id: str) -> dict[str, Any]:
+    """Return the shared proposal fixture stripped to what an author really owns.
+
+    ``make_author_proposal`` fills every binding with a fixture placeholder --
+    ``campaign-m-fixture``, an all-``a`` digest -- which is exactly the shape a
+    model templating its answer from repository test data would produce. Nothing
+    an author must transcribe is left in, so the round trip proves the executor
+    supplies each one from the request rather than believing a supplied copy.
+
+    Parameters
+    ----------
+    stable_id:
+        Proposed model identity.
+
+    Returns
+    -------
+    dict[str, Any]
+        Proposal carrying only author-owned judgment.
+    """
+
+    proposal = make_author_proposal(stable_id)
+    for key in _MACHINE_OWNED_PROPOSAL_KEYS:
+        proposal.pop(key, None)
+    proposal["proposed_facts"]["modes"].pop("per_mode_run", None)
+    return proposal
+
+
+def _assert_machine_stamped_proposal(
+    proposal: Mapping[str, Any], expected: Mapping[str, Any]
+) -> None:
+    """Assert every machine-owned proposal leaf came from the machine.
+
+    Parameters
+    ----------
+    proposal:
+        Materialized proposal from a stage-2 round trip.
+    expected:
+        Trusted ``expected_result`` bindings from the request envelope.
+    """
+
+    assert proposal["schema_version"] == AUTHOR_PROPOSAL_SCHEMA_VERSION_V3
+    for key in (
+        "campaign_id",
+        "stable_id",
+        "work_id",
+        "intake_snapshot_id",
+        "intake_snapshot_sha256",
+        "intake_item_sha256",
+        "source_manifest_identity",
+        "dispatcher_identity",
+    ):
+        assert proposal[key] == expected[key], key
+    assert proposal["proposed_facts"]["modes"]["per_mode_run"] == {}
+    # The whole-object digest binds the STAMPED proposal, which is what the
+    # driver re-derives and compares after publication.
+    assert proposal["proposal_sha256"] == stable_hash(
+        {key: value for key, value in proposal.items() if key != "proposal_sha256"}
+    )
+
+
 def test_prompt_contract_fixtures_materialize_against_registered_schemas(
     tmp_path: Path,
 ) -> None:
@@ -332,20 +410,26 @@ def test_prompt_contract_fixtures_materialize_against_registered_schemas(
         prompt_root / "stage2_author.md",
         "stage2-proposed-author-payload",
     )
-    proposed_fixture = make_author_proposal("m-fixture")
+    proposed_fixture = _author_owned_proposal("m-fixture")
     proposed_payload["payload"]["proposal"] = proposed_fixture
     proposed_result = _author_result_from_author_payload(proposed_payload, request)
     validate_payload(proposed_result, AUTHOR_RESULT_SCHEMA_VERSION)
+    _assert_machine_stamped_proposal(
+        proposed_result["payload"]["proposal"], request["expected_result"]
+    )
 
     defer_payload = _prompt_contract_fixture(
         prompt_root / "stage2_author.md",
         "stage2-defer-author-payload",
     )
-    defer_fixture = make_author_proposal("m-fixture")
+    defer_fixture = _author_owned_proposal("m-fixture")
     defer_fixture["proposed_facts"]["implementation"]["code_manifest"] = []
     defer_payload["payload"]["handoff_execution"]["proposal"] = defer_fixture
     defer_result = _author_result_from_author_payload(defer_payload, request)
     validate_payload(defer_result, AUTHOR_RESULT_SCHEMA_VERSION)
+    handoff = defer_result["payload"]["handoff_execution"]
+    _assert_machine_stamped_proposal(handoff["proposal"], request["expected_result"])
+    assert handoff["proposal_sha256"] == handoff["proposal"]["proposal_sha256"]
 
     skip_payload = _prompt_contract_fixture(
         prompt_root / "stage2_author.md",
@@ -443,7 +527,7 @@ def test_defer_without_author_identities_materializes_proposal_facts() -> None:
             "sources": [{"source_id": "source-1"}],
         },
     }
-    proposal = make_author_proposal("m-fixture")
+    proposal = _author_owned_proposal("m-fixture")
     proposal["proposed_facts"]["implementation"]["code_manifest"] = []
     licenses = proposal["proposed_facts"]["licenses"]
     authored = {
@@ -469,6 +553,156 @@ def test_defer_without_author_identities_materializes_proposal_facts() -> None:
         ]
     )
     assert result["payload"]["license_identity"] == stable_hash(licenses)
+
+
+def _proposed_request(stable_id: str = "m-fixture") -> dict[str, Any]:
+    """Return one trusted author request for proposal round trips.
+
+    Parameters
+    ----------
+    stable_id:
+        Proposed model identity.
+
+    Returns
+    -------
+    dict[str, Any]
+        Request envelope carrying the machine's own expected bindings.
+    """
+
+    return {
+        "expected_result": {
+            "schema_version": AUTHOR_RESULT_SCHEMA_VERSION,
+            "stable_id": stable_id,
+            "work_id": f"work-{stable_id}",
+            "campaign_id": "campaign-fixture",
+            "author_identity": "sha256:" + "3" * 64,
+            "prompt_identity": "sha256:" + "4" * 64,
+            "dispatcher_identity": "sha256:" + "5" * 64,
+            "source_manifest_identity": "sha256:" + "6" * 64,
+            "intake_snapshot_id": "intake-fixture",
+            "intake_snapshot_sha256": "sha256:" + "7" * 64,
+            "intake_item_sha256": "sha256:" + "8" * 64,
+        },
+        "source_manifest": {
+            "manifest_sha256": "sha256:" + "6" * 64,
+            "sources": [{"source_id": "source-1"}],
+        },
+    }
+
+
+def test_proposal_omitting_machine_owned_identities_still_materializes() -> None:
+    """The four live 2026-07-30 ``result-contract-invalid`` rejections are gone.
+
+    Every one of them named a field the machine already held or could compute
+    from what the author wrote: ``proposal_sha256`` (a self-hash),
+    ``excerpts[].text_sha256`` (a self-hash of the sibling text, which the
+    terminal ``evidence_records`` channel already refuses to accept from an
+    author), and ``modes.per_mode_run`` (attempts that do not exist yet).
+    Omitting all of them is now free.
+    """
+
+    request = _proposed_request()
+    proposal = _author_owned_proposal("m-fixture")
+    for key in _MACHINE_OWNED_PROPOSAL_KEYS:
+        assert key not in proposal
+    assert "per_mode_run" not in proposal["proposed_facts"]["modes"]
+
+    result = _author_result_from_author_payload(
+        {"kind": "PROPOSED", "payload": {"proposal": proposal}}, request
+    )
+
+    validate_payload(result, AUTHOR_RESULT_SCHEMA_VERSION)
+    _assert_machine_stamped_proposal(result["payload"]["proposal"], request["expected_result"])
+
+
+@pytest.mark.parametrize(
+    ("mutate", "match"),
+    [
+        pytest.param(
+            lambda proposal: proposal.update({"campaign_id": "campaign-somewhere-else"}),
+            "machine-owned proposal.campaign_id",
+            id="binding-conflict",
+        ),
+        pytest.param(
+            lambda proposal: proposal.update(
+                {"source_manifest_identity": "sha256:" + "a" * 64}
+            ),
+            "machine-owned proposal.source_manifest_identity",
+            id="fixture-placeholder-digest",
+        ),
+        pytest.param(
+            lambda proposal: proposal["proposed_facts"]["modes"].update(
+                {"per_mode_run": {"eval": {"attempt_id": "attempt-1", "status": "succeeded"}}}
+            ),
+            "no attempt has run",
+            id="fabricated-per-mode-run",
+        ),
+    ],
+)
+def test_machine_owned_proposal_conflicts_are_refused_not_overwritten(
+    mutate: Any, match: str
+) -> None:
+    """A conflicting authored value stays visible instead of being laundered.
+
+    This is the direction the checker lane's unconditional ``stamped.update``
+    got wrong: overwriting made a fabricated identity harmless AND invisible,
+    and left the downstream comparison checking the machine against itself.
+    Stamping here refuses first, so a proposal templated from repository test
+    data -- an all-``a`` placeholder digest, a foreign campaign, a claimed run
+    that never happened -- fails loudly at the boundary that noticed it.
+
+    Parameters
+    ----------
+    mutate:
+        Applies one conflicting authored value to the proposal.
+    match:
+        Substring the typed refusal must name.
+    """
+
+    proposal = _author_owned_proposal("m-fixture")
+    mutate(proposal)
+
+    with pytest.raises(AuthorExecutorError, match=match):
+        _author_result_from_author_payload(
+            {"kind": "PROPOSED", "payload": {"proposal": proposal}}, _proposed_request()
+        )
+
+
+def test_stamped_proposal_survives_driver_side_identity_recomputation() -> None:
+    """Stamping must not disturb the identities the driver re-derives and compares.
+
+    ``driver_admission`` recomputes ``source_identity``, ``evidence_identity``,
+    ``recipe_revision``, ``vet_identity``, and ``fidelity_identity`` from the
+    declared facts and refuses a mismatch. Those five are deliberately NOT
+    stamped -- they are the live cross-check against a proposal whose claimed
+    identity its own facts do not produce. This proves the fields that ARE
+    stamped leave that recomputation exactly where it was, so filling in a
+    machine-owned omission can never turn a good proposal into an identity
+    mismatch downstream.
+    """
+
+    request = _proposed_request()
+    proposal = _author_owned_proposal("m-fixture")
+    before = recompute_accepted_identities(
+        proposal["proposed_facts"],
+        checker_prompt_hash="sha256:" + "9" * 64,
+        checker_model="checker-model",
+        checker_version="checker-version",
+        schema_version=MODEL_SCHEMA_VERSION_V3,
+    )
+
+    result = _author_result_from_author_payload(
+        {"kind": "PROPOSED", "payload": {"proposal": proposal}}, request
+    )
+    after = recompute_accepted_identities(
+        result["payload"]["proposal"]["proposed_facts"],
+        checker_prompt_hash="sha256:" + "9" * 64,
+        checker_model="checker-model",
+        checker_version="checker-version",
+        schema_version=MODEL_SCHEMA_VERSION_V3,
+    )
+
+    assert after == before
 
 
 def test_author_identity_fields_cannot_override_machine_derivation() -> None:

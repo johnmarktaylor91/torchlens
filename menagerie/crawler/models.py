@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence, Tuple
@@ -10,6 +11,35 @@ from menagerie.crawler.constants import FailureStage, StatusKind
 
 JsonValue = Any
 JsonObject = dict[str, JsonValue]
+
+
+def bounded_json_repr(value: object, *, limit: int = 120) -> str:
+    """Render one offending value compactly and boundedly for an error message.
+
+    Shared by every lane that refuses a model-supplied machine-owned value, so a
+    refusal reads the same whether it came from the checker gate or the author
+    proposal.
+
+    Parameters
+    ----------
+    value:
+        Model-supplied or machine-owned value.
+    limit:
+        Maximum rendered characters.
+
+    Returns
+    -------
+    str
+        Compact JSON rendering, truncated with an explicit marker.
+    """
+
+    try:
+        rendered = json.dumps(value, sort_keys=True, separators=(",", ":"))
+    except (TypeError, ValueError):
+        rendered = repr(value)
+    if len(rendered) > limit:
+        return rendered[:limit] + "...<truncated>"
+    return rendered
 
 
 @dataclass(frozen=True)
