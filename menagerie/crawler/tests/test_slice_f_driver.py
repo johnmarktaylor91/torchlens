@@ -24,6 +24,10 @@ import menagerie.crawler.driver_admission as driver_admission_module
 import menagerie.crawler.driver_models as driver_models_module
 import menagerie.crawler.driver_receipts as driver_receipts_module
 import menagerie.crawler.reducer as reducer_module
+from menagerie.crawler.driver import (
+    TERMINAL_UNRECORDABLE_STREAK_LIMIT,
+    TerminalRecordingUnavailable,
+)
 from menagerie.crawler.campaign_merge import resolve_promotion_supersession
 from menagerie.crawler.artifact_transactions import (
     ArtifactBindingError,
@@ -7578,3 +7582,109 @@ def test_terminal_artifact_failure_is_not_absorbed_by_the_record_ladder(
     assert len(survivors) == 2
     assert any(record["status"]["kind"] != "failed" for record in survivors)
     assert result.status in {"complete", "terminal-partition-complete"}
+
+
+def _refuse_every_terminal_append(
+    monkeypatch: pytest.MonkeyPatch, exception: type[BaseException], message: str
+) -> None:
+    """Make every gate record unroutable and every canonical append refuse.
+
+    Parameters
+    ----------
+    monkeypatch:
+        Fixture applying both refusals.
+    exception:
+        Exception type raised by every canonical model append.
+    message:
+        Message carried by that exception.
+    """
+
+    monkeypatch.setattr(driver_admission_module, "emit_gate_records", _refuse_gate_records)
+
+    def failing_append(self: Any, model: Mapping[str, Any]) -> Any:
+        """Refuse every canonical model append."""
+
+        del self, model
+        raise exception(message)
+
+    monkeypatch.setattr(reducer_module.CanonicalReducer, "append_model", failing_append)
+
+
+def test_a_systemically_broken_recording_path_stops_the_campaign(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Three distinct unrecordable models mean the path is broken, not the models.
+
+    The ladder converts a per-model recording failure into a named hole instead of a
+    campaign abort, which is right for a per-model fact. Applied to a SYSTEMIC failure it
+    is wrong in a new way: at 28,482 models it would emit 28,482 `terminal-unrecordable`
+    events and zero records while the run looked like it was working through the roster.
+
+    This backstop is type-agnostic on purpose -- it bounds the damage without depending on
+    classifying exceptions correctly up front.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    monkeypatch:
+        Fixture used to refuse every canonical append.
+    """
+
+    snapshot = _snapshot(tmp_path, count=6)
+    _refuse_every_terminal_append(
+        monkeypatch, reducer_module.ReductionError, "synthetic systemic refusal"
+    )
+
+    with pytest.raises(TerminalRecordingUnavailable) as raised:
+        _driver(tmp_path, snapshot).run()
+
+    events = scan_jsonl(_paths(tmp_path, snapshot).operational_ledger)
+    unrecordable = [
+        event
+        for event in events
+        if event.get("event_kind") == OperationalEventKind.TERMINAL_UNRECORDABLE.value
+    ]
+    # Bounded at the limit rather than one per model: that ratio IS the fix.
+    assert len(unrecordable) == TERMINAL_UNRECORDABLE_STREAK_LIMIT
+    assert len(unrecordable) < len(snapshot.items)
+    # The evidence for the decision is durable BEFORE the stop the decision causes.
+    assert {event["details"]["stable_id"] for event in unrecordable} <= {
+        item.stable_id for item in snapshot.items
+    }
+    assert len({event["details"]["stable_id"] for event in unrecordable}) == len(unrecordable)
+    assert "recording path is broken" in str(raised.value)
+
+
+def test_a_broken_program_is_not_recorded_as_a_model_outcome(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A `NameError` in the terminal path fails loudly with its own type, immediately.
+
+    A programming error is never a fact about a model's data and recurs identically for
+    every model after it. Absorbing it into the ladder turned a one-line defect into an
+    unexplained partition hole -- the exact incident this guards.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    monkeypatch:
+        Fixture used to raise a programming error from every canonical append.
+    """
+
+    snapshot = _snapshot(tmp_path, count=6)
+    _refuse_every_terminal_append(
+        monkeypatch, NameError, "name 'terminal_gate_obtained' is not defined"
+    )
+
+    with pytest.raises(NameError, match="terminal_gate_obtained"):
+        _driver(tmp_path, snapshot).run()
+
+    events = scan_jsonl(_paths(tmp_path, snapshot).operational_ledger)
+    # Not one single model was blamed for it.
+    assert not [
+        event
+        for event in events
+        if event.get("event_kind") == OperationalEventKind.TERMINAL_UNRECORDABLE.value
+    ]
