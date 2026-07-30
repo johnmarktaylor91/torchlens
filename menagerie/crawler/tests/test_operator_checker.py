@@ -49,6 +49,7 @@ from menagerie.crawler.operator_protocol import (
     telemetry_path,
 )
 from menagerie.crawler.tests.conftest import make_gate
+from menagerie.crawler.tools.checker_latency import build_report, iter_attempt_records
 
 
 def _checker_item_pack(item: dict[str, Any]) -> dict[str, Any]:
@@ -295,6 +296,15 @@ def test_attempt_telemetry_records_completed_and_censored_durations(tmp_path: Pa
     finished = [event for event in events if event["event"] == "operator-finished"]
     assert len(finished) == 1
     assert finished[0]["wall_seconds"] >= censored["duration_seconds"]
+    # The report must read what the wrapper actually WRITES, not a hand-written
+    # fixture of it: a renamed field would otherwise leave the report silently
+    # summarizing an empty sample.
+    report = build_report(iter_attempt_records([request_path.parent]))
+    assert report["attempts"] == 2
+    assert report["completed"]["count"] == 1
+    assert report["censored_lower_bounds"]["count"] == 1
+    assert report["untimed_attempts"] == 0
+    assert set(report["by_workload"]) == {f"{GateKind.METADATA_BATCH.value}[1]"}
 
 
 @pytest.mark.parametrize(

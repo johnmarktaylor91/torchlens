@@ -371,8 +371,8 @@ def execute_checker_request(
                     # observation, not an absent one, and dropping it biases every
                     # later estimate of the real distribution downward. Without
                     # these fields the only recoverable timing was a lane total
-                    # differenced from file mtimes, which is how the attempt cap
-                    # went years without a real measurement.
+                    # differenced from file mtimes, which is why the attempt cap
+                    # was never measured at all.
                     "started_at": started_at,
                     "finished_at": finished_at,
                     "duration_seconds": round(attempt_seconds, 3),
