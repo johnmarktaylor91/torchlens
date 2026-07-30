@@ -2735,6 +2735,116 @@ def test_a_plain_http_barrier_locator_survives_into_the_terminal_record(
     )
 
 
+def test_a_plain_http_locator_survives_into_the_higher_tier_terminal_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The older deferrable arm carries the same verbatim field, so pin it too.
+
+    ``NEEDS_SOURCE_ACCESS`` is new; ``NEEDS_HIGHER_TIER`` is not, and it copies the very
+    same ``research_summary`` into the very same ``payload.research_summary`` that
+    ``author-result-v3`` constrains -- so the ``^https://`` mismatch was equally reachable
+    through this arm, and reachable for far longer. Verified against pre-sprint main
+    (67a45fdf): stage 1 admitted an ``http://`` candidate link there, and the same
+    complete BLOCKED body was refused at ``payload.research_summary.candidate_links[0].url``
+    while its ``https://`` twin validated.
+
+    This arm carries strictly more than its sibling, which is why it earns its own
+    end-to-end pin rather than a schema unit test: it also writes a ``promotion-v1``
+    row into the C3 intake extension, and that row copies the locator a THIRD time
+    through a THIRD schema.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    monkeypatch:
+        Fixture used to publish the synthetic discovery envelope.
+    """
+
+    snapshot = _snapshot(tmp_path, count=1)
+    locator = "http://legacy.lab.example/exampletier"
+
+    def publish(argv: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        """Publish a higher-tier envelope whose retained locator is plain HTTP."""
+
+        del kwargs
+        request = json.loads(Path(argv[-1]).read_text(encoding="utf-8"))
+        Path(request["required_output_path"]).write_text(
+            json.dumps(
+                {
+                    "schema_version": "menagerie.crawler.source-discovery.v1",
+                    "stable_id": request["stable_id"],
+                    "work_id": request["work_id"],
+                    "arm": "NEEDS_HIGHER_TIER",
+                    "payload": {
+                        "arm": "NEEDS_HIGHER_TIER",
+                        "research_summary": {
+                            "queries": ["ExampleNet exact architecture"],
+                            "places": ["legacy lab page"],
+                            "candidate_links": [
+                                {
+                                    "url": locator,
+                                    "why_rejected": (
+                                        "Relevant, but variant fidelity needs "
+                                        "higher-tier adjudication."
+                                    ),
+                                    "rejection_class": "no-material-detail",
+                                }
+                            ],
+                            "languages": ["en"],
+                            "conclusion": (
+                                "The model is real and located, but this tier cannot "
+                                "adjudicate it faithfully."
+                            ),
+                        },
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(list(argv), 0, "", "")
+
+    def transport() -> Any:
+        """Return a hermetic transport reporting a deterministic miss."""
+
+        def probe(url: str, *, max_bytes: int, timeout: float) -> TransportResponse:
+            """Return a deterministic 404 without touching the network."""
+
+            del max_bytes, timeout
+            return TransportResponse(
+                status=404,
+                final_url=url,
+                redirect_chain=(url,),
+                body=b"",
+                truncated=False,
+                error="not found",
+            )
+
+        return probe
+
+    monkeypatch.setattr(driver_admission_module, "_run_operator_command", publish)
+    monkeypatch.setattr(discovery_module, "default_transport", transport)
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=CommandAuthorLane(("fake-author",)),
+        campaign_id="c1-mech",
+    ).run()
+
+    assert result.status == "terminal-partition-complete"
+    paths = _paths(tmp_path, snapshot)
+    model = scan_jsonl(paths.ledgers.models)[0]
+    assert model["status"]["code"] == "deferred:needs-opus-tier"
+    assert model["discovery_probes"][0]["locator"] == locator
+
+    promotion_path = (
+        paths.ledgers.models.parent.parent / "intake-extensions" / "c3-classics.jsonl"
+    )
+    promotions = scan_jsonl(promotion_path, validate=False)
+    assert len(promotions) == 1
+    assert promotions[0]["stage1_research_summary"]["candidate_links"][0]["url"] == locator
+
+
 def test_access_blocked_arm_requires_a_barrier_it_actually_hit() -> None:
     """The arm asserts a locator was WITHHELD, so it must name one.
 
