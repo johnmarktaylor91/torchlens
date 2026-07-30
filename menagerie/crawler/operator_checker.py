@@ -565,7 +565,17 @@ def _build_prompt(envelope: Mapping[str, Any], request_path: Path) -> str:
     """
 
     frozen = PROMPT_PATH.read_text(encoding="utf-8")
-    machine_owned = ", ".join(sorted(machine_owned_gate_fields(envelope)) + ["checker.started_at", "checker.finished_at"])
+    machine_owned = ", ".join(
+        sorted(machine_owned_gate_fields(envelope))
+        + [
+            "checker.provider",
+            "checker.model",
+            "checker.version",
+            "checker.prompt_sha256",
+            "checker.started_at",
+            "checker.finished_at",
+        ]
+    )
     return (
         f"{frozen}\n\n"
         f"WORK_ENVELOPE_PATH={request_path}\n"
@@ -574,8 +584,10 @@ def _build_prompt(envelope: Mapping[str, Any], request_path: Path) -> str:
         "object, serialize it as compact JSON, and return it in the output schema's sole "
         "result_json string field.\n"
         "These gate fields are MACHINE-OWNED and are stamped by the wrapper from the "
-        f"envelope: {machine_owned}. Omit them; anything you write there is discarded. "
-        "Your authority is the verdict, the per-field checks, the findings, the "
+        f"envelope: {machine_owned}. OMIT them -- omitting is always correct and is never "
+        "an error. Do NOT invent or copy values for them: supplying one of these fields "
+        "with a value that is not the machine's is a contract violation and the whole gate "
+        "is refused. Your authority is the verdict, the per-field checks, the findings, the "
         "unsupported claims, and the required repairs."
     )
 

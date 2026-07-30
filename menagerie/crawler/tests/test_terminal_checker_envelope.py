@@ -44,6 +44,7 @@ from menagerie.crawler.driver_contracts import (
 from menagerie.crawler.driver_models import _terminal_checker_item
 from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.operator_checker import TERMINAL_CHECKER_MODEL
+from menagerie.crawler.operator_protocol import status_sidecar_path
 from menagerie.crawler.terminal_evidence import (
     GROUNDED,
     TERMINAL_EVIDENCE_FILENAME,
@@ -268,7 +269,15 @@ def test_verdict_missing_machine_owned_scaffold_is_not_discarded(tmp_path: Path)
 
 
 def test_machine_owned_gate_identity_is_never_taken_from_the_checker(tmp_path: Path) -> None:
-    """A checker-supplied identity is overwritten, never believed.
+    """A checker-supplied identity is refused outright, not quietly corrected.
+
+    This assertion used to be the opposite: a fabricated ``gate_id`` was
+    overwritten and the stamped gate proceeded. "Overwritten, never believed"
+    is true but insufficient -- silently correcting a fabricated identity also
+    ERASES the only evidence that the checker fabricated one, so a gate
+    templated from a fixture (which necessarily carries that fixture's
+    placeholder identities) was laundered into a well-formed one. A fabricated
+    identity is now a contract rejection that names the field and the value.
 
     Parameters
     ----------
@@ -281,6 +290,25 @@ def test_machine_owned_gate_identity_is_never_taken_from_the_checker(tmp_path: P
     verdict = _rejected_verdict_body()
     verdict["gate_id"] = "gate-fabricated"
     verdict["dispatcher_identity"] = "sha256:" + "f" * 64
+
+    with pytest.raises(CheckerDispatchError) as excinfo:
+        apply_machine_owned_gate_fields(
+            verdict,
+            envelope,
+            started_at="2026-07-29T00:00:00Z",
+            finished_at="2026-07-29T00:05:00Z",
+        )
+
+    message = str(excinfo.value)
+    assert 'machine-owned field gate_id="gate-fabricated"' in message
+    assert machine_owned_gate_fields(envelope)["gate_id"] in message
+
+    # Omission remains free: the same verdict with every machine-owned field
+    # omitted stamps exactly as before.
+    for machine_field in machine_owned_gate_fields(envelope):
+        if machine_field != "schema_version":
+            verdict.pop(machine_field, None)
+    verdict.pop("checker", None)
     stamped = apply_machine_owned_gate_fields(
         verdict,
         envelope,
@@ -295,23 +323,129 @@ def test_machine_owned_gate_identity_is_never_taken_from_the_checker(tmp_path: P
 # -- 2. only a genuine execution failure is an integration error ---------------
 
 
-def test_retryable_and_unavailable_checker_exits_do_not_end_the_campaign() -> None:
-    """Declared-transient wrapper exits are bounded transport retries."""
+def test_retryable_and_unavailable_checker_exits_do_not_end_the_campaign(
+    tmp_path: Path,
+) -> None:
+    """Declared-transient wrapper exits are bounded transport retries.
 
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    """
+
+    request_path = tmp_path / "request.json"
     for returncode in (75, 78):
         with pytest.raises(RetryableOperatorError):
-            _raise_for_checker_exit(returncode, "", "transport failed")
+            _raise_for_checker_exit(
+                returncode, "", "transport failed", request_path=request_path
+            )
 
 
-def test_genuine_checker_execution_failure_still_raises_integration_error() -> None:
-    """A crash, a missing binary, or a refused contract stays an integration error."""
+def test_genuine_checker_execution_failure_still_raises_integration_error(
+    tmp_path: Path,
+) -> None:
+    """A crash, a missing binary, or a refused contract stays an integration error.
 
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    """
+
+    request_path = tmp_path / "request.json"
     with pytest.raises(DriverIntegrationError) as crashed:
-        _raise_for_checker_exit(127, "", "codex: command not found")
+        _raise_for_checker_exit(
+            127, "", "codex: command not found", request_path=request_path
+        )
     assert not isinstance(crashed.value, RetryableOperatorError)
-    with pytest.raises(DriverIntegrationError, match="rejected the gate contract"):
-        _raise_for_checker_exit(64, "", "no valid gate was produced")
-    _raise_for_checker_exit(0, "", "")
+    with pytest.raises(DriverIntegrationError, match="violated the gate contract"):
+        _raise_for_checker_exit(
+            64, "", "no valid gate was produced", request_path=request_path
+        )
+    _raise_for_checker_exit(0, "", "", request_path=request_path)
+
+
+# The verbatim leak recorded on 2026-07-30: a Codex ``command_execution`` event
+# whose ``aggregated_output`` was this package's own ``tests/conftest.py``. The
+# driver copied this into a durable campaign record as the failure "reason".
+_LEAKED_EVENT_STREAM = (
+    '{"type":"item.completed","item":{"type":"command_execution",'
+    '"command":"/bin/zsh -lc \\"sed -n 2000,2095p '
+    'menagerie/crawler/tests/conftest.py\\"","aggregated_output":'
+    '"    proposal = {\\n        \\"gate_identity\\": HASH,\\n'
+    '        \\"checker\\": {\\"version\\": \\"test\\"},\\n",'
+    '"exit_code":0,"status":"completed"}}\n'
+)
+
+
+def test_checker_failure_evidence_is_the_wrapper_reason_not_the_event_stream(
+    tmp_path: Path,
+) -> None:
+    """The wrapper's structured reason wins, and the raw stream never leaks.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    """
+
+    request_path = tmp_path / "request.json"
+    status_sidecar_path(request_path).write_text(
+        json.dumps(
+            {
+                "classification": "permanent-contract-rejection",
+                "exit_code": 64,
+                "detail": (
+                    "menagerie.crawler.gate.v3 validation failed at items[0] "
+                    "(schema path properties.items.items.required; constraint required): "
+                    "'campaign_root_work_id' is a required property"
+                ),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(DriverIntegrationError) as excinfo:
+        _raise_for_checker_exit(
+            64, _LEAKED_EVENT_STREAM, "", request_path=request_path
+        )
+
+    message = str(excinfo.value)
+    # The violating party is named, and the wrapper is named as the detector.
+    assert "checker violated the gate contract" in message
+    assert "refused by the operator wrapper" in message
+    # The precise reason is carried as evidence.
+    assert "'campaign_root_work_id' is a required property" in message
+    assert "[permanent-contract-rejection]" in message
+    # The failing direction: repository source from the event stream must not
+    # reach a durable record. Before this guard the whole tail was the message.
+    assert "conftest.py" not in message
+    assert "aggregated_output" not in message
+    assert "command_execution" not in message
+
+
+def test_absent_wrapper_status_falls_back_and_says_it_is_a_transcript(
+    tmp_path: Path,
+) -> None:
+    """Without a sidecar the tail is still shown, but never as a diagnosis.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    """
+
+    request_path = tmp_path / "request.json"
+
+    with pytest.raises(DriverIntegrationError) as excinfo:
+        _raise_for_checker_exit(
+            64, _LEAKED_EVENT_STREAM, "", request_path=request_path
+        )
+
+    message = str(excinfo.value)
+    assert "published no structured reason" in message
+    assert "raw stream tail:" in message
 
 
 # -- 3. the envelope carries literal excerpts and locators ---------------------

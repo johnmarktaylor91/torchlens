@@ -3375,7 +3375,10 @@ def test_command_checker_lane_validates_real_proposal_digest_binding(tmp_path: P
 import json
 import sys
 from pathlib import Path
-from menagerie.crawler.checker_dispatch import apply_machine_owned_gate_fields
+from menagerie.crawler.checker_dispatch import (
+    apply_machine_owned_gate_fields,
+    machine_owned_gate_fields,
+)
 from menagerie.crawler.tests.conftest import NOW, make_gate
 
 request = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
@@ -3386,13 +3389,12 @@ expected_keys = {
 assert set(request["items"][0]["verified_hashes"]) == expected_keys
 stable_ids = [item["stable_id"] for item in request["items"]]
 gate = make_gate(stable_ids, gate_id="gate-command-contract")
-gate["gate_kind"] = request["gate_kind"]
-gate["gate_round"] = request["gate_round"]
-gate["gate_identity"] = request["envelope_sha256"]
-gate["batch_size"] = len(stable_ids)
-gate["checker"] = {
-    **request["checker"], "started_at": NOW, "finished_at": NOW,
-}
+# A compliant checker omits every machine-owned field and lets the wrapper
+# stamp it. Supplying the fixture's scaffold instead relied on the stamp
+# silently correcting it, which is the laundering the stamp now refuses.
+for machine_field in machine_owned_gate_fields(request):
+    gate.pop(machine_field, None)
+gate.pop("checker", None)
 for result_item, request_item in zip(gate["items"], request["items"], strict=True):
     for field in (
         "work_id", "campaign_root_work_id", "stable_id",

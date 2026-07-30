@@ -19,6 +19,7 @@ from menagerie.crawler.checker_dispatch import (
     apply_machine_owned_gate_fields,
     build_metadata_vet_envelope,
     classify_checker_response,
+    machine_owned_gate_fields,
     validate_checker_result,
 )
 from menagerie.crawler.constants import (
@@ -49,11 +50,23 @@ from menagerie.crawler.tests.conftest import (
 
 
 def _stamped(gate: dict[str, Any], envelope: Mapping[str, Any]) -> dict[str, Any]:
-    """Apply the machine-owned gate scaffold exactly as the wrapper does."""
+    """Apply the machine-owned gate scaffold exactly as the wrapper does.
+
+    The shared ``make_gate`` fixture carries a full placeholder scaffold, and a
+    checker is instructed to OMIT every machine-owned field. Handing the
+    fixture's scaffold to the stamp modelled a checker that fabricates
+    identities and relied on the stamp silently correcting them, which is the
+    laundering path the stamp now refuses. Strip them first, as a compliant
+    checker would.
+    """
 
     checker = gate.get("checker", {})
+    candidate = dict(gate)
+    for field in machine_owned_gate_fields(envelope):
+        candidate.pop(field, None)
+    candidate.pop("checker", None)
     return apply_machine_owned_gate_fields(
-        gate,
+        candidate,
         envelope,
         started_at=str(checker.get("started_at", "2026-01-01T00:00:00Z")),
         finished_at=str(checker.get("finished_at", "2026-01-01T00:00:01Z")),
