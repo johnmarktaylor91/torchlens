@@ -119,6 +119,19 @@ handoff proposal, proposal/code-manifest/source-manifest hashes, and handoff_sha
 rejected, or cannot-verify in the
 closed terminal_disposition item. This verdict remains advisory to the reducer and never awards a terminal.
 
+The terminal_disposition object is CLOSED and carries exactly these thirteen keys, spelled exactly this
+way, all of them required: author_result_id, author_result_sha256, kind, predicate, handoff_proposal_id,
+handoff_sha256, verdict, source_manifest_identity, source_ids, evidence_identity, evidence_ids,
+license_identity, findings. Use null for handoff_proposal_id and handoff_sha256 outside
+DEFER_RECOMMENDATION, and [] for an empty findings list. `predicate` is the closed set needs-cuda,
+needs-x86, insufficient-description, no-description, not-a-real-NN, blocked-prerequisite. These are GATE
+names, NOT the author-result's names for the same facts: the arm discriminator is `kind` and never `arm`,
+the result digest is `author_result_sha256` and never `result_sha256`, and your prose belongs in the
+`findings` array and never in a `reason` string. Do not carry `arm`, `result_sha256`,
+`recommendation_sha256`, `reason`, `checked_source_ids`, `checked_evidence_ids`, or `prerequisite_ids`
+across from the author-result you are reviewing. One added key is refused and your entire verdict is
+discarded, so spell the thirteen and stop.
+
 DECISION RULE
 Top-level accurate requires every field result accurate and required fidelity match or strictly
 nonmaterial minor-drift. Any inaccurate field, major-drift, or slop makes top-level inaccurate. Otherwise
