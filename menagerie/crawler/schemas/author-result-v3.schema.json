@@ -766,8 +766,8 @@
               "url": {
                 "type": "string",
                 "format": "uri",
-                "pattern": "^https://",
-                "description": "Requested candidate locator for a machine probe."
+                "pattern": "^https?://",
+                "description": "Observed research locator retained as evidence. Plain HTTP is admitted here, and only here, because this is an OBSERVED locator that grants no dereference authority -- the same contract as source-discovery-v1's observed_web_url, which this field is a verbatim copy of. Fetch descriptors remain HTTPS-only. Requiring https:// made a valid discovery unrecordable: legacy publisher and lab pages are frequently plain HTTP, and exactly those are the pages an access-barrier claim names."
               },
               "why_rejected": {
                 "$ref": "#/$defs/nonempty_string",

@@ -534,6 +534,14 @@ def _probe_discovery_candidates(
     candidates = search_evidence["candidate_links"]
     if not candidates:
         return None
+    # An OBSERVED research locator may be plain HTTP; a broker descriptor may not, and
+    # the broker refuses the whole batch over one such URL. That refusal used to abort
+    # the entire materialization, so a single legacy `http://` page an author honestly
+    # reported destroyed the model's record -- punishing the honest author again, and on
+    # exactly the pages an access-barrier claim tends to name. Unbrokerable locators are
+    # skipped here and keep a null probe outcome, which is the truthful statement: the
+    # machine retained no receipt for them. The index is taken from the FULL candidate
+    # list so `candidate-probe-NNN` still correlates position-for-position.
     descriptors = [
         {
             "source_id": f"candidate-probe-{index:03d}",
@@ -543,7 +551,10 @@ def _probe_discovery_candidates(
             "basis": str(candidate["why_rejected"]),
         }
         for index, candidate in enumerate(candidates, start=1)
+        if str(candidate["url"]).startswith("https://")
     ]
+    if not descriptors:
+        return None
     broker_dir = root / "discovery-probes"
     pack = broker_source_pack(descriptors, broker_dir=broker_dir, transport=transport)
     write_broker_outputs(pack, broker_dir)

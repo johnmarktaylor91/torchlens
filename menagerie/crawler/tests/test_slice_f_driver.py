@@ -2648,6 +2648,93 @@ def test_candidate_link_accepts_every_closed_rejection_class(rejection_class: st
     assert result.search_evidence["candidate_links"][0]["rejection_class"] == rejection_class
 
 
+def test_a_plain_http_barrier_locator_survives_into_the_terminal_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An observed `http://` locator must not make an honest discovery unrecordable.
+
+    `source-discovery-v1` deliberately admits HTTP or HTTPS for an OBSERVED research
+    locator -- it grants no dereference authority, unlike a fetch descriptor -- but the
+    record schemas that copy the same field verbatim required `https://`. So a valid
+    stage-1 result died on the way to the record, and legacy publisher and lab pages
+    are frequently plain HTTP: exactly the pages an access-barrier claim names.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    monkeypatch:
+        Fixture used to publish the synthetic discovery envelope.
+    """
+
+    snapshot = _snapshot(tmp_path, count=1)
+
+    def publish(argv: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        """Publish an access-blocked envelope whose barrier locator is plain HTTP."""
+
+        del kwargs
+        request = json.loads(Path(argv[-1]).read_text(encoding="utf-8"))
+        Path(request["required_output_path"]).write_text(
+            json.dumps(
+                {
+                    "schema_version": "menagerie.crawler.source-discovery.v1",
+                    "stable_id": request["stable_id"],
+                    "work_id": request["work_id"],
+                    "arm": "NEEDS_SOURCE_ACCESS",
+                    "payload": {
+                        "arm": "NEEDS_SOURCE_ACCESS",
+                        "research_summary": {
+                            "queries": ["ExampleNet original report"],
+                            "places": ["legacy publisher index"],
+                            "candidate_links": [
+                                {
+                                    "url": "http://legacy.publisher.example/paper",
+                                    "why_rejected": "The gate serves only the abstract.",
+                                    "rejection_class": "access-barrier",
+                                }
+                            ],
+                            "languages": ["en"],
+                            "conclusion": "The report exists behind a legacy gate.",
+                        },
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(list(argv), 0, "", "")
+
+    def transport() -> Any:
+        """Return a hermetic transport reporting the gate's refusal."""
+
+        def probe(url: str, *, max_bytes: int, timeout: float) -> TransportResponse:
+            """Return a deterministic 401 without touching the network."""
+
+            del max_bytes, timeout
+            return TransportResponse(
+                status=401,
+                final_url=url,
+                redirect_chain=(url,),
+                body=b"",
+                truncated=False,
+                error="unauthorized",
+            )
+
+        return probe
+
+    monkeypatch.setattr(driver_admission_module, "_run_operator_command", publish)
+    monkeypatch.setattr(discovery_module, "default_transport", transport)
+    result = _driver(
+        tmp_path, snapshot, author=CommandAuthorLane(("fake-author",))
+    ).run()
+
+    assert result.status == "terminal-partition-complete"
+    model = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)[0]
+    assert model["status"]["code"] == "deferred:needs-source-access"
+    assert model["source_resolution"]["candidate_probes"][0]["locator"] == (
+        "http://legacy.publisher.example/paper"
+    )
+
+
 def test_access_blocked_arm_requires_a_barrier_it_actually_hit() -> None:
     """The arm asserts a locator was WITHHELD, so it must name one.
 
