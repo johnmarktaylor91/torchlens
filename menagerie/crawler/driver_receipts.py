@@ -2590,15 +2590,21 @@ class ReceiptDriverMixin:
         self.dependencies.boundary_hook("award-commit-entered", item.stable_id)
         # Graceful-shutdown atomic award section: publication authorization and
         # materialization must remain check-free through the canonical model append.
+        # Publication authorization is DELIBERATELY outside the guard below. A failed
+        # public write is not this model's defect: it leaves a committed authorization on
+        # the artifact ledger and owns its own resume protocol, which republishes from
+        # that capability and still awards the model `runs`. Terminalizing here would
+        # burn a good model permanently because one mirror write failed, and would
+        # destroy the resume path by planting a terminal the resume cannot supersede.
+        if model.get("authored_metadata_state") == "accepted" and not isinstance(
+            artifact, ActivatedHandoffArtifact
+        ):
+            self._authorize_and_publish_artifact(artifact, model, gates, reducer)
         try:
-            if model.get("authored_metadata_state") == "accepted" and not isinstance(
-                artifact, ActivatedHandoffArtifact
-            ):
-                self._authorize_and_publish_artifact(artifact, model, gates, reducer)
             result = reducer.append_model(reducer.prepare_model(model))
         except (DriverPaused, RetryableOperatorError, AuthorBackoffError):
             raise
-        except Exception as exc:  # noqa: BLE001 -- award bookkeeping is model-local
+        except Exception as exc:  # noqa: BLE001 -- the canonical append is model-local
             # The canonical award append had no handler between here and the CLI
             # catch-all either, so a reducer refusal for ONE model -- exactly what the
             # source-link invariant is for -- ended the whole campaign. The refusal is
