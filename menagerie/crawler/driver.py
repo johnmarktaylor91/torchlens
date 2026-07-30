@@ -468,6 +468,27 @@ _SHUTDOWN_COMPOSITION_HOOK_REGISTRY: Mapping[str, str] = {
 }
 
 
+class _TerminalArtifactEscape(Exception):
+    """Internal carrier routing a terminal artifact failure past the record ladder.
+
+    `_terminalize` contains failures of the RECORD -- construction and canonical append.
+    Artifact materialization is a different kind of failure with its own resume protocol
+    and its own model-local handler in the calling lane, so it must pass through
+    untouched. This type never escapes `_terminalize`, which re-raises the cause.
+
+    Parameters
+    ----------
+    cause:
+        Artifact failure to carry out of the terminal append.
+    """
+
+    def __init__(self, cause: BaseException) -> None:
+        """Store the carried artifact failure."""
+
+        super().__init__(str(cause))
+        self.cause = cause
+
+
 class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
     """Lock-guarded single-writer scheduler integrating slices A through E."""
 
@@ -1804,6 +1825,22 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             root_cause_fingerprint=_gate_item_fingerprint(gate_item),
         )
 
+    def _terminalize_publication_escape(self, escape: "_TerminalArtifactEscape") -> None:
+        """Re-raise a terminal artifact failure with its original type and traceback.
+
+        Parameters
+        ----------
+        escape:
+            Internal carrier holding the artifact failure.
+
+        Raises
+        ------
+        BaseException
+            Always; the carried exception, so callers and the CLI see the real type.
+        """
+
+        raise escape.cause
+
     def _current_record_revision(self, item: WorkItem, reducer: CanonicalReducer) -> Optional[str]:
         """Return the current canonical record revision for one model, if any.
 
@@ -1977,6 +2014,8 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
                 superseded_model=superseded_model,
             )
             return
+        except _TerminalArtifactEscape as escape:
+            self._terminalize_publication_escape(escape)
         except (DriverPaused, RetryableOperatorError, AuthorBackoffError):
             raise
         except Exception as exc:  # noqa: BLE001 -- recording a failure may itself fail
@@ -2009,6 +2048,8 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
                 superseded_model=None,
             )
             return
+        except _TerminalArtifactEscape as escape:
+            self._terminalize_publication_escape(escape)
         except (DriverPaused, RetryableOperatorError, AuthorBackoffError):
             raise
         except Exception as exc:  # noqa: BLE001 -- the minimal terminal may also refuse
@@ -2169,7 +2210,20 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         # Terminal materialization and its model append share the same graceful-
         # shutdown atomic section as a successful run award.
         if artifact is not None and not retain_prior_artifact_authority:
-            self._authorize_terminal_artifact(artifact, model, gates, reducer)
+            # Artifact materialization is NOT record bookkeeping, so it must escape the
+            # `_terminalize` ladder rather than be absorbed by it. Probed: a terminal
+            # publication failure already has a correct model-local handler one level up,
+            # which re-terminalizes with NO artifact and `failed:runner` and lands a
+            # record. The ladder hijacked it and produced no record at all, because
+            # keeping the original `skipped:`/`deferred:` status while dropping the
+            # artifact makes a record the reducer rightly refuses. Carry it out
+            # untouched; `_terminalize` re-raises the original exception.
+            try:
+                self._authorize_terminal_artifact(artifact, model, gates, reducer)
+            except (DriverPaused, RetryableOperatorError, AuthorBackoffError):
+                raise
+            except Exception as exc:  # noqa: BLE001 -- routed to the caller's handler
+                raise _TerminalArtifactEscape(exc) from exc
         result = reducer.append_model(reducer.prepare_model(model))
         if result.appended:
             self._reduced += 1
