@@ -1204,6 +1204,42 @@ def reconcile_worker_lease(
         os.close(descriptor)
 
 
+# Every signal number an installed shutdown handler has actually observed, in
+# delivery order. A shutdown handler is the ONLY route by which an ambient
+# SIGTERM/SIGINT can be converted into ordinary program state -- the event is
+# set, the run reports ``interrupted:shutdown``, and nothing downstream can tell
+# that outcome apart from one the code chose. Recording the raw signal number is
+# what makes the difference recoverable after the fact.
+_OBSERVED_SHUTDOWN_SIGNALS: list[int] = []
+# The ledger exists to answer "was a signal delivered, and which one", so a
+# signal storm has nothing further to say. Bounding it keeps a pathological
+# sender from growing this list without limit inside a signal handler.
+_OBSERVED_SHUTDOWN_SIGNAL_LIMIT = 64
+
+
+def observed_shutdown_signals() -> tuple[int, ...]:
+    """Return the signals delivered to installed shutdown handlers in this process.
+
+    Only deliveries that happened while :func:`shutdown_signal_handlers` had its
+    handlers installed are visible here; outside that window the interpreter's own
+    disposition applies and no shutdown event is set either.
+
+    Returns
+    -------
+    tuple[int, ...]
+        Observed signal numbers in delivery order, bounded by
+        :data:`_OBSERVED_SHUTDOWN_SIGNAL_LIMIT`.
+    """
+
+    return tuple(_OBSERVED_SHUTDOWN_SIGNALS)
+
+
+def clear_observed_shutdown_signals() -> None:
+    """Empty the observed-signal ledger so a later window starts from nothing."""
+
+    _OBSERVED_SHUTDOWN_SIGNALS.clear()
+
+
 @contextmanager
 def shutdown_signal_handlers(shutdown_event: threading.Event) -> Iterator[None]:
     """Install SIGTERM/SIGINT handlers that only set a shutdown event.
@@ -1223,7 +1259,7 @@ def shutdown_signal_handlers(shutdown_event: threading.Event) -> Iterator[None]:
         raise RuntimeError("shutdown signal handlers require the main thread")
 
     def request_shutdown(signum: int, frame: Any) -> None:
-        """Set the shutdown event without performing signal-unsafe work.
+        """Record the delivered signal, then set the shutdown event.
 
         Parameters
         ----------
@@ -1231,7 +1267,13 @@ def shutdown_signal_handlers(shutdown_event: threading.Event) -> Iterator[None]:
             Standard Python signal-handler arguments.
         """
 
-        del signum, frame
+        del frame
+        # A bounded list append is the only signal-unsafe-free way to keep the
+        # provenance of the shutdown. Without it the delivered signal leaves no
+        # trace anywhere and an ambient signal is indistinguishable from a
+        # deliberate one by the time anybody looks.
+        if len(_OBSERVED_SHUTDOWN_SIGNALS) < _OBSERVED_SHUTDOWN_SIGNAL_LIMIT:
+            _OBSERVED_SHUTDOWN_SIGNALS.append(signum)
         shutdown_event.set()
 
     previous = {signum: signal.getsignal(signum) for signum in (signal.SIGTERM, signal.SIGINT)}
@@ -1964,7 +2006,9 @@ def _record_process_group_teardown(record: ProcessGroupTeardown) -> ProcessGroup
     return record
 
 
-def _kill_process_group(group: ProcessGroupHandle) -> ProcessGroupTeardown:
+def _kill_process_group(
+    group: ProcessGroupHandle, sig: int = signal.SIGKILL
+) -> ProcessGroupTeardown:
     """Terminate a complete isolated process group we can still prove we own.
 
     The parent decides to force-terminate from a liveness read that is already
@@ -1988,6 +2032,11 @@ def _kill_process_group(group: ProcessGroupHandle) -> ProcessGroupTeardown:
     ----------
     group:
         Spawn-time group identity from :func:`capture_process_group`.
+    sig:
+        Signal to deliver to the verified group. Ownership is what this routine
+        establishes, and that proof is signal-independent, so a caller running a
+        graceful SIGTERM-then-SIGKILL sequence uses the same verification for
+        both phases instead of hand-rolling one of them.
 
     Returns
     -------
@@ -2031,15 +2080,16 @@ def _kill_process_group(group: ProcessGroupHandle) -> ProcessGroupTeardown:
                 "start-token-changed-while-child-was-unreaped",
             )
         )
-    return signal_verified_process_group(group.pid, group.pgid, group.start_token)
+    return signal_verified_process_group(group.pid, group.pgid, group.start_token, sig=sig)
 
 
 def signal_verified_process_group(
     pid: int,
     pgid: int,
     expected_start_token: Optional[str],
+    sig: int = signal.SIGKILL,
 ) -> ProcessGroupTeardown:
-    """SIGKILL one already-identity-verified process group and classify the result.
+    """Signal one already-identity-verified process group and classify the result.
 
     Callers must have proven, immediately before, that ``pid`` still names the
     process whose group they intend to tear down. This function only classifies
@@ -2052,6 +2102,11 @@ def signal_verified_process_group(
     expected_start_token:
         Start token bound when ownership was established, or ``None`` when the
         host probe was unavailable.
+    sig:
+        Signal to deliver. Every outcome classified below -- ``ESRCH`` for a gone
+        group, and Darwin's zombie-counting ``EPERM`` -- is reported by the kernel
+        per delivery attempt, not per signal, so the classification holds for any
+        signal a caller chooses.
 
     Returns
     -------
@@ -2061,7 +2116,7 @@ def signal_verified_process_group(
     """
 
     try:
-        os.killpg(pgid, signal.SIGKILL)
+        os.killpg(pgid, sig)
     except ProcessLookupError:
         return ProcessGroupTeardown(
             PROCESS_GROUP_ALREADY_EXITED,
@@ -2112,7 +2167,9 @@ def signal_verified_process_group(
         PROCESS_GROUP_SIGNALLED,
         pid,
         pgid,
-        "sigkill-delivered-to-process-group",
+        # Names the signal actually delivered: a graceful SIGTERM phase and a
+        # forced SIGKILL phase must never read identically in a diagnostic.
+        f"signal-{sig}-delivered-to-process-group",
     )
 
 

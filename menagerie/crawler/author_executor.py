@@ -97,6 +97,15 @@ from menagerie.crawler.source_broker import (
     write_broker_outputs,
 )
 from menagerie.crawler.terminal_evidence import MACHINE_OWNED_EXCERPT_FIELDS
+from menagerie.crawler.worker_supervisor import (
+    # The hardened teardown: it proves the group is still ours (an unreaped child
+    # leading its own group plus an unchanged process-start token) before it
+    # signals anything. Reused rather than re-derived; there must be exactly one
+    # such routine, and a raw ``os.killpg(process.pid, ...)`` is not it.
+    _kill_process_group as kill_process_group,
+    ProcessGroupHandle,
+    capture_process_group,
+)
 
 EXECUTOR_VERSION = "menagerie-author-executor 1.0.0"
 RECEIPT_VERSION = "menagerie.crawler.author-executor-receipt.v1"
@@ -430,12 +439,17 @@ def run_claude_session(
         text=True,
         start_new_session=True,
     )
+    # Bound the group identity now, while the spawn's PID is still provably held
+    # by this exact child. Re-deriving a target from ``process.pid`` at kill time
+    # is what allows a recycled PID -- or a child that never became a group
+    # leader -- to send the teardown at somebody else's group.
+    group = capture_process_group(process)
     timed_out = False
     try:
         stdout, stderr = process.communicate(timeout=wall_seconds * EXTERNAL_KILL_FACTOR)
     except subprocess.TimeoutExpired:
         timed_out = True
-        stdout, stderr = _kill_session(process)
+        stdout, stderr = _kill_session(group)
     wall = time.monotonic() - started
     harness = _parse_harness_json(stdout or "")
     reported = harness.get("session_id") if harness else None
@@ -450,20 +464,34 @@ def run_claude_session(
     )
 
 
-def _kill_session(process: subprocess.Popen) -> tuple[str, str]:
-    """Terminate a session's process group: SIGTERM, grace, SIGKILL."""
+def _kill_session(group: ProcessGroupHandle) -> tuple[str, str]:
+    """Terminate a session's verified process group: SIGTERM, grace, SIGKILL.
 
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except (ProcessLookupError, PermissionError):
-        pass
+    Both phases go through the supervisor's one hardened teardown, which signals
+    only a group this parent can still prove it owns. When that proof fails the
+    group is left entirely alone and only the root child -- the one process whose
+    identity is never in doubt while it is unreaped -- is signalled, so a hung
+    session still cannot outlive its wall grant.
+
+    Parameters
+    ----------
+    group:
+        Spawn-time group identity from :func:`capture_process_group`.
+
+    Returns
+    -------
+    tuple[str, str]
+        Whatever the session managed to emit before it was torn down.
+    """
+
+    process = group.process
+    if not kill_process_group(group, signal.SIGTERM).benign:
+        process.terminate()
     try:
         return process.communicate(timeout=_KILL_GRACE_SECONDS)
     except subprocess.TimeoutExpired:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except (ProcessLookupError, PermissionError):
-            pass
+        if not kill_process_group(group, signal.SIGKILL).benign:
+            process.kill()
         try:
             return process.communicate(timeout=_KILL_GRACE_SECONDS)
         except subprocess.TimeoutExpired:

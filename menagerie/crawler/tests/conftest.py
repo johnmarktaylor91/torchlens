@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass, field
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -12,7 +13,7 @@ import shutil
 import stat
 import subprocess
 import sys
-from typing import Any, Callable, Iterator, NoReturn, Optional
+from typing import Any, Callable, Iterator, NoReturn, Optional, Sequence
 
 import pytest
 
@@ -76,6 +77,13 @@ from menagerie.crawler.mirrors import (
 from menagerie.crawler.standard_inputs import ASSET_ROOT
 from menagerie.crawler.worker_supervisor import SupervisedResult, SupervisorObservation
 from menagerie.crawler.policy import detect_os_sandbox
+
+# Autouse guard: an ambient SIGTERM/SIGINT that reaches an installed driver
+# shutdown handler is reported as itself instead of surfacing as whatever status
+# mismatch it happens to cause. Re-exported here so pytest collects the fixture.
+from menagerie.crawler.tests.shutdown_signal_guard import (  # noqa: F401
+    external_shutdown_signal_guard,
+)
 
 HASH = "sha256:" + "a" * 64
 OTHER_HASH = "sha256:" + "b" * 64
@@ -2986,6 +2994,11 @@ def _round21_release_nodes(target: str) -> tuple[str, ...]:
     return tuple(nodes)
 
 
+# Node IDs of everything this session collected, in collection order, recorded so
+# the run can publish a digest of exactly which suite produced its counts.
+_COLLECTED_NODE_IDS: list[str] = []
+
+
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     """Apply release markers from exact checked-in registries.
@@ -2996,12 +3009,61 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
         Fully expanded pytest items before marker-expression deselection.
     """
 
+    _COLLECTED_NODE_IDS[:] = [item.nodeid for item in items]
     for target, marker_name in _ROUND21_RELEASE_MARKERS.items():
         expected = frozenset(_round21_release_nodes(target))
         for item in items:
             if item.nodeid in expected:
                 item.add_marker(getattr(pytest.mark, marker_name))
                 _ROUND21_RELEASE_COLLECTED[target].add(item.nodeid)
+
+
+def collected_inventory_digest(node_ids: Sequence[str]) -> str:
+    """Digest one collected node-ID list so two suites cannot be confused.
+
+    Collection order is deterministic across processes, so the ordered list is
+    hashed directly rather than sorted.
+
+    Parameters
+    ----------
+    node_ids:
+        Collected node IDs in collection order.
+
+    Returns
+    -------
+    str
+        Truncated hex SHA-256 of the newline-joined node IDs.
+    """
+
+    payload = "\n".join(node_ids).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()[:16]
+
+
+def pytest_terminal_summary(terminalreporter: Any) -> None:
+    """Print which suite produced this run's counts, beside the summary.
+
+    Pass/fail counts from two different collected sets are not comparable, and
+    nothing else in the output says the set changed: a run that silently gains
+    four tests and loses a failure looks like a fix. This line makes that
+    specific mistake self-announcing -- differing digests mean the counts cannot
+    be diffed at all.
+
+    Purely diagnostic. It never changes the exit status, and any failure to
+    produce it is swallowed rather than allowed to break a run.
+
+    Parameters
+    ----------
+    terminalreporter:
+        Active terminal reporter plugin.
+    """
+
+    try:
+        digest = collected_inventory_digest(_COLLECTED_NODE_IDS)
+        terminalreporter.write_line(
+            f"collected inventory: {len(_COLLECTED_NODE_IDS)} node ids, sha256:{digest}"
+        )
+    except Exception:  # noqa: BLE001 - a diagnostic must never fail a run
+        pass
 
 
 def pytest_runtest_logreport(report: pytest.TestReport) -> None:

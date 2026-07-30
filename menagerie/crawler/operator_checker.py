@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 import json
-import os
 from pathlib import Path
 import re
 import signal
@@ -38,6 +37,13 @@ from menagerie.crawler.operator_protocol import (
     load_absolute_request,
     publish_json_atomic,
     write_status,
+)
+from menagerie.crawler.worker_supervisor import (
+    # The single hardened teardown, reused rather than re-derived: it proves the
+    # group is still ours before signalling, which a raw
+    # ``os.killpg(process.pid, ...)`` -- a PID used as a PGID -- never did.
+    _kill_process_group as kill_process_group,
+    capture_process_group,
 )
 
 CHECKER_TIMEOUT_SECONDS = float(OPERATOR_ATTEMPT_TIMEOUT_SECONDS)
@@ -632,15 +638,20 @@ def _invoke_codex(
         )
     except OSError as exc:
         return CodexAttempt(127, "", str(exc), unavailable=True)
+    # Bound the group identity while the spawn's PID is still provably this
+    # child's, so the timeout teardown below signals a group it can prove it owns
+    # rather than whatever group happens to hold that ID by then.
+    group = capture_process_group(process)
     try:
         stdout, stderr = process.communicate(timeout=timeout_seconds)
         return CodexAttempt(process.returncode, stdout, stderr)
     except subprocess.TimeoutExpired as exc:
         del exc
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+        if not kill_process_group(group).benign:
+            # The group is not provably ours, so it is left alone. The root child
+            # is still unambiguously ours while unreaped, and killing it is what
+            # keeps the drain below from blocking forever on a live process.
+            process.kill()
         stdout, stderr = process.communicate()
         return CodexAttempt(
             process.returncode if process.returncode is not None else -signal.SIGKILL,

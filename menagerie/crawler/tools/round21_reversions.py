@@ -5,13 +5,18 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 import json
-import os
 from pathlib import Path
 import shutil
-import signal
 import subprocess
 import sys
 from typing import Callable, Sequence
+
+from menagerie.crawler.worker_supervisor import (
+    # One hardened teardown for the whole package: it proves the group is still
+    # ours before signalling, which a raw ``os.killpg(process.pid, ...)`` never did.
+    _kill_process_group as kill_process_group,
+    capture_process_group,
+)
 
 
 _REVERSIONS = tuple(f"D{index:02d}" for index in range(1, 30))
@@ -1092,10 +1097,14 @@ def _run_pytest_node(root: Path, node: str, python: str) -> subprocess.Completed
         start_new_session=True,
         text=True,
     )
+    group = capture_process_group(process)
     try:
         stdout, stderr = process.communicate(timeout=_CASE_TIMEOUT_SECONDS)
     except subprocess.TimeoutExpired as exc:
-        os.killpg(process.pid, signal.SIGKILL)
+        if not kill_process_group(group).benign:
+            # The group is not provably ours and is left alone; the unreaped root
+            # child is, so killing it keeps the drain below from blocking.
+            process.kill()
         stdout, stderr = process.communicate()
         raise subprocess.TimeoutExpired(
             cmd=exc.cmd,
