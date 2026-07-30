@@ -251,6 +251,7 @@ from menagerie.crawler.driver_progress import (
 from menagerie.crawler.discovery import (
     DiscoveryError,
     FoundDiscovery,
+    AccessBlockedDiscovery,
     HigherTierDiscovery,
     NegativeDiscovery,
     RetryableToolFailureDiscovery,
@@ -728,7 +729,7 @@ class _AuthorLaneBase:
         model_dir.mkdir(parents=True, exist_ok=True)
         result_path = root / "result.json"
         source_result = self._fetch_author_sources(item, root, config)
-        if isinstance(source_result, (NegativeDiscovery, HigherTierDiscovery)):
+        if isinstance(source_result, (NegativeDiscovery, HigherTierDiscovery, AccessBlockedDiscovery)):
             return materialize_discovery_artifact(
                 source_result,
                 item=item,
@@ -813,7 +814,7 @@ class _AuthorLaneBase:
         item: WorkItem,
         root: Path,
         config: Optional[DriverConfig] = None,
-    ) -> JsonObject | NegativeDiscovery | HigherTierDiscovery:
+    ) -> JsonObject | NegativeDiscovery | HigherTierDiscovery | AccessBlockedDiscovery:
         """Validate discovery, broker FOUND locators, and freeze machine source facts.
 
         Parameters
@@ -827,7 +828,7 @@ class _AuthorLaneBase:
 
         Returns
         -------
-        dict[str, Any] | NegativeDiscovery | HigherTierDiscovery
+        dict[str, Any] | NegativeDiscovery | HigherTierDiscovery | AccessBlockedDiscovery
             Frozen source manifest, or a checked-materialization discovery arm.
         """
 
@@ -856,7 +857,7 @@ class _AuthorLaneBase:
             output_path=output_path,
         )
         value = _read_json(output_path)
-        discovery: FoundDiscovery | NegativeDiscovery | HigherTierDiscovery
+        discovery: FoundDiscovery | NegativeDiscovery | HigherTierDiscovery | AccessBlockedDiscovery
         if value.get("schema_version") == "menagerie.crawler.source-discovery.v1":
             try:
                 parsed = validate_source_discovery(
@@ -873,7 +874,7 @@ class _AuthorLaneBase:
                     "author research tool failed "
                     f"({parsed.tool_spelling}): {parsed.error}"
                 )
-            if isinstance(parsed, (NegativeDiscovery, HigherTierDiscovery)):
+            if isinstance(parsed, (NegativeDiscovery, HigherTierDiscovery, AccessBlockedDiscovery)):
                 return parsed
             discovery = parsed
             if len(discovery.descriptors) > self.effort_grant.fetch_targets:

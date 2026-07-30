@@ -54,12 +54,15 @@ from menagerie.crawler.authority import (
 )
 
 from menagerie.crawler.constants import (
+    ACCESS_BLOCKED_STATUS_CODE,
+    CAPABILITY_DEFERRAL_STATUS_CODES,
     ATTEMPT_SCHEMA_VERSION_V3,
     CHECKER_PROMPT_NAME,
     FAILURE_REASON_CODES,
     GATE_SCHEMA_VERSION_V3,
     LINK_EVIDENCED_DISCOVERY_STATUS_CODES,
     MODEL_SCHEMA_VERSION_V3,
+    NO_RUNG_SELECTED,
     TERMINAL_STATUS_CODES,
 )
 from menagerie.crawler.env_lifecycle import (
@@ -139,8 +142,9 @@ def cold_forward_policy(stable_id: str, rung: object) -> ColdForwardPolicy:
     return ColdForwardPolicy("single-mechanical", 1)
 
 
-def _derive_opus_deferral_proof(
+def _derive_blocked_capability_deferral_proof(
     *,
+    status_code: str,
     stable_id: str,
     work_id: str,
     attempts: Sequence[Mapping[str, Any]],
@@ -153,15 +157,23 @@ def _derive_opus_deferral_proof(
     meaningful_modes: Iterable[str],
     proof_rule_identity: str,
 ) -> TerminalProof:
-    """Derive the additive author-capability deferral proof.
+    """Derive the additive capability-deferral proof for an accepted BLOCKED verdict.
 
     The frozen platform-deferral rule remains unchanged and continues to prove only
     CUDA/x86 handoffs. This separate reducer rule reuses its exact terminal-gate
-    identity and reference validators for an accepted ``BLOCKED(needs-higher-tier)``
-    result, but deliberately carries no platform claim or execution attempt.
+    identity and reference validators for an accepted ``BLOCKED`` result, but
+    deliberately carries no platform claim or execution attempt.
+
+    It serves both capability deferrals, because their PROOF is identical: an accepted
+    BLOCKED terminal disposition over a frozen manifest. They differ only in which
+    capability the terminal names -- a stronger authoring tier, or the access to read
+    material we located and were refused -- and that difference is carried by
+    ``status_code``, not by a second copy of this rule.
 
     Parameters
     ----------
+    status_code:
+        Exact capability-deferral terminal being proved.
     stable_id, work_id:
         Exact promoted model and work generation.
     attempts, gates:
@@ -194,7 +206,7 @@ def _derive_opus_deferral_proof(
     )
     if disposition.get("kind") != "BLOCKED" or disposition.get("verdict") != "accepted":
         raise AuthorityDerivationError(
-            "Opus-tier deferral requires an accepted BLOCKED terminal disposition"
+            f"{status_code} requires an accepted BLOCKED terminal disposition"
         )
     _validate_terminal_gate_identities(
         disposition,
@@ -222,7 +234,7 @@ def _derive_opus_deferral_proof(
         "proof_rule_identity": proof_rule_identity,
         "stable_id": stable_id,
         "work_id": work_id,
-        "status_code": "deferred:needs-opus-tier",
+        "status_code": status_code,
         "decisive_attempt_ids": [],
         "gate_id": gate_id,
         "source_ids": list(source_ids),
@@ -254,7 +266,7 @@ def _derive_opus_deferral_proof(
         proof_rule_identity=proof_rule_identity,
         stable_id=stable_id,
         work_id=work_id,
-        status_code="deferred:needs-opus-tier",
+        status_code=status_code,
         decisive_attempt_ids=(),
         gate_id=gate_id,
         source_ids=source_ids,
@@ -1264,8 +1276,9 @@ class _ModelAuthorityPipeline:
             resolved_license_identity = (
                 str(self.license_identity) if self.license_identity is not None else None
             )
-            if status_code == "deferred:needs-opus-tier":
-                self.terminal_proof = _derive_opus_deferral_proof(
+            if status_code in CAPABILITY_DEFERRAL_STATUS_CODES:
+                self.terminal_proof = _derive_blocked_capability_deferral_proof(
+                    status_code=status_code,
                     stable_id=self.stable_id,
                     work_id=self.work_id,
                     attempts=self.current_attempts,
@@ -3011,8 +3024,22 @@ class CanonicalReducer:
                 "skipped:no-description",
                 "skipped:not-a-real-NN",
                 "deferred:needs-opus-tier",
+                ACCESS_BLOCKED_STATUS_CODE,
             }
-            and resolution.get("rung") == "R5_SKIP"
+            # ``R5_SKIP`` is the CHECKED conclusion that no faithful source path
+            # exists. For an access deferral that conclusion is false -- the path
+            # exists and we were not allowed to walk it -- so this one code is
+            # additionally admitted with the honest sentinel. This is a NARROW
+            # carve-out for a shape that is correct by design: a deferral that by
+            # definition never resolved a source. It relaxes nothing for any other
+            # code, and it does not let a skip claim a rung it did not reach.
+            and (
+                resolution.get("rung") == "R5_SKIP"
+                or (
+                    status_code == ACCESS_BLOCKED_STATUS_CODE
+                    and resolution.get("rung") == NO_RUNG_SELECTED
+                )
+            )
             and len(sources) == 1
             and isinstance(sources[0], Mapping)
             and sources[0].get("source_id") == primary

@@ -23,6 +23,7 @@ from menagerie.crawler.authority import (
     derive_terminal_observation,
 )
 from menagerie.crawler.constants import (
+    ACCESS_BLOCKED_REASON_CODE,
     ATTEMPT_SCHEMA_VERSION_V3,
     DEFAULT_FORWARD_TIMEOUT_SECONDS,
     MODEL_SCHEMA_VERSION_V3,
@@ -1769,12 +1770,24 @@ def _assemble_terminal_model(
                     ),
                 }
             )
-            if terminal_gate_obtained:
+            access_blocked = (
+                isinstance(terminal_result, BlockedRecommendation)
+                and terminal_result.reason_code == ACCESS_BLOCKED_REASON_CODE
+            )
+            if terminal_gate_obtained and not access_blocked:
                 # The bounded search itself is machine evidence and is recorded
                 # either way. `R5_SKIP` is not: it is the CHECKED conclusion that
                 # no faithful source path exists, and awarding it from an
                 # unadjudicated verdict would manufacture the exact certified
                 # claim the sentinel exists to withhold.
+                #
+                # An ACCESS deferral is excluded for the same reason from the other
+                # side: the faithful source path demonstrably EXISTS -- we named the
+                # locator -- and we were simply not allowed to read it. Stamping
+                # `R5_SKIP` there would certify "no source path exists" about a model
+                # whose source we can point at, which is precisely the false terminal
+                # this arm was created to stop recording. It keeps NO_RUNG_SELECTED:
+                # the ladder genuinely was not walked to its end.
                 facts["source_resolution"]["rung"] = "R5_SKIP"
             discovery_excerpt_text = str(search_evidence["conclusion"])
         if discovery_evidence is not None and isinstance(terminal_result, SkipRecommendation):

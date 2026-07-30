@@ -130,3 +130,96 @@ def test_status_transition_table_preserves_nonfailure_field_diagnostic() -> None
         match="terminal status completeness invalid: m_runs:nonfailure-has-failure-fields",
     ):
         assert_status_completeness([record])
+
+
+# ---------------------------------------------------------------------------
+# The access deferral and its barrier evidence are ONE fact, bound both ways.
+# ---------------------------------------------------------------------------
+
+
+def _barrier_probe(claimed: str = "access-barrier") -> dict[str, Any]:
+    """Return one machine candidate-probe row with a controllable authored class."""
+
+    return {
+        "identifier_kind": "doi",
+        "identifier": "10.1109/5.726791",
+        "locator": "https://doi.org/10.1109/5.726791",
+        "attempted_at": "2026-07-30T00:00:00Z",
+        "probe_outcome": "unreachable",
+        "http_status": 403,
+        "author_claimed_class": claimed,
+    }
+
+
+def _access_record(status_code: str, probes: list[dict[str, Any]]) -> dict[str, Any]:
+    """Return a synthetic terminal record carrying exactly these candidate probes."""
+
+    record = _complete_record("m_access", status_code)
+    record["source_resolution"]["candidate_probes"] = probes
+    return record
+
+
+def test_access_deferral_without_barrier_evidence_is_refused() -> None:
+    """Omission fails: the terminal names a capability but nothing it applies to.
+
+    An access deferral whose record names no unreachable locator is useless to the
+    later access pass the code exists to enable -- there is nothing to go and fetch.
+    """
+
+    with pytest.raises(StatusCompletenessError, match="missing-access-barrier-evidence"):
+        assert_status_completeness([_access_record("deferred:needs-source-access", [])])
+
+
+def test_barrier_evidence_under_an_absence_claim_is_refused() -> None:
+    """Over-claim fails, and this is the dangerous half.
+
+    A record that carries a locator its own author says it could not read, while
+    terminalising as "no descriptive text exists after bounded search", is exactly the
+    false permanent statement this whole change exists to remove. It may not pass just
+    because the author reached for the cheaper code.
+    """
+
+    with pytest.raises(
+        StatusCompletenessError, match="access-barrier-evidence-under-skipped:no-description"
+    ):
+        assert_status_completeness(
+            [_access_record("skipped:no-description", [_barrier_probe()])]
+        )
+
+
+def test_access_deferral_with_barrier_evidence_passes() -> None:
+    """The honest shape: the terminal and the locator it rests on, together."""
+
+    assert_status_completeness(
+        [_access_record("deferred:needs-source-access", [_barrier_probe()])]
+    )
+
+
+def test_non_barrier_probes_do_not_trip_an_absence_claim() -> None:
+    """Scoping: probes only bind the status when the AUTHOR claims a barrier.
+
+    The machine's own HTTP status deliberately does NOT decide this. Bot-walls return
+    403 to automated probes constantly, and letting an incidental 403 hard-refuse an
+    otherwise honest skip would convert a routine observation into a lost model. The
+    disagreement stays visible in the row for a checker to act on.
+    """
+
+    assert_status_completeness(
+        [_access_record("skipped:no-description", [_barrier_probe("not-this-model")])]
+    )
+
+
+def test_a_failure_record_is_outside_the_barrier_contract() -> None:
+    """A `failed:*` record asserts nothing about the world, so it is not bound here.
+
+    Binding it would also make the failure fallback itself unrecordable, turning one
+    bad model into a second-order failure.
+    """
+
+    record = _access_record("failed:runner", [_barrier_probe()])
+    record["status"]["stage"] = "runner"
+    record["status"]["reason_code"] = "protocol-violation"
+    record["status"]["traceback"] = None
+    record["status"]["no_traceback_reason"] = "synthetic record"
+    record["status"]["root_cause_fingerprint"] = "sha256:" + "0" * 64
+    assert_status_completeness([record])

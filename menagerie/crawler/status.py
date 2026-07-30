@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
 from menagerie.crawler.constants import (
+    ACCESS_BARRIER_REJECTION_CLASS,
+    ACCESS_BLOCKED_STATUS_CODE,
     NO_RUNG_SELECTED,
     NO_RUNG_SELECTED_STATUS_KINDS,
     SKIPPED_STATUS_CODES,
@@ -283,7 +285,61 @@ def _status_completeness_failures(records: Iterable[Mapping[str, Any]]) -> list[
         rung = record.get("source_resolution", {}).get("rung")
         if rung == NO_RUNG_SELECTED and kind not in NO_RUNG_SELECTED_STATUS_KINDS:
             failures.append(f"{stable_id}:no-rung-selected-under-{kind}")
+        # The access deferral and its evidence are one fact, so they bind in BOTH
+        # directions. Omission would let the campaign's only recoverable-by-access
+        # terminal be claimed with nothing naming what was unreachable -- unusable for
+        # the later access pass the code exists to enable. Over-claim is the more
+        # dangerous half: a record carrying a locator the author says it could not read,
+        # while terminalising as "no description exists", is the exact false statement
+        # this whole change removes. Neither passes.
+        # A `failed:*` record asserts nothing about the world -- it records that WE
+        # broke, frequently before any conclusion was reached -- so it is outside this
+        # check's contract, exactly as it is outside the mandatory-source-link one.
+        # Binding it here would also make the failure fallback itself unrecordable,
+        # turning one bad model into a second-order failure.
+        barriers = [] if kind == StatusKind.FAILED.value else access_barrier_probes(record)
+        if kind != StatusKind.FAILED.value and bool(barriers) != (
+            code == ACCESS_BLOCKED_STATUS_CODE
+        ):
+            failures.append(
+                f"{stable_id}:missing-access-barrier-evidence"
+                if code == ACCESS_BLOCKED_STATUS_CODE
+                else f"{stable_id}:access-barrier-evidence-under-{code}"
+            )
     return failures
+
+
+def access_barrier_probes(record: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    """Return the candidate probes whose locator the author reports it could not read.
+
+    The barrier set keys on the AUTHOR'S CLAIM, not on the machine's HTTP status. The
+    claim is what the terminal asserts, so the claim is what the terminal is bound to.
+    The machine's ``probe_outcome``/``http_status`` sit beside it in the same row for a
+    checker to compare -- a claimed ``access-barrier`` that probed ``fetched`` is a
+    finding -- but they deliberately do not decide this predicate. Bot-walls return 403
+    to automated probes constantly, and letting an incidental 403 hard-refuse an
+    otherwise honest skip would convert a common, harmless observation into a lost model.
+
+    Parameters
+    ----------
+    record:
+        Current terminal model revision.
+
+    Returns
+    -------
+    list[Mapping[str, Any]]
+        Probe rows the author classified as an access barrier.
+    """
+
+    probes = record.get("source_resolution", {}).get("candidate_probes")
+    if not isinstance(probes, list):
+        return []
+    return [
+        probe
+        for probe in probes
+        if isinstance(probe, Mapping)
+        and probe.get("author_claimed_class") == ACCESS_BARRIER_REJECTION_CLASS
+    ]
 
 
 def funnel_counts(

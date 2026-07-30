@@ -102,6 +102,8 @@ from menagerie.crawler.checkpoint import (
     record_review_signoff,
 )
 from menagerie.crawler.constants import (
+    ACCESS_BLOCKED_REASON_CODE,
+    ACCESS_BLOCKED_STATUS_CODE,
     ATTEMPT_SCHEMA_VERSION_V3,
     CHECKER_PROMPT_NAME,
     DEFAULT_FORWARD_TIMEOUT_SECONDS,
@@ -1510,6 +1512,14 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             Closed terminal status code and its record-vocabulary reason.
         """
 
+        if result.reason_code == ACCESS_BLOCKED_REASON_CODE:
+            # Access is a named capability, exactly like CUDA or a stronger tier, so
+            # this is `deferred:` and not `failed:fetch/access-denied`. Routing a
+            # WORLD-FACT under "our pipeline broke" would invite retry triage to sweep
+            # models where nothing is retryable -- one conflation traded for another.
+            # Unlike the tier deferral it is NOT campaign-conditional: no authoring
+            # tier can read a paper it is not allowed to open.
+            return ACCESS_BLOCKED_STATUS_CODE, None
         if result.reason_code == "needs-higher-tier":
             # Escalation is an AUTHORING-tier fact regardless of the stage the
             # author named, so it routes on the campaign, not on the stage. With

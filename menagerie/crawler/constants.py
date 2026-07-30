@@ -456,6 +456,52 @@ SKIPPED_STATUS_CODES = frozenset(
     }
 )
 
+ACCESS_BARRIER_REJECTION_CLASS = "access-barrier"
+"""The one candidate-rejection class that asserts a locator was WITHHELD, not absent."""
+
+ACCESS_BLOCKED_REASON_CODE = "needs-source-access"
+"""BLOCKED reason routing an access-barred model onto its own terminal.
+
+The arm goes through BLOCKED, exactly like ``needs-higher-tier``, rather than through a
+``DeferRecommendation``: a platform defer mandates a ``handoff_execution``, and there is
+nothing to hand off when the blocker is that we could not read the material at all.
+"""
+
+ACCESS_BLOCKED_STATUS_CODE = "deferred:needs-source-access"
+"""Terminal for a model whose material exists and could not be read.
+
+Before this code there was no honest terminal state for a paper behind a paywall. A
+paywall yields no bytes to quote, so ``skipped:insufficient-description`` was unreachable
+(it requires a literal retained excerpt), and the model collapsed into
+``skipped:no-description`` -- defined as "no descriptive text after bounded search". That
+is a FALSE statement recorded as terminal, for a model that is in fact recoverable with
+institutional access, on a campaign that runs once.
+
+It is ``deferred:``, not ``failed:fetch/access-denied``. ``deferred:*`` already means
+exactly "terminal for this campaign, recoverable given a named capability"
+(``needs-cuda``, ``needs-x86``, ``needs-opus-tier``), and access is such a capability.
+Filing it under ``failed:`` would record a WORLD-FACT as "our pipeline broke", inviting
+retry triage to sweep models where nothing is retryable -- fixing one conflation by
+creating another.
+
+It also RAISES the bar rather than lowering it: a paywalled model can no longer be
+discharged as a cheap ``skipped:no-description``.
+"""
+
+CAPABILITY_DEFERRAL_STATUS_CODES = frozenset(
+    {
+        "deferred:needs-opus-tier",
+        ACCESS_BLOCKED_STATUS_CODE,
+    }
+)
+"""Deferrals proved by an accepted ``BLOCKED`` verdict rather than a platform handoff.
+
+Both name a real, located model this campaign cannot author and the capability that
+would recover it. Their PROOF is identical -- an accepted BLOCKED terminal disposition
+over a frozen manifest -- so they share one reducer rule; only the capability named
+differs. The frozen platform rule (``needs-cuda`` / ``needs-x86``) is untouched.
+"""
+
 LINK_EVIDENCED_DISCOVERY_STATUS_CODES = frozenset(
     {
         "skipped:no-description",
@@ -490,6 +536,7 @@ TERMINAL_STATUS_CODES = frozenset(
         "deferred:needs-cuda",
         "deferred:needs-x86",
         "deferred:needs-opus-tier",
+        ACCESS_BLOCKED_STATUS_CODE,
         *SKIPPED_STATUS_CODES,
         *(f"failed:{stage.value}" for stage in FailureStage),
     }

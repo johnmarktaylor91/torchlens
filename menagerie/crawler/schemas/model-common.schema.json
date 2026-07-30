@@ -2100,6 +2100,7 @@
         "deferred:needs-cuda",
         "deferred:needs-x86",
         "deferred:needs-opus-tier",
+        "deferred:needs-source-access",
         "skipped:insufficient-description",
         "skipped:no-description",
         "skipped:not-a-real-NN",

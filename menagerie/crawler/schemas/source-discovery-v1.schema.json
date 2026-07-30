@@ -25,6 +25,7 @@
         "INSUFFICIENT_DESCRIPTION",
         "NOT_A_MODEL",
         "NEEDS_HIGHER_TIER",
+        "NEEDS_SOURCE_ACCESS",
         "RETRYABLE_TOOL_FAILURE"
       ],
       "description": "Closed model-judged discovery outcome."
@@ -36,6 +37,7 @@
         {"$ref": "#/$defs/insufficient_description"},
         {"$ref": "#/$defs/not_a_model"},
         {"$ref": "#/$defs/needs_higher_tier"},
+        {"$ref": "#/$defs/needs_source_access"},
         {"$ref": "#/$defs/retryable_tool_failure"}
       ],
       "description": "Strict arm-specific discovery payload."
@@ -357,6 +359,21 @@
         "research_summary": {
           "$ref": "#/$defs/search_evidence",
           "description": "Bounded research record carried to the higher-tier campaign."
+        }
+      }
+    },
+    "needs_source_access": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["arm", "research_summary"],
+      "properties": {
+        "arm": {
+          "const": "NEEDS_SOURCE_ACCESS",
+          "description": "NEEDS_SOURCE_ACCESS payload discriminator."
+        },
+        "research_summary": {
+          "$ref": "#/$defs/search_evidence",
+          "description": "Bounded research record that must name at least one locator classified access-barrier; the union parser enforces that and refuses the arm otherwise. The arm asserts 'the material exists and was withheld', so it is unavailable to a session that never hit a barrier: an author cannot reach for it as a softer landing than an honest absence claim."
         }
       }
     },

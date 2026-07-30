@@ -19,6 +19,8 @@ from menagerie.crawler.author_dispatch import (
 )
 from menagerie.crawler.authority import AuthorityContext
 from menagerie.crawler.constants import (
+    ACCESS_BARRIER_REJECTION_CLASS,
+    ACCESS_BLOCKED_REASON_CODE,
     AUTHOR_RESULT_SCHEMA_VERSION,
     SOURCE_DISCOVERY_SCHEMA_VERSION,
 )
@@ -53,6 +55,7 @@ class DiscoveryArm(str, Enum):
     INSUFFICIENT_DESCRIPTION = "INSUFFICIENT_DESCRIPTION"
     NOT_A_MODEL = "NOT_A_MODEL"
     NEEDS_HIGHER_TIER = "NEEDS_HIGHER_TIER"
+    NEEDS_SOURCE_ACCESS = "NEEDS_SOURCE_ACCESS"
     RETRYABLE_TOOL_FAILURE = "RETRYABLE_TOOL_FAILURE"
 
 
@@ -147,6 +150,29 @@ class HigherTierDiscovery:
 
 
 @dataclass(frozen=True)
+class AccessBlockedDiscovery:
+    """A stage-1 result whose material exists and could not be read.
+
+    The sibling of :class:`HigherTierDiscovery`: both name a real, located model that
+    this campaign cannot author, and both land on a ``deferred:`` terminal naming the
+    capability that would recover it. Here the capability is ACCESS -- an institutional
+    subscription, a library proxy, an interlibrary request -- rather than a stronger
+    model tier.
+
+    It exists because the alternative was a lie. A paywall yields no bytes to quote, so
+    ``INSUFFICIENT_DESCRIPTION`` (which demands a literal retained excerpt) is
+    unreachable, and the model fell through to ``NO_USABLE_SOURCE`` -- "no descriptive
+    text after bounded search" -- which is simply false about a paper sitting behind a
+    publisher gate.
+    """
+
+    stable_id: str
+    work_id: str
+    research_summary: JsonObject
+    raw_result: JsonObject
+
+
+@dataclass(frozen=True)
 class RetryableToolFailureDiscovery:
     """A verbatim research-tool failure that must retry rather than terminalize."""
 
@@ -162,8 +188,13 @@ SourceDiscovery: TypeAlias = (
     FoundDiscovery
     | NegativeDiscovery
     | HigherTierDiscovery
+    | AccessBlockedDiscovery
     | RetryableToolFailureDiscovery
 )
+
+#: Non-fetch arms materialized into a terminal author result by the ordinary lane.
+DeferrableDiscovery: TypeAlias = HigherTierDiscovery | AccessBlockedDiscovery
+NonFetchDiscovery: TypeAlias = NegativeDiscovery | DeferrableDiscovery
 
 
 def validate_source_discovery(
@@ -234,6 +265,27 @@ def validate_source_discovery(
             research_summary=deepcopy(payload["research_summary"]),
             raw_result=raw,
         )
+    if arm is DiscoveryArm.NEEDS_SOURCE_ACCESS:
+        summary = deepcopy(payload["research_summary"])
+        # The arm ASSERTS that a locator was withheld, so it must name one. Without
+        # this it would be the cheapest arm in the union -- no excerpt to retain, no
+        # absence to defend -- and would become the new soft landing, which is the
+        # failure mode this whole change exists to remove.
+        if not any(
+            isinstance(candidate, Mapping)
+            and candidate.get("rejection_class") == ACCESS_BARRIER_REJECTION_CLASS
+            for candidate in summary["candidate_links"]
+        ):
+            raise DiscoveryError(
+                "NEEDS_SOURCE_ACCESS requires at least one candidate link classified "
+                f"{ACCESS_BARRIER_REJECTION_CLASS!r}"
+            )
+        return AccessBlockedDiscovery(
+            stable_id=stable_id,
+            work_id=work_id,
+            research_summary=summary,
+            raw_result=raw,
+        )
     return RetryableToolFailureDiscovery(
         stable_id=stable_id,
         work_id=work_id,
@@ -276,7 +328,7 @@ def _parse_source_descriptor(value: Mapping[str, Any]) -> SourceDescriptor:
 
 
 def materialize_discovery_artifact(
-    discovery: NegativeDiscovery | HigherTierDiscovery,
+    discovery: NonFetchDiscovery,
     *,
     item: WorkItem,
     context: AuthorityContext,
@@ -330,7 +382,7 @@ def materialize_discovery_artifact(
 
 
 def _freeze_discovery_evidence(
-    discovery: NegativeDiscovery | HigherTierDiscovery,
+    discovery: NonFetchDiscovery,
     root: Path,
     *,
     probe_pack: BrokerPack | None,
@@ -452,7 +504,7 @@ def candidate_probe_findings(
 
 
 def _probe_discovery_candidates(
-    discovery: NegativeDiscovery | HigherTierDiscovery,
+    discovery: NonFetchDiscovery,
     root: Path,
     *,
     transport: Transport,
@@ -533,6 +585,8 @@ def freeze_discovery_evidence(discovery: SourceDiscovery, root: Path) -> JsonObj
         arm = discovery.arm.value
     elif isinstance(discovery, HigherTierDiscovery):
         arm = DiscoveryArm.NEEDS_HIGHER_TIER.value
+    elif isinstance(discovery, AccessBlockedDiscovery):
+        arm = DiscoveryArm.NEEDS_SOURCE_ACCESS.value
     elif isinstance(discovery, FoundDiscovery):
         arm = DiscoveryArm.FOUND.value
     else:
@@ -555,7 +609,7 @@ def _machine_discovery_author_result(
     model_dir: Path,
     result_path: Path,
     source_manifest: JsonObject,
-    discovery: NegativeDiscovery | HigherTierDiscovery,
+    discovery: NonFetchDiscovery,
 ) -> SkipRecommendation | BlockedRecommendation:
     """Derive a canonical terminal recommendation from typed discovery evidence.
 
@@ -612,7 +666,14 @@ def _machine_discovery_author_result(
         payload = {
             "arm": kind,
             "stage": "author",
-            "reason_code": "needs-higher-tier",
+            # Both deferrable arms route through BLOCKED, exactly as the Opus-tier
+            # arm always has. The reason code is the only thing that differs, and it
+            # is what the driver maps onto the named capability the model needs.
+            "reason_code": (
+                ACCESS_BLOCKED_REASON_CODE
+                if isinstance(discovery, AccessBlockedDiscovery)
+                else "needs-higher-tier"
+            ),
             "prerequisite_ids": [source_id],
             "evidence_ids": [evidence_id],
             "research_summary": deepcopy(discovery.research_summary),

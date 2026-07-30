@@ -85,6 +85,7 @@ from menagerie.crawler.driver_contracts import (
 )
 from menagerie.crawler.driver_contracts import AuthorEffortCapExceeded
 from menagerie.crawler.discovery import (
+    AccessBlockedDiscovery,
     DiscoveryError,
     candidate_probe_findings,
     FoundDiscovery,
@@ -2376,6 +2377,110 @@ def test_true_no_source_reaches_checked_r5_without_fetch_target(
     assert gates[0]["items"][0]["terminal_disposition"]["verdict"] == "accepted"
 
 
+def test_a_paywalled_paper_reaches_its_own_terminal_not_a_false_absence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The whole point: an unreadable paper stops being recorded as a missing one.
+
+    A paywall yields no bytes to quote, so ``skipped:insufficient-description`` was
+    unreachable and the model collapsed into ``skipped:no-description`` -- "no
+    descriptive text after bounded search" -- which is FALSE about a paper sitting
+    behind a publisher gate, and terminal on a campaign that runs once.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    monkeypatch:
+        Fixture used to publish the synthetic discovery envelope.
+    """
+
+    snapshot = _snapshot(tmp_path, count=1)
+
+    def publish_access_blocked(
+        argv: Sequence[str], **kwargs: Any
+    ) -> subprocess.CompletedProcess[str]:
+        """Publish the registered access-blocked discovery envelope."""
+
+        del kwargs
+        request = json.loads(Path(argv[-1]).read_text(encoding="utf-8"))
+        Path(request["required_output_path"]).write_text(
+            json.dumps(
+                {
+                    "schema_version": "menagerie.crawler.source-discovery.v1",
+                    "stable_id": request["stable_id"],
+                    "work_id": request["work_id"],
+                    "arm": "NEEDS_SOURCE_ACCESS",
+                    "payload": {
+                        "arm": "NEEDS_SOURCE_ACCESS",
+                        "research_summary": {
+                            "queries": ["ExampleNet architecture"],
+                            "places": ["publisher index", "thesis repositories"],
+                            "candidate_links": [
+                                {
+                                    "url": "https://doi.org/10.1109/5.726791",
+                                    "why_rejected": (
+                                        "The publisher gate serves only the abstract."
+                                    ),
+                                    "rejection_class": "access-barrier",
+                                }
+                            ],
+                            "languages": ["en"],
+                            "conclusion": (
+                                "The specifying paper exists and is behind a paywall."
+                            ),
+                        },
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(list(argv), 0, "", "")
+
+    def deterministic_probe_transport() -> Any:
+        """Return a hermetic transport reporting the publisher's own refusal."""
+
+        def probe(url: str, *, max_bytes: int, timeout: float) -> TransportResponse:
+            """Return a deterministic 403 without touching the network."""
+
+            del max_bytes, timeout
+            return TransportResponse(
+                status=403,
+                final_url=url,
+                redirect_chain=(url,),
+                body=b"",
+                truncated=False,
+                error="forbidden",
+            )
+
+        return probe
+
+    monkeypatch.setattr(
+        driver_admission_module, "_run_operator_command", publish_access_blocked
+    )
+    monkeypatch.setattr(discovery_module, "default_transport", deterministic_probe_transport)
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=CommandAuthorLane(("fake-author",)),
+    ).run()
+
+    assert result.status == "terminal-partition-complete"
+    model = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)[0]
+    assert model["status"]["code"] == "deferred:needs-source-access"
+    # `deferred:`, never `failed:` -- the pipeline worked perfectly; the world said no.
+    assert model["status"]["kind"] == "deferred"
+    # NOT `R5_SKIP`. That rung certifies "no faithful source path exists", and here we
+    # can point straight at the source we were refused.
+    assert model["source_resolution"]["rung"] == "NO_RUNG_SELECTED"
+    probes = model["source_resolution"]["candidate_probes"]
+    assert [probe["author_claimed_class"] for probe in probes] == ["access-barrier"]
+    # The machine derived the DOI the author was never asked to read off a paywall.
+    assert probes[0]["identifier_kind"] == "doi"
+    assert probes[0]["identifier"] == "10.1109/5.726791"
+    assert probes[0]["http_status"] == 403
+
+
 @pytest.mark.parametrize(
     ("arm", "payload", "expected_type"),
     [
@@ -2541,6 +2646,54 @@ def test_candidate_link_accepts_every_closed_rejection_class(rejection_class: st
     )
     assert isinstance(result, NegativeDiscovery)
     assert result.search_evidence["candidate_links"][0]["rejection_class"] == rejection_class
+
+
+def test_access_blocked_arm_requires_a_barrier_it_actually_hit() -> None:
+    """The arm asserts a locator was WITHHELD, so it must name one.
+
+    Without this it would be the cheapest arm in the union -- no excerpt to retain,
+    no absence to defend -- and would simply become the new soft landing, which is the
+    failure mode this change exists to remove rather than relocate.
+    """
+
+    value = {
+        "schema_version": "menagerie.crawler.source-discovery.v1",
+        "stable_id": "m_discovery",
+        "work_id": "work-m_discovery",
+        "arm": "NEEDS_SOURCE_ACCESS",
+        "payload": {
+            "arm": "NEEDS_SOURCE_ACCESS",
+            "research_summary": {
+                "queries": ["ExampleNet architecture"],
+                "places": ["publisher index"],
+                "candidate_links": [
+                    {
+                        "url": "https://example.com/other",
+                        "why_rejected": "A different architecture of the same name.",
+                        "rejection_class": "not-this-model",
+                    }
+                ],
+                "languages": ["en"],
+                "conclusion": "The specifying paper could not be read.",
+            },
+        },
+    }
+    with pytest.raises(DiscoveryError, match="access-barrier"):
+        validate_source_discovery(
+            value, stable_id="m_discovery", work_id="work-m_discovery"
+        )
+
+    value["payload"]["research_summary"]["candidate_links"].append(
+        {
+            "url": "https://doi.org/10.1109/5.726791",
+            "why_rejected": "The publisher gate serves only the abstract.",
+            "rejection_class": "access-barrier",
+        }
+    )
+    parsed = validate_source_discovery(
+        value, stable_id="m_discovery", work_id="work-m_discovery"
+    )
+    assert isinstance(parsed, AccessBlockedDiscovery)
 
 
 def test_candidate_link_without_a_rejection_class_is_refused() -> None:

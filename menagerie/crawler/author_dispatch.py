@@ -14,6 +14,8 @@ from typing import Any, Mapping, Optional, Sequence, TypeAlias, Union
 
 from menagerie.crawler.authority import AuthorityContext
 from menagerie.crawler.constants import (
+    ACCESS_BARRIER_REJECTION_CLASS,
+    ACCESS_BLOCKED_REASON_CODE,
     AUTHOR_MAX_FETCH_TARGETS,
     AUTHOR_MAX_TOOL_CALLS,
     AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
@@ -913,11 +915,24 @@ def _validate_author_result_mapping(
             license_record=_declared_license_record(payload),
         )
     research_summary = payload.get("research_summary")
-    if payload.get("reason_code") == "needs-higher-tier" and not isinstance(
+    reason_code = payload.get("reason_code")
+    # Both deferrable BLOCKED arms hand their bounded search on to a later pass -- to a
+    # stronger tier, or to a run that has the access this one lacked -- so both are
+    # worthless without it.
+    if reason_code in {"needs-higher-tier", ACCESS_BLOCKED_REASON_CODE} and not isinstance(
         research_summary, Mapping
     ):
         raise AuthorDispatchError(
-            "BLOCKED(needs-higher-tier) requires a typed stage-1 research_summary"
+            f"BLOCKED({reason_code}) requires a typed stage-1 research_summary"
+        )
+    if reason_code == ACCESS_BLOCKED_REASON_CODE and not any(
+        isinstance(candidate, Mapping)
+        and candidate.get("rejection_class") == ACCESS_BARRIER_REJECTION_CLASS
+        for candidate in (research_summary or {}).get("candidate_links", [])
+    ):
+        raise AuthorDispatchError(
+            f"BLOCKED({ACCESS_BLOCKED_REASON_CODE}) requires at least one candidate link "
+            f"classified {ACCESS_BARRIER_REJECTION_CLASS!r}"
         )
     return BlockedRecommendation(
         binding=binding,
