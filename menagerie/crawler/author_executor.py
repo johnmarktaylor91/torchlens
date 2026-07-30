@@ -655,6 +655,11 @@ def _prior_attempts_section(author_root: Path) -> Optional[str]:
             f"stage={summary.get('failure_stage')!r} "
             f"reason={summary.get('failure_reason')!r}"
         )
+        failure_detail = summary.get("failure_detail")
+        if failure_detail:
+            lines.append(
+                f"  failure detail, verbatim: {json.dumps(failure_detail, sort_keys=True)}"
+            )
         findings = summary.get("checker_findings")
         if findings:
             lines.append(f"  checker findings, verbatim: {json.dumps(findings)}")

@@ -258,6 +258,34 @@ def test_resolve_attempt_slot_rejects_noncanonical_same_id(mutation: str) -> Non
         )
 
 
+def test_resolve_attempt_slot_retains_actionable_schema_error() -> None:
+    """Attempt-slot rejection preserves the specific malformed constraint."""
+
+    work_id = "work-m_example"
+    execution_identity = "sha256:" + "e" * 64
+    attempt_id = deterministic_attempt_id(
+        work_id=work_id,
+        execution_identity=execution_identity,
+        cold_index=0,
+        mode="eval",
+    )
+    attempt = make_attempt(attempt_id=attempt_id, execution_identity=execution_identity)
+    attempt["undeclared_observation"] = "No contract home."
+
+    with pytest.raises(AttemptSlotResolutionError) as caught:
+        resolve_attempt_slot(
+            (attempt,),
+            work_id=work_id,
+            execution_identity=execution_identity,
+            cold_index=0,
+            mode="eval",
+        )
+
+    diagnostic = str(caught.value)
+    assert "undeclared_observation" in diagnostic
+    assert "additionalProperties" in diagnostic
+
+
 def test_attempt_timestamp_change_remains_an_immutable_conflict(tmp_path: Path) -> None:
     """M-02 retains timestamp fields in logical replay comparisons."""
 

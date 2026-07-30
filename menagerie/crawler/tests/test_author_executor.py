@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -455,6 +455,33 @@ def test_source_round_publishes_machine_derived_pack(rig, capsys) -> None:
     assert attempt is not None
     assert attempt.status == "sources-published"
     assert receipt["attempt_nonce"] == attempt.nonce
+
+
+def test_source_round_retains_authored_architecture_observations(rig) -> None:
+    """The live m10551 descriptor shape validates and carries observations forward."""
+
+    notes = (
+        "Observed forward definition: five DarknetConv2D_BN_Leaky(16,32,64,128,256) "
+        "3x3 stages each followed by MaxPooling2D(2,2) stride 2 'same'; then "
+        "MaxPooling2D stride 2, conv 512 3x3. LeakyReLU alpha=0.1 throughout, conv "
+        "bias disabled under BatchNormalization."
+    )
+    discovery = {
+        "arm": "FOUND",
+        "sources": [
+            {
+                **cast(dict[str, Any], DEFAULT_DISCOVERY["sources"][0]),
+                "notes": notes,
+            }
+        ],
+    }
+    rig["monkeypatch"].setenv("FAKE_CLAUDE_DISCOVERY", json.dumps(discovery))
+
+    code, root = _run_source_round(rig)
+
+    assert code == EXIT_OK
+    published = json.loads((root / "source-targets.json").read_text(encoding="utf-8"))
+    assert published["sources"][0]["notes"] == notes
 
 
 def test_fabricated_sha_ref_is_bad_ref_before_publication(rig) -> None:
@@ -1020,6 +1047,34 @@ def test_prior_attempt_failure_is_rendered_into_the_next_brief(rig) -> None:
     retry_brief = read_invocations(rig["log"])[1]["prompt"]
     assert "WHAT WENT WRONG LAST TIME" in retry_brief
     assert "session-crashed" in retry_brief
+
+
+def test_schema_failure_detail_is_rendered_into_the_next_brief(rig) -> None:
+    """A schema-rejected property reaches the retry brief as actionable feedback."""
+
+    malformed = {
+        "arm": "FOUND",
+        "sources": [
+            {
+                **cast(dict[str, Any], DEFAULT_DISCOVERY["sources"][0]),
+                "undeclared_observation": "No contract home.",
+            }
+        ],
+    }
+    rig["monkeypatch"].setenv("FAKE_CLAUDE_DISCOVERY", json.dumps(malformed))
+    code, root = _run_source_round(rig)
+    assert code == EXIT_RETRYABLE
+    failed = latest_attempt(root)
+    assert failed is not None
+    diagnostic = failed.record["outcome"]["detail"]["error"]
+    assert "undeclared_observation" in diagnostic
+    assert "additionalProperties" in diagnostic
+
+    rig["monkeypatch"].delenv("FAKE_CLAUDE_DISCOVERY")
+    code, _ = _run_source_round(rig)
+    assert code == EXIT_OK
+    retry_brief = read_invocations(rig["log"])[1]["prompt"]
+    assert diagnostic in retry_brief
 
 
 def test_checker_findings_reach_the_repair_generation_brief(rig) -> None:

@@ -88,6 +88,76 @@ def test_unknown_fields_are_rejected(valid_model: dict[str, Any]) -> None:
         validate_payload(nested_unknown)
 
 
+def test_union_validation_error_names_undeclared_property() -> None:
+    """A union rejection identifies the closest branch and unexpected property."""
+
+    payload = {
+        "schema_version": "menagerie.crawler.source-discovery.v1",
+        "stable_id": "m-diagnostic",
+        "work_id": "work-m-diagnostic",
+        "arm": "FOUND",
+        "payload": {
+            "arm": "FOUND",
+            "sources": [
+                {
+                    "source_id": "impl-main",
+                    "kind": "forge-file",
+                    "repo": "github.com/example/model",
+                    "path": "model.py",
+                    "ref": "main",
+                    "requested_role": "implementation",
+                    "basis": "Observed implementation entry point.",
+                    "undeclared_observation": "This property has no contract home.",
+                }
+            ],
+        },
+    }
+
+    with pytest.raises(PayloadValidationError) as caught:
+        validate_payload(payload)
+
+    diagnostic = str(caught.value)
+    assert "payload.sources[0]" in diagnostic
+    assert "oneOf[0]" in diagnostic
+    assert "additionalProperties" in diagnostic
+    assert "undeclared_observation" in diagnostic
+
+
+def test_union_validation_error_names_wrong_enum_and_allowed_values() -> None:
+    """A union rejection identifies an enum field and its closed allowed values."""
+
+    payload = {
+        "schema_version": "menagerie.crawler.source-discovery.v1",
+        "stable_id": "m-diagnostic",
+        "work_id": "work-m-diagnostic",
+        "arm": "FOUND",
+        "payload": {
+            "arm": "FOUND",
+            "sources": [
+                {
+                    "source_id": "impl-main",
+                    "kind": "forge-file",
+                    "repo": "github.com/example/model",
+                    "path": "model.py",
+                    "ref": "main",
+                    "requested_role": "configuration",
+                    "basis": "Observed implementation entry point.",
+                }
+            ],
+        },
+    }
+
+    with pytest.raises(PayloadValidationError) as caught:
+        validate_payload(payload)
+
+    diagnostic = str(caught.value)
+    assert "payload.sources[0].requested_role" in diagnostic
+    assert "enum" in diagnostic
+    assert "configuration" in diagnostic
+    assert "implementation" in diagnostic
+    assert "documentation" in diagnostic
+
+
 @pytest.mark.parametrize("value", [None, "adapter.py"])
 def test_v3_input_contract_code_path_presence_is_rejected(value: object) -> None:
     """Null and string forms of the deleted v3 executable-path leaf both reject.

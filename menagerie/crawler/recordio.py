@@ -206,7 +206,7 @@ def resolve_attempt_slot(
         validate_payload(record, ATTEMPT_SCHEMA_VERSION_V3)
     except PayloadValidationError as exc:
         raise AttemptSlotResolutionError(
-            f"deterministic attempt slot has an invalid v3 row: {attempt_id}"
+            f"deterministic attempt slot has an invalid v3 row {attempt_id}: {exc}"
         ) from exc
     identities = record.get("identities")
     retries = record.get("retries")

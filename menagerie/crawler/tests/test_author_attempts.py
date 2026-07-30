@@ -135,11 +135,15 @@ def test_prior_attempts_summary_carries_failure_reasons(tmp_path: Path) -> None:
             "kind": "failure",
             "failure_stage": "stage1",
             "failure_reason": "primary-implementation-unfetchable",
+            "detail": {"error": "requested ref 'missing' did not resolve"},
         },
     )
     _open(tmp_path)
     summaries = prior_attempts_summary(tmp_path)
     assert summaries[0]["failure_reason"] == "primary-implementation-unfetchable"
+    assert summaries[0]["failure_detail"] == {
+        "error": "requested ref 'missing' did not resolve"
+    }
     assert summaries[0]["attempt_number"] == 1
 
 

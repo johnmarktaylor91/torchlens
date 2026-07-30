@@ -73,6 +73,7 @@ class SourceDescriptor:
     url: str | None = None
     identifier: str | None = None
     media_type_hint: str | None = None
+    notes: str | None = None
 
     def to_mapping(self) -> JsonObject:
         """Return the exact descriptor fields admitted by the registered schema.
@@ -89,7 +90,7 @@ class SourceDescriptor:
             "requested_role": self.requested_role,
             "basis": self.basis,
         }
-        for name in ("repo", "path", "ref", "url", "identifier", "media_type_hint"):
+        for name in ("repo", "path", "ref", "url", "identifier", "media_type_hint", "notes"):
             item = getattr(self, name)
             if item is not None:
                 value[name] = item
@@ -269,6 +270,7 @@ def _parse_source_descriptor(value: Mapping[str, Any]) -> SourceDescriptor:
         media_type_hint=(
             str(value["media_type_hint"]) if "media_type_hint" in value else None
         ),
+        notes=str(value["notes"]) if "notes" in value else None,
     )
 
 
