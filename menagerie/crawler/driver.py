@@ -468,6 +468,47 @@ _SHUTDOWN_COMPOSITION_HOOK_REGISTRY: Mapping[str, str] = {
 }
 
 
+#: A malformed PROGRAM is never a fact about a model's data. These recur identically for
+#: every subsequent model, so absorbing them into the per-model record ladder converts a
+#: fail-fast bug into a campaign-wide silent degradation: at 28,482 models a single
+#: `NameError` in the terminal path yields 28,482 `terminal-unrecordable` events and zero
+#: records, while the run LOOKS like it is working through the roster. That is strictly
+#: worse than the abort the ladder exists to prevent, which at least stopped at model 1
+#: with the real traceback. Deliberately EXCLUDED: `KeyError`, `IndexError`, `TypeError`
+#: and `ValueError`, which record traversal raises on genuinely malformed record data --
+#: those ARE facts about the model and belong in the ladder.
+_PROGRAMMING_ERRORS: tuple[type[BaseException], ...] = (
+    NameError,  # also covers UnboundLocalError
+    AttributeError,
+    ImportError,
+    RecursionError,
+    MemoryError,
+    SystemError,
+)
+
+#: Distinct models in a row whose terminal could not be recorded before the recording path
+#: is declared systemically broken. Matches the project's three-strikes anti-flail rule.
+TERMINAL_UNRECORDABLE_STREAK_LIMIT = 3
+
+
+class TerminalRecordingUnavailable(DriverError):
+    """The terminal recording path is systemically broken; the campaign must stop.
+
+    This is the type-AGNOSTIC backstop. It bounds the damage from any systemic recording
+    failure without depending on classifying exceptions correctly up front, which is why
+    it matters more than the programming-error taxonomy above.
+
+    Derived from `DriverError`, NOT `BaseException`, and the choice was probed rather than
+    assumed. A `BaseException` would guarantee no per-model handler could absorb it -- but
+    `run()` records its typed campaign-health failure event under `except Exception`, so
+    `BaseException` would silently SKIP that event and cost exactly the diagnosability
+    this backstop exists to provide. Probed both ways: the stop propagates identically,
+    so the cheaper, better-instrumented type wins. It is raised from
+    `_report_unrecordable_terminal`, which `_terminalize` calls OUTSIDE its own try, so
+    the ladder can never re-absorb its own alarm.
+    """
+
+
 class _TerminalArtifactEscape(Exception):
     """Internal carrier routing a terminal artifact failure past the record ladder.
 
@@ -519,6 +560,12 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         # completion assertion can name the original exception instead of leaving
         # it only inside the ``terminal-unrecordable`` operational report.
         self._unrecordable_diagnostics: dict[str, str] = {}
+        # Streak of DISTINCT models whose terminal could not be recorded, cleared by any
+        # successful terminal append. Distinct, not raw consecutive: one stubborn model
+        # reached twice by later lanes is ONE fact about ONE model, already covered by the
+        # partition tripwire, and must not be able to trip a systemic alarm by itself.
+        # A broken recording path shows up as DIFFERENT models failing to record.
+        self._unrecordable_streak: list[str] = []
         self._family_artifacts: dict[str, AuthorArtifact] = {}
         self._final_artifact_transactions: dict[
             tuple[str, str, ArtifactTransactionId], ArtifactTransactionProjection
@@ -1962,9 +2009,25 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
                     ),
                     "canonical_revision_recorded": recorded,
                     "occurrence": occurrence,
+                    "unrecordable_streak": len(self._unrecordable_streak),
                 },
             }
         )
+        if recorded:
+            # A record landed; only the post-append bookkeeping refused. That is not a
+            # failure of the recording path, so it must not advance the streak.
+            return
+        if item.stable_id not in self._unrecordable_streak:
+            self._unrecordable_streak.append(item.stable_id)
+        if len(self._unrecordable_streak) >= TERMINAL_UNRECORDABLE_STREAK_LIMIT:
+            # The report above is durable BEFORE this raise, so the evidence for the
+            # decision survives the stop that the decision causes.
+            raise TerminalRecordingUnavailable(
+                f"{len(self._unrecordable_streak)} consecutive models could not have a "
+                "terminal recorded, so the recording path is broken rather than the "
+                f"models: {', '.join(self._unrecordable_streak)}. Last failure "
+                f"{error_summary}"
+            )
 
     def _terminalize(
         self,
@@ -2038,10 +2101,15 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
                 superseded_model=superseded_model,
                 terminal_gate_obtained=terminal_gate_obtained,
             )
+            self._unrecordable_streak.clear()
             return
         except _TerminalArtifactEscape as escape:
             self._terminalize_publication_escape(escape)
         except (DriverPaused, RetryableOperatorError, AuthorBackoffError):
+            raise
+        except _PROGRAMMING_ERRORS:
+            # A broken program is not a fact about this model, and will recur identically
+            # for every model after it. Fail loudly and immediately with the real type.
             raise
         except Exception as exc:  # noqa: BLE001 -- recording a failure may itself fail
             record_error: BaseException = exc
@@ -2078,10 +2146,13 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
                 # the merged tree raise `NameError` on every terminal append.
                 terminal_gate_obtained=terminal_gate_obtained,
             )
+            self._unrecordable_streak.clear()
             return
         except _TerminalArtifactEscape as escape:
             self._terminalize_publication_escape(escape)
         except (DriverPaused, RetryableOperatorError, AuthorBackoffError):
+            raise
+        except _PROGRAMMING_ERRORS:
             raise
         except Exception as exc:  # noqa: BLE001 -- the minimal terminal may also refuse
             fallback_error: BaseException = exc
