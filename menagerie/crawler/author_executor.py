@@ -1375,9 +1375,16 @@ def _stamp_machine_owned_proposal_fields(
     * the eight request bindings plus ``schema_version``, all handed to the
       executor verbatim in ``expected_result``;
     * ``proposed_facts.modes.per_mode_run``, which names attempts that do not
-      exist at proposal time. ``model-v3`` calls these leaves reducer-derived
-      and ``authored_fact_leaves`` documents excluding them, so the proposal
-      schema's ``author-gated`` annotation was the outlier;
+      exist at proposal time, so the only honest value is the empty map.
+      Its ownership ANNOTATION stays ``author-gated`` and that is correct:
+      ``proposed_facts`` is wholly the author's claim surface by design --
+      even ``evidence_identity`` and ``recipe_revision`` sit there
+      author-gated, with the machine's copies at the top level -- and
+      ``_AUTHOR_PROPOSAL_FACT_BLOCK_FIELDS`` encodes that invariant. The
+      reducer-derived annotation on ``model-v3``'s ``$.modes.per_mode_run``
+      describes the ACCEPTED RECORD, a different object; the two schemas do
+      not disagree. Stamping an empty claim the author cannot make is a
+      separate question from who the schema says owns the claim;
     * ``proposal_sha256``, the whole-object self-hash, derived last.
 
     What deliberately does NOT move, and why it matters:
