@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from menagerie.crawler.cli import build_parser as build_crawler_parser
-from menagerie.crawler.constants import MODEL_SCHEMA_VERSION_V3
+from menagerie.crawler.constants import ACCESS_BLOCKED_STATUS_CODE, MODEL_SCHEMA_VERSION_V3
 from menagerie.crawler.identity import canonical_json_bytes
 from menagerie.crawler.intake import create_intake_snapshot
 from menagerie.crawler.licenses import (
@@ -25,7 +25,10 @@ from menagerie.crawler.tests.conftest import (
     make_model,
 )
 from menagerie.crawler.tools.license_sweep import main as license_sweep_main
-from menagerie.crawler.tools.rebuild_views import main as rebuild_views_main
+from menagerie.crawler.tools.rebuild_views import (
+    _access_blocked_row,
+    main as rebuild_views_main,
+)
 from menagerie.crawler.tools.requeue import main as requeue_main
 from menagerie.crawler.tools.verify_pool_prompts import (
     PIN_SECTION_HEADING,
@@ -179,6 +182,57 @@ def test_rebuild_views_is_deterministic_and_ignores_stale_database(tmp_path: Pat
         if path.is_file()
     }
     assert first == second
+
+
+def test_blocked_on_access_view_is_an_actionable_recovery_worklist() -> None:
+    """Blocked-only-on-access and what was unreachable must be one file read.
+
+    The campaign runs once, and the batch that would recover these models has to be
+    assembled from the record months later. A count cannot be actioned; the exact
+    locator, the machine-derived identity, when we tried, and what we observed can be.
+    """
+
+    record = {
+        "stable_id": "m_paywalled",
+        "status": {"code": ACCESS_BLOCKED_STATUS_CODE, "kind": "deferred"},
+        "source_resolution": {
+            "search_report": {"conclusion": "The specifying paper is behind a paywall."},
+            "candidate_probes": [
+                {
+                    "identifier_kind": "doi",
+                    "identifier": "10.1109/5.726791",
+                    "locator": "https://doi.org/10.1109/5.726791",
+                    "attempted_at": "2026-07-30T00:00:00Z",
+                    "probe_outcome": "unreachable",
+                    "http_status": 403,
+                    "author_claimed_class": "access-barrier",
+                },
+                {
+                    "identifier_kind": None,
+                    "identifier": None,
+                    "locator": "https://example.com/other",
+                    "attempted_at": "2026-07-30T00:00:00Z",
+                    "probe_outcome": "fetched",
+                    "http_status": 200,
+                    "author_claimed_class": "not-this-model",
+                },
+            ],
+        },
+    }
+
+    row = _access_blocked_row(record)
+
+    assert row["stable_id"] == "m_paywalled"
+    assert row["conclusion"] == "The specifying paper is behind a paywall."
+    # Only the barriers, not every locator the session happened to look at.
+    assert [barrier["locator"] for barrier in row["barriers"]] == [
+        "https://doi.org/10.1109/5.726791"
+    ]
+    barrier = row["barriers"][0]
+    assert barrier["identifier_kind"] == "doi"
+    assert barrier["identifier"] == "10.1109/5.726791"
+    assert barrier["attempted_at"] == "2026-07-30T00:00:00Z"
+    assert barrier["http_status"] == 403
 
 
 def test_license_sweep_rejects_restricted_staged_artifact(tmp_path: Path) -> None:

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Iterable, Mapping, Optional, Sequence
 
 from menagerie.crawler.authority import AuthorityContext, build_authority_context
+from menagerie.crawler.constants import ACCESS_BLOCKED_STATUS_CODE
 from menagerie.crawler.identity import canonical_json_bytes, hash_bytes
 from menagerie.crawler.intake import load_intake_snapshot
 from menagerie.crawler.models import JsonObject
@@ -18,7 +19,11 @@ from menagerie.crawler.reducer import (
     materialize_current,
 )
 from menagerie.crawler.state import rebuild_state
-from menagerie.crawler.status import funnel_counts, record_is_release_eligible
+from menagerie.crawler.status import (
+    access_barrier_probes,
+    funnel_counts,
+    record_is_release_eligible,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -82,6 +87,56 @@ def _atomic_write(path: Path, data: bytes) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def _access_blocked_row(record: Mapping[str, object]) -> JsonObject:
+    """Project one access-blocked model into its recovery worklist row.
+
+    This view exists so that "which models are blocked ONLY on access, and what
+    specifically was unreachable" is a file read rather than a re-derivation. The
+    campaign runs once; the batch that would recover these models has to be
+    assembled from the record months later, and a count alone cannot be actioned.
+
+    Every field is what a later access pass needs to go and fetch the material: the
+    exact locator, the registry identity the machine derived from it, when we tried,
+    and what the attempt observed. The author's claimed class travels beside the
+    machine's own outcome so the disagreement stays visible here too.
+
+    Parameters
+    ----------
+    record:
+        Current terminal model revision with the access-blocked status.
+
+    Returns
+    -------
+    dict[str, Any]
+        Deterministic worklist row for exactly one model.
+    """
+
+    resolution = record.get("source_resolution", {})
+    search_report = (
+        resolution.get("search_report", {}) if isinstance(resolution, Mapping) else {}
+    )
+    status = record.get("status", {})
+    return {
+        "stable_id": record.get("stable_id"),
+        "status_code": status.get("code") if isinstance(status, Mapping) else None,
+        "conclusion": (
+            search_report.get("conclusion") if isinstance(search_report, Mapping) else None
+        ),
+        "barriers": [
+            {
+                "identifier_kind": probe.get("identifier_kind"),
+                "identifier": probe.get("identifier"),
+                "locator": probe.get("locator"),
+                "attempted_at": probe.get("attempted_at"),
+                "probe_outcome": probe.get("probe_outcome"),
+                "http_status": probe.get("http_status"),
+                "author_claimed_class": probe.get("author_claimed_class"),
+            }
+            for probe in access_barrier_probes(record)
+        ],
+    }
+
+
 def rebuild_views(
     intake: Path,
     records_root: Path,
@@ -121,15 +176,24 @@ def rebuild_views(
         for record in current
         if record["status"]["code"] in {"deferred:needs-cuda", "deferred:needs-x86"}
     ]
+    blocked_on_access = [
+        _access_blocked_row(record)
+        for record in current
+        if record["status"]["code"] == ACCESS_BLOCKED_STATUS_CODE
+    ]
     digests = {
         "current": _write_jsonl(views_root / "current-models" / "current.jsonl", current),
         "release": _write_jsonl(views_root / "release-models.jsonl", release),
         "deferred": _write_jsonl(views_root / "deferred-linux.jsonl", deferred),
+        "blocked_on_access": _write_jsonl(
+            views_root / "blocked-on-access.jsonl", blocked_on_access
+        ),
     }
     summary = {
         "current_count": len(current),
         "release_count": len(release),
         "deferred_count": len(deferred),
+        "blocked_on_access_count": len(blocked_on_access),
         "funnel": funnel_counts(current),
         "view_digests": digests,
     }
