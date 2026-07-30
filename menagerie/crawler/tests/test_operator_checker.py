@@ -900,3 +900,37 @@ def test_frozen_prompt_names_every_required_gate_item_field() -> None:
 
     missing = [field for field in required if field not in prompt]
     assert not missing, f"frozen prompt never names required gate item fields: {missing}"
+
+
+def test_forged_campaign_lineage_is_refused_before_publication(tmp_path: Path) -> None:
+    """A copied envelope-bound identity is checked, not taken on the model's word.
+
+    ``campaign_root_work_id`` is schema-required so it is always present, but its
+    value was compared to the envelope only by
+    ``driver_models._require_gate_bindings``, which the metadata and fidelity
+    lanes reach and the terminal lane does not. Telling the checker to copy a
+    field verbatim is only meaningful while the copy is verified.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated wrapper root.
+    """
+
+    request_path, result = _request_and_result(tmp_path)
+    envelope = json.loads(request_path.read_text(encoding="utf-8"))
+    forged = apply_machine_owned_gate_fields(
+        deepcopy(result),
+        envelope,
+        started_at="2026-07-30T18:00:00Z",
+        finished_at="2026-07-30T18:00:01Z",
+    )
+    assert validate_checker_result_mapping(deepcopy(forged), envelope)
+
+    forged["items"][0]["campaign_root_work_id"] = "work-somebody-elses-campaign"
+    forged["result_envelope_sha256"] = compute_result_envelope_sha256(forged)
+
+    with pytest.raises(CheckerDispatchError) as excinfo:
+        validate_checker_result_mapping(forged, envelope)
+
+    assert "campaign_root_work_id" in str(excinfo.value)

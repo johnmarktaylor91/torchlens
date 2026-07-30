@@ -89,6 +89,7 @@ def _checker_item_pack(item: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "work_id": item["work_id"],
+        "campaign_root_work_id": item["campaign_root_work_id"],
         "stable_id": item["stable_id"],
         "family_representative_id": item["family_representative_id"],
         "fidelity_identity": item["fidelity_identity"],

@@ -883,8 +883,17 @@ def _validate_item_binding(result_item: Mapping[str, Any], expected: Mapping[str
         If identity or artifact hashes differ.
     """
 
+    # ``campaign_root_work_id`` is required by the gate.v3 item schema, so it is
+    # always PRESENT, but its VALUE was verified only by
+    # ``driver_models._require_gate_bindings`` -- which the metadata and fidelity
+    # lanes reach and the terminal lane does not. On the terminal lane a checker
+    # could therefore return any lineage it liked and nothing compared it to the
+    # envelope. The prompt now tells the checker to copy this field verbatim from
+    # its envelope item; a copy instruction is only worth giving when the copy is
+    # checked, so it is checked here, for every gate kind, before publication.
     for field in (
         "work_id",
+        "campaign_root_work_id",
         "stable_id",
         "family_representative_id",
         "fidelity_identity",
