@@ -30,6 +30,7 @@ from menagerie.crawler.schema import (
 )
 from menagerie.crawler.terminal_evidence import (
     GROUNDED as TERMINAL_EVIDENCE_GROUNDED,
+    SOURCE_CAS_DIRNAME,
     UNRESOLVED as TERMINAL_EVIDENCE_UNRESOLVED,
 )
 
@@ -718,7 +719,7 @@ def _build_envelope(
     operator_fields = build_operator_fields(
         work_generation_identity=request_nonce,
         model=checker_model,
-        allowed_read_roots=(resolved_output_path.parent, PROMPT_PATH.parent),
+        allowed_read_roots=(resolved_output_path.parent, *_source_read_roots(normalized_items)),
         allowed_write_root=resolved_output_path.parent,
         required_output_path=resolved_output_path,
     )
@@ -746,6 +747,56 @@ def _build_envelope(
         "final_tail": final_tail,
     }
     return {**body, "envelope_sha256": stable_hash(body)}
+
+
+def _source_read_roots(items: Sequence[Mapping[str, Any]]) -> tuple[Path, ...]:
+    """Return the content-addressed source roots the checker actually reads.
+
+    The declaration is derived from the items themselves rather than passed in by
+    a caller, because a read root that a call site can forget to declare is a
+    declaration that will eventually be wrong. It is also the only honest
+    declaration available: the checker's job is to re-derive every literal
+    excerpt from FROZEN BYTES, and those bytes live in each item's author
+    ``source-cas`` tree.
+
+    The previous declaration named this module's own ``prompts`` directory and
+    nothing else. That was wrong in both directions. The wrapper inlines the
+    frozen prompt text into the argv, so the checker never opens ``prompts/``;
+    and the one tree it must open to do its job -- ``source-cas`` -- was not
+    declared at all. A declaration that names an unused directory while omitting
+    the used one cannot be audited against behavior, which is exactly how a
+    checker wandering the repository went unnoticed.
+
+    Parameters
+    ----------
+    items:
+        Normalized envelope items, each carrying its author ``model_dir``.
+
+    Returns
+    -------
+    tuple[pathlib.Path, ...]
+        Deduplicated absolute ``source-cas`` roots in first-seen order.
+
+    Raises
+    ------
+    CheckerDispatchError
+        If an item does not name the author directory whose frozen bytes it
+        expects the checker to dereference. Refusing is deliberate: silently
+        declaring nothing would restore the untrue declaration this replaces.
+    """
+
+    roots: list[Path] = []
+    for item in items:
+        model_dir = item.get("model_dir")
+        if not isinstance(model_dir, str) or not model_dir.strip():
+            raise CheckerDispatchError(
+                f"checker item {item.get('stable_id')!r} does not name its author model_dir, so "
+                "the source-cas root the checker must read cannot be declared"
+            )
+        cas_root = Path(model_dir).parent / SOURCE_CAS_DIRNAME
+        if cas_root not in roots:
+            roots.append(cas_root)
+    return tuple(roots)
 
 
 def _validate_terminal_evidence_pack(evidence_pack: Mapping[str, Any]) -> None:

@@ -100,6 +100,9 @@ def _checker_item_pack(item: dict[str, Any]) -> dict[str, Any]:
         },
         "source_manifest": {"sources": []},
         "evidence": {"excerpts": []},
+        # Every real envelope item names its author directory, because the
+        # envelope derives the declared ``source-cas`` read root from it.
+        "model_dir": f"/menagerie-checker-test/{item['stable_id']}/author/model",
     }
 
 

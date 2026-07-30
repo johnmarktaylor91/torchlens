@@ -8,8 +8,10 @@ canonical records. The inherited dataset contained generic Conv/Linear/Sequentia
 faithful exotic architectures. Executability, plausible prose, names, and comments are never proof.
 
 AUTHORITY
-1. Read WORK_ENVELOPE_PATH and verify every item proposal, source-manifest, evidence, code,
-   family-template, author-prompt, and checker-prompt hash before judging content.
+1. Read WORK_ENVELOPE_PATH and verify each item's `verified_hashes` against the frozen artifacts they
+   bind -- proposal, source-manifest, evidence, code, code-manifest, source-to-code-map, and
+   family-template -- before judging content. Those are the only artifact digests in your scope. Prompt
+   and dispatcher identities are machine-stamped: you neither verify nor report them.
 2. Work in a fresh context. Trust exact source bytes and exact public sources, not Claude summaries,
    comments, class names, legacy notes, or the claimed rung.
 3. Primary verification is against each item's frozen proposal/source/evidence/code pack and its stored
@@ -125,10 +127,30 @@ gates canonical authored-field write and crawl completion; it does not award run
 driver awards runs.
 
 OUTPUT
-Write exactly one UTF-8 JSON object to <allowed_output_root>/result.json using a temporary file, flush,
-fsync, and atomic rename. It must validate against menagerie.crawler.gate.v3. A `metadata_batch` result must
-contain 10--20 independently identified per-item results, each with exact work/model/gate identities,
-verified hashes, integrity result, verdict, exhaustive scoped field_checks, excerpt discrepancies,
-unsupported claims, required repairs, and confidence. A `fidelity` result must contain the same per-model
-identity and integrity fields plus rung_check and fidelity block. A `terminal_disposition` result contains
-exactly one fully bound item. Do not place findings only in prose. End after result.json is written.
+Return your result as your FINAL MESSAGE and nothing else, conforming to the structured output schema you
+were given: one object whose sole `result_json` field holds the complete menagerie.crawler.gate.v3 object
+serialized as compact UTF-8 JSON. You are running READ-ONLY. Do not write, create, or rename any file, and
+do not try to publish result.json -- the wrapper reads your final message and publishes the result itself.
+You are DONE the moment you return that final message; end the turn there.
+
+Everything you need is inside WORK_ENVELOPE_PATH and the frozen artifacts it names. Do NOT search the
+repository, the test suite, or any fixture to learn the shape of a gate object, and never copy a value out
+of one: a gate templated from a fixture is a fabricated gate and is refused.
+
+Field ownership is fixed. Respect it exactly.
+- MACHINE-OWNED -- OMIT these entirely. The wrapper stamps them from the envelope, omitting is always
+  correct and is never an error, and supplying a conflicting value is refused as evidence of templating:
+  schema_version, gate_id, ledger_seq, payload_sha256, gate_kind, batch_size, gate_round, gate_identity,
+  author_result_schema_identity, dispatcher_identity, result_envelope_sha256, and the whole `checker` object.
+- ENVELOPE-BOUND -- copy each one VERBATIM from the same item in the envelope's `items` array. Never derive,
+  recompute, hash, guess, or look these up anywhere else: work_id, campaign_root_work_id, stable_id,
+  family_representative_id, fidelity_identity, vet_identity, verified_hashes.
+- YOURS -- the judgments only you can make: integrity, verdict, field_checks, unsupported_claims,
+  required_repairs, and confidence; plus rung_check and the fidelity block for a `fidelity` envelope, and
+  terminal_disposition for a `terminal_disposition` envelope.
+
+Emit exactly one independently identified result per envelope item, in the same order. A `metadata_batch`
+result carries each item's integrity result, verdict, exhaustive scoped field_checks, excerpt discrepancies,
+unsupported claims, required repairs, and confidence. A `fidelity` result carries the same per-model
+integrity and judgment fields plus rung_check and the fidelity block. A `terminal_disposition` result
+carries exactly one fully bound item. Do not place findings only in prose.

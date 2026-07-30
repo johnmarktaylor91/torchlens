@@ -302,6 +302,13 @@ def _terminal_checker_item(artifact: AuthorArtifact) -> JsonObject:
         "license_identity": result.license_identity,
         "recommendation_sha256": result.recommendation_sha256,
         "recommendation_preimage": recommendation_preimage,
+        # Carried for the same reason the metadata/fidelity item carries it: the
+        # envelope declares the ``source-cas`` root the checker must read, and
+        # that root is derived from this path. A terminal item is the one most
+        # dependent on frozen bytes -- every excerpt behind its evidence IDs is
+        # re-derived from them -- so omitting it here would leave the lane that
+        # needs the declaration most as the only lane without one.
+        "model_dir": str(artifact.model_dir),
     }
 
 

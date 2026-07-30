@@ -13,6 +13,7 @@ from typing import Any, Sequence
 import pytest
 
 from menagerie.crawler.checker_dispatch import (
+    PROMPT_PATH,
     CheckerDispatchError,
     apply_machine_owned_gate_fields,
     build_fidelity_envelope,
@@ -22,7 +23,7 @@ from menagerie.crawler.checker_dispatch import (
     validate_checker_result_mapping,
 )
 from menagerie.crawler.constants import GateKind
-from menagerie.crawler.identity import canonical_json_bytes
+from menagerie.crawler.identity import canonical_json_bytes, stable_hash
 from menagerie.crawler.operator_checker import (
     FIDELITY_CHECKER_MODEL,
     METADATA_CHECKER_MODEL,
@@ -69,6 +70,9 @@ def _checker_item_pack(item: dict[str, Any]) -> dict[str, Any]:
         },
         "source_manifest": {"sources": []},
         "evidence": {"excerpts": []},
+        # Every real envelope item names its author directory, because the
+        # envelope derives the declared ``source-cas`` read root from it.
+        "model_dir": f"/menagerie-checker-test/{item['stable_id']}/author/model",
     }
 
 
@@ -662,3 +666,211 @@ def test_omitting_every_machine_owned_field_stays_free(tmp_path: Path) -> None:
     assert validate_checker_result_mapping(stamped, envelope)["gate_id"] == (
         machine_owned_gate_fields(envelope)["gate_id"]
     )
+
+
+def _reseal(request_path: Path, **changes: Any) -> Path:
+    """Rewrite one request with changed fields and a repaired self-hash.
+
+    The read-root checks sit downstream of the envelope-hash check, so a naive
+    mutation would be rejected as tampering before the check under test ever
+    ran. Resealing isolates the guard being exercised.
+
+    Parameters
+    ----------
+    request_path:
+        Exact wrapper request to rewrite in place.
+    changes:
+        Envelope fields to replace.
+
+    Returns
+    -------
+    pathlib.Path
+        The same request path, rewritten.
+    """
+
+    envelope = json.loads(request_path.read_text(encoding="utf-8"))
+    envelope.update(changes)
+    envelope["envelope_sha256"] = stable_hash(
+        {key: value for key, value in envelope.items() if key != "envelope_sha256"}
+    )
+    request_path.write_text(json.dumps(envelope), encoding="utf-8")
+    return request_path
+
+
+def _reject_detail(request_path: Path) -> str:
+    """Run one request that must never reach Codex and return its refusal detail.
+
+    Parameters
+    ----------
+    request_path:
+        Exact wrapper request.
+
+    Returns
+    -------
+    str
+        Status-sidecar detail explaining the refusal.
+    """
+
+    def invoke(argv: Sequence[str], last_message: Path, timeout: float) -> CodexAttempt:
+        """Fail loudly if preflight lets a bad declaration reach Codex."""
+
+        del argv, last_message, timeout
+        raise AssertionError("preflight must reject before invoking Codex")
+
+    exit_code = execute_checker_request(
+        request_path,
+        invoke=invoke,
+        diagnostic_stream=StringIO(),
+    )
+    assert exit_code is OperatorExitCode.PERMANENT_CONTRACT_REJECTION
+    detail = _status(request_path)["detail"]
+    assert isinstance(detail, str)
+    return detail
+
+
+def test_declared_read_roots_name_the_frozen_source_not_the_prompt(tmp_path: Path) -> None:
+    """The declaration names what the checker reads, and only that.
+
+    The checker re-derives every literal excerpt from frozen bytes under the
+    author ``source-cas`` tree, so that root must be declared. It never opens the
+    repository ``prompts`` directory, because ``_build_prompt`` inlines the frozen
+    text into the argv, so that directory must not be declared.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated wrapper root.
+    """
+
+    request_path, _result = _request_and_result(tmp_path)
+    envelope = json.loads(request_path.read_text(encoding="utf-8"))
+    read_roots = envelope["allowed_read_roots"]
+
+    model_dir = Path(envelope["items"][0]["model_dir"])
+    assert str(model_dir.parent / "source-cas") in read_roots
+    assert str(PROMPT_PATH.parent.resolve()) not in read_roots
+    assert str(request_path.parent.resolve()) in read_roots
+
+
+def test_item_without_its_author_root_cannot_declare_a_source_root(tmp_path: Path) -> None:
+    """An item naming no author directory is refused, not silently undeclared.
+
+    Falling back to declaring nothing would reinstate the untrue declaration this
+    replaces, so the builder refuses instead.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated wrapper root.
+    """
+
+    gate = make_gate(["m_no_root"])
+    item = _checker_item_pack(gate["items"][0])
+    item.pop("model_dir")
+
+    with pytest.raises(CheckerDispatchError) as excinfo:
+        build_metadata_vet_envelope(
+            [item],
+            gate_round=1,
+            output_path=tmp_path / "result.json",
+            checker_model=METADATA_CHECKER_MODEL,
+            checker_version="current",
+            request_nonce="missing-root",
+            final_tail=True,
+        )
+
+    assert "model_dir" in str(excinfo.value)
+    assert "m_no_root" in str(excinfo.value)
+
+
+def test_declaring_the_frozen_prompt_directory_is_refused(tmp_path: Path) -> None:
+    """Re-adding the unread prompt root fails closed rather than passing quietly.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated wrapper root.
+    """
+
+    request_path, _result = _request_and_result(tmp_path)
+    envelope = json.loads(request_path.read_text(encoding="utf-8"))
+    _reseal(
+        request_path,
+        allowed_read_roots=[*envelope["allowed_read_roots"], str(PROMPT_PATH.parent.resolve())],
+    )
+
+    assert "frozen prompt directory" in _reject_detail(request_path)
+
+
+def test_declaring_no_frozen_source_root_is_refused(tmp_path: Path) -> None:
+    """A request-directory-only declaration describes a checker that cannot work.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated wrapper root.
+    """
+
+    request_path, _result = _request_and_result(tmp_path)
+    _reseal(request_path, allowed_read_roots=[str(request_path.parent.resolve())])
+
+    assert "no frozen source root" in _reject_detail(request_path)
+
+
+def _frozen_prompt_text() -> str:
+    """Return the frozen checker prompt with its hard wrapping normalized away.
+
+    The prompt is hand-wrapped, so a phrase under test can straddle a newline.
+    Collapsing runs of whitespace lets these checks assert on wording rather than
+    on where a line happens to break.
+
+    Returns
+    -------
+    str
+        Prompt text with every whitespace run collapsed to one space.
+    """
+
+    return " ".join(PROMPT_PATH.read_text(encoding="utf-8").split())
+
+
+def test_frozen_prompt_never_orders_a_write_the_sandbox_forbids() -> None:
+    """The prompt describes the transport that exists, not one it cannot use.
+
+    The wrapper runs Codex under ``--sandbox read-only`` and reads the verdict
+    from the native structured final message. The prompt previously ordered the
+    model to write ``result.json`` with a temporary file, fsync and atomic
+    rename, and to "End after result.json is written" -- an unreachable
+    termination condition inside a read-only sandbox. Reinstating any of that is a
+    contract contradiction, so it fails here.
+    """
+
+    prompt = _frozen_prompt_text()
+
+    for ordered_write in (
+        "Write exactly one UTF-8 JSON object to",
+        "atomic rename",
+        "fsync",
+        "End after result.json is written",
+    ):
+        assert ordered_write not in prompt, f"prompt re-orders a forbidden write: {ordered_write}"
+    assert "Do not write, create, or rename any file" in prompt
+    assert "sole `result_json` field" in prompt
+
+
+def test_frozen_prompt_never_asks_for_machine_owned_identities() -> None:
+    """The prompt claims only what the checker can legitimately judge.
+
+    A locator the machine verifies by dereferencing may be model-supplied; an
+    identity the machine derives must be machine-derived. Asking the model for an
+    "exact gate identity" sent a live checker into this repository to learn what
+    one looks like, where it found and templated a test fixture.
+    """
+
+    prompt = _frozen_prompt_text()
+
+    assert "exact work/model/gate identities" not in prompt
+    for field in ("gate_id", "gate_identity", "ledger_seq", "result_envelope_sha256"):
+        assert field in prompt, f"{field} must be named as machine-owned so it is omitted"
+    assert "MACHINE-OWNED -- OMIT these entirely" in prompt
+    assert "copy each one VERBATIM from the same item in the envelope's `items` array" in prompt
+    assert "Do NOT search the repository, the test suite, or any fixture" in prompt

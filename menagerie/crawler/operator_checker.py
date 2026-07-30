@@ -530,13 +530,31 @@ def _validate_request(
     ) != str(output_path):
         raise CheckerDispatchError("common operator write paths do not match checker paths")
     read_roots = envelope.get("allowed_read_roots")
-    if (
-        not isinstance(read_roots, list)
-        or any(not isinstance(value, str) or not Path(value).is_absolute() for value in read_roots)
-        or str(request_path.parent.resolve()) not in read_roots
-        or str(PROMPT_PATH.parent.resolve()) not in read_roots
+    if not isinstance(read_roots, list) or any(
+        not isinstance(value, str) or not Path(value).is_absolute() for value in read_roots
     ):
         raise CheckerDispatchError("checker allowed read roots are incomplete or non-absolute")
+    if str(request_path.parent.resolve()) not in read_roots:
+        raise CheckerDispatchError("checker allowed read roots omit the request directory")
+    # The declaration must describe the reads that actually happen. The frozen
+    # prompt is inlined into the argv by ``_build_prompt``, so the checker never
+    # opens the repository ``prompts`` directory; declaring it invited exactly
+    # the repository-wandering this lane was observed doing, and made the
+    # declaration unauditable against behavior. Refusing it keeps a revert
+    # visible instead of silent.
+    if str(PROMPT_PATH.parent.resolve()) in read_roots:
+        raise CheckerDispatchError(
+            "checker allowed read roots declare the frozen prompt directory, which the wrapper "
+            "inlines and the checker never reads"
+        )
+    # A declaration naming only the request directory is degenerate: the checker
+    # cannot re-derive a single excerpt without the frozen bytes under
+    # ``source-cas``, so an envelope that declares no source root is describing a
+    # checker that cannot do its job.
+    if len(read_roots) < 2:
+        raise CheckerDispatchError(
+            "checker allowed read roots declare no frozen source root for excerpt re-derivation"
+        )
     if (
         output_path.resolve().parent != output_root.resolve()
         or output_path.name != "result.json"
