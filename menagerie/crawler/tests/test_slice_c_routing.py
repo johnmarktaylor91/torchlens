@@ -130,6 +130,119 @@ def test_evidenced_cuda_failure_defers_instead_of_failing() -> None:
     assert decision.evidence == (evidence,)
 
 
+@pytest.mark.parametrize(
+    "zoo",
+    (
+        # Bare `owner/repo` -- the roster's most common repository spelling, and the form
+        # the prefix-only table missed entirely.
+        "facebookresearch/esm",
+        "NVlabs/RADIO",
+        "thuml/Time-Series-Library",
+        # Forge markers anywhere, not only as a prefix.
+        "github:tobran/DF-GAN",
+        "github(ShoufaChen/DiffusionDet)",
+        "gnobitab/RectifiedFlow (github)",
+        "github arcinstitute/evo2 (web)",
+        "torch.hub:intel-isl/MiDaS",
+        # Explicit repository-checkout markers.
+        "dreamer-torch(repo)",
+        "act(repo,tonyzhaozh)",
+        "nanodet-src",
+        "chosj95/MIMO-UNet source",
+        # Paper-only rows, which also have no packaged home.
+        "arxiv",
+        "arxiv:2606.05116",
+        "paper/arxiv:2502.05171",
+    ),
+)
+def test_repository_shaped_zoo_reaches_the_exact_repository_environment(zoo: str) -> None:
+    """Every shipped repository spelling routes to the pinned-repository base."""
+
+    requirements = requirements_from_zoo_era(zoo)
+    assert requirements.exact_repository
+    route = route_model(
+        ModelRequirements(
+            "m_repo",
+            "pytorch",
+            requirements.packages,
+            requirements.exact_repository,
+            requirements.legacy_torch,
+        )
+    )
+    assert route.intent == "oddballs"
+
+
+@pytest.mark.parametrize(
+    "zoo",
+    (
+        # Harvest-provenance pseudo-paths. These name where a human looked, not a
+        # repository, so promoting them would strand a library model in a base env.
+        "ocr/document",
+        "torch-reference/from-scratch",
+        "reference/missing-package",
+        "nvidia-nemo/web",
+        "deeplab-public-ver2/web",
+        # Ordinary library zoos must stay library zoos.
+        "timm",
+        "huggingface_transformers",
+        "base-pytorch-compact",
+        "web",
+        "source",
+    ),
+)
+def test_non_repository_zoo_is_not_promoted_to_exact_repository(zoo: str) -> None:
+    """A lookup-context or library label never counts as a pinned repository."""
+
+    assert not requirements_from_zoo_era(zoo).exact_repository
+
+
+def test_repository_shape_never_overrides_a_declared_package_stack() -> None:
+    """A repo-spelled ecosystem zoo carries both facts and keeps its package intent."""
+
+    requirements = requirements_from_zoo_era("open-mmlab/mmdetection")
+
+    assert requirements.exact_repository
+    assert requirements.packages == frozenset({"mmcv", "mmengine"})
+    assert (
+        route_model(
+            ModelRequirements(
+                "m_mm",
+                "pytorch",
+                requirements.packages,
+                requirements.exact_repository,
+                requirements.legacy_torch,
+            )
+        ).intent
+        == "mmlab"
+    )
+
+
+def test_c1_repository_detection_is_not_stuck_at_the_prefix_only_rate() -> None:
+    """The residual c1 tier's repository rows must not collapse back to 231 rows.
+
+    The prefix-only table flagged 231 of c1-mech's 6,968 rows as ``exact_repository``
+    while roughly a thousand are repository-shaped, so every one of the rest was
+    provisioned the general library environment instead of the pinned-repository base.
+    This is the regression guard on that fix; it is deliberately a floor, not an exact
+    count, so a later honest harvest can add repository rows without editing a test.
+    """
+
+    partition = (
+        Path(__file__).resolve().parents[1] / "records" / "partitions" / "c1-mech.jsonl"
+    )
+    rows = [
+        json.loads(line)
+        for line in partition.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    detected = sum(
+        1 for row in rows if requirements_from_zoo_era(str(row["zoo"]), row.get("era")).exact_repository
+    )
+
+    assert len(rows) == 6_968
+    assert detected > 900
+
+
 def test_detectron2_mmcv_pool_gets_exactly_two_arm64_attempts() -> None:
     """The first x86 build failure retries and the second creates a deferral."""
 

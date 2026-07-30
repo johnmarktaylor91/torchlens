@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Iterable, Literal, Mapping, Optional
 
 from menagerie.crawler.constants import EnvironmentPhase, PlatformRequirement
@@ -30,12 +31,19 @@ _PACKAGE_INTENTS: tuple[tuple[str, frozenset[str]], ...] = (
     ),
 )
 
-_ZooMatchKind = Literal["exact", "prefix", "contains"]
+_ZooMatchKind = Literal["exact", "prefix", "contains", "pattern"]
 
 
 @dataclass(frozen=True)
 class ZooRequirementsRule:
-    """One auditable zoo/era rule used to derive intake routing requirements."""
+    """One auditable zoo/era rule used to derive intake routing requirements.
+
+    ``match="pattern"`` holds anchored regular expressions matched against the whole
+    normalized zoo. It exists because repository-shaped zoo strings are a *form*, not a
+    vocabulary: ``facebookresearch/esm``, ``dreamer-torch(repo)``, and ``nanodet-src`` name
+    concrete repositories with no shared literal to key on, and enumerating them as exact
+    rows would silently go stale on the next harvest.
+    """
 
     match: _ZooMatchKind
     zoos: tuple[str, ...]
@@ -65,9 +73,45 @@ ZOO_ERA_REQUIREMENTS_TABLE: tuple[ZooRequirementsRule, ...] = (
         ),
         exact_repository=True,
     ),
+    # Forge markers are matched anywhere in the string, not as a prefix. The roster
+    # spells the same fact as `github:owner/name`, `github(owner/name)`,
+    # `owner/name (github)`, and `github arcinstitute/evo2 (web)`; a prefix rule saw
+    # only the first spelling.
     ZooRequirementsRule(
-        match="prefix",
-        zoos=("github:", "github/", "torch.hub:", "torchhub:"),
+        match="contains",
+        zoos=("github", "gitlab", "torch.hub", "torchhub"),
+        exact_repository=True,
+    ),
+    # Bare `owner/repo`, the single most common repository spelling in the roster and
+    # previously undetected entirely. The negative lookahead drops harvest-provenance
+    # pseudo-paths (`ocr/document`, `torch-reference/from-scratch`, `nvidia-nemo/web`),
+    # which name a lookup context rather than a repository.
+    ZooRequirementsRule(
+        match="pattern",
+        zoos=(
+            r"[a-z0-9][a-z0-9._-]*/"
+            r"(?!(?:web|blog|arxiv|docs?|papers?|document|from-scratch|missing-package)$)"
+            r"[a-z0-9][a-z0-9._-]*",
+        ),
+        exact_repository=True,
+    ),
+    # Explicit "the source is a repository checkout" markers: `dreamer-torch(repo)`,
+    # `act(repo,tonyzhaozh)`, `nanodet-src`, `chosj95/MIMO-UNet source`.
+    ZooRequirementsRule(
+        match="contains",
+        zoos=("(repo)", "(repo,"),
+        exact_repository=True,
+    ),
+    ZooRequirementsRule(
+        match="pattern",
+        zoos=(r".*(?:-src|-source| source)",),
+        exact_repository=True,
+    ),
+    # Paper-only rows have no packaged home either, and the same minimal base plus build
+    # toolchain is the environment a faithful port or reimplementation needs.
+    ZooRequirementsRule(
+        match="pattern",
+        zoos=(r"(?:paper/)?arxiv(?:[:(].*)?",),
         exact_repository=True,
     ),
     ZooRequirementsRule(
@@ -216,7 +260,16 @@ def _zoo_rule_matches(zoo: str, rule: ZooRequirementsRule) -> bool:
         return zoo in rule.zoos
     if rule.match == "prefix":
         return zoo.startswith(rule.zoos)
+    if rule.match == "pattern":
+        return any(_compiled(pattern).fullmatch(zoo) is not None for pattern in rule.zoos)
     return any(marker in zoo for marker in rule.zoos)
+
+
+@lru_cache(maxsize=None)
+def _compiled(pattern: str) -> re.Pattern[str]:
+    """Return one compiled table pattern, cached because the table is frozen."""
+
+    return re.compile(pattern)
 
 
 @dataclass(frozen=True)

@@ -119,9 +119,13 @@ def test_intake_persists_zoo_era_routing_requirements(tmp_path: Path) -> None:
 
     assert item.era == "2018"
     assert item.packages == frozenset({"mmcv", "mmengine"})
+    # `open-mmlab/mmdetection` is both an ecosystem package need and a repository-shaped
+    # zoo, and the table is cumulative, so it carries both facts. The package need still
+    # decides the intent -- see the routing tests -- so recording the repository form here
+    # adds information without moving this row's environment.
     assert item.to_dict()["routing_requirements"] == {
         "packages": ["mmcv", "mmengine"],
-        "exact_repository": False,
+        "exact_repository": True,
         "legacy_torch": False,
     }
     assert loaded == item
