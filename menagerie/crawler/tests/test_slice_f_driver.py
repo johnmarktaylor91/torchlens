@@ -7405,3 +7405,65 @@ def test_a_terminal_that_can_never_be_recorded_is_still_reported(
     assert "synthetic permanent bookkeeping failure" in first["record_error"]
     assert "synthetic permanent bookkeeping failure" in first["fallback_error"]
     assert first["canonical_revision_recorded"] is False
+
+
+def test_terminal_artifact_failure_is_not_absorbed_by_the_record_ladder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A terminal artifact failure reaches the handler that owns it, and lands a record.
+
+    `_terminalize`'s ladder contains failures of the RECORD -- construction and canonical
+    append. Artifact materialization is a different kind of failure: it has its own
+    resume protocol and its own model-local handler in the calling lane, which
+    re-terminalizes with NO artifact and `failed:runner`. When the ladder absorbed it
+    instead, the minimal retry kept the original `skipped:`/`deferred:` status while
+    dropping the artifact -- a record the reducer rightly refuses -- so a perfectly
+    recordable model was reported unrecordable and left with no record at all.
+
+    This is the positive case for the ladder's boundary: it asserts the ladder does NOT
+    fire where it must not, which a suite of ladder-fires-correctly tests cannot show.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    monkeypatch:
+        Fixture used to refuse one model's terminal artifact publication.
+    """
+
+    snapshot = _snapshot(tmp_path, count=3)
+    victim_id = sorted(item.stable_id for item in snapshot.items)[1]
+    original = driver_module.publish_authorized_artifact
+
+    def fail_one_publication(staged: StagedArtifact, authorization: Any, **kwargs: Any) -> Any:
+        """Refuse the authorized writer for one stable id and preserve the tail."""
+
+        if staged.event["stable_id"] == victim_id:
+            raise DriverIntegrationError("synthetic terminal publication failure")
+        return original(staged, authorization, **kwargs)
+
+    monkeypatch.setattr(driver_module, "publish_authorized_artifact", fail_one_publication)
+    result = _driver(
+        tmp_path, snapshot, author=ScriptedAuthor(_TERMINAL_OUTCOME_SCRIPT)
+    ).run()
+
+    models = _model_records(tmp_path, snapshot)
+    # The regression was 2 of 3 records with the victim absent and reported unrecordable.
+    assert len(models) == 3
+    assert victim_id in models
+    # The caller's handler owns this case and records it; the ladder must not have
+    # replaced that with an unrecordable report.
+    assert models[victim_id]["status"]["code"] == "failed:runner"
+    assert models[victim_id]["status"]["reason_code"] == "protocol-violation"
+    events = scan_jsonl(_paths(tmp_path, snapshot).operational_ledger)
+    assert not [
+        event
+        for event in events
+        if event.get("event_kind") == OperationalEventKind.TERMINAL_UNRECORDABLE.value
+    ]
+    # The scripted fixture yields one inherent `failed:runner` regardless of injection,
+    # so the meaningful sibling claim is that real terminal outcomes still land.
+    survivors = [record for key, record in models.items() if key != victim_id]
+    assert len(survivors) == 2
+    assert any(record["status"]["kind"] != "failed" for record in survivors)
+    assert result.status in {"complete", "terminal-partition-complete"}
