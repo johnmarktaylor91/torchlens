@@ -211,10 +211,20 @@
         {"$ref": "#/$defs/paper_descriptor"}
       ]
     },
+    "rejection_class": {
+      "enum": [
+        "not-this-model",
+        "no-material-detail",
+        "access-barrier",
+        "dead-link",
+        "not-a-nn"
+      ],
+      "description": "Closed author reading of why one observed locator was not usable. Required and closed on purpose: with only free prose, 'we could not read it' was indistinguishable from 'there was nothing to read', so a paywall silently became an absence claim. Every candidate is now classified, which makes an access barrier an assertion the record carries rather than a silence it hides. 'not-this-model' is a homonym or a different architecture; 'no-material-detail' is about this model but never specifies the forward pass; 'access-barrier' is readable in principle but was withheld (paywall, login wall, subscription, institutional access); 'dead-link' does not resolve at all; 'not-a-nn' establishes the named thing is not a neural network."
+    },
     "candidate_link": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["url", "why_rejected"],
+      "required": ["url", "why_rejected", "rejection_class"],
       "properties": {
         "url": {
           "$ref": "#/$defs/observed_web_url",
@@ -223,6 +233,10 @@
         "why_rejected": {
           "$ref": "#/$defs/nonempty_string",
           "description": "Model-authored reason the candidate does not satisfy the source need."
+        },
+        "rejection_class": {
+          "$ref": "#/$defs/rejection_class",
+          "description": "Author's closed reading of why it stopped at this locator. Falsifiable against the machine's own probe of the same locator; a disagreement between the two is a checker signal and is never reconciled silently."
         }
       }
     },
@@ -374,6 +388,7 @@
     "$.arm": "author-gated",
     "$.payload.arm": "author-gated",
     "$.payload.error": "author-gated",
+    "$.payload.research_summary.candidate_links[].rejection_class": "author-gated",
     "$.payload.research_summary.candidate_links[].url": "author-gated",
     "$.payload.research_summary.candidate_links[].why_rejected": "author-gated",
     "$.payload.research_summary.conclusion": "author-gated",
@@ -381,6 +396,7 @@
     "$.payload.research_summary.places[]": "author-gated",
     "$.payload.research_summary.queries[]": "author-gated",
     "$.payload.retained_vague_text": "author-gated",
+    "$.payload.search_evidence.candidate_links[].rejection_class": "author-gated",
     "$.payload.search_evidence.candidate_links[].url": "author-gated",
     "$.payload.search_evidence.candidate_links[].why_rejected": "author-gated",
     "$.payload.search_evidence.conclusion": "author-gated",

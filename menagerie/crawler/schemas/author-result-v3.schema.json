@@ -504,6 +504,7 @@
     "$.payload.proposal.work_id": "author-gated",
     "$.payload.reason_code": "author-gated",
     "$.payload.recommendation_sha256": "author-gated",
+    "$.payload.research_summary.candidate_links[].rejection_class": "author-gated",
     "$.payload.research_summary.candidate_links[].url": "author-gated",
     "$.payload.research_summary.candidate_links[].why_rejected": "author-gated",
     "$.payload.research_summary.conclusion": "author-gated",
@@ -753,7 +754,7 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["url", "why_rejected"],
+            "required": ["url", "why_rejected", "rejection_class"],
             "properties": {
               "url": {
                 "type": "string",
@@ -764,6 +765,16 @@
               "why_rejected": {
                 "$ref": "#/$defs/nonempty_string",
                 "description": "Model-authored reason the candidate did not satisfy the source need."
+              },
+              "rejection_class": {
+                "enum": [
+                  "not-this-model",
+                  "no-material-detail",
+                  "access-barrier",
+                  "dead-link",
+                  "not-a-nn"
+                ],
+                "description": "Closed author reading of why this locator was not usable, carried verbatim from the stage-1 discovery envelope. Required so that 'we could not read it' survives into the terminal record instead of degrading into an unqualified absence."
               }
             }
           }

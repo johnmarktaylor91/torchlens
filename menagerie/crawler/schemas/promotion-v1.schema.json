@@ -243,7 +243,7 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["url", "why_rejected"],
+            "required": ["url", "why_rejected", "rejection_class"],
             "properties": {
               "url": {
                 "type": "string",
@@ -254,6 +254,16 @@
               "why_rejected": {
                 "$ref": "#/$defs/nonempty_string",
                 "description": "Stage-1 reason the candidate did not satisfy the source need."
+              },
+              "rejection_class": {
+                "enum": [
+                  "not-this-model",
+                  "no-material-detail",
+                  "access-barrier",
+                  "dead-link",
+                  "not-a-nn"
+                ],
+                "description": "Closed stage-1 reading of why this locator was not usable, carried into the higher-tier campaign so the promoted work inherits which locators were unreadable rather than merely unhelpful."
               }
             }
           }

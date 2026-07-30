@@ -419,6 +419,7 @@ def test_needs_higher_tier_accepts_observed_http_candidate_locator() -> None:
                 {
                     "url": "http://inklab.usc.edu/renet/",
                     "why_rejected": "Useful project context, but not executable source.",
+                    "rejection_class": "not-this-model",
                 }
             ],
             "languages": ["English"],

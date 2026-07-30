@@ -643,6 +643,7 @@ class NeedsOpusAuthor(AuthorLane):
                         {
                             "url": "https://example.com/model.txt",
                             "why_rejected": "The source needs higher-tier adjudication.",
+                            "rejection_class": "no-material-detail",
                         }
                     ],
                     "languages": ["English"],
@@ -2301,6 +2302,7 @@ def test_true_no_source_reaches_checked_r5_without_fetch_target(
                                 {
                                     "url": "https://example.com/examplenet",
                                     "why_rejected": "The page describes a different model.",
+                                    "rejection_class": "not-this-model",
                                 }
                             ],
                             "languages": ["en", "zh"],
@@ -2404,6 +2406,7 @@ def test_true_no_source_reaches_checked_r5_without_fetch_target(
                         {
                             "url": "https://example.com/abstract",
                             "why_rejected": "Only an abstract is available.",
+                            "rejection_class": "no-material-detail",
                         }
                     ],
                     "languages": ["en"],
@@ -2424,6 +2427,7 @@ def test_true_no_source_reaches_checked_r5_without_fetch_target(
                         {
                             "url": "https://example.com/tool",
                             "why_rejected": "The item is a dataset tool.",
+                            "rejection_class": "not-a-nn",
                         }
                     ],
                     "languages": ["en"],
@@ -2478,6 +2482,87 @@ def test_typed_source_discovery_union_accepts_each_closed_arm(
         work_id="work-m_discovery",
     )
     assert isinstance(result, expected_type)
+
+
+def _candidate_link_discovery(candidate: dict[str, Any]) -> dict[str, Any]:
+    """Build a minimal NO_USABLE_SOURCE envelope around exactly one candidate link."""
+
+    return {
+        "schema_version": "menagerie.crawler.source-discovery.v1",
+        "stable_id": "m_discovery",
+        "work_id": "work-m_discovery",
+        "arm": "NO_USABLE_SOURCE",
+        "payload": {
+            "arm": "NO_USABLE_SOURCE",
+            "search_evidence": {
+                "queries": ["model architecture"],
+                "places": ["publisher index"],
+                "candidate_links": [candidate],
+                "languages": ["en"],
+                "conclusion": "No usable architecture source exists.",
+            },
+        },
+    }
+
+
+@pytest.mark.parametrize(
+    "rejection_class",
+    ["not-this-model", "no-material-detail", "access-barrier", "dead-link", "not-a-nn"],
+)
+def test_candidate_link_accepts_every_closed_rejection_class(rejection_class: str) -> None:
+    """The vocabulary is exactly these five; each must round-trip."""
+
+    result = validate_source_discovery(
+        _candidate_link_discovery(
+            {
+                "url": "https://example.com/paper",
+                "why_rejected": "The publisher page never exposes the architecture.",
+                "rejection_class": rejection_class,
+            }
+        ),
+        stable_id="m_discovery",
+        work_id="work-m_discovery",
+    )
+    assert isinstance(result, NegativeDiscovery)
+    assert result.search_evidence["candidate_links"][0]["rejection_class"] == rejection_class
+
+
+def test_candidate_link_without_a_rejection_class_is_refused() -> None:
+    """Required, not optional: an unclassified candidate is how a paywall used to hide.
+
+    Free prose alone made 'we could not read it' indistinguishable from 'there was
+    nothing to read', so the class must be asserted for every candidate rather than
+    volunteered by the conscientious.
+    """
+
+    with pytest.raises(DiscoveryError, match="rejection_class"):
+        validate_source_discovery(
+            _candidate_link_discovery(
+                {
+                    "url": "https://example.com/paper",
+                    "why_rejected": "The publisher page is behind a paywall.",
+                }
+            ),
+            stable_id="m_discovery",
+            work_id="work-m_discovery",
+        )
+
+
+def test_candidate_link_rejection_class_vocabulary_is_closed() -> None:
+    """Closed, not free text: an invented class must fail rather than pass through."""
+
+    with pytest.raises(DiscoveryError):
+        validate_source_discovery(
+            _candidate_link_discovery(
+                {
+                    "url": "https://example.com/paper",
+                    "why_rejected": "The publisher page is behind a paywall.",
+                    "rejection_class": "paywalled",
+                }
+            ),
+            stable_id="m_discovery",
+            work_id="work-m_discovery",
+        )
 
 
 def test_found_discovery_alone_requires_a_nonempty_fetch_set() -> None:
@@ -6622,6 +6707,7 @@ _BLOCKED_NEEDS_HIGHER_TIER_PAYLOAD: dict[str, Any] = {
             {
                 "url": "https://example.com/model.py",
                 "why_rejected": "Faithful authoring needs the Opus tier.",
+                "rejection_class": "no-material-detail",
             }
         ],
         "languages": ["English"],
@@ -6797,6 +6883,7 @@ def test_top_tier_escalation_fails_honestly_instead_of_crashing_the_run(
                     {
                         "url": "https://example.com/model.py",
                         "why_rejected": "Beyond the top authoring tier.",
+                        "rejection_class": "no-material-detail",
                     }
                 ],
                 "languages": ["English"],

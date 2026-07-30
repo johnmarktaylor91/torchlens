@@ -74,7 +74,13 @@ Other arms use these exact complete shapes:
   "search_evidence": {
     "queries": ["ExampleNet implementation"],
     "places": ["GitHub"],
-    "candidate_links": [],
+    "candidate_links": [
+      {
+        "url": "https://example.org/other-examplenet",
+        "why_rejected": "The repository implements an unrelated architecture of the same name.",
+        "rejection_class": "not-this-model"
+      }
+    ],
     "languages": ["English"],
     "conclusion": "No usable implementation or complete specification was found."
   }
@@ -91,7 +97,8 @@ Other arms use these exact complete shapes:
     "candidate_links": [
       {
         "url": "http://example.org/project",
-        "why_rejected": "The observed page names the model but omits its forward definition."
+        "why_rejected": "The observed page names the model but omits its forward definition.",
+        "rejection_class": "no-material-detail"
       }
     ],
     "languages": ["English"],
@@ -125,7 +132,8 @@ Other arms use these exact complete shapes:
     "candidate_links": [
       {
         "url": "https://example.org/upstream",
-        "why_rejected": "The source is relevant, but variant fidelity needs higher-tier adjudication."
+        "why_rejected": "The source is relevant, but variant fidelity needs higher-tier adjudication.",
+        "rejection_class": "no-material-detail"
       }
     ],
     "languages": ["English"],
@@ -150,6 +158,19 @@ Use `NO_USABLE_SOURCE` when no usable code or sufficiently detailed description 
 real but beyond this tier's standards. `search_evidence` and `research_summary` have the
 same five required fields shown above. Candidate links retain exact observed HTTP or HTTPS
 research locators; they are evidence records, not fetch grants.
+
+**Every candidate link carries a `rejection_class`**, closed to exactly `not-this-model`
+(a homonym or a different architecture), `no-material-detail` (about this model, but never
+specifies the forward pass), `access-barrier` (readable in principle, but withheld -- a
+paywall, login wall, subscription, or institutional-access gate), `dead-link` (does not
+resolve at all), or `not-a-nn` (the named thing is not a neural network). Classify what you
+actually observed. The machine independently dereferences every locator you name and keeps
+its own receipt, so the class is a falsifiable claim, not a label.
+
+`NO_USABLE_SOURCE` and `INSUFFICIENT_DESCRIPTION` assert something about the world, so both
+require at least one candidate link: name the locators your conclusion rests on. Listing
+what you actually hit is never held against you -- an unlisted locator is simply an
+unexamined one.
 
 Use `RETRYABLE_TOOL_FAILURE` the moment a research tool is missing, permission-blocked,
 or erroring. Never research from memory; a session that cannot reach its tools must fail

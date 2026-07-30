@@ -154,10 +154,19 @@ and `work_id`:
   and verbatim `error`.
 
 Every `search_evidence` or `research_summary` object has exactly: `queries` (non-empty),
-`places` (non-empty), `candidate_links` (possibly empty objects with exact `https://`
-`url` plus non-empty `why_rejected`), `languages` (non-empty), and a non-empty
+`places` (non-empty), `candidate_links` (objects with exact `https://` `url`, non-empty
+`why_rejected`, and a closed `rejection_class`), `languages` (non-empty), and a non-empty
 `conclusion`. The three negative arms are real findings that proceed to the independent
 R5 terminal checker; they do not carry a fetch target.
+
+`rejection_class` is required on every candidate link and closed to exactly
+`not-this-model`, `no-material-detail`, `access-barrier` (readable in principle but
+withheld -- a paywall, login wall, subscription, or institutional-access gate),
+`dead-link`, or `not-a-nn`. The machine dereferences every locator you name and keeps its
+own receipt, so the class is a falsifiable claim rather than a label. `NO_USABLE_SOURCE`
+and `INSUFFICIENT_DESCRIPTION` assert something about the world and therefore require at
+least one candidate link: name the locators the conclusion rests on. Listing what you
+actually hit is never held against you; an unlisted locator is simply an unexamined one.
 
 - `FOUND` descriptors may carry only locators and authored judgment: `source_id`, `kind`,
   the kind-specific locator fields, `requested_role`, optional `media_type_hint`, and
