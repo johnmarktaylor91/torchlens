@@ -2360,7 +2360,7 @@ def test_true_no_source_reaches_checked_r5_without_fetch_target(
     # The machine's own dereference of the author's locator reaches the record.
     # It was computed and frozen before this change and read by nothing, so the
     # only independent check on a negative discovery was invisible.
-    probes = model["source_resolution"]["candidate_probes"]
+    probes = model["discovery_probes"]
     assert len(probes) == 1
     probe = probes[0]
     assert probe["locator"] == "https://example.com/examplenet"
@@ -2473,7 +2473,7 @@ def test_a_paywalled_paper_reaches_its_own_terminal_not_a_false_absence(
     # NOT `R5_SKIP`. That rung certifies "no faithful source path exists", and here we
     # can point straight at the source we were refused.
     assert model["source_resolution"]["rung"] == "NO_RUNG_SELECTED"
-    probes = model["source_resolution"]["candidate_probes"]
+    probes = model["discovery_probes"]
     assert [probe["author_claimed_class"] for probe in probes] == ["access-barrier"]
     # The machine derived the DOI the author was never asked to read off a paywall.
     assert probes[0]["identifier_kind"] == "doi"
@@ -2730,7 +2730,7 @@ def test_a_plain_http_barrier_locator_survives_into_the_terminal_record(
     assert result.status == "terminal-partition-complete"
     model = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)[0]
     assert model["status"]["code"] == "deferred:needs-source-access"
-    assert model["source_resolution"]["candidate_probes"][0]["locator"] == (
+    assert model["discovery_probes"][0]["locator"] == (
         "http://legacy.publisher.example/paper"
     )
 

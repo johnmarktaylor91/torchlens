@@ -155,7 +155,7 @@ def _access_record(status_code: str, probes: list[dict[str, Any]]) -> dict[str, 
     """Return a synthetic terminal record carrying exactly these candidate probes."""
 
     record = _complete_record("m_access", status_code)
-    record["source_resolution"]["candidate_probes"] = probes
+    record["discovery_probes"] = probes
     return record
 
 

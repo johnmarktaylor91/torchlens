@@ -276,6 +276,7 @@ _DERIVED_VIEW_PATHS = (
     Path("current-models/current.jsonl"),
     Path("release-models.jsonl"),
     Path("deferred-linux.jsonl"),
+    Path("blocked-on-access.jsonl"),
     Path("status-summary.json"),
 )
 
@@ -1360,7 +1361,13 @@ def _derived_view_check(
                 temporary_root / "state.sqlite",
                 context=authority_context,
             )
-            expected_digest_keys = {"current", "release", "deferred", "status"}
+            expected_digest_keys = {
+                "current",
+                "release",
+                "deferred",
+                "blocked_on_access",
+                "status",
+            }
             if set(digests) != expected_digest_keys:
                 raise CheckpointValidationError(
                     f"view rebuild returned incomplete digests: {sorted(digests)}"

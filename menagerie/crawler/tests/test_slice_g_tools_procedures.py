@@ -197,7 +197,8 @@ def test_blocked_on_access_view_is_an_actionable_recovery_worklist() -> None:
         "status": {"code": ACCESS_BLOCKED_STATUS_CODE, "kind": "deferred"},
         "source_resolution": {
             "search_report": {"conclusion": "The specifying paper is behind a paywall."},
-            "candidate_probes": [
+        },
+        "discovery_probes": [
                 {
                     "identifier_kind": "doi",
                     "identifier": "10.1109/5.726791",
@@ -216,8 +217,7 @@ def test_blocked_on_access_view_is_an_actionable_recovery_worklist() -> None:
                     "http_status": 200,
                     "author_claimed_class": "not-this-model",
                 },
-            ],
-        },
+        ],
     }
 
     row = _access_blocked_row(record)

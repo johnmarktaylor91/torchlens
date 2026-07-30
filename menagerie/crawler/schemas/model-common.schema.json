@@ -717,13 +717,6 @@
             "$ref": "#/$defs/source"
           },
           "description": "Mandatory resolved public sources."
-        },
-        "candidate_probes": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/candidate_probe"
-          },
-          "description": "Machine dereference of every candidate locator a typed stage-1 discovery named. Optional because only the typed-discovery arm produces one; when present it is the independent check on the author's own rejection classes, and the access-barrier subset is bound to the record's status by the terminal completeness invariant."
         }
       }
     },

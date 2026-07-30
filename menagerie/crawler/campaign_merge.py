@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from menagerie.crawler.authority import build_authority_context
+from menagerie.crawler.constants import ACCESS_BLOCKED_STATUS_CODE
 from menagerie.crawler.checkpoint import canonical_operational_ledger_path
 from menagerie.crawler.identity import atomic_replace_bytes, canonical_json_bytes, hash_bytes
 from menagerie.crawler.intake import IntakeSnapshot, load_intake_snapshot
@@ -32,6 +33,7 @@ from menagerie.crawler.status import (
     completeness_report,
     record_is_release_eligible,
 )
+from menagerie.crawler.tools.rebuild_views import _access_blocked_row
 from menagerie.crawler.tools.throughput_report import build_throughput_report
 
 
@@ -696,6 +698,15 @@ def _view_payloads(
         for record in deferred
         if str(record["status"]["code"]) == "deferred:needs-opus-tier"
     ]
+    # The cross-campaign access worklist. It has to exist at MERGE level too: the
+    # institutional-access batch that recovers these models is assembled once, over
+    # every campaign, by someone reading the merged output rather than four
+    # per-campaign views.
+    blocked_on_access = [
+        _access_blocked_row(record)
+        for record in deferred
+        if str(record["status"]["code"]) == ACCESS_BLOCKED_STATUS_CODE
+    ]
 
     def jsonl(rows: Sequence[Mapping[str, Any]]) -> bytes:
         """Serialize one ordered derived view as canonical JSONL."""
@@ -706,6 +717,7 @@ def _view_payloads(
         "current_count": len(current),
         "release_count": len(release),
         "deferred_count": len(deferred),
+        "blocked_on_access_count": len(blocked_on_access),
         "terminal": report["total"],
     }
     return {
@@ -713,6 +725,7 @@ def _view_payloads(
         "release-models.jsonl": jsonl(release),
         "deferred-linux.jsonl": jsonl(deferred_linux),
         "deferred-promotions.jsonl": jsonl(deferred_promotions),
+        "blocked-on-access.jsonl": jsonl(blocked_on_access),
         "status-summary.json": canonical_json_bytes(status_summary) + b"\n",
         "merge-report.json": canonical_json_bytes(report) + b"\n",
     }

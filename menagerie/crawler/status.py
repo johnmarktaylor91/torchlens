@@ -331,7 +331,7 @@ def access_barrier_probes(record: Mapping[str, Any]) -> list[Mapping[str, Any]]:
         Probe rows the author classified as an access barrier.
     """
 
-    probes = record.get("source_resolution", {}).get("candidate_probes")
+    probes = record.get("discovery_probes")
     if not isinstance(probes, list):
         return []
     return [

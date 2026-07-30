@@ -181,6 +181,13 @@
       "$ref": "#/$defs/source_resolution",
       "description": "Mandatory selected source rung and search record."
     },
+    "discovery_probes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/candidate_probe"
+      },
+      "description": "Machine dereference of every candidate locator a typed stage-1 discovery named. It sits at record level and NOT inside source_resolution on purpose: source_resolution is the author's proposed fact block and is author-gated end to end, while this is reduced from the machine's own broker receipts and is never authored. Optional because only the typed-discovery arm produces one; when present it is the independent check on the author's rejection classes, and its access-barrier subset is bound to the record status by the terminal completeness invariant."
+    },
     "evidence": {
       "$ref": "#/$defs/evidence",
       "description": "Mandatory literal evidence and coverage record."
@@ -706,6 +713,9 @@
     },
     "source_resolution": {
       "$ref": "model-common.schema.json#/$defs/source_resolution"
+    },
+    "candidate_probe": {
+      "$ref": "model-common.schema.json#/$defs/candidate_probe"
     },
     "rung": {
       "$ref": "model-common.schema.json#/$defs/rung"
@@ -1944,13 +1954,13 @@
     "$.source_resolution.attempted_rungs[].reason_code": "author-gated",
     "$.source_resolution.attempted_rungs[].result": "author-gated",
     "$.source_resolution.attempted_rungs[].rung": "author-gated",
-    "$.source_resolution.candidate_probes[].attempted_at": "reducer-derived",
-    "$.source_resolution.candidate_probes[].author_claimed_class": "reducer-derived",
-    "$.source_resolution.candidate_probes[].http_status": "reducer-derived",
-    "$.source_resolution.candidate_probes[].identifier": "reducer-derived",
-    "$.source_resolution.candidate_probes[].identifier_kind": "reducer-derived",
-    "$.source_resolution.candidate_probes[].locator": "reducer-derived",
-    "$.source_resolution.candidate_probes[].probe_outcome": "reducer-derived",
+    "$.discovery_probes[].attempted_at": "reducer-derived",
+    "$.discovery_probes[].author_claimed_class": "reducer-derived",
+    "$.discovery_probes[].http_status": "reducer-derived",
+    "$.discovery_probes[].identifier": "reducer-derived",
+    "$.discovery_probes[].identifier_kind": "reducer-derived",
+    "$.discovery_probes[].locator": "reducer-derived",
+    "$.discovery_probes[].probe_outcome": "reducer-derived",
     "$.source_resolution.decision": "author-gated",
     "$.source_resolution.mandatory_link_status": "author-gated",
     "$.source_resolution.primary_source_id": "author-gated",

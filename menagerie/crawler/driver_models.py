@@ -1753,22 +1753,26 @@ def _assemble_terminal_model(
                 "finished_at": created_at,
                 "conclusion": str(search_evidence["conclusion"]),
             }
-            # The machine's own dereference of every locator the author named. It
-            # was already computed and frozen next to the attempt, and read by
-            # nothing; promoting it is what makes an authored rejection class
-            # falsifiable in the record rather than only in a discarded receipt.
-            candidate_probes = discovery_evidence.get("candidate_probes")
             facts["source_resolution"].update(
                 {
                     "searched_at": created_at,
                     "search_report": search_report,
                     "mandatory_link_status": "failed",
-                    "candidate_probes": (
-                        deepcopy(candidate_probes)
-                        if isinstance(candidate_probes, list)
-                        else []
-                    ),
                 }
+            )
+            # The machine's own dereference of every locator the author named. It
+            # was already computed and frozen next to the attempt, and read by
+            # nothing; promoting it is what makes an authored rejection class
+            # falsifiable in the record rather than only in a discarded receipt.
+            #
+            # It lands at RECORD level, not inside `source_resolution`. That block is
+            # the author's proposed fact block and is author-gated end to end -- the
+            # required-field projection asserts exactly that -- so a machine-derived
+            # leaf inside it would make the block mixed-provenance and put reduced
+            # data into the author gate's coverage.
+            candidate_probes = discovery_evidence.get("candidate_probes")
+            facts["discovery_probes"] = (
+                deepcopy(candidate_probes) if isinstance(candidate_probes, list) else []
             )
             access_blocked = (
                 isinstance(terminal_result, BlockedRecommendation)
