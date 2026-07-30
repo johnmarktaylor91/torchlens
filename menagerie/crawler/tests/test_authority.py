@@ -9,11 +9,6 @@ from typing import Any, Mapping, Optional
 
 import pytest
 
-from menagerie.crawler.checker_dispatch import (
-    AUTHOR_DISPATCHER_COMPONENT,
-    AUTHOR_RESULT_SCHEMA_COMPONENT,
-    component_identity,
-)
 from menagerie.crawler.authority import (
     AuthorityContext,
     AuthorityDerivationError,
@@ -47,6 +42,11 @@ from menagerie.crawler.authority import (
 from menagerie.crawler.artifact_transactions import (
     ArtifactCheckpointProjection,
     ArtifactTransactionProjection,
+)
+from menagerie.crawler.checker_dispatch import (
+    AUTHOR_DISPATCHER_COMPONENT,
+    AUTHOR_RESULT_SCHEMA_COMPONENT,
+    component_identity,
 )
 from menagerie.crawler.constants import InvocationOrigin
 from menagerie.crawler.driver import DriverResult, DriverShutdown

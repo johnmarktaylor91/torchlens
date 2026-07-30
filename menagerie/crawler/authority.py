@@ -13,6 +13,12 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Mapping, NewType, Optional, Sequence
 
+from menagerie.crawler.checker_dispatch import (
+    AUTHOR_DISPATCHER_COMPONENT,
+    AUTHOR_RESULT_SCHEMA_COMPONENT,
+    CheckerDispatchError,
+    component_identity,
+)
 from menagerie.crawler.constants import (
     ATTEMPT_SCHEMA_VERSION_V3,
     ENVIRONMENT_AUTHORITY_VERSION_V1,
@@ -24,12 +30,6 @@ from menagerie.crawler.constants import (
     GATE_SCHEMA_VERSION_V3,
     NO_RUNG_SELECTED,
     SourceRung,
-)
-from menagerie.crawler.checker_dispatch import (
-    AUTHOR_DISPATCHER_COMPONENT,
-    AUTHOR_RESULT_SCHEMA_COMPONENT,
-    CheckerDispatchError,
-    component_identity,
 )
 from menagerie.crawler.identity import (
     compute_execution_identity,
