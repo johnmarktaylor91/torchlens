@@ -92,6 +92,10 @@ def test_verify_pool_prompts_covers_the_whole_shipped_prompt_surface() -> None:
         crawler_root / "prompts" / "pool",
     )
     fragments = {path.name for path in (crawler_root / "prompts" / "pool").glob("*.md")}
+    # The executor's own stage prompts drive every production author session; the pool
+    # fragments serve the operator-mediated lane it replaced. They were unpinned until
+    # 2026-07-29, so this expected set must follow the verifier rather than lag it.
+    fragments |= {path.name for path in (crawler_root / "prompts" / "executor").glob("*.md")}
     assert fragments
     assert set(surface) == fragments | {
         "claude_crawler_author_v2.txt",
