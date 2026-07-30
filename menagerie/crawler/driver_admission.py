@@ -1173,7 +1173,15 @@ def _checker_failure_evidence(request_path: Path, stdout: str, stderr: str) -> s
         if isinstance(detail, str) and detail.strip():
             classification = sidecar.get("classification")
             label = f" [{classification}]" if isinstance(classification, str) else ""
-            return f"{detail.strip()[-STDIO_TAIL_MAX_CHARS:]}{label}"
+            # HEAD-bounded, unlike the stream tail below. A wrapper detail is a
+            # DIAGNOSIS and its first clause is the diagnosis ("gate.v3
+            # validation failed at items[0] ... is a required property");
+            # keeping the last 1500 characters of a long schema error throws
+            # exactly that away and leaves a list of property names.
+            reason = detail.strip()
+            if len(reason) > STDIO_TAIL_MAX_CHARS:
+                reason = reason[:STDIO_TAIL_MAX_CHARS] + "...<truncated>"
+            return f"{reason}{label}"
     tail = f"{stderr}\n{stdout}".strip()[-STDIO_TAIL_MAX_CHARS:]
     return f"the checker wrapper published no structured reason; raw stream tail: {tail}"
 
