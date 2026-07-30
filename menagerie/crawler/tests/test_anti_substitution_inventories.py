@@ -98,7 +98,12 @@ _SENSITIVE_EDGE_COUNTS = Counter(
         ("CrawlerDriver._authorize_and_publish_artifact", "publish_authorized_artifact"): 1,
         ("CrawlerDriver._authorize_terminal_artifact", "publish_authorized_artifact"): 1,
         ("ReceiptDriverMixin._forward_and_reduce", "append_model"): 1,
-        ("CrawlerDriver._terminalize", "append_model"): 1,
+        # Reviewed rename, not a new edge. The canonical terminal append moved from
+        # `_terminalize` into `_append_terminal_revision` when `_terminalize` became the
+        # guard that survives a failure in the bookkeeping recording a failure. There is
+        # still exactly ONE terminal append owner, and `_terminalize` itself performs no
+        # append -- it only routes to this one.
+        ("CrawlerDriver._append_terminal_revision", "append_model"): 1,
     }
 )
 _SENSITIVE_SUFFIXES = frozenset(suffix for _owner, suffix in _SENSITIVE_EDGE_COUNTS)
@@ -815,7 +820,7 @@ def test_admission_boundary_inventory_is_closed() -> None:
         "post-award-observation": "guard:post-award-commit",
     }
     forward = inspect.getsource(driver_module.CrawlerDriver._forward_and_reduce)
-    terminal = inspect.getsource(driver_module.CrawlerDriver._terminalize)
+    terminal = inspect.getsource(driver_module.CrawlerDriver._append_terminal_revision)
     assert forward.index('"post-attempt-pre-award"') < forward.index("_assemble_run_model(")
     assert forward.index('"pre-publication-admission"') < forward.index('"pre-award-commit"')
     assert forward.index('"pre-award-commit"') < forward.index("reducer.append_model(")

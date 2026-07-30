@@ -700,6 +700,7 @@ class OperationalEventKind(StrEnum):
     CAMPAIGN_COMPLETED = "campaign-completed"
     OPERATOR_CANCELLED = "operator-cancelled"
     WORKER_SHUTDOWN_INTERRUPTED = "worker-shutdown-interrupted"
+    TERMINAL_UNRECORDABLE = "terminal-unrecordable"
 
 
 class OperationalEventStatus(StrEnum):

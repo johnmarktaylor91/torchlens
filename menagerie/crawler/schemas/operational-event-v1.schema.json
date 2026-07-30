@@ -73,7 +73,8 @@
         "wakeup-failed",
         "campaign-completed",
         "operator-cancelled",
-        "worker-shutdown-interrupted"
+        "worker-shutdown-interrupted",
+        "terminal-unrecordable"
       ],
       "description": "Mandatory operational event kind."
     },
