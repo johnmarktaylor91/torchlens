@@ -43,12 +43,12 @@ from menagerie.crawler.artifact_transactions import (
     ArtifactCheckpointProjection,
     ArtifactTransactionProjection,
 )
-from menagerie.crawler.checker_dispatch import (
+from menagerie.crawler.checker_dispatch import component_identity
+from menagerie.crawler.constants import (
     AUTHOR_DISPATCHER_COMPONENT,
     AUTHOR_RESULT_SCHEMA_COMPONENT,
-    component_identity,
+    InvocationOrigin,
 )
-from menagerie.crawler.constants import InvocationOrigin
 from menagerie.crawler.driver import DriverResult, DriverShutdown
 from menagerie.crawler.identity import hash_bytes, payload_hash, stable_hash
 

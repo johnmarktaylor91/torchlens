@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence, Union
 
 from menagerie.crawler.constants import (
+    AUTHOR_DISPATCHER_COMPONENT,
+    AUTHOR_RESULT_SCHEMA_COMPONENT,
     CHECKER_PROMPT_NAME,
     GATE_SCHEMA_VERSION_V3,
     METADATA_BATCH_MAX,
@@ -46,8 +48,6 @@ PROMPT_PATH = Path(__file__).with_name("prompts") / f"{CHECKER_PROMPT_NAME}.txt"
 GATE_ID_PREFIX = "gate-"
 PLACEHOLDER_LEDGER_SEQ = 1
 PLACEHOLDER_PAYLOAD_SHA256 = "sha256:" + "0" * 64
-AUTHOR_RESULT_SCHEMA_COMPONENT = "schemas/author-result-v4.schema.json"
-AUTHOR_DISPATCHER_COMPONENT = "author_dispatch.py"
 DETERMINISTIC_GATE_SCAFFOLD_FIELDS = (
     "schema_version",
     "gate_id",

@@ -26,12 +26,10 @@ from menagerie.crawler.authority import (
     derive_parent_attestation,
     raw_award_receipt_sha256,
 )
-from menagerie.crawler.checker_dispatch import (
+from menagerie.crawler.checker_dispatch import component_identity
+from menagerie.crawler.constants import (
     AUTHOR_DISPATCHER_COMPONENT,
     AUTHOR_RESULT_SCHEMA_COMPONENT,
-    component_identity,
-)
-from menagerie.crawler.constants import (
     ATTEMPT_SCHEMA_VERSION_V3 as ATTEMPT_SCHEMA_VERSION,
     AUTHOR_PROPOSAL_SCHEMA_VERSION_V3 as AUTHOR_PROPOSAL_SCHEMA_VERSION,
     AUTHOR_PROMPT_NAME,

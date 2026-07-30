@@ -13,14 +13,10 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Mapping, NewType, Optional, Sequence
 
-from menagerie.crawler.checker_dispatch import (
-    AUTHOR_DISPATCHER_COMPONENT,
-    AUTHOR_RESULT_SCHEMA_COMPONENT,
-    CheckerDispatchError,
-    component_identity,
-)
 from menagerie.crawler.constants import (
     ATTEMPT_SCHEMA_VERSION_V3,
+    AUTHOR_DISPATCHER_COMPONENT,
+    AUTHOR_RESULT_SCHEMA_COMPONENT,
     ENVIRONMENT_AUTHORITY_VERSION_V1,
     ENVIRONMENT_CONTENT_MANIFEST_VERSION_V1,
     ENVIRONMENT_GENERATION_VERSION_V2,
@@ -1621,8 +1617,8 @@ def build_authority_context(
         family_bindings=family_bindings,
         author_prompt_identity=author_prompt,
         author_model_identity=author_identity,
-        author_schema_identity=content_identity("schemas/author-result-v4.schema.json"),
-        author_dispatcher_identity=content_identity("author_dispatch.py"),
+        author_schema_identity=content_identity(AUTHOR_RESULT_SCHEMA_COMPONENT),
+        author_dispatcher_identity=content_identity(AUTHOR_DISPATCHER_COMPONENT),
         checker_prompt_identity=checker_prompt,
         checker_model_identity=checker_identity,
         checker_schema_identity=content_identity("schemas/gate-v3.schema.json"),
@@ -1702,6 +1698,13 @@ def _require_derived_component_identity(value: object, field: str, relative: str
     from a templated placeholder, and accepting it means the derivation itself is never
     exercised on the load path.
 
+    The bytes are hashed here rather than through ``checker_dispatch.component_identity``
+    on purpose. ``authority`` is inside the sealed crawler worker import closure
+    (``driver_receipts._crawler_worker_runtime_paths``), so importing ``checker_dispatch``
+    from module scope widens that closure and executes its transitive imports inside the
+    sandboxed worker. The shared component paths live in ``constants`` -- already in the
+    closure -- so both derivations read one source of truth with no closure change.
+
     Parameters
     ----------
     value:
@@ -1727,8 +1730,8 @@ def _require_derived_component_identity(value: object, field: str, relative: str
 
     digest = _require_hash(value, field)
     try:
-        derived = component_identity(relative)
-    except CheckerDispatchError as exc:
+        derived = hash_bytes((Path(__file__).parent / relative).read_bytes())
+    except OSError as exc:
         raise AuthorityDerivationError(
             f"{field} cannot be replayed because its authority component is unavailable: "
             f"{relative}"

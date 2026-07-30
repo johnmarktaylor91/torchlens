@@ -54,6 +54,14 @@ LEGACY_UNTRUSTED_SCHEMA_VERSIONS = frozenset(
 AUTHOR_PROMPT_NAME = "claude_crawler_author_v2"
 CHECKER_PROMPT_NAME = "codex_accuracy_checker_v2"
 
+# Package-relative paths of the two shipped components whose content identities are
+# derived from ZERO arguments. They live here, not beside either consumer, because four
+# independent seams derive them -- the gate scaffold in ``checker_dispatch``, the
+# ``AuthorityContext``, the gate proof loader, and the reducer dependency vector -- and a
+# path spelled twice is a path that can drift.
+AUTHOR_RESULT_SCHEMA_COMPONENT = "schemas/author-result-v4.schema.json"
+AUTHOR_DISPATCHER_COMPONENT = "author_dispatch.py"
+
 METADATA_BATCH_MIN = 10
 METADATA_BATCH_MAX = 20
 METADATA_FINAL_TAIL_MIN = 1
