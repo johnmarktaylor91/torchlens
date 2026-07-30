@@ -874,3 +874,29 @@ def test_frozen_prompt_never_asks_for_machine_owned_identities() -> None:
     assert "MACHINE-OWNED -- OMIT these entirely" in prompt
     assert "copy each one VERBATIM from the same item in the envelope's `items` array" in prompt
     assert "Do NOT search the repository, the test suite, or any fixture" in prompt
+
+
+def test_frozen_prompt_names_every_required_gate_item_field() -> None:
+    """Every schema-required item field is named, so none is omitted by accident.
+
+    Telling the checker to omit machine-owned scaffold is only safe while the
+    prompt still accounts for everything the schema demands. ``fidelity`` and
+    ``rung_check`` are required on EVERY item, including ``metadata_batch`` items
+    that carry their not-applicable form, so wording that reads as "supply these
+    only for a fidelity envelope" would induce a schema rejection -- discarding a
+    complete verdict over a field the model was told to drop, which is the exact
+    failure this whole contract exists to prevent. Binding the prompt to the
+    schema means a future required field cannot be added without the prompt
+    naming it.
+    """
+
+    schema = json.loads(
+        (
+            Path(__file__).resolve().parents[1] / "schemas" / "gate-v3.schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    required = schema["$defs"]["item"]["required"]
+    prompt = _frozen_prompt_text()
+
+    missing = [field for field in required if field not in prompt]
+    assert not missing, f"frozen prompt never names required gate item fields: {missing}"

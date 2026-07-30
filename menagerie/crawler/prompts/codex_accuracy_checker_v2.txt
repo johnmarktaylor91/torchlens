@@ -145,12 +145,15 @@ Field ownership is fixed. Respect it exactly.
 - ENVELOPE-BOUND -- copy each one VERBATIM from the same item in the envelope's `items` array. Never derive,
   recompute, hash, guess, or look these up anywhere else: work_id, campaign_root_work_id, stable_id,
   family_representative_id, fidelity_identity, vet_identity, verified_hashes.
-- YOURS -- the judgments only you can make: integrity, verdict, field_checks, unsupported_claims,
-  required_repairs, and confidence; plus rung_check and the fidelity block for a `fidelity` envelope, and
-  terminal_disposition for a `terminal_disposition` envelope.
+- YOURS -- the judgments only you can make. EVERY item carries ALL of them: integrity, verdict,
+  field_checks, fidelity, rung_check, unsupported_claims, required_repairs, confidence, and
+  terminal_disposition. Never drop one because this envelope does not exercise it; give it its typed
+  inapplicable form instead. On a `metadata_batch` item that is fidelity `{"required": false,
+  "verdict": "not-applicable", ...}` with empty check arrays, and terminal_disposition `null`;
+  terminal_disposition is `null` on a `fidelity` item too.
 
 Emit exactly one independently identified result per envelope item, in the same order. A `metadata_batch`
 result carries each item's integrity result, verdict, exhaustive scoped field_checks, excerpt discrepancies,
 unsupported claims, required repairs, and confidence. A `fidelity` result carries the same per-model
-integrity and judgment fields plus rung_check and the fidelity block. A `terminal_disposition` result
-carries exactly one fully bound item. Do not place findings only in prose.
+integrity and judgment fields with the fidelity block decided rather than not-applicable. A
+`terminal_disposition` result carries exactly one fully bound item. Do not place findings only in prose.
