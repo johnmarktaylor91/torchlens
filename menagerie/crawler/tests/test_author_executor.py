@@ -705,7 +705,18 @@ def test_author_cannot_supply_discovery_envelope_bindings(rig) -> None:
     attempt = latest_attempt(root)
     assert attempt is not None
     assert attempt.record["outcome"]["failure_reason"] == "discovery-contract-invalid"
-    assert "'stable_id': 'different-model'" in attempt.record["outcome"]["detail"]["error"]
+    error = attempt.record["outcome"]["detail"]["error"]
+    # Pin the refusal MECHANISM, not the prose. The rejection must be the closed-schema
+    # additionalProperties refusal naming both smuggled bindings -- an error that merely
+    # mentions one of them could be some unrelated validation failure that happens to quote
+    # the field.
+    assert "Additional properties are not allowed" in error
+    assert "stable_id" in error and "work_id" in error
+    # The author's proposed VALUES must never be echoed back into the record. Quoting
+    # attacker-controlled text into a stored error is its own defect, and an assertion that
+    # DEMANDS the echo would entrench it -- which is what this assertion previously did.
+    assert "different-model" not in error
+    assert "different-work" not in error
 
 
 def test_pinned_recipe_flags_are_load_bearing_and_present(
