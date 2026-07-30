@@ -297,8 +297,7 @@ def _status_completeness_failures(records: Iterable[Mapping[str, Any]]) -> list[
         # check's contract, exactly as it is outside the mandatory-source-link one.
         # Binding it here would also make the failure fallback itself unrecordable,
         # turning one bad model into a second-order failure.
-        barriers = [] if kind == StatusKind.FAILED.value else access_barrier_probes(record)
-        if kind != StatusKind.FAILED.value and bool(barriers) != (
+        if kind != StatusKind.FAILED.value and bool(access_barrier_probes(record)) != (
             code == ACCESS_BLOCKED_STATUS_CODE
         ):
             failures.append(
