@@ -1551,8 +1551,16 @@ def _assemble_terminal_model(
     human_review: bool,
     root_cause_fingerprint: Optional[str],
     terminal_diagnostic_reference: Optional[Mapping[str, Any]] = None,
+    terminal_gate_obtained: bool = True,
 ) -> JsonObject:
-    """Assemble one schema-complete driver terminal revision from durable evidence."""
+    """Assemble one schema-complete driver terminal revision from durable evidence.
+
+    ``terminal_gate_obtained=False`` means the author published a complete typed
+    terminal verdict but the disposition gate that adjudicates it was never
+    obtained. The frozen source facts are still exactly true and are recorded; the
+    ADJUDICATION is not, so no arm may claim acceptance and no arm may award a
+    checked rung.
+    """
 
     proposed = artifact is not None and isinstance(artifact.author_result, ProposedAuthorResult)
     proposal = artifact.proposal if proposed and artifact is not None else {}
@@ -1652,12 +1660,65 @@ def _assemble_terminal_model(
         evidence_text = f"terminal recommendation: {terminal_predicate}"
         facts["source_resolution"].update(
             {
-                "decision": "terminal recommendation accepted by exact disposition gate",
+                "decision": (
+                    "terminal recommendation accepted by exact disposition gate"
+                    if terminal_gate_obtained
+                    else "author published a typed terminal verdict; its disposition gate "
+                    "was never obtained, so the verdict is unadjudicated"
+                ),
                 "primary_source_id": primary_source_id,
                 "rung_evidence": primary_source_id,
                 "sources": retained_sources,
             }
         )
+        if not terminal_gate_obtained:
+            # The author lane SUCCEEDED here -- it published this very verdict --
+            # so the placeholder's `author-lane-failed` blames the one stage that
+            # worked. What was not reached is the adjudication, and the ladder was
+            # genuinely never walked, so the sentinel rung stays.
+            facts["source_resolution"]["attempted_rungs"] = [
+                {
+                    "rung": NO_RUNG_SELECTED,
+                    "result": "not-reached",
+                    "reason_code": "terminal-disposition-gate-unavailable",
+                    "evidence_ids": list(terminal_evidence_ids),
+                }
+            ]
+            # The placeholder search report claims an empty bounded search that
+            # concluded the lane failed before source resolution -- directly
+            # contradicting the frozen manifest sitting in the same record. When
+            # the author published its typed stage-1 summary, that summary IS the
+            # bounded search, copied verbatim exactly as the promotion row copies
+            # it, and it replaces the invented one.
+            summary = (
+                terminal_result.research_summary
+                if isinstance(terminal_result, BlockedRecommendation)
+                else None
+            )
+            if isinstance(summary, Mapping):
+                facts["source_resolution"].update(
+                    {
+                        "searched_at": created_at,
+                        "search_report": {
+                            "queries": [str(value) for value in summary.get("queries", [])],
+                            "places_checked": [
+                                str(value) for value in summary.get("places", [])
+                            ],
+                            "links_checked": [
+                                str(candidate["url"])
+                                for candidate in summary.get("candidate_links", [])
+                                if isinstance(candidate, Mapping) and "url" in candidate
+                            ],
+                            "languages_checked": [
+                                str(value) for value in summary.get("languages", [])
+                            ],
+                            "archives_checked": [],
+                            "started_at": created_at,
+                            "finished_at": created_at,
+                            "conclusion": str(summary["conclusion"]),
+                        },
+                    }
+                )
         # A SKIP or a platform DEFER is a checked terminal disposition that walked the
         # ladder to its end, so it earns R5 and must say so explicitly. It used to inherit
         # R5_SKIP silently from the unresolved placeholder; now that the placeholder is
@@ -1665,7 +1726,9 @@ def _assemble_terminal_model(
         # actually concluded. A BLOCKED arm is deliberately excluded: it lands on
         # ``failed:*`` (or an Opus-tier promotion deferral) with no source verdict reached,
         # which is precisely the case the sentinel exists for.
-        if isinstance(terminal_result, (SkipRecommendation, DeferRecommendation)):
+        if terminal_gate_obtained and isinstance(
+            terminal_result, (SkipRecommendation, DeferRecommendation)
+        ):
             facts["source_resolution"]["rung"] = SourceRung.SKIP.value
         discovery_excerpt_text = evidence_text
         if discovery_evidence is not None:
@@ -1691,12 +1754,18 @@ def _assemble_terminal_model(
             }
             facts["source_resolution"].update(
                 {
-                    "rung": "R5_SKIP",
                     "searched_at": created_at,
                     "search_report": search_report,
                     "mandatory_link_status": "failed",
                 }
             )
+            if terminal_gate_obtained:
+                # The bounded search itself is machine evidence and is recorded
+                # either way. `R5_SKIP` is not: it is the CHECKED conclusion that
+                # no faithful source path exists, and awarding it from an
+                # unadjudicated verdict would manufacture the exact certified
+                # claim the sentinel exists to withhold.
+                facts["source_resolution"]["rung"] = "R5_SKIP"
             discovery_excerpt_text = str(search_evidence["conclusion"])
         if discovery_evidence is not None and isinstance(terminal_result, SkipRecommendation):
             retained_vague_text = discovery_evidence.get("retained_vague_text")
@@ -1707,25 +1776,32 @@ def _assemble_terminal_model(
                 )
             if insufficient:
                 discovery_excerpt_text = str(retained_vague_text)
-            facts["source_resolution"].update(
-                {
-                    "decision": "bounded typed discovery recommends an independently checked skip",
-                    "sufficiency_gap": (
-                        "retained description lacks implementation detail needed for faithful "
-                        "reimplementation"
-                        if insufficient
-                        else None
-                    ),
-                    "attempted_rungs": [
-                        {
-                            "rung": "R5_SKIP",
-                            "result": "bounded-negative-discovery",
-                            "reason_code": terminal_predicate,
-                            "evidence_ids": list(terminal_evidence_ids),
-                        }
-                    ],
-                }
-            )
+            if terminal_gate_obtained:
+                # Both keys below assert an INDEPENDENTLY CHECKED skip. Neither is
+                # true when the gate that would perform that check was never
+                # obtained, so the unadjudicated arm keeps the honest
+                # `terminal-disposition-gate-unavailable` rung set above.
+                facts["source_resolution"].update(
+                    {
+                        "decision": (
+                            "bounded typed discovery recommends an independently checked skip"
+                        ),
+                        "sufficiency_gap": (
+                            "retained description lacks implementation detail needed for "
+                            "faithful reimplementation"
+                            if insufficient
+                            else None
+                        ),
+                        "attempted_rungs": [
+                            {
+                                "rung": "R5_SKIP",
+                                "result": "bounded-negative-discovery",
+                                "reason_code": terminal_predicate,
+                                "evidence_ids": list(terminal_evidence_ids),
+                            }
+                        ],
+                    }
+                )
         facts["evidence"].update(
             {
                 "evidence_identity": terminal_result.evidence_identity,

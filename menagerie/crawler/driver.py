@@ -1814,6 +1814,7 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         human_review: bool = False,
         root_cause_fingerprint: Optional[str] = None,
         superseded_model: Optional[Mapping[str, Any]] = None,
+        terminal_gate_obtained: bool = True,
     ) -> None:
         """Append one driver-owned non-run terminal revision through the reducer.
 
@@ -1829,6 +1830,15 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             Optional checker-derived failure identity.
         superseded_model:
             Exact current predecessor captured before a decisive attempt made it stale.
+        terminal_gate_obtained:
+            Whether the terminal-disposition gate that adjudicates ``artifact`` was
+            actually obtained. A retained artifact carries two independent things: the
+            EXACT source facts the broker already froze, and the AUTHORITY to finalize
+            and publish. Only the second requires an accepted gate. Passing ``False``
+            keeps the frozen source facts in the record -- they are machine-derived and
+            true whatever the gate did -- while withholding finalization entirely, so
+            the record can be honest about what was fetched without ever claiming an
+            adjudication that never happened.
         """
 
         terminal_attempts = tuple(attempts)
@@ -1858,6 +1868,7 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             human_review=human_review,
             root_cause_fingerprint=root_cause_fingerprint,
             terminal_diagnostic_reference=terminal_diagnostic_reference,
+            terminal_gate_obtained=terminal_gate_obtained,
         )
         if item.is_family_variant:
             representative_model = reducer.current_records.get(item.family_representative_id)
@@ -1943,7 +1954,16 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         self.dependencies.boundary_hook("award-commit-entered", item.stable_id)
         # Terminal materialization and its model append share the same graceful-
         # shutdown atomic section as a successful run award.
-        if artifact is not None and not retain_prior_artifact_authority:
+        if (
+            artifact is not None
+            and not retain_prior_artifact_authority
+            and terminal_gate_obtained
+        ):
+            # Finalization is gate-derived authority. Without the accepted
+            # disposition gate there is nothing to authorize, so the artifact
+            # stays evidence-only and `_authorize_terminal_artifact`'s
+            # "requires its exact gate" tripwire is respected rather than
+            # reached and worked around.
             self._authorize_terminal_artifact(artifact, model, gates, reducer)
         result = reducer.append_model(reducer.prepare_model(model))
         if result.appended:
