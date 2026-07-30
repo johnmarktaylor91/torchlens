@@ -2636,7 +2636,7 @@ def make_author_proposal(stable_id: str = "m_example") -> dict[str, Any]:
         "modes",
         "fidelity",
     )
-    proposal = {
+    proposal: dict[str, Any] = {
         "schema_version": AUTHOR_PROPOSAL_SCHEMA_VERSION,
         "proposal_id": "proposal-1",
         "proposal_sha256": HASH,
@@ -2685,6 +2685,14 @@ def make_author_proposal(stable_id: str = "m_example") -> dict[str, Any]:
             "vet_identity": identities.vet,
         }
     )
+    # Derive, never placeholder-fill: a compliant author's verified_hashes.evidence
+    # IS its evidence identity (the machine's own terminal producer sets exactly
+    # that -- ``driver_models._terminal_checker_item``), and its
+    # verified_hashes.source_manifest IS the source manifest identity it was handed.
+    # Leaving these as the all-``a`` HASH made this fixture contradict itself and
+    # let the acceptance tests certify a proposal no real author could emit.
+    proposal["verified_hashes"]["evidence"] = identities.evidence
+    proposal["verified_hashes"]["source_manifest"] = proposal["source_manifest_identity"]
     proposal["proposal_sha256"] = stable_hash(
         {key: value for key, value in proposal.items() if key != "proposal_sha256"}
     )

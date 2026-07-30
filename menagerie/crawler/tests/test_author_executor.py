@@ -68,9 +68,10 @@ from menagerie.crawler.discovery import (
 from menagerie.crawler.driver_admission import (
     CommandAuthorLane,
     DriverIntegrationError,
+    _validate_artifact_identities,
     _verify_executor_receipt,
 )
-from menagerie.crawler.driver_contracts import AuthorArtifact, WorkItem
+from menagerie.crawler.driver_contracts import AuthorArtifact, DriverConfig, WorkItem
 from menagerie.crawler.driver_models import _terminal_checker_item
 from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.metadata import recompute_accepted_identities
@@ -90,7 +91,12 @@ from menagerie.crawler.tests.executor_test_support import (
     write_fake_claude,
     write_source_request,
 )
-from menagerie.crawler.tests.conftest import make_author_proposal, make_authority_context
+from menagerie.crawler.tests.conftest import (
+    HASH,
+    make_author_proposal,
+    make_authority_context,
+    make_proposed_artifact,
+)
 
 
 @pytest.fixture()
@@ -1690,3 +1696,89 @@ def test_supersession_quarantines_stale_results_before_new_attempt(
     assert len(quarantined) == 1
     payload = json.loads(Path(quarantined[0]["quarantined_to"]).read_text("utf-8"))
     assert payload["from"] == "old-attempt"
+
+
+def _admissible_work_item(proposal: dict[str, Any]) -> WorkItem:
+    """Return the trusted intake row the shared proposal fixture was built against.
+
+    ``trusted_identity_fields`` designates a standalone row by its intake NAME,
+    so the roster name is the fixture's ``identity.variant``. Getting this wrong
+    short-circuits admission at the trusted-intake check, which silently stops
+    any later assertion from being the one that decides.
+    """
+
+    identity = proposal["proposed_facts"]["identity"]
+    return WorkItem(
+        intake=IntakeItem(
+            stable_id=proposal["stable_id"],
+            name=identity["variant"],
+            zoo="crawler",
+            variant=identity["variant"],
+            discovery_source="crawl_roster",
+            legacy_row_sha256="0" * 64,
+            preserved_legacy_flags=(),
+            variant_scope=identity["variant_scope"],
+            family_representative_id=identity["family_representative_id"],
+        ),
+        route=IntentRoute(
+            stable_id=proposal["stable_id"], intent="core", phase=EnvironmentPhase.PYTORCH
+        ),
+    )
+
+
+def _admit(proposal: dict[str, Any], tmp_path: Path) -> None:
+    """Run the shared proposal fixture through artifact-identity admission."""
+
+    artifact = make_proposed_artifact(
+        proposal, {"manifest_sha256": proposal["source_manifest_identity"]}, tmp_path
+    )
+    _validate_artifact_identities(
+        artifact,
+        DriverConfig(checker_model="codex", checker_version="current"),
+        item=_admissible_work_item(proposal),
+    )
+
+
+def test_admission_accepts_the_honest_shared_proposal_fixture(tmp_path: Path) -> None:
+    """The shared fixture must be admissible, or the refusals below prove nothing."""
+
+    _admit(make_author_proposal(), tmp_path)
+
+
+def test_admission_binds_the_verified_source_manifest_hash(tmp_path: Path) -> None:
+    """A verified hash the machine already holds may not be the author's word.
+
+    ``artifact_transactions`` already refuses a ``verified_hashes.source_manifest``
+    that disagrees with staging, but only at publication-authorization time --
+    long after a checker has gated the proposal on it. Admission is the first
+    point the machine can make the same refusal.
+    """
+
+    proposal = make_author_proposal()
+    proposal["verified_hashes"]["source_manifest"] = "sha256:" + "9" * 64
+
+    with pytest.raises(DriverIntegrationError, match="verified_hashes.source_manifest"):
+        _admit(proposal, tmp_path)
+
+
+def test_admission_refuses_a_fixture_placeholder_left_in_a_real_binding(
+    tmp_path: Path,
+) -> None:
+    """The all-``a`` placeholder is only detectable once the binding is real.
+
+    ``make_author_proposal`` ships the placeholder in BOTH
+    ``source_manifest_identity`` and ``verified_hashes.source_manifest``, so the
+    two agree trivially and no guard can see it. Give the proposal the real
+    identity a dispatched author would have been handed and the stale
+    fixture-templated digest beside it becomes visible -- which is exactly the
+    shape a model templating its answer from repository test data emits.
+    """
+
+    proposal = make_author_proposal()
+    proposal["source_manifest_identity"] = "sha256:" + "7" * 64
+    assert proposal["verified_hashes"]["source_manifest"] == HASH, (
+        "the fixture must still carry its placeholder for this to be the real case"
+    )
+
+    with pytest.raises(DriverIntegrationError, match="verified_hashes.source_manifest"):
+        _admit(proposal, tmp_path)

@@ -5942,6 +5942,30 @@ def _validate_artifact_identities(
         or evidence.get("evidence_identity") != identities.evidence
     ):
         raise DriverIntegrationError("embedded recipe/evidence identities are stale")
+    # ``verified_hashes.source_manifest`` must equal the proposal's own
+    # ``source_manifest_identity``: the machine hands the author that identity as
+    # a request binding (``_PROPOSAL_BINDING_KEYS``), the terminal lane derives
+    # the pair equal (``driver_models._terminal_checker_item``), and
+    # ``artifact_transactions`` already refuses a mismatch -- but only at
+    # publication-authorization time, long after the checker has gated the
+    # proposal on it. Checking it here is the same refusal, moved to the first
+    # point the machine can make it, so a disagreeing proposal never reaches a
+    # checker as though it were bound.
+    #
+    # NOTE: ``verified_hashes.evidence`` and ``.source_to_code_map`` are NOT
+    # checked here, and deliberately. Both are author's-word-only today: no
+    # production code produces a proposal's ``verified_hashes``, and the author
+    # prompt never states the rule, so enforcing an equality the authoring
+    # contract does not specify would refuse honestly authored work. Binding them
+    # needs a spec decision (stamp them machine-side, or state the derivation in
+    # the prompt), not a silent guard.
+    verified_hashes = proposal.get("verified_hashes")
+    if not isinstance(verified_hashes, Mapping):
+        raise DriverIntegrationError("author proposal has no verified_hashes object")
+    if verified_hashes.get("source_manifest") != proposal.get("source_manifest_identity"):
+        raise DriverIntegrationError(
+            "verified_hashes.source_manifest does not bind the proposal source manifest identity"
+        )
     expected_proposal_hash = stable_hash(
         {key: value for key, value in proposal.items() if key != "proposal_sha256"}
     )
