@@ -240,6 +240,18 @@ ignore_missing_imports = true
 check_untyped_defs = true
 disallow_untyped_defs = false
 
+# numpy's bundled stubs use 3.12+ `type` statements, which are a syntax error under the
+# `python_version = "3.11"` target above. mypy reports that as
+# "errors prevented further checking" and exits BEFORE reading any project code -- so the
+# type gate silently passed on everything while checking nothing. Skipping the stubs
+# restores real checking and leaves the 3.11 target intact (verified: identical findings
+# with and without, once mypy actually runs). Do not "fix" this by raising
+# `python_version`; that would quietly change which Python the project is checked against.
+[[tool.mypy.overrides]]
+module = "numpy.*"
+follow_imports = "skip"
+follow_imports_for_stubs = true
+
 [tool.ruff]
 line-length = 100
 
