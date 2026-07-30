@@ -76,7 +76,14 @@ class CampaignBinding:
 CAMPAIGN_SPECS: tuple[CampaignSpec, ...] = (
     CampaignSpec(
         campaign_id="c1-mech",
-        workload_class="library-zoo-mechanical",
+        # NOT "library-zoo-mechanical". `_initial_campaign` assigns c1 by exclusion --
+        # every roster row whose zoo is none of four reserved literals -- so the partition
+        # carries 716 distinct zoo strings against c2's 1 and c4's 3, and roughly one row
+        # in six is not an R1 library row at all. The old label asserted a purity the
+        # partition does not have, which is how a sixth of a tier hid inside "normal
+        # operation". "library-first" is the true claim: R1 is the rung to evaluate first
+        # and the most common answer, not a property every member satisfies.
+        workload_class="library-first-residual",
         phase="pytorch",
         author_model="claude-sonnet",
         checker_model="gpt-5.6-terra",

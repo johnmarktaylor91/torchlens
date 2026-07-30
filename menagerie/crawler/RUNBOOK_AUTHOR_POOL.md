@@ -10,10 +10,17 @@ campaigns never share a queue.
 
 | campaign | rows | workload | author tier | Agent-tool model |
 |---|---:|---|---|---|
-| `c1-mech` | ~7,150 | library-zoo mechanical | `claude-sonnet` | `sonnet` |
-| `c2-disco` | ~14,798 | discovered PyTorch tail | `claude-sonnet` | `sonnet` |
-| `c3-classics` | ~5,487 | unregistered classics | `claude-opus-5` | `opus` |
-| `c4-native` | ~1,047 | native TF / Keras / JAX | `claude-sonnet` | `sonnet` |
+| `c1-mech` | 6,968 | library-first residual | `claude-sonnet` | `sonnet` |
+| `c2-disco` | 14,798 | discovered PyTorch tail | `claude-sonnet` | `sonnet` |
+| `c3-classics` | 5,669 | unregistered classics | `claude-opus-5` | `opus` |
+| `c4-native` | 1,047 | native TF / Keras / JAX | `claude-sonnet` | `sonnet` |
+
+Row counts are the manifest's, i.e. after family co-location moves companions into
+`c3-classics`; the pre-co-location split is 7,150 / 5,487. `c1-mech` is drawn by
+*exclusion* -- every roster row whose `zoo` is none of four reserved literals -- so it is
+the residual tier, not a curated set of library zoos. R1 is its most common rung, not a
+membership property: about one row in six is not an R1 library row, and the great majority
+of those are ordinary in-tier R2 vendor work rather than promotion candidates.
 
 The tier is a **campaign** property, not a per-model decision. A campaign's
 `author_model_identity` is frozen for its entire run, so a model a sonnet campaign finds
