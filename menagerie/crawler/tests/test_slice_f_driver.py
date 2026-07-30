@@ -6568,6 +6568,31 @@ _BLOCKED_SOURCE_PAYLOAD: dict[str, Any] = {
     "license_identity": "sha256:" + "4" * 64,
 }
 
+#: The exact stage-2 escalation the live executor lane publishes: a ``BLOCKED``
+#: verdict whose reason is ``needs-higher-tier``, reached AFTER stage 1 answered
+#: ``FOUND`` and the broker froze a populated manifest. Shared by the promotion
+#: test and the refused-gate test so both provably drive the identical author
+#: shape and differ in exactly one variable -- whether the disposition gate is
+#: obtained. Keeping them on separate inline copies is how the pair drifted into
+#: covering one half of production each.
+_BLOCKED_NEEDS_HIGHER_TIER_PAYLOAD: dict[str, Any] = {
+    **_BLOCKED_SOURCE_PAYLOAD,
+    "stage": "author",
+    "reason_code": "needs-higher-tier",
+    "research_summary": {
+        "queries": ["ExampleNet architecture implementation"],
+        "places": ["upstream repositories", "introducing paper"],
+        "candidate_links": [
+            {
+                "url": "https://example.com/model.py",
+                "why_rejected": "Faithful authoring needs the Opus tier.",
+            }
+        ],
+        "languages": ["English"],
+        "conclusion": "The source is real; faithful authoring needs the Opus tier.",
+    },
+}
+
 
 def test_found_manifest_publishes_the_identity_the_binder_requires(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -6646,26 +6671,7 @@ def test_blocked_needs_higher_tier_promotes_through_the_executor_lane(
     """
 
     snapshot = _snapshot(tmp_path, count=1)
-    _install_executor_lane(
-        monkeypatch,
-        {
-            **_BLOCKED_SOURCE_PAYLOAD,
-            "stage": "author",
-            "reason_code": "needs-higher-tier",
-            "research_summary": {
-                "queries": ["ExampleNet architecture implementation"],
-                "places": ["upstream repositories", "introducing paper"],
-                "candidate_links": [
-                    {
-                        "url": "https://example.com/model.py",
-                        "why_rejected": "Faithful authoring needs the Opus tier.",
-                    }
-                ],
-                "languages": ["English"],
-                "conclusion": "The source is real; faithful authoring needs the Opus tier.",
-            },
-        },
-    )
+    _install_executor_lane(monkeypatch, _BLOCKED_NEEDS_HIGHER_TIER_PAYLOAD)
     result = _driver(
         tmp_path,
         snapshot,
@@ -6684,6 +6690,10 @@ def test_blocked_needs_higher_tier_promotes_through_the_executor_lane(
     assert len(promotions) == 1
     assert promotions[0]["stable_id"] == snapshot.items[0].stable_id
     assert promotions[0]["destination_campaign_id"] == "c3-classics"
+    # This lane promotes only because its disposition gate was obtained and
+    # accepted. The sibling test drives the identical author payload with a
+    # refusing checker, which is the production shape this one cannot reach.
+    assert model["source_resolution"]["sources"], "an accepted escalation retains its sources"
 
 
 def test_blocked_verdict_bytes_survive_into_the_terminal_record(
@@ -6951,6 +6961,103 @@ def test_terminal_gate_failure_is_model_local_and_the_campaign_continues(
     for model in models:
         assert model["status"]["code"] == "failed:runner"
         assert model["status"]["reason_code"] == "protocol-violation"
+        # A verdict nobody adjudicated may never carry the CHECKED `R5_SKIP`
+        # conclusion, however complete the bounded negative discovery looks.
+        assert model["source_resolution"]["rung"] == "NO_RUNG_SELECTED"
+
+
+class TerminalContractRefusingChecker(FakeChecker):
+    """Refuse the terminal-disposition gate the way the live checker refused it.
+
+    Rung 1e produced four terminal records and all four were identical. In every
+    case the author had published a complete typed verdict against a populated
+    broker manifest, and the terminal checker then returned a gate that failed
+    ``gate.v3`` validation -- an unexpected ``excerpt_discrepancies`` property, a
+    missing ``campaign_root_work_id`` -- which the operator lane classifies as a
+    permanent contract rejection. This reproduces that exact refusal.
+    """
+
+    def check_terminal(
+        self, artifact: AuthorArtifact, work_root: Path, config: DriverConfig
+    ) -> CheckerOutcome:
+        """Raise the contract rejection the live gate.v3 validation produced."""
+
+        del artifact, work_root, config
+        raise GateRoutingError(
+            "menagerie.crawler.gate.v3 validation failed at items.0: Additional "
+            "properties are not allowed ('excerpt_discrepancies' was unexpected)"
+        )
+
+
+def test_refused_terminal_gate_records_the_sources_the_broker_actually_froze(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A refused disposition gate must not make the terminal record lie.
+
+    This is the live rung-1e shape, which no fixture reproduced: stage 1 answers
+    ``FOUND``, the broker freezes a populated manifest, the author publishes
+    ``BLOCKED(needs-higher-tier)``, and only then does the terminal checker refuse
+    its contract. The promotion test drives this same author payload against an
+    accepting checker; the model-local terminal test drives a refusing checker
+    against a ``NO_USABLE_SOURCE`` discovery that genuinely has no sources. Each
+    covered one half, so production -- the intersection -- was untested, and every
+    completed model in the rung recorded ``sources: []`` with "source resolution
+    did not complete" over a manifest holding real fetched bytes.
+
+    The gate is NOT weakened here: the verdict stays unadjudicated, no promotion
+    row is written, and no checked rung is awarded. Only the invented facts go.
+
+    Parameters
+    ----------
+    tmp_path, monkeypatch:
+        Active fixtures.
+    """
+
+    snapshot = _snapshot(tmp_path, count=1)
+    _install_executor_lane(monkeypatch, _BLOCKED_NEEDS_HIGHER_TIER_PAYLOAD)
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=CommandAuthorLane(("fake-author",)),
+        checker=TerminalContractRefusingChecker(),
+        campaign_id="c1-mech",
+    ).run()
+
+    paths = _paths(tmp_path, snapshot)
+    stable_id = snapshot.items[0].stable_id
+    published = json.loads(
+        (paths.work_root / stable_id / "author" / "result.json").read_text(encoding="utf-8")
+    )
+    frozen = json.loads(
+        (paths.work_root / stable_id / "author" / "request.json").read_text(encoding="utf-8")
+    )["source_manifest"]["sources"]
+    assert published["payload"]["reason_code"] == "needs-higher-tier"
+    assert frozen, "the fixture must freeze a populated manifest or it cannot reproduce the bug"
+
+    model = scan_jsonl(paths.ledgers.models)[0]
+    resolution = model["source_resolution"]
+    # The four falsehoods, each asserted against the durable artifact that
+    # contradicts it.
+    assert [source["source_id"] for source in resolution["sources"]] == [
+        source["source_id"] for source in frozen
+    ]
+    assert resolution["mandatory_link_status"] == "ok"
+    assert resolution["decision"] != "source resolution did not complete"
+    assert resolution["primary_source_id"] != "missing-mandatory-link"
+    assert resolution["attempted_rungs"][0]["reason_code"] != "author-lane-failed"
+    assert resolution["search_report"]["queries"] == (
+        _BLOCKED_NEEDS_HIGHER_TIER_PAYLOAD["research_summary"]["queries"]
+    )
+    # ...and the adjudication that never happened is still withheld.
+    assert model["status"]["code"] == "failed:runner"
+    assert resolution["rung"] == "NO_RUNG_SELECTED"
+    assert not (
+        paths.ledgers.models.parent.parent / "intake-extensions" / "c3-classics.jsonl"
+    ).exists()
+    # The project's own completeness checker is the independent instrument here:
+    # it reported `mandatory_source_present` against this record for a model whose
+    # manifest was full, which is what made the whole partition read as incomplete.
+    assert result.status == "complete"
 
 
 class FidelityGateRoutingErrorChecker(ScriptedChecker):

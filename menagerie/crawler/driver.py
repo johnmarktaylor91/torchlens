@@ -1958,6 +1958,7 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         human_review: bool = False,
         root_cause_fingerprint: Optional[str] = None,
         superseded_model: Optional[Mapping[str, Any]] = None,
+        terminal_gate_obtained: bool = True,
     ) -> None:
         """Record one terminal, surviving a failure in the bookkeeping that records it.
 
@@ -2012,6 +2013,7 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
                 human_review=human_review,
                 root_cause_fingerprint=root_cause_fingerprint,
                 superseded_model=superseded_model,
+                terminal_gate_obtained=terminal_gate_obtained,
             )
             return
         except _TerminalArtifactEscape as escape:
@@ -2046,6 +2048,12 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
                 human_review=True,
                 root_cause_fingerprint=None,
                 superseded_model=None,
+                # The minimal rung drops the artifact, so no finalization can be
+                # attempted and no frozen source facts are read. Threaded anyway so
+                # the two rungs can never disagree about what authority was held --
+                # a silently-defaulted `True` here is exactly the shape that made
+                # the merged tree raise `NameError` on every terminal append.
+                terminal_gate_obtained=terminal_gate_obtained,
             )
             return
         except _TerminalArtifactEscape as escape:
@@ -2080,6 +2088,7 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         human_review: bool = False,
         root_cause_fingerprint: Optional[str] = None,
         superseded_model: Optional[Mapping[str, Any]] = None,
+        terminal_gate_obtained: bool = True,
     ) -> None:
         """Append one driver-owned non-run terminal revision through the reducer.
 
@@ -2095,6 +2104,15 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             Optional checker-derived failure identity.
         superseded_model:
             Exact current predecessor captured before a decisive attempt made it stale.
+        terminal_gate_obtained:
+            Whether the terminal-disposition gate that adjudicates ``artifact`` was
+            actually obtained. A retained artifact carries two independent things: the
+            EXACT source facts the broker already froze, and the AUTHORITY to finalize
+            and publish. Only the second requires an accepted gate. Passing ``False``
+            keeps the frozen source facts in the record -- they are machine-derived and
+            true whatever the gate did -- while withholding finalization entirely, so
+            the record can be honest about what was fetched without ever claiming an
+            adjudication that never happened.
         """
 
         terminal_attempts = tuple(attempts)
@@ -2124,6 +2142,7 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             human_review=human_review,
             root_cause_fingerprint=root_cause_fingerprint,
             terminal_diagnostic_reference=terminal_diagnostic_reference,
+            terminal_gate_obtained=terminal_gate_obtained,
         )
         if item.is_family_variant:
             representative_model = reducer.current_records.get(item.family_representative_id)
@@ -2209,15 +2228,28 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         self.dependencies.boundary_hook("award-commit-entered", item.stable_id)
         # Terminal materialization and its model append share the same graceful-
         # shutdown atomic section as a successful run award.
-        if artifact is not None and not retain_prior_artifact_authority:
-            # Artifact materialization is NOT record bookkeeping, so it must escape the
-            # `_terminalize` ladder rather than be absorbed by it. Probed: a terminal
-            # publication failure already has a correct model-local handler one level up,
-            # which re-terminalizes with NO artifact and `failed:runner` and lands a
-            # record. The ladder hijacked it and produced no record at all, because
-            # keeping the original `skipped:`/`deferred:` status while dropping the
-            # artifact makes a record the reducer rightly refuses. Carry it out
+        if (
+            artifact is not None
+            and not retain_prior_artifact_authority
+            and terminal_gate_obtained
+        ):
+            # Finalization is gate-derived authority. Without the accepted
+            # disposition gate there is nothing to authorize, so the artifact
+            # stays evidence-only and `_authorize_terminal_artifact`'s
+            # "requires its exact gate" tripwire is respected rather than
+            # reached and worked around.
+            #
+            # Materialization is also NOT record bookkeeping, so a failure HERE must
+            # escape the `_terminalize` ladder rather than be absorbed by it. Probed: a
+            # terminal publication failure already has a correct model-local handler one
+            # level up, which re-terminalizes with NO artifact and `failed:runner` and
+            # lands a record. The ladder hijacked it and produced no record at all,
+            # because keeping the original `skipped:`/`deferred:` status while dropping
+            # the artifact makes a record the reducer rightly refuses. Carry it out
             # untouched; `_terminalize` re-raises the original exception.
+            #
+            # The two guards compose: the gate condition decides WHETHER to finalize,
+            # this escape decides who owns a finalization that fails.
             try:
                 self._authorize_terminal_artifact(artifact, model, gates, reducer)
             except (DriverPaused, RetryableOperatorError, AuthorBackoffError):

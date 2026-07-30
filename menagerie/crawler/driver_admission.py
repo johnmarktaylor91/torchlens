@@ -3365,11 +3365,25 @@ class AdmissionEnvironmentMixin:
                 except (DriverPaused, RetryableOperatorError, AuthorBackoffError):
                     raise
                 except Exception as exc:  # noqa: BLE001 -- terminal gating is model-local
+                    # The STAGE stays `runner`, and that is not a compromise: a lane
+                    # that never obtained a gate cannot assert a gate verdict, and
+                    # `failed:accuracy-gate` is refused outright by terminal-proof
+                    # derivation ("lacks exact rejected gate evidence"). The reason
+                    # still has to separate two different truths that were collapsing
+                    # onto one label: a refused checker CONTRACT is recoverable by
+                    # fixing the checker and re-running exactly these models, while a
+                    # transport/internal fault is a different fact. The fidelity lane
+                    # already splits on exactly this; this arm now matches it.
+                    reason = (
+                        "internal-error"
+                        if self._is_infrastructure_error(exc)
+                        else "protocol-violation"
+                    )
                     attempt = _driver_failure_attempt(
                         item,
                         artifact,
                         "runner",
-                        "protocol-violation",
+                        reason,
                         exc,
                         self.config,
                         diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
@@ -3377,19 +3391,23 @@ class AdmissionEnvironmentMixin:
                         created_at=self.dependencies.clock(),
                     )
                     persisted = reducer.append_attempt(attempt).record
-                    # No artifact is handed to finalization: a terminal arm that
-                    # never obtained its gate has nothing to publish, and the
-                    # sibling stage-failure handler above takes the same shape.
+                    # The artifact travels as EVIDENCE, never as authority: the
+                    # broker already froze and hashed these sources, so recording
+                    # `sources: []` and "source resolution did not complete" for a
+                    # model whose manifest is full is a falsehood in a durable
+                    # record. `terminal_gate_obtained=False` keeps those exact
+                    # facts while withholding finalization and every checked rung.
                     self._terminalize(
                         item,
-                        None,
+                        artifact,
                         "failed:runner",
-                        "protocol-violation",
+                        reason,
                         str(exc),
                         (persisted,),
                         reducer,
                         operational,
                         state,
+                        terminal_gate_obtained=False,
                     )
                     continue
                 if pause is not None:
