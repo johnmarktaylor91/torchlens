@@ -89,6 +89,11 @@ NON_AUTHOR_FAULT_OUTCOMES = frozenset(
     }
 )
 
+#: Closed registry-identity vocabulary the machine derives from a bare locator.
+REGISTRY_ARXIV = "arxiv"
+REGISTRY_DOI = "doi"
+REGISTRY_OPENREVIEW = "openreview"
+
 #: Closed bound-role vocabulary. ``introducing-paper`` is broker-assigned only.
 ROLE_IMPLEMENTATION = "implementation"
 ROLE_INTRODUCING_PAPER = "introducing-paper"
@@ -1591,6 +1596,41 @@ def _broker_paper(
     )
 
 
+def registry_identity(reference: str) -> tuple[Optional[str], Optional[str]]:
+    """Return the registry identity a bare locator resolves to, if any.
+
+    This is the identity half of the discovery record's ownership split. The author
+    supplies the locator it observed and its reading of why it stopped there; the
+    machine supplies what that locator resolves to. An earlier defect asked authors
+    for identities they could not obtain -- a commit SHA read off a page that does not
+    show one -- and got invented values. Deriving the identifier here means a paywalled
+    page still yields an exact, citable ``10.…`` or ``arXiv:…`` handle without ever
+    asking the author to read one off a paywall.
+
+    Parameters
+    ----------
+    reference:
+        URL or bare identifier observed by a research session.
+
+    Returns
+    -------
+    tuple[str | None, str | None]
+        Closed registry kind and its exact identifier, or ``(None, None)`` when the
+        locator carries no supported identity.
+    """
+
+    arxiv = _ARXIV_ID_PATTERN.search(reference)
+    if arxiv is not None:
+        return REGISTRY_ARXIV, arxiv.group(1)
+    openreview = _OPENREVIEW_PATTERN.search(reference)
+    if openreview is not None:
+        return REGISTRY_OPENREVIEW, openreview.group(1)
+    doi = _DOI_PATTERN.search(reference + " ")
+    if doi is not None:
+        return REGISTRY_DOI, doi.group(1)
+    return None, None
+
+
 def derive_paper_metadata(
     reference: str,
     *,
@@ -1616,21 +1656,15 @@ def derive_paper_metadata(
         receipt including the raw registry response digest.
     """
 
-    arxiv = _ARXIV_ID_PATTERN.search(reference)
-    if arxiv is not None:
-        return _derive_arxiv(
-            arxiv.group(1), transport, evidence_dir, clock, max_bytes, timeout
-        )
-    openreview = _OPENREVIEW_PATTERN.search(reference)
-    if openreview is not None:
+    kind, identifier = registry_identity(reference)
+    if kind == REGISTRY_ARXIV and identifier is not None:
+        return _derive_arxiv(identifier, transport, evidence_dir, clock, max_bytes, timeout)
+    if kind == REGISTRY_OPENREVIEW and identifier is not None:
         return _derive_openreview(
-            openreview.group(1), transport, evidence_dir, clock, max_bytes, timeout
+            identifier, transport, evidence_dir, clock, max_bytes, timeout
         )
-    doi = _DOI_PATTERN.search(reference + " ")
-    if doi is not None:
-        return _derive_crossref(
-            doi.group(1), transport, evidence_dir, clock, max_bytes, timeout
-        )
+    if kind == REGISTRY_DOI and identifier is not None:
+        return _derive_crossref(identifier, transport, evidence_dir, clock, max_bytes, timeout)
     return None, {
         "receipt_kind": "citation-derivation",
         "reference": reference,

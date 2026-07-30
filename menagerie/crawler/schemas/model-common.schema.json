@@ -717,6 +717,90 @@
             "$ref": "#/$defs/source"
           },
           "description": "Mandatory resolved public sources."
+        },
+        "candidate_probes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/candidate_probe"
+          },
+          "description": "Machine dereference of every candidate locator a typed stage-1 discovery named. Optional because only the typed-discovery arm produces one; when present it is the independent check on the author's own rejection classes, and the access-barrier subset is bound to the record's status by the terminal completeness invariant."
+        }
+      }
+    },
+    "candidate_probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identifier_kind",
+        "identifier",
+        "locator",
+        "attempted_at",
+        "probe_outcome",
+        "http_status",
+        "author_claimed_class"
+      ],
+      "properties": {
+        "identifier_kind": {
+          "oneOf": [
+            {
+              "enum": [
+                "arxiv",
+                "doi",
+                "openreview"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Registry the machine resolved this locator to, or null when it carries no supported identity. Machine-derived: the author is never asked for an identity it cannot read off the page."
+        },
+        "identifier": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/nonempty_string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Exact registry identifier the machine derived from the locator."
+        },
+        "locator": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Exact locator the author reported observing, retained verbatim."
+        },
+        "attempted_at": {
+          "$ref": "#/$defs/timestamp",
+          "description": "Instant of the bounded machine probe pass that dereferenced this locator."
+        },
+        "probe_outcome": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/nonempty_string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Closed broker outcome observed for this locator, or null when no probe result was retained."
+        },
+        "http_status": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Exact HTTP status the probe observed. The discriminator for an access barrier: 401, 402, 403 and 451 are withheld rather than absent."
+        },
+        "author_claimed_class": {
+          "enum": [
+            "not-this-model",
+            "no-material-detail",
+            "access-barrier",
+            "dead-link",
+            "not-a-nn"
+          ],
+          "description": "The author's own closed reading of why it stopped at this locator, retained exactly as claimed. Disagreement with the machine's probe is a checker signal and is deliberately never reconciled here."
         }
       }
     },

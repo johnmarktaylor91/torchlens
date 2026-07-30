@@ -86,6 +86,7 @@ from menagerie.crawler.driver_contracts import (
 from menagerie.crawler.driver_contracts import AuthorEffortCapExceeded
 from menagerie.crawler.discovery import (
     DiscoveryError,
+    candidate_probe_findings,
     FoundDiscovery,
     HigherTierDiscovery,
     NegativeDiscovery,
@@ -177,7 +178,7 @@ from menagerie.crawler.status import (
     completeness_report,
     record_is_release_eligible,
 )
-from menagerie.crawler.source_broker import TransportResponse
+from menagerie.crawler.source_broker import BrokerOutcome, BrokerPack, TransportResponse
 from menagerie.crawler.tests.conftest import (
     HASH,
     NOW,
@@ -2355,6 +2356,21 @@ def test_true_no_source_reaches_checked_r5_without_fetch_target(
     assert model["source_resolution"]["sources"][0]["url"].startswith(
         "urn:menagerie:source-discovery:"
     )
+    # The machine's own dereference of the author's locator reaches the record.
+    # It was computed and frozen before this change and read by nothing, so the
+    # only independent check on a negative discovery was invisible.
+    probes = model["source_resolution"]["candidate_probes"]
+    assert len(probes) == 1
+    probe = probes[0]
+    assert probe["locator"] == "https://example.com/examplenet"
+    assert probe["author_claimed_class"] == "not-this-model"
+    # 404 from the injected transport: the machine reports what it saw, and does
+    # not quietly reconcile it with what the author claimed.
+    assert probe["probe_outcome"] == "unreachable"
+    assert probe["http_status"] == 404
+    assert probe["identifier_kind"] is None
+    assert probe["identifier"] is None
+    assert probe["attempted_at"]
     gates = scan_jsonl(paths.ledgers.gates)
     assert gates[0]["gate_kind"] == "terminal_disposition"
     assert gates[0]["items"][0]["terminal_disposition"]["verdict"] == "accepted"
@@ -2563,6 +2579,100 @@ def test_candidate_link_rejection_class_vocabulary_is_closed() -> None:
             stable_id="m_discovery",
             work_id="work-m_discovery",
         )
+
+
+def test_candidate_probe_findings_derive_identity_the_author_never_supplied() -> None:
+    """The machine supplies identity; the author only ever supplies a locator.
+
+    A prior defect demanded a commit SHA the author could not read off the page and
+    got invented SHAs back. The same trap applies to a paywalled paper: its DOI is
+    frequently not readable from the gate page. So the DOI/arXiv/OpenReview handle is
+    derived here from the locator itself, and nothing asks the author for it.
+    """
+
+    search_evidence = {
+        "candidate_links": [
+            {
+                "url": "https://doi.org/10.1109/5.726791",
+                "why_rejected": "The publisher gate never exposes the architecture.",
+                "rejection_class": "access-barrier",
+            },
+            {
+                "url": "https://arxiv.org/abs/1706.03762",
+                "why_rejected": "A different architecture of the same name.",
+                "rejection_class": "not-this-model",
+            },
+            {
+                "url": "https://example.com/notes",
+                "why_rejected": "A blog post with no forward definition.",
+                "rejection_class": "no-material-detail",
+            },
+        ]
+    }
+    findings = candidate_probe_findings(
+        search_evidence, None, attempted_at="2026-07-30T00:00:00Z"
+    )
+
+    assert [(row["identifier_kind"], row["identifier"]) for row in findings] == [
+        ("doi", "10.1109/5.726791"),
+        ("arxiv", "1706.03762"),
+        (None, None),
+    ]
+    # With no probe pack the machine reports that it observed nothing -- it does not
+    # borrow the author's claim to fill the gap.
+    assert all(row["probe_outcome"] is None for row in findings)
+    assert all(row["http_status"] is None for row in findings)
+    assert [row["author_claimed_class"] for row in findings] == [
+        "access-barrier",
+        "not-this-model",
+        "no-material-detail",
+    ]
+
+
+def test_candidate_probe_findings_preserve_author_machine_disagreement() -> None:
+    """A claim the machine contradicts is retained as a disagreement, not reconciled.
+
+    An author claiming ``access-barrier`` on a locator that in fact fetched cleanly is
+    exactly the signal a checker needs. Silently correcting either side would destroy it.
+    """
+
+    search_evidence = {
+        "candidate_links": [
+            {
+                "url": "https://example.com/open-paper",
+                "why_rejected": "The publisher gate blocked the full text.",
+                "rejection_class": "access-barrier",
+            }
+        ]
+    }
+    pack = BrokerPack(
+        outcomes=[
+            BrokerOutcome(
+                source_id="candidate-probe-001",
+                kind="raw-url",
+                requested_role="probe",
+                bound_role="probe",
+                outcome="fetched",
+                url="https://example.com/open-paper",
+                final_url="https://example.com/open-paper",
+                redirect_chain=(),
+                status=200,
+                bytes_fetched=12,
+                sha256=None,
+                media_type="text/html",
+                media_type_method="header",
+                resolver_receipt=None,
+                derived_citation=None,
+            )
+        ]
+    )
+    findings = candidate_probe_findings(
+        search_evidence, pack, attempted_at="2026-07-30T00:00:00Z"
+    )
+
+    assert findings[0]["author_claimed_class"] == "access-barrier"
+    assert findings[0]["probe_outcome"] == "fetched"
+    assert findings[0]["http_status"] == 200
 
 
 def test_found_discovery_alone_requires_a_nonempty_fetch_set() -> None:

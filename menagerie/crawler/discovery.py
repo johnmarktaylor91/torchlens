@@ -36,6 +36,7 @@ from menagerie.crawler.source_broker import (
     Transport,
     broker_source_pack,
     default_transport,
+    registry_identity,
     write_broker_outputs,
 )
 
@@ -307,12 +308,15 @@ def materialize_discovery_artifact(
     model_dir = root / "model"
     model_dir.mkdir(parents=True, exist_ok=True)
     result_path = root / "result.json"
+    attempted_at = utc_now()
     probe_pack = _probe_discovery_candidates(
         discovery,
         root,
         transport=probe_transport or default_transport(),
     )
-    source_manifest = _freeze_discovery_evidence(discovery, root, probe_pack=probe_pack)
+    source_manifest = _freeze_discovery_evidence(
+        discovery, root, probe_pack=probe_pack, attempted_at=attempted_at
+    )
     result = _machine_discovery_author_result(
         item=item,
         context=context,
@@ -330,6 +334,7 @@ def _freeze_discovery_evidence(
     root: Path,
     *,
     probe_pack: BrokerPack | None,
+    attempted_at: str,
 ) -> JsonObject:
     """Freeze one non-fetch discovery outcome as content-addressed machine evidence.
 
@@ -341,6 +346,8 @@ def _freeze_discovery_evidence(
         Per-attempt custody root.
     probe_pack:
         Machine broker outcomes for every authored candidate locator.
+    attempted_at:
+        Instant of the bounded probe pass that dereferenced those locators.
 
     Returns
     -------
@@ -375,9 +382,73 @@ def _freeze_discovery_evidence(
         "candidate_probe_receipts": (
             probe_pack.to_dict()["broker"] if probe_pack is not None else None
         ),
+        "candidate_probes": candidate_probe_findings(
+            search_evidence, probe_pack, attempted_at=attempted_at
+        ),
     }
     row["manifest_sha256"] = stable_hash(row)
     return {"sources": [row], "manifest_sha256": stable_hash([row])}
+
+
+def candidate_probe_findings(
+    search_evidence: Mapping[str, Any],
+    probe_pack: BrokerPack | None,
+    *,
+    attempted_at: str,
+) -> list[JsonObject]:
+    """Promote the machine's own probe of every authored locator into the record.
+
+    ``_probe_discovery_candidates`` has always dereferenced each candidate through the
+    broker and frozen typed receipts next to the attempt -- but nothing read them back.
+    They reached no validator and no model record, so the one independent check on a
+    negative discovery existed and was invisible.
+
+    Each row pairs what the AUTHOR said (``locator``, ``author_claimed_class``) with what
+    the MACHINE observed when it dereferenced that same locator (``identifier_kind``,
+    ``identifier``, ``probe_outcome``, ``http_status``). That split is deliberate: the
+    author is never asked for an identity it cannot read off the page, and the machine
+    never overwrites the author's reading. A disagreement between the two -- a claimed
+    ``access-barrier`` that probed ``fetched``, or a claimed ``not-this-model`` that
+    probed HTTP 403 -- is itself a checker signal and is preserved verbatim rather than
+    reconciled here.
+
+    Parameters
+    ----------
+    search_evidence:
+        Bounded stage-1 search record carrying the authored candidate links.
+    probe_pack:
+        Typed broker outcomes for those locators, or ``None`` when none were reported.
+    attempted_at:
+        Instant of the bounded probe pass.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        One machine-owned finding per authored candidate, in authored order.
+    """
+
+    candidates = list(search_evidence.get("candidate_links") or [])
+    outcomes = {
+        str(outcome.source_id): outcome
+        for outcome in (probe_pack.outcomes if probe_pack is not None else ())
+    }
+    findings: list[JsonObject] = []
+    for index, candidate in enumerate(candidates, start=1):
+        locator = str(candidate["url"])
+        identifier_kind, identifier = registry_identity(locator)
+        outcome = outcomes.get(f"candidate-probe-{index:03d}")
+        findings.append(
+            {
+                "identifier_kind": identifier_kind,
+                "identifier": identifier,
+                "locator": locator,
+                "attempted_at": attempted_at,
+                "probe_outcome": outcome.outcome if outcome is not None else None,
+                "http_status": outcome.status if outcome is not None else None,
+                "author_claimed_class": str(candidate["rejection_class"]),
+            }
+        )
+    return findings
 
 
 def _probe_discovery_candidates(

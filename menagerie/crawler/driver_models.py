@@ -1752,11 +1752,21 @@ def _assemble_terminal_model(
                 "finished_at": created_at,
                 "conclusion": str(search_evidence["conclusion"]),
             }
+            # The machine's own dereference of every locator the author named. It
+            # was already computed and frozen next to the attempt, and read by
+            # nothing; promoting it is what makes an authored rejection class
+            # falsifiable in the record rather than only in a discarded receipt.
+            candidate_probes = discovery_evidence.get("candidate_probes")
             facts["source_resolution"].update(
                 {
                     "searched_at": created_at,
                     "search_report": search_report,
                     "mandatory_link_status": "failed",
+                    "candidate_probes": (
+                        deepcopy(candidate_probes)
+                        if isinstance(candidate_probes, list)
+                        else []
+                    ),
                 }
             )
             if terminal_gate_obtained:
