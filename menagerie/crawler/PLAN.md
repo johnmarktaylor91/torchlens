@@ -712,7 +712,7 @@ replaced. They were unpinned until 2026-07-29, so drift in the two most load-bea
 prompts was undetectable.
 
 - `stage1_discovery.md`: `sha256:3eac9b1557b9b4df7d5f387b9e3af2cfa6794294f738d7c63acc7fc4660a22d7`
-- `stage2_author.md`: `sha256:38d8bba29143e01046857547942e7c78ebc1ee8d95905700f9b1875370600d87`
+- `stage2_author.md`: `sha256:a1002cec227150b286ec6b055b5d87749133975c0e38957cd8c412ecf0ca7a4c`
 
 ## 21. Acceptance tests
 

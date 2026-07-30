@@ -103,7 +103,36 @@ when every claim inside it is excellent.
 
 The `$complete_author_proposal_v3` sentinel documents the insertion point only. Never
 write it literally. The inserted object must contain every top-level proposal field and
-the complete `proposed_facts` object required by the registered schema.
+the complete `proposed_facts` object required by the registered schema, **except the ten
+the executor supplies** -- see immediately below.
+
+### Ten proposal fields the executor fills in
+
+The registered proposal schema marks these required, but they are the machine's, not
+yours. Omit them; the executor supplies each one and rejects a value that disagrees with
+what it holds.
+
+- `schema_version`, and the eight request bindings `campaign_id`, `stable_id`, `work_id`,
+  `intake_snapshot_id`, `intake_snapshot_sha256`, `intake_item_sha256`,
+  `source_manifest_identity`, and `dispatcher_identity`. All nine come straight off the
+  REQUEST envelope the executor is holding, so transcribing them can only introduce a
+  wrong copy.
+- `proposal_sha256`, the digest of the finished proposal. The executor derives it last,
+  after it has filled the fields above, so an authored value could not be correct anyway.
+
+`proposed_facts.modes.per_mode_run` is likewise the executor's, and the reason is not
+bookkeeping: nothing has run when you write a proposal, so there is no per-mode outcome
+to report. Omit it. Supplying a non-empty one claims attempts that do not exist and is
+refused.
+
+Everything else in the proposal is yours, **including `proposed_facts.evidence`
+`excerpts[].text_sha256`** -- unlike a terminal `evidence_records` entry, that digest
+feeds the evidence identity the engine re-derives, so it is still required here. Compute
+it as `identity.hash_bytes(text.encode("utf-8"))` over the exact text you quoted.
+
+`proposal.author` is a closed object of exactly `provider`, `model`, `version`, and
+`prompt_sha256`. It takes no other key: an extra one such as `actor` is rejected outright
+rather than ignored.
 
 ### Every terminal arm carries its excerpts in `evidence_records`
 
