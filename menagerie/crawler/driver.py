@@ -1976,6 +1976,7 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
                 human_review=human_review,
                 root_cause_fingerprint=root_cause_fingerprint,
                 superseded_model=superseded_model,
+                terminal_gate_obtained=terminal_gate_obtained,
             )
             return
         except (DriverPaused, RetryableOperatorError, AuthorBackoffError):
@@ -2008,6 +2009,12 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
                 human_review=True,
                 root_cause_fingerprint=None,
                 superseded_model=None,
+                # The minimal rung drops the artifact, so no finalization can be
+                # attempted and no frozen source facts are read. Threaded anyway so
+                # the two rungs can never disagree about what authority was held --
+                # a silently-defaulted `True` here is exactly the shape that made
+                # the merged tree raise `NameError` on every terminal append.
+                terminal_gate_obtained=terminal_gate_obtained,
             )
             return
         except (DriverPaused, RetryableOperatorError, AuthorBackoffError):
@@ -2040,6 +2047,7 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         human_review: bool = False,
         root_cause_fingerprint: Optional[str] = None,
         superseded_model: Optional[Mapping[str, Any]] = None,
+        terminal_gate_obtained: bool = True,
     ) -> None:
         """Append one driver-owned non-run terminal revision through the reducer.
 
