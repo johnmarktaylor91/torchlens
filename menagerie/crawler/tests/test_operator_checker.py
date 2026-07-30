@@ -279,6 +279,11 @@ def test_attempt_telemetry_records_completed_and_censored_durations(tmp_path: Pa
     for event in attempts:
         assert event["attempt_timeout_seconds"] == CHECKER_TIMEOUT_SECONDS
         assert event["attempt_budget_seconds"] == CHECKER_TIMEOUT_SECONDS
+        # The workload covariates: one flat cap spans a one-model fidelity call and
+        # a twenty-model metadata batch, so a duration is only interpretable
+        # alongside what the call was asked to do.
+        assert event["gate_kind"] == GateKind.METADATA_BATCH.value
+        assert event["item_count"] == 1
         assert event["started_at"] <= event["finished_at"]
         assert isinstance(event["duration_seconds"], float)
         assert event["duration_seconds"] >= 0.0

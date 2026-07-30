@@ -179,19 +179,18 @@ def summarize(values: Iterable[float]) -> JsonObject:
     }
 
 
-def build_report(records: Iterable[Mapping[str, Any]]) -> JsonObject:
-    """Build the completed-versus-censored attempt-latency report.
+def _split(records: Iterable[Mapping[str, Any]]) -> JsonObject:
+    """Split one record group into completed, censored, and untimed samples.
 
     Parameters
     ----------
     records:
-        Attempt telemetry records.
+        Attempt telemetry records belonging to one group.
 
     Returns
     -------
     dict[str, Any]
-        Report object. ``completed`` is the only sample from which a latency
-        quantile may honestly be quoted; ``censored`` durations are lower bounds.
+        Group report body.
     """
 
     completed: list[float] = []
@@ -221,20 +220,68 @@ def build_report(records: Iterable[Mapping[str, Any]]) -> JsonObject:
     return {
         "attempts": total,
         "timed_attempts": timed,
-        "untimed_attempts": untimed,
         # Records predating duration capture. A nonzero count means the report is
         # built on a partial sample and must say so rather than quietly shrinking.
+        "untimed_attempts": untimed,
         "censoring_rate": (len(censored) / timed) if timed else None,
         "completed": summarize(completed),
         # Lower bounds only. Reported so the sample's censoring is visible, never so
         # it can be pooled with the completed sample.
         "censored_lower_bounds": summarize(censored),
         "censored_reaching_wall": reached_wall,
-        "attempt_bounds_seconds": {
-            f"{bound:g}": count for bound, count in sorted(bounds.items())
-        },
+        "attempt_bounds_seconds": {f"{bound:g}": count for bound, count in sorted(bounds.items())},
         "classifications": dict(sorted(classifications.items())),
     }
+
+
+def _group_key(record: Mapping[str, Any]) -> str:
+    """Return the workload group one attempt belongs to.
+
+    Parameters
+    ----------
+    record:
+        Attempt telemetry record.
+
+    Returns
+    -------
+    str
+        Gate kind with its batch size, so a one-model fidelity call is never
+        averaged together with a twenty-model metadata batch.
+    """
+
+    gate_kind = record.get("gate_kind")
+    kind = str(gate_kind) if isinstance(gate_kind, str) and gate_kind else "unknown"
+    count = record.get("item_count")
+    if isinstance(count, int) and not isinstance(count, bool) and count >= 0:
+        return f"{kind}[{count}]"
+    return kind
+
+
+def build_report(records: Iterable[Mapping[str, Any]]) -> JsonObject:
+    """Build the completed-versus-censored attempt-latency report.
+
+    Parameters
+    ----------
+    records:
+        Attempt telemetry records.
+
+    Returns
+    -------
+    dict[str, Any]
+        Report object. ``completed`` is the only sample from which a latency
+        quantile may honestly be quoted; ``censored`` durations are lower bounds.
+        ``by_workload`` splits the same sample by gate kind and batch size, since
+        one flat cap covers calls whose work differs by more than an order of
+        magnitude.
+    """
+
+    collected = list(records)
+    groups: dict[str, list[Mapping[str, Any]]] = {}
+    for record in collected:
+        groups.setdefault(_group_key(record), []).append(record)
+    report = dict(_split(collected))
+    report["by_workload"] = {key: _split(groups[key]) for key in sorted(groups)}
+    return report
 
 
 def format_report(report: Mapping[str, Any]) -> str:
@@ -277,6 +324,18 @@ def format_report(report: Mapping[str, Any]) -> str:
         lines.append(
             "WARNING: heavy censoring. Quantiles of the completed sample understate the "
             "true distribution; raise the attempt cap and re-measure."
+        )
+    workloads = report.get("by_workload") or {}
+    for key in sorted(workloads):
+        group = workloads[key]
+        group_completed = group["completed"]
+        median = group_completed["median_seconds"]
+        maximum = group_completed["max_seconds"]
+        lines.append(
+            f"  {key}: n={group['attempts']} completed={group_completed['count']} "
+            f"median={'n/a' if median is None else f'{median:.1f}s'} "
+            f"max={'n/a' if maximum is None else f'{maximum:.1f}s'} "
+            f"censored={group['censored_lower_bounds']['count']}"
         )
     return "\n".join(lines)
 

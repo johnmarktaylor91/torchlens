@@ -312,6 +312,9 @@ def execute_checker_request(
         return OperatorExitCode.PERMANENT_CONTRACT_REJECTION
 
     prompt = _build_prompt(envelope, request_path)
+    gate_kind = str(envelope.get("gate_kind"))
+    raw_items = envelope.get("items")
+    item_count = len(raw_items) if isinstance(raw_items, list) else None
     with tempfile.TemporaryDirectory(prefix=".checker-", dir=output_path.parent) as temporary:
         temp_root = Path(temporary)
         schema_path = temp_root / "gate-output-schema.json"
@@ -375,6 +378,13 @@ def execute_checker_request(
                     "duration_seconds": round(attempt_seconds, 3),
                     "attempt_budget_seconds": round(float(attempt_budget), 3),
                     "attempt_timeout_seconds": CHECKER_TIMEOUT_SECONDS,
+                    # The covariates that make the sample a DISTRIBUTION rather than
+                    # a pile: one flat cap covers a one-model fidelity call and a
+                    # `METADATA_BATCH_MIN`..`METADATA_BATCH_MAX` metadata batch, so
+                    # durations pooled across gate kinds and batch sizes cannot say
+                    # what the cap should be for either.
+                    "gate_kind": gate_kind,
+                    "item_count": item_count,
                     "detail": last_detail,
                 },
             )

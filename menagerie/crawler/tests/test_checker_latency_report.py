@@ -22,6 +22,8 @@ def _attempt(
     budget: float = 600.0,
     timed_out: bool = False,
     classification: str = "success",
+    gate_kind: str = "fidelity",
+    item_count: int = 1,
 ) -> dict[str, Any]:
     """Build one attempt telemetry record.
 
@@ -37,6 +39,10 @@ def _attempt(
         Whether the attempt was killed at its bound.
     classification:
         Wrapper classification value.
+    gate_kind:
+        Gate tier the attempt served.
+    item_count:
+        Number of models in the attempt's envelope.
 
     Returns
     -------
@@ -56,6 +62,8 @@ def _attempt(
         "duration_seconds": duration,
         "attempt_budget_seconds": budget,
         "attempt_timeout_seconds": budget,
+        "gate_kind": gate_kind,
+        "item_count": item_count,
     }
 
 
@@ -120,6 +128,43 @@ def test_completed_and_censored_samples_are_never_pooled(tmp_path: Path) -> None
     assert report["completed"]["mean_seconds"] == 180.0
     assert report["classifications"] == {"retryable-infrastructure": 1, "success": 2}
     assert report["attempt_bounds_seconds"] == {"600": 3}
+
+
+def test_workloads_of_different_size_are_reported_separately(tmp_path: Path) -> None:
+    """A twenty-model metadata batch is never averaged into per-model fidelity calls.
+
+    One flat attempt cap spans both, so the pooled median hides that the batch is
+    the workload actually pressing on the cap.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated work root.
+    """
+
+    _write_telemetry(
+        tmp_path,
+        [
+            _attempt(duration=60.0),
+            _attempt(attempt=2, duration=70.0),
+            _attempt(
+                attempt=3,
+                duration=600.0,
+                timed_out=True,
+                classification="retryable-infrastructure",
+                gate_kind="metadata_batch",
+                item_count=20,
+            ),
+        ],
+    )
+
+    report = build_report(iter_attempt_records([tmp_path]))
+
+    assert set(report["by_workload"]) == {"fidelity[1]", "metadata_batch[20]"}
+    assert report["by_workload"]["fidelity[1]"]["censoring_rate"] == 0.0
+    assert report["by_workload"]["fidelity[1]"]["completed"]["max_seconds"] == 70.0
+    assert report["by_workload"]["metadata_batch[20]"]["censoring_rate"] == 1.0
+    assert report["by_workload"]["metadata_batch[20]"]["completed"]["count"] == 0
 
 
 def test_records_without_durations_are_counted_not_zeroed(tmp_path: Path) -> None:
