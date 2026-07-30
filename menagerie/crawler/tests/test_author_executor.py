@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, cast
@@ -19,6 +20,7 @@ from menagerie.crawler.author_dispatch import (
     AuthorEffortGrant,
     AuthorPauseReason,
     BlockedRecommendation,
+    SkipRecommendation,
     _validate_author_result_mapping,
     classify_author_response,
     plausible_author_reset_at,
@@ -45,17 +47,33 @@ from menagerie.crawler.wakeup import (
     build_wake_episode,
 )
 from menagerie.crawler.capability_probe import canonical_tool_name
-from menagerie.crawler.constants import AUTHOR_RESULT_SCHEMA_VERSION
-from menagerie.crawler.discovery import validate_source_discovery
+from menagerie.crawler.constants import (
+    ACCESS_BLOCKED_REASON_CODE,
+    AUTHOR_RESULT_SCHEMA_VERSION,
+    EnvironmentPhase,
+)
+from menagerie.crawler.discovery import (
+    AccessBlockedDiscovery,
+    FoundDiscovery,
+    HigherTierDiscovery,
+    NegativeDiscovery,
+    RetryableToolFailureDiscovery,
+    SourceDiscovery,
+    materialize_discovery_artifact,
+    validate_source_discovery,
+)
 from menagerie.crawler.driver_admission import (
     CommandAuthorLane,
     DriverIntegrationError,
     _verify_executor_receipt,
 )
-from menagerie.crawler.driver_contracts import AuthorArtifact
+from menagerie.crawler.driver_contracts import AuthorArtifact, WorkItem
 from menagerie.crawler.driver_models import _terminal_checker_item
 from menagerie.crawler.identity import hash_bytes, stable_hash
+from menagerie.crawler.intake import IntakeItem
+from menagerie.crawler.routing import IntentRoute
 from menagerie.crawler.schema import validate_payload
+from menagerie.crawler.source_broker import TransportResponse
 from menagerie.crawler.tests.executor_test_support import (
     COMMITS_URL,
     DEFAULT_DISCOVERY,
@@ -68,7 +86,7 @@ from menagerie.crawler.tests.executor_test_support import (
     write_fake_claude,
     write_source_request,
 )
-from menagerie.crawler.tests.conftest import make_author_proposal
+from menagerie.crawler.tests.conftest import make_author_proposal, make_authority_context
 
 
 @pytest.fixture()
@@ -127,8 +145,111 @@ def _prompt_contract_fixture(path: Path, marker: str) -> dict[str, Any]:
     return fixture
 
 
-def test_prompt_contract_fixtures_materialize_against_registered_schemas() -> None:
-    """Prompt-taught inner shapes stay coupled to executor wrappers and schemas."""
+def _prompt_contract_markers(path: Path) -> tuple[str, ...]:
+    """Return every contract-fixture marker a prompt ships, in prompt order.
+
+    Parameters
+    ----------
+    path:
+        Prompt file to scan.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Exact marker names.
+    """
+
+    return tuple(
+        re.findall(r"<!-- CONTRACT_FIXTURE: (\S+) -->", path.read_text(encoding="utf-8"))
+    )
+
+
+#: Exactly which typed stage-1 arm each shipped discovery fixture must parse to. The
+#: mapping is total over the prompt's markers (asserted below), so a newly taught arm
+#: cannot ship uncovered -- which is how the ``NEEDS_SOURCE_ACCESS`` fixture reached the
+#: prompt without any test ever reading it.
+_STAGE1_FIXTURE_ARMS: dict[str, type[SourceDiscovery]] = {
+    "stage1-author-payload": FoundDiscovery,
+    "stage1-no-usable-source-author-payload": NegativeDiscovery,
+    "stage1-insufficient-description-author-payload": NegativeDiscovery,
+    "stage1-not-a-model-author-payload": NegativeDiscovery,
+    "stage1-needs-higher-tier-author-payload": HigherTierDiscovery,
+    "stage1-needs-source-access-author-payload": AccessBlockedDiscovery,
+    "stage1-retryable-tool-failure-author-payload": RetryableToolFailureDiscovery,
+}
+
+#: The terminal each materializable fixture is destined for. ``FOUND`` enters controlled
+#: fetch instead and ``RETRYABLE_TOOL_FAILURE`` retries, so neither is a
+#: ``NonFetchDiscovery`` and neither has a terminal to materialize.
+_STAGE1_FIXTURE_TERMINALS: dict[str, str] = {
+    "stage1-no-usable-source-author-payload": "skipped:no-description",
+    "stage1-insufficient-description-author-payload": "skipped:insufficient-description",
+    "stage1-not-a-model-author-payload": "skipped:not-a-real-NN",
+    "stage1-needs-higher-tier-author-payload": "needs-higher-tier",
+    "stage1-needs-source-access-author-payload": ACCESS_BLOCKED_REASON_CODE,
+}
+
+
+def _fixture_work_item(stable_id: str) -> WorkItem:
+    """Return the minimal routed work item the discovery materializer reads."""
+
+    return WorkItem(
+        intake=IntakeItem(
+            stable_id=stable_id,
+            name="ExampleNet",
+            zoo="crawler",
+            variant="base",
+            discovery_source="crawl_roster",
+            legacy_row_sha256="0" * 64,
+            preserved_legacy_flags=(),
+            variant_scope="standalone",
+            family_representative_id=stable_id,
+        ),
+        route=IntentRoute(
+            stable_id=stable_id, intent="core", phase=EnvironmentPhase.PYTORCH
+        ),
+    )
+
+
+def _refusing_probe_transport(
+    url: str, *, max_bytes: int, timeout: float
+) -> TransportResponse:
+    """Return a deterministic hermetic refusal for any probed candidate locator."""
+
+    del max_bytes, timeout
+    return TransportResponse(
+        status=403,
+        final_url=url,
+        redirect_chain=(url,),
+        body=b"",
+        truncated=False,
+        error="fixture candidate refused",
+    )
+
+
+def test_prompt_contract_fixtures_materialize_against_registered_schemas(
+    tmp_path: Path,
+) -> None:
+    """Prompt-taught inner shapes stay coupled to executor wrappers and schemas.
+
+    Envelope validation alone is not what this test's name promises, and the gap was
+    not theoretical: the insufficient-description fixture shipped a plain-``http://``
+    locator that ``validate_source_discovery`` happily accepted while the
+    materialization it was destined for threw, because the broker refuses a non-HTTPS
+    descriptor for the whole batch. So every fixture that names a terminal is now
+    carried all the way through ``materialize_discovery_artifact`` -- the same call the
+    production author lane makes -- and its terminal is asserted.
+
+    ``FOUND`` and ``RETRYABLE_TOOL_FAILURE`` stop at the typed arm on purpose: neither is
+    a ``NonFetchDiscovery``, so neither has a terminal to materialize. ``FOUND`` enters
+    controlled fetch (covered end-to-end by the executor round trips in this module) and
+    ``RETRYABLE_TOOL_FAILURE`` retries rather than terminalizing.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory used as the per-fixture author custody root.
+    """
 
     prompt_root = Path(__file__).parents[1] / "prompts" / "executor"
     request = {
@@ -153,28 +274,45 @@ def test_prompt_contract_fixtures_materialize_against_registered_schemas() -> No
         },
     }
 
-    discovery_markers = (
-        "stage1-author-payload",
-        "stage1-no-usable-source-author-payload",
-        "stage1-insufficient-description-author-payload",
-        "stage1-not-a-model-author-payload",
-        "stage1-needs-higher-tier-author-payload",
-        "stage1-retryable-tool-failure-author-payload",
-    )
-    for marker in discovery_markers:
-        discovery_payload = _prompt_contract_fixture(
-            prompt_root / "stage1_discovery.md",
-            marker,
-        )
+    discovery_prompt = prompt_root / "stage1_discovery.md"
+    assert set(_prompt_contract_markers(discovery_prompt)) == set(_STAGE1_FIXTURE_ARMS)
+    assert set(_STAGE1_FIXTURE_TERMINALS) <= set(_STAGE1_FIXTURE_ARMS)
+
+    item = _fixture_work_item("m-fixture")
+    context = make_authority_context(["m-fixture"])
+    for marker, expected_arm in _STAGE1_FIXTURE_ARMS.items():
+        discovery_payload = _prompt_contract_fixture(discovery_prompt, marker)
         discovery_envelope = _discovery_envelope_from_author_payload(
             discovery_payload,
             request,
         )
-        validate_source_discovery(
+        discovery = validate_source_discovery(
             discovery_envelope,
             stable_id="m-fixture",
             work_id="work-m-fixture",
         )
+        assert isinstance(discovery, expected_arm)
+        terminal = _STAGE1_FIXTURE_TERMINALS.get(marker)
+        if not isinstance(
+            discovery, (NegativeDiscovery, HigherTierDiscovery, AccessBlockedDiscovery)
+        ):
+            assert terminal is None
+            continue
+        assert terminal is not None
+        artifact = materialize_discovery_artifact(
+            discovery,
+            item=item,
+            context=context,
+            root=tmp_path / marker,
+            probe_transport=_refusing_probe_transport,
+        )
+        terminal_result = artifact.author_result
+        if isinstance(discovery, NegativeDiscovery):
+            assert isinstance(terminal_result, SkipRecommendation)
+            assert terminal_result.status_code == terminal
+        else:
+            assert isinstance(terminal_result, BlockedRecommendation)
+            assert terminal_result.reason_code == terminal
 
     supplement_payload = _prompt_contract_fixture(
         prompt_root / "stage2_author.md",
