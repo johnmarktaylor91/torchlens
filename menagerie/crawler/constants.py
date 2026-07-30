@@ -456,6 +456,34 @@ SKIPPED_STATUS_CODES = frozenset(
     }
 )
 
+LINK_EVIDENCED_DISCOVERY_STATUS_CODES = frozenset(
+    {
+        "skipped:no-description",
+        "skipped:insufficient-description",
+    }
+)
+"""Typed-discovery terminals whose claim is only falsifiable against named locators.
+
+Both codes assert something about the WORLD -- "no descriptive text exists after a
+bounded search", "what exists is too vague to specify a forward pass" -- and the record
+is checkable only if it names the locators that were actually looked at.
+
+Before this, ``search_report`` had to carry non-empty ``queries``, ``places_checked`` and
+``languages_checked``, but ``links_checked`` was unconstrained and
+``search_evidence.candidate_links`` carries no ``minItems``. So the CHEAPEST valid skip
+listed zero candidate locators -- and zero candidates makes
+``discovery._probe_discovery_candidates`` return ``None``, so no machine probe receipt
+could physically exist to contradict it. An author that honestly listed the paywalled DOI
+it hit did strictly more work and invited strictly more checking than one that listed
+nothing: an incentive pointing exactly the wrong way on a campaign that runs once.
+
+``skipped:not-a-real-NN`` is deliberately excluded: concluding that a roster name denotes
+no neural network at all can legitimately rest on searches that surfaced nothing worth
+retaining. ``deferred:*`` codes are excluded too -- they assert no world-fact and hand the
+search on unfinished -- except where the deferral's whole content IS a locator that could
+not be read, which supplies its own stricter evidence invariant.
+"""
+
 TERMINAL_STATUS_CODES = frozenset(
     {
         "runs",

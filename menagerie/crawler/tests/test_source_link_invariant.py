@@ -28,7 +28,10 @@ from typing import Any
 
 import pytest
 
-from menagerie.crawler.constants import TERMINAL_STATUS_CODES
+from menagerie.crawler.constants import (
+    LINK_EVIDENCED_DISCOVERY_STATUS_CODES,
+    TERMINAL_STATUS_CODES,
+)
 from menagerie.crawler.reducer import CanonicalReducer, ReductionError
 
 _EXACT_SOURCE = {
@@ -150,3 +153,105 @@ def test_success_rejects_a_source_that_is_not_the_declared_primary() -> None:
 
     with pytest.raises(ReductionError, match="missing mandatory exact public primary source link"):
         _validate(model)
+
+
+# ---------------------------------------------------------------------------
+# The typed-discovery arm: an absence claim must name what it looked at.
+# ---------------------------------------------------------------------------
+
+_DISCOVERY_DIGEST = "sha256:" + "0" * 64
+
+TYPED_DISCOVERY_CODES = sorted(
+    {
+        "skipped:no-description",
+        "skipped:insufficient-description",
+        "skipped:not-a-real-NN",
+        "deferred:needs-opus-tier",
+    }
+)
+
+
+def _discovery_record(code: str, *, links: list[str]) -> dict[str, Any]:
+    """Build a typed R5 discovery record with an exactly controlled link list."""
+
+    return {
+        "status": {"code": code, "kind": str(code).split(":", 1)[0]},
+        "source_resolution": {
+            "rung": "R5_SKIP",
+            "primary_source_id": "discovery-evidence-1",
+            "mandatory_link_status": "failed",
+            "sources": [
+                {
+                    "source_id": "discovery-evidence-1",
+                    "kind": "discovery-evidence",
+                    "url": "urn:menagerie:source-discovery:" + "0" * 64,
+                    "revision_kind": "source-discovery-sha256",
+                    "revision": _DISCOVERY_DIGEST,
+                    "content_sha256": _DISCOVERY_DIGEST,
+                    "mirror_digest": _DISCOVERY_DIGEST,
+                }
+            ],
+            "search_report": {
+                "queries": ["ExampleNet architecture"],
+                "places_checked": ["publisher index"],
+                "links_checked": list(links),
+                "languages_checked": ["en"],
+                "conclusion": "Bounded search reached its end.",
+            },
+        },
+    }
+
+
+def test_link_evidenced_vocabulary_is_the_absence_claiming_subset() -> None:
+    """Guard the parametrisation: the scoping is the point, so pin it explicitly."""
+
+    assert LINK_EVIDENCED_DISCOVERY_STATUS_CODES == {
+        "skipped:no-description",
+        "skipped:insufficient-description",
+    }
+    assert LINK_EVIDENCED_DISCOVERY_STATUS_CODES < set(TERMINAL_STATUS_CODES)
+
+
+@pytest.mark.parametrize("code", sorted(LINK_EVIDENCED_DISCOVERY_STATUS_CODES))
+def test_absence_claim_without_candidate_locators_is_refused(code: str) -> None:
+    """The cheapest skip -- zero candidate links -- must no longer be the easiest one.
+
+    With no candidate locators there is nothing for ``_probe_discovery_candidates`` to
+    dereference, so no machine receipt can exist to contradict the claim. That made
+    silence cheaper than honesty on exactly the two codes that assert a world-fact.
+    """
+
+    with pytest.raises(ReductionError, match="candidate locators"):
+        _validate(_discovery_record(code, links=[]))
+
+
+@pytest.mark.parametrize("code", sorted(LINK_EVIDENCED_DISCOVERY_STATUS_CODES))
+def test_absence_claim_with_candidate_locators_passes(code: str) -> None:
+    """The honest author -- the one that names what it rejected -- is still accepted."""
+
+    _validate(_discovery_record(code, links=["https://example.com/abstract"]))
+
+
+@pytest.mark.parametrize(
+    "code",
+    [code for code in TYPED_DISCOVERY_CODES if code not in LINK_EVIDENCED_DISCOVERY_STATUS_CODES],
+)
+def test_non_absence_typed_discovery_may_have_no_candidate_locators(code: str) -> None:
+    """Scoping in the other direction: the requirement must not leak onto sibling arms.
+
+    ``not-a-real-NN`` can rest on a search that surfaced nothing worth retaining, and an
+    Opus-tier deferral asserts nothing about the world at all.
+    """
+
+    _validate(_discovery_record(code, links=[]))
+
+
+@pytest.mark.parametrize("code", TYPED_DISCOVERY_CODES)
+def test_typed_discovery_still_requires_query_place_language_evidence(code: str) -> None:
+    """The pre-existing bounded-search floor is unchanged by the new link requirement."""
+
+    record = _discovery_record(code, links=["https://example.com/abstract"])
+    record["source_resolution"]["search_report"]["languages_checked"] = []
+
+    with pytest.raises(ReductionError, match="lacks bounded query/place/language evidence"):
+        _validate(record)

@@ -19,6 +19,7 @@ import pytest
 
 import menagerie.crawler.checkpoint as checkpoint_module
 import menagerie.crawler.cli as cli_module
+import menagerie.crawler.discovery as discovery_module
 import menagerie.crawler.driver as driver_module
 import menagerie.crawler.driver_admission as driver_admission_module
 import menagerie.crawler.driver_models as driver_models_module
@@ -2293,7 +2294,15 @@ def test_true_no_source_reaches_checked_r5_without_fetch_target(
                                 "\"ExampleNet\" neural network",
                             ],
                             "places": ["publisher index", "code hosts", "web archive"],
-                            "candidate_links": [],
+                            # An absence claim must name the locators it looked at:
+                            # zero candidates means zero machine probe receipts, so
+                            # nothing could ever contradict the claim.
+                            "candidate_links": [
+                                {
+                                    "url": "https://example.com/examplenet",
+                                    "why_rejected": "The page describes a different model.",
+                                }
+                            ],
                             "languages": ["en", "zh"],
                             "conclusion": (
                                 "No usable architecture source exists after the bounded search."
@@ -2306,7 +2315,26 @@ def test_true_no_source_reaches_checked_r5_without_fetch_target(
         )
         return subprocess.CompletedProcess(list(argv), 0, "", "")
 
+    def deterministic_probe_transport() -> Any:
+        """Return a hermetic transport for the machine's candidate-link probes."""
+
+        def probe(url: str, *, max_bytes: int, timeout: float) -> TransportResponse:
+            """Return a deterministic typed miss without touching the network."""
+
+            del max_bytes, timeout
+            return TransportResponse(
+                status=404,
+                final_url=url,
+                redirect_chain=(url,),
+                body=b"",
+                truncated=False,
+                error="fixture candidate rejected",
+            )
+
+        return probe
+
     monkeypatch.setattr(driver_admission_module, "_run_operator_command", publish_negative)
+    monkeypatch.setattr(discovery_module, "default_transport", deterministic_probe_transport)
     monkeypatch.setattr(driver_module, "fetch_targets", forbidden_fetch)
     result = _driver(
         tmp_path,

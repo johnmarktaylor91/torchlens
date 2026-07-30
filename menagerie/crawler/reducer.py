@@ -58,6 +58,7 @@ from menagerie.crawler.constants import (
     CHECKER_PROMPT_NAME,
     FAILURE_REASON_CODES,
     GATE_SCHEMA_VERSION_V3,
+    LINK_EVIDENCED_DISCOVERY_STATUS_CODES,
     MODEL_SCHEMA_VERSION_V3,
     TERMINAL_STATUS_CODES,
 )
@@ -3025,6 +3026,13 @@ class CanonicalReducer:
         )
         if typed_discovery:
             search_report = resolution.get("search_report")
+            required_search_fields: tuple[str, ...] = (
+                "queries",
+                "places_checked",
+                "languages_checked",
+            )
+            if status_code in LINK_EVIDENCED_DISCOVERY_STATUS_CODES:
+                required_search_fields += ("links_checked",)
             if not isinstance(search_report, Mapping) or not all(
                 isinstance(search_report.get(field), list)
                 and bool(search_report.get(field))
@@ -3032,10 +3040,15 @@ class CanonicalReducer:
                     isinstance(value, str) and bool(value)
                     for value in search_report.get(field, [])
                 )
-                for field in ("queries", "places_checked", "languages_checked")
+                for field in required_search_fields
             ):
                 raise ReductionError(
                     "typed discovery disposition lacks bounded query/place/language evidence"
+                    + (
+                        " with the candidate locators its absence claim rests on"
+                        if status_code in LINK_EVIDENCED_DISCOVERY_STATUS_CODES
+                        else ""
+                    )
                 )
             if not isinstance(search_report.get("conclusion"), str) or not search_report.get(
                 "conclusion"
