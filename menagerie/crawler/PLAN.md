@@ -704,14 +704,14 @@ same change.
 - `campaign_c4-native.md`: `sha256:266d60f05cf9e54d15a882ea77e4143b2941ccacfdfdb6a4841433da92afb051`
 - `stage_author.md`: `sha256:8b6d32ab1589fb6b2592f8c3e50e814cca9db5b85074b39293ca3a8bbf007b52`
 - `stage_capability_probe.md`: `sha256:1f59abfc6f76beb4f10510a1f85373384be5ae5907c9fb198b3c2677f7781d01`
-- `stage_source_request.md`: `sha256:144c8a52735fbc6302ba0826ad5309588aa95b75ef71f38883b520e887da74cb`
+- `stage_source_request.md`: `sha256:26bee1bfff7b966f5ef3fbf756947ce26c8d2a67a20458883d7de6e57d64c6a1`
 
 The headless executor's own stage prompts. These drive every author session on the
 production path; the pool fragments above serve the operator-mediated lane the executor
 replaced. They were unpinned until 2026-07-29, so drift in the two most load-bearing
 prompts was undetectable.
 
-- `stage1_discovery.md`: `sha256:65f77c09b939d95a0406f17538635504ab2b9729a5e1839a6cf7be4344f8cd7e`
+- `stage1_discovery.md`: `sha256:3eac9b1557b9b4df7d5f387b9e3af2cfa6794294f738d7c63acc7fc4660a22d7`
 - `stage2_author.md`: `sha256:38d8bba29143e01046857547942e7c78ebc1ee8d95905700f9b1875370600d87`
 
 ## 21. Acceptance tests

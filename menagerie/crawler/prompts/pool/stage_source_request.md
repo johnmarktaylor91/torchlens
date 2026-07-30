@@ -150,6 +150,19 @@ and `work_id`:
 - `NEEDS_HIGHER_TIER`: payload is
   `{"arm":"NEEDS_HIGHER_TIER","research_summary":{...}}`; use this when the bounded
   Sonnet campaign cannot adjudicate the row. The summary is carried durably into C3/Opus.
+- `NEEDS_SOURCE_ACCESS`: payload is
+  `{"arm":"NEEDS_SOURCE_ACCESS","research_summary":{...}}`, and the summary must name at
+  least one candidate link classified `access-barrier`. **A paywall is not an absence.**
+  When the specifying paper, thesis, or report demonstrably EXISTS and a publisher gate,
+  login wall, subscription, or institutional-access requirement stopped you reading it,
+  this is the arm -- never `NO_USABLE_SOURCE` ("no descriptive text exists", which is
+  false about a paper behind a gate, and permanent because this campaign runs once) and
+  never `INSUFFICIENT_DESCRIPTION` (which demands the exact vague text you retained, and
+  a paywall gave you no text to retain). Exhaust the free routes first -- openly
+  deposited theses are frequently more detailed than the published paper, since they are
+  not fighting a page limit -- and reserve the arm for material you could not read at
+  all. An abstract you CAN read that is merely too thin is `INSUFFICIENT_DESCRIPTION`
+  with that abstract retained.
 - `RETRYABLE_TOOL_FAILURE`: payload names non-empty `tool_name`, exact `tool_spelling`,
   and verbatim `error`.
 
