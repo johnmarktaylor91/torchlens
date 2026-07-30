@@ -13,10 +13,13 @@ from typing import Any, Sequence
 import pytest
 
 from menagerie.crawler.checker_dispatch import (
+    CheckerDispatchError,
+    apply_machine_owned_gate_fields,
     build_fidelity_envelope,
     build_metadata_vet_envelope,
     compute_result_envelope_sha256,
     machine_owned_gate_fields,
+    validate_checker_result_mapping,
 )
 from menagerie.crawler.constants import GateKind
 from menagerie.crawler.identity import canonical_json_bytes
@@ -127,16 +130,18 @@ def _request_and_result(
         }
     else:
         raise AssertionError("test helper supports metadata and fidelity only")
-    gate["gate_kind"] = gate_kind.value
-    gate["gate_round"] = 1
-    gate["gate_identity"] = envelope["envelope_sha256"]
-    gate["batch_size"] = 1
-    gate["checker"] = {
-        **envelope["checker"],
-        "started_at": "2026-07-27T12:00:00Z",
-        "finished_at": "2026-07-27T12:00:01Z",
-    }
-    gate["result_envelope_sha256"] = compute_result_envelope_sha256(gate)
+    # Model a COMPLIANT checker: the frozen prompt tells it to omit every
+    # machine-owned field, and omission is what the wrapper stamps over. This
+    # helper previously handed back the shared fixture's scaffold verbatim --
+    # ``gate_id="gate-1"``, ``payload_sha256`` of all ``a``s, ``checker.version
+    # == "test"`` -- and relied on the stamp silently rewriting them. That made
+    # the suite's own happy path a laundered gate, which is exactly the
+    # near-miss the stamp guard now refuses, so the fixture has to stop
+    # depending on it.
+    for field in machine_owned_gate_fields(envelope):
+        gate.pop(field, None)
+    gate.pop("checker", None)
+    gate.pop("result_envelope_sha256", None)
     request_path = tmp_path / "request.json"
     request_path.write_bytes(canonical_json_bytes(envelope) + b"\n")
     return request_path, gate
@@ -453,3 +458,207 @@ def test_external_timeout_kills_the_codex_process_group(tmp_path: Path) -> None:
 
     assert attempt.timed_out is True
     assert attempt.returncode != 0
+
+
+def _fixture_templated_candidate(tmp_path: Path) -> tuple[Path, dict[str, Any], dict[str, Any]]:
+    """Return one request plus the RAW shared-fixture gate as a checker answer.
+
+    ``make_gate`` is the exact ``conftest`` helper a live checker was observed
+    reading out of this repository on 2026-07-30: the ``m11695``
+    ``operator-telemetry.jsonl`` captured it printing ``conftest.py`` lines
+    2000-2095. Unlike ``_request_and_result``, this helper does NOT repair the
+    fixture's machine-owned scaffold, so the candidate carries the fixture's
+    placeholder verification values verbatim -- precisely the artifact a checker
+    produces when it templates its answer instead of deriving it.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated wrapper root.
+
+    Returns
+    -------
+    tuple[pathlib.Path, dict[str, Any], dict[str, Any]]
+        Request path, parsed envelope, and the untouched fixture gate.
+    """
+
+    gate = make_gate(["m_fixture_templated"])
+    envelope = build_metadata_vet_envelope(
+        [_checker_item_pack(gate["items"][0])],
+        gate_round=1,
+        output_path=tmp_path / "result.json",
+        checker_model=required_checker_model(GateKind.METADATA_BATCH),
+        checker_version="current",
+        request_nonce="wrapper-fixture-templated",
+        final_tail=True,
+    )
+    request_path = tmp_path / "request.json"
+    request_path.write_bytes(canonical_json_bytes(envelope) + b"\n")
+    return request_path, envelope, gate
+
+
+def test_unconditional_stamping_would_launder_a_fixture_templated_gate(tmp_path: Path) -> None:
+    """The removed behavior is proven to have been a laundering path.
+
+    This is the FAILING direction the guard exists for, asserted positively
+    rather than assumed: the old stamp is reproduced verbatim and its output is
+    shown to pass full gate validation. A guard demonstrated only where it
+    passes proves nothing, so the hazard is demonstrated first.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated wrapper root.
+    """
+
+    _request_path, envelope, gate = _fixture_templated_candidate(tmp_path)
+
+    # The fixture's placeholder verification values, before any stamping.
+    assert gate["gate_id"] == "gate-1"
+    assert gate["payload_sha256"] == "sha256:" + "a" * 64
+    assert gate["checker"]["version"] == "test"
+    assert gate["checker"]["model"] == "codex"
+
+    # Verbatim reproduction of the pre-fix stamp: an unconditional ``update``.
+    laundered = dict(gate)
+    laundered.update(machine_owned_gate_fields(envelope))
+    checker = dict(laundered["checker"])
+    checker.update(
+        {
+            "provider": envelope["checker"]["provider"],
+            "model": envelope["checker"]["model"],
+            "version": envelope["checker"]["version"],
+            "prompt_sha256": envelope["checker"]["prompt_sha256"],
+            "started_at": "2026-07-30T18:00:00Z",
+            "finished_at": "2026-07-30T18:00:01Z",
+        }
+    )
+    laundered["checker"] = checker
+    laundered["result_envelope_sha256"] = compute_result_envelope_sha256(laundered)
+
+    # Every fixture placeholder has been silently rewritten to the machine's
+    # real value, and the fabricated gate now validates clean.
+    assert laundered["gate_id"] != "gate-1"
+    assert laundered["payload_sha256"] != "sha256:" + "a" * 64
+    assert laundered["checker"]["version"] == "current"
+    validated = validate_checker_result_mapping(laundered, envelope)
+    assert validated["gate_id"] == machine_owned_gate_fields(envelope)["gate_id"]
+
+
+def test_fixture_templated_gate_is_refused_and_attributed_to_the_checker(
+    tmp_path: Path,
+) -> None:
+    """The same candidate is now refused, and the refusal names the checker.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated wrapper root.
+    """
+
+    request_path, _envelope, gate = _fixture_templated_candidate(tmp_path)
+
+    def invoke(argv: Sequence[str], last_message: Path, timeout: float) -> CodexAttempt:
+        """Inject the fixture-templated gate as the native final answer."""
+
+        del argv, timeout
+        last_message.write_bytes(
+            canonical_json_bytes({"result_json": canonical_json_bytes(gate).decode("utf-8")})
+            + b"\n"
+        )
+        return CodexAttempt(0, '{"type":"turn.completed"}\n', "")
+
+    exit_code = execute_checker_request(
+        request_path,
+        invoke=invoke,
+        sleep=lambda _seconds: None,
+        diagnostic_stream=StringIO(),
+    )
+
+    assert exit_code is OperatorExitCode.PERMANENT_CONTRACT_REJECTION
+    # Fails CLOSED: nothing is published at the atomic output path.
+    assert not (tmp_path / "result.json").exists()
+    status = _status(request_path)
+    assert status["classification"] == "permanent-contract-rejection"
+    detail = status["detail"]
+    # Attribution: the CHECKER supplied it. Evidence: the field and the value.
+    assert detail.startswith("checker supplied the machine-owned field ")
+    assert "templated rather than derived" in detail
+    assert any(
+        f"field {field}=" in detail
+        for field in ("gate_id", "payload_sha256", "gate_identity", "ledger_seq")
+    )
+
+
+@pytest.mark.parametrize(
+    ("path", "supplied"),
+    [
+        ("payload_sha256", "sha256:" + "a" * 64),
+        ("gate_id", "gate-1"),
+        ("checker.version", "test"),
+        ("checker.model", "codex"),
+        ("checker.started_at", "2026-07-14T12:00:00Z"),
+    ],
+)
+def test_each_fixture_placeholder_is_refused_with_its_own_value_as_evidence(
+    tmp_path: Path, path: str, supplied: str
+) -> None:
+    """One conflicting machine-owned field is enough, and it is named exactly.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated wrapper root.
+    path:
+        Dotted machine-owned field seeded with a fixture placeholder.
+    supplied:
+        The exact fixture placeholder value.
+    """
+
+    request_path, result = _request_and_result(tmp_path)
+    envelope = json.loads(request_path.read_text(encoding="utf-8"))
+    candidate = deepcopy(result)
+    if path.startswith("checker."):
+        candidate["checker"] = {path.removeprefix("checker."): supplied}
+    else:
+        candidate[path] = supplied
+
+    with pytest.raises(CheckerDispatchError) as excinfo:
+        apply_machine_owned_gate_fields(
+            candidate,
+            envelope,
+            started_at="2026-07-30T18:00:00Z",
+            finished_at="2026-07-30T18:00:01Z",
+        )
+
+    message = str(excinfo.value)
+    assert f"machine-owned field {path}=" in message
+    assert json.dumps(supplied) in message
+
+
+def test_omitting_every_machine_owned_field_stays_free(tmp_path: Path) -> None:
+    """The 2026-07-29 tolerance is intact: omission is still never an error.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated wrapper root.
+    """
+
+    request_path, result = _request_and_result(tmp_path)
+    envelope = json.loads(request_path.read_text(encoding="utf-8"))
+    candidate = deepcopy(result)
+    for field in machine_owned_gate_fields(envelope):
+        candidate.pop(field, None)
+    candidate.pop("checker", None)
+
+    stamped = apply_machine_owned_gate_fields(
+        candidate,
+        envelope,
+        started_at="2026-07-30T18:00:00Z",
+        finished_at="2026-07-30T18:00:01Z",
+    )
+
+    assert validate_checker_result_mapping(stamped, envelope)["gate_id"] == (
+        machine_owned_gate_fields(envelope)["gate_id"]
+    )

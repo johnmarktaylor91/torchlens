@@ -279,6 +279,10 @@ def apply_machine_owned_gate_fields(
     a scaffold field the model had no way to observe, and it is unconditional so
     a model-supplied identity can never be believed.
 
+    OMITTING a machine-owned field is free and always has been. SUPPLYING one
+    with a conflicting value is refused, because the stamp cannot both discard
+    a fabricated identity and leave evidence that one was fabricated.
+
     Parameters
     ----------
     result:
@@ -296,28 +300,112 @@ def apply_machine_owned_gate_fields(
     Raises
     ------
     CheckerDispatchError
-        If the envelope binding is invalid or the candidate is not an object.
+        If the envelope binding is invalid, the candidate is not an object, or
+        the candidate supplies a machine-owned field with a conflicting value.
     """
 
     if not isinstance(result, Mapping):
         raise CheckerDispatchError("checker result must contain exactly one JSON object")
     stamped = dict(result)
-    stamped.update(machine_owned_gate_fields(envelope))
+    scaffold = machine_owned_gate_fields(envelope)
     expected_checker = _required_mapping(envelope.get("checker"), "envelope checker")
-    checker = dict(stamped.get("checker") or {})
-    checker.update(
-        {
-            "provider": expected_checker.get("provider"),
-            "model": expected_checker.get("model"),
-            "version": expected_checker.get("version"),
-            "prompt_sha256": expected_checker.get("prompt_sha256"),
-            "started_at": started_at,
-            "finished_at": finished_at,
-        }
-    )
+    checker_scaffold = {
+        "provider": expected_checker.get("provider"),
+        "model": expected_checker.get("model"),
+        "version": expected_checker.get("version"),
+        "prompt_sha256": expected_checker.get("prompt_sha256"),
+        "started_at": started_at,
+        "finished_at": finished_at,
+    }
+    supplied_checker = stamped.get("checker")
+    if supplied_checker is not None and not isinstance(supplied_checker, Mapping):
+        raise CheckerDispatchError("checker result checker field must be one JSON object")
+    # Refuse BEFORE stamping. Omission stays free -- that tolerance is the
+    # 2026-07-29 fix and is not being narrowed. What is refused is a CONFLICTING
+    # supplied value, and the distinction matters because the stamp below is
+    # unconditional: it used to overwrite a model-supplied scaffold silently,
+    # which meant the two checks that already exist downstream in
+    # ``validate_checker_result_mapping`` -- the
+    # ``DETERMINISTIC_GATE_SCAFFOLD_FIELDS`` comparison and the four-field
+    # ``checker`` comparison -- could never fail, because they ran against
+    # values the stamp had just made correct by construction. Those checks were
+    # structurally dead. Refusing here restores them, and it also closes the
+    # near-miss they were written for: a checker that templates its answer from
+    # a repository test fixture arrives carrying that fixture's placeholder
+    # verification values, and silently rewriting them to the machine's real
+    # ones launders a fabricated gate into a well-formed one.
+    _refuse_conflicting_machine_owned(scaffold, stamped, prefix="")
+    if isinstance(supplied_checker, Mapping):
+        _refuse_conflicting_machine_owned(checker_scaffold, supplied_checker, prefix="checker.")
+    stamped.update(scaffold)
+    checker = dict(supplied_checker) if isinstance(supplied_checker, Mapping) else {}
+    checker.update(checker_scaffold)
     stamped["checker"] = checker
     stamped["result_envelope_sha256"] = compute_result_envelope_sha256(stamped)
     return stamped
+
+
+def _bounded_json_repr(value: object, *, limit: int = 120) -> str:
+    """Render one offending value compactly and boundedly for an error message.
+
+    Parameters
+    ----------
+    value:
+        Model-supplied or machine-owned value.
+    limit:
+        Maximum rendered characters.
+
+    Returns
+    -------
+    str
+        Compact JSON rendering, truncated with an explicit marker.
+    """
+
+    try:
+        rendered = json.dumps(value, sort_keys=True, separators=(",", ":"))
+    except (TypeError, ValueError):
+        rendered = repr(value)
+    if len(rendered) > limit:
+        return rendered[:limit] + "...<truncated>"
+    return rendered
+
+
+def _refuse_conflicting_machine_owned(
+    scaffold: Mapping[str, Any], supplied: Mapping[str, Any], *, prefix: str
+) -> None:
+    """Refuse one checker result that supplies a conflicting machine-owned field.
+
+    Parameters
+    ----------
+    scaffold:
+        Machine-owned field values for this exact envelope.
+    supplied:
+        Model-authored candidate object at the same nesting level.
+    prefix:
+        Dotted path prefix used to name the offending field.
+
+    Raises
+    ------
+    CheckerDispatchError
+        If any machine-owned field is present with a value that is not the
+        machine's. The message names the field and BOTH values, because the
+        supplied value is the evidence: a fixture-templated gate carries the
+        fixture's placeholders there, and a message that only said "invalid"
+        would discard the one fact that identifies what went wrong.
+    """
+
+    for field, machine_value in scaffold.items():
+        if field not in supplied:
+            continue
+        if supplied[field] == machine_value:
+            continue
+        raise CheckerDispatchError(
+            f"checker supplied the machine-owned field {prefix}{field}="
+            f"{_bounded_json_repr(supplied[field])} but the machine-owned value for this "
+            f"envelope is {_bounded_json_repr(machine_value)}; the checker's authority is its "
+            "verdict, not the gate scaffold, so a conflicting scaffold value is evidence the "
+            "gate was templated rather than derived"
+        )
 
 
 def component_identity(relative: str) -> str:

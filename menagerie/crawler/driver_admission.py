@@ -159,6 +159,7 @@ from menagerie.crawler.operator_protocol import (
     OPERATOR_DEADLINE_SECONDS,
     OPERATOR_MAX_ATTEMPTS,
     OperatorExitCode,
+    status_sidecar_path,
 )
 from menagerie.crawler.proposal import ProposalValidationError, model_code_manifest
 from menagerie.crawler.recordio import (
@@ -1134,7 +1135,52 @@ def classify_author_exit(
     raise DriverIntegrationError(f"{label} for {stable_id}: {tail}")
 
 
-def _raise_for_checker_exit(returncode: int, stdout: str, stderr: str) -> None:
+def _checker_failure_evidence(request_path: Path, stdout: str, stderr: str) -> str:
+    """Return the wrapper's own structured reason for one nonzero checker exit.
+
+    The wrapper already classified its own failure and wrote the exact typed
+    reason to its status sidecar. The driver used to ignore that and substitute
+    ``stderr + stdout`` instead, which is not the reason: the wrapper re-emits
+    the raw Codex ``--json`` EVENT STREAM on stderr, so the tail is whatever the
+    model's last tool call happened to print. On 2026-07-30 that put verbatim
+    repository source -- including this package's own test fixtures -- into a
+    durable campaign record, while the sidecar sitting beside it said exactly
+    ``'campaign_root_work_id' is a required property``.
+
+    The stream tail is therefore a fallback, used only when the wrapper
+    published no usable sidecar, and it is labelled as such so a reader is never
+    left guessing whether the text is a diagnosis or a transcript.
+
+    Parameters
+    ----------
+    request_path:
+        Exact checker request path whose sidecar is read.
+    stdout, stderr:
+        Captured wrapper streams, used only for the labelled fallback.
+
+    Returns
+    -------
+    str
+        Bounded failure evidence.
+    """
+
+    try:
+        sidecar = json.loads(status_sidecar_path(request_path).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        sidecar = None
+    if isinstance(sidecar, Mapping):
+        detail = sidecar.get("detail")
+        if isinstance(detail, str) and detail.strip():
+            classification = sidecar.get("classification")
+            label = f" [{classification}]" if isinstance(classification, str) else ""
+            return f"{detail.strip()[-STDIO_TAIL_MAX_CHARS:]}{label}"
+    tail = f"{stderr}\n{stdout}".strip()[-STDIO_TAIL_MAX_CHARS:]
+    return f"the checker wrapper published no structured reason; raw stream tail: {tail}"
+
+
+def _raise_for_checker_exit(
+    returncode: int, stdout: str, stderr: str, *, request_path: Path
+) -> None:
     """Convert one checker-wrapper exit code into its typed lane outcome.
 
     A checker VERDICT -- accepted, rejected, or cannot-verify -- only ever
@@ -1154,6 +1200,9 @@ def _raise_for_checker_exit(returncode: int, stdout: str, stderr: str) -> None:
         Checker wrapper exit status.
     stdout, stderr:
         Captured wrapper output; structured provider errors appear on either.
+    request_path:
+        Exact checker request path, used to read the wrapper's structured
+        status sidecar in preference to the raw stream tail.
 
     Raises
     ------
@@ -1167,15 +1216,21 @@ def _raise_for_checker_exit(returncode: int, stdout: str, stderr: str) -> None:
 
     if returncode == 0:
         return
-    tail = f"{stderr}\n{stdout}".strip()[-STDIO_TAIL_MAX_CHARS:]
+    tail = _checker_failure_evidence(request_path, stdout, stderr)
     if returncode in (
         int(OperatorExitCode.RETRYABLE_INFRASTRUCTURE),
         int(OperatorExitCode.SERVICE_UNAVAILABLE),
     ):
         raise RetryableOperatorError(f"checker command failed (exit {returncode}): {tail}")
     if returncode == int(OperatorExitCode.PERMANENT_CONTRACT_REJECTION):
+        # Names the CHECKER as the violating party. The wrapper is the party
+        # that DETECTED the violation, and saying "the checker wrapper rejected
+        # the gate contract" reads as though the wrapper were at fault; every
+        # exit-64 sidecar observed so far records a checker-authored gate that
+        # failed its own schema. The wrapper is still named, as the detector.
         raise DriverIntegrationError(
-            f"checker wrapper rejected the gate contract (exit {returncode}): {tail}"
+            f"checker violated the gate contract and its result was refused by the operator "
+            f"wrapper (exit {returncode}): {tail}"
         )
     # Unclassified exits keep the historical message prefix, which
     # ``_is_infrastructure_error`` already treats as one retryable transport
@@ -2030,7 +2085,12 @@ class CommandCheckerLane:
         )
         if signal is not None:
             return CheckerOutcome(backoff=signal)
-        _raise_for_checker_exit(completed.returncode, completed.stdout, completed.stderr)
+        _raise_for_checker_exit(
+            completed.returncode,
+            completed.stdout,
+            completed.stderr,
+            request_path=request_path,
+        )
         result = validate_checker_result(root / "result.json", envelope)
         return CheckerOutcome(gate=result)
 
