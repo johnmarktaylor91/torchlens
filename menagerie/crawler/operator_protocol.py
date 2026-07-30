@@ -14,9 +14,69 @@ from menagerie.crawler.models import JsonObject
 
 OPERATOR_PROTOCOL_VERSION = "menagerie.crawler.operator-protocol.v1"
 OPERATOR_STATUS_VERSION = "menagerie.crawler.operator-status.v1"
-OPERATOR_DEADLINE_SECONDS = 600
 OPERATOR_MAX_ATTEMPTS = 3
-OPERATOR_ATTEMPT_TIMEOUT_SECONDS = 180
+
+# ---------------------------------------------------------------------------
+# The operator effort grant, single-sourced
+#
+# PROVISIONAL -- PENDING MEASUREMENT. `OPERATOR_ATTEMPT_TIMEOUT_SECONDS` is NOT
+# an evidence-based number and must not be treated as one.
+#
+# History. The original value (180) arrived in `f0d43564` with an empty commit
+# body and no rationale. Its only backing was a synthetic probe that was never a
+# checker call: a three-field fact-check over three hand-written claims across
+# three effort levels, n=9, one sample per cell, with no envelope, no evidence
+# pack, no hash verification, and no gate schema. The source document warned
+# against over-reading it and a reviewer had already flagged the extrapolation.
+# A live ten-model rung then aborted with 9 of 13 attempts (69%) timing out at
+# that limit, while two of the timed-out lanes succeeded on retry with the same
+# envelope -- so the limit was marginal for the real workload, not wrong by an
+# order of magnitude.
+#
+# Why raised rather than measured first: a run of timeouts yields only
+# RIGHT-CENSORED observations, which cannot locate the distribution's tail. The
+# grant is therefore set generously so the next rung mostly COMPLETES and
+# produces uncensored durations. Every attempt now records its wall duration and
+# the bound that censored it (`operator-telemetry.jsonl`, `codex-attempt`
+# events); `python -m menagerie.crawler.tools.checker_latency` reports the
+# completed-versus-censored distribution. REPLACE THIS CONSTANT WITH A MEASURED
+# VALUE (e.g. a p99 of completed attempt durations plus margin) once that
+# evidence exists, and record the measurement here.
+#
+# Calibration anchor, not evidence: the author lane -- which does strictly more
+# work per invocation -- grants 30 min per session (`AUTHOR_SESSION_WALL_SECONDS`),
+# so a 10 min checker attempt is generous without being unbounded.
+# ---------------------------------------------------------------------------
+
+#: PROVISIONAL. Per-attempt wall cap granted to one operator subprocess.
+OPERATOR_ATTEMPT_TIMEOUT_SECONDS = 600
+
+#: Total of the wrapper's own inter-attempt backoff sleeps. The wrapper sleeps
+#: ``2 ** (attempt_number - 1)`` after every attempt except the last, so the sum
+#: over ``OPERATOR_MAX_ATTEMPTS - 1`` sleeps is ``2 ** (n - 1) - 1``. This is the
+#: one part of the wrapper's budget that its deadline check does NOT clamp, so it
+#: is counted explicitly rather than absorbed into slack.
+OPERATOR_INTER_ATTEMPT_BACKOFF_SECONDS = 2 ** (OPERATOR_MAX_ATTEMPTS - 1) - 1
+
+#: Room between the instant this module MINTS ``deadline_at`` (envelope build, in
+#: the driver) and the instant the wrapper's first attempt actually starts:
+#: envelope publication, subprocess spawn, interpreter start, imports, and request
+#: validation. The deadline is an absolute timestamp, so that latency is spent out
+#: of the same budget the attempts draw on.
+OPERATOR_DISPATCH_SLACK_SECONDS = 180
+
+#: DERIVED, never hand-set. The wrapper refuses to start an attempt past
+#: ``deadline_at`` and clamps each attempt to the time remaining, so a deadline
+#: smaller than the granted attempts SILENTLY shortens or drops the last attempt
+#: and makes the retry policy a fiction. Deriving it means raising the attempt
+#: grant can never again leave the deadline behind. Pinned by
+#: ``test_operator_effort_grant_fits_inside_the_published_deadline``.
+OPERATOR_DEADLINE_SECONDS = (
+    OPERATOR_MAX_ATTEMPTS * OPERATOR_ATTEMPT_TIMEOUT_SECONDS
+    + OPERATOR_INTER_ATTEMPT_BACKOFF_SECONDS
+    + OPERATOR_DISPATCH_SLACK_SECONDS
+)
+
 OPERATOR_REASONING_EFFORT = "high"
 TELEMETRY_MAX_BYTES = 64 * 1024
 TELEMETRY_RECORD_MAX_CHARS = 4_000

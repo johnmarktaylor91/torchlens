@@ -157,7 +157,7 @@ from menagerie.crawler.models import JsonObject
 from menagerie.crawler.mirrors import MirrorClass, MirrorStore
 from menagerie.crawler.operator_protocol import (
     OPERATOR_DEADLINE_SECONDS,
-    OPERATOR_MAX_ATTEMPTS,
+    OPERATOR_INTER_ATTEMPT_BACKOFF_SECONDS,
     OperatorExitCode,
     status_sidecar_path,
 )
@@ -1927,8 +1927,10 @@ def _author_backoff_from_signal(payload: Mapping[str, Any]) -> AuthorBackoffSign
 # the primary limit.
 CHECKER_LANE_WALL_GRACE_SECONDS = 60.0
 # The wrapper's own inter-attempt backoff sleeps (2**0 + ... + 2**(n-2)) are the one part of
-# its budget that is not clamped by the deadline, so they are added on top of it.
-CHECKER_LANE_BACKOFF_SLACK_SECONDS = float(2 ** (OPERATOR_MAX_ATTEMPTS - 1) - 1)
+# its budget that is not clamped by the deadline, so they are added on top of it. The sum is
+# single-sourced with the protocol's own budget derivation rather than restated here, so the
+# lane bound cannot drift away from the grant it is supposed to sit above.
+CHECKER_LANE_BACKOFF_SLACK_SECONDS = float(OPERATOR_INTER_ATTEMPT_BACKOFF_SECONDS)
 
 
 def _checker_wall_bound(

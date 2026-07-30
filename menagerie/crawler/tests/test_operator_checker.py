@@ -8,6 +8,7 @@ from io import StringIO
 import json
 from pathlib import Path
 import sys
+import time
 from typing import Any, Sequence
 
 import pytest
@@ -25,6 +26,8 @@ from menagerie.crawler.checker_dispatch import (
 from menagerie.crawler.constants import GateKind
 from menagerie.crawler.identity import canonical_json_bytes, stable_hash
 from menagerie.crawler.operator_checker import (
+    CHECKER_MAX_ATTEMPTS,
+    CHECKER_TIMEOUT_SECONDS,
     FIDELITY_CHECKER_MODEL,
     METADATA_CHECKER_MODEL,
     TERMINAL_CHECKER_MODEL,
@@ -36,8 +39,14 @@ from menagerie.crawler.operator_checker import (
     required_checker_model,
 )
 from menagerie.crawler.operator_protocol import (
+    OPERATOR_ATTEMPT_TIMEOUT_SECONDS,
+    OPERATOR_DEADLINE_SECONDS,
+    OPERATOR_DISPATCH_SLACK_SECONDS,
+    OPERATOR_INTER_ATTEMPT_BACKOFF_SECONDS,
+    OPERATOR_MAX_ATTEMPTS,
     OperatorExitCode,
     status_sidecar_path,
+    telemetry_path,
 )
 from menagerie.crawler.tests.conftest import make_gate
 
@@ -180,6 +189,109 @@ def test_locked_model_tiering_uses_full_identifiers() -> None:
     assert FIDELITY_CHECKER_MODEL == "gpt-5.6-sol"
 
 
+def test_operator_effort_grant_fits_inside_the_published_deadline() -> None:
+    """Every granted attempt fits under the deadline the same grant publishes.
+
+    The wrapper refuses to start an attempt past ``deadline_at`` and clamps each
+    attempt to the time remaining, so a deadline that does not cover
+    ``OPERATOR_MAX_ATTEMPTS`` full attempts plus the wrapper's own inter-attempt
+    backoff silently shortens or drops the last attempt while the effort grant
+    still advertises it. That coupling is why the attempt cap cannot be raised on
+    its own, and this pins it structurally rather than by remembered arithmetic.
+    """
+
+    consumed = (
+        OPERATOR_MAX_ATTEMPTS * OPERATOR_ATTEMPT_TIMEOUT_SECONDS
+        + OPERATOR_INTER_ATTEMPT_BACKOFF_SECONDS
+    )
+    assert consumed < OPERATOR_DEADLINE_SECONDS
+    # The residual is dispatch latency, declared rather than accidental: the
+    # deadline is minted at envelope build and the first attempt starts later.
+    assert OPERATOR_DEADLINE_SECONDS - consumed == OPERATOR_DISPATCH_SLACK_SECONDS
+    assert OPERATOR_DISPATCH_SLACK_SECONDS > 0
+    # The backoff term must equal the sleeps the wrapper actually performs:
+    # ``sleep(2 ** (attempt_number - 1))`` after every attempt but the last.
+    assert OPERATOR_INTER_ATTEMPT_BACKOFF_SECONDS == sum(
+        2 ** (attempt_number - 1) for attempt_number in range(1, OPERATOR_MAX_ATTEMPTS)
+    )
+    assert (CHECKER_MAX_ATTEMPTS, CHECKER_TIMEOUT_SECONDS) == (
+        OPERATOR_MAX_ATTEMPTS,
+        float(OPERATOR_ATTEMPT_TIMEOUT_SECONDS),
+    )
+
+
+def test_attempt_telemetry_records_completed_and_censored_durations(tmp_path: Path) -> None:
+    """Both attempt outcomes carry a wall duration and the bound that censored it.
+
+    A timed-out attempt is a RIGHT-CENSORED observation, not an absent one. Its
+    duration and the bound it was held to are what make the sample analyzable, so
+    both are recorded for timed-out and completed attempts alike.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated wrapper root.
+    """
+
+    request_path, result = _request_and_result(tmp_path)
+    calls = 0
+
+    def invoke(argv: Sequence[str], last_message: Path, timeout: float) -> CodexAttempt:
+        """Inject one measurable timeout followed by one success."""
+
+        del argv
+        nonlocal calls
+        calls += 1
+        assert timeout == CHECKER_TIMEOUT_SECONDS
+        if calls == 1:
+            # Real elapsed time, so the recorded duration is a measurement rather
+            # than a constant the wrapper could have invented.
+            time.sleep(0.05)
+            return CodexAttempt(-9, "", "", timed_out=True)
+        last_message.write_bytes(
+            canonical_json_bytes({"result_json": canonical_json_bytes(result).decode("utf-8")})
+            + b"\n"
+        )
+        return CodexAttempt(
+            0,
+            '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}\n',
+            "",
+        )
+
+    exit_code = execute_checker_request(
+        request_path,
+        invoke=invoke,
+        sleep=lambda _seconds: None,
+        diagnostic_stream=StringIO(),
+    )
+
+    assert exit_code is OperatorExitCode.SUCCESS
+    events = [
+        json.loads(line)
+        for line in telemetry_path(request_path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    attempts = [event for event in events if event["event"] == "codex-attempt"]
+    assert [event["attempt"] for event in attempts] == [1, 2]
+    censored, completed = attempts
+    assert censored["timed_out"] is True
+    assert completed["timed_out"] is False
+    for event in attempts:
+        assert event["attempt_timeout_seconds"] == CHECKER_TIMEOUT_SECONDS
+        assert event["attempt_budget_seconds"] == CHECKER_TIMEOUT_SECONDS
+        assert event["started_at"] <= event["finished_at"]
+        assert isinstance(event["duration_seconds"], float)
+        assert event["duration_seconds"] >= 0.0
+    assert censored["duration_seconds"] >= 0.05
+    # The existing keys stay exactly as they were; duration is additive.
+    assert {"attempt", "classification", "detail", "event", "returncode", "timed_out"} <= set(
+        censored
+    )
+    finished = [event for event in events if event["event"] == "operator-finished"]
+    assert len(finished) == 1
+    assert finished[0]["wall_seconds"] >= censored["duration_seconds"]
+
+
 @pytest.mark.parametrize(
     ("gate_kind", "expected_model"),
     [
@@ -209,7 +321,9 @@ def test_success_uses_settled_argv_and_publishes_atomically(
         """Inject one successful native structured-output response."""
 
         observed.append(tuple(argv))
-        assert timeout == 180.0
+        # The full granted cap, not a deadline-clamped remainder: a freshly minted
+        # envelope must leave room for every attempt it grants.
+        assert timeout == CHECKER_TIMEOUT_SECONDS
         last_message.write_bytes(
             canonical_json_bytes({"result_json": canonical_json_bytes(result).decode("utf-8")})
             + b"\n"

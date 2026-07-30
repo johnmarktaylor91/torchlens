@@ -280,6 +280,13 @@ def execute_checker_request(
 
     runner = invoke or _invoke_codex
     clock = now or (lambda: datetime.now(timezone.utc))
+    wrapper_started = _as_utc(clock())
+
+    def elapsed() -> float:
+        """Return non-negative wrapper wall seconds since the request was accepted."""
+
+        return max((_as_utc(clock()) - wrapper_started).total_seconds(), 0.0)
+
     try:
         envelope = load_absolute_request(request_path)
         request_sha256, output_path, model, deadline = _validate_request(envelope, request_path)
@@ -295,7 +302,11 @@ def execute_checker_request(
         )
         append_telemetry(
             request_path,
-            {"event": "request-rejected", "classification": FailureKind.PERMANENT.value},
+            {
+                "event": "request-rejected",
+                "classification": FailureKind.PERMANENT.value,
+                "wall_seconds": round(elapsed(), 3),
+            },
         )
         diagnostic_stream.write(f"{detail}\n")
         return OperatorExitCode.PERMANENT_CONTRACT_REJECTION
@@ -324,10 +335,20 @@ def execute_checker_request(
                     request_sha256,
                     attempt_number - 1,
                     "checker operator deadline expired before the next attempt",
+                    wall_seconds=elapsed(),
                 )
-            started_at = _utc_timestamp(clock())
-            attempt = runner(argv, last_message_path, min(CHECKER_TIMEOUT_SECONDS, remaining))
-            finished_at = _utc_timestamp(clock())
+            # The bound this attempt is actually held to. It is the granted cap
+            # until the published deadline is nearer, and it is the value that
+            # CENSORS a timed-out attempt -- a duration equal to it means the
+            # attempt hit the wall, a smaller one means it stopped short. Recorded
+            # next to the duration so the pair is interpretable on its own.
+            attempt_budget = min(CHECKER_TIMEOUT_SECONDS, remaining)
+            started_instant = _as_utc(clock())
+            attempt = runner(argv, last_message_path, attempt_budget)
+            finished_instant = _as_utc(clock())
+            started_at = _utc_timestamp(started_instant)
+            finished_at = _utc_timestamp(finished_instant)
+            attempt_seconds = max((finished_instant - started_instant).total_seconds(), 0.0)
             classification = classify_codex_attempt(attempt)
             last_detail = emit_combined_tail(
                 attempt.stdout,
@@ -342,6 +363,18 @@ def execute_checker_request(
                     "returncode": attempt.returncode,
                     "classification": classification.kind.value,
                     "timed_out": attempt.timed_out,
+                    # Attempt duration is recorded for COMPLETED and TIMED-OUT
+                    # attempts alike: a timed-out attempt is a right-censored
+                    # observation, not an absent one, and dropping it biases every
+                    # later estimate of the real distribution downward. Without
+                    # these fields the only recoverable timing was a lane total
+                    # differenced from file mtimes, which is how the attempt cap
+                    # went years without a real measurement.
+                    "started_at": started_at,
+                    "finished_at": finished_at,
+                    "duration_seconds": round(attempt_seconds, 3),
+                    "attempt_budget_seconds": round(float(attempt_budget), 3),
+                    "attempt_timeout_seconds": CHECKER_TIMEOUT_SECONDS,
                     "detail": last_detail,
                 },
             )
@@ -372,6 +405,7 @@ def execute_checker_request(
                         request_sha256,
                         attempt_number,
                         str(exc),
+                        wall_seconds=elapsed(),
                     )
                 publish_json_atomic(output_path, result)
                 return _finish(
@@ -381,6 +415,7 @@ def execute_checker_request(
                     request_sha256,
                     attempt_number,
                     "checker result validated and published atomically",
+                    wall_seconds=elapsed(),
                 )
             if classification.kind is FailureKind.QUOTA:
                 reset_at, observation = _quota_reset(classification.reset_text, clock())
@@ -393,6 +428,7 @@ def execute_checker_request(
                     last_detail,
                     reset_at=reset_at,
                     reset_observation=observation,
+                    wall_seconds=elapsed(),
                 )
             if classification.kind is FailureKind.PERMANENT:
                 return _finish(
@@ -402,6 +438,7 @@ def execute_checker_request(
                     request_sha256,
                     attempt_number,
                     last_detail,
+                    wall_seconds=elapsed(),
                 )
             if classification.kind is FailureKind.UNAVAILABLE:
                 return _finish(
@@ -411,6 +448,7 @@ def execute_checker_request(
                     request_sha256,
                     attempt_number,
                     last_detail,
+                    wall_seconds=elapsed(),
                 )
             if attempt_number < CHECKER_MAX_ATTEMPTS:
                 sleep(float(2 ** (attempt_number - 1)))
@@ -421,6 +459,7 @@ def execute_checker_request(
             request_sha256,
             CHECKER_MAX_ATTEMPTS,
             last_detail,
+            wall_seconds=elapsed(),
         )
 
 
@@ -724,6 +763,25 @@ def _load_last_message(path: Path) -> JsonObject:
     return value
 
 
+def _as_utc(moment: datetime) -> datetime:
+    """Return one timezone-aware UTC instant for a wrapper-observed clock reading.
+
+    Parameters
+    ----------
+    moment:
+        Instant observed through the injectable clock, aware or naive.
+
+    Returns
+    -------
+    datetime.datetime
+        The same instant in UTC, safe to subtract from another reading.
+    """
+
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(timezone.utc)
+
+
 def _utc_timestamp(moment: datetime) -> str:
     """Return one schema-valid RFC 3339 UTC timestamp for a wrapper-observed instant.
 
@@ -738,9 +796,7 @@ def _utc_timestamp(moment: datetime) -> str:
         Timestamp ending in ``Z``.
     """
 
-    if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=timezone.utc)
-    return moment.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    return _as_utc(moment).isoformat().replace("+00:00", "Z")
 
 
 def _quota_reset(reset_text: str | None, now: datetime) -> tuple[str, str]:
@@ -820,6 +876,7 @@ def _finish(
     *,
     reset_at: str | None = None,
     reset_observation: str | None = None,
+    wall_seconds: float | None = None,
 ) -> OperatorExitCode:
     """Publish final status and telemetry for one wrapper outcome.
 
@@ -839,6 +896,9 @@ def _finish(
         Bounded diagnostic.
     reset_at, reset_observation:
         Optional quota wake facts.
+    wall_seconds:
+        Total wrapper wall time. Telemetry only; the lane total previously had to
+        be differenced from request and status file mtimes.
 
     Returns
     -------
@@ -864,6 +924,7 @@ def _finish(
             "classification": classification.value,
             "attempts": attempts,
             "reset_at": reset_at,
+            "wall_seconds": None if wall_seconds is None else round(float(wall_seconds), 3),
         },
     )
     return exit_code
