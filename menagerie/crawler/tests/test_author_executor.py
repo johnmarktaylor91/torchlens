@@ -414,9 +414,8 @@ def test_prompt_contract_fixtures_materialize_against_registered_schemas(
     proposed_payload["payload"]["proposal"] = proposed_fixture
     proposed_result = _author_result_from_author_payload(proposed_payload, request)
     validate_payload(proposed_result, AUTHOR_RESULT_SCHEMA_VERSION)
-    _assert_machine_stamped_proposal(
-        proposed_result["payload"]["proposal"], request["expected_result"]
-    )
+    expected_bindings = cast("Mapping[str, Any]", request["expected_result"])
+    _assert_machine_stamped_proposal(proposed_result["payload"]["proposal"], expected_bindings)
 
     defer_payload = _prompt_contract_fixture(
         prompt_root / "stage2_author.md",
@@ -428,7 +427,7 @@ def test_prompt_contract_fixtures_materialize_against_registered_schemas(
     defer_result = _author_result_from_author_payload(defer_payload, request)
     validate_payload(defer_result, AUTHOR_RESULT_SCHEMA_VERSION)
     handoff = defer_result["payload"]["handoff_execution"]
-    _assert_machine_stamped_proposal(handoff["proposal"], request["expected_result"])
+    _assert_machine_stamped_proposal(handoff["proposal"], expected_bindings)
     assert handoff["proposal_sha256"] == handoff["proposal"]["proposal_sha256"]
 
     skip_payload = _prompt_contract_fixture(
