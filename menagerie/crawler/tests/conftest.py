@@ -26,6 +26,11 @@ from menagerie.crawler.authority import (
     derive_parent_attestation,
     raw_award_receipt_sha256,
 )
+from menagerie.crawler.checker_dispatch import (
+    AUTHOR_DISPATCHER_COMPONENT,
+    AUTHOR_RESULT_SCHEMA_COMPONENT,
+    component_identity,
+)
 from menagerie.crawler.constants import (
     ATTEMPT_SCHEMA_VERSION_V3 as ATTEMPT_SCHEMA_VERSION,
     AUTHOR_PROPOSAL_SCHEMA_VERSION_V3 as AUTHOR_PROPOSAL_SCHEMA_VERSION,
@@ -2094,8 +2099,8 @@ def make_gate(
         },
         "items": items,
         "result_envelope_sha256": HASH,
-        "author_result_schema_identity": HASH,
-        "dispatcher_identity": HASH,
+        "author_result_schema_identity": component_identity(AUTHOR_RESULT_SCHEMA_COMPONENT),
+        "dispatcher_identity": component_identity(AUTHOR_DISPATCHER_COMPONENT),
     }
     proposal["result_envelope_sha256"] = stable_hash(
         {

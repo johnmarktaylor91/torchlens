@@ -25,6 +25,12 @@ from menagerie.crawler.constants import (
     NO_RUNG_SELECTED,
     SourceRung,
 )
+from menagerie.crawler.checker_dispatch import (
+    AUTHOR_DISPATCHER_COMPONENT,
+    AUTHOR_RESULT_SCHEMA_COMPONENT,
+    CheckerDispatchError,
+    component_identity,
+)
 from menagerie.crawler.identity import (
     compute_execution_identity,
     hash_bytes,
@@ -1684,6 +1690,57 @@ def _require_hash(value: object, field: str) -> str:
         raise AuthorityDerivationError(f"{field} must be a prefixed SHA-256 identity") from exc
     if digest != digest.lower():
         raise AuthorityDerivationError(f"{field} must use lowercase hexadecimal")
+    return digest
+
+
+def _require_derived_component_identity(value: object, field: str, relative: str) -> str:
+    """Return one required identity only when it replays the shipped component's bytes.
+
+    ``_require_hash`` proves only that a value is SHAPED like a digest. An identity the
+    machine can derive from zero arguments must be MACHINE-DERIVED, never merely
+    well-formed: a persisted value that only looks like a digest is indistinguishable
+    from a templated placeholder, and accepting it means the derivation itself is never
+    exercised on the load path.
+
+    Parameters
+    ----------
+    value:
+        Candidate persisted identity.
+    field:
+        Field name used in the failure.
+    relative:
+        Package-relative path of the shipped component that owns this identity.
+
+    Returns
+    -------
+    str
+        The validated identity, equal to the recomputed component identity.
+
+    Raises
+    ------
+    AuthorityDerivationError
+        If the value is not a canonical SHA-256 identity, if the shipped component is
+        unavailable, or if the persisted identity conflicts with the recomputed one. The
+        failure names BOTH values, because the supplied value is the evidence that
+        identifies whether the gate was templated or the component drifted.
+    """
+
+    digest = _require_hash(value, field)
+    try:
+        derived = component_identity(relative)
+    except CheckerDispatchError as exc:
+        raise AuthorityDerivationError(
+            f"{field} cannot be replayed because its authority component is unavailable: "
+            f"{relative}"
+        ) from exc
+    if digest != derived:
+        raise AuthorityDerivationError(
+            f"{field}={digest} conflicts with the identity derived from the shipped "
+            f"component {relative}={derived}; this identity is machine-derived from zero "
+            "arguments, so a conflicting persisted value is evidence the gate was "
+            "templated rather than derived, or that the component drifted after the gate "
+            "was sealed"
+        )
     return digest
 
 
@@ -4001,13 +4058,19 @@ def load_current_gate_proof(gate: Mapping[str, Any]) -> Mapping[str, Any]:
         raise AuthorityDerivationError(_LEGACY_PROOF_RULE)
     _validate_current_ledger_binding(gate, "gate")
     _require_nonempty_string(gate.get("gate_id"), "gate.gate_id")
-    for field in (
-        "gate_identity",
-        "result_envelope_sha256",
-        "author_result_schema_identity",
-        "dispatcher_identity",
-    ):
+    # ``gate_identity`` is the request envelope's own ``envelope_sha256`` and
+    # ``result_envelope_sha256`` binds the stamped body below; neither is derivable from
+    # zero arguments, and the envelope is not recoverable from the persisted gate (the
+    # gate_id seed mixes in a ``request_nonce`` that the gate never carries). They stay
+    # shape-checked. The remaining two ARE zero-argument constants over shipped bytes, so
+    # they are recomputed and compared rather than merely inspected.
+    for field in ("gate_identity", "result_envelope_sha256"):
         _require_hash(gate.get(field), f"gate.{field}")
+    for field, component in (
+        ("author_result_schema_identity", AUTHOR_RESULT_SCHEMA_COMPONENT),
+        ("dispatcher_identity", AUTHOR_DISPATCHER_COMPONENT),
+    ):
+        _require_derived_component_identity(gate.get(field), f"gate.{field}", component)
     checker = gate.get("checker")
     if not isinstance(checker, Mapping):
         raise AuthorityDerivationError("current gate proof lacks its checker envelope")
