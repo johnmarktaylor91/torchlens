@@ -9,6 +9,11 @@ from typing import Any, Mapping, Optional
 
 import pytest
 
+from menagerie.crawler.checker_dispatch import (
+    AUTHOR_DISPATCHER_COMPONENT,
+    AUTHOR_RESULT_SCHEMA_COMPONENT,
+    component_identity,
+)
 from menagerie.crawler.authority import (
     AuthorityContext,
     AuthorityDerivationError,
@@ -433,8 +438,8 @@ def _current_gate(
             "prompt_sha256": HASH_B,
         },
         "items": [deepcopy(dict(item))],
-        "author_result_schema_identity": HASH_C,
-        "dispatcher_identity": HASH_D,
+        "author_result_schema_identity": component_identity(AUTHOR_RESULT_SCHEMA_COMPONENT),
+        "dispatcher_identity": component_identity(AUTHOR_DISPATCHER_COMPONENT),
     }
     gate["result_envelope_sha256"] = stable_hash(
         {key: value for key, value in gate.items() if key != "ledger_seq"}
@@ -591,6 +596,102 @@ def test_current_proof_loaders_reject_legacy_attempts_and_gates() -> None:
     gate["payload_sha256"] = payload_hash(gate)
     with pytest.raises(AuthorityDerivationError, match="legacy rows lack v3 proof"):
         load_current_gate_proof(gate)
+
+
+def _reseal_gate(gate: Mapping[str, Any]) -> dict[str, Any]:
+    """Re-derive both downstream gate self-hashes around a mutated gate body.
+
+    Parameters
+    ----------
+    gate:
+        Mutated gate body.
+
+    Returns
+    -------
+    dict[str, Any]
+        The same body with its result-envelope and payload self-hashes re-derived, so
+        neither self-hash clause can be the one that refuses the mutation under test.
+    """
+
+    resealed = dict(gate)
+    resealed["result_envelope_sha256"] = stable_hash(
+        {
+            key: value
+            for key, value in resealed.items()
+            if key not in {"result_envelope_sha256", "payload_sha256", "ledger_seq"}
+        }
+    )
+    resealed["payload_sha256"] = payload_hash(resealed)
+    return resealed
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize(
+    ("field", "component", "other_component"),
+    (
+        (
+            "author_result_schema_identity",
+            AUTHOR_RESULT_SCHEMA_COMPONENT,
+            AUTHOR_DISPATCHER_COMPONENT,
+        ),
+        (
+            "dispatcher_identity",
+            AUTHOR_DISPATCHER_COMPONENT,
+            AUTHOR_RESULT_SCHEMA_COMPONENT,
+        ),
+    ),
+)
+def test_gate_constant_component_identities_are_recomputed_not_merely_shaped(
+    field: str, component: str, other_component: str
+) -> None:
+    """A well-formed but underived constant identity cannot enter the gate seam.
+
+    Both identities are derived from zero arguments over shipped bytes, so shape
+    validation alone would accept any placeholder and the derivation would never run on
+    the load path. Each case leaves the OTHER identity slot correct, and re-derives both
+    self-hashes, so the refusing clause can only be the recompute.
+    """
+
+    base = _current_gate(_terminal_gate("needs-cuda")["items"][0])
+    assert base[field] == component_identity(component)
+    # The two slots must differ, or a cross-swap would agree trivially and prove nothing.
+    assert component_identity(component) != component_identity(other_component)
+
+    # Control: resealing alone must not refuse, so neither self-hash clause decides below.
+    load_current_gate_proof(_reseal_gate(dict(base)))
+
+    # A real, correctly derived, shape-valid identity of the WRONG component.
+    swapped = _reseal_gate({**base, field: component_identity(other_component)})
+    with pytest.raises(AuthorityDerivationError) as swap_error:
+        load_current_gate_proof(swapped)
+    swap_message = str(swap_error.value)
+    assert f"gate.{field}" in swap_message
+    assert component_identity(other_component) in swap_message
+    assert component_identity(component) in swap_message
+
+    # The historical fixture placeholder, which shape validation accepted.
+    placeholder = _reseal_gate({**base, field: "sha256:" + "a" * 64})
+    with pytest.raises(AuthorityDerivationError, match="conflicts with the identity derived"):
+        load_current_gate_proof(placeholder)
+
+    # Shape refusal is unchanged and still reached first.
+    malformed = _reseal_gate({**base, field: "sha256:" + "z" * 64})
+    with pytest.raises(AuthorityDerivationError, match="must be a prefixed SHA-256 identity"):
+        load_current_gate_proof(malformed)
+
+
+@pytest.mark.smoke
+def test_gate_identity_is_not_bound_to_any_shipped_component() -> None:
+    """``gate_identity`` stays shape-checked because nothing derives it at load.
+
+    It carries the request envelope's own ``envelope_sha256``, and the envelope is not
+    recoverable from the persisted gate: the ``gate_id`` seed mixes in a ``request_nonce``
+    the gate never carries. Binding it would refuse honestly produced gates.
+    """
+
+    base = _current_gate(_terminal_gate("needs-cuda")["items"][0])
+    loose = _reseal_gate({**base, "gate_identity": "sha256:" + "b" * 64})
+    assert load_current_gate_proof(loose) is loose
 
 
 @pytest.mark.parametrize(
