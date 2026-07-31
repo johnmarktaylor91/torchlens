@@ -29,7 +29,11 @@ from menagerie.crawler.constants import (
 from menagerie.crawler.identity import fsync_directory, hash_bytes, stable_hash
 from menagerie.crawler.models import JsonObject
 from menagerie.crawler.proposal import ProposalValidationReport, validate_author_proposal
-from menagerie.crawler.schema import PayloadValidationError, validate_payload
+from menagerie.crawler.schema import (
+    MODEL_SCHEMA_VERSION_V3,
+    PayloadValidationError,
+    validate_payload,
+)
 
 PROMPT_PATH = Path(__file__).with_name("prompts") / f"{AUTHOR_PROMPT_NAME}.txt"
 _CACHE_VERSION = "menagerie.crawler.author-result-cache.v1"
@@ -730,6 +734,27 @@ def build_author_envelope(
             "identity": prompt_identity,
         },
         "author_schema_identity": context.author_schema_identity,
+        # Machine-held dispatch facts the author cannot know, disclosed as their
+        # PREIMAGES rather than as digests.
+        #
+        # ``author`` is the exact four-key object ``expected_result.author_identity``
+        # already publishes the digest of, so disclosing it is strictly weaker than
+        # what this envelope has always shipped. It exists here so the executor can
+        # stamp ``proposal.author`` from one place; it is deliberately NOT a member of
+        # ``expected_result``, whose keys are splatted verbatim into the
+        # ``author-result.v4`` body (``additionalProperties: false``).
+        #
+        # ``checker`` feeds the author-side identity calculator: ``vet_identity`` and
+        # ``fidelity_identity`` are functions of the author's own facts AND of the
+        # checker binding the driver will recompute against, and no author can guess
+        # the latter. Disclosing it cannot manufacture a passing identity -- the
+        # driver still recomputes from the published facts with the binding it holds,
+        # so a calculator fed fabricated facts still yields a refused identity.
+        "identity_inputs": {
+            "author": dict(context.author_model_fields),
+            "checker": dict(context.checker_model_fields),
+            "model_schema_version": MODEL_SCHEMA_VERSION_V3,
+        },
         "prior_attempts": [deepcopy(dict(entry)) for entry in (prior_attempts or ())],
         "expected_result": expected_result,
         "allowed_model_dir": str(Path(allowed_model_dir).resolve()),
@@ -739,6 +764,64 @@ def build_author_envelope(
         "required_proposal_schema": AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
     }
     return {**body, "envelope_sha256": stable_hash(body)}
+
+
+#: Closed key set of ``identity_inputs.author`` / ``identity_inputs.checker``.
+IDENTITY_BINDING_KEYS = frozenset({"provider", "model", "version", "prompt_sha256"})
+
+
+def _identity_binding(envelope: Mapping[str, Any], role: str) -> Mapping[str, str]:
+    """Return one closed machine-held identity preimage from an author envelope.
+
+    Both consumers -- the executor's ``proposal.author`` stamp and the author's
+    identity calculator -- read the disclosure through this ONE accessor, so a
+    shape the envelope does not actually publish cannot be tolerated in one
+    place and refused in the other.
+
+    Parameters
+    ----------
+    envelope:
+        Author request envelope built by :func:`build_author_envelope`.
+    role:
+        ``"author"`` or ``"checker"``.
+
+    Returns
+    -------
+    Mapping[str, str]
+        The exact four-key preimage.
+
+    Raises
+    ------
+    AuthorEngineFaultError
+        If the block is absent, is not an object, or is not exactly the closed
+        key set with string values. An envelope that does not disclose the
+        binding is an engine fault, never a reason to guess one.
+    """
+
+    inputs = envelope.get("identity_inputs")
+    binding = inputs.get(role) if isinstance(inputs, Mapping) else None
+    if (
+        not isinstance(binding, Mapping)
+        or set(binding) != IDENTITY_BINDING_KEYS
+        or not all(isinstance(value, str) and value for value in binding.values())
+    ):
+        raise AuthorEngineFaultError(
+            f"author envelope does not disclose the closed identity_inputs.{role} binding "
+            f"{sorted(IDENTITY_BINDING_KEYS)!r}"
+        )
+    return {key: str(binding[key]) for key in sorted(binding)}
+
+
+def author_identity_binding(envelope: Mapping[str, Any]) -> Mapping[str, str]:
+    """Return the exact ``proposal.author`` preimage the envelope discloses."""
+
+    return _identity_binding(envelope, "author")
+
+
+def checker_identity_binding(envelope: Mapping[str, Any]) -> Mapping[str, str]:
+    """Return the exact checker preimage the envelope discloses."""
+
+    return _identity_binding(envelope, "checker")
 
 
 def validate_author_result(

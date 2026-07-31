@@ -57,6 +57,8 @@ from menagerie.crawler.author_attempts import (
     prior_attempts_summary,
 )
 from menagerie.crawler.author_dispatch import (
+    AuthorEngineFaultError,
+    author_identity_binding,
     derive_terminal_evidence_pack,
     derive_terminal_license_disposition,
 )
@@ -159,6 +161,40 @@ def exa_mcp_config(api_key: Optional[str] = None) -> str:
     return json.dumps({"mcpServers": {"exa": {"type": "http", "url": url}}})
 
 
+#: The identity calculator's module path. The author invokes it as
+#: ``<interpreter> -m <module> --request ... --facts ...``; the grant below pins
+#: the interpreter and the module, so the specifier names one program.
+IDENTITY_TOOL_MODULE = "menagerie.crawler.tools.author_identities"
+
+
+def identity_tool_command() -> str:
+    """Return the exact command prefix the identity-calculator grant names.
+
+    The interpreter is this process's own, so the author is handed the same
+    environment the executor already runs the crawler in and cannot be pointed at
+    a Python that lacks the package.
+
+    Returns
+    -------
+    str
+        ``"<interpreter> -m menagerie.crawler.tools.author_identities"``.
+    """
+
+    return f"{sys.executable} -m {IDENTITY_TOOL_MODULE}"
+
+
+def identity_tool_rule() -> str:
+    """Return the single ``Bash`` permission specifier granting the calculator.
+
+    Returns
+    -------
+    str
+        A prefix specifier of the documented ``Bash(<prefix>:*)`` form.
+    """
+
+    return f"Bash({identity_tool_command()}:*)"
+
+
 def stage_tool_rules(
     *,
     write_root: Path,
@@ -167,17 +203,32 @@ def stage_tool_rules(
     """Return the path-scoped ``--allowedTools`` rules for one session stage.
 
     **The per-attempt directory is the sole writable path.** Confinement is
-    synchronous, not post-hoc: sessions carry no Bash, so the only file
-    surface is the harness ``Read``/``Write``/``Edit`` tools, and those are
+    synchronous, not post-hoc: the only file surface is the harness
+    ``Read``/``Write``/``Edit`` tools, and those are
     granted as **path-scoped permission specifiers** rather than bare tool
     names. In ``-p`` mode an unmatched permission auto-denies, so an
     absolute-path write outside the attempt directory — ``..`` traversal, a
     sibling live attempt's directory, the authority root — is denied by the
-    harness before bytes change. Rename/link escapes have no tool to ride
-    (no Bash), and the executor remains the only publisher to any
+    harness before bytes change. The executor remains the only publisher to any
     lane-visible path: staged model code, source packs, results, and probe
     evidence all leave the attempt directory only through executor-owned
     publication.
+
+    **The one command grant, and why it does not widen that.** Exactly one
+    ``Bash`` rule is emitted: a prefix specifier naming the identity calculator
+    module and nothing else. It is granted because the author lane's other
+    option was to keep asking a language model to reproduce a six-deep nested
+    SHA-256 over canonical JSON by hand, which failed on three fields in ten
+    out of ten published proposals. The confinement bar is unchanged, on three
+    counts: the rule names a fixed module rather than an interpreter or a bare
+    ``Bash`` capability, so no other program is reachable through it; the tool
+    only reads two files and writes its answer to stdout, so it adds no
+    writable path; and per the documented permission model each sub-command of
+    a compound invocation must match a rule on its own, so a chained escape has
+    nothing to chain to. ``_IDENTITY_TOOL_COMMAND`` is single-sourced below and
+    asserted exact by the escape suite, which pins the Bash allowlist to that
+    ONE rule rather than to "no Bash" — an exact allowlist is the stronger
+    assertion, since it fails on an unexpected grant as well as on a missing one.
 
     The escape acceptance suite (Sol's six cases, adopted verbatim) lives in
     ``tests/test_author_executor_escapes.py``; if the harness rules do not
@@ -218,7 +269,7 @@ def stage_tool_rules(
         # ``//`` filesystem-root anchor.
         return f"{tool}(/{path}/**)"
 
-    rules: list[str] = list(RESEARCH_TOOLS)
+    rules: list[str] = [*RESEARCH_TOOLS, identity_tool_rule()]
     for root in dict.fromkeys(Path(r) for r in (*read_roots, write_root)):
         rules.append(scoped("Read", root))
     rules.append(scoped("Edit", write_root))
@@ -766,6 +817,10 @@ def render_stage2_brief(
             f"`{request.get('allowed_model_dir')}`",
             f"- PROPOSAL schema, exact: `{_SCHEMA_ROOT / 'author-proposal-v3.schema.json'}`",
             f"- REFERENCED schema directory, exact: `{_SCHEMA_ROOT}`",
+            # The one command the session may run. Rendered as the exact literal
+            # the permission grant pins, so the brief and the allowlist cannot
+            # drift into naming two different invocations.
+            f"- identity calculator, exact: `{identity_tool_command()}`",
             f"- wall deadline: `{_deadline_iso(wall)}` (external kill at +10%)",
         ]
     )
@@ -1288,6 +1343,11 @@ def _authored_excerpt_records(payload: Mapping[str, Any]) -> tuple[Mapping[str, 
 #: Proposal keys the request envelope already fixes. Every one of them is a value
 #: the executor is handed verbatim in ``expected_result``; asking the author to
 #: transcribe it buys nothing and invites a plausible-looking wrong copy.
+#: The closed ``proposal.author`` key set. The object takes no other key -- an
+#: extra one such as ``actor`` is rejected by the proposal schema outright -- so
+#: the stamp is an exact set comparison, never a merge.
+_AUTHOR_BINDING_KEYS = frozenset({"provider", "model", "version", "prompt_sha256"})
+
 _PROPOSAL_BINDING_KEYS = (
     "campaign_id",
     "stable_id",
@@ -1358,7 +1418,10 @@ def _refuse_conflicting_machine_owned(
 
 
 def _stamp_machine_owned_proposal_fields(
-    proposal: Mapping[str, Any], expected: Mapping[str, Any]
+    proposal: Mapping[str, Any],
+    expected: Mapping[str, Any],
+    *,
+    author_binding: Mapping[str, Any],
 ) -> JsonObject:
     """Stamp every proposal leaf the machine can derive from what it already holds.
 
@@ -1370,10 +1433,25 @@ def _stamp_machine_owned_proposal_fields(
     A required field the machine could compute is both a fabrication invitation
     and a needless failure mode, and it had become the dominant one.
 
-    Three classes move here, and only these three:
+    Four classes move here, and only these four:
 
     * the eight request bindings plus ``schema_version``, all handed to the
       executor verbatim in ``expected_result``;
+    * ``author``, the closed ``{provider, model, version, prompt_sha256}``
+      object. It is a function of NOTHING the author knows -- four machine-held
+      facts about the author's own dispatch -- so recomputing it catches
+      nothing: a "lifted" value here would be the CORRECT value. Left authored,
+      it was pure failure surface, and it fired: across ten published c1-mech
+      proposals the author guessed ``version`` as the prompt FILE NAME
+      (``claude_crawler_author_v2``) or as a model name (``claude-opus-5``),
+      while the campaign holds ``current``. All ten refused at
+      ``_validate_proposal_binding``'s ``stable_hash(author)`` comparison with
+      ``model`` and ``prompt_sha256`` already correct. That comparison is
+      unchanged and still runs; it is now satisfied by construction rather than
+      by the author reproducing a fact it was never told. Stamped
+      UNCONDITIONALLY, like ``proposal_sha256`` and unlike the request
+      bindings: an author that supplies a value here is by definition guessing,
+      so refusing the conflict would only rebuild the wall one layer up;
     * ``proposed_facts.modes.per_mode_run``, which names attempts that do not
       exist at proposal time, so the only honest value is the empty map.
       Its ownership ANNOTATION stays ``author-gated`` and that is correct:
@@ -1397,6 +1475,18 @@ def _stamp_machine_owned_proposal_fields(
     own facts do not produce. Stamping them would make that comparison compare
     the machine against itself.
 
+    They are the exact opposite case to ``author`` above, and the distinction is
+    the whole design: ``author`` is a function of nothing the author knows, so
+    recomputing it catches nothing and the machine must supply it; these five
+    are functions of the author's OWN drafted facts, so recomputing them catches
+    a real lie and the machine must NOT supply them. What the author was missing
+    was never authority over the value -- it was the arithmetic. That is handed
+    over as a calculator instead, ``menagerie.crawler.tools.author_identities``,
+    which runs the very same :func:`recompute_accepted_identities` on facts the
+    author supplies. The tripwire is untouched: identities still have to follow
+    from the published facts, so a calculator fed fabricated facts returns an
+    identity that the driver's recompute refuses just as loudly.
+
     ``proposed_facts.evidence.excerpts[].text_sha256`` looks like the purest
     case of all -- a self-hash of the sibling ``text``, and the terminal
     ``evidence_records`` channel does refuse it from an author outright. It is
@@ -1413,6 +1503,9 @@ def _stamp_machine_owned_proposal_fields(
         Complete authored ``author-proposal.v3`` object.
     expected:
         Trusted ``expected_result`` bindings from the request envelope.
+    author_binding:
+        The exact four-key author preimage the envelope discloses, whose digest
+        is ``expected_result.author_identity``.
 
     Returns
     -------
@@ -1435,6 +1528,17 @@ def _stamp_machine_owned_proposal_fields(
     }
     _refuse_conflicting_machine_owned(bindings, stamped, prefix="proposal.")
     stamped.update(bindings)
+
+    # Unconditional overwrite, not a conflict check: see the ``author`` bullet
+    # above. The executor must hold a real binding to stamp -- an absent or
+    # malformed one is an engine fault, never a licence to leave the author's
+    # guess in place.
+    if not isinstance(author_binding, Mapping) or set(author_binding) != _AUTHOR_BINDING_KEYS:
+        raise AuthorExecutorError(
+            "author request lacks the closed identity_inputs.author binding "
+            f"{sorted(_AUTHOR_BINDING_KEYS)!r}"
+        )
+    stamped["author"] = {key: author_binding[key] for key in sorted(author_binding)}
 
     facts = stamped.get("proposed_facts")
     if isinstance(facts, dict):
@@ -1544,11 +1648,20 @@ def _author_result_from_author_payload(
     expected = request.get("expected_result")
     if not isinstance(expected, Mapping):
         raise AuthorExecutorError("author request lacks expected_result bindings")
+    try:
+        author_binding = author_identity_binding(request)
+    except AuthorEngineFaultError as exc:
+        # Re-typed at the executor boundary: this lane's callers branch on
+        # AuthorExecutorError, and an undisclosed binding is exactly the typed
+        # unavailability that class names.
+        raise AuthorExecutorError(str(exc)) from exc
 
     payload: JsonObject = {"arm": kind, **deepcopy(dict(authored_payload))}
     if kind == "PROPOSED":
         payload["proposal"] = _stamp_machine_owned_proposal_fields(
-            _required_proposal(payload.get("proposal"), "proposed payload proposal"), expected
+            _required_proposal(payload.get("proposal"), "proposed payload proposal"),
+            expected,
+            author_binding=author_binding,
         )
     source_manifest = request.get("source_manifest")
     manifest_sources = (
@@ -1575,7 +1688,9 @@ def _author_result_from_author_payload(
                 "defer payload handoff_execution must contain exactly proposal"
             )
         proposal = _stamp_machine_owned_proposal_fields(
-            _required_proposal(handoff.get("proposal"), "defer handoff proposal"), expected
+            _required_proposal(handoff.get("proposal"), "defer handoff proposal"),
+            expected,
+            author_binding=author_binding,
         )
         implementation = proposal.get("proposed_facts")
         implementation = (

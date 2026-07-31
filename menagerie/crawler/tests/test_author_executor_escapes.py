@@ -38,7 +38,10 @@ from pathlib import Path
 import pytest
 
 from menagerie.crawler.author_executor import (
+    IDENTITY_TOOL_MODULE,
     exa_mcp_config,
+    identity_tool_command,
+    identity_tool_rule,
     stage_tool_rules,
 )
 from menagerie.crawler.tests.executor_test_support import (
@@ -88,11 +91,36 @@ def test_rules_grant_exactly_one_writable_root() -> None:
     )
     scopes = {_scope_filesystem_path(scope) for scope in _write_scopes(rules)}
     assert scopes == {f"{attempt_dir}/**"}
-    # No bare capability grants: every file tool is path-scoped, Bash absent.
+    # No bare capability grants: every file tool is path-scoped.
     assert "Write" not in rules
     assert "Edit" not in rules
     assert "Read" not in rules
-    assert not any(rule.startswith("Bash") for rule in rules)
+    assert "Bash" not in rules
+
+
+def test_bash_allowlist_is_exactly_the_identity_calculator() -> None:
+    """The command grant is one pinned read-only calculator and nothing else.
+
+    This is deliberately an EXACT allowlist rather than the blanket "no Bash"
+    assertion it replaces. A blanket ban only fails on a grant appearing; an
+    exact set fails on that *and* on the pinned grant being widened, renamed, or
+    silently dropped. The rule must stay a prefix specifier naming one module,
+    so it can never resolve to a bare interpreter or a second program.
+    """
+
+    rules = stage_tool_rules(
+        write_root=Path("/work/m1/author/attempts/attempt-001-abc"),
+        read_roots=[Path("/work/m1/author")],
+    )
+    bash_rules = [rule for rule in rules if rule.startswith("Bash")]
+    assert bash_rules == [identity_tool_rule()]
+    prefix = identity_tool_command()
+    assert bash_rules[0] == f"Bash({prefix}:*)"
+    # The pinned prefix names the module explicitly, so the grant cannot be
+    # satisfied by the interpreter alone (``python -c``, ``python evil.py``).
+    assert prefix.endswith(f" -m {IDENTITY_TOOL_MODULE}")
+    # A command grant must never carry a writable path scope.
+    assert "**" not in bash_rules[0]
 
 
 def test_rules_use_only_matchable_forms_with_absolute_anchors() -> None:
@@ -115,7 +143,12 @@ def test_rules_use_only_matchable_forms_with_absolute_anchors() -> None:
         write_root=attempt_dir, read_roots=[Path("/work/m1/author")]
     )
     path_rules = [
-        rule for rule in rules if re.fullmatch(r"[A-Za-z_]+\(.+\)", rule)
+        rule
+        for rule in rules
+        # The one command grant is excluded by exact identity, not by tool name:
+        # any OTHER ``Bash(...)`` rule still falls through to the Read/Edit
+        # assertion below and fails it.
+        if rule != identity_tool_rule() and re.fullmatch(r"[A-Za-z_]+\(.+\)", rule)
     ]
     assert path_rules, "the confinement grant must be path-scoped rules"
     for rule in path_rules:

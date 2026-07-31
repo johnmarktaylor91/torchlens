@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Mapping, cast
@@ -80,6 +81,7 @@ from menagerie.crawler.routing import IntentRoute
 from menagerie.crawler.schema import validate_payload
 from menagerie.crawler.source_broker import TransportResponse
 from menagerie.crawler.tests.executor_test_support import (
+    AUTHOR_IDENTITY_INPUTS,
     COMMITS_URL,
     DEFAULT_DISCOVERY,
     FABRICATED_SHA,
@@ -340,6 +342,7 @@ def test_prompt_contract_fixtures_materialize_against_registered_schemas(
     request = {
         "stable_id": "m-fixture",
         "work_id": "work-m-fixture",
+        "identity_inputs": deepcopy(AUTHOR_IDENTITY_INPUTS),
         "expected_result": {
             "schema_version": AUTHOR_RESULT_SCHEMA_VERSION,
             "stable_id": "m-fixture",
@@ -456,6 +459,7 @@ def test_blocked_without_author_identities_materializes_machine_facts(
         "sources": [{"source_id": "impl-main"}],
     }
     request = {
+        "identity_inputs": deepcopy(AUTHOR_IDENTITY_INPUTS),
         "expected_result": {
             "schema_version": AUTHOR_RESULT_SCHEMA_VERSION,
             "stable_id": "m-blocked",
@@ -515,6 +519,7 @@ def test_defer_without_author_identities_materializes_proposal_facts() -> None:
     """DEFER identities bind the retained proposal evidence and licenses."""
 
     request = {
+        "identity_inputs": deepcopy(AUTHOR_IDENTITY_INPUTS),
         "expected_result": {
             "schema_version": AUTHOR_RESULT_SCHEMA_VERSION,
             "stable_id": "m-fixture",
@@ -576,6 +581,7 @@ def _proposed_request(stable_id: str = "m-fixture") -> dict[str, Any]:
     """
 
     return {
+        "identity_inputs": deepcopy(AUTHOR_IDENTITY_INPUTS),
         "expected_result": {
             "schema_version": AUTHOR_RESULT_SCHEMA_VERSION,
             "stable_id": stable_id,
@@ -719,7 +725,11 @@ def test_stamped_proposal_survives_driver_side_identity_recomputation() -> None:
     undigested = _author_owned_proposal("m-fixture")
     for excerpt in undigested["proposed_facts"]["evidence"]["excerpts"]:
         excerpt.pop("text_sha256", None)
-    stamped = _stamp_machine_owned_proposal_fields(undigested, request["expected_result"])
+    stamped = _stamp_machine_owned_proposal_fields(
+        undigested,
+        request["expected_result"],
+        author_binding=cast("Mapping[str, Any]", AUTHOR_IDENTITY_INPUTS["author"]),
+    )
 
     assert all(
         "text_sha256" not in excerpt
@@ -731,6 +741,7 @@ def test_author_identity_fields_cannot_override_machine_derivation() -> None:
     """Authored identity assertions are rejected instead of trusted or ignored."""
 
     request = {
+        "identity_inputs": deepcopy(AUTHOR_IDENTITY_INPUTS),
         "expected_result": {
             "schema_version": AUTHOR_RESULT_SCHEMA_VERSION,
             "stable_id": "m-blocked",
@@ -769,6 +780,7 @@ def test_blocked_prerequisites_are_semantic_ids_not_schema_paths() -> None:
     """BLOCKED prerequisites name external needs, never omitted output fields."""
 
     request = {
+        "identity_inputs": deepcopy(AUTHOR_IDENTITY_INPUTS),
         "expected_result": {
             "schema_version": AUTHOR_RESULT_SCHEMA_VERSION,
             "stable_id": "m-blocked",

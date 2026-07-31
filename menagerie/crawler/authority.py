@@ -157,8 +157,19 @@ class AuthorityContext:
     author_prompt_identity, author_model_identity, author_schema_identity,
     author_dispatcher_identity:
         Current author contract identities.
+    author_model_fields:
+        The exact four-key preimage ``author_model_identity`` digests
+        (``provider``, ``model``, ``version``, ``prompt_sha256``). It is carried
+        beside the digest, not re-derived downstream, so the value the author
+        lane stamps into ``proposal.author`` and the value the result binding
+        compares against can never be two different objects.
     checker_prompt_identity, checker_model_identity, checker_schema_identity:
         Current checker contract identities.
+    checker_model_fields:
+        The exact four-key preimage ``checker_model_identity`` digests. The
+        author-side identity calculator needs ``model`` and ``version``
+        verbatim to reproduce the vet and fidelity identities the driver
+        recomputes; carrying the preimage keeps the two spellings single-sourced.
     environment_generations:
         Current exact environment identities keyed by environment name.
     reducer_policy_identity, runner_policy_identity, terminal_policy_identity,
@@ -174,9 +185,11 @@ class AuthorityContext:
     author_model_identity: str
     author_schema_identity: str
     author_dispatcher_identity: str
+    author_model_fields: Mapping[str, str]
     checker_prompt_identity: str
     checker_model_identity: str
     checker_schema_identity: str
+    checker_model_fields: Mapping[str, str]
     environment_generations: Mapping[str, str]
     reducer_policy_identity: str
     runner_policy_identity: str
@@ -1568,22 +1581,23 @@ def build_authority_context(
 
     author_prompt = content_identity(f"prompts/{AUTHOR_PROMPT_NAME}.txt")
     checker_prompt = content_identity(f"prompts/{CHECKER_PROMPT_NAME}.txt")
-    author_identity = stable_hash(
-        {
-            "provider": "anthropic",
-            "model": author_model,
-            "version": author_version,
-            "prompt_sha256": author_prompt,
-        }
-    )
-    checker_identity = stable_hash(
-        {
-            "provider": "openai",
-            "model": checker_model,
-            "version": checker_version,
-            "prompt_sha256": checker_prompt,
-        }
-    )
+    # The preimage is built ONCE and both hashed and carried. A second literal
+    # spelling of these four keys anywhere downstream would be a place the digest
+    # and its disclosed preimage could silently disagree.
+    author_fields = {
+        "provider": "anthropic",
+        "model": author_model,
+        "version": author_version,
+        "prompt_sha256": author_prompt,
+    }
+    checker_fields = {
+        "provider": "openai",
+        "model": checker_model,
+        "version": checker_version,
+        "prompt_sha256": checker_prompt,
+    }
+    author_identity = stable_hash(author_fields)
+    checker_identity = stable_hash(checker_fields)
     reducer_policy = stable_hash(
         {
             "reducer": content_identity("reducer.py"),
@@ -1620,9 +1634,11 @@ def build_authority_context(
         author_model_identity=author_identity,
         author_schema_identity=content_identity(AUTHOR_RESULT_SCHEMA_COMPONENT),
         author_dispatcher_identity=content_identity(AUTHOR_DISPATCHER_COMPONENT),
+        author_model_fields=author_fields,
         checker_prompt_identity=checker_prompt,
         checker_model_identity=checker_identity,
         checker_schema_identity=content_identity("schemas/gate-v3.schema.json"),
+        checker_model_fields=checker_fields,
         environment_generations=dict(environment_generations or {}),
         reducer_policy_identity=reducer_policy,
         runner_policy_identity=runner_policy,

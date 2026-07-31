@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from copy import deepcopy
 from pathlib import Path
 
 RESOLVED_SHA = "a" * 39 + "b"
@@ -425,6 +426,28 @@ def write_source_request(root: Path, stable_id: str) -> Path:
     return path
 
 
+#: The machine-held identity preimages every real author envelope discloses. The
+#: executor stamps ``proposal.author`` from ``author`` and refuses a request without
+#: it, so an envelope fixture omitting this block is invalid rather than minimal.
+#: Single-sourced here so the several inline request stubs across the executor tests
+#: cannot drift into disclosing different bindings.
+AUTHOR_IDENTITY_INPUTS: dict[str, object] = {
+    "author": {
+        "provider": "anthropic",
+        "model": "claude-sonnet",
+        "version": "current",
+        "prompt_sha256": "sha256:" + "4" * 64,
+    },
+    "checker": {
+        "provider": "openai",
+        "model": "gpt-5.6-terra",
+        "version": "current",
+        "prompt_sha256": "sha256:" + "9" * 64,
+    },
+    "model_schema_version": "menagerie.crawler.model.v3",
+}
+
+
 def write_author_envelope(root: Path, stable_id: str) -> Path:
     """Write one minimal author envelope stub under the author root.
 
@@ -452,6 +475,7 @@ def write_author_envelope(root: Path, stable_id: str) -> Path:
             "intake_snapshot_sha256": "sha256:" + "7" * 64,
             "intake_item_sha256": "sha256:" + "8" * 64,
         },
+        "identity_inputs": deepcopy(AUTHOR_IDENTITY_INPUTS),
         "source_manifest": {
             "manifest_sha256": "sha256:" + "6" * 64,
             "sources": [{"source_id": "impl-net"}],

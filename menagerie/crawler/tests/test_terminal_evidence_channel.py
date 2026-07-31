@@ -22,6 +22,7 @@ tests pin the four properties that make it a contract rather than a convenience:
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +43,7 @@ from menagerie.crawler.driver_contracts import AuthorArtifact
 from menagerie.crawler.driver_models import _terminal_checker_item
 from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.schema import validate_payload
+from menagerie.crawler.tests.executor_test_support import AUTHOR_IDENTITY_INPUTS
 from menagerie.crawler.terminal_evidence import (
     CHANNEL_ATTEMPT_DIRECTORY,
     CHANNEL_DECLARED,
@@ -445,6 +447,7 @@ def _executor_request() -> dict[str, Any]:
     return {
         "stable_id": "m-fixture",
         "work_id": "work-m-fixture",
+        "identity_inputs": deepcopy(AUTHOR_IDENTITY_INPUTS),
         "expected_result": {
             "schema_version": AUTHOR_RESULT_SCHEMA_VERSION,
             "stable_id": "m-fixture",

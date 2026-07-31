@@ -1,0 +1,315 @@
+"""Derive an author proposal's five accepted identities from the author's own facts.
+
+WHY THIS EXISTS
+---------------
+``driver_admission._validate_artifact_identities`` recomputes ``source_identity``,
+``evidence_identity``, ``recipe_revision``, ``vet_identity``, and
+``fidelity_identity`` from a proposal's ``proposed_facts`` and refuses a mismatch.
+That recompute is a genuine tripwire: each of the five is a pure function of the
+author's own declared facts, so a proposal whose identity does not follow from its
+facts lifted that identity from somewhere, and the driver catches it. The check
+must not be loosened and the identities must not be machine-stamped -- stamping
+would make the driver compare itself.
+
+What the author was actually missing was never the authority to make the claim. It
+was the ARITHMETIC. The derivation is canonical JSON (``sort_keys``,
+``separators=(",",":")``, ``ensure_ascii=False``) over a projected six-field excerpt
+subset, then SHA-256, nested six deep. Expecting a language model to reproduce that
+byte-exactly by hand is what produced ten straight refusals with three fields wrong
+every time.
+
+So the arithmetic is handed over as a calculator, and only the arithmetic. This
+module runs the very same :func:`recompute_accepted_identities` the driver runs, on
+facts the author supplies, and prints the result. It is the same relationship the
+author already has with ``sha256sum``.
+
+WHAT THIS IS NOT
+----------------
+It is a CALCULATOR, never a second author. Three boundaries make that structural
+rather than aspirational:
+
+1. **It computes only from facts the author supplies.** It never fetches a source,
+   never consults the catalog, never infers a missing leaf, and never fills a
+   default. Incomplete facts produce a typed refusal naming what is missing, not a
+   guess that would launder an unmade claim into a real identity.
+2. **It cannot be used to satisfy the check without the facts being real.** The
+   driver's recompute is unchanged and runs over the PUBLISHED facts with the
+   binding the machine holds. Feed this tool fabricated facts and it faithfully
+   returns the identity of that fabrication -- which then fails against the real
+   artifacts exactly as before. The tool removes arithmetic failure, not factual
+   failure.
+3. **It refuses to take an identity as input.** The five identities are stripped
+   from the supplied facts before derivation, so a draft that already carries a
+   guessed identity cannot have that guess echoed back as though it were computed.
+
+The checker half of the vet/fidelity derivation (``checker_model``,
+``checker_version``, and the frozen checker prompt digest) is a machine-held fact
+about a dispatch the author has no view of, so it is read from the request
+envelope's ``identity_inputs`` disclosure. The envelope's own ``envelope_sha256`` is
+re-verified first, so a doctored binding cannot be smuggled in -- and even if one
+were, the driver recomputes with the binding IT holds, so the only achievable
+outcome is a refusal.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+from typing import Any, Mapping, Optional, Sequence
+
+from menagerie.crawler.author_dispatch import (
+    AuthorEngineFaultError,
+    checker_identity_binding,
+)
+from menagerie.crawler.identity import stable_hash
+from menagerie.crawler.metadata import (
+    MetadataValidationError,
+    recompute_accepted_identities,
+)
+from menagerie.crawler.schema import MODEL_SCHEMA_VERSION_V3
+
+#: The five proposal-level identities this tool derives, in report order. These are
+#: exactly the keys ``_validate_artifact_identities`` compares.
+DERIVED_IDENTITY_FIELDS = (
+    "source_identity",
+    "evidence_identity",
+    "recipe_revision",
+    "vet_identity",
+    "fidelity_identity",
+)
+
+
+class IdentityToolError(RuntimeError):
+    """Raised when the calculator cannot honestly derive an identity."""
+
+
+def _read_json(path: Path, label: str) -> Any:
+    """Read one UTF-8 JSON document or fail typed.
+
+    Parameters
+    ----------
+    path:
+        Path to read.
+    label:
+        Human name used in the refusal.
+
+    Returns
+    -------
+    Any
+        Parsed JSON document.
+
+    Raises
+    ------
+    IdentityToolError
+        If the file is unreadable or is not valid JSON.
+    """
+
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        raise IdentityToolError(f"{label} is unreadable at {path}: {exc}") from exc
+    try:
+        return json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise IdentityToolError(f"{label} at {path} is not one UTF-8 JSON document: {exc}") from exc
+
+
+def _verify_envelope(envelope: Any) -> Mapping[str, Any]:
+    """Return the request envelope after re-verifying its own self-hash.
+
+    The envelope is the ONLY input this tool takes that it did not get from the
+    author, so it is the only one worth authenticating. ``build_author_envelope``
+    hashes the complete body into ``envelope_sha256``; recomputing it here means a
+    hand-edited ``identity_inputs`` block fails loudly at the calculator rather than
+    silently producing an identity nobody can use.
+
+    Parameters
+    ----------
+    envelope:
+        Parsed request envelope document.
+
+    Returns
+    -------
+    Mapping[str, Any]
+        The verified envelope.
+
+    Raises
+    ------
+    IdentityToolError
+        If the document is not an object or its self-hash does not bind it.
+    """
+
+    if not isinstance(envelope, Mapping):
+        raise IdentityToolError("request envelope must be one JSON object")
+    expected = stable_hash({key: value for key, value in envelope.items() if key != "envelope_sha256"})
+    if envelope.get("envelope_sha256") != expected:
+        raise IdentityToolError(
+            "envelope_sha256 does not bind the request envelope; refusing to derive an "
+            "identity from an unverified machine binding"
+        )
+    return envelope
+
+
+def _authored_facts(document: Any) -> Mapping[str, Any]:
+    """Return the author's drafted ``proposed_facts`` from a facts or proposal file.
+
+    Both spellings are accepted because both are the same authored object at a
+    different nesting depth: a draft proposal, or the ``proposed_facts`` block on its
+    own. Anything else is refused rather than searched -- guessing which sub-object
+    the author meant is exactly the inference this tool must not perform.
+
+    Parameters
+    ----------
+    document:
+        Parsed facts document.
+
+    Returns
+    -------
+    Mapping[str, Any]
+        The drafted fact block, with any already-guessed identity removed.
+
+    Raises
+    ------
+    IdentityToolError
+        If no unambiguous fact block is present.
+    """
+
+    if not isinstance(document, Mapping):
+        raise IdentityToolError("facts document must be one JSON object")
+    facts = document.get("proposed_facts") if "proposed_facts" in document else document
+    if not isinstance(facts, Mapping):
+        raise IdentityToolError("facts document has no proposed_facts object")
+    if "evidence" not in facts or "source_resolution" not in facts:
+        raise IdentityToolError(
+            "facts document is not a proposed_facts block: it declares neither "
+            "source_resolution nor evidence. Pass your drafted proposal, or its "
+            "proposed_facts object -- this tool derives identities from facts and "
+            "never supplies a fact you did not write."
+        )
+    # An identity supplied on the way IN could only be a guess, and echoing a guess
+    # back as a computed value is the one way a calculator could become a laundry.
+    return {key: value for key, value in facts.items() if key not in DERIVED_IDENTITY_FIELDS}
+
+
+def derive_identities(
+    *, envelope: Mapping[str, Any], facts_document: Any
+) -> dict[str, Optional[str]]:
+    """Derive the five accepted identities from authored facts and the machine binding.
+
+    Parameters
+    ----------
+    envelope:
+        Verified author request envelope.
+    facts_document:
+        The author's drafted proposal or ``proposed_facts`` object.
+
+    Returns
+    -------
+    dict[str, str | None]
+        The five identities; ``fidelity_identity`` is ``None`` when the rung and
+        fidelity facts do not require one.
+
+    Raises
+    ------
+    IdentityToolError
+        If the envelope does not disclose a checker binding, or the facts are too
+        incomplete to derive from.
+    """
+
+    try:
+        checker = checker_identity_binding(envelope)
+    except AuthorEngineFaultError as exc:
+        raise IdentityToolError(str(exc)) from exc
+    inputs = envelope.get("identity_inputs")
+    schema_version = MODEL_SCHEMA_VERSION_V3
+    if isinstance(inputs, Mapping) and isinstance(inputs.get("model_schema_version"), str):
+        schema_version = str(inputs["model_schema_version"])
+    facts = _authored_facts(facts_document)
+    try:
+        # The REAL function the driver runs. Reimplementing the derivation here to
+        # "verify" it would verify nothing: the two copies would only ever agree
+        # with each other.
+        identities = recompute_accepted_identities(
+            facts,
+            checker_prompt_hash=checker["prompt_sha256"],
+            checker_model=checker["model"],
+            checker_version=checker["version"],
+            schema_version=schema_version,
+        )
+    except MetadataValidationError as exc:
+        raise IdentityToolError(
+            f"facts are incomplete, so no identity follows from them: {exc}"
+        ) from exc
+    return {
+        "source_identity": identities.source,
+        "evidence_identity": identities.evidence,
+        "recipe_revision": identities.recipe,
+        "vet_identity": identities.vet,
+        "fidelity_identity": identities.fidelity,
+    }
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Build the calculator's argument parser.
+
+    Returns
+    -------
+    argparse.ArgumentParser
+        Parser taking exactly the request envelope and the authored facts.
+    """
+
+    parser = argparse.ArgumentParser(
+        prog="python -m menagerie.crawler.tools.author_identities",
+        description=(
+            "Derive a proposal's source/evidence/recipe/vet/fidelity identities from "
+            "the facts you drafted. Computes only from what you supply; never fetches, "
+            "infers, or fills a fact."
+        ),
+    )
+    parser.add_argument(
+        "--request",
+        type=Path,
+        required=True,
+        help="The REQUEST envelope named in JOB FACTS (read for the checker binding).",
+    )
+    parser.add_argument(
+        "--facts",
+        type=Path,
+        required=True,
+        help="Your drafted proposal, or its proposed_facts object, as one JSON file.",
+    )
+    return parser
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    """Run the calculator.
+
+    Parameters
+    ----------
+    argv:
+        Argument vector; defaults to ``sys.argv[1:]``.
+
+    Returns
+    -------
+    int
+        ``0`` on success, ``2`` on a typed refusal.
+    """
+
+    args = build_parser().parse_args(argv)
+    try:
+        envelope = _verify_envelope(_read_json(args.request, "request envelope"))
+        identities = derive_identities(
+            envelope=envelope,
+            facts_document=_read_json(args.facts, "facts document"),
+        )
+    except IdentityToolError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(identities, indent=2, sort_keys=True, ensure_ascii=False))
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover - CLI entry point
+    raise SystemExit(main())

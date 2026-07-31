@@ -103,10 +103,10 @@ when every claim inside it is excellent.
 
 The `$complete_author_proposal_v3` sentinel documents the insertion point only. Never
 write it literally. The inserted object must contain every top-level proposal field and
-the complete `proposed_facts` object required by the registered schema, **except the ten
-the executor supplies** -- see immediately below.
+the complete `proposed_facts` object required by the registered schema, **except the
+eleven the executor supplies** -- see immediately below.
 
-### Ten proposal fields the executor fills in
+### Eleven proposal fields the executor fills in
 
 The registered proposal schema marks these required, but they are the machine's, not
 yours. Omit them; the executor supplies each one and rejects a value that disagrees with
@@ -119,6 +119,11 @@ what it holds.
   wrong copy.
 - `proposal_sha256`, the digest of the finished proposal. The executor derives it last,
   after it has filled the fields above, so an authored value could not be correct anyway.
+- `author`, the closed `{provider, model, version, prompt_sha256}` object naming the model
+  that wrote the proposal. **Omit it.** It describes the machine's own dispatch of you,
+  not anything you can observe: `version` is the campaign's author-version string, not the
+  prompt's file name and not a model name. The executor stamps it and overwrites whatever
+  is there, so writing one is wasted effort rather than an error.
 
 `proposed_facts.modes.per_mode_run` is likewise the executor's, and the reason is not
 bookkeeping: nothing has run when you write a proposal, so there is no per-mode outcome
@@ -130,9 +135,37 @@ Everything else in the proposal is yours, **including `proposed_facts.evidence`
 feeds the evidence identity the engine re-derives, so it is still required here. Compute
 it as `identity.hash_bytes(text.encode("utf-8"))` over the exact text you quoted.
 
-`proposal.author` is a closed object of exactly `provider`, `model`, `version`, and
-`prompt_sha256`. It takes no other key: an extra one such as `actor` is rejected outright
-rather than ignored.
+### The five identities are yours, and there is a calculator for them
+
+`source_identity`, `evidence_identity`, `recipe_revision`, `vet_identity`, and
+`fidelity_identity` stay **yours**, and the engine recomputes every one of them from your
+published `proposed_facts` and refuses a mismatch. That is not bookkeeping: each is a pure
+function of the facts you declared, so an identity that does not follow from your own facts
+is the engine catching a claim you did not actually make. It is not relaxed, and the
+executor will not fill these in for you.
+
+What you are not expected to do is the arithmetic. The derivation is canonical JSON over a
+projected excerpt subset, SHA-256, nested six deep; reproducing it by hand is how ten
+straight proposals arrived with three of the five wrong. Run the calculator instead, using
+the exact interpreter and module named in the JOB FACTS `identity calculator` line:
+
+```
+<identity calculator> --request <REQUEST envelope path> --facts <your drafted facts file>
+```
+
+Write your drafted proposal (or just its `proposed_facts` object) to a JSON file under your
+attempt directory and pass that as `--facts`. The tool prints a JSON object with the five
+identities; copy each into your proposal, including the
+`proposed_facts.implementation.recipe_revision` and
+`proposed_facts.evidence.evidence_identity` copies.
+
+Two things it will not do. It never fetches, infers, or invents a fact -- it computes only
+from the facts you hand it, and refuses with a message naming what is missing if they are
+incomplete. And it is not a way around the check: it faithfully returns the identity of
+whatever facts you give it, so an identity computed from a fact you have not actually
+grounded still fails against the real artifacts. Draft the facts honestly first, then
+compute. Re-run it if you change any fact afterwards -- the identities move when the facts
+move.
 
 ### Every terminal arm carries its excerpts in `evidence_records`
 
