@@ -1544,6 +1544,44 @@ def _placeholder_facts(
     }
 
 
+def _handoff_selected_rung(result: DeferRecommendation) -> str:
+    """Return the ladder rung a platform deferral's executable handoff selected.
+
+    A ``DeferRecommendation`` carries a REQUIRED ``handoff_execution`` whose proposal was
+    already validated through ``SourceRung(...)``, so in every well-formed deferral this
+    is a genuine ladder rung the deferred sweep will execute. It is re-validated here
+    rather than trusted by shape, because this value lands in a structured field every
+    report counts and the sentinel is deliberately not a ladder member.
+
+    An unreadable or non-canonical rung DEGRADES to ``NO_RUNG_SELECTED`` instead of
+    raising. The sentinel is the honest record of "we cannot say which rung was
+    selected", it is a coherent fact under a ``deferred:*`` kind
+    (``NO_RUNG_SELECTED_STATUS_KINDS``), and it is strictly weaker than the ``R5_SKIP``
+    this replaces. Raising would let one malformed handoff abort a whole campaign, which
+    is the same totality the BLOCKED terminal mapping is careful to preserve.
+
+    Parameters
+    ----------
+    result:
+        Adjudicated platform-deferral recommendation.
+
+    Returns
+    -------
+    str
+        Canonical ``SourceRung`` value, or ``NO_RUNG_SELECTED`` when none can be read.
+    """
+
+    handoff = result.handoff_execution
+    proposal = handoff.proposal if handoff is not None else None
+    facts = proposal.get("proposed_facts") if isinstance(proposal, Mapping) else None
+    resolution = facts.get("source_resolution") if isinstance(facts, Mapping) else None
+    rung = resolution.get("rung") if isinstance(resolution, Mapping) else None
+    try:
+        return SourceRung(str(rung)).value
+    except ValueError:
+        return NO_RUNG_SELECTED
+
+
 def _assemble_terminal_model(
     item: WorkItem,
     artifact: Optional[AuthorArtifact],
@@ -1726,18 +1764,34 @@ def _assemble_terminal_model(
                         },
                     }
                 )
-        # THE ONE PLACE A TERMINAL ARM'S RUNG IS DECIDED. A SKIP or a platform DEFER is a
-        # checked terminal disposition that walked the ladder to its end, so it earns R5
-        # and must say so explicitly. It used to inherit R5_SKIP silently from the
-        # unresolved placeholder; now that the placeholder is honest about having selected
-        # nothing, the rung has to be stated where it is actually concluded.
+        # THE ONE PLACE A TERMINAL ARM'S RUNG IS DECIDED, and each arm gets the rung it
+        # actually concluded -- never a shared default.
+        #
+        # A SKIP is the one arm whose conclusion IS ``R5_SKIP``: it walked the ladder to
+        # its end and found no faithful source path. That claim is re-certified later by
+        # ``authority._validate_skip_predicate``, reached through ``_derive_skip`` for a
+        # ``skipped:*`` status, so the stamp here is a claim something downstream checks.
+        #
+        # A PLATFORM DEFER concluded the opposite. Its ``handoff_execution`` is REQUIRED
+        # and carries a complete executable proposal whose ``source_resolution.rung`` was
+        # validated through ``SourceRung(...)`` at parse time -- a genuine ladder rung,
+        # sentinel excluded. The model has working code; the only thing missing is a host
+        # with the named capability, and the Linux deferred sweep will run exactly this
+        # proposal. Stamping ``R5_SKIP`` there asserted "no faithful source path exists"
+        # about a model we hold a faithful source path FOR, and nothing ever contested it:
+        # the R5 certification is reachable only from ``_derive_skip``, which never runs
+        # for a ``deferred:*`` status, while ``status.funnel_counts`` counts ``rung:``
+        # unconditionally. Nothing rewrites a record in place either -- the sweep emits a
+        # NEW revision -- so on a run-once campaign the false R5 was permanent for every
+        # deferred model the sweep never reached. The honest value already exists in the
+        # artifact and is author-published and hash-bound, exactly like the rest of this
+        # author-gated block, so it is propagated rather than re-derived.
         #
         # A BLOCKED arm is excluded ENTIRELY -- every reason code, not just the access
         # subset. ``_blocked_terminal`` is total and maps all of them onto ``failed:*`` or
         # ``deferred:*``; none lands on ``skipped:*``, so ``_derive_skip`` never runs and
         # nothing in the pipeline would ever re-check an R5 stamped here. That is what
-        # makes it a false structured fact rather than a recoverable one: ``R5_SKIP`` is
-        # the CHECKED conclusion that no faithful source path exists, and BLOCKED claims
+        # makes it a false structured fact rather than a recoverable one: BLOCKED claims
         # only that a prerequisite stopped us BEFORE the ladder ended -- an authoring tier
         # we do not have, a locator we may not read, a source we could not obtain. The
         # ladder was not walked, which is precisely the case the sentinel exists for.
@@ -1748,10 +1802,30 @@ def _assemble_terminal_model(
         # all -- was certified as unresolvable when it was merely unfinished. That stamp is
         # gone; for SKIP and DEFER it was strictly redundant with this one, and for BLOCKED
         # it was wrong.
-        if terminal_gate_obtained and isinstance(
-            terminal_result, (SkipRecommendation, DeferRecommendation)
-        ):
+        if terminal_gate_obtained and isinstance(terminal_result, SkipRecommendation):
             facts["source_resolution"]["rung"] = SourceRung.SKIP.value
+        elif terminal_gate_obtained and isinstance(terminal_result, DeferRecommendation):
+            deferred_rung = _handoff_selected_rung(terminal_result)
+            facts["source_resolution"]["rung"] = deferred_rung
+            # The placeholder's ``author-lane-failed / not-reached`` cannot survive beside
+            # a selected rung: the author lane ran to completion and published the very
+            # handoff being deferred. Leaving it would make the corrected block contradict
+            # itself in the same breath. The entry states what the artifact states -- the
+            # rung the handoff selected, and the platform predicate it is waiting on -- and
+            # cites the terminal evidence already bound to this record, never the handoff
+            # proposal's own evidence ids, which name a different evidence block.
+            facts["source_resolution"]["attempted_rungs"] = [
+                {
+                    "rung": deferred_rung,
+                    "result": (
+                        "selected-deferred-to-platform"
+                        if deferred_rung != NO_RUNG_SELECTED
+                        else "not-reached"
+                    ),
+                    "reason_code": terminal_predicate,
+                    "evidence_ids": list(terminal_evidence_ids),
+                }
+            ]
         elif terminal_gate_obtained and isinstance(terminal_result, BlockedRecommendation):
             # The rung stays the sentinel, but the placeholder's ``author-lane-failed``
             # must not survive: the author lane RAN TO COMPLETION and published this very
