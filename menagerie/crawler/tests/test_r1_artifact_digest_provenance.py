@@ -29,6 +29,7 @@ from menagerie.crawler.constants import (
     MODEL_SCHEMA_VERSION_V3,
 )
 from menagerie.crawler.driver_admission import _routed_environment_packages
+from menagerie.crawler.envs import load_environment_registry
 from menagerie.crawler.metadata import authored_fact_leaves
 from menagerie.crawler.recipe import (
     RecipeError,
@@ -383,6 +384,30 @@ def test_an_unknown_routed_intent_yields_no_inventory() -> None:
     """Missing routing degrades to an empty inventory instead of raising."""
 
     assert _routed_environment_packages(None, "core") == ()
+
+
+@pytest.mark.smoke
+def test_the_real_registry_is_read_without_fabricating_rows() -> None:
+    """Every routable intent either yields exact rows or yields nothing.
+
+    An UNLOCKED target is the current shipped state for every intent, and it
+    must produce an honest null digest rather than a guess. A LOCKED target must
+    produce rows carrying the exact identity fields the derivation reads, so the
+    digest binds automatically the moment a target is locked.
+    """
+
+    registry = load_environment_registry(target="osx-arm64")
+
+    assert registry.intents, "the registry must expose routable intents"
+    for name, intent in registry.intents.items():
+        packages = _routed_environment_packages(registry, name)
+        if intent.lock.export_bytes is None:
+            assert packages == (), name
+            continue
+        assert packages, name
+        for row in packages:
+            assert {"name", "version", "sha256"} <= set(row), name
+            assert re.fullmatch(r"sha256:[0-9a-f]{64}", str(row["sha256"])), name
 
 
 @pytest.mark.smoke
