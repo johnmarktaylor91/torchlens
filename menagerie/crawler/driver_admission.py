@@ -3701,6 +3701,24 @@ class AdmissionEnvironmentMixin:
             try:
                 _validate_artifact_identities(artifact, self.config, item=item)
             except DriverIntegrationError as exc:
+                # Same legibility gap as the author-lane arm above, and demonstrably the
+                # NEXT wall for the same models: `_validate_artifact_identities`
+                # recomputes five author-gated identities and its message carries the
+                # per-field claimed/computed mismatch dict -- the entire diagnostic --
+                # into a `detail` the terminal then nulls. The reason code is correct
+                # here, so only the cause needs surfacing.
+                operational.append(
+                    _model_lane_failure_event(
+                        stable_id=item.stable_id,
+                        work_id=item.active_work_id,
+                        status_code="failed:evidence",
+                        reason_code="coverage-incomplete",
+                        exc=exc,
+                        run_id=self.config.run_id,
+                        machine_id=self.config.machine_id,
+                        created_at=self.dependencies.clock(),
+                    )
+                )
                 attempt = _driver_failure_attempt(
                     item,
                     artifact,

@@ -424,6 +424,52 @@ def test_lane_failure_events_distinguish_the_two_owners(tmp_path: Path) -> None:
         )
 
 
+def test_identity_mismatch_terminal_also_names_its_cause() -> None:
+    """The NEXT wall for these same ten models is legible too.
+
+    ``_validate_artifact_identities`` recomputes five author-gated identities and
+    raises ``DriverIntegrationError`` carrying the per-field claimed/computed mismatch
+    dict -- the entire diagnostic -- into a detail the terminal then nulls. All ten
+    pilot proposals mismatch ``source_identity``, ``evidence_identity``, and
+    ``recipe_revision`` as well, so fixing only the author block moves them here.
+
+    Its reason code is NOT reclassified. ``DriverIntegrationError`` is an engine
+    exception TYPE carrying an author-CONTENT fault, and blanket-routing the type to
+    ``failed:runner`` would be exactly the wrong-census mistake in the other
+    direction. Only the cause is surfaced.
+    """
+
+    from menagerie.crawler.driver_contracts import DriverIntegrationError
+
+    exc = DriverIntegrationError(
+        "author proposal identity mismatch: "
+        "{'evidence_identity': {'claimed': 'sha256:aa', 'computed': 'sha256:bb'}}"
+    )
+    event = dict(
+        _model_lane_failure_event(
+            stable_id="m3671",
+            work_id="work-m3671",
+            status_code="failed:evidence",
+            reason_code="coverage-incomplete",
+            exc=exc,
+            run_id="run-pilot",
+            machine_id="mymini",
+            created_at="2026-07-31T10:19:06.504798Z",
+        )
+    )
+
+    assert event["error_summary"].startswith(
+        "DriverIntegrationError: author proposal identity mismatch:"
+    )
+    assert event["details"]["error_type"] == "DriverIntegrationError"
+    assert event["details"]["reason_code"] == "coverage-incomplete"
+    assert "coverage-incomplete" in FAILURE_REASON_CODES["evidence"]
+    validate_payload(
+        {**event, "ledger_seq": 1, "payload_sha256": "sha256:" + "0f" * 32},
+        OPERATIONAL_EVENT_SCHEMA_VERSION,
+    )
+
+
 def test_lane_failure_event_survives_an_exception_with_no_traceback() -> None:
     """A raise site is a best-effort discriminator; its absence never aborts a terminal.
 
