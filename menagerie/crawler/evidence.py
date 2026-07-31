@@ -26,6 +26,10 @@ class EvidenceValidationReport:
         Claim categories named by at least one valid excerpt.
     family_grounded:
         Whether at least one excerpt is explicitly family-level.
+    absence_covered_claims:
+        Claim categories discharged by a typed absence state rather than by an excerpt.
+        Kept separate from ``supported_claims`` so a declared absence can never be
+        mistaken for positive literal support when reading the report.
     """
 
     excerpt_count: int
