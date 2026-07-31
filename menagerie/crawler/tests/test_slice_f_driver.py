@@ -1842,11 +1842,10 @@ def test_runner_execution_manifest_is_compositional_by_selected_modality(
             b"    _validate_structural_slop(facts, code_paths)\n",
             b"    _validate_structural_slop(facts, tuple(code_paths))\n",
         ),
-        (
-            "checkpoint.py",
-            b'                and item.get("campaign_root_work_id") == campaign_root\n',
-            b'                and item.get("campaign_root_work_id") == work_id\n',
-        ),
+        # `checkpoint.py` no longer appears here: its only award-closure root was
+        # the retired `_reconstruction_has_canonical_anchor`, so the module never
+        # contributed a live binding to track. Reconstruction authority is proven
+        # by the artifact ledger, not by the award closure.
         (
             "reducer.py",
             b"    raw_current = _select_current(models)\n",
