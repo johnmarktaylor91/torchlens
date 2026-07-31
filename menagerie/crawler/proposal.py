@@ -101,10 +101,18 @@ EMPTIABLE_CLAIMS = frozenset(
         "taxonomy.novel_ops",
     }
 )
-#: Availability statuses that assert a claim carries no value. ``none-exist`` says the
-#: fact does not exist; ``not-found-after-search`` says it could not be established.
-#: Both are positive claims and both require the recorded bounded search.
-ABSENT_AVAILABILITY_STATUSES = frozenset({"none-exist", "not-found-after-search"})
+#: Availability statuses that assert a claim carries no value. Every one of them is a
+#: typed, recorded, queryable declaration, so every one of them discharges its own
+#: claim's evidence coverage -- there is no excerpt that says a fact is not there. The
+#: distinction that matters for coverage is declared-versus-bare, not which absence.
+ABSENCE_AVAILABILITY_STATUSES = frozenset(
+    {"none-exist", "not-found-after-search", "not-applicable"}
+)
+#: The absence statuses that additionally assert a search happened. ``none-exist`` says
+#: the fact does not exist and ``not-found-after-search`` says it could not be
+#: established; both are findings and both must carry the bounded search that produced
+#: them. ``not-applicable`` asserts the field does not pertain, which no search informs.
+SEARCH_BACKED_AVAILABILITY_STATUSES = frozenset({"none-exist", "not-found-after-search"})
 #: Claims that may declare a typed availability state instead of a value. These are the
 #: judgment facts that can be honestly unknowable for a real model, plus the collection
 #: facts whose honest answer is often "there are none". See
@@ -987,7 +995,7 @@ def declared_absence_coverage(
         if claim not in AVAILABILITY_CLAIMS:
             continue
         record = _availability_record(facts, claim)
-        if record is None or record.get("status") not in ABSENT_AVAILABILITY_STATUSES:
+        if record is None or record.get("status") not in ABSENCE_AVAILABILITY_STATUSES:
             continue
         cited = record.get("evidence")
         if not isinstance(cited, list):
@@ -1084,7 +1092,7 @@ def _validate_availability_record(
         raise ProposalValidationError(
             f"availability state for {claim} declares {status} but the field carries a value"
         )
-    if status in ABSENT_AVAILABILITY_STATUSES:
+    if status in SEARCH_BACKED_AVAILABILITY_STATUSES:
         # Until the source broker ships probe receipts, the recorded bounded search IS
         # the evidence for an absence state; explicit excerpt IDs may corroborate it.
         # ``none-exist`` is held to the same bar as ``not-found-after-search``: asserting
