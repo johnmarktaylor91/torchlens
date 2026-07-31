@@ -11,8 +11,10 @@ import pytest
 
 from menagerie.crawler.author_dispatch import (
     AuthorResultBinding,
+    BlockedRecommendation,
     DeferRecommendation,
     HandoffExecution,
+    derive_terminal_evidence_pack,
 )
 from menagerie.crawler.authority import AuthorityDerivationError, load_current_gate_proof
 from menagerie.crawler.checker_dispatch import (
@@ -594,6 +596,180 @@ def test_terminal_disposition_gate_resolves_exact_advisory_references() -> None:
 
     gate["items"][0]["terminal_disposition"]["source_ids"] = ["source-fabricated"]
     with pytest.raises(GateRoutingError, match="source IDs"):
+        validate_terminal_disposition_gate(
+            gate,
+            result,
+            source_manifest=source_manifest,
+            evidence_pack=evidence_pack,
+            license_identity=HASH,
+        )
+
+
+def _blocked_terminal_fixture(
+    manifest_source_ids: tuple[str, ...], evidence_ids: tuple[str, ...]
+) -> tuple[dict[str, Any], BlockedRecommendation, dict[str, Any], dict[str, Any]]:
+    """Build one BLOCKED terminal gate exactly as the production lane builds it.
+
+    Every identity here is derived the way ``driver_models._terminal_checker_item``
+    derives it: the checked source set for a BLOCKED arm is the WHOLE frozen
+    manifest -- the arm carries no ``source_ids`` of its own -- and the evidence
+    identity is the round-robin citation table hashed over that same set. The
+    envelope ships that table under ``identity_preimage``, which is what the real
+    driver hands the gate.
+
+    Parameters
+    ----------
+    manifest_source_ids:
+        Frozen manifest rows, in manifest order.
+    evidence_ids:
+        Evidence IDs the BLOCKED result cites.
+
+    Returns
+    -------
+    tuple[dict, BlockedRecommendation, dict, dict]
+        Gate, typed result, source manifest, and evidence pack.
+    """
+
+    source_manifest = {
+        "manifest_sha256": HASH,
+        "sources": [{"source_id": source_id} for source_id in manifest_source_ids],
+    }
+    derived = derive_terminal_evidence_pack(
+        source_ids=manifest_source_ids,
+        evidence_ids=evidence_ids,
+        predicate="blocked-prerequisite",
+    )
+    evidence_pack = {
+        "evidence_identity": derived["evidence_identity"],
+        "identity_preimage": derived["excerpts"],
+        "excerpts": derived["excerpts"],
+        "checked_source_ids": list(manifest_source_ids),
+    }
+    raw_result = {
+        "result_id": "result-blocked",
+        "result_sha256": HASH,
+        "stable_id": "m_example",
+        "work_id": "work-m_example",
+        "campaign_id": "work-m_example",
+        "author_identity": HASH,
+        "prompt_identity": HASH,
+        "dispatcher_identity": HASH,
+        "source_manifest_identity": HASH,
+        "intake_snapshot_id": "intake-1",
+        "intake_snapshot_sha256": HASH,
+        "intake_item_sha256": HASH,
+        "created_at": "2026-07-16T00:00:00Z",
+    }
+    result = BlockedRecommendation(
+        binding=AuthorResultBinding(raw_result=raw_result, **raw_result),
+        stage="source",
+        reason_code="missing-material-source",
+        prerequisite_ids=("faithful-source",),
+        evidence_ids=evidence_ids,
+        evidence_identity=derived["evidence_identity"],
+        license_identity=HASH,
+        recommendation_sha256=HASH,
+    )
+    gate = make_gate(["m_example"])
+    gate.update(
+        {
+            "schema_version": GATE_SCHEMA_VERSION_V3,
+            "gate_kind": "terminal_disposition",
+            "batch_size": 1,
+            "author_result_schema_identity": HASH,
+            "dispatcher_identity": HASH,
+        }
+    )
+    gate["items"][0]["terminal_disposition"] = {
+        "author_result_id": "result-blocked",
+        "author_result_sha256": HASH,
+        "kind": "BLOCKED",
+        "predicate": "blocked-prerequisite",
+        "handoff_proposal_id": None,
+        "handoff_sha256": None,
+        "verdict": "accepted",
+        "source_manifest_identity": HASH,
+        "source_ids": list(manifest_source_ids),
+        "evidence_identity": derived["evidence_identity"],
+        "evidence_ids": list(evidence_ids),
+        "license_identity": HASH,
+        "findings": [],
+    }
+    return gate, result, source_manifest, evidence_pack
+
+
+def test_blocked_terminal_gate_checks_the_whole_frozen_manifest() -> None:
+    """A BLOCKED arm's checked source set is the manifest, at any manifest width.
+
+    The BLOCKED arm declares no ``source_ids``, so the checked set is machine
+    derived. Two derivations existed and disagreed: the envelope declared the
+    whole frozen manifest (and hashed it into ``evidence_identity`` and
+    ``verified_hashes.source_to_code_map``), while the gate projected it back out
+    of the round-robin citation table as ``manifest[i % len(manifest)]``. They
+    coincide only when the manifest is no wider than the evidence-ID list, which
+    is every fixture that existed and no production manifest -- so the live rung
+    lost EVERY wide BLOCKED model to a ``GateRoutingError`` that the driver then
+    recorded as a runner protocol violation.
+
+    Three manifest rows against one evidence ID make the two derivations
+    distinguishable: the projection resolves to ``source-1`` alone.
+    """
+
+    gate, result, source_manifest, evidence_pack = _blocked_terminal_fixture(
+        ("source-1", "source-2", "source-3"), ("evidence-1",)
+    )
+
+    decision = validate_terminal_disposition_gate(
+        gate,
+        result,
+        source_manifest=source_manifest,
+        evidence_pack=evidence_pack,
+        license_identity=HASH,
+    )
+
+    assert decision.accepted is True
+    assert decision.predicate == "blocked-prerequisite"
+    assert set(decision.source_ids) == {"source-1", "source-2", "source-3"}
+
+
+@pytest.mark.parametrize(
+    "gate_source_ids",
+    [
+        pytest.param(["source-1"], id="round-robin-projection-only"),
+        pytest.param(["source-1", "source-2"], id="manifest-subset"),
+        pytest.param(
+            ["source-1", "source-2", "source-3", "source-4"], id="outside-the-manifest"
+        ),
+    ],
+)
+def test_blocked_terminal_gate_still_refuses_a_source_set_it_did_not_derive(
+    gate_source_ids: list[str],
+) -> None:
+    """Widening the derivation does not disarm the exact-match check.
+
+    The check is unchanged -- ``terminal.source_ids`` must equal the machine's
+    set exactly. Only the definition of that set was corrected. A checker that
+    writes anything else, INCLUDING the old round-robin projection it used to be
+    asked for, is still refused.
+
+    Parameters
+    ----------
+    gate_source_ids:
+        The set a checker writes instead of the frozen manifest.
+    """
+
+    gate, result, source_manifest, evidence_pack = _blocked_terminal_fixture(
+        ("source-1", "source-2", "source-3"), ("evidence-1",)
+    )
+    gate["items"][0]["terminal_disposition"]["source_ids"] = gate_source_ids
+
+    # Anchored on the WHOLE message, not a substring: the sibling checks in this
+    # function raise their own ``GateRoutingError``s, and a loose match would let
+    # a case pass on the manifest-subset or evidence-ID clause without the check
+    # under test ever deciding.
+    with pytest.raises(
+        GateRoutingError, match=r"^terminal disposition source IDs do not exactly match result$"
+    ):
         validate_terminal_disposition_gate(
             gate,
             result,

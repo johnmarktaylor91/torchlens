@@ -369,7 +369,7 @@ def validate_terminal_disposition_gate(
         result_source_ids,
         result_evidence_ids,
         support_claims,
-    ) = _terminal_result_references(result, evidence_pack)
+    ) = _terminal_result_references(result, evidence_pack, source_manifest)
     exact = {
         "author_result_id": binding.result_id,
         "author_result_sha256": binding.result_sha256,
@@ -443,6 +443,7 @@ def validate_terminal_disposition_gate(
 def _terminal_result_references(
     result: DeferRecommendation | SkipRecommendation | BlockedRecommendation,
     evidence_pack: Mapping[str, Any],
+    source_manifest: Mapping[str, Any],
 ) -> tuple[str, str, tuple[str, ...], tuple[str, ...], frozenset[str]]:
     """Derive exact terminal gate references from one advisory union arm."""
 
@@ -464,7 +465,23 @@ def _terminal_result_references(
             result.evidence_ids,
             frozenset({predicate, result.status_code}),
         )
-    source_ids = _evidence_source_ids(evidence_pack, result.evidence_ids)
+    # A BLOCKED arm declares NO ``source_ids`` of its own -- the schema gives it
+    # none -- so the checked set is the whole frozen manifest, which is exactly
+    # what ``driver_models._terminal_checker_item`` puts in the envelope's
+    # ``checked_source_ids`` and hashes into ``verified_hashes.source_to_code_map``.
+    # It is also the set whose round-robin pairing produces the author-declared
+    # ``evidence_identity`` that the same function re-derives and refuses to bind
+    # unless it matches, so the manifest set is already hash-bound on this arm.
+    #
+    # This used to project the set back out of the citation table instead, which
+    # returned ``manifest[i % len(manifest)]`` for each evidence ID -- an artifact
+    # of the round-robin derivation that the checker prompt itself documents as
+    # carrying no provenance. Whenever a manifest held more sources than the
+    # result held evidence IDs the two machine-side derivations disagreed, no
+    # ``terminal.source_ids`` a checker could write satisfied both, and the gate
+    # died on a field it owned. Single-source fixtures hid it because there the
+    # projection and the manifest coincide.
+    source_ids = tuple(sorted(_manifest_source_ids(source_manifest)))
     return (
         "BLOCKED",
         "blocked-prerequisite",
