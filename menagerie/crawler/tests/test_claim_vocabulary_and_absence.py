@@ -118,6 +118,27 @@ def test_both_schemas_declare_exactly_the_enforced_availability_statuses(
     assert declared == set(AVAILABILITY_STATUSES)
 
 
+@pytest.mark.parametrize(
+    "schema_version",
+    ["menagerie.crawler.author-proposal.v3", "menagerie.crawler.model.v3"],
+)
+def test_the_dotted_availability_key_cannot_collide_with_a_nested_object(
+    schema_version: str,
+) -> None:
+    """``taxonomy.novel_ops`` is one flat key, and nothing can spell it two ways.
+
+    The ownership walker joins instance keys with a dot, so a NESTED
+    ``availability.taxonomy.novel_ops`` object would normalize to the same path as the
+    flat dotted key. A closed key set with no bare ``taxonomy`` member is what keeps
+    that ambiguity impossible.
+    """
+
+    claims = load_schema(schema_version)["$defs"]["availability_claims"]
+    assert claims["additionalProperties"] is False
+    assert "taxonomy" not in claims["properties"]
+    assert "taxonomy.novel_ops" in claims["properties"]
+
+
 def test_schema_publishes_exactly_the_enforced_gated_vocabulary() -> None:
     """The machine-discoverable enum equals the set the gate enforces."""
 
