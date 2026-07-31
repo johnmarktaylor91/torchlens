@@ -1416,11 +1416,53 @@
         },
         "kwargs": {
           "type": "object",
-          "description": "Mandatory kwargs."
+          "description": "Mandatory kwargs. A mapping value carrying the single '__construct__' key is a closed construct node ({module, symbol, kwargs}) resolved from the declared distribution at build time; every other value is literal JSON. Generic torch.nn containers are refused as construct-node symbols."
         },
         "pretrained_disable_fields": {
           "$ref": "#/$defs/string_array",
           "description": "Mandatory pretrained disable fields."
+        },
+        "entrypoint": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional public non-forward call method for the declarative model, delegated through the crawler-owned transparent adapter and receipted as delegated_method. Null or absent means the native forward. Underscore-prefixed names are refused."
+        },
+        "post_construct": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/post_construct_call"
+          },
+          "description": "Optional bounded declarative post-construction configuration calls applied to the constructed model in order, before the runtime provenance tripwire. Plain JSON arguments only; construct nodes are refused here."
+        }
+      }
+    },
+    "post_construct_call": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "args",
+        "kwargs"
+      ],
+      "properties": {
+        "method": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory public method name invoked on the constructed model; underscore-prefixed names are refused."
+        },
+        "args": {
+          "type": "array",
+          "description": "Mandatory plain-JSON positional arguments for the configuration call."
+        },
+        "kwargs": {
+          "type": "object",
+          "description": "Mandatory plain-JSON keyword arguments for the configuration call."
         }
       }
     },
@@ -1665,6 +1707,66 @@
         "source_evidence_ids": {
           "$ref": "#/$defs/string_array",
           "description": "Mandatory source evidence ids."
+        },
+        "constructor": {
+          "$ref": "#/$defs/input_constructor",
+          "description": "Closed declarative constructor for a non-tensor input object (for example a graph). Required exactly when distribution is 'constructor' and kind is 'constructed'; forbidden otherwise."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "distribution": {
+                "const": "constructor",
+                "description": "Select constructed non-tensor input leaves."
+              }
+            },
+            "required": [
+              "distribution"
+            ]
+          },
+          "then": {
+            "required": [
+              "constructor"
+            ],
+            "properties": {
+              "kind": {
+                "const": "constructed",
+                "description": "Constructed leaves declare the closed 'constructed' kind."
+              }
+            }
+          },
+          "else": {
+            "not": {
+              "required": [
+                "constructor"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "input_constructor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "module",
+        "symbol",
+        "kwargs"
+      ],
+      "properties": {
+        "module": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory dotted import module defining the input constructor."
+        },
+        "symbol": {
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Mandatory direct constructor attribute resolved on the module."
+        },
+        "kwargs": {
+          "type": "object",
+          "description": "Mandatory JSON-only constructor keyword arguments; nested construct nodes follow the same closed grammar and bounds as declarative recipe kwargs."
         }
       }
     },

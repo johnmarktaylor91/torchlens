@@ -5,10 +5,12 @@ from __future__ import annotations
 import ast
 import importlib
 import importlib.machinery
+import importlib.metadata
 import inspect
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field as dataclass_field
+from functools import lru_cache
 from pathlib import Path
 from types import FunctionType, ModuleType
 from typing import Any, Callable, Mapping, Optional, Sequence, Union
@@ -22,6 +24,283 @@ class RecipeError(ValueError):
 
 BuildModel = Callable[[], object]
 MakeDummyCall = Callable[[int, str], tuple[tuple[object, ...], dict[str, object]]]
+
+CONSTRUCT_NODE_KEY = "__construct__"
+"""Marker key that turns a declarative kwargs mapping into a construct node."""
+
+MAX_CONSTRUCT_DEPTH = 4
+"""Maximum construct-node nesting depth admitted by the declarative grammar."""
+
+MAX_CONSTRUCT_NODES = 16
+"""Maximum total construct nodes admitted by one declarative recipe."""
+
+MAX_POST_CONSTRUCT_CALLS = 8
+"""Maximum bounded post-construction configuration calls per recipe."""
+
+_GENERIC_CONTAINER_SYMBOLS = frozenset(
+    {"Sequential", "ModuleList", "ModuleDict", "ParameterList", "ParameterDict", "Module"}
+)
+
+
+def _is_generic_container_reference(module: str, symbol: str) -> bool:
+    """Return whether a declared module/symbol names a generic torch container.
+
+    Parameters
+    ----------
+    module, symbol:
+        Declared import module and constructor attribute.
+
+    Returns
+    -------
+    bool
+        True when the reference names a composition container rather than a
+        published architecture entrypoint.
+    """
+
+    return symbol in _GENERIC_CONTAINER_SYMBOLS and (
+        module == "torch.nn" or module.startswith("torch.nn.")
+    )
+
+
+def _reject_container_constructor(constructor: object, context: str) -> None:
+    """Refuse a resolved constructor whose identity is a generic torch container.
+
+    Name-based parse rules are defeated by re-export laundering, so this check
+    compares the resolved object identity against the actual torch container
+    classes whenever the resolved constructor originates from torch.
+
+    Parameters
+    ----------
+    constructor:
+        Resolved callable constructor.
+    context:
+        Human-readable reference used in the refusal.
+
+    Raises
+    ------
+    RecipeError
+        If the constructor is one of the generic torch.nn containers.
+    """
+
+    module_name = str(getattr(constructor, "__module__", "") or "")
+    if module_name.split(".")[0] != "torch":
+        return
+    import torch
+
+    containers: tuple[object, ...] = (
+        torch.nn.Sequential,
+        torch.nn.ModuleList,
+        torch.nn.ModuleDict,
+        torch.nn.ParameterList,
+        torch.nn.ParameterDict,
+        torch.nn.Module,
+    )
+    if any(constructor is container for container in containers):
+        raise RecipeError(
+            f"generic torch.nn containers are refused in declarative R1 recipes: {context}"
+        )
+
+
+def _validate_construct_node_spec(spec: Any, context: str) -> Mapping[str, Any]:
+    """Validate the exact three-field construct-node payload.
+
+    Parameters
+    ----------
+    spec:
+        Candidate ``{"module", "symbol", "kwargs"}`` payload.
+    context:
+        Location used in refusal messages.
+
+    Returns
+    -------
+    Mapping[str, Any]
+        The validated construct payload.
+
+    Raises
+    ------
+    RecipeError
+        If the payload deviates from the closed construct-node shape.
+    """
+
+    if not isinstance(spec, Mapping) or set(spec) != {"module", "symbol", "kwargs"}:
+        raise RecipeError(
+            f"construct node at {context} must declare exactly module, symbol, and kwargs"
+        )
+    module = spec["module"]
+    symbol = spec["symbol"]
+    if not isinstance(module, str) or not all(
+        part.isidentifier() for part in module.split(".")
+    ):
+        raise RecipeError(f"construct node at {context} module must be a dotted identifier")
+    if not isinstance(symbol, str) or not symbol.isidentifier():
+        raise RecipeError(f"construct node at {context} symbol must be a direct identifier")
+    if _is_generic_container_reference(module, symbol):
+        raise RecipeError(
+            "generic torch.nn containers are refused in declarative R1 recipes: "
+            f"{module}.{symbol}"
+        )
+    kwargs = spec["kwargs"]
+    if not isinstance(kwargs, Mapping) or not all(isinstance(key, str) for key in kwargs):
+        raise RecipeError(f"construct node at {context} kwargs must be a string-keyed mapping")
+    return spec
+
+
+def _walk_construct_values(
+    value: Any, *, context: str, depth: int, counter: list[int]
+) -> None:
+    """Recursively validate construct nodes inside declarative JSON values.
+
+    Parameters
+    ----------
+    value:
+        JSON-compatible declarative value.
+    context:
+        Location used in refusal messages.
+    depth:
+        Number of enclosing construct nodes.
+    counter:
+        One-slot mutable total construct-node count.
+
+    Raises
+    ------
+    RecipeError
+        If a construct node is malformed, too deep, or too numerous.
+    """
+
+    if isinstance(value, Mapping):
+        if CONSTRUCT_NODE_KEY in value:
+            if set(value) != {CONSTRUCT_NODE_KEY}:
+                raise RecipeError(
+                    f"construct node at {context} must carry only the "
+                    f"{CONSTRUCT_NODE_KEY!r} key"
+                )
+            if depth + 1 > MAX_CONSTRUCT_DEPTH:
+                raise RecipeError(
+                    f"construct graph exceeds the maximum depth of {MAX_CONSTRUCT_DEPTH}"
+                )
+            counter[0] += 1
+            if counter[0] > MAX_CONSTRUCT_NODES:
+                raise RecipeError(
+                    f"construct graph exceeds the maximum of {MAX_CONSTRUCT_NODES} nodes"
+                )
+            spec = _validate_construct_node_spec(value[CONSTRUCT_NODE_KEY], context)
+            for name, child in spec["kwargs"].items():
+                _walk_construct_values(
+                    child, context=f"{context}.{name}", depth=depth + 1, counter=counter
+                )
+            return
+        for name, child in value.items():
+            _walk_construct_values(
+                child, context=f"{context}.{name}", depth=depth, counter=counter
+            )
+    elif isinstance(value, (list, tuple)):
+        for index, child in enumerate(value):
+            _walk_construct_values(
+                child, context=f"{context}[{index}]", depth=depth, counter=counter
+            )
+
+
+def _reject_construct_nodes(value: Any, context: str) -> None:
+    """Refuse construct nodes anywhere inside a plain-JSON-only value.
+
+    Parameters
+    ----------
+    value:
+        JSON-compatible value that must stay free of construct nodes.
+    context:
+        Location used in refusal messages.
+
+    Raises
+    ------
+    RecipeError
+        If any nested mapping carries the construct marker key.
+    """
+
+    if isinstance(value, Mapping):
+        if CONSTRUCT_NODE_KEY in value:
+            raise RecipeError(f"{context} must be plain JSON without construct nodes")
+        for name, child in value.items():
+            _reject_construct_nodes(child, f"{context}.{name}")
+    elif isinstance(value, (list, tuple)):
+        for index, child in enumerate(value):
+            _reject_construct_nodes(child, f"{context}[{index}]")
+
+
+@lru_cache(maxsize=1)
+def _packages_distributions_snapshot() -> Mapping[str, tuple[str, ...]]:
+    """Return the interpreter's frozen top-level-package to distribution map.
+
+    Returns
+    -------
+    Mapping[str, tuple[str, ...]]
+        Immutable copy of ``importlib.metadata.packages_distributions()``. The
+        environment cannot change inside one worker process, so one snapshot is
+        both correct and cheap.
+    """
+
+    return {
+        name: tuple(values)
+        for name, values in importlib.metadata.packages_distributions().items()
+    }
+
+
+def assert_model_provenance(model: object, distribution: str) -> None:
+    """Fail closed unless the constructed model's class is defined by the pinned distribution.
+
+    Parse-time grammar rules bound what a declarative recipe can *express*; this
+    runtime tripwire bounds what is actually *constructed*. It closes composition
+    laundering: a model assembled from generic primitives, or resolved through a
+    factory into another package's class, cannot carry the R1 label of the
+    declared distribution.
+
+    Parameters
+    ----------
+    model:
+        Constructed native model object.
+    distribution:
+        Declared pinned distribution name.
+
+    Raises
+    ------
+    RecipeError
+        If the model type is a generic container, its defining module cannot be
+        attributed to any installed distribution, or the attribution does not
+        include the declared distribution.
+    """
+
+    model_type = type(model)
+    module_name = str(getattr(model_type, "__module__", "") or "")
+    qualified = f"{module_name}.{model_type.__qualname__}"
+    top_level = module_name.split(".")[0]
+    if top_level == "torch":
+        import torch
+
+        containers: tuple[object, ...] = (
+            torch.nn.Sequential,
+            torch.nn.ModuleList,
+            torch.nn.ModuleDict,
+            torch.nn.ParameterList,
+            torch.nn.ParameterDict,
+            torch.nn.Module,
+        )
+        if any(model_type is container for container in containers):
+            raise RecipeError(
+                f"declarative recipe constructed a generic container {qualified}; "
+                "a composed container cannot claim R1"
+            )
+    if not top_level or top_level in {"builtins", "__main__"}:
+        raise RecipeError(
+            f"constructed model type {qualified} has no importable defining module "
+            "and cannot claim R1"
+        )
+    wanted = canonical_distribution_name(distribution)
+    attributed = _packages_distributions_snapshot().get(top_level, ())
+    if not any(canonical_distribution_name(name) == wanted for name in attributed):
+        described = sorted(attributed) if attributed else "no installed distribution"
+        raise RecipeError(
+            f"constructed model type {qualified} is not defined by the pinned "
+            f"distribution {distribution!r}: attributed to {described}"
+        )
 
 
 def _is_disabling_pretrained_value(value: Any) -> bool:
@@ -225,6 +504,75 @@ def bind_library_artifact_digest(
 
 
 @dataclass(frozen=True)
+class PostConstructCall:
+    """One bounded declarative post-construction configuration call.
+
+    Parameters
+    ----------
+    method:
+        Public method name invoked on the constructed model.
+    args, kwargs:
+        Plain-JSON call arguments; construct nodes are refused here.
+    """
+
+    method: str
+    args: tuple[Any, ...] = ()
+    kwargs: Mapping[str, Any] = dataclass_field(default_factory=dict)
+
+    @classmethod
+    def from_mapping(cls, value: Any, context: str) -> "PostConstructCall":
+        """Validate and construct one closed post-construction call.
+
+        Parameters
+        ----------
+        value:
+            Candidate call mapping.
+        context:
+            Location used in refusal messages.
+
+        Returns
+        -------
+        PostConstructCall
+            Strict configuration call.
+        """
+
+        if not isinstance(value, Mapping):
+            raise RecipeError(f"{context} must be an object")
+        unknown = set(value) - {"method", "args", "kwargs"}
+        if unknown:
+            raise RecipeError(f"{context} has unknown fields: {sorted(unknown)!r}")
+        method = value.get("method")
+        if not isinstance(method, str) or not method.isidentifier():
+            raise RecipeError(f"{context} method must be a direct identifier")
+        if method.startswith("_"):
+            raise RecipeError(f"{context} method must be a public name, not {method!r}")
+        args = value.get("args", [])
+        if not isinstance(args, (list, tuple)):
+            raise RecipeError(f"{context} args must be a list")
+        kwargs = value.get("kwargs", {})
+        if not isinstance(kwargs, Mapping) or not all(isinstance(key, str) for key in kwargs):
+            raise RecipeError(f"{context} kwargs must be a string-keyed mapping")
+        try:
+            canonical_json_bytes({"args": list(args), "kwargs": dict(kwargs)})
+        except (TypeError, ValueError) as exc:
+            raise RecipeError(f"{context} arguments must be JSON-compatible") from exc
+        _reject_construct_nodes(list(args), f"{context}.args")
+        _reject_construct_nodes(dict(kwargs), f"{context}.kwargs")
+        return cls(method=method, args=tuple(args), kwargs=dict(kwargs))
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the canonical JSON-compatible call mapping.
+
+        Returns
+        -------
+        dict[str, Any]
+            Post-construction call payload.
+        """
+
+        return {"method": self.method, "args": list(self.args), "kwargs": dict(self.kwargs)}
+
+
+@dataclass(frozen=True)
 class DeclarativeRecipe:
     """Closed R1 library constructor description.
 
@@ -235,11 +583,18 @@ class DeclarativeRecipe:
     module, symbol:
         Importable module and direct constructor attribute.
     kwargs:
-        JSON-compatible constructor keyword arguments.
+        JSON-compatible constructor keyword arguments. A mapping value carrying
+        the single ``__construct__`` key is a construct node resolved from a
+        declared module/symbol at build time; everything else is literal JSON.
     artifact_sha256:
         Optional exact installed-artifact hash.
     pretrained_disable_fields:
         Keyword names explicitly set to disable pretrained assets.
+    post_construct:
+        Bounded declarative configuration calls applied after construction.
+    entrypoint:
+        Optional public non-``forward`` call method delegated through the
+        crawler-owned transparent adapter. ``None`` means native ``forward``.
     """
 
     distribution: str
@@ -249,6 +604,8 @@ class DeclarativeRecipe:
     kwargs: Mapping[str, Any]
     artifact_sha256: Optional[str] = None
     pretrained_disable_fields: tuple[str, ...] = ()
+    post_construct: tuple[PostConstructCall, ...] = ()
+    entrypoint: Optional[str] = None
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any]) -> "DeclarativeRecipe":
@@ -273,6 +630,8 @@ class DeclarativeRecipe:
             "symbol",
             "kwargs",
             "pretrained_disable_fields",
+            "post_construct",
+            "entrypoint",
         }
         unknown = set(value) - allowed
         if unknown:
@@ -288,6 +647,11 @@ class DeclarativeRecipe:
         symbol = str(value["symbol"])
         if not all(part.isidentifier() for part in module.split(".")) or not symbol.isidentifier():
             raise RecipeError("module and symbol must be direct Python identifiers")
+        if _is_generic_container_reference(module, symbol):
+            raise RecipeError(
+                "generic torch.nn containers are refused in declarative R1 recipes: "
+                f"{module}.{symbol}"
+            )
         kwargs = value["kwargs"]
         if not isinstance(kwargs, Mapping) or not all(isinstance(key, str) for key in kwargs):
             raise RecipeError("kwargs must be a string-keyed mapping")
@@ -297,6 +661,28 @@ class DeclarativeRecipe:
             raise RecipeError(
                 "kwargs must contain only JSON-compatible declarative values"
             ) from exc
+        node_counter = [0]
+        for name, child in kwargs.items():
+            _walk_construct_values(
+                child, context=f"kwargs.{name}", depth=0, counter=node_counter
+            )
+        entrypoint = value.get("entrypoint")
+        if entrypoint is not None:
+            if not isinstance(entrypoint, str) or not entrypoint.isidentifier():
+                raise RecipeError("entrypoint must be a direct method identifier or null")
+            if entrypoint.startswith("_"):
+                raise RecipeError(f"entrypoint must be a public method, not {entrypoint!r}")
+        raw_post_construct = value.get("post_construct", [])
+        if not isinstance(raw_post_construct, (list, tuple)):
+            raise RecipeError("post_construct must be a list of configuration calls")
+        if len(raw_post_construct) > MAX_POST_CONSTRUCT_CALLS:
+            raise RecipeError(
+                f"post_construct exceeds the maximum of {MAX_POST_CONSTRUCT_CALLS} calls"
+            )
+        post_construct = tuple(
+            PostConstructCall.from_mapping(item, f"post_construct[{index}]")
+            for index, item in enumerate(raw_post_construct)
+        )
         disable_fields = value.get("pretrained_disable_fields", [])
         if not isinstance(disable_fields, (list, tuple)) or not all(
             isinstance(field, str) and field for field in disable_fields
@@ -314,10 +700,16 @@ class DeclarativeRecipe:
             kwargs=dict(kwargs),
             artifact_sha256=artifact,
             pretrained_disable_fields=tuple(disable_fields),
+            post_construct=post_construct,
+            entrypoint=entrypoint,
         )
 
     def to_dict(self) -> dict[str, Any]:
         """Return a canonical JSON-compatible recipe mapping.
+
+        The two grammar-extension fields are emitted only when they deviate from
+        their defaults so that every pre-extension recipe keeps its exact
+        historical recipe-revision hash.
 
         Returns
         -------
@@ -325,7 +717,7 @@ class DeclarativeRecipe:
             Declarative recipe payload.
         """
 
-        return {
+        payload: dict[str, Any] = {
             "distribution": self.distribution,
             "version": self.version,
             "artifact_sha256": self.artifact_sha256,
@@ -334,6 +726,11 @@ class DeclarativeRecipe:
             "kwargs": dict(self.kwargs),
             "pretrained_disable_fields": list(self.pretrained_disable_fields),
         }
+        if self.post_construct:
+            payload["post_construct"] = [call.to_dict() for call in self.post_construct]
+        if self.entrypoint is not None:
+            payload["entrypoint"] = self.entrypoint
+        return payload
 
 
 @dataclass(frozen=True)
@@ -354,6 +751,9 @@ class LoadedRecipe:
         Loaded typed module, absent for declarative recipes.
     adapter_sha256:
         Digest observed from the one exact adapter byte string executed by the loader.
+    entrypoint:
+        Declared public non-``forward`` call method for declarative recipes;
+        the executor delegates through the crawler-owned transparent adapter.
     """
 
     kind: str
@@ -362,6 +762,7 @@ class LoadedRecipe:
     recipe_revision: str
     module: Optional[ModuleType]
     adapter_sha256: Optional[str] = None
+    entrypoint: Optional[str] = None
 
 
 def reject_opaque_recipe(value: Mapping[str, Any]) -> None:
@@ -384,6 +785,116 @@ def reject_opaque_recipe(value: Mapping[str, Any]) -> None:
     if offending or recipe_type in {"statement", "expression", "exec-string", "eval-string"}:
         details = sorted(offending) or [recipe_type]
         raise RecipeError(f"opaque executable recipes are forbidden: {details!r}")
+
+
+def _materialize_construct_value(value: Any, context: str) -> Any:
+    """Resolve construct nodes inside one declarative value at build time.
+
+    Parameters
+    ----------
+    value:
+        Validated JSON-compatible declarative value.
+    context:
+        Location used in refusal messages.
+
+    Returns
+    -------
+    Any
+        The literal value, or the object built by the declared construct graph.
+
+    Raises
+    ------
+    RecipeError
+        If a construct node cannot be resolved to a callable non-container symbol.
+    """
+
+    if isinstance(value, Mapping):
+        if CONSTRUCT_NODE_KEY in value:
+            spec = _validate_construct_node_spec(value.get(CONSTRUCT_NODE_KEY), context)
+            constructed_module = importlib.import_module(str(spec["module"]))
+            constructed_symbol = getattr(constructed_module, str(spec["symbol"]), None)
+            if constructed_symbol is None or not callable(constructed_symbol):
+                raise RecipeError(
+                    f"construct node at {context}: {spec['module']}.{spec['symbol']} "
+                    "is not a callable constructor"
+                )
+            _reject_container_constructor(
+                constructed_symbol, f"{spec['module']}.{spec['symbol']}"
+            )
+            materialized = {
+                name: _materialize_construct_value(child, f"{context}.{name}")
+                for name, child in spec["kwargs"].items()
+            }
+            return constructed_symbol(**materialized)
+        return {
+            name: _materialize_construct_value(child, f"{context}.{name}")
+            for name, child in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [
+            _materialize_construct_value(child, f"{context}[{index}]")
+            for index, child in enumerate(value)
+        ]
+    return value
+
+
+def resolve_input_constructor(spec: Mapping[str, Any]) -> object:
+    """Materialize one declared constructed input leaf without authored code.
+
+    This implements the input-leaf ``distribution: "constructor"`` reservation:
+    the value is built by importing a declared module, resolving a declared
+    symbol, and calling it with JSON-only (possibly construct-node) kwargs.
+
+    Parameters
+    ----------
+    spec:
+        Exact ``{"module", "symbol", "kwargs"}`` input constructor payload.
+
+    Returns
+    -------
+    object
+        The constructed input value.
+
+    Raises
+    ------
+    RecipeError
+        If the payload deviates from the closed grammar, resolves to a generic
+        container, or produces ``None``.
+    """
+
+    validated = _validate_construct_node_spec(spec, "input_contract constructor")
+    counter = [0]
+    for name, child in validated["kwargs"].items():
+        _walk_construct_values(
+            child, context=f"input constructor kwargs.{name}", depth=1, counter=counter
+        )
+    try:
+        canonical_json_bytes(dict(validated["kwargs"]))
+    except (TypeError, ValueError) as exc:
+        raise RecipeError(
+            "input constructor kwargs must contain only JSON-compatible values"
+        ) from exc
+    constructed_module = importlib.import_module(str(validated["module"]))
+    constructed_symbol = getattr(constructed_module, str(validated["symbol"]), None)
+    if constructed_symbol is None or not callable(constructed_symbol):
+        raise RecipeError(
+            f"input constructor {validated['module']}.{validated['symbol']} "
+            "is not a callable constructor"
+        )
+    _reject_container_constructor(
+        constructed_symbol, f"{validated['module']}.{validated['symbol']}"
+    )
+    value = constructed_symbol(
+        **{
+            name: _materialize_construct_value(child, f"input constructor kwargs.{name}")
+            for name, child in validated["kwargs"].items()
+        }
+    )
+    if value is None:
+        raise RecipeError(
+            f"input constructor {validated['module']}.{validated['symbol']} produced None"
+        )
+    return value
 
 
 def load_declarative_recipe(
@@ -413,6 +924,7 @@ def load_declarative_recipe(
     constructor = getattr(module, recipe.symbol, None)
     if constructor is None or not callable(constructor):
         raise RecipeError(f"{recipe.module}.{recipe.symbol} is not a callable constructor")
+    _reject_container_constructor(constructor, f"{recipe.module}.{recipe.symbol}")
     if recipe.pretrained_disable_fields:
         try:
             parameters = inspect.signature(constructor).parameters
@@ -432,16 +944,37 @@ def load_declarative_recipe(
     def build_model() -> object:
         """Invoke the direct library constructor with declarative kwargs.
 
+        Construct-node kwargs are resolved from their declared modules, bounded
+        post-construction configuration calls are applied, and the runtime
+        provenance tripwire refuses any constructed model whose class is not
+        defined by the pinned distribution.
+
         Returns
         -------
         object
             Constructed random-initialized model.
         """
 
-        return constructor(**dict(recipe.kwargs))
+        materialized = {
+            name: _materialize_construct_value(child, f"kwargs.{name}")
+            for name, child in recipe.kwargs.items()
+        }
+        model = constructor(**materialized)
+        for index, call in enumerate(recipe.post_construct):
+            method = getattr(model, call.method, None)
+            if not callable(method):
+                raise RecipeError(
+                    f"post_construct[{index}] method {call.method!r} is not callable "
+                    "on the constructed model"
+                )
+            method(*call.args, **dict(call.kwargs))
+        assert_model_provenance(model, recipe.distribution)
+        return model
 
     revision = compute_recipe_revision(recipe.to_dict(), source_identity)
-    return LoadedRecipe("declarative-library", build_model, None, revision, None)
+    return LoadedRecipe(
+        "declarative-library", build_model, None, revision, None, entrypoint=recipe.entrypoint
+    )
 
 
 def _check_adapter_source(source: str, path: Path) -> ast.Module:

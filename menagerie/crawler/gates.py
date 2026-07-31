@@ -267,7 +267,12 @@ def route_fidelity_gate(
     if not fidelity_accepted:
         failure_reason_code = reason_codes[verdict]
     elif rung_verdict is AccuracyVerdict.INACCURATE:
-        failure_reason_code = "slop-cap-exhausted"
+        # A rung-inaccurate finding over an otherwise matching fidelity result is
+        # an identity dispute, not fabrication: labeling it "slop-cap-exhausted"
+        # would misfile a real fidelity dispute as a budget/slop outcome. This is
+        # the same code the terminal-proof derivation in ``authority`` assigns to
+        # a rejected matching-fidelity item, so routing and terminal proof agree.
+        failure_reason_code = "identity-mismatch"
     elif rung_verdict is AccuracyVerdict.CANNOT_VERIFY:
         failure_reason_code = "cannot-verify-cap-exhausted"
     permanent_scar = bool(fidelity.get("permanent_scar")) or verdict is FidelityVerdict.SLOP

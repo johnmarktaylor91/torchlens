@@ -426,6 +426,11 @@ def test_inaccurate_rung_check_blocks_matching_fidelity_gate() -> None:
     assert decision.accepted_for_fidelity is False
     assert decision.canonical_write_allowed is False
     assert decision.route is GateRoute.BLOCK_FIDELITY
+    # A rung-inaccurate finding over MATCHING fidelity is an identity dispute,
+    # never a slop/budget outcome, and must agree with the terminal-proof
+    # derivation for the same rejected item.
+    assert decision.failure_reason_code == "identity-mismatch"
+    assert decision.permanent_scar is False
     assert metadata_decision.canonical_write_allowed is False
     assert metadata_decision.route is GateRoute.REQUEUE_NEXT_BATCH
 

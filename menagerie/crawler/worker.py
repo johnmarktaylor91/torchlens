@@ -38,7 +38,12 @@ from menagerie.crawler.modes import (
     output_value_sha256,
 )
 from menagerie.crawler.policy import ExecutionPolicy, PolicyObservation, PolicyViolation
-from menagerie.crawler.recipe import LoadedRecipe, RecipeError, load_recipe
+from menagerie.crawler.recipe import (
+    LoadedRecipe,
+    RecipeError,
+    load_recipe,
+    resolve_input_constructor,
+)
 from menagerie.crawler.standard_inputs import (
     ASSET_ROOT,
     InputSpec,
@@ -603,7 +608,29 @@ def _materialize_declarative_call(
         if not isinstance(leaves, list):
             raise TypeError(f"input_contract.{collection} must be a list")
         for leaf in leaves:
-            if not isinstance(leaf, Mapping) or leaf.get("kind") != "tensor":
+            if not isinstance(leaf, Mapping):
+                raise TypeError(f"input_contract.{collection} contains a non-tensor leaf")
+            if leaf.get("distribution") == "constructor":
+                if leaf.get("kind") != "constructed":
+                    raise TypeError(
+                        f"input_contract.{collection} constructor leaf must declare "
+                        "kind 'constructed'"
+                    )
+                constructor_spec = leaf.get("constructor")
+                if not isinstance(constructor_spec, Mapping):
+                    raise TypeError(
+                        f"input_contract.{collection} constructed leaf lacks a "
+                        "constructor spec"
+                    )
+                constructed = resolve_input_constructor(constructor_spec)
+                _assign_path(root, str(leaf.get("path")), constructed)
+                input_kinds.append("standard-constructed-input")
+                notes.append(
+                    "constructed input via "
+                    f"{constructor_spec.get('module')}.{constructor_spec.get('symbol')}"
+                )
+                continue
+            if leaf.get("kind") != "tensor":
                 raise TypeError(f"input_contract.{collection} contains a non-tensor leaf")
             materialized = materialize_standard_input(
                 request.modality,
@@ -682,6 +709,38 @@ def _materialize_dummy_call(
         )
 
     return _materialize_declarative_call(request)
+
+
+def _build_declared_model(loaded: LoadedRecipe, request: WorkerRequest) -> object:
+    """Build one model and apply the declared non-``forward`` entrypoint delegation.
+
+    Parameters
+    ----------
+    loaded:
+        Validated executable recipe.
+    request:
+        Complete worker request supplying the native framework.
+
+    Returns
+    -------
+    object
+        The constructed model, wrapped in the crawler-owned transparent adapter
+        when the declarative recipe declares a public non-``forward`` entrypoint.
+    """
+
+    model = loaded.build_model()
+    if (
+        loaded.kind == "declarative-library"
+        and loaded.entrypoint is not None
+        and loaded.entrypoint != "forward"
+    ):
+        model = NativeForwardAdapter(
+            model,
+            original_framework=request.framework,
+            run_framework=request.framework,
+            call_method=loaded.entrypoint,
+        )
+    return model
 
 
 def _set_mode(model: object, mode: RunMode) -> None:
@@ -1160,7 +1219,7 @@ def _execute(request: WorkerRequest) -> tuple[dict[str, Any], PolicyObservation]
             base["observed_adapter_sha256"] = loaded.adapter_sha256
             base["constructor_started"] = True
             constructor_started = time.monotonic()
-            model = loaded.build_model()
+            model = _build_declared_model(loaded, request)
             constructor_seconds = time.monotonic() - constructor_started
             base["constructor_completed"] = True
             args, kwargs, input_kind, input_asset, input_note = _materialize_dummy_call(
@@ -1208,7 +1267,7 @@ def _execute(request: WorkerRequest) -> tuple[dict[str, Any], PolicyObservation]
                 if request.mode is None and len(modes) > 1:
                     _seed_frameworks(request.seed, request.framework)
                     mode_constructor_started = time.monotonic()
-                    mode_model = loaded.build_model()
+                    mode_model = _build_declared_model(loaded, request)
                     mode_constructor_seconds = time.monotonic() - mode_constructor_started
                 receipt, output = _mode_receipt(
                     mode_model,
