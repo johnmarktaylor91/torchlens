@@ -697,7 +697,7 @@ reuses. Editing any of these files stales its digest by construction: re-pin the
 same change.
 
 - `claude_crawler_author_v2.txt`: `sha256:d3c6ac5189e8d94dde83c3589cd6721faa2bf448cbcb4ad6662cc161c74fa034`
-- `codex_accuracy_checker_v2.txt`: `sha256:cd2d498c8ce1b52fb2c440298e1a64cac506c2574fd406365c4c69b8164cc27b`
+- `codex_accuracy_checker_v2.txt`: `sha256:3b1a9f39ba513dab7716fd93c69e63ecaba954b05996be79165a3dce31f0acbe`
 - `campaign_c1-mech.md`: `sha256:32fe5a762448793199b91cffd3b2290ac90b33b57213e627f362885d3ed445d2`
 - `campaign_c2-disco.md`: `sha256:d176f8298d8a0ecdfd2519a4905e5047cb214aff377545b34c653b7448ecd5b5`
 - `campaign_c3-classics.md`: `sha256:e6a277891824b72e378c52b1e472357d968d30a91a87b1b8d562ab923b5a11a4`

@@ -161,6 +161,28 @@ def _request_and_result(
     return request_path, gate
 
 
+def _native_final_message(gate: dict[str, Any]) -> bytes:
+    """Serialize one gate the way the natively constrained checker returns it.
+
+    The final message is the checker-authored fragment itself, not a string
+    carrying a whole gate: the ``--output-schema`` now pins the gate's own item
+    vocabulary, so the machine-owned scaffold is not merely omitted by
+    convention, it is absent from what the model is able to emit.
+
+    Parameters
+    ----------
+    gate:
+        Candidate gate whose items the checker authored.
+
+    Returns
+    -------
+    bytes
+        Exact ``-o`` final-message bytes.
+    """
+
+    return canonical_json_bytes({"items": gate["items"]}) + b"\n"
+
+
 def _status(request_path: Path) -> dict[str, Any]:
     """Read one wrapper status sidecar.
 
@@ -249,10 +271,7 @@ def test_attempt_telemetry_records_completed_and_censored_durations(tmp_path: Pa
             # than a constant the wrapper could have invented.
             time.sleep(0.05)
             return CodexAttempt(-9, "", "", timed_out=True)
-        last_message.write_bytes(
-            canonical_json_bytes({"result_json": canonical_json_bytes(result).decode("utf-8")})
-            + b"\n"
-        )
+        last_message.write_bytes(_native_final_message(result))
         return CodexAttempt(
             0,
             '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}\n',
@@ -339,10 +358,7 @@ def test_success_uses_settled_argv_and_publishes_atomically(
         # The full granted cap, not a deadline-clamped remainder: a freshly minted
         # envelope must leave room for every attempt it grants.
         assert timeout == CHECKER_TIMEOUT_SECONDS
-        last_message.write_bytes(
-            canonical_json_bytes({"result_json": canonical_json_bytes(result).decode("utf-8")})
-            + b"\n"
-        )
+        last_message.write_bytes(_native_final_message(result))
         return CodexAttempt(
             0,
             '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}\n',
@@ -561,23 +577,23 @@ def test_missing_codex_binary_is_typed_service_unavailable(tmp_path: Path) -> No
     assert _status(request_path)["classification"] == "service-unavailable"
 
 
-def test_native_output_schema_is_strict_one_field_transport() -> None:
-    """Native coercion stays simple while full gate validation remains local."""
+def test_native_output_schema_constrains_the_gate_itself_not_an_opaque_string() -> None:
+    """The wrapper hands Codex the gate's own vocabulary, not a string transport.
 
-    assert _native_output_schema() == {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "result_json": {
-                "type": "string",
-                "description": (
-                    "Compact JSON serialization of the complete menagerie.crawler.gate.v3 "
-                    "candidate."
-                ),
-            }
-        },
-        "required": ["result_json"],
-    }
+    The one-field ``result_json`` STRING schema this replaces made the provider's
+    structured-output constraint vacuous: the gate travelled as an opaque string,
+    so nothing but prompt prose carried its shape.
+    """
+
+    schema = _native_output_schema()
+
+    assert schema["type"] == "object"
+    assert schema["additionalProperties"] is False
+    assert set(schema["properties"]) == {"items"}
+    assert schema["required"] == ["items"]
+    # The gate is the constraint, not a payload inside one.
+    assert "result_json" not in json.dumps(schema)
+    assert schema["properties"]["items"]["items"]["type"] == "object"
 
 
 def test_external_timeout_kills_the_codex_process_group(tmp_path: Path) -> None:
@@ -678,10 +694,19 @@ def test_unconditional_stamping_would_launder_a_fixture_templated_gate(tmp_path:
     assert validated["gate_id"] == machine_owned_gate_fields(envelope)["gate_id"]
 
 
-def test_fixture_templated_gate_is_refused_and_attributed_to_the_checker(
+def test_fixture_templated_gate_is_refused_and_the_stamp_guard_still_bites(
     tmp_path: Path,
 ) -> None:
-    """The same candidate is now refused, and the refusal names the checker.
+    """The same candidate is refused, and the attribution guard remains live.
+
+    The refusal now happens EARLIER than it used to. A whole gate is no longer a
+    shape the final message can take: the native output schema admits exactly the
+    checker-authored ``items``, so a templated gate carrying a scaffold is refused
+    as a transport violation before ``apply_machine_owned_gate_fields`` ever sees
+    it. That is strictly stronger, but it would make a wrapper-only assertion a
+    tautology, so the attributing guard is ALSO exercised at its own boundary
+    here -- the earlier refusal must not be allowed to read as the later one
+    having been removed.
 
     Parameters
     ----------
@@ -689,16 +714,13 @@ def test_fixture_templated_gate_is_refused_and_attributed_to_the_checker(
         Isolated wrapper root.
     """
 
-    request_path, _envelope, gate = _fixture_templated_candidate(tmp_path)
+    request_path, envelope, gate = _fixture_templated_candidate(tmp_path)
 
     def invoke(argv: Sequence[str], last_message: Path, timeout: float) -> CodexAttempt:
-        """Inject the fixture-templated gate as the native final answer."""
+        """Inject the fixture-templated whole gate as the final answer."""
 
         del argv, timeout
-        last_message.write_bytes(
-            canonical_json_bytes({"result_json": canonical_json_bytes(gate).decode("utf-8")})
-            + b"\n"
-        )
+        last_message.write_bytes(canonical_json_bytes(gate) + b"\n")
         return CodexAttempt(0, '{"type":"turn.completed"}\n', "")
 
     exit_code = execute_checker_request(
@@ -713,8 +735,18 @@ def test_fixture_templated_gate_is_refused_and_attributed_to_the_checker(
     assert not (tmp_path / "result.json").exists()
     status = _status(request_path)
     assert status["classification"] == "permanent-contract-rejection"
-    detail = status["detail"]
-    # Attribution: the CHECKER supplied it. Evidence: the field and the value.
+    assert "sole key is 'items'" in status["detail"]
+
+    # The guard the earlier refusal now pre-empts is still armed at its own
+    # boundary, with the offending field and its value as the evidence.
+    with pytest.raises(CheckerDispatchError) as excinfo:
+        apply_machine_owned_gate_fields(
+            gate,
+            envelope,
+            started_at="2026-07-30T18:00:00Z",
+            finished_at="2026-07-30T18:00:01Z",
+        )
+    detail = str(excinfo.value)
     assert detail.startswith("checker supplied the machine-owned field ")
     assert "templated rather than derived" in detail
     assert any(
@@ -983,7 +1015,7 @@ def test_frozen_prompt_never_orders_a_write_the_sandbox_forbids() -> None:
     ):
         assert ordered_write not in prompt, f"prompt re-orders a forbidden write: {ordered_write}"
     assert "Do not write, create, or rename any file" in prompt
-    assert "sole `result_json` field" in prompt
+    assert "sole `items` field" in prompt
 
 
 def test_frozen_prompt_never_asks_for_machine_owned_identities() -> None:

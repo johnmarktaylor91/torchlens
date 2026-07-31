@@ -25,6 +25,12 @@ from menagerie.crawler.checker_dispatch import (
 from menagerie.crawler.constants import GateKind
 from menagerie.crawler.identity import stable_hash
 from menagerie.crawler.models import JsonObject
+from menagerie.crawler.native_output_schema import (
+    AUTHORED_PROPERTY,
+    NativeOutputSchemaError,
+    decode_native_result,
+    native_output_schema,
+)
 from menagerie.crawler.operator_protocol import (
     OPERATOR_ATTEMPT_TIMEOUT_SECONDS,
     OPERATOR_MAX_ATTEMPTS,
@@ -647,42 +653,43 @@ def _build_prompt(envelope: Mapping[str, Any], request_path: Path) -> str:
         f"{frozen}\n\n"
         f"WORK_ENVELOPE_PATH={request_path}\n"
         "The outer read-only wrapper publishes result.json. Do not write files. "
-        "Read the exact envelope at WORK_ENVELOPE_PATH, construct the complete gate.v3 "
-        "object, serialize it as compact JSON, and return it in the output schema's sole "
-        "result_json string field.\n"
+        "Read the exact envelope at WORK_ENVELOPE_PATH, judge every item, and return your "
+        f"verdicts in the output schema's sole `{AUTHORED_PROPERTY}` array.\n"
+        "That schema is DERIVED FROM menagerie.crawler.gate.v3 itself and is enforced "
+        "natively, so its key vocabulary IS the gate's: you cannot add a key to any block "
+        "and you cannot omit one. Do not reason about the gate's shape -- emit your "
+        "judgements and let the schema hold the shape.\n"
         "These gate fields are MACHINE-OWNED and are stamped by the wrapper from the "
-        f"envelope: {machine_owned}. OMIT them -- omitting is always correct and is never "
-        "an error. Do NOT invent or copy values for them: supplying one of these fields "
-        "with a value that is not the machine's is a contract violation and the whole gate "
-        "is refused. Your authority is the verdict, the per-field checks, the findings, the "
-        "unsupported claims, and the required repairs."
+        f"envelope: {machine_owned}. They are absent from your output schema BY DESIGN, so "
+        "omitting them is not merely correct, it is the only thing you can do. Do NOT "
+        "attempt to smuggle a value for one into a field that is yours. Your authority is "
+        "the verdict, the per-field checks, the findings, the unsupported claims, and the "
+        "required repairs."
     )
 
 
 def _native_output_schema() -> JsonObject:
-    """Return the strict native structured-output transport schema.
+    """Return the native structured-output schema derived from ``gate.v3`` itself.
+
+    This used to be a one-field ``result_json`` STRING transport, which made the
+    provider's structured-output constraint enforce nothing about the gate: the
+    real content was an opaque string, so the only channel carrying the gate's
+    shape was prose in the frozen prompt. The checker consequently invented
+    schema-shaped keys for whichever closed block the prose had not yet
+    enumerated -- ``terminal_disposition.arm``, then ``rung_check.required``,
+    then ``integrity.findings`` -- and each fix moved the failure to the next
+    nested block rather than closing the class.
 
     Returns
     -------
     dict[str, Any]
-        One-field transport schema. The decoded gate still passes the complete
-        repository schema and semantic validator before publication.
+        Strict-subset schema pinning the exact ``gate.v3`` item vocabulary. The
+        decoded gate still passes the complete repository schema and semantic
+        validator before publication; this constraint is additional, never a
+        replacement.
     """
 
-    return {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "result_json": {
-                "type": "string",
-                "description": (
-                    "Compact JSON serialization of the complete menagerie.crawler.gate.v3 "
-                    "candidate."
-                ),
-            }
-        },
-        "required": ["result_json"],
-    }
+    return native_output_schema()
 
 
 def _invoke_codex(
@@ -741,7 +748,11 @@ def _invoke_codex(
 
 
 def _load_last_message(path: Path) -> JsonObject:
-    """Load the native schema-coerced final answer as exactly one object.
+    """Load the natively constrained final answer as the checker's authored gate.
+
+    The final message is now the gate fragment itself rather than a string
+    carrying one, so the provider's constraint applies to the object the wrapper
+    actually consumes.
 
     Parameters
     ----------
@@ -751,26 +762,21 @@ def _load_last_message(path: Path) -> JsonObject:
     Returns
     -------
     dict[str, Any]
-        Parsed checker result.
+        Candidate gate carrying exactly the checker-authored items.
 
     Raises
     ------
     CheckerDispatchError
-        If the output is absent, symlinked, empty, or not one object.
+        If the output is absent, symlinked, empty, or does not match the native
+        transport.
     """
 
     if path.is_symlink() or not path.is_file() or path.stat().st_size == 0:
         raise CheckerDispatchError("Codex did not publish a non-empty final answer")
-    transport = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(transport, dict) or set(transport) != {"result_json"}:
-        raise CheckerDispatchError("Codex final answer must match the native transport schema")
-    result_json = transport.get("result_json")
-    if not isinstance(result_json, str):
-        raise CheckerDispatchError("Codex result_json must be a string")
-    value = json.loads(result_json)
-    if not isinstance(value, dict):
-        raise CheckerDispatchError("decoded Codex gate must be exactly one JSON object")
-    return value
+    try:
+        return decode_native_result(json.loads(path.read_text(encoding="utf-8")))
+    except NativeOutputSchemaError as exc:
+        raise CheckerDispatchError(str(exc)) from exc
 
 
 def _as_utc(moment: datetime) -> datetime:

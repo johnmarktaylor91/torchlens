@@ -141,10 +141,12 @@ driver awards runs.
 
 OUTPUT
 Return your result as your FINAL MESSAGE and nothing else, conforming to the structured output schema you
-were given: one object whose sole `result_json` field holds the complete menagerie.crawler.gate.v3 object
-serialized as compact UTF-8 JSON. You are running READ-ONLY. Do not write, create, or rename any file, and
-do not try to publish result.json -- the wrapper reads your final message and publishes the result itself.
-You are DONE the moment you return that final message; end the turn there.
+were given: one object whose sole `items` field is the array of your per-item verdicts. That schema is
+DERIVED FROM the menagerie.crawler.gate.v3 item definition itself and is enforced natively, so every closed
+block's key vocabulary is already exact -- you cannot add a key and you cannot omit one. Spend no effort
+guessing the shape; spend it on the judgement. You are running READ-ONLY. Do not write, create, or rename
+any file, and do not try to publish result.json -- the wrapper reads your final message and publishes the
+result itself. You are DONE the moment you return that final message; end the turn there.
 
 Everything you need is inside WORK_ENVELOPE_PATH and the frozen artifacts it names. Do NOT search the
 repository, the test suite, or any fixture to learn the shape of a gate object, and never copy a value out

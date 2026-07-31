@@ -453,6 +453,36 @@ def _load_schema_resource(filename: str) -> dict[str, Any]:
     return loaded
 
 
+def load_schema_resource(filename: str) -> dict[str, Any]:
+    """Load one version-neutral bundled schema resource by exact filename.
+
+    The shared ``*-common`` documents are referenced by absolute ``$id`` from the
+    versioned schemas, so anything that must resolve those references itself --
+    rather than through a ``referencing`` registry -- needs the document. This is
+    the supported spelling for that; the cached private loader stays private so
+    its cache cannot be reached with an unchecked filename.
+
+    Parameters
+    ----------
+    filename:
+        Exact filename listed in ``SCHEMA_RESOURCE_FILES``.
+
+    Returns
+    -------
+    dict[str, Any]
+        Parsed JSON Schema resource.
+
+    Raises
+    ------
+    KeyError
+        If the filename is not a registered shared resource.
+    SchemaError
+        If the bundled resource is invalid.
+    """
+
+    return _load_schema_resource(filename)
+
+
 @lru_cache(maxsize=None)
 def get_validator(schema_version: str) -> Draft202012Validator:
     """Return a cached strict validator for a crawler schema.
