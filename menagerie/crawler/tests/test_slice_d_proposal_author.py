@@ -14,6 +14,7 @@ from menagerie.crawler.author_dispatch import (
     DeferRecommendation,
     ProposedAuthorResult,
     SkipRecommendation,
+    _validate_blocked_reason,
     build_author_envelope,
     serialize_author_result_cache,
     validate_author_result,
@@ -23,6 +24,10 @@ from menagerie.crawler.authority import AuthorityContext
 from menagerie.crawler.constants import (
     AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
     AUTHOR_RESULT_SCHEMA_VERSION,
+    BLOCKED_ADVISORY_STAGES,
+    BLOCKED_REASON_CODES,
+    EFFORT_EXHAUSTION_REASON_CODES,
+    FAILURE_REASON_CODES,
 )
 from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.proposal import (
@@ -1124,7 +1129,7 @@ def test_author_result_rejects_mismatch_or_partial(tmp_path: Path, corruption: s
             {
                 "arm": "BLOCKED",
                 "stage": "source",
-                "reason_code": "missing-prerequisite",
+                "reason_code": "missing-mandatory-link",
                 "prerequisite_ids": ["prerequisite-1"],
                 "evidence_ids": ["evidence-1"],
                 "evidence_identity": "sha256:" + "3" * 64,
@@ -1182,6 +1187,170 @@ def test_advisory_author_result_arms_are_production_parsed(
     assert isinstance(parsed, expected_type)
     cache = serialize_author_result_cache(parsed, source_manifest=manifest, model_dir=tmp_path)
     assert isinstance(validate_author_result_cache(cache, envelope), expected_type)
+
+
+def _parse_blocked_result(
+    tmp_path: Path, *, stage: str, reason_code: str
+) -> BlockedRecommendation:
+    """Drive one complete BLOCKED author result through the production parser.
+
+    Everything except ``stage``/``reason_code`` is exact, so nothing ahead of the reason
+    vocabulary can short-circuit the parse: the arm reaches the blocked branch and that
+    branch is what decides.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated author result directory.
+    stage, reason_code:
+        Blocking claim under test.
+
+    Returns
+    -------
+    BlockedRecommendation
+        Parsed arm when the claim is admissible.
+    """
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    prompt_hash = hash_bytes(
+        (Path(__file__).parents[1] / "prompts" / "claude_crawler_author_v2.txt").read_bytes()
+    )
+    proposal["author"]["prompt_sha256"] = prompt_hash
+    context = _author_context(proposal, prompt_hash)
+    envelope = build_author_envelope(
+        context=context,
+        work_id=proposal["work_id"],
+        stable_id=proposal["stable_id"],
+        campaign_id="campaign-1",
+        created_at="2026-07-16T00:00:00Z",
+        untrusted_hints={},
+        source_manifest=manifest,
+        allowed_model_dir=tmp_path,
+        output_path=tmp_path / "result.json",
+    )
+    payload = {
+        "arm": "BLOCKED",
+        "stage": stage,
+        "reason_code": reason_code,
+        "prerequisite_ids": ["prerequisite-1"],
+        "evidence_ids": ["evidence-1"],
+        "evidence_identity": "sha256:" + "3" * 64,
+        "license_identity": "sha256:" + "4" * 64,
+    }
+    payload["recommendation_sha256"] = stable_hash(payload)
+    raw = _author_result(envelope, "BLOCKED", payload)
+    (tmp_path / "result.json").write_text(json.dumps(raw))
+    parsed = validate_author_result(tmp_path / "result.json", envelope)
+    assert isinstance(parsed, BlockedRecommendation)
+    return parsed
+
+
+def test_blocked_reason_vocabulary_covers_exactly_the_schema_stages() -> None:
+    """The mirrored blocking stages are exactly the shipped schema's stage enum."""
+
+    schema = json.loads(
+        (
+            Path(__file__).parents[1] / "schemas" / "author-result-v3.schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    schema_stages = set(schema["$defs"]["blocked_payload"]["properties"]["stage"]["enum"])
+    assert schema_stages == set(BLOCKED_ADVISORY_STAGES)
+    assert set(BLOCKED_REASON_CODES) == schema_stages
+
+
+def test_blocked_reason_vocabulary_subtracts_only_effort_exhaustion() -> None:
+    """Each stage keeps its whole attempt vocabulary minus the exhaustion codes."""
+
+    for stage, allowed in BLOCKED_REASON_CODES.items():
+        assert allowed == FAILURE_REASON_CODES[stage] - EFFORT_EXHAUSTION_REASON_CODES
+        assert allowed, f"{stage} lost its entire prerequisite vocabulary"
+        assert "effort-cap-exhausted" not in allowed
+
+
+@pytest.mark.parametrize("stage", sorted(BLOCKED_ADVISORY_STAGES))
+def test_blocked_arm_accepts_every_closed_prerequisite_reason(tmp_path: Path, stage: str) -> None:
+    """Closing the vocabulary refuses nothing an honest prerequisite block can say.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated author result directory.
+    stage:
+        Closed blocking stage under test.
+    """
+
+    for reason_code in sorted(BLOCKED_REASON_CODES[stage]):
+        parsed = _parse_blocked_result(tmp_path, stage=stage, reason_code=reason_code)
+        assert parsed.stage == stage
+        assert parsed.reason_code == reason_code
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize("reason_code", sorted(EFFORT_EXHAUSTION_REASON_CODES))
+@pytest.mark.parametrize("stage", sorted(BLOCKED_ADVISORY_STAGES))
+def test_blocked_arm_refuses_effort_exhaustion_dressed_as_a_prerequisite(
+    tmp_path: Path, stage: str, reason_code: str
+) -> None:
+    """An exhausted session cannot claim the model is unresolvable, at any stage.
+
+    ``effort-cap-exhausted`` is a member of every stage's attempt vocabulary, so only the
+    explicit refusal can stop it; the free-form spellings prove the closed vocabulary
+    catches what the explicit list does not enumerate.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated author result directory.
+    stage, reason_code:
+        Blocking stage and exhaustion spelling under test.
+    """
+
+    with pytest.raises(AuthorDispatchError) as caught:
+        _parse_blocked_result(tmp_path, stage=stage, reason_code=reason_code)
+    message = str(caught.value)
+    assert "unfinished, not" in message
+    assert "effort-cap-exhausted" in message
+
+
+@pytest.mark.smoke
+def test_blocked_arm_refuses_a_reason_outside_its_stage_vocabulary(tmp_path: Path) -> None:
+    """A free-form reason, and a reason borrowed from another stage, are both refused.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated author result directory.
+    """
+
+    with pytest.raises(AuthorDispatchError, match="is not a closed source reason"):
+        _parse_blocked_result(tmp_path, stage="source", reason_code="missing-prerequisite")
+    # ``build-failed`` is a real reason code, but it belongs to ``environment``.
+    assert "build-failed" in BLOCKED_REASON_CODES["environment"]
+    with pytest.raises(AuthorDispatchError, match="is not a closed source reason"):
+        _parse_blocked_result(tmp_path, stage="source", reason_code="build-failed")
+
+
+def test_blocked_arm_refuses_a_stage_outside_the_closed_set(tmp_path: Path) -> None:
+    """A stage the schema never admits is refused before the reason vocabulary decides.
+
+    The schema enum settles this one, so the assertion names the schema. The dispatcher's
+    own unknown-stage arm is exercised directly below, where nothing else can decide it.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated author result directory.
+    """
+
+    with pytest.raises(AuthorDispatchError, match="constructor"):
+        _parse_blocked_result(tmp_path, stage="constructor", reason_code="exception")
+
+
+def test_blocked_reason_guard_refuses_an_unknown_stage_directly() -> None:
+    """The dispatcher's own unknown-stage arm refuses, independently of the schema."""
+
+    with pytest.raises(AuthorDispatchError, match="is not a closed blocking stage"):
+        _validate_blocked_reason("constructor", "exception")
 
 
 def _author_context(proposal: dict[str, Any], prompt_hash: str) -> AuthorityContext:

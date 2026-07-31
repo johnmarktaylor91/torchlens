@@ -729,6 +729,56 @@ FAILURE_REASON_CODES: dict[str, frozenset[str]] = {
     ),
 }
 
+#: Reason codes that name an effort or budget outcome rather than a source verdict.
+#:
+#: ``PLAN.md`` LP-13.2: cap exhaustion is ``failed:<actual-stage>`` with
+#: ``effort-cap-exhausted``, not a skip or a convenience defer, and only
+#: ``tools/requeue --reason ... --grant ...`` reissues the work with a larger grant. An
+#: exhausted model is *unfinished*, not *unresolvable*.
+#:
+#: Only ``effort-cap-exhausted`` is a :data:`FAILURE_REASON_CODES` member, so it is the
+#: only row the :data:`BLOCKED_REASON_CODES` subtraction below actually removes. The other
+#: rows are free-form spellings observed from live author sessions; they are listed so a
+#: laundering attempt is refused with the real diagnosis instead of a bare unknown-code
+#: message. They are a diagnostic aid, never the enforcement boundary -- the closed
+#: per-stage vocabulary is what refuses every unlisted spelling.
+EFFORT_EXHAUSTION_REASON_CODES = frozenset(
+    {
+        "effort-cap-exhausted",
+        "budget-exhausted",
+        "effort-exhausted:wall-seconds",
+    }
+)
+
+#: Closed stages a BLOCKED advisory author-result arm may name.
+#:
+#: Mirrors ``blocked_payload.stage`` in ``schemas/author-result-v3.schema.json``. The
+#: mirror is asserted against the shipped schema by
+#: ``test_blocked_reason_vocabulary_covers_exactly_the_schema_stages`` so the two cannot
+#: drift apart silently.
+BLOCKED_ADVISORY_STAGES = frozenset(
+    {
+        "source",
+        "fetch",
+        "evidence",
+        "environment",
+        "policy",
+        "runner",
+    }
+)
+
+#: Closed per-stage reason vocabulary a BLOCKED advisory arm may claim.
+#:
+#: A BLOCKED arm terminalizes under the ``blocked-prerequisite`` predicate: an assertion
+#: that this model cannot be resolved until a named prerequisite exists. Effort exhaustion
+#: is not such an assertion, so every exhaustion code is subtracted from every stage. The
+#: rest of the stage vocabulary is exactly :data:`FAILURE_REASON_CODES`, which keeps one
+#: source of truth for reason codes across the advisory and attempt lanes.
+BLOCKED_REASON_CODES: dict[str, frozenset[str]] = {
+    stage: FAILURE_REASON_CODES[stage] - EFFORT_EXHAUSTION_REASON_CODES
+    for stage in sorted(BLOCKED_ADVISORY_STAGES)
+}
+
 WORKFLOW_STATES = frozenset(
     {
         "UNTRIAGED",

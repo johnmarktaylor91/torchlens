@@ -22,6 +22,8 @@ from menagerie.crawler.constants import (
     AUTHOR_PROMPT_NAME,
     AUTHOR_RESULT_SCHEMA_VERSION,
     AUTHOR_SESSION_WALL_SECONDS,
+    BLOCKED_REASON_CODES,
+    EFFORT_EXHAUSTION_REASON_CODES,
     AuthorPauseReason,
 )
 from menagerie.crawler.identity import fsync_directory, hash_bytes, stable_hash
@@ -934,10 +936,13 @@ def _validate_author_result_mapping(
             f"BLOCKED({ACCESS_BLOCKED_REASON_CODE}) requires at least one candidate link "
             f"classified {ACCESS_BARRIER_REJECTION_CLASS!r}"
         )
+    blocked_stage = str(payload["stage"])
+    blocked_reason_code = str(payload["reason_code"])
+    _validate_blocked_reason(blocked_stage, blocked_reason_code)
     return BlockedRecommendation(
         binding=binding,
-        stage=str(payload["stage"]),
-        reason_code=str(payload["reason_code"]),
+        stage=blocked_stage,
+        reason_code=blocked_reason_code,
         prerequisite_ids=_nonempty_unique_strings(
             payload.get("prerequisite_ids"), "prerequisite_ids"
         ),
@@ -951,6 +956,56 @@ def _validate_author_result_mapping(
             deepcopy(dict(research_summary)) if isinstance(research_summary, Mapping) else None
         ),
     )
+
+
+def _validate_blocked_reason(stage: str, reason_code: str) -> None:
+    """Close a BLOCKED advisory reason to its stage and refuse effort exhaustion.
+
+    A BLOCKED arm terminalizes under the ``blocked-prerequisite`` predicate: an assertion
+    that this model cannot be resolved until a named prerequisite exists, carried into the
+    durable record as a source verdict. Cap exhaustion is a budget outcome, not a source
+    verdict (``PLAN.md`` LP-13.2) -- an exhausted model is *unfinished*, not
+    *unresolvable*. On a run-once campaign that difference is permanent, so the refusal
+    lives at the parse boundary every author result crosses: the wrong claim is
+    unrepresentable rather than merely detectable downstream.
+
+    The honest terminal for an exhausted session is the one the doctrine already names:
+    let the session exceed its grant, so ``AuthorEffortCapExceeded`` reaches
+    ``_author_lane_failure`` and the driver records ``failed:<stage>`` with
+    ``effort-cap-exhausted``, which ``tools/requeue --reason ... --grant ...`` reissues as
+    an explicit new work generation.
+
+    Parameters
+    ----------
+    stage:
+        Closed blocking stage claimed by the advisory arm.
+    reason_code:
+        Root reason code claimed by the advisory arm.
+
+    Raises
+    ------
+    AuthorDispatchError
+        If the reason names an effort or budget outcome, if the stage is not a closed
+        blocking stage, or if the reason is outside that stage's closed vocabulary.
+    """
+
+    if reason_code in EFFORT_EXHAUSTION_REASON_CODES:
+        raise AuthorDispatchError(
+            f"blocked recommendation reason_code {reason_code!r} names an effort or budget "
+            "outcome, not a missing prerequisite: an exhausted model is unfinished, not "
+            "unresolvable. Exceed the grant instead, so the driver records failed:<stage> "
+            "with effort-cap-exhausted and tools/requeue can reissue a larger grant."
+        )
+    allowed = BLOCKED_REASON_CODES.get(stage)
+    if allowed is None:
+        raise AuthorDispatchError(
+            f"blocked recommendation stage {stage!r} is not a closed blocking stage"
+        )
+    if reason_code not in allowed:
+        raise AuthorDispatchError(
+            f"blocked recommendation reason_code {reason_code!r} is not a closed "
+            f"{stage} reason"
+        )
 
 
 def _validate_proposal_binding(proposal: Mapping[str, Any], binding: AuthorResultBinding) -> None:
