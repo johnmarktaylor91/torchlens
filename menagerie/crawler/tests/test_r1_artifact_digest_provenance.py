@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import re
 from copy import deepcopy
+from pathlib import Path
 from typing import Any, Mapping
 
 import pytest
@@ -28,7 +29,11 @@ from menagerie.crawler.constants import (
     AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
     MODEL_SCHEMA_VERSION_V3,
 )
-from menagerie.crawler.driver_admission import _routed_environment_packages
+from menagerie.crawler.driver_admission import (
+    _normalize_artifact_modes,
+    _routed_environment_packages,
+)
+from menagerie.crawler.driver_contracts import DriverConfig, DriverIntegrationError
 from menagerie.crawler.envs import load_environment_registry
 from menagerie.crawler.metadata import authored_fact_leaves
 from menagerie.crawler.recipe import (
@@ -46,7 +51,13 @@ from menagerie.crawler.schema import (
     schema_owner_paths,
 )
 
-from menagerie.crawler.tests.conftest import make_author_proposal
+from menagerie.crawler.tests.conftest import (
+    HASH,
+    make_author_proposal,
+    make_proposed_artifact,
+)
+
+_DRIVER_CONFIG = DriverConfig()
 
 _RECIPE_PATH = "$.proposed_facts.implementation.library_recipe"
 _DIGEST_LEAF = "$.implementation.library_recipe.artifact_sha256"
@@ -401,6 +412,61 @@ def test_the_digest_leaf_left_the_author_identity_surface() -> None:
 
     assert "implementation.library_recipe.artifact_sha256" not in authored
     assert "implementation.library_recipe.distribution" in authored
+
+
+@pytest.mark.smoke
+def test_the_pre_gate_rebind_binds_the_digest_and_its_identities(tmp_path: Path) -> None:
+    """The driver's own normalization pass -- not just the helper -- does this.
+
+    The digest must land BEFORE the checker gate, together with a full identity
+    rebind, or ``recipe_revision`` would no longer describe the recipe bytes the
+    worker executes.
+    """
+
+    proposal = _honest_r1_proposal()
+    recipe = proposal["proposed_facts"]["implementation"]["library_recipe"]
+    recipe["distribution"] = "timm"
+    recipe["version"] = "1.0.9"
+    artifact = make_proposed_artifact(proposal, {"manifest_sha256": HASH}, tmp_path)
+    before = deepcopy(artifact.proposal)
+
+    rebound = _normalize_artifact_modes(
+        artifact, _DRIVER_CONFIG, environment_packages=list(_ROUTED_PACKAGES)
+    )
+    bound_recipe = rebound.proposal["proposed_facts"]["implementation"]["library_recipe"]
+
+    assert bound_recipe["artifact_sha256"] == _distinct_digest("timm")
+    assert rebound.proposal["recipe_revision"] != before["recipe_revision"]
+    assert (
+        rebound.proposal["proposed_facts"]["implementation"]["recipe_revision"]
+        == rebound.proposal["recipe_revision"]
+    )
+    assert rebound.proposal["proposal_sha256"] != before["proposal_sha256"]
+    # The source artifact is never mutated in place.
+    assert artifact.proposal == before
+
+
+@pytest.mark.smoke
+def test_the_pre_gate_rebind_refuses_a_conflicting_digest(tmp_path: Path) -> None:
+    """A model whose claim contradicts its routed environment stops -- typed."""
+
+    proposal = _honest_r1_proposal()
+    recipe = proposal["proposed_facts"]["implementation"]["library_recipe"]
+    recipe["distribution"] = "timm"
+    recipe["version"] = "1.0.9"
+    recipe["artifact_sha256"] = _distinct_digest("a-different-build")
+    artifact = make_proposed_artifact(proposal, {"manifest_sha256": HASH}, tmp_path)
+
+    with pytest.raises(DriverIntegrationError) as raised:
+        _normalize_artifact_modes(
+            artifact, _DRIVER_CONFIG, environment_packages=list(_ROUTED_PACKAGES)
+        )
+
+    assert str(raised.value) == (
+        "supplied artifact_sha256 conflicts with the routed environment: "
+        f"supplied {_distinct_digest('a-different-build')}, "
+        f"derived {_distinct_digest('timm')}"
+    )
 
 
 @pytest.mark.smoke
