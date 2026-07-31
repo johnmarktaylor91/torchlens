@@ -39,6 +39,7 @@ from menagerie.crawler.gates import (
 from menagerie.crawler.identity import stable_hash
 from menagerie.crawler.models import LedgerPaths
 from menagerie.crawler.reducer import CanonicalReducer, ReductionError
+from menagerie.crawler.schema import PayloadValidationError, validate_payload
 from menagerie.crawler.tests.conftest import (
     HASH,
     make_authority_context,
@@ -592,6 +593,134 @@ def test_terminal_disposition_gate_resolves_exact_advisory_references() -> None:
             evidence_pack=evidence_pack,
             license_identity=HASH,
         )
+
+
+#: The exact ``terminal_disposition`` key set the schema admits. Spelled literally rather
+#: than read back out of the schema, so a widening of the schema block cannot silently
+#: widen the assertion with it.
+_TERMINAL_DISPOSITION_KEYS = (
+    "author_result_id",
+    "author_result_sha256",
+    "kind",
+    "predicate",
+    "handoff_proposal_id",
+    "handoff_sha256",
+    "verdict",
+    "source_manifest_identity",
+    "source_ids",
+    "evidence_identity",
+    "evidence_ids",
+    "license_identity",
+    "findings",
+)
+
+
+def _terminal_gate(disposition: Mapping[str, Any]) -> dict[str, Any]:
+    """Build a schema-complete terminal gate carrying ``disposition``.
+
+    Parameters
+    ----------
+    disposition:
+        Candidate ``terminal_disposition`` block under test.
+
+    Returns
+    -------
+    dict[str, Any]
+        Single-item ``terminal_disposition`` gate.v3 payload.
+    """
+
+    gate = make_gate(["m_example"])
+    gate.update(
+        {
+            "schema_version": GATE_SCHEMA_VERSION_V3,
+            "gate_kind": "terminal_disposition",
+            "batch_size": 1,
+            "author_result_schema_identity": HASH,
+            "dispatcher_identity": HASH,
+        }
+    )
+    gate["items"][0]["terminal_disposition"] = dict(disposition)
+    return gate
+
+
+def _compliant_disposition() -> dict[str, Any]:
+    """Return a terminal disposition carrying exactly the admitted key set.
+
+    Returns
+    -------
+    dict[str, Any]
+        Schema-valid ``terminal_disposition`` block.
+    """
+
+    return {
+        "author_result_id": "result-blocked",
+        "author_result_sha256": HASH,
+        "kind": "BLOCKED",
+        "predicate": "blocked-prerequisite",
+        "handoff_proposal_id": None,
+        "handoff_sha256": None,
+        "verdict": "rejected",
+        "source_manifest_identity": HASH,
+        "source_ids": ["source-1"],
+        "evidence_identity": HASH,
+        "evidence_ids": ["evidence-1"],
+        "license_identity": HASH,
+        "findings": ["evidence identity does not bind the declared excerpts"],
+    }
+
+
+def test_terminal_disposition_block_admits_exactly_its_declared_keys() -> None:
+    """The closed terminal block refuses author-result vocabulary, and admits its own.
+
+    A 10-model pilot rung reached terminal for the first time and lost every verdict
+    here: the checker composed ``terminal_disposition`` out of the *author-result's*
+    names for the same facts -- ``arm`` for ``kind``, ``result_sha256`` for
+    ``author_result_sha256``, a ``reason`` string for the ``findings`` array, plus
+    ``recommendation_sha256`` -- and the closed block refused all nine. That refusal is
+    the contract working, so this pins BOTH directions: the invented spellings stay
+    refused, and a disposition carrying exactly the declared thirteen still passes. A
+    guard exercised only where it passes proves nothing, so the negative case asserts on
+    the specific unexpected keys rather than on rejection alone.
+    """
+
+    compliant = _compliant_disposition()
+    assert set(compliant) == set(_TERMINAL_DISPOSITION_KEYS)
+
+    # The passing direction: without it, a schema typo would satisfy the negative case.
+    validate_payload(_terminal_gate(compliant), GATE_SCHEMA_VERSION_V3)
+
+    # The failing direction, one invented key at a time, so no single rejection can
+    # stand in for the rest and mask a key the block has quietly started admitting.
+    for invented, value in (
+        ("arm", "BLOCKED"),
+        ("result_sha256", HASH),
+        ("recommendation_sha256", HASH),
+        ("reason", "the recommendation is not validly grounded"),
+        ("checked_source_ids", ["source-1"]),
+        ("checked_evidence_ids", ["evidence-1"]),
+        ("prerequisite_ids", ["prereq-1"]),
+    ):
+        polluted = dict(compliant, **{invented: value})
+        with pytest.raises(PayloadValidationError) as excinfo:
+            validate_payload(_terminal_gate(polluted), GATE_SCHEMA_VERSION_V3)
+        message = str(excinfo.value)
+        assert "additionalProperties" in message, f"{invented} refused for the wrong reason"
+        assert f"'{invented}'" in message, f"{invented} was admitted or refused unnamed"
+
+    # The exact shape one pilot model emitted: author-result spellings throughout.
+    pilot_shape = {
+        "arm": "BLOCKED",
+        "verdict": "rejected",
+        "result_sha256": HASH,
+        "recommendation_sha256": HASH,
+        "source_manifest_identity": HASH,
+        "evidence_identity": HASH,
+        "license_identity": HASH,
+        "reason": "the required BLOCKED proof is not validly grounded",
+    }
+    with pytest.raises(PayloadValidationError) as excinfo:
+        validate_payload(_terminal_gate(pilot_shape), GATE_SCHEMA_VERSION_V3)
+    assert "Additional properties are not allowed" in str(excinfo.value)
 
 
 def test_reducer_refuses_run_award_with_inaccurate_rung_check(tmp_path: Path) -> None:

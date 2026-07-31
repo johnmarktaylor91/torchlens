@@ -1031,6 +1031,41 @@ def test_frozen_prompt_names_every_required_gate_item_field() -> None:
     assert not missing, f"frozen prompt never names required gate item fields: {missing}"
 
 
+def test_frozen_prompt_names_every_terminal_disposition_key() -> None:
+    """The closed terminal block's key set is spelled out, not left to be guessed.
+
+    ``terminal_disposition`` is the checker's own judgment, and the prompt forbids
+    looking the gate's shape up in this repository -- so the prompt text is the only
+    place the key set can come from. It previously said "the closed
+    terminal_disposition item" without ever naming a key, and a 10-model pilot rung
+    lost all nine terminal verdicts to that gap: each checker reached for the
+    *author-result's* vocabulary instead (``arm`` for ``kind``, ``result_sha256`` for
+    ``author_result_sha256``, ``reason`` for ``findings``) and the closed block
+    correctly refused every one. The gate was right; the prompt was silent. Naming the
+    keys here means a future required key cannot be added without the prompt teaching
+    it.
+    """
+
+    schema = json.loads(
+        (
+            Path(__file__).resolve().parents[1] / "schemas" / "gate-v3.schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    block = schema["$defs"]["terminal_disposition"]
+    prompt = _frozen_prompt_text()
+
+    missing = [field for field in block["required"] if field not in prompt]
+    assert not missing, f"frozen prompt never names terminal_disposition keys: {missing}"
+
+    # The block is closed, so "named" must mean the full set: a prompt that listed only
+    # some keys would still leave the rest to be invented.
+    assert set(block["required"]) == set(block["properties"])
+
+    # The predicate is a closed enum the checker cannot derive from anywhere else.
+    for predicate in block["properties"]["predicate"]["enum"]:
+        assert predicate in prompt, f"prompt never names the {predicate!r} predicate"
+
+
 def test_forged_campaign_lineage_is_refused_before_publication(tmp_path: Path) -> None:
     """A copied envelope-bound identity is checked, not taken on the model's word.
 
