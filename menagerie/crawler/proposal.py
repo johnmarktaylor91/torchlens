@@ -1656,7 +1656,14 @@ def _validate_source_ladder(
         raise ProposalValidationError("selected rung does not document every higher rung")
     if rung is SourceRung.LIBRARY:
         recipe = implementation.get("library_recipe")
-        required = ("distribution", "version", "artifact_sha256", "module", "symbol")
+        # ``artifact_sha256`` is deliberately absent: it identifies the INSTALLED
+        # distribution, and the author stage has no package inventory, no
+        # environment identity, and no interpreter with which to derive it. The
+        # driver resolves it from the routed intent's exact resolved export
+        # before gating (``recipe.bind_library_artifact_digest``) and refuses a
+        # conflicting supplied value, so requiring it here only forced authors to
+        # fabricate a digest nothing ever verified.
+        required = ("distribution", "version", "module", "symbol")
         if implementation.get("recipe_type") != "declarative-library" or not isinstance(
             recipe, Mapping
         ):
