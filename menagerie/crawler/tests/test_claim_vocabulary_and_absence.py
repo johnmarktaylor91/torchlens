@@ -18,7 +18,7 @@ import pytest
 from menagerie.crawler.constants import AUTHOR_PROMPT_NAME
 from menagerie.crawler.evidence import EvidenceValidationError, validate_evidence
 from menagerie.crawler.identity import hash_bytes, stable_hash
-from menagerie.crawler.metadata import AVAILABILITY_STATUSES
+from menagerie.crawler.metadata import AVAILABILITY_KEYS, AVAILABILITY_STATUSES
 from menagerie.crawler.proposal import (
     CLAIM_VOCABULARY_BEGIN,
     CLAIM_VOCABULARY_END,
@@ -83,6 +83,39 @@ def test_every_gated_claim_string_is_stated_verbatim_in_the_prompt() -> None:
     prompt = _PROMPT_PATH.read_text(encoding="utf-8")
     missing = sorted(claim for claim in DEFAULT_GATED_CLAIMS if claim not in prompt)
     assert missing == []
+
+
+@pytest.mark.parametrize(
+    "schema_version",
+    ["menagerie.crawler.author-proposal.v3", "menagerie.crawler.model.v3"],
+)
+def test_both_schemas_declare_exactly_the_enforced_availability_keys(
+    schema_version: str,
+) -> None:
+    """The availability register is one closed key set, declared in three places.
+
+    ``AVAILABILITY_KEYS`` in code, the proposal schema, and the model schema must agree;
+    a claim that can declare an absence in one but not another is a silent refusal
+    waiting to happen.
+    """
+
+    schema = load_schema(schema_version)
+    declared = set(schema["$defs"]["availability_claims"]["properties"])
+    assert declared == set(AVAILABILITY_KEYS)
+
+
+@pytest.mark.parametrize(
+    "schema_version",
+    ["menagerie.crawler.author-proposal.v3", "menagerie.crawler.model.v3"],
+)
+def test_both_schemas_declare_exactly_the_enforced_availability_statuses(
+    schema_version: str,
+) -> None:
+    """The status vocabulary is closed and identical across code and both schemas."""
+
+    schema = load_schema(schema_version)
+    declared = set(schema["$defs"]["availability_claim"]["properties"]["status"]["enum"])
+    assert declared == set(AVAILABILITY_STATUSES)
 
 
 def test_schema_publishes_exactly_the_enforced_gated_vocabulary() -> None:
