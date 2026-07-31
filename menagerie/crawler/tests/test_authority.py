@@ -1085,6 +1085,15 @@ def test_accuracy_gate_still_refuses_every_unevidenced_terminal_claim() -> None:
     with pytest.raises(AuthorityDerivationError, match="adjudicated terminal disposition"):
         _accuracy_gate_proof([blockless])
 
+    # `str` IS a `Sequence`, so a findings field the checker wrote as one string would
+    # otherwise iterate into a list of non-empty CHARACTERS and satisfy the obligation
+    # with no finding at all. Non-string members cannot launder into one either.
+    for malformed in ("rejected on the merits", None, [1, 2], {"finding": "x"}):
+        wrong_shape = _adjudicated_terminal_gate("rejected")
+        wrong_shape["items"][0]["terminal_disposition"]["findings"] = malformed
+        with pytest.raises(AuthorityDerivationError, match="adjudicated terminal disposition"):
+            _accuracy_gate_proof([wrong_shape])
+
 
 @pytest.mark.smoke
 def test_terminal_rule_never_softens_the_bounded_repair_cap() -> None:
