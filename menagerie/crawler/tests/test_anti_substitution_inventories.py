@@ -65,6 +65,19 @@ _DEAD_SYMBOLS = {
     "store_licensed_artifact",
     "_supervise_environment_worker",
     "_validate_terminal_evidence",
+    # Retired with the v2 reconstruction path. Reconstruction authority now comes
+    # from the independent artifact ledger: `validate_artifact_checkpoint` proves
+    # the transaction, and `_derive_candidate_paths` refuses any reconstruction
+    # document no append-only artifact event names.
+    "_reconstruction_has_canonical_anchor",
+    # Superseded by `authority._TerminalProofPipeline._derive_deferral`. This one
+    # must NOT be revived: nothing writes `attempt.defer_evidence` or
+    # `capability_observation` (both hard-coded `None`) and no attempt is appended
+    # for a `DeferRecommendation`, so re-wiring it makes every platform DEFER
+    # unreducible.
+    "_validate_deferral",
+    # Never called. The live receipt read is `driver_receipts._verified_worker_result`.
+    "_read_verified_worker_receipt",
     "validate_reconstruction_source_binding",
     "build_author_repair_envelope",
     "collect_executable_closure",
@@ -1191,14 +1204,94 @@ def test_executable_and_artifact_authority_have_one_final_projection() -> None:
     )
 
 
+def _closure_symbol_definition(tree: ast.Module, symbol: str) -> ast.AST | None:
+    """Return the module-level or one-level-nested definition node for a symbol.
+
+    Parameters
+    ----------
+    tree:
+        Parsed production module.
+    symbol:
+        Award-closure root, either ``name`` or ``Owner.name``.
+
+    Returns
+    -------
+    ast.AST | None
+        The definition node, or ``None`` when the module does not define it.
+    """
+
+    if "." in symbol:
+        owner, child = symbol.split(".", 1)
+        for node in tree.body:
+            if isinstance(node, ast.ClassDef) and node.name == owner:
+                for nested in node.body:
+                    if (
+                        isinstance(nested, (ast.FunctionDef, ast.AsyncFunctionDef))
+                        and nested.name == child
+                    ):
+                        return nested
+        return None
+    for node in tree.body:
+        if (
+            isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == symbol
+        ):
+            return node
+    return None
+
+
+def _unreferenced_closure_symbols() -> tuple[str, ...]:
+    """Return award-closure roots that no production code outside them references.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Sorted ``relative:symbol`` components with zero production references.
+    """
+
+    trees = {
+        path: ast.parse(path.read_text(encoding="utf-8")) for path in _production_python_paths()
+    }
+    unreferenced = []
+    for relative, symbols in driver_module._AWARD_CLOSURE_SYMBOLS.items():  # noqa: SLF001
+        defining = _CRAWLER_ROOT / relative
+        for symbol in symbols:
+            leaf = symbol.rsplit(".", 1)[-1]
+            definition = _closure_symbol_definition(trees[defining], symbol)
+            own = set() if definition is None else {id(node) for node in ast.walk(definition)}
+            references = sum(
+                1
+                for tree in trees.values()
+                for node in ast.walk(tree)
+                if id(node) not in own
+                and (
+                    (isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load))
+                    or isinstance(node, ast.Attribute)
+                )
+                and (node.id if isinstance(node, ast.Name) else node.attr) == leaf
+            )
+            if references == 0:
+                unreferenced.append(f"{relative}:{symbol}")
+    return tuple(sorted(unreferenced))
+
+
 def test_award_identity_closure_names_live_symbols_and_no_dead_symbols() -> None:
-    """Award closure roots must resolve and must not retain deleted authority."""
+    """Award closure roots must resolve, stay reachable, and retain no dead authority.
+
+    Existence is NOT the property that matters. A root nothing calls contributes
+    its own hash and its callees' hashes to the award closure while reviewing
+    zero live behavior, and the register then asserts a review that is not
+    happening. `_validate_terminal_evidence` was retired correctly into
+    `_DEAD_SYMBOLS`; the roots this catches were left listed as live instead.
+    Reachability is what stops the next dead root landing the same way.
+    """
 
     for relative, symbols in driver_module._AWARD_CLOSURE_SYMBOLS.items():  # noqa: SLF001
         path = _CRAWLER_ROOT / relative
         for symbol in symbols:
             assert driver_module._source_symbol_bytes(path, symbol)  # noqa: SLF001
             assert symbol not in _DEAD_SYMBOLS
+    assert _unreferenced_closure_symbols() == ()
 
 
 def test_real_composition_sources_are_not_fake_substitutes() -> None:

@@ -3473,30 +3473,6 @@ class CanonicalReducer:
 
         _ExecutionValidationPipeline(self, model).run()
 
-    def _validate_deferral(self, model: Mapping[str, Any]) -> None:
-        """Require positive source/probe evidence for either closed platform deferral.
-
-        Parameters
-        ----------
-        model:
-            Proposed model revision.
-        """
-
-        status_code = model.get("status", {}).get("code")
-        if status_code not in {"deferred:needs-cuda", "deferred:needs-x86"}:
-            return
-        attempts_by_id = self._attempt_index()
-        for attempt_id in model.get("status", {}).get("attempt_ids", []):
-            attempt = attempts_by_id.get(attempt_id)
-            evidence = attempt.get("defer_evidence") if attempt is not None else None
-            if (
-                isinstance(evidence, Mapping)
-                and evidence.get("target_status") == status_code
-                and (evidence.get("source_ids") or evidence.get("probe_attempt_ids"))
-            ):
-                return
-        raise ReductionError("platform deferral requires positive source or focused-probe evidence")
-
 
 def _production_canonical_root(ledgers: LedgerPaths) -> Optional[Path]:
     """Return the canonical crawler root for the production records layout.

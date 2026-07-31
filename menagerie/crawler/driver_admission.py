@@ -415,7 +415,6 @@ _AWARD_CLOSURE_SYMBOLS = {
         "_current_run_is_fresh",
         "_validate_artifact_identities",
         "_validate_trusted_intake_identity",
-        "_read_verified_worker_receipt",
         "_environment_binding",
         "_installed_package_manifest_bytes",
         "_observed_interpreter_facts",
@@ -462,7 +461,6 @@ _AWARD_CLOSURE_SYMBOLS = {
         "_validate_representative",
     ),
     "proposal.py": ("validate_author_proposal",),
-    "checkpoint.py": ("_reconstruction_has_canonical_anchor",),
     "gates.py": (
         "MetadataRouteDecision",
         "FidelityRouteDecision",
@@ -516,7 +514,6 @@ _AWARD_CLOSURE_SYMBOLS = {
         "CanonicalReducer._is_fidelity_repair_failure",
         "CanonicalReducer._is_pre_fidelity_terminal",
         "CanonicalReducer._validate_family_template",
-        "CanonicalReducer._validate_deferral",
         "CanonicalReducer._validate_execution",
         "project_dependency_current",
     ),
@@ -5113,26 +5110,6 @@ def _validated_requeue_grants(path: Path, intake_ids: frozenset[str]) -> tuple[J
         by_id[grant_id] = normalized
         validated.append(normalized)
     return tuple(validated)
-
-
-def _read_verified_worker_receipt(
-    path: Path,
-) -> tuple[Optional[dict[str, Any]], Optional[str]]:
-    """Read one atomic worker receipt and verify its self hash."""
-
-    if not path.is_file():
-        return None, "missing-receipt"
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        return None, f"invalid-receipt:{type(exc).__name__}"
-    if not isinstance(value, dict):
-        return None, "invalid-receipt:not-an-object"
-    claimed = value.get("receipt_sha256")
-    payload = {key: item for key, item in value.items() if key != "receipt_sha256"}
-    if claimed != stable_hash(payload):
-        return None, "invalid-receipt:hash-mismatch"
-    return value, None
 
 
 def _environment_binding(

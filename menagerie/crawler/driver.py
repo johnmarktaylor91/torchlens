@@ -394,7 +394,6 @@ from menagerie.crawler.driver_admission import (
     _observed_interpreter_facts,
     _quarantine_environment_payload,
     _quarantine_work_identity,
-    _read_verified_worker_receipt,
     _required_artifact_bytes,
     _runner_identity,
     _source_symbol_bytes,

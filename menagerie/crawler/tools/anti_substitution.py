@@ -16,7 +16,6 @@ _SUBSTITUTION_BOUNDARIES = frozenset(
         "_execution_identity",
         "_attempts_from_supervised",
         "_verified_worker_result",
-        "_read_verified_worker_receipt",
         "_seal_environment_content",
         "materialized_environment_generation",
         "verify_environment_authority",
