@@ -379,3 +379,33 @@ def test_a_malformed_digest_is_still_a_contract_defect_under_every_origin(
                 tmp_path,
                 fetch_bytes=lambda _url: b"whatever",
             )
+
+
+def test_the_evidence_search_covers_every_producer_including_the_supplement(
+    tmp_path: Path,
+) -> None:
+    """Three producers write evidence under one author root, not one.
+
+    The driver's own stage-1 pass writes ``broker/evidence``; an operator that
+    brokered its own pack writes under ``attempts/<id>/broker/``; and the single
+    supplementary round writes ``broker/supplement/evidence``. A search that
+    only knew about the first would leave the other two re-fetching from the
+    network, which is the same seam this change exists to close.
+    """
+
+    root = tmp_path / "author"
+    for relative in (
+        "broker/evidence",
+        "attempts/a1/broker/evidence",
+        "attempts/a1/broker/supplement/evidence",
+    ):
+        (root / relative).mkdir(parents=True)
+    (root / "attempts" / "a1" / "scratch").mkdir(parents=True)
+
+    found = [str(path.relative_to(root)) for path in broker_evidence_dirs(root)]
+
+    assert found == [
+        "broker/evidence",
+        "attempts/a1/broker/evidence",
+        "attempts/a1/broker/supplement/evidence",
+    ]
