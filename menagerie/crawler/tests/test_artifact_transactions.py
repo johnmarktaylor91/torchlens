@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import json
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from menagerie.crawler.artifact_transactions import (
+    ARTIFACT_RECONSTRUCTION_SCHEMA_VERSION,
     ArtifactCheckpointError,
     ArtifactEventKind,
     ArtifactEventLedger,
@@ -34,6 +36,7 @@ from menagerie.crawler.authority import (
     PublicationAuthorization,
     PublicationAuthorizationId,
 )
+from menagerie.crawler.checkpoint import CheckpointValidationError, _derive_candidate_paths
 from menagerie.crawler.constants import (
     AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
     AUTHOR_RESULT_SCHEMA_VERSION,
@@ -946,3 +949,79 @@ def test_checkpoint_rejects_reconstruction_rewrite_and_mirror_orphan(tmp_path: P
             canonical_root=canonical,
             repository_root=repo,
         )
+
+
+def test_candidate_derivation_refuses_unanchored_reconstruction_document(
+    tmp_path: Path,
+) -> None:
+    """A current-schema reconstruction no artifact event names can never be signed.
+
+    ``_validate_artifact_reconstruction_append_only`` asserts only that every
+    ledger-named reconstruction is present in the checkpoint candidate set. The
+    converse -- that every reconstruction document IN the candidate set is
+    ledger-named -- has to hold here, or the ``reconstruction`` allowlist root
+    sweeps an orphaned or fabricated document into the signed checkpoint with
+    nothing binding it to canonical authority.
+    """
+
+    repo = tmp_path / "repo"
+    canonical = repo / "menagerie" / "crawler"
+    ledger_path = canonical / "records" / "artifacts" / "shard.jsonl"
+    context = _context("m_resnet50", "m_vgg16")
+    mirrors = _mirrors(tmp_path)
+    published = {}
+    with ArtifactEventLedger(ledger_path) as ledger:
+        for stable_id, content, evidence_id in (
+            ("m_resnet50", b"resnet50 object", "ev-resnet50"),
+            ("m_vgg16", b"vgg16 object", "ev-vgg16"),
+        ):
+            _staged, published[stable_id] = _commit_private(
+                stable_id,
+                content=content,
+                context=context,
+                mirrors=mirrors,
+                ledger=ledger,
+                canonical_root=canonical,
+                repository_root=repo,
+                evidence_id=evidence_id,
+            )
+
+    # Non-vacuity: two distinct genuinely ledger-named documents are ADMITTED, so
+    # the refusal below discriminates on the anchor rather than refusing wholesale.
+    anchored = _derive_candidate_paths(repo, canonical, (ledger_path,))
+    expected_anchored = {
+        published[stable_id].reconstruction_path.relative_to(repo)
+        for stable_id in ("m_resnet50", "m_vgg16")
+    }
+    assert len(expected_anchored) == 2
+    assert expected_anchored <= set(anchored)
+
+    # A well-formed CURRENT-schema document that no artifact event names. Copying
+    # real published bytes keeps every other field internally coherent, so only the
+    # missing ledger anchor can be what refuses it.
+    forged = dict(
+        json.loads(published["m_resnet50"].reconstruction_path.read_text(encoding="utf-8"))
+    )
+    assert forged["schema_version"] == ARTIFACT_RECONSTRUCTION_SCHEMA_VERSION
+    forged["stable_id"] = "m_fabricated"
+    forged["transaction_id"] = "txn-fabricated"
+    unanchored = canonical / "reconstruction" / "zz" / "m_fabricated" / "txn-fabricated.json"
+    unanchored.parent.mkdir(parents=True, exist_ok=True)
+    unanchored.write_text(json.dumps(forged, indent=2, sort_keys=True), encoding="utf-8")
+
+    with pytest.raises(CheckpointValidationError) as refusal:
+        _derive_candidate_paths(repo, canonical, (ledger_path,))
+    assert str(refusal.value) == (
+        "reconstruction document is not named by the artifact ledger: "
+        "menagerie/crawler/reconstruction/zz/m_fabricated/txn-fabricated.json"
+    )
+
+    # An EMPTY ledger names nothing, so a real document is unanchored too. The
+    # per-shard artifact validation runs only when artifact events exist, which is
+    # exactly the window this sweep has to cover on its own.
+    unanchored.unlink()
+    with pytest.raises(CheckpointValidationError) as unledgered:
+        _derive_candidate_paths(repo, canonical, ())
+    assert str(unledgered.value).startswith(
+        "reconstruction document is not named by the artifact ledger: "
+    )

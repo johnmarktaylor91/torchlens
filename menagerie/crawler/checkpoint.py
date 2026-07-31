@@ -1257,7 +1257,7 @@ def _create_canonical_checkpoint(
         if artifact.decision.redistribution_class
         in {RedistributionClass.RESTRICTED_PRIVATE, RedistributionClass.UNKNOWN}
     )
-    candidates = _derive_candidate_paths(root, canonical_root, authority_context)
+    candidates = _derive_candidate_paths(root, canonical_root, artifact_ledgers)
     _validate_canonical_jsonl_append_only(root, canonical_root, candidates, runner)
     if has_artifact_events:
         _validate_artifact_reconstruction_append_only(root, artifact_ledgers, candidates, runner)
@@ -1267,7 +1267,7 @@ def _create_canonical_checkpoint(
     generated_inventory = _publish_generated_metadata_inventory(
         root, canonical_root, candidates, validated_environment_candidates
     )
-    candidates = _derive_candidate_paths(root, canonical_root, authority_context)
+    candidates = _derive_candidate_paths(root, canonical_root, artifact_ledgers)
     sweep_artifacts = _validate_candidate_license_coverage(
         root,
         candidates,
@@ -2623,17 +2623,61 @@ def _reconstruction_has_canonical_anchor(
     return False
 
 
+def _ledger_named_reconstructions(
+    repo_root: Path,
+    artifact_ledger_paths: Sequence[Path],
+) -> frozenset[Path]:
+    """Return the repository-relative reconstructions named by append-only events.
+
+    Parameters
+    ----------
+    repo_root, artifact_ledger_paths:
+        Git worktree and the complete artifact ledger shards.
+
+    Returns
+    -------
+    frozenset[pathlib.Path]
+        Normalized ledger-named reconstruction paths inside the repository.
+
+    Raises
+    ------
+    CheckpointValidationError
+        If an artifact ledger cannot be read into its named anchor set. An
+        unreadable ledger leaves the anchored set unknowable, and an unknowable
+        anchor set must never be read as "nothing needs anchoring".
+    """
+
+    try:
+        named = artifact_reconstruction_paths(artifact_ledger_paths, repo_root)
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise CheckpointValidationError(
+            "artifact ledger does not yield a readable reconstruction anchor set"
+        ) from exc
+    anchored: set[Path] = set()
+    for absolute in named:
+        try:
+            anchored.add(_normalize_path(absolute.resolve().relative_to(repo_root.resolve())))
+        except ValueError:
+            # An anchor naming a path outside the worktree anchors nothing here.
+            # Skipping it only SHRINKS the anchored set, so the sweep below stays
+            # fail-closed; `_validate_artifact_reconstruction_append_only` owns the
+            # typed refusal for that escaping anchor.
+            continue
+    return frozenset(anchored)
+
+
 def _derive_candidate_paths(
     repo_root: Path,
     canonical_root: Path,
-    authority_context: AuthorityContext,
+    artifact_ledger_paths: Sequence[Path],
 ) -> tuple[Path, ...]:
     """Derive the complete checkpoint set solely from canonical public roots.
 
     Parameters
     ----------
-    repo_root, canonical_root, authority_context:
-        Git worktree, canonical crawler root, and mandatory active authority.
+    repo_root, canonical_root, artifact_ledger_paths:
+        Git worktree, canonical crawler root, and the complete artifact ledger
+        shards whose append-only events name every legitimate reconstruction.
 
     Returns
     -------
@@ -2654,14 +2698,25 @@ def _derive_candidate_paths(
         for path in absolute_root.rglob("*"):
             if path.is_file() and path.suffix in _ALLOWLIST_SUFFIXES:
                 paths.add(path.relative_to(repo_root))
+    anchored = _ledger_named_reconstructions(repo_root, artifact_ledger_paths)
     reconstruction_root = canonical_root / "reconstruction"
     for reconstruction in reconstruction_root.rglob("*.json"):
         if reconstruction.name.endswith(".commit.json"):
             continue
         payload = _read_json_object(reconstruction, "canonical reconstruction")
         if payload.get("schema_version") == ARTIFACT_RECONSTRUCTION_SCHEMA_VERSION:
-            # The caller validates v1 documents from the independent artifact
-            # ledger plus mandatory AuthorityContext before candidate derivation.
+            # `_validate_artifact_reconstruction_append_only` proves ledger-named
+            # documents are present and immutable; it asserts only
+            # ledger-named subset-of candidates. Without the converse asserted
+            # HERE, a well-formed current-schema document that NO artifact event
+            # names -- an orphan or a fabrication -- is swept in by the allowlist
+            # and signed with nothing binding it to canonical authority.
+            relative = _normalize_path(reconstruction.resolve().relative_to(repo_root.resolve()))
+            if relative not in anchored:
+                raise CheckpointValidationError(
+                    "reconstruction document is not named by the artifact ledger: "
+                    f"{relative.as_posix()}"
+                )
             continue
         raise CheckpointValidationError(
             f"legacy reconstruction is not artifact-ledger authority: {reconstruction}"
