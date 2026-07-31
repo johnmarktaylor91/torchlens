@@ -1809,7 +1809,7 @@
     "$.implementation.initialization.policy": "author-gated",
     "$.implementation.initialization.pretrained_disabled": "author-gated",
     "$.implementation.initialization.source_specified_choices[]": "author-gated",
-    "$.implementation.library_recipe.artifact_sha256": "author-gated",
+    "$.implementation.library_recipe.artifact_sha256": "reducer-derived",
     "$.implementation.library_recipe.distribution": "author-gated",
     "$.implementation.library_recipe.kwargs": "author-gated",
     "$.implementation.library_recipe.module": "author-gated",

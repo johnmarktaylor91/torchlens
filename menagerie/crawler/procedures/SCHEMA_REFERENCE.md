@@ -281,7 +281,7 @@ External metadata is captured and gated now because it requires source reading, 
 | `implementation.library_recipe` | object | Mandatory | Mandatory library recipe. |
 | `implementation.library_recipe.distribution` | string | Mandatory | Mandatory distribution. |
 | `implementation.library_recipe.version` | string | Mandatory | Mandatory version. |
-| `implementation.library_recipe.artifact_sha256` | string | Mandatory | Mandatory artifact sha256. |
+| `implementation.library_recipe.artifact_sha256` | string \| null | Best-effort | Machine-derived installed-distribution artifact digest. The author stage has no package inventory, environment identity, or interpreter, so it may omit the leaf; the driver resolves it from the routed intent's exact resolved export before gating and refuses a conflicting supplied value. Null when the routed environment names no matching distribution. |
 | `implementation.library_recipe.module` | string | Mandatory | Mandatory module. |
 | `implementation.library_recipe.symbol` | string | Mandatory | Mandatory symbol. |
 | `implementation.library_recipe.kwargs` | object | Mandatory | Mandatory kwargs. |
@@ -321,7 +321,7 @@ External metadata is captured and gated now because it requires source reading, 
 | `implementation.device_policy` | string | Mandatory | Mandatory device policy. |
 | `implementation.required_construct_asset` | null | Mandatory | Mandatory required construct asset. |
 | `implementation.recipe_revision` | string | Mandatory | Mandatory recipe revision. |
-| `implementation.torchlens_import_static_check` | const `passed` | Mandatory | Mandatory torchlens import static check. |
+| `implementation.torchlens_import_static_check` | enum `passed` \| `not-checked` (`not-applicable-no-code` when `recipe_type` is `none`) | Mandatory | Static import-check disposition. `passed` is an attestation only a party with an interpreter may make; the author stage has none, so an author records the honest `not-checked`. |
 
 ### Input contract
 

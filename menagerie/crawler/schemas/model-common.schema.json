@@ -1332,9 +1332,10 @@
         "torchlens_import_static_check": {
           "enum": [
             "passed",
+            "not-checked",
             "not-applicable-no-code"
           ],
-          "description": "Mandatory torchlens import static check."
+          "description": "Mandatory torchlens import static-check disposition. 'passed' is an attestation that only a party with an interpreter may make; the author stage has none, so an author declares the honest 'not-checked'."
         },
         "declared_timeout_seconds": {
           "type": [
@@ -1370,8 +1371,11 @@
           "else": {
             "properties": {
               "torchlens_import_static_check": {
-                "const": "passed",
-                "description": "Executable implementations must pass the static import check."
+                "enum": [
+                  "passed",
+                  "not-checked"
+                ],
+                "description": "Executable implementations record a real check verdict or the honest 'not-checked'; the no-code sentinel is structurally inexpressible here."
               }
             }
           }
@@ -1384,7 +1388,6 @@
       "required": [
         "distribution",
         "version",
-        "artifact_sha256",
         "module",
         "symbol",
         "kwargs",
@@ -1400,8 +1403,8 @@
           "description": "Mandatory version."
         },
         "artifact_sha256": {
-          "$ref": "#/$defs/hash",
-          "description": "Mandatory artifact sha256."
+          "$ref": "#/$defs/nullable_hash",
+          "description": "Machine-derived installed-distribution artifact digest. The author has no package inventory and cannot derive it, so the leaf is optional in an author proposal and null when the routed environment names no matching distribution. The driver resolves it from the routed intent's exact resolved export before gating and refuses a conflicting supplied value."
         },
         "module": {
           "$ref": "#/$defs/nonempty_string",

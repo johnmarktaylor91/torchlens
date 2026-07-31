@@ -391,6 +391,7 @@ from menagerie.crawler.driver_admission import (
     _installed_package_manifest_bytes,
     _instantiate_variant_artifact,
     _normalize_artifact_modes,
+    _routed_environment_packages,
     _observed_interpreter_facts,
     _quarantine_environment_payload,
     _quarantine_work_identity,
@@ -1740,7 +1741,13 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         repaired = self._stage_author_result(item, repaired, reducer)
         if not isinstance(repaired.author_result, ProposedAuthorResult):
             raise DriverIntegrationError("checker repair returned a terminal recommendation")
-        repaired = _normalize_artifact_modes(repaired, self.config)
+        repaired = _normalize_artifact_modes(
+            repaired,
+            self.config,
+            environment_packages=_routed_environment_packages(
+                self.registry, item.route.intent
+            ),
+        )
         if repaired.proposal.get("stable_id") != item.stable_id:
             raise DriverIntegrationError("repaired author proposal stable_id does not match intake")
         if repaired.campaign_root_work_id != artifact.campaign_root_work_id:
@@ -1825,7 +1832,13 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
                     raise DriverIntegrationError(
                         "detected-mode repair returned a terminal recommendation"
                     )
-                repaired = _normalize_artifact_modes(repaired, self.config)
+                repaired = _normalize_artifact_modes(
+                    repaired,
+                    self.config,
+                    environment_packages=_routed_environment_packages(
+                        self.registry, item.route.intent
+                    ),
+                )
                 if repaired.proposal.get("stable_id") != item.stable_id:
                     raise DriverIntegrationError(
                         "mode-repair proposal stable_id does not match intake"

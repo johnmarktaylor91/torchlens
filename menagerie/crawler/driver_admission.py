@@ -101,6 +101,7 @@ from menagerie.crawler.constants import (
 )
 from menagerie.crawler.envs import (
     EnvironmentIntent,
+    EnvironmentRegistry,
     IntentProbes,
 )
 from menagerie.crawler.env_lifecycle import (
@@ -163,6 +164,7 @@ from menagerie.crawler.operator_protocol import (
     status_sidecar_path,
 )
 from menagerie.crawler.proposal import ProposalValidationError, model_code_manifest
+from menagerie.crawler.recipe import RecipeError, bind_library_artifact_digest
 from menagerie.crawler.recordio import (
     JsonlLedger,
     scan_jsonl,
@@ -3170,7 +3172,13 @@ class AdmissionEnvironmentMixin:
         try:
             if not isinstance(artifact.author_result, ProposedAuthorResult):
                 return
-            candidate = _normalize_artifact_modes(artifact, self.config)
+            candidate = _normalize_artifact_modes(
+                artifact,
+                self.config,
+                environment_packages=_routed_environment_packages(
+                    getattr(self, "registry", None), item.route.intent
+                ),
+            )
             if candidate.proposal.get("stable_id") != item.stable_id:
                 return
             if candidate.author_result.binding.work_id != item.active_work_id:
@@ -3495,7 +3503,13 @@ class AdmissionEnvironmentMixin:
                 self.dependencies.boundary_hook("after-author", item.stable_id)
                 continue
             try:
-                artifact = _normalize_artifact_modes(artifact, self.config)
+                artifact = _normalize_artifact_modes(
+                    artifact,
+                    self.config,
+                    environment_packages=_routed_environment_packages(
+                        getattr(self, "registry", None), item.route.intent
+                    ),
+                )
                 if artifact.proposal.get("stable_id") != item.stable_id:
                     raise DriverIntegrationError("author proposal stable_id does not match intake")
                 expected_work_id = item.active_work_id
@@ -6028,8 +6042,54 @@ def _verify_model_code_manifest(
         raise DriverIntegrationError("verified hashes do not bind the model-code entry and closure")
 
 
-def _normalize_artifact_modes(artifact: AuthorArtifact, config: DriverConfig) -> AuthorArtifact:
-    """Canonicalize modes and the closed model-code manifest before gating.
+def _routed_environment_packages(
+    registry: Optional[EnvironmentRegistry], intent_name: Optional[str]
+) -> tuple[Mapping[str, Any], ...]:
+    """Return the routed intent's exact resolved-export package rows.
+
+    The rows are a static, pre-gate artifact of the very lock that materializes
+    the environment (``env_lifecycle._require_lock_inventory_match`` keeps the
+    lock and the created prefix one-to-one), so resolving a distribution digest
+    from them is equivalent to resolving it from the live prefix while remaining
+    available before the environment stage runs.
+
+    Parameters
+    ----------
+    registry:
+        Loaded environment registry, when one is available.
+    intent_name:
+        Routed environment intent for this work item.
+
+    Returns
+    -------
+    tuple[Mapping[str, Any], ...]
+        Exact package rows, or an empty tuple when the intent is unknown or its
+        target is not locked. An empty inventory degrades to an honest null
+        digest; it never aborts admission.
+    """
+
+    if registry is None or not isinstance(intent_name, str):
+        return ()
+    intent = registry.intents.get(intent_name)
+    if intent is None or intent.lock.export_bytes is None:
+        return ()
+    try:
+        value = json.loads(parse_resolved_export(intent.lock.export_bytes))
+    except (EnvironmentExactnessError, UnicodeDecodeError, json.JSONDecodeError):
+        return ()
+    packages = value.get("packages") if isinstance(value, Mapping) else None
+    if not isinstance(packages, list):
+        return ()
+    return tuple(row for row in packages if isinstance(row, Mapping))
+
+
+def _normalize_artifact_modes(
+    artifact: AuthorArtifact,
+    config: DriverConfig,
+    *,
+    environment_packages: Sequence[Mapping[str, Any]] = (),
+) -> AuthorArtifact:
+    """Canonicalize modes, model code, and the derived R1 artifact digest.
 
     Parameters
     ----------
@@ -6037,12 +6097,18 @@ def _normalize_artifact_modes(artifact: AuthorArtifact, config: DriverConfig) ->
         Validated author artifact whose mutable proposal has not entered a gate.
     config:
         Exact checker identity participating in vet and fidelity identities.
+    environment_packages:
+        Exact package rows for the routed environment. The R1 artifact digest
+        identifies the installed distribution, which the author stage cannot
+        derive, so the driver resolves it here -- before the gate, while the
+        recipe bytes and their dependent identities can still rebind together.
 
     Returns
     -------
     AuthorArtifact
-        Copy with both mode declarations ordered identically and all dependent
-        identities rebound to those canonical bytes.
+        Copy with both mode declarations ordered identically, the derived
+        artifact digest bound, and all dependent identities rebound to those
+        canonical bytes.
     """
 
     proposal = deepcopy(artifact.proposal)
@@ -6073,7 +6139,17 @@ def _normalize_artifact_modes(artifact: AuthorArtifact, config: DriverConfig) ->
     modes["meaningful_modes"] = canonical
     external_modes["meaningful_modes"] = canonical
     code_changed = _bind_model_code_manifest(proposal, artifact.model_dir)
-    if not changed and not code_changed:
+    implementation_block = facts.get("implementation")
+    if isinstance(implementation_block, dict):
+        try:
+            recipe_changed = bind_library_artifact_digest(
+                implementation_block, environment_packages
+            )
+        except RecipeError as exc:
+            raise DriverIntegrationError(str(exc)) from exc
+    else:
+        recipe_changed = False
+    if not changed and not code_changed and not recipe_changed:
         return artifact
     try:
         identities = recompute_accepted_identities(

@@ -6,6 +6,7 @@ import ast
 import importlib
 import importlib.machinery
 import inspect
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -73,6 +74,154 @@ def validate_pretrained_disable_fields(
             raise RecipeError(
                 f"pretrained disable field {field!r} does not carry a disabling value"
             )
+
+
+_HASH_PATTERN = re.compile(r"sha256:[0-9a-f]{64}\Z")
+
+
+def canonical_distribution_name(value: str) -> str:
+    """Return one comparable package name for environment-inventory lookup.
+
+    Parameters
+    ----------
+    value:
+        Declared distribution name.
+
+    Returns
+    -------
+    str
+        Case-folded name with ``_``/``.`` normalized to ``-``.
+    """
+
+    return value.strip().casefold().replace("_", "-").replace(".", "-")
+
+
+def resolve_environment_artifact_digest(
+    packages: Sequence[Mapping[str, Any]],
+    *,
+    distribution: str,
+    version: str,
+) -> Optional[str]:
+    """Derive the installed-distribution artifact digest from an exact inventory.
+
+    The author stage has no package inventory, no environment identity, and no
+    interpreter, so it cannot know this digest; the routed environment's exact
+    resolved export does. This resolves the one row naming ``distribution`` and
+    returns its recorded artifact digest.
+
+    Parameters
+    ----------
+    packages:
+        Exact ``name``/``version``/``sha256`` rows from the routed intent's
+        resolved export or the materialized prefix inventory.
+    distribution, version:
+        Declared recipe distribution and version.
+
+    Returns
+    -------
+    str | None
+        The canonical ``sha256:``-prefixed artifact digest, or ``None`` when the
+        routed environment names no matching distribution. ``None`` is an honest
+        "not derivable here", never a fabricated digest.
+
+    Raises
+    ------
+    RecipeError
+        If the inventory names the distribution more than once, records a
+        noncanonical digest, or records a version that contradicts the recipe.
+    """
+
+    wanted = canonical_distribution_name(distribution)
+    matches = [
+        row
+        for row in packages
+        if isinstance(row, Mapping)
+        and isinstance(row.get("name"), str)
+        and canonical_distribution_name(str(row["name"])) == wanted
+    ]
+    if not matches:
+        return None
+    digests = {str(row.get("sha256")) for row in matches}
+    versions = {str(row.get("version")) for row in matches}
+    if len(digests) != 1 or len(versions) != 1:
+        raise RecipeError(
+            f"environment inventory names distribution {distribution!r} ambiguously"
+        )
+    digest = digests.pop()
+    if _HASH_PATTERN.fullmatch(digest) is None:
+        raise RecipeError(
+            f"environment inventory digest for {distribution!r} is not a canonical sha256"
+        )
+    resolved_version = versions.pop()
+    if resolved_version != str(version).strip():
+        raise RecipeError(
+            f"recipe declares {distribution!r} version {version!r} but the routed "
+            f"environment installs {resolved_version!r}"
+        )
+    return digest
+
+
+def bind_library_artifact_digest(
+    implementation: dict[str, Any],
+    packages: Sequence[Mapping[str, Any]],
+) -> bool:
+    """Fill the machine-derived R1 artifact digest, refusing a conflicting claim.
+
+    The digest identifies the installed distribution, which only the machine can
+    derive, so this never trusts an author value over its own derivation and
+    never silently overwrites one either: a conflicting supplied digest is a
+    typed refusal, so the check cannot be left structurally dead.
+
+    Parameters
+    ----------
+    implementation:
+        Mutable proposal implementation block.
+    packages:
+        Exact package rows for the routed environment.
+
+    Returns
+    -------
+    bool
+        Whether the recipe bytes changed and dependent identities must rebind.
+
+    Raises
+    ------
+    RecipeError
+        If a supplied digest conflicts with the derived one, is malformed, or the
+        inventory itself is ambiguous.
+    """
+
+    if implementation.get("recipe_type") != "declarative-library":
+        return False
+    recipe = implementation.get("library_recipe")
+    if not isinstance(recipe, dict):
+        return False
+    distribution = recipe.get("distribution")
+    version = recipe.get("version")
+    if not isinstance(distribution, str) or not isinstance(version, str):
+        raise RecipeError("declarative recipe lacks a distribution and version to resolve")
+    supplied = recipe.get("artifact_sha256")
+    if supplied is not None and (
+        not isinstance(supplied, str) or _HASH_PATTERN.fullmatch(supplied) is None
+    ):
+        raise RecipeError("supplied artifact_sha256 is not a canonical sha256 digest")
+    derived = resolve_environment_artifact_digest(
+        packages, distribution=distribution, version=version
+    )
+    if supplied is not None and derived is not None and supplied != derived:
+        raise RecipeError(
+            "supplied artifact_sha256 conflicts with the routed environment: "
+            f"supplied {supplied}, derived {derived}"
+        )
+    if supplied is not None:
+        return False
+    if derived is None:
+        if "artifact_sha256" in recipe:
+            return False
+        recipe["artifact_sha256"] = None
+        return True
+    recipe["artifact_sha256"] = derived
+    return True
 
 
 @dataclass(frozen=True)
