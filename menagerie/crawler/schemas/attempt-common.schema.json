@@ -174,7 +174,9 @@
         "repair-exhausted",
         "missing-material-source",
         "needs-higher-tier",
-        "malformed-result"
+        "malformed-result",
+        "terminal-disposition-rejected",
+        "terminal-disposition-unverifiable"
       ]
     },
     "rung": {

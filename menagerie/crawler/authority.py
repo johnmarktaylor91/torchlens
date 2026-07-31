@@ -26,6 +26,7 @@ from menagerie.crawler.constants import (
     GATE_SCHEMA_VERSION_V3,
     NO_RUNG_SELECTED,
     SourceRung,
+    terminal_disposition_failure_reason,
 )
 from menagerie.crawler.identity import (
     compute_execution_identity,
@@ -4428,6 +4429,69 @@ def _validate_skip_predicate(
             raise AuthorityDerivationError("not-a-real-NN lacks literal scope evidence")
 
 
+def _derive_terminal_disposition_failure(
+    matches: Sequence[tuple[Mapping[str, Any], Mapping[str, Any]]],
+) -> tuple[str, str, str]:
+    """Derive an accuracy-gate failure from ONE adjudicated terminal disposition.
+
+    The proof obligation for a single adjudication, and the exact mirror of
+    :func:`_terminal_gate`, which proves the ACCEPTED side. It deliberately does not reuse
+    the ``metadata_batch`` rule: that rule proves a bounded REPAIR lineage, and a terminal
+    disposition has no lineage to bound -- there is one checker verdict on one authored
+    result and nothing to repair -- so its cap and its ``*-cap-exhausted`` reasons are
+    claims no fact here supports.
+
+    What it demands instead is what a single adjudication can actually produce: an exact
+    ``terminal_disposition`` block whose verdict is a NON-ACCEPTED closed verdict, carrying
+    at least one finding. Findings are the substance of the refusal -- the schema defines
+    them as "closed checker findings for rejected or unverifiable recommendations" -- so a
+    non-accepted verdict that names nothing is an unevidenced refusal and is refused here,
+    exactly as an unevidenced ``metadata_batch`` claim is refused above.
+
+    Parameters
+    ----------
+    matches:
+        Exact ``terminal_disposition`` gate/item pairs for one model and work, in
+        deterministic history order.
+
+    Returns
+    -------
+    tuple[str, str, str]
+        Gate ID, reason code, and root-cause fingerprint.
+
+    Raises
+    ------
+    AuthorityDerivationError
+        If no exact adjudicated non-accepted disposition with findings exists.
+    """
+
+    adjudicated: list[tuple[Mapping[str, Any], Mapping[str, Any], Mapping[str, Any]]] = []
+    for gate, item in matches:
+        disposition = item.get("terminal_disposition")
+        if not isinstance(disposition, Mapping):
+            continue
+        # `accepted` is not merely "not a failure": deriving a gate FAILURE from a gate
+        # that ACCEPTED is precisely the unevidenced claim this kernel exists to refuse.
+        if disposition.get("verdict") == "accepted":
+            continue
+        findings = disposition.get("findings")
+        if not isinstance(findings, Sequence) or isinstance(findings, (str, bytes)):
+            continue
+        if not [value for value in findings if isinstance(value, str) and value.strip()]:
+            continue
+        adjudicated.append((gate, item, disposition))
+    if not adjudicated:
+        raise AuthorityDerivationError(
+            "failed:accuracy-gate lacks an exact adjudicated terminal disposition"
+        )
+    gate, item, disposition = adjudicated[-1]
+    return (
+        str(gate["gate_id"]),
+        terminal_disposition_failure_reason(disposition.get("verdict")),
+        _gate_item_fingerprint(item),
+    )
+
+
 def _derive_gate_failure(
     gates: Sequence[Mapping[str, Any]], *, stable_id: str, work_id: str, stage: str
 ) -> tuple[str, str, str]:
@@ -4458,6 +4522,21 @@ def _derive_gate_failure(
         work_id=work_id,
         gate_kind=gate_kind,
     )
+    if stage == "accuracy-gate" and not active:
+        # `failed:accuracy-gate` has two DISJOINT proof rules, selected by which checker
+        # gate actually adjudicated this work, and the repair rule keeps precedence: this
+        # arm is consulted only when NO `metadata_batch` item exists for the work at all,
+        # so the bounded-cap rule below is never softened or bypassed for a model that has
+        # a repair lineage. When neither kind exists the original refusal below still
+        # fires with its original message -- a model with no gate evidence stays refused.
+        terminal_matches = _matching_gate_items(
+            gates,
+            stable_id=stable_id,
+            work_id=work_id,
+            gate_kind="terminal_disposition",
+        )
+        if terminal_matches:
+            return _derive_terminal_disposition_failure(terminal_matches)
     campaign_ids = {
         str(item.get("campaign_root_work_id"))
         for _gate, item in active

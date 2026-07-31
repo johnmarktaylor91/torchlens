@@ -117,6 +117,7 @@ from menagerie.crawler.constants import (
     OPERATIONAL_EVENT_SCHEMA_VERSION,
     OperationalEventKind,
     OperationalEventStatus,
+    terminal_disposition_failure_reason,
 )
 from menagerie.crawler.envs import (
     EnvironmentIntent,
@@ -1593,11 +1594,15 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         else:
             raise DriverIntegrationError("unknown terminal author-result arm")
         if not decision.accepted:
+            # The stage is honest: the checker's gate refused this model, and no other
+            # stage names that. The REASON was not: both `*-cap-exhausted` codes assert a
+            # bounded repair cap, and a terminal disposition is ONE adjudication with
+            # nothing to repair, so no cap supports either claim. The authority kernel
+            # derives the reason independently from the same gate through the same total
+            # mapping, so the driver's candidate can never contradict the proof.
             status_code = "failed:accuracy-gate"
-            reason_code = (
-                "inaccurate-cap-exhausted"
-                if gate_item.get("terminal_disposition", {}).get("verdict") == "rejected"
-                else "cannot-verify-cap-exhausted"
+            reason_code = terminal_disposition_failure_reason(
+                gate_item.get("terminal_disposition", {}).get("verdict")
             )
         elif status_code == "deferred:needs-opus-tier":
             if self._intake_snapshot is None:

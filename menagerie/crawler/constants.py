@@ -563,6 +563,71 @@ the tripwire stricter than it was -- previously a cap-exhausted record and a
 checked no-source conclusion were indistinguishable in the structured field.
 """
 
+TERMINAL_DISPOSITION_REJECTED_REASON_CODE = "terminal-disposition-rejected"
+"""The checker adjudicated one advisory terminal claim and refused it ON THE MERITS.
+
+The author published a SKIP/DEFER/BLOCKED recommendation; the checker read the frozen
+sources it names, and concluded the closed terminal predicate is not established. That is
+a real, evidenced campaign outcome and it had no honest terminal before this code.
+
+It is NOT the author's ``skipped:*``/``deferred:*`` claim, which is the very thing just
+refused -- recording one would enter a rejected claim into the catalog as fact. It is not
+``failed:runner``, which asserts the lane never obtained a verdict when it obtained a
+decisive one. It is not ``failed:author``, whose members all describe a session that
+crashed, exhausted, or produced something unrecordable, when this session completed and
+published a well-formed, expressible result. It is not ``failed:evidence``, which asserts a
+specific DEFECT in the evidence pack: the pilot's own rejections verify every excerpt and
+hash and still refuse the predicate, so an evidence-stage failure did not occur.
+"""
+
+TERMINAL_DISPOSITION_UNVERIFIABLE_REASON_CODE = "terminal-disposition-unverifiable"
+"""The checker could not adjudicate one advisory terminal claim either way.
+
+The weaker sibling of :data:`TERMINAL_DISPOSITION_REJECTED_REASON_CODE`, and deliberately
+distinct from it: "refused on the merits" and "could not determine" are exactly the
+distinction the closed verdict vocabularies already draw everywhere else
+(``AccuracyVerdict.INACCURATE`` vs ``CANNOT_VERIFY``), and collapsing them here would
+reintroduce the conflation this pair exists to remove.
+"""
+
+TERMINAL_DISPOSITION_FAILURE_REASONS: dict[str, str] = {
+    "rejected": TERMINAL_DISPOSITION_REJECTED_REASON_CODE,
+    "cannot-verify": TERMINAL_DISPOSITION_UNVERIFIABLE_REASON_CODE,
+}
+"""Non-accepted terminal-disposition verdicts mapped to their honest reason codes.
+
+``accepted`` is deliberately absent: it is not a failure at all, and a
+``failed:accuracy-gate`` claim over an ACCEPTED disposition is exactly the unevidenced
+claim the terminal-proof tripwire exists to refuse.
+"""
+
+
+def terminal_disposition_failure_reason(verdict: object) -> str:
+    """Map one non-accepted terminal-disposition verdict onto its honest reason.
+
+    The single crossing between the checker's verdict vocabulary and the record's, shared
+    by the driver and the authority kernel so the two can never derive different reasons
+    for the same gate. Like ``driver._blocked_terminal`` it is TOTAL: an unreadable verdict
+    degrades to the weaker ``unverifiable`` claim -- which is true of an adjudication that
+    cannot be read as a refusal on the merits -- rather than aborting. One odd verdict
+    string on one model must never take the whole campaign down.
+
+    Parameters
+    ----------
+    verdict:
+        Checker ``terminal_disposition.verdict`` known not to be ``accepted``.
+
+    Returns
+    -------
+    str
+        Reason code valid for the ``accuracy-gate`` stage.
+    """
+
+    return TERMINAL_DISPOSITION_FAILURE_REASONS.get(
+        str(verdict), TERMINAL_DISPOSITION_UNVERIFIABLE_REASON_CODE
+    )
+
+
 FAILURE_REASON_CODES: dict[str, frozenset[str]] = {
     "intake": frozenset(
         {
@@ -640,6 +705,16 @@ FAILURE_REASON_CODES: dict[str, frozenset[str]] = {
             "identity-mismatch",
             "checker-contract-invalid",
             "effort-cap-exhausted",
+            # The checker adjudicated a SINGLE advisory terminal disposition -- a
+            # SKIP/DEFER/BLOCKED recommendation -- and refused it. Every sibling above
+            # describes the metadata_batch REPAIR loop and states something false here:
+            # the two `*-cap-exhausted` codes assert a bounded repair cap when there is
+            # one adjudication and nothing to repair, `identity-mismatch` asserts the
+            # thing checked was not the thing authored, and `checker-contract-invalid`
+            # blames the checker for an author claim the checker refused correctly.
+            # See `TERMINAL_DISPOSITION_FAILURE_REASONS`.
+            TERMINAL_DISPOSITION_REJECTED_REASON_CODE,
+            TERMINAL_DISPOSITION_UNVERIFIABLE_REASON_CODE,
         }
     ),
     "environment": frozenset(

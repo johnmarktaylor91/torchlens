@@ -71,6 +71,7 @@ from menagerie.crawler.constants import (
     NO_RUNG_SELECTED,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
     OperationalEventKind,
+    TERMINAL_DISPOSITION_REJECTED_REASON_CODE,
     TERMINAL_STATUS_CODES,
 )
 from menagerie.crawler.driver_admission import (
@@ -803,6 +804,14 @@ class CheckerScript:
     lineage_repairs: bool = False
     reject_fidelity: bool = False
     metadata_error: Optional[str] = None
+    #: Non-accepted ``terminal_disposition`` verdict the checker should return, with
+    #: the findings that carry its refusal. The production shape the pilot actually
+    #: produced: the checker reads the frozen sources, verifies every hash, and still
+    #: refuses the authored terminal predicate.
+    terminal_verdict: Optional[str] = None
+    terminal_findings: tuple[str, ...] = (
+        "every declared excerpt resolves and verifies, and none supports the predicate",
+    )
 
 
 class ScriptedChecker(CheckerLane):
@@ -1024,7 +1033,7 @@ class ScriptedChecker(CheckerLane):
             ),
             "kind": kind,
             "predicate": predicate,
-            "verdict": "accepted",
+            "verdict": self.script.terminal_verdict or "accepted",
             "source_manifest_identity": binding.source_manifest_identity,
             "source_ids": (
                 [
@@ -1037,8 +1046,16 @@ class ScriptedChecker(CheckerLane):
             "evidence_identity": result.evidence_identity,
             "evidence_ids": list(result.evidence_ids),
             "license_identity": result.license_identity,
-            "findings": [],
+            "findings": (
+                list(self.script.terminal_findings) if self.script.terminal_verdict else []
+            ),
         }
+        if self.script.terminal_verdict is not None:
+            # A refusal on the merits is an ITEM-level rejection too. Integrity stays
+            # ACCURATE on purpose: the terminal integrity rule is monotone rather than
+            # equality-bound, so a correctly-rejected item may carry honest integrity,
+            # and the routing under test must not secretly depend on a degraded one.
+            item["verdict"] = "inaccurate"
         gate["checker"].update(
             {
                 "model": config.checker_model,
@@ -7328,6 +7345,81 @@ def test_accepted_blocked_disposition_terminalizes_on_a_wide_manifest(
     # The manifest really was wide, so the fixture cannot silently regress into
     # the single-source shape that hid the defect.
     assert len(model["source_resolution"]["sources"]) == 3
+
+
+@pytest.mark.smoke
+def test_rejected_blocked_disposition_terminalizes_on_its_own_adjudication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A checker refusal on the merits records an adjudicated terminal, not a crash.
+
+    The exact production shape the pilot produced five times over: stage 1 answers
+    ``FOUND``, the broker freezes a WIDE manifest, the author publishes a well-formed
+    ``BLOCKED`` recommendation, and the checker reads the frozen sources and REFUSES the
+    predicate. That is a real, evidenced campaign outcome.
+
+    Before this rule the arm routed to ``failed:accuracy-gate`` with
+    ``inaccurate-cap-exhausted`` -- a bounded REPAIR cap, over a single adjudication with
+    no ``metadata_batch`` lineage and nothing to repair -- so terminal-proof derivation
+    refused it, ``_terminalize`` could not write the record even on its minimal retry, and
+    the model became a partition hole that stops the campaign.
+
+    The manifest is deliberately wide: the single-source width is exactly where the two
+    machine-side derivations of a BLOCKED arm's checked source set coincide, and a
+    one-source fixture here would prove nothing about production.
+
+    Parameters
+    ----------
+    tmp_path, monkeypatch:
+        Active fixtures.
+    """
+
+    snapshot = _snapshot(tmp_path, count=1)
+    assert len(_BLOCKED_SOURCE_PAYLOAD["evidence_ids"]) == 1
+    _install_executor_lane(monkeypatch, _BLOCKED_SOURCE_PAYLOAD, source_count=3)
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=CommandAuthorLane(("fake-author",)),
+        checker=ScriptedChecker(script=CheckerScript(terminal_verdict="rejected")),
+        campaign_id="c1-mech",
+    ).run()
+
+    # The campaign reaches a COMPLETE TERMINAL PARTITION: every model has a terminal and
+    # `assert_partition` found no hole -- which is the entire point, since the defect this
+    # covers made the model unrecordable and the run die on `missing=[...]`. It stops short
+    # of plain `complete` only because a refusal on the merits is flagged for human review,
+    # which is the honest disposition for a refused claim rather than a defect.
+    assert result.status == "terminal-partition-complete"
+    models = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
+    # The partition hole this test exists to prevent: the record must EXIST.
+    assert len(models) == 1
+    status = models[0]["status"]
+    assert status["code"] == "failed:accuracy-gate"
+    assert status["stage"] == "accuracy-gate"
+    assert status["reason_code"] == TERMINAL_DISPOSITION_REJECTED_REASON_CODE
+    # No cap was exhausted and nothing was repaired, so no cap may be claimed.
+    assert "cap-exhausted" not in status["reason_code"]
+    # Nor is this the lane-level mislabel the pre-fix masking produced.
+    assert status["code"] != "failed:runner"
+    assert status["reason_code"] != "protocol-violation"
+    # The refusal is recorded with the evidence that produced it.
+    assert status["root_cause_fingerprint"]
+    assert status["human_review"]["required"] is True
+    # The manifest really was wide, so this cannot regress into the degenerate
+    # single-source shape that hid the width-dependent defect for a whole sprint.
+    assert len(models[0]["source_resolution"]["sources"]) == 3
+
+    gates = scan_jsonl(_paths(tmp_path, snapshot).ledgers.gates)
+    terminal = [gate for gate in gates if gate["gate_kind"] == "terminal_disposition"]
+    assert len(terminal) == 1
+    disposition = terminal[0]["items"][0]["terminal_disposition"]
+    assert disposition["verdict"] == "rejected"
+    # The proof obligation the terminal rests on: a real refusal names findings.
+    assert disposition["findings"]
+    # No metadata_batch repair lineage exists, which is precisely why the repair rule
+    # could not have proved this terminal.
+    assert not [gate for gate in gates if gate["gate_kind"] == "metadata_batch"]
 
 
 def test_blocked_needs_higher_tier_promotes_through_the_executor_lane(

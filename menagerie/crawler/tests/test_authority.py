@@ -47,7 +47,13 @@ from menagerie.crawler.checker_dispatch import component_identity
 from menagerie.crawler.constants import (
     AUTHOR_DISPATCHER_COMPONENT,
     AUTHOR_RESULT_SCHEMA_COMPONENT,
+    EFFORT_EXHAUSTION_REASON_CODES,
+    FAILURE_REASON_CODES,
     InvocationOrigin,
+    TERMINAL_DISPOSITION_FAILURE_REASONS,
+    TERMINAL_DISPOSITION_REJECTED_REASON_CODE,
+    TERMINAL_DISPOSITION_UNVERIFIABLE_REASON_CODE,
+    terminal_disposition_failure_reason,
 )
 from menagerie.crawler.driver import DriverResult, DriverShutdown
 from menagerie.crawler.identity import hash_bytes, payload_hash, stable_hash
@@ -886,6 +892,254 @@ def test_terminal_failure_uses_exact_decisive_stage_and_complete_mode_map() -> N
             attempts=[_failed_attempt("runner", "protocol-violation")],
             proof_rule_identity=HASH_A,
         )
+
+
+def _adjudicated_terminal_gate(
+    verdict: str,
+    *,
+    findings: Optional[list[str]] = None,
+    gate_id: str = "gate-terminal-1",
+    gate_round: int = 1,
+    ledger_seq: int = 1,
+    stable_id: str = "m_example",
+    work_id: str = "work-1",
+) -> dict[str, Any]:
+    """Build one exact adjudicated ``terminal_disposition`` gate.
+
+    Parameters
+    ----------
+    verdict:
+        Closed terminal-disposition verdict under adjudication.
+    findings:
+        Checker findings; ``None`` supplies one realistic non-empty finding.
+    gate_id, gate_round, ledger_seq:
+        Immutable gate identity and deterministic history position.
+    stable_id, work_id:
+        Exact item association.
+
+    Returns
+    -------
+    dict[str, Any]
+        Minimal canonical gate facts consumed by the terminal-failure rule.
+    """
+
+    return {
+        "gate_id": gate_id,
+        "gate_kind": "terminal_disposition",
+        "gate_round": gate_round,
+        "ledger_seq": ledger_seq,
+        "items": [
+            {
+                "stable_id": stable_id,
+                "work_id": work_id,
+                "campaign_root_work_id": "campaign-1",
+                "verdict": "inaccurate",
+                # A correctly-rejected item may carry HONEST integrity: the terminal
+                # integrity rule is monotone, not equality-bound, so the rule under test
+                # must key on the disposition verdict and never on a degraded integrity.
+                "integrity": {"verdict": "accurate"},
+                "rung_check": {"selected_rung": "R5_SKIP", "verdict": "accurate"},
+                "terminal_disposition": {
+                    "kind": "BLOCKED",
+                    "predicate": "blocked-prerequisite",
+                    "verdict": verdict,
+                    "findings": (
+                        ["every declared excerpt verifies but none supports the predicate"]
+                        if findings is None
+                        else findings
+                    ),
+                    "source_ids": ["source-1", "source-2"],
+                    "evidence_ids": ["evidence-1"],
+                },
+            }
+        ],
+    }
+
+
+def _metadata_batch_gate(
+    *, gate_id: str, gate_round: int, ledger_seq: int, verdict: str = "inaccurate"
+) -> dict[str, Any]:
+    """Build one rejected ``metadata_batch`` repair-loop gate.
+
+    Parameters
+    ----------
+    gate_id, gate_round, ledger_seq:
+        Immutable gate identity and deterministic history position.
+    verdict:
+        Checker item verdict driving repair-loop rejection.
+
+    Returns
+    -------
+    dict[str, Any]
+        Minimal canonical gate facts consumed by the bounded repair rule.
+    """
+
+    return {
+        "gate_id": gate_id,
+        "gate_kind": "metadata_batch",
+        "gate_round": gate_round,
+        "ledger_seq": ledger_seq,
+        "items": [
+            {
+                "stable_id": "m_example",
+                "work_id": "work-1",
+                "campaign_root_work_id": "campaign-1",
+                "verdict": verdict,
+                "integrity": {"verdict": "accurate"},
+                "rung_check": {"verdict": "accurate"},
+            }
+        ],
+    }
+
+
+def _accuracy_gate_proof(gates: list[dict[str, Any]]) -> Any:
+    """Derive the ``failed:accuracy-gate`` terminal proof over one gate history.
+
+    Parameters
+    ----------
+    gates:
+        Canonical gate history.
+
+    Returns
+    -------
+    Any
+        Immutable reducer-derived terminal authority.
+    """
+
+    return derive_terminal_proof(
+        "m_example",
+        "work-1",
+        "failed:accuracy-gate",
+        attempts=[],
+        gates=gates,
+        proof_rule_identity=HASH_A,
+    )
+
+
+@pytest.mark.smoke
+def test_rejected_terminal_disposition_reaches_its_own_adjudicated_terminal() -> None:
+    """A checker refusal on the merits terminalizes without claiming a repair cap.
+
+    A terminal disposition is ONE adjudication over one authored result: there is no
+    ``metadata_batch`` lineage and nothing to repair, so every ``*-cap-exhausted`` reason
+    would state a cap that no fact supports. Before this rule the arm could not
+    terminalize at all and the model became an unrecordable partition hole.
+    """
+
+    proof = _accuracy_gate_proof([_adjudicated_terminal_gate("rejected")])
+    assert proof.status_code == "failed:accuracy-gate"
+    assert proof.failure_stage == "accuracy-gate"
+    assert proof.reason_code == TERMINAL_DISPOSITION_REJECTED_REASON_CODE
+    assert proof.gate_id == "gate-terminal-1"
+    assert proof.reason_code in FAILURE_REASON_CODES["accuracy-gate"]
+    # The honest reason must not smuggle in a cap or exhaustion claim.
+    assert "cap-exhausted" not in proof.reason_code
+    assert proof.reason_code not in EFFORT_EXHAUSTION_REASON_CODES
+
+    unverifiable = _accuracy_gate_proof([_adjudicated_terminal_gate("cannot-verify")])
+    assert unverifiable.reason_code == TERMINAL_DISPOSITION_UNVERIFIABLE_REASON_CODE
+    # "refused on the merits" and "could not determine" stay distinguishable.
+    assert unverifiable.reason_code != proof.reason_code
+    # Distinct adjudications keep distinct root causes.
+    assert unverifiable.root_cause_fingerprint != proof.root_cause_fingerprint
+
+
+@pytest.mark.smoke
+def test_accuracy_gate_still_refuses_every_unevidenced_terminal_claim() -> None:
+    """The tripwire is unchanged: no valid gate evidence, no gate-failure terminal.
+
+    The whole point of the rule being worked around is that it refuses unevidenced
+    claims, so each negative below must fail for its OWN reason -- an accepted
+    disposition still carries findings, and a rejected one still carries its verdict --
+    rather than being short-circuited by a shared missing field.
+    """
+
+    # No gate of any kind: the original refusal, with its original message.
+    with pytest.raises(AuthorityDerivationError, match="lacks exact rejected gate evidence"):
+        _accuracy_gate_proof([])
+
+    # A gate that ACCEPTED cannot prove a gate FAILURE, findings notwithstanding.
+    accepted = _adjudicated_terminal_gate("accepted")
+    assert accepted["items"][0]["terminal_disposition"]["findings"]
+    with pytest.raises(AuthorityDerivationError, match="adjudicated terminal disposition"):
+        _accuracy_gate_proof([accepted])
+
+    # A refusal that names nothing is an unevidenced refusal, whitespace included.
+    for empty in ([], ["   "]):
+        silent = _adjudicated_terminal_gate("rejected", findings=empty)
+        assert silent["items"][0]["terminal_disposition"]["verdict"] == "rejected"
+        with pytest.raises(AuthorityDerivationError, match="adjudicated terminal disposition"):
+            _accuracy_gate_proof([silent])
+
+    # Another model's or another work's adjudication is not this record's evidence.
+    for foreign in (
+        _adjudicated_terminal_gate("rejected", stable_id="m_other"),
+        _adjudicated_terminal_gate("rejected", work_id="work-2"),
+    ):
+        with pytest.raises(AuthorityDerivationError, match="lacks exact rejected gate evidence"):
+            _accuracy_gate_proof([foreign])
+
+    # A gate item with no disposition block at all proves nothing.
+    blockless = _adjudicated_terminal_gate("rejected")
+    blockless["items"][0]["terminal_disposition"] = None
+    with pytest.raises(AuthorityDerivationError, match="adjudicated terminal disposition"):
+        _accuracy_gate_proof([blockless])
+
+
+@pytest.mark.smoke
+def test_terminal_rule_never_softens_the_bounded_repair_cap() -> None:
+    """The ``metadata_batch`` repair rule keeps precedence and keeps its cap.
+
+    The new arm is consulted ONLY when no ``metadata_batch`` item exists for the work, so
+    a model with a repair lineage can never reach a terminal by borrowing a terminal
+    disposition sitting beside it.
+    """
+
+    single = _metadata_batch_gate(gate_id="gate-metadata-1", gate_round=1, ledger_seq=2)
+    with pytest.raises(AuthorityDerivationError, match="bounded cap"):
+        _accuracy_gate_proof([single])
+
+    # Even with a fully valid rejected terminal disposition present, the capped repair
+    # lineage still governs and still refuses.
+    with pytest.raises(AuthorityDerivationError, match="bounded cap"):
+        _accuracy_gate_proof([single, _adjudicated_terminal_gate("rejected")])
+
+    # And the repair rule still succeeds exactly where it always did.
+    repeated = _metadata_batch_gate(gate_id="gate-metadata-2", gate_round=2, ledger_seq=3)
+    capped = _accuracy_gate_proof([single, repeated])
+    assert capped.reason_code == "inaccurate-cap-exhausted"
+    assert capped.gate_id == "gate-metadata-2"
+
+
+@pytest.mark.smoke
+def test_terminal_disposition_reason_mapping_is_total_and_shared() -> None:
+    """One odd verdict string on one model must not take the campaign down.
+
+    ``_blocked_terminal`` is total for exactly this reason, and this mapping is the same
+    kind of crossing. An unreadable verdict degrades to the WEAKER ``unverifiable`` claim
+    -- true of any adjudication that cannot be read as a refusal on the merits -- rather
+    than aborting. The driver and the authority kernel share this one function so they
+    cannot derive different reasons for the same gate.
+    """
+
+    assert (
+        terminal_disposition_failure_reason("rejected") == TERMINAL_DISPOSITION_REJECTED_REASON_CODE
+    )
+    assert (
+        terminal_disposition_failure_reason("cannot-verify")
+        == TERMINAL_DISPOSITION_UNVERIFIABLE_REASON_CODE
+    )
+    for unexpected in ("wat", "", None, 7):
+        reason = terminal_disposition_failure_reason(unexpected)
+        assert reason == TERMINAL_DISPOSITION_UNVERIFIABLE_REASON_CODE
+        assert reason in FAILURE_REASON_CODES["accuracy-gate"]
+
+    # An unreadable verdict must still terminalize rather than raise.
+    degraded = _accuracy_gate_proof([_adjudicated_terminal_gate("not-a-verdict")])
+    assert degraded.reason_code == TERMINAL_DISPOSITION_UNVERIFIABLE_REASON_CODE
+
+    # `accepted` is deliberately absent from the table: it is not a failure at all.
+    assert "accepted" not in TERMINAL_DISPOSITION_FAILURE_REASONS
 
 
 def test_terminal_deferral_resolves_gate_source_and_literal_support() -> None:
