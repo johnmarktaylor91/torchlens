@@ -47,7 +47,7 @@
         "source_id": {"$ref": "author-result-v3.schema.json#/$defs/nonempty_string", "description": "Frozen manifest source the excerpt was read out of."},
         "locator": {"$ref": "author-result-v3.schema.json#/$defs/nonempty_string", "description": "Where the excerpt sits in that source; a bytes:start-end locator receives strict byte-range checking."},
         "text": {"$ref": "author-result-v3.schema.json#/$defs/nonempty_string", "description": "Verbatim excerpt text, matched byte-for-byte against the frozen source before it is ever presented as evidence."},
-        "supports": {"$ref": "author-result-v3.schema.json#/$defs/string_array", "description": "Claims this excerpt is offered in support of."},
+        "supports": {"$ref": "author-result-v3.schema.json#/$defs/string_array", "description": "Claims this excerpt is offered in support of. Matched against the closed gated-claim vocabulary (author-proposal-v3.schema.json#/$defs/gated_claim_category) by EXACT string equality: a leaf path does not satisfy its aggregate, and a cross-block spelling satisfies nothing. Extra finer-grained entries are permitted and never penalized."},
         "family_level": {"type": "boolean", "description": "Whether the excerpt is about the architecture family rather than this one model."},
         "disposition": {"$ref": "author-result-v3.schema.json#/$defs/nonempty_string", "description": "Author's reading of what the excerpt establishes."}
       }

@@ -101,7 +101,16 @@ TORCHLENS_DERIVABLE_FIELDS = frozenset(
 #: unknowable. A bare null/empty gated value never passes the proposal gate; the honest
 #: spelling of an unknown is an explicit ``external_metadata.availability.<field>``
 #: record, which is exactly as auditable as a present value.
-AVAILABILITY_STATUSES = frozenset({"present", "not-found-after-search", "not-applicable"})
+#: ``none-exist`` is the fourth, distinct disposition: the search concluded that the
+#: fact genuinely DOES NOT EXIST for this model (a first-of-family has no predecessors;
+#: an architecture that introduces no new operator has no novel ops). It is not
+#: ``not-found-after-search`` (we looked and could not establish it) and not
+#: ``not-applicable`` (the field does not pertain). Collapsing the three would make an
+#: unanswered field indistinguishable from an answered-empty one, which is exactly the
+#: distinction the catalog exists to record.
+AVAILABILITY_STATUSES = frozenset(
+    {"present", "not-found-after-search", "not-applicable", "none-exist"}
+)
 #: Closed basis vocabulary declaring where an availability conclusion came from.
 AVAILABILITY_BASES = frozenset(
     {
@@ -130,6 +139,15 @@ AVAILABILITY_FIELDS = frozenset(
         "year",
         "license",
     }
+)
+#: Claims outside ``external_metadata`` that share the one availability register, keyed
+#: by their full canonical claim path so the key is never ambiguous with a field name.
+#: These are the collection facts whose honest answer is often "there are none"; the
+#: register is their only route to saying so in a typed, queryable way.
+FOREIGN_AVAILABILITY_KEYS = frozenset({"taxonomy.novel_ops"})
+#: Every key ``external_metadata.availability`` may carry.
+AVAILABILITY_KEYS = (
+    AVAILABILITY_FIELDS | FOREIGN_AVAILABILITY_KEYS | {"lineage", "predecessors"}
 )
 #: Exact key set of one availability record.
 AVAILABILITY_RECORD_KEYS = frozenset({"status", "values", "basis", "evidence"})
@@ -611,7 +629,7 @@ def _validate_availability_block(metadata: Mapping[str, Any]) -> None:
         return
     if not isinstance(availability, Mapping):
         raise MetadataValidationError("external_metadata.availability must be an object")
-    unsupported = set(map(str, availability)) - AVAILABILITY_FIELDS
+    unsupported = set(map(str, availability)) - AVAILABILITY_KEYS
     if unsupported:
         raise MetadataValidationError(
             f"availability states are not declarable for: {sorted(unsupported)}"

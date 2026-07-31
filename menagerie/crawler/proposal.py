@@ -26,6 +26,7 @@ from menagerie.crawler.metadata import (
     AVAILABILITY_FIELDS,
     AVAILABILITY_RECORD_KEYS,
     AVAILABILITY_STATUSES,
+    FOREIGN_AVAILABILITY_KEYS,
     MANDATORY_EXTERNAL_FIELDS,
 )
 from menagerie.crawler.recipe import RecipeError, validate_pretrained_disable_fields
@@ -81,10 +82,18 @@ VALUE_MATCHED_CLAIMS = frozenset({"external_metadata.citation"})
 _HOLLOW_BOOKKEEPING_KEYS = frozenset(
     {"status", "source_evidence_ids", "evidence_ids", "basis", "confidence", "note"}
 )
-#: Gated claims for which an empty collection is a true, ordinary fact rather than an
-#: unfilled field (a model with no recorded predecessors, lineage, or novel ops is the
-#: common honest case). Every other gated claim must either carry a value or declare a
-#: typed availability state; bare null/empty never passes.
+#: Gated claims for which an empty collection can be a true, ordinary fact rather than
+#: an unfilled field (a model with no recorded predecessors, lineage, or novel ops is
+#: the common honest case). Emptiness here is still an ASSERTION, not an exemption: it
+#: must be declared as a typed ``none-exist`` (or ``not-found-after-search``)
+#: availability state carrying its bounded search, exactly like every other unknown.
+#:
+#: These claims previously had no honest exit at all. They were required to carry an
+#: excerpt tag by the coverage gate, yet forbidden from declaring an availability state
+#: by :func:`_validate_claim_state`, so the only way past the gate was to tag an
+#: arbitrary excerpt that says nothing about lineage. Because coverage is nominal, that
+#: worked -- the gate rewarded fabricated attribution for exactly the facts it defined
+#: as having no attribution. A recorded absence replaces a fabricated presence.
 EMPTIABLE_CLAIMS = frozenset(
     {
         "external_metadata.lineage",
@@ -92,11 +101,17 @@ EMPTIABLE_CLAIMS = frozenset(
         "taxonomy.novel_ops",
     }
 )
-#: External-metadata claims that may declare a typed availability state instead of a
-#: value (``external_metadata.availability.<field>``). These are exactly the judgment
-#: facts that can be honestly unknowable for a real model. See
+#: Availability statuses that assert a claim carries no value. ``none-exist`` says the
+#: fact does not exist; ``not-found-after-search`` says it could not be established.
+#: Both are positive claims and both require the recorded bounded search.
+ABSENT_AVAILABILITY_STATUSES = frozenset({"none-exist", "not-found-after-search"})
+#: Claims that may declare a typed availability state instead of a value. These are the
+#: judgment facts that can be honestly unknowable for a real model, plus the collection
+#: facts whose honest answer is often "there are none". See
 #: :data:`menagerie.crawler.metadata.AVAILABILITY_FIELDS` (single source of truth).
-AVAILABILITY_CLAIMS = frozenset(f"external_metadata.{field}" for field in AVAILABILITY_FIELDS)
+AVAILABILITY_CLAIMS = (
+    frozenset(f"external_metadata.{field}" for field in AVAILABILITY_FIELDS) | EMPTIABLE_CLAIMS
+)
 #: Source roles whose bytes are the *paper*, not the implementation. Paper metadata
 #: (`authors`, `institution`, `country`, `venue`, `year`, `era`, `citation`) essentially
 #: never appears verbatim in implementation code, so a proposal that asserts a citation
@@ -107,6 +122,45 @@ PAPER_EVIDENCE_ROLES = frozenset({"introducing-paper", "supplement", "project-pa
 #: declares one it must occur in the excerpt text: an exact identifier is a strictly
 #: stronger anchor than title-token overlap, so requiring it tightens the gate.
 CITATION_IDENTIFIER_FIELDS = ("arxiv_id", "doi", "openreview_id")
+#: Gated claim that is required only when a paper source is bound or a citation is
+#: volunteered; every other member of :data:`DEFAULT_GATED_CLAIMS` is always required.
+CONDITIONAL_GATED_CLAIMS = frozenset({"external_metadata.citation"})
+#: Delimiters of the generated claim-vocabulary region in the author prompt. The region
+#: is rendered from :data:`DEFAULT_GATED_CLAIMS` by
+#: ``menagerie.crawler.tools.render_claim_vocabulary`` and re-derived on every test run,
+#: so the prompt cannot silently drift out of step with the set the gate enforces. A
+#: hand-copied list is what produced the closed-vocabulary wall in the first place: the
+#: required strings existed only in Python and were invisible to the author.
+CLAIM_VOCABULARY_BEGIN = "<<<BEGIN GENERATED CLAIM VOCABULARY -- DO NOT HAND-EDIT>>>"
+CLAIM_VOCABULARY_END = "<<<END GENERATED CLAIM VOCABULARY>>>"
+
+
+def gated_claim_vocabulary_block() -> str:
+    """Render the closed gated-claim vocabulary exactly as the prompt must carry it.
+
+    Returns
+    -------
+    str
+        Delimited block listing every claim-category string a ``supports`` entry may be
+        matched against, derived from :data:`DEFAULT_GATED_CLAIMS`.
+    """
+
+    always = sorted(DEFAULT_GATED_CLAIMS - CONDITIONAL_GATED_CLAIMS)
+    conditional = sorted(CONDITIONAL_GATED_CLAIMS)
+    lines = [CLAIM_VOCABULARY_BEGIN]
+    lines.append(
+        f"These {len(always)} strings are ALWAYS required. A supports entry is matched by"
+    )
+    lines.append("EXACT STRING EQUALITY against this list. Nothing else counts.")
+    lines.extend(f"  {claim}" for claim in always)
+    lines.append("")
+    lines.append(
+        f"These {len(conditional)} are required whenever the introducing paper is a fetched"
+    )
+    lines.append("source or you volunteer a citation:")
+    lines.extend(f"  {claim}" for claim in conditional)
+    lines.append(CLAIM_VOCABULARY_END)
+    return "\n".join(lines)
 VERIFIED_HASH_CODE_MANIFEST_KEY = "code_manifest"
 _AUTHOR_VERIFIED_HASH_SPEC = required_field_projection_spec(
     RequiredFieldProjection.AUTHOR_PROPOSAL_VERIFIED_HASH
@@ -333,6 +387,7 @@ def validate_author_proposal(
             claims,
             cas_root=cas_root,
             require_family_grounding=True,
+            declared_absences=declared_absence_coverage(facts, claims),
         )
     except EvidenceValidationError as exc:
         raise ProposalValidationError(str(exc)) from exc
@@ -756,11 +811,19 @@ def _validate_claim_support(
                 canonical = _SUPPORT_ALIASES.get(support, support)
                 support_texts.setdefault(canonical, []).append(text)
 
+    absence_covered = frozenset(declared_absence_coverage(facts, required_claims))
     unsupported: list[str] = []
     for claim in required_claims:
         canonical = _SUPPORT_ALIASES.get(claim, claim)
         if not support_texts.get(canonical):
-            unsupported.append(canonical)
+            if canonical not in absence_covered:
+                unsupported.append(canonical)
+                continue
+            # A typed absence state stands in for excerpt text: there is no excerpt that
+            # says a fact is not there. The record itself is still validated below.
+            _validate_claim_state(
+                canonical, _claim_value(facts, canonical), facts, known_evidence
+            )
             continue
         if canonical == "external_metadata.citation":
             # Citation leaves are value-checked against the paper source bytes in
@@ -811,8 +874,8 @@ def _validate_claim_state(
             raise ProposalValidationError(
                 f"gated claim {claim} is bare null/empty; a value must be present or the "
                 "claim must declare a typed availability state "
-                "(external_metadata.availability) of not-found-after-search or "
-                "not-applicable with its evidence"
+                "(external_metadata.availability) of none-exist, not-found-after-search, "
+                "or not-applicable with its evidence"
             )
         return
     if claim not in AVAILABILITY_CLAIMS:
@@ -822,8 +885,35 @@ def _validate_claim_state(
     _validate_availability_record(claim, record, value, empty, facts, known_evidence)
 
 
+def _availability_key(claim: str) -> Optional[str]:
+    """Return the availability-register key for one claim, if it has one.
+
+    ``external_metadata`` claims are keyed by their bare field name, which is how the
+    register has always been spelled. Claims owned by another block are keyed by their
+    FULL canonical path, so a key can never be confused with a field of a different
+    block that happens to share a leaf name.
+
+    Parameters
+    ----------
+    claim:
+        Canonical claim path.
+
+    Returns
+    -------
+    str | None
+        Register key, or ``None`` when the claim has no availability route.
+    """
+
+    prefix = "external_metadata."
+    if claim.startswith(prefix):
+        return claim.removeprefix(prefix)
+    if claim in FOREIGN_AVAILABILITY_KEYS:
+        return claim
+    return None
+
+
 def _availability_record(facts: Mapping[str, Any], claim: str) -> Optional[Mapping[str, Any]]:
-    """Return the declared availability record for one external-metadata claim.
+    """Return the declared availability record for one gated claim.
 
     Parameters
     ----------
@@ -843,8 +933,8 @@ def _availability_record(facts: Mapping[str, Any], claim: str) -> Optional[Mappi
         If the availability block is present but not an object of objects.
     """
 
-    prefix = "external_metadata."
-    if not claim.startswith(prefix):
+    key = _availability_key(claim)
+    if key is None:
         return None
     metadata = facts.get("external_metadata")
     if not isinstance(metadata, Mapping):
@@ -854,12 +944,60 @@ def _availability_record(facts: Mapping[str, Any], claim: str) -> Optional[Mappi
         return None
     if not isinstance(availability, Mapping):
         raise ProposalValidationError("external_metadata.availability must be an object")
-    record = availability.get(claim.removeprefix(prefix))
+    record = availability.get(key)
     if record is None:
         return None
     if not isinstance(record, Mapping):
         raise ProposalValidationError(f"availability state for {claim} must be an object")
     return record
+
+
+def declared_absence_coverage(
+    facts: Mapping[str, Any], required_claims: Iterable[str]
+) -> dict[str, list[str]]:
+    """Return the claims a typed absence state covers, with the evidence each cites.
+
+    This is the ONLY route by which an unfilled gated claim reaches coverage, and it is
+    strictly narrower than tagging an arbitrary excerpt: the claim must be permitted an
+    availability state at all, the state must assert absence rather than presence, and
+    the record must be structurally well-formed. Everything else the record asserts --
+    the bounded search, the value/status agreement, the evidence IDs actually existing
+    -- is enforced by :func:`_validate_availability_record` in the same validation pass.
+
+    Parameters
+    ----------
+    facts:
+        Complete proposed fact tree.
+    required_claims:
+        Gated claim categories under evaluation.
+
+    Returns
+    -------
+    dict[str, list[str]]
+        Claim category to the evidence IDs its absence state cites.
+
+    Raises
+    ------
+    ProposalValidationError
+        If the availability block is structurally malformed.
+    """
+
+    coverage: dict[str, list[str]] = {}
+    for claim in required_claims:
+        if claim not in AVAILABILITY_CLAIMS:
+            continue
+        record = _availability_record(facts, claim)
+        if record is None or record.get("status") not in ABSENT_AVAILABILITY_STATUSES:
+            continue
+        cited = record.get("evidence")
+        if not isinstance(cited, list):
+            # Structurally invalid; _validate_availability_record raises the precise
+            # error. Granting no coverage here keeps the failure a refusal either way.
+            continue
+        coverage[claim] = [
+            evidence_id for evidence_id in cited if isinstance(evidence_id, str)
+        ]
+    return coverage
 
 
 def _validate_availability_record(
@@ -946,9 +1084,12 @@ def _validate_availability_record(
         raise ProposalValidationError(
             f"availability state for {claim} declares {status} but the field carries a value"
         )
-    if status == "not-found-after-search":
+    if status in ABSENT_AVAILABILITY_STATUSES:
         # Until the source broker ships probe receipts, the recorded bounded search IS
-        # the evidence for a not-found state; explicit excerpt IDs may corroborate it.
+        # the evidence for an absence state; explicit excerpt IDs may corroborate it.
+        # ``none-exist`` is held to the same bar as ``not-found-after-search``: asserting
+        # that a model HAS no predecessors is a finding, and a finding needs the search
+        # that produced it, or "there are none" becomes the cheapest thing to write.
         _validate_absence_is_searched(facts, [claim])
 
 
@@ -960,6 +1101,12 @@ def _claim_is_hollow(claim: str, value: object) -> bool:
     metadata silently blank is a worse outcome than one that stops, because nothing
     surfaces it.
 
+    :data:`EMPTIABLE_CLAIMS` are no longer short-circuited to "not hollow" here. Empty
+    IS a real fact for them, but a real fact is a claim and a claim is declared: they
+    reach the gate through a typed ``none-exist`` availability state, not through an
+    exemption. Reporting emptiness as non-hollow made the state unrecordable and
+    unqueryable, and left tagging an unrelated excerpt as the only way to pass coverage.
+
     Parameters
     ----------
     claim:
@@ -970,11 +1117,9 @@ def _claim_is_hollow(claim: str, value: object) -> bool:
     Returns
     -------
     bool
-        True when the claim carries no answer and emptiness is not a real fact for it.
+        True when the claim carries no answer.
     """
 
-    if claim in EMPTIABLE_CLAIMS:
-        return False
     if value is None:
         return True
     if isinstance(value, str):
@@ -1023,8 +1168,8 @@ def _validate_absence_is_searched(facts: Mapping[str, Any], hollow: Sequence[str
         or not conclusion.strip()
     ):
         raise ProposalValidationError(
-            "a not-found-after-search state requires a recorded bounded search that "
-            f"could have found the fact: {sorted(set(hollow))}"
+            "an absence state (none-exist or not-found-after-search) requires a recorded "
+            f"bounded search that could have found the fact: {sorted(set(hollow))}"
         )
 
 

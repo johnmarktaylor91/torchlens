@@ -696,7 +696,7 @@ fragment both fail; `python -m menagerie.crawler.tools.verify_prompts` remains t
 reuses. Editing any of these files stales its digest by construction: re-pin the literal row here in the
 same change.
 
-- `claude_crawler_author_v2.txt`: `sha256:d3c6ac5189e8d94dde83c3589cd6721faa2bf448cbcb4ad6662cc161c74fa034`
+- `claude_crawler_author_v2.txt`: `sha256:b9c67cd84a4016c745d111f7ec98b7b4b16fb5ea0fd56f08ecb055865606be7a`
 - `codex_accuracy_checker_v2.txt`: `sha256:8f2d3274a79d0beb50e9f3b0bf0453c7b0a1df5ffa790afb8758a2e9f393db20`
 - `campaign_c1-mech.md`: `sha256:32fe5a762448793199b91cffd3b2290ac90b33b57213e627f362885d3ed445d2`
 - `campaign_c2-disco.md`: `sha256:d176f8298d8a0ecdfd2519a4905e5047cb214aff377545b34c653b7448ecd5b5`
