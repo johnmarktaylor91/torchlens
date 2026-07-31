@@ -49,6 +49,7 @@ from menagerie.crawler.author_dispatch import (
     AUTHOR_EXIT_UNAVAILABLE,
     AuthorBackoffSignal,
     AuthorEffortGrant,
+    AuthorEffortExhaustionClaim,
     ProposedAuthorResult,
     build_author_envelope,
     classify_author_response,
@@ -364,6 +365,14 @@ def _author_lane_failure(exc: Exception) -> tuple[str, str]:
     # on the exception because only the raise site knows whether the source had
     # already been resolved and frozen when the budget ran out.
     if isinstance(exc, AuthorEffortCapExceeded):
+        return exc.stage, exc.reason_code
+    # A session that ran out of budget and tried to file it as a prerequisite block is
+    # refused at the parse boundary. It is still an exhausted session, so it lands on the
+    # same doctrine terminal rather than falling through to `identity-unresolved`, which
+    # would trade one false statement about this model for another. The stage travels on
+    # the claim for the same reason it travels on the cap: the arm the author named is the
+    # stage that was actually in flight when the budget ran out.
+    if isinstance(exc, AuthorEffortExhaustionClaim):
         return exc.stage, exc.reason_code
     if isinstance(exc, FetchHashMismatchError):
         return "fetch", "hash-mismatch"

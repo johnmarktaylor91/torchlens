@@ -24,6 +24,7 @@ from menagerie.crawler.constants import (
     AUTHOR_SESSION_WALL_SECONDS,
     BLOCKED_REASON_CODES,
     EFFORT_EXHAUSTION_REASON_CODES,
+    EXHAUSTION_TERMINAL_REASON_BY_STAGE,
     AuthorPauseReason,
 )
 from menagerie.crawler.identity import fsync_directory, hash_bytes, stable_hash
@@ -38,6 +39,44 @@ _ENVELOPE_VERSION = "menagerie.crawler.author-envelope.v3"
 
 class AuthorDispatchError(ValueError):
     """Raised when an author envelope, result, cache, or repair is not exact."""
+
+
+class AuthorEffortExhaustionClaim(AuthorDispatchError):
+    """Raised when a BLOCKED advisory arm claims an effort or budget outcome.
+
+    Refusing the claim is only half the fix. Falling through to the author lane's blanket
+    arm would record ``identity-unresolved`` -- a different false statement about the same
+    model. This type exists so the lane can route the session to the terminal the doctrine
+    already names, ``failed:<stage>`` with ``effort-cap-exhausted``, which
+    ``tools/requeue --grant ...`` can reissue.
+
+    Parameters
+    ----------
+    args:
+        Standard exception arguments.
+    stage:
+        Closed blocking stage the author named. Carried for the same reason
+        :class:`~menagerie.crawler.driver_contracts.AuthorEffortCapExceeded` carries it:
+        recording every exhaustion as ``failed:source`` asserts that the model's source
+        could not be resolved, which is routinely false. Defaults to ``"source"``.
+    reason_code:
+        Stage-valid exhaustion reason for the terminal. Resolved from ``stage`` because the
+        vocabularies differ -- ``author`` carries the ``effort-exhausted:`` family while the
+        other stages carry ``effort-cap-exhausted`` -- so a single hardcoded reason would
+        record an invalid ``(stage, reason_code)`` pair.
+    """
+
+    def __init__(
+        self,
+        *args: object,
+        stage: str = "source",
+        reason_code: Optional[str] = None,
+    ) -> None:
+        """Attach the closed stage and its stage-valid exhaustion reason."""
+
+        super().__init__(*args)
+        self.stage = stage if stage in EXHAUSTION_TERMINAL_REASON_BY_STAGE else "source"
+        self.reason_code = reason_code or EXHAUSTION_TERMINAL_REASON_BY_STAGE[self.stage]
 
 
 class AuthorResultKind(str, Enum):
@@ -984,17 +1023,26 @@ def _validate_blocked_reason(stage: str, reason_code: str) -> None:
 
     Raises
     ------
+    AuthorEffortExhaustionClaim
+        If the reason names an effort or budget outcome. The author lane routes this to
+        ``failed:<stage>`` with ``effort-cap-exhausted`` rather than its blanket
+        ``identity-unresolved`` arm, so refusing the claim cannot substitute one false
+        statement for another.
     AuthorDispatchError
-        If the reason names an effort or budget outcome, if the stage is not a closed
-        blocking stage, or if the reason is outside that stage's closed vocabulary.
+        If the stage is not a closed blocking stage, or if the reason is outside that
+        stage's closed vocabulary.
     """
 
     if reason_code in EFFORT_EXHAUSTION_REASON_CODES:
-        raise AuthorDispatchError(
+        raise AuthorEffortExhaustionClaim(
             f"blocked recommendation reason_code {reason_code!r} names an effort or budget "
             "outcome, not a missing prerequisite: an exhausted model is unfinished, not "
             "unresolvable. Exceed the grant instead, so the driver records failed:<stage> "
-            "with effort-cap-exhausted and tools/requeue can reissue a larger grant."
+            "with a stage-valid effort reason and tools/requeue can reissue a larger grant.",
+            # The stage the author named is the stage that was in flight when the budget
+            # ran out. An unknown one cannot travel to a terminal, so the constructor
+            # falls back rather than fabricating a status code.
+            stage=stage,
         )
     allowed = BLOCKED_REASON_CODES.get(stage)
     if allowed is None:

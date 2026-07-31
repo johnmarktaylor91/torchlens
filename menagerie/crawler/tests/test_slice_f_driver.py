@@ -78,6 +78,7 @@ from menagerie.crawler.driver_admission import (
     _author_lane_failure,
     _checker_wall_bound,
 )
+from menagerie.crawler.author_dispatch import AuthorEffortExhaustionClaim
 from menagerie.crawler.driver_contracts import (
     GateBatchUnusableError,
     RetryableOperatorError,
@@ -3339,6 +3340,14 @@ def test_author_source_handshake_rejects_an_undigested_broker_row(
         (
             AuthorEffortCapExceeded("cap", stage="author", dimension="tool-calls"),
             ("author", "effort-exhausted:tool-calls"),
+        ),
+        # A refused effort-exhaustion claim is still an exhausted session, so it must not
+        # fall through to the blanket arm below, and it carries the stage the author named
+        # rather than asserting the source could not be resolved.
+        (AuthorEffortExhaustionClaim("laundered"), ("source", "effort-cap-exhausted")),
+        (
+            AuthorEffortExhaustionClaim("laundered", stage="evidence"),
+            ("evidence", "effort-cap-exhausted"),
         ),
         (FetchHashMismatchError("mismatch"), ("fetch", "hash-mismatch")),
         (FetchRetrievalError("unreachable"), ("fetch", "unreachable")),

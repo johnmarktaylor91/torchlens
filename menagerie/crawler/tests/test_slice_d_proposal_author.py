@@ -24,10 +24,15 @@ from menagerie.crawler.authority import AuthorityContext
 from menagerie.crawler.constants import (
     AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
     AUTHOR_RESULT_SCHEMA_VERSION,
+    ACCESS_BARRIER_REJECTION_CLASS,
+    ACCESS_BLOCKED_REASON_CODE,
     BLOCKED_ADVISORY_STAGES,
     BLOCKED_REASON_CODES,
+    CAPABILITY_BLOCKED_REASON_CODES_BY_STAGE,
     EFFORT_EXHAUSTION_REASON_CODES,
+    EXHAUSTION_TERMINAL_REASON_BY_STAGE,
     FAILURE_REASON_CODES,
+    TERMINAL_STATUS_CODES,
 )
 from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.proposal import (
@@ -1228,7 +1233,7 @@ def _parse_blocked_result(
         allowed_model_dir=tmp_path,
         output_path=tmp_path / "result.json",
     )
-    payload = {
+    payload: dict[str, Any] = {
         "arm": "BLOCKED",
         "stage": stage,
         "reason_code": reason_code,
@@ -1237,6 +1242,27 @@ def _parse_blocked_result(
         "evidence_identity": "sha256:" + "3" * 64,
         "license_identity": "sha256:" + "4" * 64,
     }
+    if reason_code in {"needs-higher-tier", ACCESS_BLOCKED_REASON_CODE}:
+        # The two deferrable arms carry a mandatory stage-1 research summary, enforced by
+        # an earlier clause. Without it those probes would be refused before the reason
+        # vocabulary ever decided, and would prove nothing about the vocabulary.
+        payload["research_summary"] = {
+            "queries": ["ExampleNet architecture implementation"],
+            "places": ["upstream repositories", "introducing paper"],
+            "candidate_links": [
+                {
+                    "url": "https://example.com/model.txt",
+                    "why_rejected": "The material could not be adjudicated at this tier.",
+                    "rejection_class": (
+                        ACCESS_BARRIER_REJECTION_CLASS
+                        if reason_code == ACCESS_BLOCKED_REASON_CODE
+                        else "no-material-detail"
+                    ),
+                }
+            ],
+            "languages": ["English"],
+            "conclusion": "The source is real; this campaign cannot author it faithfully.",
+        }
     payload["recommendation_sha256"] = stable_hash(payload)
     raw = _author_result(envelope, "BLOCKED", payload)
     (tmp_path / "result.json").write_text(json.dumps(raw))
@@ -1259,12 +1285,44 @@ def test_blocked_reason_vocabulary_covers_exactly_the_schema_stages() -> None:
 
 
 def test_blocked_reason_vocabulary_subtracts_only_effort_exhaustion() -> None:
-    """Each stage keeps its whole attempt vocabulary minus the exhaustion codes."""
+    """Each stage keeps its whole vocabulary, plus capability reasons, minus exhaustion."""
 
     for stage, allowed in BLOCKED_REASON_CODES.items():
-        assert allowed == FAILURE_REASON_CODES[stage] - EFFORT_EXHAUSTION_REASON_CODES
+        expected = (
+            FAILURE_REASON_CODES.get(stage, frozenset())
+            | CAPABILITY_BLOCKED_REASON_CODES_BY_STAGE.get(stage, frozenset())
+        ) - EFFORT_EXHAUSTION_REASON_CODES
+        assert allowed == expected
         assert allowed, f"{stage} lost its entire prerequisite vocabulary"
-        assert "effort-cap-exhausted" not in allowed
+        assert not allowed & EFFORT_EXHAUSTION_REASON_CODES
+
+
+def test_blocked_reason_vocabulary_keeps_the_deferrable_capability_arms() -> None:
+    """Closing the vocabulary must not reject the two deferrable BLOCKED arms.
+
+    Both are authored at ``stage="author"`` and both are legitimate. ``needs-source-access``
+    routes to a ``deferred:`` capability terminal and is deliberately absent from
+    ``FAILURE_REASON_CODES``, so a naive close to the failure set alone would have silently
+    rejected every access-barrier deferral.
+    """
+
+    assert ACCESS_BLOCKED_REASON_CODE not in FAILURE_REASON_CODES.get("author", frozenset())
+    for reason_code in ("needs-higher-tier", ACCESS_BLOCKED_REASON_CODE):
+        assert reason_code in BLOCKED_REASON_CODES["author"]
+
+
+def test_every_blocked_stage_has_a_stage_valid_exhaustion_terminal() -> None:
+    """The refused-claim terminal must be a reason its own stage actually admits.
+
+    ``author`` carries the ``effort-exhausted:`` family rather than
+    ``effort-cap-exhausted``, so a single hardcoded reason would record an invalid pair.
+    """
+
+    for stage in BLOCKED_ADVISORY_STAGES:
+        reason_code = EXHAUSTION_TERMINAL_REASON_BY_STAGE[stage]
+        assert reason_code in FAILURE_REASON_CODES[stage]
+        assert reason_code in EFFORT_EXHAUSTION_REASON_CODES
+        assert f"failed:{stage}" in TERMINAL_STATUS_CODES
 
 
 @pytest.mark.parametrize("stage", sorted(BLOCKED_ADVISORY_STAGES))
@@ -1308,8 +1366,10 @@ def test_blocked_arm_refuses_effort_exhaustion_dressed_as_a_prerequisite(
     with pytest.raises(AuthorDispatchError) as caught:
         _parse_blocked_result(tmp_path, stage=stage, reason_code=reason_code)
     message = str(caught.value)
+    # The distinctive phrase of the exhaustion arm. The generic vocabulary refusal never
+    # says this, so a probe decided by that clause instead would fail here.
     assert "unfinished, not" in message
-    assert "effort-cap-exhausted" in message
+    assert "failed:<stage>" in message
 
 
 @pytest.mark.smoke

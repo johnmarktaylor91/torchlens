@@ -731,22 +731,31 @@ FAILURE_REASON_CODES: dict[str, frozenset[str]] = {
 
 #: Reason codes that name an effort or budget outcome rather than a source verdict.
 #:
-#: ``PLAN.md`` LP-13.2: cap exhaustion is ``failed:<actual-stage>`` with
-#: ``effort-cap-exhausted``, not a skip or a convenience defer, and only
+#: ``PLAN.md`` LP-13.2: cap exhaustion is ``failed:<actual-stage>`` with a stage-valid
+#: effort reason, not a skip or a convenience defer, and only
 #: ``tools/requeue --reason ... --grant ...`` reissues the work with a larger grant. An
 #: exhausted model is *unfinished*, not *unresolvable*.
 #:
-#: Only ``effort-cap-exhausted`` is a :data:`FAILURE_REASON_CODES` member, so it is the
-#: only row the :data:`BLOCKED_REASON_CODES` subtraction below actually removes. The other
-#: rows are free-form spellings observed from live author sessions; they are listed so a
-#: laundering attempt is refused with the real diagnosis instead of a bare unknown-code
-#: message. They are a diagnostic aid, never the enforcement boundary -- the closed
-#: per-stage vocabulary is what refuses every unlisted spelling.
-EFFORT_EXHAUSTION_REASON_CODES = frozenset(
+#: The ``effort-exhausted:`` family is derived rather than listed so a dimension added to
+#: :data:`FAILURE_REASON_CODES` later is covered without touching this set. The explicit
+#: rows are the remaining exhaustion spellings the vocabulary defines, plus
+#: ``budget-exhausted`` -- not a vocabulary member at all, but a free-form spelling a live
+#: author session actually produced, listed so the laundering refusal names the real
+#: diagnosis instead of emitting a bare unknown-code message. The explicit rows are a
+#: diagnostic aid, never the enforcement boundary: the closed per-stage vocabulary below
+#: is what refuses every unlisted spelling.
+EFFORT_EXHAUSTION_REASON_CODES: frozenset[str] = frozenset(
     {
         "effort-cap-exhausted",
+        "repair-exhausted",
+        "wall-exceeded",
         "budget-exhausted",
-        "effort-exhausted:wall-seconds",
+    }
+    | {
+        code
+        for codes in FAILURE_REASON_CODES.values()
+        for code in codes
+        if code.startswith("effort-exhausted:")
     }
 )
 
@@ -755,11 +764,13 @@ EFFORT_EXHAUSTION_REASON_CODES = frozenset(
 #: Mirrors ``blocked_payload.stage`` in ``schemas/author-result-v3.schema.json``. The
 #: mirror is asserted against the shipped schema by
 #: ``test_blocked_reason_vocabulary_covers_exactly_the_schema_stages`` so the two cannot
-#: drift apart silently.
-BLOCKED_ADVISORY_STAGES = frozenset(
+#: drift apart silently -- which they already did once: ``author`` was added to the schema
+#: enum for the deferrable arms and a hand-listed mirror missed it.
+BLOCKED_ADVISORY_STAGES: frozenset[str] = frozenset(
     {
         "source",
         "fetch",
+        "author",
         "evidence",
         "environment",
         "policy",
@@ -767,16 +778,54 @@ BLOCKED_ADVISORY_STAGES = frozenset(
     }
 )
 
+#: BLOCKED reason codes that are deliberately NOT failure reasons.
+#:
+#: ``needs-source-access`` routes to ``deferred:needs-source-access``, a capability
+#: terminal, so it is absent from :data:`FAILURE_REASON_CODES` by design -- it asserts a
+#: world-fact about access, not a pipeline failure. It is still something a BLOCKED arm may
+#: legitimately say, so the advisory vocabulary is the UNION rather than the failure set
+#: alone. Closing to the failure set alone would have silently rejected every
+#: access-barrier deferral.
+#:
+#: Scoped to ``author`` because that is the only stage that emits it, mirroring
+#: ``needs-higher-tier``, which likewise lives only in the ``author`` failure vocabulary.
+#: Both deferrable arms are authored at the same point for the same reason.
+CAPABILITY_BLOCKED_REASON_CODES_BY_STAGE: dict[str, frozenset[str]] = {
+    "author": frozenset({ACCESS_BLOCKED_REASON_CODE}),
+}
+
 #: Closed per-stage reason vocabulary a BLOCKED advisory arm may claim.
 #:
 #: A BLOCKED arm terminalizes under the ``blocked-prerequisite`` predicate: an assertion
 #: that this model cannot be resolved until a named prerequisite exists. Effort exhaustion
-#: is not such an assertion, so every exhaustion code is subtracted from every stage. The
-#: rest of the stage vocabulary is exactly :data:`FAILURE_REASON_CODES`, which keeps one
-#: source of truth for reason codes across the advisory and attempt lanes.
+#: is not such an assertion -- it says the session ran out of budget, which makes the model
+#: *unfinished*, not *unresolvable* -- so every exhaustion code is subtracted from every
+#: stage. Everything else is the union of the stage's failure vocabulary and the capability
+#: reasons, which keeps one source of truth for reason codes across the advisory, attempt,
+#: and capability-deferral lanes.
 BLOCKED_REASON_CODES: dict[str, frozenset[str]] = {
-    stage: FAILURE_REASON_CODES[stage] - EFFORT_EXHAUSTION_REASON_CODES
+    stage: (
+        FAILURE_REASON_CODES.get(stage, frozenset())
+        | CAPABILITY_BLOCKED_REASON_CODES_BY_STAGE.get(stage, frozenset())
+    )
+    - EFFORT_EXHAUSTION_REASON_CODES
     for stage in sorted(BLOCKED_ADVISORY_STAGES)
+}
+
+#: Stage-valid exhaustion reason used when routing a refused exhaustion claim.
+#:
+#: The claim is refused as an advisory arm, but the session really did exhaust, so it lands
+#: on ``failed:<stage>`` and needs a reason that stage's vocabulary actually admits.
+#: ``author`` carries the ``effort-exhausted:`` family instead of ``effort-cap-exhausted``,
+#: so a single hardcoded reason would emit an invalid ``(stage, reason_code)`` pair.
+EXHAUSTION_TERMINAL_REASON_BY_STAGE: dict[str, str] = {
+    stage: next(
+        code
+        for code in ("effort-cap-exhausted", "effort-exhausted:wall-seconds", "wall-exceeded")
+        if code in FAILURE_REASON_CODES.get(stage, frozenset())
+    )
+    for stage in sorted(BLOCKED_ADVISORY_STAGES)
+    if FAILURE_REASON_CODES.get(stage, frozenset()) & EFFORT_EXHAUSTION_REASON_CODES
 }
 
 WORKFLOW_STATES = frozenset(
