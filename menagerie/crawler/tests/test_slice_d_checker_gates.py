@@ -14,7 +14,9 @@ from menagerie.crawler.author_dispatch import (
     DeferRecommendation,
     HandoffExecution,
 )
+from menagerie.crawler.authority import AuthorityDerivationError, load_current_gate_proof
 from menagerie.crawler.checker_dispatch import (
+    LEDGER_ASSIGNED_GATE_FIELDS,
     CheckerDispatchError,
     apply_machine_owned_gate_fields,
     build_metadata_vet_envelope,
@@ -38,6 +40,7 @@ from menagerie.crawler.gates import (
 )
 from menagerie.crawler.identity import stable_hash
 from menagerie.crawler.models import LedgerPaths
+from menagerie.crawler.recordio import LedgerConflictError
 from menagerie.crawler.reducer import CanonicalReducer, ReductionError
 from menagerie.crawler.schema import PayloadValidationError, validate_payload
 from menagerie.crawler.tests.conftest import (
@@ -59,11 +62,16 @@ def _stamped(gate: dict[str, Any], envelope: Mapping[str, Any]) -> dict[str, Any
     identities and relied on the stamp silently correcting them, which is the
     laundering path the stamp now refuses. Strip them first, as a compliant
     checker would.
+
+    ``LEDGER_ASSIGNED_GATE_FIELDS`` are stripped alongside the scaffold but are
+    NOT part of it: the machine derives the scaffold up front, whereas the ledger
+    assigns those two at append time, so nothing -- checker or wrapper -- may
+    carry a value for them into a not-yet-appended gate.
     """
 
     checker = gate.get("checker", {})
     candidate = dict(gate)
-    for field in machine_owned_gate_fields(envelope):
+    for field in (*machine_owned_gate_fields(envelope), *LEDGER_ASSIGNED_GATE_FIELDS):
         candidate.pop(field, None)
     candidate.pop("checker", None)
     return apply_machine_owned_gate_fields(
@@ -764,3 +772,170 @@ def test_reducer_refuses_run_award_with_inaccurate_rung_check(tmp_path: Path) ->
         reducer.append_gate(fidelity_gate)
         with pytest.raises(ReductionError, match="rung check"):
             reducer.append_model(reducer.prepare_model(model))
+
+
+def _stamped_metadata_gate(tmp_path: Path, stable_id: str, *, nonce: str) -> dict[str, Any]:
+    """Build one gate exactly as the production stamp produces it.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    stable_id:
+        Sole model in the batch, which also makes the gate distinct.
+    nonce:
+        Fresh request nonce, which seeds a distinct ``gate_id``.
+
+    Returns
+    -------
+    dict[str, Any]
+        Stamped, not-yet-appended gate.
+    """
+
+    gate = make_gate([stable_id])
+    envelope = build_metadata_vet_envelope(
+        [_checker_item_pack(gate["items"][0])],
+        gate_round=1,
+        output_path=tmp_path / nonce / "result.json",
+        checker_model="codex",
+        checker_version="test",
+        request_nonce=nonce,
+        final_tail=True,
+    )
+    return _stamped(gate, envelope)
+
+
+def _pre_fix_stamp(gate: Mapping[str, Any]) -> dict[str, Any]:
+    """Reproduce the pre-fix stamp verbatim on one stamped gate.
+
+    Before 2026-07-30 the machine-owned scaffold carried
+    ``ledger_seq = PLACEHOLDER_LEDGER_SEQ`` (the constant ``1``) and a zeroed
+    ``payload_sha256``, and ``compute_result_envelope_sha256`` excluded only the
+    result and payload hashes -- so ``ledger_seq`` was INSIDE the digest.
+
+    Parameters
+    ----------
+    gate:
+        Correctly stamped gate carrying no ledger-assigned fields.
+
+    Returns
+    -------
+    dict[str, Any]
+        The same gate as the pre-fix code would have produced it.
+    """
+
+    legacy = dict(gate)
+    legacy["ledger_seq"] = 1
+    legacy["payload_sha256"] = "sha256:" + "0" * 64
+    legacy["result_envelope_sha256"] = stable_hash(
+        {
+            key: value
+            for key, value in legacy.items()
+            if key not in {"result_envelope_sha256", "payload_sha256"}
+        }
+    )
+    return legacy
+
+
+def test_two_gates_in_one_run_get_advancing_ledger_assigned_sequences(tmp_path: Path) -> None:
+    """A SECOND gate appends, and the ledger -- not the stamp -- numbers both.
+
+    This is the case no test covered. Every prior gate regression appended at
+    most ONE gate through the production stamp, and a stamped constant
+    ``ledger_seq = 1`` is indistinguishable from a correct assignment at sequence
+    one. The defect therefore survived five rungs and killed the first campaign
+    that ever recorded a second gate (2026-07-30: ``LedgerConflictError:
+    ledger_seq must be next local sequence 2``). A single-gate assertion cannot
+    detect it, so this test appends two.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    """
+
+    stable_ids = ["m_seq_first", "m_seq_second"]
+    first = _stamped_metadata_gate(tmp_path, "m_seq_first", nonce="ledger-seq-first")
+    second = _stamped_metadata_gate(tmp_path, "m_seq_second", nonce="ledger-seq-second")
+
+    # The two gates must be genuinely distinct, or the ledger's idempotent-replay
+    # path -- which returns the existing record WITHOUT appending -- would be what
+    # this test exercised, and a frozen sequence would read as a pass.
+    assert first["gate_id"] != second["gate_id"]
+    assert first["items"][0]["stable_id"] != second["items"][0]["stable_id"]
+
+    # The appends come BEFORE the shape assertions on purpose. Under the pre-fix
+    # stamp this test must fail on the SECOND APPEND -- the failure the campaign
+    # actually hit -- and a "no stamped ledger_seq" assertion placed first would
+    # short-circuit it into a shape complaint that never reaches the ledger.
+    with CanonicalReducer(_ledger_paths(tmp_path), make_authority_context(stable_ids)) as reducer:
+        first_result = reducer.append_gate(first)
+        second_result = reducer.append_gate(second)
+
+    # The stamp leaves both ledger-assigned slots empty for the ledger to fill.
+    for field in LEDGER_ASSIGNED_GATE_FIELDS:
+        assert field not in first
+        assert field not in second
+
+    assert first_result.appended is True
+    assert second_result.appended is True
+    assert first_result.record["ledger_seq"] == 1
+    assert second_result.record["ledger_seq"] == 2
+    assert first_result.record["payload_sha256"] != second_result.record["payload_sha256"]
+
+    # Both persisted gates replay their own v3 proof. The self-hash is recomputed
+    # by the authority with ``ledger_seq`` EXCLUDED, so a digest taken over a body
+    # that contained it can never replay -- which is why the pre-fix code left
+    # even its single recorded gate unreadable.
+    for record in (first_result.record, second_result.record):
+        assert load_current_gate_proof(record)["gate_id"] == record["gate_id"]
+
+
+def test_the_pre_fix_constant_ledger_seq_stamp_fails_this_regression(tmp_path: Path) -> None:
+    """The removed behaviour is proven to fail, in both directions it failed.
+
+    A guard shown only where it passes proves nothing. Restoring the exact pre-fix
+    stamp must reproduce BOTH defects: the second append conflicts with the
+    ledger's own next sequence, and the first gate -- which appended cleanly,
+    because a constant ``1`` IS the next sequence exactly once -- cannot replay
+    its own result-envelope self-hash.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    """
+
+    stable_ids = ["m_seq_first", "m_seq_second"]
+    first = _pre_fix_stamp(_stamped_metadata_gate(tmp_path, "m_seq_first", nonce="legacy-first"))
+    second = _pre_fix_stamp(
+        _stamped_metadata_gate(tmp_path, "m_seq_second", nonce="legacy-second")
+    )
+
+    assert first["ledger_seq"] == 1
+    assert second["ledger_seq"] == 1
+
+    with CanonicalReducer(_ledger_paths(tmp_path), make_authority_context(stable_ids)) as reducer:
+        persisted = reducer.append_gate(first).record
+        # Defect one: the constant was right by accident exactly once.
+        assert persisted["ledger_seq"] == 1
+        with pytest.raises(LedgerConflictError) as conflict:
+            reducer.append_gate(second)
+
+    assert "ledger_seq must be next local sequence 2" in str(conflict.value)
+
+    # Defect two, independent of the first: the digest was taken over a body that
+    # contained ``ledger_seq``, so the gate that DID append is still unreadable.
+    with pytest.raises(AuthorityDerivationError) as proof:
+        load_current_gate_proof(persisted)
+    assert "result-envelope self-hash is invalid" in str(proof.value)
+
+    # The correctly stamped form of the SAME gate replays cleanly, so the failure
+    # above is attributable to the pre-fix stamp and not to the fixture.
+    with CanonicalReducer(
+        _ledger_paths(tmp_path / "control"), make_authority_context(stable_ids)
+    ) as reducer:
+        control = reducer.append_gate(
+            _stamped_metadata_gate(tmp_path, "m_seq_first", nonce="legacy-first")
+        ).record
+    assert load_current_gate_proof(control)["gate_id"] == control["gate_id"]

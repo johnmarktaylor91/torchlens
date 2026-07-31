@@ -14,6 +14,7 @@ from typing import Any, Sequence
 import pytest
 
 from menagerie.crawler.checker_dispatch import (
+    LEDGER_ASSIGNED_GATE_FIELDS,
     PROMPT_PATH,
     CheckerDispatchError,
     apply_machine_owned_gate_fields,
@@ -152,7 +153,11 @@ def _request_and_result(
     # the suite's own happy path a laundered gate, which is exactly the
     # near-miss the stamp guard now refuses, so the fixture has to stop
     # depending on it.
-    for field in machine_owned_gate_fields(envelope):
+    #
+    # The ledger-assigned pair goes too. It is not part of the machine-owned
+    # scaffold -- the ledger assigns it at append time from its own state -- so a
+    # compliant checker result cannot carry it either.
+    for field in (*machine_owned_gate_fields(envelope), *LEDGER_ASSIGNED_GATE_FIELDS):
         gate.pop(field, None)
     gate.pop("checker", None)
     gate.pop("result_envelope_sha256", None)
@@ -669,8 +674,14 @@ def test_unconditional_stamping_would_launder_a_fixture_templated_gate(tmp_path:
     assert gate["checker"]["model"] == "codex"
 
     # Verbatim reproduction of the pre-fix stamp: an unconditional ``update``.
+    # The pre-fix scaffold also carried the two ledger placeholders, so they are
+    # reproduced here explicitly. They have since moved OUT of the scaffold and
+    # into ``LEDGER_ASSIGNED_GATE_FIELDS`` -- reading them from the current
+    # ``machine_owned_gate_fields`` would silently stop reproducing the old stamp
+    # and turn the ``payload_sha256`` assertion below into a no-op.
     laundered = dict(gate)
     laundered.update(machine_owned_gate_fields(envelope))
+    laundered.update({"ledger_seq": 1, "payload_sha256": "sha256:" + "0" * 64})
     checker = dict(laundered["checker"])
     checker.update(
         {
@@ -686,11 +697,21 @@ def test_unconditional_stamping_would_launder_a_fixture_templated_gate(tmp_path:
     laundered["result_envelope_sha256"] = compute_result_envelope_sha256(laundered)
 
     # Every fixture placeholder has been silently rewritten to the machine's
-    # real value, and the fabricated gate now validates clean.
+    # real value.
     assert laundered["gate_id"] != "gate-1"
     assert laundered["payload_sha256"] != "sha256:" + "a" * 64
     assert laundered["checker"]["version"] == "current"
-    validated = validate_checker_result_mapping(laundered, envelope)
+
+    # ...and the fabricated gate validates clean. Today a gate carrying the
+    # ledger-assigned pair at all is refused before this point, which is a
+    # strictly stronger second gate that did not exist pre-fix; drop the pair so
+    # the hazard being demonstrated here is the SCAFFOLD laundering and not that
+    # later refusal standing in for it.
+    pre_ledger_split = {
+        key: value for key, value in laundered.items() if key not in LEDGER_ASSIGNED_GATE_FIELDS
+    }
+    pre_ledger_split["result_envelope_sha256"] = compute_result_envelope_sha256(pre_ledger_split)
+    validated = validate_checker_result_mapping(pre_ledger_split, envelope)
     assert validated["gate_id"] == machine_owned_gate_fields(envelope)["gate_id"]
 
 
@@ -756,28 +777,39 @@ def test_fixture_templated_gate_is_refused_and_the_stamp_guard_still_bites(
 
 
 @pytest.mark.parametrize(
-    ("path", "supplied"),
+    ("path", "supplied", "owner"),
     [
-        ("payload_sha256", "sha256:" + "a" * 64),
-        ("gate_id", "gate-1"),
-        ("checker.version", "test"),
-        ("checker.model", "codex"),
-        ("checker.started_at", "2026-07-14T12:00:00Z"),
+        ("payload_sha256", "sha256:" + "a" * 64, "ledger-assigned"),
+        ("ledger_seq", 7, "ledger-assigned"),
+        ("gate_id", "gate-1", "machine-owned"),
+        ("checker.version", "test", "machine-owned"),
+        ("checker.model", "codex", "machine-owned"),
+        ("checker.started_at", "2026-07-14T12:00:00Z", "machine-owned"),
     ],
 )
 def test_each_fixture_placeholder_is_refused_with_its_own_value_as_evidence(
-    tmp_path: Path, path: str, supplied: str
+    tmp_path: Path, path: str, supplied: Any, owner: str
 ) -> None:
-    """One conflicting machine-owned field is enough, and it is named exactly.
+    """One field the checker does not own is enough, and it is named exactly.
+
+    Two ownership classes reach this boundary. A ``machine-owned`` scaffold field
+    is refused when it CONFLICTS with the value the machine derived. A
+    ``ledger-assigned`` field is refused on any value at all, because the append
+    has not happened and no correct value exists yet. Both must name the offending
+    field and carry the supplied value as evidence, and the parametrization pins
+    WHICH class each field belongs to so a field silently changing owners cannot
+    pass unnoticed.
 
     Parameters
     ----------
     tmp_path:
         Isolated wrapper root.
     path:
-        Dotted machine-owned field seeded with a fixture placeholder.
+        Dotted field seeded with a fixture placeholder.
     supplied:
         The exact fixture placeholder value.
+    owner:
+        Expected ownership class named in the refusal.
     """
 
     request_path, result = _request_and_result(tmp_path)
@@ -797,8 +829,10 @@ def test_each_fixture_placeholder_is_refused_with_its_own_value_as_evidence(
         )
 
     message = str(excinfo.value)
-    assert f"machine-owned field {path}=" in message
+    assert f"{owner} field {path}=" in message
     assert json.dumps(supplied) in message
+    other = "machine-owned" if owner == "ledger-assigned" else "ledger-assigned"
+    assert f"{other} field {path}=" not in message
 
 
 def test_omitting_every_machine_owned_field_stays_free(tmp_path: Path) -> None:

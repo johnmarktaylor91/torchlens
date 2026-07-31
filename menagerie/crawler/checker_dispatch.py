@@ -38,16 +38,44 @@ from menagerie.crawler.terminal_evidence import (
 
 PROMPT_PATH = Path(__file__).with_name("prompts") / f"{CHECKER_PROMPT_NAME}.txt"
 
-# Machine-owned gate scaffold. ``gate_id``, the ledger placeholders, and the two
-# component identities are IDENTITIES, not judgments: the checker cannot observe
-# them and has no authority over them, so asking a model to author them turns a
-# complete, well-reasoned verdict into a discarded contract rejection the first
-# time it forgets one. That is exactly what killed a live campaign on
-# 2026-07-29 (``'gate_id' is a required property``). The machine derives them
-# and the wrapper stamps them; the checker owns only its verdict.
+# Machine-owned gate scaffold. ``gate_id`` and the two component identities are
+# IDENTITIES, not judgments: the checker cannot observe them and has no authority
+# over them, so asking a model to author them turns a complete, well-reasoned
+# verdict into a discarded contract rejection the first time it forgets one. That
+# is exactly what killed a live campaign on 2026-07-29 (``'gate_id' is a required
+# property``). The machine derives them and the wrapper stamps them; the checker
+# owns only its verdict.
 GATE_ID_PREFIX = "gate-"
-PLACEHOLDER_LEDGER_SEQ = 1
-PLACEHOLDER_PAYLOAD_SHA256 = "sha256:" + "0" * 64
+
+# LEDGER-assigned, not wrapper-stamped. gate.v3's own authority-ownership table
+# says ``$.ledger_seq -> reducer-derived``, and ``payload_sha256`` binds the exact
+# line the ledger writes. NEITHER value exists until the append happens, so the
+# stamped gate OMITS both and ``JsonlLedger.append`` assigns them from the
+# ledger's own state.
+#
+# This used to be a pair of constants stamped into the scaffold
+# (``PLACEHOLDER_LEDGER_SEQ = 1``). ``payload_sha256`` survived that because the
+# ledger overwrites it unconditionally; ``ledger_seq`` did not, because the ledger
+# only fills it when ABSENT and otherwise refuses a value that is not the next
+# local sequence. A constant 1 is the next sequence exactly once, so the defect
+# was invisible until a campaign recorded its SECOND gate and died with
+# ``LedgerConflictError: ledger_seq must be next local sequence 2`` (2026-07-30,
+# rung 10, 10/10 authors published). The stamped constant also poisoned the FIRST
+# gate: ``result_envelope_sha256`` was computed over a body containing
+# ``ledger_seq``, while ``authority.load_current_gate_proof`` recomputes it with
+# ``ledger_seq`` excluded, so every recorded gate failed its own self-hash with
+# "current gate result-envelope self-hash is invalid". Omitting the fields makes
+# both hashes agree by construction, because an absent key and an excluded key
+# canonicalize identically.
+LEDGER_ASSIGNED_GATE_FIELDS = ("ledger_seq", "payload_sha256")
+
+# Schema-shape stand-ins used ONLY to satisfy gate.v3's ``required`` list when a
+# not-yet-appended gate is validated. They are never published, never hashed, and
+# never handed to the ledger -- see ``_with_pending_ledger_fields``.
+_PENDING_LEDGER_GATE_FIELDS: Mapping[str, Any] = {
+    "ledger_seq": 1,
+    "payload_sha256": "sha256:" + "0" * 64,
+}
 DETERMINISTIC_GATE_SCAFFOLD_FIELDS = (
     "schema_version",
     "gate_id",
@@ -234,8 +262,8 @@ def machine_owned_gate_fields(envelope: Mapping[str, Any]) -> JsonObject:
     Returns
     -------
     dict[str, Any]
-        Deterministic gate scaffold plus the two ledger placeholders the locked
-        ledger reassigns at append time.
+        Deterministic gate scaffold. The two ``LEDGER_ASSIGNED_GATE_FIELDS`` are
+        deliberately absent: the ledger owns them and assigns them at append time.
 
     Raises
     ------
@@ -254,8 +282,6 @@ def machine_owned_gate_fields(envelope: Mapping[str, Any]) -> JsonObject:
     return {
         "schema_version": str(envelope.get("required_result_schema")),
         "gate_id": GATE_ID_PREFIX + gate_seed.removeprefix("sha256:")[:32],
-        "ledger_seq": PLACEHOLDER_LEDGER_SEQ,
-        "payload_sha256": PLACEHOLDER_PAYLOAD_SHA256,
         "gate_kind": envelope.get("gate_kind"),
         "batch_size": len(items),
         "gate_round": envelope.get("gate_round"),
@@ -283,6 +309,11 @@ def apply_machine_owned_gate_fields(
     OMITTING a machine-owned field is free and always has been. SUPPLYING one
     with a conflicting value is refused, because the stamp cannot both discard
     a fabricated identity and leave evidence that one was fabricated.
+
+    The ``LEDGER_ASSIGNED_GATE_FIELDS`` are stricter still: they are refused on
+    ANY value, because there is no value the checker could legitimately hold. The
+    ledger has not run yet, so the correct sequence and payload hash do not exist
+    at stamp time -- anything present in those slots was invented.
 
     Parameters
     ----------
@@ -338,12 +369,69 @@ def apply_machine_owned_gate_fields(
     _refuse_conflicting_machine_owned(scaffold, stamped, prefix="")
     if isinstance(supplied_checker, Mapping):
         _refuse_conflicting_machine_owned(checker_scaffold, supplied_checker, prefix="checker.")
+    # AFTER the scaffold comparison, deliberately: that check names the offending
+    # field and both values, and running the ledger refusal first would shadow it
+    # for any candidate that happens to carry both kinds of fabrication.
+    _refuse_ledger_assigned_fields(stamped, "checker result")
     stamped.update(scaffold)
     checker = dict(supplied_checker) if isinstance(supplied_checker, Mapping) else {}
     checker.update(checker_scaffold)
     stamped["checker"] = checker
     stamped["result_envelope_sha256"] = compute_result_envelope_sha256(stamped)
     return stamped
+
+
+def _refuse_ledger_assigned_fields(supplied: Mapping[str, Any], origin: str) -> None:
+    """Refuse one gate that carries a field only the ledger may assign.
+
+    Parameters
+    ----------
+    supplied:
+        Candidate gate object.
+    origin:
+        Human-readable description of where the candidate came from.
+
+    Raises
+    ------
+    CheckerDispatchError
+        If any ``LEDGER_ASSIGNED_GATE_FIELDS`` entry is present. Presence alone is
+        the offence: the append has not happened, so no correct value exists yet
+        and whatever is in the slot was invented. Refusing rather than overwriting
+        keeps the ledger's own next-sequence check reachable -- silently rewriting
+        the value is what made the constant-``1`` stamp survive five rungs.
+    """
+
+    for field in LEDGER_ASSIGNED_GATE_FIELDS:
+        if field not in supplied:
+            continue
+        raise CheckerDispatchError(
+            f"{origin} supplies the ledger-assigned field {field}="
+            f"{bounded_json_repr(supplied[field])}; {field} is assigned by the ledger from its "
+            "own state at append time and does not exist before then, so any value here was "
+            "invented rather than derived"
+        )
+
+
+def _with_pending_ledger_fields(gate: Mapping[str, Any]) -> JsonObject:
+    """Return one schema-shaped copy of a gate that has not been appended yet.
+
+    Parameters
+    ----------
+    gate:
+        Stamped gate without its ledger-assigned fields.
+
+    Returns
+    -------
+    dict[str, Any]
+        Copy whose ABSENT ledger fields carry stand-in values, so ``gate.v3``'s
+        ``required`` list is satisfiable before the append that will supply the
+        real ones. A field the candidate actually supplied is left as supplied, so
+        an out-of-range value still fails its own schema constraint rather than
+        being masked by the stand-in. The copy is validated and discarded; it is
+        never hashed, published, or appended.
+    """
+
+    return {**_PENDING_LEDGER_GATE_FIELDS, **gate}
 
 
 def _refuse_conflicting_machine_owned(
@@ -468,7 +556,12 @@ def validate_checker_result_mapping(
     _validate_envelope_hash(envelope)
     normalized = dict(result)
     try:
-        validate_payload(normalized, GATE_SCHEMA_VERSION_V3)
+        # Validate against a PENDING copy: gate.v3 requires the ledger-assigned
+        # fields, but this gate has not been appended, so the real values do not
+        # exist yet. The stand-ins prove the shape; ``normalized`` -- the object
+        # actually returned, hashed, and handed to the reducer -- stays free of
+        # them so the ledger can assign from its own state.
+        validate_payload(_with_pending_ledger_fields(normalized), GATE_SCHEMA_VERSION_V3)
     except PayloadValidationError as exc:
         raise CheckerDispatchError(str(exc)) from exc
     scaffold = machine_owned_gate_fields(envelope)
@@ -477,6 +570,9 @@ def validate_checker_result_mapping(
             raise CheckerDispatchError(
                 f"checker result {field} is not the machine-owned value for its envelope"
             )
+    # After the scaffold comparison, so a candidate carrying both kinds of
+    # fabrication is still named by the more specific message first.
+    _refuse_ledger_assigned_fields(normalized, "checker result")
     result_checker = _required_mapping(normalized.get("checker"), "result checker")
     expected_checker = _required_mapping(envelope.get("checker"), "envelope checker")
     for field in ("provider", "model", "version", "prompt_sha256"):
@@ -512,13 +608,7 @@ def validate_checker_result_mapping(
         seen.add(stable_id)
         _validate_item_binding(result_item, expected)
         _validate_item_decision(result_item, GateKind(str(normalized["gate_kind"])))
-    expected_hash = stable_hash(
-        {
-            key: value
-            for key, value in normalized.items()
-            if key not in {"result_envelope_sha256", "payload_sha256"}
-        }
-    )
+    expected_hash = compute_result_envelope_sha256(normalized)
     if normalized.get("result_envelope_sha256") != expected_hash:
         raise CheckerDispatchError("result_envelope_sha256 does not bind the complete gate result")
     return normalized
@@ -575,21 +665,27 @@ def compute_result_envelope_sha256(result: Mapping[str, Any]) -> str:
     Parameters
     ----------
     result:
-        Gate result with placeholder or absent result/payload hashes.
+        Gate result with absent result hash and absent ledger-assigned fields.
 
     Returns
     -------
     str
         Canonical result digest.
+
+    Notes
+    -----
+    The excluded set is exactly the one ``authority.load_current_gate_proof`` and
+    ``driver_models._normalize_gate_generation`` recompute over. It MUST stay
+    aligned with them: this digest is written once, before the append, and
+    re-derived afterwards from the persisted gate, so any key the ledger touches
+    between those two moments has to be outside the digest or no gate can ever
+    replay its own self-hash. ``ledger_seq`` was inside here and outside there,
+    which made every recorded gate fail with "current gate result-envelope
+    self-hash is invalid" the moment anything tried to read one back.
     """
 
-    return stable_hash(
-        {
-            key: value
-            for key, value in result.items()
-            if key not in {"result_envelope_sha256", "payload_sha256"}
-        }
-    )
+    excluded = {"result_envelope_sha256", *LEDGER_ASSIGNED_GATE_FIELDS}
+    return stable_hash({key: value for key, value in result.items() if key not in excluded})
 
 
 def _build_envelope(

@@ -29,6 +29,7 @@ from menagerie.crawler.author_dispatch import (
     derive_terminal_license_disposition,
 )
 from menagerie.crawler.checker_dispatch import (
+    LEDGER_ASSIGNED_GATE_FIELDS,
     CheckerDispatchError,
     apply_machine_owned_gate_fields,
     build_terminal_disposition_envelope,
@@ -245,9 +246,11 @@ def test_verdict_missing_machine_owned_scaffold_is_not_discarded(tmp_path: Path)
         "verified_hashes",
     ):
         item[field] = envelope["items"][0][field]
-    for machine_field in machine_owned_gate_fields(envelope):
+    for machine_field in (*machine_owned_gate_fields(envelope), *LEDGER_ASSIGNED_GATE_FIELDS):
         # ``schema_version`` is the one machine field the checker can read off
-        # the envelope, so the live omission was exactly the rest of them.
+        # the envelope, so the live omission was exactly the rest of them. The
+        # ledger-assigned pair goes with them: the ledger assigns it at append
+        # time, so a not-yet-appended gate never legitimately carries it.
         if machine_field != "schema_version":
             verdict.pop(machine_field, None)
     verdict.pop("checker", None)
@@ -303,9 +306,9 @@ def test_machine_owned_gate_identity_is_never_taken_from_the_checker(tmp_path: P
     assert 'machine-owned field gate_id="gate-fabricated"' in message
     assert machine_owned_gate_fields(envelope)["gate_id"] in message
 
-    # Omission remains free: the same verdict with every machine-owned field
-    # omitted stamps exactly as before.
-    for machine_field in machine_owned_gate_fields(envelope):
+    # Omission remains free: the same verdict with every machine-owned and
+    # ledger-assigned field omitted stamps exactly as before.
+    for machine_field in (*machine_owned_gate_fields(envelope), *LEDGER_ASSIGNED_GATE_FIELDS):
         if machine_field != "schema_version":
             verdict.pop(machine_field, None)
     verdict.pop("checker", None)
