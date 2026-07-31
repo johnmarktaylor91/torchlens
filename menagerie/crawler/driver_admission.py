@@ -50,6 +50,9 @@ from menagerie.crawler.author_dispatch import (
     AuthorBackoffSignal,
     AuthorEffortGrant,
     AuthorEffortExhaustionClaim,
+    AuthorEngineFaultError,
+    AuthorInfrastructureFaultError,
+    AuthorResultMalformedError,
     ProposedAuthorResult,
     build_author_envelope,
     classify_author_response,
@@ -393,7 +396,147 @@ def _author_lane_failure(exc: Exception) -> tuple[str, str]:
         # Deliberately narrow: the sibling `ArtifactBindingError` arms reject
         # author-SUPPLIED content and stay author-owned below.
         return "runner", "internal-error"
+    # `AuthorDispatchError` has 33 raise sites with three different owners, and the
+    # blanket arm below recorded ALL of them as `session-crashed` -- a session that
+    # published a complete result and was then refused on its CONTENT read as a session
+    # that died. These arms split by OWNERSHIP of the input each raise site refused.
+    # They dispatch on subtypes chosen AT the raise sites, never on message text, so
+    # nothing here has to be kept in sync with any wording, and a site whose ownership
+    # is genuinely unknowable still raises the bare base and still lands on the
+    # catch-all below -- which is the honest answer for it.
+    if isinstance(exc, AuthorResultMalformedError):
+        # The session ran to completion and published bytes that fail a contract it is
+        # bound to. `malformed-result` is the reason the author vocabulary already
+        # carries for exactly this class.
+        return "author", "malformed-result"
+    if isinstance(exc, (AuthorEngineFaultError, AuthorInfrastructureFaultError)):
+        # The engine's own envelope/grant/intake/cache, or the host underneath them,
+        # refused. Identical routing to the `SourceManifestBindingError` arm above and
+        # for the identical reason: an engine fault counted in the author-stage census
+        # makes the campaign's own failure counts wrong. The two types stay distinct so
+        # the operational event's `error_summary` still says which one it was -- the
+        # `runner` reason vocabulary has no retryable member, and inventing one would be
+        # a vocabulary change rather than a taxonomy fix.
+        return "runner", "internal-error"
     return "author", "session-crashed"
+
+
+def _raise_site(exc: BaseException) -> Optional[str]:
+    """Return the deepest crawler-owned ``file:line in function`` frame of ``exc``.
+
+    The terminal record redacts ``status.detail`` and files the Python traceback into a
+    gitignored local diagnostics sidecar, so on any host that did not keep that sidecar
+    the reason code is the only surviving statement about the cause. A message alone is
+    not always enough to find the check: several refusals share an f-string template
+    across shared helpers. The frame is machine-derived from the exception's own
+    traceback, never from externally-controlled text.
+
+    Parameters
+    ----------
+    exc:
+        Exception whose raise site is wanted.
+
+    Returns
+    -------
+    str | None
+        ``"<module>.py:<lineno> in <function>"`` for the deepest frame inside the
+        crawler package, or ``None`` when the exception carries no usable traceback.
+    """
+
+    package_root = str(Path(__file__).parent)
+    site: Optional[str] = None
+    frame = exc.__traceback__
+    while frame is not None:
+        filename = frame.tb_frame.f_code.co_filename
+        if filename.startswith(package_root):
+            site = (
+                f"{Path(filename).name}:{frame.tb_lineno} "
+                f"in {frame.tb_frame.f_code.co_name}"
+            )
+        frame = frame.tb_next
+    return site
+
+
+def _model_lane_failure_event(
+    *,
+    stable_id: str,
+    work_id: str,
+    status_code: str,
+    reason_code: str,
+    exc: BaseException,
+    run_id: str,
+    machine_id: str,
+    created_at: str,
+) -> JsonObject:
+    """Build the operational event that NAMES the cause of one model-local terminal.
+
+    A ``failed:`` terminal deliberately nulls ``status.detail`` -- the detail can carry
+    externally-controlled text -- and points ``status.traceback`` at a gitignored local
+    diagnostics sidecar. That is safe but it is not legible: the terminal on its own
+    says only ``failed:author`` / ``<reason_code>``, and a whole partition of models can
+    terminalize for one cause with nothing in any durable operational record naming it.
+
+    This event closes that gap the same way the terminal-unrecordable ladder did: the
+    exception TYPE and MESSAGE are summarised once and surfaced at the event's TOP
+    LEVEL, not nested where they need excavating, alongside the machine-derived raise
+    site. All three are engine-derived: the type is a class name, the message on the
+    author-lane types is a fixed literal from the raise site, and the frame comes from
+    the traceback object.
+
+    Parameters
+    ----------
+    stable_id, work_id:
+        Terminal model and its active work generation.
+    status_code, reason_code:
+        Closed disposition the lane recorded for this model.
+    exc:
+        Exception that produced the terminal.
+    run_id, machine_id, created_at:
+        Campaign run identity and event timestamp.
+
+    Returns
+    -------
+    JsonObject
+        Schema-valid ``model-lane-failed`` operational event.
+    """
+
+    error_summary = f"{type(exc).__name__}: {exc}"
+    raise_site = _raise_site(exc)
+    return {
+        "error_summary": error_summary,
+        "schema_version": OPERATIONAL_EVENT_SCHEMA_VERSION,
+        "event_id": "model-lane-failed-"
+        + stable_hash(
+            {
+                "run_id": run_id,
+                "stable_id": stable_id,
+                "work_id": work_id,
+                "status_code": status_code,
+                "reason_code": reason_code,
+                "error_summary": error_summary,
+                "raise_site": raise_site,
+            }
+        )[7:31],
+        "created_at": created_at,
+        "event_kind": OperationalEventKind.MODEL_LANE_FAILED.value,
+        "status": OperationalEventStatus.MODEL_LANE_FAILED.value,
+        "provider": None,
+        "observed_response": None,
+        "reset_at": None,
+        "queued_work_counts": {"models": 1},
+        "current_environment": None,
+        "run_id": run_id,
+        "machine_id": machine_id,
+        "details": {
+            "stable_id": stable_id,
+            "work_id": work_id,
+            "status_code": status_code,
+            "reason_code": reason_code,
+            "error_type": type(exc).__name__,
+            "error_message": str(exc),
+            "raise_site": raise_site,
+        },
+    }
 
 
 # Reviewed runtime roots. ``_runner_identity`` discovers their transitive local call
@@ -3411,6 +3554,22 @@ class AdmissionEnvironmentMixin:
                 raise
             except Exception as exc:  # noqa: BLE001 -- author failure belongs to this model
                 stage, reason_code = _author_lane_failure(exc)
+                # Emitted BEFORE the terminal is appended, so the cause survives even if
+                # the terminal bookkeeping below refuses. Without it the recorded facts
+                # are `failed:<stage>` plus a reason code and a null detail: a whole
+                # partition can terminalize for one cause with nothing durable naming it.
+                operational.append(
+                    _model_lane_failure_event(
+                        stable_id=item.stable_id,
+                        work_id=item.active_work_id,
+                        status_code=f"failed:{stage}",
+                        reason_code=reason_code,
+                        exc=exc,
+                        run_id=self.config.run_id,
+                        machine_id=self.config.machine_id,
+                        created_at=self.dependencies.clock(),
+                    )
+                )
                 attempt = _driver_failure_attempt(
                     item,
                     None,

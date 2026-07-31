@@ -74,7 +74,8 @@
         "campaign-completed",
         "operator-cancelled",
         "worker-shutdown-interrupted",
-        "terminal-unrecordable"
+        "terminal-unrecordable",
+        "model-lane-failed"
       ],
       "description": "Mandatory operational event kind."
     },
@@ -110,7 +111,8 @@
         "campaign-completed",
         "operator-cancelled",
         "paused:terminated",
-        "interrupted:shutdown"
+        "interrupted:shutdown",
+        "failed:model-lane"
       ],
       "description": "Mandatory closed current disposition."
     },
@@ -144,7 +146,7 @@
     "error_summary": {
       "type": "string",
       "minLength": 1,
-      "description": "Optional top-level 'ExcType: message' for the failure this event reports. Present on terminal-unrecordable events so the original exception is legible without opening the nested details report: a model whose terminal could not be written presents downstream as a partition hole, and the exception type is what identifies it."
+      "description": "Optional top-level 'ExcType: message' for the failure this event reports. Present on terminal-unrecordable and model-lane-failed events so the original exception is legible without opening the nested details report: a model whose terminal could not be written presents downstream as a partition hole, and a model whose terminal WAS written carries a redacted status.detail with the cause only in a gitignored diagnostics sidecar. The exception type is what identifies both."
     },
     "reset_at": {
       "oneOf": [

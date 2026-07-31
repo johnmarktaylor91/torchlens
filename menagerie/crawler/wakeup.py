@@ -96,6 +96,9 @@ _WAKE_EVENT_TRANSITIONS: dict[OperationalEventKind, _WakeEventTransition] = {
     # An unrecordable terminal is a durable per-model fact, never a wake transition:
     # it must not open, resume, fire or resolve a wake episode.
     OperationalEventKind.TERMINAL_UNRECORDABLE: _WakeEventTransition.OBSERVE,
+    # A model-local lane failure is a durable per-model diagnostic, never a wake
+    # transition, for the same reason an unrecordable terminal is not one.
+    OperationalEventKind.MODEL_LANE_FAILED: _WakeEventTransition.OBSERVE,
 }
 if set(_WAKE_EVENT_TRANSITIONS) != set(OperationalEventKind):
     raise RuntimeError("wakeup event transition table is not exhaustive")

@@ -37,7 +37,64 @@ _ENVELOPE_VERSION = "menagerie.crawler.author-envelope.v3"
 
 
 class AuthorDispatchError(ValueError):
-    """Raised when an author envelope, result, cache, or repair is not exact."""
+    """Raised when an author envelope, result, cache, or repair is not exact.
+
+    This base type is the OWNERSHIP-AMBIGUOUS catch-all and nothing else. It stays
+    the base of every sibling below so that existing ``except AuthorDispatchError``
+    handlers keep catching the whole family, but a site that raises it BARE is
+    asserting only "something in the author lane was not exact" -- which is what the
+    author lane's blanket arm records as ``failed:author`` /``session-crashed``.
+
+    Raising it bare from a site whose ownership IS known is the defect this hierarchy
+    exists to prevent: ``session-crashed`` is a field the reducer counts, so every
+    unrelated cause it absorbs makes the campaign's own failure census wrong. Pick
+    :class:`AuthorResultMalformedError`, :class:`AuthorEngineFaultError`, or
+    :class:`AuthorInfrastructureFaultError` whenever the raise site knows who owns
+    the input it just refused.
+    """
+
+
+class AuthorResultMalformedError(AuthorDispatchError):
+    """Raised when AUTHOR-SUPPLIED bytes fail a contract the author is bound to.
+
+    The session ran to completion and published something; what it published does not
+    satisfy the frozen contract. Recording that as ``session-crashed`` states a fact
+    that did not occur. The author lane routes this to ``failed:author`` /
+    ``malformed-result``, the reason the vocabulary already carries for exactly this
+    ("the author published a well-formed result naming a reason the closed record
+    vocabulary cannot express" generalised to every author-owned contract refusal).
+
+    This is NOT a weakening of any check. Every refusal that raised before still
+    refuses, at the same boundary, with the same message. Only the recorded ownership
+    changes, from a false claim about the session's liveness to a true one about its
+    content.
+    """
+
+
+class AuthorEngineFaultError(AuthorDispatchError):
+    """Raised when TORCHLENS-SUPPLIED inputs to the author lane are inconsistent.
+
+    The envelope, the effort grant, the intake context, the shipped prompt identity,
+    and the disposable result cache are all built by the engine from machine-held
+    facts. When one of those refuses its own self-consistency check, the author is not
+    implicated at all: no author session has necessarily even run. Following the
+    ``SourceManifestBindingError`` precedent, the lane records ``failed:runner`` /
+    ``internal-error`` so the author-stage census counts author failures only.
+    """
+
+
+class AuthorInfrastructureFaultError(AuthorDispatchError):
+    """Raised when the host, not the author or the engine's own data, refused.
+
+    Unreadable shipped prompt bytes and a corrupt on-disk result cache are host
+    faults: the same campaign on a healthy host would not produce them. They share
+    ``failed:runner`` / ``internal-error`` with :class:`AuthorEngineFaultError`
+    because the ``runner`` reason vocabulary has no retryable member to name and
+    inventing one would be a vocabulary change, not a taxonomy fix. The two stay
+    DISTINCT TYPES so the operational event's top-level ``error_summary`` still tells
+    an operator whether to fix the host or fix the code -- the exception type is the
+    discriminator, and it travels.
+    """
 
 
 class AuthorEffortExhaustionClaim(AuthorDispatchError):
@@ -280,6 +337,12 @@ def derive_terminal_evidence_pack(
 
     normalized_sources = tuple(str(source_id) for source_id in source_ids)
     if evidence_ids and not normalized_sources:
+        # DELIBERATELY on the ownership-ambiguous base. This derivation is called from
+        # the author executor, the driver's terminal assembly, and discovery, with id
+        # lists that are author-declared in some callers and engine-derived in others.
+        # The helper cannot see which, and no caller currently passes ownership, so a
+        # guess here would be exactly the kind of wrong-census claim this split exists
+        # to remove. Narrow it by threading ownership from the callers, not by guessing.
         raise AuthorDispatchError("terminal evidence cannot bind IDs without a source")
     excerpts = [
         {
@@ -403,7 +466,7 @@ class AuthorEffortGrant:
         """
 
         if min(self.tool_calls, self.fetch_targets, self.wall_seconds) <= 0:
-            raise AuthorDispatchError("author effort grant dimensions must be positive")
+            raise AuthorEngineFaultError("author effort grant dimensions must be positive")
 
     def to_dict(self) -> JsonObject:
         """Return the JSON grant published to the operator.
@@ -628,15 +691,15 @@ def build_author_envelope(
     """
 
     if not all(value.strip() for value in (work_id, stable_id, campaign_id, created_at)):
-        raise AuthorDispatchError("author envelope identities must be non-empty")
+        raise AuthorEngineFaultError("author envelope identities must be non-empty")
     prompt_identity = hash_bytes(_read_prompt())
     if context.author_prompt_identity != prompt_identity:
-        raise AuthorDispatchError(
+        raise AuthorEngineFaultError(
             "active author prompt identity does not match shipped prompt bytes"
         )
     intake = context.intake_by_stable_id.get(stable_id)
     if not isinstance(intake, Mapping) or intake.get("stable_id") != stable_id:
-        raise AuthorDispatchError("author stable_id is absent from the active intake context")
+        raise AuthorEngineFaultError("author stable_id is absent from the active intake context")
     source_manifest_identity = _source_manifest_identity(source_manifest)
     expected_result: JsonObject = {
         "schema_version": AUTHOR_RESULT_SCHEMA_VERSION,
@@ -705,7 +768,7 @@ def validate_author_result(
     path = Path(result_path).resolve()
     expected_path = Path(str(envelope.get("required_output_path"))).resolve()
     if path != expected_path or path.name != "result.json":
-        raise AuthorDispatchError("author result is not at the envelope's exact atomic path")
+        raise AuthorEngineFaultError("author result is not at the envelope's exact atomic path")
     return _validate_author_result_mapping(_read_json_object(path), envelope, cas_root=cas_root)
 
 
@@ -736,9 +799,9 @@ def serialize_author_result_cache(
     """
 
     if repair_generation is not None and repair_generation < 1:
-        raise AuthorDispatchError("cached repair generation must be positive")
+        raise AuthorEngineFaultError("cached repair generation must be positive")
     if _source_manifest_identity(source_manifest) != result.binding.source_manifest_identity:
-        raise AuthorDispatchError("cache source manifest does not match the author result")
+        raise AuthorEngineFaultError("cache source manifest does not match the author result")
     body: JsonObject = {
         "cache_version": _CACHE_VERSION,
         "result": deepcopy(result.binding.raw_result),
@@ -773,14 +836,16 @@ def validate_author_result_cache(
     """
 
     if cache.get("cache_version") != _CACHE_VERSION:
-        raise AuthorDispatchError("unsupported author-result cache version")
+        raise AuthorInfrastructureFaultError("unsupported author-result cache version")
     expected = stable_hash({key: value for key, value in cache.items() if key != "cache_identity"})
     if cache.get("cache_identity") != expected:
-        raise AuthorDispatchError("author-result cache identity mismatch")
-    source_manifest = _required_mapping(cache.get("source_manifest"), "cache source_manifest")
+        raise AuthorInfrastructureFaultError("author-result cache identity mismatch")
+    source_manifest = _required_mapping(
+        cache.get("source_manifest"), "cache source_manifest", owner="infrastructure"
+    )
     if _source_manifest_identity(source_manifest) != envelope.get("source_manifest_identity"):
-        raise AuthorDispatchError("cached source manifest is stale for the author envelope")
-    result = _required_mapping(cache.get("result"), "cache result")
+        raise AuthorEngineFaultError("cached source manifest is stale for the author envelope")
+    result = _required_mapping(cache.get("result"), "cache result", owner="infrastructure")
     return _validate_author_result_mapping(result, envelope, cas_root=cas_root)
 
 
@@ -858,44 +923,46 @@ def _validate_author_result_mapping(
     try:
         validate_payload(result, AUTHOR_RESULT_SCHEMA_VERSION)
     except PayloadValidationError as exc:
-        raise AuthorDispatchError(str(exc)) from exc
-    expected = _required_mapping(envelope.get("expected_result"), "expected_result")
+        raise AuthorResultMalformedError(str(exc)) from exc
+    expected = _required_mapping(envelope.get("expected_result"), "expected_result", owner="engine")
     for field, value in expected.items():
         if result.get(field) != value:
-            raise AuthorDispatchError(f"author result {field} does not match its envelope")
+            raise AuthorResultMalformedError(f"author result {field} does not match its envelope")
     expected_hash = stable_hash(
         {key: value for key, value in result.items() if key != "result_sha256"}
     )
     if result.get("result_sha256") != expected_hash:
-        raise AuthorDispatchError("result_sha256 does not bind the complete author result")
-    payload = _required_mapping(result.get("payload"), "author result payload")
+        raise AuthorResultMalformedError("result_sha256 does not bind the complete author result")
+    payload = _required_mapping(result.get("payload"), "author result payload", owner="author")
     kind = AuthorResultKind(str(result.get("kind")))
     if payload.get("arm") != kind.value:
-        raise AuthorDispatchError("author result kind and payload arm disagree")
+        raise AuthorResultMalformedError("author result kind and payload arm disagree")
     binding = _result_binding(result)
     if kind is AuthorResultKind.PROPOSED:
-        proposal = _required_mapping(payload.get("proposal"), "proposed payload proposal")
+        proposal = _required_mapping(
+            payload.get("proposal"), "proposed payload proposal", owner="author"
+        )
         _validate_proposal_binding(proposal, binding)
         try:
             report = validate_author_proposal(
                 proposal,
                 allowed_model_dir=str(envelope["allowed_model_dir"]),
                 source_manifest=_required_mapping(
-                    envelope.get("source_manifest"), "source_manifest"
+                    envelope.get("source_manifest"), "source_manifest", owner="engine"
                 ),
                 cas_root=cas_root,
                 expected_schema_version=AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
             )
         except ValueError as exc:
-            raise AuthorDispatchError(str(exc)) from exc
+            raise AuthorResultMalformedError(str(exc)) from exc
         return ProposedAuthorResult(binding, deepcopy(dict(proposal)), report)
     _validate_recommendation_hash(payload)
     if kind is AuthorResultKind.DEFER_RECOMMENDATION:
         handoff_value = _required_mapping(
-            payload.get("handoff_execution"), "defer handoff_execution"
+            payload.get("handoff_execution"), "defer handoff_execution", owner="author"
         )
         handoff_proposal = _required_mapping(
-            handoff_value.get("proposal"), "defer handoff proposal"
+            handoff_value.get("proposal"), "defer handoff proposal", owner="author"
         )
         _validate_proposal_binding(handoff_proposal, binding)
         proposal_sha256 = str(handoff_value["proposal_sha256"])
@@ -922,7 +989,7 @@ def _validate_author_result_mapping(
             or handoff_proposal.get("source_manifest_identity") != source_manifest_identity
             or handoff_sha256 != expected_handoff
         ):
-            raise AuthorDispatchError("defer handoff execution identity is inconsistent")
+            raise AuthorResultMalformedError("defer handoff execution identity is inconsistent")
         return DeferRecommendation(
             binding=binding,
             platform=str(payload["platform"]),
@@ -962,7 +1029,7 @@ def _validate_author_result_mapping(
     if reason_code in {"needs-higher-tier", ACCESS_BLOCKED_REASON_CODE} and not isinstance(
         research_summary, Mapping
     ):
-        raise AuthorDispatchError(
+        raise AuthorResultMalformedError(
             f"BLOCKED({reason_code}) requires a typed stage-1 research_summary"
         )
     if reason_code == ACCESS_BLOCKED_REASON_CODE and not any(
@@ -970,7 +1037,7 @@ def _validate_author_result_mapping(
         and candidate.get("rejection_class") == ACCESS_BARRIER_REJECTION_CLASS
         for candidate in (research_summary or {}).get("candidate_links", [])
     ):
-        raise AuthorDispatchError(
+        raise AuthorResultMalformedError(
             f"BLOCKED({ACCESS_BLOCKED_REASON_CODE}) requires at least one candidate link "
             f"classified {ACCESS_BARRIER_REJECTION_CLASS!r}"
         )
@@ -1061,17 +1128,17 @@ def _validate_proposal_binding(proposal: Mapping[str, Any], binding: AuthorResul
     }
     for field, value in expected.items():
         if proposal.get(field) != value:
-            raise AuthorDispatchError(f"proposed result {field} does not match its result binding")
-    author = _required_mapping(proposal.get("author"), "proposal author")
+            raise AuthorResultMalformedError(f"proposed result {field} does not match its result binding")
+    author = _required_mapping(proposal.get("author"), "proposal author", owner="author")
     if stable_hash(author) != binding.author_identity:
-        raise AuthorDispatchError("proposal author identity does not match its result binding")
+        raise AuthorResultMalformedError("proposal author identity does not match its result binding")
     if author.get("prompt_sha256") != binding.prompt_identity:
-        raise AuthorDispatchError("proposal prompt identity does not match its result binding")
+        raise AuthorResultMalformedError("proposal prompt identity does not match its result binding")
     proposal_hash = stable_hash(
         {key: value for key, value in proposal.items() if key != "proposal_sha256"}
     )
     if proposal.get("proposal_sha256") != proposal_hash:
-        raise AuthorDispatchError("proposal_sha256 does not bind the complete v3 proposal")
+        raise AuthorResultMalformedError("proposal_sha256 does not bind the complete v3 proposal")
 
 
 def _result_binding(result: Mapping[str, Any]) -> AuthorResultBinding:
@@ -1102,7 +1169,7 @@ def _validate_recommendation_hash(payload: Mapping[str, Any]) -> None:
         {key: value for key, value in payload.items() if key != "recommendation_sha256"}
     )
     if payload.get("recommendation_sha256") != expected:
-        raise AuthorDispatchError("recommendation_sha256 does not bind its complete payload")
+        raise AuthorResultMalformedError("recommendation_sha256 does not bind its complete payload")
 
 
 def _source_manifest_identity(source_manifest: Mapping[str, Any]) -> str:
@@ -1125,7 +1192,7 @@ def _nonempty_unique_strings(value: object, field: str) -> tuple[str, ...]:
         or not all(isinstance(item, str) and item for item in value)
         or len(value) != len(set(value))
     ):
-        raise AuthorDispatchError(f"author result {field} must be nonempty and duplicate-free")
+        raise AuthorResultMalformedError(f"author result {field} must be nonempty and duplicate-free")
     return tuple(value)
 
 
@@ -1150,7 +1217,7 @@ def _unique_strings(value: object, field: str) -> tuple[str, ...]:
         or not all(isinstance(item, str) and item for item in value)
         or len(value) != len(set(value))
     ):
-        raise AuthorDispatchError(f"author result {field} must be duplicate-free strings")
+        raise AuthorResultMalformedError(f"author result {field} must be duplicate-free strings")
     return tuple(value)
 
 
@@ -1160,19 +1227,19 @@ def _read_prompt() -> bytes:
     try:
         return PROMPT_PATH.read_bytes()
     except OSError as exc:
-        raise AuthorDispatchError(f"cannot read frozen author prompt: {exc}") from exc
+        raise AuthorInfrastructureFaultError(f"cannot read frozen author prompt: {exc}") from exc
 
 
 def _validate_envelope_hash(envelope: Mapping[str, Any]) -> None:
     """Validate a v3 author envelope's version and self-hash."""
 
     if envelope.get("envelope_version") != _ENVELOPE_VERSION:
-        raise AuthorDispatchError("author envelope is not v3")
+        raise AuthorEngineFaultError("author envelope is not v3")
     expected = stable_hash(
         {key: value for key, value in envelope.items() if key != "envelope_sha256"}
     )
     if envelope.get("envelope_sha256") != expected:
-        raise AuthorDispatchError("author envelope hash mismatch")
+        raise AuthorEngineFaultError("author envelope hash mismatch")
 
 
 def _read_json_object(path: Path) -> JsonObject:
@@ -1181,18 +1248,60 @@ def _read_json_object(path: Path) -> JsonObject:
     try:
         raw = path.read_bytes()
         if not raw or path.is_symlink() or not path.is_file():
+            # DELIBERATELY on the ownership-ambiguous base. A missing, empty, or
+            # non-regular result at the envelope's atomic path is the ONE observation
+            # consistent with a session that genuinely died before its atomic rename --
+            # which is exactly what `session-crashed` asserts. Naming it
+            # `malformed-result` would state that a completed session published bad
+            # content, which is equally unprovable from here.
             raise AuthorDispatchError("author result must be a non-empty regular file")
         parsed = json.loads(raw.decode("utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        # Also deliberately ambiguous: a truncated file is a crash mid-write, a
+        # syntactically invalid one is authored content, and the two are
+        # indistinguishable at this boundary. Guessing either way would trade a
+        # detectable catch-all for an undetectable false statement.
         raise AuthorDispatchError(f"partial or invalid author result: {exc}") from exc
     if not isinstance(parsed, dict):
-        raise AuthorDispatchError("author result must contain exactly one JSON object")
+        raise AuthorResultMalformedError("author result must contain exactly one JSON object")
     return parsed
 
 
-def _required_mapping(value: object, field: str) -> Mapping[str, Any]:
-    """Return a required mapping from a validated envelope or result."""
+#: Ownership of the refusal raised by :func:`_required_mapping`, keyed by the caller's
+#: declared ``owner``. The helper itself cannot know who wrote the mapping it just
+#: refused -- it is called on driver-built envelope fields, on host-held cache fields,
+#: and on author-published result fields alike -- so the CALLER, which does know,
+#: declares it. Without this the one shared helper would have to raise the bare
+#: ownership-ambiguous base and launder nine known-ownership sites into the
+#: ``session-crashed`` catch-all.
+_REQUIRED_MAPPING_OWNERS: dict[str, type[AuthorDispatchError]] = {
+    "author": AuthorResultMalformedError,
+    "engine": AuthorEngineFaultError,
+    "infrastructure": AuthorInfrastructureFaultError,
+}
+
+
+def _required_mapping(value: object, field: str, *, owner: str) -> Mapping[str, Any]:
+    """Return a required mapping from a validated envelope, cache, or result.
+
+    Parameters
+    ----------
+    value:
+        Candidate JSON value.
+    field:
+        Field name used in the refusal message.
+    owner:
+        Who supplied ``value``: ``"author"`` for author-published result bytes,
+        ``"engine"`` for a driver-built envelope, ``"infrastructure"`` for host-held
+        cache state. Mandatory and keyword-only so a new call site cannot silently
+        inherit a wrong ownership.
+
+    Returns
+    -------
+    Mapping[str, Any]
+        The exact mapping, unchanged.
+    """
 
     if not isinstance(value, Mapping):
-        raise AuthorDispatchError(f"author {field} must be an object")
+        raise _REQUIRED_MAPPING_OWNERS[owner](f"author {field} must be an object")
     return value

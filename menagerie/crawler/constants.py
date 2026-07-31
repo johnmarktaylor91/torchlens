@@ -912,6 +912,7 @@ class OperationalEventKind(StrEnum):
     OPERATOR_CANCELLED = "operator-cancelled"
     WORKER_SHUTDOWN_INTERRUPTED = "worker-shutdown-interrupted"
     TERMINAL_UNRECORDABLE = "terminal-unrecordable"
+    MODEL_LANE_FAILED = "model-lane-failed"
 
 
 class OperationalEventStatus(StrEnum):
@@ -948,6 +949,7 @@ class OperationalEventStatus(StrEnum):
     OPERATOR_CANCELLED = "operator-cancelled"
     TERMINATED = "paused:terminated"
     SHUTDOWN_INTERRUPTED = DRIVER_SHUTDOWN_STATUS
+    MODEL_LANE_FAILED = "failed:model-lane"
 
 
 # Slice-F scheduler configuration defaults.  The earlier names remain the
