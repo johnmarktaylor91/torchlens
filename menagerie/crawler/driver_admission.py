@@ -124,10 +124,13 @@ from menagerie.crawler.env_lifecycle import (
 )
 from menagerie.crawler.effort import StageCap
 from menagerie.crawler.fetcher import (
+    CasObjectCorruptError,
+    DigestOrigin,
     FetchHashMismatchError,
     FetchRetrievalError,
     FetchTarget,
     UnpinnedTargetError,
+    UpstreamContentDriftError,
 )
 from menagerie.crawler.family_templates import (
     FamilyTemplateError,
@@ -184,8 +187,10 @@ from menagerie.crawler.routing import (
 from menagerie.crawler.source_broker import (
     BROKER_PACK_VERSION,
     SourceBrokerError,
+    broker_evidence_dirs,
     broker_source_pack,
     default_transport,
+    promote_broker_evidence,
     write_broker_outputs,
 )
 from menagerie.crawler.wakeup import WakeupManager, reduce_wake_episodes
@@ -379,6 +384,18 @@ def _author_lane_failure(exc: Exception) -> tuple[str, str]:
     # stage that was actually in flight when the budget ran out.
     if isinstance(exc, AuthorEffortExhaustionClaim):
         return exc.stage, exc.reason_code
+    if isinstance(exc, CasObjectCorruptError):
+        # Our own store failed to match its own content address. No retry can fix
+        # a damaged object, so this is terminal by construction, and it is
+        # spelled out here so it can never again be indistinguishable from the
+        # upstream-drift case below except by parsing a message string.
+        return "fetch", "hash-mismatch"
+    if isinstance(exc, UpstreamContentDriftError):
+        # `fetch_targets` resolves drift into a recorded per-source disposition,
+        # so reaching this arm means a caller invoked the singular `fetch_target`
+        # directly and declined to resolve it. Kept distinct and explicit rather
+        # than folded into the refusal below, which means something else.
+        return "fetch", "hash-mismatch"
     if isinstance(exc, FetchHashMismatchError):
         return "fetch", "hash-mismatch"
     if isinstance(exc, FetchRetrievalError):
@@ -1103,6 +1120,23 @@ class _AuthorLaneBase:
             raise DriverIntegrationError(
                 "source broker pack has no machine-classified implementation row"
             )
+        # Promote the bytes the broker ALREADY fetched into the controlled-fetch
+        # CAS before the fetch runs. Without this the driver goes back to the
+        # network to verify bytes it already possesses: `already-present` can
+        # never fire, every source costs a second GET, and a page carrying an
+        # embedded nonce or timestamp differs between the two reads and trips a
+        # digest check that means nothing. Promotion is full-digest-verified, so
+        # it publishes exactly the bytes the manifest already pins.
+        promotions = promote_broker_evidence(
+            [row for row in raw_targets if isinstance(row, Mapping)],
+            broker_evidence_dirs(root),
+            root / "source-cas",
+        )
+        broker_lengths = {
+            str(entry["source_id"]): int(entry["bytes_len"])
+            for entry in promotions
+            if entry.get("disposition") == "promoted"
+        }
         targets: list[FetchTarget] = []
         for raw in raw_targets:
             if not isinstance(raw, Mapping):
@@ -1135,6 +1169,13 @@ class _AuthorLaneBase:
                     revision=str(raw.get("revision", "")),
                     expected_sha256=str(raw.get("expected_sha256") or ""),
                     media_type=str(raw.get("media_type", "application/octet-stream")),
+                    # Every digest on this path is broker-derived: the broker
+                    # hashes its OWN fetch, and `expected_sha256` is a
+                    # machine-owned field a descriptor is refused for carrying.
+                    # So a later disagreement is our-fetch-versus-our-fetch, not
+                    # a substituted document.
+                    digest_origin=DigestOrigin.CONTROLLED_FETCH,
+                    expected_bytes_len=broker_lengths.get(str(raw.get("source_id", ""))),
                 )
             )
         fetched = _current_fetch_targets(targets, root / "source-cas")
@@ -1183,6 +1224,24 @@ class _AuthorLaneBase:
         # extra key or publishes any other digest cannot be staged at all --
         # a perfectly good typed author result dies at the binder and the model
         # is terminalized on a cause that never occurred.
+        # Per-source custody disposition: which sources were served from bytes we
+        # already held, which fell back to the network, and which re-pinned
+        # because the document moved under us. A drift is a real
+        # evidence-integrity event, so it is recorded rather than passed over.
+        write_envelope_atomic(
+            {
+                "provenance_version": "menagerie.crawler.source-custody-provenance.v1",
+                "stable_id": item.stable_id,
+                "work_id": work_id,
+                "promotions": promotions,
+                "upstream_drift": [
+                    dict(row["upstream_drift"])
+                    for row in merged_rows
+                    if isinstance(row.get("upstream_drift"), Mapping)
+                ],
+            },
+            root / "source-custody.json",
+        )
         discovery_evidence = freeze_discovery_evidence(discovery, root)
         write_envelope_atomic(
             {

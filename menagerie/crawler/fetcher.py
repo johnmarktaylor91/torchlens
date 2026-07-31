@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Callable, Optional, Union
 from urllib.parse import urlsplit
 
+from enum import StrEnum
+
 from menagerie.crawler.constants import RetrievalStatus
 from menagerie.crawler.identity import fsync_directory, hash_bytes, is_sha256, stable_hash
 
@@ -25,11 +27,139 @@ class UnpinnedTargetError(ControlledFetchError):
 
 
 class FetchHashMismatchError(ControlledFetchError):
-    """Raised when retrieved bytes do not match the pinned digest."""
+    """Raised when bytes do not match the pinned digest.
+
+    Retained as the shared base so existing callers keep catching every digest
+    disagreement, but nothing should catch it directly any more: the two events
+    it used to conflate are structurally unrelated and are now distinct
+    subclasses. Telling them apart by parsing the message string was the only
+    option before and is never correct.
+    """
+
+
+class CasObjectCorruptError(FetchHashMismatchError):
+    """Raised when a local CAS object does not hash to its own address.
+
+    This is our own store failing to match its own content address. Nothing
+    upstream can cause it and no retry can fix it: the object on disk is
+    damaged. Always fatal.
+    """
+
+    def __init__(self, path: Path, expected: str, actual: str) -> None:
+        """Bind the damaged object's location and both digests.
+
+        Parameters
+        ----------
+        path:
+            Local CAS object that failed its self-check.
+        expected:
+            Content address the object is stored under.
+        actual:
+            Digest the object's bytes actually hash to.
+        """
+
+        super().__init__(f"corrupt CAS object {path}: expected {expected}, got {actual}")
+        self.path = path
+        self.expected_sha256 = expected
+        self.actual_sha256 = actual
+
+
+class UpstreamContentDriftError(FetchHashMismatchError):
+    """Raised when a re-fetch of our own earlier fetch returns different bytes.
+
+    This is NOT corruption and NOT substitution. Pages carrying an embedded
+    nonce, timestamp, session id, or ad token differ on every retrieval, so at
+    campaign scale against live web sources this is routine rather than
+    exceptional. It is raised only when the pinned digest is backed by one of
+    our own controlled fetches; an author-supplied digest that is unbacked by a
+    fetch of ours stays a hard refusal, because there it really is the
+    anti-substitution tripwire.
+
+    The retrieved bytes ride along on ``content`` so a caller resolving the
+    drift never has to issue a third GET.
+    """
+
+    def __init__(
+        self,
+        *,
+        source_id: str,
+        url: str,
+        expected_sha256: str,
+        actual_sha256: str,
+        expected_bytes_len: Optional[int],
+        actual_bytes_len: int,
+        content: bytes,
+    ) -> None:
+        """Bind both digests, both byte lengths, and the retrieved bytes.
+
+        Parameters
+        ----------
+        source_id, url:
+            Proposal-local source identifier and the exact URL that drifted.
+        expected_sha256, actual_sha256:
+            Digest of our earlier fetch and of the bytes just retrieved.
+        expected_bytes_len:
+            Byte length our earlier fetch observed, or ``None`` when the caller
+            did not record one. Equal lengths with differing digests is the
+            signature of a fixed-width embedded nonce or timestamp.
+        actual_bytes_len:
+            Byte length just retrieved.
+        content:
+            The bytes just retrieved, so resolution needs no further request.
+        """
+
+        super().__init__(
+            f"upstream content drift for {url!r}: expected {expected_sha256} "
+            f"({expected_bytes_len} bytes), got {actual_sha256} ({actual_bytes_len} bytes)"
+        )
+        self.source_id = source_id
+        self.url = url
+        self.expected_sha256 = expected_sha256
+        self.actual_sha256 = actual_sha256
+        self.expected_bytes_len = expected_bytes_len
+        self.actual_bytes_len = actual_bytes_len
+        self.content = content
+
+    def disposition(self) -> dict[str, object]:
+        """Return the recorded per-source evidence-integrity disposition.
+
+        Returns
+        -------
+        dict[str, object]
+            Machine-readable record of the drift, carried beside the manifest
+            row so an accepted drift is never a silent pass.
+        """
+
+        return {
+            "event": "upstream-content-drift",
+            "source_id": self.source_id,
+            "url": self.url,
+            "captured_sha256": self.expected_sha256,
+            "captured_bytes_len": self.expected_bytes_len,
+            "refetched_sha256": self.actual_sha256,
+            "refetched_bytes_len": self.actual_bytes_len,
+            "equal_length": self.expected_bytes_len == self.actual_bytes_len,
+        }
 
 
 class FetchRetrievalError(ControlledFetchError):
     """Raised when an exact target cannot be retrieved."""
+
+
+class DigestOrigin(StrEnum):
+    """Who the pinned digest on a :class:`FetchTarget` came from.
+
+    The distinction is load-bearing and must never be defaulted away. A digest
+    the requester merely *declared* is the anti-substitution tripwire: bytes
+    that do not match it are refused outright. A digest one of our own
+    controlled fetches *derived* is only a record of what we ourselves saw, so
+    a later disagreement is upstream drift rather than a substitution attempt.
+    """
+
+    #: Supplied by the requester and unbacked by any fetch of ours. Strict.
+    DECLARED = "declared"
+    #: Derived by one of our own controlled fetches of the same URL.
+    CONTROLLED_FETCH = "controlled-fetch"
 
 
 @dataclass(frozen=True)
@@ -55,6 +185,15 @@ class FetchTarget:
         that were retrieved.
     media_type:
         Declared source media type.
+    digest_origin:
+        Who ``expected_sha256`` came from. Defaults to the strict
+        :attr:`DigestOrigin.DECLARED`, so a caller must opt in explicitly before
+        a digest is treated as merely our own earlier observation. Defaulting
+        the other way would silently disarm the anti-substitution refusal.
+    expected_bytes_len:
+        Byte length our own earlier fetch observed, when one is known. Carried
+        only so a drift report can state both lengths; it is never enforced and
+        never substitutes for the digest.
     """
 
     source_id: str
@@ -62,6 +201,8 @@ class FetchTarget:
     revision: str
     expected_sha256: str = ""
     media_type: str = "application/octet-stream"
+    digest_origin: DigestOrigin = DigestOrigin.DECLARED
+    expected_bytes_len: Optional[int] = None
 
 
 def normalize_expected_sha256(value: Optional[str]) -> str:
@@ -175,9 +316,7 @@ def fetch_target(
             content = destination.read_bytes()
             actual = hash_bytes(content)
             if actual != expected:
-                raise FetchHashMismatchError(
-                    f"corrupt CAS object {destination}: expected {expected}, got {actual}"
-                )
+                raise CasObjectCorruptError(destination, expected, actual)
             return _manifest(
                 target, actual, len(content), RetrievalStatus.ALREADY_PRESENT, destination
             )
@@ -193,11 +332,64 @@ def fetch_target(
         raise FetchRetrievalError("controlled fetcher must return bytes")
     actual = hash_bytes(content)
     if expected and actual != expected:
+        if target.digest_origin is DigestOrigin.CONTROLLED_FETCH:
+            # Our own earlier fetch versus our own later fetch. Nothing here is
+            # evidence of substitution, so it gets its own type rather than the
+            # refusal reserved for an unbacked requester-supplied digest.
+            raise UpstreamContentDriftError(
+                source_id=target.source_id,
+                url=target.url,
+                expected_sha256=expected,
+                actual_sha256=actual,
+                expected_bytes_len=target.expected_bytes_len,
+                actual_bytes_len=len(content),
+                content=content,
+            )
         raise FetchHashMismatchError(
             f"hash mismatch for {target.url!r}: expected {expected}, got {actual}"
         )
 
-    destination = cas_path(cas_root, actual)
+    destination = publish_cas_object(cas_root, actual, content)
+    return _manifest(target, actual, len(content), RetrievalStatus.FETCHED, destination)
+
+
+def publish_cas_object(
+    cas_root: Union[str, Path],
+    content_sha256: str,
+    content: bytes,
+) -> Path:
+    """Atomically publish exact bytes at their canonical content address.
+
+    The single writer for every CAS object, so a controlled fetch, a drift
+    resolution, and a promotion from another store all land byte-identically.
+
+    Parameters
+    ----------
+    cas_root:
+        Root of the local source CAS.
+    content_sha256:
+        Canonical digest the bytes are published under.
+    content:
+        Exact bytes to publish.
+
+    Returns
+    -------
+    pathlib.Path
+        Canonical CAS object path.
+
+    Raises
+    ------
+    CasObjectCorruptError
+        If the bytes do not hash to the digest they are being published under.
+    """
+
+    actual = hash_bytes(content)
+    destination = cas_path(cas_root, content_sha256)
+    if actual != content_sha256:
+        # Refuse to mint an object at an address its own bytes do not have. The
+        # promotion path reaches this with bytes from a different store, so this
+        # is exactly where a wrong-bytes promotion has to die.
+        raise CasObjectCorruptError(destination, content_sha256, actual)
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
     try:
@@ -209,7 +401,7 @@ def fetch_target(
         fsync_directory(destination.parent)
     finally:
         temporary.unlink(missing_ok=True)
-    return _manifest(target, actual, len(content), RetrievalStatus.FETCHED, destination)
+    return destination
 
 
 def fetch_targets(
@@ -233,9 +425,37 @@ def fetch_targets(
     -------
     dict[str, object]
         Ordered source manifests plus their aggregate identity.
+
+    Raises
+    ------
+    CasObjectCorruptError
+        If a local CAS object fails its own self-check. Never resolved here.
+    FetchHashMismatchError
+        If a requester-declared digest unbacked by a fetch of ours is violated.
+        Never resolved here either: that is the anti-substitution refusal.
     """
 
-    manifests = [fetch_target(target, cas_root, fetch_bytes=fetch_bytes) for target in targets]
+    manifests: list[dict[str, object]] = []
+    for target in targets:
+        try:
+            manifests.append(fetch_target(target, cas_root, fetch_bytes=fetch_bytes))
+        except UpstreamContentDriftError as drift:
+            # A live page that differs on every retrieval is routine at campaign
+            # scale, so this cannot be a lane kill. It is still a real
+            # evidence-integrity event, so it is never a silent pass either: the
+            # bytes upstream now serves are published, the row re-pins to them so
+            # every excerpt locator is re-verified against the NEW bytes, and the
+            # drift is recorded per-source beside the row.
+            destination = publish_cas_object(cas_root, drift.actual_sha256, drift.content)
+            row = _manifest(
+                target,
+                drift.actual_sha256,
+                drift.actual_bytes_len,
+                RetrievalStatus.FETCHED,
+                destination,
+                upstream_drift=drift.disposition(),
+            )
+            manifests.append(row)
     return {"sources": manifests, "manifest_sha256": stable_hash(manifests)}
 
 
@@ -334,6 +554,8 @@ def _manifest(
     length: int,
     status: RetrievalStatus,
     path: Path,
+    *,
+    upstream_drift: Optional[dict[str, object]] = None,
 ) -> dict[str, object]:
     """Build one deterministic source manifest.
 
@@ -351,6 +573,10 @@ def _manifest(
         Fetch or reuse outcome.
     path:
         Local CAS object path.
+    upstream_drift:
+        Recorded evidence-integrity disposition when this row re-pinned to bytes
+        that moved under an earlier fetch of ours. Absent on every ordinary row,
+        so its mere presence is the signal.
 
     Returns
     -------
@@ -364,8 +590,16 @@ def _manifest(
         "revision": target.revision,
         "content_sha256": content_sha256,
         "fetched_bytes_len": length,
+        # Deliberately still `fetched`: these bytes really were fetched in this
+        # pass and really are the CAS object this row names. Minting a third
+        # status here would drop the row out of the `{fetched, already-present}`
+        # gates that admit a source for excerpt verification, which would turn
+        # "we noticed drift" into "we silently stopped checking the excerpt" --
+        # the exact opposite of the point.
         "retrieval_status": status.value,
         "media_type": target.media_type,
         "cas_path": str(path),
     }
+    if upstream_drift is not None:
+        body["upstream_drift"] = upstream_drift
     return {**body, "manifest_sha256": stable_hash(body)}

@@ -38,7 +38,8 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Mapping, Optional, Protocol, Sequence, Union
 
-from menagerie.crawler.identity import hash_bytes, utc_now
+from menagerie.crawler.fetcher import publish_cas_object
+from menagerie.crawler.identity import hash_bytes, is_sha256, utc_now
 from menagerie.crawler.models import JsonObject
 
 BROKER_PACK_VERSION = "menagerie.crawler.source-broker-pack.v1"
@@ -856,6 +857,120 @@ def broker_source_pack(
         ):
             pack.rows.append(_manifest_row(descriptor, outcome))
     return pack
+
+
+def broker_evidence_dirs(author_root: Union[str, Path]) -> list[Path]:
+    """Return every directory that may hold brokered evidence for one model.
+
+    Two producers write evidence under one author root and they do not share a
+    directory: the driver's own stage-1 broker pass writes ``broker/evidence``,
+    while an operator that brokered its own pack writes under
+    ``attempts/<id>/broker/`` (including the supplementary round's
+    ``broker/supplement/evidence``). Promotion re-hashes every candidate in
+    full, so widening the search can only ever find MORE of our own bytes; it
+    can never admit the wrong ones.
+
+    Parameters
+    ----------
+    author_root:
+        Per-model author custody root.
+
+    Returns
+    -------
+    list[pathlib.Path]
+        Existing evidence directories, driver-owned first, in a stable order.
+    """
+
+    root = Path(author_root)
+    found: list[Path] = []
+    for candidate in [root / "broker" / "evidence", *sorted(root.glob("**/evidence"))]:
+        if candidate.is_dir() and candidate not in found:
+            found.append(candidate)
+    return found
+
+
+def promote_broker_evidence(
+    rows: Sequence[Mapping[str, Any]],
+    evidence_dirs: Sequence[Union[str, Path]],
+    cas_root: Union[str, Path],
+) -> list[JsonObject]:
+    """Promote the broker's already-fetched bytes into the controlled-fetch CAS.
+
+    The broker fetches every source and stores the exact bytes under
+    ``<broker_dir>/evidence``, but the controlled fetch looks in a different
+    tree (``source-cas``). Without this step the driver goes back to the network
+    to verify bytes it already possesses: the ``already-present`` short circuit
+    can never fire, every source costs a second GET, and any page carrying an
+    embedded nonce, timestamp, or session id differs between the two reads and
+    trips a digest check for no reason. Promoting closes that window at its
+    source rather than tolerating it downstream.
+
+    Promotion is byte-exact and fail-closed. Every candidate is re-hashed in
+    full before it is published, so the abbreviated evidence filename is only
+    ever a lookup hint and never an authority: a blob that does not hash to the
+    digest the broker recorded is refused, not promoted, and the source simply
+    falls back to a controlled fetch.
+
+    Parameters
+    ----------
+    rows:
+        Broker manifest rows, each carrying ``source_id`` and the
+        broker-derived ``expected_sha256``.
+    evidence_dirs:
+        Directories that may hold the fetched bytes, in search order.
+    cas_root:
+        Controlled-fetch content-addressed store to publish into.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        One disposition per manifest row, in row order.
+    """
+
+    searched = [Path(directory) for directory in evidence_dirs]
+    dispositions: list[JsonObject] = []
+    for row in rows:
+        source_id = str(row.get("source_id", ""))
+        digest = str(row.get("expected_sha256", ""))
+        disposition: JsonObject = {"source_id": source_id, "content_sha256": digest}
+        if not is_sha256(digest):
+            dispositions.append({**disposition, "disposition": "digest-uncanonical"})
+            continue
+        name = f"{digest.removeprefix('sha256:')[:16]}.bin"
+        promoted = False
+        refused = False
+        for directory in searched:
+            candidate = directory / name
+            if not candidate.is_file():
+                continue
+            body = candidate.read_bytes()
+            if hash_bytes(body) != digest:
+                # The 16-hex evidence filename is a PREFIX, so a collision or a
+                # tampered blob is possible in principle. Re-hashing in full and
+                # refusing here is what keeps the abbreviation from ever becoming
+                # a substitution channel.
+                refused = True
+                continue
+            publish_cas_object(cas_root, digest, body)
+            dispositions.append(
+                {
+                    **disposition,
+                    "disposition": "promoted",
+                    "bytes_len": len(body),
+                    "evidence_path": str(candidate),
+                }
+            )
+            promoted = True
+            break
+        if promoted:
+            continue
+        dispositions.append(
+            {
+                **disposition,
+                "disposition": "evidence-digest-mismatch" if refused else "evidence-missing",
+            }
+        )
+    return dispositions
 
 
 def write_broker_outputs(pack: BrokerPack, broker_dir: Union[str, Path]) -> Path:
