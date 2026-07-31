@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Mapping, Optional, Sequence, Union
 
 from menagerie.crawler.constants import (
@@ -37,6 +38,30 @@ from menagerie.crawler.terminal_evidence import (
 )
 
 PROMPT_PATH = Path(__file__).with_name("prompts") / f"{CHECKER_PROMPT_NAME}.txt"
+
+#: Terminal-lane verdict lockstep. On a ``terminal_disposition`` item the
+#: disposition decides and the item's top-level ``verdict`` AND ``integrity``
+#: verdict must both carry its counterpart -- there is no worst-of precedence
+#: step and integrity is not scored as a separate lane the way it is for a
+#: metadata or fidelity item.
+#:
+#: This is a named constant rather than a dict literal inside the check because
+#: it is a CONTRACT THE CHECKER MUST BE TOLD. A 10-model pilot rung on
+#: 2026-07-30 lost two of six terminal verdicts to
+#: ``terminal top-level/integrity verdicts contradict the disposition``: both
+#: agreed with the disposition at the top level and both scored ``integrity``
+#: independently (once ``accurate``, once ``cannot-verify``), because the frozen
+#: prompt stated the metadata worst-of precedence rule and never stated this one.
+#: ``test_terminal_verdict_lockstep_is_stated_in_the_frozen_prompt`` reads this
+#: mapping and requires the prompt to spell every arrow, so changing the rule
+#: here fails until the prompt is re-stated and re-pinned.
+TERMINAL_VERDICT_LOCKSTEP: Mapping[str, AccuracyVerdict] = MappingProxyType(
+    {
+        "accepted": AccuracyVerdict.ACCURATE,
+        "rejected": AccuracyVerdict.INACCURATE,
+        "cannot-verify": AccuracyVerdict.CANNOT_VERIFY,
+    }
+)
 
 # Machine-owned gate scaffold. ``gate_id`` and the two component identities are
 # IDENTITIES, not judgments: the checker cannot observe them and has no authority
@@ -999,11 +1024,7 @@ def _validate_item_decision(result_item: Mapping[str, Any], gate_kind: GateKind)
         terminal = _required_mapping(
             result_item.get("terminal_disposition"), "terminal_disposition"
         )
-        expected_verdict = {
-            "accepted": AccuracyVerdict.ACCURATE,
-            "rejected": AccuracyVerdict.INACCURATE,
-            "cannot-verify": AccuracyVerdict.CANNOT_VERIFY,
-        }[str(terminal.get("verdict"))]
+        expected_verdict = TERMINAL_VERDICT_LOCKSTEP[str(terminal.get("verdict"))]
         if verdict is not expected_verdict or integrity.get("verdict") != verdict.value:
             raise CheckerDispatchError(
                 "terminal top-level/integrity verdicts contradict the disposition"

@@ -132,12 +132,33 @@ the result digest is `author_result_sha256` and never `result_sha256`, and your 
 across from the author-result you are reviewing. One added key is refused and your entire verdict is
 discarded, so spell the thirteen and stop.
 
+TWO TERMINAL ENVELOPE OBJECTS ARE MACHINE-DERIVED. THEY ARE NOT AUTHOR CLAIMS AND CANNOT BE FORGED.
+1. `evidence_pack.identity_preimage` is the machine-owned CITATION TABLE whose hash IS
+   `evidence_identity`; recompute the identity over it and nothing else. The driver builds its rows by
+   pairing `declared_evidence_ids` with `checked_source_ids` BY ROUND-ROBIN INDEX and stamping every
+   `supports` with the one typed predicate. That pairing is an artifact of the derivation, carries no
+   excerpt text, and asserts NO verified provenance. A preimage row whose `source_id` or `supports`
+   differs from the literal excerpt bearing the same `evidence_id` is therefore EXPECTED and is never an
+   excerpt discrepancy, a misbinding, a hash mismatch, or evidence of forgery. Provenance lives ONLY in
+   `evidence_pack.excerpts`, which the machine re-derived from frozen bytes; judge the excerpts.
+2. `verified_hashes.source_to_code_map` on a terminal envelope is the hash of `checked_source_ids`
+   itself. Its preimage is in the envelope and there is no separate frozen source-to-code-map artifact;
+   its absence is not a locator failure, a hash mismatch, or a reason to withhold a verdict.
+
 DECISION RULE
 Top-level accurate requires every field result accurate and required fidelity match or strictly
 nonmaterial minor-drift. Any inaccurate field, major-drift, or slop makes top-level inaccurate. Otherwise
 any cannot-verify makes top-level cannot-verify. Confidence never overrides these rules. Metadata accuracy
 gates canonical authored-field write and crawl completion; it does not award runs. Only the deterministic
 driver awards runs.
+
+On a `terminal_disposition` item the three verdicts you author are LOCKED TOGETHER and are checked
+mechanically; disagreement discards your entire verdict. `terminal_disposition.verdict` decides, and the
+item's top-level `verdict` AND `integrity.verdict` must both carry its exact counterpart:
+accepted -> accurate, rejected -> inaccurate, cannot-verify -> cannot-verify. There is no precedence
+step here and integrity is not scored as a separate lane: if unverifiable evidence or a failed hash makes
+integrity anything other than accurate, that is a `cannot-verify` or `rejected` DISPOSITION, and all three
+move together. Decide the disposition first, then write the other two from it.
 
 OUTPUT
 Return your result as your FINAL MESSAGE and nothing else, conforming to the structured output schema you

@@ -30,6 +30,8 @@ from menagerie.crawler.author_dispatch import (
 )
 from menagerie.crawler.checker_dispatch import (
     LEDGER_ASSIGNED_GATE_FIELDS,
+    PROMPT_PATH,
+    TERMINAL_VERDICT_LOCKSTEP,
     CheckerDispatchError,
     apply_machine_owned_gate_fields,
     build_terminal_disposition_envelope,
@@ -592,3 +594,167 @@ def test_partial_evidence_records_are_unresolved(tmp_path: Path) -> None:
     )
     assert resolution.resolution == UNRESOLVED
     assert "ev-two has no inspectable excerpt record" in str(resolution.reason)
+
+
+# -- 3. the terminal verdict lockstep, and the prompt that must state it -------
+
+
+def _validated_terminal_verdict(
+    envelope: dict[str, Any],
+    *,
+    top_level: str,
+    integrity: str,
+    disposition: str,
+) -> dict[str, Any]:
+    """Run one complete terminal verdict through the real publication validator.
+
+    Parameters
+    ----------
+    envelope:
+        Terminal request envelope the verdict answers.
+    top_level:
+        Item ``verdict`` under test.
+    integrity:
+        Item ``integrity.verdict`` under test.
+    disposition:
+        ``terminal_disposition.verdict`` under test.
+
+    Returns
+    -------
+    dict[str, Any]
+        Validated gate result.
+    """
+
+    verdict = _rejected_verdict_body()
+    item = verdict["items"][0]
+    for field in (
+        "work_id",
+        "stable_id",
+        "family_representative_id",
+        "fidelity_identity",
+        "vet_identity",
+        "verified_hashes",
+    ):
+        item[field] = envelope["items"][0][field]
+    item["verdict"] = top_level
+    item["integrity"]["verdict"] = integrity
+    item["terminal_disposition"]["verdict"] = disposition
+    # ``make_gate`` supplies fixture placeholders for the machine-owned scaffold.
+    # Leaving them would refuse every case at the scaffold comparison, long before
+    # the verdict clause under test ever decided -- a probe that proves nothing.
+    for machine_field in (*machine_owned_gate_fields(envelope), *LEDGER_ASSIGNED_GATE_FIELDS):
+        if machine_field != "schema_version":
+            verdict.pop(machine_field, None)
+    verdict.pop("checker", None)
+    stamped = apply_machine_owned_gate_fields(
+        verdict,
+        envelope,
+        started_at="2026-07-30T00:00:00Z",
+        finished_at="2026-07-30T00:05:00Z",
+    )
+    return validate_checker_result_mapping(stamped, envelope)
+
+
+def test_terminal_verdict_lockstep_refuses_an_independently_scored_integrity_lane(
+    tmp_path: Path,
+) -> None:
+    """A terminal item's three verdicts move together, and the two live shapes still fail.
+
+    The 2026-07-30 pilot rung lost two of six terminal verdicts to this clause. Neither
+    disagreed with the disposition at the TOP level -- both said ``inaccurate`` for a
+    ``rejected`` disposition, which is exactly right. Both scored ``integrity`` as its own
+    lane the way a metadata item does: once ``accurate`` (nothing was wrong with the
+    hashes; the rejection was on the merits) and once ``cannot-verify``. So this pins the
+    clause against the shapes that actually occurred, not an invented one.
+
+    Every case differs from the passing control in exactly ONE slot, and the control runs
+    first: a guard exercised only where it fails proves nothing, and a negative whose
+    compared slots hold the same value would pass against a check that never ran.
+
+    Parameters
+    ----------
+    tmp_path:
+        Pytest temporary directory.
+    """
+
+    artifact = _blocked_artifact(tmp_path, excerpts=_excerpts())
+    envelope = _terminal_envelope(_terminal_checker_item(artifact), tmp_path)
+
+    # The passing control, through the same real entry point the driver uses.
+    validated = _validated_terminal_verdict(
+        envelope, top_level="inaccurate", integrity="inaccurate", disposition="rejected"
+    )
+    assert validated["items"][0]["verdict"] == "inaccurate"
+    assert validated["items"][0]["integrity"]["verdict"] == "inaccurate"
+    assert validated["items"][0]["terminal_disposition"]["verdict"] == "rejected"
+
+    live_shapes = (
+        # m_3c3c1e8d404047cb4bcb: clean integrity, rejected on the merits.
+        ("inaccurate", "accurate", "rejected"),
+        # m10551: integrity scored cannot-verify, still rejected.
+        ("inaccurate", "cannot-verify", "rejected"),
+        # The dangerous direction, which this clause must keep refusing: an
+        # acceptance riding on an integrity lane that says the evidence is bad.
+        ("accurate", "inaccurate", "accepted"),
+        ("accurate", "cannot-verify", "accepted"),
+        # Top-level disagreeing with the disposition outright.
+        ("cannot-verify", "cannot-verify", "rejected"),
+    )
+    for top_level, integrity, disposition in live_shapes:
+        # The slots being compared must genuinely differ, or the case would pass
+        # against a check that never decided.
+        assert (top_level, integrity) != ("inaccurate", "inaccurate")
+        with pytest.raises(CheckerDispatchError) as excinfo:
+            _validated_terminal_verdict(
+                envelope,
+                top_level=top_level,
+                integrity=integrity,
+                disposition=disposition,
+            )
+        # Exact equality, not a substring: an earlier clause refusing this item
+        # for an unrelated reason would otherwise read as a pass.
+        assert (
+            str(excinfo.value)
+            == "terminal top-level/integrity verdicts contradict the disposition"
+        )
+
+
+def test_terminal_verdict_lockstep_is_stated_in_the_frozen_prompt() -> None:
+    """The rule the checker is judged by is a rule the checker was told.
+
+    The pilot's two contract rejections were not defiance: the frozen prompt stated the
+    metadata worst-of precedence rule and never stated this one, so the checker scored
+    ``integrity`` independently because nothing said not to. This reads the mapping the
+    check itself uses, so changing ``TERMINAL_VERDICT_LOCKSTEP`` fails here until the
+    prompt is re-stated and its PLAN.md digest re-pinned.
+    """
+
+    prompt = PROMPT_PATH.read_text(encoding="utf-8")
+    assert TERMINAL_VERDICT_LOCKSTEP, "an empty lockstep would make every arrow vacuous"
+    for disposition, verdict in TERMINAL_VERDICT_LOCKSTEP.items():
+        assert f"{disposition} -> {verdict.value}" in prompt
+    # The mapping alone does not say the integrity lane moves with it, which is the
+    # half the pilot got wrong.
+    assert "integrity.verdict" in prompt
+
+
+def test_machine_derived_envelope_objects_are_disclosed_to_the_checker() -> None:
+    """The checker is told which terminal envelope objects it must not read as claims.
+
+    All three of the pilot's recorded rejections rested on the ``identity_preimage``
+    rows disagreeing with the literal excerpts about ``source_id``, read as forged
+    evidence bindings. That table is machine-derived by ``derive_terminal_evidence_pack``
+    -- the author cannot influence it -- and the disagreement is an artifact of the
+    round-robin pairing, so the prompt now says so. ``source_to_code_map`` is the same
+    class of defect: it is the hash of ``checked_source_ids``, and four of six calls
+    reported it as an unverifiable digest with no frozen artifact.
+    """
+
+    prompt = PROMPT_PATH.read_text(encoding="utf-8")
+    for disclosed in (
+        "identity_preimage",
+        "ROUND-ROBIN INDEX",
+        "checked_source_ids",
+        "source_to_code_map",
+    ):
+        assert disclosed in prompt
