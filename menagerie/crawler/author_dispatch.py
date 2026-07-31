@@ -22,7 +22,6 @@ from menagerie.crawler.constants import (
     AUTHOR_PROMPT_NAME,
     AUTHOR_RESULT_SCHEMA_VERSION,
     AUTHOR_SESSION_WALL_SECONDS,
-    BLOCKED_REASON_CODES,
     EFFORT_EXHAUSTION_REASON_CODES,
     EXHAUSTION_TERMINAL_REASON_BY_STAGE,
     AuthorPauseReason,
@@ -998,26 +997,31 @@ def _validate_author_result_mapping(
 
 
 def _validate_blocked_reason(stage: str, reason_code: str) -> None:
-    """Close a BLOCKED advisory reason to its stage and refuse effort exhaustion.
+    """Refuse a BLOCKED advisory reason that names an effort or budget outcome.
 
     A BLOCKED arm terminalizes under the ``blocked-prerequisite`` predicate: an assertion
     that this model cannot be resolved until a named prerequisite exists, carried into the
     durable record as a source verdict. Cap exhaustion is a budget outcome, not a source
     verdict (``PLAN.md`` LP-13.2) -- an exhausted model is *unfinished*, not
     *unresolvable*. On a run-once campaign that difference is permanent, so the refusal
-    lives at the parse boundary every author result crosses: the wrong claim is
+    lives at the parse boundary every author result crosses: the false claim is
     unrepresentable rather than merely detectable downstream.
 
-    The honest terminal for an exhausted session is the one the doctrine already names:
-    let the session exceed its grant, so ``AuthorEffortCapExceeded`` reaches
-    ``_author_lane_failure`` and the driver records ``failed:<stage>`` with
-    ``effort-cap-exhausted``, which ``tools/requeue --reason ... --grant ...`` reissues as
-    an explicit new work generation.
+    The honest terminal is the one the doctrine already names: ``failed:<stage>`` with a
+    stage-valid effort reason, which ``tools/requeue --reason ... --grant ...`` reissues as
+    an explicit new work generation. ``_author_lane_failure`` routes this exception there.
+
+    This refuses ONLY the exhaustion class, never an unrecognized reason. The reason
+    vocabulary at large is closed downstream instead, by the total mapping in
+    ``driver._blocked_terminal``: a well-formed result whose reason the record cannot
+    express becomes ``failed:author`` with ``malformed-result``. Refusing unrecognized
+    reasons here as well would reintroduce the campaign-killing failure mode that mapping
+    was written to remove.
 
     Parameters
     ----------
     stage:
-        Closed blocking stage claimed by the advisory arm.
+        Blocking stage claimed by the advisory arm.
     reason_code:
         Root reason code claimed by the advisory arm.
 
@@ -1025,12 +1029,8 @@ def _validate_blocked_reason(stage: str, reason_code: str) -> None:
     ------
     AuthorEffortExhaustionClaim
         If the reason names an effort or budget outcome. The author lane routes this to
-        ``failed:<stage>`` with ``effort-cap-exhausted`` rather than its blanket
-        ``identity-unresolved`` arm, so refusing the claim cannot substitute one false
-        statement for another.
-    AuthorDispatchError
-        If the stage is not a closed blocking stage, or if the reason is outside that
-        stage's closed vocabulary.
+        ``failed:<stage>`` with a stage-valid effort reason rather than its blanket arm, so
+        refusing the claim cannot substitute one false statement for another.
     """
 
     if reason_code in EFFORT_EXHAUSTION_REASON_CODES:
@@ -1043,16 +1043,6 @@ def _validate_blocked_reason(stage: str, reason_code: str) -> None:
             # ran out. An unknown one cannot travel to a terminal, so the constructor
             # falls back rather than fabricating a status code.
             stage=stage,
-        )
-    allowed = BLOCKED_REASON_CODES.get(stage)
-    if allowed is None:
-        raise AuthorDispatchError(
-            f"blocked recommendation stage {stage!r} is not a closed blocking stage"
-        )
-    if reason_code not in allowed:
-        raise AuthorDispatchError(
-            f"blocked recommendation reason_code {reason_code!r} is not a closed "
-            f"{stage} reason"
         )
 
 

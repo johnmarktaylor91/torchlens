@@ -10,6 +10,7 @@ import pytest
 
 from menagerie.crawler.author_dispatch import (
     AuthorDispatchError,
+    AuthorEffortExhaustionClaim,
     BlockedRecommendation,
     DeferRecommendation,
     ProposedAuthorResult,
@@ -26,9 +27,6 @@ from menagerie.crawler.constants import (
     AUTHOR_RESULT_SCHEMA_VERSION,
     ACCESS_BARRIER_REJECTION_CLASS,
     ACCESS_BLOCKED_REASON_CODE,
-    BLOCKED_ADVISORY_STAGES,
-    BLOCKED_REASON_CODES,
-    CAPABILITY_BLOCKED_REASON_CODES_BY_STAGE,
     EFFORT_EXHAUSTION_REASON_CODES,
     EXHAUSTION_TERMINAL_REASON_BY_STAGE,
     FAILURE_REASON_CODES,
@@ -1271,73 +1269,98 @@ def _parse_blocked_result(
     return parsed
 
 
-def test_blocked_reason_vocabulary_covers_exactly_the_schema_stages() -> None:
-    """The mirrored blocking stages are exactly the shipped schema's stage enum."""
-
-    schema = json.loads(
-        (
-            Path(__file__).parents[1] / "schemas" / "author-result-v3.schema.json"
-        ).read_text(encoding="utf-8")
-    )
-    schema_stages = set(schema["$defs"]["blocked_payload"]["properties"]["stage"]["enum"])
-    assert schema_stages == set(BLOCKED_ADVISORY_STAGES)
-    assert set(BLOCKED_REASON_CODES) == schema_stages
+#: Blocking stages read from the shipped schema rather than mirrored in Python, so a stage
+#: added to the enum is covered here without a second list to keep in step.
+_BLOCKED_SCHEMA_STAGES: tuple[str, ...] = tuple(
+    json.loads(
+        (Path(__file__).parents[1] / "schemas" / "author-result-v3.schema.json").read_text(
+            encoding="utf-8"
+        )
+    )["$defs"]["blocked_payload"]["properties"]["stage"]["enum"]
+)
 
 
-def test_blocked_reason_vocabulary_subtracts_only_effort_exhaustion() -> None:
-    """Each stage keeps its whole vocabulary, plus capability reasons, minus exhaustion."""
+def test_blocked_schema_stages_are_read_not_guessed() -> None:
+    """The parametrized stage list really is the shipped schema enum, and is non-trivial."""
 
-    for stage, allowed in BLOCKED_REASON_CODES.items():
-        expected = (
-            FAILURE_REASON_CODES.get(stage, frozenset())
-            | CAPABILITY_BLOCKED_REASON_CODES_BY_STAGE.get(stage, frozenset())
-        ) - EFFORT_EXHAUSTION_REASON_CODES
-        assert allowed == expected
-        assert allowed, f"{stage} lost its entire prerequisite vocabulary"
-        assert not allowed & EFFORT_EXHAUSTION_REASON_CODES
+    assert "author" in _BLOCKED_SCHEMA_STAGES
+    assert "source" in _BLOCKED_SCHEMA_STAGES
+    assert len(_BLOCKED_SCHEMA_STAGES) >= 6
 
 
-def test_blocked_reason_vocabulary_keeps_the_deferrable_capability_arms() -> None:
-    """Closing the vocabulary must not reject the two deferrable BLOCKED arms.
+def test_effort_exhaustion_set_covers_every_exhaustion_code_a_blocked_arm_can_name() -> None:
+    """No budget-exhaustion code reachable from a BLOCKED arm escapes the refused class.
 
-    Both are authored at ``stage="author"`` and both are legitimate. ``needs-source-access``
-    routes to a ``deferred:`` capability terminal and is deliberately absent from
-    ``FAILURE_REASON_CODES``, so a naive close to the failure set alone would have silently
-    rejected every access-barrier deferral.
+    The sweep is scoped to the stages a BLOCKED arm may actually name. The remaining
+    ``*-cap-exhausted`` codes are VERDICT caps, not budget outcomes: they say the checker
+    rejected the model until its repair rounds ran out, which is a quality finding and a
+    truthful thing to record. They live only on the ``accuracy-gate`` and ``fidelity``
+    stages, which a BLOCKED arm cannot name, and they are deliberately NOT refused.
     """
 
-    assert ACCESS_BLOCKED_REASON_CODE not in FAILURE_REASON_CODES.get("author", frozenset())
-    for reason_code in ("needs-higher-tier", ACCESS_BLOCKED_REASON_CODE):
-        assert reason_code in BLOCKED_REASON_CODES["author"]
+    reachable = {
+        code
+        for stage in _BLOCKED_SCHEMA_STAGES
+        for code in FAILURE_REASON_CODES.get(stage, frozenset())
+        if code.startswith("effort-exhausted:") or "exhaust" in code or code == "wall-exceeded"
+    }
+    assert reachable, "the sweep found nothing, so it proves nothing"
+    assert reachable <= EFFORT_EXHAUSTION_REASON_CODES
+
+    verdict_caps = {
+        "slop-cap-exhausted",
+        "major-drift-cap-exhausted",
+        "cannot-verify-cap-exhausted",
+        "inaccurate-cap-exhausted",
+    }
+    assert not verdict_caps & reachable
+    for stage in _BLOCKED_SCHEMA_STAGES:
+        assert not verdict_caps & FAILURE_REASON_CODES.get(stage, frozenset())
+
+    # The pilot's free-form spelling is not a vocabulary member at all, and is still refused.
+    assert "budget-exhausted" in EFFORT_EXHAUSTION_REASON_CODES
+    assert "budget-exhausted" not in reachable
 
 
-def test_every_blocked_stage_has_a_stage_valid_exhaustion_terminal() -> None:
+def test_every_exhausting_stage_has_a_stage_valid_exhaustion_terminal() -> None:
     """The refused-claim terminal must be a reason its own stage actually admits.
 
     ``author`` carries the ``effort-exhausted:`` family rather than
     ``effort-cap-exhausted``, so a single hardcoded reason would record an invalid pair.
     """
 
-    for stage in BLOCKED_ADVISORY_STAGES:
-        reason_code = EXHAUSTION_TERMINAL_REASON_BY_STAGE[stage]
+    assert EXHAUSTION_TERMINAL_REASON_BY_STAGE["author"] == "effort-exhausted:wall-seconds"
+    assert EXHAUSTION_TERMINAL_REASON_BY_STAGE["source"] == "effort-cap-exhausted"
+    for stage, reason_code in EXHAUSTION_TERMINAL_REASON_BY_STAGE.items():
         assert reason_code in FAILURE_REASON_CODES[stage]
         assert reason_code in EFFORT_EXHAUSTION_REASON_CODES
         assert f"failed:{stage}" in TERMINAL_STATUS_CODES
 
 
-@pytest.mark.parametrize("stage", sorted(BLOCKED_ADVISORY_STAGES))
-def test_blocked_arm_accepts_every_closed_prerequisite_reason(tmp_path: Path, stage: str) -> None:
-    """Closing the vocabulary refuses nothing an honest prerequisite block can say.
+@pytest.mark.parametrize("stage", sorted(_BLOCKED_SCHEMA_STAGES))
+def test_blocked_arm_still_accepts_every_honest_prerequisite_reason(
+    tmp_path: Path, stage: str
+) -> None:
+    """The exhaustion refusal rejects nothing an honest prerequisite block can say.
+
+    Includes both deferrable capability arms. ``needs-source-access`` routes to a
+    ``deferred:`` terminal and is deliberately absent from ``FAILURE_REASON_CODES``, so a
+    guard that closed to the failure set alone would have silently rejected every
+    access-barrier deferral.
 
     Parameters
     ----------
     tmp_path:
         Isolated author result directory.
     stage:
-        Closed blocking stage under test.
+        Blocking stage under test.
     """
 
-    for reason_code in sorted(BLOCKED_REASON_CODES[stage]):
+    honest = (FAILURE_REASON_CODES.get(stage, frozenset()) - EFFORT_EXHAUSTION_REASON_CODES) | (
+        {ACCESS_BLOCKED_REASON_CODE} if stage == "author" else set()
+    )
+    assert honest, f"{stage} has no honest prerequisite reason to test"
+    for reason_code in sorted(honest):
         parsed = _parse_blocked_result(tmp_path, stage=stage, reason_code=reason_code)
         assert parsed.stage == stage
         assert parsed.reason_code == reason_code
@@ -1345,72 +1368,61 @@ def test_blocked_arm_accepts_every_closed_prerequisite_reason(tmp_path: Path, st
 
 @pytest.mark.smoke
 @pytest.mark.parametrize("reason_code", sorted(EFFORT_EXHAUSTION_REASON_CODES))
-@pytest.mark.parametrize("stage", sorted(BLOCKED_ADVISORY_STAGES))
 def test_blocked_arm_refuses_effort_exhaustion_dressed_as_a_prerequisite(
-    tmp_path: Path, stage: str, reason_code: str
+    tmp_path: Path, reason_code: str
 ) -> None:
-    """An exhausted session cannot claim the model is unresolvable, at any stage.
+    """An exhausted session cannot claim the model is unresolvable.
 
-    ``effort-cap-exhausted`` is a member of every stage's attempt vocabulary, so only the
-    explicit refusal can stop it; the free-form spellings prove the closed vocabulary
-    catches what the explicit list does not enumerate.
+    ``effort-cap-exhausted`` is a member of most stages' own vocabularies, so nothing but
+    this explicit refusal stops it; ``budget-exhausted`` is in no vocabulary at all and is
+    refused by the same clause rather than degrading to ``malformed-result``.
 
     Parameters
     ----------
     tmp_path:
         Isolated author result directory.
-    stage, reason_code:
-        Blocking stage and exhaustion spelling under test.
+    reason_code:
+        Exhaustion spelling under test.
     """
 
-    with pytest.raises(AuthorDispatchError) as caught:
-        _parse_blocked_result(tmp_path, stage=stage, reason_code=reason_code)
+    with pytest.raises(AuthorEffortExhaustionClaim) as caught:
+        _parse_blocked_result(tmp_path, stage="source", reason_code=reason_code)
     message = str(caught.value)
-    # The distinctive phrase of the exhaustion arm. The generic vocabulary refusal never
-    # says this, so a probe decided by that clause instead would fail here.
     assert "unfinished, not" in message
     assert "failed:<stage>" in message
 
 
 @pytest.mark.smoke
-def test_blocked_arm_refuses_a_reason_outside_its_stage_vocabulary(tmp_path: Path) -> None:
-    """A free-form reason, and a reason borrowed from another stage, are both refused.
+@pytest.mark.parametrize("stage", sorted(_BLOCKED_SCHEMA_STAGES))
+def test_refused_exhaustion_claim_carries_a_stage_valid_terminal(stage: str) -> None:
+    """Every stage's refusal names a terminal that stage's own vocabulary admits.
 
     Parameters
     ----------
-    tmp_path:
-        Isolated author result directory.
+    stage:
+        Blocking stage under test.
     """
 
-    with pytest.raises(AuthorDispatchError, match="is not a closed source reason"):
-        _parse_blocked_result(tmp_path, stage="source", reason_code="missing-prerequisite")
-    # ``build-failed`` is a real reason code, but it belongs to ``environment``.
-    assert "build-failed" in BLOCKED_REASON_CODES["environment"]
-    with pytest.raises(AuthorDispatchError, match="is not a closed source reason"):
-        _parse_blocked_result(tmp_path, stage="source", reason_code="build-failed")
+    with pytest.raises(AuthorEffortExhaustionClaim) as caught:
+        _validate_blocked_reason(stage, "budget-exhausted")
+    claim = caught.value
+    assert claim.reason_code in FAILURE_REASON_CODES[claim.stage]
+    assert f"failed:{claim.stage}" in TERMINAL_STATUS_CODES
 
 
-def test_blocked_arm_refuses_a_stage_outside_the_closed_set(tmp_path: Path) -> None:
-    """A stage the schema never admits is refused before the reason vocabulary decides.
+def test_an_unrecognized_reason_is_left_to_the_total_terminal_mapping() -> None:
+    """An odd reason string is NOT refused here; ``_blocked_terminal`` records it honestly.
 
-    The schema enum settles this one, so the assertion names the schema. The dispatcher's
-    own unknown-stage arm is exercised directly below, where nothing else can decide it.
-
-    Parameters
-    ----------
-    tmp_path:
-        Isolated author result directory.
+    ``driver._blocked_terminal`` is total and maps an unrecordable reason to
+    ``failed:author``/``malformed-result``. Refusing it at the parse boundary as well would
+    reintroduce the failure mode that mapping exists to prevent: one odd reason string on
+    one model taking the whole campaign down.
     """
 
-    with pytest.raises(AuthorDispatchError, match="constructor"):
-        _parse_blocked_result(tmp_path, stage="constructor", reason_code="exception")
-
-
-def test_blocked_reason_guard_refuses_an_unknown_stage_directly() -> None:
-    """The dispatcher's own unknown-stage arm refuses, independently of the schema."""
-
-    with pytest.raises(AuthorDispatchError, match="is not a closed blocking stage"):
-        _validate_blocked_reason("constructor", "exception")
+    for reason_code in ("some-reason-the-record-cannot-express", "missing-runtime-dependency"):
+        assert reason_code not in EFFORT_EXHAUSTION_REASON_CODES
+        # Returns rather than raising: the guard is scoped to the exhaustion class alone.
+        assert _validate_blocked_reason("source", reason_code) is None
 
 
 def _author_context(proposal: dict[str, Any], prompt_hash: str) -> AuthorityContext:
