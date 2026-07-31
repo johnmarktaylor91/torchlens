@@ -204,8 +204,8 @@ def stage_tool_rules(
 
     **The per-attempt directory is the sole writable path.** Confinement is
     synchronous, not post-hoc: the only file surface is the harness
-    ``Read``/``Write``/``Edit`` tools, and those are
-    granted as **path-scoped permission specifiers** rather than bare tool
+    ``Read``/``Write``/``Edit`` tools, and those are granted as **path-scoped
+    permission specifiers** rather than bare tool
     names. In ``-p`` mode an unmatched permission auto-denies, so an
     absolute-path write outside the attempt directory — ``..`` traversal, a
     sibling live attempt's directory, the authority root — is denied by the
@@ -225,10 +225,11 @@ def stage_tool_rules(
     only reads two files and writes its answer to stdout, so it adds no
     writable path; and per the documented permission model each sub-command of
     a compound invocation must match a rule on its own, so a chained escape has
-    nothing to chain to. ``_IDENTITY_TOOL_COMMAND`` is single-sourced below and
-    asserted exact by the escape suite, which pins the Bash allowlist to that
-    ONE rule rather than to "no Bash" — an exact allowlist is the stronger
-    assertion, since it fails on an unexpected grant as well as on a missing one.
+    nothing to chain to. :func:`identity_tool_command` single-sources the
+    invocation for the grant, the rendered brief, and the escape suite, which
+    pins the Bash allowlist to that ONE rule rather than to "no Bash" — an exact
+    allowlist is the stronger assertion, since it fails on an unexpected grant
+    as well as on a missing one.
 
     The escape acceptance suite (Sol's six cases, adopted verbatim) lives in
     ``tests/test_author_executor_escapes.py``; if the harness rules do not
@@ -1340,14 +1341,14 @@ def _authored_excerpt_records(payload: Mapping[str, Any]) -> tuple[Mapping[str, 
     return tuple(found)
 
 
-#: Proposal keys the request envelope already fixes. Every one of them is a value
-#: the executor is handed verbatim in ``expected_result``; asking the author to
-#: transcribe it buys nothing and invites a plausible-looking wrong copy.
 #: The closed ``proposal.author`` key set. The object takes no other key -- an
 #: extra one such as ``actor`` is rejected by the proposal schema outright -- so
 #: the stamp is an exact set comparison, never a merge.
 _AUTHOR_BINDING_KEYS = frozenset({"provider", "model", "version", "prompt_sha256"})
 
+#: Proposal keys the request envelope already fixes. Every one of them is a value
+#: the executor is handed verbatim in ``expected_result``; asking the author to
+#: transcribe it buys nothing and invites a plausible-looking wrong copy.
 _PROPOSAL_BINDING_KEYS = (
     "campaign_id",
     "stable_id",
