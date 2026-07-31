@@ -377,7 +377,9 @@ def test_calculator_output_satisfies_the_driver_recompute(tmp_path: Path) -> Non
     envelope = _envelope(tmp_path, proposal["stable_id"], manifest)
     computed = derive_identities(envelope=envelope, facts_document=proposal)
     assert set(computed) == set(DERIVED_IDENTITY_FIELDS)
-    assert computed == _driver_recompute(proposal["proposed_facts"])
+    # Compared against the recompute over the PUBLISHED fact block -- the one carrying
+    # the two embedded copies -- because that is the object the driver actually sees.
+    assert computed == _driver_recompute(_settled(proposal["proposed_facts"], computed))
 
 
 def test_a_fabricated_fact_still_fails_the_recompute(tmp_path: Path) -> None:
@@ -408,11 +410,79 @@ def test_a_fabricated_fact_still_fails_the_recompute(tmp_path: Path) -> None:
     }
     assert differing == {"text", "text_sha256"}
 
-    recomputed = _driver_recompute(fabricated)
+    # Publish the fabricated facts carrying the HONEST identities -- the exact shape a
+    # proposal takes when it lifted an identity from somewhere its own facts do not
+    # produce -- and the driver's recompute disagrees.
+    published = _settled(fabricated, honest)
+    recomputed = _driver_recompute(published)
     assert recomputed["evidence_identity"] != honest["evidence_identity"]
+    assert recomputed["vet_identity"] != honest["vet_identity"]
     # And the tool is not a laundry: asked about the fabricated facts it returns the
-    # fabrication's own identity, which is exactly what the driver refuses.
-    assert derive_identities(envelope=envelope, facts_document=fabricated) == recomputed
+    # fabrication's own identity, which is exactly what the driver refuses to match
+    # against the real artifacts.
+    fabricated_ids = derive_identities(envelope=envelope, facts_document=fabricated)
+    assert fabricated_ids != honest
+    assert fabricated_ids == _driver_recompute(_settled(fabricated, fabricated_ids))
+
+
+def _settled(facts: dict[str, Any], identities: dict[str, Any]) -> dict[str, Any]:
+    """Return the fact block with both embedded identity copies written."""
+
+    published = deepcopy(facts)
+    published["implementation"]["recipe_revision"] = identities["recipe_revision"]
+    published["evidence"]["evidence_identity"] = identities["evidence_identity"]
+    return published
+
+
+def test_the_calculator_settles_the_embedded_copies_before_reporting(
+    tmp_path: Path,
+) -> None:
+    """The reported ``vet_identity`` is the one the PUBLISHED proposal will produce.
+
+    ``_validate_artifact_identities`` requires ``implementation.recipe_revision`` and
+    ``evidence.evidence_identity`` to equal the identities it recomputes, and both are
+    authored leaves that ``vet_identity`` projects. A calculator that derived once from
+    a draft lacking them would hand back a ``vet_identity`` the driver rejects the
+    moment the author writes them in. This asserts the reported numbers survive the
+    round trip through the complete published fact block.
+    """
+
+    proposal, manifest = _grounded(tmp_path)
+    envelope = _envelope(tmp_path, proposal["stable_id"], manifest)
+
+    draft = deepcopy(proposal["proposed_facts"])
+    draft["implementation"].pop("recipe_revision", None)
+    draft["evidence"].pop("evidence_identity", None)
+
+    reported = derive_identities(envelope=envelope, facts_document=draft)
+    published = _settled(draft, reported)
+    assert _driver_recompute(published) == reported
+
+
+def test_deriving_without_settling_would_have_produced_a_refused_vet_identity(
+    tmp_path: Path,
+) -> None:
+    """Pin the trap the settling pass exists for, in the failing direction.
+
+    Derive naively from the copy-less draft, then write the copies as an author must.
+    ``vet_identity`` moves -- and only ``vet_identity`` -- so a calculator without the
+    settling pass would be confidently wrong on exactly one of the five.
+    """
+
+    proposal, manifest = _grounded(tmp_path)
+    envelope = _envelope(tmp_path, proposal["stable_id"], manifest)
+    draft = deepcopy(proposal["proposed_facts"])
+    draft["implementation"].pop("recipe_revision", None)
+    draft["evidence"].pop("evidence_identity", None)
+
+    naive = _driver_recompute(draft)
+    published = _settled(draft, naive)
+    after = _driver_recompute(published)
+
+    moved = {field for field in DERIVED_IDENTITY_FIELDS if naive[field] != after[field]}
+    assert moved == {"vet_identity"}
+    # And the settled calculator is right where the naive derivation was wrong.
+    assert derive_identities(envelope=envelope, facts_document=draft) == after
 
 
 def test_the_calculator_refuses_to_echo_an_identity_it_was_handed(tmp_path: Path) -> None:
@@ -505,4 +575,4 @@ def test_the_command_the_grant_names_actually_runs(
 
     assert main(["--request", str(request_path), "--facts", str(facts_path)]) == 0
     printed = json.loads(capsys.readouterr().out)
-    assert printed == _driver_recompute(proposal["proposed_facts"])
+    assert printed == _driver_recompute(_settled(proposal["proposed_facts"], printed))

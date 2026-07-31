@@ -155,9 +155,17 @@ the exact interpreter and module named in the JOB FACTS `identity calculator` li
 
 Write your drafted proposal (or just its `proposed_facts` object) to a JSON file under your
 attempt directory and pass that as `--facts`. The tool prints a JSON object with the five
-identities; copy each into your proposal, including the
-`proposed_facts.implementation.recipe_revision` and
-`proposed_facts.evidence.evidence_identity` copies.
+identities. Copy each into the matching top-level proposal field, and copy **two of them a
+second time** into their embedded homes, which the engine checks separately:
+
+- `recipe_revision` also into `proposed_facts.implementation.recipe_revision`
+- `evidence_identity` also into `proposed_facts.evidence.evidence_identity`
+
+Both embedded copies are required, and a proposal carrying the top-level five without them
+is refused as `embedded recipe/evidence identities are stale`. The tool already accounts
+for them when it computes `vet_identity`, so copy its numbers verbatim -- do not compute a
+draft without the copies and then add them, because the two are authored leaves and adding
+them afterwards moves `vet_identity`.
 
 Two things it will not do. It never fetches, infers, or invents a fact -- it computes only
 from the facts you hand it, and refuses with a message naming what is missing if they are

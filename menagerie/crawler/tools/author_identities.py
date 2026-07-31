@@ -56,6 +56,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 
@@ -193,44 +194,31 @@ def _authored_facts(document: Any) -> Mapping[str, Any]:
     return {key: value for key, value in facts.items() if key not in DERIVED_IDENTITY_FIELDS}
 
 
-def derive_identities(
-    *, envelope: Mapping[str, Any], facts_document: Any
+def _recompute(
+    facts: Mapping[str, Any], checker: Mapping[str, str], schema_version: str
 ) -> dict[str, Optional[str]]:
-    """Derive the five accepted identities from authored facts and the machine binding.
+    """Run the REAL driver-side derivation once over one fact block.
+
+    Reimplementing the derivation here to "verify" it would verify nothing: the two
+    copies would only ever agree with each other.
 
     Parameters
     ----------
-    envelope:
-        Verified author request envelope.
-    facts_document:
-        The author's drafted proposal or ``proposed_facts`` object.
+    facts, checker, schema_version:
+        Fact block, checker preimage, and ownership policy version.
 
     Returns
     -------
     dict[str, str | None]
-        The five identities; ``fidelity_identity`` is ``None`` when the rung and
-        fidelity facts do not require one.
+        The five identities.
 
     Raises
     ------
     IdentityToolError
-        If the envelope does not disclose a checker binding, or the facts are too
-        incomplete to derive from.
+        If the facts are too incomplete for any identity to follow from them.
     """
 
     try:
-        checker = checker_identity_binding(envelope)
-    except AuthorEngineFaultError as exc:
-        raise IdentityToolError(str(exc)) from exc
-    inputs = envelope.get("identity_inputs")
-    schema_version = MODEL_SCHEMA_VERSION_V3
-    if isinstance(inputs, Mapping) and isinstance(inputs.get("model_schema_version"), str):
-        schema_version = str(inputs["model_schema_version"])
-    facts = _authored_facts(facts_document)
-    try:
-        # The REAL function the driver runs. Reimplementing the derivation here to
-        # "verify" it would verify nothing: the two copies would only ever agree
-        # with each other.
         identities = recompute_accepted_identities(
             facts,
             checker_prompt_hash=checker["prompt_sha256"],
@@ -249,6 +237,81 @@ def derive_identities(
         "vet_identity": identities.vet,
         "fidelity_identity": identities.fidelity,
     }
+
+
+def derive_identities(
+    *, envelope: Mapping[str, Any], facts_document: Any
+) -> dict[str, Optional[str]]:
+    """Derive the five accepted identities from authored facts and the machine binding.
+
+    **The derivation has to settle, and that is not a detail.** The driver also
+    requires the two EMBEDDED copies inside the fact block --
+    ``implementation.recipe_revision`` and ``evidence.evidence_identity`` -- to equal
+    the identities it recomputes. Those two leaves are themselves authored leaves, so
+    writing them moves ``vet_identity``, which projects every authored leaf. Deriving
+    once from a draft that does not yet carry them therefore yields a ``vet_identity``
+    that is wrong for the proposal the author will actually publish.
+
+    It settles in exactly one write pass, and provably so rather than by luck:
+    ``compute_recipe_revision`` excludes ``recipe_revision`` from its own input and
+    ``compute_evidence_identity`` reads only ``excerpts``, so neither copy can move the
+    value it holds. Only ``vet_identity`` moves, and it moves once. This function
+    performs that one pass and then VERIFIES the invariant instead of assuming it --
+    if either copy's value shifted, it refuses rather than iterating, because a
+    derivation that did not settle is one nobody should publish an identity from.
+
+    Parameters
+    ----------
+    envelope:
+        Verified author request envelope.
+    facts_document:
+        The author's drafted proposal or ``proposed_facts`` object.
+
+    Returns
+    -------
+    dict[str, str | None]
+        The five identities as they will be recomputed from the SETTLED fact block;
+        ``fidelity_identity`` is ``None`` when the rung and fidelity facts do not
+        require one.
+
+    Raises
+    ------
+    IdentityToolError
+        If the envelope does not disclose a checker binding, the facts are too
+        incomplete to derive from, or the derivation did not settle.
+    """
+
+    try:
+        checker = checker_identity_binding(envelope)
+    except AuthorEngineFaultError as exc:
+        raise IdentityToolError(str(exc)) from exc
+    inputs = envelope.get("identity_inputs")
+    schema_version = MODEL_SCHEMA_VERSION_V3
+    if isinstance(inputs, Mapping) and isinstance(inputs.get("model_schema_version"), str):
+        schema_version = str(inputs["model_schema_version"])
+    facts = _authored_facts(facts_document)
+    first = _recompute(facts, checker, schema_version)
+
+    settled = deepcopy(dict(facts))
+    implementation = settled.get("implementation")
+    evidence = settled.get("evidence")
+    if not isinstance(implementation, dict) or not isinstance(evidence, dict):
+        raise IdentityToolError(
+            "facts must carry implementation and evidence objects to settle the "
+            "embedded identity copies"
+        )
+    implementation["recipe_revision"] = first["recipe_revision"]
+    evidence["evidence_identity"] = first["evidence_identity"]
+    final = _recompute(settled, checker, schema_version)
+    if (
+        final["recipe_revision"] != first["recipe_revision"]
+        or final["evidence_identity"] != first["evidence_identity"]
+    ):
+        raise IdentityToolError(
+            "the embedded recipe/evidence copies did not settle in one pass; the "
+            "derivation is not a fixed point for these facts"
+        )
+    return final
 
 
 def build_parser() -> argparse.ArgumentParser:
