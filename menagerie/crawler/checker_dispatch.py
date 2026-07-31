@@ -39,19 +39,46 @@ from menagerie.crawler.terminal_evidence import (
 
 PROMPT_PATH = Path(__file__).with_name("prompts") / f"{CHECKER_PROMPT_NAME}.txt"
 
+#: Total severity order over the closed checker verdicts.
+#:
+#: The frozen checker prompt's DECISION RULE is a maximum over this order: any
+#: inaccurate component makes the top level inaccurate, otherwise any
+#: cannot-verify makes it cannot-verify, otherwise accurate. Naming the order
+#: once lets every lane state that one rule instead of each spelling out a
+#: different comparison.
+VERDICT_SEVERITY: Mapping[AccuracyVerdict, int] = MappingProxyType(
+    {
+        AccuracyVerdict.ACCURATE: 0,
+        AccuracyVerdict.CANNOT_VERIFY: 1,
+        AccuracyVerdict.INACCURATE: 2,
+    }
+)
+
 #: Terminal-lane verdict lockstep. On a ``terminal_disposition`` item the
-#: disposition decides and the item's top-level ``verdict`` AND ``integrity``
-#: verdict must both carry its counterpart -- there is no worst-of precedence
-#: step and integrity is not scored as a separate lane the way it is for a
-#: metadata or fidelity item.
+#: disposition decides the item's top-level ``verdict``, which carries its exact
+#: counterpart below. ``integrity`` is scored on its own evidence and is bounded,
+#: not pinned: it may be no MORE severe than the verdict under
+#: :data:`VERDICT_SEVERITY`.
+#:
+#: The integrity half used to be an equality, and that mandated a falsehood. An
+#: item rejected purely on the merits, with zero hash mismatches, zero excerpt
+#: discrepancies and zero locator failures, still had to declare
+#: ``integrity: "inaccurate"``, erasing the only signal separating "rejected
+#: because the evidence is forged" from "rejected because the argument fails".
+#: The same 10-model pilot rung on 2026-07-30 lost two of six terminal verdicts
+#: to that clause: both agreed with the disposition at the top level and both
+#: scored ``integrity`` independently (once ``accurate``, once ``cannot-verify``)
+#: -- which the monotone rule now ADMITS, because in both the verdict was at
+#: least as severe as integrity. The equality had no safety content: it could
+#: only force integrity UP to match a severe disposition, never restrain a
+#: lenient one. What refuses an unsafe item is the monotone bound, which still
+#: rejects every acceptance over degraded integrity -- as
+#: :func:`menagerie.crawler.gates.validate_terminal_disposition_gate`
+#: independently does.
 #:
 #: This is a named constant rather than a dict literal inside the check because
-#: it is a CONTRACT THE CHECKER MUST BE TOLD. A 10-model pilot rung on
-#: 2026-07-30 lost two of six terminal verdicts to
-#: ``terminal top-level/integrity verdicts contradict the disposition``: both
-#: agreed with the disposition at the top level and both scored ``integrity``
-#: independently (once ``accurate``, once ``cannot-verify``), because the frozen
-#: prompt stated the metadata worst-of precedence rule and never stated this one.
+#: it is a CONTRACT THE CHECKER MUST BE TOLD; the pilot's rejections were not
+#: defiance, they were a rule the prompt never stated.
 #: ``test_terminal_verdict_lockstep_is_stated_in_the_frozen_prompt`` reads this
 #: mapping and requires the prompt to spell every arrow, so changing the rule
 #: here fails until the prompt is re-stated and re-pinned.
@@ -1005,6 +1032,26 @@ def _validate_item_binding(result_item: Mapping[str, Any], expected: Mapping[str
 def _validate_item_decision(result_item: Mapping[str, Any], gate_kind: GateKind) -> None:
     """Enforce top-level verdict precedence and fidelity lane separation.
 
+    Every lane enforces the same rule: the top-level verdict is the maximum of its
+    components under :data:`VERDICT_SEVERITY`. The metadata and fidelity lanes take that
+    maximum over integrity plus every scoped field check. The terminal lane's components
+    are integrity and the disposition, so the same rule reads as two clauses: the verdict
+    equals the disposition restated (:data:`TERMINAL_VERDICT_LOCKSTEP`), and the verdict
+    is at least as severe as integrity.
+
+    The terminal lane previously required ``integrity == verdict``. That mandated a false
+    statement: an item rejected purely on the merits, with zero hash mismatches, zero
+    excerpt discrepancies and zero locator failures, still had to declare
+    ``integrity: "inaccurate"``. It erased the only signal separating "rejected because the
+    evidence is forged" from "rejected because the argument fails", and it contradicted how
+    this same function treats integrity in the metadata lane. Dropping the equality removes
+    no protection: the equality could only ever force integrity *up* to match a severe
+    disposition, never restrain a lenient one. What protects the gate is the monotone
+    clause, which still refuses every cell where the verdict is more lenient than integrity
+    -- above all an acceptance over degraded integrity, which
+    :func:`menagerie.crawler.gates.validate_terminal_disposition_gate` independently
+    refuses as well.
+
     Parameters
     ----------
     result_item:
@@ -1025,9 +1072,14 @@ def _validate_item_decision(result_item: Mapping[str, Any], gate_kind: GateKind)
             result_item.get("terminal_disposition"), "terminal_disposition"
         )
         expected_verdict = TERMINAL_VERDICT_LOCKSTEP[str(terminal.get("verdict"))]
-        if verdict is not expected_verdict or integrity.get("verdict") != verdict.value:
+        if verdict is not expected_verdict:
             raise CheckerDispatchError(
-                "terminal top-level/integrity verdicts contradict the disposition"
+                "terminal top-level verdict contradicts the disposition"
+            )
+        integrity_verdict = AccuracyVerdict(str(integrity.get("verdict")))
+        if VERDICT_SEVERITY[verdict] < VERDICT_SEVERITY[integrity_verdict]:
+            raise CheckerDispatchError(
+                "terminal verdict is less severe than its own integrity verdict"
             )
         return
     checks = result_item.get("field_checks")

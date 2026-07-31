@@ -152,13 +152,20 @@ any cannot-verify makes top-level cannot-verify. Confidence never overrides thes
 gates canonical authored-field write and crawl completion; it does not award runs. Only the deterministic
 driver awards runs.
 
-On a `terminal_disposition` item the three verdicts you author are LOCKED TOGETHER and are checked
-mechanically; disagreement discards your entire verdict. `terminal_disposition.verdict` decides, and the
-item's top-level `verdict` AND `integrity.verdict` must both carry its exact counterpart:
-accepted -> accurate, rejected -> inaccurate, cannot-verify -> cannot-verify. There is no precedence
-step here and integrity is not scored as a separate lane: if unverifiable evidence or a failed hash makes
-integrity anything other than accurate, that is a `cannot-verify` or `rejected` DISPOSITION, and all three
-move together. Decide the disposition first, then write the other two from it.
+On a `terminal_disposition` item the verdicts you author are checked mechanically and disagreement
+discards your entire verdict. `terminal_disposition.verdict` decides, and the item's top-level `verdict`
+must carry its exact counterpart: accepted -> accurate, rejected -> inaccurate,
+cannot-verify -> cannot-verify. Decide the disposition first, then write the top-level verdict from it.
+
+`integrity.verdict` is NOT pinned to that counterpart, and you must not restate the disposition in it.
+Score it on the evidence you actually checked -- hashes, excerpts, locators -- and report what you found.
+Rejecting an item on the merits whose hashes, excerpts and locators were all clean is
+`integrity.verdict: accurate` alongside a `rejected` disposition, and that is CORRECT, not a
+contradiction: it is the only thing distinguishing "rejected because the evidence is forged" from
+"rejected because the argument fails". The ONE bound is that integrity may never be MORE severe than the
+top-level verdict, ordered accurate < cannot-verify < inaccurate. So if unverifiable evidence or a failed
+hash makes integrity anything other than accurate, that must ESCALATE the disposition to `cannot-verify`
+or `rejected`; an `accepted` disposition over degraded integrity is always refused.
 
 OUTPUT
 Return your result as your FINAL MESSAGE and nothing else, conforming to the structured output schema you

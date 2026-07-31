@@ -655,21 +655,28 @@ def _validated_terminal_verdict(
     return validate_checker_result_mapping(stamped, envelope)
 
 
-def test_terminal_verdict_lockstep_refuses_an_independently_scored_integrity_lane(
+def test_terminal_verdict_lockstep_bounds_integrity_without_pinning_it(
     tmp_path: Path,
 ) -> None:
-    """A terminal item's three verdicts move together, and the two live shapes still fail.
+    """The top level moves with the disposition; integrity is bounded, not pinned.
 
-    The 2026-07-30 pilot rung lost two of six terminal verdicts to this clause. Neither
-    disagreed with the disposition at the TOP level -- both said ``inaccurate`` for a
-    ``rejected`` disposition, which is exactly right. Both scored ``integrity`` as its own
-    lane the way a metadata item does: once ``accurate`` (nothing was wrong with the
-    hashes; the rejection was on the merits) and once ``cannot-verify``. So this pins the
-    clause against the shapes that actually occurred, not an invented one.
+    The 2026-07-30 pilot rung lost two of six terminal verdicts to the clause this
+    replaces. Neither disagreed with the disposition at the TOP level -- both said
+    ``inaccurate`` for a ``rejected`` disposition, which is exactly right. Both scored
+    ``integrity`` on its own evidence: once ``accurate`` (nothing was wrong with the
+    hashes; the rejection was on the merits) and once ``cannot-verify``. Both were
+    HONEST, and the old equality discarded them for saying so -- it would have forced
+    ``integrity: "inaccurate"`` onto an item with zero hash mismatches, zero excerpt
+    discrepancies and zero locator failures, erasing the only signal separating forged
+    evidence from a failed argument. Both are now ADMITTED, because in both the verdict
+    is at least as severe as integrity.
 
-    Every case differs from the passing control in exactly ONE slot, and the control runs
-    first: a guard exercised only where it fails proves nothing, and a negative whose
-    compared slots hold the same value would pass against a check that never ran.
+    What must still fail is the other direction, and it does: an acceptance riding on an
+    integrity lane that says the evidence is bad, and a top level that disagrees with its
+    disposition outright. Every case differs from the passing control in exactly ONE
+    slot, and the control runs first: a guard exercised only where it fails proves
+    nothing, and a negative whose compared slots hold the same value would pass against a
+    check that never ran.
 
     Parameters
     ----------
@@ -688,22 +695,52 @@ def test_terminal_verdict_lockstep_refuses_an_independently_scored_integrity_lan
     assert validated["items"][0]["integrity"]["verdict"] == "inaccurate"
     assert validated["items"][0]["terminal_disposition"]["verdict"] == "rejected"
 
-    live_shapes = (
+    # The two verdicts the pilot actually lost. Each differs from the control in exactly
+    # the integrity slot, and each is now accepted with its honest integrity preserved.
+    recovered_shapes = (
         # m_3c3c1e8d404047cb4bcb: clean integrity, rejected on the merits.
         ("inaccurate", "accurate", "rejected"),
         # m10551: integrity scored cannot-verify, still rejected.
         ("inaccurate", "cannot-verify", "rejected"),
-        # The dangerous direction, which this clause must keep refusing: an
-        # acceptance riding on an integrity lane that says the evidence is bad.
-        ("accurate", "inaccurate", "accepted"),
-        ("accurate", "cannot-verify", "accepted"),
-        # Top-level disagreeing with the disposition outright.
-        ("cannot-verify", "cannot-verify", "rejected"),
     )
-    for top_level, integrity, disposition in live_shapes:
-        # The slots being compared must genuinely differ, or the case would pass
-        # against a check that never decided.
+    for top_level, integrity, disposition in recovered_shapes:
+        # The compared slots must genuinely differ, or the case would pass against a
+        # check that never decided.
         assert (top_level, integrity) != ("inaccurate", "inaccurate")
+        recovered = _validated_terminal_verdict(
+            envelope,
+            top_level=top_level,
+            integrity=integrity,
+            disposition=disposition,
+        )
+        # The honest integrity verdict survives into the record rather than being
+        # overwritten to match the disposition. That signal is the whole point.
+        assert recovered["items"][0]["integrity"]["verdict"] == integrity
+        assert recovered["items"][0]["verdict"] == top_level
+
+    refused_shapes = (
+        # The dangerous direction, which the monotone bound must keep refusing: an
+        # acceptance riding on an integrity lane that says the evidence is bad.
+        (
+            ("accurate", "inaccurate", "accepted"),
+            "terminal verdict is less severe than its own integrity verdict",
+        ),
+        (
+            ("accurate", "cannot-verify", "accepted"),
+            "terminal verdict is less severe than its own integrity verdict",
+        ),
+        # Forged evidence must not be softened to "could not verify" either.
+        (
+            ("cannot-verify", "inaccurate", "cannot-verify"),
+            "terminal verdict is less severe than its own integrity verdict",
+        ),
+        # Top-level disagreeing with the disposition outright.
+        (
+            ("cannot-verify", "cannot-verify", "rejected"),
+            "terminal top-level verdict contradicts the disposition",
+        ),
+    )
+    for (top_level, integrity, disposition), expected_message in refused_shapes:
         with pytest.raises(CheckerDispatchError) as excinfo:
             _validated_terminal_verdict(
                 envelope,
@@ -713,10 +750,7 @@ def test_terminal_verdict_lockstep_refuses_an_independently_scored_integrity_lan
             )
         # Exact equality, not a substring: an earlier clause refusing this item
         # for an unrelated reason would otherwise read as a pass.
-        assert (
-            str(excinfo.value)
-            == "terminal top-level/integrity verdicts contradict the disposition"
-        )
+        assert str(excinfo.value) == expected_message
 
 
 def test_terminal_verdict_lockstep_is_stated_in_the_frozen_prompt() -> None:

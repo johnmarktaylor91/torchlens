@@ -17,7 +17,10 @@ from menagerie.crawler.author_dispatch import (
 from menagerie.crawler.authority import AuthorityDerivationError, load_current_gate_proof
 from menagerie.crawler.checker_dispatch import (
     LEDGER_ASSIGNED_GATE_FIELDS,
+    TERMINAL_VERDICT_LOCKSTEP,
+    VERDICT_SEVERITY,
     CheckerDispatchError,
+    _validate_item_decision,
     apply_machine_owned_gate_fields,
     build_metadata_vet_envelope,
     classify_checker_response,
@@ -29,6 +32,7 @@ from menagerie.crawler.constants import (
     AccuracyVerdict,
     CheckerPauseReason,
     FidelityVerdict,
+    GateKind,
     GateRoute,
 )
 from menagerie.crawler.gates import (
@@ -601,6 +605,21 @@ def test_terminal_disposition_gate_resolves_exact_advisory_references() -> None:
             evidence_pack=evidence_pack,
             license_identity=HASH,
         )
+    gate["items"][0]["terminal_disposition"]["source_ids"] = ["source-1"]
+
+    # Independently of the checker-dispatch decision rule, the routing gate refuses an
+    # acceptance over degraded integrity. Every reference above stays exact, so only the
+    # integrity clause can decide these two probes.
+    for degraded in ("inaccurate", "cannot-verify"):
+        gate["items"][0]["integrity"]["verdict"] = degraded
+        with pytest.raises(GateRoutingError, match="accurate item integrity"):
+            validate_terminal_disposition_gate(
+                gate,
+                result,
+                source_manifest=source_manifest,
+                evidence_pack=evidence_pack,
+                license_identity=HASH,
+            )
 
 
 #: The exact ``terminal_disposition`` key set the schema admits. Spelled literally rather
@@ -939,3 +958,179 @@ def test_the_pre_fix_constant_ledger_seq_stamp_fails_this_regression(tmp_path: P
             _stamped_metadata_gate(tmp_path, "m_seq_first", nonce="legacy-first")
         ).record
     assert load_current_gate_proof(control)["gate_id"] == control["gate_id"]
+
+
+# The complete (integrity, disposition) product for a terminal-disposition item.
+#
+# The top-level verdict is pinned to the disposition by TERMINAL_VERDICT_LOCKSTEP, so
+# integrity is the only free variable and the product is exactly nine cells.
+# ``old_admits`` is the retired ``integrity == verdict`` equality; ``new_admits`` is the
+# monotone ``severity(verdict) >= severity(integrity)`` rule.
+#
+# integrity, disposition, old_admits, new_admits
+_TERMINAL_VERDICT_CELLS = (
+    ("accurate", "accepted", True, True),
+    ("cannot-verify", "accepted", False, False),
+    ("inaccurate", "accepted", False, False),
+    ("accurate", "cannot-verify", False, True),
+    ("cannot-verify", "cannot-verify", True, True),
+    ("inaccurate", "cannot-verify", False, False),
+    ("accurate", "rejected", False, True),
+    ("cannot-verify", "rejected", False, True),
+    ("inaccurate", "rejected", True, True),
+)
+
+
+def _terminal_decision_item(
+    integrity: str, disposition: str, *, verdict: str | None = None
+) -> dict[str, Any]:
+    """Build one terminal-disposition gate item at an exact verdict triple.
+
+    Parameters
+    ----------
+    integrity:
+        Integrity verdict to declare.
+    disposition:
+        Terminal disposition verdict.
+    verdict:
+        Top-level verdict; defaults to the disposition's locked counterpart.
+
+    Returns
+    -------
+    dict[str, Any]
+        Complete gate item.
+    """
+
+    item = deepcopy(make_gate(["m_terminal"])["items"][0])
+    item["integrity"]["verdict"] = integrity
+    item["verdict"] = verdict or TERMINAL_VERDICT_LOCKSTEP[disposition].value
+    item["terminal_disposition"] = {
+        "kind": "BLOCKED",
+        "predicate": "blocked-prerequisite",
+        "verdict": disposition,
+        "author_result_id": "result-1",
+        "author_result_sha256": HASH,
+        "handoff_proposal_id": None,
+        "handoff_sha256": None,
+        "source_manifest_identity": HASH,
+        "evidence_identity": HASH,
+        "license_identity": HASH,
+        "source_ids": ["source-1"],
+        "evidence_ids": ["evidence-1"],
+        "findings": [],
+    }
+    return item
+
+
+def test_terminal_verdict_cells_are_the_complete_product() -> None:
+    """The enumeration is exhaustive over the closed verdict and disposition sets."""
+
+    verdicts = {member.value for member in AccuracyVerdict}
+    dispositions = set(TERMINAL_VERDICT_LOCKSTEP)
+    assert len(verdicts) == 3 and len(dispositions) == 3
+    tabulated = {
+        (integrity, disposition) for integrity, disposition, _, _ in _TERMINAL_VERDICT_CELLS
+    }
+    assert tabulated == {
+        (integrity, disposition) for integrity in verdicts for disposition in dispositions
+    }
+
+
+def test_terminal_verdict_cells_match_the_two_stated_rules() -> None:
+    """Each tabulated admissibility column is the rule it claims to be.
+
+    The table carries the safety argument, so it is checked against the rules rather than
+    trusted.
+    """
+
+    for integrity, disposition, old_admits, new_admits in _TERMINAL_VERDICT_CELLS:
+        verdict = TERMINAL_VERDICT_LOCKSTEP[disposition]
+        assert old_admits is (integrity == verdict.value)
+        assert new_admits is (
+            VERDICT_SEVERITY[verdict] >= VERDICT_SEVERITY[AccuracyVerdict(integrity)]
+        )
+
+
+def test_terminal_relaxation_never_admits_a_more_lenient_verdict() -> None:
+    """Every newly admitted cell judges the item strictly above its integrity findings.
+
+    This is the safety property the relaxation must preserve: no item may be accepted, or
+    judged less severely than its own integrity findings warrant. A cell the old rule
+    refused and the new rule admits is only ever one where the verdict is *more* severe
+    than integrity.
+    """
+
+    newly_admitted = [
+        (integrity, disposition)
+        for integrity, disposition, old_admits, new_admits in _TERMINAL_VERDICT_CELLS
+        if new_admits and not old_admits
+    ]
+    assert newly_admitted == [
+        ("accurate", "cannot-verify"),
+        ("accurate", "rejected"),
+        ("cannot-verify", "rejected"),
+    ]
+    for integrity, disposition in newly_admitted:
+        verdict = TERMINAL_VERDICT_LOCKSTEP[disposition]
+        assert VERDICT_SEVERITY[verdict] > VERDICT_SEVERITY[AccuracyVerdict(integrity)]
+    # Nothing the old rule admitted is now refused: the change only ever widens.
+    assert not [cell for cell in _TERMINAL_VERDICT_CELLS if cell[2] and not cell[3]]
+    # Acceptance over degraded integrity stays refused under the new rule.
+    assert [
+        (integrity, disposition)
+        for integrity, disposition, _, new_admits in _TERMINAL_VERDICT_CELLS
+        if disposition == "accepted" and new_admits
+    ] == [("accurate", "accepted")]
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize(
+    ("integrity", "disposition", "old_admits", "new_admits"), _TERMINAL_VERDICT_CELLS
+)
+def test_terminal_verdict_cell_admissibility_matches_the_production_check(
+    integrity: str, disposition: str, old_admits: bool, new_admits: bool
+) -> None:
+    """The real production check admits exactly the tabulated ``new_admits`` cells.
+
+    Parameters
+    ----------
+    integrity, disposition:
+        Verdict cell under test.
+    old_admits, new_admits:
+        Tabulated admissibility of the retired equality and the shipped monotone rule.
+        ``old_admits`` is documentation here; that it really is the old rule is proven by
+        ``test_terminal_verdict_cells_match_the_two_stated_rules``.
+    """
+
+    item = _terminal_decision_item(integrity, disposition)
+    if new_admits:
+        _validate_item_decision(item, GateKind.TERMINAL_DISPOSITION)
+        return
+    with pytest.raises(CheckerDispatchError) as caught:
+        _validate_item_decision(item, GateKind.TERMINAL_DISPOSITION)
+    # Exact equality, not a substring: an earlier clause refusing this item for an
+    # unrelated reason would otherwise read as a pass.
+    assert str(caught.value) == "terminal verdict is less severe than its own integrity verdict"
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize("disposition", sorted(TERMINAL_VERDICT_LOCKSTEP))
+def test_terminal_top_level_verdict_lockstep_still_binds(disposition: str) -> None:
+    """The retained clause refuses any top-level verdict other than the locked one.
+
+    Parameters
+    ----------
+    disposition:
+        Terminal disposition under test.
+    """
+
+    expected = TERMINAL_VERDICT_LOCKSTEP[disposition]
+    for member in AccuracyVerdict:
+        if member is expected:
+            continue
+        # Integrity is set to the offered verdict so the monotone clause is satisfied and
+        # only the lockstep clause can decide this probe.
+        item = _terminal_decision_item(member.value, disposition, verdict=member.value)
+        with pytest.raises(CheckerDispatchError) as caught:
+            _validate_item_decision(item, GateKind.TERMINAL_DISPOSITION)
+        assert str(caught.value) == "terminal top-level verdict contradicts the disposition"
