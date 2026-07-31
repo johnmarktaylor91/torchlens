@@ -161,10 +161,23 @@ def exa_mcp_config(api_key: Optional[str] = None) -> str:
     return json.dumps({"mcpServers": {"exa": {"type": "http", "url": url}}})
 
 
-#: The identity calculator's module path. The author invokes it as
-#: ``<interpreter> -m <module> --request ... --facts ...``; the grant below pins
-#: the interpreter and the module, so the specifier names one program.
-IDENTITY_TOOL_MODULE = "menagerie.crawler.tools.author_identities"
+#: The identity calculator's module path, as a repository-relative POSIX path.
+#: The author invokes it as ``<interpreter> <abs script path> --request ... --facts
+#: ...``; the grant pins both halves, so the specifier names exactly one program.
+IDENTITY_TOOL_MODULE = "menagerie/crawler/tools/author_identities.py"
+
+
+def identity_tool_script() -> Path:
+    """Return the calculator's absolute script path.
+
+    Returns
+    -------
+    Path
+        Absolute path to the shipped calculator, resolved from this module's own
+        location so a worktree or an installed copy each name their own file.
+    """
+
+    return Path(__file__).resolve().parent / "tools" / "author_identities.py"
 
 
 def identity_tool_command() -> str:
@@ -172,15 +185,23 @@ def identity_tool_command() -> str:
 
     The interpreter is this process's own, so the author is handed the same
     environment the executor already runs the crawler in and cannot be pointed at
-    a Python that lacks the package.
+    a Python that lacks the dependencies.
+
+    The script is named BY PATH rather than as ``-m <module>``, and that is not
+    cosmetic. ``menagerie`` is not an installed distribution -- it resolves through
+    the current working directory -- and the author session's working directory is
+    its own attempt directory. ``-m`` therefore died with ``No module named
+    'menagerie'`` under a live probe, AFTER the harness had granted the command.
+    A path invocation plus the script's own import bootstrap works from any
+    directory.
 
     Returns
     -------
     str
-        ``"<interpreter> -m menagerie.crawler.tools.author_identities"``.
+        ``"<interpreter> <absolute calculator path>"``.
     """
 
-    return f"{sys.executable} -m {IDENTITY_TOOL_MODULE}"
+    return f"{sys.executable} {identity_tool_script()}"
 
 
 def identity_tool_rule() -> str:

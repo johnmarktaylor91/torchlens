@@ -60,6 +60,24 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 
+# Import bootstrap, and it has to run BEFORE the package imports below.
+#
+# The author session's working directory is its own attempt directory, and
+# ``menagerie`` is not an installed distribution -- only ``torchlens`` is, so the
+# package resolves through the current directory and nothing else. Every in-process
+# caller (tests, the executor) happens to run from a repository root and therefore
+# never notices. The author never does, and a live probe under the real permission
+# recipe failed here with ``No module named 'menagerie'`` after the harness had
+# already GRANTED the command: a capability that is reachable but not runnable.
+#
+# ``parents[3]`` is the repository root: tools -> crawler -> menagerie -> root.
+# Guarded on an actual import failure so a normal ``-m`` invocation or an installed
+# layout keeps whatever ``menagerie`` it already resolved.
+try:  # pragma: no cover - exercised by the CLI probe, not by in-process callers
+    import menagerie  # noqa: F401
+except ModuleNotFoundError:  # pragma: no cover - see above
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+
 from menagerie.crawler.author_dispatch import (
     AuthorEngineFaultError,
     checker_identity_binding,

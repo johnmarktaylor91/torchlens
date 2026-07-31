@@ -42,6 +42,7 @@ from menagerie.crawler.author_executor import (
     exa_mcp_config,
     identity_tool_command,
     identity_tool_rule,
+    identity_tool_script,
     stage_tool_rules,
 )
 from menagerie.crawler.tests.executor_test_support import (
@@ -116,9 +117,12 @@ def test_bash_allowlist_is_exactly_the_identity_calculator() -> None:
     assert bash_rules == [identity_tool_rule()]
     prefix = identity_tool_command()
     assert bash_rules[0] == f"Bash({prefix}:*)"
-    # The pinned prefix names the module explicitly, so the grant cannot be
+    # The pinned prefix names the script explicitly, so the grant cannot be
     # satisfied by the interpreter alone (``python -c``, ``python evil.py``).
-    assert prefix.endswith(f" -m {IDENTITY_TOOL_MODULE}")
+    assert prefix.endswith(IDENTITY_TOOL_MODULE.replace("/", os.sep))
+    # The named script must actually exist: a grant pointing at nothing is a
+    # capability the author cannot use, which is how the live probe failed once.
+    assert identity_tool_script().is_file()
     # A command grant must never carry a writable path scope.
     assert "**" not in bash_rules[0]
 

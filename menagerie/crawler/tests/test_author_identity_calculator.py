@@ -24,6 +24,9 @@ proves only that the reimplementation agrees with itself.
 from __future__ import annotations
 
 import json
+import os
+import shlex
+import subprocess
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -42,6 +45,7 @@ from menagerie.crawler.author_dispatch import (
 from menagerie.crawler.author_executor import (
     AuthorExecutorError,
     _stamp_machine_owned_proposal_fields,
+    identity_tool_command,
 )
 from menagerie.crawler.authority import AuthorityContext
 from menagerie.crawler.identity import hash_bytes, stable_hash
@@ -575,4 +579,43 @@ def test_the_command_the_grant_names_actually_runs(
 
     assert main(["--request", str(request_path), "--facts", str(facts_path)]) == 0
     printed = json.loads(capsys.readouterr().out)
+    assert printed == _driver_recompute(_settled(proposal["proposed_facts"], printed))
+
+
+def test_the_grant_command_runs_as_a_real_subprocess_from_the_attempt_directory(
+    tmp_path: Path,
+) -> None:
+    """The exact granted command, in a fresh process, cwd'd where the author is.
+
+    In-process tests cannot see this failure mode and did not: every one of them
+    runs from a repository root, where ``menagerie`` resolves through the current
+    directory. ``menagerie`` is not an installed distribution, and the author's cwd
+    is its own attempt directory, so a live probe under the real permission recipe
+    got ``No module named 'menagerie'`` AFTER the harness had already granted the
+    command -- a capability that was reachable but not runnable. Only a real
+    subprocess started somewhere else reproduces it, so that is what this does.
+    """
+
+    proposal, manifest = _grounded(tmp_path)
+    envelope = _envelope(tmp_path, proposal["stable_id"], manifest)
+    request_path = tmp_path / "request.json"
+    request_path.write_text(json.dumps(envelope), encoding="utf-8")
+    facts_path = tmp_path / "facts.json"
+    facts_path.write_text(json.dumps(proposal["proposed_facts"]), encoding="utf-8")
+
+    attempt = tmp_path / "attempts" / "attempt-001-probe"
+    attempt.mkdir(parents=True)
+    completed = subprocess.run(
+        [*shlex.split(identity_tool_command()), "--request", str(request_path),
+         "--facts", str(facts_path)],
+        cwd=str(attempt),
+        capture_output=True,
+        text=True,
+        timeout=120,
+        # A cleared PYTHONPATH is the honest reproduction: the grant carries no
+        # environment, so the script has to bootstrap its own imports.
+        env={k: v for k, v in os.environ.items() if k != "PYTHONPATH"},
+    )
+    assert completed.returncode == 0, completed.stderr
+    printed = json.loads(completed.stdout)
     assert printed == _driver_recompute(_settled(proposal["proposed_facts"], printed))
