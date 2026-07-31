@@ -6991,7 +6991,9 @@ def test_command_notifier_timeout_is_short_and_nonblocking(tmp_path: Path) -> No
 _EXECUTOR_LANE_SOURCE = b"ExampleNet is a source-grounded architecture."
 
 
-def _found_broker_pack(request: Mapping[str, Any], digest: str) -> dict[str, Any]:
+def _found_broker_pack(
+    request: Mapping[str, Any], digest: str, source_count: int = 1
+) -> dict[str, Any]:
     """Return one machine broker pack for a stage-1 ``FOUND`` discovery.
 
     Parameters
@@ -7000,6 +7002,12 @@ def _found_broker_pack(request: Mapping[str, Any], digest: str) -> dict[str, Any
         Source-request envelope published to the executor.
     digest:
         Content digest the controlled fetch will observe.
+    source_count:
+        Number of frozen sources the broker reports. Production manifests are
+        routinely wide -- the live rung froze 10 to 20 rows per model -- while
+        every fixture here froze exactly ONE, which is the width at which two
+        independent machine derivations of a BLOCKED arm's checked source set
+        happen to coincide. Widening it is what lets a test see them disagree.
 
     Returns
     -------
@@ -7007,6 +7015,8 @@ def _found_broker_pack(request: Mapping[str, Any], digest: str) -> dict[str, Any
         Broker pack carrying its registered discovery envelope.
     """
 
+    urls = [f"https://example.com/model{index}.py" for index in range(1, source_count + 1)]
+    source_ids = [f"source-{index}" for index in range(1, source_count + 1)]
     discovery = {
         "schema_version": "menagerie.crawler.source-discovery.v1",
         "stable_id": request["stable_id"],
@@ -7016,12 +7026,13 @@ def _found_broker_pack(request: Mapping[str, Any], digest: str) -> dict[str, Any
             "arm": "FOUND",
             "sources": [
                 {
-                    "source_id": "source-1",
+                    "source_id": source_id,
                     "kind": "raw-url",
-                    "url": "https://example.com/model.py",
+                    "url": url,
                     "requested_role": "implementation",
                     "basis": "Fixture implementation source.",
                 }
+                for source_id, url in zip(source_ids, urls)
             ],
         },
     }
@@ -7029,15 +7040,16 @@ def _found_broker_pack(request: Mapping[str, Any], digest: str) -> dict[str, Any
         "pack_version": "menagerie.crawler.source-broker-pack.v1",
         "sources": [
             {
-                "source_id": "source-1",
-                "url": "https://example.com/model.py",
-                "final_url": "https://example.com/model.py",
+                "source_id": source_id,
+                "url": url,
+                "final_url": url,
                 "revision": digest,
                 "expected_sha256": digest,
                 "media_type": "text/x-python",
                 "media_type_method": "path-extension",
                 "broker_role": "implementation",
             }
+            for source_id, url in zip(source_ids, urls)
         ],
         "broker": {"outcomes": [], "derived_citations": [], "total_bytes": 0},
         "discovery": discovery,
@@ -7099,13 +7111,15 @@ def _blocked_result_bytes(envelope: Mapping[str, Any], payload: Mapping[str, Any
     return json.dumps(result)
 
 
-def _executor_lane_operator(payload: Mapping[str, Any]) -> Any:
+def _executor_lane_operator(payload: Mapping[str, Any], source_count: int = 1) -> Any:
     """Script one executor lane that finds sources and then returns ``BLOCKED``.
 
     Parameters
     ----------
     payload:
         Stage-2 ``BLOCKED`` payload, minus its recommendation digest.
+    source_count:
+        Frozen manifest width the scripted broker reports.
 
     Returns
     -------
@@ -7122,7 +7136,9 @@ def _executor_lane_operator(payload: Mapping[str, Any]) -> Any:
         envelope = json.loads(Path(argv[-1]).read_text(encoding="utf-8"))
         output = Path(envelope["required_output_path"])
         if envelope.get("envelope_version") == "menagerie.crawler.author-source-request.v1":
-            output.write_text(json.dumps(_found_broker_pack(envelope, digest)), encoding="utf-8")
+            output.write_text(
+                json.dumps(_found_broker_pack(envelope, digest, source_count)), encoding="utf-8"
+            )
         else:
             output.write_text(_blocked_result_bytes(envelope, payload), encoding="utf-8")
         return subprocess.CompletedProcess(list(argv), 0, "", "")
@@ -7130,7 +7146,9 @@ def _executor_lane_operator(payload: Mapping[str, Any]) -> Any:
     return run
 
 
-def _install_executor_lane(monkeypatch: pytest.MonkeyPatch, payload: Mapping[str, Any]) -> None:
+def _install_executor_lane(
+    monkeypatch: pytest.MonkeyPatch, payload: Mapping[str, Any], source_count: int = 1
+) -> None:
     """Install the scripted executor transport and its controlled fetch.
 
     Parameters
@@ -7139,10 +7157,14 @@ def _install_executor_lane(monkeypatch: pytest.MonkeyPatch, payload: Mapping[str
         Active fixture.
     payload:
         Stage-2 ``BLOCKED`` payload the scripted executor publishes.
+    source_count:
+        Frozen manifest width the scripted broker reports.
     """
 
     monkeypatch.setattr(
-        driver_admission_module, "_run_operator_command", _executor_lane_operator(payload)
+        driver_admission_module,
+        "_run_operator_command",
+        _executor_lane_operator(payload, source_count),
     )
     monkeypatch.setattr(
         driver_module,
@@ -7247,6 +7269,65 @@ def test_blocked_source_verdict_keeps_its_own_stage_and_reason(
     assert model["status"]["code"] == "failed:source"
     assert model["status"]["reason_code"] == "missing-material-source"
     assert model["status"]["stage"] == "source"
+
+
+def test_accepted_blocked_disposition_terminalizes_on_a_wide_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An ACCEPTED terminal disposition reaches the author's own stage and reason.
+
+    The sibling test above drives the identical author payload against a manifest
+    holding ONE source, and that single row is the width at which the two
+    machine-side derivations of a BLOCKED arm's checked source set coincide.
+    Production manifests are wide: the live rung froze 10 to 20 rows per model.
+    At any width greater than the result's evidence-ID count the gate's own
+    reference derivation projected the set back out of the round-robin citation
+    table -- ``manifest[i % len(manifest)]`` -- while the envelope the checker was
+    handed declared the whole manifest. No value a checker could write satisfied
+    both, so ``validate_terminal_disposition_gate`` raised on every wide model and
+    the surrounding handler recorded ``failed:runner``/``protocol-violation`` --
+    a runner protocol violation on a lane where no runner ever executed, with
+    every retry counter at zero.
+
+    This drives the wide shape end to end. The assertions below are exactly the
+    single-source test's assertions, which is the point: manifest width must not
+    change the terminal a model reaches. Before the fix the ``code`` assertion
+    reads ``failed:runner`` and the ``stage`` assertion reads ``runner``.
+
+    Parameters
+    ----------
+    tmp_path, monkeypatch:
+        Active fixtures.
+    """
+
+    snapshot = _snapshot(tmp_path, count=1)
+    # Three frozen sources against one evidence ID: the round-robin projection
+    # resolves to ``{source-1}`` while the envelope declares all three, so the
+    # two derivations are provably distinguishable in this fixture.
+    assert len(_BLOCKED_SOURCE_PAYLOAD["evidence_ids"]) == 1
+    _install_executor_lane(monkeypatch, _BLOCKED_SOURCE_PAYLOAD, source_count=3)
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=CommandAuthorLane(("fake-author",)),
+        campaign_id="c1-mech",
+    ).run()
+
+    assert result.status == "complete"
+    model = scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)[0]
+    status = model["status"]
+    assert status["code"] == "failed:source"
+    assert status["reason_code"] == "missing-material-source"
+    assert status["stage"] == "source"
+    # The mis-attribution this test exists to prevent, asserted directly rather
+    # than only by implication: a lane whose runner never started must not
+    # publish a runner failure, and must not publish one with an all-zero retry
+    # ledger and a null detail either.
+    assert status["code"] != "failed:runner"
+    assert status["reason_code"] != "protocol-violation"
+    # The manifest really was wide, so the fixture cannot silently regress into
+    # the single-source shape that hid the defect.
+    assert len(model["source_resolution"]["sources"]) == 3
 
 
 def test_blocked_needs_higher_tier_promotes_through_the_executor_lane(
