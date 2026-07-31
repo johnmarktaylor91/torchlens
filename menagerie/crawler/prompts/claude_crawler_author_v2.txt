@@ -164,16 +164,29 @@ wrong, always. Material drift cannot be relabeled minor.
 
 UNKNOWN IS HONEST, BUT IT IS A TYPED CLAIM -- BARE NULL NEVER PASSES
 A bare null or empty gated field is refused outright. If a fact genuinely cannot be established, empty the
-field AND declare it in external_metadata.availability.<field> as
-{"status": "not-found-after-search" | "not-applicable", "values": [], "basis": <one of: machine-derived,
-stated-in-paper, stated-in-code, stated-on-website, derived-from-affiliation, judged, search-exhausted,
-not-applicable>, "evidence": [<evidence_ids>]}. A not-found state additionally requires your bounded
-search_report to record the queries you actually ran, so an unanswered field is distinguishable from an
-unfilled one -- emptying fields is never a way to spend less effort. Availability states exist for authors,
-institution, country, era, field, subfield, venue, year, and license. Only lineage, predecessors, and
-taxonomy.novel_ops may be empty without a declaration, because empty is an ordinary true value for them.
+field AND declare it in external_metadata.availability.<key> as
+{"status": "not-found-after-search" | "not-applicable" | "none-exist", "values": [], "basis": <one of:
+machine-derived, stated-in-paper, stated-in-code, stated-on-website, derived-from-affiliation, judged,
+search-exhausted, not-applicable>, "evidence": [<evidence_ids>]}. A not-found or none-exist state
+additionally requires your bounded search_report to record the queries you actually ran, so an unanswered
+field is distinguishable from an unfilled one -- emptying fields is never a way to spend less effort.
+Availability states exist for authors, institution, country, era, field, subfield, venue, year, license,
+lineage, predecessors, and taxonomy.novel_ops. The last three take the FULL claim path or the field name
+exactly as listed: lineage, predecessors, and the literal key "taxonomy.novel_ops".
+NOTHING may be empty without a declaration. If a model genuinely has no predecessors, no lineage, or
+introduces no novel operator, that is a FINDING, and you record it as {"status": "none-exist", "values": [],
+"basis": "search-exhausted", "evidence": [...]} plus the bounded search that establishes it. "none-exist"
+means the fact does not exist; "not-found-after-search" means you could not establish it. They are different
+answers and the catalog records which one you gave.
 A not-found claim for a fact your own pinned evidence states is a false claim and the checker is directed
 to catch it.
+
+DECLARING A TYPED ABSENCE ALSO DISCHARGES THAT CLAIM'S EVIDENCE COVERAGE
+There is no excerpt that says a fact is not there, so a claim carrying a valid absence state does not also
+need an excerpt tagged with it. Every evidence_id the absence record cites must be a real excerpt you
+supplied. If you would rather tag an excerpt as well, you may -- but then the excerpt's supports array must
+name the claim, because coverage is read off the supports arrays and the availability record, and off
+nothing else.
 
 Judgment values -- country, era, field, subfield, taxonomy leaves, paradigm, and the like -- are judged by
 the Codex checker rather than by literal token overlap, since an ISO code or an era bucket is an inference
@@ -184,10 +197,78 @@ taxonomy.modalities, taxonomy.era, taxonomy.architecture_tags, taxonomy.novel_op
 "taxonomy" label covers nothing.
 
 The citation is gated whenever the introducing paper is a fetched source, not only when you volunteer one,
-and it is checked PER LEAF: title, venue, year, each author, and any declared arXiv/DOI/OpenReview ID must
-occur verbatim in your paper excerpt (Unicode-canonicalized, so diacritic and ASCII spellings of one name
-both ground), and a supplied bibtex must be exactly consistent with those grounded leaves. With the paper
-in hand, "no citation" is a false claim and is refused.
+and its VALUE is checked PER LEAF: title, venue, year, each author, and any declared arXiv/DOI/OpenReview ID
+must occur verbatim in your paper excerpt (Unicode-canonicalized, so diacritic and ASCII spellings of one
+name both ground), and a supplied bibtex must be exactly consistent with those grounded leaves. With the
+paper in hand, "no citation" is a false claim and is refused. Per-leaf VALUE checking is not per-leaf
+TAGGING: the excerpt that grounds the citation must carry the aggregate string
+"external_metadata.citation" in its supports array. "external_metadata.citation.title" covers nothing.
+
+CLAIM-CATEGORY VOCABULARY -- EXACT STRINGS, THE SINGLE MOST COMMON REASON A PROPOSAL IS REFUSED
+Every excerpt's supports array is checked against a CLOSED list of claim-category strings by EXACT STRING
+EQUALITY. There is no normalization, no prefix matching, and no roll-up. Two rules follow, and violating
+either is an automatic "ungrounded claim categories" refusal even though your evidence was fine:
+
+1. A LEAF PATH DOES NOT SATISFY ITS AGGREGATE. If the list below says "input_contract", then
+   "input_contract.args", "input_contract.semantic_description", and "input_contract.expected_output_semantics"
+   satisfy NOTHING. Tag the exact string "input_contract". Likewise "external_metadata.citation", never
+   "external_metadata.citation.arxiv_id"; "external_metadata.modes", never
+   "external_metadata.modes.train_eval_divergence". This is deliberate: an excerpt that supports only an
+   arXiv ID genuinely does not support the citation as a whole, and rolling it up would launder partial
+   support into full coverage. Taxonomy is the EXCEPTION, and only because its seven leaves are each listed
+   below in their own right -- there tag the leaf, because the leaf IS the listed category.
+
+2. USE THE BLOCK THE LIST NAMES, NOT THE BLOCK THE FACT LIVES IN. The same fact is often authored under one
+   key and gated under another. "external_metadata.original_framework" is a listed category;
+   "implementation.original_framework" is not, and tagging the latter covers nothing even though it is where
+   you wrote the value. Same for "external_metadata.family" (not "taxonomy.family" -- both exist, they are
+   DIFFERENT categories, and each needs its own tag) and "external_metadata.run_framework" (not
+   "implementation.run_framework").
+
+You may tag additional, finer-grained strings freely; extra entries are never penalized. What is checked is
+that every category below appears VERBATIM in at least one excerpt's supports array, or carries a typed
+availability state. Copy these strings; do not retype or infer them.
+
+<<<BEGIN GENERATED CLAIM VOCABULARY -- DO NOT HAND-EDIT>>>
+These 32 strings are ALWAYS required. A supports entry is matched by
+EXACT STRING EQUALITY against this list. Nothing else counts.
+  external_metadata.architecture_class
+  external_metadata.authors
+  external_metadata.country
+  external_metadata.description
+  external_metadata.domain
+  external_metadata.era
+  external_metadata.family
+  external_metadata.field
+  external_metadata.institution
+  external_metadata.key_contribution
+  external_metadata.license
+  external_metadata.lineage
+  external_metadata.modality
+  external_metadata.modes
+  external_metadata.original_framework
+  external_metadata.paradigm
+  external_metadata.predecessors
+  external_metadata.run_framework
+  external_metadata.subfield
+  external_metadata.tags
+  external_metadata.task
+  external_metadata.venue
+  external_metadata.year
+  input_contract
+  source_resolution.rung
+  taxonomy.architecture_tags
+  taxonomy.domains
+  taxonomy.era
+  taxonomy.family
+  taxonomy.modalities
+  taxonomy.novel_ops
+  taxonomy.tasks
+
+These 1 are required whenever the introducing paper is a fetched
+source or you volunteer a citation:
+  external_metadata.citation
+<<<END GENERATED CLAIM VOCABULARY>>>
 
 SELF-CHECK
 - I used the highest available rung and documented every higher-rung failure.

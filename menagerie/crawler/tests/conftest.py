@@ -2199,6 +2199,29 @@ def make_model(
                 "paradigm": ["supervised"],
                 "lineage": [],
                 "predecessors": [],
+                # Empty lineage/predecessors/novel_ops are no longer silent: they are
+                # typed ``none-exist`` findings carrying the bounded search, which is
+                # also what discharges their evidence coverage.
+                "availability": {
+                    "lineage": {
+                        "status": "none-exist",
+                        "values": [],
+                        "basis": "search-exhausted",
+                        "evidence": [],
+                    },
+                    "predecessors": {
+                        "status": "none-exist",
+                        "values": [],
+                        "basis": "search-exhausted",
+                        "evidence": [],
+                    },
+                    "taxonomy.novel_ops": {
+                        "status": "none-exist",
+                        "values": [],
+                        "basis": "search-exhausted",
+                        "evidence": [],
+                    },
+                },
                 "tags": ["example"],
                 "keywords": ["cnn"],
                 "venue": "TestConf",

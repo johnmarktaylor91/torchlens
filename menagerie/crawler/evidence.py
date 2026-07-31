@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence, Union
+from typing import AbstractSet, Any, Iterable, Mapping, Optional, Sequence, Union
 
 from menagerie.crawler.fetcher import cas_path
 from menagerie.crawler.identity import hash_bytes
@@ -26,11 +26,16 @@ class EvidenceValidationReport:
         Claim categories named by at least one valid excerpt.
     family_grounded:
         Whether at least one excerpt is explicitly family-level.
+    absence_covered_claims:
+        Claim categories discharged by a typed absence state rather than by an excerpt.
+        Kept separate from ``supported_claims`` so a declared absence can never be
+        mistaken for positive literal support when reading the report.
     """
 
     excerpt_count: int
     supported_claims: frozenset[str]
     family_grounded: bool
+    absence_covered_claims: frozenset[str] = frozenset()
 
 
 def validate_evidence(
@@ -40,8 +45,18 @@ def validate_evidence(
     *,
     cas_root: Union[str, Path, None] = None,
     require_family_grounding: bool = False,
+    declared_absences: Optional[Mapping[str, Sequence[str]]] = None,
 ) -> EvidenceValidationReport:
     """Validate verbatim excerpts and exhaustive claim-category coverage.
+
+    Coverage is nominal: a claim category is covered when an excerpt names it, or when
+    the proposal declares a typed absence state for it. Whether an excerpt's *text*
+    entails the claim is the Codex accuracy checker's judgment, not this function's.
+
+    Claim-category strings are matched EXACTLY. A leaf path ``X.y`` never satisfies the
+    aggregate ``X``: an excerpt supporting only ``external_metadata.citation.arxiv_id``
+    genuinely does not support the citation as a whole, and rolling leaves up into their
+    parent would silently launder that partial support into full coverage.
 
     Parameters
     ----------
@@ -55,6 +70,12 @@ def validate_evidence(
         Optional CAS root used when manifests do not contain ``cas_path``.
     require_family_grounding:
         Whether a family-level grounding excerpt is mandatory.
+    declared_absences:
+        Claim categories carrying a typed, structurally validated absence state, mapped
+        to the evidence IDs that state cites. An absence state is a positive,
+        evidence-carrying assertion that a fact is not there, so it discharges coverage
+        for its own claim; every ID it cites must be a real validated excerpt. Absence
+        of the record never discharges anything -- a bare empty value still fails.
 
     Returns
     -------
@@ -107,8 +128,9 @@ def validate_evidence(
             raise EvidenceValidationError(f"{evidence_id}.family_level must be boolean")
         family_grounded = family_grounded or family_level
 
+    absence_covered = _absence_coverage(declared_absences, evidence_ids)
     required = {claim for claim in required_claims if claim}
-    missing = required - supported
+    missing = required - supported - absence_covered
     if missing:
         raise EvidenceValidationError(f"ungrounded claim categories: {sorted(missing)}")
     coverage = evidence.get("coverage")
@@ -123,7 +145,60 @@ def validate_evidence(
         raise EvidenceValidationError(
             "family grounding is declared complete without a family excerpt"
         )
-    return EvidenceValidationReport(len(excerpts), frozenset(supported), family_grounded)
+    return EvidenceValidationReport(
+        len(excerpts), frozenset(supported), family_grounded, absence_covered
+    )
+
+
+def _absence_coverage(
+    declared_absences: Optional[Mapping[str, Sequence[str]]],
+    known_evidence_ids: AbstractSet[str],
+) -> frozenset[str]:
+    """Return claim categories discharged by a typed absence state.
+
+    Parameters
+    ----------
+    declared_absences:
+        Claim category to the evidence IDs its typed absence state cites.
+    known_evidence_ids:
+        Evidence IDs of excerpts that validated in this same pass.
+
+    Returns
+    -------
+    frozenset[str]
+        Claim categories a typed absence state covers.
+
+    Raises
+    ------
+    EvidenceValidationError
+        If a declared absence is malformed or cites an evidence ID that no validated
+        excerpt provides. A fabricated corroboration must never buy coverage.
+    """
+
+    if not declared_absences:
+        return frozenset()
+    covered: set[str] = set()
+    for claim, cited in declared_absences.items():
+        if not isinstance(claim, str) or not claim.strip():
+            raise EvidenceValidationError("declared absence claim names must be non-empty strings")
+        # A bare string is a Sequence whose iteration yields characters; require a real
+        # list/tuple so a single ID never silently decomposes into per-character IDs.
+        if isinstance(cited, (str, bytes)) or not isinstance(cited, Sequence):
+            raise EvidenceValidationError(
+                f"declared absence for {claim} must carry a list of evidence IDs"
+            )
+        unknown = [
+            evidence_id
+            for evidence_id in cited
+            if not isinstance(evidence_id, str) or evidence_id not in known_evidence_ids
+        ]
+        if unknown:
+            raise EvidenceValidationError(
+                f"declared absence for {claim} cites missing or fabricated evidence: "
+                f"{sorted(map(str, unknown))}"
+            )
+        covered.add(claim)
+    return frozenset(covered)
 
 
 def evidence_ids(evidence: Mapping[str, Any]) -> frozenset[str]:

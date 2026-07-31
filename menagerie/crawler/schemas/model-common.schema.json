@@ -1142,7 +1142,7 @@
         },
         "supports": {
           "$ref": "#/$defs/nonempty_string_array",
-          "description": "Mandatory supports."
+          "description": "Mandatory supports; claim-category strings matched by exact equality, never by prefix roll-up."
         },
         "family_level": {
           "type": "boolean",

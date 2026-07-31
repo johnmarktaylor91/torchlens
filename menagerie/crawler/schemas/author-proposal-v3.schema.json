@@ -414,9 +414,10 @@
           "enum": [
             "present",
             "not-found-after-search",
-            "not-applicable"
+            "not-applicable",
+            "none-exist"
           ],
-          "description": "Mandatory closed availability disposition."
+          "description": "Mandatory closed availability disposition. none-exist asserts the fact genuinely does not exist for this model (no predecessors, no lineage, no novel operator); not-found-after-search asserts it could not be established. Both require the recorded bounded search."
         },
         "values": {
           "type": "array",
@@ -482,9 +483,59 @@
         "year": {
           "$ref": "#/$defs/availability_claim",
           "description": "Optional typed availability state for year."
+        },
+        "lineage": {
+          "$ref": "#/$defs/availability_claim",
+          "description": "Typed availability state for external_metadata.lineage. Required when lineage is empty: none-exist when the model genuinely has no recorded lineage, not-found-after-search when it could not be established."
+        },
+        "predecessors": {
+          "$ref": "#/$defs/availability_claim",
+          "description": "Typed availability state for external_metadata.predecessors. Required when predecessors is empty."
+        },
+        "taxonomy.novel_ops": {
+          "$ref": "#/$defs/availability_claim",
+          "description": "Typed availability state for the taxonomy.novel_ops claim, keyed by its full canonical claim path because it is owned by another block. Required when novel_ops is empty."
         }
       },
-      "description": "Optional per-field typed availability states; bare null never passes the gate."
+      "description": "Optional per-claim typed availability states; bare null or empty never passes the gate. External-metadata claims are keyed by bare field name; claims owned by another block are keyed by their full canonical claim path."
+    },
+    "gated_claim_category": {
+      "enum": [
+        "external_metadata.architecture_class",
+        "external_metadata.authors",
+        "external_metadata.citation",
+        "external_metadata.country",
+        "external_metadata.description",
+        "external_metadata.domain",
+        "external_metadata.era",
+        "external_metadata.family",
+        "external_metadata.field",
+        "external_metadata.institution",
+        "external_metadata.key_contribution",
+        "external_metadata.license",
+        "external_metadata.lineage",
+        "external_metadata.modality",
+        "external_metadata.modes",
+        "external_metadata.original_framework",
+        "external_metadata.paradigm",
+        "external_metadata.predecessors",
+        "external_metadata.run_framework",
+        "external_metadata.subfield",
+        "external_metadata.tags",
+        "external_metadata.task",
+        "external_metadata.venue",
+        "external_metadata.year",
+        "input_contract",
+        "source_resolution.rung",
+        "taxonomy.architecture_tags",
+        "taxonomy.domains",
+        "taxonomy.era",
+        "taxonomy.family",
+        "taxonomy.modalities",
+        "taxonomy.novel_ops",
+        "taxonomy.tasks"
+      ],
+      "description": "The closed gated-claim vocabulary the coverage gate enforces, published here so it is machine-discoverable rather than existing only in Python. Coverage matches an excerpt's supports entry against these strings by EXACT equality: a leaf path such as external_metadata.citation.arxiv_id does not satisfy external_metadata.citation, and a cross-block spelling such as implementation.original_framework does not satisfy external_metadata.original_framework. This enum is deliberately NOT applied as a constraint on supports items, because a proposal may legitimately tag additional finer-grained strings; it is the required vocabulary, not the permitted one. Kept in step with menagerie.crawler.proposal.DEFAULT_GATED_CLAIMS by test_claim_vocabulary_is_derived_from_code."
     }
   },
   "x-authority-ownership": {
@@ -565,6 +616,18 @@
     "$.proposed_facts.external_metadata.availability.venue.evidence[]": "author-gated",
     "$.proposed_facts.external_metadata.availability.venue.status": "author-gated",
     "$.proposed_facts.external_metadata.availability.venue.values[]": "author-gated",
+    "$.proposed_facts.external_metadata.availability.lineage.basis": "author-gated",
+    "$.proposed_facts.external_metadata.availability.lineage.evidence[]": "author-gated",
+    "$.proposed_facts.external_metadata.availability.lineage.status": "author-gated",
+    "$.proposed_facts.external_metadata.availability.lineage.values[]": "author-gated",
+    "$.proposed_facts.external_metadata.availability.predecessors.basis": "author-gated",
+    "$.proposed_facts.external_metadata.availability.predecessors.evidence[]": "author-gated",
+    "$.proposed_facts.external_metadata.availability.predecessors.status": "author-gated",
+    "$.proposed_facts.external_metadata.availability.predecessors.values[]": "author-gated",
+    "$.proposed_facts.external_metadata.availability.taxonomy.novel_ops.basis": "author-gated",
+    "$.proposed_facts.external_metadata.availability.taxonomy.novel_ops.evidence[]": "author-gated",
+    "$.proposed_facts.external_metadata.availability.taxonomy.novel_ops.status": "author-gated",
+    "$.proposed_facts.external_metadata.availability.taxonomy.novel_ops.values[]": "author-gated",
     "$.proposed_facts.external_metadata.availability.year.basis": "author-gated",
     "$.proposed_facts.external_metadata.availability.year.evidence[]": "author-gated",
     "$.proposed_facts.external_metadata.availability.year.status": "author-gated",

@@ -1513,9 +1513,10 @@
           "enum": [
             "present",
             "not-found-after-search",
-            "not-applicable"
+            "not-applicable",
+            "none-exist"
           ],
-          "description": "Mandatory closed availability disposition."
+          "description": "Mandatory closed availability disposition. none-exist asserts the fact genuinely does not exist for this model; not-found-after-search asserts it could not be established. Both require the recorded bounded search."
         },
         "values": {
           "type": "array",
@@ -1581,9 +1582,21 @@
         "year": {
           "$ref": "#/$defs/availability_claim",
           "description": "Optional typed availability state for year."
+        },
+        "lineage": {
+          "$ref": "#/$defs/availability_claim",
+          "description": "Typed availability state for external_metadata.lineage. Required when lineage is empty: none-exist when the model genuinely has no recorded lineage, not-found-after-search when it could not be established."
+        },
+        "predecessors": {
+          "$ref": "#/$defs/availability_claim",
+          "description": "Typed availability state for external_metadata.predecessors. Required when predecessors is empty."
+        },
+        "taxonomy.novel_ops": {
+          "$ref": "#/$defs/availability_claim",
+          "description": "Typed availability state for the taxonomy.novel_ops claim, keyed by its full canonical claim path because it is owned by another block. Required when novel_ops is empty."
         }
       },
-      "description": "Optional per-field typed availability states; bare null never passes the gate."
+      "description": "Optional per-claim typed availability states; bare null or empty never passes the gate. External-metadata claims are keyed by bare field name; claims owned by another block are keyed by their full canonical claim path."
     }
   },
   "x-authority-ownership": {
@@ -1712,6 +1725,18 @@
     "$.external_metadata.availability.venue.evidence[]": "author-gated",
     "$.external_metadata.availability.venue.status": "author-gated",
     "$.external_metadata.availability.venue.values[]": "author-gated",
+    "$.external_metadata.availability.lineage.basis": "author-gated",
+    "$.external_metadata.availability.lineage.evidence[]": "author-gated",
+    "$.external_metadata.availability.lineage.status": "author-gated",
+    "$.external_metadata.availability.lineage.values[]": "author-gated",
+    "$.external_metadata.availability.predecessors.basis": "author-gated",
+    "$.external_metadata.availability.predecessors.evidence[]": "author-gated",
+    "$.external_metadata.availability.predecessors.status": "author-gated",
+    "$.external_metadata.availability.predecessors.values[]": "author-gated",
+    "$.external_metadata.availability.taxonomy.novel_ops.basis": "author-gated",
+    "$.external_metadata.availability.taxonomy.novel_ops.evidence[]": "author-gated",
+    "$.external_metadata.availability.taxonomy.novel_ops.status": "author-gated",
+    "$.external_metadata.availability.taxonomy.novel_ops.values[]": "author-gated",
     "$.external_metadata.availability.year.basis": "author-gated",
     "$.external_metadata.availability.year.evidence[]": "author-gated",
     "$.external_metadata.availability.year.status": "author-gated",
