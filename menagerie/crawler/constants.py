@@ -741,9 +741,16 @@ FAILURE_REASON_CODES: dict[str, frozenset[str]] = {
 #: rows are the remaining exhaustion spellings the vocabulary defines, plus
 #: ``budget-exhausted`` -- not a vocabulary member at all, but a free-form spelling a live
 #: author session actually produced, listed so the laundering refusal names the real
-#: diagnosis instead of emitting a bare unknown-code message. The explicit rows are a
-#: diagnostic aid, never the enforcement boundary: the closed per-stage vocabulary below
-#: is what refuses every unlisted spelling.
+#: diagnosis instead of emitting a bare unknown-code message.
+#:
+#: This set is deliberately the ONLY closed thing about a BLOCKED reason. The reason
+#: vocabulary at large is NOT closed with a hard refusal, because ``_blocked_terminal``
+#: already closes it TOTALLY and gracefully: an unrecordable reason becomes
+#: ``failed:author`` with ``malformed-result``. Refusing every unrecognized reason at the
+#: parse boundary would reintroduce exactly the failure mode that mapping exists to
+#: prevent -- one odd reason string on one model taking the whole campaign down. An
+#: exhaustion claim is different in kind: it is not an unrecognized string, it is a FALSE
+#: statement about why the model stopped, and a false statement must be unrepresentable.
 EFFORT_EXHAUSTION_REASON_CODES: frozenset[str] = frozenset(
     {
         "effort-cap-exhausted",
@@ -759,59 +766,6 @@ EFFORT_EXHAUSTION_REASON_CODES: frozenset[str] = frozenset(
     }
 )
 
-#: Closed stages a BLOCKED advisory author-result arm may name.
-#:
-#: Mirrors ``blocked_payload.stage`` in ``schemas/author-result-v3.schema.json``. The
-#: mirror is asserted against the shipped schema by
-#: ``test_blocked_reason_vocabulary_covers_exactly_the_schema_stages`` so the two cannot
-#: drift apart silently -- which they already did once: ``author`` was added to the schema
-#: enum for the deferrable arms and a hand-listed mirror missed it.
-BLOCKED_ADVISORY_STAGES: frozenset[str] = frozenset(
-    {
-        "source",
-        "fetch",
-        "author",
-        "evidence",
-        "environment",
-        "policy",
-        "runner",
-    }
-)
-
-#: BLOCKED reason codes that are deliberately NOT failure reasons.
-#:
-#: ``needs-source-access`` routes to ``deferred:needs-source-access``, a capability
-#: terminal, so it is absent from :data:`FAILURE_REASON_CODES` by design -- it asserts a
-#: world-fact about access, not a pipeline failure. It is still something a BLOCKED arm may
-#: legitimately say, so the advisory vocabulary is the UNION rather than the failure set
-#: alone. Closing to the failure set alone would have silently rejected every
-#: access-barrier deferral.
-#:
-#: Scoped to ``author`` because that is the only stage that emits it, mirroring
-#: ``needs-higher-tier``, which likewise lives only in the ``author`` failure vocabulary.
-#: Both deferrable arms are authored at the same point for the same reason.
-CAPABILITY_BLOCKED_REASON_CODES_BY_STAGE: dict[str, frozenset[str]] = {
-    "author": frozenset({ACCESS_BLOCKED_REASON_CODE}),
-}
-
-#: Closed per-stage reason vocabulary a BLOCKED advisory arm may claim.
-#:
-#: A BLOCKED arm terminalizes under the ``blocked-prerequisite`` predicate: an assertion
-#: that this model cannot be resolved until a named prerequisite exists. Effort exhaustion
-#: is not such an assertion -- it says the session ran out of budget, which makes the model
-#: *unfinished*, not *unresolvable* -- so every exhaustion code is subtracted from every
-#: stage. Everything else is the union of the stage's failure vocabulary and the capability
-#: reasons, which keeps one source of truth for reason codes across the advisory, attempt,
-#: and capability-deferral lanes.
-BLOCKED_REASON_CODES: dict[str, frozenset[str]] = {
-    stage: (
-        FAILURE_REASON_CODES.get(stage, frozenset())
-        | CAPABILITY_BLOCKED_REASON_CODES_BY_STAGE.get(stage, frozenset())
-    )
-    - EFFORT_EXHAUSTION_REASON_CODES
-    for stage in sorted(BLOCKED_ADVISORY_STAGES)
-}
-
 #: Stage-valid exhaustion reason used when routing a refused exhaustion claim.
 #:
 #: The claim is refused as an advisory arm, but the session really did exhaust, so it lands
@@ -822,10 +776,10 @@ EXHAUSTION_TERMINAL_REASON_BY_STAGE: dict[str, str] = {
     stage: next(
         code
         for code in ("effort-cap-exhausted", "effort-exhausted:wall-seconds", "wall-exceeded")
-        if code in FAILURE_REASON_CODES.get(stage, frozenset())
+        if code in codes
     )
-    for stage in sorted(BLOCKED_ADVISORY_STAGES)
-    if FAILURE_REASON_CODES.get(stage, frozenset()) & EFFORT_EXHAUSTION_REASON_CODES
+    for stage, codes in sorted(FAILURE_REASON_CODES.items())
+    if codes & EFFORT_EXHAUSTION_REASON_CODES
 }
 
 WORKFLOW_STATES = frozenset(
