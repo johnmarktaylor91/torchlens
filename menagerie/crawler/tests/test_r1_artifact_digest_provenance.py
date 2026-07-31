@@ -272,6 +272,30 @@ def test_a_matching_supplied_digest_needs_no_rebinding() -> None:
 
 
 @pytest.mark.smoke
+def test_binding_is_idempotent_across_repeated_normalization() -> None:
+    """A cached, already-normalized artifact re-normalizes without churn.
+
+    ``_preserve_uncommitted_author_result`` writes a NORMALIZED artifact that the
+    commit path later re-normalizes, so a second pass must be a no-op: a rebind
+    would churn ``recipe_revision`` and every identity derived from it.
+    """
+
+    implementation = _library_implementation()
+    assert bind_library_artifact_digest(implementation, list(_ROUTED_PACKAGES)) is True
+    after_first = deepcopy(implementation)
+
+    assert bind_library_artifact_digest(implementation, list(_ROUTED_PACKAGES)) is False
+    assert implementation == after_first
+
+    unresolvable = _library_implementation(distribution="not-in-this-environment")
+    assert bind_library_artifact_digest(unresolvable, list(_ROUTED_PACKAGES)) is True
+    after_null = deepcopy(unresolvable)
+
+    assert bind_library_artifact_digest(unresolvable, list(_ROUTED_PACKAGES)) is False
+    assert unresolvable == after_null
+
+
+@pytest.mark.smoke
 def test_a_malformed_supplied_digest_is_refused() -> None:
     """A non-canonical claim is refused rather than quietly replaced."""
 
