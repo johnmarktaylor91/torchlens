@@ -54,7 +54,6 @@ from menagerie.crawler.authority import (
 )
 
 from menagerie.crawler.constants import (
-    ACCESS_BLOCKED_STATUS_CODE,
     CAPABILITY_DEFERRAL_STATUS_CODES,
     ATTEMPT_SCHEMA_VERSION_V3,
     CHECKER_PROMPT_NAME,
@@ -63,7 +62,9 @@ from menagerie.crawler.constants import (
     LINK_EVIDENCED_DISCOVERY_STATUS_CODES,
     MODEL_SCHEMA_VERSION_V3,
     NO_RUNG_SELECTED,
+    SKIPPED_STATUS_CODES,
     TERMINAL_STATUS_CODES,
+    SourceRung,
 )
 from menagerie.crawler.env_lifecycle import (
     EnvironmentExactnessError,
@@ -3018,25 +3019,28 @@ class CanonicalReducer:
         )
         status_code = model.get("status", {}).get("code")
         typed_discovery = (
-            status_code
-            in {
-                "skipped:insufficient-description",
-                "skipped:no-description",
-                "skipped:not-a-real-NN",
-                "deferred:needs-opus-tier",
-                ACCESS_BLOCKED_STATUS_CODE,
-            }
+            status_code in SKIPPED_STATUS_CODES | CAPABILITY_DEFERRAL_STATUS_CODES
             # ``R5_SKIP`` is the CHECKED conclusion that no faithful source path
-            # exists. For an access deferral that conclusion is false -- the path
-            # exists and we were not allowed to walk it -- so this one code is
-            # additionally admitted with the honest sentinel. This is a NARROW
-            # carve-out for a shape that is correct by design: a deferral that by
-            # definition never resolved a source. It relaxes nothing for any other
-            # code, and it does not let a skip claim a rung it did not reach.
+            # exists. For a capability deferral that conclusion is false -- both codes
+            # are proved by an accepted BLOCKED verdict, which asserts only that a
+            # prerequisite stopped us before the ladder ended, and both name a model we
+            # LOCATED and could not author here. So the whole BLOCKED-proved class is
+            # additionally admitted with the honest sentinel.
+            #
+            # The carve-out follows the ARM, not one code. Keying it on the access code
+            # alone left ``deferred:needs-opus-tier`` -- the sibling half of the very set
+            # ``CAPABILITY_DEFERRAL_STATUS_CODES`` exists to say shares one rule -- with
+            # only one acceptable shape: the false ``R5_SKIP``. A validation rule that
+            # is satisfiable only by an untrue record is not a tripwire, and the driver
+            # dutifully wrote the lie to satisfy it.
+            #
+            # This relaxes NOTHING for a skip. Every ``skipped:*`` code is an epistemic
+            # claim and still has to carry its checked R5 here, exactly as before, and
+            # the bounded-search evidence below is still required of all of them.
             and (
-                resolution.get("rung") == "R5_SKIP"
+                resolution.get("rung") == SourceRung.SKIP.value
                 or (
-                    status_code == ACCESS_BLOCKED_STATUS_CODE
+                    status_code in CAPABILITY_DEFERRAL_STATUS_CODES
                     and resolution.get("rung") == NO_RUNG_SELECTED
                 )
             )

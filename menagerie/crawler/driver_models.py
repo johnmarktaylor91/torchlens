@@ -23,7 +23,6 @@ from menagerie.crawler.authority import (
     derive_terminal_observation,
 )
 from menagerie.crawler.constants import (
-    ACCESS_BLOCKED_REASON_CODE,
     ATTEMPT_SCHEMA_VERSION_V3,
     DEFAULT_FORWARD_TIMEOUT_SECONDS,
     MODEL_SCHEMA_VERSION_V3,
@@ -1727,17 +1726,47 @@ def _assemble_terminal_model(
                         },
                     }
                 )
-        # A SKIP or a platform DEFER is a checked terminal disposition that walked the
-        # ladder to its end, so it earns R5 and must say so explicitly. It used to inherit
-        # R5_SKIP silently from the unresolved placeholder; now that the placeholder is
-        # honest about having selected nothing, the rung has to be stated where it is
-        # actually concluded. A BLOCKED arm is deliberately excluded: it lands on
-        # ``failed:*`` (or an Opus-tier promotion deferral) with no source verdict reached,
-        # which is precisely the case the sentinel exists for.
+        # THE ONE PLACE A TERMINAL ARM'S RUNG IS DECIDED. A SKIP or a platform DEFER is a
+        # checked terminal disposition that walked the ladder to its end, so it earns R5
+        # and must say so explicitly. It used to inherit R5_SKIP silently from the
+        # unresolved placeholder; now that the placeholder is honest about having selected
+        # nothing, the rung has to be stated where it is actually concluded.
+        #
+        # A BLOCKED arm is excluded ENTIRELY -- every reason code, not just the access
+        # subset. ``_blocked_terminal`` is total and maps all of them onto ``failed:*`` or
+        # ``deferred:*``; none lands on ``skipped:*``, so ``_derive_skip`` never runs and
+        # nothing in the pipeline would ever re-check an R5 stamped here. That is what
+        # makes it a false structured fact rather than a recoverable one: ``R5_SKIP`` is
+        # the CHECKED conclusion that no faithful source path exists, and BLOCKED claims
+        # only that a prerequisite stopped us BEFORE the ladder ended -- an authoring tier
+        # we do not have, a locator we may not read, a source we could not obtain. The
+        # ladder was not walked, which is precisely the case the sentinel exists for.
+        #
+        # This used to be decided in two places that disagreed: the typed-discovery branch
+        # below carried its own stamp guarded only by ``not access_blocked``, so every
+        # non-ACCESS BLOCKED arm carrying discovery evidence -- ``needs-higher-tier`` above
+        # all -- was certified as unresolvable when it was merely unfinished. That stamp is
+        # gone; for SKIP and DEFER it was strictly redundant with this one, and for BLOCKED
+        # it was wrong.
         if terminal_gate_obtained and isinstance(
             terminal_result, (SkipRecommendation, DeferRecommendation)
         ):
             facts["source_resolution"]["rung"] = SourceRung.SKIP.value
+        elif terminal_gate_obtained and isinstance(terminal_result, BlockedRecommendation):
+            # The rung stays the sentinel, but the placeholder's ``author-lane-failed``
+            # must not survive: the author lane RAN TO COMPLETION and published this very
+            # verdict, which a disposition gate then adjudicated. Blaming it names the one
+            # stage that worked. The author's own blocking reason is the truthful account
+            # of why no rung was selected, and it is author-declared exactly like the
+            # evidence ids beside it, so the block stays author-gated end to end.
+            facts["source_resolution"]["attempted_rungs"] = [
+                {
+                    "rung": NO_RUNG_SELECTED,
+                    "result": "blocked-before-rung-selection",
+                    "reason_code": terminal_result.reason_code,
+                    "evidence_ids": list(terminal_evidence_ids),
+                }
+            ]
         discovery_excerpt_text = evidence_text
         if discovery_evidence is not None:
             search_evidence = discovery_evidence.get("search_evidence")
@@ -1781,25 +1810,12 @@ def _assemble_terminal_model(
             facts["discovery_probes"] = (
                 deepcopy(candidate_probes) if isinstance(candidate_probes, list) else []
             )
-            access_blocked = (
-                isinstance(terminal_result, BlockedRecommendation)
-                and terminal_result.reason_code == ACCESS_BLOCKED_REASON_CODE
-            )
-            if terminal_gate_obtained and not access_blocked:
-                # The bounded search itself is machine evidence and is recorded
-                # either way. `R5_SKIP` is not: it is the CHECKED conclusion that
-                # no faithful source path exists, and awarding it from an
-                # unadjudicated verdict would manufacture the exact certified
-                # claim the sentinel exists to withhold.
-                #
-                # An ACCESS deferral is excluded for the same reason from the other
-                # side: the faithful source path demonstrably EXISTS -- we named the
-                # locator -- and we were simply not allowed to read it. Stamping
-                # `R5_SKIP` there would certify "no source path exists" about a model
-                # whose source we can point at, which is precisely the false terminal
-                # this arm was created to stop recording. It keeps NO_RUNG_SELECTED:
-                # the ladder genuinely was not walked to its end.
-                facts["source_resolution"]["rung"] = "R5_SKIP"
+            # NO RUNG IS STAMPED HERE. The bounded search itself is machine evidence and is
+            # recorded either way, but the presence of discovery evidence says only that a
+            # search happened -- never which rung it concluded. This branch used to award
+            # `R5_SKIP` off exactly that signal, which is why a BLOCKED arm holding a
+            # perfectly good bounded search was certified as unresolvable. The rung is
+            # decided once, by arm, above.
             discovery_excerpt_text = str(search_evidence["conclusion"])
         if discovery_evidence is not None and isinstance(terminal_result, SkipRecommendation):
             retained_vague_text = discovery_evidence.get("retained_vague_text")
