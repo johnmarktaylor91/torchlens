@@ -3376,6 +3376,7 @@ import json
 import sys
 from pathlib import Path
 from menagerie.crawler.checker_dispatch import (
+    LEDGER_ASSIGNED_GATE_FIELDS,
     apply_machine_owned_gate_fields,
     machine_owned_gate_fields,
 )
@@ -3392,7 +3393,9 @@ gate = make_gate(stable_ids, gate_id="gate-command-contract")
 # A compliant checker omits every machine-owned field and lets the wrapper
 # stamp it. Supplying the fixture's scaffold instead relied on the stamp
 # silently correcting it, which is the laundering the stamp now refuses.
-for machine_field in machine_owned_gate_fields(request):
+# The ledger-assigned pair goes too: the LEDGER assigns those at append time,
+# so no not-yet-appended gate legitimately carries them.
+for machine_field in (*machine_owned_gate_fields(request), *LEDGER_ASSIGNED_GATE_FIELDS):
     gate.pop(machine_field, None)
 gate.pop("checker", None)
 for result_item, request_item in zip(gate["items"], request["items"], strict=True):
