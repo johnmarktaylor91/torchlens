@@ -135,6 +135,29 @@ Everything else in the proposal is yours, **including `proposed_facts.evidence`
 feeds the evidence identity the engine re-derives, so it is still required here. Compute
 it as `identity.hash_bytes(text.encode("utf-8"))` over the exact text you quoted.
 
+**Hash the STRING YOU PASTED, never the region your `locator` names.** The engine
+recomputes the digest from the `text` field alone and refuses any disagreement, and both
+observed failures came from hashing the source instead:
+
+- **A line range wider than the quote.** `lines 371-382` counted the trailing blank line;
+  the pasted text stopped at line 381. The excerpt was genuinely verbatim in the source,
+  so nothing else caught it -- the digest was the only check standing between a partial
+  quote and the record.
+- **A character your paste did not reproduce.** The paragraph really held U+00A0 before
+  `<cite`; the pasted text held an ASCII space. The digest was right about the bytes and
+  the quote was wrong, which is the worse way round: it would have published a paraphrase
+  under a correct-looking hash.
+
+So: paste the excerpt into your facts file first, then digest **that exact string**. If a
+source region resists byte-exact quoting -- no-break spaces, zero-width joiners, unusual
+line endings -- quote a shorter span you can reproduce exactly rather than widening the
+digest to cover it. A short exact excerpt grounds a claim; a long approximate one grounds
+nothing and costs the whole proposal.
+
+Sources the ONE supplementary round fetched for you are citable exactly like frozen ones:
+quote them by their `source_id` from the supplementary manifest. They are our fetch and
+our digest, and the engine grounds evidence against them alongside the frozen manifest.
+
 ### The five identities are yours, and there is a calculator for them
 
 `source_identity`, `evidence_identity`, `recipe_revision`, `vet_identity`, and

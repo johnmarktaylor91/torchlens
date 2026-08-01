@@ -27,7 +27,7 @@ from menagerie.crawler.constants import (
     AuthorPauseReason,
 )
 from menagerie.crawler.identity import fsync_directory, hash_bytes, stable_hash
-from menagerie.crawler.models import JsonObject
+from menagerie.crawler.models import JsonObject, manifest_source_rows
 from menagerie.crawler.proposal import ProposalValidationReport, validate_author_proposal
 from menagerie.crawler.schema import (
     MODEL_SCHEMA_VERSION_V3,
@@ -829,6 +829,7 @@ def validate_author_result(
     envelope: Mapping[str, Any],
     *,
     cas_root: Union[str, Path, None] = None,
+    supplementary_sources: Optional[Sequence[Mapping[str, Any]]] = None,
 ) -> AuthorResult:
     """Validate and parse a complete atomic author result into its typed union.
 
@@ -840,6 +841,11 @@ def validate_author_result(
         V3 author envelope returned by :func:`build_author_envelope`.
     cas_root:
         Optional source CAS root used for proposal evidence verification.
+    supplementary_sources:
+        Frozen rows of the ONE supplementary broker pack the executor may grant
+        mid-session, when the lane holds them. Omitting them falls back to the
+        rows carried on the envelope's own manifest. See
+        :func:`_grounding_manifest`.
 
     Returns
     -------
@@ -852,7 +858,12 @@ def validate_author_result(
     expected_path = Path(str(envelope.get("required_output_path"))).resolve()
     if path != expected_path or path.name != "result.json":
         raise AuthorEngineFaultError("author result is not at the envelope's exact atomic path")
-    return _validate_author_result_mapping(_read_json_object(path), envelope, cas_root=cas_root)
+    return _validate_author_result_mapping(
+        _read_json_object(path),
+        envelope,
+        cas_root=cas_root,
+        supplementary_sources=supplementary_sources,
+    )
 
 
 def serialize_author_result_cache(
@@ -994,11 +1005,62 @@ def write_envelope_atomic(envelope: Mapping[str, Any], path: Union[str, Path]) -
     return destination
 
 
+def _grounding_manifest(
+    envelope: Mapping[str, Any],
+    supplementary_sources: Optional[Sequence[Mapping[str, Any]]],
+) -> JsonObject:
+    """Return every source an excerpt in this result may legitimately cite.
+
+    Evidence grounding and manifest IDENTITY are two different questions and this
+    function is where they part company. ``source_manifest_identity`` binds the
+    manifest the author was handed at dispatch and echoed back; it must never
+    move. But the executor may grant ONE supplementary broker round mid-session,
+    and the sources it fetches are just as machine-owned and digest-pinned as the
+    frozen ones -- the author was handed them and told to write its result. Until
+    they were folded in here, every excerpt citing one was refused as
+    ``references unknown source``: an honest author indicted for quoting a
+    document we ourselves fetched for it.
+
+    The supplementary rows therefore widen GROUNDING only. They are appended, so
+    they can only ever add a citable source; a row reusing a frozen ``source_id``
+    is refused upstream at ingest and would in any case trip the duplicate-source
+    check in :func:`~menagerie.crawler.evidence.validate_evidence`. Nothing here
+    relaxes a digest, a locator, or a coverage requirement.
+
+    Parameters
+    ----------
+    envelope:
+        V3 author envelope carrying the frozen manifest.
+    supplementary_sources:
+        Rows the lane holds directly. ``None`` falls back to the rows the
+        envelope's own manifest carries, which is how a reloaded cache and a
+        canonical rehydration recover them without re-plumbing every call site.
+
+    Returns
+    -------
+    dict[str, Any]
+        A grounding-only manifest. It carries no ``manifest_sha256``: it is not
+        an identity and must never be mistaken for one.
+    """
+
+    manifest = _required_mapping(envelope.get("source_manifest"), "source_manifest", owner="engine")
+    if supplementary_sources is None:
+        return {"sources": manifest_source_rows(manifest)}
+    frozen = manifest.get("sources")
+    return {
+        "sources": [
+            *(list(frozen) if isinstance(frozen, list) else []),
+            *(row for row in supplementary_sources if isinstance(row, Mapping)),
+        ]
+    }
+
+
 def _validate_author_result_mapping(
     result: Mapping[str, Any],
     envelope: Mapping[str, Any],
     *,
     cas_root: Union[str, Path, None],
+    supplementary_sources: Optional[Sequence[Mapping[str, Any]]] = None,
 ) -> AuthorResult:
     """Validate and parse one in-memory result through the closed v3 union."""
 
@@ -1030,9 +1092,7 @@ def _validate_author_result_mapping(
             report = validate_author_proposal(
                 proposal,
                 allowed_model_dir=str(envelope["allowed_model_dir"]),
-                source_manifest=_required_mapping(
-                    envelope.get("source_manifest"), "source_manifest", owner="engine"
-                ),
+                source_manifest=_grounding_manifest(envelope, supplementary_sources),
                 cas_root=cas_root,
                 expected_schema_version=AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
             )

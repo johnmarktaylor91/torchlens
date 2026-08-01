@@ -161,7 +161,7 @@ from menagerie.crawler.metadata import (
     canonical_meaningful_modes,
     recompute_accepted_identities,
 )
-from menagerie.crawler.models import JsonObject
+from menagerie.crawler.models import SUPPLEMENTARY_SOURCES_KEY, JsonObject
 from menagerie.crawler.mirrors import MirrorClass, MirrorStore
 from menagerie.crawler.operator_protocol import (
     OPERATOR_DEADLINE_SECONDS,
@@ -975,8 +975,18 @@ class _AuthorLaneBase:
             request_path=envelope_path,
             output_path=result_path,
         )
-        result = validate_author_result(result_path, envelope, cas_root=root / "source-cas")
-        return AuthorArtifact(result, source_manifest, model_dir)
+        # The session may have spent its ONE supplementary source round. Those
+        # sources are ours -- our broker fetched and hashed them -- so they join
+        # private custody BEFORE the result is validated against them. Doing it
+        # after would refuse every excerpt citing a source we ourselves supplied.
+        grounding_manifest = self._extend_manifest_with_supplement(item, root, source_manifest)
+        result = validate_author_result(
+            result_path,
+            envelope,
+            cas_root=root / "source-cas",
+            supplementary_sources=grounding_manifest.get("supplementary_sources", ()),
+        )
+        return AuthorArtifact(result, grounding_manifest, model_dir)
 
     def _fetch_author_sources(
         self,
@@ -1120,6 +1130,86 @@ class _AuthorLaneBase:
             raise DriverIntegrationError(
                 "source broker pack has no machine-classified implementation row"
             )
+        merged_rows, promotions = self._freeze_broker_pack_rows(raw_targets, root)
+        # Provenance is recorded BESIDE the manifest, never inside it. The
+        # `sources` list and its digest carry ONE identity contract every
+        # producer and consumer shares: `manifest_sha256 == stable_hash(sources)`.
+        # The author echoes that identity back and `_validate_context_result`
+        # re-derives it from the rows before binding private custody, so a
+        # manifest whose digest disagrees with its own rows cannot be staged at
+        # all -- a perfectly good typed author result dies at the binder and the
+        # model is terminalized on a cause that never occurred. The ONE key that
+        # may join them later is `supplementary_sources` (see
+        # `_extend_manifest_with_supplement`), which sits deliberately OUTSIDE
+        # `sources` precisely so it cannot move the identity already echoed.
+        #
+        # Per-source custody disposition: which sources were served from bytes we
+        # already held, which fell back to the network, and which re-pinned
+        # because the document moved under us. A drift is a real
+        # evidence-integrity event, so it is recorded rather than passed over.
+        write_envelope_atomic(
+            {
+                "provenance_version": "menagerie.crawler.source-custody-provenance.v1",
+                "stable_id": item.stable_id,
+                "work_id": work_id,
+                "promotions": promotions,
+                "upstream_drift": [
+                    dict(row["upstream_drift"])
+                    for row in merged_rows
+                    if isinstance(row.get("upstream_drift"), Mapping)
+                ],
+            },
+            root / "source-custody.json",
+        )
+        # Freeze the exact discovery bytes into the model's CAS as well.
+        discovery_evidence = freeze_discovery_evidence(discovery, root)
+        write_envelope_atomic(
+            {
+                "provenance_version": "menagerie.crawler.found-discovery-provenance.v1",
+                "stable_id": item.stable_id,
+                "work_id": work_id,
+                "discovery_evidence": discovery_evidence,
+                "discovery_evidence_sha256": stable_hash(discovery_evidence),
+            },
+            root / "discovery-provenance.json",
+        )
+        return {
+            "sources": merged_rows,
+            "manifest_sha256": stable_hash(merged_rows),
+        }
+
+    def _freeze_broker_pack_rows(
+        self,
+        raw_targets: Sequence[Any],
+        root: Path,
+    ) -> tuple[list[JsonObject], list[JsonObject]]:
+        """Promote one broker pack's own bytes and controlled-fetch it into custody.
+
+        Shared by the stage-1 pack and by the ONE supplementary pack the executor
+        may grant mid-session, so both reach the model's CAS through the identical
+        promotion, digest, and merge path. A second implementation is exactly how
+        the supplementary round ended up with fetched, hash-pinned bytes that no
+        consumer could read.
+
+        Parameters
+        ----------
+        raw_targets:
+            Broker manifest rows carrying the machine-derived identity fields.
+        root:
+            Per-model author custody root owning ``source-cas``.
+
+        Returns
+        -------
+        tuple[list[dict[str, Any]], list[dict[str, Any]]]
+            Frozen merged manifest rows, and the per-row promotion dispositions.
+
+        Raises
+        ------
+        DriverIntegrationError
+            If a row lacks machine-derived identity, duplicates a ``source_id``,
+            or the controlled fetch returns a source the pack never named.
+        """
+
         # Promote the bytes the broker ALREADY fetched into the controlled-fetch
         # CAS before the fetch runs. Without this the driver goes back to the
         # network to verify bytes it already possesses: `already-present` can
@@ -1214,48 +1304,134 @@ class _AuthorLaneBase:
                     },
                 }
             )
-        # Freeze the exact discovery bytes into the model's CAS and record the
-        # provenance BESIDE the manifest, never inside it. The registered
-        # `source_manifest` shape is closed to `{sources, manifest_sha256}` with
-        # ONE identity contract every producer and consumer shares:
-        # `manifest_sha256 == stable_hash(sources)`. The author echoes that
-        # identity back and `_validate_context_result` re-derives it from the
-        # rows before binding private custody, so a manifest that carries an
-        # extra key or publishes any other digest cannot be staged at all --
-        # a perfectly good typed author result dies at the binder and the model
-        # is terminalized on a cause that never occurred.
-        # Per-source custody disposition: which sources were served from bytes we
-        # already held, which fell back to the network, and which re-pinned
-        # because the document moved under us. A drift is a real
-        # evidence-integrity event, so it is recorded rather than passed over.
+        return merged_rows, promotions
+
+    def _extend_manifest_with_supplement(
+        self,
+        item: WorkItem,
+        root: Path,
+        source_manifest: JsonObject,
+    ) -> JsonObject:
+        """Fold the ONE granted supplementary broker pack into the model's custody.
+
+        The executor may grant exactly one supplementary source round mid-session:
+        the author names descriptors, OUR broker fetches and hashes them, and the
+        session is resumed with the resulting manifest. Those sources are real,
+        machine-fetched, digest-pinned evidence the author was legitimately handed
+        -- but until this method existed nothing carried them back to the lane, so
+        the frozen manifest never learned about them and every excerpt citing one
+        was refused as ``references unknown source``. An honest author looked like
+        a fabricator, and the pack that proved otherwise left no trace on the
+        model's custody. That is a strictly worse failure than the fabrication the
+        check exists to catch, so the pack is ingested here through the identical
+        promotion and controlled-fetch path stage 1 uses.
+
+        The extension is deliberately a SEPARATE key rather than more ``sources``
+        rows. ``source_manifest_identity`` is the identity of the manifest the
+        author was handed at dispatch and echoed back in its result; growing
+        ``sources`` after the fact would move it and terminalize a good result on
+        an identity the author never saw. So ``sources`` and ``manifest_sha256``
+        stay exactly as frozen, and the supplementary rows ride beside them under
+        their own digest.
+
+        Parameters
+        ----------
+        item:
+            Scheduled work item owning this author root.
+        root:
+            Per-model author custody root.
+        source_manifest:
+            Frozen stage-1 manifest the author session was dispatched against.
+
+        Returns
+        -------
+        dict[str, Any]
+            The frozen manifest, extended with ``supplementary_sources`` and
+            ``supplementary_manifest_sha256`` when a pack was granted and
+            unchanged otherwise.
+
+        Raises
+        ------
+        DriverIntegrationError
+            If the recorded pack is untyped, is not entirely fetched, exceeds the
+            controlled-fetch grant, or would redefine a frozen ``source_id``.
+        """
+
+        from menagerie.crawler.author_attempts import latest_attempt
+        from menagerie.crawler.author_dispatch import write_envelope_atomic
+
+        attempt = latest_attempt(root)
+        if attempt is None:
+            return source_manifest
+        supplement = attempt.record.get("supplement")
+        if not isinstance(supplement, Mapping):
+            return source_manifest
+        manifest_path = supplement.get("manifest_path")
+        if not isinstance(manifest_path, str) or not manifest_path.strip():
+            return source_manifest
+        path = Path(manifest_path)
+        if not path.is_file():
+            raise DriverIntegrationError(
+                "the executor recorded a supplementary source pack whose manifest is absent"
+            )
+        pack = _read_json(path)
+        if pack.get("pack_version") != BROKER_PACK_VERSION:
+            raise DriverIntegrationError(
+                "supplementary source pack is not the registered broker pack envelope"
+            )
+        raw_rows = pack.get("sources")
+        if not isinstance(raw_rows, list) or not raw_rows:
+            raise DriverIntegrationError("supplementary source pack carries no fetched source")
+        if len(raw_rows) > self.effort_grant.fetch_targets:
+            raise AuthorEffortCapExceeded(
+                f"supplementary source pack for {item.stable_id} named {len(raw_rows)} targets, "
+                f"exceeding the {self.effort_grant.fetch_targets} controlled-fetch grant"
+            )
+        # A supplementary row may only ADD a source. Letting one reuse a frozen
+        # `source_id` would let an author repoint an already-quoted identifier at
+        # different bytes after the fact, which is the one thing the frozen
+        # manifest exists to prevent.
+        frozen_ids = {
+            str(row.get("source_id"))
+            for row in source_manifest.get("sources", [])
+            if isinstance(row, Mapping)
+        }
+        for row in raw_rows:
+            if not isinstance(row, Mapping):
+                raise DriverIntegrationError("supplementary source pack rows must be objects")
+            if str(row.get("source_id")) in frozen_ids:
+                raise DriverIntegrationError(
+                    "supplementary source may not redefine a frozen manifest source_id"
+                )
+            if row.get("broker_outcome") != "fetched":
+                raise DriverIntegrationError(
+                    "supplementary manifest rows must all record a fetched broker outcome"
+                )
+        merged_rows, promotions = self._freeze_broker_pack_rows(raw_rows, root)
+        # Record the ingest beside the manifest. The whole point of the defect
+        # this closes was that a real, fetched source could vanish with nothing
+        # written down, so the extension is never allowed to be silent either.
+        custody_path = root / "source-custody.json"
+        custody = _read_json(custody_path) if custody_path.is_file() else {}
         write_envelope_atomic(
             {
+                **custody,
                 "provenance_version": "menagerie.crawler.source-custody-provenance.v1",
                 "stable_id": item.stable_id,
-                "work_id": work_id,
-                "promotions": promotions,
-                "upstream_drift": [
+                "supplement_manifest_path": str(path),
+                "supplement_promotions": promotions,
+                "supplement_upstream_drift": [
                     dict(row["upstream_drift"])
                     for row in merged_rows
                     if isinstance(row.get("upstream_drift"), Mapping)
                 ],
             },
-            root / "source-custody.json",
-        )
-        discovery_evidence = freeze_discovery_evidence(discovery, root)
-        write_envelope_atomic(
-            {
-                "provenance_version": "menagerie.crawler.found-discovery-provenance.v1",
-                "stable_id": item.stable_id,
-                "work_id": work_id,
-                "discovery_evidence": discovery_evidence,
-                "discovery_evidence_sha256": stable_hash(discovery_evidence),
-            },
-            root / "discovery-provenance.json",
+            custody_path,
         )
         return {
-            "sources": merged_rows,
-            "manifest_sha256": stable_hash(merged_rows),
+            **source_manifest,
+            SUPPLEMENTARY_SOURCES_KEY: merged_rows,
+            "supplementary_manifest_sha256": stable_hash(merged_rows),
         }
 
     def _dispatch(
