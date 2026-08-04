@@ -231,21 +231,33 @@ Omitting `evidence_records` is allowed and is recorded as a **named gap** on the
 envelope: the checker is told plainly that the cited IDs have no inspectable excerpt. It
 is not treated as grounding, and it will not be silently forgiven. Quote what you read.
 
-**The pack resolves all-or-nothing, so cite only what you can ground.** Every ID in
-`evidence_ids` must have a record here whose `text` re-derives byte-for-byte from the
-frozen source named by its `source_id`. A single ID that has no record, or whose
-`source_id` is not in the REQUEST envelope's `source_manifest`, or whose text does not
-match the frozen bytes, reports the **whole pack** unresolved and discards every excerpt
-that did verify -- including the one carrying the `blocked-prerequisite` excerpt your
-terminal arm rests on. A `BLOCKED` whose pack collapses this way is terminalized as
-disposition-unverifiable, which is worse than a smaller honest pack.
+**The pack resolves per record, so cite everything you can ground -- and nothing else.**
+Every ID in `evidence_ids` is re-derived on its own. An ID whose record's `text` matches
+the frozen source named by its `source_id` byte-for-byte is shown to the checker; an ID
+that has no record, or whose `source_id` is not in the REQUEST envelope's
+`source_manifest`, or whose text does not match, is reported beside them as a
+**named unresolved gap** in `unresolved_evidence_ids` and shown to nobody. The two sets partition
+`evidence_ids` exactly, so a bad row can never launder itself through good neighbours --
+and good rows are no longer destroyed by a bad one. A pack where some IDs ground and some
+do not resolves `partially-grounded`, not `grounded`; only a pack where every ID grounds
+resolves `grounded`.
 
-Two consequences worth internalizing. First, quoting more is not safer: three ungroundable
-rows destroy ten good ones. Second, a fact you read somewhere the broker never froze -- a
-web page, a metadata API response, an abstract you fetched outside the manifest -- has no
-groundable `source_id` and does not belong in `evidence_ids` at all. Drop the ID, or
+Two floors are absolute. If nothing verifies, or if no verified record's `supports` names
+your terminal arm's own predicate (`blocked-prerequisite`, the platform predicate, or the
+R5 status), the whole pack is unresolved and the arm terminalizes as
+disposition-unverifiable: grounding only decoration around a dead predicate is not
+partial grounding. So ground the excerpt your recommendation actually rests on FIRST.
+
+Two consequences worth internalizing. First, an ID you can ground is never worse than
+silence, so cite the whole basis for your arm -- above all the excerpt carrying the
+`blocked-prerequisite` claim a `BLOCKED` rests on. An arm whose own predicate has no
+grounded excerpt is what the checker is entitled to reject. Second, a fact you read
+somewhere the broker never froze -- a web page, a metadata API response, an abstract you
+fetched outside the manifest -- has no groundable `source_id`, will be named as a gap the
+checker reads, and belongs in `findings` rather than `evidence_ids`. Drop the ID, or
 request that object through the one supplementary source round so it is in the manifest
-before you cite it.
+before you cite it. Padding buys nothing: an unresolved ID stays visible as a defect in
+your pack, never a verified row.
 
 For `DEFER_RECOMMENDATION`, use `platform` (exactly `cuda` or `x86`), not
 `recommended_target`; include `source_ids`, `evidence_ids`, and `evidence_records`; and put the same complete

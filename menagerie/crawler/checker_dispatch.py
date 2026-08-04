@@ -34,6 +34,7 @@ from menagerie.crawler.schema import (
 from menagerie.crawler.terminal_evidence import (
     GROUNDED as TERMINAL_EVIDENCE_GROUNDED,
     SOURCE_CAS_DIRNAME,
+    TERMINAL_EVIDENCE_RESOLUTIONS,
     UNRESOLVED as TERMINAL_EVIDENCE_UNRESOLVED,
 )
 
@@ -930,8 +931,13 @@ def _validate_terminal_evidence_pack(evidence_pack: Mapping[str, Any]) -> None:
     two separate things and they must never be confused: ``identity_preimage``
     is the machine-derived citation table whose hash IS ``evidence_identity``,
     and ``excerpts`` holds only text the machine re-derived from frozen bytes.
-    So a pack either grounds every declared ID with a literal excerpt, or it
-    declares the gap outright -- never a reference-only list dressed as evidence.
+
+    Resolution is per record, so the structural invariant this enforces is a
+    PARTITION: the IDs carrying excerpts and the IDs named unresolved are
+    disjoint, and together they are exactly ``declared_evidence_ids``. Every
+    declared ID therefore lands in exactly one bucket, and an unverified record
+    has no shape in which it can be presented as verified -- it is either an
+    excerpt the machine re-derived, or a named gap.
 
     Parameters
     ----------
@@ -941,14 +947,14 @@ def _validate_terminal_evidence_pack(evidence_pack: Mapping[str, Any]) -> None:
     Raises
     ------
     CheckerDispatchError
-        If the pack neither grounds every declared evidence ID nor declares the
-        gap explicitly.
+        If the pack does not partition its declared evidence IDs into
+        re-derived excerpts and explicitly named gaps.
     """
 
     resolution = evidence_pack.get("resolution")
     declared = evidence_pack.get("declared_evidence_ids")
     excerpts = evidence_pack.get("excerpts")
-    if resolution not in {TERMINAL_EVIDENCE_GROUNDED, TERMINAL_EVIDENCE_UNRESOLVED}:
+    if resolution not in TERMINAL_EVIDENCE_RESOLUTIONS:
         raise CheckerDispatchError("terminal evidence pack must declare its resolution")
     if not isinstance(declared, list):
         raise CheckerDispatchError("terminal evidence pack must declare its evidence IDs")
@@ -958,12 +964,13 @@ def _validate_terminal_evidence_pack(evidence_pack: Mapping[str, Any]) -> None:
         )
     if not isinstance(excerpts, list):
         raise CheckerDispatchError("terminal evidence pack excerpts must be a list")
+    unresolved = evidence_pack.get("unresolved_evidence_ids")
     if resolution == TERMINAL_EVIDENCE_UNRESOLVED:
         if excerpts:
             raise CheckerDispatchError(
                 "unresolved terminal evidence pack cannot ship excerpts it did not verify"
             )
-        if not isinstance(evidence_pack.get("unresolved_evidence_ids"), list):
+        if not isinstance(unresolved, list):
             raise CheckerDispatchError(
                 "unresolved terminal evidence pack must name its unresolved evidence IDs"
             )
@@ -979,15 +986,47 @@ def _validate_terminal_evidence_pack(evidence_pack: Mapping[str, Any]) -> None:
         for excerpt in excerpts
         if isinstance(excerpt, Mapping)
     }
-    for evidence_id in declared:
-        excerpt = grounded.get(str(evidence_id))
-        if excerpt is None or any(
+    for evidence_id, excerpt in grounded.items():
+        if any(
             not isinstance(excerpt.get(field), str) or not excerpt.get(field)
             for field in ("source_id", "locator", "text")
         ):
             raise CheckerDispatchError(
                 f"grounded terminal evidence pack has no literal excerpt for {evidence_id}"
             )
+    if resolution == TERMINAL_EVIDENCE_GROUNDED:
+        missing = [str(value) for value in declared if str(value) not in grounded]
+        if missing:
+            raise CheckerDispatchError(
+                f"grounded terminal evidence pack has no literal excerpt for {missing[0]}"
+            )
+        if unresolved:
+            raise CheckerDispatchError(
+                "a grounded terminal evidence pack cannot also name unresolved evidence IDs"
+            )
+        return
+    if not grounded:
+        raise CheckerDispatchError(
+            "a partially grounded terminal evidence pack must carry at least one excerpt"
+        )
+    if not isinstance(unresolved, list) or not unresolved:
+        raise CheckerDispatchError(
+            "a partially grounded terminal evidence pack must name its unresolved evidence IDs"
+        )
+    if not isinstance(evidence_pack.get("unresolved_reason"), str):
+        raise CheckerDispatchError(
+            "a partially grounded terminal evidence pack must explain each gap"
+        )
+    named = {str(value) for value in unresolved}
+    if named & set(grounded):
+        raise CheckerDispatchError(
+            "a terminal evidence pack cannot both ground and disclaim the same evidence ID"
+        )
+    if named | set(grounded) != {str(value) for value in declared}:
+        raise CheckerDispatchError(
+            "a partially grounded terminal evidence pack must account for every declared "
+            "evidence ID exactly once"
+        )
 
 
 def _validate_item_binding(result_item: Mapping[str, Any], expected: Mapping[str, Any]) -> None:

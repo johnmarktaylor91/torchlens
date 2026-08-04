@@ -1220,7 +1220,7 @@
         },
         "code_path": {
           "$ref": "#/$defs/nullable_string",
-          "description": "Mandatory code path. Model-root-relative entry module for a staged rung; null for R1_LIBRARY, which refuses staged code and must use library_recipe instead. Staged code is checked by AST before acceptance and must be FULLY TYPED: every function and method defined in this module, and in every member of its recursive model-local import closure listed in code_manifest, carries an annotation on every parameter other than self/cls -- including *args and **kwargs -- and a return annotation. One unannotated definition anywhere in that closure refuses the whole proposal. Verbatim-vendored upstream files are part of the closure and are checked identically; unannotated upstream source is a blocking condition to report, never a reason to modify the vendored bytes."
+          "description": "Mandatory code path. Model-root-relative entry module for a staged rung; null for R1_LIBRARY, which refuses staged code and must use library_recipe instead. Staged code is checked by AST before acceptance and the code YOU WRITE must be FULLY TYPED: every function and method defined in this module, and in every AUTHOR-WRITTEN member of its recursive model-local import closure listed in code_manifest, carries an annotation on every parameter other than self/cls -- including *args and **kwargs -- and a return annotation. One unannotated authored definition anywhere in that closure refuses the whole proposal, and this entry module is never exempt whatever it contains. A closure member that is VERBATIM VENDORED upstream source is exempt from the annotation rule only, and only on proof: it must be declared in upstream_files and its staged bytes must hash to a content_sha256 the controlled-fetch manifest already froze. Editing one character breaks that digest and the file goes straight back under the annotation rule, so vendored bytes must be copied exactly and never adjusted to pass a check. The exemption is for LEGIBILITY only: the dynamic-execution and out-of-sandbox-write checks cover every closure member with no exemption at all, vendored or authored."
         },
         "code_sha256": {
           "$ref": "#/$defs/nullable_hash",
@@ -1246,7 +1246,7 @@
               }
             }
           },
-          "description": "Closed recursive model-local Python import manifest. Every member listed here is subject to the same full-annotation AST check as code_path, vendored upstream files included."
+          "description": "Closed recursive model-local Python import manifest. Every AUTHOR-WRITTEN member listed here is subject to the same full-annotation AST check as code_path; a member proven to be verbatim vendored upstream bytes (declared in upstream_files, staged digest equal to a frozen controlled-fetch content_sha256) is exempt from that check alone. Every member without exception is checked for dynamic execution and out-of-sandbox writes."
         },
         "builder_symbol": {
           "oneOf": [
@@ -1286,7 +1286,7 @@
           "items": {
             "$ref": "#/$defs/upstream_file"
           },
-          "description": "Mandatory upstream files."
+          "description": "Mandatory upstream files. Exact verbatim upstream bytes staged beside the adapter, each bound to a frozen controlled-fetch source. This array is also what proves a closure member was not written by you: a member declared here whose staged bytes hash to the declared, frozen content_sha256 is exempt from the full-annotation AST check that covers authored code. Declare every vendored file; an undeclared one is treated as yours."
         },
         "patches": {
           "type": "array",
@@ -1420,7 +1420,11 @@
         },
         "pretrained_disable_fields": {
           "$ref": "#/$defs/string_array",
-          "description": "Mandatory pretrained disable fields. Names every pinned-constructor keyword that would otherwise load pretrained weights or a checkpoint. This is checked, not merely recorded: R1_LIBRARY REFUSES an empty array, every name here must also be a key of kwargs carrying a disabling value (null, false, empty string, 'none', or 'random'), names must not repeat, and each name must be a real keyword parameter of the pinned constructor -- a name absent from that signature is refused when the recipe is loaded. So an empty array cannot be filled by inventing a field. If the pinned constructor genuinely exposes no pretrained, weights, or checkpoint keyword, R1_LIBRARY's precondition cannot be met for it; report that as a blocked prerequisite rather than emitting a recipe that will be refused as malformed."
+          "description": "Mandatory pretrained disable fields. Names EVERY pinned-constructor keyword that would otherwise load pretrained weights or a checkpoint. This is checked, not merely recorded: every name here must also be a key of kwargs carrying a disabling value (null, false, empty string, 'none', or 'random'), names must not repeat, and each name must be a real keyword parameter of the pinned constructor -- a name absent from that signature is refused when the recipe is loaded. R1_LIBRARY must state its pretrained disposition positively, so an empty array is accepted ONLY together with pretrained_fields_absent true; an empty array with no assertion is refused as silence. Three further checks run whether or not you declare anything, and none can be satisfied by wording: a kwargs key naming a known pretrained keyword (pretrained, weights, encoder_weights, pretrained_backbone, weights_backbone, pretrained_cfg, checkpoint_path and similar) with an enabling value is refused outright; a kwargs key with a known pretrained-asset name that is not listed here is refused until it is declared, so an enabling value can never ride through unlisted; and at load time the real constructor signature is read so that a pretrained keyword left at an ENABLING DEFAULT you never mentioned -- encoder_weights='imagenet' -- is refused before construction."
+        },
+        "pretrained_fields_absent": {
+          "type": "boolean",
+          "description": "Optional positive assertion that the pinned constructor exposes NO pretrained, weights, or checkpoint keyword at all, so there is nothing to disable. This is the honest spelling for a constructor such as MiniMaxForCausalLM(config), a GNN layer, or an SNN, and it is the ONLY way an empty pretrained_disable_fields is accepted. It is checked, not merely recorded: it cannot be combined with a non-empty pretrained_disable_fields (asserting both is a refused contradiction), and it is not taken on trust: the driver re-derives it from the real constructor signature when the recipe is loaded and refuses the recipe if that signature exposes any known pretrained keyword. Absent means false."
         },
         "entrypoint": {
           "oneOf": [

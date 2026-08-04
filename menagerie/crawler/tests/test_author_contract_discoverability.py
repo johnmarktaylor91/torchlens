@@ -17,11 +17,21 @@ died on rules that appear nowhere an author reads:
   ``build_model()``, which is exactly the form the validator refuses; the schema
   said "Mandatory builder symbol."
 * ``m9617`` -- a ``BLOCKED`` arm whose thirteen-excerpt pack contained three rows
-  citing a source outside the frozen manifest. Terminal evidence resolves
+  citing a source outside the frozen manifest. Terminal evidence resolved
   all-or-nothing, so those three discarded the ten that verified -- including the
   one supporting the blocked predicate -- and the model terminalized as
   disposition-unverifiable. The all-or-nothing amplification was written down
   nowhere.
+
+Two of those three rules turned out to be UNSATISFIABLE rather than merely
+undocumented, and were repaired in ``test_unsatisfiable_gate_repair``: a
+constructor with no pretrained-capable keyword now asserts absence instead of
+dying, and verbatim vendored upstream is exempt from the annotation rule on proof
+of provenance. Terminal evidence now resolves per record. Documenting an
+unsatisfiable rule perfectly still kills every model of that shape, so this
+module's job did not end -- it changed to keeping the CURRENT rules discoverable,
+including the two spellings and the one exemption a correct author must know
+about.
 
 Each case below pairs the LIVE enforcement site with the surfaces the author is
 directed to read, so silencing the guidance fails here even though the rule keeps
@@ -96,12 +106,13 @@ def _implementation_property(name: str) -> Mapping[str, Any]:
 def test_the_pretrained_disable_rule_is_stated_in_the_registered_schema() -> None:
     """``pretrained_disable_fields`` documents every clause that can refuse it.
 
-    ``proposal._validate_source_ladder`` refuses an empty array outright, and
-    ``recipe.validate_pretrained_disable_fields`` then requires each name to be a
-    ``kwargs`` key carrying a disabling value. Neither clause was discoverable, so
-    an author whose constructor exposes no such keyword emitted the honest ``[]``
-    and died. The schema must now say both, and must say what to do when the
-    constructor has no such keyword at all.
+    ``proposal._validate_source_ladder`` requires a positive disposition, and
+    ``recipe.validate_pretrained_disposition`` then requires each named field to
+    be a ``kwargs`` key carrying a disabling value, refuses a known pretrained
+    keyword left enabled, and -- at load, against the real signature -- refuses an
+    enabling default nobody overrode. An author whose constructor exposes no such
+    keyword once emitted the honest ``[]`` and died; the alternative spelling that
+    now saves it is worthless if it is not written where the author reads.
     """
 
     assert "library_recipe" in json.dumps(_implementation_property("library_recipe"))
@@ -113,10 +124,26 @@ def test_the_pretrained_disable_rule_is_stated_in_the_registered_schema() -> Non
         "pretrained_disable_fields",
     )
     lowered = leaf.lower()
-    assert "empty" in lowered, "the empty-array refusal must be stated, not just enforced"
+    assert "empty" in lowered, "the empty-array rule must be stated, not just enforced"
     assert "kwargs" in lowered, "the kwargs pairing requirement must be stated"
     assert "signature" in lowered, "the constructor-signature check must be stated"
-    assert "blocked" in lowered, "the no-such-keyword escape hatch must be named"
+    assert (
+        "pretrained_fields_absent" in lowered
+    ), "the no-such-keyword spelling must be named where the obligation is stated"
+    assert "default" in lowered, "the enabling-default refusal must be stated"
+    assert "unlisted" in lowered, "the unlisted-known-key refusal must be stated"
+
+    absent = _description(
+        _schema("model-common.schema.json"),
+        "$defs",
+        "library_recipe",
+        "properties",
+        "pretrained_fields_absent",
+    ).lower()
+    assert "checked" in absent, "the assertion must be documented as checked"
+    assert "signature" in absent, "the assertion must be documented as verified, not believed"
+    assert "cannot be combined" in absent, "the contradiction refusal must be stated"
+    assert "contradiction" in absent, "the contradiction refusal must be named as one"
 
 
 @pytest.mark.smoke
@@ -131,6 +158,7 @@ def test_the_pretrained_disable_rule_is_stated_in_the_canonical_prompt() -> None
 
     text = _AUTHOR_PROMPT.read_text(encoding="utf-8")
     assert "pretrained_disable_fields" in text
+    assert "pretrained_fields_absent" in text
     assert "empty" in text.lower()
 
 
@@ -138,20 +166,28 @@ def test_the_pretrained_disable_rule_is_stated_in_the_canonical_prompt() -> None
 def test_the_full_annotation_rule_is_stated_in_the_registered_schema() -> None:
     """``code_path`` and both staged symbols document the AST typing check.
 
-    ``proposal._validate_typed_functions`` runs over the whole recursive
-    model-local import closure, so the rule's SCOPE matters as much as its
-    existence: an author vendoring unannotated upstream source needs to know that
-    file is checked too, before spending a whole one-shot attempt on it.
+    ``proposal._validate_typed_functions`` runs over the recursive model-local
+    import closure, so the rule's SCOPE matters as much as its existence -- and
+    the scope now has an exemption. An author must be able to read what the
+    exemption costs (declare the file, stage it byte-exact) and what it does NOT
+    buy (nothing about eval/exec or writes), before spending its one attempt.
     """
 
     code_path = _implementation_property("code_path")["description"].lower()
     assert "annotat" in code_path, "the annotation requirement must be stated"
     assert "closure" in code_path, "the closure scope must be stated"
     assert "return annotation" in code_path
-    assert "vendor" in code_path, "vendored upstream members must be named as in scope"
+    assert "vendor" in code_path, "vendored upstream members must be named"
+    assert "upstream_files" in code_path, "the exemption's declaration channel must be named"
+    assert "content_sha256" in code_path, "the exemption's digest proof must be stated"
+    assert "never exempt" in code_path, "the entry point's exclusion must be stated"
 
     manifest = _implementation_property("code_manifest")["description"].lower()
     assert "annotation" in manifest
+    assert "exempt" in manifest
+
+    upstream = _implementation_property("upstream_files")["description"].lower()
+    assert "exempt" in upstream, "upstream_files must say what declaring a file there does"
 
     builder = _implementation_property("builder_symbol")["description"]
     assert "build_model() ->" in builder, "the annotated signature must be shown"
@@ -174,32 +210,44 @@ def test_the_canonical_prompt_shows_annotated_staged_signatures() -> None:
     lowered = text.lower()
     assert "annotation" in lowered
     assert "closure" in lowered
+    assert "exempt" in lowered, "the vendored-verbatim exemption must be stated"
+    assert "byte" in lowered, "the exemption's byte-fidelity condition must be stated"
 
 
 @pytest.mark.smoke
-def test_terminal_evidence_resolution_is_documented_as_all_or_nothing() -> None:
-    """The pack's all-or-nothing amplification is stated on both surfaces.
+def test_terminal_evidence_resolution_is_documented_as_per_record() -> None:
+    """The pack's per-record settlement is stated on both surfaces.
 
-    ``terminal_evidence.resolve_terminal_evidence`` returns ``UNRESOLVED`` with an
-    EMPTY excerpt tuple unless every declared ID grounds. An author reading only
-    "absence is a named gap" reasonably concludes that quoting more is never
-    worse; ``m9617`` proved otherwise. Both the result schema and the stage brief
-    must carry the correction, including that a source outside the frozen manifest
-    is what triggers it.
+    ``m9617`` was killed by all-or-nothing resolution AND by the fact that nothing
+    warned it. The rule changed; the documentation obligation did not. An author
+    reading the old warning would still cite defensively little, which is the
+    behaviour the repair exists to stop -- so both the result schema and the stage
+    brief must now say that a groundable citation is never worse than silence, and
+    that an ungroundable one is named as a gap rather than laundered.
     """
 
     document = _schema("author-result-v4.schema.json")
     records = _description(document, "$defs", "evidence_records").lower()
-    assert "all-or-nothing" in records
+    assert "per record" in records
+    assert "partially-grounded" in records, "the third resolution must be named"
     assert "source_manifest" in records, "the frozen-manifest restriction must be named"
-    assert "discards every excerpt that did verify" in records
+    assert "unresolved_evidence_ids" in records, "the named-gap channel must be stated"
+    assert "never worse than omitting it" in records
+    assert "gap" in records, "gaps must be documented as named"
+    assert "predicate" in records, "the predicate-grounding floor must be stated"
+    assert "never presented as evidence" in records
+    assert "all-or-nothing" not in records.replace("not all-or-nothing", "")
 
     for arm in ("defer_payload", "skip_payload", "blocked_payload"):
         ids = _description(document, "$defs", arm, "properties", "evidence_ids").lower()
-        assert "all-or-nothing" in ids, f"{arm}.evidence_ids must carry the warning"
+        assert "per record" in ids, f"{arm}.evidence_ids must carry the correction"
+        assert "partially-grounded" in ids
+        assert "gap" in ids, f"{arm}.evidence_ids must state that failures become gaps"
 
     stage2 = _STAGE2_PROMPT.read_text(encoding="utf-8").lower()
-    assert "all-or-nothing" in stage2
+    assert "resolves per record" in stage2
+    assert "partially-grounded" in stage2
+    assert "named unresolved gap" in stage2
     assert "blocked-prerequisite" in stage2
 
 
@@ -214,15 +262,49 @@ def test_the_guarded_rules_are_still_the_rules_the_code_enforces() -> None:
     """
 
     proposal_source = (_CRAWLER_ROOT / "proposal.py").read_text(encoding="utf-8")
-    assert "R1_LIBRARY must explicitly disable pretrained fields" in proposal_source
+    assert "must declare its pretrained disposition" in recipe_or(proposal_source)
     assert "must be fully typed" in proposal_source
+    assert "_verbatim_upstream_members" in proposal_source, (
+        "the vendored-legibility exemption is documented; if it is gone the documentation "
+        "must be revisited rather than left describing a rule that changed"
+    )
 
     recipe_source = (_CRAWLER_ROOT / "recipe.py").read_text(encoding="utf-8")
     assert "is absent from constructor kwargs" in recipe_source
     assert "does not carry a disabling value" in recipe_source
+    assert "would resolve pretrained assets" in recipe_source
+    assert "contradicted by the pinned constructor signature" in recipe_source
 
     terminal_source = (_CRAWLER_ROOT / "terminal_evidence.py").read_text(encoding="utf-8")
-    assert "if len(verified) == len(declared):" in terminal_source, (
-        "terminal evidence is documented as all-or-nothing; if this equality is gone the "
+    assert 'PARTIALLY_GROUNDED = "partially-grounded"' in terminal_source, (
+        "terminal evidence is documented as per-record; if this resolution is gone the "
         "documentation must be revisited rather than left describing a rule that changed"
     )
+    assert "if len(verified) == len(declared):" in terminal_source, (
+        "full grounding must still mean every declared ID, unchanged"
+    )
+    assert "_any_supports_predicate" in terminal_source, (
+        "the predicate-grounding floor is documented; if it is gone the documentation "
+        "must be revisited"
+    )
+
+
+def recipe_or(proposal_source: str) -> str:
+    """Return the proposal source joined with the recipe source it delegates to.
+
+    The pretrained disposition message moved to ``recipe`` when the two spellings
+    were introduced, and ``proposal`` re-raises it. Reading both keeps this guard
+    pinned to the live wording wherever it lives.
+
+    Parameters
+    ----------
+    proposal_source:
+        Exact ``proposal.py`` text.
+
+    Returns
+    -------
+    str
+        Concatenated proposal and recipe source text.
+    """
+
+    return proposal_source + (_CRAWLER_ROOT / "recipe.py").read_text(encoding="utf-8")

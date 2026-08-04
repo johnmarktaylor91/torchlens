@@ -50,6 +50,7 @@ from menagerie.crawler.operator_checker import TERMINAL_CHECKER_MODEL
 from menagerie.crawler.operator_protocol import status_sidecar_path
 from menagerie.crawler.terminal_evidence import (
     GROUNDED,
+    PARTIALLY_GROUNDED,
     TERMINAL_EVIDENCE_FILENAME,
     UNRESOLVED,
     resolve_terminal_evidence,
@@ -63,7 +64,15 @@ DECLARED_EVIDENCE = ("ev-one", "ev-two")
 
 
 def _excerpts() -> list[dict[str, Any]]:
-    """Return two literal excerpt records present verbatim in their sources."""
+    """Return two literal excerpt records present verbatim in their sources.
+
+    Both rows claim the terminal predicate beside their own support, the way a
+    real arm's citations do: a partial verdict survives only while at least one
+    VERIFIED row still claims the predicate, so a fixture whose rows claimed
+    only decoration would collapse every partial case here to ``unresolved``
+    (that floor has its own dedicated tests in
+    ``test_terminal_evidence_channel``).
+    """
 
     return [
         {
@@ -71,14 +80,14 @@ def _excerpts() -> list[dict[str, Any]]:
             "source_id": "source-1",
             "locator": "cfg/yolov3-tiny.cfg lines 25-31",
             "text": "activation=leaky\n",
-            "supports": ["source_resolution.rung"],
+            "supports": ["source_resolution.rung", PREDICATE],
         },
         {
             "evidence_id": "ev-two",
             "source_id": "source-2",
             "locator": "models/yolov3-tiny.yaml lines 13-16",
             "text": "[-1, 1, nn.MaxPool2d, [2, 2, 0]]",
-            "supports": ["fidelity.deviations"],
+            "supports": ["fidelity.deviations", PREDICATE],
         },
     ]
 
@@ -515,6 +524,12 @@ def test_terminal_envelope_refuses_a_grounded_claim_without_literal_excerpts(
 def test_excerpt_absent_from_its_frozen_source_is_not_evidence(tmp_path: Path) -> None:
     """Text that does not appear in the frozen bytes is never shown as grounded.
 
+    Resolution is per record, so the ROW that did not re-derive is what is
+    withheld -- it is named as a gap and appears in no excerpt -- while the row
+    that did re-derive is still shown. What must never happen, and does not, is
+    the ungrounded row reaching the checker as evidence or the pack calling
+    itself grounded.
+
     Parameters
     ----------
     tmp_path:
@@ -526,15 +541,16 @@ def test_excerpt_absent_from_its_frozen_source_is_not_evidence(tmp_path: Path) -
     artifact = _blocked_artifact(tmp_path, excerpts=excerpts)
     item = _terminal_checker_item(artifact)
     pack = item["evidence_pack"]
-    assert pack["resolution"] == UNRESOLVED
-    assert pack["excerpts"] == []
-    assert set(pack["unresolved_evidence_ids"]) == set(DECLARED_EVIDENCE)
+    assert pack["resolution"] == PARTIALLY_GROUNDED
+    assert [row["evidence_id"] for row in pack["excerpts"]] == ["ev-one"]
+    assert pack["unresolved_evidence_ids"] == ["ev-two"]
+    assert all("mish" not in str(row["text"]) for row in pack["excerpts"])
     assert "did not re-derive" in str(pack["unresolved_reason"])
     # The envelope still builds -- the gap is stated, not hidden -- so the
     # independent checker sees exactly what it cannot verify.
     shipped = _terminal_envelope(item, tmp_path)["items"][0]["evidence_pack"]
-    assert shipped["resolution"] == UNRESOLVED
-    assert shipped["excerpts"] == []
+    assert shipped["resolution"] == PARTIALLY_GROUNDED
+    assert shipped["unresolved_evidence_ids"] == ["ev-two"]
     assert shipped["unresolved_reason"]
 
 
@@ -553,7 +569,9 @@ def test_excerpt_citing_a_source_outside_the_manifest_is_not_evidence(
     excerpts[0]["source_id"] = "source-invented"
     artifact = _blocked_artifact(tmp_path, excerpts=excerpts)
     pack = _terminal_checker_item(artifact)["evidence_pack"]
-    assert pack["resolution"] == UNRESOLVED
+    assert pack["resolution"] == PARTIALLY_GROUNDED
+    assert pack["unresolved_evidence_ids"] == ["ev-one"]
+    assert all(row["evidence_id"] != "ev-one" for row in pack["excerpts"])
     assert "outside the frozen source manifest" in str(pack["unresolved_reason"])
 
 
@@ -574,8 +592,12 @@ def test_absent_evidence_records_are_declared_not_invented(tmp_path: Path) -> No
     assert pack["checked_source_ids"] == ["source-1", "source-2"]
 
 
-def test_partial_evidence_records_are_unresolved(tmp_path: Path) -> None:
+def test_partial_evidence_records_are_not_grounded(tmp_path: Path) -> None:
     """A pack that omits one excerpt's locator is not grounded.
+
+    "Grounded" keeps its exact original meaning -- every declared ID, no
+    exceptions. A record the machine cannot dereference is named, not shown, and
+    drops the pack to ``partially-grounded``.
 
     Parameters
     ----------
@@ -592,7 +614,9 @@ def test_partial_evidence_records_are_unresolved(tmp_path: Path) -> None:
         predicate=PREDICATE,
         author_root=artifact.model_dir.parent,
     )
-    assert resolution.resolution == UNRESOLVED
+    assert not resolution.grounded
+    assert resolution.resolution == PARTIALLY_GROUNDED
+    assert resolution.unresolved_evidence_ids == ("ev-two",)
     assert "ev-two has no inspectable excerpt record" in str(resolution.reason)
 
 

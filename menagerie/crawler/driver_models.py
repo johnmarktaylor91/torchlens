@@ -257,6 +257,16 @@ def _terminal_checker_item(artifact: AuthorArtifact) -> JsonObject:
         "declared_record_count": len(result.evidence_records),
         "excerpts": [deepcopy(excerpt) for excerpt in resolved.excerpts],
         "declared_evidence_ids": list(evidence_ids),
+        # Which of the excerpts that DID re-derive actually speak to the typed
+        # predicate the terminal arm rests on. A partially grounded pack can lose
+        # exactly the row that carried it, and the checker should not have to
+        # infer that from the gap list: ``identity_preimage`` stamps the predicate
+        # onto every row uniformly, so it cannot answer this question.
+        "predicate_supported_by": [
+            str(excerpt["evidence_id"])
+            for excerpt in resolved.excerpts
+            if predicate in {str(item) for item in excerpt.get("supports", [])}
+        ],
         "unresolved_evidence_ids": list(resolved.unresolved_evidence_ids),
         "unresolved_reason": resolved.reason,
         "checked_source_ids": list(source_ids),

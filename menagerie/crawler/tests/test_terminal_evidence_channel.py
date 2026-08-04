@@ -44,11 +44,16 @@ from menagerie.crawler.driver_models import _terminal_checker_item
 from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.schema import validate_payload
 from menagerie.crawler.tests.executor_test_support import AUTHOR_IDENTITY_INPUTS
+from menagerie.crawler.checker_dispatch import (
+    CheckerDispatchError,
+    _validate_terminal_evidence_pack,
+)
 from menagerie.crawler.terminal_evidence import (
     CHANNEL_ATTEMPT_DIRECTORY,
     CHANNEL_DECLARED,
     CHANNEL_NONE,
     GROUNDED,
+    PARTIALLY_GROUNDED,
     TERMINAL_EVIDENCE_FILENAME,
     UNRESOLVED,
     resolve_terminal_evidence,
@@ -120,6 +125,7 @@ def _blocked_artifact(
     declared_records: list[dict[str, Any]] | None,
     file_excerpts: list[dict[str, Any]] | None = None,
     license_record: dict[str, Any] | None = None,
+    evidence_ids: tuple[str, ...] = DECLARED_EVIDENCE,
 ) -> AuthorArtifact:
     """Stage one BLOCKED artifact carrying a declared channel, a file, or neither.
 
@@ -150,7 +156,7 @@ def _blocked_artifact(
         )
     source_ids = tuple(str(row["source_id"]) for row in source_manifest["sources"])
     evidence_pack = derive_terminal_evidence_pack(
-        source_ids=source_ids, evidence_ids=DECLARED_EVIDENCE, predicate=PREDICATE
+        source_ids=source_ids, evidence_ids=evidence_ids, predicate=PREDICATE
     )
     license_disposition = derive_terminal_license_disposition(
         kind="BLOCKED", source_manifest_identity=HASH
@@ -160,7 +166,7 @@ def _blocked_artifact(
         "stage": "source",
         "reason_code": "missing-material-source",
         "prerequisite_ids": ["prereq-1"],
-        "evidence_ids": list(DECLARED_EVIDENCE),
+        "evidence_ids": list(evidence_ids),
         "evidence_identity": evidence_pack["evidence_identity"],
         "license_identity": stable_hash(license_disposition),
     }
@@ -192,7 +198,7 @@ def _blocked_artifact(
         stage="source",
         reason_code="missing-material-source",
         prerequisite_ids=("prereq-1",),
-        evidence_ids=DECLARED_EVIDENCE,
+        evidence_ids=evidence_ids,
         evidence_identity=str(payload["evidence_identity"]),
         license_identity=str(payload["license_identity"]),
         recommendation_sha256=str(payload["recommendation_sha256"]),
@@ -356,6 +362,150 @@ def test_verified_digests_are_recomputed_not_copied(tmp_path: Path) -> None:
     )
     assert resolved.resolution == GROUNDED
     assert resolved.excerpts[0]["text_sha256"] == hash_bytes(b"activation=leaky\n")
+
+
+# -- 2b. partial grounding: verified rows stand, gaps are named, nothing hides -
+
+
+def _mixed_records() -> list[dict[str, Any]]:
+    """Return one groundable predicate-bearing record and one ungroundable one.
+
+    This is the m9617 shape in miniature: the record carrying the terminal
+    predicate re-derives from frozen bytes; the other cites a source the broker
+    never froze.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Declared records for a partially groundable pack.
+    """
+
+    return [
+        *_declared_records(),
+        {
+            "evidence_id": "ev-unfrozen",
+            "source_id": "source-never-frozen",
+            "locator": "api response",
+            "text": "a fact read outside the frozen manifest",
+            "supports": ["external_metadata.citation"],
+        },
+    ]
+
+
+@pytest.mark.smoke
+def test_partial_grounding_presents_verified_rows_and_names_each_gap(
+    tmp_path: Path,
+) -> None:
+    """A gap beside a verified excerpt never un-verifies it.
+
+    The m9617 inversion -- three ungroundable rows destroying ten verified ones,
+    including the predicate-bearing one -- is gone: the verified subset is
+    presented, every failed ID is named, and citing more can never flip a
+    verified row back to nothing.
+    """
+
+    declared = ("ev-one", "ev-unfrozen")
+    artifact = _blocked_artifact(
+        tmp_path, declared_records=_mixed_records(), evidence_ids=declared
+    )
+    resolved = resolve_terminal_evidence(
+        source_manifest=artifact.source_manifest,
+        evidence_ids=declared,
+        predicate=PREDICATE,
+        author_root=artifact.model_dir.parent,
+        declared_records=_mixed_records(),
+    )
+    assert resolved.resolution == PARTIALLY_GROUNDED
+    assert [excerpt["evidence_id"] for excerpt in resolved.excerpts] == ["ev-one"]
+    assert resolved.excerpts[0]["text_sha256"] == hash_bytes(b"activation=leaky\n")
+    assert resolved.unresolved_evidence_ids == ("ev-unfrozen",)
+    assert "ev-unfrozen" in str(resolved.reason)
+
+    pack = _terminal_checker_item(artifact)["evidence_pack"]
+    assert pack["resolution"] == PARTIALLY_GROUNDED
+    assert [excerpt["evidence_id"] for excerpt in pack["excerpts"]] == ["ev-one"]
+    assert pack["unresolved_evidence_ids"] == ["ev-unfrozen"]
+    # The checker-side contract accepts exactly this shape.
+    _validate_terminal_evidence_pack(pack)
+
+
+@pytest.mark.smoke
+def test_an_invented_id_is_never_laundered_by_verified_neighbors(tmp_path: Path) -> None:
+    """Padding buys nothing: the invented ID is a named gap, never an excerpt."""
+
+    declared = ("ev-one", "ev-invented")
+    records = _declared_records()  # no record for ev-invented at all
+    artifact = _blocked_artifact(tmp_path, declared_records=records, evidence_ids=declared)
+    resolved = resolve_terminal_evidence(
+        source_manifest=artifact.source_manifest,
+        evidence_ids=declared,
+        predicate=PREDICATE,
+        author_root=artifact.model_dir.parent,
+        declared_records=records,
+    )
+    assert resolved.resolution == PARTIALLY_GROUNDED
+    assert {excerpt["evidence_id"] for excerpt in resolved.excerpts} == {"ev-one"}
+    assert resolved.unresolved_evidence_ids == ("ev-invented",)
+    assert "ev-invented has no inspectable excerpt record" in str(resolved.reason)
+
+
+@pytest.mark.smoke
+def test_a_pack_whose_predicate_rows_all_fail_stays_unresolved(tmp_path: Path) -> None:
+    """Grounding only decoration is not partial grounding.
+
+    If every verified excerpt merely supports metadata while the rows claiming
+    the terminal predicate failed to re-derive, the pack cannot support the
+    recommendation and stays unresolved with an empty excerpt list.
+    """
+
+    declared = ("ev-one", "ev-unfrozen")
+    records = _mixed_records()
+    # The groundable record no longer claims the predicate; the ungroundable one does.
+    records[0]["supports"] = ["source_resolution.rung"]
+    records[1]["supports"] = [PREDICATE]
+    artifact = _blocked_artifact(tmp_path, declared_records=records, evidence_ids=declared)
+    resolved = resolve_terminal_evidence(
+        source_manifest=artifact.source_manifest,
+        evidence_ids=declared,
+        predicate=PREDICATE,
+        author_root=artifact.model_dir.parent,
+        declared_records=records,
+    )
+    assert resolved.resolution == UNRESOLVED
+    assert resolved.excerpts == ()
+    assert "no verified excerpt claims the terminal predicate" in str(resolved.reason)
+
+    pack = _terminal_checker_item(artifact)["evidence_pack"]
+    assert pack["resolution"] == UNRESOLVED
+    assert pack["excerpts"] == []
+    _validate_terminal_evidence_pack(pack)
+
+
+@pytest.mark.smoke
+def test_the_checker_contract_refuses_a_non_partition_partial_pack(
+    tmp_path: Path,
+) -> None:
+    """No unverified ID can sit among the verified ones, even by envelope bug.
+
+    The checker-side validation independently requires a partially-grounded
+    pack to partition its declared IDs exactly; a pack that presents an
+    excerpt for an ID it also calls unresolved, or that grounds an undeclared
+    ID, is refused before any checker reads it.
+    """
+
+    declared = ("ev-one", "ev-unfrozen")
+    artifact = _blocked_artifact(
+        tmp_path, declared_records=_mixed_records(), evidence_ids=declared
+    )
+    pack = deepcopy(_terminal_checker_item(artifact)["evidence_pack"])
+    # An ID both presented and named unresolved is refused.
+    pack["unresolved_evidence_ids"] = ["ev-one", "ev-unfrozen"]
+    with pytest.raises(CheckerDispatchError, match="both ground and disclaim"):
+        _validate_terminal_evidence_pack(pack)
+    # A gap silently dropped from the unresolved list is refused too.
+    pack["unresolved_evidence_ids"] = []
+    with pytest.raises(CheckerDispatchError, match="unresolved"):
+        _validate_terminal_evidence_pack(pack)
 
 
 # -- 3. declaring nothing is a named gap, never a silent grounding claim -------

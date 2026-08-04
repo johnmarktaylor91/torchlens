@@ -49,14 +49,20 @@ initialization, input semantics, or output behavior. If a material choice is mis
 
 RANDOM-INITIALIZATION AND EXECUTION POLICY
 - Explicitly disable every pretrained, weights, and checkpoint flag. In an R1 declarative recipe the
-  mechanism is implementation.library_recipe.pretrained_disable_fields, and it is checked, not read: R1
-  REFUSES an empty array, every name in it must also be a key of library_recipe.kwargs carrying a
-  disabling value (null, false, "", "none", or "random"), names must not repeat, and each name must be a
-  real keyword parameter of the pinned constructor -- a name absent from that signature is refused when
-  the recipe is loaded. So you can neither leave the array empty nor invent a field to fill it. If the
-  pinned constructor genuinely exposes no pretrained/weights/checkpoint keyword at all, R1's precondition
-  cannot be met: report BLOCKED at author with a reason naming that, which is requeuable, rather than
-  emitting a proposal that dies as a malformed result.
+  mechanism is implementation.library_recipe.pretrained_disable_fields, and it is checked, not read:
+  every name in it must also be a key of library_recipe.kwargs carrying a disabling value (null, false,
+  "", "none", or "random"), names must not repeat, and each name must be a real keyword parameter of the
+  pinned constructor -- a name absent from that signature is refused when the recipe is loaded. So you
+  cannot invent a field to fill the array. R1 requires a POSITIVE disposition and refuses silence, which
+  means exactly one of two spellings: a non-empty pretrained_disable_fields naming EVERY such keyword the
+  constructor exposes, or "pretrained_fields_absent": true with an empty array when the pinned
+  constructor genuinely exposes none -- MiniMaxForCausalLM(config), a GNN layer, an SNN. Do not report
+  BLOCKED for that case; assert absence, which is a normal, accepted R1. The assertion is verified, not
+  believed: the driver reads the real constructor signature when the recipe is loaded and refuses the
+  recipe if it exposes any pretrained keyword after all. Two further checks need no declaration from you
+  and cannot be talked past -- a kwargs key naming a known pretrained keyword with an enabling value is
+  refused outright, and a pretrained keyword left at an ENABLING DEFAULT you never mentioned
+  (encoder_weights="imagenet") is refused at load. Read the signature; disable what it exposes.
 - Do not download or read a checkpoint. If construction requires one, report BLOCKED at constructor with
   reason requires-checkpoint.
 - Default to eval mode and CPU. Cite any source-required different mode or device.
@@ -65,15 +71,22 @@ RANDOM-INITIALIZATION AND EXECUTION POLICY
 - R1 may use the closed declarative library recipe. Other runnable work must stage a typed adapter defining
   build_model() and make_dummy_call(seed, device). The returned object must expose forward.
 - "Typed adapter" is literal, and it is enforced by an AST check, not a convention: EVERY function and
-  method defined in the staged module -- and in every member of its recursive model-local import closure,
-  the same closure you list in implementation.code_manifest -- must carry a complete annotation set. Every
-  parameter other than self/cls, including *args and **kwargs, needs an annotation, and every function
-  needs a return annotation. Write `def build_model() -> torch.nn.Module:` and
-  `def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[str, object]]:`, not the
-  bare signatures named above. ONE unannotated definition anywhere in the closure refuses the whole
-  proposal. Upstream code you vendor verbatim is part of that closure and is checked identically; if the
-  real source you must not modify is unannotated, that is a blocking condition to report, never a license
-  to edit the vendored bytes.
+  method YOU WRITE in the staged module -- and in every author-written member of its recursive
+  model-local import closure, the same closure you list in implementation.code_manifest -- must carry a
+  complete annotation set. Every parameter other than self/cls, including *args and **kwargs, needs an
+  annotation, and every function needs a return annotation. Write `def build_model() -> torch.nn.Module:`
+  and `def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[str, object]]:`, not
+  the bare signatures named above. ONE unannotated authored definition anywhere in the closure refuses
+  the whole proposal, and the code_path entry module is never exempt.
+- Upstream code you vendor VERBATIM is exempt from that annotation rule, and only from that rule. Real
+  repositories are not annotated (`def forward(self, x):`), so requiring it of them would make R2_VENDOR
+  impossible; never edit vendored bytes to satisfy a check. The exemption is granted on proof, not on
+  your word: list the file in implementation.upstream_files and stage it byte for byte, so its digest
+  equals the frozen content_sha256 the broker fetched. Change one character and the digest breaks and the
+  file is treated as yours. Everything else still applies to vendored members with no exemption at all:
+  no BUILTIN eval/exec/compile (bare or via builtins.*), no torch.compile, no named string-evaluation
+  entry point (pandas.eval / pd.eval, numexpr.evaluate / ne.evaluate), and no write outside the model
+  sandbox. A method that merely shares a builtin's name is fine -- write `model.eval()` for eval mode.
 - Record executable paths only in implementation.code_path and source_to_code_map; input_contract has no
   code_path field and must never carry one.
 - A transparent native adapter must record its native object type and delegated method.

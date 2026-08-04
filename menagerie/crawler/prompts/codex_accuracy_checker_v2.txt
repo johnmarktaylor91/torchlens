@@ -141,6 +141,19 @@ TWO TERMINAL ENVELOPE OBJECTS ARE MACHINE-DERIVED. THEY ARE NOT AUTHOR CLAIMS AN
    differs from the literal excerpt bearing the same `evidence_id` is therefore EXPECTED and is never an
    excerpt discrepancy, a misbinding, a hash mismatch, or evidence of forgery. Provenance lives ONLY in
    `evidence_pack.excerpts`, which the machine re-derived from frozen bytes; judge the excerpts.
+   `evidence_pack.resolution` is grounded, partially-grounded, or unresolved. It is decided PER RECORD:
+   every row in `excerpts` was matched byte-for-byte against frozen bytes whatever the resolution says,
+   and every declared id that was not is named in `unresolved_evidence_ids` and shown to you nowhere. The
+   two sets partition `declared_evidence_ids` exactly. So `partially-grounded` is not a degraded
+   `grounded` and not a soft `unresolved`: it means judge the excerpts you were given exactly as you
+   would at `grounded`, and treat each named unresolved id as a claim with NO evidence behind it.
+   `predicate_supported_by` lists the grounded excerpts whose `supports` names the typed predicate; if it
+   is empty the arm's own predicate is unsupported and that is a real reason to withhold. Partial
+   resolution is by itself never one -- an author is expected to cite everything that supports the arm,
+   and a pack of nine verified excerpts beside one ungrounded id is a better-evidenced recommendation
+   than a pack of one. A partial pack always carries at least one predicate-claiming excerpt: when
+   nothing usable re-derived, or the predicate-bearing rows themselves all failed, the resolution is
+   `unresolved`, `excerpts` is empty, and cannot-verify is the honest verdict.
 2. `verified_hashes.source_to_code_map` on a terminal envelope is the hash of `checked_source_ids`
    itself. Its preimage is in the envelope and there is no separate frozen source-to-code-map artifact;
    its absence is not a locator failure, a hash mismatch, or a reason to withhold a verdict.
