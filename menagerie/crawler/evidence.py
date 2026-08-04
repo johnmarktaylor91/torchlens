@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import AbstractSet, Any, Iterable, Mapping, Optional, Sequence, Union
@@ -397,12 +398,69 @@ def _validate_locator(evidence_id: str, locator: str, text: bytes, content: byte
             start, end = int(start_text), int(end_text)
         except (ValueError, TypeError) as exc:
             raise EvidenceValidationError(f"{evidence_id} has an invalid byte locator") from exc
-        if start < 0 or end < start or content[start:end] != text:
+        if start < 0 or end < start or not _same_text(content[start:end], text):
             raise EvidenceValidationError(f"{evidence_id} does not exist verbatim at {locator}")
-    elif text not in content:
+    elif text not in content and _fold_space(text) not in _fold_space(content):
         raise EvidenceValidationError(
             f"{evidence_id} excerpt is not verbatim in its fetched source"
         )
+
+
+#: One run of whitespace. Python's ``\s`` over ``str`` is Unicode-aware: it covers every
+#: character in category ``Zs`` (U+0020, U+00A0, U+2002-U+200A, U+202F, U+3000, ...) plus
+#: the ASCII whitespace controls, and deliberately does NOT cover U+200B ZERO WIDTH SPACE,
+#: which is a format character (``Cf``) rather than a separator. That exclusion matters: a
+#: zero-width character is invisible but occupies no rendered gap, so folding it away would
+#: let an excerpt differ from its source somewhere nothing is displayed. Compiled over
+#: decoded text rather than raw bytes because the distinction erased is codepoint-level.
+_SPACE_RUN_PATTERN = re.compile(r"\s+")
+
+
+def _fold_space(value: bytes) -> bytes:
+    """Canonicalize every run of Unicode whitespace to one ASCII space.
+
+    A fetched page and the excerpt an author transcribes out of it can differ in
+    exactly one respect that carries no meaning: *which* space character sits between
+    two runs of visible text. ar5iv renders LaTeX inter-author spacing as U+2003 EM
+    SPACE and non-breaking gaps as U+00A0, and an author reading that page writes the
+    ordinary U+0020 it renders as. Comparing raw bytes then refuses a transcription
+    that reproduced 150 characters of markup -- including exact generated ``id``
+    attribute values no one could invent -- over a single invisible codepoint, and
+    burns the model's one authoring attempt (menagerie campaign ``pilot``, model
+    ``m8245``, MetaFormer/PoolFormer, excerpt ``ev-ar5iv-affiliation``).
+
+    The fold is applied identically to both sides and erases *only* the identity of
+    whitespace characters. It can never join two tokens, because a whitespace run
+    always folds to one space rather than to nothing, and it can never split one,
+    because no space is ever introduced. Every visible character, its order, and every
+    token boundary therefore survive untouched: an excerpt naming text the source does
+    not contain is refused exactly as before. This is the same equivalence
+    :func:`menagerie.crawler.proposal._normalize_support_text` already applies through
+    its NFKD fold, which maps these separators to U+0020 -- so the raw-byte check was
+    the one place in the pipeline that still treated them as distinct.
+
+    Parameters
+    ----------
+    value:
+        Excerpt or source bytes to canonicalize.
+
+    Returns
+    -------
+    bytes
+        UTF-8 bytes with every whitespace run replaced by a single ASCII space.
+    """
+
+    # Deliberately NOT a full NFKC/NFKD pass. Those forms also fold ligatures, full-width
+    # forms, and compatibility digits, which are visible-character differences an excerpt
+    # must still reproduce exactly. Only the whitespace class is canonicalized here.
+    decoded = value.decode("utf-8", "surrogateescape")
+    return _SPACE_RUN_PATTERN.sub(" ", decoded).encode("utf-8", "surrogateescape")
+
+
+def _same_text(content: bytes, text: bytes) -> bool:
+    """Return whether two byte runs agree exactly or differ only in space characters."""
+
+    return content == text or _fold_space(content) == _fold_space(text)
 
 
 def _nonempty(value: object, field: str) -> str:

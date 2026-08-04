@@ -10,7 +10,7 @@ import unicodedata
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Optional, Sequence, Union
+from typing import AbstractSet, Any, Iterable, Mapping, Optional, Sequence, Union
 
 from menagerie.crawler.constants import AUTHOR_PROPOSAL_SCHEMA_VERSION_V3, SourceRung
 from menagerie.crawler.evidence import (
@@ -1602,7 +1602,7 @@ def _validate_citation_leaves(citation: Mapping[str, Any], texts: Sequence[str])
         if isinstance(value, str) and value.strip() and not phrase_grounded(value):
             failures.append(leaf)
     year = citation.get("year")
-    if year is not None and str(year) not in combined_tokens:
+    if year is not None and not _year_grounded(year, citation, combined_tokens):
         failures.append("year")
     authors = citation.get("authors")
     for index, author in enumerate(authors if isinstance(authors, list) else []):
@@ -1650,6 +1650,107 @@ def _validate_citation_leaves(citation: Mapping[str, Any], texts: Sequence[str])
         )
     if problems:
         raise ProposalValidationError("; ".join(problems))
+
+
+def _year_grounded(
+    year: object, citation: Mapping[str, Any], combined_tokens: AbstractSet[str]
+) -> bool:
+    """Return whether a declared publication year is grounded by the paper evidence.
+
+    The plain token check is the rule; this adds exactly one entailment, for the same
+    reason the ``arxiv_id`` widening exists, and it is licensed by a measured fact about
+    the sources authors actually quote.
+
+    A paper's own publication year is *bibliographic* metadata, and a rendering of the
+    paper's BODY does not print it. Across every ar5iv page in the ``pilot`` campaign's
+    archived rungs the declared year occurred outside the bibliography ZERO times, and on
+    two of them it did not occur at all. The only text on such a page that carries the
+    token is some OTHER work's year in the reference list -- so on a body rendering the
+    old check had exactly one satisfying witness, and that witness was a bibliography
+    entry for a different paper bound as evidence for THIS paper's citation. A rule whose
+    only satisfying assignment is a dishonest one is not a tripwire; it is a wall that
+    refuses honest authors and rewards laundering, and the authoring stage runs once per
+    model, so each refusal is a permanent dead record (model ``m7362``, MobileOne).
+
+    The entailment: a modern arXiv identifier ``YYMM.NNNNN`` *encodes* the announcement
+    month, so an ``arxiv_id`` -- which this same function has already required to be
+    grounded verbatim in the paper evidence -- establishes when the work was announced
+    without anyone asserting it. This is machine-derived from an already-grounded leaf,
+    never from author recollection.
+
+    The admitted window is the announcement year or the single following year, and
+    nothing else. The ``+1`` is not slack: a preprint is routinely announced late in one
+    year and published at a venue in the next, which is a true claim the announcement
+    year alone would refuse (model ``m8245``, PoolFormer, announced 2111 and published at
+    CVPR 2022). It runs one way only -- a year EARLIER than announcement is impossible
+    for the work the identifier names, and two or more years later is not entailed, so
+    both stay refused. Old-style identifiers (``cs.CV/0309136``) are not decoded here and
+    fall through to the text check unchanged.
+
+    Parameters
+    ----------
+    year:
+        Declared citation year.
+    citation:
+        Present citation block, read for its already-grounded ``arxiv_id``.
+    combined_tokens:
+        Canonicalized token set of the bound paper-role excerpt text.
+
+    Returns
+    -------
+    bool
+        Whether the declared year is grounded by the excerpt text or entailed by the
+        grounded arXiv identifier.
+    """
+
+    if str(year) in combined_tokens:
+        return True
+    announced = _arxiv_announcement_year(citation.get("arxiv_id"))
+    if announced is None:
+        return False
+    try:
+        declared = int(str(year))
+    except (TypeError, ValueError):
+        return False
+    return declared in (announced, announced + 1)
+
+
+def _arxiv_announcement_year(arxiv_id: object) -> Optional[int]:
+    """Return the four-digit year a modern arXiv identifier announces, if any.
+
+    Modern identifiers are ``YYMM.NNNNN`` where ``YY`` is the two-digit year and ``MM``
+    is a real month. The scheme began in April 2007 and arXiv has stated it runs to 2029
+    before renumbering, so ``07``-``99`` maps into the 2000s unambiguously. Anything that
+    is not exactly this shape -- an old-style ``archive/YYMMNNN`` locator, a malformed
+    month, a pre-2007 stamp -- returns ``None`` so the caller falls back to the plain
+    text check rather than inventing a year.
+
+    Parameters
+    ----------
+    arxiv_id:
+        Declared identifier, possibly carrying an ``arXiv:`` prefix or a ``vN`` suffix.
+
+    Returns
+    -------
+    int | None
+        Announcement year, or ``None`` when the identifier does not encode one.
+    """
+
+    if not isinstance(arxiv_id, str):
+        return None
+    parsed = _ARXIV_IDENTIFIER_PATTERN.match(arxiv_id.strip())
+    if parsed is None:
+        return None
+    core = arxiv_id.strip().lower().removeprefix("arxiv:")
+    if "." not in core:
+        return None
+    stamp = core.split(".", 1)[0]
+    if len(stamp) != 4 or not stamp.isdigit():
+        return None
+    year_part, month_part = int(stamp[:2]), int(stamp[2:])
+    if year_part < 7 or not 1 <= month_part <= 12:
+        return None
+    return 2000 + year_part
 
 
 def _identifier_grounded(value: str, combined: str) -> bool:

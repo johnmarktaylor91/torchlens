@@ -229,3 +229,96 @@ def test_evidence_rejects_altered_or_ungrounded_claims(tmp_path: Path, failure: 
         required.append("citation")
     with pytest.raises(EvidenceValidationError):
         validate_evidence(evidence, manifest, required)
+
+
+#: The exact shape that burned model ``m8245``. ar5iv renders LaTeX inter-author spacing
+#: as U+2003 EM SPACE; an author reading the rendered page transcribes the ordinary space
+#: it renders as, and every other character -- including the generated ``id`` attribute
+#: values -- comes back exactly right.
+_AR5IV_PAGE = (
+    'prelude <br class="ltx_break"><sup id="id9.9.id9" class="ltx_sup">1</sup>Sea AI Lab\n'
+    ' <sup id="id10.10.id10" class="ltx_sup">2</sup>National University of Singapore\n tail'
+)
+_TRANSCRIBED = (
+    '<br class="ltx_break"><sup id="id9.9.id9" class="ltx_sup">1</sup>Sea AI Lab\n'
+    ' <sup id="id10.10.id10" class="ltx_sup">2</sup>National University of Singapore'
+)
+
+
+def _space_case(tmp_path: Path, excerpt_text: str, *, byte_locator: bool) -> Any:
+    """Validate one excerpt against the ar5iv page fixture."""
+
+    content_hash = hash_bytes(_AR5IV_PAGE.encode())
+    path = cas_path(tmp_path, content_hash)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(_AR5IV_PAGE.encode())
+    manifest = {
+        "sources": [{"source_id": "s1", "content_sha256": content_hash, "cas_path": str(path)}]
+    }
+    evidence = deepcopy(_evidence(excerpt_text, hash_bytes(excerpt_text.encode())))
+    if not byte_locator:
+        evidence["excerpts"][0]["locator"] = "author affiliation block"
+    else:
+        start = len("prelude ".encode())
+        evidence["excerpts"][0]["locator"] = f"bytes:{start}-{start + len(_TRANSCRIBED.encode()) + 2}"
+    return validate_evidence(evidence, manifest, ["description"], require_family_grounding=True)
+
+
+def test_excerpt_differing_only_in_which_space_character_is_verbatim(tmp_path: Path) -> None:
+    """A U+2003 the author typed as U+0020 is the same text, not a different one."""
+
+    assert _TRANSCRIBED not in _AR5IV_PAGE  # raw bytes genuinely differ
+    report = _space_case(tmp_path, _TRANSCRIBED, byte_locator=False)
+    assert report.supported_claims == frozenset({"description"})
+
+
+def test_whitespace_run_and_newline_differences_are_verbatim(tmp_path: Path) -> None:
+    """Whitespace runs collapse, so a newline or a longer gap reads the same."""
+
+    variant = _TRANSCRIBED.replace("Lab\n ", "Lab \n\n   ")
+    assert _space_case(tmp_path, variant, byte_locator=False).excerpt_count == 1
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        pytest.param(("Sea AI Lab", "Sae AI Lab"), id="visible-character-changed"),
+        pytest.param(("Sea AI Lab", "Sea AI Research Lab"), id="word-inserted"),
+        pytest.param(("National University of", "University of"), id="word-deleted"),
+        pytest.param(("Sea AI Lab", "SeaAILab"), id="space-deleted-tokens-joined"),
+        pytest.param(("Singapore", "Singa pore"), id="space-inserted-token-split"),
+        pytest.param(("id10.10.id10", "id10.11.id10"), id="generated-id-digit-changed"),
+        pytest.param(("Sea AI Lab", "sea ai lab"), id="case-changed"),
+        pytest.param(("Sea AI Lab", "Sea AI​ Lab"), id="zero-width-space-inserted"),
+    ],
+)
+def test_non_whitespace_differences_are_still_refused(
+    tmp_path: Path, mutation: tuple[str, str]
+) -> None:
+    """The fold erases only which space character was typed.
+
+    Every visible character, its order, and every token boundary must still match, so a
+    fabricated excerpt is refused exactly as before. U+200B is a format character rather
+    than a separator and is deliberately not folded: it occupies no rendered gap, so
+    treating it as whitespace would let an excerpt differ where nothing is displayed.
+    """
+
+    with pytest.raises(EvidenceValidationError, match="not verbatim in its fetched source"):
+        _space_case(tmp_path, _TRANSCRIBED.replace(*mutation), byte_locator=False)
+
+
+def test_byte_locator_branch_shares_the_same_space_equivalence(tmp_path: Path) -> None:
+    """An author using the more precise locator is not punished harder for a space.
+
+    Keeping the byte-range branch stricter than the membership branch would push
+    authors toward the vaguer locator, which is the opposite of what it exists for.
+    """
+
+    assert _space_case(tmp_path, _TRANSCRIBED, byte_locator=True).excerpt_count == 1
+
+
+def test_byte_locator_still_refuses_an_altered_range(tmp_path: Path) -> None:
+    """The range anchor survives: text that is not at the locator still fails."""
+
+    with pytest.raises(EvidenceValidationError, match="does not exist verbatim at"):
+        _space_case(tmp_path, _TRANSCRIBED.replace("Sea AI Lab", "Sae AI Lab"), byte_locator=True)
