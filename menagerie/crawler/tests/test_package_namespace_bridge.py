@@ -28,6 +28,7 @@ from typing import Any, Mapping
 import pytest
 
 import menagerie.crawler as crawler_package
+import menagerie.crawler.package_namespace as package_namespace
 from menagerie.crawler.env_lifecycle import (
     EnvironmentExactnessError,
     installed_package_inventory_bytes,
@@ -43,7 +44,9 @@ from menagerie.crawler.package_namespace import (
 )
 from menagerie.crawler.recipe import (
     RecipeError,
+    assert_construct_namespace,
     assert_model_provenance,
+    assert_recipe_root_namespace,
     bind_library_artifact_digest,
     resolve_environment_artifact_digest,
 )
@@ -388,6 +391,57 @@ def test_the_shipped_release_locks_resolve_the_torch_distribution(target: str) -
 
     assert bind_library_artifact_digest(implementation, packages) is True
     assert implementation["library_recipe"]["artifact_sha256"] == conda_rows[0]["sha256"]
+
+
+@pytest.mark.smoke
+def test_the_provision_registry_cannot_reach_the_namespace_bounds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The registry selects an inventory row; it never admits a module.
+
+    The recipe-root and construct-node bounds refuse a module that no INSTALLED
+    distribution supplies, which is what closes the stdlib laundering path. The
+    provision registry maps inventory names to distribution names for one
+    purpose -- choosing which package row supplies a digest -- and must never
+    become a second way to satisfy those bounds, or a registry entry would turn
+    into an import permission.
+    """
+
+    # Inject a hostile entry claiming an inventory package provides a stdlib
+    # name. If either namespace bound consulted the registry, this would admit
+    # ``subprocess`` -- the exact hole the recipe-root bound exists to close.
+    hostile = dict(INVENTORY_DISTRIBUTION_PROVISIONS)
+    hostile["evil-row"] = frozenset({"subprocess"})
+    monkeypatch.setattr(
+        package_namespace, "INVENTORY_DISTRIBUTION_PROVISIONS", hostile, raising=True
+    )
+
+    with pytest.raises(RecipeError):
+        assert_recipe_root_namespace(
+            "subprocess", distribution="subprocess", require_installed=True
+        )
+    with pytest.raises(RecipeError):
+        assert_construct_namespace("subprocess", distribution="subprocess", context="kwargs.y")
+    # The digest lookup DOES read it, which is what proves the injection was live
+    # and the bounds' indifference above is real rather than vacuous.
+    assert inventory_row_provides_distribution("evil-row", "subprocess") is True
+
+    # The bounds still refuse the stdlib, and the registry's own spelling is not
+    # a way around the root bound either.
+    with pytest.raises(RecipeError):
+        assert_recipe_root_namespace(
+            "subprocess", distribution="subprocess", require_installed=False
+        )
+    with pytest.raises(RecipeError):
+        assert_construct_namespace("subprocess", distribution="subprocess", context="kwargs.x")
+    with pytest.raises(RecipeError):
+        assert_recipe_root_namespace("torch.nn", distribution="pytorch", require_installed=True)
+    # And the spelling the recipe must use is still admitted, so the conda row
+    # that provides it resolves without weakening anything.
+    assert_recipe_root_namespace("torch.nn", distribution="torch", require_installed=True)
+    assert resolve_environment_artifact_digest(
+        _CONDA_INVENTORY, distribution="torch", version="2.5.1"
+    ) == _digest("pytorch")
 
 
 @pytest.mark.smoke
