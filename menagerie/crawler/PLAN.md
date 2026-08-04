@@ -709,6 +709,15 @@ and the parameter count first exists in the authored recipe -- so it saves the e
 worker run, and the kill. Coverage is partial by construction: a recipe naming a library symbol
 (`timm.dla60`) declares no size, yields no bound, and is always admitted.
 
+The withhold runs in the author lane too, right after the environment-coverage check and BEFORE
+`_normalize_artifact_modes`, with the environment-lane gate kept as the backstop. The 2026-08-04 pilot
+rung proved the environment-lane placement alone was too late: full-config Mixtral (m5915, a ~31B
+lower bound) terminalized `failed:runner` / `protocol-violation` on a transformers version drift
+inside normalization before any size check ran, and `capacity-deferrals` reported zero. The size is
+knowable from the authored recipe alone, so an oversized model now defers recoverably instead of
+terminalizing on whatever normalization happens to refuse first. The durable ledger is idempotent per
+work generation, so the two placements can never double-record.
+
 ### 17.8 Models routed to an environment that cannot serve them
 
 ```bash
