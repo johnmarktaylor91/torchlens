@@ -1554,6 +1554,8 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         reducer: CanonicalReducer,
         operational: JsonlLedger,
         state: JsonObject,
+        *,
+        prior_attempts: tuple[Mapping[str, Any], ...] = (),
     ) -> Optional[str]:
         """Gate and reduce one advisory terminal author-result arm.
 
@@ -1563,6 +1565,17 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             Scheduled intake row and privately staged typed recommendation.
         reducer, operational, state:
             Locked canonical writers and scheduler state.
+        prior_attempts:
+            Already-persisted ledger attempts for this model's active work
+            generation. A first-call terminal has none. A terminal reached
+            AFTER the worker ran -- the mode-repair generation answering
+            terminally -- must carry them: the reducer independently derives
+            the record's per-mode and environment proof from the attempts
+            LEDGER, so a record assembled without them claims a not-applicable
+            environment that contradicts the proof and refuses
+            (``model environment generation contradicts its attempt proof``).
+            Every row here is a ``reducer.append_attempt(...).record``, so
+            nothing unvalidated enters the record through this argument.
 
         Returns
         -------
@@ -1636,7 +1649,7 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         # author's own typed verdict is recorded as the attempt it is. Without
         # this the arm cannot terminalize at all, and the verdict degrades into
         # whichever generic cause the surrounding handler happens to name.
-        attempts: tuple[Mapping[str, Any], ...] = ()
+        attempts: tuple[Mapping[str, Any], ...] = tuple(prior_attempts)
         if (
             decision.accepted
             and isinstance(artifact.author_result, BlockedRecommendation)
@@ -1647,6 +1660,7 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             # an escalation with nowhere to escalate to lands on `author` even
             # when the author named `source` as its blocker.
             attempts = (
+                *attempts,
                 reducer.append_attempt(
                     _driver_failure_attempt(
                         item,
@@ -1686,6 +1700,8 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         reducer: CanonicalReducer,
         operational: JsonlLedger,
         state: JsonObject,
+        *,
+        prior_attempts: tuple[Mapping[str, Any], ...] = (),
     ) -> Optional[str]:
         """Adjudicate a repair generation's terminal recommendation as a terminal.
 
@@ -1714,6 +1730,10 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             Control-flow signal carrying the staged terminal artifact.
         reducer, operational, state:
             Locked canonical writers and scheduler state.
+        prior_attempts:
+            Already-persisted ledger attempts for this work generation, when the
+            repair that answered terminally was requested AFTER the worker ran
+            (the ``run_modes`` site). See ``_route_terminal_author_result``.
 
         Returns
         -------
@@ -1724,7 +1744,8 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         artifact = terminal.artifact
         try:
             return self._route_terminal_author_result(
-                item, artifact, reducer, operational, state
+                item, artifact, reducer, operational, state,
+                prior_attempts=prior_attempts,
             )
         except (DriverPaused, RetryableOperatorError, AuthorBackoffError):
             raise
@@ -1748,7 +1769,7 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
                 "failed:runner",
                 reason,
                 str(exc),
-                (persisted,),
+                (*prior_attempts, persisted),
                 reducer,
                 operational,
                 state,
@@ -1887,6 +1908,12 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         ------
         DriverIntegrationError
             If no revision satisfies the observation before the configured cap.
+        AuthorRepairTerminal
+            If a repair generation answers with a typed terminal recommendation.
+            That is an ANSWER, not a failed revision: re-authoring after it would
+            burn the remaining cap asking a question the author already declined,
+            so it propagates immediately for the caller to adjudicate through the
+            same terminal-disposition gate the first-call arm uses.
         """
 
         detected = canonical_meaningful_modes(
@@ -1923,9 +1950,19 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
                 )
                 repaired = self._stage_author_result(item, repaired, reducer)
                 if not isinstance(repaired.author_result, ProposedAuthorResult):
-                    raise DriverIntegrationError(
-                        "detected-mode repair returned a terminal recommendation"
-                    )
+                    # The same defect `_repair_author` just had, with a worse
+                    # cost profile: this used to be a `DriverIntegrationError`,
+                    # which the `except Exception` arm below consumed into
+                    # `last_error` -- so a typed DEFER/SKIP/BLOCKED answer
+                    # re-ran the AGENTIC author for every remaining generation
+                    # of the cap before dying `cap exhausted` as
+                    # `failed:runner / protocol-violation`, discarding the
+                    # verdict. The three terminal arms are legitimate author
+                    # outcomes on a mode-repair generation too; hand the staged
+                    # artifact to the caller as control flow so it reaches the
+                    # SAME terminal-disposition gate a first-call terminal
+                    # reaches.
+                    raise AuthorRepairTerminal(repaired, "run_modes")
                 repaired = _normalize_artifact_modes(
                     repaired,
                     self.config,
@@ -1954,7 +1991,14 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
                 if repaired.campaign_root_work_id != artifact.campaign_root_work_id:
                     raise DriverIntegrationError("mode repair changed campaign lineage")
                 _validate_artifact_identities(repaired, self.config, item=item)
-            except RetryableOperatorError:
+            except (RetryableOperatorError, AuthorRepairTerminal, AuthorBackoffError):
+                # None of these is a failed revision, so none may consume the
+                # cap: a retryable operator fault is infrastructure; a terminal
+                # recommendation is the author's ANSWER; and a provider backoff
+                # is a campaign pause -- the caller's `except AuthorBackoffError`
+                # arm was unreachable while the blanket arm below swallowed it
+                # into `last_error` and re-dispatched against an exhausted
+                # provider.
                 raise
             except Exception as exc:  # noqa: BLE001 -- each generation consumes the bounded cap
                 last_error = exc
