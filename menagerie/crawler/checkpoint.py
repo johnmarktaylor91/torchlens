@@ -21,7 +21,7 @@ from menagerie.crawler.artifact_transactions import (
     artifact_reconstruction_paths,
     validate_artifact_checkpoint,
 )
-from menagerie.crawler.authority import AuthorityContext
+from menagerie.crawler.authority import AuthorityContext, layered_environment_generation
 from menagerie.crawler.constants import (
     FAILURE_REASON_CODES,
     OPERATIONAL_EVENT_SCHEMA_VERSION,
@@ -41,6 +41,7 @@ from menagerie.crawler.identity import (
     atomic_replace_bytes,
     canonical_json_bytes,
     hash_bytes,
+    is_sha256,
     stable_hash,
 )
 from menagerie.crawler.intake import IntakeError, load_intake_snapshot
@@ -2073,11 +2074,29 @@ def _validate_environment_candidates(
                     )
                 except (EnvironmentExactnessError, EnvironmentProbeError):
                     continue
+                # A strict authority binding records the LAYERED v2 generation
+                # (machine-derived base + parent-witnessed content seal). Accept
+                # the layer only when its declared base equals the base just
+                # recomputed from committed artifact bytes; anything else keeps
+                # the plain v1 base as the sole acceptable identity.
+                row_base = environment.get("base_environment_generation")
+                row_content = environment.get("environment_content_sha256")
+                if (
+                    isinstance(row_base, str)
+                    and isinstance(row_content, str)
+                    and row_base == generation
+                    and is_sha256(row_content)
+                ):
+                    expected_generation = layered_environment_generation(generation, row_content)
+                elif row_base is None and row_content is None:
+                    expected_generation = generation
+                else:
+                    continue
                 if (
                     environment.get("lock_sha256") == lock_sha256
                     and environment.get("resolved_export_sha256") == lock.declared_export_hash
                     and environment.get("packages_manifest_sha256") == hash_bytes(package_bytes)
-                    and identities.get("environment") == generation
+                    and identities.get("environment") == expected_generation
                 ):
                     attested = True
                     current_generation_attempt_ids.add(str(row.get("attempt_id")))

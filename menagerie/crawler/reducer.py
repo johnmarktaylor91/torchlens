@@ -43,6 +43,7 @@ from menagerie.crawler.authority import (
     derive_terminal_observation,
     derive_terminal_proof,
     family_authority_projection,
+    layered_environment_generation,
     mode_summary_projection,
     load_current_attempt_proof,
     load_current_gate_proof,
@@ -81,7 +82,7 @@ from menagerie.crawler.family_templates import (
     validate_size_variant,
     validate_size_variant_derivation,
 )
-from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, stable_hash
+from menagerie.crawler.identity import canonical_json_bytes, hash_bytes, is_sha256, stable_hash
 from menagerie.crawler.intake import legacy_requires_fidelity_audit
 from menagerie.crawler.metadata import (
     AcceptedIdentities,
@@ -2362,16 +2363,42 @@ class CanonicalReducer:
             raise ReductionError(
                 "observed environment lacks exact committed generation artifacts"
             ) from exc
+        # ``generation`` is the machine-derived v1 base recomputed from committed
+        # lock/export/package/probe bytes. A strict authority binding layers the
+        # parent-witnessed prefix content seal over that base (generation v2), so
+        # an authority-bound attempt legitimately carries the LAYERED identity.
+        # The layer is only accepted when its declared base equals the base this
+        # reducer just recomputed: the anchor stays machine-derived, and a record
+        # whose base drifts from the committed artifacts still refuses here.
+        declared_base = environment.get("base_environment_generation")
+        declared_content = environment.get("environment_content_sha256")
+        if declared_base is None and declared_content is None:
+            expected_generation = generation
+        elif (
+            isinstance(declared_base, str)
+            and isinstance(declared_content, str)
+            and declared_base == generation
+            and is_sha256(declared_content)
+        ):
+            expected_generation = layered_environment_generation(generation, declared_content)
+        else:
+            raise ReductionError(
+                "observed environment authority layer does not chain to the committed "
+                f"base generation: base_expected={generation}, "
+                f"base_observed={declared_base}, "
+                "content_seal_well_formed="
+                f"{isinstance(declared_content, str) and is_sha256(declared_content)}"
+            )
         if (
             environment.get("lock_sha256") != hash_bytes(lock_bytes)
             or environment.get("resolved_export_sha256") != hash_bytes(export_bytes)
             or environment.get("packages_manifest_sha256") != hash_bytes(package_bytes)
             or export_hash != hash_bytes(export_bytes)
-            or identities.get("environment") != generation
+            or identities.get("environment") != expected_generation
         ):
             raise ReductionError(
                 "observed environment generation is stale or self-attested: "
-                f"expected={generation}, observed={identities.get('environment')}, "
+                f"expected={expected_generation}, observed={identities.get('environment')}, "
                 f"lock={environment.get('lock_sha256') == hash_bytes(lock_bytes)}, "
                 f"export={environment.get('resolved_export_sha256') == hash_bytes(export_bytes)}, "
                 f"packages={environment.get('packages_manifest_sha256') == hash_bytes(package_bytes)}"
