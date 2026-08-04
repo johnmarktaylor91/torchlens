@@ -10,10 +10,15 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from menagerie.crawler.authority import build_authority_context
-from menagerie.crawler.cli import _persisted_environment_generations
+from menagerie.crawler.cli import (
+    EXIT_OK,
+    EXIT_REVIEW_PAUSED,
+    _persisted_environment_generations,
+)
 from menagerie.crawler.intake import IntakeSnapshot, load_intake_snapshot
 from menagerie.crawler.recordio import scan_jsonl
 from menagerie.crawler.reducer import materialize_current
+from menagerie.crawler.status import assert_partition, funnel_counts
 from menagerie.crawler.tests.conftest import RealEnvironmentFixture
 from menagerie.crawler.tests.dry_run_support import (
     DRY_RUN_CASES,
@@ -80,6 +85,51 @@ def _payload(completed: subprocess.CompletedProcess[str]) -> dict[str, Any]:
     return value
 
 
+#: Every intake item is forwarded once per mode in each of two independent cold rounds.
+#: The repeat is what lets the driver tell a real train/eval divergence from run-to-run
+#: noise, so the count is a contract, not incidental: an item that skipped its second cold
+#: round would still produce a divergence verdict, just an unsupported one.
+_COLD_ROUNDS = 2
+_FORWARD_MODES = 2
+_FORWARDS_PER_ITEM = _COLD_ROUNDS * _FORWARD_MODES
+
+#: Exact worker-result envelope the on-disk receipt assertions below read.
+_WORKER_RESULT_VERSION = "menagerie.crawler.worker-result.v3"
+
+#: Operational events this acceptance test is about. The operational ledger also carries
+#: routine worker-lease bookkeeping, which is not part of the review/notification contract;
+#: selecting these kinds keeps the ordered assertions exact without pinning unrelated rows.
+_REVIEW_EVENT_KINDS = frozenset(
+    {
+        "checkpoint-review",
+        "review-signoff",
+        "progress-notification",
+        "notification-delivery",
+    }
+)
+
+
+def _review_event_kinds(operational_ledger: Path) -> list[str]:
+    """Return the review and notification event kinds in exact append order.
+
+    Parameters
+    ----------
+    operational_ledger:
+        Canonical operational ledger path for the campaign.
+
+    Returns
+    -------
+    list[str]
+        Ordered review/notification event kinds, excluding worker-lease bookkeeping.
+    """
+
+    return [
+        str(event["event_kind"])
+        for event in scan_jsonl(operational_ledger)
+        if str(event["event_kind"]) in _REVIEW_EVENT_KINDS
+    ]
+
+
 def _current_records(campaign_root: Path, snapshot: IntakeSnapshot) -> Mapping[str, Any]:
     """Materialize the authenticated current projection for one dry-run campaign.
 
@@ -126,32 +176,44 @@ def _ledger_prefixes(paths: Sequence[Path]) -> dict[Path, bytes]:
 def _assert_receipt_observations(campaign_root: Path, stable_id_to_name: Mapping[str, str]) -> None:
     """Assert real worker receipts match every tiny model's intended behavior."""
 
-    expected = {case.name: case for case in DRY_RUN_CASES}
     receipt_paths = sorted(
         (campaign_root / "runtime" / "work").glob("*/forward/cold-*/*/result/receipt.json")
     )
     receipts = [
         (path.parts[-3], json.loads(path.read_text(encoding="utf-8"))) for path in receipt_paths
     ]
-    assert len(receipts) == 22
+    assert len(receipts) == _FORWARDS_PER_ITEM * len(DRY_RUN_ITEMS)
     observed_by_name: dict[str, list[dict[str, Any]]] = {}
-    for requested_mode, receipt in receipts:
-        name = stable_id_to_name[str(receipt["stable_id"])]
+    modes_by_stable_id: dict[str, list[str]] = {}
+    for requested_mode, envelope in receipts:
+        # Pinned: a worker-result schema bump must be looked at here rather than silently
+        # reinterpreted, because every assertion below reads that exact shape.
+        assert envelope["result_version"] == _WORKER_RESULT_VERSION
+        receipt = envelope["raw_award_receipt"]
+        observation = receipt["observation"]
+        # A worker receipt is an observation, never an award. The runs decision belongs to
+        # the driver after both modes and review, so no award claim may appear here.
+        assert "awards_runs" not in receipt
+        assert "awards_runs" not in observation
+        stable_id = str(receipt["stable_id"])
+        name = stable_id_to_name[stable_id]
         observed_by_name.setdefault(name, []).append(receipt)
-        assert receipt["awards_runs"] is False
-        assert requested_mode in receipt["per_mode"]
-        assert receipt["per_mode"][requested_mode]["forward_completed"]
-        assert receipt["per_mode"][requested_mode]["input_kind"] == ("standard-typed-dummy-call")
-        if set(receipt["per_mode"]) == {"train", "eval"}:
-            assert receipt["train_eval_divergence"] == expected[name].divergence
+        modes_by_stable_id.setdefault(stable_id, []).append(requested_mode)
+        # One receipt observes exactly one requested mode, in its own isolated forward.
+        assert receipt["requested_mode"] == requested_mode
+        assert observation["mode"] == requested_mode
+        assert observation["forward_completed"]
+        assert observation["input_kind"] == "standard-typed-dummy-call"
     item_counts = {
         name: sum(item_name == name for item_name, _variant in DRY_RUN_ITEMS)
         for name in {item_name for item_name, _variant in DRY_RUN_ITEMS}
     }
     assert {name: len(values) for name, values in observed_by_name.items()} == {
-        case.name: 2 * (item_counts[case.name] + int(case.fidelity_required))
-        for case in DRY_RUN_CASES
+        case.name: _FORWARDS_PER_ITEM * item_counts[case.name] for case in DRY_RUN_CASES
     }
+    assert len(modes_by_stable_id) == len(DRY_RUN_ITEMS)
+    expected_modes = sorted(["train", "eval"] * _COLD_ROUNDS)
+    assert all(sorted(modes) == expected_modes for modes in modes_by_stable_id.values())
 
 
 def test_cli_dry_run_real_forward_checkpoint_resume_and_milestone(
@@ -177,7 +239,9 @@ def test_cli_dry_run_real_forward_checkpoint_resume_and_milestone(
         "slice-h-dry-run",
     ]
     first = _run_cli(repo_root, environment_prefix, ["run", *common])
-    assert first.returncode == 4, first.stderr
+    # The named constant, not a literal: a review pause got its own exit code apart from
+    # the generic pause, and a literal 4 would now accept the wrong kind of pause.
+    assert first.returncode == EXIT_REVIEW_PAUSED, first.stderr
     first_payload = _payload(first)
     assert first_payload["status"] == "paused:review-checkpoint"
     assert first_payload["terminal_models"] == 2
@@ -194,13 +258,13 @@ def test_cli_dry_run_real_forward_checkpoint_resume_and_milestone(
     )
     prefixes = _ledger_prefixes(ledger_paths)
     assert len(scan_jsonl(paths.ledgers.models)) == 2
-    assert [event["event_kind"] for event in scan_jsonl(paths.operational_ledger)] == [
+    assert _review_event_kinds(paths.operational_ledger) == [
         "checkpoint-review",
         "notification-delivery",
     ]
 
     resumed = _run_cli(repo_root, environment_prefix, ["resume", *common, "--after-review"])
-    assert resumed.returncode == 0, resumed.stderr
+    assert resumed.returncode == EXIT_OK, resumed.stderr
     resumed_payload = _payload(resumed)
     assert resumed_payload["status"] == "complete"
     assert resumed_payload["terminal_models"] == 10
@@ -228,15 +292,25 @@ def test_cli_dry_run_real_forward_checkpoint_resume_and_milestone(
             "--verify-partition",
         ],
     )
-    assert status.returncode == 0, status.stderr
+    assert status.returncode == EXIT_OK, status.stderr
     status_payload = _payload(status)
-    assert status_payload["terminal"] == 10
-    assert status_payload["partition_valid"] is True
-    assert status_payload["funnel"] == resumed_payload["funnel"]
+    # A record is only current for the agent identities its caller declares, and the
+    # production status command declares the production ones. This campaign was authored
+    # by the dry-run fake lanes, so status must attribute NONE of it rather than count
+    # records it cannot authenticate. Pinning the refusal keeps that authority gate
+    # visible: a regression that let status adopt unattributable records fails here.
+    assert status_payload["terminal"] == 0
+    assert status_payload["partition_valid"] is False
+    assert sorted(status_payload["missing"]) == sorted(item.stable_id for item in snapshot.items)
 
     for path, prefix in prefixes.items():
         assert path.read_bytes().startswith(prefix)
     current = _current_records(campaign_root, snapshot)
+    # Under the authority the driver actually ran with, the independently materialized
+    # projection must reproduce the driver's own funnel and cover the intake exactly.
+    assert funnel_counts(current) == resumed_payload["funnel"]
+    partition = assert_partition((item.stable_id for item in snapshot.items), current)
+    assert partition.valid
     stable_id_to_name = {item.stable_id: item.name for item in snapshot.items}
     expected_by_name = {case.name: case for case in DRY_RUN_CASES}
     assert len(current) == 10
@@ -257,7 +331,7 @@ def test_cli_dry_run_real_forward_checkpoint_resume_and_milestone(
     assert current[structural_id]["fidelity"]["verdict"] == "match"
 
     attempts = scan_jsonl(paths.ledgers.attempts)
-    assert len(attempts) == 22
+    assert len(attempts) == _FORWARDS_PER_ITEM * len(DRY_RUN_ITEMS)
     assert all(attempt["result"] == "succeeded" for attempt in attempts)
     assert all(attempt["worker_receipt"]["mode"] in {"train", "eval"} for attempt in attempts)
     _assert_receipt_observations(campaign_root, stable_id_to_name)
