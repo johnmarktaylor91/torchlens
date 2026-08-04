@@ -247,6 +247,7 @@ from menagerie.crawler.driver_contracts import (
     AuthorArtifact,
     AuthorBlockedPrerequisite,
     AuthorLane as AuthorLane,
+    AuthorRepairTerminal,
     AuthorUsagePause,
     BoundaryHook as BoundaryHook,
     CheckerLane as CheckerLane,
@@ -1678,6 +1679,83 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         )
         return None
 
+    def _route_repair_terminal_author_result(
+        self,
+        item: WorkItem,
+        terminal: AuthorRepairTerminal,
+        reducer: CanonicalReducer,
+        operational: JsonlLedger,
+        state: JsonObject,
+    ) -> Optional[str]:
+        """Adjudicate a repair generation's terminal recommendation as a terminal.
+
+        The repair arm and the first-call arm now settle through ONE adjudicator.
+        The first-call arm (``_route_terminal_author_result``, wrapped by its
+        caller) already had both halves: the terminal-disposition gate, and a
+        model-local fallback for a gate that itself refuses. The repair arm had
+        neither, so an identical recommendation got an entirely different record
+        depending only on WHICH author call produced it -- visible in one run, in
+        pilot rung 3: ``m3671`` returned ``BLOCKED`` on its first call and
+        terminalized ``failed:accuracy-gate / terminal-disposition-unverifiable``
+        through the gate, while ``m5888`` returned an equally well-formed
+        ``BLOCKED`` one generation later and terminalized ``failed:runner /
+        protocol-violation`` with the verdict discarded.
+
+        The fallback mirrors the first-call arm exactly, including
+        ``terminal_gate_obtained=False``: a lane that never obtained a gate cannot
+        assert a gate verdict, but the broker's frozen source facts are true
+        whatever the gate did and stay in the record.
+
+        Parameters
+        ----------
+        item:
+            Model whose bounded repair generation answered terminally.
+        terminal:
+            Control-flow signal carrying the staged terminal artifact.
+        reducer, operational, state:
+            Locked canonical writers and scheduler state.
+
+        Returns
+        -------
+        str | None
+            Usage-limit pause reason, if the terminal checker is unavailable.
+        """
+
+        artifact = terminal.artifact
+        try:
+            return self._route_terminal_author_result(
+                item, artifact, reducer, operational, state
+            )
+        except (DriverPaused, RetryableOperatorError, AuthorBackoffError):
+            raise
+        except Exception as exc:  # noqa: BLE001 -- terminal gating is model-local
+            reason = "internal-error" if self._is_infrastructure_error(exc) else "protocol-violation"
+            attempt = _driver_failure_attempt(
+                item,
+                artifact,
+                "runner",
+                reason,
+                exc,
+                self.config,
+                diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
+                environment=None,
+                created_at=self.dependencies.clock(),
+            )
+            persisted = reducer.append_attempt(attempt).record
+            self._terminalize(
+                item,
+                artifact,
+                "failed:runner",
+                reason,
+                str(exc),
+                (persisted,),
+                reducer,
+                operational,
+                state,
+                terminal_gate_obtained=False,
+            )
+            return None
+
     def _repair_author(
         self,
         item: WorkItem,
@@ -1747,7 +1825,16 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         )
         repaired = self._stage_author_result(item, repaired, reducer)
         if not isinstance(repaired.author_result, ProposedAuthorResult):
-            raise DriverIntegrationError("checker repair returned a terminal recommendation")
+            # NOT a contract breach, and the message this replaces said otherwise
+            # twice over: it blamed the CHECKER for an answer the AUTHOR gave, and
+            # it was a `DriverIntegrationError`, which the caller reads as
+            # `protocol-violation`. The three typed terminal arms are legitimate
+            # author outcomes on every generation, not just the first, and a repair
+            # generation -- re-reading the sources under the checker's findings --
+            # is exactly when an author learns the model cannot be authored at all.
+            # Hand it to the caller as control flow so it reaches the SAME
+            # terminal-disposition gate a first-call terminal reaches.
+            raise AuthorRepairTerminal(repaired, gate_kind)
         repaired = _normalize_artifact_modes(
             repaired,
             self.config,

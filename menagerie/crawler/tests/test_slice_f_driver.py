@@ -444,6 +444,13 @@ class AuthorScript:
     failed_call: Optional[int] = None
     invalid_modes_id: Optional[str] = None
     terminal_outcomes: tuple[tuple[str, str], ...] = ()
+    #: Restrict ``terminal_outcomes`` to ONE model and ONE invocation number.
+    #: Unset (the default) keeps the historical behavior of applying the outcome
+    #: script to every author call. Setting them is how a REPAIR generation --
+    #: author call 2 for one model, after its gate came back inaccurate -- is made
+    #: to answer terminally while its siblings stay ordinary proposals.
+    terminal_id: Optional[str] = None
+    terminal_call: Optional[int] = None
 
 
 class ScriptedAuthor(AuthorLane):
@@ -590,7 +597,11 @@ class ScriptedAuthor(AuthorLane):
         if item.stable_id == self.script.invalid_modes_id:
             artifact.proposal["proposed_facts"]["modes"]["meaningful_modes"] = ["invalid"]
             artifact = _rebind_fake_author_result(artifact)
-        if self.script.terminal_outcomes:
+        terminal_due = self.script.terminal_id is None or (
+            item.stable_id == self.script.terminal_id
+            and self.script.terminal_call in {None, next_call}
+        )
+        if self.script.terminal_outcomes and terminal_due:
             outcome_kind, outcome = self.script.terminal_outcomes[
                 min(self._script_index, len(self.script.terminal_outcomes) - 1)
             ]
@@ -5493,6 +5504,77 @@ def test_repair_author_failure_terminalizes_and_continues(tmp_path: Path) -> Non
         stable_id != failed_id and record["status"]["code"] == "runs"
         for stable_id, record in models.items()
     )
+
+
+def test_a_repair_generation_may_answer_with_a_terminal_recommendation(
+    tmp_path: Path,
+) -> None:
+    """The author's terminal answer to a repair is adjudicated, not called a violation.
+
+    Verbatim from pilot rung 3 (``a74c4d48``): ``m5888`` was asked to repair ONE
+    field -- "Replace external_metadata.availability.predecessors ... with the
+    source-established Mixtral predecessor/lineage" -- re-read its frozen sources,
+    and returned a ``BLOCKED`` recommendation carrying six grounded excerpts
+    showing the library default is not the published architecture. That result
+    parses cleanly through the production v3 parser as a ``BlockedRecommendation``.
+    The driver recorded it as ``failed:runner / protocol-violation`` and discarded
+    the verdict, because ``_repair_author`` raised ``DriverIntegrationError`` on
+    any non-proposal arm.
+
+    The same run contains the control: ``m3671`` returned an equally well-formed
+    ``BLOCKED`` on its FIRST author call and was adjudicated by the
+    terminal-disposition gate. Same code, same rung, same recommendation quality --
+    the only difference was which author call produced it. This asserts the two
+    arms now agree.
+    """
+
+    snapshot = _snapshot(tmp_path, count=10)
+    repaired_id = snapshot.items[0].stable_id
+    author = ScriptedAuthor(
+        AuthorScript(
+            terminal_outcomes=(("platform", "cuda"),),
+            terminal_id=repaired_id,
+            terminal_call=2,
+        )
+    )
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=author,
+        checker=ScriptedChecker(
+            script=CheckerScript(
+                metadata_verdict="inaccurate",
+                selected_id=repaired_id,
+                required_repair="repair selected model",
+                field_repair="repair selected model",
+            )
+        ),
+    ).run()
+
+    assert result.status == "complete"
+    assert author.calls[repaired_id] == 2, "the repair generation must have run"
+    paths = _paths(tmp_path, snapshot)
+    models = {record["stable_id"]: record for record in scan_jsonl(paths.ledgers.models)}
+    status = models[repaired_id]["status"]
+    assert status["code"] == "deferred:needs-cuda", (
+        "a typed terminal recommendation from a repair generation must reach the "
+        "record as the disposition it is"
+    )
+    assert status["code"] != "failed:runner"
+    assert status["reason_code"] is None
+    # The verdict was ADJUDICATED, not merely relabeled: the terminal-disposition
+    # gate the first-call arm uses must have run for this model too.
+    terminal_gates = [
+        gate
+        for gate in scan_jsonl(paths.ledgers.gates)
+        if gate.get("gate_kind") == "terminal_disposition"
+        and any(entry.get("stable_id") == repaired_id for entry in gate.get("items", []))
+    ]
+    assert terminal_gates, "the repair terminal must be adjudicated by the terminal gate"
+    assert any(
+        stable_id != repaired_id and record["status"]["code"] == "runs"
+        for stable_id, record in models.items()
+    ), "siblings must be unaffected"
 
 
 def test_checker_contract_failure_terminalizes_batch(tmp_path: Path) -> None:
