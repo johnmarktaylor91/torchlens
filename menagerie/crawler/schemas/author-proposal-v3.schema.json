@@ -533,7 +533,8 @@
         "taxonomy.family",
         "taxonomy.modalities",
         "taxonomy.novel_ops",
-        "taxonomy.tasks"
+        "taxonomy.tasks",
+        "website"
       ],
       "description": "The closed gated-claim vocabulary the coverage gate enforces, published here so it is machine-discoverable rather than existing only in Python. Coverage matches an excerpt's supports entry against these strings by EXACT equality: a leaf path such as external_metadata.citation.arxiv_id does not satisfy external_metadata.citation, and a cross-block spelling such as implementation.original_framework does not satisfy external_metadata.original_framework. This enum is deliberately NOT applied as a constraint on supports items, because a proposal may legitimately tag additional finer-grained strings; it is the required vocabulary, not the permitted one. Kept in step with menagerie.crawler.proposal.DEFAULT_GATED_CLAIMS by test_claim_vocabulary_is_derived_from_code."
     }
