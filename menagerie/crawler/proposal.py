@@ -130,6 +130,53 @@ PAPER_EVIDENCE_ROLES = frozenset({"introducing-paper", "supplement", "project-pa
 #: declares one it must occur in the excerpt text: an exact identifier is a strictly
 #: stronger anchor than title-token overlap, so requiring it tightens the gate.
 CITATION_IDENTIFIER_FIELDS = ("arxiv_id", "doi", "openreview_id")
+#: TeX accent commands mapped to the combining mark they place on their argument. Used
+#: only by :func:`_decode_tex_escapes` to make a BibTeX spelling of an accented name
+#: canonicalize identically to the same name spelled in Unicode.
+_TEX_ACCENT_COMBINING = {
+    "'": "\u0301",  # acute
+    "`": "\u0300",  # grave
+    "^": "\u0302",  # circumflex
+    '"': "\u0308",  # diaeresis
+    "~": "\u0303",  # tilde
+    "=": "\u0304",  # macron
+    ".": "\u0307",  # dot above
+    "u": "\u0306",  # breve
+    "v": "\u030c",  # caron
+    "H": "\u030b",  # double acute
+    "c": "\u0327",  # cedilla
+    "k": "\u0328",  # ogonek
+    "r": "\u030a",  # ring above
+    "d": "\u0323",  # dot below
+    "b": "\u0331",  # macron below
+}
+#: TeX commands for letters that carry no separable combining mark. They must decode to
+#: the real character rather than to a bare ASCII stand-in, so that ``\l`` and ``ł`` --
+#: which NFKD does not decompose -- reduce to the same token.
+_TEX_LETTERS = {
+    "ss": "\u00df",
+    "AE": "\u00c6",
+    "ae": "\u00e6",
+    "OE": "\u0152",
+    "oe": "\u0153",
+    "AA": "\u00c5",
+    "aa": "\u00e5",
+    "O": "\u00d8",
+    "o": "\u00f8",
+    "L": "\u0141",
+    "l": "\u0142",
+    "i": "\u0131",
+    "j": "\u0237",
+}
+#: ``\'e``, ``\'{e}``, ``{\'e}``, and ``\c{c}`` are all the same accent applied to one
+#: letter; the outer braces are punctuation the tokenizer already drops.
+_TEX_ACCENT_PATTERN = re.compile(
+    r"\\(?P<accent>['`^\"~=.]|[uvHckrdb](?=\s*\{|\s))\s*\{?\s*(?P<letter>[A-Za-z])\s*\}?"
+)
+#: Longest command name first so ``\oe`` never matches as ``\o`` followed by ``e``.
+_TEX_LETTER_PATTERN = re.compile(
+    r"\\(?P<letter>" + "|".join(sorted(_TEX_LETTERS, key=len, reverse=True)) + r")(\{\}|\b)"
+)
 #: Gated claim that is required only when a paper source is bound or a citation is
 #: volunteered; every other member of :data:`DEFAULT_GATED_CLAIMS` is always required.
 CONDITIONAL_GATED_CLAIMS = frozenset({"external_metadata.citation"})
@@ -1217,10 +1264,19 @@ def _validate_citation_leaves(citation: Mapping[str, Any], texts: Sequence[str])
     with fabricated authors, venue, URL, and BibTeX passed the gate. Each present leaf
     must now occur -- Unicode-canonicalized, so ``Balazevic`` and the diacritic
     spelling of the same author ground each other -- in the controlled-fetched paper
-    excerpts bound to the citation claim. BibTeX is checked for exact consistency with
-    the grounded title/year/authors, which an entry for a different work cannot
-    satisfy. ``citation.url`` exact verification is machine-derived work (the source
-    broker's resolver receipt) and is not excerpt-checked here.
+    excerpts bound to the citation claim. That covers ``title``, ``venue``, ``year``,
+    every ``authors`` entry, and every member of :data:`CITATION_IDENTIFIER_FIELDS`.
+
+    Two leaves are deliberately not excerpt-checked, because neither is quoted from the
+    paper, and each names what checks it instead:
+
+    * ``bibtex`` is a *constructed* record. No paper prints its own BibTeX, so demanding
+      it verbatim would be a requirement no honest author could satisfy. It is checked
+      for exact consistency with the already-grounded title, year, and authors, which an
+      entry for a different work cannot satisfy -- so a fabricated entry is still
+      refused, just by the check that can actually decide it.
+    * ``citation.url`` is machine-derived work verified by the source broker's resolver
+      receipt.
 
     Parameters
     ----------
@@ -1233,7 +1289,8 @@ def _validate_citation_leaves(citation: Mapping[str, Any], texts: Sequence[str])
     Raises
     ------
     ProposalValidationError
-        If any positive citation leaf is not grounded in the paper text.
+        If any excerpt-checked citation leaf is not grounded in the paper text, or if
+        ``bibtex`` disagrees with the grounded title, year, or authors.
     """
 
     combined = _normalize_support_text("\n".join(texts))
@@ -1252,6 +1309,7 @@ def _validate_citation_leaves(citation: Mapping[str, Any], texts: Sequence[str])
         return not tokens or tokens <= combined_tokens
 
     failures: list[str] = []
+    inconsistent: list[str] = []
     for leaf in ("title", "venue"):
         value = citation.get(leaf)
         if isinstance(value, str) and value.strip() and not phrase_grounded(value):
@@ -1287,12 +1345,24 @@ def _validate_citation_leaves(citation: Mapping[str, Any], texts: Sequence[str])
                 if author_tokens and not author_tokens <= bibtex_tokens:
                     consistent = False
         if not consistent:
-            failures.append("bibtex")
+            inconsistent.append("bibtex")
+    problems: list[str] = []
     if failures:
-        raise ProposalValidationError(
+        problems.append(
             "citation leaves are not grounded verbatim in the fetched paper text: "
             f"{sorted(set(failures))}"
         )
+    if inconsistent:
+        # Never fold this into the verbatim clause. A BibTeX entry is a constructed
+        # record that no paper prints about itself, so an author told its BibTeX was
+        # "not grounded verbatim in the fetched paper text" is sent after an excerpt
+        # that cannot exist. The check it actually failed is the consistency one.
+        problems.append(
+            "citation leaves do not agree with the grounded title, year, and authors: "
+            f"{sorted(set(inconsistent))}"
+        )
+    if problems:
+        raise ProposalValidationError("; ".join(problems))
 
 
 def _positive_scalars(value: object) -> list[object]:
@@ -1336,9 +1406,49 @@ def _normalize_support_text(value: str) -> str:
     # splits on the diacritic itself, so "Balazevic" and "Balažević" -- the
     # same author, spelled the two ways real sources actually spell them -- normalize to
     # different token sets and a correct claim fails as if it were fabricated.
-    decomposed = unicodedata.normalize("NFKD", value)
+    decomposed = unicodedata.normalize("NFKD", _decode_tex_escapes(value))
     folded = "".join(char for char in decomposed if not unicodedata.combining(char))
     return " ".join(re.findall(r"[a-z0-9]+", folded.lower()))
+
+
+def _decode_tex_escapes(value: str) -> str:
+    """Rewrite TeX accent and special-letter escapes as the character they denote.
+
+    BibTeX is a *constructed* citation record, and its accented names are written
+    ``L\\'elio``, ``Th\\'eophile``, ``Timoth\\'ee`` -- the only spelling BibTeX has for
+    them. :func:`_normalize_support_text` is Unicode-aware but not TeX-aware, so the
+    backslash and the quote were dropped as punctuation and ``L\\'elio`` tokenized to
+    ``l`` plus ``elio`` while the same author spelled ``Lélio`` in the fetched page
+    tokenized to ``lelio``. The two spellings of one name did not compare equal, and an
+    honest BibTeX entry naming exactly the grounded authors was refused as if it cited a
+    different work (menagerie campaign ``pilot``, model ``m5915``, Mixtral of Experts).
+
+    This decodes syntax, never semantics: each escape becomes the precomposed Unicode
+    character it denotes, which the existing NFKD fold then reduces exactly as it
+    reduces the same character typed directly. Symmetry with the Unicode spelling is
+    therefore by construction. Nothing is loosened -- an escape can only rejoin a token
+    the TeX syntax split, so a name the entry does not actually contain still cannot
+    match.
+
+    Parameters
+    ----------
+    value:
+        Text that may carry TeX escapes.
+
+    Returns
+    -------
+    str
+        Text with recognized TeX escapes replaced by their Unicode characters.
+    """
+
+    def replace_accent(match: re.Match[str]) -> str:
+        """Compose one accent command and its single-letter argument."""
+
+        combining = _TEX_ACCENT_COMBINING[match.group("accent")]
+        return unicodedata.normalize("NFC", match.group("letter") + combining)
+
+    decoded = _TEX_ACCENT_PATTERN.sub(replace_accent, value)
+    return _TEX_LETTER_PATTERN.sub(lambda match: _TEX_LETTERS[match.group("letter")], decoded)
 
 
 def _validate_code(
