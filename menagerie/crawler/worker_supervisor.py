@@ -2569,6 +2569,48 @@ def _runtime_read_roots(argv: Sequence[str], cwd: Path) -> tuple[Path, ...]:
     return tuple(dict.fromkeys(root.resolve() for root in roots))
 
 
+def _macos_runtime_read_capabilities(
+    execution_read_manifest: Optional[ExecutionReadManifestV2 | ExecutionReadManifestV3],
+    discovered_roots: Sequence[Path],
+) -> tuple[tuple[Path, ...], tuple[Path, ...]]:
+    """Return the macOS profile's runtime read roots and package-data read paths.
+
+    Parameters
+    ----------
+    execution_read_manifest:
+        Shipped worker read capability, or ``None`` for the discovery-only path.
+    discovered_roots:
+        Roots :func:`_runtime_read_roots` derived from the worker argv and its
+        read-only source working directory.
+
+    Returns
+    -------
+    tuple[tuple[pathlib.Path, ...], tuple[pathlib.Path, ...]]
+        Roots handed to :func:`generate_macos_sandbox_profile` as
+        ``runtime_read_roots``, and the extra package-data paths granted exactly.
+
+    A v3 manifest carries the whole runtime grant on its sealed environment
+    prefix, so no discovered root may contribute a code-suffix grant. The
+    discovered roots must still be handed to the profile generator, because the
+    worker's ``python -m`` source working directory is a ``sys.path`` entry and
+    an ordinary ``importlib.metadata`` scan reads the confined metadata names
+    inside any ``.dist-info``/``.egg-info`` it finds there. The Linux classifier
+    (:func:`_runtime_import_metadata_path_allowed`) accepts exactly those names
+    unconditionally, so dropping the roots here makes the Seatbelt authority
+    stricter than the Linux one and SIGKILLs the worker before its constructor
+    runs. The generator emits only the confined metadata clauses for a
+    non-prefix root, never a code or payload grant.
+    """
+
+    roots = tuple(discovered_roots)
+    if execution_read_manifest is None:
+        return roots, _runtime_package_data_paths(roots)
+    if isinstance(execution_read_manifest, ExecutionReadManifestV3):
+        return (execution_read_manifest.environment_authority.prefix, *roots), ()
+    # A v2 manifest names every readable file exactly and grants no root at all.
+    return (), ()
+
+
 def _syscall_name(line: str) -> Optional[str]:
     """Return the traced syscall name from one broker line.
 
@@ -4271,22 +4313,9 @@ def run_isolated_subprocess(
     macos_runtime_read_roots: tuple[Path, ...] = ()
     if sandbox.kind == "sandbox-exec":
         discovered_roots = _runtime_read_roots(argv, working_directory)
-        if execution_read_manifest is None:
-            macos_runtime_read_roots = discovered_roots
-            runtime_package_data_paths = _runtime_package_data_paths(macos_runtime_read_roots)
-        elif isinstance(execution_read_manifest, ExecutionReadManifestV3):
-            # The prefix carries the full runtime grant; the discovered source
-            # roots (the ``python -m`` working directory and interpreter roots)
-            # contribute only the confined import-metadata patterns the profile
-            # generator emits for non-prefix roots in v3 mode.
-            macos_runtime_read_roots = (
-                execution_read_manifest.environment_authority.prefix,
-                *discovered_roots,
-            )
-            runtime_package_data_paths = ()
-        elif isinstance(execution_read_manifest, ExecutionReadManifestV2):
-            macos_runtime_read_roots = ()
-            runtime_package_data_paths = ()
+        macos_runtime_read_roots, runtime_package_data_paths = _macos_runtime_read_capabilities(
+            execution_read_manifest, discovered_roots
+        )
         profile_path = scratch_root / "worker-sandbox.sb"
         profile_path.write_text(
             generate_macos_sandbox_profile(

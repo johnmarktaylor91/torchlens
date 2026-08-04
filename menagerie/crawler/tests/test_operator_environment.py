@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 from urllib.parse import unquote, urlsplit
@@ -137,11 +138,26 @@ def _package_row(artifact: Path, content: bytes) -> dict[str, Any]:
     }
 
 
+def _mamba_stub(tmp_path: Path) -> Path:
+    """Return a real executable file standing in for the installed mamba.
+
+    ``create`` requires its creation tool to exist before it touches any state, so
+    the fake-runner tests need a genuine executable rather than a bare path string.
+    """
+
+    stub = tmp_path / "tools" / "mamba"
+    stub.parent.mkdir(parents=True, exist_ok=True)
+    stub.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    stub.chmod(0o755)
+    return stub.resolve()
+
+
 def _operator(
     tmp_path: Path,
     runner: FakeToolRunner,
     *,
     sleeper: Any = lambda _seconds: None,
+    mamba_command: Sequence[str] | None = None,
 ) -> EnvironmentOperator:
     """Build one operator with fake argv-only tool boundaries."""
 
@@ -149,6 +165,7 @@ def _operator(
         state_root=(tmp_path / "operator-state").resolve(),
         conda_lock_command=("/fake/conda-lock",),
         conda_command=("/fake/conda",),
+        mamba_command=mamba_command or (str(_mamba_stub(tmp_path)),),
         runner=runner,
         sleeper=sleeper,
     )
@@ -350,6 +367,100 @@ def test_create_stages_verified_cas_offline_and_remove_retains_cas(
     assert cas_path.read_bytes() == content
     with pytest.raises(PermanentEnvironmentOperatorError, match="not an exact registered"):
         operator.remove(prefix)
+
+
+@pytest.mark.smoke
+def test_offline_create_runs_mamba_and_never_conda(tmp_path: Path) -> None:
+    """The creation command is the configured mamba, not the conda tool.
+
+    ``conda create --offline`` against conda 26.3.2 nondeterministically
+    re-downloads packages that are already staged and verified in the
+    generation-local cache, leaving ``.partial`` files and failing with an
+    OfflineError naming a different package each run. Only mamba installs the
+    staged bytes, so the creation argv must never reach conda.
+    """
+
+    content = b"offline package"
+    artifact = tmp_path / "demo-package-1.2.3-build_0.tar.bz2"
+    runner = FakeToolRunner((_package_row(artifact, content),))
+    mamba = _mamba_stub(tmp_path)
+    operator = _operator(tmp_path, runner, mamba_command=(str(mamba),))
+    environment = _write_environment(tmp_path / "envs" / "core" / "environment.yml")
+    solved = operator.solve(environment, "osx-arm64")
+    prefix = (tmp_path / "runtime" / "prefix").resolve()
+
+    operator.create(Path(solved["lock_path"]), prefix)
+
+    create_commands = [command for command in runner.commands if "create" in command]
+    assert len(create_commands) == 1
+    assert create_commands[0][0] == str(mamba)
+    assert create_commands[0][1] == "create"
+    assert "--offline" in create_commands[0]
+    assert "/fake/conda" not in create_commands[0]
+    # The creation child still resolves helpers from the shared tool directory.
+    assert str(mamba.parent) in runner.environments[-1]["PATH"].split(":")
+
+
+@pytest.mark.smoke
+def test_missing_mamba_refuses_create_loudly_instead_of_falling_back_to_conda(
+    tmp_path: Path,
+) -> None:
+    """An absent mamba is a typed refusal, not a silent conda offline create.
+
+    A fallback would be worse than a failure: conda's broken offline create exits
+    zero often enough to publish a prefix whose installed inventory disagrees with
+    the verified lock. The refusal must also come before any state is written, so
+    no registration, package cache, or partial prefix survives it.
+    """
+
+    content = b"offline package"
+    artifact = tmp_path / "demo-package-1.2.3-build_0.tar.bz2"
+    runner = FakeToolRunner((_package_row(artifact, content),))
+    operator = _operator(
+        tmp_path, runner, mamba_command=(str(tmp_path / "absent" / "mamba"),)
+    )
+    environment = _write_environment(tmp_path / "envs" / "core" / "environment.yml")
+    solved = operator.solve(environment, "osx-arm64")
+    prefix = (tmp_path / "runtime" / "prefix").resolve()
+
+    with pytest.raises(PermanentEnvironmentOperatorError, match="requires the mamba"):
+        operator.create(Path(solved["lock_path"]), prefix)
+
+    assert runner.create_calls == 0
+    assert not any("create" in command for command in runner.commands)
+    assert not prefix.exists()
+    state_root = (tmp_path / "operator-state").resolve()
+    assert not (state_root / "package-caches").exists()
+    assert not list((state_root / "prefix-registrations").glob("*.json"))
+
+
+@pytest.mark.smoke
+def test_a_nonexecutable_mamba_is_refused_before_any_creation_state(
+    tmp_path: Path,
+) -> None:
+    """A present-but-unrunnable creation tool is refused with the same typed error.
+
+    The one unavoidable environment guard in this module: root bypasses the
+    execute bit, so the mode-based half of the check cannot be observed as root.
+    """
+
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        pytest.skip("root bypasses the execute permission bit")
+    content = b"offline package"
+    artifact = tmp_path / "demo-package-1.2.3-build_0.tar.bz2"
+    runner = FakeToolRunner((_package_row(artifact, content),))
+    unrunnable = tmp_path / "tools" / "not-executable-mamba"
+    unrunnable.parent.mkdir(parents=True, exist_ok=True)
+    unrunnable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    unrunnable.chmod(0o644)
+    operator = _operator(tmp_path, runner, mamba_command=(str(unrunnable),))
+    environment = _write_environment(tmp_path / "envs" / "core" / "environment.yml")
+    solved = operator.solve(environment, "osx-arm64")
+
+    with pytest.raises(PermanentEnvironmentOperatorError, match="requires the mamba"):
+        operator.create(Path(solved["lock_path"]), (tmp_path / "runtime" / "prefix").resolve())
+
+    assert runner.create_calls == 0
 
 
 def test_probe_returns_exact_declared_order_and_bounded_failure_detail(

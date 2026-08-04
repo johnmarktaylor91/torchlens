@@ -45,6 +45,16 @@ PROTOCOL_VERSION = "menagerie.crawler.environment-operator.v1"
 
 _DEFAULT_CONDA_LOCK = Path("/opt/homebrew/Caskroom/miniforge/base/bin/conda-lock")
 _DEFAULT_CONDA = Path("/opt/homebrew/Caskroom/miniforge/base/bin/conda")
+# ``conda create --offline`` is not usable as the creation tool. Against conda 26.3.2 it
+# nondeterministically re-downloads packages that are already staged and verified in the
+# generation-local cache: the run leaves ``.partial`` files behind and fails with an
+# OfflineError naming a different package each time. That was reproduced outside this
+# operator, so it is conda's own offline-install behaviour and not a staging defect here.
+# ``mamba create --offline`` on byte-identical staged inputs installs from the cache and
+# produces a conda-meta inventory byte-identical to the resolved export, so mamba is the
+# only accepted creation tool. There is deliberately no conda fallback: falling back would
+# silently reintroduce corrupted offline installs behind a passing exit status.
+_DEFAULT_MAMBA = Path("/opt/homebrew/Caskroom/miniforge/base/bin/mamba")
 _SHA256_PATTERN = re.compile(r"[0-9a-f]{64}\Z")
 _SAFE_COMPONENT_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
 _GLOB_CHARACTERS = frozenset("*?[]{}")
@@ -119,7 +129,12 @@ Sleeper = Callable[[float], None]
 
 
 class EnvironmentOperator:
-    """Solve, create, probe, and remove exact conda environments."""
+    """Solve, create, probe, and remove exact conda environments.
+
+    conda-lock solves the intent and mamba creates the prefix offline from the
+    verified content-addressed cache; see :data:`_DEFAULT_MAMBA` for why the
+    creation step must not run through conda.
+    """
 
     def __init__(
         self,
@@ -127,6 +142,7 @@ class EnvironmentOperator:
         state_root: Path | None = None,
         conda_lock_command: Sequence[str] | None = None,
         conda_command: Sequence[str] | None = None,
+        mamba_command: Sequence[str] | None = None,
         runner: CommandRunner | None = None,
         sleeper: Sleeper = time.sleep,
     ) -> None:
@@ -139,6 +155,10 @@ class EnvironmentOperator:
             from the action path and placed below the repository's ``.crawl-local``.
         conda_lock_command, conda_command:
             Optional argv prefixes used instead of the installed tools.
+        mamba_command:
+            Optional argv prefix for the offline creation tool. Its executable is
+            required to exist before :meth:`create` touches any state, and conda is
+            never substituted for it.
         runner:
             Injectable non-shell subprocess boundary.
         sleeper:
@@ -153,6 +173,9 @@ class EnvironmentOperator:
         )
         self._conda_command = tuple(
             conda_command or _default_tool_command("MENAGERIE_CONDA", _DEFAULT_CONDA)
+        )
+        self._mamba_command = tuple(
+            mamba_command or _default_tool_command("MENAGERIE_MAMBA", _DEFAULT_MAMBA)
         )
         self._runner = runner or _default_command_runner
         self._sleeper = sleeper
@@ -222,8 +245,15 @@ class EnvironmentOperator:
         -------
         dict[str, Any]
             Created-prefix and generation-local package-cache paths.
+
+        Raises
+        ------
+        PermanentEnvironmentOperatorError
+            If the mamba creation tool is unavailable. See :data:`_DEFAULT_MAMBA`
+            for why conda is not an accepted substitute.
         """
 
+        self._require_creation_tool()
         lock_file = _require_absolute_file(lock_file, "exact lock")
         prefix = _require_removable_prefix(prefix)
         lock_bytes = lock_file.read_bytes()
@@ -262,10 +292,10 @@ class EnvironmentOperator:
                     prefix=prefix,
                     state_root=state_root,
                     package_cache=package_cache,
-                    tool_commands=(self._conda_command,),
+                    tool_commands=(self._mamba_command, self._conda_command),
                 )
                 command = (
-                    *self._conda_command,
+                    *self._mamba_command,
                     "create",
                     "--yes",
                     "--offline",
@@ -278,7 +308,7 @@ class EnvironmentOperator:
                     command,
                     environment=environment,
                     timeout_seconds=_CREATE_TIMEOUT_SECONDS,
-                    label="conda create",
+                    label="mamba create",
                 )
             except Exception:
                 # The registration intentionally survives so lifecycle ``finally`` can
@@ -590,6 +620,36 @@ class EnvironmentOperator:
         raise TransientEnvironmentOperatorError(
             f"artifact download remained unavailable for {package.filename}"
         ) from last_error
+
+    def _require_creation_tool(self) -> None:
+        """Refuse to create anything unless the mamba executable is really present.
+
+        Raises
+        ------
+        PermanentEnvironmentOperatorError
+            If the configured creation command names no executable file.
+
+        The check runs before the prefix registration, the package cache, and the
+        CAS staging, so a host without mamba leaves no partial state behind. It
+        fails loudly on purpose: the alternative -- quietly creating the prefix
+        with ``conda create --offline`` -- produces environments whose installed
+        inventory silently disagrees with the verified lock (see
+        :data:`_DEFAULT_MAMBA`), which is exactly the corruption this operator
+        exists to prevent.
+        """
+
+        configured = self._mamba_command[0]
+        # A bare program name is resolved the way the child would resolve it, so an
+        # operator may still spell the tool by name rather than by absolute path.
+        resolved = configured if os.sep in configured else (shutil.which(configured) or configured)
+        executable = Path(resolved)
+        if not executable.is_file() or not os.access(executable, os.X_OK):
+            raise PermanentEnvironmentOperatorError(
+                "offline environment creation requires the mamba executable, and "
+                f"{str(executable)!r} is not one; set MENAGERIE_MAMBA to an installed "
+                "mamba. conda is not an accepted substitute because its offline "
+                "create re-downloads staged packages and corrupts the prefix"
+            )
 
     def _stage_package_cache(
         self,
