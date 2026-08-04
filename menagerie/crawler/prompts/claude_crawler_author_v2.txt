@@ -127,7 +127,10 @@ Before finishing, fill every source-reading field in author-proposal.v3:
 1. canonical name, aliases/acronym, family relationship, representative/variant scope, duplicate links,
    domains, tasks, modalities, era, architecture tags, and novel operators;
 2. website English: a neutral tagline of at most 12 words, a grounded two-to-four-sentence paragraph, and
-   one key-contribution line;
+   one key-contribution line. The website prose is a gated claim: tag the excerpts that ground its factual
+   clauses (typically the same ones grounding family, task, and key contribution) with `website` in their
+   supports arrays, and set website.family_grounding_id to the evidence_id of a family_level excerpt --
+   it is validated as a real reference, not free text;
 3. implementation, paper, project, documentation, affiliation, and license links; exact revisions,
    paths/symbols, paper versions/locators, content hashes, and fetch recipes;
 4. structured citation: title, authors[], year, venue, arxiv_id, doi, openreview_id, url, and bibtex.
@@ -287,7 +290,7 @@ that every category below appears VERBATIM in at least one excerpt's supports ar
 availability state. Copy these strings; do not retype or infer them.
 
 <<<BEGIN GENERATED CLAIM VOCABULARY -- DO NOT HAND-EDIT>>>
-These 32 strings are ALWAYS required. A supports entry is matched by
+These 33 strings are ALWAYS required. A supports entry is matched by
 EXACT STRING EQUALITY against this list. Nothing else counts.
   external_metadata.architecture_class
   external_metadata.authors
@@ -321,6 +324,7 @@ EXACT STRING EQUALITY against this list. Nothing else counts.
   taxonomy.modalities
   taxonomy.novel_ops
   taxonomy.tasks
+  website
 
 These 1 are required whenever the introducing paper is a fetched
 source or you volunteer a citation:

@@ -15,20 +15,23 @@ from typing import Any
 
 import pytest
 
-from menagerie.crawler.constants import AUTHOR_PROMPT_NAME
+from menagerie.crawler.constants import AUTHOR_PROMPT_NAME, MODEL_SCHEMA_VERSION_V3
 from menagerie.crawler.evidence import EvidenceValidationError, validate_evidence
 from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.metadata import AVAILABILITY_KEYS, AVAILABILITY_STATUSES
 from menagerie.crawler.proposal import (
+    AUTHORED_LEAF_COVERAGE_LANES,
     CLAIM_VOCABULARY_BEGIN,
     CLAIM_VOCABULARY_END,
+    CONDITIONAL_GATED_CLAIMS,
     DEFAULT_GATED_CLAIMS,
     EMPTIABLE_CLAIMS,
+    KEYWORD_CLAIM,
     ProposalValidationError,
     gated_claim_vocabulary_block,
     validate_author_proposal,
 )
-from menagerie.crawler.schema import load_schema
+from menagerie.crawler.schema import SchemaOwner, load_schema, schema_owner_paths
 from menagerie.crawler.tests.conftest import attach_paper_evidence, make_author_proposal
 from menagerie.crawler.tools import render_claim_vocabulary
 
@@ -576,3 +579,117 @@ def test_the_generated_block_round_trips_through_json_safe_text() -> None:
     block = gated_claim_vocabulary_block()
     assert block == json.loads(json.dumps(block))
     assert block.isascii()
+
+
+# --------------------------------------------------------------------------------
+# 5. The audited coverage map: no author-gated leaf without a declared lane.
+# --------------------------------------------------------------------------------
+
+
+def _lane_covers(path: str, prefix: str) -> bool:
+    """Return whether one dotted/indexed schema path falls under one lane prefix."""
+
+    return path == prefix or path.startswith(f"{prefix}.") or path.startswith(f"{prefix}[")
+
+
+def test_every_author_gated_schema_path_has_a_declared_verification_lane() -> None:
+    """Every authored leaf is claim-gated or carries an audited lane assignment.
+
+    The claim-vocabulary gate deliberately covers claims, not the ~290 author-gated
+    schema paths; the 2026-08 audit mapped every remaining path to the lane that
+    actually verifies it (or recorded why it is deliberately unverified) in
+    ``AUTHORED_LEAF_COVERAGE_LANES``. This test is the tripwire that keeps the map
+    exhaustive: a NEW author-gated schema path that lands in no gated claim and no
+    audited lane fails here, forcing its change to declare who verifies it instead
+    of shipping a leaf an author can state freely and nobody checks.
+    """
+
+    claim_prefixes = set(DEFAULT_GATED_CLAIMS) | {KEYWORD_CLAIM}
+    lane_prefixes = [prefix for prefix, _ in AUTHORED_LEAF_COVERAGE_LANES]
+    uncovered = []
+    for raw in schema_owner_paths(MODEL_SCHEMA_VERSION_V3, SchemaOwner.AUTHOR_GATED):
+        path = raw.removeprefix("$.")
+        claim_covered = any(_lane_covers(path, claim) for claim in claim_prefixes)
+        lane_covered = any(_lane_covers(path, prefix) for prefix in lane_prefixes)
+        if not claim_covered and not lane_covered:
+            uncovered.append(path)
+    assert uncovered == []
+
+
+def test_every_declared_lane_prefix_names_a_real_schema_path() -> None:
+    """No dead map rows: every lane prefix matches at least one author-gated path."""
+
+    paths = [
+        raw.removeprefix("$.")
+        for raw in schema_owner_paths(MODEL_SCHEMA_VERSION_V3, SchemaOwner.AUTHOR_GATED)
+    ]
+    dead = [
+        prefix
+        for prefix, _ in AUTHORED_LEAF_COVERAGE_LANES
+        if not any(_lane_covers(path, prefix) for path in paths)
+    ]
+    assert dead == []
+
+
+def test_website_prose_is_an_always_required_gated_claim() -> None:
+    """The public-facing website block is claim-gated, unconditionally.
+
+    Website prose was the one authored block no lane verified structurally: the
+    checker reviewed it only under its holistic item verdict. The block claim closes
+    that, and it needs no availability route because the schema requires non-empty
+    website prose for every proposal.
+    """
+
+    assert "website" in DEFAULT_GATED_CLAIMS
+    assert "website" not in CONDITIONAL_GATED_CLAIMS
+    assert "website" in gated_claim_vocabulary_block()
+
+
+# --------------------------------------------------------------------------------
+# 6. website.family_grounding_id is a dereferenced reference, not free text.
+# --------------------------------------------------------------------------------
+
+
+def test_a_fabricated_family_grounding_id_is_refused(tmp_path: Path) -> None:
+    """The one field naming the family-grounding excerpt must actually name one."""
+
+    proposal, manifest = _ground(tmp_path)
+    proposal["proposed_facts"]["website"]["family_grounding_id"] = "grounding-nowhere"
+    with pytest.raises(ProposalValidationError) as excinfo:
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+    assert str(excinfo.value) == (
+        "website.family_grounding_id references missing or fabricated evidence: "
+        "grounding-nowhere"
+    )
+
+
+def test_a_non_family_level_grounding_reference_is_refused(tmp_path: Path) -> None:
+    """Pointing at a real excerpt that is not family-level is still a false claim."""
+
+    proposal, manifest = _ground(tmp_path)
+    # ``attach_paper_evidence`` adds a real, validated, NON-family-level excerpt.
+    proposal["proposed_facts"]["website"]["family_grounding_id"] = "evidence-source-paper"
+    with pytest.raises(ProposalValidationError) as excinfo:
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+    assert str(excinfo.value) == (
+        "website.family_grounding_id must name a family_level excerpt: "
+        "evidence-source-paper is not family-level"
+    )
+
+
+def test_a_family_level_grounding_reference_passes(tmp_path: Path) -> None:
+    """The positive arm: the fixture references its family-level excerpt and passes."""
+
+    proposal, manifest = _ground(tmp_path)
+    website = proposal["proposed_facts"]["website"]
+    excerpts = proposal["proposed_facts"]["evidence"]["excerpts"]
+    referenced = [
+        excerpt
+        for excerpt in excerpts
+        if excerpt["evidence_id"] == website["family_grounding_id"]
+    ]
+    assert len(referenced) == 1 and referenced[0]["family_level"] is True
+    report = validate_author_proposal(
+        proposal, allowed_model_dir=tmp_path, source_manifest=manifest
+    )
+    assert "website" in report.supported_claims

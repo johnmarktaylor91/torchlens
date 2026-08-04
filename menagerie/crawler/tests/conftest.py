@@ -2248,7 +2248,9 @@ def make_model(
                 "description": "A source-grounded example. It is used for integrity tests.",
                 "key_contribution": "A grounded example.",
                 "voice_version": "v1",
-                "family_grounding_id": "grounding-1",
+                # The grounding id is a validated REFERENCE: it must name the
+                # family_level excerpt that grounds the family prose.
+                "family_grounding_id": "evidence-1",
                 "template_source_model_id": None,
                 "variant_parameter_input_line": None,
                 "template_hash": None,

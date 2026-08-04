@@ -211,7 +211,7 @@ a reason to re-crawl external sources.
 | `website.description` | string | Mandatory | Mandatory description. |
 | `website.key_contribution` | string | Mandatory | Mandatory key contribution. |
 | `website.voice_version` | string | Mandatory | Mandatory voice version. |
-| `website.family_grounding_id` | string | Mandatory | Mandatory family grounding id. |
+| `website.family_grounding_id` | string | Mandatory | Mandatory family grounding id: the evidence_id of a family_level excerpt in this record's own evidence block, validated referentially at proposal admission. |
 | `website.template_source_model_id` | string \| null | Mandatory | Mandatory template source model id. |
 | `website.variant_parameter_input_line` | string \| null | Mandatory | Mandatory variant parameter input line. |
 | `website.template_hash` | string \| null | Mandatory | Mandatory template hash. |

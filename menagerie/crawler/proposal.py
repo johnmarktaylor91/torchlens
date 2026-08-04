@@ -59,6 +59,16 @@ DEFAULT_GATED_CLAIMS = frozenset(
         "external_metadata.description",
         "source_resolution.rung",
         "input_contract",
+        # The website block is the PUBLIC-FACING prose of the permanent record, and it
+        # was the one authored block no lane verified structurally: the checker prompt
+        # reviews website text under its holistic item verdict, but nothing forced a
+        # per-item verdict or an evidence binding, so an inattentive checker could pass
+        # invented catalog-page prose silently. One block-level claim closes that: the
+        # prose restates facts the author already grounds (family, task, contribution,
+        # description), so tagging those same excerpts with ``website`` costs one
+        # supports entry and is always satisfiable -- the schema requires non-empty
+        # website prose for every proposal, so no availability route is needed.
+        "website",
     }
     | TAXONOMY_LEAF_CLAIMS
 )
@@ -194,6 +204,104 @@ _TEX_LETTER_PATTERN = re.compile(
 #: Gated claim that is required only when a paper source is bound or a citation is
 #: volunteered; every other member of :data:`DEFAULT_GATED_CLAIMS` is always required.
 CONDITIONAL_GATED_CLAIMS = frozenset({"external_metadata.citation"})
+#: The audited coverage map for every author-gated leaf that is NOT under a gated
+#: claim: which lane actually verifies it, or the recorded reason it is deliberately
+#: unverified. This is the durable answer to "the claim vocabulary covers 30-odd
+#: claims but the schema declares ~290 author-gated paths -- who checks the rest?",
+#: audited leaf-by-leaf on 2026-08-04 by reading each lane's enforcing code. It is
+#: exercised by the test suite: every author-gated ``model.v3`` schema path must fall
+#: under a gated claim or under exactly this table, so a new authored leaf cannot
+#: land silently uncovered -- adding one forces its author to declare, here, which
+#: lane verifies it.
+#:
+#: Lane vocabulary (each names its enforcing code, not a hope):
+#:
+#: ``integrity-machine``
+#:     Deterministically verified against frozen bytes. Excerpts re-hash and
+#:     byte-locate against CAS sources (:func:`menagerie.crawler.evidence.validate_evidence`);
+#:     declared source rows must mirror the frozen manifest
+#:     (``artifact_transactions``: "proposal and source manifest source sets differ");
+#:     coverage assertions are recomputed, not trusted.
+#: ``identity-recompute``
+#:     Recomputed from fact bytes by
+#:     :func:`menagerie.crawler.metadata.recompute_accepted_identities`; a divergent
+#:     declared value refuses at admission.
+#: ``citation-grounding``
+#:     The top-level citation must equal the claim-gated
+#:     ``external_metadata.citation`` (`_validate_citation_consistency`), its leaves
+#:     are value-checked verbatim against controlled-fetched paper bytes
+#:     (`_validate_citation_leaves`), and its absence must sit behind a bounded
+#:     search (`_validate_citation`).
+#: ``rung-lane``
+#:     Deterministic source-ladder validation (`_validate_source_ladder`,
+#:     `_validate_r4_negative_proof`, checked-link fetch coverage) plus the checker's
+#:     ``rung_check`` verdict, which acceptance requires to be accurate
+#:     (``gates.route_metadata_gate`` / ``route_fidelity_gate``) and which the write
+#:     gate cross-validates (``metadata._validate_rung_and_search_attestation``).
+#:     The identity naming leaves ride this lane: rung_check's contract is "this
+#:     source IS this architecture and variant".
+#: ``execution-lane``
+#:     Consumed and verified by real isolated execution: the recipe is built and run,
+#:     the input contract must byte-match the worker receipt
+#:     (``metadata.input_signature_matches_contract``), declared meaningful modes must
+#:     equal the claim-gated external copy at admission ("proposal meaningful-mode
+#:     declarations disagree") and each declared mode produces a receipt.
+#: ``fidelity-lane``
+#:     ``fidelity.required`` has a machine floor (R3/R4 always require it,
+#:     ``driver_models._fidelity_required``); gate id and fidelity identity must match
+#:     the actual bound fidelity gate at admission; the five-way verdict routes
+#:     through ``gates.route_fidelity_gate``.
+#: ``license-lane``
+#:     Redistribution effects are recomputed fail-closed from hash-verified excerpts
+#:     (``licenses.recompute_license_decision``): fabricated evidence ids yield no
+#:     findings and therefore no public redistribution. Semantic license claims are
+#:     additionally under the ``external_metadata.license`` gated claim.
+#: ``availability-machine``
+#:     Typed availability records validate structurally per-record
+#:     (`_validate_availability_record`) and are spot-verified by the checker against
+#:     the evidence pack (checker prompt step 8).
+#: ``checker-holistic``
+#:     No per-claim field check. Verified only by the checker's item-wide verdict,
+#:     which the write gate requires to be ``accurate``
+#:     (``metadata._validate_gate_header``) and whose prompt enumerates these blocks
+#:     as explicit ordered steps; the exact leaf bytes are bound into the vet
+#:     identity, so the verdict cannot survive any later edit. DELIBERATE non-claims,
+#:     re-litigated 2026-08-04: ``people_and_origin`` and ``dates`` restate facts
+#:     whose canonical copies (authors, institution, country, year, venue, era) are
+#:     already per-claim gated with availability routes; a block claim here would
+#:     need excerpt coverage even for models whose people/dates are honestly unknown
+#:     -- external_metadata declares those absences through the availability
+#:     register, but these blocks have no such route, so the claim would be a wall
+#:     (an author could not ground it), and their extra columns (labs, bases,
+#:     confidence, note) are provenance judgments about already-gated facts.
+#:     Deterministic equality is equally unavailable: the fixture-visible semantics
+#:     legitimately diverge (institutions vs labs vs institution; year bases differ
+#:     from citation year), so equating them would invent semantics.
+#: ``unverified-bookkeeping``
+#:     ``evidence.family_grounding_path`` is a nullable operator-side note with no
+#:     consumer and no defined ground truth; nothing reads it, nothing derives from
+#:     it, and no checker step names it. Recorded here as deliberately unverified so
+#:     the next audit does not re-litigate it. (The family grounding FACT is
+#:     verified: at least one ``family_level`` excerpt is mandatory, and
+#:     ``website.family_grounding_id`` must reference one -- see
+#:     `_validate_website_grounding`.)
+AUTHORED_LEAF_COVERAGE_LANES: tuple[tuple[str, str], ...] = (
+    ("citation", "citation-grounding"),
+    ("dates", "checker-holistic"),
+    ("evidence.coverage", "integrity-machine"),
+    ("evidence.evidence_identity", "identity-recompute"),
+    ("evidence.excerpts[]", "integrity-machine"),
+    ("evidence.family_grounding_path", "unverified-bookkeeping"),
+    ("external_metadata.availability", "availability-machine"),
+    ("fidelity", "fidelity-lane"),
+    ("identity", "rung-lane"),
+    ("implementation", "execution-lane"),
+    ("licenses", "license-lane"),
+    ("modes.meaningful_modes[]", "execution-lane"),
+    ("people_and_origin", "checker-holistic"),
+    ("source_resolution", "rung-lane"),
+    ("source_resolution.sources[]", "integrity-machine"),
+)
 #: Delimiters of the generated claim-vocabulary region in the author prompt. The region
 #: is rendered from :data:`DEFAULT_GATED_CLAIMS` by
 #: ``menagerie.crawler.tools.render_claim_vocabulary`` and re-derived on every test run,
@@ -577,6 +685,7 @@ def validate_author_proposal(
         raise ProposalValidationError(str(exc)) from exc
     known_evidence = evidence_ids(evidence)
     _validate_claim_support(facts, evidence, claims, known_evidence)
+    _validate_website_grounding(facts, evidence)
     _validate_citation(facts, known_evidence)
     _validate_citation_consistency(facts)
     _validate_paper_evidence_source(facts, evidence, source_manifest)
@@ -726,6 +835,53 @@ def _validate_description(facts: Mapping[str, Any]) -> None:
             raise ProposalValidationError(f"{field} must be non-empty")
 
 
+def _validate_website_grounding(
+    facts: Mapping[str, Any], evidence: Mapping[str, Any]
+) -> None:
+    """Resolve ``website.family_grounding_id`` to a real family-level excerpt.
+
+    The leaf is a REFERENCE, and the governing ownership rule is that a reference
+    the machine can dereference must be dereferenced: before this check it was
+    free text that nothing read, so the one field naming which excerpt grounds
+    the family prose of a permanent public record was unverifiable by anyone.
+    Every proposal is already required to carry at least one ``family_level``
+    excerpt (``validate_evidence(require_family_grounding=True)``), so pointing
+    at it is always satisfiable and costs the author nothing new.
+
+    Parameters
+    ----------
+    facts:
+        Complete proposed fact tree.
+    evidence:
+        Literal evidence block already verified against source bytes.
+
+    Raises
+    ------
+    ProposalValidationError
+        If the id names no excerpt, or names one that is not family-level.
+    """
+
+    website = _mapping(facts.get("website"), "website")
+    grounding_id = website.get("family_grounding_id")
+    if not isinstance(grounding_id, str) or not grounding_id.strip():
+        raise ProposalValidationError("website.family_grounding_id must be a non-empty string")
+    excerpts = evidence.get("excerpts")
+    if not isinstance(excerpts, list):
+        raise ProposalValidationError("evidence.excerpts must be a list")
+    for excerpt in excerpts:
+        if isinstance(excerpt, Mapping) and excerpt.get("evidence_id") == grounding_id:
+            if excerpt.get("family_level") is not True:
+                raise ProposalValidationError(
+                    "website.family_grounding_id must name a family_level excerpt: "
+                    f"{grounding_id} is not family-level"
+                )
+            return
+    raise ProposalValidationError(
+        "website.family_grounding_id references missing or fabricated evidence: "
+        f"{grounding_id}"
+    )
+
+
 def _citation_is_present(facts: Mapping[str, Any]) -> bool:
     """Return whether the proposal asserts an introducing citation.
 
@@ -808,7 +964,7 @@ def _validate_paper_evidence_source(
 ) -> None:
     """Require an asserted citation to be grounded in controlled-fetched paper bytes.
 
-    Twenty-seven claims are gated on literal excerpts drawn from the frozen source
+    The gated claims are grounded on literal excerpts drawn from the frozen source
     manifest, and roughly half of them -- ``authors``, ``institution``, ``country``,
     ``venue``, ``year``, ``era``, ``citation`` -- are paper metadata that does not occur
     in implementation code. An author whose manifest holds only code therefore cannot

@@ -363,7 +363,7 @@
         },
         "family_grounding_id": {
           "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory family grounding id."
+          "description": "Mandatory family grounding id: the evidence_id of a family_level excerpt in this record's own evidence block, validated referentially at proposal admission."
         },
         "template_source_model_id": {
           "$ref": "#/$defs/nullable_string",
