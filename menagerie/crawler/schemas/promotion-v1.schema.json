@@ -20,26 +20,33 @@
   ],
   "properties": {
     "schema_version": {
-      "const": "menagerie.crawler.promotion.v1"
+      "const": "menagerie.crawler.promotion.v1",
+      "description": "Closed promotion payload version."
     },
     "promotion_id": {
       "type": "string",
-      "pattern": "^promotion-[0-9a-f]{20}$"
+      "pattern": "^promotion-[0-9a-f]{20}$",
+      "description": "Content-addressed promotion identifier, derived as the first twenty hex characters of promotion_sha256. It carries no authority of its own and is revalidated against the recomputed digest on every read."
     },
     "promotion_sha256": {
-      "$ref": "#/$defs/hash"
+      "$ref": "#/$defs/hash",
+      "description": "Exact digest of this row with promotion_id and promotion_sha256 themselves excluded. Recomputed on every read, so two runs that promote the same blocked attempt produce the same row and the append stays idempotent."
     },
     "stable_id": {
-      "$ref": "#/$defs/nonempty_string"
+      "$ref": "#/$defs/nonempty_string",
+      "description": "Durable identifier of the promoted model, required to equal both the frozen intake item's stable_id and the embedded author result's."
     },
     "source_campaign_id": {
-      "enum": ["c1-mech", "c2-disco", "c4-native"]
+      "enum": ["c1-mech", "c2-disco", "c4-native"],
+      "description": "Closed set of campaigns permitted to promote work upward. C3 itself is absent, so a promotion can never originate in its own destination."
     },
     "destination_campaign_id": {
-      "const": "c3-classics"
+      "const": "c3-classics",
+      "description": "The single higher-tier destination. Promotion is one-directional by construction rather than by convention."
     },
     "created_at": {
-      "$ref": "#/$defs/timestamp"
+      "$ref": "#/$defs/timestamp",
+      "description": "UTC row creation time, required to equal the prior attempt's creation time. A promotion records a decision already made rather than a new observation, so a fresh clock reading here would make an otherwise identical promotion irreproducible."
     },
     "source_intake": {
       "type": "object",
@@ -50,18 +57,23 @@
         "item_sha256",
         "item"
       ],
+      "description": "Exact originating intake trust root and the single roster member being promoted, carried whole so the destination campaign never has to re-resolve the source campaign's roster.",
       "properties": {
         "snapshot_id": {
-          "$ref": "#/$defs/nonempty_string"
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Identifier of the intake snapshot the promoted item was drawn from."
         },
         "snapshot_sha256": {
-          "$ref": "#/$defs/hash"
+          "$ref": "#/$defs/hash",
+          "description": "Exact digest of that whole intake snapshot, required to match the prior attempt's binding."
         },
         "item_sha256": {
-          "$ref": "#/$defs/hash"
+          "$ref": "#/$defs/hash",
+          "description": "Exact digest of the frozen item below, recomputed on every read and required to match the prior attempt's binding. This is what makes the copied roster row provably the same bytes the source campaign authored against."
         },
         "item": {
-          "$ref": "#/$defs/intake_item"
+          "$ref": "#/$defs/intake_item",
+          "description": "Verbatim frozen roster row, copied rather than referenced so the promotion stays readable independently of the source campaign."
         }
       }
     },
@@ -69,24 +81,29 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["sources", "manifest_sha256"],
+      "description": "Frozen source manifest the blocked attempt already paid to fetch, retained so the higher tier inherits those exact sources instead of refetching them.",
       "properties": {
         "sources": {
           "type": "array",
           "minItems": 1,
           "items": {
             "type": "object"
-          }
+          },
+          "description": "The frozen source list itself. Left structurally open here because it is carried verbatim and adjudicated against the source schema by whichever campaign consumes it, not re-adjudicated at promotion time."
         },
         "manifest_sha256": {
-          "$ref": "#/$defs/hash"
+          "$ref": "#/$defs/hash",
+          "description": "Manifest self-digest over the source list, required to equal the recomputed digest and the top-level source_manifest_identity."
         }
       }
     },
     "source_manifest_identity": {
-      "$ref": "#/$defs/hash"
+      "$ref": "#/$defs/hash",
+      "description": "Redundant top-level copy of the manifest identity, required to agree with both source_manifest.manifest_sha256 and the prior attempt's binding. Three independent copies must agree, so a manifest silently swapped for a different one cannot survive validation."
     },
     "stage1_research_summary": {
-      "$ref": "#/$defs/research_summary"
+      "$ref": "#/$defs/research_summary",
+      "description": "Bounded stage-1 research retained for the higher-tier pass. Required, because a needs-higher-tier block asserts the model is real and locatable, and promoting it without the search that established that would discard the only evidence the claim rests on."
     },
     "prior_attempt": {
       "type": "object",
@@ -99,24 +116,31 @@
         "reason_code",
         "author_result"
       ],
+      "description": "The exact blocked attempt that justifies this promotion, retained whole so the higher tier can read what the lower tier actually concluded.",
       "properties": {
         "result_id": {
-          "$ref": "#/$defs/nonempty_string"
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Identifier of the blocking author result, required to equal the embedded author_result's own result_id."
         },
         "result_sha256": {
-          "$ref": "#/$defs/hash"
+          "$ref": "#/$defs/hash",
+          "description": "Exact digest of that author result, required to equal the embedded author_result's own result_sha256."
         },
         "work_id": {
-          "$ref": "#/$defs/nonempty_string"
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Work identifier of the blocking attempt, required to equal the embedded author_result's own work_id."
         },
         "kind": {
-          "const": "BLOCKED"
+          "const": "BLOCKED",
+          "description": "Only a BLOCKED result can promote. A proposal, skip, or defer is a decision this tier was able to reach, so it has nothing to hand upward."
         },
         "reason_code": {
-          "const": "needs-higher-tier"
+          "const": "needs-higher-tier",
+          "description": "The single blocking reason meaning 'real model, beyond this tier'. Every other blocking reason asserts a fact about the world that a stronger model would not change, so promoting on one would merely re-pay for the same answer."
         },
         "author_result": {
-          "$ref": "https://torchlens.org/schemas/menagerie/crawler/author-result-v4.schema.json"
+          "$ref": "https://torchlens.org/schemas/menagerie/crawler/author-result-v4.schema.json",
+          "description": "The complete blocking author result, embedded verbatim. Its result_id, result_sha256, work_id, stable_id, kind, and payload reason_code are each required to agree with the fields named above, so this summary can never drift from the record it summarizes."
         }
       }
     }
@@ -162,59 +186,74 @@
       ],
       "properties": {
         "stable_id": {
-          "$ref": "#/$defs/nonempty_string"
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Durable model identifier."
         },
         "name": {
-          "$ref": "#/$defs/nonempty_string"
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Model name, part of the immutable legacy natural key."
         },
         "zoo": {
-          "$ref": "#/$defs/nonempty_string"
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Originating model zoo or collection, part of the immutable legacy natural key and the primary input to deterministic routing."
         },
         "variant": {
-          "type": "string"
+          "type": "string",
+          "description": "Variant token, part of the immutable legacy natural key. Permitted to be empty, unlike name and zoo, because an unvarianted row is a legitimate roster member."
         },
         "discovery_source": {
-          "$ref": "#/$defs/nonempty_string"
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Input stream in which the roster member was observed."
         },
         "legacy_row_sha256": {
-          "$ref": "#/$defs/hash"
+          "$ref": "#/$defs/hash",
+          "description": "Digest of the complete untrusted legacy row this item was derived from."
         },
         "preserved_legacy_flags": {
           "type": "array",
           "uniqueItems": true,
           "items": {
             "$ref": "#/$defs/nonempty_string"
-          }
+          },
+          "description": "Deterministic audit-routing risks derived from the immutable legacy row. Routing hints only; they never gain authority over an authored fact."
         },
         "variant_scope": {
-          "$ref": "#/$defs/nonempty_string"
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Scope within which family_representative_id is interpreted. Only the family scope currently declares size-variant membership."
         },
         "family_representative_id": {
-          "$ref": "#/$defs/nonempty_string"
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Stable ID of the row this one specializes, used for representative-first scheduling. A representative names its own stable_id; a declared size variant names a different row."
         },
         "family": {
-          "type": ["string", "null"]
+          "type": ["string", "null"],
+          "description": "Untrusted legacy grouping label carried verbatim from the discovery row, or null when the row declared none. A scheduling and description-reuse hint only; it never gains authority over any authored taxonomy fact."
         },
         "era": {
-          "type": ["string", "null"]
+          "type": ["string", "null"],
+          "description": "Untrusted legacy era hint carried verbatim from the discovery row, or null when the row declared none. Only an explicit four-digit year inside it can activate a legacy routing rule."
         },
         "routing_requirements": {
           "type": "object",
           "additionalProperties": false,
           "required": ["packages", "exact_repository", "legacy_torch"],
+          "description": "Dependency facts deterministically derived from the immutable zoo and era by the audited routing table, carried so the higher tier schedules the promoted work exactly as the source campaign would have.",
           "properties": {
             "packages": {
               "type": "array",
               "uniqueItems": true,
               "items": {
                 "$ref": "#/$defs/nonempty_string"
-              }
+              },
+              "description": "Ecosystem packages the zoo requires, accumulated across every matching routing rule."
             },
             "exact_repository": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "Whether this zoo must be built from its exact upstream repository rather than from an installed library."
             },
             "legacy_torch": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "Whether the derived era falls before a matching routing rule's legacy cutoff year, so the work needs a legacy torch environment."
             }
           }
         }
@@ -232,14 +271,17 @@
       ],
       "properties": {
         "queries": {
-          "$ref": "#/$defs/nonempty_string_array"
+          "$ref": "#/$defs/nonempty_string_array",
+          "description": "Exact bounded search queries attempted."
         },
         "places": {
-          "$ref": "#/$defs/nonempty_string_array"
+          "$ref": "#/$defs/nonempty_string_array",
+          "description": "Exact indexes, hosts, registries, or archives searched."
         },
         "candidate_links": {
           "type": "array",
           "uniqueItems": true,
+          "description": "Candidate locators paired with stage-1 rejection reasons.",
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -269,13 +311,16 @@
           }
         },
         "languages": {
-          "$ref": "#/$defs/nonempty_string_array"
+          "$ref": "#/$defs/nonempty_string_array",
+          "description": "Languages covered by the bounded search."
         },
         "conclusion": {
-          "$ref": "#/$defs/nonempty_string"
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Bounded stage-1 judgment supported by the preceding search record."
         },
         "retained_description": {
-          "type": ["string", "null"]
+          "type": ["string", "null"],
+          "description": "Exact descriptive text stage 1 did retain, or null when it retained none. Optional because only the arms that found prose worth quoting can supply it; an explicit null distinguishes 'nothing was found to retain' from a field that was simply never written."
         }
       }
     }

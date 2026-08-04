@@ -3,17 +3,21 @@
 from __future__ import annotations
 
 import ast
+import importlib
 import inspect
 import json
 import multiprocessing
 import os
 from pathlib import Path
+import pkgutil
 import signal
 import textwrap
+from types import CodeType, FunctionType
 from typing import Any
 
 import pytest
 
+import menagerie.crawler as crawler_package
 import menagerie.crawler.driver as driver_module
 from menagerie.crawler.authority import AuthorityContext
 from menagerie.crawler.driver import (
@@ -69,6 +73,7 @@ VS2_LANDING_MANIFEST: dict[str, Any] = {
             "_SHUTDOWN_ADMISSION_REGISTRY",
             "CrawlerDriver._forward_and_reduce",
             "CrawlerDriver._terminalize",
+            "CrawlerDriver._append_terminal_revision",
         ),
     },
     "real_composition_nodes": (
@@ -189,6 +194,117 @@ def _called_symbols(function: Any) -> set[str]:
         elif isinstance(node.func, ast.Attribute):
             symbols.add(node.func.attr)
     return symbols
+
+
+def _names_model_award(code: CodeType) -> bool:
+    """Return whether one code object, or any nested one, names ``append_model``.
+
+    Parameters
+    ----------
+    code:
+        Compiled code object to scan.
+
+    Returns
+    -------
+    bool
+        True when the symbol is referenced anywhere in the compiled body.
+    """
+
+    if "append_model" in code.co_names:
+        return True
+    return any(
+        isinstance(constant, CodeType) and _names_model_award(constant)
+        for constant in code.co_consts
+    )
+
+
+def _model_award_functions() -> dict[str, Any]:
+    """Return every crawler function that appends a canonical model award.
+
+    The atomic-award structural audit below is only worth anything if it inspects
+    EVERY place a model can be awarded. Naming those places by hand is what let
+    this test rot: the terminal award moved out of ``_terminalize`` into the
+    revision appender it delegates to, and the test kept auditing the empty shell.
+    So the sites are DISCOVERED from the code rather than declared, and the caller
+    asserts the discovered set exactly. A new, moved, or duplicated award site
+    fails this test instead of quietly escaping its gaze.
+
+    The sweep is deliberately package-wide rather than driver-wide. ``CrawlerDriver``
+    is assembled from mixins across several modules, so any per-module list would
+    reintroduce exactly the blind spot this helper exists to remove.
+
+    Discovery reads COMPILED code, not source, so nothing can be excluded by being
+    unreadable: a dataclass-generated method has no source but still has a code
+    object, and is scanned like any other. A candidate that names the award but
+    cannot then be read as source raises rather than being skipped, and a crawler
+    module that cannot be imported fails the sweep instead of shrinking it.
+
+    Returns
+    -------
+    dict[str, Any]
+        ``"Owner.method"`` or ``"function"`` to owning module name, for every
+        crawler function that calls ``.append_model(``.
+    """
+
+    found: dict[str, Any] = {}
+
+    def record(label: str, member: FunctionType, module_name: str) -> None:
+        """Record one member when its body really calls ``.append_model(``."""
+
+        if not _names_model_award(member.__code__):
+            return
+        tree = ast.parse(textwrap.dedent(inspect.getsource(member)))
+        if any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "append_model"
+            for node in ast.walk(tree)
+        ):
+            found[label] = module_name
+
+    for info in pkgutil.iter_modules(crawler_package.__path__):
+        if info.ispkg:
+            continue
+        module = importlib.import_module(f"{crawler_package.__name__}.{info.name}")
+        for owner_name, owner in vars(module).items():
+            if not isinstance(owner, type) or owner.__module__ != module.__name__:
+                continue
+            for attribute, member in vars(owner).items():
+                if isinstance(member, FunctionType):
+                    record(f"{owner_name}.{attribute}", member, module.__name__)
+        for name, member in vars(module).items():
+            if isinstance(member, FunctionType) and member.__module__ == module.__name__:
+                record(name, member, module.__name__)
+    return found
+
+
+def _assert_atomic_award_section(function: Any, publication_call: str) -> None:
+    """Assert one award section guards, then commits, without an interior check.
+
+    Parameters
+    ----------
+    function:
+        Driver function that owns a canonical model award.
+    publication_call:
+        Source spelling of the artifact-publication call inside that award.
+
+    Returns
+    -------
+    None
+        Raises when the guarded ordering or the atomic section is broken.
+    """
+
+    source = inspect.getsource(function)
+    pre_publication = source.index('"pre-publication"')
+    publication_admission = source.index('"pre-publication-admission"')
+    pre_commit = source.index('"pre-award-commit"')
+    publication = source.index(publication_call)
+    append = source.index("reducer.append_model(")
+    post_commit = source.index('"post-award-commit"')
+    assert (
+        pre_publication < publication_admission < pre_commit < publication < append < post_commit
+    )
+    assert "_check_shutdown" not in source[publication:append]
 
 
 def _run_after_forward_shutdown(root: str, fixture: RealEnvironmentFixture) -> None:
@@ -530,8 +646,23 @@ def test_shutdown_admission_registry_and_atomic_award_sections_are_complete() ->
         "model-append": "atomic:award-commit",
         "post-award-observation": "guard:post-award-commit",
     }
+    # Every model-append site in the crawler, discovered rather than declared. The two
+    # driver award boundaries are audited below; the run award stayed inline in the
+    # forward lane, while the terminal award moved into the revision appender that
+    # `_terminalize` wraps with its failure-containment ladder. The reducer's own
+    # replay projection appends into a throwaway replay reducer and crosses no
+    # shutdown boundary, so it is named here rather than audited -- naming it is what
+    # stops it from silently becoming a real award. This equality is the proof that
+    # the structural audit below is total: any new, moved, or duplicated append site
+    # anywhere in the package fails here first.
+    assert _model_award_functions() == {
+        "ReceiptDriverMixin._forward_and_reduce": "menagerie.crawler.driver_receipts",
+        "CrawlerDriver._append_terminal_revision": "menagerie.crawler.driver",
+        "project_dependency_current": "menagerie.crawler.reducer",
+    }
+
     run_calls = _called_symbols(driver_module.CrawlerDriver._forward_and_reduce)
-    terminal_calls = _called_symbols(driver_module.CrawlerDriver._terminalize)
+    terminal_calls = _called_symbols(driver_module.CrawlerDriver._append_terminal_revision)
     assert {
         "_check_shutdown",
         "_assemble_run_model",
@@ -539,44 +670,23 @@ def test_shutdown_admission_registry_and_atomic_award_sections_are_complete() ->
         "append_model",
     } <= run_calls
     assert {"_check_shutdown", "_authorize_terminal_artifact", "append_model"} <= terminal_calls
+    # `_terminalize` no longer holds the award itself, so the delegation edge is what
+    # keeps the audited section on the terminal path at all.
+    assert "_append_terminal_revision" in _called_symbols(driver_module.CrawlerDriver._terminalize)
 
     run_source = inspect.getsource(driver_module.CrawlerDriver._forward_and_reduce)
     post_attempt = run_source.index('"post-attempt-pre-award"')
     assembly = run_source.index("_assemble_run_model(")
     pre_publication = run_source.index('"pre-publication"')
-    publication_admission = run_source.index('"pre-publication-admission"')
-    pre_commit = run_source.index('"pre-award-commit"')
-    publication = run_source.index("_authorize_and_publish_artifact(")
-    append = run_source.index("reducer.append_model(")
-    post_commit = run_source.index('"post-award-commit"')
-    assert (
-        post_attempt
-        < assembly
-        < pre_publication
-        < publication_admission
-        < pre_commit
-        < publication
-        < append
-        < post_commit
+    assert post_attempt < assembly < pre_publication
+    _assert_atomic_award_section(
+        driver_module.CrawlerDriver._forward_and_reduce,
+        "_authorize_and_publish_artifact(",
     )
-    assert "_check_shutdown" not in run_source[publication:append]
-
-    terminal_source = inspect.getsource(driver_module.CrawlerDriver._terminalize)
-    terminal_pre_publication = terminal_source.index('"pre-publication"')
-    terminal_publication_admission = terminal_source.index('"pre-publication-admission"')
-    terminal_pre_commit = terminal_source.index('"pre-award-commit"')
-    terminal_publication = terminal_source.index("_authorize_terminal_artifact(")
-    terminal_append = terminal_source.index("reducer.append_model(")
-    terminal_post_commit = terminal_source.index('"post-award-commit"')
-    assert (
-        terminal_pre_publication
-        < terminal_publication_admission
-        < terminal_pre_commit
-        < terminal_publication
-        < terminal_append
-        < terminal_post_commit
+    _assert_atomic_award_section(
+        driver_module.CrawlerDriver._append_terminal_revision,
+        "_authorize_terminal_artifact(",
     )
-    assert "_check_shutdown" not in terminal_source[terminal_publication:terminal_append]
 
 
 def test_vs2_landing_manifest_is_complete() -> None:

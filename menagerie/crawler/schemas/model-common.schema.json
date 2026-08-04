@@ -995,7 +995,8 @@
           "if": {
             "properties": {
               "kind": {
-                "const": "discovery-evidence"
+                "const": "discovery-evidence",
+                "description": "Select a machine-written discovery-evidence source."
               }
             },
             "required": [
@@ -1005,20 +1006,24 @@
           "then": {
             "properties": {
               "url": {
-                "pattern": "^urn:menagerie:source-discovery:[0-9a-f]{64}$"
+                "pattern": "^urn:menagerie:source-discovery:[0-9a-f]{64}$",
+                "description": "Discovery evidence was never fetched from anywhere, so it is named by a self-describing URN over its own stored bytes rather than by a public location. The 64 hex characters are exactly this record's content_sha256, which is what makes the identifier resolvable inside the campaign store and unforgeable outside it."
               },
               "revision_kind": {
-                "const": "source-discovery-sha256"
+                "const": "source-discovery-sha256",
+                "description": "Discovery evidence has no upstream revision to cite, so it is revisioned by the digest of the discovery record itself."
               },
               "content_sha256": {
-                "$ref": "#/$defs/hash"
+                "$ref": "#/$defs/hash",
+                "description": "Machine-written discovery evidence always has exact stored bytes, so the base property's nullable digest is narrowed to a required one. This restates locally what the intake-snapshot branch already implies, so the URN above can never be built over an absent digest."
               }
             }
           },
           "else": {
             "properties": {
               "url": {
-                "pattern": "^https?://"
+                "pattern": "^https?://",
+                "description": "Every source that is not discovery evidence was actually dereferenced, so it must name a real HTTP or HTTPS locator."
               }
             }
           }
