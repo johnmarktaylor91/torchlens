@@ -138,6 +138,52 @@ class AuthorBlockedPrerequisite(DriverError):
     """
 
 
+class AuthorRepairTerminal(DriverError):
+    """One bounded repair generation answered with a typed terminal recommendation.
+
+    This is CONTROL FLOW, not a failure. A repair generation re-runs the author
+    against the checker's findings, and the author is entitled to the same three
+    typed terminal arms it may return on its first call: ``DEFER``, ``SKIP``, or
+    ``BLOCKED``. Re-reading the sources to repair one field is precisely when an
+    author discovers that the model cannot be authored at all -- pilot ``m5888``
+    was asked to repair ``external_metadata.availability.predecessors`` and came
+    back with six grounded excerpts showing the library default is not the
+    published architecture.
+
+    Before this class the repair lane had no path for that answer: it raised
+    ``DriverIntegrationError``, which the surrounding handler reads as a
+    ``protocol-violation`` and terminalizes ``failed:runner``. A well-formed,
+    evidence-bound verdict was recorded as the author breaking its contract, and
+    the recommendation -- its reason code, prerequisites and evidence -- was
+    discarded. Because the agentic authoring stage runs exactly ONCE per model
+    across a permanent catalog, that is a permanently wrong record, not a retry.
+
+    Deliberately NOT a ``DriverIntegrationError``: it must not be classified as
+    an infrastructure fault (which would retry the author) nor as a lane contract
+    breach (which would blame the author). It carries the staged artifact so the
+    caller can hand it to the same terminal-disposition gate the first-call arm
+    uses.
+
+    Parameters
+    ----------
+    artifact:
+        Staged, identity-bound artifact whose ``author_result`` is the typed
+        terminal recommendation.
+    gate_kind:
+        Repair gate that requested the generation, for the diagnostic only.
+    """
+
+    def __init__(self, artifact: "AuthorArtifact", gate_kind: str) -> None:
+        """Bind the staged terminal artifact to the repair gate that asked for it."""
+
+        super().__init__(
+            f"author answered the bounded {gate_kind} repair with a typed terminal "
+            f"recommendation ({type(artifact.author_result).__name__})"
+        )
+        self.artifact = artifact
+        self.gate_kind = gate_kind
+
+
 class RetryableOperatorError(DriverIntegrationError):
     """Raised when an operator lane fails transiently and must be retried.
 

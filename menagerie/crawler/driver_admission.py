@@ -209,6 +209,7 @@ from menagerie.crawler.driver_contracts import (
     AuthorBackoffError,
     AuthorEffortCapExceeded,
     AuthorQueueStalled,
+    AuthorRepairTerminal,
     AuthorUsagePause,
     CheckerOutcome,
     DriverConfig,
@@ -4330,6 +4331,18 @@ class AdmissionEnvironmentMixin:
                     return self._pause_for_usage(backoff.signal, operational, len(work))
                 except RetryableOperatorError:
                     raise
+                except AuthorRepairTerminal as terminal:
+                    # A typed terminal recommendation is an ANSWER, not a repair
+                    # failure. Caught ahead of the blanket arm below, which would
+                    # record it as `failed:runner / protocol-violation` and throw
+                    # the verdict away.
+                    pause = self._route_repair_terminal_author_result(
+                        items_by_id[stable_id], terminal, reducer, operational, state
+                    )
+                    pending_ids.discard(stable_id)
+                    if pause is not None:
+                        return pause
+                    continue
                 except Exception as exc:  # noqa: BLE001 -- repair failure is model-local
                     reason = (
                         "protocol-violation"
@@ -4619,6 +4632,16 @@ class AdmissionEnvironmentMixin:
                         return self._pause_for_usage(backoff.signal, operational, len(work))
                     except RetryableOperatorError:
                         raise
+                    except AuthorRepairTerminal as terminal:
+                        # See the metadata arm above: a typed terminal recommendation
+                        # is the author's answer to the fidelity findings, not a
+                        # failed repair, and settles through the terminal gate.
+                        pause = self._route_repair_terminal_author_result(
+                            item, terminal, reducer, operational, state
+                        )
+                        if pause is not None:
+                            return pause
+                        break
                     except Exception as exc:  # noqa: BLE001 -- repair failure is model-local
                         reason = (
                             "protocol-violation"
@@ -4794,6 +4817,17 @@ class AdmissionEnvironmentMixin:
                             return self._pause_for_usage(backoff.signal, operational, len(work))
                         except RetryableOperatorError:
                             raise
+                        except AuthorRepairTerminal as terminal:
+                            # See the metadata arm above: the author's typed terminal
+                            # answer settles through the terminal-disposition gate
+                            # instead of being recorded as a repair protocol breach.
+                            pause = self._route_repair_terminal_author_result(
+                                item, terminal, reducer, operational, state
+                            )
+                            if pause is not None:
+                                return pause
+                            metadata_blocked = True
+                            break
                         except Exception as exc:  # noqa: BLE001 -- repair failure is model-local
                             reason = (
                                 "protocol-violation"
