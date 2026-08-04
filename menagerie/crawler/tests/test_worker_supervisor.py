@@ -43,7 +43,6 @@ from menagerie.crawler.worker_supervisor import (
 )
 
 import shutil
-from types import ModuleType
 from menagerie.crawler.constants import RunMode
 from menagerie.crawler.proposal import ProposalValidationError, validate_author_proposal
 from menagerie.crawler.recipe import RecipeError, load_declarative_recipe
@@ -1195,36 +1194,36 @@ def test_python_undeclared_weight_reads_poison_receipt(tmp_path: Path, suffix: s
     assert receipt["error"]["reason_code"] == "checkpoint-read"
 
 
-def test_pretrained_disable_fields_require_real_disabled_constructor_kwargs(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A real disabled parameter passes while absent or enabled claims are refused."""
+def test_pretrained_disable_fields_require_real_disabled_constructor_kwargs() -> None:
+    """A real disabled parameter passes while absent or enabled claims are refused.
 
-    module = ModuleType("round3_recipe_fixture")
+    The recipe names a real installed distribution and a real constructor with a
+    real explicit ``weights`` parameter. A synthetic ``sys.modules``-injected
+    fixture cannot stand here: the loader's namespace and provenance tripwires
+    refuse modules no installed distribution provides and constructors that
+    return non-model objects, and the disable-field claim being validated is
+    only meaningful against a constructor those tripwires accept.
+    """
 
-    def constructor(*, width: int, weights: object | None = None) -> dict[str, object]:
-        """Return received constructor values for the declarative loader fixture."""
-
-        return {"width": width, "weights": weights}
-
-    setattr(module, "ExampleNet", constructor)
-    monkeypatch.setitem(sys.modules, module.__name__, module)
+    torchvision = pytest.importorskip("torchvision")
     base = {
-        "distribution": "round3-fixture",
-        "version": "1",
-        "module": module.__name__,
-        "symbol": "ExampleNet",
-        "kwargs": {"width": 4, "weights": None},
+        "distribution": "torchvision",
+        "version": torchvision.__version__,
+        "module": "torchvision.models",
+        "symbol": "squeezenet1_0",
+        "kwargs": {"weights": None},
         "pretrained_disable_fields": ["weights"],
     }
 
     loaded = load_declarative_recipe(base)
+    model = loaded.build_model()
 
-    assert loaded.build_model() == {"width": 4, "weights": None}
+    assert type(model).__name__ == "SqueezeNet"
+    assert type(model).__module__.startswith("torchvision.")
     with pytest.raises(RecipeError, match="absent from constructor kwargs"):
         load_declarative_recipe({**base, "pretrained_disable_fields": ["pretrained"]})
     with pytest.raises(RecipeError, match="does not carry a disabling value"):
-        load_declarative_recipe({**base, "kwargs": {"width": 4, "weights": True}})
+        load_declarative_recipe({**base, "kwargs": {"weights": True}})
 
 
 def test_proposal_refuses_bogus_pretrained_disable_field(tmp_path: Path) -> None:

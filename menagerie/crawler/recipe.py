@@ -142,7 +142,14 @@ def assert_construct_namespace(module: str, *, distribution: str, context: str) 
     if module in CONSTRUCT_MODULE_ALLOWLIST:
         return
     top_level = module.split(".")[0]
-    if canonical_distribution_name(top_level) == canonical_distribution_name(distribution):
+    if (
+        top_level not in sys.stdlib_module_names
+        and canonical_distribution_name(top_level) == canonical_distribution_name(distribution)
+    ):
+        # The name-equality fallback exists for distributions whose metadata is
+        # not visible to this interpreter. The standard library is excluded from
+        # it: stdlib modules import without any installed distribution, so
+        # declaring ``distribution: "subprocess"`` must not admit ``subprocess``.
         return
     if top_level in _distribution_top_level_packages(distribution):
         return
@@ -150,6 +157,70 @@ def assert_construct_namespace(module: str, *, distribution: str, context: str) 
         f"construct node at {context} names module {module!r}, which is outside the "
         f"pinned distribution {distribution!r} and the allowlisted modules "
         f"{sorted(CONSTRUCT_MODULE_ALLOWLIST)!r}"
+    )
+
+
+def assert_recipe_root_namespace(
+    module: str, *, distribution: str, require_installed: bool
+) -> None:
+    """Refuse a recipe root module outside the pinned distribution's namespace.
+
+    This runs BEFORE the root module is imported, for the same reason as
+    :func:`assert_construct_namespace`: importing an author-named module already
+    executes that module's top-level code, so a post-import refusal arrives
+    after the thing it exists to prevent. ``subprocess.run`` as a recipe root
+    parsed, imported, and executed its side effect before the returned-object
+    provenance tripwire ever saw the result.
+
+    The root rule is STRICTER than the construct-node rule: it has no auxiliary
+    allowlist. The root names the model constructor itself, and
+    :func:`assert_model_provenance` already requires the constructed class to be
+    defined by the pinned distribution, so a root outside that distribution is
+    at best a guaranteed later failure and at worst an arbitrary import. The
+    allowlist entries (``torch``, ``torch.nn``, ``torch.nn.utils.rnn``) admit
+    kwargs helpers, not models; when the pinned distribution *is* ``torch``
+    they are admitted here as its own packages, and under any other pin they
+    would only admit recipes destined to fail provenance.
+
+    Parameters
+    ----------
+    module:
+        Declared dotted root module name.
+    distribution:
+        Declared pinned distribution of the recipe.
+    require_installed:
+        When true (the pre-import load-time check), membership must come from
+        the interpreter's installed-package metadata; the name-equality
+        fallback for not-installed distributions is refused because an
+        uninstalled distribution cannot legitimately supply an importable
+        module -- everything ``import_module`` could still reach (the standard
+        library, ``sys.modules`` injections, ``sys.path`` strays) is exactly
+        the surface this check closes.
+
+    Raises
+    ------
+    RecipeError
+        If the module belongs to the standard library or is not a package of
+        the pinned distribution.
+    """
+
+    top_level = module.split(".")[0]
+    if top_level in sys.stdlib_module_names:
+        raise RecipeError(
+            f"declarative recipe root names module {module!r} from the Python "
+            f"standard library; the standard library can never be the pinned "
+            f"distribution {distribution!r}"
+        )
+    if top_level in _distribution_top_level_packages(distribution):
+        return
+    if not require_installed and canonical_distribution_name(
+        top_level
+    ) == canonical_distribution_name(distribution):
+        return
+    raise RecipeError(
+        f"declarative recipe root names module {module!r}, which is not a package "
+        f"of the pinned distribution {distribution!r}"
+        + (" installed in this interpreter" if require_installed else "")
     )
 
 
@@ -790,6 +861,9 @@ class DeclarativeRecipe:
         symbol = str(value["symbol"])
         if not all(part.isidentifier() for part in module.split(".")) or not symbol.isidentifier():
             raise RecipeError("module and symbol must be direct Python identifiers")
+        assert_recipe_root_namespace(
+            module, distribution=str(value["distribution"]), require_installed=False
+        )
         if _is_generic_container_reference(module, symbol):
             raise RecipeError(
                 "generic torch.nn containers are refused in declarative R1 recipes: "
@@ -1103,6 +1177,9 @@ def load_declarative_recipe(
         recipe = DeclarativeRecipe.from_mapping(value)
     else:
         recipe = value
+    assert_recipe_root_namespace(
+        recipe.module, distribution=recipe.distribution, require_installed=True
+    )
     module = importlib.import_module(recipe.module)
     constructor = getattr(module, recipe.symbol, None)
     if constructor is None or not callable(constructor):
