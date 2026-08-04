@@ -77,10 +77,15 @@ from menagerie.crawler.driver_admission import (
     CHECKER_LANE_BACKOFF_SLACK_SECONDS,
     _author_lane_failure,
     _checker_wall_bound,
+    classify_author_exit,
 )
-from menagerie.crawler.author_dispatch import AuthorEffortExhaustionClaim
+from menagerie.crawler.author_dispatch import (
+    AuthorEffortExhaustionClaim,
+    AuthorExecutorContractError,
+)
 from menagerie.crawler.driver_contracts import (
     GateBatchUnusableError,
+    ResearchToolsUnavailableError,
     RetryableOperatorError,
     StaleGateBindingError,
 )
@@ -5419,6 +5424,167 @@ def test_author_failure_without_source_is_honest_and_later_models_continue(
         models[failed_id]["implementation"]["torchlens_import_static_check"]
         == "not-applicable-no-code"
     )
+
+
+class ContractInvalidExitAuthor(FakeAuthor):
+    """One model's executor relays the verbatim rung-5 exit-75 contract refusal.
+
+    The failing model drives the REAL ``classify_author_exit`` with the exact
+    structured stderr the author executor emitted on 2026-07-27 for m4066, so
+    the test exercises the production classification rather than a hand-built
+    exception.
+    """
+
+    def __init__(self, failed_id: str) -> None:
+        """Record which scheduled model publishes contract-invalid payloads."""
+
+        super().__init__()
+        self.failed_id = failed_id
+
+    def author(
+        self,
+        item: WorkItem,
+        work_root: Path,
+        config: DriverConfig,
+        context: AuthorityContext,
+    ) -> AuthorArtifact:
+        """Relay the executor's typed refusal for the one failing model."""
+
+        if item.stable_id == self.failed_id:
+            self.calls[item.stable_id] = self.calls.get(item.stable_id, 0) + 1
+            classify_author_exit(
+                "author",
+                item.stable_id,
+                75,
+                "",
+                "author executor stage2 failed: result-contract-invalid "
+                "(attempt 810e0dd00ddc472baeba4bec6cab653c)",
+            )
+            raise AssertionError("classify_author_exit accepted a nonzero author exit")
+        return super().author(item, work_root, config, context)
+
+
+class TransportFailingAuthor(FakeAuthor):
+    """One model's author dispatch dies with genuine campaign-scoped transport."""
+
+    def __init__(self, failed_id: str) -> None:
+        """Record which scheduled model's transport persistently fails."""
+
+        super().__init__()
+        self.failed_id = failed_id
+
+    def author(
+        self,
+        item: WorkItem,
+        work_root: Path,
+        config: DriverConfig,
+        context: AuthorityContext,
+    ) -> AuthorArtifact:
+        """Fail the one model with the transport type the campaign must not absorb."""
+
+        if item.stable_id == self.failed_id:
+            raise RetryableOperatorError(
+                f"author command failed for {item.stable_id} (exit 75): socket reset"
+            )
+        return super().author(item, work_root, config, context)
+
+
+@pytest.mark.smoke
+def test_classify_author_exit_scopes_published_contract_refusals_to_the_model() -> None:
+    """The executor's refusal of PUBLISHED payload bytes indicts the model, not the machine.
+
+    Exit 75 with a structured ``*-contract-invalid`` / ``result-not-json`` line
+    means a session ran to completion and what it published failed the frozen
+    contract -- evidence confined to one model's authoring. Typing that as
+    ``RetryableOperatorError`` let one schema-invalid author result terminate a
+    whole 20-model rung with zero records written (2026-07-27, m4066). Sessions
+    that died WITHOUT publishing stay campaign-scoped transport, and the two
+    provider-outage arms keep their own promotable types.
+    """
+
+    for line in (
+        "author executor stage1 failed: discovery-contract-invalid (attempt aa)",
+        "author executor stage2 failed: result-not-json (attempt aa)",
+        "author executor stage2 failed: result-contract-invalid (attempt aa)",
+    ):
+        with pytest.raises(AuthorExecutorContractError) as raised:
+            classify_author_exit("author", "m4066", 75, "", line)
+        assert not isinstance(raised.value, RetryableOperatorError)
+        assert raised.value.stable_id == "m4066"
+        # The model-local terminal names the author's content, never a dead session.
+        assert _author_lane_failure(raised.value) == ("author", "malformed-result")
+    # A session that died without publishing is indistinguishable from broken
+    # infrastructure and must keep its campaign-scoped classification.
+    with pytest.raises(RetryableOperatorError):
+        classify_author_exit(
+            "author",
+            "m4066",
+            75,
+            "",
+            "author executor stage2 failed: session-crashed (attempt aa)",
+        )
+    # The streak-promotable outage arms are unchanged.
+    with pytest.raises(ResearchToolsUnavailableError):
+        classify_author_exit(
+            "source-request",
+            "m4066",
+            75,
+            "",
+            "author executor stage1 failed: research-tools-unavailable (attempt aa)",
+        )
+
+
+def test_one_contract_invalid_author_result_cannot_abort_the_campaign(
+    tmp_path: Path,
+) -> None:
+    """The rung-5 abort, replayed: one invalid author result must cost one model.
+
+    On 2026-07-27 a 20-model rung dispatched 22 author attempts and published 18
+    good results, then m4066's two sessions each published schema-invalid
+    payloads; the executor's exit-75 refusal was classified campaign-scoped
+    transport, so the run terminated with ZERO terminal records, ZERO gates, and
+    ZERO ledger rows. This drives the same refusal through the same classifier
+    and asserts the blast radius is the model: the siblings all land in the
+    ledger, and the failing model gets an honest author-owned terminal after its
+    one bounded fresh session.
+    """
+
+    snapshot = _snapshot(tmp_path, count=6)
+    failed_id = snapshot.items[0].stable_id
+    author = ContractInvalidExitAuthor(failed_id)
+
+    result = _driver(tmp_path, snapshot, author=author).run()
+
+    assert result.status == "terminal-partition-complete"
+    models = {
+        record["stable_id"]: record
+        for record in scan_jsonl(_paths(tmp_path, snapshot).ledgers.models)
+    }
+    # Every sibling completed and was recorded.
+    assert sum(record["status"]["code"] == "runs" for record in models.values()) == 5
+    # The refusal still fired -- the model is failed, honestly, as the author's
+    # published content, not as a dead session and not as an engine fault.
+    assert models[failed_id]["status"]["code"] == "failed:author"
+    assert models[failed_id]["status"]["reason_code"] == "malformed-result"
+    # One bounded fresh session was granted before the model-local terminal:
+    # exactly the two per-run author attempts the aborting run also spent.
+    assert author.calls[failed_id] == 2
+
+
+def test_genuine_transport_failure_still_halts_the_campaign(tmp_path: Path) -> None:
+    """The boundary moved; it did not dissolve.
+
+    A persistent ``RetryableOperatorError`` that is NOT an executor contract
+    refusal -- a spawn or socket failure -- is evidence about the machine, and
+    terminalizing models into it would burn good models on a broken host. It
+    must still unwind the run for the scheduler to retry.
+    """
+
+    snapshot = _snapshot(tmp_path, count=3)
+    failed_id = snapshot.items[0].stable_id
+
+    with pytest.raises(RetryableOperatorError):
+        _driver(tmp_path, snapshot, author=TransportFailingAuthor(failed_id)).run()
 
 
 def test_fetch_contract_rejection_terminalizes_with_its_own_reason(tmp_path: Path) -> None:
