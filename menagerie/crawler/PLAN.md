@@ -684,6 +684,31 @@ content hash. Attempt ledgers use machine-specific filenames, but the same singl
 machine campaign; concurrent Mac/Linux crawling is not a supported mode. The checkpoint reducer merges
 completed machine facts deterministically and detects conflicting current revisions.
 
+### 17.7 Models withheld because this host is too small
+
+```bash
+python -m menagerie.crawler capacity-deferrals
+python -m menagerie.crawler capacity-deferrals --full     # full estimate and threshold per model
+```
+
+Some catalog models cannot be instantiated on a small host at all: full-config Mixtral-8x7B declares
+about 46.5B parameters, roughly 186 GB of fp32 random-init tensors, and on a 16 GiB machine its worker
+is OOM-killed after minutes of futile allocation. Before the environment lane runs, the driver bounds
+each gated model's parameter count from the authored recipe's own declared configuration -- no import,
+no construction, no allocation -- and withholds any model whose bound exceeds a ceiling derived from
+the host's real physical memory (`OVERCOMMIT_ALLOWANCE` times `hw.memsize`, at four bytes per
+parameter). Withheld models are recorded in `records/intake-extensions/host-capacity-deferrals.jsonl`
+under the disposition `deferred:needs-more-memory`, each row stating both the estimate and the
+threshold that produced it.
+
+A withheld model is **not** terminalized: it is uncompleted for this campaign, not failed, and
+re-running the identical campaign on a larger host lifts the ceiling automatically because the
+threshold is read from the machine. `MENAGERIE_HOST_MEMORY_BYTES` declares that figure explicitly when
+modelling a bigger box. The check cannot save the author session -- an intake row carries only a name,
+and the parameter count first exists in the authored recipe -- so it saves the environment solve, the
+worker run, and the kill. Coverage is partial by construction: a recipe naming a library symbol
+(`timm.dla60`) declares no size, yields no bound, and is always admitted.
+
 ## 18. Frozen agent prompt identities
 
 The prompt files are authoritative runtime inputs. The dispatch-brief fragments under `prompts/pool/`

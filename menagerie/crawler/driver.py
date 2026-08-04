@@ -190,6 +190,14 @@ from menagerie.crawler.models import (
     LedgerPaths as LedgerPaths,
     manifest_source_rows,
 )
+from menagerie.crawler.host_capacity import (
+    CapacityAssessment,
+    append_capacity_deferral_row,
+    assess_model_capacity,
+    build_capacity_deferral_row,
+    capacity_deferral_path,
+    host_capacity,
+)
 from menagerie.crawler.mirrors import ArtifactOrigin, MirrorClass, MirrorStore
 from menagerie.crawler.proposal import ProposalValidationError, model_code_manifest
 from menagerie.crawler.promotion import (
@@ -1116,6 +1124,11 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             # `paused:usage-limit` instead of failing the in-flight model.
             return usage_pause.reason
         eligible_work = tuple(item for item in work if item.stable_id in artifacts)
+        # Before the checker and before the environment lane: a model this host
+        # cannot instantiate should cost nothing further on this run or on any
+        # resume. The author session is already spent and cannot be recovered --
+        # the parameter count first exists in the authored recipe.
+        eligible_work = self._admit_within_host_capacity(eligible_work, artifacts, operational)
         self._ensure_pending_run_anchors(eligible_work, artifacts, reducer, operational, state)
         eligible_work = tuple(item for item in eligible_work if item.stable_id in artifacts)
         pause = self._ensure_gates(eligible_work, artifacts, reducer, operational, state)
@@ -1152,6 +1165,119 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             award_run=True,
             currentness_validation_only=currentness_validation_only,
         )
+
+    def _admit_within_host_capacity(
+        self,
+        work: Sequence[WorkItem],
+        artifacts: Mapping[str, AuthorArtifact],
+        operational: JsonlLedger,
+    ) -> tuple[WorkItem, ...]:
+        """Withhold models this host provably cannot instantiate, and record why.
+
+        This runs AFTER the proposal is authored and gated and BEFORE the
+        environment lane, because that is the earliest point at which the model's
+        size is knowable: an intake row carries only a name, and a parameter
+        count cannot be obtained by building the model, which is the very thing
+        being avoided. So the check cannot save the agentic author session -- it
+        saves the environment solve, the worker run, and the OOM kill.
+
+        A withheld model is NOT terminalized. It is left uncompleted for this
+        campaign and recorded in the durable host-capacity deferral ledger, which
+        is the truthful statement: not attempted, not failed, recoverable on
+        bigger hardware. Re-running the identical campaign on a larger host lifts
+        the ceiling automatically -- the threshold is read from the machine -- so
+        the model is admitted there with no code change.
+
+        Parameters
+        ----------
+        work:
+            Gated work items eligible for the environment lane.
+        artifacts:
+            Executable authority keyed by stable ID.
+        operational:
+            Locked operational ledger for the health event.
+
+        Returns
+        -------
+        tuple[WorkItem, ...]
+            The subset of ``work`` this host will attempt, in original order.
+        """
+
+        if not work:
+            return tuple(work)
+        host = host_capacity()
+        admitted: list[WorkItem] = []
+        deferred: list[tuple[WorkItem, CapacityAssessment]] = []
+        for item in work:
+            artifact = artifacts[item.stable_id]
+            try:
+                recipe = artifact.proposal.get("proposed_facts", {}).get("implementation", {})
+            except DriverIntegrationError:
+                # A terminal author result has no executable proposal and never
+                # reaches the environment lane on its own account. Nothing to size.
+                admitted.append(item)
+                continue
+            assessment = assess_model_capacity(recipe, host=host)
+            if assessment.deferred:
+                deferred.append((item, assessment))
+            else:
+                admitted.append(item)
+        if not deferred:
+            return tuple(admitted)
+        created_at = self.dependencies.clock()
+        records_root = self.paths.ledgers.models.parent.parent
+        ledger_path = capacity_deferral_path(records_root)
+        for item, assessment in deferred:
+            append_capacity_deferral_row(
+                ledger_path,
+                build_capacity_deferral_row(
+                    stable_id=item.stable_id,
+                    work_id=item.active_work_id,
+                    name=item.intake.name,
+                    campaign_id=str(self.config.campaign_id),
+                    run_id=self.config.run_id,
+                    machine_id=self.config.machine_id,
+                    created_at=created_at,
+                    assessment=assessment,
+                ),
+            )
+        event = {
+            "schema_version": OPERATIONAL_EVENT_SCHEMA_VERSION,
+            "created_at": created_at,
+            "event_kind": OperationalEventKind.CAMPAIGN_HEALTH.value,
+            "status": OperationalEventStatus.HEALTHY.value,
+            "provider": None,
+            "observed_response": None,
+            "reset_at": None,
+            "queued_work_counts": {"models": len(deferred)},
+            "current_environment": None,
+            "run_id": self.config.run_id,
+            "machine_id": self.config.machine_id,
+            "details": {
+                "disposition": "host-capacity-deferred",
+                "ledger": str(ledger_path.relative_to(records_root)),
+                "host_physical_memory_bytes": host.physical_memory_bytes,
+                "admissible_parameter_ceiling": host.admissible_parameter_ceiling,
+                "deferred": [
+                    {
+                        "stable_id": item.stable_id,
+                        "work_id": item.active_work_id,
+                        "parameter_count_lower_bound": (
+                            assessment.estimate.parameter_count_lower_bound
+                            if assessment.estimate is not None
+                            else None
+                        ),
+                    }
+                    for item, assessment in deferred
+                ],
+            },
+        }
+        # The identity covers the complete logical payload, so a resume that
+        # re-derives the identical refusal idempotently no-ops instead of
+        # tripping the ledger's conflicting-replay tripwire.
+        event["event_id"] = f"host-capacity-{stable_hash(event)[7:31]}"
+        operational.append(event)
+        return tuple(admitted)
 
     def _stage_author_result(
         self,
