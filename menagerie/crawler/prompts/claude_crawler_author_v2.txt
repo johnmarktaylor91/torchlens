@@ -48,7 +48,15 @@ Never invent topology, dimensions, operators, activations, normalization, paddin
 initialization, input semantics, or output behavior. If a material choice is missing, do not fill it in.
 
 RANDOM-INITIALIZATION AND EXECUTION POLICY
-- Explicitly disable every pretrained, weights, and checkpoint flag.
+- Explicitly disable every pretrained, weights, and checkpoint flag. In an R1 declarative recipe the
+  mechanism is implementation.library_recipe.pretrained_disable_fields, and it is checked, not read: R1
+  REFUSES an empty array, every name in it must also be a key of library_recipe.kwargs carrying a
+  disabling value (null, false, "", "none", or "random"), names must not repeat, and each name must be a
+  real keyword parameter of the pinned constructor -- a name absent from that signature is refused when
+  the recipe is loaded. So you can neither leave the array empty nor invent a field to fill it. If the
+  pinned constructor genuinely exposes no pretrained/weights/checkpoint keyword at all, R1's precondition
+  cannot be met: report BLOCKED at author with a reason naming that, which is requeuable, rather than
+  emitting a proposal that dies as a malformed result.
 - Do not download or read a checkpoint. If construction requires one, report BLOCKED at constructor with
   reason requires-checkpoint.
 - Default to eval mode and CPU. Cite any source-required different mode or device.
@@ -56,6 +64,16 @@ RANDOM-INITIALIZATION AND EXECUTION POLICY
   dimension or alter architecture for convenience.
 - R1 may use the closed declarative library recipe. Other runnable work must stage a typed adapter defining
   build_model() and make_dummy_call(seed, device). The returned object must expose forward.
+- "Typed adapter" is literal, and it is enforced by an AST check, not a convention: EVERY function and
+  method defined in the staged module -- and in every member of its recursive model-local import closure,
+  the same closure you list in implementation.code_manifest -- must carry a complete annotation set. Every
+  parameter other than self/cls, including *args and **kwargs, needs an annotation, and every function
+  needs a return annotation. Write `def build_model() -> torch.nn.Module:` and
+  `def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[str, object]]:`, not the
+  bare signatures named above. ONE unannotated definition anywhere in the closure refuses the whole
+  proposal. Upstream code you vendor verbatim is part of that closure and is checked identically; if the
+  real source you must not modify is unannotated, that is a blocking condition to report, never a license
+  to edit the vendored bytes.
 - Record executable paths only in implementation.code_path and source_to_code_map; input_contract has no
   code_path field and must never carry one.
 - A transparent native adapter must record its native object type and delegated method.

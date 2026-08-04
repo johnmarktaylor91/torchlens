@@ -67,7 +67,7 @@
     "evidence_records": {
       "type": "array",
       "items": {"$ref": "#/$defs/evidence_record"},
-      "description": "Declared home for the excerpts the recommendation cites. Absence is a named gap in the checker envelope, never a silent claim of grounding."
+      "description": "Declared home for the excerpts the recommendation cites. Absence is a named gap in the checker envelope, never a silent claim of grounding. When present the pack resolves ALL-OR-NOTHING: every id in evidence_ids must have a record here whose text re-derives byte-for-byte from the frozen source named by its source_id. One id with no record, or whose source_id is outside the request envelope's source_manifest, or whose text does not match the frozen bytes, reports the WHOLE pack unresolved and discards every excerpt that did verify -- including the one carrying the terminal arm's own predicate, which then terminalizes as disposition-unverifiable. Quoting more is therefore not safer than quoting less. A fact read anywhere the broker never froze has no groundable source_id and belongs in neither this array nor evidence_ids."
     },
     "handoff_execution": {
       "type": "object",
@@ -98,7 +98,7 @@
         "arm": {"const": "DEFER_RECOMMENDATION", "description": "Platform-deferral arm discriminator."},
         "platform": {"enum": ["cuda", "x86"], "description": "Closed target platform capability."},
         "source_ids": {"$ref": "author-result-v3.schema.json#/$defs/string_array", "description": "Exact supporting source identities."},
-        "evidence_ids": {"$ref": "author-result-v3.schema.json#/$defs/string_array", "description": "Exact supporting evidence identities."},
+        "evidence_ids": {"$ref": "author-result-v3.schema.json#/$defs/string_array", "description": "Exact supporting evidence identities. Declare ONLY ids you can ground verbatim in the frozen source_manifest: resolution is all-or-nothing, so one id without a matching, re-derivable evidence_records entry reports the entire pack unresolved. See evidence_records."},
         "evidence_identity": {"$ref": "author-result-v3.schema.json#/$defs/hash", "description": "Exact evidence-pack identity."},
         "license_identity": {"$ref": "author-result-v3.schema.json#/$defs/hash", "description": "Exact license disposition identity."},
         "handoff_execution": {"$ref": "#/$defs/handoff_execution", "description": "Separately authenticated executable handoff authority."},
@@ -125,7 +125,7 @@
           "description": "Closed R5 status recommendation."
         },
         "source_ids": {"$ref": "author-result-v3.schema.json#/$defs/string_array", "description": "Hash-bound candidate source identities."},
-        "evidence_ids": {"$ref": "author-result-v3.schema.json#/$defs/string_array", "description": "Hash-bound candidate evidence excerpts."},
+        "evidence_ids": {"$ref": "author-result-v3.schema.json#/$defs/string_array", "description": "Hash-bound candidate evidence excerpts. Declare ONLY ids you can ground verbatim in the frozen source_manifest: resolution is all-or-nothing, so one id without a matching, re-derivable evidence_records entry reports the entire pack unresolved. See evidence_records."},
         "evidence_identity": {"$ref": "author-result-v3.schema.json#/$defs/hash", "description": "Exact candidate evidence-pack identity."},
         "search_report_identity": {"$ref": "author-result-v3.schema.json#/$defs/hash", "description": "Exact bounded search-report identity."},
         "license_identity": {"$ref": "author-result-v3.schema.json#/$defs/hash", "description": "Exact proposed license disposition identity."},
@@ -158,7 +158,7 @@
           },
           "description": "Stable semantic IDs for missing external facts or capabilities; schema paths and output-field names are forbidden."
         },
-        "evidence_ids": {"$ref": "author-result-v3.schema.json#/$defs/string_array", "description": "Hash-bound candidate evidence excerpts."},
+        "evidence_ids": {"$ref": "author-result-v3.schema.json#/$defs/string_array", "description": "Hash-bound candidate evidence excerpts. Declare ONLY ids you can ground verbatim in the frozen source_manifest: resolution is all-or-nothing, so one id without a matching, re-derivable evidence_records entry reports the entire pack unresolved. See evidence_records."},
         "evidence_identity": {"$ref": "author-result-v3.schema.json#/$defs/hash", "description": "Exact candidate evidence-pack identity."},
         "license_identity": {"$ref": "author-result-v3.schema.json#/$defs/hash", "description": "Exact proposed license disposition identity."},
         "evidence_records": {"$ref": "#/$defs/evidence_records", "description": "Declared literal excerpts for the cited evidence IDs."},
