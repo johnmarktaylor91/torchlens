@@ -1983,11 +1983,25 @@ def _assemble_terminal_model(
                 ],
             }
         )
-    metadata_gate = _find_gate(
-        gates,
-        item.stable_id,
-        "metadata_batch",
-        proposal if proposed else None,
+    # A metadata gate adjudicates the AUTHORED facts of the exact proposal it
+    # bound, so it is consulted only when THIS record carries those facts. A
+    # record that carries none -- a typed terminal recommendation, or the
+    # artifact-free minimal fallback that `_terminalize` uses as its last
+    # resort -- holds machine placeholder facts that DECLARE authored metadata
+    # absent (`external_metadata: None`). Passing `proposal=None` here made
+    # `_find_gate` a stable-id wildcard: it matched the latest accepted gate of
+    # a DROPPED proposal generation and then validated the placeholder facts
+    # against it, which refuses deterministically ("external_metadata must be
+    # an object") and would also have stamped `metadata_state="accepted"` over
+    # facts no checker ever saw. That wildcard is how rung-2 `m5915` ended with
+    # NO record at all: its primary terminal append refused on a stale
+    # artifact/gate pair (the tripwire working), and the artifact-free fallback
+    # -- the rung that exists precisely to survive that -- inherited the same
+    # foreign gate and refused too. No check is weakened: proposed facts are
+    # still gated below exactly as before, and a gateless record is honestly
+    # `metadata_state="failed"` with `accuracy_gate.current=False`.
+    metadata_gate = (
+        _find_gate(gates, item.stable_id, "metadata_batch", proposal) if proposed else None
     )
     metadata_item: Optional[Mapping[str, Any]] = None
     metadata_accepted = False

@@ -70,6 +70,7 @@ from menagerie.crawler.driver_contracts import (
     ActivatedHandoffArtifact,
     AuthorArtifact,
     AuthorBackoffError,
+    AuthorRepairTerminal,
     DriverIntegrationError,
     DriverPaused,
     DriverShutdown,
@@ -2393,6 +2394,26 @@ class ReceiptDriverMixin:
                         # already returns a pause reason from run repair, so route
                         # it through the same channel instead of the blanket arm.
                         return self._pause_for_usage(backoff.signal, operational, 1)
+                    except AuthorRepairTerminal as terminal:
+                        # A typed terminal recommendation from the mode-repair
+                        # generation is an ANSWER, not a repair failure. Caught
+                        # ahead of the blanket arm below, which would record it
+                        # as `failed:runner / protocol-violation` and throw the
+                        # verdict away; routed to the same terminal-disposition
+                        # gate the first-call arm uses, exactly like the three
+                        # `_ensure_gates` repair sites.
+                        return self._route_repair_terminal_author_result(
+                            item,
+                            terminal,
+                            reducer,
+                            operational,
+                            state,
+                            # The worker already ran under this work generation, so
+                            # the reducer will derive per-mode and environment proof
+                            # from these ledger attempts; the terminal record must
+                            # carry them or it contradicts that proof and refuses.
+                            prior_attempts=tuple(all_attempts),
+                        )
                     except Exception as exc:  # noqa: BLE001 -- bounded repair is model-local
                         reason = (
                             "protocol-violation"

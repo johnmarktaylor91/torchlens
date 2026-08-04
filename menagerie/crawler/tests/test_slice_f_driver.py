@@ -1308,6 +1308,44 @@ class DetectedModeRepairAuthor(FakeAuthor):
         return _rebind_fake_author_result(artifact)
 
 
+class ModeRepairTerminalAuthor(FakeAuthor):
+    """Eval-only first proposal; the detected-mode repair generation answers terminally.
+
+    Call 1 declares eval-only so the worker's dual-mode observation triggers the
+    bounded ``run_modes`` repair; call 2 -- the AGENTIC repair generation -- comes
+    back with a typed platform deferral instead of a revised proposal.
+    """
+
+    def __init__(self, stable_id: str) -> None:
+        """Script the terminal answer onto exactly the repair generation."""
+
+        super().__init__(
+            AuthorScript(
+                terminal_outcomes=(("platform", "cuda"),),
+                terminal_id=stable_id,
+                terminal_call=2,
+            )
+        )
+
+    def author(
+        self, item: WorkItem, work_root: Path, config: DriverConfig, context: AuthorityContext
+    ) -> AuthorArtifact:
+        """Return an eval-only proposal first and the scripted terminal on repair."""
+
+        artifact = super().author(item, work_root, config, context)
+        if not isinstance(artifact.author_result, ProposedAuthorResult):
+            return artifact
+        facts = artifact.proposal["proposed_facts"]
+        facts["modes"]["meaningful_modes"] = ["eval"]
+        facts["external_metadata"]["modes"]["meaningful_modes"] = ["eval"]
+        _refresh_proposal_identities(
+            artifact.proposal,
+            checker_model=config.checker_model,
+            checker_version=config.checker_version,
+        )
+        return _rebind_fake_author_result(artifact)
+
+
 class ModeRepairCapAuthor(EvalOnlyAuthor):
     """Issue fresh work identities that never cover a detected train mode."""
 
@@ -4613,6 +4651,59 @@ def test_runtime_mode_expansion_terminalizes_only_after_repair_cap(tmp_path: Pat
         )
     )
     assert len(repair_requests) == 2
+
+
+def test_a_mode_repair_generation_may_answer_with_a_terminal_recommendation(
+    tmp_path: Path,
+) -> None:
+    """A typed terminal answer to a mode repair is adjudicated, never cap-burned.
+
+    ``_repair_author_for_detected_modes`` had the same structural defect the
+    ``_ensure_gates`` repair sites just shed, with a WORSE cost profile: a typed
+    DEFER/SKIP/BLOCKED answer from the repair generation was consumed into
+    ``last_error`` by the blanket per-generation arm, so the driver re-ran the
+    AGENTIC author for every remaining generation of ``run_repair_max`` asking a
+    question the author had already declined, then died ``cap exhausted`` as
+    ``failed:runner / protocol-violation`` with the verdict discarded. In a
+    run-once system each of those re-runs is a real agent session.
+
+    With ``run_repair_max=3`` the defective path makes four author calls and a
+    protocol-violation record; the routed path makes exactly two and records the
+    disposition the author actually gave, adjudicated by the same
+    terminal-disposition gate the first-call arm uses.
+    """
+
+    snapshot = _snapshot(tmp_path, count=1)
+    stable_id = snapshot.items[0].stable_id
+    author = ModeRepairTerminalAuthor(stable_id)
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=author,
+        forward=ScriptedForward(ForwardScript(expanded_id=stable_id)),
+        run_repair_max=3,
+    ).run()
+
+    assert result.status == "complete"
+    assert author.calls == {stable_id: 2}, (
+        "a terminal answer must consume ONE repair generation, not the whole cap"
+    )
+    paths = _paths(tmp_path, snapshot)
+    model = scan_jsonl(paths.ledgers.models)[-1]
+    assert model["status"]["code"] == "deferred:needs-cuda", (
+        "the author's typed verdict must reach the record as the disposition it is"
+    )
+    assert model["status"]["code"] != "failed:runner"
+    assert model["status"]["reason_code"] is None
+    # The verdict was ADJUDICATED, not merely relabeled: the terminal-disposition
+    # gate the first-call arm uses must have run for this model too.
+    terminal_gates = [
+        gate
+        for gate in scan_jsonl(paths.ledgers.gates)
+        if gate.get("gate_kind") == "terminal_disposition"
+        and any(entry.get("stable_id") == stable_id for entry in gate.get("items", []))
+    ]
+    assert terminal_gates, "the repair terminal must be adjudicated by the terminal gate"
 
 
 def test_declared_mode_order_is_canonical_before_gate_and_recipe_identity(tmp_path: Path) -> None:
