@@ -1220,7 +1220,7 @@
         },
         "code_path": {
           "$ref": "#/$defs/nullable_string",
-          "description": "Mandatory code path."
+          "description": "Mandatory code path. Model-root-relative entry module for a staged rung; null for R1_LIBRARY, which refuses staged code and must use library_recipe instead. Staged code is checked by AST before acceptance and must be FULLY TYPED: every function and method defined in this module, and in every member of its recursive model-local import closure listed in code_manifest, carries an annotation on every parameter other than self/cls -- including *args and **kwargs -- and a return annotation. One unannotated definition anywhere in that closure refuses the whole proposal. Verbatim-vendored upstream files are part of the closure and are checked identically; unannotated upstream source is a blocking condition to report, never a reason to modify the vendored bytes."
         },
         "code_sha256": {
           "$ref": "#/$defs/nullable_hash",
@@ -1246,7 +1246,7 @@
               }
             }
           },
-          "description": "Closed recursive model-local Python import manifest."
+          "description": "Closed recursive model-local Python import manifest. Every member listed here is subject to the same full-annotation AST check as code_path, vendored upstream files included."
         },
         "builder_symbol": {
           "oneOf": [
@@ -1257,7 +1257,7 @@
               "type": "null"
             }
           ],
-          "description": "Mandatory builder symbol."
+          "description": "Mandatory builder symbol. Exactly build_model for a staged rung, null otherwise. It must be defined fully annotated -- 'def build_model() -> torch.nn.Module:', not 'def build_model():'; see code_path for the annotation rule that covers every staged function."
         },
         "dummy_call_symbol": {
           "oneOf": [
@@ -1268,7 +1268,7 @@
               "type": "null"
             }
           ],
-          "description": "Mandatory dummy call symbol."
+          "description": "Mandatory dummy call symbol. Exactly make_dummy_call for a staged rung, null otherwise. Both parameters and the return need annotations -- 'def make_dummy_call(seed: int, device: str) -> tuple[tuple[object, ...], dict[str, object]]:', not 'def make_dummy_call(seed, device):'; see code_path."
         },
         "library_recipe": {
           "oneOf": [
@@ -1420,7 +1420,7 @@
         },
         "pretrained_disable_fields": {
           "$ref": "#/$defs/string_array",
-          "description": "Mandatory pretrained disable fields."
+          "description": "Mandatory pretrained disable fields. Names every pinned-constructor keyword that would otherwise load pretrained weights or a checkpoint. This is checked, not merely recorded: R1_LIBRARY REFUSES an empty array, every name here must also be a key of kwargs carrying a disabling value (null, false, empty string, 'none', or 'random'), names must not repeat, and each name must be a real keyword parameter of the pinned constructor -- a name absent from that signature is refused when the recipe is loaded. So an empty array cannot be filled by inventing a field. If the pinned constructor genuinely exposes no pretrained, weights, or checkpoint keyword, R1_LIBRARY's precondition cannot be met for it; report that as a blocked prerequisite rather than emitting a recipe that will be refused as malformed."
         },
         "entrypoint": {
           "oneOf": [

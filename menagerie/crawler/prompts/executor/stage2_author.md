@@ -231,6 +231,22 @@ Omitting `evidence_records` is allowed and is recorded as a **named gap** on the
 envelope: the checker is told plainly that the cited IDs have no inspectable excerpt. It
 is not treated as grounding, and it will not be silently forgiven. Quote what you read.
 
+**The pack resolves all-or-nothing, so cite only what you can ground.** Every ID in
+`evidence_ids` must have a record here whose `text` re-derives byte-for-byte from the
+frozen source named by its `source_id`. A single ID that has no record, or whose
+`source_id` is not in the REQUEST envelope's `source_manifest`, or whose text does not
+match the frozen bytes, reports the **whole pack** unresolved and discards every excerpt
+that did verify -- including the one carrying the `blocked-prerequisite` excerpt your
+terminal arm rests on. A `BLOCKED` whose pack collapses this way is terminalized as
+disposition-unverifiable, which is worse than a smaller honest pack.
+
+Two consequences worth internalizing. First, quoting more is not safer: three ungroundable
+rows destroy ten good ones. Second, a fact you read somewhere the broker never froze -- a
+web page, a metadata API response, an abstract you fetched outside the manifest -- has no
+groundable `source_id` and does not belong in `evidence_ids` at all. Drop the ID, or
+request that object through the one supplementary source round so it is in the manifest
+before you cite it.
+
 For `DEFER_RECOMMENDATION`, use `platform` (exactly `cuda` or `x86`), not
 `recommended_target`; include `source_ids`, `evidence_ids`, and `evidence_records`; and put the same complete
 registered proposal at `handoff_execution.proposal`. The executor derives the other four
