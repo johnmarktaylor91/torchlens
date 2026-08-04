@@ -1124,6 +1124,11 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             # `paused:usage-limit` instead of failing the in-flight model.
             return usage_pause.reason
         eligible_work = tuple(item for item in work if item.stable_id in artifacts)
+        # Before the checker and before the environment lane: a model this host
+        # cannot instantiate should cost nothing further on this run or on any
+        # resume. The author session is already spent and cannot be recovered --
+        # the parameter count first exists in the authored recipe.
+        eligible_work = self._admit_within_host_capacity(eligible_work, artifacts, operational)
         self._ensure_pending_run_anchors(eligible_work, artifacts, reducer, operational, state)
         eligible_work = tuple(item for item in eligible_work if item.stable_id in artifacts)
         pause = self._ensure_gates(eligible_work, artifacts, reducer, operational, state)
@@ -1135,7 +1140,6 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             or item.requeue_active
             or self.config.only_status is not None
         )
-        eligible_work = self._admit_within_host_capacity(eligible_work, artifacts, operational)
         if pause is not None:
             mechanical_work = tuple(
                 item
