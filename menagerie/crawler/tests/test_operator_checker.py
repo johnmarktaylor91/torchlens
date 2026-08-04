@@ -331,6 +331,131 @@ def test_attempt_telemetry_records_completed_and_censored_durations(tmp_path: Pa
     assert set(report["by_workload"]) == {f"{GateKind.METADATA_BATCH.value}[1]"}
 
 
+def _flubbed_echo(result: dict[str, Any]) -> dict[str, Any]:
+    """Return the result with one well-formed but mis-transcribed vet identity.
+
+    This is the observed live fault shape (rung 3, batch ``0f44a52d3e324c4c``,
+    item m4334): every other binding echoed exactly, and the flubbed value is
+    still a syntactically valid ``sha256:`` string, so nothing upstream of the
+    binding comparison can catch it.
+    """
+
+    flubbed = deepcopy(result)
+    flubbed["items"][0]["vet_identity"] = "sha256:" + "0" * 64
+    return flubbed
+
+
+def test_binding_mismatch_is_refused_then_retried_not_terminal(tmp_path: Path) -> None:
+    """One mis-transcribed identity echo costs an attempt, not the whole batch.
+
+    The mismatched result is REFUSED -- the telemetry proves it never published
+    -- and a fresh bounded attempt re-reads the same frozen envelope. Before
+    this, the first flub was an immediate ``PERMANENT_CONTRACT_REJECTION`` that
+    terminalized every batch member as ``failed:runner / protocol-violation``
+    on a run-once system (rung 3: m4334 and m8245 both died on one flubbed
+    string).
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated wrapper root.
+    """
+
+    request_path, result = _request_and_result(tmp_path)
+    calls = 0
+
+    def invoke(argv: Sequence[str], last_message: Path, timeout: float) -> CodexAttempt:
+        """Inject one mis-echoed binding followed by one faithful echo."""
+
+        del argv, timeout
+        nonlocal calls
+        calls += 1
+        message = _flubbed_echo(result) if calls == 1 else result
+        last_message.write_bytes(_native_final_message(message))
+        return CodexAttempt(
+            0,
+            '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}\n',
+            "",
+        )
+
+    exit_code = execute_checker_request(
+        request_path,
+        invoke=invoke,
+        sleep=lambda _seconds: None,
+        diagnostic_stream=StringIO(),
+    )
+
+    assert exit_code is OperatorExitCode.SUCCESS
+    assert calls == 2
+    published = json.loads((tmp_path / "result.json").read_text(encoding="utf-8"))
+    assert published["items"][0]["vet_identity"] == result["items"][0]["vet_identity"]
+    events = [
+        json.loads(line)
+        for line in telemetry_path(request_path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    refusals = [event for event in events if event["event"] == "binding-mismatch-refused"]
+    assert [event["attempt"] for event in refusals] == [1]
+    assert refusals[0]["retrying"] is True
+    assert "mismatched binding: vet_identity" in refusals[0]["detail"]
+    assert _status(request_path)["classification"] == "success"
+
+
+def test_persistent_binding_mismatch_still_exits_permanent(tmp_path: Path) -> None:
+    """A mismatch on every bounded attempt keeps the exact historical refusal.
+
+    The retry never weakens the tripwire: a checker that cannot ever echo its
+    envelope bindings -- the signature of a genuine builder/matcher divergence
+    rather than a stochastic flub -- exhausts ``CHECKER_MAX_ATTEMPTS`` and
+    exits with the same permanent contract rejection, the same sidecar
+    classification, and no published result.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated wrapper root.
+    """
+
+    request_path, result = _request_and_result(tmp_path)
+    calls = 0
+
+    def invoke(argv: Sequence[str], last_message: Path, timeout: float) -> CodexAttempt:
+        """Inject the same mis-echoed binding on every attempt."""
+
+        del argv, timeout
+        nonlocal calls
+        calls += 1
+        last_message.write_bytes(_native_final_message(_flubbed_echo(result)))
+        return CodexAttempt(
+            0,
+            '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}\n',
+            "",
+        )
+
+    exit_code = execute_checker_request(
+        request_path,
+        invoke=invoke,
+        sleep=lambda _seconds: None,
+        diagnostic_stream=StringIO(),
+    )
+
+    assert exit_code is OperatorExitCode.PERMANENT_CONTRACT_REJECTION
+    assert calls == CHECKER_MAX_ATTEMPTS
+    assert not (tmp_path / "result.json").exists()
+    status = _status(request_path)
+    assert status["classification"] == "permanent-contract-rejection"
+    assert "mismatched binding: vet_identity" in status["detail"]
+    events = [
+        json.loads(line)
+        for line in telemetry_path(request_path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    refusals = [event for event in events if event["event"] == "binding-mismatch-refused"]
+    assert [event["retrying"] for event in refusals] == [True] * (CHECKER_MAX_ATTEMPTS - 1) + [
+        False
+    ]
+
+
 @pytest.mark.parametrize(
     ("gate_kind", "expected_model"),
     [
