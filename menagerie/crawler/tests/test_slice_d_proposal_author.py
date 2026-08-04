@@ -38,6 +38,7 @@ from menagerie.crawler.proposal import (
     DEFAULT_GATED_CLAIMS,
     VALUE_MATCHED_CLAIMS,
     ProposalValidationError,
+    _normalize_support_text,
     model_code_manifest,
     validate_author_proposal,
 )
@@ -447,13 +448,19 @@ def test_fabricated_citation_authors_venue_and_bibtex_are_refused_per_leaf(
             }
         )
     with pytest.raises(
-        ProposalValidationError, match="not grounded verbatim.*authors.*bibtex.*venue"
+        ProposalValidationError,
+        match="not grounded verbatim.*authors.*venue.*do not agree.*bibtex",
     ):
         validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
 
 
 def test_fabricated_bibtex_alone_is_refused_by_consistency(tmp_path: Path) -> None:
-    """A BibTeX entry for a different work fails against the grounded leaves."""
+    """A BibTeX entry for a different work fails against the grounded leaves.
+
+    The refusal must name the check BibTeX actually failed. A constructed record is
+    never quoted by the paper it cites, so reporting it as "not grounded verbatim in
+    the fetched paper text" would send the author after an excerpt that cannot exist.
+    """
 
     proposal, manifest = _ground_proposal(tmp_path)
     for citation in (
@@ -464,8 +471,11 @@ def test_fabricated_bibtex_alone_is_refused_by_consistency(tmp_path: Path) -> No
             "@article{other2019, title={A Different Paper Entirely}, "
             "author={Somebody, Else}, year={2019}}"
         )
-    with pytest.raises(ProposalValidationError, match="not grounded verbatim.*bibtex"):
+    with pytest.raises(
+        ProposalValidationError, match="do not agree with the grounded title.*bibtex"
+    ) as refusal:
         validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+    assert "not grounded verbatim" not in str(refusal.value)
 
 
 def test_honest_bibtex_consistent_with_grounded_leaves_passes(tmp_path: Path) -> None:
@@ -482,6 +492,197 @@ def test_honest_bibtex_consistent_with_grounded_leaves_passes(tmp_path: Path) ->
         )
     report = validate_author_proposal(
         proposal, allowed_model_dir=tmp_path, source_manifest=manifest
+    )
+    assert report.rung.value == "R1_LIBRARY"
+
+
+ACCENTED_PAPER_TEXT = (
+    "Example Model. Lélio Renard Lavaud, Théophile Gervet, Example Lab, US. "
+    "Published at TestConf in 2020."
+)
+
+
+def _accented_citation(
+    proposal: dict[str, Any], bibtex: str, authors: list[str] | None = None
+) -> None:
+    """Point both citation copies at the accented-author fixture.
+
+    Parameters
+    ----------
+    proposal:
+        Author proposal mutated in place.
+    bibtex:
+        Constructed BibTeX record under test.
+    authors:
+        Claimed author list; defaults to the two accented names in the paper text.
+    """
+
+    for citation in (
+        proposal["proposed_facts"]["citation"],
+        proposal["proposed_facts"]["external_metadata"]["citation"],
+    ):
+        citation["authors"] = list(
+            authors if authors is not None else ["Lélio Renard Lavaud", "Théophile Gervet"]
+        )
+        citation["bibtex"] = bibtex
+
+
+def test_bibtex_spelling_accents_as_tex_escapes_still_grounds_the_same_authors(
+    tmp_path: Path,
+) -> None:
+    """The m5915 shape: an honest BibTeX whose accented names use TeX escapes.
+
+    ``L\\'elio`` is the only spelling BibTeX has for ``Lélio``, and the author is
+    obliged to write it that way. Before the canonicalizer decoded TeX escapes the
+    backslash and quote were dropped as punctuation, the name tokenized to ``l`` plus
+    ``elio`` instead of ``lelio``, and a correct entry naming exactly the grounded
+    authors was refused as if it cited a different work. Refusing this is refusing a
+    requirement no honest author can satisfy.
+    """
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    _strip_paper_evidence(proposal, manifest)
+    attach_paper_evidence(
+        proposal, manifest, tmp_path, text=ACCENTED_PAPER_TEXT, source_id="source-arxiv"
+    )
+    _accented_citation(
+        proposal,
+        "@inproceedings{lavaud2020example, title={Example Model}, "
+        "author={Renard Lavaud, L\\'elio and Gervet, Th\\'eophile}, "
+        "booktitle={TestConf}, year={2020}}",
+    )
+    report = validate_author_proposal(
+        proposal, allowed_model_dir=tmp_path, source_manifest=manifest
+    )
+    assert report.rung.value == "R1_LIBRARY"
+
+
+def test_tex_escapes_cannot_launder_a_bibtex_naming_different_authors(
+    tmp_path: Path,
+) -> None:
+    """Decoding TeX escapes must not become a hole a fabricated entry fits through.
+
+    The escape decoder only rejoins a token the TeX syntax split. An entry whose author
+    list, fully decoded, names people the grounded citation does not claim is still an
+    entry for a different work, and is still refused.
+    """
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    _strip_paper_evidence(proposal, manifest)
+    attach_paper_evidence(
+        proposal, manifest, tmp_path, text=ACCENTED_PAPER_TEXT, source_id="source-arxiv"
+    )
+    _accented_citation(
+        proposal,
+        "@inproceedings{other2020, title={Example Model}, "
+        "author={Renard Lavaud, S\\'ebastien and Gervet, Ana\\\"is}, "
+        "booktitle={TestConf}, year={2020}}",
+    )
+    with pytest.raises(
+        ProposalValidationError, match="do not agree with the grounded title.*bibtex"
+    ):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_tex_escaped_bibtex_still_fails_against_a_fabricated_author_claim(
+    tmp_path: Path,
+) -> None:
+    """An author the paper never names is refused before BibTeX is even consulted."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    _strip_paper_evidence(proposal, manifest)
+    attach_paper_evidence(
+        proposal, manifest, tmp_path, text=ACCENTED_PAPER_TEXT, source_id="source-arxiv"
+    )
+    _accented_citation(
+        proposal,
+        "@inproceedings{ghost2020, title={Example Model}, "
+        "author={Ghostwriter, S\\'ebastien}, booktitle={TestConf}, year={2020}}",
+        authors=["Sébastien Ghostwriter"],
+    )
+    with pytest.raises(ProposalValidationError, match="not grounded verbatim.*authors"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_tex_escape_decoding_is_symmetric_with_the_unicode_spelling() -> None:
+    """Both spellings of one name must canonicalize to the same tokens.
+
+    Symmetry is the whole property: the decoder emits the precomposed character the
+    escape denotes, so the existing NFKD fold reduces it exactly as it reduces the
+    character typed directly. ``\\l`` and ``ł`` matter separately because NFKD does not
+    decompose a barred l, so decoding it to a bare ``l`` would have been the asymmetry
+    in the other direction.
+    """
+
+    for escaped, unicode_spelling in (
+        ("L\\'elio", "Lélio"),
+        ("Th\\'eophile", "Théophile"),
+        ("Timoth\\'ee", "Timothée"),
+        ('Ana\\"is', "Anaïs"),
+        ("Fran\\c{c}ois", "François"),
+        ("Erd\\H{o}s", "Erdős"),
+        ("{\\L}ukasz", "Łukasz"),
+        ("Wei\\ss{}", "Weiß"),
+        ("Sm\\o{}rrebr\\o{}d", "Smørrebrød"),
+    ):
+        assert _normalize_support_text(escaped) == _normalize_support_text(unicode_spelling)
+
+
+def test_tex_escape_decoding_leaves_unrelated_backslash_commands_alone() -> None:
+    """Only accent and special-letter commands decode; nothing else is interpreted."""
+
+    assert _normalize_support_text("\\varphi \\ref{fig:1} \\dots") == "varphi ref fig 1 dots"
+
+
+def test_declared_arxiv_id_present_on_the_page_but_absent_from_the_excerpt_is_refused(
+    tmp_path: Path,
+) -> None:
+    """The m8245 shape: the grounding text was available and was not excerpted.
+
+    The MetaFormer author declared ``arxiv_id`` and bound citation-header excerpts
+    (``citation_title``, ``citation_author``) that carry the title and authors but not
+    the identifier -- which occurs twenty-eight times elsewhere on the same fetched
+    page. The requirement is satisfiable from the bytes the author already held, so the
+    refusal is correct and the remedy is one more excerpt, never a looser check. Both
+    halves are asserted here so the pair cannot drift apart.
+    """
+
+    page = (
+        '<meta name="citation_title" content="Example Model" />'
+        '<meta name="citation_author" content="Author, A." />'
+        "Published at TestConf in 2020. [Submitted 2020] arXiv:1905.09791"
+    )
+    header_only, with_identifier = page.split("[Submitted 2020] ")
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    _strip_paper_evidence(proposal, manifest)
+    attach_paper_evidence(
+        proposal, manifest, tmp_path, text=header_only, source_id="source-arxiv"
+    )
+    for citation in (
+        proposal["proposed_facts"]["citation"],
+        proposal["proposed_facts"]["external_metadata"]["citation"],
+    ):
+        citation["arxiv_id"] = "1905.09791"
+    with pytest.raises(ProposalValidationError, match="not grounded verbatim.*arxiv_id"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+    grounded, grounded_manifest = _ground_proposal(tmp_path)
+    _strip_paper_evidence(grounded, grounded_manifest)
+    attach_paper_evidence(
+        grounded,
+        grounded_manifest,
+        tmp_path,
+        text=header_only + with_identifier,
+        source_id="source-arxiv",
+    )
+    for citation in (
+        grounded["proposed_facts"]["citation"],
+        grounded["proposed_facts"]["external_metadata"]["citation"],
+    ):
+        citation["arxiv_id"] = "1905.09791"
+    report = validate_author_proposal(
+        grounded, allowed_model_dir=tmp_path, source_manifest=grounded_manifest
     )
     assert report.rung.value == "R1_LIBRARY"
 
