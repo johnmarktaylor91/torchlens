@@ -59,6 +59,12 @@ from menagerie.crawler.driver import (
 )
 from menagerie.crawler.driver_contracts import RetryableOperatorError
 from menagerie.crawler.envs import load_environment_registry
+from menagerie.crawler.host_capacity import (
+    CAPACITY_DEFERRAL_DISPOSITION,
+    capacity_deferral_path,
+    host_capacity,
+    load_capacity_deferral_rows,
+)
 from menagerie.crawler.intake import IntakeSnapshot, create_intake_snapshot, load_intake_snapshot
 from menagerie.crawler.partitioner import (
     DEFAULT_CAMPAIGN_MANIFEST,
@@ -161,6 +167,17 @@ def build_parser() -> argparse.ArgumentParser:
     status.add_argument("--full", action="store_true")
     status.add_argument("--verify-partition", action="store_true")
 
+    capacity = subparsers.add_parser(
+        "capacity-deferrals",
+        help="list models withheld because this host is too small to instantiate them",
+    )
+    capacity.add_argument("--records-root", type=Path)
+    capacity.add_argument(
+        "--full",
+        action="store_true",
+        help="print each row's complete estimate and threshold",
+    )
+
     wake = subparsers.add_parser("wake", help="inspect or cancel durable wake episodes")
     wake.add_argument("--records-root", type=Path)
     wake_actions = wake.add_subparsers(dest="wake_command", required=True)
@@ -236,6 +253,8 @@ def main(
             return _plan_command(args)
         if args.command == "status":
             return _status_command(args)
+        if args.command == "capacity-deferrals":
+            return _capacity_deferrals_command(args)
         if args.command == "wake":
             return _wake_command(args)
         if args.command == "checkpoint":
@@ -1219,6 +1238,50 @@ def _status_command(args: argparse.Namespace) -> int:
         output["missing"] = sorted(report.missing_ids)
     if args.full:
         output["current"] = current
+    print(json.dumps(output, sort_keys=True))
+    return EXIT_OK
+
+
+def _capacity_deferrals_command(args: argparse.Namespace) -> int:
+    """Print every model withheld for size, newest campaign roots included.
+
+    This is the "show me everything deferred for size" view. Each row names the
+    parameter bound that was derived and the host ceiling it exceeded, so the
+    call can be judged without re-running anything, and the ``recheck_hint``
+    names the machine that would clear it.
+    """
+
+    records_root = args.records_root or args.repo_root / "menagerie" / "crawler" / "records"
+    rows = load_capacity_deferral_rows([capacity_deferral_path(records_root)])
+    host = host_capacity()
+    output: dict[str, object] = {
+        "disposition": CAPACITY_DEFERRAL_DISPOSITION,
+        "deferred": len(rows),
+        "host_physical_memory_bytes": host.physical_memory_bytes,
+        "admissible_parameter_ceiling": host.admissible_parameter_ceiling,
+        "models": [
+            (
+                dict(row)
+                if args.full
+                else {
+                    "stable_id": row["stable_id"],
+                    "name": row["name"],
+                    "work_id": row["work_id"],
+                    "parameter_count_lower_bound": row["capacity"]["estimate"][
+                        "parameter_count_lower_bound"
+                    ],
+                    "estimated_parameter_bytes": row["capacity"]["estimate"][
+                        "estimated_parameter_bytes"
+                    ],
+                    "admissible_parameter_ceiling": row["capacity"]["threshold"][
+                        "admissible_parameter_ceiling"
+                    ],
+                    "recheck_hint": row["recheck_hint"],
+                }
+            )
+            for row in rows
+        ],
+    }
     print(json.dumps(output, sort_keys=True))
     return EXIT_OK
 
