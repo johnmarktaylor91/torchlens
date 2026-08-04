@@ -13,7 +13,7 @@ import sys
 import time
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence, cast
 
 import pytest
 
@@ -854,7 +854,13 @@ class ScriptedChecker(CheckerLane):
             item["work_id"] = proposal["work_id"]
             item["campaign_root_work_id"] = artifact.campaign_root_work_id or proposal["work_id"]
             item["vet_identity"] = proposal["vet_identity"]
-            item["fidelity_identity"] = None
+            # Echo the proposal's own fidelity identity exactly like the real
+            # checker protocol: the driver's item pack carries it and the
+            # operator hands it back. Hard-coding ``None`` here encoded the
+            # same wrong assumption the binding matcher used to hold and let
+            # fidelity-required proposals pass a check the production echo
+            # failed (pilot 2026-08-04: m4334, m7362, m9304).
+            item["fidelity_identity"] = proposal.get("fidelity_identity")
             item["verified_hashes"] = {
                 "proposal": proposal["proposal_sha256"],
                 **proposal["verified_hashes"],
@@ -7915,6 +7921,115 @@ def test_a_gate_that_is_unusable_for_every_member_is_a_named_batch_condition() -
         )
     assert set(raised.value.stale_ids) == {"m_alpha", "m_beta"}
     assert not isinstance(raised.value, GateBatchUnusableError)
+
+
+@dataclass(frozen=True)
+class _PackStub:
+    """Artifact stand-in complete enough for the production item-pack builder."""
+
+    proposal: Mapping[str, Any]
+    source_manifest: Mapping[str, Any]
+    model_dir: Path
+    campaign_root_work_id: Optional[str] = None
+
+
+def _fidelity_bearing_artifact(fidelity_identity: Optional[str]) -> AuthorArtifact:
+    """Return a pack-complete artifact stand-in for a fidelity-declaring R1 author."""
+
+    proposal = _fidelity_bearing_proposal(fidelity_identity)
+    return cast(
+        AuthorArtifact,
+        _PackStub(
+            proposal=proposal,
+            source_manifest={"sources": []},
+            model_dir=Path("model-dir"),
+        ),
+    )
+
+
+def _fidelity_bearing_proposal(fidelity_identity: Optional[str]) -> dict[str, Any]:
+    """Return a minimal proposal shaped like a fidelity-declaring R1 author's."""
+
+    return {
+        "work_id": "work-m_fid",
+        "stable_id": "m_fid",
+        "vet_identity": "sha256:" + "a" * 64,
+        "fidelity_identity": fidelity_identity,
+        "proposal_sha256": "sha256:" + "d" * 64,
+        "verified_hashes": {"code": "sha256:" + "e" * 64},
+        "proposed_facts": {
+            "identity": {"family_representative_id": "fam-m_fid"},
+            "source_resolution": {"rung": "R1_LIBRARY"},
+            "fidelity": {"required": fidelity_identity is not None},
+        },
+    }
+
+
+def _echoed_gate_item(artifact: AuthorArtifact) -> dict[str, Any]:
+    """Build a gate item the way the real lane does: pack, then checker echo."""
+
+    item = dict(driver_models_module._checker_item(artifact))
+    item["rung_check"] = {
+        "selected_rung": "R1_LIBRARY",
+        "highest_applicable": "R1_LIBRARY",
+        "verdict": "accurate",
+        "findings": [],
+    }
+    return item
+
+
+def test_a_fidelity_required_proposal_is_not_stale_at_the_metadata_gate() -> None:
+    """A checker item faithfully echoing a fidelity-bearing proposal binds it.
+
+    The two sides of this contract are both production code: the driver's own
+    ``_checker_item`` pack carries ``proposal["fidelity_identity"]`` whenever the
+    author declared fidelity required -- R1 library recipes legitimately do --
+    and the checker echoes the pack. The old matcher expected ``None`` for
+    metadata gates, so the faithful echo was judged stale and every
+    fidelity-required member of the batch was terminalized
+    ``failed:runner / protocol-violation`` (pilot 2026-08-04: m4334, m7362,
+    m9304, all bound byte-exactly through ``verified_hashes["proposal"]``).
+    No test double is involved here, so the two sides cannot drift in tandem.
+    """
+
+    artifact = _fidelity_bearing_artifact("sha256:" + "c" * 64)
+    item = _echoed_gate_item(artifact)
+    assert item["fidelity_identity"] == artifact.proposal["fidelity_identity"]
+
+    driver_models_module._require_gate_bindings(
+        {"items": [item]}, (artifact,), "metadata_batch"
+    )
+    driver_models_module._require_gate_bindings({"items": [item]}, (artifact,), "fidelity")
+
+    # A genuinely stale echo -- a fidelity identity from some other proposal
+    # generation -- still refuses. The tripwire is scoped, not weakened.
+    stale_item = dict(item)
+    stale_item["fidelity_identity"] = "sha256:" + "f" * 64
+    with pytest.raises(StaleGateBindingError):
+        driver_models_module._require_gate_bindings(
+            {"items": [stale_item]}, (artifact,), "metadata_batch"
+        )
+
+
+def test_a_fidelity_gate_cannot_bind_a_proposal_without_a_fidelity_identity() -> None:
+    """A fidelity gate certifies a fidelity identity, so ``None`` cannot bind.
+
+    A proposal that never derived a fidelity identity has nothing a fidelity
+    gate could have checked; an item echoing ``None`` must refuse for the
+    ``fidelity`` kind while still binding an ordinary metadata gate.
+    """
+
+    artifact = _fidelity_bearing_artifact(None)
+    item = _echoed_gate_item(artifact)
+    assert item["fidelity_identity"] is None
+
+    driver_models_module._require_gate_bindings(
+        {"items": [item]}, (artifact,), "metadata_batch"
+    )
+    with pytest.raises(StaleGateBindingError):
+        driver_models_module._require_gate_bindings(
+            {"items": [item]}, (artifact,), "fidelity"
+        )
 
 
 class RetryableMetadataChecker(ScriptedChecker):
