@@ -15,8 +15,10 @@ tests pin the grammar extension in BOTH directions:
 
 from __future__ import annotations
 
+import sys
 from copy import deepcopy
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import pytest
@@ -419,15 +421,25 @@ def test_pre_extension_recipes_keep_their_exact_revision_payload() -> None:
 
 @pytest.mark.smoke
 def test_composed_from_primitives_model_fails_the_provenance_tripwire() -> None:
-    """A generic torch primitive claimed under another distribution is refused at build."""
+    """A torch primitive claimed under another distribution is refused, and early.
 
-    loaded = load_declarative_recipe(
-        _torch_recipe(distribution="timm", version="1.0.28")
-    )
+    The recipe-level refusal used to arrive only at build, from the returned-
+    object provenance tripwire. The root namespace bound now refuses the same
+    claim at parse, before any import; the tripwire itself keeps its own
+    verdict on the constructed object for the factory-laundering cases no
+    parse rule can see.
+    """
 
     with pytest.raises(RecipeError) as caught:
-        loaded.build_model()
+        load_declarative_recipe(_torch_recipe(distribution="timm", version="1.0.28"))
     assert str(caught.value) == (
+        "declarative recipe root names module 'torch.nn', which is not a package "
+        "of the pinned distribution 'timm'"
+    )
+
+    with pytest.raises(RecipeError) as tripwire:
+        assert_model_provenance(torch.nn.Linear(4, 2), "timm")
+    assert str(tripwire.value) == (
         "constructed model type torch.nn.modules.linear.Linear is not defined by "
         "the pinned distribution 'timm': attributed to ['torch']"
     )
@@ -705,6 +717,156 @@ def test_the_allowlist_is_exactly_the_modules_the_admitted_shapes_require() -> N
     assert CONSTRUCT_MODULE_ALLOWLIST == frozenset(
         {"torch", "torch.nn", "torch.nn.utils.rnn"}
     )
+
+
+# ---------------------------------------------------------------------------
+# The recipe ROOT names the model itself: bounded to the pin, before import.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.smoke
+def test_a_recipe_root_outside_the_namespace_is_refused_before_it_executes(
+    tmp_path: Path,
+) -> None:
+    """``subprocess.run`` as the recipe ROOT never reaches its own call.
+
+    The construct-node bound left the identical hole open one level up: this
+    exact recipe parsed, imported, and executed its shell command as the root
+    constructor, and was refused only afterwards by the returned-object
+    provenance tripwire. A refusal after the side effect is not a refusal, so
+    the assertion that matters is that the marker file does not exist.
+
+    The root rule is stricter than the construct-node rule: no auxiliary
+    allowlist. The root names the model, provenance already demands the model's
+    class come from the pinned distribution, so the only root a legitimate
+    recipe can name is one of the pin's own packages.
+    """
+
+    marker = tmp_path / "recipe_root_side_effect"
+    with pytest.raises(RecipeError) as caught:
+        load_declarative_recipe(
+            {
+                "distribution": "torch",
+                "version": torch.__version__,
+                "module": "subprocess",
+                "symbol": "run",
+                "kwargs": {"args": ["touch", str(marker)]},
+                "pretrained_disable_fields": [],
+            }
+        )
+
+    assert not marker.exists(), "the refused recipe root still executed a shell command"
+    assert str(caught.value) == (
+        "declarative recipe root names module 'subprocess' from the Python "
+        "standard library; the standard library can never be the pinned "
+        "distribution 'torch'"
+    )
+
+
+@pytest.mark.smoke
+def test_a_matching_distribution_name_does_not_admit_a_stdlib_root(
+    tmp_path: Path,
+) -> None:
+    """Declaring ``distribution: "subprocess"`` must not launder ``subprocess`` in.
+
+    The name-equality fallback exists for distributions whose metadata is not
+    visible to the validating interpreter. Standard-library modules import
+    WITHOUT any installed distribution, so a declared distribution equal to a
+    stdlib module name is the one spelling of "not installed, yet importable"
+    an author fully controls. It is excluded outright, on both the root and the
+    input-constructor entrances.
+    """
+
+    marker = tmp_path / "matching_name_side_effect"
+    with pytest.raises(RecipeError) as caught:
+        load_declarative_recipe(
+            {
+                "distribution": "subprocess",
+                "version": "1",
+                "module": "subprocess",
+                "symbol": "run",
+                "kwargs": {"args": ["touch", str(marker)]},
+                "pretrained_disable_fields": [],
+            }
+        )
+    assert not marker.exists(), "a stdlib root claimed under its own name still executed"
+    assert str(caught.value) == (
+        "declarative recipe root names module 'subprocess' from the Python "
+        "standard library; the standard library can never be the pinned "
+        "distribution 'subprocess'"
+    )
+
+    with pytest.raises(RecipeError) as constructor_caught:
+        resolve_input_constructor(
+            {
+                "module": "subprocess",
+                "symbol": "run",
+                "kwargs": {"args": ["/bin/sh", "-c", f"touch {marker}"]},
+            },
+            distribution="subprocess",
+        )
+    assert not marker.exists(), "a stdlib input constructor under its own name still executed"
+    assert "outside the pinned distribution 'subprocess'" in str(constructor_caught.value)
+
+
+@pytest.mark.smoke
+def test_an_importable_module_without_installed_metadata_cannot_be_a_root(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Load-time root membership comes from installed metadata, not name equality.
+
+    Parse-time validation may run where the pinned distribution is not
+    installed, so ``DeclarativeRecipe.from_mapping`` keeps the lenient
+    name-equality fallback there. At load time the module is about to be
+    IMPORTED: an uninstalled distribution cannot legitimately supply it, and
+    everything ``import_module`` could still reach without installed metadata
+    (``sys.modules`` injections, ``sys.path`` strays) is exactly the surface
+    the strict check closes.
+    """
+
+    module = ModuleType("fake_dist_fixture")
+    setattr(module, "Net", object)
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+    recipe = {
+        "distribution": "fake-dist-fixture",
+        "version": "1",
+        "module": "fake_dist_fixture",
+        "symbol": "Net",
+        "kwargs": {},
+        "pretrained_disable_fields": [],
+    }
+
+    # Parse admits the name-equality spelling (offline proposal validation).
+    parsed = DeclarativeRecipe.from_mapping(recipe)
+    assert parsed.module == "fake_dist_fixture"
+
+    with pytest.raises(RecipeError) as caught:
+        load_declarative_recipe(recipe)
+    assert str(caught.value) == (
+        "declarative recipe root names module 'fake_dist_fixture', which is not "
+        "a package of the pinned distribution 'fake-dist-fixture' installed in "
+        "this interpreter"
+    )
+
+
+@pytest.mark.smoke
+def test_a_plain_timm_create_model_recipe_root_builds() -> None:
+    """The strict root rule admits the canonical factory recipe unchanged."""
+
+    timm = pytest.importorskip("timm")
+    loaded = load_declarative_recipe(
+        {
+            "distribution": "timm",
+            "version": timm.__version__,
+            "module": "timm",
+            "symbol": "create_model",
+            "kwargs": {"model_name": "resnet10t", "pretrained": False, "num_classes": 2},
+            "pretrained_disable_fields": ["pretrained"],
+        }
+    )
+    model = loaded.build_model()
+
+    assert type(model).__module__.startswith("timm.")
 
 
 @pytest.mark.smoke
