@@ -230,6 +230,82 @@ def gated_claim_vocabulary_block() -> str:
     lines.extend(f"  {claim}" for claim in conditional)
     lines.append(CLAIM_VOCABULARY_END)
     return "\n".join(lines)
+
+
+#: The one gated claim that is a relevance judgment rather than an excerpt-tagged
+#: fact. It is excluded from :data:`DEFAULT_GATED_CLAIMS` because author-side
+#: evidence coverage cannot demand an excerpt for it, but the accuracy gate still
+#: requires the checker's independent verdict on it, so the required-check
+#: derivation adds it back explicitly.
+KEYWORD_CLAIM = "external_metadata.keywords"
+
+
+def required_metadata_field_checks(facts: Mapping[str, Any]) -> tuple[str, ...]:
+    """Derive the closed, ordered field-check set one metadata gate item must cover.
+
+    This is the checker-facing half of the same closed gated-claim vocabulary the
+    author's evidence coverage is validated against (:data:`DEFAULT_GATED_CLAIMS`),
+    so the two gates verify one contract: every claim the author had to ground with
+    excerpt tags or a typed availability state is exactly the claim set the checker
+    must return one independent verdict for. The derivation is machine-owned,
+    deterministic, and stably ordered; it is computed from the proposed facts alone
+    so the checker-item builder, the envelope boundary, and the canonical-write
+    validator all derive byte-identical sets from the same bytes.
+
+    The citation claim follows the author-side conditionality: it is required
+    whenever the proposal asserts a present citation or binds a controlled-fetched
+    paper-role source. The declared source rows mirror the frozen manifest -- a
+    divergent set is refused upstream as ``proposal and source manifest source sets
+    differ`` -- so deriving from the declared rows needs no manifest.
+
+    Parameters
+    ----------
+    facts:
+        Complete ``proposed_facts`` tree, or the corresponding canonical fact
+        mapping recovered at write time.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Sorted claim paths; exactly one ``field_check`` per member is required.
+    """
+
+    claims = set(DEFAULT_GATED_CLAIMS - CONDITIONAL_GATED_CLAIMS)
+    claims.add(KEYWORD_CLAIM)
+    if _citation_is_present(facts) or _declared_fetched_paper_sources(facts):
+        claims.add("external_metadata.citation")
+    return tuple(sorted(claims))
+
+
+def _declared_fetched_paper_sources(facts: Mapping[str, Any]) -> bool:
+    """Return whether the facts declare a hash-bound paper-role source.
+
+    Facts-only mirror of :func:`_fetched_paper_source_ids`: the declared rows
+    carry the same ``content_sha256`` binding as their frozen manifest rows, and a
+    proposal whose declared set diverges from its manifest never reaches a gate.
+
+    Parameters
+    ----------
+    facts:
+        Complete proposed fact tree, possibly partial in non-proposal contexts.
+
+    Returns
+    -------
+    bool
+        True when a declared source row has a paper role and a content digest.
+    """
+
+    resolution = facts.get("source_resolution")
+    declared = resolution.get("sources") if isinstance(resolution, Mapping) else None
+    if not isinstance(declared, list):
+        return False
+    return any(
+        isinstance(source, Mapping)
+        and source.get("role") in PAPER_EVIDENCE_ROLES
+        and isinstance(source.get("content_sha256"), str)
+        and bool(source.get("content_sha256"))
+        for source in declared
+    )
 VERIFIED_HASH_CODE_MANIFEST_KEY = "code_manifest"
 _AUTHOR_VERIFIED_HASH_SPEC = required_field_projection_spec(
     RequiredFieldProjection.AUTHOR_PROPOSAL_VERIFIED_HASH

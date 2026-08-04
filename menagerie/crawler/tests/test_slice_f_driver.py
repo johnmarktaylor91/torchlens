@@ -159,11 +159,15 @@ from menagerie.crawler.fetcher import (
     UnpinnedTargetError,
     fetch_targets as controlled_fetch_targets,
 )
-from menagerie.crawler.metadata import authored_fact_leaves, recompute_accepted_identities
+from menagerie.crawler.metadata import recompute_accepted_identities
 from menagerie.crawler.models import LedgerPaths
 from menagerie.crawler.mirrors import MirrorStore
 from menagerie.crawler.policy import SandboxUnavailableError
-from menagerie.crawler.proposal import DEFAULT_GATED_CLAIMS, model_code_manifest
+from menagerie.crawler.proposal import (
+    DEFAULT_GATED_CLAIMS,
+    model_code_manifest,
+    required_metadata_field_checks,
+)
 from menagerie.crawler.promotion import (
     materialize_promotion_intake,
     promotion_records_root,
@@ -877,9 +881,7 @@ class ScriptedChecker(CheckerLane):
                     "reason": "supported",
                     "required_repair": None,
                 }
-                for field in authored_fact_leaves(
-                    proposal["proposed_facts"], schema_version=MODEL_SCHEMA_VERSION_V3
-                )
+                for field in required_metadata_field_checks(proposal["proposed_facts"])
             ]
         gate["checker"].update(
             {
