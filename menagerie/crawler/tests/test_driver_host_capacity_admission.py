@@ -21,7 +21,7 @@ from menagerie.crawler.constants import (
     OperationalEventStatus,
 )
 from menagerie.crawler.driver import CrawlerDriver
-from menagerie.crawler.driver_contracts import WorkItem
+from menagerie.crawler.driver_contracts import DriverIntegrationError, WorkItem
 from menagerie.crawler.host_capacity import (
     CAPACITY_DEFERRAL_DISPOSITION,
     HOST_MEMORY_ENV_VAR,
@@ -175,6 +175,38 @@ def test_a_bigger_host_admits_the_same_model(
     )
 
     assert admitted == (mixtral,)
+    assert not capacity_deferral_path(records_root).exists()
+    assert operational.records == []
+
+
+class _TerminalArtifact:
+    """Terminal author result: it has no executable proposal to size."""
+
+    @property
+    def proposal(self) -> dict[str, Any]:
+        """Raise exactly as a terminal author result does."""
+
+        raise DriverIntegrationError("terminal author result has no executable proposal")
+
+
+def test_a_terminal_author_result_passes_through(tmp_path: Path) -> None:
+    """A skip/blocked/defer arm has nothing to size and must not crash the gate.
+
+    The gate now runs before the checker, where terminal author results are
+    still in the wave, so this arm is reached in normal operation.
+    """
+
+    records_root = tmp_path / "records"
+    driver = _driver(records_root)
+    blocked = _work_item("m3671", "BindsNET DiehlAndCook2015")
+    artifacts: Any = {"m3671": _TerminalArtifact()}
+    operational: Any = _StubLedger()
+
+    admitted = CrawlerDriver._admit_within_host_capacity(
+        driver, (blocked,), artifacts, operational
+    )
+
+    assert admitted == (blocked,)
     assert not capacity_deferral_path(records_root).exists()
     assert operational.records == []
 
