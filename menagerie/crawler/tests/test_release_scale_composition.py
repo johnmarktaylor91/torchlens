@@ -129,7 +129,9 @@ def _compile_count_arm(
             assert capability.environment_prefix == fixture.prefix
     assert cache.currentness_passes == before_passes + 1
     assert cache.cheap_tree_walks == before_walks + 1
-    assert cache.lstat_tree_walks == 2 * cache.full_seals + cache.cheap_tree_walks
+    assert cache.lstat_tree_walks == (
+        2 * cache.full_seals + 2 * cache.seal_stability_retries + cache.cheap_tree_walks
+    )
 
 
 def _assert_spawn_validation_catches_post_pass_mutation(
@@ -179,7 +181,9 @@ def _assert_spawn_validation_catches_post_pass_mutation(
     assert cache.real_spawns == 0
     assert cache.rehashes == 1
     assert cache.invalidations == 1
-    assert cache.lstat_tree_walks == 2 * cache.full_seals + cache.cheap_tree_walks
+    assert cache.lstat_tree_walks == (
+        2 * cache.full_seals + 2 * cache.seal_stability_retries + cache.cheap_tree_walks
+    )
 
 
 def test_pass_and_spawn_validation_walks_are_constant_bounded(
@@ -239,7 +243,9 @@ def test_pass_and_spawn_validation_walks_are_constant_bounded(
     assert cache.real_spawns == len(initial_attempts)
     assert cache.spawn_validations == cache.real_spawns
     assert cache.cheap_tree_walks == cache.currentness_passes + cache.real_spawns
-    assert cache.lstat_tree_walks == 2 * cache.full_seals + cache.cheap_tree_walks
+    assert cache.lstat_tree_walks == (
+        2 * cache.full_seals + 2 * cache.seal_stability_retries + cache.cheap_tree_walks
+    )
     assert cache.full_seals == 1
     assert cache.rehashes == 0
 
@@ -254,7 +260,9 @@ def test_pass_and_spawn_validation_walks_are_constant_bounded(
     assert cache.real_spawns == spawns_after_first
     assert cache.spawn_validations == cache.real_spawns
     assert cache.cheap_tree_walks == cache.currentness_passes + cache.real_spawns
-    assert cache.lstat_tree_walks == 2 * cache.full_seals + cache.cheap_tree_walks
+    assert cache.lstat_tree_walks == (
+        2 * cache.full_seals + 2 * cache.seal_stability_retries + cache.cheap_tree_walks
+    )
     assert scan_jsonl(paths.ledgers.models) == initial_models
     assert scan_jsonl(paths.ledgers.attempts) == initial_attempts
     assert cache.full_seals == 1
