@@ -132,6 +132,12 @@ _SYSTEM_READ_FILES = frozenset(
         Path("/etc/passwd"),
         Path("/etc/resolv.conf"),
         Path("/usr/share/locale/locale.alias"),
+        # platform.mac_ver() reads the OS version record during ordinary imports
+        # (huggingface_hub walks it while timm/transformers load). The Seatbelt
+        # profile already allows every /System read as benign OS metadata; naming
+        # the exact file here keeps the in-process and parent classifiers from
+        # drifting stricter than that OS-sandbox authority.
+        Path("/System/Library/CoreServices/SystemVersion.plist"),
     }
 )
 _SAFE_INHERITED_KEYS = (
@@ -359,7 +365,6 @@ def _macos_runtime_root_read_patterns(root: Path) -> tuple[str, ...]:
     # Match a file directly beneath the root or at any depth under it. Plain groups only:
     # see _sbpl_regex_literal for why Seatbelt cannot be given a non-capturing group.
     descendant = f"{escaped}/(.*/)?"
-    metadata_names = "|".join(re.escape(name) for name in sorted(_RUNTIME_METADATA_NAMES))
     code_suffixes = "|".join(
         sorted({*(suffix.lstrip(".") for suffix in _RUNTIME_SOURCE_SUFFIXES), "metallib"})
     )
@@ -367,16 +372,49 @@ def _macos_runtime_root_read_patterns(root: Path) -> tuple[str, ...]:
         f"^{escaped}/.*\\.({code_suffixes})$",
         # A versioned shared object carries the same code kind as its bare `.so` spelling.
         f"^{escaped}/.*\\.so\\.[^/]+$",
-        # importlib.metadata resolves a distribution version during an ordinary import and
-        # reads these fixed names. The classifier confines them to a metadata directory, and
-        # so does this pattern, so no package payload becomes readable.
-        f"^{descendant}[^/]*\\.(dist-info|egg-info)/(.*/)?({metadata_names})$",
+        *_macos_root_import_metadata_patterns(root),
         # A virtual-environment or build-tree interpreter reads these markers during startup.
         f"^{descendant}(pybuilddir\\.txt|pyvenv\\.cfg)$",
         # OpenSSL loads its configuration file when the ssl module initializes a context.
         f"^{descendant}ssl/(.*/)?openssl\\.cnf$",
         # A frozen standard library ships as lib/python<version>.zip on the interpreter path.
         f"^{descendant}lib/(.*/)?python[^/]*\\.zip$",
+    )
+
+
+def _macos_root_import_metadata_patterns(root: Path) -> tuple[str, ...]:
+    """Return the confined import-metadata read regexes for one search root.
+
+    Parameters
+    ----------
+    root:
+        Resolved root that the worker interpreter scans as a ``sys.path`` entry.
+
+    Returns
+    -------
+    tuple[str, ...]
+        The exact metadata subset of :func:`_macos_runtime_root_read_patterns`.
+
+    The worker launches ``python -m`` from its source working directory, so that
+    directory is always a ``sys.path`` entry, and an ordinary
+    ``importlib.metadata`` scan (``packages_distributions()`` runs during the
+    declarative recipe's provenance resolution) reads the fixed metadata names
+    inside any ``.dist-info``/``.egg-info`` it finds there. The Linux classifier
+    (:func:`_runtime_import_metadata_path_allowed`) already allows exactly those
+    confined names on every path, so a v3 profile that omits them for the source
+    root is macOS-only authority drift: the worker is SIGKILLed for a read Linux
+    accepts. These clauses grant no code suffix and no package payload -- only
+    the closed metadata names confined to a metadata directory.
+    """
+
+    escaped = re.escape(str(root))
+    descendant = f"{escaped}/(.*/)?"
+    metadata_names = "|".join(re.escape(name) for name in sorted(_RUNTIME_METADATA_NAMES))
+    return (
+        # importlib.metadata resolves a distribution version during an ordinary import and
+        # reads these fixed names. The classifier confines them to a metadata directory, and
+        # so does this pattern, so no package payload becomes readable.
+        f"^{descendant}[^/]*\\.(dist-info|egg-info)/(.*/)?({metadata_names})$",
         # The editable-install path hook is probed by name on each sys.path entry.
         f"^{descendant}__editable__\\..*\\.__path_hook__$",
     )
@@ -515,6 +553,17 @@ def generate_macos_sandbox_profile(
     if environment_prefix is not None:
         encoded_prefix = json.dumps(str(environment_prefix), ensure_ascii=True)
         lines.append(f"(allow file-read-data (subpath {encoded_prefix}))")
+        # The v3 manifest names code members exactly, so a non-prefix runtime root
+        # (the worker's source working directory, on ``sys.path`` via ``python -m``)
+        # receives no code-suffix grant here. It still needs the confined
+        # import-metadata names the Linux classifier accepts unconditionally, or an
+        # ordinary ``importlib.metadata`` scan over ``sys.path`` SIGKILLs the worker
+        # on the first ``.egg-info``/``.dist-info`` metadata read outside the prefix.
+        for root in tuple(dict.fromkeys(path.resolve() for path in runtime_read_roots)):
+            if root == environment_prefix or root.is_relative_to(environment_prefix):
+                continue
+            for pattern in _macos_root_import_metadata_patterns(root):
+                lines.append(f"(allow file-read-data (regex {_sbpl_regex_literal(pattern)}))")
     elif execution_read_manifest is None:
         for root in tuple(dict.fromkeys(path.resolve() for path in runtime_read_roots)):
             encoded_root = json.dumps(str(root), ensure_ascii=True)
