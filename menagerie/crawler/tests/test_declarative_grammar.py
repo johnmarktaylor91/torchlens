@@ -24,6 +24,7 @@ import torch
 
 from menagerie.crawler.constants import RunMode
 from menagerie.crawler.recipe import (
+    CONSTRUCT_MODULE_ALLOWLIST,
     MAX_CONSTRUCT_DEPTH,
     MAX_CONSTRUCT_NODES,
     DeclarativeRecipe,
@@ -273,7 +274,7 @@ def test_constructed_non_tensor_runtime_object_leaf_reaches_a_forward(
     }
 
     # The materialized leaf is a runtime object, not a tensor.
-    leaf_value = resolve_input_constructor(packed_constructor)
+    leaf_value = resolve_input_constructor(packed_constructor, distribution="torch")
     assert type(leaf_value) is torch.nn.utils.rnn.PackedSequence
     assert not isinstance(leaf_value, torch.Tensor)
 
@@ -559,6 +560,201 @@ def test_provenance_tripwire_passes_the_pinned_distribution_class() -> None:
     """The tripwire's accepting direction: a torch-defined class under distribution torch."""
 
     assert_model_provenance(torch.nn.Linear(2, 2), "torch")
+
+
+# ---------------------------------------------------------------------------
+# The construct-node callable namespace is bounded, and bounded BEFORE import.
+# ---------------------------------------------------------------------------
+
+
+def _shell_construct_node(module: str, symbol: str, marker: Path, argument: str) -> dict[str, Any]:
+    """Return a construct node that would create ``marker`` if it ever ran.
+
+    Parameters
+    ----------
+    module, symbol:
+        Declared construct-node module and symbol.
+    marker:
+        Path the shell command would create.
+    argument:
+        Keyword name the chosen symbol takes its command under.
+
+    Returns
+    -------
+    dict[str, Any]
+        Construct-node value.
+    """
+
+    command = f"touch {marker}"
+    payload: Any = command if argument == "command" else ["/bin/sh", "-c", command]
+    return {"__construct__": {"module": module, "symbol": symbol, "kwargs": {argument: payload}}}
+
+
+@pytest.mark.smoke
+def test_a_construct_node_outside_the_namespace_is_refused_before_it_executes(
+    tmp_path: Path,
+) -> None:
+    """``subprocess.run`` in a construct node never reaches its own call.
+
+    The grammar was a bounded syntax over an UNBOUNDED callable namespace: this
+    recipe parsed and ran a shell command during ``build_model()``, and only
+    afterwards failed on a downstream type error. A refusal that arrives after
+    the side effect is not a refusal, so the assertion that matters is that the
+    marker file does not exist -- not merely that something raised.
+
+    The bound is a parse rule over the declared string, so the recipe is now
+    refused before it is even loadable: importing an author-named module already
+    executes that module's top-level code, which is too late for a check.
+    """
+
+    marker = tmp_path / "construct_node_side_effect"
+    with pytest.raises(RecipeError) as caught:
+        load_declarative_recipe(
+            _torch_recipe(
+                kwargs={
+                    "in_features": _shell_construct_node("subprocess", "run", marker, "args"),
+                    "out_features": 2,
+                }
+            )
+        )
+
+    assert not marker.exists(), "the refused construct node still executed a shell command"
+    assert str(caught.value) == (
+        "construct node at kwargs.in_features names module 'subprocess', which is "
+        "outside the pinned distribution 'torch' and the allowlisted modules "
+        f"{sorted(CONSTRUCT_MODULE_ALLOWLIST)!r}"
+    )
+
+
+@pytest.mark.smoke
+def test_an_input_constructor_outside_the_namespace_is_refused_before_it_executes(
+    tmp_path: Path,
+) -> None:
+    """The constructed-input leaf runs the same import-then-call machinery, so it is bounded too.
+
+    ``resolve_input_constructor`` is a second entrance to exactly the same
+    unbounded namespace; bounding only the recipe's construct nodes would leave
+    the whole hole reachable through the input contract.
+    """
+
+    marker = tmp_path / "input_constructor_side_effect"
+    with pytest.raises(RecipeError) as caught:
+        resolve_input_constructor(
+            {
+                "module": "subprocess",
+                "symbol": "run",
+                "kwargs": {"args": ["/bin/sh", "-c", f"touch {marker}"]},
+            },
+            distribution="torch",
+        )
+
+    assert not marker.exists(), "the refused input constructor still executed a shell command"
+    assert str(caught.value) == (
+        "construct node at input_contract constructor names module 'subprocess', "
+        "which is outside the pinned distribution 'torch' and the allowlisted "
+        f"modules {sorted(CONSTRUCT_MODULE_ALLOWLIST)!r}"
+    )
+
+
+@pytest.mark.smoke
+def test_the_allowlist_admits_exact_modules_not_the_whole_torch_package(
+    tmp_path: Path,
+) -> None:
+    """A top-level ``torch`` prefix would have re-admitted shell execution.
+
+    ``torch.utils.collect_env.run`` is torch's own function, defined in a torch
+    module, that shells out through ``subprocess.Popen``. It is the reason the
+    allowlist is a set of EXACT module names rather than the ``torch`` package:
+    a prefix rule would admit it, and with it ``torch.hub.load`` and
+    ``torch.jit.load``, handing the construct graph general-purpose code loading
+    inside a namespace nobody audited.
+    """
+
+    marker = tmp_path / "torch_namespace_side_effect"
+    with pytest.raises(RecipeError) as caught:
+        load_declarative_recipe(
+            {
+                "distribution": "timm",
+                "version": "1.0.9",
+                "module": "timm.models.vision_transformer",
+                "symbol": "VisionTransformer",
+                "kwargs": {
+                    "embed_dim": _shell_construct_node(
+                        "torch.utils.collect_env", "run", marker, "command"
+                    )
+                },
+                "pretrained_disable_fields": [],
+            }
+        )
+
+    assert not marker.exists(), "an unallowlisted torch module still executed a shell command"
+    assert "torch.utils.collect_env" in str(caught.value)
+    assert "outside the pinned distribution 'timm'" in str(caught.value)
+
+
+@pytest.mark.smoke
+def test_the_allowlist_is_exactly_the_modules_the_admitted_shapes_require() -> None:
+    """The allowlist is a closed, stated set, not a namespace that drifts wider.
+
+    Each member exists because a real admitted shape in this file needs it:
+    ``torch`` for ``torch.zeros``, ``torch.nn`` for ``TransformerEncoderLayer``,
+    and ``torch.nn.utils.rnn`` for ``pack_padded_sequence``. Widening the set
+    without a shape that requires it must break this test.
+    """
+
+    assert CONSTRUCT_MODULE_ALLOWLIST == frozenset(
+        {"torch", "torch.nn", "torch.nn.utils.rnn"}
+    )
+
+
+@pytest.mark.smoke
+def test_a_construct_node_that_builds_a_composed_container_is_refused() -> None:
+    """The container check follows the construct graph, not just the root.
+
+    The tripwire used to inspect ``type(root_model)`` alone, so the root got a
+    RETURNED-OBJECT provenance check while every construct node got only a
+    CONSTRUCTOR-SYMBOL check. That asymmetry is the whole laundering surface: a
+    published architecture at the root, an author-composed ``nn.Sequential``
+    underneath it, and nothing looking. Both the root and this construct node
+    name ``torchvision``, so the namespace bound admits the recipe outright and
+    the container instance is the only thing left to refuse it.
+    """
+
+    torchvision = pytest.importorskip("torchvision")
+    loaded = load_declarative_recipe(
+        {
+            "distribution": "torchvision",
+            "version": torchvision.__version__,
+            "module": "torchvision.models.vision_transformer",
+            "symbol": "VisionTransformer",
+            "kwargs": {
+                "image_size": 32,
+                "patch_size": 16,
+                "num_layers": 1,
+                "num_heads": 1,
+                "hidden_dim": 8,
+                "mlp_dim": 8,
+                "norm_layer": {
+                    "__construct__": {
+                        "module": "torchvision.models.vgg",
+                        "symbol": "make_layers",
+                        "kwargs": {"cfg": [8, "M"], "batch_norm": False},
+                    }
+                },
+            },
+            "pretrained_disable_fields": [],
+        }
+    )
+
+    # Every parse rule admits it: the module is the pinned distribution's own.
+    assert loaded.kind == "declarative-library"
+
+    with pytest.raises(RecipeError) as caught:
+        loaded.build_model()
+    assert str(caught.value) == (
+        "construct node at kwargs.norm_layer constructed a generic container "
+        "torch.nn.modules.container.Sequential; a composed container cannot claim R1"
+    )
 
 
 @pytest.mark.smoke
@@ -847,7 +1043,8 @@ def test_input_constructor_refusals() -> None:
 
     with pytest.raises(RecipeError) as container:
         resolve_input_constructor(
-            {"module": "torch.nn", "symbol": "Sequential", "kwargs": {}}
+            {"module": "torch.nn", "symbol": "Sequential", "kwargs": {}},
+            distribution="torch",
         )
     assert str(container.value) == (
         "generic torch.nn containers are refused in declarative R1 recipes: "
@@ -855,17 +1052,23 @@ def test_input_constructor_refusals() -> None:
     )
 
     with pytest.raises(RecipeError) as malformed:
-        resolve_input_constructor({"module": "torch", "symbol": "zeros"})
+        resolve_input_constructor({"module": "torch", "symbol": "zeros"}, distribution="torch")
     assert str(malformed.value) == (
         "construct node at input_contract constructor must declare exactly "
         "module, symbol, and kwargs"
     )
 
+    # ``torch.cuda.empty_cache`` is a no-op on a CPU-only host and returns None;
+    # it stands where ``gc.disable`` used to, because the namespace bound now
+    # refuses a stdlib module before it can be called at all.
     with pytest.raises(RecipeError) as produced_none:
         resolve_input_constructor(
-            {"module": "gc", "symbol": "disable", "kwargs": {}}
+            {"module": "torch.cuda", "symbol": "empty_cache", "kwargs": {}},
+            distribution="torch",
         )
-    assert str(produced_none.value) == "input constructor gc.disable produced None"
+    assert str(produced_none.value) == (
+        "input constructor torch.cuda.empty_cache produced None"
+    )
 
 
 @pytest.mark.smoke

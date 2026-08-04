@@ -575,6 +575,36 @@ def _call_leaf_values(args: tuple[object, ...], kwargs: Mapping[str, object]) ->
     return values
 
 
+def _declared_distribution(request: WorkerRequest) -> str:
+    """Return the pinned distribution bounding this request's constructed inputs.
+
+    A constructed input leaf imports and calls a declared symbol, so it needs the
+    same namespace bound as the recipe's own construct nodes. That bound is the
+    recipe's pinned distribution, which only the request carries.
+
+    Parameters
+    ----------
+    request:
+        Complete worker request.
+
+    Returns
+    -------
+    str
+        Declared pinned distribution.
+
+    Raises
+    ------
+    TypeError
+        If the declarative recipe declares no distribution to bound against.
+    """
+
+    payload = request.recipe.get("recipe")
+    distribution = payload.get("distribution") if isinstance(payload, Mapping) else None
+    if not isinstance(distribution, str) or not distribution:
+        raise TypeError("declarative recipe declares no distribution for constructed inputs")
+    return distribution
+
+
 def _materialize_declarative_call(
     request: WorkerRequest,
 ) -> tuple[tuple[object, ...], dict[str, object], str, Optional[str], str]:
@@ -622,7 +652,9 @@ def _materialize_declarative_call(
                         f"input_contract.{collection} constructed leaf lacks a "
                         "constructor spec"
                     )
-                constructed = resolve_input_constructor(constructor_spec)
+                constructed = resolve_input_constructor(
+                    constructor_spec, distribution=_declared_distribution(request)
+                )
                 _assign_path(root, str(leaf.get("path")), constructed)
                 input_kinds.append("standard-constructed-input")
                 notes.append(
