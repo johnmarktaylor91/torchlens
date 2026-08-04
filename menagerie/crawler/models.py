@@ -13,6 +13,47 @@ JsonValue = Any
 JsonObject = dict[str, JsonValue]
 
 
+#: The manifest key carrying the ONE supplementary broker pack the executor may
+#: grant an author session mid-flight. It is kept OUT of ``sources`` on purpose:
+#: ``manifest_sha256 == stable_hash(sources)`` is the identity the author echoed
+#: back at dispatch, and appending to ``sources`` afterwards would move it and
+#: terminalize a good result on an identity the author was never shown.
+SUPPLEMENTARY_SOURCES_KEY = "supplementary_sources"
+
+
+def manifest_source_rows(source_manifest: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    """Return every machine-fetched source row one author session may cite.
+
+    ONE reading of "which sources exist" for every consumer that cares about
+    BYTES rather than about identity: evidence grounding, private byte staging,
+    and staged-artifact coverage. The frozen ``sources`` rows come first, then
+    any supplementary rows the lane ingested after the executor granted its one
+    supplementary broker round. Both sets are broker-fetched and digest-pinned;
+    the split exists only so the bound manifest identity cannot move.
+
+    Consumers that need the manifest IDENTITY must keep reading ``sources``
+    directly -- this function is deliberately not a drop-in for that.
+
+    Parameters
+    ----------
+    source_manifest:
+        Frozen manifest, optionally carrying ``supplementary_sources``.
+
+    Returns
+    -------
+    list[Mapping[str, Any]]
+        Frozen rows followed by supplementary rows, object rows only.
+    """
+
+    frozen = source_manifest.get("sources")
+    supplementary = source_manifest.get(SUPPLEMENTARY_SOURCES_KEY)
+    rows: list[Mapping[str, Any]] = []
+    for group in (frozen, supplementary):
+        if isinstance(group, list):
+            rows.extend(row for row in group if isinstance(row, Mapping))
+    return rows
+
+
 def bounded_json_repr(value: object, *, limit: int = 120) -> str:
     """Render one offending value compactly and boundedly for an error message.
 

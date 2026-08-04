@@ -185,7 +185,11 @@ from menagerie.crawler.metadata import (
     validate_authored_facts_for_write,
 )
 from menagerie.crawler.modes import classify_observed_mode_receipts
-from menagerie.crawler.models import JsonObject, LedgerPaths as LedgerPaths
+from menagerie.crawler.models import (
+    JsonObject,
+    LedgerPaths as LedgerPaths,
+    manifest_source_rows,
+)
 from menagerie.crawler.mirrors import ArtifactOrigin, MirrorClass, MirrorStore
 from menagerie.crawler.proposal import ProposalValidationError, model_code_manifest
 from menagerie.crawler.promotion import (
@@ -1161,8 +1165,12 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         sources = artifact.source_manifest.get("sources")
         if not isinstance(sources, list) or not sources:
             raise DriverIntegrationError("author result has no frozen source bytes")
+        # Supplementary rows are staged alongside the frozen ones: their bytes
+        # are ours, they are digest-pinned identically, and an excerpt is allowed
+        # to cite them, so custody that held only the frozen half would leave a
+        # cited source with no private byte for anything downstream to re-read.
         inputs: list[ArtifactInput] = []
-        source_rows = [row for row in sources if isinstance(row, Mapping)]
+        source_rows = manifest_source_rows(artifact.source_manifest)
         prefix = item.stable_id.removeprefix("m_")[:2] or "__"
         for index, row in enumerate(source_rows):
             cas_path = row.get("cas_path")

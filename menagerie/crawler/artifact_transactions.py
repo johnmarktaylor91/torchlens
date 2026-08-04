@@ -47,7 +47,7 @@ from menagerie.crawler.mirrors import (
     MirrorStore,
     RetentionClass,
 )
-from menagerie.crawler.models import AppendResult, JsonObject
+from menagerie.crawler.models import AppendResult, JsonObject, manifest_source_rows
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
 from menagerie.crawler.schema import PayloadValidationError, validate_payload
 
@@ -1099,7 +1099,12 @@ def _validate_artifact_inputs(
     raw_sources = source_manifest.get("sources")
     if not isinstance(raw_sources, list):
         raise SourceManifestBindingError("source manifest requires source rows")
-    sources = {str(row.get("source_id")): row for row in raw_sources if isinstance(row, Mapping)}
+    # BYTE custody covers the supplementary rows too. This is the coverage
+    # question ("is every staged byte a source we fetched, and is every source we
+    # fetched staged?"), not the identity question -- `bind_author_artifact`
+    # still derives `source_identity` from `sources` alone, so widening here
+    # cannot move a bound identity.
+    sources = {str(row.get("source_id")): row for row in manifest_source_rows(source_manifest)}
     source_artifact_ids: set[str] = set()
     seen_paths: dict[str, str] = {}
     for artifact in artifacts:
