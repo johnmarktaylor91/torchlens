@@ -1,6 +1,6 @@
 {
   "intents": {
-    "core": {"imports": ["torch", "torchvision", "transformers", "timm", "diffusers"], "export_checks": [{"module": "torch", "attribute": "__version__"}, {"module": "transformers", "attribute": "AutoModel"}]},
+    "core": {"imports": ["torch", "torchvision", "transformers", "timm", "diffusers", "segmentation_models_pytorch"], "export_checks": [{"module": "torch", "attribute": "__version__"}, {"module": "transformers", "attribute": "AutoModel"}, {"module": "segmentation_models_pytorch", "attribute": "Unet"}]},
     "graph": {"imports": ["torch_geometric", "dgl", "ogb", "rdkit"], "export_checks": [{"module": "torch_geometric", "attribute": "__version__"}, {"module": "dgl", "attribute": "__version__"}]},
     "audio": {"imports": ["torchaudio", "librosa", "speechbrain", "soundfile"], "export_checks": [{"module": "torchaudio", "attribute": "__version__"}, {"module": "librosa", "attribute": "load"}]},
     "mmlab": {"imports": ["mmengine", "mmcv", "mmpretrain", "mmseg", "mmdet"], "export_checks": [{"module": "mmcv", "attribute": "__version__"}, {"module": "mmengine", "attribute": "__version__"}]},
