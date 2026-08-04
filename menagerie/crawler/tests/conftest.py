@@ -2396,7 +2396,6 @@ def make_model(
             "library_recipe": {
                 "distribution": "example",
                 "version": "1.0",
-                "artifact_sha256": HASH,
                 "module": "example",
                 "symbol": "ExampleNet",
                 "kwargs": {"weights": None},

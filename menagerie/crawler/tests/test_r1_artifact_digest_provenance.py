@@ -136,12 +136,17 @@ def _library_implementation(**recipe_overrides: Any) -> dict[str, Any]:
 
 
 def _honest_r1_proposal() -> dict[str, Any]:
-    """Return an R1 ``PROPOSED`` proposal that omits the underivable digest."""
+    """Return an R1 ``PROPOSED`` proposal that omits the underivable digest.
+
+    The shared author fixture no longer supplies the leaf at all: an identity
+    the author has no instrument to derive is not the author's to write. This
+    only asserts that it is absent.
+    """
 
     proposal = make_author_proposal("m_r1_honest")
     recipe = proposal["proposed_facts"]["implementation"]["library_recipe"]
     assert proposal["proposed_facts"]["source_resolution"]["rung"] == "R1_LIBRARY"
-    del recipe["artifact_sha256"]
+    assert "artifact_sha256" not in recipe
     return proposal
 
 
@@ -203,7 +208,7 @@ def test_an_honest_r1_proposal_now_validates_without_the_installed_digest() -> N
 
 @pytest.mark.smoke
 def test_a_null_installed_digest_is_expressible() -> None:
-    """An environment that names no matching distribution records an honest null."""
+    """A target with no inventory at all still has to be recordable."""
 
     proposal = _honest_r1_proposal()
     proposal["proposed_facts"]["implementation"]["library_recipe"]["artifact_sha256"] = None
@@ -298,12 +303,15 @@ def test_binding_is_idempotent_across_repeated_normalization() -> None:
     assert bind_library_artifact_digest(implementation, list(_ROUTED_PACKAGES)) is False
     assert implementation == after_first
 
-    unresolvable = _library_implementation(distribution="not-in-this-environment")
-    assert bind_library_artifact_digest(unresolvable, list(_ROUTED_PACKAGES)) is True
-    after_null = deepcopy(unresolvable)
+    # The same idempotence holds for the only surviving null: a target with no
+    # inventory at all. A distribution the routed environment does not install is
+    # no longer a null -- see the refusal test below.
+    uninstrumented = _library_implementation()
+    assert bind_library_artifact_digest(uninstrumented, []) is True
+    after_null = deepcopy(uninstrumented)
 
-    assert bind_library_artifact_digest(unresolvable, list(_ROUTED_PACKAGES)) is False
-    assert unresolvable == after_null
+    assert bind_library_artifact_digest(uninstrumented, []) is False
+    assert uninstrumented == after_null
 
 
 @pytest.mark.smoke
@@ -333,23 +341,59 @@ def test_a_declared_version_that_contradicts_the_environment_is_refused() -> Non
 
 
 @pytest.mark.smoke
-def test_an_unrouted_distribution_degrades_to_an_honest_null() -> None:
-    """One odd model must not abort a campaign; it records what is true."""
+def test_a_distribution_the_environment_does_not_install_is_refused() -> None:
+    """An unsatisfied lookup is a refusal, not a null.
+
+    A null here used to be indistinguishable from "no instrument available", so
+    an R1 row could be recorded permanently, claiming a pinned installed
+    distribution, while the routed environment demonstrably did not install it.
+    The measurement is possible and it failed, so the model stops.
+    """
 
     implementation = _library_implementation(distribution="not-in-this-environment")
+    before = deepcopy(implementation)
 
-    assert bind_library_artifact_digest(implementation, list(_ROUTED_PACKAGES)) is True
-    assert implementation["library_recipe"]["artifact_sha256"] is None
+    with pytest.raises(RecipeError) as raised:
+        bind_library_artifact_digest(implementation, list(_ROUTED_PACKAGES))
+
+    assert str(raised.value) == (
+        "routed environment does not install distribution 'not-in-this-environment': "
+        "no package row carries that name and none declares it as a provision"
+    )
+    assert implementation == before
 
 
 @pytest.mark.smoke
 def test_an_empty_inventory_degrades_rather_than_aborting() -> None:
-    """An unlocked or unavailable target yields null, never a fabricated digest."""
+    """An unlocked or unavailable target yields null, never a fabricated digest.
+
+    This is the ONE surviving null: no inventory means no instrument. Such a
+    target cannot materialize an environment and so cannot reach a run record
+    either, and blaming the model for an operator-side gap would terminalize it
+    permanently for an infrastructure condition.
+    """
 
     implementation = _library_implementation()
 
     assert bind_library_artifact_digest(implementation, []) is True
     assert implementation["library_recipe"]["artifact_sha256"] is None
+
+
+@pytest.mark.smoke
+def test_an_unverifiable_supplied_digest_is_refused() -> None:
+    """With no inventory there is nothing to check a claim against."""
+
+    implementation = _library_implementation(artifact_sha256=_distinct_digest("claimed"))
+    before = deepcopy(implementation)
+
+    with pytest.raises(RecipeError) as raised:
+        bind_library_artifact_digest(implementation, [])
+
+    assert str(raised.value) == (
+        "supplied artifact_sha256 cannot be verified: the routed environment "
+        "exposes no package inventory"
+    )
+    assert implementation == before
 
 
 @pytest.mark.smoke

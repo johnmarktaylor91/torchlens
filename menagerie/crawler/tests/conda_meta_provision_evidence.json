@@ -1,0 +1,62 @@
+{
+  "libtorch": {
+    "build": "cpu_generic_h9a9d006_17",
+    "files_excerpt": [
+      "bin/torch_shm_manager",
+      "include/ATen/ATen.h",
+      "include/ATen/AccumulateType.h",
+      "include/ATen/ArrayRef.h",
+      "include/ATen/Backend.h",
+      "include/ATen/Backtrace.h"
+    ],
+    "source_record": "libtorch-2.5.1-cpu_generic_h9a9d006_17.json",
+    "total_files": 8923,
+    "version": "2.5.1"
+  },
+  "numpy": {
+    "build": "py311h649a571_0",
+    "files_excerpt": [
+      "bin/f2py",
+      "bin/numpy-config",
+      "lib/python3.11/site-packages/numpy-2.1.3.dist-info/INSTALLER",
+      "lib/python3.11/site-packages/numpy-2.1.3.dist-info/LICENSE.txt",
+      "lib/python3.11/site-packages/numpy-2.1.3.dist-info/METADATA",
+      "lib/python3.11/site-packages/numpy-2.1.3.dist-info/RECORD",
+      "lib/python3.11/site-packages/numpy-2.1.3.dist-info/REQUESTED",
+      "lib/python3.11/site-packages/numpy-2.1.3.dist-info/WHEEL",
+      "lib/python3.11/site-packages/numpy-2.1.3.dist-info/direct_url.json",
+      "lib/python3.11/site-packages/numpy-2.1.3.dist-info/entry_points.txt",
+      "lib/python3.11/site-packages/numpy/__config__.py",
+      "lib/python3.11/site-packages/numpy/__init__.cython-30.pxd",
+      "lib/python3.11/site-packages/numpy/__init__.pxd",
+      "lib/python3.11/site-packages/numpy/__init__.py"
+    ],
+    "source_record": "numpy-2.1.3-py311h649a571_0.json",
+    "total_files": 1433,
+    "version": "2.1.3"
+  },
+  "pytorch": {
+    "build": "cpu_generic_py311_hc7d8f6d_17",
+    "files_excerpt": [
+      "bin/convert-caffe2-to-onnx",
+      "bin/convert-onnx-to-caffe2",
+      "bin/torchfrtrace",
+      "bin/torchrun",
+      "lib/libtorch_python.dylib",
+      "lib/python3.11/site-packages/functorch/_C.cpython-311-darwin.so",
+      "lib/python3.11/site-packages/torch-2.5.1.dist-info/INSTALLER",
+      "lib/python3.11/site-packages/torch-2.5.1.dist-info/LICENSE",
+      "lib/python3.11/site-packages/torch-2.5.1.dist-info/METADATA",
+      "lib/python3.11/site-packages/torch-2.5.1.dist-info/NOTICE",
+      "lib/python3.11/site-packages/torch-2.5.1.dist-info/RECORD",
+      "lib/python3.11/site-packages/torch-2.5.1.dist-info/REQUESTED",
+      "lib/python3.11/site-packages/torch-2.5.1.dist-info/WHEEL",
+      "lib/python3.11/site-packages/torch-2.5.1.dist-info/direct_url.json",
+      "lib/python3.11/site-packages/torch-2.5.1.dist-info/entry_points.txt",
+      "lib/python3.11/site-packages/torch-2.5.1.dist-info/top_level.txt"
+    ],
+    "source_record": "pytorch-2.5.1-cpu_generic_py311_hc7d8f6d_17.json",
+    "total_files": 4113,
+    "version": "2.5.1"
+  }
+}
