@@ -16,6 +16,10 @@ from types import FunctionType, ModuleType
 from typing import Any, Callable, Mapping, Optional, Sequence, Union
 
 from menagerie.crawler.identity import canonical_json_bytes, compute_recipe_revision, hash_bytes
+from menagerie.crawler.package_namespace import (
+    canonical_distribution_name,
+    inventory_row_provides_distribution,
+)
 
 
 class RecipeError(ValueError):
@@ -572,23 +576,6 @@ def validate_pretrained_disable_fields(
 _HASH_PATTERN = re.compile(r"sha256:[0-9a-f]{64}\Z")
 
 
-def canonical_distribution_name(value: str) -> str:
-    """Return one comparable package name for environment-inventory lookup.
-
-    Parameters
-    ----------
-    value:
-        Declared distribution name.
-
-    Returns
-    -------
-    str
-        Case-folded name with ``_``/``.`` normalized to ``-``.
-    """
-
-    return value.strip().casefold().replace("_", "-").replace(".", "-")
-
-
 def resolve_environment_artifact_digest(
     packages: Sequence[Mapping[str, Any]],
     *,
@@ -599,8 +586,17 @@ def resolve_environment_artifact_digest(
 
     The author stage has no package inventory, no environment identity, and no
     interpreter, so it cannot know this digest; the routed environment's exact
-    resolved export does. This resolves the one row naming ``distribution`` and
-    returns its recorded artifact digest.
+    resolved export does. This resolves the one row that PROVIDES
+    ``distribution`` -- under either namespace spelling, see
+    :mod:`menagerie.crawler.package_namespace` -- and returns its recorded
+    artifact digest.
+
+    An inventory that exists but provides no such row is NOT a null result. It
+    means the routed environment does not install the artifact the recipe pins,
+    so the R1 claim has nothing behind it and no digest can honestly be recorded.
+    That is a typed refusal: a permanent R1 row whose machine-derived identity is
+    silently absent is exactly the reading an instrument produces when it was
+    structurally unable to measure anything.
 
     Parameters
     ----------
@@ -608,47 +604,62 @@ def resolve_environment_artifact_digest(
         Exact ``name``/``version``/``sha256`` rows from the routed intent's
         resolved export or the materialized prefix inventory.
     distribution, version:
-        Declared recipe distribution and version.
+        Declared recipe distribution and version, in the Python distribution
+        namespace.
 
     Returns
     -------
     str | None
-        The canonical ``sha256:``-prefixed artifact digest, or ``None`` when the
-        routed environment names no matching distribution. ``None`` is an honest
-        "not derivable here", never a fabricated digest.
+        The canonical ``sha256:``-prefixed artifact digest. ``None`` ONLY when
+        the caller supplied no inventory at all -- an unlocked or unrouted
+        target, where the machine genuinely holds no instrument. It is never a
+        fabricated digest and never a stand-in for an unsatisfied lookup.
 
     Raises
     ------
     RecipeError
-        If the inventory names the distribution more than once, records a
-        noncanonical digest, or records a version that contradicts the recipe.
+        If a nonempty inventory provides no matching row, provides more than
+        one, records a noncanonical digest, or records a version that
+        contradicts the recipe.
     """
 
-    wanted = canonical_distribution_name(distribution)
+    if not packages:
+        return None
     matches = [
         row
         for row in packages
         if isinstance(row, Mapping)
         and isinstance(row.get("name"), str)
-        and canonical_distribution_name(str(row["name"])) == wanted
+        and inventory_row_provides_distribution(str(row["name"]), distribution)
     ]
     if not matches:
-        return None
+        raise RecipeError(
+            f"routed environment does not install distribution {distribution!r}: no "
+            "package row carries that name and none declares it as a provision"
+        )
     digests = {str(row.get("sha256")) for row in matches}
     versions = {str(row.get("version")) for row in matches}
     if len(digests) != 1 or len(versions) != 1:
         raise RecipeError(
             f"environment inventory names distribution {distribution!r} ambiguously"
         )
+    # Name the inventory row too when the two namespaces spell it differently, so
+    # a mismatch is debuggable without reading the provision registry.
+    row_name = str(matches[0]["name"])
+    located = (
+        repr(distribution)
+        if canonical_distribution_name(row_name) == canonical_distribution_name(distribution)
+        else f"{distribution!r} (inventory package {row_name!r})"
+    )
     digest = digests.pop()
     if _HASH_PATTERN.fullmatch(digest) is None:
         raise RecipeError(
-            f"environment inventory digest for {distribution!r} is not a canonical sha256"
+            f"environment inventory digest for {located} is not a canonical sha256"
         )
     resolved_version = versions.pop()
     if resolved_version != str(version).strip():
         raise RecipeError(
-            f"recipe declares {distribution!r} version {version!r} but the routed "
+            f"recipe declares {located} version {version!r} but the routed "
             f"environment installs {resolved_version!r}"
         )
     return digest
@@ -665,6 +676,13 @@ def bind_library_artifact_digest(
     never silently overwrites one either: a conflicting supplied digest is a
     typed refusal, so the check cannot be left structurally dead.
 
+    The digest is required whenever it is derivable. A routed environment that
+    exposes an inventory must yield one, so the only surviving null is the case
+    where no inventory exists at all -- an unlocked or unrouted target, which
+    cannot materialize an environment and therefore cannot reach a run record
+    either. In that case a supplied digest is refused rather than trusted:
+    there is nothing to check it against.
+
     Parameters
     ----------
     implementation:
@@ -680,8 +698,9 @@ def bind_library_artifact_digest(
     Raises
     ------
     RecipeError
-        If a supplied digest conflicts with the derived one, is malformed, or the
-        inventory itself is ambiguous.
+        If a supplied digest conflicts with the derived one, is malformed, is
+        unverifiable, the routed environment does not install the pinned
+        distribution, or the inventory itself is ambiguous.
     """
 
     if implementation.get("recipe_type") != "declarative-library":
@@ -706,13 +725,18 @@ def bind_library_artifact_digest(
             "supplied artifact_sha256 conflicts with the routed environment: "
             f"supplied {supplied}, derived {derived}"
         )
-    if supplied is not None:
-        return False
     if derived is None:
+        if supplied is not None:
+            raise RecipeError(
+                "supplied artifact_sha256 cannot be verified: the routed environment "
+                "exposes no package inventory"
+            )
         if "artifact_sha256" in recipe:
             return False
         recipe["artifact_sha256"] = None
         return True
+    if supplied is not None:
+        return False
     recipe["artifact_sha256"] = derived
     return True
 

@@ -13,6 +13,10 @@ from menagerie.crawler.authority import EnvironmentAuthorityCache
 from menagerie.crawler.envs import EnvironmentIntent, IntentProbes
 from menagerie.crawler.effort import EffortTracker, StageCap
 from menagerie.crawler.identity import canonical_json_bytes, compute_env_generation, hash_bytes
+from menagerie.crawler.package_namespace import (
+    PackageNamespaceError,
+    assert_inventory_provisions,
+)
 
 
 class EnvironmentLifecycleError(RuntimeError):
@@ -443,7 +447,8 @@ def installed_package_inventory_bytes(prefix: Path) -> bytes:
     Raises
     ------
     EnvironmentExactnessError
-        If installed metadata is absent, malformed, or lacks exact artifact hashes.
+        If installed metadata is absent, malformed, lacks exact artifact hashes,
+        or contradicts a declared Python-distribution provision.
     """
 
     metadata_paths = sorted((prefix / "conda-meta").glob("*.json"))
@@ -459,8 +464,48 @@ def installed_package_inventory_bytes(prefix: Path) -> bytes:
             ) from exc
         if not isinstance(value, Mapping):
             raise EnvironmentExactnessError(f"installed package metadata must be an object: {path}")
+        _require_declared_provisions(value, path)
         rows.append(value)
     return _canonical_package_inventory(rows, "installed conda metadata")
+
+
+def _require_declared_provisions(record: Mapping[str, Any], path: Path) -> None:
+    """Re-prove the machine-owned provision registry against installed evidence.
+
+    The R1 artifact digest is resolved PRE-gate from a static inventory whose
+    package names live in the packaging system's namespace, while the recipe
+    names a Python distribution. The registry that bridges the two spellings is
+    a cached derivation, so this is where the cache is checked against the only
+    authority on it: the file list the package actually installed. A registry
+    entry that has gone stale stops environment creation here rather than
+    mis-selecting a digest later.
+
+    Parameters
+    ----------
+    record:
+        One installed-package metadata record.
+    path:
+        Metadata path used in diagnostics.
+
+    Raises
+    ------
+    EnvironmentExactnessError
+        If the record contradicts a declared provision.
+    """
+
+    name = record.get("name")
+    if not isinstance(name, str) or not name:
+        return
+    files = record.get("files")
+    listed = (
+        tuple(item for item in files if isinstance(item, str))
+        if isinstance(files, Sequence) and not isinstance(files, (str, bytes))
+        else None
+    )
+    try:
+        assert_inventory_provisions(name, listed)
+    except PackageNamespaceError as exc:
+        raise EnvironmentExactnessError(f"{exc} ({path})") from exc
 
 
 def _canonical_package_inventory(value: Any, label: str) -> bytes:

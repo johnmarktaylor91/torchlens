@@ -1404,7 +1404,7 @@
         },
         "artifact_sha256": {
           "$ref": "#/$defs/nullable_hash",
-          "description": "Machine-derived installed-distribution artifact digest. The author has no package inventory and cannot derive it, so the leaf is optional in an author proposal and null when the routed environment names no matching distribution. The driver resolves it from the routed intent's exact resolved export before gating and refuses a conflicting supplied value."
+          "description": "Machine-derived installed-distribution artifact digest. The author has no package inventory and cannot derive it, so the leaf is optional in an author proposal. The driver resolves it from the routed intent's exact resolved export before gating, matching the declared Python distribution against the inventory package that provides it, and refuses a conflicting or unverifiable supplied value. It is null ONLY when the routed target exposes no package inventory at all; an inventory that does not install the pinned distribution is a typed refusal, never a null."
         },
         "module": {
           "$ref": "#/$defs/nonempty_string",
