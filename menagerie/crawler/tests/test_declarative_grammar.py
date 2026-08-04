@@ -28,6 +28,7 @@ from menagerie.crawler.recipe import (
     MAX_CONSTRUCT_NODES,
     DeclarativeRecipe,
     RecipeError,
+    _GENERIC_CONTAINER_SYMBOLS,
     _reject_container_constructor,
     assert_model_provenance,
     load_declarative_recipe,
@@ -239,6 +240,99 @@ def test_constructed_input_leaf_runs_through_the_worker(tmp_path: Path) -> None:
     assert receipt["observed_adapter_sha256"] is None
 
 
+@pytest.mark.smoke
+def test_constructed_non_tensor_runtime_object_leaf_reaches_a_forward(
+    tmp_path: Path,
+) -> None:
+    """The DGL ``DGLGraph`` shape: a genuinely non-tensor runtime input object.
+
+    ``torch.nn.utils.rnn.pack_padded_sequence`` stands in for the unavailable
+    ``dgl`` dependency and is the same shape class -- a framework runtime object
+    that is emphatically NOT a tensor, is built by a declared library symbol, and
+    is consumed directly by a real library model. The sibling constructed-leaf
+    test builds ``torch.zeros``, which is a plain tensor and therefore does not
+    exercise the non-tensor case this leaf kind exists for. The tensor the packer
+    needs is itself supplied by a NESTED construct node, so the input-constructor
+    and construct-graph paths are proved composed rather than separately.
+    """
+
+    packed_constructor = {
+        "module": "torch.nn.utils.rnn",
+        "symbol": "pack_padded_sequence",
+        "kwargs": {
+            "input": {
+                "__construct__": {
+                    "module": "torch",
+                    "symbol": "zeros",
+                    "kwargs": {"size": [3, 5, 4]},
+                }
+            },
+            "lengths": [5, 3, 2],
+            "batch_first": True,
+        },
+    }
+
+    # The materialized leaf is a runtime object, not a tensor.
+    leaf_value = resolve_input_constructor(packed_constructor)
+    assert type(leaf_value) is torch.nn.utils.rnn.PackedSequence
+    assert not isinstance(leaf_value, torch.Tensor)
+
+    contract = {
+        "builder_symbol": "make_dummy_call",
+        "seed": 0,
+        "semantic_description": "One packed variable-length sequence batch.",
+        "source_basis": ["evidence-1"],
+        "smallest_valid_probe_rationale": "Smallest ragged batch.",
+        "args": [
+            {
+                "path": "args[0]",
+                "kind": "constructed",
+                "semantic_role": "packed sequence batch",
+                "shape": [],
+                "dtype": "object",
+                "device_policy": "cpu",
+                "distribution": "constructor",
+                "constraints": [],
+                "source_evidence_ids": ["evidence-1"],
+                "constructor": packed_constructor,
+            }
+        ],
+        "kwargs": [],
+        "non_tensor_values": [],
+        "masks_state_and_control": [],
+        "expected_output_semantics": "packed hidden states",
+    }
+    request = WorkerRequest(
+        stable_id="m_packed_sequence",
+        recipe={
+            "kind": "declarative-library",
+            "recipe": _torch_recipe(
+                symbol="LSTM",
+                kwargs={"input_size": 4, "hidden_size": 6, "batch_first": True},
+            ),
+        },
+        modality=None,
+        input_spec=None,
+        input_contract=contract,
+        scratch_root=tmp_path / "scratch",
+        receipt_path=tmp_path / "result" / "receipt.json",
+        meaningful_modes=(RunMode.EVAL,),
+    )
+
+    receipt = run_worker(request)
+
+    assert receipt["error"] is None
+    mode_receipt = receipt["per_mode"]["eval"]
+    assert mode_receipt["forward_completed"] is True
+    assert mode_receipt["input_kind"] == "standard-constructed-input"
+    assert mode_receipt["input_note"] == (
+        "constructed input via torch.nn.utils.rnn.pack_padded_sequence"
+    )
+    assert receipt["observed_adapter_sha256"] is None
+    # The packed hidden states carry the ragged total, not a padded rectangle.
+    assert mode_receipt["output_signature"]["leaves"][0]["shape"] == [10, 6]
+
+
 def test_declarative_entrypoint_delegates_through_transparent_adapter(
     tmp_path: Path,
 ) -> None:
@@ -338,10 +432,18 @@ def test_composed_from_primitives_model_fails_the_provenance_tripwire() -> None:
     )
 
 
-@pytest.mark.smoke
-@pytest.mark.parametrize(
-    "symbol", ["Sequential", "ModuleList", "ModuleDict", "ParameterList", "Module"]
+_CONTAINER_ROOT_SYMBOLS = (
+    "Sequential",
+    "ModuleList",
+    "ModuleDict",
+    "ParameterList",
+    "ParameterDict",
+    "Module",
 )
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize("symbol", _CONTAINER_ROOT_SYMBOLS)
 def test_generic_container_root_is_refused_at_parse(symbol: str) -> None:
     """Generic containers are denied as the declarative recipe root symbol."""
 
@@ -349,6 +451,55 @@ def test_generic_container_root_is_refused_at_parse(symbol: str) -> None:
         load_declarative_recipe(_torch_recipe(symbol=symbol, kwargs={}))
     assert str(caught.value) == (
         f"generic torch.nn containers are refused in declarative R1 recipes: torch.nn.{symbol}"
+    )
+
+
+@pytest.mark.smoke
+def test_every_denied_container_symbol_has_a_root_refusal_case() -> None:
+    """The root-refusal cases enumerate the whole denied-container set.
+
+    Without this guard a symbol added to ``_GENERIC_CONTAINER_SYMBOLS`` silently
+    ships with no root-refusal case, which is how ``ParameterDict`` sat untested.
+    """
+
+    assert set(_CONTAINER_ROOT_SYMBOLS) == set(_GENERIC_CONTAINER_SYMBOLS)
+
+
+@pytest.mark.smoke
+def test_library_factory_returning_a_composed_model_is_refused_only_at_build() -> None:
+    """The laundering path a parse-time grammar cannot close, closed at runtime.
+
+    ``torchvision.models.vgg.make_layers`` is a genuine function of a genuine
+    pinned distribution: the declared module and symbol are not container names,
+    the kwargs are ordinary JSON, and every parse-time rule admits it. What it
+    returns is a bare ``nn.Sequential`` assembled from primitives. This is
+    precisely the case the "is this thin?" argument turns on -- the grammar sees
+    only data and cannot decide what a named factory builds -- so the assertion
+    that matters is that PARSE SUCCEEDS and the runtime provenance tripwire is
+    the thing that refuses it.
+    """
+
+    torchvision = pytest.importorskip("torchvision")
+    loaded = load_declarative_recipe(
+        {
+            "distribution": "torchvision",
+            "version": torchvision.__version__,
+            "module": "torchvision.models.vgg",
+            "symbol": "make_layers",
+            "kwargs": {"cfg": [8, "M"], "batch_norm": False},
+            "pretrained_disable_fields": [],
+        }
+    )
+
+    # The grammar admitted it: no parse-time rule can reject this recipe.
+    assert loaded.kind == "declarative-library"
+    assert loaded.adapter_sha256 is None
+
+    with pytest.raises(RecipeError) as caught:
+        loaded.build_model()
+    assert str(caught.value) == (
+        "declarative recipe constructed a generic container "
+        "torch.nn.modules.container.Sequential; a composed container cannot claim R1"
     )
 
 
@@ -493,6 +644,32 @@ def test_provenance_tripwire_passes_the_pinned_distribution_class() -> None:
             "post_construct[0].args[0] must be plain JSON without construct nodes",
         ),
         (
+            "construct node smuggled into post_construct kwargs",
+            _torch_recipe(
+                post_construct=[
+                    {
+                        "method": "to",
+                        "args": [],
+                        "kwargs": {
+                            "device": {
+                                "__construct__": {
+                                    "module": "torch",
+                                    "symbol": "device",
+                                    "kwargs": {},
+                                }
+                            }
+                        },
+                    }
+                ]
+            ),
+            "post_construct[0].kwargs.device must be plain JSON without construct nodes",
+        ),
+        (
+            "non-JSON post_construct argument",
+            _torch_recipe(post_construct=[{"method": "to", "args": [object()], "kwargs": {}}]),
+            "post_construct[0] arguments must be JSON-compatible",
+        ),
+        (
             "private entrypoint",
             _torch_recipe(entrypoint="_forward_impl"),
             "entrypoint must be a public method, not '_forward_impl'",
@@ -522,6 +699,76 @@ def test_the_grammar_has_no_slot_for_arbitrary_computation(
     with pytest.raises(RecipeError) as caught:
         load_declarative_recipe(recipe)
     assert str(caught.value) == message, label
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize("entrypoint", ["training", "no_such_public_method"])
+def test_a_public_entrypoint_that_is_not_a_method_has_nowhere_to_land(
+    entrypoint: str, tmp_path: Path
+) -> None:
+    """The entrypoint slot admits only a real callable of the constructed model.
+
+    Parse deliberately admits any public identifier -- it cannot know the model's
+    API before construction -- so the closing check is at delegation time. A
+    public non-callable attribute (``training``) and an absent name are both
+    refused before any forward runs, which is what leaves the entrypoint slot
+    with no room for author-chosen behavior.
+
+    Parameters
+    ----------
+    entrypoint:
+        Public identifier that is not a callable method of the model.
+    tmp_path:
+        Pytest temporary directory.
+    """
+
+    parsed = load_declarative_recipe(_torch_recipe(entrypoint=entrypoint))
+    assert parsed.entrypoint == entrypoint
+
+    contract = {
+        "builder_symbol": "make_dummy_call",
+        "seed": 0,
+        "semantic_description": "One feature vector.",
+        "source_basis": ["evidence-1"],
+        "smallest_valid_probe_rationale": "Smallest valid batch.",
+        "args": [
+            {
+                "path": "args[0]",
+                "kind": "tensor",
+                "semantic_role": "features",
+                "shape": [1, 4],
+                "dtype": "float32",
+                "device_policy": "cpu",
+                "distribution": "normal",
+                "constraints": [],
+                "source_evidence_ids": ["evidence-1"],
+            }
+        ],
+        "kwargs": [],
+        "non_tensor_values": [],
+        "masks_state_and_control": [],
+        "expected_output_semantics": "projected features",
+    }
+    request = WorkerRequest(
+        stable_id="m_bad_entrypoint",
+        recipe={
+            "kind": "declarative-library",
+            "recipe": _torch_recipe(entrypoint=entrypoint),
+        },
+        modality=None,
+        input_spec=None,
+        input_contract=contract,
+        scratch_root=tmp_path / "scratch",
+        receipt_path=tmp_path / "result" / "receipt.json",
+        meaningful_modes=(RunMode.EVAL,),
+    )
+
+    receipt = run_worker(request)
+
+    assert receipt["per_mode"] == {}
+    assert receipt["error"]["message"] == (
+        f"native object Linear has no callable {entrypoint!r}"
+    )
 
 
 @pytest.mark.smoke
@@ -725,6 +972,35 @@ def test_schema_admits_the_extended_recipe_and_constructed_leaves() -> None:
     ]
     proposal["proposed_facts"]["input_contract"]["args"][0] = _constructed_leaf()
     validate_payload(proposal)
+
+
+def test_the_extended_shapes_record_zero_authored_bytes() -> None:
+    """A record carrying all three extended shapes declares no authored code.
+
+    The design argument is not merely that the shapes are expressible, but that
+    they are expressible with NO author-authored code member: a null
+    ``code_path``, a null ``code_sha256``, and an empty ``code_manifest``. The
+    sibling schema test validates the extended grammar without ever asserting the
+    zero-authored-bytes fields it is supposed to buy.
+    """
+
+    model = make_model(accepted=True)
+    implementation = model["implementation"]
+    implementation["library_recipe"]["entrypoint"] = "run"
+    implementation["library_recipe"]["post_construct"] = [
+        {"method": "set_distilled_training", "args": [True], "kwargs": {}}
+    ]
+    implementation["code_manifest"] = []
+    model["input_contract"]["args"][0] = _constructed_leaf()
+
+    validate_payload(model)
+
+    assert implementation["recipe_type"] == "declarative-library"
+    assert implementation["code_path"] is None
+    assert implementation["code_sha256"] is None
+    assert implementation["code_manifest"] == []
+    assert implementation["builder_symbol"] is None
+    assert implementation["dummy_call_symbol"] is None
 
 
 def test_schema_refuses_misplaced_or_missing_input_constructors() -> None:
