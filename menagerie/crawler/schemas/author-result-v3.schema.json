@@ -761,7 +761,8 @@
           "uniqueItems": true,
           "items": {
             "$ref": "#/$defs/nonempty_string"
-          }
+          },
+          "description": "Exact bounded search queries attempted."
         },
         "places": {
           "type": "array",
@@ -769,11 +770,13 @@
           "uniqueItems": true,
           "items": {
             "$ref": "#/$defs/nonempty_string"
-          }
+          },
+          "description": "Exact indexes, hosts, registries, or archives searched."
         },
         "candidate_links": {
           "type": "array",
           "uniqueItems": true,
+          "description": "Candidate locators paired with authored rejection reasons.",
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -808,13 +811,16 @@
           "uniqueItems": true,
           "items": {
             "$ref": "#/$defs/nonempty_string"
-          }
+          },
+          "description": "Languages covered by the bounded search."
         },
         "conclusion": {
-          "$ref": "#/$defs/nonempty_string"
+          "$ref": "#/$defs/nonempty_string",
+          "description": "Bounded model judgment supported by the preceding search record."
         },
         "retained_description": {
-          "type": ["string", "null"]
+          "type": ["string", "null"],
+          "description": "Exact descriptive text the bounded search did retain, or null when it retained none. Optional because only the arms that found prose to quote can supply it; an explicit null distinguishes 'nothing was found to retain' from a field that was simply never written."
         }
       }
     }
