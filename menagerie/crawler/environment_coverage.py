@@ -61,7 +61,6 @@ import fcntl
 import json
 import os
 from pathlib import Path
-import re
 from typing import Any, Mapping, Optional, Sequence
 
 from menagerie.crawler.identity import (
@@ -72,6 +71,7 @@ from menagerie.crawler.identity import (
 from menagerie.crawler.models import JsonObject
 from menagerie.crawler.package_namespace import (
     canonical_distribution_name,
+    dependency_spec_name,
     inventory_row_provides_distribution,
 )
 
@@ -106,9 +106,6 @@ statement: not attempted, not failed, recoverable in a named environment.
 COVERAGE_DEFERRAL_RELATIVE_PATH = (
     Path("intake-extensions") / "environment-coverage-deferrals.jsonl"
 )
-
-_SPEC_NAME = re.compile(r"[A-Za-z0-9._-]+")
-
 
 class CoverageVerdict(StrEnum):
     """Closed routed-environment coverage outcomes."""
@@ -247,31 +244,6 @@ def _inventory_provides(
     return None
 
 
-def dependency_spec_name(spec: str) -> str:
-    """Return the bare package name a conda match spec asks for.
-
-    Specs in an intent's ``environment.yml`` carry channels and version bounds
-    (``conda-forge::pytorch>=2.3``); the coverage question is only about the
-    NAME, so everything after it is discarded.
-
-    Parameters
-    ----------
-    spec:
-        One declared dependency match spec.
-
-    Returns
-    -------
-    str
-        The bare package name, or an empty string for an unparseable spec.
-    """
-
-    candidate = spec.strip()
-    if "::" in candidate:
-        candidate = candidate.rsplit("::", 1)[1]
-    match = _SPEC_NAME.match(candidate)
-    return match.group(0) if match is not None else ""
-
-
 def _routing_table_intent(distribution: str) -> Optional[str]:
     """Return the intent ``routing._PACKAGE_INTENTS`` already maps this package to."""
 
@@ -372,6 +344,13 @@ def _resolved_export_packages(intent: Any) -> tuple[Mapping[str, Any], ...]:
     lock = getattr(intent, "lock", None)
     export_bytes = getattr(lock, "export_bytes", None)
     if not isinstance(export_bytes, (bytes, bytearray)):
+        return ()
+    status = getattr(lock, "status", None)
+    if isinstance(status, str) and status != "locked":
+        # A superseded (or otherwise unreadable) lock is last run's solve
+        # residue, not this campaign's inventory: claiming LOCKED_INVENTORY
+        # coverage from it would prove a covering intent with stale evidence.
+        # The declared-dependency and routing-table bases still apply.
         return ()
     # Imported lazily for the same reason as the routing table: a ledger reader
     # should not need the environment-exactness machinery to print rows.

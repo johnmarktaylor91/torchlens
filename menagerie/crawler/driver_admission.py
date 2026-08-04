@@ -114,6 +114,13 @@ from menagerie.crawler.envs import (
     EnvironmentRegistry,
     IntentProbes,
 )
+from menagerie.crawler.host_capacity import (
+    CapacityAssessment,
+    append_capacity_deferral_row,
+    assess_model_capacity,
+    build_capacity_deferral_row,
+    capacity_deferral_path,
+)
 from menagerie.crawler.env_lifecycle import (
     ArtifactReceipt,
     EnvironmentExactnessError,
@@ -3672,6 +3679,132 @@ class AdmissionEnvironmentMixin:
         event["event_id"] = f"environment-coverage-{stable_hash(event)[7:31]}"
         operational.append(event)
 
+    def _withhold_for_host_capacity(
+        self,
+        item: WorkItem,
+        artifact: AuthorArtifact,
+        operational: JsonlLedger,
+    ) -> bool:
+        """Withhold a model this host provably cannot instantiate, pre-normalization.
+
+        The environment-lane capacity gate (``_admit_within_host_capacity``)
+        already refuses oversized models -- but only for artifacts that SURVIVE
+        author-lane normalization. The 2026-08-04 pilot rung proved that order
+        wrong: full-config Mixtral (m5915, a ~31B-parameter lower bound against
+        a 24 GiB host) terminalized ``failed:runner`` / ``protocol-violation``
+        on an unrelated normalization refusal before any size check ran, and
+        ``capacity-deferrals`` reported zero. The size is knowable from the
+        authored recipe alone, so the assessment runs here too -- right after
+        environment coverage and BEFORE ``_normalize_artifact_modes`` -- and an
+        oversized model defers recoverably instead of terminalizing on whatever
+        normalization happens to refuse first.
+
+        The environment-lane gate stays as the backstop; the durable ledger is
+        idempotent per work generation, so both firing can never double-record.
+
+        Parameters
+        ----------
+        item:
+            Exact scheduled work generation.
+        artifact:
+            Validated, staged author artifact carrying the declarative recipe.
+        operational:
+            Locked operational ledger for the health event.
+
+        Returns
+        -------
+        bool
+            Whether the model was withheld from this wave.
+        """
+
+        try:
+            proposal = artifact.proposal
+        except DriverIntegrationError:
+            # A terminal author result has no executable proposal and declares no
+            # recipe; there is nothing to size.
+            return False
+        facts = proposal.get("proposed_facts")
+        implementation = facts.get("implementation") if isinstance(facts, Mapping) else None
+        if not isinstance(implementation, Mapping):
+            return False
+        assessment = assess_model_capacity(implementation)
+        if not assessment.deferred:
+            return False
+        cache = self.paths.work_root / item.stable_id / "driver-author-artifact.json"
+        try:
+            _write_json_atomic(
+                cache,
+                serialize_author_result_cache(
+                    artifact.author_result,
+                    source_manifest=artifact.source_manifest,
+                    model_dir=artifact.model_dir,
+                ),
+            )
+        except Exception:  # noqa: BLE001 -- a disposable cache must never block the record
+            cache.unlink(missing_ok=True)
+        self._record_host_capacity_deferral(item, assessment, operational)
+        return True
+
+    def _record_host_capacity_deferral(
+        self,
+        item: WorkItem,
+        assessment: CapacityAssessment,
+        operational: JsonlLedger,
+    ) -> None:
+        """Append one durable host-capacity deferral row plus its campaign-health event."""
+
+        created_at = self.dependencies.clock()
+        records_root = self.paths.ledgers.models.parent.parent
+        ledger_path = capacity_deferral_path(records_root)
+        append_capacity_deferral_row(
+            ledger_path,
+            build_capacity_deferral_row(
+                stable_id=item.stable_id,
+                work_id=item.active_work_id,
+                name=item.intake.name,
+                campaign_id=str(self.config.campaign_id),
+                run_id=self.config.run_id,
+                machine_id=self.config.machine_id,
+                created_at=created_at,
+                assessment=assessment,
+            ),
+        )
+        event: JsonObject = {
+            "schema_version": OPERATIONAL_EVENT_SCHEMA_VERSION,
+            "created_at": created_at,
+            "event_kind": OperationalEventKind.CAMPAIGN_HEALTH.value,
+            "status": OperationalEventStatus.HEALTHY.value,
+            "provider": None,
+            "observed_response": None,
+            "reset_at": None,
+            "queued_work_counts": {"models": 1},
+            "current_environment": None,
+            "run_id": self.config.run_id,
+            "machine_id": self.config.machine_id,
+            "details": {
+                "disposition": "host-capacity-deferred",
+                "ledger": str(ledger_path.relative_to(records_root)),
+                "host_physical_memory_bytes": assessment.host.physical_memory_bytes,
+                "admissible_parameter_ceiling": assessment.host.admissible_parameter_ceiling,
+                "deferred": [
+                    {
+                        "stable_id": item.stable_id,
+                        "work_id": item.active_work_id,
+                        "parameter_count_lower_bound": (
+                            assessment.estimate.parameter_count_lower_bound
+                            if assessment.estimate is not None
+                            else None
+                        ),
+                    }
+                ],
+            },
+        }
+        # The identity covers the complete logical payload, so a resume that
+        # re-derives the identical refusal idempotently no-ops instead of
+        # tripping the ledger's conflicting-replay tripwire.
+        event["event_id"] = f"host-capacity-{stable_hash(event)[7:31]}"
+        operational.append(event)
+
     def _preserve_uncommitted_author_result(
         self, item: WorkItem, artifact: AuthorArtifact
     ) -> None:
@@ -3903,6 +4036,10 @@ class AdmissionEnvironmentMixin:
                             item, cached_artifact_v3, operational
                         ):
                             continue
+                        if self._withhold_for_host_capacity(
+                            item, cached_artifact_v3, operational
+                        ):
+                            continue
                         artifacts[item.stable_id] = cached_artifact_v3
                     else:
                         pause = self._route_terminal_author_result(
@@ -4051,6 +4188,12 @@ class AdmissionEnvironmentMixin:
             # reaching the blanket arm below, is what used to blame the model for a
             # routing decision made at intake.
             if self._withhold_for_environment_coverage(item, artifact, operational):
+                continue
+            # Sized BEFORE normalization for the same reason coverage is: the R1
+            # digest binding inside normalization can refuse for reasons of its
+            # own (a version drift, a missing package), and letting it fire first
+            # terminalizes a model this host was never going to attempt anyway.
+            if self._withhold_for_host_capacity(item, artifact, operational):
                 continue
             try:
                 artifact = _normalize_artifact_modes(
@@ -6644,6 +6787,14 @@ def _routed_environment_packages(
         return ()
     intent = registry.intents.get(intent_name)
     if intent is None or intent.lock.export_bytes is None:
+        return ()
+    if intent.lock.status != "locked":
+        # Lock artifacts are the environment lane's own solve residue, rewritten
+        # on every run. A residue whose resolved export no longer satisfies the
+        # intent's CURRENT declaration (`superseded`) proves the spec moved after
+        # the solve; reading it as this run's inventory would refuse every model
+        # needing the newly declared package against an environment the next
+        # solve will not produce. Unknown is honest; a stale certainty is not.
         return ()
     try:
         value = json.loads(parse_resolved_export(intent.lock.export_bytes))

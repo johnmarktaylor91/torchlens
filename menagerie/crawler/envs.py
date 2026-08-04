@@ -9,6 +9,10 @@ from typing import Any, Mapping, Optional
 
 from menagerie.crawler.constants import EnvironmentPhase
 from menagerie.crawler.identity import hash_bytes, stable_hash
+from menagerie.crawler.package_namespace import (
+    dependency_spec_name,
+    inventory_row_provides_distribution,
+)
 
 DEFAULT_ENVS_ROOT = Path(__file__).with_name("envs")
 
@@ -55,6 +59,7 @@ class LockArtifacts:
     lock_bytes: Optional[bytes]
     export_bytes: Optional[bytes]
     declared_export_hash: Optional[str]
+    declared_dependencies: tuple[str, ...] = ()
 
     @property
     def status(self) -> str:
@@ -63,7 +68,8 @@ class LockArtifacts:
         Returns
         -------
         str
-            ``unlocked``, ``incomplete``, ``hash-mismatch``, or ``locked``.
+            ``unlocked``, ``incomplete``, ``hash-mismatch``, ``superseded``, or
+            ``locked``.
         """
 
         present = (self.lock_bytes is not None, self.export_bytes is not None)
@@ -73,7 +79,61 @@ class LockArtifacts:
             return "incomplete"
         if hash_bytes(self.export_bytes or b"") != self.declared_export_hash:
             return "hash-mismatch"
+        if self.missing_declared_dependency() is not None:
+            return "superseded"
         return "locked"
+
+    def missing_declared_dependency(self) -> Optional[str]:
+        """Name one declared dependency the resolved export fails to install.
+
+        Lock artifacts are OUTPUTS of the environment lane's own target solve,
+        not operator inputs: every run re-solves ``environment.yml`` and
+        rewrites them, so the artifacts on disk are the residue of the LAST
+        solve. When the declaration gains a dependency after that solve (the
+        2026-08-04 pilot rung: ``segmentation-models-pytorch`` was declared in
+        ``core`` hours after the run's solve wrote a lock without it), the
+        residue silently contradicts the spec it claims to realize. Reading it
+        as the routed environment's truth then refuses every model needing the
+        new dependency with "no package row carries that name" -- a false
+        permanent wall, because the very next solve would install it.
+
+        A solve satisfies every requested package by construction, so a
+        resolved export missing a declared dependency name is PROOF the lock
+        predates the declaration. This never inspects versions or bounds: a
+        version drift is a solver outcome, not evidence of a superseded spec.
+
+        Returns
+        -------
+        str | None
+            The first declared dependency name absent from the resolved
+            export, or ``None`` when every declared name is present, the
+            export is unreadable (downstream parsing owns that refusal), or no
+            declaration was provided.
+        """
+
+        if not self.declared_dependencies or self.export_bytes is None:
+            return None
+        try:
+            value = json.loads(self.export_bytes.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return None
+        packages = value.get("packages") if isinstance(value, Mapping) else None
+        if not isinstance(packages, list):
+            return None
+        row_names = [
+            str(row["name"])
+            for row in packages
+            if isinstance(row, Mapping) and isinstance(row.get("name"), str)
+        ]
+        for spec in self.declared_dependencies:
+            name = dependency_spec_name(str(spec))
+            if not name:
+                continue
+            if not any(
+                inventory_row_provides_distribution(row_name, name) for row_name in row_names
+            ):
+                return name
+        return None
 
 
 @dataclass(frozen=True)
@@ -142,7 +202,10 @@ def load_environment_registry(
         raw = _mapping(raw_value, f"intent {name}")
         env = _load_json_yaml(root / name / "environment.yml")
         probe = _parse_probes(name, _mapping(raw_probes.get(name), f"probes for {name}"))
-        lock = _load_lock_artifacts(root / name / "locks", target)
+        dependencies = _strings(env.get("dependencies"), f"dependencies for {name}")
+        lock = _load_lock_artifacts(
+            root / name / "locks", target, declared_dependencies=dependencies
+        )
         generation = compute_environment_generation(name, lock, probe)
         intents[name] = EnvironmentIntent(
             name=name,
@@ -151,7 +214,7 @@ def load_environment_registry(
             description=_string(raw.get("description"), f"description for {name}"),
             split_guidance=_string(raw.get("split_guidance"), f"split guidance for {name}"),
             channels=_strings(env.get("channels"), f"channels for {name}"),
-            dependencies=_strings(env.get("dependencies"), f"dependencies for {name}"),
+            dependencies=dependencies,
             probes=probe,
             lock=lock,
             generation=generation,
@@ -206,7 +269,9 @@ def compute_environment_generation(
     )
 
 
-def _load_lock_artifacts(lock_dir: Path, target: str) -> LockArtifacts:
+def _load_lock_artifacts(
+    lock_dir: Path, target: str, *, declared_dependencies: tuple[str, ...] = ()
+) -> LockArtifacts:
     """Load optional setup-time target artifacts from one lock directory."""
 
     lock_path = lock_dir / f"{target}.lock"
@@ -224,6 +289,7 @@ def _load_lock_artifacts(lock_dir: Path, target: str) -> LockArtifacts:
             if export_hash_path.is_file()
             else None
         ),
+        declared_dependencies=declared_dependencies,
     )
 
 
