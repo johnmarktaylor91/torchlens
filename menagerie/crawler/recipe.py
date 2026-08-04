@@ -41,6 +41,27 @@ _GENERIC_CONTAINER_SYMBOLS = frozenset(
     {"Sequential", "ModuleList", "ModuleDict", "ParameterList", "ParameterDict", "Module"}
 )
 
+CONSTRUCT_MODULE_ALLOWLIST = frozenset({"torch", "torch.nn", "torch.nn.utils.rnn"})
+"""Exact auxiliary modules a construct node may name besides the pinned distribution.
+
+A construct node's ``module`` is imported and its ``symbol`` is called, so the set
+of reachable callables *is* the grammar's real bound. Without this the grammar is
+a bounded syntax over an unbounded callable namespace: ``subprocess.run`` parses,
+imports, and executes before any downstream type error is reached.
+
+The bound is therefore "the artifact the recipe pins, plus a named auxiliary
+allowlist". Membership is EXACT module names, not prefixes, and is derived from
+the shapes that actually occur: ``torch`` (``torch.zeros``), ``torch.nn``
+(``TransformerEncoderLayer``), and ``torch.nn.utils.rnn``
+(``pack_padded_sequence``). Exactness keeps the auxiliary surface minimal --
+``torch.hub``, ``torch.jit``, and ``torch.utils.collect_env`` all expose
+general-purpose code/state loaders and none of them are on this list.
+
+Extend this deliberately, one module at a time, with a test that names the real
+recipe shape requiring it. Widening it to a top-level package prefix would hand
+every construct node the whole of torch again.
+"""
+
 
 def _is_generic_container_reference(module: str, symbol: str) -> bool:
     """Return whether a declared module/symbol names a generic torch container.
@@ -60,6 +81,118 @@ def _is_generic_container_reference(module: str, symbol: str) -> bool:
     return symbol in _GENERIC_CONTAINER_SYMBOLS and (
         module == "torch.nn" or module.startswith("torch.nn.")
     )
+
+
+@lru_cache(maxsize=None)
+def _distribution_top_level_packages(distribution: str) -> frozenset[str]:
+    """Return the top-level import packages the named distribution installs.
+
+    This inverts the interpreter's package-to-distribution map so a distribution
+    whose import package differs from its distribution name (``opencv-python``
+    ships ``cv2``) still resolves without importing anything.
+
+    Parameters
+    ----------
+    distribution:
+        Declared pinned distribution name.
+
+    Returns
+    -------
+    frozenset[str]
+        Top-level package names attributed to the distribution, empty when the
+        distribution is not installed in this interpreter.
+    """
+
+    wanted = canonical_distribution_name(distribution)
+    return frozenset(
+        package
+        for package, names in _packages_distributions_snapshot().items()
+        if any(canonical_distribution_name(name) == wanted for name in names)
+    )
+
+
+def assert_construct_namespace(module: str, *, distribution: str, context: str) -> None:
+    """Refuse a construct-node module outside the pinned distribution and allowlist.
+
+    This runs BEFORE the module is imported. Import order matters: importing an
+    author-named module already executes that module's top-level code, so a
+    post-import check would be a check applied after the thing it exists to
+    prevent. The declared string is the only artifact available early enough.
+
+    Two namespaces are admitted. The pinned distribution's own packages are
+    admitted because that distribution is exactly what the recipe pins, versions,
+    and digests -- running its code is the point of the R1 rung. Everything else
+    must be an exact member of :data:`CONSTRUCT_MODULE_ALLOWLIST`.
+
+    Parameters
+    ----------
+    module:
+        Declared dotted module name of the construct node.
+    distribution:
+        Declared pinned distribution of the enclosing recipe.
+    context:
+        Location used in refusal messages.
+
+    Raises
+    ------
+    RecipeError
+        If the module belongs to neither admitted namespace.
+    """
+
+    if module in CONSTRUCT_MODULE_ALLOWLIST:
+        return
+    top_level = module.split(".")[0]
+    if canonical_distribution_name(top_level) == canonical_distribution_name(distribution):
+        return
+    if top_level in _distribution_top_level_packages(distribution):
+        return
+    raise RecipeError(
+        f"construct node at {context} names module {module!r}, which is outside the "
+        f"pinned distribution {distribution!r} and the allowlisted modules "
+        f"{sorted(CONSTRUCT_MODULE_ALLOWLIST)!r}"
+    )
+
+
+def _reject_container_instance(value: object, description: str) -> None:
+    """Refuse a materialized object whose type is a generic torch container.
+
+    The root model and every construct-node result are materialized the same way,
+    so they get the same instance check. Checking only the root leaves the exact
+    asymmetry composition laundering needs: a returned-object check on the root
+    and a constructor-symbol-only check on everything the root is built from.
+
+    Parameters
+    ----------
+    value:
+        Materialized object.
+    description:
+        Leading refusal clause naming what constructed the object.
+
+    Raises
+    ------
+    RecipeError
+        If the object's type is one of the generic torch containers.
+    """
+
+    value_type = type(value)
+    module_name = str(getattr(value_type, "__module__", "") or "")
+    if module_name.split(".")[0] != "torch":
+        return
+    import torch
+
+    containers: tuple[object, ...] = (
+        torch.nn.Sequential,
+        torch.nn.ModuleList,
+        torch.nn.ModuleDict,
+        torch.nn.ParameterList,
+        torch.nn.ParameterDict,
+        torch.nn.Module,
+    )
+    if any(value_type is container for container in containers):
+        raise RecipeError(
+            f"{description} {module_name}.{value_type.__qualname__}; "
+            "a composed container cannot claim R1"
+        )
 
 
 def _reject_container_constructor(constructor: object, context: str) -> None:
@@ -101,7 +234,9 @@ def _reject_container_constructor(constructor: object, context: str) -> None:
         )
 
 
-def _validate_construct_node_spec(spec: Any, context: str) -> Mapping[str, Any]:
+def _validate_construct_node_spec(
+    spec: Any, context: str, *, distribution: str
+) -> Mapping[str, Any]:
     """Validate the exact three-field construct-node payload.
 
     Parameters
@@ -110,6 +245,10 @@ def _validate_construct_node_spec(spec: Any, context: str) -> Mapping[str, Any]:
         Candidate ``{"module", "symbol", "kwargs"}`` payload.
     context:
         Location used in refusal messages.
+    distribution:
+        Pinned distribution bounding the construct node's callable namespace.
+        Keyword-only and required so no call site can resolve a construct node
+        against an unbounded namespace by omission.
 
     Returns
     -------
@@ -119,7 +258,8 @@ def _validate_construct_node_spec(spec: Any, context: str) -> Mapping[str, Any]:
     Raises
     ------
     RecipeError
-        If the payload deviates from the closed construct-node shape.
+        If the payload deviates from the closed construct-node shape or names a
+        module outside the bounded namespace.
     """
 
     if not isinstance(spec, Mapping) or set(spec) != {"module", "symbol", "kwargs"}:
@@ -139,6 +279,7 @@ def _validate_construct_node_spec(spec: Any, context: str) -> Mapping[str, Any]:
             "generic torch.nn containers are refused in declarative R1 recipes: "
             f"{module}.{symbol}"
         )
+    assert_construct_namespace(module, distribution=distribution, context=context)
     kwargs = spec["kwargs"]
     if not isinstance(kwargs, Mapping) or not all(isinstance(key, str) for key in kwargs):
         raise RecipeError(f"construct node at {context} kwargs must be a string-keyed mapping")
@@ -146,7 +287,7 @@ def _validate_construct_node_spec(spec: Any, context: str) -> Mapping[str, Any]:
 
 
 def _walk_construct_values(
-    value: Any, *, context: str, depth: int, counter: list[int]
+    value: Any, *, context: str, depth: int, counter: list[int], distribution: str
 ) -> None:
     """Recursively validate construct nodes inside declarative JSON values.
 
@@ -160,11 +301,14 @@ def _walk_construct_values(
         Number of enclosing construct nodes.
     counter:
         One-slot mutable total construct-node count.
+    distribution:
+        Pinned distribution bounding every construct node's callable namespace.
 
     Raises
     ------
     RecipeError
-        If a construct node is malformed, too deep, or too numerous.
+        If a construct node is malformed, too deep, too numerous, or names a
+        module outside the bounded namespace.
     """
 
     if isinstance(value, Mapping):
@@ -183,20 +327,34 @@ def _walk_construct_values(
                 raise RecipeError(
                     f"construct graph exceeds the maximum of {MAX_CONSTRUCT_NODES} nodes"
                 )
-            spec = _validate_construct_node_spec(value[CONSTRUCT_NODE_KEY], context)
+            spec = _validate_construct_node_spec(
+                value[CONSTRUCT_NODE_KEY], context, distribution=distribution
+            )
             for name, child in spec["kwargs"].items():
                 _walk_construct_values(
-                    child, context=f"{context}.{name}", depth=depth + 1, counter=counter
+                    child,
+                    context=f"{context}.{name}",
+                    depth=depth + 1,
+                    counter=counter,
+                    distribution=distribution,
                 )
             return
         for name, child in value.items():
             _walk_construct_values(
-                child, context=f"{context}.{name}", depth=depth, counter=counter
+                child,
+                context=f"{context}.{name}",
+                depth=depth,
+                counter=counter,
+                distribution=distribution,
             )
     elif isinstance(value, (list, tuple)):
         for index, child in enumerate(value):
             _walk_construct_values(
-                child, context=f"{context}[{index}]", depth=depth, counter=counter
+                child,
+                context=f"{context}[{index}]",
+                depth=depth,
+                counter=counter,
+                distribution=distribution,
             )
 
 
@@ -272,22 +430,7 @@ def assert_model_provenance(model: object, distribution: str) -> None:
     module_name = str(getattr(model_type, "__module__", "") or "")
     qualified = f"{module_name}.{model_type.__qualname__}"
     top_level = module_name.split(".")[0]
-    if top_level == "torch":
-        import torch
-
-        containers: tuple[object, ...] = (
-            torch.nn.Sequential,
-            torch.nn.ModuleList,
-            torch.nn.ModuleDict,
-            torch.nn.ParameterList,
-            torch.nn.ParameterDict,
-            torch.nn.Module,
-        )
-        if any(model_type is container for container in containers):
-            raise RecipeError(
-                f"declarative recipe constructed a generic container {qualified}; "
-                "a composed container cannot claim R1"
-            )
+    _reject_container_instance(model, "declarative recipe constructed a generic container")
     if not top_level or top_level in {"builtins", "__main__"}:
         raise RecipeError(
             f"constructed model type {qualified} has no importable defining module "
@@ -664,7 +807,11 @@ class DeclarativeRecipe:
         node_counter = [0]
         for name, child in kwargs.items():
             _walk_construct_values(
-                child, context=f"kwargs.{name}", depth=0, counter=node_counter
+                child,
+                context=f"kwargs.{name}",
+                depth=0,
+                counter=node_counter,
+                distribution=str(value["distribution"]),
             )
         entrypoint = value.get("entrypoint")
         if entrypoint is not None:
@@ -787,7 +934,7 @@ def reject_opaque_recipe(value: Mapping[str, Any]) -> None:
         raise RecipeError(f"opaque executable recipes are forbidden: {details!r}")
 
 
-def _materialize_construct_value(value: Any, context: str) -> Any:
+def _materialize_construct_value(value: Any, context: str, *, distribution: str) -> Any:
     """Resolve construct nodes inside one declarative value at build time.
 
     Parameters
@@ -796,6 +943,8 @@ def _materialize_construct_value(value: Any, context: str) -> Any:
         Validated JSON-compatible declarative value.
     context:
         Location used in refusal messages.
+    distribution:
+        Pinned distribution bounding every construct node's callable namespace.
 
     Returns
     -------
@@ -805,12 +954,16 @@ def _materialize_construct_value(value: Any, context: str) -> Any:
     Raises
     ------
     RecipeError
-        If a construct node cannot be resolved to a callable non-container symbol.
+        If a construct node names a module outside the bounded namespace, cannot
+        be resolved to a callable non-container symbol, or builds a generic
+        container instance.
     """
 
     if isinstance(value, Mapping):
         if CONSTRUCT_NODE_KEY in value:
-            spec = _validate_construct_node_spec(value.get(CONSTRUCT_NODE_KEY), context)
+            spec = _validate_construct_node_spec(
+                value.get(CONSTRUCT_NODE_KEY), context, distribution=distribution
+            )
             constructed_module = importlib.import_module(str(spec["module"]))
             constructed_symbol = getattr(constructed_module, str(spec["symbol"]), None)
             if constructed_symbol is None or not callable(constructed_symbol):
@@ -822,23 +975,33 @@ def _materialize_construct_value(value: Any, context: str) -> Any:
                 constructed_symbol, f"{spec['module']}.{spec['symbol']}"
             )
             materialized = {
-                name: _materialize_construct_value(child, f"{context}.{name}")
+                name: _materialize_construct_value(
+                    child, f"{context}.{name}", distribution=distribution
+                )
                 for name, child in spec["kwargs"].items()
             }
-            return constructed_symbol(**materialized)
+            constructed = constructed_symbol(**materialized)
+            _reject_container_instance(
+                constructed, f"construct node at {context} constructed a generic container"
+            )
+            return constructed
         return {
-            name: _materialize_construct_value(child, f"{context}.{name}")
+            name: _materialize_construct_value(
+                child, f"{context}.{name}", distribution=distribution
+            )
             for name, child in value.items()
         }
     if isinstance(value, (list, tuple)):
         return [
-            _materialize_construct_value(child, f"{context}[{index}]")
+            _materialize_construct_value(
+                child, f"{context}[{index}]", distribution=distribution
+            )
             for index, child in enumerate(value)
         ]
     return value
 
 
-def resolve_input_constructor(spec: Mapping[str, Any]) -> object:
+def resolve_input_constructor(spec: Mapping[str, Any], *, distribution: str) -> object:
     """Materialize one declared constructed input leaf without authored code.
 
     This implements the input-leaf ``distribution: "constructor"`` reservation:
@@ -849,6 +1012,12 @@ def resolve_input_constructor(spec: Mapping[str, Any]) -> object:
     ----------
     spec:
         Exact ``{"module", "symbol", "kwargs"}`` input constructor payload.
+    distribution:
+        Pinned distribution of the recipe this input is being built for; bounds
+        the constructor's callable namespace exactly as it bounds a recipe's
+        construct nodes. A constructed input leaf runs the same import-then-call
+        machinery, so leaving it unbounded would reopen the hole on the input
+        side alone.
 
     Returns
     -------
@@ -858,15 +1027,22 @@ def resolve_input_constructor(spec: Mapping[str, Any]) -> object:
     Raises
     ------
     RecipeError
-        If the payload deviates from the closed grammar, resolves to a generic
-        container, or produces ``None``.
+        If the payload deviates from the closed grammar, names a module outside
+        the bounded namespace, resolves to or builds a generic container, or
+        produces ``None``.
     """
 
-    validated = _validate_construct_node_spec(spec, "input_contract constructor")
+    validated = _validate_construct_node_spec(
+        spec, "input_contract constructor", distribution=distribution
+    )
     counter = [0]
     for name, child in validated["kwargs"].items():
         _walk_construct_values(
-            child, context=f"input constructor kwargs.{name}", depth=1, counter=counter
+            child,
+            context=f"input constructor kwargs.{name}",
+            depth=1,
+            counter=counter,
+            distribution=distribution,
         )
     try:
         canonical_json_bytes(dict(validated["kwargs"]))
@@ -886,7 +1062,9 @@ def resolve_input_constructor(spec: Mapping[str, Any]) -> object:
     )
     value = constructed_symbol(
         **{
-            name: _materialize_construct_value(child, f"input constructor kwargs.{name}")
+            name: _materialize_construct_value(
+                child, f"input constructor kwargs.{name}", distribution=distribution
+            )
             for name, child in validated["kwargs"].items()
         }
     )
@@ -894,6 +1072,11 @@ def resolve_input_constructor(spec: Mapping[str, Any]) -> object:
         raise RecipeError(
             f"input constructor {validated['module']}.{validated['symbol']} produced None"
         )
+    _reject_container_instance(
+        value,
+        f"input constructor {validated['module']}.{validated['symbol']} "
+        "constructed a generic container",
+    )
     return value
 
 
@@ -944,10 +1127,12 @@ def load_declarative_recipe(
     def build_model() -> object:
         """Invoke the direct library constructor with declarative kwargs.
 
-        Construct-node kwargs are resolved from their declared modules, bounded
-        post-construction configuration calls are applied, and the runtime
-        provenance tripwire refuses any constructed model whose class is not
-        defined by the pinned distribution.
+        Construct-node kwargs are resolved from their declared modules -- bounded
+        to the pinned distribution and :data:`CONSTRUCT_MODULE_ALLOWLIST`, and
+        refused if they build a generic container -- bounded post-construction
+        configuration calls are applied, and the runtime provenance tripwire
+        refuses any constructed model whose class is not defined by the pinned
+        distribution.
 
         Returns
         -------
@@ -956,7 +1141,9 @@ def load_declarative_recipe(
         """
 
         materialized = {
-            name: _materialize_construct_value(child, f"kwargs.{name}")
+            name: _materialize_construct_value(
+                child, f"kwargs.{name}", distribution=recipe.distribution
+            )
             for name, child in recipe.kwargs.items()
         }
         model = constructor(**materialized)
