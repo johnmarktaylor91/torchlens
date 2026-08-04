@@ -696,7 +696,7 @@ fragment both fail; `python -m menagerie.crawler.tools.verify_prompts` remains t
 reuses. Editing any of these files stales its digest by construction: re-pin the literal row here in the
 same change.
 
-- `claude_crawler_author_v2.txt`: `sha256:689a31996a1c9a11424eca20758ebf58285ed6e82eb0d21fda3edf4ded535896`
+- `claude_crawler_author_v2.txt`: `sha256:857836112d8f608ed9408122dda140e46252d6de5d7180e9246513abaec51fbe`
 - `codex_accuracy_checker_v2.txt`: `sha256:bd20008a5d8c445ae4f61dcaa64854088d028ed13b4119fc16531759b458d0e0`
 - `campaign_c1-mech.md`: `sha256:32fe5a762448793199b91cffd3b2290ac90b33b57213e627f362885d3ed445d2`
 - `campaign_c2-disco.md`: `sha256:d176f8298d8a0ecdfd2519a4905e5047cb214aff377545b34c653b7448ecd5b5`
@@ -712,7 +712,7 @@ replaced. They were unpinned until 2026-07-29, so drift in the two most load-bea
 prompts was undetectable.
 
 - `stage1_discovery.md`: `sha256:3eac9b1557b9b4df7d5f387b9e3af2cfa6794294f738d7c63acc7fc4660a22d7`
-- `stage2_author.md`: `sha256:1e4cd02fce1159d9538094830e86d2296dd85e9a93d3d7929aee0ef4da266930`
+- `stage2_author.md`: `sha256:ecbc94e4b1ffa3c216955404ad0c551e7df474ecb2ff82dfde0da06bf8dfa0f2`
 
 ## 21. Acceptance tests
 

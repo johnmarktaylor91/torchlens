@@ -291,15 +291,15 @@
         },
         "arxiv_id": {
           "$ref": "#/$defs/nullable_string",
-          "description": "Mandatory arxiv id."
+          "description": "Mandatory arxiv id. When non-null the identifier must appear inside the text of an excerpt named by source_evidence_ids; occurring elsewhere in the fetched page grounds nothing, so bind the line that carries it as its own excerpt. A page mention that adds a revision selector (arXiv:2111.11418v3) grounds the unversioned id, but a bare mention does not ground a version you declare."
         },
         "doi": {
           "$ref": "#/$defs/nullable_string",
-          "description": "Mandatory doi."
+          "description": "Mandatory doi. When non-null the identifier must appear inside the text of an excerpt named by source_evidence_ids; occurring elsewhere in the fetched page grounds nothing, so bind the line that carries it as its own excerpt. A DOI suffix is opaque, so it is matched exactly and no near variant grounds it."
         },
         "openreview_id": {
           "$ref": "#/$defs/nullable_string",
-          "description": "Mandatory openreview id."
+          "description": "Mandatory openreview id. When non-null the identifier must appear inside the text of an excerpt named by source_evidence_ids; occurring elsewhere in the fetched page grounds nothing, so bind the line that carries it as its own excerpt. An OpenReview id is opaque, so it is matched exactly and no near variant grounds it."
         },
         "url": {
           "oneOf": [
@@ -319,7 +319,7 @@
         },
         "source_evidence_ids": {
           "$ref": "#/$defs/string_array",
-          "description": "Mandatory source evidence ids."
+          "description": "Mandatory ids of the excerpts that ground this citation. Every non-null citation leaf is value-checked against the concatenated text of these excerpts and nothing else: title, venue, year, each author, and each declared identifier must occur inside that bound text. A value present in the fetched source bytes but not inside a bound excerpt is refused, so bind an excerpt that literally carries each value declared here, adding a second excerpt when the identifier and the title sit on different lines."
         }
       }
     },

@@ -130,6 +130,20 @@ PAPER_EVIDENCE_ROLES = frozenset({"introducing-paper", "supplement", "project-pa
 #: declares one it must occur in the excerpt text: an exact identifier is a strictly
 #: stronger anchor than title-token overlap, so requiring it tightens the gate.
 CITATION_IDENTIFIER_FIELDS = ("arxiv_id", "doi", "openreview_id")
+#: The arXiv identifier grammar, with the optional ``vN`` revision selector captured
+#: separately. Both eras are covered: the post-2007 ``YYMM.NNNN(N)`` form and the old
+#: ``archive[.SS]/YYMMNNN`` form. The base identifier can never itself end in ``v`` plus
+#: digits -- the new form ends in a fixed-width digit run and the old form ends in seven
+#: digits -- so a trailing ``vN`` is unambiguously the version selector and never part of
+#: the identifier being named. That unambiguity is what makes
+#: :func:`_identifier_grounded` safe for arXiv and is exactly what DOI and OpenReview
+#: identifiers lack; see that function for why neither gets the same treatment.
+_ARXIV_IDENTIFIER_PATTERN = re.compile(
+    r"\A(?:arxiv:)?"
+    r"(?:\d{4}\.\d{4,5}|[a-z][a-z-]*(?:\.[a-z]{2})?/\d{7})"
+    r"(?P<version>v\d+)?\Z",
+    re.IGNORECASE,
+)
 #: TeX accent commands mapped to the combining mark they place on their argument. Used
 #: only by :func:`_decode_tex_escapes` to make a BibTeX spelling of an accented name
 #: canonicalize identically to the same name spelled in Unicode.
@@ -1304,7 +1318,9 @@ def _validate_citation_leaves(citation: Mapping[str, Any], texts: Sequence[str])
     must now occur -- Unicode-canonicalized, so ``Balazevic`` and the diacritic
     spelling of the same author ground each other -- in the controlled-fetched paper
     excerpts bound to the citation claim. That covers ``title``, ``venue``, ``year``,
-    every ``authors`` entry, and every member of :data:`CITATION_IDENTIFIER_FIELDS`.
+    every ``authors`` entry, and every member of :data:`CITATION_IDENTIFIER_FIELDS`. The
+    identifier leaves go through :func:`_identifier_grounded`, which is the same phrase
+    check plus the one arXiv entailment a bare phrase comparison gets wrong.
 
     Two leaves are deliberately not excerpt-checked, because neither is quoted from the
     paper, and each names what checks it instead:
@@ -1364,7 +1380,7 @@ def _validate_citation_leaves(citation: Mapping[str, Any], texts: Sequence[str])
             failures.append(f"authors[{index}]")
     for leaf in CITATION_IDENTIFIER_FIELDS:
         value = citation.get(leaf)
-        if isinstance(value, str) and value.strip() and not phrase_grounded(value):
+        if isinstance(value, str) and value.strip() and not _identifier_grounded(value, combined):
             failures.append(leaf)
     bibtex = citation.get("bibtex")
     if isinstance(bibtex, str) and bibtex.strip():
@@ -1402,6 +1418,74 @@ def _validate_citation_leaves(citation: Mapping[str, Any], texts: Sequence[str])
         )
     if problems:
         raise ProposalValidationError("; ".join(problems))
+
+
+def _identifier_grounded(value: str, combined: str) -> bool:
+    """Return whether a declared citation identifier is named by the excerpt text.
+
+    The plain phrase check is the rule; this adds exactly one entailment that the plain
+    check got wrong. :func:`_normalize_support_text` reduces ``2111.11418`` to the token
+    pair ``2111 11418``, but a page that mentions the work only as ``arXiv:2111.11418v3``
+    reduces to ``2111 11418v3`` -- the revision selector fuses into the trailing token,
+    the phrase is no longer contiguous, and a true claim is refused. The authoring stage
+    runs once per model, so that refusal is a permanent dead record, not a retry.
+
+    The entailment runs one way only, from the *more* specific mention to the *less*
+    specific claim. An arXiv identifier names a work and ``vN`` names one revision of
+    that same work, so a page saying ``2111.11418v3`` has necessarily named
+    ``2111.11418``: the widening is on the page side, and the claim being checked is
+    unchanged. The converse is deliberately not granted -- a bare ``2111.11418`` on the
+    page does not establish that a third revision exists, so a declared ``2111.11418v3``
+    asserts strictly more than the excerpt shows and stays refused. Version-suffix
+    tolerance therefore applies only when the *declared* identifier carries no version.
+
+    This is not a general "ignore trailing characters" rule, which would be a laundering
+    path: it consumes only a literal ``v`` followed by digits and then demands a token
+    boundary, so ``2111.114189`` is still refused against ``2111.11418`` and vice versa.
+    The tolerance is licensed by the arXiv grammar specifically -- a base arXiv id can
+    never end in ``v`` plus digits (see :data:`_ARXIV_IDENTIFIER_PATTERN`), so a trailing
+    ``vN`` cannot be anything but the revision selector.
+
+    Neither sibling identifier has the same flaw, and neither may borrow the fix:
+
+    * A DOI suffix is an *opaque* string chosen by the registrant. ``10.1234/xyzv2`` is
+      not required to be a revision of ``10.1234/xyz``; it may be a separately
+      registered DOI for an unrelated work. Versioned deposits (Zenodo, DataCite) mint
+      distinct DOIs rather than suffixing one, so there is no grammar that could tell an
+      entailed mention from a different identifier, and accepting one would let a real
+      but wrong DOI ground the claim.
+    * An OpenReview id is likewise an opaque token, and OpenReview expresses revisions as
+      separate note ids rather than as a suffix on the forum id. It has no version
+      surface at all, so there is nothing to entail. Its ids do sit inside query strings
+      (``?id=SygXPaEYvH&noteId=...``), but ``&`` and ``=`` are punctuation the tokenizer
+      already splits on, so no fusion occurs.
+
+    Parameters
+    ----------
+    value:
+        Declared identifier as the author wrote it.
+    combined:
+        Canonicalized excerpt text from the bound paper-role sources.
+
+    Returns
+    -------
+    bool
+        Whether the excerpt text names the declared identifier.
+    """
+
+    normalized = _normalize_support_text(value)
+    if not normalized:
+        return True
+    if f" {normalized} " in f" {combined} ":
+        return True
+    parsed = _ARXIV_IDENTIFIER_PATTERN.match(value.strip())
+    if parsed is None or parsed.group("version") is not None:
+        return False
+    # ``combined`` holds only lowercase alphanumeric tokens separated by single spaces,
+    # so these lookarounds are exactly token boundaries. The suffix is consumed as a
+    # whole or not at all, which is why a numeric extension cannot pass.
+    versioned = re.compile(rf"(?<![0-9a-z]){re.escape(normalized)}v[0-9]+(?![0-9a-z])")
+    return versioned.search(combined) is not None
 
 
 def _positive_scalars(value: object) -> list[object]:
