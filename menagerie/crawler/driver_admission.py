@@ -51,6 +51,7 @@ from menagerie.crawler.author_dispatch import (
     AuthorEffortGrant,
     AuthorEffortExhaustionClaim,
     AuthorEngineFaultError,
+    AuthorExecutorContractError,
     AuthorInfrastructureFaultError,
     AuthorResultMalformedError,
     ProposedAuthorResult,
@@ -1498,6 +1499,10 @@ def classify_author_exit(
     ------
     AuthorBackoffError
         On a rate/quota response, including exit ``76``.
+    AuthorExecutorContractError
+        On the executor's own refusal of a session's PUBLISHED discovery or
+        result payload -- a model-scoped authoring failure, never a campaign
+        abort.
     RetryableOperatorError
         On a declared retryable or unavailable operator failure.
     DriverIntegrationError
@@ -1527,6 +1532,30 @@ def classify_author_exit(
             for line in combined.splitlines()
         ):
             raise ForgeRateLimitedError(stable_id, tail)
+        # A session that RAN TO COMPLETION and published payload bytes the
+        # executor's own contract validator refused is evidence about this
+        # model's authoring, not about the machine. The executor still relays
+        # it through its retryable exit so a fresh session gets one bounded
+        # chance, but classifying it as campaign-scoped transport (the
+        # ``RetryableOperatorError`` below) let ONE schema-invalid author
+        # result terminate an entire rung with every sibling's completed work
+        # unrecorded (2026-07-27, m4066). Matched on the executor's exact
+        # structured failure lines, like the two provider-outage arms above.
+        # ``session-crashed`` / ``wall-exceeded`` / ``no-result-output`` are
+        # deliberately NOT here: a session that died without publishing is
+        # indistinguishable from broken infrastructure, and mis-terminalizing
+        # every model on a host whose provider CLI is broken would be the
+        # worse defect.
+        expected_contract_failures = (
+            "author executor stage1 failed: discovery-contract-invalid (attempt ",
+            "author executor stage2 failed: result-not-json (attempt ",
+            "author executor stage2 failed: result-contract-invalid (attempt ",
+        )
+        if returncode == AUTHOR_EXIT_RETRYABLE and any(
+            line.startswith(expected_contract_failures) and line.endswith(")")
+            for line in combined.splitlines()
+        ):
+            raise AuthorExecutorContractError(stable_id, tail)
         raise RetryableOperatorError(f"{label} for {stable_id} (exit {returncode}): {tail}")
     if returncode == AUTHOR_EXIT_PERMANENT:
         # Deliberately does NOT use the historical retryable prefix: a declared
@@ -4649,9 +4678,12 @@ class AdmissionEnvironmentMixin:
                         return pause
                     continue
                 except Exception as exc:  # noqa: BLE001 -- repair failure is model-local
+                    # `AuthorResultMalformedError` (incl. the executor-relayed
+                    # contract refusal) is the AUTHOR violating its result
+                    # contract; `internal-error` would indict the engine.
                     reason = (
                         "protocol-violation"
-                        if isinstance(exc, DriverIntegrationError)
+                        if isinstance(exc, (DriverIntegrationError, AuthorResultMalformedError))
                         and not self._is_infrastructure_error(exc)
                         else "internal-error"
                     )
@@ -5299,7 +5331,18 @@ class AdmissionEnvironmentMixin:
             try:
                 return operation()
             except Exception as exc:  # noqa: BLE001 -- typed below before retry
-                if attempt == 1 or not self._is_infrastructure_error(exc):
+                # ``AuthorExecutorContractError`` is retried on the same bounded
+                # budget -- the author is stochastic, and one fresh session
+                # routinely gets further than the last -- but it is deliberately
+                # NOT ``_is_infrastructure_error``: that predicate also feeds the
+                # reason pickers, and a contract-invalid author payload recorded
+                # as ``internal-error`` would indict the engine for the author's
+                # bytes. When the retry budget is spent it propagates as the
+                # model-local failure it is, not as a campaign abort.
+                if attempt == 1 or not (
+                    self._is_infrastructure_error(exc)
+                    or isinstance(exc, AuthorExecutorContractError)
+                ):
                     raise
         raise AssertionError("bounded infrastructure retry did not return or raise")
 

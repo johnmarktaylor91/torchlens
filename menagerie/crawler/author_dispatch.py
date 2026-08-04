@@ -76,6 +76,55 @@ class AuthorResultMalformedError(AuthorDispatchError):
     """
 
 
+class AuthorExecutorContractError(AuthorResultMalformedError):
+    """The EXECUTOR'S OWN validator refused the bytes one author session published.
+
+    Same ownership as :class:`AuthorResultMalformedError` -- the session ran to
+    completion and what it published fails a frozen contract -- but observed one
+    process boundary further out: the author executor validated the session's
+    discovery or result payload itself, refused it, and relayed that refusal
+    through its retryable exit code. ``classify_author_exit`` used to convert
+    that exit into a ``RetryableOperatorError``, which every author-lane handler
+    treats as CAMPAIGN-scoped transport failure. On 2026-07-27 one model whose
+    two sessions each published schema-invalid payloads (an empty discovery
+    ``notes`` string, then a proposal missing ``fidelity.permanent_scar``)
+    therefore terminated a 20-model rung with zero records written, and every
+    resume re-aborted on the same model.
+
+    The evidence carried by this class is confined to ONE model's authoring
+    content, so its blast radius is that model: the driver still grants one
+    fresh bounded session (the author is stochastic; the second session
+    routinely gets further than the first), and a repeat refusal terminalizes
+    the model as ``failed:author`` / ``malformed-result`` while the campaign
+    continues. The executor's validator itself is untouched -- an invalid result
+    is still refused at the same boundary with the same message; only which
+    party the refusal indicts has changed.
+
+    Deliberately NOT a ``RetryableOperatorError``: that class means "the
+    machine, not the model, is broken", and every catch site that re-raises it
+    campaign-wide is correct for genuine transport failure. Sessions that died
+    without publishing (``session-crashed``, ``wall-exceeded``,
+    ``no-result-output``) stay ambiguous between the two readings and keep
+    their campaign-scoped classification.
+
+    Parameters
+    ----------
+    stable_id:
+        Model whose published payload the executor refused.
+    detail:
+        Exact bounded diagnostic tail supplied by the trusted operator protocol.
+    """
+
+    def __init__(self, stable_id: str, detail: str) -> None:
+        """Attach the affected model and the executor's bounded diagnostic."""
+
+        super().__init__(
+            f"author session for {stable_id} published a contract-invalid payload: {detail}"
+        )
+        self.stable_id = stable_id
+        self.detail = detail
+
+
 class AuthorEngineFaultError(AuthorDispatchError):
     """Raised when TORCHLENS-SUPPLIED inputs to the author lane are inconsistent.
 
