@@ -966,6 +966,10 @@ class _AuthorLaneBase:
             # alike surface every prior attempt's outcome, failure reason, and
             # verbatim checker findings to the next author session.
             prior_attempts=prior_attempts_summary(root),
+            routed_environment_intent=item.route.intent,
+            routed_environment_packages=_routed_environment_packages(
+                getattr(self, "registry", None), item.route.intent
+            ),
         )
         envelope_path = write_envelope_atomic(envelope, root / "request.json")
         self._dispatch(
@@ -3723,6 +3727,10 @@ class AdmissionEnvironmentMixin:
                         source_manifest=cached_manifest,
                         allowed_model_dir=cached_model_dir,
                         output_path=cache.parent / "author" / "result.json",
+                        routed_environment_intent=item.route.intent,
+                        routed_environment_packages=_routed_environment_packages(
+                            getattr(self, "registry", None), item.route.intent
+                        ),
                     )
                     cached_result = validate_author_result_cache(
                         cached_value,
@@ -4104,6 +4112,10 @@ class AdmissionEnvironmentMixin:
                 source_manifest=inputs.source_manifest,
                 allowed_model_dir=rehydrated.model_dir,
                 output_path=rehydrated.root / "author" / "result.json",
+                routed_environment_intent=item.route.intent,
+                routed_environment_packages=_routed_environment_packages(
+                    getattr(self, "registry", None), item.route.intent
+                ),
             )
             result = validate_author_result_mapping(raw_result, envelope)
             staged = staged_artifact_for_result(

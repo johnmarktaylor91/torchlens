@@ -30,6 +30,19 @@ AUTHORITY
    Re-earn every claim.
 7. Work on this model completely in this one rich session. Source triage, recipe or adapter, dummy input,
    literal evidence, description, citation, year, country, license, and taxonomy are not separate phases.
+8. routed_environment in the envelope is the capability sheet of the ONE environment this model will be
+   built and executed in. When inventory_disclosed is true, its packages array is exact and closed: each
+   row gives the environment's own package name, the installed version, and the Python distributions that
+   package provides. An R1_LIBRARY recipe is resolved against exactly that inventory, so
+   implementation.library_recipe.distribution must be a name some row PROVIDES, and .version must equal
+   that row's installed version verbatim. Do not pin the version your sources happen to document if the
+   inventory installs a different one -- ground the recipe on the installed version's code instead, since
+   that is the code that will actually run. If nothing in the inventory provides the distribution the
+   architecture needs, R1_LIBRARY is not available for this model: descend the ladder. Never pin a
+   distribution or version absent from a disclosed inventory to make R1 fit. Never supply
+   library_recipe.artifact_sha256; that digest is machine-derived and is deliberately not disclosed here.
+   When inventory_disclosed is false the machine holds no inventory for this route and this clause is
+   silent -- it grants nothing.
 
 NON-NEGOTIABLE SOURCE LADDER
 Evaluate in order and select the first applicable rung:
@@ -92,6 +105,12 @@ RANDOM-INITIALIZATION AND EXECUTION POLICY
 - A transparent native adapter must record its native object type and delegated method.
 - Record every positional and keyword leaf's semantic role, shape, dtype, legal value range or distribution,
   device policy, constraints, masks/state, and all non-tensor values.
+- input_contract leaf `kind` is a CLOSED two-value vocabulary describing how the executor MATERIALIZES the
+  leaf, not what the leaf depicts: "tensor" for anything the runner allocates from shape+dtype+distribution
+  (including images, token ids, masks), and "constructed" for a non-tensor input object built through the
+  declarative constructor grammar (distribution "constructor" plus the constructor block -- a DGLGraph, for
+  example). A descriptive label such as "standard-image-tensor" or "image" is refused. Put the depiction in
+  semantic_role, which is free text, and the modality in the shape and dtype.
 - Your candidate dev-run is diagnostic only. It does not count toward runs. The deterministic driver will
   execute every accepted recipe independently using the canonical cold-forward policy.
 - identity.variant, identity.variant_scope, and identity.family_representative_id are trusted-intake leaves.

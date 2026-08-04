@@ -643,7 +643,7 @@ def _materialize_declarative_call(
             raise TypeError(f"input_contract.{collection} must be a list")
         for leaf in leaves:
             if not isinstance(leaf, Mapping):
-                raise TypeError(f"input_contract.{collection} contains a non-tensor leaf")
+                raise TypeError(f"input_contract.{collection} contains a non-object leaf")
             if leaf.get("distribution") == "constructor":
                 if leaf.get("kind") != "constructed":
                     raise TypeError(
@@ -667,7 +667,17 @@ def _materialize_declarative_call(
                 )
                 continue
             if leaf.get("kind") != "tensor":
-                raise TypeError(f"input_contract.{collection} contains a non-tensor leaf")
+                # Naming the offending value and the closed vocabulary, because the
+                # old "contains a non-tensor leaf" text MISDESCRIBED the commonest
+                # case: an ordinary image tensor whose only defect was a descriptive
+                # `kind` label. The schema now closes this vocabulary, so reaching
+                # here is a real contract breach rather than a wording accident --
+                # and it must still say which leaf and which value.
+                raise TypeError(
+                    f"input_contract.{collection} leaf {str(leaf.get('path'))!r} declares "
+                    f"kind {leaf.get('kind')!r}; the executable vocabulary is "
+                    "'tensor' or 'constructed'"
+                )
             materialized = materialize_standard_input(
                 request.modality,
                 {"shape": leaf.get("shape"), "dtype": leaf.get("dtype")},

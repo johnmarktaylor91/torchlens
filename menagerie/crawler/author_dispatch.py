@@ -28,6 +28,7 @@ from menagerie.crawler.constants import (
 )
 from menagerie.crawler.identity import fsync_directory, hash_bytes, stable_hash
 from menagerie.crawler.models import JsonObject, manifest_source_rows
+from menagerie.crawler.package_namespace import inventory_disclosure
 from menagerie.crawler.proposal import ProposalValidationReport, validate_author_proposal
 from menagerie.crawler.schema import (
     MODEL_SCHEMA_VERSION_V3,
@@ -663,6 +664,8 @@ def build_author_envelope(
     allowed_model_dir: Union[str, Path],
     output_path: Union[str, Path],
     prior_attempts: Optional[Sequence[Mapping[str, Any]]] = None,
+    routed_environment_intent: Optional[str] = None,
+    routed_environment_packages: Sequence[Mapping[str, Any]] = (),
 ) -> JsonObject:
     """Build one v3 author packet from the mandatory active authority context.
 
@@ -687,6 +690,14 @@ def build_author_envelope(
         attempt, its outcome, failure reason, verbatim checker findings, and
         prior result hash. Every retry kind — infrastructure requeues and
         checker repairs alike — rides here, hash-bound with the envelope.
+    routed_environment_intent:
+        Name of the environment intent this work item is routed to, when the
+        driver has routed one.
+    routed_environment_packages:
+        Exact resolved-export package rows for that intent, empty when the
+        target is unlocked or unrouted. Disclosed to the author through
+        :func:`~menagerie.crawler.package_namespace.inventory_disclosure`, which
+        withholds the machine-derived artifact digest.
 
     Returns
     -------
@@ -756,6 +767,25 @@ def build_author_envelope(
             "model_schema_version": MODEL_SCHEMA_VERSION_V3,
         },
         "prior_attempts": [deepcopy(dict(entry)) for entry in (prior_attempts or ())],
+        # The routed environment's capability sheet: the second machine-held
+        # dispatch fact the author cannot know, and the one the R1 recipe pin is
+        # later resolved against. Before it existed, `library_recipe.distribution`
+        # and `version` were authored blind and a CORRECT author could be refused
+        # for naming a distribution the routed environment does not install (the
+        # `segmentation-models-pytorch` and `dgl` refusals) or a version it does
+        # not install (`transformers 4.57.1` against an installed 5.14.1). That is
+        # an unsatisfiable rule rather than a check, and the fix is to publish the
+        # fact, never to relax the resolution.
+        #
+        # `inventory_disclosed` distinguishes "this environment installs nothing
+        # you named" from "the machine holds no inventory here" -- an unlocked or
+        # unrouted target, where the digest honestly resolves to null. Collapsing
+        # the two into an empty list would read as the former.
+        "routed_environment": {
+            "intent": routed_environment_intent,
+            "inventory_disclosed": bool(routed_environment_packages),
+            "packages": [dict(row) for row in inventory_disclosure(routed_environment_packages)],
+        },
         "expected_result": expected_result,
         "allowed_model_dir": str(Path(allowed_model_dir).resolve()),
         "allowed_output_root": str(Path(output_path).resolve().parent),

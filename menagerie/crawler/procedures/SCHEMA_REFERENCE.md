@@ -434,7 +434,7 @@ a reason to re-crawl external sources.
 | `input_contract.smallest_valid_probe_rationale` | string | Mandatory | Mandatory smallest valid probe rationale. |
 | `input_contract.args` | array<object> | Mandatory | Mandatory args. |
 | `input_contract.args[].path` | string | Mandatory | Mandatory path. |
-| `input_contract.args[].kind` | string | Mandatory | Mandatory record or status kind. |
+| `input_contract.args[].kind` | enum: `tensor` \| `constructed` | Mandatory | Mandatory materialization kind, and a CLOSED vocabulary because the executor's is closed: worker._materialize_declarative_call materializes exactly 'tensor' and 'constructed' and refuses every other value. Publishing it as an open string let a schema-valid, checker-passed proposal name a descriptive kind ('standard-image-tensor') and die at execution on an ordinary image tensor, after the one authoring visit this catalog allows. The vocabulary is deliberately about MATERIALIZATION, not modality: modality lives in the recipe, and shape/dtype/distribution already carry the rest. |
 | `input_contract.args[].semantic_role` | string | Mandatory | Mandatory semantic role. |
 | `input_contract.args[].shape` | array<integer \| string> | Mandatory | Mandatory shape. |
 | `input_contract.args[].dtype` | string | Mandatory | Mandatory authored, source-read input dtype. Unlike observed.* dtype/device facts, this input_contract leaf is accuracy-gated and contributes to vet identity. |
@@ -448,7 +448,7 @@ a reason to re-crawl external sources.
 | `input_contract.args[].constructor.kwargs` | object map | Mandatory | Mandatory JSON-only constructor keyword arguments; nested construct nodes follow the same closed grammar and bounds as declarative recipe kwargs. |
 | `input_contract.kwargs` | array<object> | Mandatory | Mandatory kwargs. |
 | `input_contract.kwargs[].path` | string | Mandatory | Mandatory path. |
-| `input_contract.kwargs[].kind` | string | Mandatory | Mandatory record or status kind. |
+| `input_contract.kwargs[].kind` | enum: `tensor` \| `constructed` | Mandatory | Mandatory materialization kind, and a CLOSED vocabulary because the executor's is closed: worker._materialize_declarative_call materializes exactly 'tensor' and 'constructed' and refuses every other value. Publishing it as an open string let a schema-valid, checker-passed proposal name a descriptive kind ('standard-image-tensor') and die at execution on an ordinary image tensor, after the one authoring visit this catalog allows. The vocabulary is deliberately about MATERIALIZATION, not modality: modality lives in the recipe, and shape/dtype/distribution already carry the rest. |
 | `input_contract.kwargs[].semantic_role` | string | Mandatory | Mandatory semantic role. |
 | `input_contract.kwargs[].shape` | array<integer \| string> | Mandatory | Mandatory shape. |
 | `input_contract.kwargs[].dtype` | string | Mandatory | Mandatory authored, source-read input dtype. Unlike observed.* dtype/device facts, this input_contract leaf is accuracy-gated and contributes to vet identity. |

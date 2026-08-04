@@ -1675,8 +1675,11 @@
           "description": "Mandatory path."
         },
         "kind": {
-          "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory record or status kind."
+          "enum": [
+            "tensor",
+            "constructed"
+          ],
+          "description": "Mandatory materialization kind, and a CLOSED vocabulary because the executor's is closed: worker._materialize_declarative_call materializes exactly 'tensor' and 'constructed' and refuses every other value. Publishing it as an open string let a schema-valid, checker-passed proposal name a descriptive kind ('standard-image-tensor') and die at execution on an ordinary image tensor, after the one authoring visit this catalog allows. The vocabulary is deliberately about MATERIALIZATION, not modality: modality lives in the recipe, and shape/dtype/distribution already carry the rest."
         },
         "semantic_role": {
           "$ref": "#/$defs/nonempty_string",
