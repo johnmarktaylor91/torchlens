@@ -113,11 +113,11 @@ def test_oversized_model_is_withheld_and_recorded(tmp_path: Path) -> None:
     driver = _driver(records_root)
     mixtral = _work_item("m5915", "Mixtral 8x7B")
     dla = _work_item("m4334", "DLA-60")
-    artifacts = {
+    artifacts: Any = {
         "m5915": _StubArtifact({"library_recipe": MIXTRAL_RECIPE}),
         "m4334": _StubArtifact({"library_recipe": NAMED_SYMBOL_RECIPE}),
     }
-    operational = _StubLedger()
+    operational: Any = _StubLedger()
 
     admitted = CrawlerDriver._admit_within_host_capacity(
         driver, (mixtral, dla), artifacts, operational
@@ -146,8 +146,8 @@ def test_a_wave_with_nothing_oversized_is_untouched(tmp_path: Path) -> None:
     records_root = tmp_path / "records"
     driver = _driver(records_root)
     dla = _work_item("m4334", "DLA-60")
-    artifacts = {"m4334": _StubArtifact({"library_recipe": NAMED_SYMBOL_RECIPE})}
-    operational = _StubLedger()
+    artifacts: Any = {"m4334": _StubArtifact({"library_recipe": NAMED_SYMBOL_RECIPE})}
+    operational: Any = _StubLedger()
 
     admitted = CrawlerDriver._admit_within_host_capacity(
         driver, (dla,), artifacts, operational
@@ -167,8 +167,8 @@ def test_a_bigger_host_admits_the_same_model(
     records_root = tmp_path / "records"
     driver = _driver(records_root)
     mixtral = _work_item("m5915", "Mixtral 8x7B")
-    artifacts = {"m5915": _StubArtifact({"library_recipe": MIXTRAL_RECIPE})}
-    operational = _StubLedger()
+    artifacts: Any = {"m5915": _StubArtifact({"library_recipe": MIXTRAL_RECIPE})}
+    operational: Any = _StubLedger()
 
     admitted = CrawlerDriver._admit_within_host_capacity(
         driver, (mixtral,), artifacts, operational
@@ -183,7 +183,7 @@ def test_an_empty_wave_never_reads_the_host(tmp_path: Path) -> None:
     """The gate is free when there is no work to admit."""
 
     driver = _driver(tmp_path / "records")
-    operational = _StubLedger()
+    operational: Any = _StubLedger()
     assert (
         CrawlerDriver._admit_within_host_capacity(driver, (), {}, operational) == ()
     )
