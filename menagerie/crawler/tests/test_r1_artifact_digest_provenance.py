@@ -138,15 +138,18 @@ def _library_implementation(**recipe_overrides: Any) -> dict[str, Any]:
 def _honest_r1_proposal() -> dict[str, Any]:
     """Return an R1 ``PROPOSED`` proposal that omits the underivable digest.
 
-    The shared author fixture no longer supplies the leaf at all: an identity
-    the author has no instrument to derive is not the author's to write. This
-    only asserts that it is absent.
+    The shared author fixture carries an explicit null rather than a claimed
+    digest: an identity the author has no instrument to derive is not the
+    author's to write, and a null is exactly what the pre-gate binding would
+    have left there, so normalizing the fixture stays a no-op. This deletes the
+    leaf outright to exercise the stronger honest shape -- an author that omits
+    it entirely.
     """
 
     proposal = make_author_proposal("m_r1_honest")
     recipe = proposal["proposed_facts"]["implementation"]["library_recipe"]
     assert proposal["proposed_facts"]["source_resolution"]["rung"] == "R1_LIBRARY"
-    assert "artifact_sha256" not in recipe
+    del recipe["artifact_sha256"]
     return proposal
 
 
