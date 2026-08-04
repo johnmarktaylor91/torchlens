@@ -145,6 +145,35 @@ directly and is not consulted here.
 """
 
 
+_SPEC_NAME = re.compile(r"[A-Za-z0-9._-]+")
+
+
+def dependency_spec_name(spec: str) -> str:
+    """Return the bare package name a conda match spec asks for.
+
+    Specs in an intent's ``environment.yml`` carry channels and version bounds
+    (``conda-forge::pytorch>=2.3``); both the coverage question and the
+    lock-currency question are only about the NAME, so everything after it is
+    discarded.
+
+    Parameters
+    ----------
+    spec:
+        One declared dependency match spec.
+
+    Returns
+    -------
+    str
+        The bare package name, or an empty string for an unparseable spec.
+    """
+
+    candidate = spec.strip()
+    if "::" in candidate:
+        candidate = candidate.rsplit("::", 1)[1]
+    match = _SPEC_NAME.match(candidate)
+    return match.group(0) if match is not None else ""
+
+
 def inventory_row_provides_distribution(row_name: str, distribution: str) -> bool:
     """Return whether one inventory row provides the declared Python distribution.
 

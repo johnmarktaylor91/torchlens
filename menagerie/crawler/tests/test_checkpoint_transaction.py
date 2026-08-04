@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -48,6 +49,7 @@ from menagerie.crawler.licenses import (
     pre_public_merge_sweep,
 )
 from menagerie.crawler.mirrors import ArtifactOrigin, MirrorClass, MirrorStore
+from menagerie.crawler.package_namespace import dependency_spec_name
 from menagerie.crawler.recordio import JsonlLedger, scan_jsonl
 from menagerie.crawler.reducer import CanonicalReducer, default_ledger_paths
 from menagerie.crawler.tests.conftest import (
@@ -296,27 +298,34 @@ def _write_exact_environment_artifacts(env_root: Path, target: str) -> tuple[Pat
 
     locks = env_root / "core" / "locks"
     locks.mkdir(parents=True, exist_ok=True)
-    artifact_sha256 = "sha256:" + "a" * 64
-    artifact_url = "https://conda.example.test/core.conda"
     lock = locks / f"{target}.lock"
     export = locks / f"{target}.resolved.json"
-    lock.write_text(f"{artifact_url}#{artifact_sha256.removeprefix('sha256:')}\n", encoding="utf-8")
-    export.write_bytes(
-        canonical_json_bytes(
+    # One row per DECLARED core dependency: a lock whose resolved export does
+    # not satisfy its own intent's declaration reads as `superseded` (last
+    # run's solve residue), and this fixture models a CURRENT locked target.
+    declared = json.loads((env_root / "core" / "environment.yml").read_text(encoding="utf-8"))
+    names = []
+    for spec in declared["dependencies"]:
+        name = dependency_spec_name(str(spec))
+        if name:
+            names.append(name)
+    rows = []
+    for name in sorted(names):
+        digest = hashlib.sha256(name.encode("utf-8")).hexdigest()
+        rows.append(
             {
-                "packages": [
-                    {
-                        "name": "python",
-                        "version": "3.11",
-                        "build": "h1_0",
-                        "url": artifact_url,
-                        "sha256": artifact_sha256,
-                    }
-                ]
+                "name": name,
+                "version": "3.11" if name == "python" else "1.0",
+                "build": "h1_0",
+                "url": f"https://conda.example.test/{name}.conda",
+                "sha256": f"sha256:{digest}",
             }
         )
-        + b"\n"
+    lock.write_text(
+        "".join(f"{row['url']}#{row['sha256'].removeprefix('sha256:')}\n" for row in rows),
+        encoding="utf-8",
     )
+    export.write_bytes(canonical_json_bytes({"packages": rows}) + b"\n")
     (locks / f"{target}.resolved.sha256").write_text(
         f"{checkpoint_module.hash_bytes(export.read_bytes())}\n", encoding="utf-8"
     )
