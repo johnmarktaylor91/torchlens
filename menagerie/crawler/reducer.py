@@ -91,7 +91,12 @@ from menagerie.crawler.metadata import (
     recompute_accepted_identities,
     validate_authored_facts_for_write,
 )
-from menagerie.crawler.models import AppendResult, JsonObject, LedgerPaths
+from menagerie.crawler.models import (
+    AppendResult,
+    JsonObject,
+    LedgerPaths,
+    manifest_source_rows,
+)
 from menagerie.crawler.licenses import LicenseDecision, RedistributionClass
 from menagerie.crawler.mirrors import MirrorStore
 from menagerie.crawler.recordio import JsonlLedger, LedgerConflictError, scan_jsonl
@@ -1200,11 +1205,16 @@ class _ModelAuthorityPipeline:
         if not isinstance(self.document, Mapping):
             return
         manifest = self.document.get("source_manifest")
-        raw_sources = manifest.get("sources") if isinstance(manifest, Mapping) else None
-        if isinstance(raw_sources, list):
-            self.source_manifest = tuple(
-                value for value in raw_sources if isinstance(value, Mapping)
-            )
+        # Coverage, not identity: this tuple is the SOURCE FACT index that
+        # `_validate_terminal_references` resolves a terminal arm's cited
+        # `source_ids` against, and a SKIP/DEFER arm may legitimately cite a row
+        # from the ONE granted supplementary broker pack. Reading `sources` alone
+        # refused those as "terminal gate names a missing source fact" -- the
+        # same defect as the author-side "references unknown source", one lane
+        # further downstream. `source_manifest_identity` above is still the
+        # frozen digest and does not move.
+        if isinstance(manifest, Mapping) and isinstance(manifest.get("sources"), list):
+            self.source_manifest = tuple(manifest_source_rows(manifest))
         author_result = self.document.get("author_result")
         payload = author_result.get("payload") if isinstance(author_result, Mapping) else None
         if isinstance(payload, Mapping):

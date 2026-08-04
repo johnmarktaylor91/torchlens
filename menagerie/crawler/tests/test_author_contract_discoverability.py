@@ -251,6 +251,100 @@ def test_terminal_evidence_resolution_is_documented_as_per_record() -> None:
     assert "blocked-prerequisite" in stage2
 
 
+def _v3_input_contract_property(name: str) -> Mapping[str, Any]:
+    """Return one ``input_contract`` property node from the v3 model schema."""
+
+    document = _schema("model-v3.schema.json")
+    return document["$defs"]["input_contract"]["properties"][name]
+
+
+@pytest.mark.smoke
+def test_the_builder_symbol_spelling_is_stated_in_the_registered_schema() -> None:
+    """``input_contract.builder_symbol`` documents its grammar AND its derivation.
+
+    ``proposal._validate_author_read_grants`` refuses anything outside
+    ``identifier('.'identifier)*``. The schema said, in full, "Mandatory builder
+    symbol." Seven of nine pilot authors independently landed on
+    ``library_recipe.module + '.' + library_recipe.symbol``; the two that did not
+    wrote ``timm.models.dla:dla60`` -- the ordinary entry-point spelling of the
+    same fact -- and the placeholder ``declarative-library-recipe``, and both died
+    permanently. A convention seven of nine agents infer is a real convention, and
+    the two that guess a different spelling are owed the rule, not a dead record.
+    """
+
+    builder = _v3_input_contract_property("builder_symbol")["description"]
+    assert "dotted" in builder.lower(), "the grammar must be named, not just enforced"
+    assert "identifier('.'identifier)*" in builder, "the exact accepted grammar must be shown"
+    assert ":" in builder and "dla60" in builder, "the refused colon spelling must be shown"
+    assert "library_recipe.module" in builder, "the declarative derivation must be stated"
+    assert "library_recipe.symbol" in builder
+    assert "build_model" in builder, "the staged-rung spelling must be stated"
+    assert "placeholder" in builder.lower(), "a placeholder must be named as refused"
+
+
+@pytest.mark.smoke
+def test_the_exact_source_echo_rule_is_stated_in_the_registered_schema() -> None:
+    """``source_resolution.sources`` documents that the echo is exact, both ways.
+
+    ``artifact_transactions._validate_context_result`` requires set EQUALITY
+    against the frozen manifest plus any supplementary pack. The schema said
+    "Mandatory resolved public sources.", which reads like a bibliography. ``m9617``
+    read it that way, cited the eight sources it used out of the fifteen we fetched,
+    and died on a rule stated nowhere.
+    """
+
+    sources = _description(
+        _schema("model-common.schema.json"),
+        "$defs",
+        "source_resolution",
+        "properties",
+        "sources",
+    )
+    lowered = sources.lower()
+    assert "exactly" in lowered, "the exact-set rule must be stated"
+    assert "supplementary" in lowered, "the supplementary half must be named as citable"
+    assert "dropped" in lowered, "omitting an unused source must be named as refused"
+    assert "verbatim" in lowered, "the per-row verbatim fields must be named"
+    assert "source sets differ" in lowered, "the live refusal wording must be quoted"
+
+
+@pytest.mark.smoke
+def test_the_leaf_path_rule_is_stated_where_the_checker_reads() -> None:
+    """``field_check.field`` documents the leaf grammar the gate actually requires.
+
+    Not an author rule, but the same failure shape and the same one-shot cost:
+    ``metadata.validate_authored_facts_for_write`` requires exactly one check per
+    authored LEAF path, and ``m5915`` terminalized because its checker wrote the
+    SECTION name ``identity`` and grouped names like ``citation; dates``. The gate
+    schema said "Mandatory field." and the prompt said "Group only truly identical
+    fields within the same item" -- an instruction for the very thing that is
+    refused. Both surfaces must now carry the rule.
+    """
+
+    field = _description(
+        _schema("gate-common.schema.json"), "$defs", "field_check", "properties", "field"
+    )
+    lowered = field.lower()
+    assert "leaf" in lowered, "the leaf grammar must be named"
+    assert "citation.year" in field, "an exact accepted spelling must be shown"
+    assert "evidence.excerpts[].locator" in field, "the collection spelling must be shown"
+    assert "proposed_facts." in field, "the tolerated prefix must be stated"
+    assert "section" in lowered, "the section-name refusal must be stated"
+    assert "'identity'" in field, "the exact spelling that killed m5915 must be shown"
+    assert "semicolon" in lowered and "comma" in lowered, "both joined spellings must be refused"
+    assert "duplicate" in lowered and "ungated" in lowered, "one-to-one coverage must be stated"
+
+    prompt = (_CRAWLER_ROOT / "prompts" / "codex_accuracy_checker_v2.txt").read_text(
+        encoding="utf-8"
+    )
+    assert "Group only truly identical fields" not in prompt, (
+        "the instruction that produced the grouped names must be gone, not merely "
+        "contradicted elsewhere in the same prompt"
+    )
+    assert "NEVER group" in prompt
+    assert "evidence.excerpts[].locator" in prompt
+
+
 @pytest.mark.smoke
 def test_the_guarded_rules_are_still_the_rules_the_code_enforces() -> None:
     """The documented wording still matches live enforcement messages.
@@ -286,6 +380,44 @@ def test_the_guarded_rules_are_still_the_rules_the_code_enforces() -> None:
     assert "_any_supports_predicate" in terminal_source, (
         "the predicate-grounding floor is documented; if it is gone the documentation "
         "must be revisited"
+    )
+
+    assert "builder_symbol must be a dotted symbol" in proposal_source, (
+        "the documented builder-symbol grammar must still be the enforced one"
+    )
+
+    binding_source = (_CRAWLER_ROOT / "artifact_transactions.py").read_text(encoding="utf-8")
+    assert "proposal and source manifest source sets differ" in binding_source
+    assert "citable_rows = manifest_source_rows(source_manifest)" in binding_source, (
+        "the documented supplementary-row citability must still come from the widened "
+        "reading; reverting it to `sources` alone re-kills a correct proposal"
+    )
+    assert "source_identity = stable_hash(sources)" in binding_source, (
+        "the IDENTITY must still be derived from the frozen rows alone, or the author's "
+        "echoed digest stops matching"
+    )
+
+    for module, site in (
+        ("gates.py", "_manifest_source_ids(source_manifest, include_supplementary=True)"),
+        ("terminal_evidence.py", "for source in manifest_source_rows(source_manifest)"),
+        ("reducer.py", "self.source_manifest = tuple(manifest_source_rows(manifest))"),
+    ):
+        text = (_CRAWLER_ROOT / module).read_text(encoding="utf-8")
+        assert site in text, (
+            f"{module} must keep reading the supplementary half for its COVERAGE question; "
+            "narrowing it back to `sources` alone re-kills a terminal arm for citing a "
+            "source our own broker fetched for it"
+        )
+    gates_source = (_CRAWLER_ROOT / "gates.py").read_text(encoding="utf-8")
+    assert "source_ids = tuple(sorted(_manifest_source_ids(source_manifest)))" in gates_source, (
+        "the BLOCKED arm's DERIVATION must stay on the frozen rows, matching the two "
+        "sibling derivations that bind evidence_identity"
+    )
+
+    metadata_source = (_CRAWLER_ROOT / "metadata.py").read_text(encoding="utf-8")
+    assert "is not an authored leaf" in metadata_source, (
+        "the leaf-path refusal is documented; its message must keep naming the checker "
+        "gate as the owner rather than reading as an author defect"
     )
 
 

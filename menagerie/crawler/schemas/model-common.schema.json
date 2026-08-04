@@ -716,7 +716,7 @@
           "items": {
             "$ref": "#/$defs/source"
           },
-          "description": "Mandatory resolved public sources."
+          "description": "Mandatory resolved public sources. This is a CUSTODY ECHO, not a bibliography: it must name EXACTLY the set the machine fetched for this model -- every row of the frozen source_manifest, plus every row of the supplementary manifest if the one supplementary source round was granted -- with no row added and NO ROW DROPPED. Echo a source you ended up not using anyway; silently omitting one is refused as 'proposal and source manifest source sets differ', and so is naming a source_id that is in neither manifest. Per row, url, revision, content_sha256, byte_count, and media_type must be the manifest's exact bytes verbatim; role, locator, and the remaining leaves are your own judgement about that source."
         }
       }
     },

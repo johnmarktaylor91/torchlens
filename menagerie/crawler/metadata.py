@@ -739,7 +739,17 @@ def validate_authored_facts_for_write(
         field = raw_field.removeprefix("proposed_facts.")
         if field not in required:
             if strict_v3:
-                raise MetadataValidationError(f"extraneous authored field check: {field}")
+                # Name the OWNER. This check reads the CHECKER's gate item, not
+                # the author's proposal, so "extraneous authored field check:
+                # identity" alone reads as an author defect and has already sent
+                # one investigation looking for a stray authored leaf. The two
+                # ways a checker lands here are a fact SECTION name and a grouped
+                # ("citation; dates") name, so say which leaf spelling is owed.
+                raise MetadataValidationError(
+                    "checker gate names a field that is not an authored leaf: "
+                    f"{field!r}; each field_check must name exactly one leaf path "
+                    "as the model schema spells it (no section names, no grouped names)"
+                )
             continue
         if field in verdicts:
             raise MetadataValidationError(f"duplicate authored field check: {field}")

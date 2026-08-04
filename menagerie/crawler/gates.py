@@ -21,7 +21,7 @@ from menagerie.crawler.constants import (
     GateRoute,
 )
 from menagerie.crawler.identity import stable_hash
-from menagerie.crawler.models import JsonObject
+from menagerie.crawler.models import JsonObject, manifest_source_rows
 from menagerie.crawler.schema import PayloadValidationError, validate_payload
 
 
@@ -407,7 +407,10 @@ def validate_terminal_disposition_gate(
         raise GateRoutingError("terminal disposition evidence IDs do not exactly match result")
     if _source_manifest_identity(source_manifest) != binding.source_manifest_identity:
         raise GateRoutingError("terminal source manifest identity does not match author result")
-    manifest_source_ids = _manifest_source_ids(source_manifest)
+    # Coverage, so supplementary rows count: a terminal arm citing a source the
+    # executor's ONE granted supplementary round fetched for it is quoting OUR
+    # fetch, not an outside document.
+    manifest_source_ids = _manifest_source_ids(source_manifest, include_supplementary=True)
     if not set(result_source_ids).issubset(manifest_source_ids):
         raise GateRoutingError("terminal recommendation references a source outside its manifest")
     if evidence_pack.get("evidence_identity") != result.evidence_identity:
@@ -512,15 +515,35 @@ def _source_manifest_identity(source_manifest: Mapping[str, Any]) -> str:
     )
 
 
-def _manifest_source_ids(source_manifest: Mapping[str, Any]) -> frozenset[str]:
-    """Return unique source IDs from an exact staged manifest."""
+def _manifest_source_ids(
+    source_manifest: Mapping[str, Any], *, include_supplementary: bool = False
+) -> frozenset[str]:
+    """Return unique source IDs from an exact staged manifest.
+
+    Parameters
+    ----------
+    source_manifest:
+        Frozen manifest, optionally carrying ``supplementary_sources``.
+    include_supplementary:
+        Widen to every citable row. Answer the COVERAGE question ("may this
+        result name that source?") with ``True``; leave it ``False`` for the
+        BLOCKED arm's machine DERIVATION, which must stay byte-identical to the
+        two sibling derivations in :mod:`~menagerie.crawler.author_executor` and
+        :func:`~menagerie.crawler.driver_models._terminal_checker_item`. Those
+        both read the dispatch envelope's frozen ``sources``, and the three-way
+        agreement is what binds ``evidence_identity``; widening one of them alone
+        would break a good BLOCKED result on an identity nobody derived.
+    """
 
     sources = source_manifest.get("sources")
     if not isinstance(sources, list):
         raise GateRoutingError("terminal source manifest has no sources")
-    source_ids = [source.get("source_id") for source in sources if isinstance(source, Mapping)]
+    rows: list[Any] = (
+        manifest_source_rows(source_manifest) if include_supplementary else list(sources)
+    )
+    source_ids = [source.get("source_id") for source in rows if isinstance(source, Mapping)]
     if (
-        len(source_ids) != len(sources)
+        len(source_ids) != len(rows)
         or not all(isinstance(source_id, str) and source_id for source_id in source_ids)
         or len(source_ids) != len(set(source_ids))
     ):

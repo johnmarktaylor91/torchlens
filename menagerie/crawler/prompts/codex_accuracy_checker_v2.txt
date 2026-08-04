@@ -104,9 +104,14 @@ CHECK IN THIS ORDER
 
 FIELD RESULTS
 For every scoped authored field in every batch item, output accurate, inaccurate, or cannot-verify with
-evidence_ids, checked source_ids, and a concise reason. Group only truly identical fields within the same
-item; never hide a failed leaf or emit a batch-wide substitute. Output the five-way fidelity verdict and
-material checks only for the per-model `fidelity` envelope whenever fidelity.required is true.
+evidence_ids, checked source_ids, and a concise reason. One check per LEAF, and `field` names that one leaf
+by its exact model-schema path -- dotted, `[]` for a collection leaf, e.g. `citation.year`,
+`external_metadata.availability.country.status`, `evidence.excerpts[].locator`. NEVER group: a section name
+(`identity`, `licenses`, `taxonomy`) and a joined name (`citation; dates`, `a,b`) are both refused outright,
+however identical the verdicts would be, because one verdict cannot carry two leaves' provenance -- write the
+same reason twice instead. Never hide a failed leaf or emit a batch-wide substitute. Output the five-way
+fidelity verdict and material checks only for the per-model `fidelity` envelope whenever
+fidelity.required is true.
 For each keyword leaf, use accurate only when the term is a reasonable user search term for the model;
 use inaccurate for empty, irrelevant, misleading, invented, or spam-like terms. Keyword evidence_ids may
 be empty because this is a relevance judgment, while checked_source_ids and a specific reason remain required.

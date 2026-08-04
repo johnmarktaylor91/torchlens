@@ -307,7 +307,7 @@ a reason to re-crawl external sources.
 | `source_resolution.search_report.conclusion` | string | Mandatory | Mandatory conclusion. |
 | `source_resolution.mandatory_link_status` | enum: `ok` \| `failed` | Mandatory | Mandatory mandatory link status. |
 | `source_resolution.primary_source_id` | string | Mandatory | Mandatory primary source id. |
-| `source_resolution.sources` | array<object> | Mandatory | Mandatory resolved public sources. |
+| `source_resolution.sources` | array<object> | Mandatory | Mandatory resolved public sources. This is a CUSTODY ECHO, not a bibliography: it must name EXACTLY the set the machine fetched for this model -- every row of the frozen source_manifest, plus every row of the supplementary manifest if the one supplementary source round was granted -- with no row added and NO ROW DROPPED. Echo a source you ended up not using anyway; silently omitting one is refused as 'proposal and source manifest source sets differ', and so is naming a source_id that is in neither manifest. Per row, url, revision, content_sha256, byte_count, and media_type must be the manifest's exact bytes verbatim; role, locator, and the remaining leaves are your own judgement about that source. |
 | `source_resolution.sources[].source_id` | string | Mandatory | Mandatory source identifier. |
 | `source_resolution.sources[].role` | enum: `implementation` \| `introducing-paper` \| `supplement` \| `project-page` \| `documentation` \| `license` \| `affiliation` \| `archive` | Mandatory | Mandatory role. |
 | `source_resolution.sources[].kind` | enum: `repository` \| `package` \| `paper` \| `web-page` \| `archive` \| `intake-snapshot` \| `discovery-evidence` | Mandatory | Mandatory record or status kind. |
@@ -427,7 +427,7 @@ a reason to re-crawl external sources.
 | --- | --- | --- | --- |
 | `input_contract` | object | Mandatory | Mandatory source-valid dummy-input contract. |
 | `input_contract.code_path` | string \| null | Mandatory | Mandatory code path. |
-| `input_contract.builder_symbol` | string | Mandatory | Mandatory builder symbol. |
+| `input_contract.builder_symbol` | string | Mandatory | Mandatory builder symbol: the exact thing this contract's args/kwargs are passed to, named as a DOTTED PYTHON PATH and nothing else. The grammar is enforced and is exactly identifier('.'identifier)* -- so 'timm.models.dla.dla60' and 'build_model' are legal, while 'timm.models.dla:dla60' (entry-point colon), 'declarative-library-recipe' or any other hyphenated placeholder, a slashed path, a call expression, and a bare description are all refused. Derive it, never invent it: for recipe_type 'declarative-library' it is implementation.library_recipe.module + '.' + implementation.library_recipe.symbol; for a staged rung it is exactly implementation.builder_symbol, i.e. 'build_model'. This field names the constructor for the record's readers -- it is never dereferenced as a filesystem path, and the identifier grammar is what keeps it from becoming one. |
 | `input_contract.seed` | integer | Mandatory | Mandatory seed. |
 | `input_contract.semantic_description` | string | Mandatory | Mandatory semantic description. |
 | `input_contract.source_basis` | array<string> | Mandatory | Mandatory source basis. |
@@ -775,7 +775,7 @@ a reason to re-crawl external sources.
 | `items[].integrity.locator_failures` | array<string> | Mandatory | Mandatory locator failures. |
 | `items[].verdict` | enum `gate-common.accuracy_verdict` | Mandatory | Mandatory checker verdict. |
 | `items[].field_checks` | array<object> | Mandatory | Mandatory per-field accuracy findings. |
-| `items[].field_checks[].field` | string | Mandatory | Mandatory field. |
+| `items[].field_checks[].field` | string | Mandatory | Mandatory field: ONE authored LEAF path, spelled exactly as the model schema spells it -- dotted, with '[]' for a collection leaf, e.g. 'citation.year', 'external_metadata.availability.country.status', 'evidence.excerpts[].locator'. An optional 'proposed_facts.' prefix is accepted and stripped; nothing else is. A SECTION name ('identity', 'licenses', 'taxonomy') is not a leaf and is refused as an extraneous check, and so is any grouped spelling -- no comma-joined, semicolon-joined, or otherwise combined names, however identical the two leaves' verdicts are, because one verdict cannot carry two leaves' provenance. Coverage is exhaustive and one-to-one: every authored leaf gets exactly one check, a repeated leaf is refused as a duplicate, and any leaf left unchecked is refused as an ungated authored fact. |
 | `items[].field_checks[].verdict` | enum `gate-common.accuracy_verdict` | Mandatory | Mandatory checker verdict. |
 | `items[].field_checks[].evidence_ids` | array<string> | Mandatory | Mandatory supporting evidence identifiers; may be empty only for external_metadata.keywords relevance judgments, which still require checked_source_ids and a reason. |
 | `items[].field_checks[].checked_source_ids` | array<string> | Mandatory | Mandatory checked source ids. |
