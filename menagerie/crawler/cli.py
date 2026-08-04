@@ -59,6 +59,11 @@ from menagerie.crawler.driver import (
 )
 from menagerie.crawler.driver_contracts import RetryableOperatorError
 from menagerie.crawler.envs import load_environment_registry
+from menagerie.crawler.environment_coverage import (
+    COVERAGE_DEFERRAL_DISPOSITION,
+    coverage_deferral_path,
+    load_coverage_deferral_rows,
+)
 from menagerie.crawler.host_capacity import (
     CAPACITY_DEFERRAL_DISPOSITION,
     capacity_deferral_path,
@@ -178,6 +183,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="print each row's complete estimate and threshold",
     )
 
+    coverage = subparsers.add_parser(
+        "coverage-deferrals",
+        help="list models whose routed environment cannot install their library",
+    )
+    coverage.add_argument("--records-root", type=Path)
+    coverage.add_argument(
+        "--full",
+        action="store_true",
+        help="print each row's complete coverage assessment and evidence",
+    )
+
     wake = subparsers.add_parser("wake", help="inspect or cancel durable wake episodes")
     wake.add_argument("--records-root", type=Path)
     wake_actions = wake.add_subparsers(dest="wake_command", required=True)
@@ -255,6 +271,8 @@ def main(
             return _status_command(args)
         if args.command == "capacity-deferrals":
             return _capacity_deferrals_command(args)
+        if args.command == "coverage-deferrals":
+            return _coverage_deferrals_command(args)
         if args.command == "wake":
             return _wake_command(args)
         if args.command == "checkpoint":
@@ -1275,6 +1293,44 @@ def _capacity_deferrals_command(args: argparse.Namespace) -> int:
                     ],
                     "admissible_parameter_ceiling": row["capacity"]["threshold"][
                         "admissible_parameter_ceiling"
+                    ],
+                    "recheck_hint": row["recheck_hint"],
+                }
+            )
+            for row in rows
+        ],
+    }
+    print(json.dumps(output, sort_keys=True))
+    return EXIT_OK
+
+
+def _coverage_deferrals_command(args: argparse.Namespace) -> int:
+    """Print every model withheld because its routed environment lacks its library.
+
+    This is the "show me everything deferred for routing" view. Each row names
+    the distribution that was pinned, the intent that could not install it, and
+    the intent that would -- so the call can be judged and acted on without
+    re-running anything.
+    """
+
+    records_root = args.records_root or args.repo_root / "menagerie" / "crawler" / "records"
+    rows = load_coverage_deferral_rows([coverage_deferral_path(records_root)])
+    output: dict[str, object] = {
+        "disposition": COVERAGE_DEFERRAL_DISPOSITION,
+        "deferred": len(rows),
+        "models": [
+            (
+                dict(row)
+                if args.full
+                else {
+                    "stable_id": row["stable_id"],
+                    "name": row["name"],
+                    "work_id": row["work_id"],
+                    "distribution": row["coverage"]["library"]["distribution"],
+                    "version": row["coverage"]["library"]["version"],
+                    "routed_intent": row["coverage"]["routed_intent"],
+                    "covering_intents": [
+                        entry["intent"] for entry in row["coverage"]["covering_intents"]
                     ],
                     "recheck_hint": row["recheck_hint"],
                 }

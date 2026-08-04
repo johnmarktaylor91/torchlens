@@ -102,6 +102,13 @@ from menagerie.crawler.constants import (
     OperationalEventStatus,
     author_lane_wall_bound,
 )
+from menagerie.crawler.environment_coverage import (
+    CoverageAssessment,
+    append_coverage_deferral_row,
+    assess_environment_coverage,
+    build_coverage_deferral_row,
+    coverage_deferral_path,
+)
 from menagerie.crawler.envs import (
     EnvironmentIntent,
     EnvironmentRegistry,
@@ -3535,6 +3542,136 @@ class AdmissionEnvironmentMixin:
         cache = self.paths.work_root / item.stable_id / "driver-author-artifact.json"
         return not cache.is_file()
 
+    def _withhold_for_environment_coverage(
+        self,
+        item: WorkItem,
+        artifact: AuthorArtifact,
+        operational: JsonlLedger,
+    ) -> bool:
+        """Withhold a model whose routed intent cannot install its library, and say so.
+
+        Routing is fixed at intake from the roster zoo; the distribution is
+        declared later by the author. When they disagree the model reaches an
+        environment that simply does not have its library, and the R1 digest
+        refusal that follows is CORRECT -- it stays exactly as it is, and a
+        withheld model still never runs, still gets no digest, and still asserts
+        no rung.
+
+        What changes is the record. Terminalizing ``failed:runner`` /
+        ``protocol-violation`` asserted that our pipeline broke on the model,
+        which is false: the author is right, the environment is honestly missing
+        the package, and another intent carries it on purpose. So the model is
+        withheld -- not terminalized -- and recorded in the durable
+        environment-coverage deferral ledger naming the intent that would cover
+        it, exactly as ``_admit_within_host_capacity`` records a model this host
+        is too small for.
+
+        The disposable author-result cache is written first, so a resume
+        re-derives the same deferral from the cached result instead of spending a
+        second agentic session on a model it already knows it cannot route.
+
+        Parameters
+        ----------
+        item:
+            Exact scheduled work generation.
+        artifact:
+            Validated, staged author artifact carrying the declarative recipe.
+        operational:
+            Locked operational ledger for the health event.
+
+        Returns
+        -------
+        bool
+            Whether the model was withheld from this wave.
+        """
+
+        try:
+            proposal = artifact.proposal
+        except DriverIntegrationError:
+            # A terminal author result has no executable proposal and declares no
+            # recipe; there is no routed distribution to assess.
+            return False
+        facts = proposal.get("proposed_facts")
+        implementation = facts.get("implementation") if isinstance(facts, Mapping) else None
+        if not isinstance(implementation, Mapping):
+            return False
+        registry = getattr(self, "registry", None)
+        assessment = assess_environment_coverage(
+            implementation,
+            routed_intent=item.route.intent,
+            routed_packages=_routed_environment_packages(registry, item.route.intent),
+            registry=registry,
+        )
+        if not assessment.deferred:
+            return False
+        cache = self.paths.work_root / item.stable_id / "driver-author-artifact.json"
+        try:
+            _write_json_atomic(
+                cache,
+                serialize_author_result_cache(
+                    artifact.author_result,
+                    source_manifest=artifact.source_manifest,
+                    model_dir=artifact.model_dir,
+                ),
+            )
+        except Exception:  # noqa: BLE001 -- a disposable cache must never block the record
+            cache.unlink(missing_ok=True)
+        self._record_environment_coverage_deferral(item, assessment, operational)
+        return True
+
+    def _record_environment_coverage_deferral(
+        self,
+        item: WorkItem,
+        assessment: CoverageAssessment,
+        operational: JsonlLedger,
+    ) -> None:
+        """Append one durable coverage deferral row plus its campaign-health event."""
+
+        created_at = self.dependencies.clock()
+        records_root = self.paths.ledgers.models.parent.parent
+        ledger_path = coverage_deferral_path(records_root)
+        append_coverage_deferral_row(
+            ledger_path,
+            build_coverage_deferral_row(
+                stable_id=item.stable_id,
+                work_id=item.active_work_id,
+                name=item.intake.name,
+                campaign_id=str(self.config.campaign_id),
+                run_id=self.config.run_id,
+                machine_id=self.config.machine_id,
+                created_at=created_at,
+                assessment=assessment,
+            ),
+        )
+        library = assessment.library
+        event: JsonObject = {
+            "schema_version": OPERATIONAL_EVENT_SCHEMA_VERSION,
+            "created_at": created_at,
+            "event_kind": OperationalEventKind.CAMPAIGN_HEALTH.value,
+            "status": OperationalEventStatus.HEALTHY.value,
+            "provider": None,
+            "observed_response": None,
+            "reset_at": None,
+            "queued_work_counts": {"models": 1},
+            "current_environment": item.route.intent,
+            "run_id": self.config.run_id,
+            "machine_id": self.config.machine_id,
+            "details": {
+                "disposition": "environment-coverage-deferred",
+                "ledger": str(ledger_path.relative_to(records_root)),
+                "stable_id": item.stable_id,
+                "work_id": item.active_work_id,
+                "routed_intent": item.route.intent,
+                "distribution": library.distribution if library is not None else None,
+                "covering_intents": [entry.intent for entry in assessment.covering],
+            },
+        }
+        # The identity covers the complete logical payload, so a resume that
+        # re-derives the identical deferral idempotently no-ops instead of
+        # tripping the ledger's conflicting-replay tripwire.
+        event["event_id"] = f"environment-coverage-{stable_hash(event)[7:31]}"
+        operational.append(event)
+
     def _preserve_uncommitted_author_result(
         self, item: WorkItem, artifact: AuthorArtifact
     ) -> None:
@@ -3759,6 +3896,13 @@ class AdmissionEnvironmentMixin:
                     cache.unlink(missing_ok=True)
                 else:
                     if isinstance(cached_result, ProposedAuthorResult):
+                        # Re-derived on the cached path too, so a resume repeats the
+                        # withholding instead of letting a model the campaign already
+                        # deferred slip into the environment lane.
+                        if self._withhold_for_environment_coverage(
+                            item, cached_artifact_v3, operational
+                        ):
+                            continue
                         artifacts[item.stable_id] = cached_artifact_v3
                     else:
                         pause = self._route_terminal_author_result(
@@ -3901,6 +4045,12 @@ class AdmissionEnvironmentMixin:
                 if pause is not None:
                     raise DriverPaused(pause)
                 self.dependencies.boundary_hook("after-author", item.stable_id)
+                continue
+            # Checked BEFORE normalization, because the R1 digest binding inside it
+            # is exactly what refuses an unservable routing -- and that refusal,
+            # reaching the blanket arm below, is what used to blame the model for a
+            # routing decision made at intake.
+            if self._withhold_for_environment_coverage(item, artifact, operational):
                 continue
             try:
                 artifact = _normalize_artifact_modes(
