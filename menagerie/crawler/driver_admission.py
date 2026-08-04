@@ -5350,63 +5350,46 @@ class AdmissionEnvironmentMixin:
                             observed_generation
                             or reducer.context.environment_generations.get(intent.name)
                         )
-                        event_identity = stable_hash(
-                            {
+                        event = {
+                            "schema_version": OPERATIONAL_EVENT_SCHEMA_VERSION,
+                            "created_at": self.dependencies.clock(),
+                            "event_kind": OperationalEventKind.CAMPAIGN_HEALTH.value,
+                            "status": OperationalEventStatus.RUNNER_FAILED.value,
+                            "provider": None,
+                            "observed_response": None,
+                            "reset_at": None,
+                            "queued_work_counts": {"models": len(by_intent[intent_name])},
+                            "current_environment": intent.name,
+                            "run_id": self.config.run_id,
+                            "machine_id": self.config.machine_id,
+                            "details": {
                                 "disposition": "environment-integrity-quarantined",
                                 "intent": intent.name,
                                 "target": intent.lock.target,
-                                "env_generation": observed_generation,
                                 "artifact_identity": cleanup_artifact_identity(),
-                                "failure_type": f"{type(exc).__module__}.{type(exc).__qualname__}",
-                            }
-                        )[7:31]
-                        operational.append(
-                            {
-                                "schema_version": OPERATIONAL_EVENT_SCHEMA_VERSION,
-                                "event_id": f"environment-integrity-{event_identity}",
-                                "created_at": self.dependencies.clock(),
-                                "event_kind": OperationalEventKind.CAMPAIGN_HEALTH.value,
-                                "status": OperationalEventStatus.RUNNER_FAILED.value,
-                                "provider": None,
-                                "observed_response": None,
-                                "reset_at": None,
-                                "queued_work_counts": {"models": len(by_intent[intent_name])},
-                                "current_environment": intent.name,
-                                "run_id": self.config.run_id,
-                                "machine_id": self.config.machine_id,
-                                "details": {
-                                    "disposition": "environment-integrity-quarantined",
-                                    "intent": intent.name,
-                                    "target": intent.lock.target,
-                                    "artifact_identity": cleanup_artifact_identity(),
-                                    "env_generation": observed_generation,
-                                    "failure_type": (
-                                        f"{type(exc).__module__}.{type(exc).__qualname__}"
-                                    ),
-                                },
-                            }
-                        )
+                                "env_generation": observed_generation,
+                                "failure_type": (
+                                    f"{type(exc).__module__}.{type(exc).__qualname__}"
+                                ),
+                            },
+                        }
+                        # The identity covers the COMPLETE logical payload, so one
+                        # event_id names exactly one payload. A recurrence of the
+                        # same integrity failure in a later environment cycle of
+                        # the same process, or on a later resume, therefore appends
+                        # a distinct occurrence event -- or idempotently no-ops
+                        # when byte-identical -- instead of tripping the ledger's
+                        # conflicting-replay tripwire and killing the resume
+                        # (2026-08-03 incident: two same-identity quarantines with
+                        # differing queued_work_counts crashed `resume`).
+                        event["event_id"] = f"environment-integrity-{stable_hash(event)[7:31]}"
+                        operational.append(event)
                         environment_failure = exc
                         break
                     if use_completed:
                         cleanup_identity = cleanup_artifact_identity()
-                        event_identity = stable_hash(
-                            {
-                                "disposition": "environment-cleanup-quarantined",
-                                "intent": intent.name,
-                                "target": intent.lock.target,
-                                "artifact_identity": cleanup_identity,
-                                "env_generation": observed_generation,
-                                "environment": _quarantine_environment_payload(
-                                    observed_environment
-                                ),
-                                "completed_work": completed_work,
-                                "completed_work_identity": stable_hash(completed_work),
-                            }
-                        )[7:31]
                         event = {
                             "schema_version": OPERATIONAL_EVENT_SCHEMA_VERSION,
-                            "event_id": f"environment-cleanup-{event_identity}",
                             "created_at": self.dependencies.clock(),
                             "event_kind": OperationalEventKind.CAMPAIGN_HEALTH.value,
                             "status": OperationalEventStatus.RUNNER_FAILED.value,
@@ -5433,6 +5416,10 @@ class AdmissionEnvironmentMixin:
                                 ),
                             },
                         }
+                        # Same complete-payload identity rule as the integrity
+                        # quarantine above: a repeated identical cleanup failure
+                        # must re-record or no-op, never conflict.
+                        event["event_id"] = f"environment-cleanup-{stable_hash(event)[7:31]}"
                         operational.append(event)
                         environment_failure = None
                         break

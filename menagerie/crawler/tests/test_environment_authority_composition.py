@@ -345,6 +345,91 @@ def test_real_multi_model_cache_closes_currentness_and_quarantines_mutation(
     }
 
 
+def test_repeated_environment_integrity_quarantine_is_two_events_not_a_conflict(
+    tmp_path: Path,
+    isolated_real_environment_fixture: RealEnvironmentFixture,
+) -> None:
+    """A resume that quarantines the same environment twice records two occurrences.
+
+    Regression for the 2026-08-03 resume crash: one review-checkpoint resume runs the
+    pending-work group and the runs-currentness group as two environment cycles. When
+    both cycles hit the same integrity failure, both quarantine events derived the
+    same ``event_id`` while their logical payloads differed (``queued_work_counts``),
+    so the second append died on the operational ledger's conflicting-replay tripwire
+    and the campaign became permanently un-resumable. The identity now covers the
+    complete payload: each occurrence is its own durable event, and the resume ends
+    with honest ``failed:environment`` terminals instead of a crashed ledger append.
+    """
+
+    real_environment_fixture = isolated_real_environment_fixture
+    master = tmp_path / "quarantine-master.jsonl"
+    deferred = tmp_path / "quarantine-deferred.jsonl"
+    _write_jsonl(
+        master,
+        [
+            {"name": case.name, "zoo": "quarantine-fixtures", "variant": "base"}
+            for case in (DRY_RUN_CASES[0], DRY_RUN_CASES[1], DRY_RUN_CASES[3])
+        ],
+    )
+    _write_jsonl(deferred, [])
+    snapshot = create_intake_snapshot(master, deferred, tmp_path / "intake")
+    paths = _paths(tmp_path, snapshot)
+    driver = _driver(
+        tmp_path,
+        snapshot,
+        author=TinyModelAuthor(),
+        checker=FakeChecker(),
+        forward=SupervisedForwardLane(timeout_seconds=20, cwd=Path.cwd()),
+        environments=RealEnvironmentLane(real_environment_fixture),
+        registry=real_environment_registry(real_environment_fixture),
+        review_at=1,
+    )
+
+    paused = driver.run()
+    assert paused.status == "paused:review-checkpoint"
+    runs_before = [
+        row for row in scan_jsonl(paths.ledgers.models) if row["status"]["code"] == "runs"
+    ]
+    assert len(runs_before) == 1
+
+    # Any recurring in-use AuthorityDerivationError stands in for the load-induced
+    # seal instability observed in the campaign failures; a FIFO in the prefix is
+    # deterministic where hardlink ctime churn is not, and the authority walk
+    # refuses it on EVERY environment cycle of the same resume.
+    fifo = real_environment_fixture.prefix / "round19-integrity-fifo"
+    os.mkfifo(fifo)
+    try:
+        resumed = driver.run(after_review=True)
+    finally:
+        fifo.unlink()
+
+    integrity_events = [
+        event
+        for event in scan_jsonl(paths.operational_ledger)
+        if event.get("details", {}).get("disposition") == "environment-integrity-quarantined"
+    ]
+    latest_models: dict[str, Any] = {}
+    for row in scan_jsonl(paths.ledgers.models):
+        latest_models[str(row["stable_id"])] = row
+    assert {
+        "resumed_status": resumed.status,
+        "occurrences": len(integrity_events),
+        "distinct_event_ids": len({event["event_id"] for event in integrity_events}),
+        "queued_counts": [event["queued_work_counts"]["models"] for event in integrity_events],
+        "failure_types": {event["details"]["failure_type"] for event in integrity_events},
+        "terminal_codes": {row["status"]["code"] for row in latest_models.values()},
+        "terminal_models": len(latest_models),
+    } == {
+        "resumed_status": "complete",
+        "occurrences": 2,
+        "distinct_event_ids": 2,
+        "queued_counts": [2, 1],
+        "failure_types": {"menagerie.crawler.authority.AuthorityDerivationError"},
+        "terminal_codes": {"failed:environment"},
+        "terminal_models": 3,
+    }
+
+
 def test_outside_selected_interpreter_is_rejected_at_binding(tmp_path: Path) -> None:
     """An interpreter escape such as ``/bin/false`` fails before worker spawn."""
 
