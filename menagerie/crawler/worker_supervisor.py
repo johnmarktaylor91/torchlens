@@ -127,6 +127,12 @@ _SYSTEM_READ_FILES = frozenset(
         Path("/etc/passwd"),
         Path("/etc/resolv.conf"),
         Path("/usr/share/locale/locale.alias"),
+        # platform.mac_ver() reads the OS version record during ordinary imports
+        # (huggingface_hub walks it while timm/transformers load). The Seatbelt
+        # profile already allows every /System read as benign OS metadata; naming
+        # the exact file here keeps the in-process and parent classifiers from
+        # drifting stricter than that OS-sandbox authority.
+        Path("/System/Library/CoreServices/SystemVersion.plist"),
     }
 )
 _TERMINAL_TRACE_PATTERN = re.compile(r"\+\+\+ (?:exited with|killed by) .+ \+\+\+$")
@@ -4269,7 +4275,14 @@ def run_isolated_subprocess(
             macos_runtime_read_roots = discovered_roots
             runtime_package_data_paths = _runtime_package_data_paths(macos_runtime_read_roots)
         elif isinstance(execution_read_manifest, ExecutionReadManifestV3):
-            macos_runtime_read_roots = (execution_read_manifest.environment_authority.prefix,)
+            # The prefix carries the full runtime grant; the discovered source
+            # roots (the ``python -m`` working directory and interpreter roots)
+            # contribute only the confined import-metadata patterns the profile
+            # generator emits for non-prefix roots in v3 mode.
+            macos_runtime_read_roots = (
+                execution_read_manifest.environment_authority.prefix,
+                *discovered_roots,
+            )
             runtime_package_data_paths = ()
         elif isinstance(execution_read_manifest, ExecutionReadManifestV2):
             macos_runtime_read_roots = ()
