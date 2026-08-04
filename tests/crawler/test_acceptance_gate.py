@@ -53,16 +53,25 @@ def test_frozen_prompts_and_generated_lock_boundary_pass_release_gate() -> None:
     # The dispatch-brief fragments steer every author session, so the release gate pins
     # the whole prompt surface rather than only the two top-level prompts.
     pool_root = crawler_root / "prompts" / "pool"
+    # The executor's stage prompts drive every production author session, so they are part
+    # of the frozen surface too. The expected set is re-derived from the shipped tree rather
+    # than listed literally: that is what makes this an independent inventory check, and it
+    # is why adding a new prompt without pinning it fails here instead of passing silently.
+    executor_root = crawler_root / "prompts" / "executor"
     digests = verify_prompt_surface(
         crawler_root / "PLAN.md",
         crawler_root / "prompts" / "claude_crawler_author_v2.txt",
         crawler_root / "prompts" / "codex_accuracy_checker_v2.txt",
         pool_root,
     )
+    shipped_fragments = {path.name for path in pool_root.glob("*.md")} | {
+        path.name for path in executor_root.glob("*.md")
+    }
+    assert shipped_fragments
     assert set(digests) == {
         "claude_crawler_author_v2.txt",
         "codex_accuracy_checker_v2.txt",
-    } | {path.name for path in pool_root.glob("*.md")}
+    } | shipped_fragments
     assert fabricated_crawler_locks(repo_root) == ()
 
 

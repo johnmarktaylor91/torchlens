@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
-import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from menagerie.crawler.intake import load_intake_snapshot
+from menagerie.crawler.authority import build_authority_context
+from menagerie.crawler.cli import _persisted_environment_generations
+from menagerie.crawler.intake import IntakeSnapshot, load_intake_snapshot
 from menagerie.crawler.recordio import scan_jsonl
 from menagerie.crawler.reducer import materialize_current
+from menagerie.crawler.tests.conftest import RealEnvironmentFixture
 from menagerie.crawler.tests.dry_run_support import (
     DRY_RUN_CASES,
     DRY_RUN_ITEMS,
@@ -20,15 +24,51 @@ from menagerie.crawler.tests.dry_run_support import (
 from .support import repository_root
 
 
-def _run_cli(repo_root: Path, arguments: Sequence[str]) -> subprocess.CompletedProcess[str]:
-    """Run the crawler module in a real child process and capture its public output."""
+def _run_cli(
+    repo_root: Path,
+    environment_prefix: Path,
+    arguments: Sequence[str],
+) -> subprocess.CompletedProcess[str]:
+    """Run the crawler module in a real child process and capture its public output.
 
+    The child runs under the bound prefix's own interpreter, exactly as the documented
+    dry-run procedure does, so the awards it grants come from the real environment
+    rather than from whichever interpreter happens to host pytest.
+
+    Parameters
+    ----------
+    repo_root, environment_prefix:
+        Checked-out source root and the materialized real prefix the driver binds.
+    arguments:
+        CLI arguments following the shared ``--repo-root`` selection.
+
+    Returns
+    -------
+    subprocess.CompletedProcess[str]
+        Captured real CLI process result.
+    """
+
+    environment = dict(os.environ)
+    environment["PYTHONPATH"] = str(repo_root)
+    # Fail closed in the child: an unmet prerequisite must surface as a failure here, not
+    # as a quietly degraded run that still reports a clean acceptance payload.
+    environment["MENAGERIE_RELEASE_GATE"] = "1"
     return subprocess.run(
-        [sys.executable, "-m", "menagerie.crawler", "--repo-root", str(repo_root), *arguments],
+        [
+            str(environment_prefix / "bin" / "python"),
+            "-B",
+            "-m",
+            "menagerie.crawler",
+            "--repo-root",
+            str(repo_root),
+            *arguments,
+        ],
         cwd=repo_root,
+        env=environment,
         check=False,
         capture_output=True,
         text=True,
+        timeout=1800,
     )
 
 
@@ -38,6 +78,43 @@ def _payload(completed: subprocess.CompletedProcess[str]) -> dict[str, Any]:
     value = json.loads(completed.stdout.strip().splitlines()[-1])
     assert isinstance(value, dict)
     return value
+
+
+def _current_records(campaign_root: Path, snapshot: IntakeSnapshot) -> Mapping[str, Any]:
+    """Materialize the authenticated current projection for one dry-run campaign.
+
+    The projection is authority-scoped: it is only meaningful against the exact intake
+    snapshot and agent identities the run recorded, so the context is rebuilt from those
+    facts rather than assumed.
+
+    Parameters
+    ----------
+    campaign_root, snapshot:
+        Disposable campaign root and the intake snapshot the run consumed.
+
+    Returns
+    -------
+    Mapping[str, Any]
+        Highest valid dependency-current revision per stable ID.
+    """
+
+    paths = dry_run_paths(campaign_root, snapshot)
+    context = build_authority_context(
+        active_intake_snapshot_id=snapshot.snapshot_id,
+        active_intake_snapshot_sha256=snapshot.snapshot_sha256,
+        intake_rows=(item.to_dict() for item in snapshot.items),
+        author_model="fake-claude",
+        author_version="dry-run",
+        checker_model="fake-codex",
+        checker_version="dry-run",
+    )
+    context = replace(
+        context,
+        environment_generations=_persisted_environment_generations(
+            scan_jsonl(paths.ledgers.attempts)
+        ),
+    )
+    return materialize_current(paths.ledgers, context=context)
 
 
 def _ledger_prefixes(paths: Sequence[Path]) -> dict[Path, bytes]:
@@ -77,15 +154,21 @@ def _assert_receipt_observations(campaign_root: Path, stable_id_to_name: Mapping
     }
 
 
-def test_cli_dry_run_real_forward_checkpoint_resume_and_milestone(tmp_path: Path) -> None:
+def test_cli_dry_run_real_forward_checkpoint_resume_and_milestone(
+    tmp_path: Path,
+    real_environment_fixture: RealEnvironmentFixture,
+) -> None:
     """The real driver reaches runs only after isolated train/eval forwards and review."""
 
     repo_root = repository_root()
     campaign_root = tmp_path / "campaign"
+    environment_prefix = real_environment_fixture.prefix
     common = [
         "--dry-run",
         "--dry-run-root",
         str(campaign_root),
+        "--dry-run-environment-prefix",
+        str(environment_prefix),
         "--review-checkpoint-at",
         "2",
         "--progress-milestones",
@@ -93,7 +176,7 @@ def test_cli_dry_run_real_forward_checkpoint_resume_and_milestone(tmp_path: Path
         "--run-id",
         "slice-h-dry-run",
     ]
-    first = _run_cli(repo_root, ["run", *common])
+    first = _run_cli(repo_root, environment_prefix, ["run", *common])
     assert first.returncode == 4, first.stderr
     first_payload = _payload(first)
     assert first_payload["status"] == "paused:review-checkpoint"
@@ -116,7 +199,7 @@ def test_cli_dry_run_real_forward_checkpoint_resume_and_milestone(tmp_path: Path
         "notification-delivery",
     ]
 
-    resumed = _run_cli(repo_root, ["resume", *common, "--after-review"])
+    resumed = _run_cli(repo_root, environment_prefix, ["resume", *common, "--after-review"])
     assert resumed.returncode == 0, resumed.stderr
     resumed_payload = _payload(resumed)
     assert resumed_payload["status"] == "complete"
@@ -128,12 +211,14 @@ def test_cli_dry_run_real_forward_checkpoint_resume_and_milestone(tmp_path: Path
         "mode:eval": 10,
         "mode:train": 10,
         "models:total": 10,
-        "rung:R1_LIBRARY": 9,
-        "rung:R3_PORT": 1,
+        # Every tiny model is authored as a staged typed port, so the corpus is uniformly
+        # R3_PORT; the earlier 9/1 split predates the staged-code author.
+        "rung:R3_PORT": 10,
         "status:runs": 10,
     }
     status = _run_cli(
         repo_root,
+        environment_prefix,
         [
             "status",
             "--intake",
@@ -151,7 +236,7 @@ def test_cli_dry_run_real_forward_checkpoint_resume_and_milestone(tmp_path: Path
 
     for path, prefix in prefixes.items():
         assert path.read_bytes().startswith(prefix)
-    current = materialize_current(paths.ledgers)
+    current = _current_records(campaign_root, snapshot)
     stable_id_to_name = {item.stable_id: item.name for item in snapshot.items}
     expected_by_name = {case.name: case for case in DRY_RUN_CASES}
     assert len(current) == 10

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -76,6 +77,9 @@ def test_git_tree_ships_no_runtime_solve_or_secret_artifacts(tmp_path: Path) -> 
     repo_root = repository_root()
     tracked = tracked_paths(repo_root)
     assert all(".crawl-local" not in path.parts for path in tracked)
+    # Runtime solve output never ships; the genuine target-solved release families ship on
+    # purpose, because a release proof must consume fixed committed bytes. The helper draws
+    # that line by attestation, so an unprovenanced or incomplete family still fails here.
     assert fabricated_crawler_locks(repo_root) == ()
     crawler_paths = [path for path in tracked if path.parts[:2] == ("menagerie", "crawler")]
     secret_parts = {"credential", "credentials", "secret", "secrets", "token"}
@@ -84,8 +88,11 @@ def test_git_tree_ships_no_runtime_solve_or_secret_artifacts(tmp_path: Path) -> 
     )
     baseline = tmp_path / ".secrets.baseline"
     shutil.copyfile(repo_root / ".secrets.baseline", baseline)
+    # Invoke the scanner through this interpreter rather than a bare PATH name: the tool is
+    # a declared dev dependency, so an installed environment must be enough to run the
+    # check. A PATH lookup turns "the scanner is missing" into a host accident.
     secret_scan = subprocess.run(
-        ["detect-secrets", "scan", "--baseline", str(baseline)],
+        [sys.executable, "-m", "detect_secrets", "scan", "--baseline", str(baseline)],
         cwd=repo_root,
         check=False,
         capture_output=True,

@@ -96,6 +96,10 @@ dev = [
     "mypy==2.1.0",
     "pip-audit==2.10.1",
     "pre-commit",
+    # Pinned to the .pre-commit-config.yaml rev so the crawler acceptance suite's secret
+    # scan runs the same scanner the hook enforces. It was previously reachable only as a
+    # PATH accident, which made tests/crawler's boundary check unrunnable in a clean env.
+    "detect-secrets==1.5.0",
     # jsonschema/referencing back the menagerie crawler's payload validation
     # (menagerie/crawler/schema.py: Draft202012Validator + a referencing Registry).
     # This is internal contributor/automation tooling, not a torchlens runtime
