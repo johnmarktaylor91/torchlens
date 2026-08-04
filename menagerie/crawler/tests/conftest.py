@@ -1014,6 +1014,50 @@ def _private_real_environment_source(source: Path, root: Path) -> Path:
     return private_source
 
 
+def _session_isolated_clone_source(source: Path, root: Path) -> Path:
+    """Return a clone source whose inodes are private to this test session.
+
+    Hardlink-cloning the cross-session base prefix directly shares its inodes with
+    every concurrent session. Any other session then creating or tearing down its
+    own hardlink clone of that base bumps ``st_ctime_ns`` on the SHARED inodes,
+    which this session's sealed environment authority correctly observes as
+    metadata churn -- and an in-flight full seal cannot stabilize while the churn
+    is active (observed 2026-08-03: concurrent suite runs made the acceptance
+    dry-run's resume quarantine its environment). A copy-on-write clone (APFS
+    clonefile / reflink) gives this session private inodes at near-zero disk cost,
+    so external link churn on the base can no longer perturb this session's seal.
+
+    On Linux hosts without reflink support the base is returned unchanged: a full
+    638 MB copy per session is not worth it there, and those hosts (CI runners)
+    hold the exclusive-host assumption this isolation exists to remove.
+
+    Parameters
+    ----------
+    source, root:
+        Selected cross-session base environment and session fixture root.
+
+    Returns
+    -------
+    pathlib.Path
+        Session-private clone source, or the base itself on no-reflink Linux.
+    """
+
+    if sys.platform == "linux" and not _linux_reflinks_supported(source, root):
+        return source
+    session_source = root / "session-source"
+    session_source.mkdir()
+    command = (
+        ("cp", "-a", "-c", f"{source}/.", str(session_source))
+        if sys.platform == "darwin"
+        else ("cp", "-a", "--reflink=always", f"{source}/.", str(session_source))
+    )
+    try:
+        subprocess.run(command, check=True, capture_output=True, text=True)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        _real_environment_failure(f"session-isolated source copy failed: {exc}")
+    return session_source
+
+
 def _copy_up_real_environment_member(
     member: Path,
     source_member: Path,
@@ -1063,7 +1107,8 @@ def _build_real_environment_fixture(
     counter:
         Session counter receiving the production cache after strict binding.
     shared:
-        Whether to clone the immutable base directly or first make private inodes.
+        Whether to clone the session-scoped read-only source or first make private
+        inodes for one mutating test.
     configure:
         Optional test-owned pre-seal mutation applied only to an isolated clone.
 
@@ -1074,7 +1119,11 @@ def _build_real_environment_fixture(
     """
 
     source = _real_environment_source()
-    clone_source = source if shared else _private_real_environment_source(source, root)
+    clone_source = (
+        _session_isolated_clone_source(source, root)
+        if shared
+        else _private_real_environment_source(source, root)
+    )
     prefix = root / "prefix"
     try:
         hardlink_clone_tree(clone_source, prefix)
