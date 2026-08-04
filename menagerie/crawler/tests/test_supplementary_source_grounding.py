@@ -29,6 +29,7 @@ from typing import Any
 
 import pytest
 
+from menagerie.crawler.artifact_transactions import _validate_context_result
 from menagerie.crawler.author_attempts import new_attempt
 from menagerie.crawler.author_dispatch import (
     AuthorEffortGrant,
@@ -505,6 +506,172 @@ def test_a_result_validated_without_its_pack_still_names_the_unknown_source(
     with pytest.raises(Exception) as refused:
         validate_author_result(result_path, envelope)
     assert str(refused.value) == f"{evidence_id} references unknown source {PAPER_SOURCE_ID}"
+
+
+# -- the artifact binding: the same split, one lane further downstream -------
+
+
+def _bindable(proposal: dict[str, Any], manifest: dict[str, Any], prompt_hash: str) -> None:
+    """Stamp the transaction-authority fields ``_validate_context_result`` reads."""
+
+    proposal["author"]["prompt_sha256"] = prompt_hash
+    proposal.update(
+        {
+            "schema_version": AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
+            "campaign_id": "campaign-1",
+            "intake_snapshot_id": "intake-1",
+            "intake_snapshot_sha256": "sha256:" + "1" * 64,
+            "intake_item_sha256": stable_hash(
+                {"stable_id": proposal["stable_id"], "variant": "base"}
+            ),
+            "source_manifest_identity": str(manifest["manifest_sha256"]),
+            "dispatcher_identity": "sha256:" + "2" * 64,
+        }
+    )
+    proposal["proposal_sha256"] = stable_hash(
+        {key: value for key, value in proposal.items() if key != "proposal_sha256"}
+    )
+
+
+def _echo_manifest_fields(proposal: dict[str, Any], manifest: dict[str, Any]) -> None:
+    """Copy the five machine-owned source fields verbatim, as a correct author does.
+
+    ``_ground_proposal`` is a proposal-validation fixture and its declared rows
+    carry placeholder digests, which the binding's per-row field check refuses on
+    its own. Normalizing them here keeps these three cases pinned to the SET
+    comparison under test; the field check keeps its own coverage elsewhere.
+    """
+
+    rows: list[dict[str, Any]] = [
+        row  # the fixture's own mutable manifest dicts, reached through one reading
+        for group in ("sources", "supplementary_sources")
+        for row in manifest.get(group, [])
+    ]
+    by_id = {str(row["source_id"]): row for row in rows}
+    for declared in proposal["proposed_facts"]["source_resolution"]["sources"]:
+        fetched = by_id.get(str(declared["source_id"]))
+        if fetched is None:
+            continue
+        for field in ("url", "revision", "content_sha256", "media_type"):
+            # Reconcile toward whichever side actually carries the value; the
+            # fixture's manifest rows are partial and its declared rows carry
+            # placeholders, and inventing a third value on either side would make
+            # the pair agree on something neither ever said.
+            if fetched.get(field) is None:
+                fetched[field] = declared.get(field)
+            else:
+                declared[field] = fetched[field]
+        if fetched.get("fetched_bytes_len") is None and fetched.get("byte_count") is None:
+            fetched["fetched_bytes_len"] = declared["byte_count"]
+        else:
+            declared["byte_count"] = fetched.get("fetched_bytes_len", fetched.get("byte_count"))
+    # Reconciliation edited manifest rows, so re-freeze both halves' digests.
+    # `_bindable` reads `manifest_sha256` afterwards, and the binder recomputes
+    # it from the rows -- a stale digest would fail on identity, not on the set.
+    manifest["manifest_sha256"] = stable_hash(manifest["sources"])
+    if "supplementary_sources" in manifest:
+        manifest["supplementary_manifest_sha256"] = stable_hash(manifest["supplementary_sources"])
+    proposal["verified_hashes"]["source_manifest"] = manifest["manifest_sha256"]
+
+
+def _bind(proposal: dict[str, Any], manifest: dict[str, Any]) -> tuple[str, ...]:
+    """Run the REAL artifact binding over one proposal and return its source set."""
+
+    prompt_hash = hash_bytes(
+        (Path(__file__).parents[1] / "prompts" / "claude_crawler_author_v2.txt").read_bytes()
+    )
+    _echo_manifest_fields(proposal, manifest)
+    _bindable(proposal, manifest, prompt_hash)
+    context = _author_context(proposal, prompt_hash)
+    envelope = build_author_envelope(
+        context=context,
+        work_id=proposal["work_id"],
+        stable_id=proposal["stable_id"],
+        campaign_id="campaign-1",
+        created_at="2026-07-16T00:00:00Z",
+        untrusted_hints={},
+        source_manifest=manifest,
+        allowed_model_dir=Path(proposal["stable_id"]),
+        output_path=Path(proposal["stable_id"]) / "result.json",
+    )
+    result = _author_result(envelope, "PROPOSED", {"arm": "PROPOSED", "proposal": proposal})
+    return _validate_context_result(
+        context,
+        proposal["stable_id"],
+        proposal["work_id"],
+        result,
+        proposal,
+        manifest,
+    )[6]
+
+
+@pytest.mark.smoke
+def test_the_artifact_binding_accepts_the_supplementary_source_the_author_cited(
+    tmp_path: Path,
+) -> None:
+    """A proposal echoing frozen PLUS supplementary rows binds.
+
+    This is the m538/m9304 shape from the ten-model pilot, where the author did
+    exactly what ``stage2_author.md`` promises -- "sources the ONE supplementary
+    round fetched for you are citable exactly like frozen ones" -- and the
+    binding, still reading ``sources`` alone, refused it as "proposal and source
+    manifest source sets differ". Grounding had already been widened; this lane
+    had not, so a correct proposal still died permanently.
+    """
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    _demote_paper_source_to_supplement(proposal, manifest)
+    declared = {
+        row["source_id"]
+        for row in proposal["proposed_facts"]["source_resolution"]["sources"]
+    }
+    assert PAPER_SOURCE_ID in declared, "the fixture must actually exercise the supplement"
+
+    bound = _bind(proposal, manifest)
+    assert set(bound) == {row["source_id"] for row in manifest_source_rows(manifest)}
+    assert PAPER_SOURCE_ID in bound
+
+
+def test_the_binding_still_refuses_a_source_that_is_in_neither_half(tmp_path: Path) -> None:
+    """Widening added a citable row; it must not have opened the set.
+
+    The tripwire's whole point is that an author cannot name a document the
+    machine never fetched, and a proposal-side row with no manifest row behind it
+    is exactly that.
+    """
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    _demote_paper_source_to_supplement(proposal, manifest)
+    invented = dict(proposal["proposed_facts"]["source_resolution"]["sources"][0])
+    invented["source_id"] = "source-nobody-fetched"
+    proposal["proposed_facts"]["source_resolution"]["sources"].append(invented)
+
+    with pytest.raises(Exception) as refused:
+        _bind(proposal, manifest)
+    assert "source sets differ" in str(refused.value)
+
+
+def test_the_binding_still_refuses_a_proposal_that_drops_a_fetched_source(
+    tmp_path: Path,
+) -> None:
+    """The echo stays exhaustive in the other direction too.
+
+    This is the m9617 shape: the author cited its supplement correctly but
+    silently omitted seven frozen sources it had decided not to use. Dropping a
+    source we fetched is not an editorial choice -- it removes the custody
+    attestation for those bytes -- so it must keep failing, and the obligation is
+    now stated on ``source_resolution.sources`` where the author reads it.
+    """
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    _demote_paper_source_to_supplement(proposal, manifest)
+    declared = proposal["proposed_facts"]["source_resolution"]["sources"]
+    dropped = next(row for row in declared if row["source_id"] != PAPER_SOURCE_ID)
+    declared.remove(dropped)
+
+    with pytest.raises(Exception) as refused:
+        _bind(proposal, manifest)
+    assert "source sets differ" in str(refused.value)
 
 
 # -- the lane: ingesting the pack the executor actually wrote ----------------

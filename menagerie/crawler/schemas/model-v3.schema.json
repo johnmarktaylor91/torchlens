@@ -774,7 +774,7 @@
       "properties": {
         "builder_symbol": {
           "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory builder symbol."
+          "description": "Mandatory builder symbol: the exact thing this contract's args/kwargs are passed to, named as a DOTTED PYTHON PATH and nothing else. The grammar is enforced and is exactly identifier('.'identifier)* -- so 'timm.models.dla.dla60' and 'build_model' are legal, while 'timm.models.dla:dla60' (entry-point colon), 'declarative-library-recipe' or any other hyphenated placeholder, a slashed path, a call expression, and a bare description are all refused. Derive it, never invent it: for recipe_type 'declarative-library' it is implementation.library_recipe.module + '.' + implementation.library_recipe.symbol; for a staged rung it is exactly implementation.builder_symbol, i.e. 'build_model'. This field names the constructor for the record's readers -- it is never dereferenced as a filesystem path, and the identifier grammar is what keeps it from becoming one."
         },
         "seed": {
           "type": "integer",

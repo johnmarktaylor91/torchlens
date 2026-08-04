@@ -170,6 +170,52 @@ def _accurate_authored_gate(facts: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@pytest.mark.parametrize(
+    "spelling",
+    [
+        pytest.param("identity", id="section-name"),
+        pytest.param("licenses", id="section-name-second"),
+        pytest.param("citation; external_metadata.citation", id="semicolon-joined"),
+        pytest.param("citation,dates", id="comma-joined"),
+    ],
+)
+def test_a_section_or_grouped_field_name_is_refused_and_names_the_checker(
+    spelling: str,
+) -> None:
+    """A gate must name ONE leaf, and the refusal must say whose defect it is.
+
+    Every spelling here is verbatim from the pilot's real ``m5915``/``m7362``
+    metadata gates, which terminalized the model. The engine is right to refuse:
+    one verdict cannot carry two leaves' provenance, and the exhaustiveness check
+    downstream is keyed on leaf paths. What it was NOT doing is saying so -- the
+    old message, "extraneous authored field check: identity", reads as an author
+    emitting a stray field, and misdirected an investigation that way.
+    """
+
+    facts = make_author_proposal()["proposed_facts"]
+    gate_item = _accurate_authored_gate(facts)
+    gate_item["field_checks"][0]["field"] = spelling
+
+    with pytest.raises(MetadataValidationError) as refused:
+        validate_authored_facts_for_write(facts, gate_item)
+    message = str(refused.value)
+    assert "checker gate" in message, "the refusal must name the checker as the owner"
+    assert repr(spelling) in message, "the offending spelling must be quoted back"
+    assert "exactly one leaf path" in message, "the owed spelling must be stated"
+
+
+def test_a_leaf_path_check_with_the_proposed_facts_prefix_is_still_accepted() -> None:
+    """The tolerated prefix must survive the sharper refusal around it."""
+
+    facts = make_author_proposal()["proposed_facts"]
+    gate_item = _accurate_authored_gate(facts)
+    original = gate_item["field_checks"][0]["field"]
+    gate_item["field_checks"][0]["field"] = f"proposed_facts.{original}"
+
+    report = validate_authored_facts_for_write(facts, gate_item)
+    assert report is not None
+
+
 def test_authored_input_dtype_is_gated_and_changes_vet_identity() -> None:
     """An authored dtype collision cannot bypass write gating or vet staleness."""
 

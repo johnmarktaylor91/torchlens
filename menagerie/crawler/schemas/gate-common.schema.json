@@ -207,7 +207,7 @@
       "properties": {
         "field": {
           "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory field."
+          "description": "Mandatory field: ONE authored LEAF path, spelled exactly as the model schema spells it -- dotted, with '[]' for a collection leaf, e.g. 'citation.year', 'external_metadata.availability.country.status', 'evidence.excerpts[].locator'. An optional 'proposed_facts.' prefix is accepted and stripped; nothing else is. A SECTION name ('identity', 'licenses', 'taxonomy') is not a leaf and is refused as an extraneous check, and so is any grouped spelling -- no comma-joined, semicolon-joined, or otherwise combined names, however identical the two leaves' verdicts are, because one verdict cannot carry two leaves' provenance. Coverage is exhaustive and one-to-one: every authored leaf gets exactly one check, a repeated leaf is refused as a duplicate, and any leaf left unchecked is refused as an ungated authored fact."
         },
         "verdict": {
           "$ref": "#/$defs/accuracy_verdict",

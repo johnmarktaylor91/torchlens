@@ -57,7 +57,7 @@ from menagerie.crawler.evidence import (
     _validate_locator,
 )
 from menagerie.crawler.identity import hash_bytes
-from menagerie.crawler.models import JsonObject
+from menagerie.crawler.models import JsonObject, manifest_source_rows
 
 TERMINAL_EVIDENCE_FILENAME = "evidence-pack.json"
 ATTEMPTS_DIRNAME = "attempts"
@@ -574,14 +574,16 @@ def _verify_against_frozen_source(
     """
 
     source_id = str(excerpt["source_id"])
-    sources = source_manifest.get("sources")
-    if not isinstance(sources, list):
+    if not isinstance(source_manifest.get("sources"), list):
         raise EvidenceValidationError("terminal source manifest has no sources")
+    # Coverage, not identity: an excerpt quoting a row from the ONE granted
+    # supplementary broker pack is quoting our own fetch, at our own digest, and
+    # is re-verified against the CAS bytes below exactly like a frozen row.
     row = next(
         (
             source
-            for source in sources
-            if isinstance(source, Mapping) and source.get("source_id") == source_id
+            for source in manifest_source_rows(source_manifest)
+            if source.get("source_id") == source_id
         ),
         None,
     )

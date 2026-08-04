@@ -958,7 +958,17 @@ def _validate_context_result(
         raise SourceManifestBindingError("source manifest identity changed")
     if author_result.get("source_manifest_identity") != source_identity:
         raise ArtifactBindingError("author result quotes a different source manifest identity")
-    source_ids = tuple(sorted(str(row.get("source_id")) for row in sources))
+    # CITABLE, not frozen: `source_identity` above is the identity question and
+    # stays on `sources` alone, but "which sources may this proposal name?" is a
+    # coverage question, and the answer includes the ONE supplementary broker
+    # pack the executor may grant mid-session. The author is told those rows are
+    # citable exactly like frozen ones, and it is OUR fetch and OUR digest -- so
+    # echoing one back is compliance, not fabrication. Reading `sources` alone
+    # here refused a correct proposal for quoting a document we handed it, which
+    # is the same defect `manifest_source_rows` was introduced to close for byte
+    # custody (see `models.SUPPLEMENTARY_SOURCES_KEY`).
+    citable_rows = manifest_source_rows(source_manifest)
+    source_ids = tuple(sorted(str(row.get("source_id")) for row in citable_rows))
     if any(value in {"", "None"} for value in source_ids) or len(set(source_ids)) != len(
         source_ids
     ):
@@ -1005,8 +1015,10 @@ def _validate_context_result(
         }
         if set(proposed_by_id) != set(source_ids):
             raise ArtifactBindingError("proposal and source manifest source sets differ")
-        for fetched in sources:
-            assert isinstance(fetched, Mapping)
+        # Every citable row is field-checked, supplementary ones included: the
+        # widened set above may only ADD an obligation to echo our exact bytes,
+        # never remove one.
+        for fetched in citable_rows:
             authored = proposed_by_id[str(fetched["source_id"])]
             expected_size = fetched.get("fetched_bytes_len", fetched.get("byte_count"))
             if (
