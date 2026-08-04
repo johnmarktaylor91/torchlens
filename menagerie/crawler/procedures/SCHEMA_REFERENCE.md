@@ -1,17 +1,48 @@
 # Crawler schema reference
 
-This data dictionary is the human companion to the executable JSON Schemas in `menagerie/crawler/schemas/`. “Mandatory” means the field is required by its enclosing schema object; “Best-effort” means it may be null, omitted by a branch, or records an observation that is not guaranteed to exist. Closed vocabularies and cross-field conditions remain authoritative in the schemas.
+This data dictionary is the human companion to the executable JSON Schemas in
+`menagerie/crawler/schemas/`. Closed vocabularies and cross-field conditions remain
+authoritative in the schemas; this document restates them, it does not extend them.
+
+**Every field table below is generated.** The rows are a mechanical projection of the
+executable schemas -- the field path, its rendered type, whether the enclosing object
+requires it, and the leaf's own schema `description` verbatim. Do not hand-edit anything
+between a `BEGIN GENERATED SCHEMA TABLE` / `END GENERATED SCHEMA TABLE` marker pair: the
+prose outside those markers is hand-written, the tables inside them are owned by
+`menagerie/crawler/tools/render_schema_reference.py` and re-derived by the test suite on
+every run. After a schema change, regenerate with:
+
+```bash
+python -m menagerie.crawler.tools.render_schema_reference --write
+```
+
+The `Presence` column is mechanically derived from the enclosing object's `required` list:
+
+- **Mandatory** -- required by every alternative shape of its enclosing object.
+- **Optional** -- declared by every alternative shape and required by none.
+- **Branch-dependent** -- declared or required by only some of the alternative shapes
+  (`oneOf`/`anyOf` branches). The branch condition itself is authoritative in the schema.
+
+Presence is a structural fact only. A field can be `Mandatory` and still carry `null`, and
+its `Meaning` text is where the schema says so -- descriptions that begin "Best-effort"
+mark exactly those observations that are required to be present but not guaranteed to
+exist.
+
+Named closed vocabularies referenced by the `Type` column are expanded once under
+"Closed vocabularies" rather than repeated in every row.
 
 Current v3 amendment: `input_contract.code_path` is absent from `model.v3`,
-`author-proposal.v3`, and embedded `author-result.v4`; either null or string presence rejects. The field
-listed below belongs only to readable untrusted `model.v2` history. The distinct current-v3 fields
-`implementation.code_path` and `implementation.source_to_code_map[].code_path` remain mandatory where
-their enclosing recipe requires them.
+`author-proposal.v3`, and embedded `author-result.v4`; either null or string presence
+rejects. The field listed below belongs only to readable untrusted `model.v2` history. The
+distinct current-v3 fields `implementation.code_path` and
+`implementation.source_to_code_map[].code_path` remain mandatory where their enclosing
+recipe requires them.
 
 ## `model.v2`
 
 ### Bookkeeping
 
+<!-- BEGIN GENERATED SCHEMA TABLE: model.v2/bookkeeping -->
 | Field | Type | Presence | Meaning |
 | --- | --- | --- | --- |
 | `schema_version` | const `menagerie.crawler.model.v2` | Mandatory | Mandatory versioned schema identifier. |
@@ -21,10 +52,10 @@ their enclosing recipe requires them.
 | `parent_revision` | string \| null | Mandatory | Best-effort hash of the superseded model revision. |
 | `created_at` | string | Mandatory | Mandatory UTC creation timestamp. |
 | `revised_by` | object | Mandatory | Mandatory actor that produced this revision. |
-| `revised_by.actor` | const `driver` or string | Mandatory | Mandatory revision-producing actor. |
-| `revised_by.model` | string | Mandatory for non-driver revisions | Model identifier for a non-driver revision producer. |
-| `revised_by.version` | string | Mandatory for non-driver revisions | Version of a non-driver revision producer. |
-| `authored_metadata_state` | enum | Mandatory | Mandatory acceptance state for source-read metadata. |
+| `revised_by.actor` | const `driver` \| string | Mandatory | Mandatory producing actor. |
+| `revised_by.model` | string | Branch-dependent | Mandatory model. |
+| `revised_by.version` | string | Branch-dependent | Mandatory version. |
+| `authored_metadata_state` | enum: `pending` \| `accepted` \| `failed` | Mandatory | Mandatory acceptance state for source-read metadata. |
 | `intake` | object | Mandatory | Mandatory preserved intake provenance. |
 | `intake.snapshot_id` | string | Mandatory | Mandatory snapshot id. |
 | `intake.snapshot_sha256` | string | Mandatory | Mandatory snapshot sha256. |
@@ -62,9 +93,14 @@ their enclosing recipe requires them.
 | `completeness.family_template_valid` | boolean | Mandatory | Mandatory family template valid. |
 | `completeness.release_eligible` | boolean | Mandatory | Mandatory release eligible. |
 | `completeness.issues` | array<string> | Mandatory | Mandatory issues. |
+| `untrusted_attempt` | object \| null | Optional | Explicitly untrusted authored attempt facts excluded from authority fields. |
+| `untrusted_attempt.proposal_sha256` | string | Mandatory | Hash of the retained unaccepted author proposal. |
+| `untrusted_attempt.proposal` | object map | Mandatory | Raw author proposal retained only as untrusted attempt evidence. |
+<!-- END GENERATED SCHEMA TABLE: model.v2/bookkeeping -->
 
 ### Identity and taxonomy
 
+<!-- BEGIN GENERATED SCHEMA TABLE: model.v2/identity-and-taxonomy -->
 | Field | Type | Presence | Meaning |
 | --- | --- | --- | --- |
 | `identity` | object | Mandatory | Mandatory canonical model identity. |
@@ -76,7 +112,7 @@ their enclosing recipe requires them.
 | `identity.family_representative_id` | string | Mandatory | Mandatory family representative id. |
 | `identity.duplicate_of` | string \| null | Mandatory | Mandatory duplicate of. |
 | `identity.alias_of` | string \| null | Mandatory | Mandatory alias of. |
-| `taxonomy` | object | Mandatory | Best-effort gated architecture taxonomy. |
+| `taxonomy` | object \| null | Mandatory | Best-effort gated architecture taxonomy. |
 | `taxonomy.family` | string | Mandatory | Mandatory family. |
 | `taxonomy.domains` | array<string> | Mandatory | Mandatory domains. |
 | `taxonomy.tasks` | array<string> | Mandatory | Mandatory tasks. |
@@ -84,14 +120,45 @@ their enclosing recipe requires them.
 | `taxonomy.era` | string | Mandatory | Mandatory era. |
 | `taxonomy.architecture_tags` | array<string> | Mandatory | Mandatory architecture tags. |
 | `taxonomy.novel_ops` | array<string> | Mandatory | Mandatory novel ops. |
+| `family_variant_derivation` | object \| null | Optional | Reducer-verifiable mechanical family recipe specialization proof. |
+| `family_variant_derivation.variant_token` | string | Mandatory | Exact trusted intake token selecting the variant. |
+| `family_variant_derivation.template_source_model_id` | string | Mandatory | Exact representative stable ID. |
+| `family_variant_derivation.template_source_revision` | string | Mandatory | Exact representative record revision. |
+| `family_variant_derivation.representative_recipe_revision` | string | Mandatory | Exact representative recipe identity. |
+| `family_variant_derivation.representative_library_recipe` | object | Mandatory | Byte-exact representative declarative library recipe. |
+| `family_variant_derivation.representative_library_recipe.distribution` | string | Mandatory | Mandatory distribution. |
+| `family_variant_derivation.representative_library_recipe.version` | string | Mandatory | Mandatory version. |
+| `family_variant_derivation.representative_library_recipe.artifact_sha256` | string \| null | Optional | Machine-derived installed-distribution artifact digest. The author has no package inventory and cannot derive it, so the leaf is optional in an author proposal. The driver resolves it from the routed intent's exact resolved export before gating, matching the declared Python distribution against the inventory package that provides it, and refuses a conflicting or unverifiable supplied value. It is null ONLY when the routed target exposes no package inventory at all; an inventory that does not install the pinned distribution is a typed refusal, never a null. |
+| `family_variant_derivation.representative_library_recipe.module` | string | Mandatory | Mandatory module. |
+| `family_variant_derivation.representative_library_recipe.symbol` | string | Mandatory | Mandatory symbol. |
+| `family_variant_derivation.representative_library_recipe.kwargs` | object map | Mandatory | Mandatory kwargs. A mapping value carrying the single '__construct__' key is a closed construct node ({module, symbol, kwargs}) resolved from the declared distribution at build time; every other value is literal JSON. Generic torch.nn containers are refused as construct-node symbols. |
+| `family_variant_derivation.representative_library_recipe.pretrained_disable_fields` | array<string> | Mandatory | Mandatory pretrained disable fields. |
+| `family_variant_derivation.representative_library_recipe.entrypoint` | string \| null | Optional | Optional public non-forward call method for the declarative model, delegated through the crawler-owned transparent adapter and receipted as delegated_method. Null or absent means the native forward. Underscore-prefixed names are refused. |
+| `family_variant_derivation.representative_library_recipe.post_construct` | array<object> | Optional | Optional bounded declarative post-construction configuration calls applied to the constructed model in order, before the runtime provenance tripwire. Plain JSON arguments only; construct nodes are refused here. |
+| `family_variant_derivation.representative_library_recipe.post_construct[].method` | string | Mandatory | Mandatory public method name invoked on the constructed model; underscore-prefixed names are refused. |
+| `family_variant_derivation.representative_library_recipe.post_construct[].args` | array | Mandatory | Mandatory plain-JSON positional arguments for the configuration call. |
+| `family_variant_derivation.representative_library_recipe.post_construct[].kwargs` | object map | Mandatory | Mandatory plain-JSON keyword arguments for the configuration call. |
+| `family_variant_derivation.selector_rule` | object | Mandatory | Closed selector-key or direct-symbol specialization rule. |
+| `family_variant_derivation.selector_rule.kind` | enum: `kwarg` \| `symbol` | Mandatory | Closed mechanical selector rule kind. |
+| `family_variant_derivation.selector_rule.key` | string \| null | Mandatory | Exact selector kwarg, or null for a symbol rule. |
+| `family_variant_derivation.allowed_recipe_delta` | object | Mandatory | The sole permitted representative recipe change. |
+| `family_variant_derivation.allowed_recipe_delta.path` | array<string> | Mandatory | Exact recipe path changed by specialization. |
+| `family_variant_derivation.allowed_recipe_delta.previous_value` | value | Mandatory | Exact representative value replaced by specialization. |
+| `family_variant_derivation.allowed_recipe_delta.new_value` | string | Mandatory | Exact trusted intake token written at the recipe path. |
+| `family_variant_derivation.allowed_input_delta` | const `unchanged` | Mandatory | Input contract must remain byte-identical to the representative. |
+<!-- END GENERATED SCHEMA TABLE: model.v2/identity-and-taxonomy -->
 
 ### External metadata
 
-External metadata is captured and gated now because it requires source reading, web research, or human judgment. Parameter counts, input/output shapes, operation types, FLOPs, and graph structure are TorchLens-derivable; they are optional observations, never a reason to re-crawl external sources.
+External metadata is captured and gated now because it requires source reading, web
+research, or human judgment. Parameter counts, input/output shapes, operation types,
+FLOPs, and graph structure are TorchLens-derivable; they are optional observations, never
+a reason to re-crawl external sources.
 
+<!-- BEGIN GENERATED SCHEMA TABLE: model.v2/external-metadata -->
 | Field | Type | Presence | Meaning |
 | --- | --- | --- | --- |
-| `external_metadata` | object | Mandatory | Best-effort gated externally sourced catalog metadata. |
+| `external_metadata` | object \| null | Mandatory | Best-effort gated externally sourced catalog metadata. |
 | `external_metadata.modality` | array<string> | Mandatory | Mandatory modality. |
 | `external_metadata.architecture_class` | array<string> | Mandatory | Mandatory architecture class. |
 | `external_metadata.domain` | array<string> | Mandatory | Mandatory domain. |
@@ -102,7 +169,7 @@ External metadata is captured and gated now because it requires source reading, 
 | `external_metadata.lineage` | array<string> | Mandatory | Mandatory lineage. |
 | `external_metadata.predecessors` | array<string> | Mandatory | Mandatory predecessors. |
 | `external_metadata.tags` | array<string> | Mandatory | Mandatory tags. |
-| `external_metadata.keywords` | array<string> | Mandatory | Mandatory keywords. |
+| `external_metadata.keywords` | array<string> | Mandatory | Mandatory non-empty English user search terms. These are relevance-checked model/family/task/domain aliases and phrases, not verbatim-source quotations. |
 | `external_metadata.venue` | string \| null | Mandatory | Mandatory venue. |
 | `external_metadata.family` | string | Mandatory | Mandatory family. |
 | `external_metadata.era` | string | Mandatory | Mandatory era. |
@@ -111,7 +178,7 @@ External metadata is captured and gated now because it requires source reading, 
 | `external_metadata.authors` | array<string> | Mandatory | Mandatory authors. |
 | `external_metadata.institution` | array<string> | Mandatory | Mandatory institution. |
 | `external_metadata.citation` | object | Mandatory | Best-effort gated citation metadata. |
-| `external_metadata.citation.status` | enum | Mandatory | Mandatory closed current disposition. |
+| `external_metadata.citation.status` | enum: `present` \| `not-found-after-search` \| `not-applicable` | Mandatory | Mandatory closed current disposition. |
 | `external_metadata.citation.title` | string \| null | Mandatory | Mandatory title. |
 | `external_metadata.citation.authors` | array<string> | Mandatory | Mandatory authors. |
 | `external_metadata.citation.year` | integer \| null | Mandatory | Mandatory year. |
@@ -128,15 +195,17 @@ External metadata is captured and gated now because it requires source reading, 
 | `external_metadata.original_framework` | string | Mandatory | Mandatory original framework. |
 | `external_metadata.run_framework` | string | Mandatory | Mandatory run framework. |
 | `external_metadata.modes` | object | Mandatory | Mandatory meaningful runtime-mode record. |
-| `external_metadata.modes.meaningful_modes` | array<enum> | Mandatory | Mandatory meaningful modes. |
-| `external_metadata.modes.train_eval_divergence` | enum | Mandatory | Mandatory train eval divergence. |
+| `external_metadata.modes.meaningful_modes` | array<enum: `train` \| `eval`> | Mandatory | Mandatory meaningful modes. |
+| `external_metadata.modes.train_eval_divergence` | enum: `none` \| `statistical` \| `structural` | Mandatory | Mandatory train eval divergence. |
+<!-- END GENERATED SCHEMA TABLE: model.v2/external-metadata -->
 
 ### Website
 
+<!-- BEGIN GENERATED SCHEMA TABLE: model.v2/website -->
 | Field | Type | Presence | Meaning |
 | --- | --- | --- | --- |
-| `website` | object | Mandatory | Best-effort presentation metadata for the catalog page. |
-| `website.kind` | enum | Mandatory | Mandatory record or status kind. |
+| `website` | object \| null | Mandatory | Best-effort presentation metadata for the catalog page. |
+| `website.kind` | enum: `family-representative` \| `size-variant-template` | Mandatory | Mandatory record or status kind. |
 | `website.tagline` | string | Mandatory | Mandatory tagline. |
 | `website.description` | string | Mandatory | Mandatory description. |
 | `website.key_contribution` | string | Mandatory | Mandatory key contribution. |
@@ -145,26 +214,28 @@ External metadata is captured and gated now because it requires source reading, 
 | `website.template_source_model_id` | string \| null | Mandatory | Mandatory template source model id. |
 | `website.variant_parameter_input_line` | string \| null | Mandatory | Mandatory variant parameter input line. |
 | `website.template_hash` | string \| null | Mandatory | Mandatory template hash. |
+<!-- END GENERATED SCHEMA TABLE: model.v2/website -->
 
 ### People, origin, dates, and citation
 
+<!-- BEGIN GENERATED SCHEMA TABLE: model.v2/people-origin-dates-citation -->
 | Field | Type | Presence | Meaning |
 | --- | --- | --- | --- |
-| `people_and_origin` | object | Mandatory | Best-effort gated people and origin metadata. |
+| `people_and_origin` | object \| null | Mandatory | Best-effort gated people and origin metadata. |
 | `people_and_origin.authors` | array<string> | Mandatory | Mandatory authors. |
 | `people_and_origin.labs` | array<string> | Mandatory | Mandatory labs. |
 | `people_and_origin.institutions` | array<string> | Mandatory | Mandatory institutions. |
 | `people_and_origin.origin_countries` | array<string> | Mandatory | Mandatory origin countries. |
 | `people_and_origin.country_basis` | string | Mandatory | Mandatory country basis. |
-| `people_and_origin.country_confidence` | enum | Mandatory | Mandatory country confidence. |
+| `people_and_origin.country_confidence` | enum: `high` \| `medium` \| `low` \| `cannot-determine` | Mandatory | Mandatory country confidence. |
 | `people_and_origin.country_note` | string | Mandatory | Mandatory country note. |
-| `dates` | object | Mandatory | Best-effort gated publication-date metadata. |
+| `dates` | object \| null | Mandatory | Best-effort gated publication-date metadata. |
 | `dates.year` | integer \| null | Mandatory | Mandatory year. |
 | `dates.year_basis` | string | Mandatory | Mandatory year basis. |
 | `dates.first_public_date` | string \| null | Mandatory | Mandatory first public date. |
 | `dates.first_public_date_basis` | string | Mandatory | Mandatory first public date basis. |
-| `citation` | object | Mandatory | Best-effort gated citation metadata. |
-| `citation.status` | enum | Mandatory | Mandatory closed current disposition. |
+| `citation` | object \| null | Mandatory | Best-effort gated citation metadata. |
+| `citation.status` | enum: `present` \| `not-found-after-search` \| `not-applicable` | Mandatory | Mandatory closed current disposition. |
 | `citation.title` | string \| null | Mandatory | Mandatory title. |
 | `citation.authors` | array<string> | Mandatory | Mandatory authors. |
 | `citation.year` | integer \| null | Mandatory | Mandatory year. |
@@ -175,20 +246,22 @@ External metadata is captured and gated now because it requires source reading, 
 | `citation.url` | string \| null | Mandatory | Mandatory public source URL when available. |
 | `citation.bibtex` | string \| null | Mandatory | Mandatory bibtex. |
 | `citation.source_evidence_ids` | array<string> | Mandatory | Mandatory source evidence ids. |
+<!-- END GENERATED SCHEMA TABLE: model.v2/people-origin-dates-citation -->
 
 ### Licenses
 
+<!-- BEGIN GENERATED SCHEMA TABLE: model.v2/licenses -->
 | Field | Type | Presence | Meaning |
 | --- | --- | --- | --- |
-| `licenses` | object | Mandatory | Best-effort gated source-license metadata. |
+| `licenses` | object \| null | Mandatory | Best-effort gated source-license metadata. |
 | `licenses.code` | object | Mandatory | Mandatory closed status code. |
 | `licenses.code.spdx` | string | Mandatory | Mandatory spdx. |
-| `licenses.code.status` | enum | Mandatory | Mandatory closed current disposition. |
+| `licenses.code.status` | enum: `declared` \| `not-found` \| `custom` \| `not-applicable` | Mandatory | Mandatory closed current disposition. |
 | `licenses.code.source_id` | string | Mandatory | Mandatory source identifier. |
 | `licenses.code.locator` | string | Mandatory | Mandatory exact location within the source. |
 | `licenses.code.evidence_ids` | array<string> | Mandatory | Mandatory supporting evidence identifiers. |
 | `licenses.paper_text` | object | Mandatory | Mandatory paper text. |
-| `licenses.paper_text.status` | enum | Mandatory | Mandatory closed current disposition. |
+| `licenses.paper_text.status` | enum: `linked-not-redistributed` \| `short-excerpt-committed` \| `not-applicable` | Mandatory | Mandatory closed current disposition. |
 | `licenses.paper_text.source_id` | string \| null | Mandatory | Mandatory source identifier. |
 | `licenses.weights` | object | Mandatory | Mandatory weights. |
 | `licenses.weights.status` | const `not-used` | Mandatory | Mandatory closed current disposition. |
@@ -197,52 +270,62 @@ External metadata is captured and gated now because it requires source reading, 
 | `licenses.data.status` | string | Mandatory | Mandatory closed current disposition. |
 | `licenses.data.source_id` | string \| null | Mandatory | Mandatory source identifier. |
 | `licenses.data.evidence_ids` | array<string> | Mandatory | Mandatory supporting evidence identifiers. |
-| `licenses.redistribution_class` | enum | Mandatory | Mandatory redistribution class. |
+| `licenses.redistribution_class` | enum: `public-compatible` \| `restricted-private` \| `manifest-only` \| `not-applicable` | Mandatory | Mandatory redistribution class. |
+| `licenses.source_dispositions` | array<object> | Optional | Optional per-source dispositions for heterogeneous fetched manifests. |
+| `licenses.source_dispositions[].spdx` | string | Mandatory | Exact SPDX or NOASSERTION disposition. |
+| `licenses.source_dispositions[].status` | enum: `declared` \| `not-found` \| `custom` \| `not-applicable` | Mandatory | Evidence-backed disposition status. |
+| `licenses.source_dispositions[].source_id` | string | Mandatory | Exactly one source-manifest member identity. |
+| `licenses.source_dispositions[].locator` | string | Mandatory | Exact license locator in the named source. |
+| `licenses.source_dispositions[].evidence_ids` | array<string> | Mandatory | Literal license excerpts supporting this source. |
+<!-- END GENERATED SCHEMA TABLE: model.v2/licenses -->
 
 ### Source resolution
 
+<!-- BEGIN GENERATED SCHEMA TABLE: model.v2/source-resolution -->
 | Field | Type | Presence | Meaning |
 | --- | --- | --- | --- |
 | `source_resolution` | object | Mandatory | Mandatory selected source rung and search record. |
-| `source_resolution.rung` | enum | Mandatory | Mandatory source-resolution ladder rung, or `NO_RUNG_SELECTED` when work ended before any rung was selected. |
+| `source_resolution.rung` | enum `model-common.rung_or_no_selection` | Mandatory | Mandatory source-resolution ladder rung, or NO_RUNG_SELECTED when work ended before any rung was selected. |
 | `source_resolution.decision` | string | Mandatory | Mandatory source-resolution decision. |
 | `source_resolution.rung_evidence` | string | Mandatory | Mandatory rung evidence. |
 | `source_resolution.sufficiency_gap` | string \| null | Mandatory | Mandatory for insufficient-description skips; names missing implementation detail. |
 | `source_resolution.searched_at` | string | Mandatory | Mandatory searched at. |
 | `source_resolution.attempted_rungs` | array<object> | Mandatory | Mandatory attempted rungs. |
-| `source_resolution.attempted_rungs[].rung` | enum | Mandatory | Mandatory source-resolution ladder rung, or `NO_RUNG_SELECTED` when the ladder was never walked. |
+| `source_resolution.attempted_rungs[].rung` | enum `model-common.rung_or_no_selection` | Mandatory | Mandatory source-resolution ladder rung, or NO_RUNG_SELECTED when the ladder was never walked. |
 | `source_resolution.attempted_rungs[].result` | string | Mandatory | Mandatory immutable attempt outcome. |
 | `source_resolution.attempted_rungs[].reason_code` | string | Mandatory | Mandatory closed reason code when applicable. |
 | `source_resolution.attempted_rungs[].evidence_ids` | array<string> | Mandatory | Mandatory supporting evidence identifiers. |
 | `source_resolution.search_report` | object | Mandatory | Mandatory search report. |
 | `source_resolution.search_report.queries` | array<string> | Mandatory | Mandatory queries. |
 | `source_resolution.search_report.places_checked` | array<string> | Mandatory | Mandatory places checked. |
-| `source_resolution.search_report.links_checked` | array<string> | Mandatory | Mandatory links checked. |
+| `source_resolution.search_report.links_checked` | array<string> | Mandatory | Mandatory exact content URLs checked. For R2/R4 every entry must bind to fetched, hash-inventoried CAS bytes; unfetched candidate repositories are a coverage gap. |
 | `source_resolution.search_report.languages_checked` | array<string> | Mandatory | Mandatory languages checked. |
 | `source_resolution.search_report.archives_checked` | array<string> | Mandatory | Mandatory archives checked. |
 | `source_resolution.search_report.started_at` | string | Mandatory | Mandatory UTC start timestamp. |
 | `source_resolution.search_report.finished_at` | string | Mandatory | Mandatory UTC completion timestamp. |
 | `source_resolution.search_report.conclusion` | string | Mandatory | Mandatory conclusion. |
-| `source_resolution.mandatory_link_status` | enum | Mandatory | Mandatory mandatory link status. |
+| `source_resolution.mandatory_link_status` | enum: `ok` \| `failed` | Mandatory | Mandatory mandatory link status. |
 | `source_resolution.primary_source_id` | string | Mandatory | Mandatory primary source id. |
 | `source_resolution.sources` | array<object> | Mandatory | Mandatory resolved public sources. |
 | `source_resolution.sources[].source_id` | string | Mandatory | Mandatory source identifier. |
-| `source_resolution.sources[].role` | enum | Mandatory | Mandatory role. |
-| `source_resolution.sources[].kind` | enum | Mandatory | Mandatory record or status kind. |
-| `source_resolution.sources[].url` | string | Mandatory | Mandatory public source URL when available. |
+| `source_resolution.sources[].role` | enum: `implementation` \| `introducing-paper` \| `supplement` \| `project-page` \| `documentation` \| `license` \| `affiliation` \| `archive` | Mandatory | Mandatory role. |
+| `source_resolution.sources[].kind` | enum: `repository` \| `package` \| `paper` \| `web-page` \| `archive` \| `intake-snapshot` \| `discovery-evidence` | Mandatory | Mandatory record or status kind. |
+| `source_resolution.sources[].url` | string | Mandatory | Mandatory public source URL, except for typed machine discovery evidence. |
 | `source_resolution.sources[].revision_kind` | string | Mandatory | Mandatory revision kind. |
 | `source_resolution.sources[].revision` | string | Mandatory | Mandatory revision. |
 | `source_resolution.sources[].locator` | string | Mandatory | Mandatory exact location within the source. |
-| `source_resolution.sources[].content_sha256` | string | Mandatory | Mandatory content sha256. |
+| `source_resolution.sources[].content_sha256` | string \| null | Mandatory | Mandatory content sha256. |
 | `source_resolution.sources[].byte_count` | integer | Mandatory | Mandatory byte count. |
 | `source_resolution.sources[].media_type` | string | Mandatory | Mandatory media type. |
 | `source_resolution.sources[].retrieved_at` | string | Mandatory | Mandatory retrieved at. |
 | `source_resolution.sources[].fetch_recipe` | string | Mandatory | Mandatory fetch recipe. |
 | `source_resolution.sources[].mirror_class` | string | Mandatory | Mandatory mirror class. |
 | `source_resolution.sources[].mirror_digest` | string \| null | Mandatory | Mandatory mirror digest. |
+<!-- END GENERATED SCHEMA TABLE: model.v2/source-resolution -->
 
 ### Evidence
 
+<!-- BEGIN GENERATED SCHEMA TABLE: model.v2/evidence -->
 | Field | Type | Presence | Meaning |
 | --- | --- | --- | --- |
 | `evidence` | object | Mandatory | Mandatory literal evidence and coverage record. |
@@ -252,9 +335,9 @@ External metadata is captured and gated now because it requires source reading, 
 | `evidence.excerpts[].locator` | string | Mandatory | Mandatory exact location within the source. |
 | `evidence.excerpts[].text` | string | Mandatory | Mandatory verbatim retained source text. |
 | `evidence.excerpts[].text_sha256` | string | Mandatory | Mandatory hash of the verbatim excerpt. |
-| `evidence.excerpts[].supports` | array<string> | Mandatory | Mandatory supports. |
+| `evidence.excerpts[].supports` | array<string> | Mandatory | Mandatory supports; claim-category strings matched by exact equality, never by prefix roll-up. |
 | `evidence.excerpts[].family_level` | boolean | Mandatory | Mandatory family level. |
-| `evidence.excerpts[].disposition` | enum | Mandatory | Mandatory excerpt role, including insufficient reimplementation evidence. |
+| `evidence.excerpts[].disposition` | enum: `supporting` \| `insufficient-for-faithful-reimpl` | Mandatory | Mandatory excerpt role, including insufficient reimplementation evidence. |
 | `evidence.excerpts[].license_disposition` | string | Mandatory | Mandatory license handling for the retained excerpt. |
 | `evidence.coverage` | object | Mandatory | Mandatory coverage. |
 | `evidence.coverage.all_agent_fields_have_support` | boolean | Mandatory | Mandatory all agent fields have support. |
@@ -262,9 +345,11 @@ External metadata is captured and gated now because it requires source reading, 
 | `evidence.coverage.family_grounding_complete` | boolean | Mandatory | Mandatory family grounding complete. |
 | `evidence.evidence_identity` | string | Mandatory | Mandatory evidence identity. |
 | `evidence.family_grounding_path` | string \| null | Mandatory | Mandatory family grounding path. |
+<!-- END GENERATED SCHEMA TABLE: model.v2/evidence -->
 
 ### Implementation
 
+<!-- BEGIN GENERATED SCHEMA TABLE: model.v2/implementation -->
 | Field | Type | Presence | Meaning |
 | --- | --- | --- | --- |
 | `implementation` | object | Mandatory | Mandatory executable implementation recipe. |
@@ -273,19 +358,27 @@ External metadata is captured and gated now because it requires source reading, 
 | `implementation.native_object_type` | string | Mandatory | Mandatory native object type. |
 | `implementation.native_call_method` | string | Mandatory | Mandatory native call method. |
 | `implementation.transparent_forward_adapter` | boolean | Mandatory | Mandatory transparent forward adapter. |
-| `implementation.recipe_type` | enum | Mandatory | Mandatory recipe type. |
+| `implementation.recipe_type` | enum: `declarative-library` \| `typed-adapter` \| `port` \| `reimplementation` \| `none` | Mandatory | Mandatory recipe type. |
 | `implementation.code_path` | string \| null | Mandatory | Mandatory code path. |
 | `implementation.code_sha256` | string \| null | Mandatory | Mandatory code sha256. |
+| `implementation.code_manifest` | array<object> | Optional | Closed recursive model-local Python import manifest. |
+| `implementation.code_manifest[].path` | string | Mandatory | Model-root-relative imported code path. |
+| `implementation.code_manifest[].sha256` | string | Mandatory | Exact imported code member digest. |
 | `implementation.builder_symbol` | const `build_model` \| null | Mandatory | Mandatory builder symbol. |
 | `implementation.dummy_call_symbol` | const `make_dummy_call` \| null | Mandatory | Mandatory dummy call symbol. |
-| `implementation.library_recipe` | object | Mandatory | Mandatory library recipe. |
+| `implementation.library_recipe` | object \| null | Mandatory | Mandatory library recipe. |
 | `implementation.library_recipe.distribution` | string | Mandatory | Mandatory distribution. |
 | `implementation.library_recipe.version` | string | Mandatory | Mandatory version. |
-| `implementation.library_recipe.artifact_sha256` | string \| null | Best-effort | Machine-derived installed-distribution artifact digest. The author stage has no package inventory, environment identity, or interpreter, so it may omit the leaf; the driver resolves it from the routed intent's exact resolved export before gating, matching the declared Python distribution against the inventory package that provides it, and refuses a conflicting or unverifiable supplied value. Null ONLY when the routed target exposes no package inventory at all; an inventory that does not install the pinned distribution is a typed refusal, never a null. |
+| `implementation.library_recipe.artifact_sha256` | string \| null | Optional | Machine-derived installed-distribution artifact digest. The author has no package inventory and cannot derive it, so the leaf is optional in an author proposal. The driver resolves it from the routed intent's exact resolved export before gating, matching the declared Python distribution against the inventory package that provides it, and refuses a conflicting or unverifiable supplied value. It is null ONLY when the routed target exposes no package inventory at all; an inventory that does not install the pinned distribution is a typed refusal, never a null. |
 | `implementation.library_recipe.module` | string | Mandatory | Mandatory module. |
 | `implementation.library_recipe.symbol` | string | Mandatory | Mandatory symbol. |
-| `implementation.library_recipe.kwargs` | object | Mandatory | Mandatory kwargs. |
+| `implementation.library_recipe.kwargs` | object map | Mandatory | Mandatory kwargs. A mapping value carrying the single '__construct__' key is a closed construct node ({module, symbol, kwargs}) resolved from the declared distribution at build time; every other value is literal JSON. Generic torch.nn containers are refused as construct-node symbols. |
 | `implementation.library_recipe.pretrained_disable_fields` | array<string> | Mandatory | Mandatory pretrained disable fields. |
+| `implementation.library_recipe.entrypoint` | string \| null | Optional | Optional public non-forward call method for the declarative model, delegated through the crawler-owned transparent adapter and receipted as delegated_method. Null or absent means the native forward. Underscore-prefixed names are refused. |
+| `implementation.library_recipe.post_construct` | array<object> | Optional | Optional bounded declarative post-construction configuration calls applied to the constructed model in order, before the runtime provenance tripwire. Plain JSON arguments only; construct nodes are refused here. |
+| `implementation.library_recipe.post_construct[].method` | string | Mandatory | Mandatory public method name invoked on the constructed model; underscore-prefixed names are refused. |
+| `implementation.library_recipe.post_construct[].args` | array | Mandatory | Mandatory plain-JSON positional arguments for the configuration call. |
+| `implementation.library_recipe.post_construct[].kwargs` | object map | Mandatory | Mandatory plain-JSON keyword arguments for the configuration call. |
 | `implementation.upstream_files` | array<object> | Mandatory | Mandatory upstream files. |
 | `implementation.upstream_files[].source_id` | string | Mandatory | Mandatory source identifier. |
 | `implementation.upstream_files[].path` | string | Mandatory | Mandatory path. |
@@ -321,14 +414,17 @@ External metadata is captured and gated now because it requires source reading, 
 | `implementation.device_policy` | string | Mandatory | Mandatory device policy. |
 | `implementation.required_construct_asset` | null | Mandatory | Mandatory required construct asset. |
 | `implementation.recipe_revision` | string | Mandatory | Mandatory recipe revision. |
-| `implementation.torchlens_import_static_check` | enum `passed` \| `not-checked` (`not-applicable-no-code` when `recipe_type` is `none`) | Mandatory | Static import-check disposition. `passed` is an attestation only a party with an interpreter may make; the author stage has none, so an author records the honest `not-checked`. |
+| `implementation.torchlens_import_static_check` | enum: `passed` \| `not-checked` \| `not-applicable-no-code` | Mandatory | Mandatory torchlens import static-check disposition. 'passed' is an attestation that only a party with an interpreter may make; the author stage has none, so an author declares the honest 'not-checked'. |
+| `implementation.declared_timeout_seconds` | integer \| null | Optional | Optional author-declared per-forward timeout seconds in [1,1800]; null uses the default. |
+<!-- END GENERATED SCHEMA TABLE: model.v2/implementation -->
 
 ### Input contract
 
+<!-- BEGIN GENERATED SCHEMA TABLE: model.v2/input-contract -->
 | Field | Type | Presence | Meaning |
 | --- | --- | --- | --- |
 | `input_contract` | object | Mandatory | Mandatory source-valid dummy-input contract. |
-| `input_contract.code_path` | string \| null | Mandatory | Historical v2 input-builder path retained only as untrusted history; absent and rejected in v3. |
+| `input_contract.code_path` | string \| null | Mandatory | Mandatory code path. |
 | `input_contract.builder_symbol` | string | Mandatory | Mandatory builder symbol. |
 | `input_contract.seed` | integer | Mandatory | Mandatory seed. |
 | `input_contract.semantic_description` | string | Mandatory | Mandatory semantic description. |
@@ -339,21 +435,29 @@ External metadata is captured and gated now because it requires source reading, 
 | `input_contract.args[].kind` | string | Mandatory | Mandatory record or status kind. |
 | `input_contract.args[].semantic_role` | string | Mandatory | Mandatory semantic role. |
 | `input_contract.args[].shape` | array<integer \| string> | Mandatory | Mandatory shape. |
-| `input_contract.args[].dtype` | string | Mandatory | Mandatory dtype. |
+| `input_contract.args[].dtype` | string | Mandatory | Mandatory authored, source-read input dtype. Unlike observed.* dtype/device facts, this input_contract leaf is accuracy-gated and contributes to vet identity. |
 | `input_contract.args[].device_policy` | string | Mandatory | Mandatory device policy. |
-| `input_contract.args[].distribution` | enum | Mandatory | Mandatory distribution. |
+| `input_contract.args[].distribution` | enum: `normal` \| `uniform` \| `integer-range` \| `zeros` \| `ones` \| `categorical` \| `constructor` | Mandatory | Mandatory distribution. |
 | `input_contract.args[].constraints` | array<string> | Mandatory | Mandatory constraints. |
 | `input_contract.args[].source_evidence_ids` | array<string> | Mandatory | Mandatory source evidence ids. |
+| `input_contract.args[].constructor` | object | Optional | Closed declarative constructor for a non-tensor input object (for example a graph). Required exactly when distribution is 'constructor' and kind is 'constructed'; forbidden otherwise. |
+| `input_contract.args[].constructor.module` | string | Mandatory | Mandatory dotted import module defining the input constructor. |
+| `input_contract.args[].constructor.symbol` | string | Mandatory | Mandatory direct constructor attribute resolved on the module. |
+| `input_contract.args[].constructor.kwargs` | object map | Mandatory | Mandatory JSON-only constructor keyword arguments; nested construct nodes follow the same closed grammar and bounds as declarative recipe kwargs. |
 | `input_contract.kwargs` | array<object> | Mandatory | Mandatory kwargs. |
 | `input_contract.kwargs[].path` | string | Mandatory | Mandatory path. |
 | `input_contract.kwargs[].kind` | string | Mandatory | Mandatory record or status kind. |
 | `input_contract.kwargs[].semantic_role` | string | Mandatory | Mandatory semantic role. |
 | `input_contract.kwargs[].shape` | array<integer \| string> | Mandatory | Mandatory shape. |
-| `input_contract.kwargs[].dtype` | string | Mandatory | Mandatory dtype. |
+| `input_contract.kwargs[].dtype` | string | Mandatory | Mandatory authored, source-read input dtype. Unlike observed.* dtype/device facts, this input_contract leaf is accuracy-gated and contributes to vet identity. |
 | `input_contract.kwargs[].device_policy` | string | Mandatory | Mandatory device policy. |
-| `input_contract.kwargs[].distribution` | enum | Mandatory | Mandatory distribution. |
+| `input_contract.kwargs[].distribution` | enum: `normal` \| `uniform` \| `integer-range` \| `zeros` \| `ones` \| `categorical` \| `constructor` | Mandatory | Mandatory distribution. |
 | `input_contract.kwargs[].constraints` | array<string> | Mandatory | Mandatory constraints. |
 | `input_contract.kwargs[].source_evidence_ids` | array<string> | Mandatory | Mandatory source evidence ids. |
+| `input_contract.kwargs[].constructor` | object | Optional | Closed declarative constructor for a non-tensor input object (for example a graph). Required exactly when distribution is 'constructor' and kind is 'constructed'; forbidden otherwise. |
+| `input_contract.kwargs[].constructor.module` | string | Mandatory | Mandatory dotted import module defining the input constructor. |
+| `input_contract.kwargs[].constructor.symbol` | string | Mandatory | Mandatory direct constructor attribute resolved on the module. |
+| `input_contract.kwargs[].constructor.kwargs` | object map | Mandatory | Mandatory JSON-only constructor keyword arguments; nested construct nodes follow the same closed grammar and bounds as declarative recipe kwargs. |
 | `input_contract.non_tensor_values` | array<object> | Mandatory | Mandatory non tensor values. |
 | `input_contract.non_tensor_values[].path` | string | Mandatory | Mandatory path. |
 | `input_contract.non_tensor_values[].type` | string | Mandatory | Mandatory type. |
@@ -363,22 +467,26 @@ External metadata is captured and gated now because it requires source reading, 
 | `input_contract.non_tensor_values[].source_evidence_ids` | array<string> | Mandatory | Mandatory source evidence ids. |
 | `input_contract.masks_state_and_control` | array<string> | Mandatory | Mandatory masks state and control. |
 | `input_contract.expected_output_semantics` | string | Mandatory | Mandatory expected output semantics. |
+<!-- END GENERATED SCHEMA TABLE: model.v2/input-contract -->
 
 ### Observed
 
+<!-- BEGIN GENERATED SCHEMA TABLE: model.v2/observed -->
 | Field | Type | Presence | Meaning |
 | --- | --- | --- | --- |
 | `observed` | object | Mandatory | Mandatory best-effort observed runtime facts. |
 | `observed.parameter_count_total` | integer | Mandatory | Mandatory parameter count total. |
 | `observed.parameter_count_trainable` | integer | Mandatory | Mandatory parameter count trainable. |
+| `observed.native_framework` | string \| null | Mandatory | Worker-observed native framework for the designated measurement attempt. |
+| `observed.delegated_method` | string \| null | Mandatory | Worker-observed native call method for the designated measurement attempt. |
 | `observed.output_signature` | object | Mandatory | Mandatory output signature. |
 | `observed.output_signature.tree` | value | Mandatory | Mandatory tree. |
 | `observed.output_signature.leaves` | array<object> | Mandatory | Mandatory leaves. |
 | `observed.output_signature.leaves[].path` | string | Mandatory | Mandatory path. |
 | `observed.output_signature.leaves[].kind` | string | Mandatory | Mandatory record or status kind. |
 | `observed.output_signature.leaves[].shape` | array<integer \| string> \| null | Mandatory | Mandatory shape. |
-| `observed.output_signature.leaves[].dtype` | string \| null | Mandatory | Mandatory dtype. |
-| `observed.output_signature.leaves[].device` | string \| null | Mandatory | Mandatory device. |
+| `observed.output_signature.leaves[].dtype` | string \| null | Mandatory | Mandatory mechanically observed output dtype under observed.*; this root-path placement is TorchLens-derivable and excluded from authored metadata gating. |
+| `observed.output_signature.leaves[].device` | string \| null | Mandatory | Mandatory mechanically observed output device under observed.*; this root-path placement is TorchLens-derivable and excluded from authored metadata gating. |
 | `observed.output_signature.leaves[].python_type` | string | Mandatory | Mandatory python type. |
 | `observed.input_kind` | string | Mandatory | Mandatory input kind. |
 | `observed.input_asset` | string \| null | Mandatory | Mandatory input asset. |
@@ -389,26 +497,28 @@ External metadata is captured and gated now because it requires source reading, 
 | `observed.measurement_attempt_ids` | array<string> | Mandatory | Mandatory measurement attempt ids. |
 | `observed.snippet` | string | Mandatory | Mandatory snippet. |
 | `observed.snippet_sha256` | string | Mandatory | Mandatory snippet sha256. |
+<!-- END GENERATED SCHEMA TABLE: model.v2/observed -->
 
 ### Modes and verification state
 
+<!-- BEGIN GENERATED SCHEMA TABLE: model.v2/modes-and-verification-state -->
 | Field | Type | Presence | Meaning |
 | --- | --- | --- | --- |
 | `modes` | object | Mandatory | Mandatory meaningful runtime-mode record. |
-| `modes.meaningful_modes` | array<enum> | Mandatory | Mandatory meaningful modes. |
+| `modes.meaningful_modes` | array<enum: `train` \| `eval`> | Mandatory | Mandatory meaningful modes. |
 | `modes.per_mode_run` | object | Mandatory | Mandatory per mode run. |
-| `modes.per_mode_run.train` | object | Best-effort | Best-effort train. |
+| `modes.per_mode_run.train` | object | Optional | Best-effort train. |
 | `modes.per_mode_run.train.attempt_id` | string | Mandatory | Mandatory immutable attempt identifier. |
-| `modes.per_mode_run.train.status` | enum | Mandatory | Mandatory closed current disposition. |
-| `modes.per_mode_run.eval` | object | Best-effort | Best-effort eval. |
+| `modes.per_mode_run.train.status` | enum: `succeeded` \| `failed` \| `observed` | Mandatory | Mandatory closed current disposition. |
+| `modes.per_mode_run.eval` | object | Optional | Best-effort eval. |
 | `modes.per_mode_run.eval.attempt_id` | string | Mandatory | Mandatory immutable attempt identifier. |
-| `modes.per_mode_run.eval.status` | enum | Mandatory | Mandatory closed current disposition. |
-| `modes.train_eval_divergence` | enum | Mandatory | Mandatory train eval divergence. |
+| `modes.per_mode_run.eval.status` | enum: `succeeded` \| `failed` \| `observed` | Mandatory | Mandatory closed current disposition. |
+| `modes.train_eval_divergence` | enum: `none` \| `statistical` \| `structural` | Mandatory | Mandatory train eval divergence. |
 | `modes.divergence_evidence` | string | Mandatory | Mandatory divergence evidence. |
 | `fidelity` | object | Mandatory | Mandatory implementation-fidelity gate state. |
 | `fidelity.required` | boolean | Mandatory | Mandatory required. |
 | `fidelity.reason` | string | Mandatory | Mandatory reason. |
-| `fidelity.verdict` | enum \| null | Mandatory | Mandatory checker verdict. |
+| `fidelity.verdict` | enum: `match` \| `minor-drift` \| `major-drift` \| `slop` \| `cannot-verify` \| null | Mandatory | Mandatory checker verdict. |
 | `fidelity.fidelity_identity` | string \| null | Mandatory | Mandatory fidelity identity. |
 | `fidelity.gate_id` | string \| null | Mandatory | Mandatory immutable gate identifier. |
 | `fidelity.current` | boolean | Mandatory | Mandatory current. |
@@ -418,7 +528,7 @@ External metadata is captured and gated now because it requires source reading, 
 | `accuracy_gate.required` | const `True` | Mandatory | Mandatory required. |
 | `accuracy_gate.vet_identity` | string \| null | Mandatory | Mandatory vet identity. |
 | `accuracy_gate.gate_id` | string \| null | Mandatory | Mandatory immutable gate identifier. |
-| `accuracy_gate.verdict` | enum \| null | Mandatory | Mandatory checker verdict. |
+| `accuracy_gate.verdict` | enum: `accurate` \| `inaccurate` \| `cannot-verify` \| null | Mandatory | Mandatory checker verdict. |
 | `accuracy_gate.current` | boolean | Mandatory | Mandatory current. |
 | `accuracy_gate.checker_model` | string | Mandatory | Mandatory checker model. |
 | `accuracy_gate.checker_version` | string | Mandatory | Mandatory checker version. |
@@ -428,20 +538,25 @@ External metadata is captured and gated now because it requires source reading, 
 | `execution.environment_id` | string | Mandatory | Mandatory environment id. |
 | `execution.env_generation` | string | Mandatory | Mandatory env generation. |
 | `execution.accepted_attempt_ids` | array<string> | Mandatory | Mandatory accepted attempt ids. |
-| `execution.confirmation_policy` | enum | Mandatory | Mandatory confirmation policy. |
+| `execution.confirmation_policy` | enum: `two-cold-r3-r4` \| `single-mechanical` \| `mechanical-canary` | Mandatory | Mandatory confirmation policy. |
 | `execution.network_attempted` | const `False` | Mandatory | Mandatory network attempted. |
 | `execution.checkpoint_accessed` | const `False` | Mandatory | Mandatory checkpoint accessed. |
 | `execution.last_verified_at` | string | Mandatory | Mandatory last verified at. |
 | `execution.current` | boolean | Mandatory | Mandatory current. |
 | `status` | object | Mandatory | Mandatory closed current disposition. |
-| `status.kind` | enum | Mandatory | Mandatory record or status kind. |
-| `status.code` | enum | Mandatory | Mandatory closed status code. |
-| `status.stage` | enum \| null | Mandatory | Mandatory processing or failure stage. |
-| `status.reason_code` | referenced value \| null | Mandatory | Mandatory closed reason code when applicable. |
+| `status.kind` | enum: `runs` \| `deferred` \| `skipped` \| `failed` | Mandatory | Mandatory record or status kind. |
+| `status.code` | enum `model-common.status_code` | Mandatory | Mandatory closed status code. |
+| `status.stage` | enum `model-common.failure_stage` \| null | Mandatory | Mandatory processing or failure stage. |
+| `status.reason_code` | enum `attempt-common.reason_code` \| null | Mandatory | Mandatory closed reason code when applicable. |
 | `status.detail` | string \| null | Mandatory | Best-effort human-readable detail. |
-| `status.traceback` | string \| redacted-text object \| null | Mandatory | Best-effort local diagnostic reference for a captured traceback. |
+| `status.traceback` | string \| null \| object | Mandatory | Best-effort captured traceback. |
+| `status.traceback.redaction` | const `externally-controlled-text-v1` | Mandatory | Closed marker for externally controlled text removed from public records. |
+| `status.traceback.content_sha256` | string | Mandatory | Digest of the exact canonical JSON diagnostic value. |
+| `status.traceback.local_path` | string | Mandatory | Gitignored local diagnostic sidecar locator. |
+| `status.traceback.diagnostic_key` | string | Mandatory | JSON-style key locating the exact value inside the sidecar. |
+| `status.traceback.stream_sha256` | string | Optional | Exact parent-observed stream digest when the value is a stdio tail. |
 | `status.no_traceback_reason` | string \| null | Mandatory | Mandatory no traceback reason. |
-| `status.attempted_rungs` | array<enum> | Mandatory | Mandatory attempted rungs. |
+| `status.attempted_rungs` | array<enum `model-common.rung_or_no_selection`> | Mandatory | Mandatory attempted rungs. |
 | `status.retries` | object | Mandatory | Mandatory retries. |
 | `status.retries.source` | integer | Mandatory | Mandatory source. |
 | `status.retries.fetch` | integer | Mandatory | Mandatory fetch. |
@@ -464,9 +579,11 @@ External metadata is captured and gated now because it requires source reading, 
 | `status.human_review.reason` | string \| null | Mandatory | Mandatory reason. |
 | `status.human_review.queue` | string \| null | Mandatory | Mandatory queue. |
 | `status.human_review.requested_at` | string \| null | Mandatory | Mandatory requested at. |
+<!-- END GENERATED SCHEMA TABLE: model.v2/modes-and-verification-state -->
 
 ## `attempt.v2` receipt fields
 
+<!-- BEGIN GENERATED SCHEMA TABLE: attempt.v2/receipt -->
 | Field | Type | Presence | Meaning |
 | --- | --- | --- | --- |
 | `schema_version` | const `menagerie.crawler.attempt.v2` | Mandatory | Mandatory versioned schema identifier. |
@@ -478,12 +595,12 @@ External metadata is captured and gated now because it requires source reading, 
 | `attempt_no` | integer | Mandatory | Mandatory ordinal attempt number. |
 | `parent_attempt_id` | string \| null | Mandatory | Best-effort parent attempt identifier. |
 | `actor` | string | Mandatory | Mandatory producing actor. |
-| `stage` | enum | Mandatory | Mandatory processing or failure stage. |
-| `mode` | enum \| null | Mandatory | Mandatory mode. |
+| `stage` | enum `attempt-common.stage` | Mandatory | Mandatory processing or failure stage. |
+| `mode` | enum: `train` \| `eval` \| null | Mandatory | Mandatory mode. |
 | `started_at` | string | Mandatory | Mandatory UTC start timestamp. |
 | `finished_at` | string | Mandatory | Mandatory UTC completion timestamp. |
-| `result` | enum | Mandatory | Mandatory immutable attempt outcome. |
-| `attempted_rungs` | array<enum> | Mandatory | Mandatory attempted rungs. |
+| `result` | enum: `succeeded` \| `failed` \| `observed` | Mandatory | Mandatory immutable attempt outcome. |
+| `attempted_rungs` | array<enum `attempt-common.rung_or_no_selection`> | Mandatory | Mandatory attempted rungs. |
 | `retries` | object | Mandatory | Mandatory retries. |
 | `retries.stage_attempt` | integer | Mandatory | Mandatory stage attempt. |
 | `retries.root_cause_repeat` | integer | Mandatory | Mandatory root cause repeat. |
@@ -498,7 +615,7 @@ External metadata is captured and gated now because it requires source reading, 
 | `identities.runner` | string \| null | Mandatory | Mandatory runner. |
 | `identities.author_prompt` | string \| null | Mandatory | Mandatory author prompt. |
 | `identities.checker_prompt` | string \| null | Mandatory | Mandatory checker prompt. |
-| `environment` | object | Mandatory | Mandatory environment. |
+| `environment` | object \| null | Mandatory | Mandatory environment. |
 | `environment.family` | string | Mandatory | Mandatory family. |
 | `environment.target` | string | Mandatory | Mandatory target. |
 | `environment.env_id` | string | Mandatory | Mandatory env id. |
@@ -523,7 +640,7 @@ External metadata is captured and gated now because it requires source reading, 
 | `invocation.safe_env` | object map | Mandatory | Mandatory safe env. |
 | `invocation.seed` | integer | Mandatory | Mandatory seed. |
 | `invocation.device` | string | Mandatory | Mandatory device. |
-| `invocation.mode` | enum \| null | Mandatory | Mandatory mode. |
+| `invocation.mode` | enum: `train` \| `eval` \| null | Mandatory | Mandatory mode. |
 | `invocation.network_policy` | string | Mandatory | Mandatory network policy. |
 | `invocation.timeout_seconds` | integer | Mandatory | Mandatory timeout seconds. |
 | `invocation.rss_limit_bytes` | integer | Mandatory | Mandatory rss limit bytes. |
@@ -531,12 +648,18 @@ External metadata is captured and gated now because it requires source reading, 
 | `worker_receipt` | object | Mandatory | Mandatory worker receipt. |
 | `worker_receipt.present` | boolean | Mandatory | Mandatory present. |
 | `worker_receipt.receipt_sha256` | string \| null | Mandatory | Mandatory receipt sha256. |
+| `worker_receipt.observed_recipe_revision` | string \| null | Mandatory | Worker-observed recipe revision, required for parent comparison. |
+| `worker_receipt.observed_adapter_sha256` | string \| null | Mandatory | Worker-observed typed-adapter digest, or null for declarative recipes. |
+| `worker_receipt.observed_code_manifest_sha256` | string \| null | Mandatory | Worker-observed digest over the recursive code_manifest bytes, or null when the recipe has no code manifest. |
+| `worker_receipt.observed_input_asset_sha256` | string \| null | Mandatory | Worker-observed digest of the materialized standard input asset, or null when no standard asset was selected. |
+| `worker_receipt.constructor_seconds` | number \| null | Optional | Worker-observed model-construction wall seconds, or null when the constructor did not complete. |
+| `worker_receipt.forward_seconds` | number \| null | Optional | Worker-observed forward wall seconds for this mode, or null when the forward did not run. |
 | `worker_receipt.constructor_started` | boolean | Mandatory | Mandatory constructor started. |
 | `worker_receipt.constructor_completed` | boolean | Mandatory | Mandatory constructor completed. |
 | `worker_receipt.input_completed` | boolean | Mandatory | Mandatory input completed. |
 | `worker_receipt.forward_started` | boolean | Mandatory | Mandatory forward started. |
 | `worker_receipt.forward_completed` | boolean | Mandatory | Mandatory forward completed. |
-| `worker_receipt.mode` | enum \| null | Mandatory | Mandatory mode. |
+| `worker_receipt.mode` | enum: `train` \| `eval` \| null | Mandatory | Mandatory mode. |
 | `worker_receipt.input_signature` | value | Mandatory | Mandatory input signature. |
 | `worker_receipt.output_signature` | value | Mandatory | Mandatory output signature. |
 | `worker_receipt.input_kind` | string \| null | Mandatory | Mandatory input kind. |
@@ -552,13 +675,23 @@ External metadata is captured and gated now because it requires source reading, 
 | `supervisor_observation.wall_seconds` | number | Mandatory | Mandatory wall seconds. |
 | `supervisor_observation.cpu_seconds` | number | Mandatory | Mandatory cpu seconds. |
 | `supervisor_observation.peak_rss_bytes` | integer | Mandatory | Mandatory peak rss bytes. |
-| `supervisor_observation.stdout_sha256` | string | Mandatory | Mandatory stdout sha256. |
+| `supervisor_observation.stdout_sha256` | string \| null | Mandatory | Mandatory stdout sha256. |
 | `supervisor_observation.stdout_bytes` | integer | Mandatory | Mandatory stdout bytes. |
-| `supervisor_observation.stdout_tail` | string \| redacted-text object | Mandatory | Empty string or hash-bound local diagnostic reference; raw worker stdout is forbidden. |
-| `supervisor_observation.stdout_completion_line` | string \| null | Optional | Parent-attested TorchLens-owned completion marker used for run-award verification. |
-| `supervisor_observation.stderr_sha256` | string | Mandatory | Mandatory stderr sha256. |
+| `supervisor_observation.stdout_tail` | string \| object | Mandatory | Mandatory stdout tail. |
+| `supervisor_observation.stdout_tail.redaction` | const `externally-controlled-text-v1` | Mandatory | Closed marker for externally controlled text removed from public records. |
+| `supervisor_observation.stdout_tail.content_sha256` | string | Mandatory | Digest of the exact canonical JSON diagnostic value. |
+| `supervisor_observation.stdout_tail.local_path` | string | Mandatory | Gitignored local diagnostic sidecar locator. |
+| `supervisor_observation.stdout_tail.diagnostic_key` | string | Mandatory | JSON-style key locating the exact value inside the sidecar. |
+| `supervisor_observation.stdout_tail.stream_sha256` | string | Optional | Exact parent-observed stream digest when the value is a stdio tail. |
+| `supervisor_observation.stdout_completion_line` | string \| null | Optional | Parent-attested TorchLens-owned completion marker. |
+| `supervisor_observation.stderr_sha256` | string \| null | Mandatory | Mandatory stderr sha256. |
 | `supervisor_observation.stderr_bytes` | integer | Mandatory | Mandatory stderr bytes. |
-| `supervisor_observation.stderr_tail` | string \| redacted-text object | Mandatory | Empty string or hash-bound local diagnostic reference; raw worker stderr is forbidden. |
+| `supervisor_observation.stderr_tail` | string \| object | Mandatory | Mandatory stderr tail. |
+| `supervisor_observation.stderr_tail.redaction` | const `externally-controlled-text-v1` | Mandatory | Closed marker for externally controlled text removed from public records. |
+| `supervisor_observation.stderr_tail.content_sha256` | string | Mandatory | Digest of the exact canonical JSON diagnostic value. |
+| `supervisor_observation.stderr_tail.local_path` | string | Mandatory | Gitignored local diagnostic sidecar locator. |
+| `supervisor_observation.stderr_tail.diagnostic_key` | string | Mandatory | JSON-style key locating the exact value inside the sidecar. |
+| `supervisor_observation.stderr_tail.stream_sha256` | string | Optional | Exact parent-observed stream digest when the value is a stdio tail. |
 | `supervisor_observation.full_log_local_path` | string | Mandatory | Mandatory full log local path. |
 | `supervisor_observation.full_log_retention` | string | Mandatory | Mandatory full log retention. |
 | `policy_observation` | object | Mandatory | Mandatory policy observation. |
@@ -571,31 +704,43 @@ External metadata is captured and gated now because it requires source reading, 
 | `policy_observation.credentials_present` | boolean | Mandatory | Mandatory credentials present. |
 | `policy_observation.torchlens_import_attempted` | boolean | Mandatory | Mandatory torchlens import attempted. |
 | `policy_observation.cache_read_attempted` | boolean | Mandatory | Mandatory cache read attempted. |
-| `error` | object | Mandatory | Mandatory error. |
-| `error.stage` | enum | Mandatory | Mandatory processing or failure stage. |
-| `error.reason_code` | enum | Mandatory | Mandatory closed reason code when applicable. |
-| `error.exception_type` | string \| null | Mandatory | Mandatory exception type. |
-| `error.message` | string \| redacted-text object | Mandatory | Empty string or a hash-bound local diagnostic reference; raw worker text is forbidden. |
-| `error.traceback` | string \| redacted-text object \| null | Mandatory | Best-effort local diagnostic reference for a captured traceback. |
-| `error.no_traceback_reason` | string \| null | Mandatory | Mandatory no traceback reason. |
-| `error.native_crash` | boolean | Mandatory | Mandatory native crash. |
-| `error.root_cause_fingerprint` | string | Mandatory | Mandatory root cause fingerprint. |
-| `error.details` | object | Mandatory | Mandatory structured event details. |
-| `defer_evidence` | object | Mandatory | Mandatory defer evidence. |
-| `defer_evidence.target_status` | enum | Mandatory | Mandatory target status. |
+| `error` | value \| null | Mandatory | Mandatory error. |
+| `error.stage` | enum `attempt-common.stage` | Branch-dependent | Mandatory processing or failure stage. |
+| `error.reason_code` | enum `attempt-common.reason_code` | Branch-dependent | Mandatory closed reason code when applicable. |
+| `error.exception_type` | string \| null | Branch-dependent | Mandatory exception type. |
+| `error.message` | string \| object | Branch-dependent | Mandatory message. |
+| `error.message.redaction` | const `externally-controlled-text-v1` | Mandatory | Closed marker for externally controlled text removed from public records. |
+| `error.message.content_sha256` | string | Mandatory | Digest of the exact canonical JSON diagnostic value. |
+| `error.message.local_path` | string | Mandatory | Gitignored local diagnostic sidecar locator. |
+| `error.message.diagnostic_key` | string | Mandatory | JSON-style key locating the exact value inside the sidecar. |
+| `error.message.stream_sha256` | string | Optional | Exact parent-observed stream digest when the value is a stdio tail. |
+| `error.traceback` | string \| null \| object \| string \| object \| null | Branch-dependent | Best-effort captured traceback. |
+| `error.traceback.redaction` | const `externally-controlled-text-v1` | Mandatory | Closed marker for externally controlled text removed from public records. |
+| `error.traceback.content_sha256` | string | Mandatory | Digest of the exact canonical JSON diagnostic value. |
+| `error.traceback.local_path` | string | Mandatory | Gitignored local diagnostic sidecar locator. |
+| `error.traceback.diagnostic_key` | string | Mandatory | JSON-style key locating the exact value inside the sidecar. |
+| `error.traceback.stream_sha256` | string | Optional | Exact parent-observed stream digest when the value is a stdio tail. |
+| `error.no_traceback_reason` | string \| null \| null \| string | Branch-dependent | Mandatory no traceback reason. |
+| `error.native_crash` | boolean | Branch-dependent | Mandatory native crash. |
+| `error.root_cause_fingerprint` | string | Branch-dependent | Mandatory root cause fingerprint. |
+| `error.details` | object map | Branch-dependent | Mandatory structured event details. |
+| `defer_evidence` | object \| null | Mandatory | Mandatory defer evidence. |
+| `defer_evidence.target_status` | enum: `deferred:needs-cuda` \| `deferred:needs-x86` | Mandatory | Mandatory target status. |
 | `defer_evidence.source_ids` | array<string> | Mandatory | Mandatory source ids. |
 | `defer_evidence.probe_attempt_ids` | array<string> | Mandatory | Mandatory probe attempt ids. |
 | `defer_evidence.explanation` | string | Mandatory | Mandatory explanation. |
+<!-- END GENERATED SCHEMA TABLE: attempt.v2/receipt -->
 
 ## `gate.v2` verdict fields
 
+<!-- BEGIN GENERATED SCHEMA TABLE: gate.v2/verdict -->
 | Field | Type | Presence | Meaning |
 | --- | --- | --- | --- |
 | `schema_version` | const `menagerie.crawler.gate.v2` | Mandatory | Mandatory versioned schema identifier. |
 | `gate_id` | string | Mandatory | Mandatory immutable gate identifier. |
 | `ledger_seq` | integer | Mandatory | Mandatory monotonic ledger sequence. |
 | `payload_sha256` | string | Mandatory | Mandatory hash of the complete ledger payload. |
-| `gate_kind` | enum | Mandatory | Mandatory checker gate kind. |
+| `gate_kind` | enum: `metadata_batch` \| `fidelity` | Mandatory | Mandatory checker gate kind. |
 | `batch_size` | integer | Mandatory | Mandatory number of items in this gate. |
 | `gate_round` | integer | Mandatory | Mandatory checker repair round. |
 | `gate_identity` | string | Mandatory | Mandatory hash binding the gate inputs and checker. |
@@ -608,6 +753,7 @@ External metadata is captured and gated now because it requires source reading, 
 | `checker.finished_at` | string | Mandatory | Mandatory UTC completion timestamp. |
 | `items` | array<object> | Mandatory | Mandatory gate verdict items. |
 | `items[].work_id` | string | Mandatory | Mandatory deterministic work identifier. |
+| `items[].campaign_root_work_id` | string | Mandatory | Stable campaign/root-work lineage across repaired proposals. |
 | `items[].stable_id` | string | Mandatory | Mandatory stable model identifier. |
 | `items[].family_representative_id` | string | Mandatory | Mandatory family representative id. |
 | `items[].fidelity_identity` | string \| null | Mandatory | Mandatory fidelity identity. |
@@ -617,27 +763,28 @@ External metadata is captured and gated now because it requires source reading, 
 | `items[].verified_hashes.source_manifest` | string | Mandatory | Mandatory source manifest. |
 | `items[].verified_hashes.evidence` | string | Mandatory | Mandatory literal evidence and coverage record. |
 | `items[].verified_hashes.code` | string \| null | Mandatory | Mandatory closed status code. |
+| `items[].verified_hashes.code_manifest` | string | Optional | Closed recursive model-code path-and-byte manifest digest. |
 | `items[].verified_hashes.source_to_code_map` | string | Mandatory | Mandatory source to code map. |
 | `items[].verified_hashes.family_template` | string \| null | Mandatory | Mandatory family template. |
 | `items[].integrity` | object | Mandatory | Mandatory integrity. |
-| `items[].integrity.verdict` | enum | Mandatory | Mandatory checker verdict. |
+| `items[].integrity.verdict` | enum `gate-common.accuracy_verdict` | Mandatory | Mandatory checker verdict. |
 | `items[].integrity.hash_mismatches` | array<string> | Mandatory | Mandatory hash mismatches. |
 | `items[].integrity.excerpt_discrepancies` | array<string> | Mandatory | Mandatory excerpt discrepancies. |
 | `items[].integrity.locator_failures` | array<string> | Mandatory | Mandatory locator failures. |
-| `items[].verdict` | enum | Mandatory | Mandatory checker verdict. |
+| `items[].verdict` | enum `gate-common.accuracy_verdict` | Mandatory | Mandatory checker verdict. |
 | `items[].field_checks` | array<object> | Mandatory | Mandatory per-field accuracy findings. |
 | `items[].field_checks[].field` | string | Mandatory | Mandatory field. |
-| `items[].field_checks[].verdict` | enum | Mandatory | Mandatory checker verdict. |
-| `items[].field_checks[].evidence_ids` | array<string> | Mandatory | Mandatory supporting evidence identifiers. |
+| `items[].field_checks[].verdict` | enum `gate-common.accuracy_verdict` | Mandatory | Mandatory checker verdict. |
+| `items[].field_checks[].evidence_ids` | array<string> | Mandatory | Mandatory supporting evidence identifiers; may be empty only for external_metadata.keywords relevance judgments, which still require checked_source_ids and a reason. |
 | `items[].field_checks[].checked_source_ids` | array<string> | Mandatory | Mandatory checked source ids. |
 | `items[].field_checks[].reason` | string | Mandatory | Mandatory reason. |
 | `items[].field_checks[].required_repair` | string \| null | Mandatory | Mandatory required repair. |
 | `items[].fidelity` | object | Mandatory | Mandatory implementation-fidelity gate state. |
 | `items[].fidelity.required` | boolean | Mandatory | Mandatory required. |
-| `items[].fidelity.verdict` | enum | Mandatory | Mandatory checker verdict. |
+| `items[].fidelity.verdict` | enum: `match` \| `minor-drift` \| `major-drift` \| `slop` \| `cannot-verify` \| `not-applicable` | Mandatory | Mandatory checker verdict. |
 | `items[].fidelity.material_checks` | array<object> | Mandatory | Mandatory material fidelity findings. |
 | `items[].fidelity.material_checks[].category` | string | Mandatory | Mandatory category. |
-| `items[].fidelity.material_checks[].verdict` | enum | Mandatory | Mandatory checker verdict. |
+| `items[].fidelity.material_checks[].verdict` | enum: `match` \| `minor-drift` \| `major-drift` \| `slop` \| `cannot-verify` | Mandatory | Mandatory checker verdict. |
 | `items[].fidelity.material_checks[].source_id` | string | Mandatory | Mandatory source identifier. |
 | `items[].fidelity.material_checks[].source_locator` | string | Mandatory | Mandatory source locator. |
 | `items[].fidelity.material_checks[].evidence_ids` | array<string> | Mandatory | Mandatory supporting evidence identifiers. |
@@ -649,13 +796,70 @@ External metadata is captured and gated now because it requires source reading, 
 | `items[].fidelity.omissions` | array<string> | Mandatory | Mandatory omissions. |
 | `items[].fidelity.permanent_scar` | boolean | Mandatory | Mandatory permanent scar. |
 | `items[].rung_check` | object | Mandatory | Mandatory rung check. |
-| `items[].rung_check.selected_rung` | enum | Mandatory | Mandatory selected rung. |
-| `items[].rung_check.highest_applicable` | enum | Mandatory | Mandatory highest applicable. |
-| `items[].rung_check.verdict` | enum | Mandatory | Mandatory checker verdict. |
+| `items[].rung_check.selected_rung` | enum `gate-common.rung` | Mandatory | Mandatory selected rung. |
+| `items[].rung_check.highest_applicable` | enum `gate-common.rung` | Mandatory | Mandatory highest applicable. |
+| `items[].rung_check.verdict` | enum `gate-common.accuracy_verdict` | Mandatory | Mandatory checker verdict. |
 | `items[].rung_check.findings` | array<string> | Mandatory | Mandatory findings. |
 | `items[].unsupported_claims` | array<string> | Mandatory | Mandatory unsupported claims. |
 | `items[].required_repairs` | array<string> | Mandatory | Mandatory repairs required before acceptance. |
-| `items[].confidence` | enum | Mandatory | Mandatory checker confidence level. |
+| `items[].confidence` | enum: `high` \| `medium` \| `low` | Mandatory | Mandatory checker confidence level. |
 | `result_envelope_sha256` | string | Mandatory | Mandatory result envelope sha256. |
+<!-- END GENERATED SCHEMA TABLE: gate.v2/verdict -->
 
-The `author-proposal.v2` and `operational-event.v1` schemas are also self-documenting: every property carries its own executable JSON Schema description.
+## Closed vocabularies
+
+Every named closed vocabulary referenced as ``enum `name` `` in a `Type` cell above, with
+its exact members. Anonymous enums declared directly on a property are listed inline in
+their own row instead.
+
+<!-- BEGIN GENERATED SCHEMA TABLE: vocabularies/closed -->
+- `attempt-common.reason_code` (80 members):
+  `schema-invalid`, `stable-id-conflict`, `duplicate-revision-conflict`, `migration-invariant`,
+  `identity-unresolved`, `missing-mandatory-link`, `source-model-mismatch`,
+  `source-target-invalid`, `higher-rung-unresolved`, `unreachable`, `revision-missing`,
+  `hash-mismatch`, `access-denied`, `artifact-missing`, `locator-missing`, `excerpt-mismatch`,
+  `insufficient-detail`, `coverage-incomplete`, `search-incomplete`, `inaccurate-cap-exhausted`,
+  `cannot-verify-cap-exhausted`, `identity-mismatch`, `checker-contract-invalid`,
+  `solve-failed`, `lock-missing`, `artifact-hash-mismatch`, `build-failed`, `probe-failed`,
+  `resolved-export-mismatch`, `island-cap`, `below-minimum-island-size`, `module-missing`,
+  `symbol-missing`, `abi-load-failed`, `import-exception`, `exception`, `requires-checkpoint`,
+  `requires-weight-asset`, `invalid-model-object`, `contract-invalid`, `source-invalid-shape`,
+  `generation-exception`, `semantic-constraint`, `mode-run`, `incomplete-receipt`,
+  `invalid-output-signature`, `confirmation-mismatch`, `major-drift-cap-exhausted`,
+  `slop-cap-exhausted`, `timeout`, `oom`, `disk-floor`, `scratch-cap`, `rss-cap`,
+  `network-attempt`, `checkpoint-read`, `write-outside-scratch`, `credentials-exposed`,
+  `torchlens-import`, `opaque-code`, `native-crash`, `signal`, `missing-receipt`,
+  `protocol-violation`, `ledger-corruption`, `internal-error`, `sandbox-unavailable-v1`,
+  `effort-cap-exhausted`, `effort-exhausted:tool-calls`, `effort-exhausted:fetch-targets`,
+  `effort-exhausted:wall-seconds`, `wall-exceeded`, `session-crashed`,
+  `research-tools-unavailable`, `repair-exhausted`, `missing-material-source`,
+  `needs-higher-tier`, `malformed-result`, `terminal-disposition-rejected`,
+  `terminal-disposition-unverifiable`
+- `attempt-common.rung_or_no_selection` (6 members):
+  `R1_LIBRARY`, `R2_VENDOR`, `R3_PORT`, `R4_REIMPLEMENT`, `R5_SKIP`, `NO_RUNG_SELECTED`
+- `attempt-common.stage` (15 members):
+  `intake`, `source`, `fetch`, `author`, `evidence`, `accuracy-gate`, `environment`, `import`,
+  `constructor`, `input`, `forward`, `fidelity`, `resource`, `policy`, `runner`
+- `gate-common.accuracy_verdict` (3 members):
+  `accurate`, `inaccurate`, `cannot-verify`
+- `gate-common.rung` (5 members):
+  `R1_LIBRARY`, `R2_VENDOR`, `R3_PORT`, `R4_REIMPLEMENT`, `R5_SKIP`
+- `model-common.failure_stage` (15 members):
+  `intake`, `source`, `fetch`, `author`, `evidence`, `accuracy-gate`, `environment`, `import`,
+  `constructor`, `input`, `forward`, `fidelity`, `resource`, `policy`, `runner`
+- `model-common.rung_or_no_selection` (6 members):
+  `R1_LIBRARY`, `R2_VENDOR`, `R3_PORT`, `R4_REIMPLEMENT`, `R5_SKIP`, `NO_RUNG_SELECTED`
+- `model-common.status_code` (23 members):
+  `runs`, `deferred:needs-cuda`, `deferred:needs-x86`, `deferred:needs-opus-tier`,
+  `deferred:needs-source-access`, `skipped:insufficient-description`, `skipped:no-description`,
+  `skipped:not-a-real-NN`, `failed:intake`, `failed:source`, `failed:fetch`, `failed:author`,
+  `failed:evidence`, `failed:accuracy-gate`, `failed:environment`, `failed:import`,
+  `failed:constructor`, `failed:input`, `failed:forward`, `failed:fidelity`, `failed:resource`,
+  `failed:policy`, `failed:runner`
+<!-- END GENERATED SCHEMA TABLE: vocabularies/closed -->
+
+## Schemas not tabulated here
+
+The `author-proposal.v2` and `operational-event.v1` schemas are self-documenting: every
+property carries its own executable JSON Schema description. Read them directly in
+`menagerie/crawler/schemas/`.
