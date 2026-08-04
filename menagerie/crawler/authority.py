@@ -437,6 +437,41 @@ class EnvironmentAuthorityV1:
     _cache: EnvironmentAuthorityCache = dataclass_field(compare=False, repr=False)
 
 
+def layered_environment_generation(
+    base_environment_generation: str,
+    environment_content_sha256: str,
+) -> str:
+    """Compose the v2 environment generation over its exact-artifact base.
+
+    This is the ONE definition of the generation-v2 layer. The authority cache
+    stamps it at bind time, ``verify_environment_authority`` re-derives it, and
+    the reducer/checkpoint validators recompute it from their own
+    machine-derived base so a recorded generation can never drift from the
+    committed lock/export/package/probe artifacts it claims to extend.
+
+    Parameters
+    ----------
+    base_environment_generation:
+        Exact lock/export/package/probe generation recomputed from committed
+        artifact bytes.
+    environment_content_sha256:
+        Complete prefix content-seal digest observed by the binding parent.
+
+    Returns
+    -------
+    str
+        Canonical layered environment generation.
+    """
+
+    return stable_hash(
+        {
+            "version": ENVIRONMENT_GENERATION_VERSION_V2,
+            "base_environment_generation": base_environment_generation,
+            "environment_content_sha256": environment_content_sha256,
+        }
+    )
+
+
 _VERIFICATION_TOKEN_SECRET = object()
 
 
@@ -949,12 +984,9 @@ class EnvironmentAuthorityCache:
                 self.verify(active)
             return active
         manifest = self._seal(prefix, selected_interpreter)
-        final_generation = stable_hash(
-            {
-                "version": ENVIRONMENT_GENERATION_VERSION_V2,
-                "base_environment_generation": base_generation,
-                "environment_content_sha256": manifest.content_manifest_sha256,
-            }
+        final_generation = layered_environment_generation(
+            base_generation,
+            manifest.content_manifest_sha256,
         )
         selected = canonical_prefix / manifest.selected_interpreter_relative_path
         authority_payload = {
@@ -2410,12 +2442,9 @@ def verify_environment_authority(
         raise AuthorityDerivationError("environment authority has the wrong discriminator")
     if authority.authority_id != stable_hash(_environment_authority_payload(authority)):
         raise AuthorityDerivationError("environment authority identity is rewritten")
-    expected_generation = stable_hash(
-        {
-            "version": ENVIRONMENT_GENERATION_VERSION_V2,
-            "base_environment_generation": authority.base_environment_generation,
-            "environment_content_sha256": authority.content_manifest_sha256,
-        }
+    expected_generation = layered_environment_generation(
+        authority.base_environment_generation,
+        authority.content_manifest_sha256,
     )
     if authority.environment_generation != expected_generation:
         raise AuthorityDerivationError("environment generation omits or rewrites the content seal")

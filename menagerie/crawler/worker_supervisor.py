@@ -1732,8 +1732,44 @@ def _linux_rss(pid: int) -> int:
     return 0
 
 
+def _rusage_v2_memory_bytes(buffer: bytes) -> int:
+    """Return the enforceable memory reading from one ``rusage_info_v2`` image.
+
+    Parameters
+    ----------
+    buffer:
+        Raw ``rusage_info_v2`` bytes as filled by ``proc_pid_rusage``.
+
+    Returns
+    -------
+    int
+        ``max(ri_resident_size, ri_phys_footprint)`` in bytes.
+
+    Notes
+    -----
+    Darwin has no kernel memory rlimit, so the parent sampler is the ONLY
+    memory containment for macOS workers. ``ri_resident_size`` alone is not an
+    enforceable metric there: under system memory pressure the kernel
+    compresses and swaps a runaway worker's pages, holding resident size below
+    any cap sized to physical RAM while the true footprint keeps growing until
+    the OS memorystatus (jetsam) killer delivers an unattributable SIGKILL
+    first. ``ri_phys_footprint`` counts dirty+compressed+IOKit memory -- the
+    same metric jetsam enforces -- so sampling it makes the configured cap bind
+    before the OS kill and the breach classify as ``resource``/``rss-cap``
+    instead of an anonymous ``worker terminated by signal 9`` native crash
+    (rung-2 m5915 Mixtral incident). The max keeps the reading monotonic with
+    the historical resident-only sampler.
+    """
+
+    # rusage_info_v2: UUID (16 bytes), six uint64 counters, then
+    # ri_resident_size at offset 64 and ri_phys_footprint at offset 72.
+    resident = int.from_bytes(buffer[64:72], "little")
+    footprint = int.from_bytes(buffer[72:80], "little")
+    return max(resident, footprint)
+
+
 def _macos_rss(pid: int) -> int:
-    """Read live resident bytes for one macOS child via ``proc_pid_rusage``.
+    """Read live enforceable memory bytes for one macOS child via ``proc_pid_rusage``.
 
     Parameters
     ----------
@@ -1743,7 +1779,8 @@ def _macos_rss(pid: int) -> int:
     Returns
     -------
     int
-        Resident bytes for the live worker, or zero when unavailable.
+        ``max(resident, phys_footprint)`` bytes for the live worker, or zero
+        when unavailable.
     """
 
     try:
@@ -1754,8 +1791,7 @@ def _macos_rss(pid: int) -> int:
         buffer = (ctypes.c_ubyte * 256)()
         if proc_pid_rusage(pid, 2, ctypes.byref(buffer)) != 0:
             return 0
-        # rusage_info_v2: UUID (16 bytes), six uint64 counters, then resident_size.
-        return int(ctypes.c_uint64.from_buffer(buffer, 64).value)
+        return _rusage_v2_memory_bytes(bytes(buffer))
     except (AttributeError, OSError, ValueError):
         return 0
 
