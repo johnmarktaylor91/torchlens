@@ -11,7 +11,7 @@ import unicodedata
 from dataclasses import asdict, dataclass, field as dataclass_field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Iterable, Iterator, Mapping, NewType, Optional, Sequence
+from typing import Any, Callable, Iterable, Iterator, Mapping, NewType, Optional, Sequence
 
 from menagerie.crawler.constants import (
     ATTEMPT_SCHEMA_VERSION_V3,
@@ -117,10 +117,29 @@ _ENVIRONMENT_TREE_WALK_REGISTRY: Mapping[str, int] = {
     "EnvironmentAuthorityCache._walk_and_validate": 1,
     "_seal_environment_content": 2,
 }
+# Bounded whole-derivation attempts for one in-flight content seal. Each attempt is a
+# complete fresh hash-walk plus metadata-walk pair judged by the UNCHANGED acceptance
+# predicate (two consecutive identical walks plus semantic digest match); a transient
+# external metadata blip (hardlink create/unlink elsewhere bumps ``st_ctime_ns`` on
+# shared inodes) costs one discarded attempt instead of the environment cycle, while a
+# tree that cannot hold still for any single attempt exhausts the bound and refuses
+# exactly as before.
+_SEAL_CONTENT_STABILITY_ATTEMPTS = 3
 
 
 class AuthorityDerivationError(ValueError):
     """Raised when retained facts do not form the frozen replayable proof graph."""
+
+
+class _SealInstabilityError(AuthorityDerivationError):
+    """Internal marker: the prefix tree did not hold still during one seal attempt.
+
+    Raised only inside one in-flight content-seal derivation attempt, where the
+    bounded stability loop in :func:`_seal_environment_content` may discard the
+    attempt and re-derive from scratch. Never escapes that function: exhaustion
+    re-raises a plain :class:`AuthorityDerivationError` with the same message, so
+    callers and ledger ``failure_type`` records observe the exact historical type.
+    """
 
 
 MirrorObjectId = NewType("MirrorObjectId", str)
@@ -579,7 +598,13 @@ def _hash_regular_file_stably(
     Raises
     ------
     AuthorityDerivationError
-        If the file changes while being hashed.
+        If the file's semantic metadata (device, inode, mode, size, mtime) changes
+        while being hashed; this is direct evidence of a writer and never retried.
+    _SealInstabilityError
+        If only ``st_ctime_ns`` keeps moving across both local attempts. A ctime-only
+        blip is what external hardlink churn on a shared inode produces, so the
+        enclosing bounded seal-stability loop may discard the whole attempt and
+        re-derive from scratch.
     """
 
     import hashlib
@@ -605,7 +630,7 @@ def _hash_regular_file_stably(
         if before.st_ctime_ns == after.st_ctime_ns:
             return f"sha256:{digest.hexdigest()}", after
         if attempt == 1:
-            raise AuthorityDerivationError(f"environment member changed while sealing: {path}")
+            raise _SealInstabilityError(f"environment member changed while sealing: {path}")
         before = after
     raise AssertionError("stable environment hash loop exhausted")
 
@@ -786,13 +811,30 @@ def _scan_environment_tree(
 def _seal_environment_content(
     prefix: Path,
     selected_interpreter: Path,
+    *,
+    on_stability_retry: Optional[Callable[[], None]] = None,
 ) -> EnvironmentContentManifestV1:
     """Build one stable complete prefix seal with two tree enumerations.
+
+    Acceptance is unchanged: one hash walk and one metadata walk of the same tree
+    must be identical in shape and complete-tree fingerprint (which includes every
+    ``st_ctime_ns``), plus the semantic digest checks below. What is new is that an
+    attempt failing ONLY that stability comparison is discarded whole and re-derived
+    from scratch, up to ``_SEAL_CONTENT_STABILITY_ATTEMPTS`` total attempts. Nothing
+    from a discarded attempt is reused -- the certified digests always come from the
+    hash walk inside the one attempt whose own stability bracket passed, because a
+    stale first walk cannot prove the tree held still while its digests were read
+    (a same-size rewrite with a restored mtime is visible only through ctime, and
+    only within the bracket). Exhaustion raises the same
+    :class:`AuthorityDerivationError` (exact type and message) as before.
 
     Parameters
     ----------
     prefix, selected_interpreter:
         Canonical environment root and its lexical interpreter member.
+    on_stability_retry:
+        Optional accounting hook invoked once before each ADDITIONAL derivation
+        attempt, so the parent cache's deterministic walk counters stay honest.
 
     Returns
     -------
@@ -817,40 +859,52 @@ def _seal_environment_content(
     if not stat.S_ISREG(interpreter_status.st_mode) or not interpreter_status.st_mode & 0o111:
         raise AuthorityDerivationError("selected interpreter is not an executable regular file")
 
-    entries, external, fingerprint = _scan_environment_tree(
-        canonical_prefix,
-        hash_files=True,
-    )
-    second_entries, second_external, second_fingerprint = _scan_environment_tree(
-        canonical_prefix,
-        hash_files=False,
-    )
-    stable_shape = tuple(
-        (
-            entry.relative_path,
-            entry.entry_type,
-            entry.executable,
-            entry.link_text,
-            entry.resolved_target_relative_path,
-        )
-        for entry in entries
-    )
-    second_shape = tuple(
-        (
-            entry.relative_path,
-            entry.entry_type,
-            entry.executable,
-            entry.link_text,
-            entry.resolved_target_relative_path,
-        )
-        for entry in second_entries
-    )
-    if stable_shape != second_shape or fingerprint != second_fingerprint:
-        raise AuthorityDerivationError("environment tree changed during content sealing")
-    if tuple(target.path for target in external) != tuple(
-        target.path for target in second_external
-    ):
-        raise AuthorityDerivationError("environment symlink escapes changed during sealing")
+    attempts_remaining = _SEAL_CONTENT_STABILITY_ATTEMPTS
+    while True:
+        attempts_remaining -= 1
+        try:
+            entries, external, fingerprint = _scan_environment_tree(
+                canonical_prefix,
+                hash_files=True,
+            )
+            second_entries, second_external, second_fingerprint = _scan_environment_tree(
+                canonical_prefix,
+                hash_files=False,
+            )
+            stable_shape = tuple(
+                (
+                    entry.relative_path,
+                    entry.entry_type,
+                    entry.executable,
+                    entry.link_text,
+                    entry.resolved_target_relative_path,
+                )
+                for entry in entries
+            )
+            second_shape = tuple(
+                (
+                    entry.relative_path,
+                    entry.entry_type,
+                    entry.executable,
+                    entry.link_text,
+                    entry.resolved_target_relative_path,
+                )
+                for entry in second_entries
+            )
+            if stable_shape != second_shape or fingerprint != second_fingerprint:
+                raise _SealInstabilityError("environment tree changed during content sealing")
+            if tuple(target.path for target in external) != tuple(
+                target.path for target in second_external
+            ):
+                raise _SealInstabilityError("environment symlink escapes changed during sealing")
+            break
+        except _SealInstabilityError as instability:
+            if attempts_remaining <= 0:
+                # Exhaustion refuses with the exact historical type and message so
+                # ledger failure_type records and callers observe no new vocabulary.
+                raise AuthorityDerivationError(str(instability)) from instability
+            if on_stability_retry is not None:
+                on_stability_retry()
 
     relative_interpreter = _canonical_relative_path(canonical_prefix, lexical_interpreter)
     target_relative = _canonical_relative_path(canonical_prefix, resolved_interpreter)
@@ -907,6 +961,7 @@ class EnvironmentAuthorityCache:
         self.cheap_validations = 0
         self.cheap_tree_walks = 0
         self.lstat_tree_walks = 0
+        self.seal_stability_retries = 0
         self.currentness_passes = 0
         self.spawn_validations = 0
         self.real_spawns = 0
@@ -936,7 +991,22 @@ class EnvironmentAuthorityCache:
 
         self.full_seals += 1
         self.lstat_tree_walks += 2
-        return _seal_environment_content(prefix, interpreter)
+        return _seal_environment_content(
+            prefix,
+            interpreter,
+            on_stability_retry=self._count_seal_stability_retry,
+        )
+
+    def _count_seal_stability_retry(self) -> None:
+        """Account one discarded unstable walk pair and its fresh replacement attempt.
+
+        Invoked by the seal's bounded stability loop before each additional
+        derivation attempt, so ``lstat_tree_walks`` stays an honest ceiling:
+        ``2 * full_seals + 2 * seal_stability_retries + cheap_tree_walks``.
+        """
+
+        self.seal_stability_retries += 1
+        self.lstat_tree_walks += 2
 
     def bind(
         self,
