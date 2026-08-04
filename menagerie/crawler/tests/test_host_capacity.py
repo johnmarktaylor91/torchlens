@@ -336,12 +336,17 @@ def test_deferral_ledger_appends_idempotently(tmp_path: Path) -> None:
     assert loaded[0]["disposition"] == CAPACITY_DEFERRAL_DISPOSITION
 
 
-def test_deferral_ledger_refuses_a_conflicting_row(tmp_path: Path) -> None:
-    """One work generation cannot carry two different capacity verdicts."""
+def test_a_resume_does_not_rewrite_or_reject_an_existing_refusal(tmp_path: Path) -> None:
+    """Re-deriving a refusal under a later run keeps the first record and no-ops.
+
+    ``created_at`` and ``run_id`` necessarily differ on a resume, so treating the
+    re-derived row as a conflict would abort the driver on its second pass over
+    the same oversized model.
+    """
 
     path = capacity_deferral_path(tmp_path)
-    append_capacity_deferral_row(path, _mixtral_row())
-    conflicting = build_capacity_deferral_row(
+    first = append_capacity_deferral_row(path, _mixtral_row())
+    resumed = build_capacity_deferral_row(
         stable_id="m5915",
         work_id="work-m5915",
         name="Mixtral 8x7B",
@@ -351,8 +356,8 @@ def test_deferral_ledger_refuses_a_conflicting_row(tmp_path: Path) -> None:
         created_at="2026-08-04T03:52:37.527339Z",
         assessment=assess_model_capacity(MIXTRAL_RECIPE, host=SMALL_HOST),
     )
-    with pytest.raises(CapacityDeferralError):
-        append_capacity_deferral_row(path, conflicting)
+    assert append_capacity_deferral_row(path, resumed) == first
+    assert len(load_capacity_deferral_rows([path])) == 1
 
 
 def test_deferral_ledger_refuses_a_tampered_row(tmp_path: Path) -> None:

@@ -703,7 +703,17 @@ def append_capacity_deferral_row(path: Path, row: Mapping[str, Any]) -> JsonObje
     Raises
     ------
     CapacityDeferralError
-        If the same work generation already carries a different deferral.
+        If the row is malformed.
+
+    Notes
+    -----
+    The FIRST refusal recorded for a work generation is the record, and a later
+    run that re-derives a refusal for the same generation is a no-op. This is
+    deliberate: ``created_at`` (and possibly ``run_id``) necessarily differ on
+    every resume, so treating a re-derived refusal as a conflict would abort the
+    driver on the second pass over the same oversized model. A model that has
+    stopped being too large is not deferred at all and writes nothing here, so
+    a stale row can only ever be superseded by the model completing normally.
     """
 
     validated = validate_capacity_deferral_row(row)
@@ -717,13 +727,6 @@ def append_capacity_deferral_row(path: Path, row: Mapping[str, Any]) -> JsonObje
             item for item in existing if (item["stable_id"], item["work_id"]) == key
         ]
         if matching:
-            # A repeated refusal of the same work generation is expected on every
-            # resume: the host has not grown, so the identical row is re-derived.
-            # Only a CONFLICTING row for the same generation is an error.
-            if len(matching) != 1 or matching[0] != validated:
-                raise CapacityDeferralError(
-                    f"conflicting host-capacity deferral for {key[0]} at {key[1]}"
-                )
             return matching[0]
         handle.seek(0, os.SEEK_END)
         handle.write(canonical_json_bytes(validated) + b"\n")
