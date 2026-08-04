@@ -21,6 +21,7 @@ from menagerie.crawler.checker_dispatch import (
     LEDGER_ASSIGNED_GATE_FIELDS,
     TERMINAL_VERDICT_LOCKSTEP,
     VERDICT_SEVERITY,
+    CheckerBindingMismatchError,
     CheckerDispatchError,
     _validate_item_decision,
     apply_machine_owned_gate_fields,
@@ -28,6 +29,7 @@ from menagerie.crawler.checker_dispatch import (
     classify_checker_response,
     machine_owned_gate_fields,
     validate_checker_result,
+    validate_checker_result_mapping,
 )
 from menagerie.crawler.constants import (
     GATE_SCHEMA_VERSION_V3,
@@ -56,6 +58,7 @@ from menagerie.crawler.tests.conftest import (
     make_author_proposal,
     make_gate,
     make_model,
+    make_proposed_artifact,
 )
 
 
@@ -272,6 +275,81 @@ def test_checker_result_rejects_partial_or_mismatched_item(tmp_path: Path) -> No
     result_path.write_text(json.dumps(gate))
     with pytest.raises(CheckerDispatchError, match="mismatched binding"):
         validate_checker_result(result_path, envelope)
+
+
+_ENVELOPE_BOUND_ITEM_FIELDS = (
+    "work_id",
+    "campaign_root_work_id",
+    "stable_id",
+    "family_representative_id",
+    "fidelity_identity",
+    "vet_identity",
+    "verified_hashes",
+)
+
+
+def test_production_item_pack_round_trips_the_production_result_matcher(
+    tmp_path: Path,
+) -> None:
+    """The driver's own pack and the wrapper's own matcher agree on every binding.
+
+    Both sides of this chain are production code with no test double between
+    them: the proposal's identities come from the production identity
+    calculator, ``driver_models._checker_item`` builds the pack, the production
+    envelope builder stamps and freezes it, and a result that copies each
+    envelope-bound field verbatim -- exactly what the frozen prompt instructs a
+    compliant checker to do -- must satisfy
+    ``validate_checker_result_mapping``. If either side ever computes a
+    different identity for the same logical proposal (the (a)-regression
+    suspected after rung 3's ``m4334 mismatched binding: vet_identity``
+    refusal), the faithful echo here stops matching and this test fails.
+
+    The second half pins the refusal: one flipped identity is still refused
+    with the typed ``CheckerBindingMismatchError`` the wrapper's bounded retry
+    keys on, so the retry can never be entered by anything except a genuine
+    mismatch, and the comparison itself stays exact.
+    """
+
+    from menagerie.crawler import driver_models
+
+    stable_id = "m_pack_roundtrip"
+    proposal = make_author_proposal(stable_id)
+    artifact = make_proposed_artifact(
+        proposal, {"sources": []}, model_dir=tmp_path / "model"
+    )
+    item = driver_models._checker_item(artifact)
+    result_path = tmp_path / "result.json"
+    envelope = build_metadata_vet_envelope(
+        [item],
+        gate_round=1,
+        output_path=result_path,
+        checker_model="codex",
+        checker_version="test",
+        request_nonce="pack-roundtrip",
+        final_tail=True,
+    )
+    envelope_item = envelope["items"][0]
+    # The envelope's identity fields ARE the pack's: stamping the machine-owned
+    # required_field_checks inventory must never perturb a binding.
+    for field in _ENVELOPE_BOUND_ITEM_FIELDS:
+        assert envelope_item[field] == item[field]
+
+    gate = make_gate([stable_id])
+    # A compliant checker copies each envelope-bound field verbatim from its
+    # envelope item; everything else in the result is its own judgment.
+    for field in _ENVELOPE_BOUND_ITEM_FIELDS:
+        gate["items"][0][field] = deepcopy(envelope_item[field])
+    gate["items"][0]["rung_check"]["selected_rung"] = proposal["proposed_facts"][
+        "source_resolution"
+    ]["rung"]
+    gate = _stamped(gate, envelope)
+    validated = validate_checker_result_mapping(gate, envelope)
+    assert validated["items"][0]["vet_identity"] == proposal["vet_identity"]
+
+    flubbed = deepcopy(gate)
+    flubbed["items"][0]["vet_identity"] = "sha256:" + "0" * 64
+    with pytest.raises(CheckerBindingMismatchError, match="mismatched binding: vet_identity"):
+        validate_checker_result_mapping(flubbed, envelope)
 
 
 @pytest.mark.parametrize(

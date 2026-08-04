@@ -149,6 +149,22 @@ class CheckerDispatchError(ValueError):
     """Raised when a checker request or atomic result violates its contract."""
 
 
+class CheckerBindingMismatchError(CheckerDispatchError):
+    """Raised when a result item's echoed identity binding differs from its envelope.
+
+    The envelope-bound identity fields are machine-known constants the checker is
+    told to copy verbatim, so a mismatch here is the one contract violation with a
+    stochastic cause the checker can repair on a fresh attempt: a generative model
+    mis-transcribing one identity string (rung 3, batch ``0f44a52d3e324c4c``:
+    ``vet_identity`` flubbed for one of two items while every sibling echo in the
+    same run round-tripped exactly). The comparison itself is never relaxed -- a
+    mismatched result is refused unconditionally -- but the operator wrapper is
+    allowed to distinguish this refusal from a structural contract violation and
+    spend its remaining bounded attempts on a re-ask instead of permanently
+    failing every batch member on the first flub.
+    """
+
+
 @dataclass(frozen=True)
 class CheckerBackoffSignal:
     """Typed rate/quota pause signal for the later wakeup layer.
@@ -1068,8 +1084,11 @@ def _validate_item_binding(result_item: Mapping[str, Any], expected: Mapping[str
 
     Raises
     ------
-    CheckerDispatchError
-        If identity or artifact hashes differ.
+    CheckerBindingMismatchError
+        If identity or artifact hashes differ. The typed subclass lets the
+        operator wrapper retry what is empirically a stochastic transcription
+        fault without ever publishing, or comparing more leniently, a
+        mismatched result.
     """
 
     # ``campaign_root_work_id`` is required by the gate.v3 item schema, so it is
@@ -1090,7 +1109,7 @@ def _validate_item_binding(result_item: Mapping[str, Any], expected: Mapping[str
         "verified_hashes",
     ):
         if result_item.get(field) != expected.get(field):
-            raise CheckerDispatchError(
+            raise CheckerBindingMismatchError(
                 f"checker item {expected.get('stable_id')} mismatched binding: {field}"
             )
 

@@ -16,6 +16,7 @@ import time
 from typing import Any, Callable, Mapping, Sequence, TextIO
 
 from menagerie.crawler.checker_dispatch import (
+    CheckerBindingMismatchError,
     CheckerDispatchError,
     PROMPT_PATH,
     apply_machine_owned_gate_fields,
@@ -408,6 +409,43 @@ def execute_checker_request(
                         finished_at=finished_at,
                     )
                     validate_checker_result_mapping(result, envelope)
+                except CheckerBindingMismatchError as exc:
+                    # An echoed identity binding that differs from the envelope
+                    # is the one contract refusal with a stochastic cause: the
+                    # model mis-transcribed a machine-known constant it was told
+                    # to copy verbatim (observed live: one flubbed
+                    # ``vet_identity`` out of six identity echoes in a run,
+                    # every sibling exact). The mismatched result is refused
+                    # unconditionally -- it is never published and the
+                    # comparison is never loosened -- but refusing the whole
+                    # batch PERMANENTLY on the first flub turned one bad
+                    # transcription into a terminal ``protocol-violation`` for
+                    # every batch member on a run-once system. A fresh bounded
+                    # attempt re-reads the same frozen envelope, so the re-ask
+                    # can repair a flub while a systematic divergence still
+                    # exhausts the attempts and exits as the same permanent
+                    # contract rejection as before.
+                    last_detail = str(exc)
+                    append_telemetry(
+                        request_path,
+                        {
+                            "event": "binding-mismatch-refused",
+                            "attempt": attempt_number,
+                            "retrying": attempt_number < CHECKER_MAX_ATTEMPTS,
+                            "detail": last_detail,
+                        },
+                    )
+                    if attempt_number < CHECKER_MAX_ATTEMPTS:
+                        continue
+                    return _finish(
+                        request_path,
+                        OperatorExitCode.PERMANENT_CONTRACT_REJECTION,
+                        FailureKind.PERMANENT,
+                        request_sha256,
+                        attempt_number,
+                        str(exc),
+                        wall_seconds=elapsed(),
+                    )
                 except (
                     CheckerDispatchError,
                     OSError,
