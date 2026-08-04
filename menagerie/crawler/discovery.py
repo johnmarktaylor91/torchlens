@@ -652,6 +652,10 @@ def _machine_discovery_author_result(
         source_manifest=source_manifest,
         allowed_model_dir=model_dir,
         output_path=result_path,
+        # The machine discovery arm publishes a SKIP/BLOCKED recommendation and
+        # never a library recipe, so it needs no inventory; the intent still
+        # travels so every author envelope names its route.
+        routed_environment_intent=item.route.intent,
     )
     expected = envelope["expected_result"]
     if not isinstance(expected, Mapping):
