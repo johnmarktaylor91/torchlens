@@ -1127,10 +1127,12 @@ def load_declarative_recipe(
     def build_model() -> object:
         """Invoke the direct library constructor with declarative kwargs.
 
-        Construct-node kwargs are resolved from their declared modules, bounded
-        post-construction configuration calls are applied, and the runtime
-        provenance tripwire refuses any constructed model whose class is not
-        defined by the pinned distribution.
+        Construct-node kwargs are resolved from their declared modules -- bounded
+        to the pinned distribution and :data:`CONSTRUCT_MODULE_ALLOWLIST`, and
+        refused if they build a generic container -- bounded post-construction
+        configuration calls are applied, and the runtime provenance tripwire
+        refuses any constructed model whose class is not defined by the pinned
+        distribution.
 
         Returns
         -------

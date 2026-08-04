@@ -599,7 +599,11 @@ def _declared_distribution(request: WorkerRequest) -> str:
     """
 
     payload = request.recipe.get("recipe")
-    distribution = payload.get("distribution") if isinstance(payload, Mapping) else None
+    if not isinstance(payload, Mapping):
+        # ``load_recipe`` accepts the flat form, where the recipe fields sit
+        # directly on the request mapping; resolve the distribution the same way.
+        payload = request.recipe
+    distribution = payload.get("distribution")
     if not isinstance(distribution, str) or not distribution:
         raise TypeError("declarative recipe declares no distribution for constructed inputs")
     return distribution
