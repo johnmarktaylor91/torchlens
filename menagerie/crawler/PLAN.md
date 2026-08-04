@@ -709,6 +709,40 @@ and the parameter count first exists in the authored recipe -- so it saves the e
 worker run, and the kill. Coverage is partial by construction: a recipe naming a library symbol
 (`timm.dla60`) declares no size, yields no bound, and is always admitted.
 
+### 17.8 Models routed to an environment that cannot serve them
+
+```bash
+python -m menagerie.crawler coverage-deferrals
+python -m menagerie.crawler coverage-deferrals --full     # full assessment and evidence per model
+```
+
+Routing is fixed at intake from the immutable roster row; the distribution a model needs is declared
+later, by the author, in the declarative recipe. When they disagree the model lands in an intent that
+does not install its library at all. That is a real, deliberate condition, not an accident: `core`
+excludes DGL on purpose, because conda-forge's `dgl` hard-pins torch to 2.3.1 and depends on
+TensorFlow, so admitting it would downgrade torch and numpy for every core model -- and the separate
+`graph` intent exists precisely to carry it.
+
+`recipe.resolve_environment_artifact_digest` correctly refuses to invent an artifact digest for a
+distribution the routed environment does not install, and that refusal is unchanged. What changed is
+the record it produces. Before the environment lane, the driver compares the recipe's own declared
+distribution against the routed intent's exact resolved-export inventory -- the same inventory,
+through the same namespace bridge (`package_namespace`), that the refusal reads, so the two can never
+disagree -- and withholds a model whose routed intent provably lacks it. Withheld models are recorded
+in `records/intake-extensions/environment-coverage-deferrals.jsonl` under the disposition
+`deferred:needs-environment-coverage`, each row naming the pinned distribution, the intent that could
+not serve it, and every intent that could, with the basis for each claim: a solved lock that contains
+the package (`locked-inventory`), a declared dependency that asks for it (`declared-dependency`), or
+the routing table that already maps it to an intent (`routing-table`).
+
+Like a host-capacity deferral, a withheld model is **not** terminalized -- `failed:runner` would
+assert that our pipeline broke on a correctly authored model, which is false -- and it is not minted
+as a canonical `deferred:*` terminal either, because every such terminal is proved by a
+checker-adjudicated DEFER gate or an accepted BLOCKED gate and this disposition is machine-derived
+with no adjudication behind it. The check fails open: no inventory, no declarative recipe, or an
+unreadable pin all admit the model unchanged, and a library no intent declares is still recorded, with
+a recheck hint that names declaring it as the action that would cover it.
+
 ## 18. Frozen agent prompt identities
 
 The prompt files are authoritative runtime inputs. The dispatch-brief fragments under `prompts/pool/`
