@@ -717,7 +717,25 @@ def _find_gate(
 def _gate_item_matches_proposal(
     item: Mapping[str, Any], proposal: Mapping[str, Any], kind: str
 ) -> bool:
-    """Return whether a checker item binds every current dependent identity."""
+    """Return whether a checker item binds every current dependent identity.
+
+    The ``fidelity_identity`` expectation is the PROPOSAL'S OWN value for every
+    gate kind. The checker item pack (``_checker_item``) carries
+    ``proposal["fidelity_identity"]`` and the checker echoes it, so whenever the
+    author declares ``fidelity.required`` the derived identity is already
+    non-None at metadata-gate time -- R1 library recipes do this legitimately,
+    not just R3/R4 rungs. The previous ``None``-for-metadata expectation
+    compared the item's faithful echo against a constant the proposal never
+    held and judged every fidelity-required member of the batch stale
+    (pilot 2026-08-04: m4334, m7362, m9304, all bound byte-exactly through
+    ``verified_hashes["proposal"]`` yet refused). Comparing against the
+    proposal's own value is the same-strength exact binding as every other
+    identity clause here; a genuinely stale echo still refuses.
+
+    A ``fidelity`` gate additionally requires the proposal to HAVE a fidelity
+    identity: such a gate certifies exactly that identity, so a proposal that
+    never derived one has nothing the gate could have checked.
+    """
 
     facts = proposal.get("proposed_facts", {})
     expected_hashes = dict(proposal.get("verified_hashes", {}))
@@ -739,7 +757,9 @@ def _gate_item_matches_proposal(
         or item.get("vet_identity") != proposal.get("vet_identity")
     ):
         return False
-    expected_fidelity = proposal.get("fidelity_identity") if kind == "fidelity" else None
+    expected_fidelity = proposal.get("fidelity_identity")
+    if kind == "fidelity" and expected_fidelity is None:
+        return False
     return item.get("fidelity_identity") == expected_fidelity
 
 
