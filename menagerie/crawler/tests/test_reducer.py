@@ -1450,15 +1450,29 @@ def test_run_award_rejects_null_output_signature_tree(tmp_path: Path) -> None:
             reducer.append_model(make_model(accepted=True))
 
 
-def test_recursive_authored_gate_blocks_ungated_website_leaf(tmp_path: Path) -> None:
-    """An accurate external-metadata subset cannot authorize the rest of proposed facts."""
+def test_recursive_authored_gate_blocks_an_ungated_nonexternal_claim(tmp_path: Path) -> None:
+    """An accurate external-metadata subset cannot authorize the rest of proposed facts.
+
+    The dropped claim is deliberately OUTSIDE ``external_metadata``: every
+    mandatory external field keeps its accurate check, so the shallower external
+    gate is fully satisfied and only the recursive authored gate can catch the
+    hole. That is the exact hazard the original ``website.tagline`` spelling
+    guarded. It stopped guarding anything when the required set narrowed to the
+    closed gated-claim vocabulary -- ``website.tagline`` is not a member, so
+    filtering it out removed nothing and the assertion could never fire again.
+    ``input_contract`` is the surviving non-external claim in that role.
+    """
 
     paths = _paths(tmp_path)
     stable_ids = ["m_example", *(f"m_{index}" for index in range(9))]
+    ungated_claim = "input_contract"
     gate = make_gate(stable_ids)
     item = next(value for value in gate["items"] if value["stable_id"] == "m_example")
+    assert any(check["field"] == ungated_claim for check in item["field_checks"]), (
+        "the dropped claim must actually be in the required set, or this test is inert"
+    )
     item["field_checks"] = [
-        check for check in item["field_checks"] if check["field"] != "website.tagline"
+        check for check in item["field_checks"] if check["field"] != ungated_claim
     ]
     # Rebind the synthetic checker envelope so this semantic-admission test reaches
     # the authored-leaf rule instead of correctly tripping current-proof replay first.

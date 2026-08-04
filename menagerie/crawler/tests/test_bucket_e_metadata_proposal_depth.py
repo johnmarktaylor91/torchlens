@@ -21,8 +21,10 @@ from menagerie.crawler.metadata import (
     validate_external_metadata_for_write,
 )
 from menagerie.crawler.proposal import (
+    KEYWORD_CLAIM,
     ProposalValidationError,
     model_code_manifest,
+    required_metadata_field_checks,
     validate_author_proposal,
 )
 from menagerie.crawler.tests.conftest import (
@@ -129,7 +131,16 @@ def test_torchlens_derivable_fields_remain_optional_at_write() -> None:
 
 
 def _accurate_authored_gate(facts: dict[str, Any]) -> dict[str, Any]:
-    """Return exhaustive per-leaf checks with keyword relevance semantics.
+    """Return exhaustive gated-claim checks with keyword relevance semantics.
+
+    The covered set is the machine-derived closed claim vocabulary
+    (:func:`required_metadata_field_checks`) -- the same list the envelope
+    boundary stamps onto every checker item and the same list canonical write
+    validates against. It was previously every authored schema leaf (180+ of
+    them), which no real proposal could ever ground: the author contract tags
+    excerpts at CLAIM granularity, so the only thing that ever satisfied a
+    per-leaf gate was this fixture stuffing every leaf path into one excerpt's
+    ``supports``. Tagging ~34 claim strings is what a real proposal does.
 
     Parameters
     ----------
@@ -142,7 +153,7 @@ def _accurate_authored_gate(facts: dict[str, Any]) -> dict[str, Any]:
         Accurate gate item suitable for block-at-write validation.
     """
 
-    fields = tuple(authored_fact_leaves(facts, schema_version=MODEL_SCHEMA_VERSION_V3))
+    fields = required_metadata_field_checks(facts)
     facts["evidence"]["excerpts"][0]["supports"] = list(fields)
     return {
         "verdict": "accurate",
@@ -159,11 +170,9 @@ def _accurate_authored_gate(facts: dict[str, Any]) -> dict[str, Any]:
             {
                 "field": field,
                 "verdict": "accurate",
-                "evidence_ids": [] if field == "external_metadata.keywords[]" else ["evidence-1"],
+                "evidence_ids": [] if field == KEYWORD_CLAIM else ["evidence-1"],
                 "checked_source_ids": ["source-1"],
-                "reason": "relevant user search term"
-                if field == "external_metadata.keywords[]"
-                else "supported",
+                "reason": "relevant user search term" if field == KEYWORD_CLAIM else "supported",
             }
             for field in fields
         ],
@@ -182,18 +191,28 @@ def _accurate_authored_gate(facts: dict[str, Any]) -> dict[str, Any]:
 def test_a_section_or_grouped_field_name_is_refused_and_names_the_checker(
     spelling: str,
 ) -> None:
-    """A gate must name ONE leaf, and the refusal must say whose defect it is.
+    """A gate must name ONE claim, and the refusal must say whose defect it is.
 
     Every spelling here is verbatim from the pilot's real ``m5915``/``m7362``
     metadata gates, which terminalized the model. The engine is right to refuse:
-    one verdict cannot carry two leaves' provenance, and the exhaustiveness check
-    downstream is keyed on leaf paths. What it was NOT doing is saying so -- the
-    old message, "extraneous authored field check: identity", reads as an author
-    emitting a stray field, and misdirected an investigation that way.
+    one verdict cannot carry two claims' provenance, and the exhaustiveness check
+    downstream is keyed on the machine-derived claim paths. What it was NOT doing
+    is saying so -- the old message, "extraneous authored field check: identity",
+    reads as an author emitting a stray field, and misdirected an investigation
+    that way.
+
+    The owed spelling moved from "one authored leaf path" to "one claim from the
+    envelope item's machine-derived ``required_field_checks``", so the message
+    assertion tracks the new contract. The HAZARD is unchanged and is asserted
+    directly below the refusal: a grouped or section-named verdict must never
+    blanket-bless the claims it swallowed. Two independent layers catch it -- the
+    substituted name is refused as outside the required set, and the claim it
+    displaced is separately reported as ungated.
     """
 
     facts = make_author_proposal()["proposed_facts"]
     gate_item = _accurate_authored_gate(facts)
+    displaced = gate_item["field_checks"][0]["field"]
     gate_item["field_checks"][0]["field"] = spelling
 
     with pytest.raises(MetadataValidationError) as refused:
@@ -201,7 +220,16 @@ def test_a_section_or_grouped_field_name_is_refused_and_names_the_checker(
     message = str(refused.value)
     assert "checker gate" in message, "the refusal must name the checker as the owner"
     assert repr(spelling) in message, "the offending spelling must be quoted back"
-    assert "exactly one leaf path" in message, "the owed spelling must be stated"
+    assert "exactly one claim" in message, "the owed spelling must be stated"
+    assert "required_field_checks" in message, "the owed spelling's OWNER must be named"
+
+    # The blanket-blessing hazard itself: even with the offending name dropped
+    # rather than refused, the claim it stood in for is still uncovered.
+    dropped = deepcopy(gate_item)
+    dropped["field_checks"] = dropped["field_checks"][1:]
+    with pytest.raises(MetadataValidationError, match="ungated authored facts") as ungated:
+        validate_authored_facts_for_write(facts, dropped)
+    assert displaced in str(ungated.value), "the swallowed claim must be named as ungated"
 
 
 def test_a_leaf_path_check_with_the_proposed_facts_prefix_is_still_accepted() -> None:
@@ -217,10 +245,21 @@ def test_a_leaf_path_check_with_the_proposed_facts_prefix_is_still_accepted() ->
 
 
 def test_authored_input_dtype_is_gated_and_changes_vet_identity() -> None:
-    """An authored dtype collision cannot bypass write gating or vet staleness."""
+    """An authored dtype collision cannot bypass write gating or vet staleness.
+
+    The gated unit for the input contract is the single ``input_contract`` claim,
+    not one check per contract leaf, so the dtype's gate is the contract verdict.
+    Both halves of the original hazard still land. No canonical write happens
+    unless a checker returned an accurate verdict covering the authored input
+    contract -- the dtype rides inside it -- and a checker cannot quietly narrow
+    that obligation to a single leaf, because a per-leaf expansion is refused and
+    leaves the contract claim ungated. The leaf-name ownership assertions below
+    are unaffected: they exercise the schema's collision rules, not gate coverage.
+    """
 
     facts = make_author_proposal()["proposed_facts"]
     dtype_path = "input_contract.args[].dtype"
+    contract_claim = "input_contract"
     kwarg = deepcopy(facts["input_contract"]["args"][0])
     kwarg["path"] = "kwargs.image"
     facts["input_contract"]["kwargs"].append(kwarg)
@@ -228,11 +267,23 @@ def test_authored_input_dtype_is_gated_and_changes_vet_identity() -> None:
     assert leaves[dtype_path] == ["float32"]
     assert leaves["input_contract.kwargs[].dtype"] == ["float32"]
 
-    gate_item = _accurate_authored_gate(facts)
-    dtype_check = next(check for check in gate_item["field_checks"] if check["field"] == dtype_path)
-    dtype_check["verdict"] = "inaccurate"
+    accurate = _accurate_authored_gate(facts)
+    assert contract_claim in required_metadata_field_checks(facts)
+
+    inaccurate = deepcopy(accurate)
+    contract_check = next(
+        check for check in inaccurate["field_checks"] if check["field"] == contract_claim
+    )
+    contract_check["verdict"] = "inaccurate"
     with pytest.raises(MetadataValidationError, match="non-accurate authored facts"):
-        validate_authored_facts_for_write(facts, gate_item)
+        validate_authored_facts_for_write(facts, inaccurate)
+
+    narrowed = deepcopy(accurate)
+    next(
+        check for check in narrowed["field_checks"] if check["field"] == contract_claim
+    )["field"] = dtype_path
+    with pytest.raises(MetadataValidationError, match="per-leaf expansions"):
+        validate_authored_facts_for_write(facts, narrowed)
 
     before = recompute_accepted_identities(
         facts,
@@ -280,7 +331,7 @@ def test_keywords_use_nonverbatim_relevance_checks_but_remain_gated() -> None:
     facts["external_metadata"]["keywords"] = ["image feature extractor"]
     gate_item = _accurate_authored_gate(facts)
     report = validate_authored_facts_for_write(facts, gate_item)
-    keyword_path = "external_metadata.keywords[]"
+    keyword_path = KEYWORD_CLAIM
     assert keyword_path in report.gated_fields
 
     keyword_check = next(
@@ -293,7 +344,14 @@ def test_keywords_use_nonverbatim_relevance_checks_but_remain_gated() -> None:
 
 
 def test_v3_schema_ownership_gates_mode_divergence_and_resolves_references() -> None:
-    """External mode claims are gated while reducer mode results stay outside vet identity."""
+    """External mode claims are gated while reducer mode results stay outside vet identity.
+
+    The schema-ownership half is untouched: the authored ``external_metadata``
+    mode claim is inside vet identity and the reducer's own ``modes`` results are
+    outside it. Only the gated UNIT moved -- the checker owes one verdict on the
+    ``external_metadata.modes`` claim rather than one per mode leaf -- so the
+    authored divergence assertion is still covered by a required check.
+    """
 
     facts = make_author_proposal()["proposed_facts"]
     leaves = authored_fact_leaves(facts, schema_version=MODEL_SCHEMA_VERSION_V3)
@@ -301,7 +359,6 @@ def test_v3_schema_ownership_gates_mode_divergence_and_resolves_references() -> 
     assert "modes.meaningful_modes[]" in leaves
     assert "modes.train_eval_divergence" not in leaves
     assert "modes.divergence_evidence" not in leaves
-    facts["evidence"]["excerpts"][0]["supports"] = list(leaves)
     gate_item = _accurate_authored_gate(facts)
     gate_item.update(
         {
@@ -316,7 +373,10 @@ def test_v3_schema_ownership_gates_mode_divergence_and_resolves_references() -> 
         }
     )
     report = validate_authored_facts_for_write(facts, gate_item)
-    assert "external_metadata.modes.train_eval_divergence" in report.gated_fields
+    assert "external_metadata.modes" in report.gated_fields
+    # The authored divergence leaf lives under -- and is therefore gated by --
+    # that claim; the reducer's own mode results still are not authored facts.
+    assert "modes.train_eval_divergence" not in report.gated_fields
 
     fabricated = deepcopy(gate_item)
     fabricated["field_checks"][0]["evidence_ids"] = ["fabricated"]
@@ -335,8 +395,6 @@ def test_v3_accurate_r4_requires_enumerated_search_attestation() -> None:
     facts = make_author_proposal()["proposed_facts"]
     facts["source_resolution"]["rung"] = "R4_REIMPLEMENT"
     links = facts["source_resolution"]["search_report"]["links_checked"]
-    leaves = authored_fact_leaves(facts, schema_version=MODEL_SCHEMA_VERSION_V3)
-    facts["evidence"]["excerpts"][0]["supports"] = list(leaves)
     gate_item = _accurate_authored_gate(facts)
     gate_item.update(
         {
