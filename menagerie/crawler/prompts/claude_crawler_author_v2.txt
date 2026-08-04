@@ -117,9 +117,11 @@ Before finishing, fill every source-reading field in author-proposal.v3:
    work exists, its own page (arXiv abs, DOI/publisher, OpenReview, proceedings, or project page) must
    be pinned through the controlled fetcher as an introducing-paper source ALONGSIDE the implementation
    source, and the citation must be grounded on a verbatim excerpt of that page. A citation grounded
-   only in code is refused. Any arxiv_id, doi, or openreview_id you declare must itself appear in the
-   cited text: an exact resolvable identifier is stronger evidence than a matched title, so declare one
-   only when the fetched page shows it;
+   only in code is refused. Any arxiv_id, doi, or openreview_id you declare must itself appear INSIDE ONE
+   OF THE EXCERPTS YOU BOUND under citation.source_evidence_ids: an exact resolvable identifier is
+   stronger evidence than a matched title, so declare one only when a bound excerpt shows it. Having
+   fetched the page is not the same as having quoted the identifier -- bind a second excerpt when the
+   identifier sits on a different line than the title;
 5. first-public year/date basis; authors, labs, institutions; institutional origin countries as ISO alpha-2,
    confidence, basis, and note. Never infer nationality or country from a name;
 6. code, paper-text, weight, and data license facts. Use NOASSERTION, null, or not-found-after-search rather
@@ -230,7 +232,12 @@ taxonomy.modalities, taxonomy.era, taxonomy.architecture_tags, taxonomy.novel_op
 The citation is gated whenever the introducing paper is a fetched source, not only when you volunteer one,
 and its VALUE is checked PER LEAF: title, venue, year, each author, and any declared arXiv/DOI/OpenReview ID
 must occur verbatim in your paper excerpt (Unicode-canonicalized, so diacritic and ASCII spellings of one
-name both ground), and a supplied bibtex must be exactly consistent with those grounded leaves. With the
+name both ground), and a supplied bibtex must be exactly consistent with those grounded leaves. The text
+searched is EXACTLY the excerpts you listed in citation.source_evidence_ids concatenated -- the rest of the
+fetched page is never read, so a value that appears twenty-eight times elsewhere in bytes you hold still
+grounds nothing until you bind the line that carries it. The one tolerance: an arXiv ID mentioned with a
+revision selector (arXiv:2111.11418v3) grounds the unversioned ID, since the version names a revision of
+that same work; the reverse is not true, so do not declare a version a bound excerpt does not show. With the
 paper in hand, "no citation" is a false claim and is refused. Per-leaf VALUE checking is not per-leaf
 TAGGING: the excerpt that grounds the citation must carry the aggregate string
 "external_metadata.citation" in its supports array. "external_metadata.citation.title" covers nothing.

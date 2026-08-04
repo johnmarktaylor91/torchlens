@@ -184,12 +184,12 @@ a reason to re-crawl external sources.
 | `external_metadata.citation.authors` | array<string> | Mandatory | Mandatory authors. |
 | `external_metadata.citation.year` | integer \| null | Mandatory | Mandatory year. |
 | `external_metadata.citation.venue` | string \| null | Mandatory | Mandatory venue. |
-| `external_metadata.citation.arxiv_id` | string \| null | Mandatory | Mandatory arxiv id. |
-| `external_metadata.citation.doi` | string \| null | Mandatory | Mandatory doi. |
-| `external_metadata.citation.openreview_id` | string \| null | Mandatory | Mandatory openreview id. |
+| `external_metadata.citation.arxiv_id` | string \| null | Mandatory | Mandatory arxiv id. When non-null the identifier must appear inside the text of an excerpt named by source_evidence_ids; occurring elsewhere in the fetched page grounds nothing, so bind the line that carries it as its own excerpt. A page mention that adds a revision selector (arXiv:2111.11418v3) grounds the unversioned id, but a bare mention does not ground a version you declare. |
+| `external_metadata.citation.doi` | string \| null | Mandatory | Mandatory doi. When non-null the identifier must appear inside the text of an excerpt named by source_evidence_ids; occurring elsewhere in the fetched page grounds nothing, so bind the line that carries it as its own excerpt. A DOI suffix is opaque, so it is matched exactly and no near variant grounds it. |
+| `external_metadata.citation.openreview_id` | string \| null | Mandatory | Mandatory openreview id. When non-null the identifier must appear inside the text of an excerpt named by source_evidence_ids; occurring elsewhere in the fetched page grounds nothing, so bind the line that carries it as its own excerpt. An OpenReview id is opaque, so it is matched exactly and no near variant grounds it. |
 | `external_metadata.citation.url` | string \| null | Mandatory | Mandatory public source URL when available. |
 | `external_metadata.citation.bibtex` | string \| null | Mandatory | Mandatory bibtex. |
-| `external_metadata.citation.source_evidence_ids` | array<string> | Mandatory | Mandatory source evidence ids. |
+| `external_metadata.citation.source_evidence_ids` | array<string> | Mandatory | Mandatory ids of the excerpts that ground this citation. Every non-null citation leaf is value-checked against the concatenated text of these excerpts and nothing else: title, venue, year, each author, and each declared identifier must occur inside that bound text. A value present in the fetched source bytes but not inside a bound excerpt is refused, so bind an excerpt that literally carries each value declared here, adding a second excerpt when the identifier and the title sit on different lines. |
 | `external_metadata.license` | string \| null | Mandatory | Mandatory license. |
 | `external_metadata.key_contribution` | string | Mandatory | Mandatory key contribution. |
 | `external_metadata.description` | string | Mandatory | Mandatory description. |
@@ -241,12 +241,12 @@ a reason to re-crawl external sources.
 | `citation.authors` | array<string> | Mandatory | Mandatory authors. |
 | `citation.year` | integer \| null | Mandatory | Mandatory year. |
 | `citation.venue` | string \| null | Mandatory | Mandatory venue. |
-| `citation.arxiv_id` | string \| null | Mandatory | Mandatory arxiv id. |
-| `citation.doi` | string \| null | Mandatory | Mandatory doi. |
-| `citation.openreview_id` | string \| null | Mandatory | Mandatory openreview id. |
+| `citation.arxiv_id` | string \| null | Mandatory | Mandatory arxiv id. When non-null the identifier must appear inside the text of an excerpt named by source_evidence_ids; occurring elsewhere in the fetched page grounds nothing, so bind the line that carries it as its own excerpt. A page mention that adds a revision selector (arXiv:2111.11418v3) grounds the unversioned id, but a bare mention does not ground a version you declare. |
+| `citation.doi` | string \| null | Mandatory | Mandatory doi. When non-null the identifier must appear inside the text of an excerpt named by source_evidence_ids; occurring elsewhere in the fetched page grounds nothing, so bind the line that carries it as its own excerpt. A DOI suffix is opaque, so it is matched exactly and no near variant grounds it. |
+| `citation.openreview_id` | string \| null | Mandatory | Mandatory openreview id. When non-null the identifier must appear inside the text of an excerpt named by source_evidence_ids; occurring elsewhere in the fetched page grounds nothing, so bind the line that carries it as its own excerpt. An OpenReview id is opaque, so it is matched exactly and no near variant grounds it. |
 | `citation.url` | string \| null | Mandatory | Mandatory public source URL when available. |
 | `citation.bibtex` | string \| null | Mandatory | Mandatory bibtex. |
-| `citation.source_evidence_ids` | array<string> | Mandatory | Mandatory source evidence ids. |
+| `citation.source_evidence_ids` | array<string> | Mandatory | Mandatory ids of the excerpts that ground this citation. Every non-null citation leaf is value-checked against the concatenated text of these excerpts and nothing else: title, venue, year, each author, and each declared identifier must occur inside that bound text. A value present in the fetched source bytes but not inside a bound excerpt is refused, so bind an excerpt that literally carries each value declared here, adding a second excerpt when the identifier and the title sit on different lines. |
 <!-- END GENERATED SCHEMA TABLE: model.v2/people-origin-dates-citation -->
 
 ### Licenses

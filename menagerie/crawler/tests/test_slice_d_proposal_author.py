@@ -38,6 +38,7 @@ from menagerie.crawler.proposal import (
     DEFAULT_GATED_CLAIMS,
     VALUE_MATCHED_CLAIMS,
     ProposalValidationError,
+    _identifier_grounded,
     _normalize_support_text,
     model_code_manifest,
     validate_author_proposal,
@@ -685,6 +686,208 @@ def test_declared_arxiv_id_present_on_the_page_but_absent_from_the_excerpt_is_re
         grounded, allowed_model_dir=tmp_path, source_manifest=grounded_manifest
     )
     assert report.rung.value == "R1_LIBRARY"
+
+
+#: The fixture header that grounds every citation leaf except the identifier, so the
+#: identifier is the only variable in the tests below.
+_CITATION_HEADER_TEXT = (
+    '<meta name="citation_title" content="Example Model" />'
+    '<meta name="citation_author" content="Author, A." />'
+    "Published at TestConf in 2020."
+)
+#: Line 148 of the arXiv abstract page the pilot crawler actually froze for model m8245
+#: (source ``paper-arxiv-abs``, content sha256
+#: ``18e4beca562216cce440a60aab0d736f4fb0b75606631d54564d8cea807f7ac0``), quoted byte for
+#: byte. It is the real shape the bug is about: the identifier appears on this line only
+#: with its revision selector attached.
+M8245_VERSIONED_ONLY_LINE = (
+    '              <a href="https://arxiv.org/abs/2111.11418v3">arXiv:2111.11418v3</a>'
+    " [cs.CV]</span> for this version)\n"
+)
+#: The two excerpts model m8245's recorded proposal actually bound to its citation claim
+#: (``ev-arxiv-citation`` and ``ev-arxiv-venue``), quoted byte for byte from the archived
+#: author result. Both are honest quotes of the frozen page and neither names the
+#: identifier, which occurs twenty-eight times elsewhere in the same fetched bytes.
+M8245_RECORDED_CITATION_EXCERPTS = (
+    '<meta name="citation_title" content="MetaFormer Is Actually What You Need for'
+    ' Vision" /><meta name="citation_author" content="Yu, Weihao" />'
+    '<meta name="citation_author" content="Luo, Mi" />'
+    '<meta name="citation_author" content="Zhou, Pan" />'
+    '<meta name="citation_author" content="Si, Chenyang" />'
+    '<meta name="citation_author" content="Zhou, Yichen" />'
+    '<meta name="citation_author" content="Wang, Xinchao" />'
+    '<meta name="citation_author" content="Feng, Jiashi" />'
+    '<meta name="citation_author" content="Yan, Shuicheng" />'
+    '<meta name="citation_date" content="2021/11/22" />'
+    '<meta name="citation_online_date" content="2022/07/04" />',
+    '          <td class="tablecell comments mathjax">CVPR 2022 (Oral). Code: '
+    '<a href="https://github.com/sail-sg/poolformer" rel="external noopener nofollow"'
+    ' class="link-external link-https">this https URL</a></td>\n',
+)
+
+
+def _citation_against(
+    tmp_path: Path, text: str, arxiv_id: str
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Build a grounded proposal whose paper evidence is exactly ``text``.
+
+    Parameters
+    ----------
+    tmp_path:
+        Per-test temporary directory.
+    text:
+        Verbatim paper-excerpt text to bind as the sole citation evidence.
+    arxiv_id:
+        Identifier both citation copies declare.
+
+    Returns
+    -------
+    tuple[dict[str, Any], dict[str, Any]]
+        Proposal and source manifest ready for validation.
+    """
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    _strip_paper_evidence(proposal, manifest)
+    attach_paper_evidence(proposal, manifest, tmp_path, text=text, source_id="source-arxiv")
+    for citation in (
+        proposal["proposed_facts"]["citation"],
+        proposal["proposed_facts"]["external_metadata"]["citation"],
+    ):
+        citation["arxiv_id"] = arxiv_id
+    return proposal, manifest
+
+
+def test_versioned_only_arxiv_mention_grounds_the_unversioned_declared_id(
+    tmp_path: Path,
+) -> None:
+    """A real page line naming ``2111.11418v3`` grounds a declared ``2111.11418``.
+
+    The canonicalizer reduces ``2111.11418`` to the token pair ``2111 11418``, but the
+    revision selector fuses into the trailing token, so the phrase was no longer
+    contiguous and a true claim was refused. The authoring stage runs once per model, so
+    that refusal is a permanent dead record. The bytes here are the arXiv abstract line
+    the pilot crawler actually froze for m8245, not a fixture invented to pass.
+    """
+
+    assert "2111.11418v3" in M8245_VERSIONED_ONLY_LINE
+    assert "2111.11418<" not in M8245_VERSIONED_ONLY_LINE
+    proposal, manifest = _citation_against(
+        tmp_path, _CITATION_HEADER_TEXT + M8245_VERSIONED_ONLY_LINE, "2111.11418"
+    )
+    report = validate_author_proposal(
+        proposal, allowed_model_dir=tmp_path, source_manifest=manifest
+    )
+    assert report.rung.value == "R1_LIBRARY"
+
+
+def test_m8245_recorded_citation_excerpts_still_do_not_ground_its_arxiv_id(
+    tmp_path: Path,
+) -> None:
+    """The archived m8245 proposal stays refused; the version fix must not reach it.
+
+    Its two bound excerpts are honest quotes that simply do not contain the identifier,
+    and the remedy was always one more excerpt. If the version-suffix tolerance ever
+    accepts this pair it has stopped being an identifier rule.
+    """
+
+    combined = _normalize_support_text("\n".join(M8245_RECORDED_CITATION_EXCERPTS))
+    assert not _identifier_grounded("2111.11418", combined)
+
+    proposal, manifest = _citation_against(
+        tmp_path,
+        _CITATION_HEADER_TEXT + "".join(M8245_RECORDED_CITATION_EXCERPTS),
+        "2111.11418",
+    )
+    with pytest.raises(ProposalValidationError, match="not grounded verbatim.*arxiv_id"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_a_bare_page_mention_does_not_ground_a_declared_arxiv_version(
+    tmp_path: Path,
+) -> None:
+    """The weaker direction is deliberately not granted.
+
+    An arXiv id names a work and ``vN`` names one revision of it, so a versioned mention
+    has necessarily named the work. A bare mention has not established that a third
+    revision exists, so declaring ``v3`` asserts strictly more than the excerpt shows.
+    """
+
+    proposal, manifest = _citation_against(
+        tmp_path,
+        _CITATION_HEADER_TEXT + " Cited as arXiv:2111.11418 [cs.CV]",
+        "2111.11418v3",
+    )
+    with pytest.raises(ProposalValidationError, match="not grounded verbatim.*arxiv_id"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_a_numerically_extended_arxiv_id_cannot_launder_either_way(
+    tmp_path: Path,
+) -> None:
+    """The tolerance consumes ``v`` plus digits or nothing -- never loose trailing text.
+
+    A general "ignore what follows" rule would make ``2111.114189`` ground
+    ``2111.11418``, which is a different identifier entirely. Both directions are
+    asserted so neither can regress into a laundering path.
+    """
+
+    extended = _normalize_support_text("Cited as arXiv:2111.114189 [cs.CV]")
+    assert not _identifier_grounded("2111.11418", extended)
+    base = _normalize_support_text("Cited as arXiv:2111.11418 [cs.CV]")
+    assert not _identifier_grounded("2111.114189", base)
+
+    proposal, manifest = _citation_against(
+        tmp_path,
+        _CITATION_HEADER_TEXT + " Cited as arXiv:2111.114189 [cs.CV]",
+        "2111.11418",
+    )
+    with pytest.raises(ProposalValidationError, match="not grounded verbatim.*arxiv_id"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_a_fabricated_arxiv_id_is_refused_against_the_real_page_line(
+    tmp_path: Path,
+) -> None:
+    """An identifier appearing nowhere in the bound text is still refused."""
+
+    proposal, manifest = _citation_against(
+        tmp_path, _CITATION_HEADER_TEXT + M8245_VERSIONED_ONLY_LINE, "2199.99999"
+    )
+    with pytest.raises(ProposalValidationError, match="not grounded verbatim.*arxiv_id"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_doi_and_openreview_identifiers_get_no_version_tolerance() -> None:
+    """Only arXiv's grammar licenses the widening; the opaque identifiers keep exact match.
+
+    A DOI suffix and an OpenReview id are registrant-chosen opaque strings, so
+    ``10.1234/xyzv2`` may be a separately registered work rather than a revision of
+    ``10.1234/xyz``. There is no grammar that could tell the two apart, so no near
+    variant may ground either. Exact occurrence still grounds them, including inside the
+    URL and query-string forms real pages print.
+    """
+
+    assert not _identifier_grounded(
+        "10.1234/xyz", _normalize_support_text("https://doi.org/10.1234/xyzv2")
+    )
+    assert _identifier_grounded(
+        "10.1234/xyz", _normalize_support_text("https://doi.org/10.1234/xyz")
+    )
+    assert not _identifier_grounded("SygXPaEYv", _normalize_support_text("?id=SygXPaEYvH"))
+    assert _identifier_grounded(
+        "SygXPaEYvH", _normalize_support_text("https://openreview.net/forum?id=SygXPaEYvH&noteId=x")
+    )
+
+
+def test_the_old_style_arxiv_identifier_gets_the_same_one_way_tolerance() -> None:
+    """Pre-2007 ``archive[.SS]/YYMMNNN`` ids carry the same revision selector."""
+
+    assert _identifier_grounded(
+        "math.GT/0309136", _normalize_support_text("arXiv:math.GT/0309136v2")
+    )
+    assert not _identifier_grounded(
+        "math.GT/0309136v2", _normalize_support_text("arXiv:math.GT/0309136")
+    )
 
 
 def test_omitting_the_citation_while_the_paper_is_bound_is_refused(tmp_path: Path) -> None:

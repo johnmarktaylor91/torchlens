@@ -154,6 +154,21 @@ line endings -- quote a shorter span you can reproduce exactly rather than widen
 digest to cover it. A short exact excerpt grounds a claim; a long approximate one grounds
 nothing and costs the whole proposal.
 
+**A citation value is checked against the BOUND EXCERPTS, never against the page.** The
+engine concatenates the text of exactly the excerpts named in
+`citation.source_evidence_ids` and requires each non-null citation leaf -- title, venue,
+year, every author, and every declared `arxiv_id`/`doi`/`openreview_id` -- to occur in
+that concatenation. Nothing else in the frozen source is read. This is the failure that
+killed a real MetaFormer proposal: the author bound the `citation_title`/`citation_author`
+meta-tag run and the `CVPR 2022 (Oral)` comments row, both honest, neither containing
+`2111.11418` -- which sat twenty-eight times elsewhere on the same fetched page. Having
+the bytes is not having quoted them. So after you write the citation, read each non-null
+leaf back against your own bound excerpt text, and bind one more excerpt whenever a leaf
+is not literally inside it. The one tolerance is arXiv revisions: a bound excerpt reading
+`arXiv:2111.11418v3` grounds a declared `2111.11418`, because the version names a revision
+of that same work. It does not run the other way -- a bare mention does not license
+declaring `v3` -- so declare the identifier as the excerpt shows it or plainer.
+
 Sources the ONE supplementary round fetched for you are citable exactly like frozen ones:
 quote them by their `source_id` from the supplementary manifest. They are our fetch and
 our digest, and the engine grounds evidence against them alongside the frozen manifest.
