@@ -186,6 +186,67 @@ def test_models_at_the_practical_ceiling_are_still_attempted() -> None:
     assert assess_model_capacity(recipe, host=SMALL_HOST).verdict is CapacityVerdict.ADMIT
 
 
+#: Known architectures, their real parameter counts, and the recipe kwargs a
+#: proposal would declare for them. The bound must never exceed the truth --
+#: that is what makes it safe to refuse on -- and must stay close enough on
+#: ungated designs to be worth computing.
+CALIBRATION: tuple[tuple[str, int, dict[str, Any]], ...] = (
+    (
+        "bert-base",
+        110_000_000,
+        {
+            "hidden_size": 768,
+            "num_hidden_layers": 12,
+            "num_attention_heads": 12,
+            "intermediate_size": 3072,
+            "vocab_size": 30522,
+        },
+    ),
+    (
+        "gpt2",
+        124_000_000,
+        {"n_embd": 768, "n_layer": 12, "n_head": 12, "n_vocab": 50257},
+    ),
+    (
+        "vit-b16",
+        86_000_000,
+        {"embed_dim": 768, "depth": 12, "num_heads": 12},
+    ),
+    (
+        "llama-70b",
+        70_000_000_000,
+        {
+            "hidden_size": 8192,
+            "num_hidden_layers": 80,
+            "num_attention_heads": 64,
+            "num_key_value_heads": 8,
+            "intermediate_size": 28672,
+            "vocab_size": 32000,
+            "tie_word_embeddings": False,
+        },
+    ),
+    ("mixtral-8x7b", 46_700_000_000, MIXTRAL_RECIPE["kwargs"]),
+)
+
+
+@pytest.mark.parametrize("name,real,kwargs", CALIBRATION, ids=[row[0] for row in CALIBRATION])
+def test_estimate_never_exceeds_the_real_parameter_count(
+    name: str, real: int, kwargs: dict[str, Any]
+) -> None:
+    """The bound is a bound: it must sit at or under the model's true size.
+
+    An estimate that could OVERSHOOT would be able to refuse a model that
+    actually fits, and the authoring stage runs once per model, so that mistake
+    is permanent. Undershooting only ever costs an attempt.
+    """
+
+    estimate = estimate_parameter_count({"kwargs": kwargs})
+    assert estimate is not None, name
+    assert estimate.parameter_count_lower_bound <= real, name
+    # Not so loose that it is useless: within a factor of two of the truth.
+    assert estimate.parameter_count_lower_bound >= real // 2, name
+
+
 def test_host_capacity_reads_the_machine() -> None:
     """The host figure comes from the machine, not a hardcoded constant."""
 
