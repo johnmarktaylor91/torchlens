@@ -67,10 +67,12 @@ from menagerie.crawler.licenses import (
     recompute_license_decision,
 )
 from menagerie.crawler.metadata import (
-    authored_fact_leaves,
     recompute_accepted_identities,
 )
-from menagerie.crawler.proposal import ProposalValidationReport
+from menagerie.crawler.proposal import (
+    ProposalValidationReport,
+    required_metadata_field_checks,
+)
 from menagerie.crawler.mirrors import (
     ArtifactOrigin,
     MirrorClass,
@@ -2053,9 +2055,7 @@ def make_gate(
                         "reason": "supported",
                         "required_repair": None,
                     }
-                    for field in authored_fact_leaves(
-                        _model_facts(model), schema_version=MODEL_SCHEMA_VERSION
-                    )
+                    for field in required_metadata_field_checks(_model_facts(model))
                 ],
                 "fidelity": {
                     "required": fidelity_required,
@@ -2624,8 +2624,10 @@ def make_model(
         },
     }
     if accepted:
+        # Support the closed gated-claim vocabulary, exactly as the author
+        # contract instructs a real author to tag excerpts.
         model["evidence"]["excerpts"][0]["supports"] = list(
-            authored_fact_leaves(_model_facts(model), schema_version=MODEL_SCHEMA_VERSION)
+            required_metadata_field_checks(_model_facts(model))
         )
         _bind_model_identities(model)
     return model

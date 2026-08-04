@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import re
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Collection, Mapping, Optional, Sequence
 
 from menagerie.crawler.constants import (
     AUTHOR_PROPOSAL_SCHEMA_VERSION_V3,
@@ -702,7 +702,23 @@ def validate_external_metadata_for_write(
 def validate_authored_facts_for_write(
     facts: Mapping[str, Any], gate_item: Mapping[str, Any]
 ) -> MetadataValidationReport:
-    """Require one unique accurate evidence/relevance check for every authored leaf.
+    """Require one unique accurate check for every machine-required gated claim.
+
+    The v3 required set is the closed gated-claim vocabulary derived by
+    :func:`menagerie.crawler.proposal.required_metadata_field_checks` -- the same
+    contract the author's evidence coverage is validated against, and the same
+    machine-derived list stamped into every checker envelope item as
+    ``required_field_checks``. Coverage is exact in both directions: a listed
+    claim without a check refuses as an ungated authored fact, and a check naming
+    anything outside the list refuses as extraneous. The set was previously every
+    authored schema leaf (200+ paths), which no checker was told and no authored
+    evidence pack could support -- the author contract deliberately tags excerpts
+    at claim granularity -- so exhaustive-looking gates died here on facts nobody
+    could ever have gated. Narrowing to the claim vocabulary is an alignment with
+    the author-side contract, not a relaxation of it: hashes, excerpts, and
+    locators stay gated by ``integrity``; identity and rung by ``rung_check``;
+    citation leaf values by deterministic verbatim grounding at admission; and
+    implementation fidelity by the fidelity lane.
 
     Parameters
     ----------
@@ -714,7 +730,7 @@ def validate_authored_facts_for_write(
     Returns
     -------
     MetadataValidationReport
-        Exhaustive authored-leaf gate coverage.
+        Exhaustive gated-claim coverage.
     """
 
     _validate_gate_header(gate_item)
@@ -724,10 +740,19 @@ def validate_authored_facts_for_write(
     if not isinstance(checks, list):
         raise MetadataValidationError("metadata gate has no per-field checks")
     strict_v3 = "terminal_disposition" in gate_item
-    required = authored_fact_leaves(
-        facts,
-        schema_version=MODEL_SCHEMA_VERSION_V3 if strict_v3 else MODEL_SCHEMA_VERSION,
-    )
+    absence_covered: Mapping[str, list[str]] = {}
+    if strict_v3:
+        # Imported at call time: ``proposal`` imports this module at load time,
+        # so the shared claim derivation is reached lazily to stay acyclic.
+        from menagerie.crawler.proposal import (
+            declared_absence_coverage,
+            required_metadata_field_checks,
+        )
+
+        required: Collection[str] = frozenset(required_metadata_field_checks(facts))
+        absence_covered = declared_absence_coverage(facts, required)
+    else:
+        required = authored_fact_leaves(facts, schema_version=MODEL_SCHEMA_VERSION)
     source_ids, evidence_by_id = _authored_reference_indexes(facts)
     verdicts: dict[str, str] = {}
     for check in checks:
@@ -740,15 +765,17 @@ def validate_authored_facts_for_write(
         if field not in required:
             if strict_v3:
                 # Name the OWNER. This check reads the CHECKER's gate item, not
-                # the author's proposal, so "extraneous authored field check:
-                # identity" alone reads as an author defect and has already sent
-                # one investigation looking for a stray authored leaf. The two
-                # ways a checker lands here are a fact SECTION name and a grouped
-                # ("citation; dates") name, so say which leaf spelling is owed.
+                # the author's proposal, so an unexplained "extraneous" here reads
+                # as an author defect and has already sent one investigation
+                # looking for a stray authored fact. A checker lands here with a
+                # section name, a grouped ("citation; dates") name, or a per-leaf
+                # expansion of a claim, so say where the owed spelling lives.
                 raise MetadataValidationError(
-                    "checker gate names a field that is not an authored leaf: "
-                    f"{field!r}; each field_check must name exactly one leaf path "
-                    "as the model schema spells it (no section names, no grouped names)"
+                    "checker gate names a field outside the required gated-claim "
+                    f"checks: {field!r}; each field_check must name exactly one "
+                    "claim from the envelope item's machine-derived "
+                    "required_field_checks list (no section names, no grouped "
+                    "names, no per-leaf expansions)"
                 )
             continue
         if field in verdicts:
@@ -761,7 +788,10 @@ def validate_authored_facts_for_write(
         evidence_ids = check.get("evidence_ids")
         if not isinstance(evidence_ids, list):
             raise MetadataValidationError(f"authored field check has invalid evidence_ids: {field}")
-        if not _is_keyword_leaf(field) and not evidence_ids:
+        if not _is_keyword_leaf(field) and not evidence_ids and field not in absence_covered:
+            # A typed absence availability state is the one evidence-free route:
+            # there is no excerpt that says a fact is not there, so the checker's
+            # verdict judges the recorded absence itself.
             raise MetadataValidationError(
                 f"authored field check lacks verified evidence support: {field}"
             )
@@ -772,6 +802,7 @@ def validate_authored_facts_for_write(
                 evidence_ids=evidence_ids,
                 source_ids=source_ids,
                 evidence_by_id=evidence_by_id,
+                absence_cited=frozenset(absence_covered.get(field, ())),
             )
         verdicts[field] = str(check.get("verdict"))
     missing = set(required) - set(verdicts)
@@ -863,8 +894,16 @@ def _validate_field_check_references(
     evidence_ids: Sequence[Any],
     source_ids: frozenset[str],
     evidence_by_id: Mapping[str, Mapping[str, Any]],
+    absence_cited: frozenset[str] = frozenset(),
 ) -> None:
-    """Resolve one exact v3 checker field check to proposal sources and excerpts."""
+    """Resolve one exact v3 checker field check to proposal sources and excerpts.
+
+    ``absence_cited`` carries the evidence IDs the claim's own typed absence
+    availability record cites. Those excerpts ground the recorded bounded search
+    rather than the claim value, so they discharge the supports-naming
+    requirement -- and nothing else: they must still exist and still come from
+    checked sources, exactly like every other reference.
+    """
 
     if not all(isinstance(source_id, str) and source_id for source_id in checked_source_ids) or len(
         checked_source_ids
@@ -894,6 +933,8 @@ def _validate_field_check_references(
             raise MetadataValidationError(
                 f"authored field evidence source was not checked for {field}: {evidence_id}"
             )
+        if str(evidence_id) in absence_cited:
+            continue
         supports = excerpt.get("supports")
         accepted_supports = {field, f"proposed_facts.{field}"}
         if not isinstance(supports, list) or not accepted_supports.intersection(supports):

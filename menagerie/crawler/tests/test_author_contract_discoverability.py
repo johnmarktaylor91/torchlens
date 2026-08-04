@@ -309,29 +309,32 @@ def test_the_exact_source_echo_rule_is_stated_in_the_registered_schema() -> None
 
 
 @pytest.mark.smoke
-def test_the_leaf_path_rule_is_stated_where_the_checker_reads() -> None:
-    """``field_check.field`` documents the leaf grammar the gate actually requires.
+def test_the_required_check_rule_is_stated_where_the_checker_reads() -> None:
+    """``field_check.field`` documents the machine-derived required-check contract.
 
     Not an author rule, but the same failure shape and the same one-shot cost:
     ``metadata.validate_authored_facts_for_write`` requires exactly one check per
-    authored LEAF path, and ``m5915`` terminalized because its checker wrote the
-    SECTION name ``identity`` and grouped names like ``citation; dates``. The gate
-    schema said "Mandatory field." and the prompt said "Group only truly identical
-    fields within the same item" -- an instruction for the very thing that is
-    refused. Both surfaces must now carry the rule.
+    machine-required gated claim, and the checker is TOLD that set through the
+    envelope item's ``required_field_checks`` inventory rather than asked to
+    reconstruct it from the proposal. ``m5915`` terminalized on the earlier shape
+    of this wall (a SECTION name ``identity``, grouped names like ``citation;
+    dates``); the rung-2 census then proved the leaf-granular successor rule was
+    unsatisfiable in the other direction -- 10-25 emitted checks against 200+
+    demanded leaves that no authored evidence pack could support. Both surfaces
+    must carry the closed-inventory rule.
     """
 
     field = _description(
         _schema("gate-common.schema.json"), "$defs", "field_check", "properties", "field"
     )
     lowered = field.lower()
-    assert "leaf" in lowered, "the leaf grammar must be named"
-    assert "citation.year" in field, "an exact accepted spelling must be shown"
-    assert "evidence.excerpts[].locator" in field, "the collection spelling must be shown"
+    assert "required_field_checks" in field, "the machine-derived inventory must be named"
+    assert "verbatim" in lowered, "the exact-copy rule must be stated"
+    assert "external_metadata.citation" in field, "an exact accepted spelling must be shown"
     assert "proposed_facts." in field, "the tolerated prefix must be stated"
     assert "section" in lowered, "the section-name refusal must be stated"
     assert "'identity'" in field, "the exact spelling that killed m5915 must be shown"
-    assert "semicolon" in lowered and "comma" in lowered, "both joined spellings must be refused"
+    assert "per-leaf expansion" in lowered, "the leaf-expansion refusal must be stated"
     assert "duplicate" in lowered and "ungated" in lowered, "one-to-one coverage must be stated"
 
     prompt = (_CRAWLER_ROOT / "prompts" / "codex_accuracy_checker_v2.txt").read_text(
@@ -341,8 +344,10 @@ def test_the_leaf_path_rule_is_stated_where_the_checker_reads() -> None:
         "the instruction that produced the grouped names must be gone, not merely "
         "contradicted elsewhere in the same prompt"
     )
-    assert "NEVER group" in prompt
-    assert "evidence.excerpts[].locator" in prompt
+    unwrapped = " ".join(prompt.split())
+    assert "required_field_checks" in prompt, "the checker must be told to read the inventory"
+    assert "EXACTLY ONE check per listed string" in unwrapped
+    assert "never reconstruct it by inspecting the proposal" in unwrapped
 
 
 @pytest.mark.smoke
@@ -415,9 +420,13 @@ def test_the_guarded_rules_are_still_the_rules_the_code_enforces() -> None:
     )
 
     metadata_source = (_CRAWLER_ROOT / "metadata.py").read_text(encoding="utf-8")
-    assert "is not an authored leaf" in metadata_source, (
-        "the leaf-path refusal is documented; its message must keep naming the checker "
-        "gate as the owner rather than reading as an author defect"
+    assert "checker gate names a field outside the required gated-claim" in metadata_source, (
+        "the extraneous-check refusal is documented; its message must keep naming the "
+        "checker gate as the owner rather than reading as an author defect"
+    )
+    assert "ungated authored facts" in metadata_source, (
+        "the exact-coverage refusal must survive the closed-inventory narrowing; a "
+        "listed claim without a check still refuses"
     )
 
 

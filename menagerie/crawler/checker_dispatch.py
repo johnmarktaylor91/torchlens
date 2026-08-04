@@ -24,7 +24,11 @@ from menagerie.crawler.constants import (
 from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.models import JsonObject, bounded_json_repr
 from menagerie.crawler.operator_protocol import build_operator_fields
-from menagerie.crawler.proposal import ProposalValidationError, required_verified_hash_keys
+from menagerie.crawler.proposal import (
+    ProposalValidationError,
+    required_metadata_field_checks,
+    required_verified_hash_keys,
+)
 from menagerie.crawler.schema import (
     PayloadValidationError,
     RequiredFieldProjection,
@@ -837,7 +841,30 @@ def _build_envelope(
         if not stable_id or stable_id in seen:
             raise CheckerDispatchError("checker envelope stable IDs must be non-empty and unique")
         seen.add(stable_id)
-        normalized_items.append(dict(item))
+        normalized = dict(item)
+        # The required-check inventory is MACHINE-DERIVED here, at the one
+        # boundary every checker request passes through, from the same proposal
+        # bytes ``verified_hashes`` binds. The checker was previously asked to
+        # reconstruct the required coverage set by inspecting the proposal JSON,
+        # which no model does reliably, so complete well-reasoned verdicts died
+        # at canonical write on ``ungated authored facts``. Stamping is
+        # unconditional; a caller-supplied conflicting value is refused rather
+        # than overwritten, mirroring the gate-scaffold rule, because silently
+        # rewriting it would hide the only evidence that a caller invented an
+        # inventory instead of deriving one.
+        facts = proposal.get("proposed_facts")
+        if not isinstance(facts, Mapping):
+            raise CheckerDispatchError("checker item proposal lacks proposed_facts")
+        derived_checks = list(required_metadata_field_checks(facts))
+        supplied_checks = normalized.get("required_field_checks")
+        if supplied_checks is not None and supplied_checks != derived_checks:
+            raise CheckerDispatchError(
+                f"checker item {stable_id} supplies a required_field_checks list that is "
+                "not the machine derivation for its own proposal; the inventory is "
+                "machine-owned and cannot be authored"
+            )
+        normalized["required_field_checks"] = derived_checks
+        normalized_items.append(normalized)
     prompt_sha256 = hash_bytes(_read_prompt())
     resolved_output_path = Path(output_path).resolve()
     operator_fields = build_operator_fields(
