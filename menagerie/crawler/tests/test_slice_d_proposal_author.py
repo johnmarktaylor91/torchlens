@@ -321,6 +321,100 @@ def test_arxiv_identifier_present_in_the_fetched_paper_grounds_the_citation(
     assert report.rung.value == "R1_LIBRARY"
 
 
+def _r1_recipe(proposal: dict[str, Any]) -> dict[str, Any]:
+    """Return the mutable R1 library recipe of a grounded proposal fixture."""
+
+    recipe = proposal["proposed_facts"]["implementation"]["library_recipe"]
+    assert isinstance(recipe, dict)
+    return recipe
+
+
+@pytest.mark.smoke
+def test_r1_with_no_pretrained_capable_constructor_passes_on_assertion(
+    tmp_path: Path,
+) -> None:
+    """The pilot's most common R1 shape is satisfiable again, honestly.
+
+    ``MiniMaxForCausalLM(config)``, ``TAGConv``, and ``DiehlAndCook2015v2`` all
+    died on ``R1_LIBRARY must explicitly disable pretrained fields`` because
+    their constructors expose nothing to disable. The checked positive
+    assertion replaces that wall: an empty disable list plus
+    ``pretrained_fields_absent: true`` passes the proposal gate, and the
+    assertion is re-verified against the real constructor signature at load.
+    """
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    recipe = _r1_recipe(proposal)
+    recipe["kwargs"] = {"hidden_size": 8}
+    recipe["pretrained_disable_fields"] = []
+    recipe["pretrained_fields_absent"] = True
+    report = validate_author_proposal(
+        proposal, allowed_model_dir=tmp_path, source_manifest=manifest
+    )
+    assert report.rung.value == "R1_LIBRARY"
+
+
+@pytest.mark.smoke
+def test_r1_silence_about_pretrained_fields_is_still_refused(tmp_path: Path) -> None:
+    """An empty disable list with no assertion remains the undeclared state.
+
+    The wall came from conflating "nothing to disable" with "did not think
+    about it"; only the first is now expressible, and silence still refuses.
+    """
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    recipe = _r1_recipe(proposal)
+    recipe["kwargs"] = {"hidden_size": 8}
+    recipe["pretrained_disable_fields"] = []
+    with pytest.raises(ProposalValidationError, match="must declare its pretrained disposition"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+@pytest.mark.smoke
+def test_r1_enabled_pretrained_flag_is_still_refused(tmp_path: Path) -> None:
+    """The protection the rule exists for fires unchanged: enabling refuses."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    recipe = _r1_recipe(proposal)
+    recipe["kwargs"] = {"weights": "IMAGENET1K_V1"}
+    recipe["pretrained_disable_fields"] = ["weights"]
+    with pytest.raises(ProposalValidationError, match="does not carry a disabling value"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+@pytest.mark.smoke
+def test_r1_unlisted_pretrained_capable_kwarg_is_refused(tmp_path: Path) -> None:
+    """A pretrained-capable kwargs key cannot ride through unlisted.
+
+    Listing a harmless disabled field beside an enabling ``weights`` value used
+    to satisfy the non-empty rule; the kwargs scan now refuses the dodge.
+    """
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    recipe = _r1_recipe(proposal)
+    recipe["kwargs"] = {"weights": "IMAGENET1K_V1", "progress": False}
+    recipe["pretrained_disable_fields"] = ["progress"]
+    with pytest.raises(ProposalValidationError, match="leave known pretrained keywords enabled"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+    # Even a DISABLING value on a known key must be declared where readers look.
+    recipe["kwargs"] = {"weights": None, "progress": False}
+    with pytest.raises(ProposalValidationError, match="pretrained-capable keys"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+@pytest.mark.smoke
+def test_r1_assertion_beside_disable_fields_is_refused_as_contradiction(
+    tmp_path: Path,
+) -> None:
+    """Both declarations at once answer the same question twice and refuse."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    recipe = _r1_recipe(proposal)
+    recipe["pretrained_fields_absent"] = True
+    with pytest.raises(ProposalValidationError, match="contradicts"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
 def _blank_search_report(proposal: dict[str, Any]) -> None:
     """Remove the bounded search that would justify an unanswered field."""
 

@@ -27,6 +27,17 @@ declared channel exactly as it would be anywhere else, and a declared channel
 that fails to ground does NOT fall back to a file -- otherwise the file would
 launder what the contract just rejected.
 
+Resolution is PER RECORD, not all-or-nothing. Every excerpt shown was matched
+verbatim against frozen bytes; every declared ID that was not lands in
+``unresolved_evidence_ids`` and is shown to nobody. The two sets partition the
+declared IDs exactly, so a pack can never present an unverified record as
+verified, and the resolution stops being ``grounded`` the instant one ID fails.
+Two floors bound the partial verdict: nothing verified is a hard ``unresolved``,
+and so is a verified subset in which no row even claims the terminal predicate,
+because grounded decoration around a dead predicate is not partial grounding.
+See :func:`_settle` for why the previous all-or-nothing rule paid authors to
+cite LESS evidence.
+
 ``CANDIDATE_EVIDENCE_FILENAMES`` remains as a compatibility fallback for attempt
 directories written before the channel existed, and is consulted ONLY when the
 payload declares no records at all. It is not the contract; it is a reader for
@@ -54,7 +65,11 @@ SOURCE_CAS_DIRNAME = "source-cas"
 DISCOVERY_EVIDENCE_KIND = "discovery-evidence-v1"
 
 GROUNDED = "grounded"
+PARTIALLY_GROUNDED = "partially-grounded"
 UNRESOLVED = "unresolved"
+
+#: Every resolution a terminal evidence pack may declare.
+TERMINAL_EVIDENCE_RESOLUTIONS = frozenset({GROUNDED, PARTIALLY_GROUNDED, UNRESOLVED})
 
 #: Closed vocabulary naming where the excerpts a resolution judged arrived from.
 CHANNEL_DECLARED = "declared-payload"
@@ -80,14 +95,21 @@ class TerminalEvidenceResolution:
     resolution:
         ``grounded`` when every declared evidence ID resolved to a literal
         excerpt the machine matched verbatim against its frozen source;
-        ``unresolved`` otherwise.
+        ``partially-grounded`` when a strict subset did AND that subset still
+        includes an excerpt claiming the terminal predicate, with every gap
+        named; ``unresolved`` when nothing usable verified -- none did, or the
+        predicate-bearing rows themselves all failed.
     excerpts:
-        Exact verified excerpt records, in declared order. Empty when
-        unresolved -- an unverified row is never presented as evidence.
+        Exact verified excerpt records, in declared order. Every row here was
+        matched byte-for-byte against frozen bytes -- an unverified row is never
+        presented as evidence at any resolution. Empty when unresolved.
     unresolved_evidence_ids:
-        Declared evidence IDs with no inspectable, re-derived record.
+        Declared evidence IDs with no inspectable, re-derived record. Together
+        with the IDs on ``excerpts`` this partitions the declared set exactly:
+        every declared ID lands in one bucket and never in both.
     reason:
-        Machine-written explanation of an unresolved outcome.
+        Machine-written explanation naming each gap, for any outcome that is not
+        fully grounded.
     channel:
         Closed name of the channel whose records this verdict judged, so a
         reader can tell a contract-declared grounding from a historical
@@ -155,18 +177,122 @@ def resolve_terminal_evidence(
         verified, reasons = _verify_records(
             list(declared_records), declared, source_manifest, cas_root, CHANNEL_DECLARED
         )
-        if len(verified) == len(declared):
-            return TerminalEvidenceResolution(
-                GROUNDED, tuple(verified), (), None, CHANNEL_DECLARED
-            )
+        return _settle(verified, reasons, declared, CHANNEL_DECLARED, predicate)
+    return _resolve_author_excerpts(source_manifest, declared, author_root, predicate)
+
+
+def _settle(
+    verified: Sequence[JsonObject],
+    reasons: Sequence[str],
+    declared: tuple[str, ...],
+    channel: str,
+    predicate: str,
+) -> TerminalEvidenceResolution:
+    """Turn one channel's per-record outcome into a resolution.
+
+    Resolution used to be all-or-nothing: one ungrounded ID discarded every
+    excerpt that DID re-derive. Pilot model ``m9617`` is the proof that this is
+    not a tripwire but an inversion of the incentive it was meant to create. It
+    emitted an honest ``BLOCKED`` citing thirteen records; ten grounded
+    byte-for-byte, including the one carrying the ``blocked-prerequisite``
+    predicate, and three cited a response the broker never froze. All ten were
+    thrown away, the checker was handed nothing to read, and the model died
+    ``terminal-disposition-unverifiable``. The author would have SURVIVED by
+    citing fewer IDs -- a system that wants more grounding paying authors to
+    ground less.
+
+    Per-record settlement removes that inversion without conceding anything to
+    the padding argument it was defending against. A padded ID cannot launder:
+    it never becomes an excerpt, it is named in ``unresolved_evidence_ids``, and
+    the resolution stops being ``grounded`` the moment one ID fails. What the
+    partial verdict buys is that the nine good citations beside a bad one are
+    still shown, under a name that says plainly they are not the whole pack.
+
+    Two floors keep the partial verdict honest. Nothing verified is a hard
+    ``unresolved``. And a partial pack must still carry the terminal predicate
+    itself: if no verified row's ``supports`` even claims the predicate the
+    recommendation rests on -- because the predicate-bearing rows are exactly the
+    ones that failed -- then the pack has grounded only decoration, and grounded
+    decoration around an ungrounded predicate is not partial grounding. It stays
+    ``unresolved`` with an empty excerpt tuple, so padding-in-reverse (dressing a
+    dead predicate in verified trimmings) buys nothing.
+
+    Parameters
+    ----------
+    verified:
+        Rows this channel re-derived from frozen bytes, in declared order.
+    reasons:
+        One named reason per declared ID that did not re-derive.
+    declared:
+        Exact declared evidence identities, in declared order.
+    channel:
+        Closed channel name whose records were judged.
+    predicate:
+        Closed typed terminal predicate the evidence must still carry for a
+        partial verdict to stand.
+
+    Returns
+    -------
+    TerminalEvidenceResolution
+        Grounded, partially grounded, or unresolved outcome.
+    """
+
+    if len(verified) == len(declared):
+        return TerminalEvidenceResolution(GROUNDED, tuple(verified), (), None, channel)
+    grounded_ids = {str(row["evidence_id"]) for row in verified}
+    unresolved = tuple(value for value in declared if value not in grounded_ids)
+    detail = "; ".join(reasons)
+    if not verified:
         return TerminalEvidenceResolution(
             UNRESOLVED,
             (),
-            declared,
-            "declared evidence_records did not ground: " + "; ".join(reasons),
-            CHANNEL_DECLARED,
+            unresolved,
+            f"no declared evidence_record re-derived from its frozen source: {detail}",
+            channel,
         )
-    return _resolve_author_excerpts(source_manifest, declared, author_root)
+    if not _any_supports_predicate(verified, predicate):
+        return TerminalEvidenceResolution(
+            UNRESOLVED,
+            (),
+            unresolved,
+            f"no verified excerpt claims the terminal predicate {predicate!r}: {detail}",
+            channel,
+        )
+    return TerminalEvidenceResolution(
+        PARTIALLY_GROUNDED,
+        tuple(verified),
+        unresolved,
+        f"{len(verified)} of {len(declared)} declared evidence IDs re-derived from frozen "
+        f"bytes; the rest are named here and are shown to no one: {detail}",
+        channel,
+    )
+
+
+def _any_supports_predicate(verified: Sequence[JsonObject], predicate: str) -> bool:
+    """Return whether any verified excerpt claims to support the terminal predicate.
+
+    The ``supports`` list is the author's claim about what each excerpt shows;
+    whether the text actually supports it stays the checker's judgment. This
+    floor only prevents the degenerate partial pack whose grounded rows never
+    even claim the predicate the terminal recommendation rests on.
+
+    Parameters
+    ----------
+    verified:
+        Excerpt rows already re-derived from frozen source bytes.
+    predicate:
+        Closed typed terminal predicate.
+
+    Returns
+    -------
+    bool
+        Whether at least one verified row's ``supports`` names the predicate.
+    """
+
+    return any(
+        isinstance(row.get("supports"), list) and predicate in row["supports"]
+        for row in verified
+    )
 
 
 def _resolve_machine_discovery(
@@ -242,7 +368,10 @@ def _resolve_machine_discovery(
 
 
 def _resolve_author_excerpts(
-    source_manifest: Mapping[str, Any], declared: tuple[str, ...], author_root: Path
+    source_manifest: Mapping[str, Any],
+    declared: tuple[str, ...],
+    author_root: Path,
+    predicate: str,
 ) -> TerminalEvidenceResolution:
     """Match every author-cited excerpt verbatim against its frozen source.
 
@@ -254,6 +383,8 @@ def _resolve_author_excerpts(
         Exact declared evidence identities.
     author_root:
         Private staging root for one model's author round trips.
+    predicate:
+        Closed typed terminal predicate handed through to settlement.
 
     Returns
     -------
@@ -274,6 +405,7 @@ def _resolve_author_excerpts(
         )
     cas_root = author_root / SOURCE_CAS_DIRNAME
     last_reason = ""
+    best: Optional[TerminalEvidenceResolution] = None
     for path in candidates:
         record = _read_json_object(path)
         if record is None:
@@ -286,12 +418,22 @@ def _resolve_author_excerpts(
         verified, reasons = _verify_records(
             excerpts, declared, source_manifest, cas_root, CHANNEL_ATTEMPT_DIRECTORY
         )
-        if len(verified) != len(declared):
-            last_reason = f"{path}: " + "; ".join(reasons)
-            continue
-        return TerminalEvidenceResolution(
-            GROUNDED, tuple(verified), (), None, CHANNEL_ATTEMPT_DIRECTORY
-        )
+        settled = _settle(verified, reasons, declared, CHANNEL_ATTEMPT_DIRECTORY, predicate)
+        if settled.grounded:
+            return settled
+        last_reason = f"{path}: " + "; ".join(reasons)
+        # A fully grounded later candidate still wins, so keep scanning; a
+        # partial one is only used when no candidate grounds outright.
+        if best is None and settled.excerpts:
+            best = TerminalEvidenceResolution(
+                settled.resolution,
+                settled.excerpts,
+                settled.unresolved_evidence_ids,
+                f"{path}: {settled.reason}",
+                CHANNEL_ATTEMPT_DIRECTORY,
+            )
+    if best is not None:
+        return best
     return TerminalEvidenceResolution(
         UNRESOLVED, (), declared, f"{no_channel}; {last_reason}", CHANNEL_ATTEMPT_DIRECTORY
     )

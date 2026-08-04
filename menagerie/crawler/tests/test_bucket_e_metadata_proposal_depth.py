@@ -621,6 +621,213 @@ def test_r2_checked_candidate_withheld_from_fetch_is_rejected(tmp_path: Path) ->
         _validate_focused(proposal, manifest, tmp_path)
 
 
+_UNTYPED_VENDORED_CODE = (
+    "import torch.nn as nn\n\n"
+    "class ExampleNet(nn.Module):\n"
+    "    def __init__(self):\n"
+    "        super().__init__()\n"
+    "        self.conv = nn.Conv2d(3, 8, 3)\n"
+    "        self.act = nn.ReLU()\n"
+    "        self.head = nn.Linear(8, 2)\n\n"
+    "    def forward(self, value):\n"
+    "        hidden = self.act(self.conv(value))\n"
+    "        return self.head(hidden.mean(dim=(2, 3)))\n"
+)
+
+_TYPED_VENDOR_ADAPTER = (
+    "from __future__ import annotations\n\n"
+    "import vendored_net\n\n"
+    "def build_model() -> object:\n"
+    "    return vendored_net.ExampleNet()\n\n"
+    "def make_dummy_call(seed: int, device: str) -> tuple[tuple[()], dict[str, object]]:\n"
+    "    return (), {}\n"
+)
+
+
+def _r2_vendored_proposal(
+    tmp_path: Path,
+    *,
+    frozen_code: str = _UNTYPED_VENDORED_CODE,
+    staged_code: str | None = None,
+    adapter_code: str = _TYPED_VENDOR_ADAPTER,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Build an R2 proposal whose adapter imports a really staged vendored file.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated source and adapter directory.
+    frozen_code:
+        Exact upstream implementation bytes frozen in the controlled manifest.
+    staged_code:
+        Bytes actually staged as ``vendored_net.py``; defaults to the frozen
+        bytes, i.e. a verbatim vendoring.
+    adapter_code:
+        Staged entry-point adapter source.
+
+    Returns
+    -------
+    tuple[dict[str, Any], dict[str, Any]]
+        R2 proposal and exact source manifest.
+    """
+
+    proposal, manifest = _r2_proposal(tmp_path, bound=True)
+    facts = proposal["proposed_facts"]
+    frozen_bytes = frozen_code.encode()
+    frozen_digest = hash_bytes(frozen_bytes)
+    impl_cas = tmp_path / "impl-source.py"
+    impl_cas.write_text(frozen_code)
+    declared_impl = dict(facts["source_resolution"]["sources"][0])
+    declared_impl.update(
+        {
+            "source_id": "source-impl",
+            "role": "implementation",
+            "kind": "repository",
+            "url": "https://example.com/upstream/vendored_net.py",
+            "locator": "vendored_net.py",
+            "content_sha256": frozen_digest,
+            "byte_count": len(frozen_bytes),
+        }
+    )
+    facts["source_resolution"]["sources"].append(dict(declared_impl))
+    manifest["sources"].append({**declared_impl, "cas_path": str(impl_cas)})
+    manifest["manifest_sha256"] = stable_hash(manifest["sources"])
+    proposal["verified_hashes"]["source_manifest"] = manifest["manifest_sha256"]
+    facts["evidence"]["excerpts"].append(
+        {
+            "evidence_id": "evidence-impl",
+            "source_id": "source-impl",
+            "locator": f"bytes:0-{len(frozen_bytes)}",
+            "text": frozen_code,
+            "text_sha256": frozen_digest,
+            "supports": ["implementation.architecture"],
+            "family_level": False,
+            "disposition": "supporting",
+            "license_disposition": "short-excerpt-committed",
+        }
+    )
+    (tmp_path / "vendored_net.py").write_text(
+        frozen_code if staged_code is None else staged_code
+    )
+    (tmp_path / "adapter.py").write_text(adapter_code)
+    implementation = facts["implementation"]
+    implementation["code_sha256"] = hash_bytes(adapter_code.encode())
+    implementation["upstream_files"] = [
+        {
+            "source_id": "source-impl",
+            "path": "vendored_net.py",
+            "sha256": frozen_digest,
+            "use": "vendored verbatim as the model definition module",
+        }
+    ]
+    implementation["source_to_code_map"] = [
+        {
+            "material_item": "complete upstream forward architecture",
+            "source_id": "source-impl",
+            "source_locator": f"bytes:0-{len(frozen_bytes)}",
+            "evidence_ids": ["evidence-impl"],
+            "code_path": "vendored_net.py",
+            "code_locator": "lines 1-12",
+            "disposition": "wrapped-exactly",
+        }
+    ]
+    code_manifest = [dict(row) for row in model_code_manifest(tmp_path / "adapter.py", tmp_path)]
+    implementation["code_manifest"] = code_manifest
+    proposal["verified_hashes"]["code"] = implementation["code_sha256"]
+    proposal["verified_hashes"]["code_manifest"] = stable_hash(code_manifest)
+    return proposal, manifest
+
+
+@pytest.mark.smoke
+def test_r2_verbatim_vendored_member_may_be_untyped(tmp_path: Path) -> None:
+    """The m8189 shape is satisfiable: verbatim upstream bytes need no annotations.
+
+    The vendored module is unannotated, exactly as real upstream PyTorch source
+    is, and its staged bytes reproduce the frozen manifest digest byte for
+    byte. The typed entry adapter plus the byte-proven vendored member now pass
+    the gate; the typing rule was a legibility constraint that made R2
+    structurally unreachable, never a safety one.
+    """
+
+    proposal, manifest = _r2_vendored_proposal(tmp_path)
+    _validate_focused(proposal, manifest, tmp_path)
+
+
+@pytest.mark.smoke
+def test_r2_modified_vendored_bytes_restore_the_typing_requirement(tmp_path: Path) -> None:
+    """One changed byte voids the exemption: the file is author-edited code now."""
+
+    proposal, manifest = _r2_vendored_proposal(
+        tmp_path, staged_code=_UNTYPED_VENDORED_CODE.replace("8, 2", "8, 3")
+    )
+    with pytest.raises(ProposalValidationError, match="must be fully typed"):
+        _validate_focused(proposal, manifest, tmp_path)
+
+
+@pytest.mark.smoke
+def test_r2_vendored_bytes_never_escape_the_safety_checks(tmp_path: Path) -> None:
+    """A frozen source carrying eval() is refused even as a byte-proven vendoring.
+
+    The exemption covers the LEGIBILITY rule only. If the upstream bytes
+    themselves contain dynamic execution, byte-fidelity to the frozen manifest
+    changes nothing: the safety AST check runs on every closure member.
+    """
+
+    hostile = (
+        "from __future__ import annotations\n\n"
+        "def build_upstream() -> object:\n"
+        "    return eval('object()')\n"
+    )
+    proposal, manifest = _r2_vendored_proposal(tmp_path, frozen_code=hostile)
+    with pytest.raises(ProposalValidationError, match="forbidden dynamic execution"):
+        _validate_focused(proposal, manifest, tmp_path)
+
+
+@pytest.mark.smoke
+def test_r2_entry_adapter_is_never_exempt_from_typing(tmp_path: Path) -> None:
+    """Binding the entry point itself as an upstream file earns no exemption.
+
+    The adapter is author-written by definition; even bytes that reproduce a
+    frozen source digest do not lift the annotation contract from it.
+    """
+
+    untyped_adapter = (
+        "import vendored_net\n\n"
+        "def build_model():\n"
+        "    return vendored_net.ExampleNet()\n\n"
+        "def make_dummy_call(seed, device):\n"
+        "    return (), {}\n"
+    )
+    proposal, manifest = _r2_vendored_proposal(tmp_path, adapter_code=untyped_adapter)
+    implementation = proposal["proposed_facts"]["implementation"]
+    adapter_digest = hash_bytes(untyped_adapter.encode())
+    adapter_cas = tmp_path / "adapter-source.py"
+    adapter_cas.write_text(untyped_adapter)
+    declared = dict(proposal["proposed_facts"]["source_resolution"]["sources"][-1])
+    declared.update(
+        {
+            "source_id": "source-adapter",
+            "locator": "adapter.py",
+            "content_sha256": adapter_digest,
+            "byte_count": len(untyped_adapter.encode()),
+        }
+    )
+    proposal["proposed_facts"]["source_resolution"]["sources"].append(declared)
+    manifest["sources"].append({**declared, "cas_path": str(adapter_cas)})
+    manifest["manifest_sha256"] = stable_hash(manifest["sources"])
+    proposal["verified_hashes"]["source_manifest"] = manifest["manifest_sha256"]
+    implementation["upstream_files"].append(
+        {
+            "source_id": "source-adapter",
+            "path": "adapter.py",
+            "sha256": adapter_digest,
+            "use": "attempted exemption of the entry adapter itself",
+        }
+    )
+    with pytest.raises(ProposalValidationError, match="must be fully typed"):
+        _validate_focused(proposal, manifest, tmp_path)
+
+
 @pytest.mark.parametrize(
     "phrase",
     [

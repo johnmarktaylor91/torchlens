@@ -364,6 +364,7 @@
     "$.payload.proposal.proposed_facts.implementation.library_recipe.post_construct[].kwargs": "author-gated",
     "$.payload.proposal.proposed_facts.implementation.library_recipe.post_construct[].method": "author-gated",
     "$.payload.proposal.proposed_facts.implementation.library_recipe.pretrained_disable_fields[]": "author-gated",
+    "$.payload.proposal.proposed_facts.implementation.library_recipe.pretrained_fields_absent": "author-gated",
     "$.payload.proposal.proposed_facts.implementation.library_recipe.symbol": "author-gated",
     "$.payload.proposal.proposed_facts.implementation.library_recipe.version": "author-gated",
     "$.payload.proposal.proposed_facts.implementation.mode": "author-gated",

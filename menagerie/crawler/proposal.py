@@ -29,7 +29,7 @@ from menagerie.crawler.metadata import (
     FOREIGN_AVAILABILITY_KEYS,
     MANDATORY_EXTERNAL_FIELDS,
 )
-from menagerie.crawler.recipe import RecipeError, validate_pretrained_disable_fields
+from menagerie.crawler.recipe import RecipeError, validate_pretrained_disposition
 from menagerie.crawler.schema import (
     PayloadValidationError,
     RequiredFieldProjection,
@@ -182,6 +182,45 @@ _GATE_VERIFIED_HASH_SPEC = required_field_projection_spec(
 )
 VERIFIED_HASH_PROPOSAL_KEY = _GATE_VERIFIED_HASH_SPEC.field_order[-1]
 _FORBIDDEN_CALLS = frozenset({"eval", "exec", "compile"})
+_BUILTIN_NAMESPACE_ROOTS = frozenset({"builtins", "__builtins__"})
+_FORBIDDEN_DOTTED_CALLS = frozenset(
+    {
+        "torch.compile",
+        # Known library entry points that evaluate strings as code. These are
+        # dynamic execution with a module prefix, refused by EXACT dotted name
+        # (canonical module plus its ubiquitous import alias), never by pattern:
+        # pattern-matching on the last segment is precisely the rule that made
+        # ``model.eval()`` unsatisfiable.
+        "pandas.eval",
+        "pd.eval",
+        "numexpr.evaluate",
+        "numexpr.re_evaluate",
+        "ne.evaluate",
+    }
+)
+"""Dotted calls refused by exact name rather than by their last segment.
+
+The last-segment rule that used to stand in for this refused every method whose
+name happens to collide with a builtin, and the collisions are not exotic:
+``model.eval()`` is how a staged adapter enters eval mode, which the author
+contract REQUIRES it to do, and ``re.compile()`` is ordinary library use. Pilot
+model ``m8189``'s adapter was refused for ``model.eval`` -- an unsatisfiable
+instruction pair, since the prompt mandates the call the validator rejects.
+
+Reaching the real builtin through an attribute needs the builtin namespace, so
+that is matched by ROOT instead; ``torch.compile`` stays refused by name because
+logging a compiled artifact is a separate locked anti-pattern; and the named
+string-evaluation entry points of pandas and numexpr are refused so that
+dropping the suffix rule does not silently legalise ``pd.eval("...")``.
+
+What this denylist explicitly does NOT cover, and cannot: dynamic-evaluation
+METHODS on arbitrary receivers (``df.eval("...")`` is statically
+indistinguishable from ``model.eval()``), non-standard import aliases
+(``import pandas as q; q.eval(...)``), and any module we have never heard of
+that evaluates strings. A static name list bounds known entry points; it is not,
+and must never be presented as, a sandbox. The runtime sandbox the staged code
+executes under is the actual containment boundary.
+"""
 _SLOP_PATTERNS = (
     r"\bcompact\s+(?:stand[- ]?in|substitute|approximation|version)\b",
     r"\bgeneric\s+(?:stand[- ]?in|substitute|implementation|version)\b",
@@ -407,7 +446,7 @@ def validate_author_proposal(
     implementation = _mapping(facts.get("implementation"), "implementation")
     allowed_dir = Path(allowed_model_dir).resolve()
     _validate_author_read_grants(facts, allowed_dir)
-    code_path = _validate_code(implementation, rung, allowed_dir)
+    code_path = _validate_code(implementation, rung, allowed_dir, source_manifest)
     _validate_source_ladder(
         rung,
         facts,
@@ -1342,7 +1381,10 @@ def _normalize_support_text(value: str) -> str:
 
 
 def _validate_code(
-    implementation: Mapping[str, Any], rung: SourceRung, allowed_dir: Path
+    implementation: Mapping[str, Any],
+    rung: SourceRung,
+    allowed_dir: Path,
+    source_manifest: Union[Mapping[str, Any], Sequence[Mapping[str, Any]]],
 ) -> Optional[Path]:
     """Validate staged typed code, path isolation, and forbidden execution APIs.
 
@@ -1354,6 +1396,9 @@ def _validate_code(
         Selected source rung.
     allowed_dir:
         Resolved model sandbox directory.
+    source_manifest:
+        Exact controlled-fetch source manifest, used to prove which closure
+        members are unmodified vendored upstream bytes.
 
     Returns
     -------
@@ -1403,6 +1448,7 @@ def _validate_code(
     expected_hash = implementation.get("code_sha256")
     if expected_hash != hash_bytes(code):
         raise ProposalValidationError("implementation.code_sha256 does not match staged bytes")
+    verbatim = _verbatim_upstream_members(implementation, allowed_dir, source_manifest)
     for member in resolve_model_code_closure(resolved, allowed_dir):
         try:
             tree = ast.parse(member.read_text(encoding="utf-8"), filename=str(member))
@@ -1410,9 +1456,107 @@ def _validate_code(
             raise ProposalValidationError(
                 f"staged model-code member is not valid UTF-8 Python: {exc}"
             ) from exc
-        _validate_typed_functions(tree)
+        if member == resolved or member not in verbatim:
+            _validate_typed_functions(tree)
+        # No exemption here, ever. Full annotation is a LEGIBILITY constraint on
+        # what the author wrote; dynamic execution and out-of-sandbox writes are
+        # a SAFETY constraint on what will run, and verbatim upstream bytes run
+        # exactly like authored ones.
         _validate_calls_and_writes(tree, allowed_dir)
     return resolved
+
+
+def _verbatim_upstream_members(
+    implementation: Mapping[str, Any],
+    allowed_dir: Path,
+    source_manifest: Union[Mapping[str, Any], Sequence[Mapping[str, Any]]],
+) -> frozenset[Path]:
+    """Return closure members proven to be unmodified fetched upstream bytes.
+
+    ``_validate_typed_functions`` exists so that the code an author WRITES is
+    legible: a reviewer can read a staged adapter and see the contract. Running
+    it over the whole recursive closure applied that requirement to bytes the
+    author did not write and is forbidden to touch. ``METHODOLOGY.md`` mandates
+    vendoring real upstream source verbatim, essentially no real PyTorch repo is
+    fully annotated (``def forward(self, x):``), and the two rules together made
+    R2_VENDOR -- a locked rung of the source-fidelity ladder -- structurally
+    unreachable: pilot model ``m8189`` vendored ``naver-ai/pit`` and was refused
+    on ``pit.py``'s upstream signatures, which no correct author could have
+    fixed without editing the vendored bytes.
+
+    The exemption is keyed on PROOF, not on a rung and not on a claim. A member
+    qualifies only when the proposal declares it in ``implementation.upstream_files``,
+    the row's ``source_id`` names a completed controlled fetch whose frozen
+    ``content_sha256`` equals the row's declared digest, AND the staged file's
+    own bytes hash to that same digest. An author cannot manufacture that chain:
+    it does not write the CAS, and the digest is recomputed here from the file
+    on disk rather than read from the declaration. Editing one character of a
+    vendored file breaks the digest and the file goes straight back under the
+    annotation rule; a row pointing at a digest some OTHER source froze binds
+    nothing.
+
+    The staged ENTRY POINT is never exempt, whatever it hashes to: ``build_model``
+    and ``make_dummy_call`` are the author's contract with the runner.
+
+    Parameters
+    ----------
+    implementation:
+        Proposal implementation block carrying ``upstream_files``.
+    allowed_dir:
+        Resolved model-local staging root.
+    source_manifest:
+        Exact controlled-fetch source manifest.
+
+    Returns
+    -------
+    frozenset[pathlib.Path]
+        Resolved members whose bytes are provably unmodified fetched source.
+    """
+
+    upstream_files = implementation.get("upstream_files")
+    if not isinstance(upstream_files, list) or not upstream_files:
+        return frozenset()
+    try:
+        indexed = _source_manifest_index(source_manifest)
+    except ProposalValidationError:
+        # A manifest we cannot read grants no exemption.
+        return frozenset()
+    members: set[Path] = set()
+    for upstream in upstream_files:
+        if not isinstance(upstream, Mapping):
+            continue
+        declared_path = upstream.get("path")
+        declared_hash = upstream.get("sha256")
+        source_id = upstream.get("source_id")
+        if (
+            not isinstance(declared_path, str)
+            or not isinstance(declared_hash, str)
+            or not isinstance(source_id, str)
+        ):
+            continue
+        # The binding is per ROW: the named source must exist, must be an
+        # actually completed controlled fetch, and must have frozen exactly the
+        # digest this row declares. A digest that merely appears somewhere in
+        # the manifest under a different source is not this row's provenance.
+        source = indexed.get(source_id)
+        if not _is_controlled_fetch(source):
+            continue
+        assert source is not None  # _is_controlled_fetch refused None
+        if source.get("content_sha256") != declared_hash:
+            continue
+        candidate = Path(declared_path)
+        if candidate.is_absolute():
+            continue
+        staged = (allowed_dir / candidate).resolve()
+        if not staged.is_relative_to(allowed_dir) or not staged.is_file():
+            continue
+        try:
+            observed = hash_bytes(staged.read_bytes())
+        except OSError:
+            continue
+        if observed == declared_hash:
+            members.add(staged)
+    return frozenset(members)
 
 
 def _validate_author_read_grants(facts: Mapping[str, Any], allowed_dir: Path) -> None:
@@ -1674,12 +1818,33 @@ def _validate_calls_and_writes(tree: ast.AST, allowed_dir: Path) -> None:
         if not isinstance(node, ast.Call):
             continue
         call_name = _call_name(node.func)
-        if call_name in _FORBIDDEN_CALLS or call_name.rsplit(".", 1)[-1] in _FORBIDDEN_CALLS:
+        if _is_forbidden_call(call_name):
             raise ProposalValidationError(f"forbidden dynamic execution call: {call_name}")
         if call_name == "open" and _open_writes(node):
             _validate_literal_write_target(node, allowed_dir, call_name)
         elif call_name.rsplit(".", 1)[-1] in _WRITE_METHODS:
             _validate_literal_write_target(node, allowed_dir, call_name)
+
+
+def _is_forbidden_call(call_name: str) -> bool:
+    """Return whether a static call name reaches dynamic execution.
+
+    Parameters
+    ----------
+    call_name:
+        Dotted static call name, or an empty string when none is derivable.
+
+    Returns
+    -------
+    bool
+        True for a bare builtin, an explicit builtin-namespace attribute, or a
+        refused-by-name dotted call.
+    """
+
+    if call_name in _FORBIDDEN_CALLS or call_name in _FORBIDDEN_DOTTED_CALLS:
+        return True
+    root, _, leaf = call_name.rpartition(".")
+    return root in _BUILTIN_NAMESPACE_ROOTS and leaf in _FORBIDDEN_CALLS
 
 
 def _call_name(function: ast.expr) -> str:
@@ -1826,14 +1991,29 @@ def _validate_source_ladder(
             for field in required
         ):
             raise ProposalValidationError("R1_LIBRARY recipe is incomplete")
-        if not recipe.get("pretrained_disable_fields"):
-            raise ProposalValidationError("R1_LIBRARY must explicitly disable pretrained fields")
+        # The pretrained rule is a real safety requirement -- a weight download
+        # inside a capture poisons the record with weights the catalog does not
+        # describe -- but "the array must be non-empty" was the wrong shape for
+        # it in both directions. It refused constructors that expose no such
+        # keyword (``MiniMaxForCausalLM(config)``: no value satisfies it, so
+        # every such model died a permanent dead record), and it accepted a
+        # recipe that named one harmless disabled field while a second, genuinely
+        # enabling keyword sat untouched in the same kwargs. What replaces it is
+        # a positive assertion that silence still fails, plus an unconditional
+        # refusal of any known pretrained keyword left enabled; the pinned
+        # SIGNATURE is then checked against that assertion at load time in
+        # ``recipe.load_declarative_recipe``, where the constructor is real.
         kwargs = recipe.get("kwargs")
         disable_fields = recipe.get("pretrained_disable_fields")
-        if not isinstance(kwargs, Mapping) or not isinstance(disable_fields, list):
+        fields_absent = recipe.get("pretrained_fields_absent", False)
+        if (
+            not isinstance(kwargs, Mapping)
+            or not isinstance(disable_fields, list)
+            or not isinstance(fields_absent, bool)
+        ):
             raise ProposalValidationError("R1_LIBRARY pretrained disable declaration is malformed")
         try:
-            validate_pretrained_disable_fields(kwargs, disable_fields)
+            validate_pretrained_disposition(kwargs, disable_fields, fields_absent=fields_absent)
         except RecipeError as exc:
             raise ProposalValidationError(str(exc)) from exc
     if rung is SourceRung.REIMPLEMENT:

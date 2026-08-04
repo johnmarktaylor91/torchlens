@@ -542,6 +542,63 @@ def _is_disabling_pretrained_value(value: Any) -> bool:
     )
 
 
+PRETRAINED_PARAMETER_NAMES = frozenset(
+    {
+        "checkpoint",
+        "checkpoint_path",
+        "ckpt",
+        "ckpt_path",
+        "encoder_weights",
+        "init_checkpoint",
+        "init_ckpt",
+        "load_pretrained",
+        "load_weights",
+        "pretrained",
+        "pretrained_backbone",
+        "pretrained_cfg",
+        "pretrained_cfg_overlay",
+        "pretrained_model",
+        "pretrained_model_name_or_path",
+        "pretrained_path",
+        "pretrained_weights",
+        "use_pretrained",
+        "weights",
+        "weights_backbone",
+        "weights_path",
+        "weights_url",
+    }
+)
+"""Constructor keywords KNOWN to load pretrained assets when left enabled.
+
+This set is a machine FLOOR, not a definition. The author still has to declare
+every pretrained keyword its pinned constructor exposes, including spellings
+absent from here; what this set adds is a check the author cannot talk its way
+past, because the driver derives it from the real signature rather than from the
+declaration.
+
+Membership is by EXACT name on purpose. A prefix or substring rule would refuse
+``pretrained_window_sizes`` -- a Swin geometry list that loads nothing -- and a
+rule that manufactures a refusal out of a spelling is a wall, not a tripwire.
+"""
+
+
+def _is_construct_node(value: Any) -> bool:
+    """Return whether a declarative value is a build-time construct node.
+
+    Parameters
+    ----------
+    value:
+        JSON-compatible declarative value.
+
+    Returns
+    -------
+    bool
+        True for the single-key ``__construct__`` mapping form.
+    """
+
+    return isinstance(value, Mapping) and set(value) == {CONSTRUCT_NODE_KEY}
+
+
 def validate_pretrained_disable_fields(
     kwargs: Mapping[str, Any], disable_fields: Sequence[str]
 ) -> None:
@@ -571,6 +628,203 @@ def validate_pretrained_disable_fields(
             raise RecipeError(
                 f"pretrained disable field {field!r} does not carry a disabling value"
             )
+
+
+def enabled_pretrained_kwargs(kwargs: Mapping[str, Any]) -> tuple[str, ...]:
+    """Return declared kwargs naming a known pretrained keyword without disabling it.
+
+    Parameters
+    ----------
+    kwargs:
+        Complete declarative constructor keyword mapping.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Sorted keyword names left enabled.
+    """
+
+    return tuple(
+        sorted(
+            name
+            for name, value in kwargs.items()
+            if name in PRETRAINED_PARAMETER_NAMES and not _is_disabling_pretrained_value(value)
+        )
+    )
+
+
+def validate_pretrained_disposition(
+    kwargs: Mapping[str, Any], disable_fields: Sequence[str], *, fields_absent: bool
+) -> None:
+    """Require an R1 recipe to state, positively, how it disables pretrained assets.
+
+    The safety requirement is that a capture never downloads weights the catalog
+    does not describe. The requirement it was implemented as -- "name at least one
+    field" -- is neither necessary nor sufficient for that. It is not necessary:
+    ``MiniMaxForCausalLM(config)`` exposes no such keyword, so no value satisfies
+    the rule and every ``XForCausalLM``-shaped R1 becomes a permanent dead record.
+    It is not sufficient either: naming one harmless disabled field satisfied the
+    check while a second, genuinely enabling keyword sat untouched in the same
+    ``kwargs``.
+
+    So the declaration is now a positive assertion with two honest spellings, and
+    silence is still refused because it is exactly what "I did not think about
+    it" looks like:
+
+    * a non-empty ``pretrained_disable_fields``, validated exactly as before, or
+    * ``pretrained_fields_absent`` -- "I read the pinned signature and it exposes
+      no such keyword", a CLAIM the driver re-derives from the real constructor in
+      :func:`load_declarative_recipe` rather than believing.
+
+    On top of either spelling, a kwarg that names a known pretrained keyword and
+    carries an enabling value is refused outright, and one that carries a
+    disabling value but is missing from ``disable_fields`` is refused until it is
+    declared there. Both clauses need no interpreter; the first closes the
+    sufficiency hole above, the second keeps the disable list a complete account
+    of the constructor's known pretrained surface.
+
+    Parameters
+    ----------
+    kwargs:
+        Complete declarative constructor keyword mapping.
+    disable_fields:
+        Fields claimed to disable pretrained assets.
+    fields_absent:
+        Author assertion that the pinned constructor exposes no pretrained
+        keyword at all.
+
+    Raises
+    ------
+    RecipeError
+        If the disposition is silent, self-contradictory, leaves a known
+        pretrained keyword enabled, or leaves a known pretrained keyword in
+        ``kwargs`` undeclared in ``disable_fields``.
+    """
+
+    if fields_absent and disable_fields:
+        raise RecipeError(
+            "pretrained_fields_absent contradicts a non-empty pretrained_disable_fields"
+        )
+    if not fields_absent and not disable_fields:
+        raise RecipeError(
+            "R1_LIBRARY must declare its pretrained disposition: either name every "
+            "pretrained keyword of the pinned constructor in pretrained_disable_fields, "
+            "or assert pretrained_fields_absent when that constructor exposes none"
+        )
+    validate_pretrained_disable_fields(kwargs, disable_fields)
+    enabled = enabled_pretrained_kwargs(kwargs)
+    if enabled:
+        raise RecipeError(
+            f"declarative kwargs leave known pretrained keywords enabled: {list(enabled)!r}"
+        )
+    # Declaration completeness, on top of value safety: a kwargs key with a
+    # known pretrained-asset name must itself appear in the disable list, even
+    # when it already carries a disabling value. The disable list is the
+    # author's account of the constructor's pretrained surface, and a known
+    # keyword riding through it unlisted -- whatever its value today -- leaves
+    # that account incomplete for every later reader.
+    unlisted = sorted(
+        name
+        for name in kwargs
+        if name in PRETRAINED_PARAMETER_NAMES and name not in set(disable_fields)
+    )
+    if unlisted:
+        raise RecipeError(
+            "kwargs carry pretrained-capable keys that pretrained_disable_fields does "
+            f"not declare: {unlisted!r}"
+        )
+
+
+def constructor_pretrained_parameters(constructor: Any) -> tuple[str, ...]:
+    """Return the known pretrained keywords the pinned constructor really exposes.
+
+    Parameters
+    ----------
+    constructor:
+        Resolved library constructor.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Sorted exposed keyword names.
+
+    Raises
+    ------
+    RecipeError
+        If the signature cannot be inspected, so no claim about it is verifiable.
+    """
+
+    try:
+        parameters = inspect.signature(constructor).parameters
+    except (TypeError, ValueError) as exc:
+        raise RecipeError(
+            "cannot verify the pretrained disposition against constructor signature"
+        ) from exc
+    return tuple(
+        sorted(
+            name
+            for name, parameter in parameters.items()
+            if name in PRETRAINED_PARAMETER_NAMES
+            and parameter.kind
+            in {
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                inspect.Parameter.KEYWORD_ONLY,
+            }
+        )
+    )
+
+
+def assert_constructor_pretrained_assets_disabled(
+    constructor: Any, kwargs: Mapping[str, Any], *, fields_absent: bool = False
+) -> None:
+    """Refuse a pinned constructor that would still resolve a pretrained asset.
+
+    This is the layer the author cannot author around. It reads the REAL
+    signature, in the routed environment, immediately before construction, and
+    checks the effective value of every known pretrained keyword -- the declared
+    ``kwargs`` value when the recipe supplies one, the parameter DEFAULT when it
+    does not. An enabling default nobody overrode (``encoder_weights="imagenet"``)
+    is the exact shape the old declaration check waved through.
+
+    Parameters
+    ----------
+    constructor:
+        Resolved library constructor.
+    kwargs:
+        Complete declarative constructor keyword mapping.
+    fields_absent:
+        Author assertion that this constructor exposes no pretrained keyword.
+
+    Raises
+    ------
+    RecipeError
+        If a known pretrained keyword resolves to an enabling value, or if the
+        absence assertion is contradicted by the signature.
+    """
+
+    exposed = constructor_pretrained_parameters(constructor)
+    if fields_absent and exposed:
+        raise RecipeError(
+            "pretrained_fields_absent is contradicted by the pinned constructor signature, "
+            f"which exposes {list(exposed)!r}"
+        )
+    parameters = inspect.signature(constructor).parameters
+    enabled: list[str] = []
+    for name in exposed:
+        if name in kwargs:
+            value = kwargs[name]
+            if _is_construct_node(value) or not _is_disabling_pretrained_value(value):
+                enabled.append(name)
+            continue
+        default = parameters[name].default
+        if default is inspect.Parameter.empty or not _is_disabling_pretrained_value(default):
+            enabled.append(name)
+    if enabled:
+        raise RecipeError(
+            "pinned constructor would resolve pretrained assets: "
+            f"{enabled!r} are neither disabled in kwargs nor disabled by default"
+        )
 
 
 _HASH_PATTERN = re.compile(r"sha256:[0-9a-f]{64}\Z")
@@ -828,6 +1082,11 @@ class DeclarativeRecipe:
         Optional exact installed-artifact hash.
     pretrained_disable_fields:
         Keyword names explicitly set to disable pretrained assets.
+    pretrained_fields_absent:
+        Positive assertion that the pinned constructor exposes no pretrained
+        keyword at all, so there is nothing to disable. It is the only honest
+        spelling for a constructor such as ``MiniMaxForCausalLM(config)`` and is
+        re-derived from the real signature at load time, never believed.
     post_construct:
         Bounded declarative configuration calls applied after construction.
     entrypoint:
@@ -842,6 +1101,7 @@ class DeclarativeRecipe:
     kwargs: Mapping[str, Any]
     artifact_sha256: Optional[str] = None
     pretrained_disable_fields: tuple[str, ...] = ()
+    pretrained_fields_absent: bool = False
     post_construct: tuple[PostConstructCall, ...] = ()
     entrypoint: Optional[str] = None
 
@@ -868,6 +1128,7 @@ class DeclarativeRecipe:
             "symbol",
             "kwargs",
             "pretrained_disable_fields",
+            "pretrained_fields_absent",
             "post_construct",
             "entrypoint",
         }
@@ -933,6 +1194,13 @@ class DeclarativeRecipe:
             isinstance(field, str) and field for field in disable_fields
         ):
             raise RecipeError("pretrained_disable_fields must be a string sequence")
+        fields_absent = value.get("pretrained_fields_absent", False)
+        if not isinstance(fields_absent, bool):
+            raise RecipeError("pretrained_fields_absent must be a boolean")
+        if fields_absent and disable_fields:
+            raise RecipeError(
+                "pretrained_fields_absent contradicts a non-empty pretrained_disable_fields"
+            )
         validate_pretrained_disable_fields(kwargs, disable_fields)
         artifact = value.get("artifact_sha256")
         if artifact is not None and not isinstance(artifact, str):
@@ -945,6 +1213,7 @@ class DeclarativeRecipe:
             kwargs=dict(kwargs),
             artifact_sha256=artifact,
             pretrained_disable_fields=tuple(disable_fields),
+            pretrained_fields_absent=fields_absent,
             post_construct=post_construct,
             entrypoint=entrypoint,
         )
@@ -952,7 +1221,7 @@ class DeclarativeRecipe:
     def to_dict(self) -> dict[str, Any]:
         """Return a canonical JSON-compatible recipe mapping.
 
-        The two grammar-extension fields are emitted only when they deviate from
+        The grammar-extension fields are emitted only when they deviate from
         their defaults so that every pre-extension recipe keeps its exact
         historical recipe-revision hash.
 
@@ -971,6 +1240,8 @@ class DeclarativeRecipe:
             "kwargs": dict(self.kwargs),
             "pretrained_disable_fields": list(self.pretrained_disable_fields),
         }
+        if self.pretrained_fields_absent:
+            payload["pretrained_fields_absent"] = True
         if self.post_construct:
             payload["post_construct"] = [call.to_dict() for call in self.post_construct]
         if self.entrypoint is not None:
@@ -1224,6 +1495,14 @@ def load_declarative_recipe(
                 "pretrained disable fields are not explicit constructor parameters: "
                 f"{unsupported!r}"
             )
+    # The declaration above is the author's account of the constructor. This is
+    # the machine's, read from the real signature in the routed environment
+    # immediately before construction, and it runs whether or not the recipe
+    # declared anything: an enabling DEFAULT nobody overrode downloads weights
+    # just as surely as an enabling kwarg, and no declaration check can see it.
+    assert_constructor_pretrained_assets_disabled(
+        constructor, recipe.kwargs, fields_absent=recipe.pretrained_fields_absent
+    )
 
     def build_model() -> object:
         """Invoke the direct library constructor with declarative kwargs.
