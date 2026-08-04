@@ -61,7 +61,8 @@
       "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
     },
     "requested_role": {
-      "enum": ["implementation", "paper", "documentation", "probe"]
+      "enum": ["implementation", "paper", "documentation", "probe"],
+      "description": "Model judgment about intended use. It never overrides the broker's own role binding, and it never changes what a descriptor KIND does: requested_role 'paper' on a paper-kind descriptor still yields no quotable bytes."
     },
     "https_url": {
       "type": "string",
@@ -139,7 +140,7 @@
         },
         "kind": {
           "const": "raw-url",
-          "description": "Request to fetch one direct HTTPS object."
+          "description": "Request to fetch one direct HTTPS object. This is the only descriptor that yields quotable bytes for a paper: pair it with requested_role 'paper' to fetch a landing page or an ar5iv rendering into the manifest as an excerptable source."
         },
         "url": {
           "$ref": "#/$defs/https_url",
@@ -178,7 +179,7 @@
         },
         "kind": {
           "const": "paper",
-          "description": "Request to resolve paper metadata through an authoritative registry."
+          "description": "Request to resolve paper metadata through an authoritative registry. This is a CITATION-DERIVATION channel, not a bytes channel: it returns registry metadata and a resolver receipt, and it deliberately produces NO manifest row, so nothing it touches can ever be excerpted. If you intend to QUOTE the paper -- and a citation with status 'present' requires exactly that, an excerpt from a paper-role source -- request the page as a raw-url descriptor with requested_role 'paper' instead. Fetch the landing page (arxiv.org/abs/...) for title, authors, identifiers, and the date; a body rendering (ar5iv HTML) for the architecture prose. Requesting a paper-kind descriptor and expecting to quote from it is the single most common way a well-formed proposal is refused."
         },
         "url": {
           "$ref": "#/$defs/https_url",

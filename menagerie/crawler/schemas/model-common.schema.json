@@ -262,7 +262,7 @@
             "not-found-after-search",
             "not-applicable"
           ],
-          "description": "Mandatory closed current disposition."
+          "description": "Mandatory closed current disposition. Declaring 'present' commits to evidence, not just to values: the frozen manifest must carry a controlled-fetched paper-role source (declared role introducing-paper, supplement, or project-page) and at least one excerpt from it must name external_metadata.citation in its supports. Paper metadata -- authors, venue, institution, country, year -- does not occur in implementation code and cannot be grounded from it, and a BibTeX block quoted from a repository README is a documentation source, not a paper source. Request quotable paper bytes as a raw-url descriptor; a paper-kind descriptor derives citation metadata only and never becomes a manifest row you can excerpt."
         },
         "title": {
           "$ref": "#/$defs/nullable_string",
@@ -283,7 +283,7 @@
               "type": "null"
             }
           ],
-          "description": "Mandatory year."
+          "description": "Mandatory year. When non-null it must be grounded like every other citation leaf: the four-digit year must occur inside the text of an excerpt named by source_evidence_ids and drawn from a paper-role source. A rendering of the paper BODY (ar5iv HTML, a PDF-to-text page) does NOT print the work its own year -- the only years such a page carries are other works' years in its reference list, and binding one of those grounds nothing. Fetch the landing page (arxiv.org/abs/..., the PMC article, the OpenReview forum) as a second paper-role source and bind the line that states the date. One entailment is granted instead: when a modern arXiv identifier YYMM.NNNNN is itself grounded, it encodes the announcement month, so the announcement year or the single following venue-publication year is established without an excerpt. An earlier year, or one two or more years later, is not entailed and stays refused."
         },
         "venue": {
           "$ref": "#/$defs/nullable_string",
@@ -1560,15 +1560,15 @@
         },
         "source_id": {
           "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory source identifier."
+          "description": "Mandatory source identifier. Under R2_VENDOR every row must name one of implementation.upstream_files[].source_id -- the map exists to bind vendored upstream bytes to the staged code, so a row pointing at a README, a requirements file, or any other non-vendored source is refused even when its disposition is authored-adapter. Support that an adapter draws from documentation belongs in evidence.excerpts, not here."
         },
         "source_locator": {
           "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory source locator."
+          "description": "Mandatory source locator. It must be byte-identical to the locator of one excerpt in evidence.excerpts that also carries this row's source_id and is named in this row's evidence_ids; the three are matched as one exact triple, so \"pit.py lines 54-62\" does not bind an excerpt recorded at \"pit.py lines 54-69\"."
         },
         "evidence_ids": {
           "$ref": "#/$defs/string_array",
-          "description": "Mandatory supporting evidence identifiers."
+          "description": "Mandatory supporting evidence identifiers. At least one must name an excerpt whose (evidence_id, source_id, locator) triple matches this row exactly."
         },
         "code_path": {
           "$ref": "#/$defs/nonempty_string",

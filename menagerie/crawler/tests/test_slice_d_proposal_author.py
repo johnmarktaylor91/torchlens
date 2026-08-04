@@ -2410,3 +2410,153 @@ def test_r4_requires_explicit_bounded_negative_proof(tmp_path: Path, missing_pro
             allowed_model_dir=tmp_path,
             source_manifest=manifest,
         )
+
+
+def _retext_paper(
+    proposal: dict[str, Any], manifest: dict[str, Any], tmp_path: Path, body: str
+) -> None:
+    """Replace the fixture's paper bytes in place, rebinding every digest it feeds."""
+
+    digest = hash_bytes(body.encode())
+    path = tmp_path / "source-paper.txt"
+    path.write_text(body)
+    facts = proposal["proposed_facts"]
+    for row in (*facts["source_resolution"]["sources"], *manifest["sources"]):
+        if row.get("source_id") == "source-paper":
+            row.update(
+                {
+                    "content_sha256": digest,
+                    "mirror_digest": digest,
+                    "byte_count": len(body.encode()),
+                }
+            )
+    for excerpt in facts["evidence"]["excerpts"]:
+        if excerpt["source_id"] == "source-paper":
+            excerpt.update(
+                {
+                    "locator": f"bytes:0-{len(body.encode())}",
+                    "text": body,
+                    "text_sha256": digest,
+                }
+            )
+    manifest["manifest_sha256"] = stable_hash(manifest["sources"])
+    proposal["verified_hashes"]["source_manifest"] = manifest["manifest_sha256"]
+
+
+def _paper_without_year(
+    tmp_path: Path, *, arxiv_id: str = "2007.04044"
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Build an honest proposal whose paper source never prints the work's own year.
+
+    This is the measured shape of a body rendering. Across every ar5iv page in the
+    ``pilot`` campaign's archived rungs the declared year occurred outside the
+    bibliography zero times, so the fixture's paper text carries the title, authors,
+    and arXiv identifier but no date at all.
+    """
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    _retext_paper(
+        proposal,
+        manifest,
+        tmp_path,
+        f"Example Model. A. Author, Example Lab, US. arXiv:{arxiv_id}. "
+        "Abstract: ExampleNet is a small convolutional network.",
+    )
+    for citation in (
+        proposal["proposed_facts"]["citation"],
+        proposal["proposed_facts"]["external_metadata"]["citation"],
+    ):
+        citation.update({"arxiv_id": arxiv_id, "bibtex": None, "venue": None})
+    return proposal, manifest
+
+
+def test_year_is_grounded_by_the_arxiv_identifier_when_the_body_omits_it(
+    tmp_path: Path,
+) -> None:
+    """A body rendering prints no date, so the grounded identifier must carry the year.
+
+    ``2007.04044`` announces in 2020-07. Requiring the token anyway left exactly one
+    satisfying witness on such a page -- some other work's year in the reference list,
+    bound as evidence for THIS paper's citation -- which is the laundering the check
+    exists to refuse. The identifier is machine-derived from an already-grounded leaf.
+    """
+
+    proposal, manifest = _paper_without_year(tmp_path)
+    assert "2020" not in _paper_text(proposal)
+    for citation in (
+        proposal["proposed_facts"]["citation"],
+        proposal["proposed_facts"]["external_metadata"]["citation"],
+    ):
+        citation["year"] = 2020
+    validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_venue_publication_year_after_the_announcement_is_entailed(tmp_path: Path) -> None:
+    """A preprint announced late in one year is routinely published the next.
+
+    PoolFormer is announced as ``2111.11418`` and published at CVPR 2022, so refusing
+    the venue year would refuse a true claim.
+    """
+
+    proposal, manifest = _paper_without_year(tmp_path)
+    for citation in (
+        proposal["proposed_facts"]["citation"],
+        proposal["proposed_facts"]["external_metadata"]["citation"],
+    ):
+        citation["year"] = 2021
+    validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+@pytest.mark.parametrize("year", [2018, 2019, 2022, 2023, 2030, 1997])
+def test_year_outside_the_entailed_window_is_still_refused(tmp_path: Path, year: int) -> None:
+    """The entailment runs one way and one year only.
+
+    A year EARLIER than announcement is impossible for the work the identifier names,
+    and two or more years later is not entailed by it, so both stay refused.
+    """
+
+    proposal, manifest = _paper_without_year(tmp_path)
+    for citation in (
+        proposal["proposed_facts"]["citation"],
+        proposal["proposed_facts"]["external_metadata"]["citation"],
+    ):
+        citation["year"] = year
+    with pytest.raises(ProposalValidationError, match="not grounded verbatim.*year"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_year_without_an_arxiv_identifier_still_needs_the_paper_text(tmp_path: Path) -> None:
+    """Nothing is entailed when no identifier is declared; the excerpt must carry it."""
+
+    proposal, manifest = _paper_without_year(tmp_path)
+    for citation in (
+        proposal["proposed_facts"]["citation"],
+        proposal["proposed_facts"]["external_metadata"]["citation"],
+    ):
+        citation["arxiv_id"] = None
+        citation["year"] = 2020
+    with pytest.raises(ProposalValidationError, match="not grounded verbatim.*year"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_old_style_arxiv_identifier_entails_no_year(tmp_path: Path) -> None:
+    """``archive/YYMMNNN`` is not decoded, so the text check governs unchanged."""
+
+    proposal, manifest = _paper_without_year(tmp_path, arxiv_id="cs.CV/0309136")
+    for citation in (
+        proposal["proposed_facts"]["citation"],
+        proposal["proposed_facts"]["external_metadata"]["citation"],
+    ):
+        citation["year"] = 2003
+    with pytest.raises(ProposalValidationError, match="not grounded verbatim.*year"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def _paper_text(proposal: dict[str, Any]) -> str:
+    """Return the concatenated excerpt text bound to the paper source."""
+
+    return " ".join(
+        excerpt["text"]
+        for excerpt in proposal["proposed_facts"]["evidence"]["excerpts"]
+        if excerpt["source_id"] == "source-paper"
+    )
