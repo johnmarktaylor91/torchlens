@@ -149,6 +149,10 @@ def test_linux_committed_lock_provenance_awards_in_ci(
     _run_host_denial_composition(tmp_path, fixture, expected_sandbox="bubblewrap")
 
 
+@pytest.mark.skipif(
+    os.environ.get("MENAGERIE_RELEASE_GATE") != "1",
+    reason="release-gate-only",
+)
 @pytest.mark.round21_macos_real
 def test_macos_committed_lock_seatbelt_award_and_denial(
     tmp_path: Path,
