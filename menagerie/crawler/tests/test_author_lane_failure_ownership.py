@@ -35,10 +35,12 @@ import pytest
 
 from menagerie.crawler.author_dispatch import (
     AuthorDispatchError,
+    AuthorEffortExhaustionClaim,
     AuthorEngineFaultError,
     AuthorInfrastructureFaultError,
     AuthorResultBinding,
     AuthorResultMalformedError,
+    _validate_blocked_reason,
     _validate_envelope_hash,
     _validate_proposal_binding,
     validate_author_result,
@@ -486,3 +488,86 @@ def test_lane_failure_event_survives_an_exception_with_no_traceback() -> None:
         {**event, "ledger_seq": 1, "payload_sha256": "sha256:" + "0f" * 32},
         OPERATIONAL_EVENT_SCHEMA_VERSION,
     )
+
+
+# ---------------------------------------------------------------------------
+# Effort-exhaustion spelling variants (rung 7, 2026-08-05): the honest-exhaustion
+# transmuting matcher was exact-string and caught 0 of 8 live sessions' spellings,
+# so 8 wall-exhausted authors died at the terminal checker as ungroundable
+# BLOCKED(blocked-prerequisite) rejections instead of landing on the honest
+# failed:<stage> effort terminal. These fixtures are the EXACT reason codes the 8
+# frozen rung-7 author results published (rung-archive work/<m>/author/result.json).
+# ---------------------------------------------------------------------------
+
+#: (model, verbatim reason_code) from the rung-7 archive -- all eight sessions.
+RUNG7_FROZEN_EXHAUSTION_SPELLINGS: tuple[tuple[str, str], ...] = (
+    ("m4066", "author-wall-deadline-before-citation-grounding"),
+    ("m5445", "authoring-budget-exhausted"),
+    ("m5888", "author-wall-deadline-reached"),
+    ("m5915", "authoring-budget-exhausted"),
+    ("m7637", "authoring-budget-exhausted"),
+    ("m8867", "author-wall-deadline-before-evidence-digests"),
+    ("m9304", "authoring-wall-exhausted"),
+    ("m9577", "authoring-budget-exhausted"),
+)
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize(
+    ("model", "reason_code"),
+    RUNG7_FROZEN_EXHAUSTION_SPELLINGS,
+    ids=[f"{model}-{code}" for model, code in RUNG7_FROZEN_EXHAUSTION_SPELLINGS],
+)
+def test_all_eight_frozen_rung7_exhaustion_spellings_transmute(
+    model: str, reason_code: str
+) -> None:
+    """Every live rung-7 exhaustion spelling lands on the honest effort terminal.
+
+    The matcher recognizes the CLASS (the author's own wall/budget/deadline ran
+    out) rather than four canonical spellings, so an honest exhaustion statement
+    can no longer slip through to terminal-checker adjudication of a predicate it
+    structurally cannot ground.
+    """
+
+    del model
+    with pytest.raises(AuthorEffortExhaustionClaim) as caught:
+        _validate_blocked_reason("author", reason_code)
+    # Routed to a stage-valid effort reason for `failed:author`, never recorded
+    # under the author's novel spelling and never as blocked-prerequisite.
+    assert caught.value.stage == "author"
+    assert caught.value.reason_code in FAILURE_REASON_CODES["author"]
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize(
+    "reason_code",
+    [
+        # Genuine external prerequisites: never transmute, whatever their spelling.
+        "needs-source-access",
+        "paywalled-paper",
+        "upstream-repo-deleted",
+        "missing-runtime-dependency",
+        "needs-higher-tier",
+        "compute-budget-approval-missing",  # names "budget" without an outcome token
+        "dataset-license-blocked",
+        "some-reason-the-record-cannot-express",
+    ],
+)
+def test_genuine_prerequisite_claims_never_transmute(reason_code: str) -> None:
+    """Broadened MATCHING must not broaden SEMANTICS.
+
+    A claim about the world (an external blocker) is adjudicated by the terminal
+    checker on the merits; only a statement about the author's own spent budget may
+    transmute. The guard returns rather than raising for every one of these.
+    """
+
+    assert _validate_blocked_reason("author", reason_code) is None
+
+
+@pytest.mark.smoke
+def test_spelling_normalization_folds_case_whitespace_and_underscores() -> None:
+    """Case, whitespace, and underscore variants of a canonical spelling match."""
+
+    for variant in ("Wall_Exceeded", "  wall exceeded  ", "BUDGET__EXHAUSTED"):
+        with pytest.raises(AuthorEffortExhaustionClaim):
+            _validate_blocked_reason("author", variant)
