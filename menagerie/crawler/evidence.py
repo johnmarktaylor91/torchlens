@@ -400,10 +400,29 @@ def _validate_locator(evidence_id: str, locator: str, text: bytes, content: byte
             raise EvidenceValidationError(f"{evidence_id} has an invalid byte locator") from exc
         if start < 0 or end < start or not _same_text(content[start:end], text):
             raise EvidenceValidationError(f"{evidence_id} does not exist verbatim at {locator}")
-    elif text not in content and _fold_space(text) not in _fold_space(content):
-        raise EvidenceValidationError(
-            f"{evidence_id} excerpt is not verbatim in its fetched source"
-        )
+    elif text not in content:
+        # The fold erases which whitespace character sits inside the excerpt; this
+        # strip erases whether whitespace sits AROUND it. Line-based extraction
+        # tooling appends a trailing newline to whatever it prints (``sed -n 'Np'``
+        # ends every emission with one), so an author quoting a 500-byte run out of
+        # the middle of a single-line page reproduces every visible byte exactly and
+        # still carries one invisible trailing ``\n`` the source does not have at
+        # that position. That refusal burned the model's one authoring attempt
+        # (menagerie campaign ``pilot``, model ``m4066``, Implicit Q-Learning:
+        # excerpt ``ev-arxiv-meta``, byte-identical for its whole visible length).
+        #
+        # Only the OUTER whitespace of the whole excerpt is dropped, after the fold
+        # has already run on both sides. Every visible character, its order, and all
+        # interior spacing (modulo the fold's existing run-identity rule) still
+        # must match, so an excerpt whose quoted content differs from the source
+        # anywhere something is displayed is refused exactly as before. An excerpt
+        # that strips to nothing quotes nothing and is refused rather than matched
+        # against every source trivially.
+        folded = _fold_space(text).strip()
+        if not folded or folded not in _fold_space(content):
+            raise EvidenceValidationError(
+                f"{evidence_id} excerpt is not verbatim in its fetched source"
+            )
 
 
 #: One run of whitespace. Python's ``\s`` over ``str`` is Unicode-aware: it covers every

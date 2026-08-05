@@ -1576,7 +1576,10 @@ def _validate_citation_leaves(citation: Mapping[str, Any], texts: Sequence[str])
     excerpts bound to the citation claim. That covers ``title``, ``venue``, ``year``,
     every ``authors`` entry, and every member of :data:`CITATION_IDENTIFIER_FIELDS`. The
     identifier leaves go through :func:`_identifier_grounded`, which is the same phrase
-    check plus the one arXiv entailment a bare phrase comparison gets wrong.
+    check plus the one arXiv entailment a bare phrase comparison gets wrong; author
+    names likewise get exactly one entailment,
+    :func:`_email_fused_component_grounded`, for pages that print a name fused with
+    its own name-derived email address.
 
     Two leaves are deliberately not excerpt-checked, because neither is quoted from the
     paper, and each names what checks it instead:
@@ -1616,8 +1619,15 @@ def _validate_citation_leaves(citation: Mapping[str, Any], texts: Sequence[str])
     def name_grounded(value: object) -> bool:
         """Return whether every canonical component of one name occurs in the text."""
 
-        tokens = set(_normalize_support_text(str(value)).split())
-        return not tokens or tokens <= combined_tokens
+        components = _normalize_support_text(str(value)).split()
+        tokens = set(components)
+        if tokens <= combined_tokens:
+            return True
+        return all(
+            token in combined_tokens
+            or _email_fused_component_grounded(token, components, combined_tokens)
+            for token in tokens
+        )
 
     failures: list[str] = []
     inconsistent: list[str] = []
@@ -1843,6 +1853,100 @@ def _identifier_grounded(value: str, combined: str) -> bool:
     # whole or not at all, which is why a numeric extension cannot pass.
     versioned = re.compile(rf"(?<![0-9a-z]){re.escape(normalized)}v[0-9]+(?![0-9a-z])")
     return versioned.search(combined) is not None
+
+
+def _email_fused_component_grounded(
+    token: str, components: Sequence[str], text_tokens: AbstractSet[str]
+) -> bool:
+    """Return whether one missing name component is grounded by a name-email fusion.
+
+    The plain component-membership check is the rule; this adds exactly one entailment
+    for a rendering defect the check got wrong. ar5iv renders a failed LaTeX author
+    macro (BMVC's ``\\addauthor``) by running its arguments together with NO separator,
+    so the paper's own author line prints as ``Hanchao Lilihanchao@bit.edu.com1`` --
+    the surname fused with a name-derived email local part. ``Li`` then tokenizes into
+    ``lilihanchao`` rather than ``li``, the fetched page contains no separated spelling
+    of the name anywhere, and a correct author list is refused as fabricated. The
+    authoring stage runs once per model, so that refusal is a permanent dead record
+    (menagerie campaign ``pilot``, model ``m9666``, Pyramid Attention Network: both
+    ``Hanchao Li`` and ``Pengfei Xiong`` fused this way, and ``Xiong`` occurred nowhere
+    else in any fetched byte).
+
+    The entailment is deliberately stronger than "the component prefixes a token",
+    which would let ``Li`` ground ``Liu``. A fused token grounds the missing component
+    only when it is EXACTLY the component followed by the WHOLE declared name --
+    every component, each exactly once, concatenated in some order -- which is the
+    shape a name-derived email local part actually has (``li`` + ``lihanchao``,
+    ``xiong`` + ``xiongpengfei``). The token must therefore spell out the full
+    declared name contiguously inside the source bytes, with the missing component
+    appearing twice; a name the page does not contain still cannot match:
+
+    * a name differing in any visible character fails (``Pengfei Xiang`` shares no
+      such token, and ``Li`` does not prefix ``liu``);
+    * padding the declared name to fit the fused token fails (``Pengfei Xiongxiong``
+      leaves a remainder that no longer spells the whole declared list);
+    * re-segmenting the fused bytes as a different name fails (``Li Lihanchao``
+      requires a thirteen-character token where the page has eleven); and
+    * single-component names are excluded outright, so a doubled ordinary word
+      (``murmur``) can never ground a declared mononym ``Mur``.
+
+    A fusion with a non-name-derived email (``Wangneobull@...``) is NOT recovered --
+    the remainder spells no part of the declared name, so nothing links the token to
+    the claim, and the refusal stands as unsatisfiable-evidence rather than admit a
+    guess. This helper never rewrites text and never relaxes the other components:
+    each one still needs its own exact membership or its own fusion witness.
+
+    Parameters
+    ----------
+    token:
+        Canonical name component absent from the excerpt token set.
+    components:
+        Every canonical component of the declared name, in declared order.
+    text_tokens:
+        Canonical excerpt token set.
+
+    Returns
+    -------
+    bool
+        Whether a fused excerpt token grounds the missing component.
+    """
+
+    if len(components) < 2:
+        return False
+    fused_length = len(token) + sum(len(component) for component in components)
+    return any(
+        len(candidate) == fused_length
+        and candidate.startswith(token)
+        and _spells_all_components(candidate[len(token) :], list(components))
+        for candidate in text_tokens
+    )
+
+
+def _spells_all_components(text: str, components: list[str]) -> bool:
+    """Return whether ``text`` is a concatenation of ``components``, each used once.
+
+    Parameters
+    ----------
+    text:
+        Candidate remainder of a fused token.
+    components:
+        Multiset of canonical name components still to be consumed.
+
+    Returns
+    -------
+    bool
+        Whether some ordering of the components concatenates to exactly ``text``.
+    """
+
+    if not components:
+        return not text
+    return any(
+        text.startswith(component)
+        and _spells_all_components(
+            text[len(component) :], components[:index] + components[index + 1 :]
+        )
+        for index, component in enumerate(components)
+    )
 
 
 def _positive_scalars(value: object) -> list[object]:
