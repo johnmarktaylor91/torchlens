@@ -35,9 +35,11 @@ from menagerie.crawler.author_executor import (
     RECEIPT_VERSION,
     SUPPLEMENT_VERSION,
     AuthorExecutorError,
+    SessionOutcome,
     _author_result_from_author_payload,
     _stamp_machine_owned_proposal_fields,
     _discovery_envelope_from_author_payload,
+    session_failure_class,
     _supplement_request_from_author_payload,
     main,
     structured_limit_reset_at,
@@ -1369,6 +1371,175 @@ def test_session_crash_is_retryable_not_quota(rig) -> None:
     attempt = latest_attempt(root)
     assert attempt is not None
     assert attempt.record["outcome"]["failure_reason"] == "session-crashed"
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize(
+    ("shape", "expected_class", "expected_marker"),
+    [
+        ("not_logged_in", "auth-unavailable", "Not logged in"),
+        ("overloaded_529", "provider-overloaded", "529 Overloaded"),
+    ],
+)
+def test_session_crash_cause_is_durable_and_rides_the_retry_channel(
+    rig, capsys, shape: str, expected_class: str, expected_marker: str
+) -> None:
+    """A crashed session's own error text survives on the attempt AND on stdout.
+
+    Rung 7's abort was undiagnosable for exactly this gap: the executor parsed
+    the harness JSON for effort fields and DISCARDED the ``result`` error text,
+    and both observed root causes ("Not logged in · Please run /login" on
+    m7362; "API Error: Repeated 529 Overloaded" on the clone-2 specimen) were
+    sitting in the discarded payload -- the attempt record showed 0 tokens,
+    rc=1, and an EMPTY stderr tail, so the biggest blast-radius cluster spent a
+    census cycle as "cause unknown". The evidence must now land in two places:
+    durably on the attempt record, and as a machine-built stdout notice so the
+    driver's stdio tail -- and therefore ``AuthorSessionRetryExhausted.detail``
+    when the retry budget spends -- names the cause.
+    """
+
+    rig["monkeypatch"].setenv("FAKE_CLAUDE_MODE", "outage")
+    rig["monkeypatch"].setenv("FAKE_CLAUDE_OUTAGE_SHAPE", shape)
+    code, root = _run_source_round(rig)
+    assert code == EXIT_RETRYABLE
+    attempt = latest_attempt(root)
+    assert attempt is not None
+    outcome = attempt.record["outcome"]
+    assert outcome["failure_reason"] == "session-crashed"
+    detail = outcome["detail"]
+    assert detail["failure_class"] == expected_class
+    assert expected_marker in detail["session_error_text_quarantined"]
+    assert detail["harness_subtype"] == "error_during_execution"
+    assert detail["returncode"] == 1
+
+    notice_lines = [
+        line
+        for line in capsys.readouterr().out.splitlines()
+        if '"author-session-failure"' in line
+    ]
+    assert len(notice_lines) == 1, "exactly one machine-built failure notice"
+    notice = json.loads(notice_lines[0])
+    assert notice["failure_class"] == expected_class
+    assert expected_marker in notice["session_error_text_quarantined"]
+
+
+@pytest.mark.smoke
+def test_the_failure_notice_never_reads_as_a_provider_pause(rig, capsys) -> None:
+    """The quarantined crash text must be invisible to backoff classification.
+
+    ``classify_author_exit`` runs ``classify_author_response`` over the
+    executor's stdout, and ``_structured_author_error`` reads the ``result``,
+    ``message``, and ``error`` fields of any ``is_error`` JSON there -- where
+    the rate-marker list includes "overloaded". A failure notice that carried
+    the 529 session text in those fields would silently promote an ordinary
+    retryable crash into a campaign-wide usage pause with a guessed one-hour
+    reset. The notice therefore carries the text under its own quarantined key
+    and no top-level ``is_error``/``result``/``message``/``error`` at all.
+    """
+
+    rig["monkeypatch"].setenv("FAKE_CLAUDE_MODE", "outage")
+    rig["monkeypatch"].setenv("FAKE_CLAUDE_OUTAGE_SHAPE", "overloaded_529")
+    code, _root = _run_source_round(rig)
+    assert code == EXIT_RETRYABLE
+    stdout = capsys.readouterr().out
+    notice_line = next(
+        line for line in stdout.splitlines() if '"author-session-failure"' in line
+    )
+    notice = json.loads(notice_line)
+    for forbidden in ("is_error", "result", "message", "error"):
+        assert forbidden not in notice, (
+            f"the notice must not carry {forbidden!r}: that key feeds "
+            "_structured_author_error's pause classification"
+        )
+    assert "overloaded" in notice["session_error_text_quarantined"].lower()
+    # The driver-side proof: the exact bytes the driver would read classify as
+    # NO pause, on both the retryable exit and the raw line.
+    assert classify_author_response(EXIT_RETRYABLE, notice_line) is None
+    assert classify_author_response(EXIT_RETRYABLE, stdout) is None
+
+
+@pytest.mark.smoke
+def test_stage2_session_crash_carries_the_failure_evidence(rig) -> None:
+    """The stage-2 crash branch persists the same durable evidence as stage 1.
+
+    This is the exact m7362 shape: a healthy stage 1, then the follow-on
+    session dies instantly. The resume failure and the final crash must EACH
+    carry the cause -- the resume-failed event durably on the attempt, and the
+    terminal failure detail on its outcome.
+    """
+
+    assert _run_source_round(rig)[0] == EXIT_OK
+    rig["monkeypatch"].setenv("FAKE_CLAUDE_MODE", "outage")
+    rig["monkeypatch"].setenv("FAKE_CLAUDE_OUTAGE_SHAPE", "not_logged_in")
+    code, root = _run_author_round(rig)
+    assert code == EXIT_RETRYABLE
+    attempt = latest_attempt(root)
+    assert attempt is not None
+    outcome = attempt.record["outcome"]
+    assert outcome["failure_reason"] == "session-crashed"
+    assert outcome["detail"]["failure_class"] == "auth-unavailable"
+    assert "Not logged in" in outcome["detail"]["session_error_text_quarantined"]
+    events = [
+        json.loads(line)
+        for line in attempt.paths.events.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    resume_failures = [event for event in events if event.get("event") == "resume-failed"]
+    assert resume_failures, "the failed resume must be a durable event"
+    assert resume_failures[0]["failure"]["failure_class"] == "auth-unavailable"
+
+
+def test_unparseable_crash_stdout_is_quarantined(rig) -> None:
+    """A crash with unparseable stdout keeps a bounded raw tail as evidence.
+
+    The parsed-harness path keeps the ``result`` text; when there is no
+    parseable harness document at all, the raw stdout tail is the only trace of
+    what the session said, and it used to be discarded entirely.
+    """
+
+    rig["monkeypatch"].setenv("FAKE_CLAUDE_MODE", "crash")
+    code, root = _run_source_round(rig)
+    assert code == EXIT_RETRYABLE
+    attempt = latest_attempt(root)
+    assert attempt is not None
+    detail = attempt.record["outcome"]["detail"]
+    assert detail["failure_class"] == "unclassified"
+    assert detail["harness_subtype"] is None
+    assert detail["session_error_text_quarantined"] is None
+    assert "boom, not json" in detail["stdout_tail_quarantined"]
+
+
+def test_session_failure_class_prefers_structured_fields() -> None:
+    """Structured harness fields outrank the quarantined free text."""
+
+    def outcome(harness, stdout_tail="") -> SessionOutcome:
+        return SessionOutcome(
+            harness=harness,
+            returncode=1,
+            timed_out=False,
+            wall_seconds=0.6,
+            session_id=None,
+            argv=("claude",),
+            stderr_tail="",
+            stdout_tail=stdout_tail,
+        )
+
+    assert (
+        session_failure_class(outcome({"api_error_status": 529}))
+        == "provider-overloaded"
+    )
+    assert (
+        session_failure_class(outcome({"error": {"type": "authentication_error"}}))
+        == "auth-unavailable"
+    )
+    # Booleans are not HTTP statuses.
+    assert session_failure_class(outcome({"api_error_status": True})) == "unclassified"
+    # With no harness at all, the raw stdout tail still labels the class.
+    assert (
+        session_failure_class(outcome(None, stdout_tail="please run /login"))
+        == "auth-unavailable"
+    )
+    assert session_failure_class(outcome(None)) == "unclassified"
 
 
 def test_negative_discovery_arm_is_published_for_lane_materialization(rig) -> None:
