@@ -369,6 +369,7 @@ def test_real_unhashable_output_awards_runs_with_unverifiable_modes(
     )
 
 
+@pytest.mark.smoke
 def test_driver_has_no_direct_supervised_worker_receipt_reads() -> None:
     """Every driver semantic consumer must use the central typed projection."""
 
@@ -385,6 +386,7 @@ def test_driver_has_no_direct_supervised_worker_receipt_reads() -> None:
     assert direct_reads == []
 
 
+@pytest.mark.smoke
 def test_live_protocol_comparisons_stay_in_worker_supervisor() -> None:
     """Driver code must not branch on nested or outer live protocol literals."""
 
@@ -408,6 +410,7 @@ def test_live_protocol_comparisons_stay_in_worker_supervisor() -> None:
     assert compared_literals.isdisjoint(versions)
 
 
+@pytest.mark.smoke
 def test_vs1_landing_manifest_is_complete() -> None:
     """The VS1 landing unit names every production seam and collected regression."""
 
