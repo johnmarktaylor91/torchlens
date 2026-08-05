@@ -475,9 +475,11 @@ def test_one_retryable_sibling_still_lets_its_peers_finish_their_sessions(
     # Every session the pool started reached a terminal state before the abort
     # propagated: `completed` is appended in the lane's own `finally`, so an
     # orphaned or cancelled sibling would be missing from it. The failing model
-    # appears twice because the retryable classification still gets its one
-    # bounded infrastructure retry, exactly as under a serial lane.
-    assert author.completed.count(failing_id) == 2
+    # appears three times because the retryable classification gets the full
+    # bounded backoff ladder -- one initial attempt plus one retry per
+    # `_INFRASTRUCTURE_RETRY_BACKOFF_SECONDS` entry -- exactly as under a
+    # serial lane.
+    assert author.completed.count(failing_id) == 3
     assert set(author.calls) <= set(author.completed)
     work_root = _paths(tmp_path, snapshot).work_root
     for stable_id in author.calls:

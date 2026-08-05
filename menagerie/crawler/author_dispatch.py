@@ -1285,6 +1285,92 @@ def _validate_author_result_mapping(
     )
 
 
+#: Budget-resource tokens an author uses when naming its own spent effort grant.
+#: Deliberately narrow: every member names the AUTHOR'S OWN budget (its wall clock,
+#: its effort grant, its deadline), never an external resource a genuine prerequisite
+#: could honestly name. Widening this set risks transmuting a genuine prerequisite
+#: claim, which is the one direction this matcher must never move.
+_EXHAUSTION_RESOURCE_TOKENS: frozenset[str] = frozenset({"wall", "budget", "deadline", "effort"})
+
+#: Outcome tokens that assert the named resource ran out.
+_EXHAUSTION_OUTCOME_TOKENS: frozenset[str] = frozenset(
+    {"exhausted", "exceeded", "expired", "depleted", "reached", "elapsed", "overrun"}
+)
+
+
+def _normalized_reason_code(reason_code: str) -> str:
+    """Fold spelling variance out of one author-supplied reason code.
+
+    Case, surrounding whitespace, underscores, and internal whitespace are all
+    spelling, not meaning: ``Wall_Exceeded`` and ``wall-exceeded`` state the same
+    outcome. Folding happens ONLY inside the exhaustion matcher -- the code the
+    author wrote travels unmodified everywhere else.
+
+    Parameters
+    ----------
+    reason_code:
+        Raw author-supplied reason code.
+
+    Returns
+    -------
+    str
+        Casefolded, hyphen-normalized spelling.
+    """
+
+    folded = re.sub(r"[\s_]+", "-", reason_code.strip().casefold())
+    return re.sub(r"-{2,}", "-", folded)
+
+
+def _names_effort_exhaustion(reason_code: str) -> bool:
+    """Return whether one BLOCKED reason states the author's own budget ran out.
+
+    The canonical spellings in ``EFFORT_EXHAUSTION_REASON_CODES`` were exact-match
+    only, and rung 7 measured the cost: 8 of 20 authors stated honest wall-clock
+    exhaustion in novel spellings (``authoring-budget-exhausted``,
+    ``author-wall-deadline-reached``, ``authoring-wall-exhausted``,
+    ``author-wall-deadline-before-citation-grounding``, ...) that the matcher let
+    through as ``blocked-prerequisite`` claims, so every one died at the terminal
+    checker as an ungroundable predicate instead of landing on the honest
+    ``failed:<stage>`` effort terminal. Authors run once; a matcher that only
+    recognizes spellings nobody produces is a wall.
+
+    This broadens MATCHING, never semantics: it recognizes (a) the canonical
+    spellings after normalization, (b) the ``effort-exhausted:`` prefix family,
+    and (c) a reason whose tokens name the author's own budget resource (wall /
+    budget / deadline / effort) together with an outcome stating it ran out --
+    including the ``<resource>-deadline-before-<milestone>`` shape. A genuine
+    external-prerequisite claim (``needs-source-access``, ``paywalled-paper``,
+    ``upstream-repo-deleted``) shares no token pair with that grammar and must
+    never transmute.
+
+    Parameters
+    ----------
+    reason_code:
+        Raw author-supplied BLOCKED reason code.
+
+    Returns
+    -------
+    bool
+        Whether the reason states effort/budget exhaustion.
+    """
+
+    canonical = _normalized_reason_code(reason_code)
+    if canonical in EFFORT_EXHAUSTION_REASON_CODES:
+        return True
+    if canonical.startswith("effort-exhausted:"):
+        return True
+    tokens = frozenset(canonical.replace(":", "-").split("-"))
+    if tokens & _EXHAUSTION_RESOURCE_TOKENS:
+        if tokens & _EXHAUSTION_OUTCOME_TOKENS:
+            return True
+        # "…-deadline-before-<milestone>": the deadline fired before the work
+        # completed. rung 7: author-wall-deadline-before-citation-grounding,
+        # author-wall-deadline-before-evidence-digests.
+        if "deadline" in tokens and "before" in tokens:
+            return True
+    return False
+
+
 def _validate_blocked_reason(stage: str, reason_code: str) -> None:
     """Refuse a BLOCKED advisory reason that names an effort or budget outcome.
 
@@ -1322,7 +1408,7 @@ def _validate_blocked_reason(stage: str, reason_code: str) -> None:
         refusing the claim cannot substitute one false statement for another.
     """
 
-    if reason_code in EFFORT_EXHAUSTION_REASON_CODES:
+    if _names_effort_exhaustion(reason_code):
         raise AuthorEffortExhaustionClaim(
             f"blocked recommendation reason_code {reason_code!r} names an effort or budget "
             "outcome, not a missing prerequisite: an exhausted model is unfinished, not "
