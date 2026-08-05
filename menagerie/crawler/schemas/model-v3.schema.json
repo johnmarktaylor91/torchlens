@@ -1533,8 +1533,17 @@
           "description": "Mandatory values; non-empty exactly when status is present."
         },
         "basis": {
-          "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory closed-vocabulary basis for the disposition."
+          "enum": [
+            "machine-derived",
+            "stated-in-paper",
+            "stated-in-code",
+            "stated-on-website",
+            "derived-from-affiliation",
+            "judged",
+            "search-exhausted",
+            "not-applicable"
+          ],
+          "description": "Mandatory closed availability basis, declaring where the disposition came from. An absence reached by reading the frozen sources and finding nothing is search-exhausted -- that is the basis for every not-found-after-search and none-exist state, however the looking was actually done. Descriptive prose is refused: this enum is the whole vocabulary."
         },
         "evidence": {
           "$ref": "#/$defs/string_array",

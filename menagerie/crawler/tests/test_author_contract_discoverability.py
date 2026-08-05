@@ -48,6 +48,9 @@ from typing import Any, Mapping
 
 import pytest
 
+from menagerie.crawler.author_executor import _REPAIR_STANDING_RULE
+from menagerie.crawler.metadata import AVAILABILITY_BASES
+
 _CRAWLER_ROOT = Path(__file__).resolve().parents[1]
 _SCHEMA_DIR = _CRAWLER_ROOT / "schemas"
 _AUTHOR_PROMPT = _CRAWLER_ROOT / "prompts" / "claude_crawler_author_v2.txt"
@@ -306,6 +309,92 @@ def test_the_exact_source_echo_rule_is_stated_in_the_registered_schema() -> None
     assert "dropped" in lowered, "omitting an unused source must be named as refused"
     assert "verbatim" in lowered, "the per-row verbatim fields must be named"
     assert "source sets differ" in lowered, "the live refusal wording must be quoted"
+
+
+@pytest.mark.smoke
+def test_the_availability_basis_vocabulary_is_declared_where_the_author_reads() -> None:
+    """The closed ``basis`` set is an enum in the schema and named in the prompt.
+
+    The 2026-08-05 twenty-model rung lost two models here, both on their first and
+    only attempt. ``m8245`` wrote ``bounded-source-read`` and ``m9617`` wrote
+    ``bounded-frozen-source-read`` -- honest descriptions of what each had actually
+    done -- for ``country`` and ``institution`` absences that were otherwise correct
+    and complete. Every other availability record across all 39 archived proposals
+    used the canonical ``search-exhausted`` (57 of 67 rows), so the vocabulary was
+    reachable; it simply was not DECLARED. ``status`` sat next to it as a real
+    ``enum`` and has never lost a model.
+
+    The schema read "Mandatory closed-vocabulary basis for the disposition." -- it
+    told the author the set was closed and then withheld the members, which is the
+    same shape as the original ``ungrounded claim categories`` wall: strings that
+    exist only in Python. Both surfaces must now carry them.
+    """
+
+    for schema_name in ("author-proposal-v3.schema.json", "model-v3.schema.json"):
+        basis = _schema(schema_name)["$defs"]["availability_claim"]["properties"]["basis"]
+        assert "enum" in basis, (
+            f"{schema_name} must DECLARE the basis members; a nonempty_string that only "
+            "promises a closed vocabulary is what killed m8245 and m9617"
+        )
+        assert set(basis["enum"]) == set(AVAILABILITY_BASES)
+        assert "search-exhausted" in basis["description"], (
+            "the description must name the member an absence-by-reading resolves to, "
+            "which is the exact substitution both dead models got wrong"
+        )
+
+    prompt = _AUTHOR_PROMPT.read_text(encoding="utf-8")
+    unwrapped = " ".join(prompt.split())
+    assert 'BOTH "status" AND "basis" ARE CLOSED ENUMS' in unwrapped
+    assert "bounded-frozen-source-read" in unwrapped, (
+        "the prompt must show the exact spelling that killed a model, not a paraphrase"
+    )
+    assert "bounded-source-read" in unwrapped
+    for basis in AVAILABILITY_BASES:
+        assert basis in prompt, f"the prompt must state the basis member {basis!r} verbatim"
+
+
+@pytest.mark.smoke
+def test_emptying_a_gated_value_on_repair_is_stated_as_half_an_instruction() -> None:
+    """Every repair brief carries the rule that a bare removal is refused.
+
+    ``m4334`` and ``m7362`` each received the checker repair "Ground or remove the
+    asserted US country value", obeyed it literally on the next attempt, emptied
+    ``country``, declared no availability state, and terminalized as permanently dead
+    records with ``ungrounded claim categories: ['external_metadata.country']``.
+    Neither author was wrong about its evidence; each did exactly what the rejecting
+    party asked, and the next gate refused it. ``m7362`` additionally dropped its
+    ``website`` and ``input_contract`` tags in the same rewrite, which is why that one
+    diagnostic named three claims -- both of which its own attempts 1 and 2 had
+    grounded, so neither was a wall.
+
+    The rule is stamped by the machine onto every repair brief rather than requested of
+    the checker, because depending on the rejecting party to phrase a repair completely
+    is precisely what failed. The checker is asked as well, as a second surface.
+    """
+
+    executor_source = (_CRAWLER_ROOT / "author_executor.py").read_text(encoding="utf-8")
+    assert "_REPAIR_STANDING_RULE" in executor_source
+    assert "lines.extend((\"\", _REPAIR_STANDING_RULE))" in executor_source, (
+        "the rule must be appended to the rendered feedback block itself; defining it "
+        "without emitting it leaves the trap open"
+    )
+    rule = " ".join(_REPAIR_STANDING_RULE.split())
+    assert "REMOVE, DROP, RETRACT, or NOT ASSERT" in rule
+    assert "external_metadata.availability" in rule
+    assert "search-exhausted" in rule
+
+    prompt = " ".join(_AUTHOR_PROMPT.read_text(encoding="utf-8").split())
+    assert "only half an instruction" in prompt
+
+    checker = " ".join(
+        (_CRAWLER_ROOT / "prompts" / "codex_accuracy_checker_v2.txt").read_text(
+            encoding="utf-8"
+        ).split()
+    )
+    assert "PHRASE REMOVAL REPAIRS COMPLETELY" in checker
+    assert "Ground or remove the asserted country value" in checker, (
+        "the checker must be shown the exact phrasing that killed two models"
+    )
 
 
 @pytest.mark.smoke

@@ -733,6 +733,31 @@ def _campaign_fragment(campaign_id: Optional[str]) -> Optional[str]:
     return path.read_text(encoding="utf-8").strip()
 
 
+#: Machine-owned rule appended to EVERY repair brief, under the verbatim checker
+#: findings. A checker repair is free prose, and the two most natural phrasings of a
+#: metadata repair -- "ground or remove the asserted US country value", "ground or drop
+#: it" -- describe a first half that is legal and a second half that is not: emptying a
+#: gated field WITHOUT a typed availability state is refused by the deterministic gate as
+#: an ungrounded claim. In the 2026-08-05 twenty-model rung both models that received
+#: that exact repair (m4334, m7362) complied literally, emptied ``country``, declared no
+#: availability record, and terminalized as permanently dead records. Neither author was
+#: wrong about the evidence; each was told to do something the next gate refuses. The
+#: rule is stamped by the machine rather than requested of the checker, because relying
+#: on the rejecting party to phrase the repair completely is what failed.
+_REPAIR_STANDING_RULE = (
+    "STANDING RULE ON EVERY REPAIR -- READ BEFORE ACTING ON THE FINDINGS ABOVE\n"
+    "A repair that says to REMOVE, DROP, RETRACT, or NOT ASSERT a gated value is only "
+    "half an instruction, and obeying only that half is refused. Emptying a gated field "
+    "is legal ONLY together with a typed external_metadata.availability.<key> state "
+    "(status not-found-after-search / none-exist / not-applicable, basis from the closed "
+    "enum -- an absence you established by reading the frozen sources is "
+    "search-exhausted) plus the bounded search_report. A gated field left bare-empty is "
+    "an ungrounded claim and the proposal dies. So: ground the value, or empty it AND "
+    "declare the absence. There is no third option, and 'the checker told me to remove "
+    "it' is not one."
+)
+
+
 def _prior_attempts_section(author_root: Path) -> Optional[str]:
     """Render the WHAT WENT WRONG LAST TIME feedback block."""
 
@@ -765,6 +790,7 @@ def _prior_attempts_section(author_root: Path) -> Optional[str]:
         findings = summary.get("checker_findings")
         if findings:
             lines.append(f"  checker findings, verbatim: {json.dumps(findings)}")
+    lines.extend(("", _REPAIR_STANDING_RULE))
     return "\n".join(lines)
 
 

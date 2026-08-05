@@ -68,6 +68,18 @@ DEFAULT_GATED_CLAIMS = frozenset(
         # description), so tagging those same excerpts with ``website`` costs one
         # supports entry and is always satisfiable -- the schema requires non-empty
         # website prose for every proposal, so no availability route is needed.
+        #
+        # "Always satisfiable" was an ARGUMENT when this claim landed; it is now a
+        # MEASUREMENT. Replaying this gate over all 39 proposals archived from the
+        # 2026-08-05 twenty-model rung: 37 carried a ``website`` supports tag and 39 of
+        # 39 dereferenced ``website.family_grounding_id`` to a real family-level
+        # excerpt, so the harder half of the claim was satisfied by literally every
+        # proposal an author produced. The two misses are one model's third attempt
+        # (m7362), which dropped ``website``, ``input_contract`` AND
+        # ``external_metadata.country`` together in a whole-proposal rewrite after its
+        # own attempts 1 and 2 had grounded all three. That is a regression, not a
+        # wall: no proposal ever failed this claim for want of groundable evidence.
+        # Do not re-litigate it from theory -- replay the archive.
         "website",
     }
     | TAXONOMY_LEAF_CLAIMS
@@ -1384,12 +1396,24 @@ def _validate_availability_record(
     status = record.get("status")
     if status not in AVAILABILITY_STATUSES:
         raise ProposalValidationError(
-            f"availability state for {claim} has a non-canonical status: {status!r}"
+            f"availability state for {claim} has a non-canonical status: {status!r}; "
+            f"status is a closed vocabulary, one of {sorted(AVAILABILITY_STATUSES)}"
         )
     basis = record.get("basis")
     if basis not in AVAILABILITY_BASES:
+        # Name the vocabulary in the refusal. Two of twenty models in the 2026-08-05
+        # rung died here on their FIRST and ONLY attempt, both by writing an honest
+        # descriptive phrase for what they actually did ('bounded-source-read',
+        # 'bounded-frozen-source-read') where the enum wanted 'search-exhausted'. The
+        # schema said "closed-vocabulary basis" without declaring the vocabulary, so
+        # the members existed only in Python -- the exact shape of the wall the
+        # generated claim vocabulary was built to remove. The enum is now declared in
+        # both schemas; this message is the second surface, for the human reading the
+        # terminal record.
         raise ProposalValidationError(
-            f"availability state for {claim} has a non-canonical basis: {basis!r}"
+            f"availability state for {claim} has a non-canonical basis: {basis!r}; "
+            f"basis is a closed vocabulary, one of {sorted(AVAILABILITY_BASES)} "
+            "(an absence established by reading the frozen sources is 'search-exhausted')"
         )
     values = record.get("values")
     if not isinstance(values, list):
