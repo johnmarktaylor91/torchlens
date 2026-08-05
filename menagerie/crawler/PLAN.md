@@ -780,7 +780,7 @@ replaced. They were unpinned until 2026-07-29, so drift in the two most load-bea
 prompts was undetectable.
 
 - `stage1_discovery.md`: `sha256:0b56756b8a8aabcb1134536bc488e76f43bf1479319e208b90a6cc1a2a0a15aa`
-- `stage2_author.md`: `sha256:8d81d607590250e85f99c7db75e481607bfed9010a1187792113e2a808d7148c`
+- `stage2_author.md`: `sha256:935445a496a6e4eb20a4681829a8162bba6328451b69637e617c7e1641616817`
 
 ## 21. Acceptance tests
 
