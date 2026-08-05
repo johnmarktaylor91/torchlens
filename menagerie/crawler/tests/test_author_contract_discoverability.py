@@ -596,3 +596,151 @@ def recipe_or(proposal_source: str) -> str:
     """
 
     return proposal_source + (_CRAWLER_ROOT / "recipe.py").read_text(encoding="utf-8")
+
+
+@pytest.mark.smoke
+def test_the_wall_exhaustion_spelling_is_commanded_where_the_author_reads() -> None:
+    """The stage brief commands the ONE reserved exhaustion spelling, verbatim.
+
+    Rung 7's largest cluster: eight of twenty sessions hit the wall deadline and
+    followed the brief's old instruction -- "Emit a valid BLOCKED result ... flows
+    through the engine's terminal-disposition gate and can be requeued" -- inventing
+    five free-form spellings (``authoring-budget-exhausted``,
+    ``author-wall-deadline-reached``, ``authoring-wall-exhausted``, and two
+    ``author-wall-deadline-before-*`` forms). Every one parsed as an ordinary
+    prerequisite claim, reached the terminal checker, and was correctly rejected or
+    found unverifiable: no frozen source can witness a wall clock. Meanwhile the
+    honest path existed the whole time: ``_validate_blocked_reason`` refuses the
+    reserved spellings as :class:`AuthorEffortExhaustionClaim` and the driver lane
+    records ``failed:<stage>`` with a stage-valid effort reason -- requeueable, no
+    checker involved. The rung's whole loss was discoverability, so both surfaces
+    must now command the exact spelling and the schema must warn beside the field.
+    """
+
+    stage2 = _STAGE2_PROMPT.read_text(encoding="utf-8")
+    unwrapped = " ".join(stage2.split())
+    assert "exactly `wall-exceeded`" in unwrapped, (
+        "the brief must command the reserved spelling verbatim, not describe it"
+    )
+    assert "`stage` naming the stage in flight" in unwrapped
+    assert '`["authoring-wall-budget"]`' in unwrapped, (
+        "prerequisite_ids is schema-required (minItems 1); the brief must show a "
+        "publishable value or the commanded shape is unwritable"
+    )
+    assert "asks no checker to adjudicate it" in unwrapped, (
+        "the brief must say the honest path needs no blocked-prerequisite excerpt, "
+        "or an exhausted author will still burn its last minutes grounding one"
+    )
+    assert "requeue with a larger grant" in unwrapped
+    assert "authoring-budget-exhausted" in unwrapped, (
+        "the exact spelling that killed real models must be shown as the trap"
+    )
+    assert "no frozen source can witness your wall clock" in unwrapped
+
+    reason = json.loads(
+        (_SCHEMA_DIR / "author-result-v4.schema.json").read_text(encoding="utf-8")
+    )["$defs"]["blocked_payload"]["properties"]["reason_code"]["description"]
+    assert "wall-exceeded" in reason, "the schema must name the reserved spelling"
+    assert "effort-exhausted:*" in reason, "the reserved family must be named"
+    assert "requeueable" in reason
+
+    # The commanded spelling must stay lockstep with the live vocabulary: if the
+    # reserved set moves, the prompt and schema prose above are lying to the one
+    # attempt each author gets.
+    from menagerie.crawler.constants import (
+        EFFORT_EXHAUSTION_REASON_CODES,
+        EXHAUSTION_TERMINAL_REASON_BY_STAGE,
+        FAILURE_REASON_CODES,
+        TERMINAL_STATUS_CODES,
+    )
+
+    assert "wall-exceeded" in EFFORT_EXHAUSTION_REASON_CODES, (
+        "the brief commands wall-exceeded; if the reserved vocabulary dropped it, "
+        "the commanded path silently became the rejected path"
+    )
+    routed = EXHAUSTION_TERMINAL_REASON_BY_STAGE["author"]
+    assert routed in FAILURE_REASON_CODES["author"]
+    assert "failed:author" in TERMINAL_STATUS_CODES
+
+
+@pytest.mark.smoke
+def test_the_exact_value_traps_are_stated_in_the_stage_brief() -> None:
+    """Every byte-exact refusal that killed a real session is disclosed as a block.
+
+    Four rung-7 author sessions died on exact-value rules that lived only in
+    Python or in an unread schema leaf: ``m3671`` attempt 1 on
+    ``source_to_code_map[0].code_path`` null, ``m3671`` attempt 2 and ``m9617``
+    attempt 1 on the ``licenses.weights.status`` const, ``m4334`` attempt 1 on the
+    ``initialization.policy`` const. The prompt-audit docket added the three
+    Python-only cross-field checks (citation object equality, the mandatory-link
+    invariant, the ``cas_path`` grant refusal) as the same trap shape waiting to
+    fire. Authors run once; each rule must be stated where they read, and each
+    stated rule must still be the live one.
+    """
+
+    stage2 = " ".join(_STAGE2_PROMPT.read_text(encoding="utf-8").split())
+    assert 'exactly `"not-used"`' in stage2, (
+        "the licenses.weights.status const must be commanded verbatim"
+    )
+    assert '`"not-applicable"` killed a real proposal' in stage2, (
+        "the near-synonym that killed m3671 and m9617 must be shown as the trap"
+    )
+    assert "must be **exactly equal**, leaf for leaf" in stage2
+    assert "must list **every** source in the frozen manifest" in stage2, (
+        "the staging set-equality rule must be stated: m9617 listed the 9 sources "
+        "it had used out of 18 and was refused at staging as a session crash"
+    )
+    assert "no subset, no extras" in stage2
+    assert '`source_resolution.mandatory_link_status` must be `"ok"`' in stage2
+    assert "Never add `cas_path`" in stage2
+    assert "`code_path` is a **non-empty string**" in stage2
+    assert "`source_to_code_map: []`" in stage2, (
+        "the declarative-R1 shape must be shown beside the row rule"
+    )
+    assert 'const `"random"`' in stage2
+    assert "`source_specified_choices`" in stage2
+
+    # Each disclosed trap must still be the rule the code or schema enforces.
+    proposal_source = (_CRAWLER_ROOT / "proposal.py").read_text(encoding="utf-8")
+    assert "top-level citation differs from accuracy-checked external_metadata.citation" in (
+        proposal_source
+    )
+    assert "mandatory source link is not satisfied" in proposal_source
+    assert "primary_source_id does not name a declared source" in proposal_source
+    assert "source_resolution.sources cannot carry author-controlled CAS paths" in (
+        proposal_source
+    )
+
+    common = _schema("model-common.schema.json")
+    weights = common["$defs"]["licenses"]["properties"]["weights"]["properties"]["status"]
+    assert weights.get("const") == "not-used"
+    initialization = common["$defs"]["initialization"]["properties"]
+    assert initialization["policy"].get("const") == "random"
+    assert initialization["pretrained_disabled"].get("const") is True
+    code_path = common["$defs"]["source_to_code"]["properties"]["code_path"]
+    assert code_path.get("$ref", "").endswith("nonempty_string"), (
+        "the disclosed row rule must still be the schema's: a null code_path row "
+        "is what killed m3671 attempt 1"
+    )
+    assert "code_path" in common["$defs"]["source_to_code"]["required"]
+
+
+@pytest.mark.smoke
+def test_the_digest_tool_rule_is_stated_in_the_stage_brief() -> None:
+    """The brief tells the author to COMPUTE excerpt digests, never to write them.
+
+    ``m10517`` published a proposal whose quoted excerpt was byte-perfect against
+    the frozen CAS line while its declared ``text_sha256`` matched no bytes
+    anywhere -- a digest written from memory. The existing digest section warned
+    about hashing the wrong REGION; it never said to run a real tool, and a
+    fabricated digest is exactly the failure a warning about regions does not
+    reach.
+    """
+
+    stage2 = " ".join(_STAGE2_PROMPT.read_text(encoding="utf-8").split())
+    assert "`sha256sum`" in stage2, "a concrete tool must be named"
+    assert "A digest written from memory" in stage2
+    assert "matched no bytes anywhere" in stage2, (
+        "the m10517 failure shape must be described so the instruction reads as "
+        "load-bearing rather than pedantry"
+    )
