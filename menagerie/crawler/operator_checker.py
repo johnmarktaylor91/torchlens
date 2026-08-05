@@ -21,6 +21,7 @@ from menagerie.crawler.checker_dispatch import (
     PROMPT_PATH,
     apply_machine_owned_gate_fields,
     machine_owned_gate_fields,
+    metadata_fidelity_normalizations,
     validate_checker_result_mapping,
 )
 from menagerie.crawler.constants import GateKind
@@ -326,15 +327,22 @@ def execute_checker_request(
         temp_root = Path(temporary)
         schema_path = temp_root / "gate-output-schema.json"
         last_message_path = temp_root / "last-message.json"
-        publish_json_atomic(schema_path, _native_output_schema())
-        argv = build_codex_argv(
-            workdir=request_path.parent,
-            model=model,
-            schema_path=schema_path,
-            last_message_path=last_message_path,
-            prompt=prompt,
-        )
+        publish_json_atomic(schema_path, _native_output_schema(GateKind(gate_kind)))
         last_detail = ""
+        # Corrective feedback for the NEXT attempt after a contract refusal. The
+        # frozen prompt bytes stay pinned; the feedback travels in the same
+        # dynamic prompt region that already carries WORK_ENVELOPE_PATH. Rung 8
+        # showed why silence loses: attempt 1 was refused for a stale
+        # ``fidelity_identity`` echo, attempt 2 re-ran the identical prompt with
+        # nothing naming the flub, and the batch died on its next slip.
+        contract_feedback: str | None = None
+        # A structural contract refusal (schema shape, decision logic -- anything
+        # that is not the typed binding-mismatch flub) gets exactly ONE bounded
+        # re-ask with the exact error fed back, mirroring the author-side echo
+        # retry. One, not the full budget: a checker that violates its contract
+        # twice with the error named to it is systematically divergent, which is
+        # what the permanent classification exists for.
+        contract_retry_spent = False
         for attempt_number in range(1, CHECKER_MAX_ATTEMPTS + 1):
             remaining = (deadline - clock().astimezone(timezone.utc)).total_seconds()
             if remaining <= 0:
@@ -353,6 +361,17 @@ def execute_checker_request(
             # attempt hit the wall, a smaller one means it stopped short. Recorded
             # next to the duration so the pair is interpretable on its own.
             attempt_budget = min(CHECKER_TIMEOUT_SECONDS, remaining)
+            argv = build_codex_argv(
+                workdir=request_path.parent,
+                model=model,
+                schema_path=schema_path,
+                last_message_path=last_message_path,
+                prompt=(
+                    prompt
+                    if contract_feedback is None
+                    else _with_contract_feedback(prompt, contract_feedback)
+                ),
+            )
             started_instant = _as_utc(clock())
             attempt = runner(argv, last_message_path, attempt_budget)
             finished_instant = _as_utc(clock())
@@ -402,8 +421,17 @@ def execute_checker_request(
                     # verdict is never thrown away over a scaffold field the
                     # model could not observe, and it means no model-supplied
                     # identity is ever believed.
+                    decoded = _load_last_message(last_message_path)
+                    # Named BEFORE the stamp overwrites it: a divergent supplied
+                    # fidelity block on a metadata gate is normalized (it is a
+                    # gate-kind constant, not a judgment), but the divergence is
+                    # evidence of checker confusion and must survive as
+                    # telemetry rather than vanish into the machine fill.
+                    normalized_fidelity_ids = metadata_fidelity_normalizations(
+                        decoded, envelope
+                    )
                     result = apply_machine_owned_gate_fields(
-                        _load_last_message(last_message_path),
+                        decoded,
                         envelope,
                         started_at=started_at,
                         finished_at=finished_at,
@@ -421,11 +449,12 @@ def execute_checker_request(
                     # batch PERMANENTLY on the first flub turned one bad
                     # transcription into a terminal ``protocol-violation`` for
                     # every batch member on a run-once system. A fresh bounded
-                    # attempt re-reads the same frozen envelope, so the re-ask
-                    # can repair a flub while a systematic divergence still
-                    # exhausts the attempts and exits as the same permanent
-                    # contract rejection as before.
+                    # attempt re-reads the same frozen envelope WITH the exact
+                    # refusal fed back, so the re-ask can repair a flub while a
+                    # systematic divergence still exhausts the attempts and
+                    # exits as the same permanent contract rejection as before.
                     last_detail = str(exc)
+                    contract_feedback = last_detail
                     append_telemetry(
                         request_path,
                         {
@@ -452,6 +481,34 @@ def execute_checker_request(
                     UnicodeDecodeError,
                     json.JSONDecodeError,
                 ) as exc:
+                    # A structural contract refusal: the checker returned a
+                    # complete answer whose SHAPE the machine validator refused
+                    # (never its merits -- a validated adverse verdict is a
+                    # SUCCESS publication and no code path re-asks over one).
+                    # Rung 8 killed both members of a two-model batch here in
+                    # one second, on a slip the checker was never told about.
+                    # ONE bounded re-ask with the exact error fed back mirrors
+                    # the author-side echo retry: the refused result is never
+                    # published, the validator is never loosened, and a second
+                    # refusal with the error named is systematic divergence and
+                    # exits permanent exactly as before.
+                    last_detail = str(exc)
+                    retrying = (
+                        not contract_retry_spent and attempt_number < CHECKER_MAX_ATTEMPTS
+                    )
+                    append_telemetry(
+                        request_path,
+                        {
+                            "event": "contract-rejection-refused",
+                            "attempt": attempt_number,
+                            "retrying": retrying,
+                            "detail": last_detail,
+                        },
+                    )
+                    if retrying:
+                        contract_retry_spent = True
+                        contract_feedback = last_detail
+                        continue
                     return _finish(
                         request_path,
                         OperatorExitCode.PERMANENT_CONTRACT_REJECTION,
@@ -460,6 +517,15 @@ def execute_checker_request(
                         attempt_number,
                         str(exc),
                         wall_seconds=elapsed(),
+                    )
+                if normalized_fidelity_ids:
+                    append_telemetry(
+                        request_path,
+                        {
+                            "event": "fidelity-normalized",
+                            "attempt": attempt_number,
+                            "stable_ids": list(normalized_fidelity_ids),
+                        },
                     )
                 publish_json_atomic(output_path, result)
                 return _finish(
@@ -676,17 +742,21 @@ def _build_prompt(envelope: Mapping[str, Any], request_path: Path) -> str:
     """
 
     frozen = PROMPT_PATH.read_text(encoding="utf-8")
-    machine_owned = ", ".join(
-        sorted(machine_owned_gate_fields(envelope))
-        + [
-            "checker.provider",
-            "checker.model",
-            "checker.version",
-            "checker.prompt_sha256",
-            "checker.started_at",
-            "checker.finished_at",
-        ]
-    )
+    machine_owned_names = sorted(machine_owned_gate_fields(envelope)) + [
+        "checker.provider",
+        "checker.model",
+        "checker.version",
+        "checker.prompt_sha256",
+        "checker.started_at",
+        "checker.finished_at",
+    ]
+    # On a metadata gate the per-item fidelity block is a gate-kind constant the
+    # wrapper stamps; it is absent from the metadata output schema by design, so
+    # the enumeration must name it or the prompt's ownership table understates
+    # what the machine owns for this envelope.
+    if envelope.get("gate_kind") == GateKind.METADATA_BATCH.value:
+        machine_owned_names.append("items[*].fidelity")
+    machine_owned = ", ".join(machine_owned_names)
     return (
         f"{frozen}\n\n"
         f"WORK_ENVELOPE_PATH={request_path}\n"
@@ -706,7 +776,7 @@ def _build_prompt(envelope: Mapping[str, Any], request_path: Path) -> str:
     )
 
 
-def _native_output_schema() -> JsonObject:
+def _native_output_schema(gate_kind: GateKind) -> JsonObject:
     """Return the native structured-output schema derived from ``gate.v3`` itself.
 
     This used to be a one-field ``result_json`` STRING transport, which made the
@@ -718,16 +788,57 @@ def _native_output_schema() -> JsonObject:
     then ``integrity.findings`` -- and each fix moved the failure to the next
     nested block rather than closing the class.
 
+    Parameters
+    ----------
+    gate_kind:
+        Exact gate kind of the validated request envelope. The schema is derived
+        per kind, so a metadata checker cannot represent a fidelity verdict at
+        all (rung 8: one such verdict killed both models of a batch).
+
     Returns
     -------
     dict[str, Any]
-        Strict-subset schema pinning the exact ``gate.v3`` item vocabulary. The
-        decoded gate still passes the complete repository schema and semantic
-        validator before publication; this constraint is additional, never a
-        replacement.
+        Strict-subset schema pinning the exact ``gate.v3`` item vocabulary for
+        this gate kind. The decoded gate still passes the complete repository
+        schema and semantic validator before publication; this constraint is
+        additional, never a replacement.
     """
 
-    return native_output_schema()
+    return native_output_schema(gate_kind)
+
+
+def _with_contract_feedback(prompt: str, error: str) -> str:
+    """Append one refused attempt's exact contract error to the dynamic prompt.
+
+    The frozen prompt bytes stay pinned -- this rides in the same dynamic region
+    that already carries ``WORK_ENVELOPE_PATH`` -- and the feedback names the
+    machine validator's exact refusal so the re-ask repairs the one defect
+    instead of re-rolling the dice on an identical prompt.
+
+    Parameters
+    ----------
+    prompt:
+        Complete one-shot prompt for this envelope.
+    error:
+        Exact refusal text from the machine validator, bounded so a pathological
+        error cannot displace the instructions it annotates.
+
+    Returns
+    -------
+    str
+        Prompt for the corrective attempt.
+    """
+
+    return (
+        f"{prompt}\n\n"
+        "YOUR PREVIOUS ATTEMPT WAS REFUSED BY THE MACHINE VALIDATOR. Exact error:\n"
+        f"{error[:2_000]}\n"
+        "That refusal is mechanical -- output shape or identity binding -- and is NOT a "
+        "judgment on your verdicts; do not change any judgment because of it. Re-read the "
+        "envelope at WORK_ENVELOPE_PATH, correct exactly the named defect, and return your "
+        "COMPLETE verdicts for every envelope item again. Envelope-bound identity fields must "
+        "be copied VERBATIM from THIS envelope's items, never from any earlier round's files."
+    )
 
 
 def _invoke_codex(
