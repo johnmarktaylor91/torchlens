@@ -279,6 +279,59 @@ class AuthorQueueStalled(RetryableOperatorError):
     """
 
 
+class AuthorSessionRetryExhausted(RetryableOperatorError):
+    """One model's author sessions died without publishing until the retry budget spent.
+
+    Rung 7 (2026-08-05, m7362): a repair-round ``claude -p`` died in 0.6s with rc=1,
+    zero tokens, and an empty stderr tail -- twice, 0.85s apart, with no backoff --
+    and the resulting ``RetryableOperatorError`` unwound the campaign, stranding five
+    models that held published, gated work. The session transcripts held the cause
+    ("Not logged in"): a transient host-side credential blip that a zero-backoff
+    immediate retry structurally cannot survive and that says nothing about the model.
+
+    This subclass marks the RETRY BUDGET SPENT boundary for exactly the
+    no-publication author-session class (``session-crashed`` / ``wall-exceeded`` /
+    ``no-result-output`` and spawn failures). It deliberately remains a
+    ``RetryableOperatorError``: any handler not consulting the lane-health boundary
+    still propagates it campaign-scoped, which is the fail-safe LOUD side. Handlers
+    that do consult the boundary may terminalize the single model instead -- but only
+    with a contemporaneous same-lane publication witness and passing host checks,
+    because a session that died without publishing is otherwise indistinguishable
+    from a broken host (BATON trap 3).
+
+    Parameters
+    ----------
+    stable_id:
+        Model whose author sessions died without publishing.
+    attempts:
+        Total sessions attempted before the budget spent.
+    backoff_seconds:
+        Waits observed between attempts, so the durable record can prove the
+        failures were not sub-second echoes of one instant.
+    detail:
+        Bounded diagnostic from the final attempt.
+    """
+
+    def __init__(
+        self,
+        stable_id: str,
+        *,
+        attempts: int,
+        backoff_seconds: tuple[float, ...],
+        detail: str,
+    ) -> None:
+        """Attach the affected model and the spent retry ladder's shape."""
+
+        super().__init__(
+            f"author sessions for {stable_id} died without publishing "
+            f"{attempts} times (backoff {list(backoff_seconds)}): {detail}"
+        )
+        self.stable_id = stable_id
+        self.attempts = attempts
+        self.backoff_seconds = backoff_seconds
+        self.detail = detail
+
+
 class AuthorEffortCapExceeded(DriverIntegrationError):
     """Raised when an author session exceeds its declared effort grant.
 
@@ -874,6 +927,11 @@ class DriverDependencies:
     wakeup_installer: Optional[Callable[[Any], None]] = None
     wakeup_verifier: Optional[Callable[[Any], bool]] = None
     wakeup_deactivator: Optional[Callable[[Any], None]] = None
+    #: Injectable wait used between bounded infrastructure retries. ``None`` means
+    #: the driver waits on its own shutdown event (real time, interruptible by
+    #: SIGTERM); tests inject a recorder so the backoff ladder is provable without
+    #: sleeping.
+    sleeper: Optional[Callable[[float], None]] = None
 
 
 class DriverLock:
@@ -913,6 +971,29 @@ class DriverLock:
             fcntl.flock(self._handle.fileno(), fcntl.LOCK_UN)
             self._handle.close()
             self._handle = None
+
+    def held(self) -> bool:
+        """Return whether this process still verifiably holds the lock.
+
+        A cheap mechanical fact for the author-lane host checks: the handle is
+        open, its file still exists at the lock path, and the open descriptor
+        still refers to that same inode (an unlinked-and-recreated lock file
+        means another writer may hold a lock this handle no longer guards).
+
+        Returns
+        -------
+        bool
+            Whether the acquired lock is still in force.
+        """
+
+        if self._handle is None:
+            return False
+        try:
+            on_disk = os.stat(self.path)
+            via_handle = os.fstat(self._handle.fileno())
+        except OSError:
+            return False
+        return (on_disk.st_dev, on_disk.st_ino) == (via_handle.st_dev, via_handle.st_ino)
 
 
 def default_driver_paths(repo_root: Path, intake_root: Path) -> DriverPaths:

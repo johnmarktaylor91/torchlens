@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import platform
+import shutil
 import subprocess
 import sys
 import time
@@ -31,6 +32,7 @@ from typing import (
 
 from menagerie.crawler import author_queue
 from menagerie.crawler.artifact_transactions import (
+    ArtifactBindingError,
     ArtifactCheckpointError,
     ArtifactCheckpointProjection,
     ArtifactEventKind,
@@ -225,6 +227,7 @@ from menagerie.crawler.driver_contracts import (
     AuthorEffortCapExceeded,
     AuthorQueueStalled,
     AuthorRepairTerminal,
+    AuthorSessionRetryExhausted,
     AuthorUsagePause,
     CheckerOutcome,
     DriverConfig,
@@ -451,6 +454,18 @@ def _author_lane_failure(exc: Exception) -> tuple[str, str]:
         # `runner` reason vocabulary has no retryable member, and inventing one would be
         # a vocabulary change rather than a taxonomy fix.
         return "runner", "internal-error"
+    if isinstance(exc, ArtifactBindingError):
+        # Staging refused a result the session ran to completion and PUBLISHED --
+        # `session-crashed` asserts a death that did not occur. Rung 7, m9617: a
+        # replay-valid PROPOSED result whose declared source set contradicted the
+        # frozen manifest was recorded as a session crash, permanently on a run-once
+        # campaign. The reachable raise sites in `validate_artifact_transaction`'s
+        # staging path all refuse the PUBLISHED CONTENT against machine authority,
+        # which is exactly the `malformed-result` class; the exact refusal type,
+        # message, and raise site still travel on the model-lane failure event, so
+        # nothing is lost by the honest label. (A finer split -- author-owned vs
+        # engine-owned binding subtypes -- belongs in `artifact_transactions.py`.)
+        return "author", "malformed-result"
     return "author", "session-crashed"
 
 
@@ -2989,6 +3004,28 @@ def _outage_streak_signal(
     return None
 
 
+#: Waits, in seconds, before each bounded infrastructure retry. One initial attempt
+#: plus one retry per entry. Rung 7's abort (m7362) was two sub-second session deaths
+#: 0.85s apart: a zero-backoff single retry cannot survive any host condition lasting
+#: longer than about a second, and the observed cause -- a transient CLI credential
+#: blip -- resolves on the order of seconds. The schedule stays short enough that a
+#: genuinely dead host still halts within about half a minute per lane call.
+_INFRASTRUCTURE_RETRY_BACKOFF_SECONDS: tuple[float, ...] = (5.0, 30.0)
+
+#: Campaign-volume free-space floor for the lane-health host check. Deliberately far
+#: below the 30 GiB env-solve floor: this check asks only "can the host still write
+#: records and session artifacts", not "can it solve environments".
+_AUTHOR_LANE_DISK_FLOOR_BYTES: int = 5 * 1024**3
+
+#: Retained publication witnesses. Only existence and the most recent entry feed the
+#: boundary, so the list stays bounded on a 28k-model run.
+_AUTHOR_LANE_WITNESS_CAP: int = 50
+
+#: Consecutive DISTINCT models dying without publication -- with no intervening
+#: publication -- that promote the failure from model-scoped to a lane-wide pattern.
+_AUTHOR_NO_PUBLICATION_STREAK_LIMIT: int = 2
+
+
 class AdmissionEnvironmentMixin:
     """Admission, environment, and execution workflow methods for the driver."""
 
@@ -2997,6 +3034,11 @@ class AdmissionEnvironmentMixin:
         tuple[ArtifactEventLedger, int, ArtifactCheckpointProjection]
     ]
     _ledger_hot_path_samples: list[tuple[int, float]]
+    # Author-lane health state (initialized by the concrete driver facade).
+    _author_lane_publications: list[dict[str, str]]
+    _author_no_publication_deaths: list[str]
+    _models_with_staged_work: set[str]
+    _reduced_model_ids: set[str]
 
     if TYPE_CHECKING:
 
@@ -4104,6 +4146,17 @@ class AdmissionEnvironmentMixin:
                 raise AuthorUsagePause(
                     self._pause_for_usage(backoff.signal, operational, len(work))
                 ) from backoff
+            except AuthorSessionRetryExhausted as exhausted:
+                # The bounded ladder spent its budget on no-publication session
+                # deaths. The mechanical lane-health boundary decides the scope:
+                # a contemporaneous publication witness plus passing host checks
+                # terminalizes THIS model; anything else stays the campaign-scoped
+                # loud halt the re-raise below preserves.
+                if self._scope_author_retry_exhaustion(
+                    item, None, exhausted, reducer, operational, state
+                ):
+                    continue
+                raise
             except RetryableOperatorError:
                 raise
             except Exception as exc:  # noqa: BLE001 -- author failure belongs to this model
@@ -4663,6 +4716,23 @@ class AdmissionEnvironmentMixin:
                     # reset time, not a failed repair. `_ensure_gates` already returns a
                     # usage-pause reason, so route it the same way as a checker backoff.
                     return self._pause_for_usage(backoff.signal, operational, len(work))
+                except AuthorSessionRetryExhausted as exhausted:
+                    # Rung 7's exact crash site: a repair-round session died without
+                    # publishing until the bounded ladder spent. The lane-health
+                    # boundary decides model-vs-campaign scope; the retained prior
+                    # artifact keeps the frozen source facts on a model-scoped
+                    # terminal instead of erasing work the broker already proved.
+                    if self._scope_author_retry_exhaustion(
+                        items_by_id[stable_id],
+                        artifacts[stable_id],
+                        exhausted,
+                        reducer,
+                        operational,
+                        state,
+                    ):
+                        pending_ids.discard(stable_id)
+                        continue
+                    raise
                 except RetryableOperatorError:
                     raise
                 except AuthorRepairTerminal as terminal:
@@ -4967,6 +5037,14 @@ class AdmissionEnvironmentMixin:
                         # reset time, not a failed repair. `_ensure_gates` already returns a
                         # usage-pause reason, so route it the same way as a checker backoff.
                         return self._pause_for_usage(backoff.signal, operational, len(work))
+                    except AuthorSessionRetryExhausted as exhausted:
+                        # No-publication session deaths through the fidelity-repair
+                        # lane meet the same mechanical boundary as the metadata arm.
+                        if self._scope_author_retry_exhaustion(
+                            item, artifact, exhausted, reducer, operational, state
+                        ):
+                            break
+                        raise
                     except RetryableOperatorError:
                         raise
                     except AuthorRepairTerminal as terminal:
@@ -5152,6 +5230,16 @@ class AdmissionEnvironmentMixin:
                             # reset time, not a failed repair. `_ensure_gates` already returns a
                             # usage-pause reason, so route it the same way as a checker backoff.
                             return self._pause_for_usage(backoff.signal, operational, len(work))
+                        except AuthorSessionRetryExhausted as exhausted:
+                            # Same mechanical boundary as the batch repair lane: a
+                            # model-scoped verdict terminalizes this model with its
+                            # retained artifact; anything else re-raises loud.
+                            if self._scope_author_retry_exhaustion(
+                                item, artifact, exhausted, reducer, operational, state
+                            ):
+                                metadata_blocked = True
+                                break
+                            raise
                         except RetryableOperatorError:
                             raise
                         except AuthorRepairTerminal as terminal:
@@ -5302,7 +5390,25 @@ class AdmissionEnvironmentMixin:
         *,
         admission: Optional[tuple[str, WorkItem]] = None,
     ) -> _T:
-        """Retry one external author or checker infrastructure failure once.
+        """Retry one external author or checker infrastructure failure, with backoff.
+
+        Rung 7 (m7362) measured the old ladder: exactly one retry, dispatched 0.85s
+        after a 0.6-second rc=1 session death, then a campaign abort. A zero-backoff
+        single retry cannot survive any host condition lasting longer than about a
+        second -- the observed cause was a transient CLI credential blip ("Not logged
+        in") that resolved on its own. The ladder is now
+        ``_INFRASTRUCTURE_RETRY_BACKOFF_SECONDS``: one initial attempt plus one
+        bounded retry per backoff entry, waiting the entry's seconds first. The wait
+        rides the shutdown event (or the injected test sleeper), so SIGTERM still
+        interrupts it immediately.
+
+        On exhaustion, an AUTHOR-lane no-publication infrastructure failure is
+        re-raised as :class:`AuthorSessionRetryExhausted` -- still a
+        ``RetryableOperatorError``, so every handler that does not consult the
+        lane-health boundary keeps the campaign-scoped LOUD behavior -- while
+        specialized transports (provider outages with their own streak promotion,
+        queue stalls, backoff signals) and published-content refusals propagate
+        unwrapped exactly as before.
 
         Parameters
         ----------
@@ -5319,32 +5425,311 @@ class AdmissionEnvironmentMixin:
         Raises
         ------
         Exception
-            The first contract error or the second infrastructure error.
+            The first contract error, or the final infrastructure error once the
+            bounded budget is spent.
         """
 
-        for attempt in range(2):
+        backoffs = _INFRASTRUCTURE_RETRY_BACKOFF_SECONDS
+        contract_retries = 0
+        infrastructure_retries = 0
+        while True:
             if admission is not None:
                 lane, item = admission
                 self.dependencies.boundary_hook(f"pre-{lane}", item.stable_id)
                 self._check_shutdown(f"{lane}-admission", item=item)
             self._check_shutdown("external-call-admission")
             try:
-                return operation()
-            except Exception as exc:  # noqa: BLE001 -- typed below before retry
-                # ``AuthorExecutorContractError`` is retried on the same bounded
-                # budget -- the author is stochastic, and one fresh session
-                # routinely gets further than the last -- but it is deliberately
-                # NOT ``_is_infrastructure_error``: that predicate also feeds the
-                # reason pickers, and a contract-invalid author payload recorded
-                # as ``internal-error`` would indict the engine for the author's
-                # bytes. When the retry budget is spent it propagates as the
-                # model-local failure it is, not as a campaign abort.
-                if attempt == 1 or not (
-                    self._is_infrastructure_error(exc)
-                    or isinstance(exc, AuthorExecutorContractError)
-                ):
+                result = operation()
+            except AuthorExecutorContractError:
+                # ``AuthorExecutorContractError`` keeps its own calibrated budget:
+                # ONE fresh bounded session -- the author is stochastic, and one
+                # fresh session routinely gets further than the last -- with NO
+                # backoff, because a contract-invalid payload is not a
+                # time-correlated condition and a full author session is
+                # expensive. It is deliberately NOT ``_is_infrastructure_error``:
+                # that predicate also feeds the reason pickers, and a
+                # contract-invalid author payload recorded as ``internal-error``
+                # would indict the engine for the author's bytes. When this
+                # budget is spent it propagates as the model-local failure it is,
+                # never as a campaign abort.
+                if contract_retries >= 1:
                     raise
-        raise AssertionError("bounded infrastructure retry did not return or raise")
+                contract_retries += 1
+                continue
+            except Exception as exc:  # noqa: BLE001 -- typed below before retry
+                if not self._is_infrastructure_error(exc):
+                    raise
+                if infrastructure_retries < len(backoffs):
+                    self._wait_before_infrastructure_retry(backoffs[infrastructure_retries])
+                    infrastructure_retries += 1
+                    continue
+                if (
+                    admission is not None
+                    and admission[0] == "author"
+                    and self._author_no_publication_class(exc)
+                ):
+                    raise AuthorSessionRetryExhausted(
+                        admission[1].stable_id,
+                        attempts=1 + infrastructure_retries,
+                        backoff_seconds=backoffs,
+                        detail=str(exc)[-STDIO_TAIL_MAX_CHARS:],
+                    ) from exc
+                raise
+            else:
+                if admission is not None and admission[0] == "author":
+                    # Any successful author-lane round trip is a same-lane,
+                    # same-run publication witness for the boundary below.
+                    self._note_author_lane_publication(admission[1].stable_id)
+                return result
+
+    def _wait_before_infrastructure_retry(self, seconds: float) -> None:
+        """Wait out one backoff entry without ever outliving a shutdown request.
+
+        Parameters
+        ----------
+        seconds:
+            Backoff duration from ``_INFRASTRUCTURE_RETRY_BACKOFF_SECONDS``.
+        """
+
+        if seconds <= 0:
+            return
+        sleeper = self.dependencies.sleeper
+        if sleeper is not None:
+            sleeper(seconds)
+            return
+        # ``Event.wait`` returns early the moment the signal handler sets the
+        # event; the admission check on the next loop iteration then raises the
+        # typed shutdown, so a SIGTERM never waits out a 30-second backoff.
+        self._shutdown_event.wait(seconds)
+
+    def _author_no_publication_class(self, exc: Exception) -> bool:
+        """Return whether one exhausted author failure is a NO-PUBLICATION death.
+
+        The lane-health boundary applies to exactly the class BATON trap 3 leaves
+        ambiguous: sessions that died without publishing (``session-crashed``,
+        ``wall-exceeded``, ``no-result-output``, unclassified exits, spawn
+        failures). Specialized transports carry their own semantics and are
+        excluded: provider outages (``AuthorOutageError``) feed the author-wave
+        streak promotion, queue stalls are lane-wide by construction, backoff
+        signals are campaign pauses, and published-content refusals are already
+        model-scoped under their own types.
+
+        Parameters
+        ----------
+        exc:
+            Final exception after the bounded retry budget spent.
+
+        Returns
+        -------
+        bool
+            Whether the lane-health boundary may adjudicate this failure.
+        """
+
+        current: BaseException | None = exc
+        seen: set[int] = set()
+        while current is not None and id(current) not in seen:
+            seen.add(id(current))
+            if isinstance(
+                current,
+                (
+                    AuthorOutageError,
+                    AuthorQueueStalled,
+                    AuthorSessionRetryExhausted,
+                    AuthorBackoffError,
+                    AuthorExecutorContractError,
+                ),
+            ):
+                return False
+            current = current.__cause__ or current.__context__
+        return self._is_infrastructure_error(exc)
+
+    def _note_author_lane_publication(self, stable_id: str) -> None:
+        """Record one successful author-lane round trip as a lane-health witness.
+
+        Any author session that ran to completion and published -- a proposal, a
+        typed terminal, a repair generation -- is contemporaneous evidence that the
+        host's author lane works, and it clears the consecutive no-publication
+        death streak. Wave-pool workers call this from their own threads, so the
+        two structures share one lock.
+
+        Parameters
+        ----------
+        stable_id:
+            Model whose author session published.
+        """
+
+        with self._author_lane_state_lock:
+            self._author_lane_publications.append(
+                {"stable_id": stable_id, "at": self.dependencies.clock()}
+            )
+            del self._author_lane_publications[:-_AUTHOR_LANE_WITNESS_CAP]
+            self._author_no_publication_deaths.clear()
+
+    def _author_lane_health_checks(self) -> JsonObject:
+        """Run the cheap host checks the lane-health boundary requires.
+
+        Three mechanical facts, none of which is a liveness heuristic: the campaign
+        volume holds more than the floor (a full disk kills every later session the
+        same way), the canonical ledger directory is writable (a read-only ledger
+        makes every terminal unrecordable), and the driver still holds its
+        single-writer lock. Absence of a host FAILURE signal is never treated as
+        evidence of host HEALTH -- these checks can only veto model-scoping, never
+        substitute for the publication witness.
+
+        Returns
+        -------
+        dict[str, Any]
+            Structured check results with an overall ``passed`` verdict.
+        """
+
+        try:
+            disk_free = shutil.disk_usage(self.paths.work_root).free
+        except OSError:
+            disk_free = -1
+        disk_ok = disk_free >= _AUTHOR_LANE_DISK_FLOOR_BYTES
+        ledger_dir = self.paths.ledgers.models.parent
+        ledger_writable = os.access(ledger_dir, os.W_OK)
+        lock = getattr(self, "_driver_lock", None)
+        lock_held = bool(lock is not None and lock.held())
+        return {
+            "disk_free_bytes": disk_free,
+            "disk_floor_bytes": _AUTHOR_LANE_DISK_FLOOR_BYTES,
+            "disk_ok": disk_ok,
+            "ledger_dir_writable": ledger_writable,
+            "driver_lock_held": lock_held,
+            "passed": disk_ok and ledger_writable and lock_held,
+        }
+
+    def _scope_author_retry_exhaustion(
+        self,
+        item: WorkItem,
+        artifact: Optional[AuthorArtifact],
+        exc: AuthorSessionRetryExhausted,
+        reducer: CanonicalReducer,
+        operational: JsonlLedger,
+        state: JsonObject,
+    ) -> bool:
+        """Decide one exhausted no-publication author death: model or campaign.
+
+        The mechanical lane-health test from the converged rung-7 plan. A session
+        that died without publishing is indistinguishable from a broken host, so it
+        may be terminalized model-scoped ONLY when the same run holds positive
+        evidence the lane works and the host passes its cheap checks:
+
+        1. at least one contemporaneous same-lane session in this run published
+           successfully (rung 7 is the witness shape: m7362 crashed while 15
+           sibling models produced terminals through the same author lane), AND
+        2. the host checks pass (disk above floor, ledger writable, lock held), AND
+        3. this is not the second consecutive DISTINCT model to die without
+           publishing since the last publication (a lane-wide pattern).
+
+        Otherwise the failure stays campaign-scoped and the caller re-raises: first
+        model in a run, consecutive distinct-model deaths, and failed host checks
+        all halt LOUD. The decision itself is recorded on the operational ledger
+        either way, so the durable record always shows which side fired and why.
+
+        Parameters
+        ----------
+        item, artifact:
+            Model whose sessions died, and its retained prior artifact when one
+            exists (a repair-round death keeps the frozen source facts on the
+            terminal).
+        exc:
+            Typed retry-exhaustion failure from the bounded ladder.
+        reducer, operational, state:
+            Locked canonical writers and scheduler state.
+
+        Returns
+        -------
+        bool
+            ``True`` when the model was terminalized model-scoped; ``False`` when
+            the caller must re-raise campaign-scoped.
+        """
+
+        with self._author_lane_state_lock:
+            if item.stable_id not in self._author_no_publication_deaths:
+                self._author_no_publication_deaths.append(item.stable_id)
+            death_streak = list(self._author_no_publication_deaths)
+            witnesses = list(self._author_lane_publications)
+        host_checks = self._author_lane_health_checks()
+        lane_wide_pattern = len(death_streak) >= _AUTHOR_NO_PUBLICATION_STREAK_LIMIT
+        model_scoped = bool(witnesses) and host_checks["passed"] and not lane_wide_pattern
+        created_at = self.dependencies.clock()
+        witness_summary = {
+            "publications_this_run": len(witnesses),
+            "last_publication": witnesses[-1] if witnesses else None,
+            "no_publication_death_streak": death_streak,
+            "host_checks": host_checks,
+            "retry_attempts": exc.attempts,
+            "retry_backoff_seconds": list(exc.backoff_seconds),
+        }
+        operational.append(
+            {
+                "schema_version": OPERATIONAL_EVENT_SCHEMA_VERSION,
+                "event_id": "author-lane-boundary-"
+                + stable_hash(
+                    {
+                        "run_id": self.config.run_id,
+                        "stable_id": item.stable_id,
+                        "work_id": item.active_work_id,
+                        "created_at": created_at,
+                    }
+                )[7:31],
+                "created_at": created_at,
+                "event_kind": OperationalEventKind.CAMPAIGN_HEALTH.value,
+                "status": (
+                    OperationalEventStatus.HEALTHY.value
+                    if model_scoped
+                    else OperationalEventStatus.RETRYABLE_INFRASTRUCTURE.value
+                ),
+                "provider": None,
+                "observed_response": None,
+                "reset_at": None,
+                "queued_work_counts": {"models": 1},
+                "current_environment": None,
+                "run_id": self.config.run_id,
+                "machine_id": self.config.machine_id,
+                "details": {
+                    "kind": "author-no-publication-boundary",
+                    "stable_id": item.stable_id,
+                    "work_id": item.active_work_id,
+                    "decision": "model-scoped" if model_scoped else "campaign-scoped",
+                    "message": str(exc),
+                    **witness_summary,
+                },
+            }
+        )
+        if not model_scoped:
+            return False
+        attempt = _driver_failure_attempt(
+            item,
+            artifact,
+            "author",
+            "session-crashed",
+            exc,
+            self.config,
+            diagnostics_root=_diagnostics_root_for_work_root(self.paths.work_root),
+            environment=None,
+            created_at=self.dependencies.clock(),
+        )
+        persisted = reducer.append_attempt(attempt).record
+        detail = (
+            f"{exc} [lane-health witness: {json.dumps(witness_summary, sort_keys=True)}]"
+        )
+        self._terminalize(
+            item,
+            artifact,
+            "failed:author",
+            "session-crashed",
+            detail,
+            (persisted,),
+            reducer,
+            operational,
+            state,
+            human_review=True,
+            terminal_gate_obtained=False,
+        )
+        return True
 
     @staticmethod
     def _is_infrastructure_error(exc: Exception) -> bool:

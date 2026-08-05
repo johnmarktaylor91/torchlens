@@ -256,6 +256,7 @@ from menagerie.crawler.driver_contracts import (
     AuthorBlockedPrerequisite,
     AuthorLane as AuthorLane,
     AuthorRepairTerminal,
+    AuthorSessionRetryExhausted,
     AuthorUsagePause,
     BoundaryHook as BoundaryHook,
     CheckerLane as CheckerLane,
@@ -589,6 +590,23 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         self._intake_snapshot: Optional[IntakeSnapshot] = None
         self._authority_context: Optional[AuthorityContext] = None
         self._shutdown_event = threading.Event()
+        # Author-lane health state for the no-publication boundary (rung 7, m7362).
+        # Publications witness that THIS RUN's author lane works; the death streak
+        # counts consecutive DISTINCT models dying without publication since the
+        # last witness. Wave-pool worker threads record publications concurrently,
+        # so both structures share one lock.
+        self._author_lane_state_lock = threading.Lock()
+        self._author_lane_publications: list[dict[str, str]] = []
+        self._author_no_publication_deaths: list[str] = []
+        # Strand accounting: models whose published author work this run staged,
+        # minus models whose record reduced. On a campaign abort the difference is
+        # every model holding published-but-unreduced work, and each one gets a
+        # durable stranded record instead of silently vanishing (rung 7 stranded
+        # five models, including its only checker-accurate proposal, with nothing
+        # durable naming them).
+        self._models_with_staged_work: set[str] = set()
+        self._reduced_model_ids: set[str] = set()
+        self._driver_lock: Optional[DriverLock] = None
         self._artifact_checkpoint_cache: Optional[
             tuple[ArtifactEventLedger, int, ArtifactCheckpointProjection]
         ] = None
@@ -606,22 +624,47 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             "command": list(sys.argv),
         }
         try:
-            with DriverLock(self.paths.lock_path, owner):
-                with shutdown_signal_handlers(self._shutdown_event):
-                    try:
-                        return self._run_locked(after_review=after_review)
-                    except Exception as exc:
-                        self._record_driver_failure(exc)
-                        raise
+            with DriverLock(self.paths.lock_path, owner) as lock:
+                # Held for the author-lane host checks: "locks held" is one of the
+                # three mechanical facts the no-publication boundary verifies.
+                self._driver_lock = lock
+                try:
+                    with shutdown_signal_handlers(self._shutdown_event):
+                        try:
+                            return self._run_locked(after_review=after_review)
+                        except Exception as exc:
+                            self._record_driver_failure(exc)
+                            raise
+                finally:
+                    self._driver_lock = None
         except SingleWriterError as exc:
             raise DriverLockError(str(exc)) from exc
 
     def _record_driver_failure(self, exc: Exception) -> None:
-        """Append a typed campaign-health failure before propagating an error."""
+        """Append a typed campaign-health failure, then strand records, then state.
+
+        A campaign abort must never silently discard in-flight work. Rung 7
+        stranded five models -- all holding staged published results and recorded
+        gates, one of them the rung's only checker-accurate proposal -- with
+        nothing durable naming them: they were simply MISSING from the terminal
+        table. Every model whose published work this run staged but whose record
+        never reduced now gets a durable ``model-stranded-by-campaign-abort``
+        operational event, and the driver state file carries the full stranded
+        list plus the retry-exhaustion shape, so resume tooling and a human
+        reading the wreckage both see exactly what survives and what to recover.
+
+        Parameters
+        ----------
+        exc:
+            Failure about to propagate out of the locked run.
+        """
 
         created_at = self.dependencies.clock()
         retryable = isinstance(exc, RetryableOperatorError)
+        retry_exhausted = isinstance(exc, AuthorSessionRetryExhausted)
         exception_type = f"{type(exc).__module__}.{type(exc).__qualname__}"
+        with self._author_lane_state_lock:
+            stranded = sorted(self._models_with_staged_work - self._reduced_model_ids)
         identity = stable_hash(
             {
                 "run_id": self.config.run_id,
@@ -643,7 +686,7 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             "provider": None,
             "observed_response": None,
             "reset_at": None,
-            "queued_work_counts": {"models": 0},
+            "queued_work_counts": {"models": len(stranded)},
             "current_environment": None,
             "run_id": self.config.run_id,
             "machine_id": self.config.machine_id,
@@ -651,12 +694,54 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
                 "exception_type": exception_type,
                 "message": str(exc),
                 "retryable_infrastructure": retryable,
+                "retry_exhausted": retry_exhausted,
+                "stranded_models": stranded,
             },
         }
         with JsonlLedger(
             self.paths.operational_ledger, OPERATIONAL_EVENT_SCHEMA_VERSION
         ) as operational:
             operational.append(event)
+            for stable_id in stranded:
+                strand_identity = stable_hash(
+                    {
+                        "run_id": self.config.run_id,
+                        "stable_id": stable_id,
+                        "created_at": created_at,
+                        "driver_failure": identity,
+                    }
+                )[7:31]
+                operational.append(
+                    {
+                        "schema_version": OPERATIONAL_EVENT_SCHEMA_VERSION,
+                        "event_id": f"model-stranded-{strand_identity}",
+                        "created_at": created_at,
+                        "event_kind": OperationalEventKind.CAMPAIGN_HEALTH.value,
+                        "status": (
+                            OperationalEventStatus.RETRYABLE_INFRASTRUCTURE.value
+                            if retryable
+                            else OperationalEventStatus.RUNNER_FAILED.value
+                        ),
+                        "provider": None,
+                        "observed_response": None,
+                        "reset_at": None,
+                        "queued_work_counts": {"models": 1},
+                        "current_environment": None,
+                        "run_id": self.config.run_id,
+                        "machine_id": self.config.machine_id,
+                        "details": {
+                            "kind": "model-stranded-by-campaign-abort",
+                            "stable_id": stable_id,
+                            "driver_failure_event_id": f"driver-failure-{identity}",
+                            "exception_type": exception_type,
+                            # The staged artifact cache and recorded gates survive
+                            # on disk; a resume rehydrates them without re-running
+                            # the author. This event exists so nothing has to
+                            # infer that from a shortfall in the terminal table.
+                            "recoverable_state": "staged-artifact-and-gates",
+                        },
+                    }
+                )
         _write_driver_state(
             self.paths.driver_state,
             {
@@ -667,6 +752,8 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
                 ),
                 "exception_type": exception_type,
                 "message": str(exc),
+                "retry_exhausted": retry_exhausted,
+                "stranded_models": stranded,
             },
         )
 
@@ -1395,6 +1482,11 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
             ledger=reducer.artifact_ledger,
             created_at=self.dependencies.clock(),
         )
+        # Strand accounting: this model now holds staged published work. If the
+        # campaign aborts before its record reduces, `_record_driver_failure`
+        # writes it a durable stranded record instead of letting it vanish.
+        with self._author_lane_state_lock:
+            self._models_with_staged_work.add(item.stable_id)
         return replace(artifact, staged=staged)
 
     def _license_decisions(self, artifact: AuthorArtifact) -> dict[Any, LicenseDecision]:
@@ -2645,6 +2737,9 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         result = reducer.append_model(reducer.prepare_model(model))
         if result.appended:
             self._reduced += 1
+        # Reduced (even if deduplicated): this model is no longer strandable.
+        with self._author_lane_state_lock:
+            self._reduced_model_ids.add(item.stable_id)
         self.dependencies.boundary_hook("post-award-commit", item.stable_id)
         self._check_shutdown("post-award-commit")
         self.dependencies.boundary_hook("after-reduce", item.stable_id)

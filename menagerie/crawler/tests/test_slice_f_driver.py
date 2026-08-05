@@ -3989,6 +3989,7 @@ def _driver(
     author_model: Optional[str] = None,
     checker_model: Optional[str] = None,
     paths_override: Optional[DriverPaths] = None,
+    sleeper: Optional[Any] = None,
 ) -> CrawlerDriver:
     """Build a fully fake deterministic driver."""
 
@@ -4004,6 +4005,9 @@ def _driver(
         (lambda _definition: None) if pause_scheduler is not None else None,
         (lambda _definition: True) if pause_scheduler is not None else None,
         (lambda _definition: None) if pause_scheduler is not None else None,
+        # Deterministic tests never wait out real infrastructure backoff; a test
+        # proving the ladder injects its own recorder here.
+        sleeper if sleeper is not None else (lambda _seconds: None),
     )
     return CrawlerDriver(
         paths_override or _paths(tmp_path, snapshot),
@@ -5576,15 +5580,22 @@ def test_genuine_transport_failure_still_halts_the_campaign(tmp_path: Path) -> N
 
     A persistent ``RetryableOperatorError`` that is NOT an executor contract
     refusal -- a spawn or socket failure -- is evidence about the machine, and
-    terminalizing models into it would burn good models on a broken host. It
-    must still unwind the run for the scheduler to retry.
+    terminalizing models into it would burn good models on a broken host. With
+    NO contemporaneous same-lane publication (the failing model is the first
+    authored, serially), the lane-health boundary has no witness that the host
+    works, so the run must still unwind LOUD for the scheduler to retry.
     """
 
     snapshot = _snapshot(tmp_path, count=3)
     failed_id = snapshot.items[0].stable_id
 
     with pytest.raises(RetryableOperatorError):
-        _driver(tmp_path, snapshot, author=TransportFailingAuthor(failed_id)).run()
+        _driver(
+            tmp_path,
+            snapshot,
+            author=TransportFailingAuthor(failed_id),
+            author_concurrency=1,
+        ).run()
 
 
 def test_fetch_contract_rejection_terminalizes_with_its_own_reason(tmp_path: Path) -> None:
@@ -5719,9 +5730,12 @@ def test_mode_normalization_failure_terminalizes_and_continues(tmp_path: Path) -
     # The v3 result union rejects the malformed mode before it can become a
     # staged proposal or runner input. The author emitted an invalid result, so
     # the failure is author-owned; claiming the source could not be identified
-    # would be a fact this run never established.
+    # would be a fact this run never established. The reason is the PUBLISHED
+    # content's, not a session death: `session-crashed` here was the historical
+    # catch-all, and rung 7 (m9617) showed it permanently misrecording a session
+    # that ran to a clean published result.
     assert models[failed_id]["status"]["code"] == "failed:author"
-    assert models[failed_id]["status"]["reason_code"] == "session-crashed"
+    assert models[failed_id]["status"]["reason_code"] == "malformed-result"
     assert sum(record["status"]["code"] == "runs" for record in models.values()) == 9
 
 
@@ -7832,20 +7846,23 @@ def test_an_unrecordable_blocked_reason_is_named_not_reported_as_a_crash(
 def test_a_driver_side_binding_refusal_is_not_a_crashed_session() -> None:
     """Binding refusals are attributed by ownership, and only one side is engine.
 
-    ``session-crashed`` is already the catch-all for the author reason
-    vocabulary. Letting the ENGINE's own manifest inconsistency land on it too
-    would make the field describe two unrelated causes, and would report a
-    session that ran to a clean typed verdict as having died. The split must
-    stay narrow in the other direction as well: a binding refusal of content the
-    AUTHOR supplied is still author-owned, and moving it to the engine would
-    hide a real authoring defect behind an engine fault.
+    ``session-crashed`` is the catch-all for the author reason vocabulary.
+    Letting the ENGINE's own manifest inconsistency land on it too would make
+    the field describe two unrelated causes, and would report a session that ran
+    to a clean typed verdict as having died. The split must stay narrow in the
+    other direction as well: a binding refusal of content the AUTHOR supplied is
+    still author-owned, and moving it to the engine would hide a real authoring
+    defect behind an engine fault -- but it is the PUBLISHED CONTENT that was
+    refused, so the reason is ``malformed-result``, never ``session-crashed``
+    (rung 7, m9617: a replay-valid published proposal whose source set
+    contradicted the frozen manifest was recorded as a dead session).
     """
 
     engine = _author_lane_failure(SourceManifestBindingError("source manifest identity changed"))
     author = _author_lane_failure(ArtifactBindingError("invalid typed author result"))
 
     assert engine == ("runner", "internal-error")
-    assert author == ("author", "session-crashed")
+    assert author == ("author", "malformed-result")
     for stage, reason_code in (engine, author):
         assert reason_code in FAILURE_REASON_CODES[stage]
         assert f"failed:{stage}" in TERMINAL_STATUS_CODES

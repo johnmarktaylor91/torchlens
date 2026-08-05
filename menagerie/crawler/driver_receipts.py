@@ -2659,6 +2659,9 @@ class ReceiptDriverMixin:
             return None
         if result.appended:
             self._reduced += 1
+        # Reduced (even if deduplicated): this model is no longer strandable.
+        with self._author_lane_state_lock:
+            self._reduced_model_ids.add(item.stable_id)
         self.dependencies.boundary_hook("post-award-commit", item.stable_id)
         self._check_shutdown("post-award-commit")
         self.dependencies.boundary_hook("after-reduce", item.stable_id)
