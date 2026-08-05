@@ -1600,6 +1600,10 @@
           "$ref": "#/$defs/availability_claim",
           "description": "Typed availability state for external_metadata.predecessors. Required when predecessors is empty."
         },
+        "taxonomy.era": {
+          "$ref": "#/$defs/availability_claim",
+          "description": "Typed availability state for the taxonomy.era claim, keyed by its full canonical claim path because it is owned by another block."
+        },
         "taxonomy.novel_ops": {
           "$ref": "#/$defs/availability_claim",
           "description": "Typed availability state for the taxonomy.novel_ops claim, keyed by its full canonical claim path because it is owned by another block. Required when novel_ops is empty."
@@ -1742,6 +1746,10 @@
     "$.external_metadata.availability.predecessors.evidence[]": "author-gated",
     "$.external_metadata.availability.predecessors.status": "author-gated",
     "$.external_metadata.availability.predecessors.values[]": "author-gated",
+    "$.external_metadata.availability.taxonomy.era.basis": "author-gated",
+    "$.external_metadata.availability.taxonomy.era.evidence[]": "author-gated",
+    "$.external_metadata.availability.taxonomy.era.status": "author-gated",
+    "$.external_metadata.availability.taxonomy.era.values[]": "author-gated",
     "$.external_metadata.availability.taxonomy.novel_ops.basis": "author-gated",
     "$.external_metadata.availability.taxonomy.novel_ops.evidence[]": "author-gated",
     "$.external_metadata.availability.taxonomy.novel_ops.status": "author-gated",

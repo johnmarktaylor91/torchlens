@@ -40,6 +40,7 @@ from menagerie.crawler.author_executor import (
     _stamp_machine_owned_proposal_fields,
     _discovery_envelope_from_author_payload,
     session_failure_class,
+    session_failure_class_basis,
     _supplement_request_from_author_payload,
     main,
     structured_limit_reset_at,
@@ -1408,6 +1409,7 @@ def test_session_crash_cause_is_durable_and_rides_the_retry_channel(
     assert outcome["failure_reason"] == "session-crashed"
     detail = outcome["detail"]
     assert detail["failure_class"] == expected_class
+    assert "failure_class_basis" in detail
     assert expected_marker in detail["session_error_text_quarantined"]
     assert detail["harness_subtype"] == "error_during_execution"
     assert detail["returncode"] == 1
@@ -1420,6 +1422,7 @@ def test_session_crash_cause_is_durable_and_rides_the_retry_channel(
     assert len(notice_lines) == 1, "exactly one machine-built failure notice"
     notice = json.loads(notice_lines[0])
     assert notice["failure_class"] == expected_class
+    assert "failure_class_basis" in notice
     assert expected_marker in notice["session_error_text_quarantined"]
 
 
@@ -1529,8 +1532,16 @@ def test_session_failure_class_prefers_structured_fields() -> None:
         == "provider-overloaded"
     )
     assert (
+        session_failure_class_basis(outcome({"api_error_status": 529}))
+        == "api_error_status:529"
+    )
+    assert (
         session_failure_class(outcome({"error": {"type": "authentication_error"}}))
         == "auth-unavailable"
+    )
+    assert (
+        session_failure_class_basis(outcome({"error": {"type": "authentication_error"}}))
+        == "error.type:authentication_error"
     )
     # Booleans are not HTTP statuses.
     assert session_failure_class(outcome({"api_error_status": True})) == "unclassified"
@@ -1538,6 +1549,14 @@ def test_session_failure_class_prefers_structured_fields() -> None:
     assert (
         session_failure_class(outcome(None, stdout_tail="please run /login"))
         == "auth-unavailable"
+    )
+    assert (
+        session_failure_class_basis(outcome(None, stdout_tail="please run /login"))
+        == "diagnostic-text:auth-marker"
+    )
+    assert (
+        session_failure_class_basis(outcome(None, stdout_tail="529 overloaded"))
+        == "diagnostic-text:overload-marker"
     )
     assert session_failure_class(outcome(None)) == "unclassified"
 

@@ -192,6 +192,11 @@ class RetryableOperatorError(DriverIntegrationError):
     ``_is_infrastructure_error``.
     """
 
+    #: Executor-authored session failure class, when a structured notice supplied one.
+    failure_class: Optional[str] = None
+    #: Machine-readable basis for ``failure_class``, when the notice supplied one.
+    failure_class_basis: Optional[str] = None
+
 
 class AuthorOutageError(RetryableOperatorError):
     """One model's share of a GLOBAL infrastructure condition, not a model failure.

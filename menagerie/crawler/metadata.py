@@ -144,7 +144,7 @@ AVAILABILITY_FIELDS = frozenset(
 #: by their full canonical claim path so the key is never ambiguous with a field name.
 #: These are the collection facts whose honest answer is often "there are none"; the
 #: register is their only route to saying so in a typed, queryable way.
-FOREIGN_AVAILABILITY_KEYS = frozenset({"taxonomy.novel_ops"})
+FOREIGN_AVAILABILITY_KEYS = frozenset({"taxonomy.era", "taxonomy.novel_ops"})
 #: Every key ``external_metadata.availability`` may carry.
 AVAILABILITY_KEYS = (
     AVAILABILITY_FIELDS | FOREIGN_AVAILABILITY_KEYS | {"lineage", "predecessors"}

@@ -117,7 +117,7 @@ recipe requires them.
 | `taxonomy.domains` | array<string> | Mandatory | Mandatory domains. |
 | `taxonomy.tasks` | array<string> | Mandatory | Mandatory tasks. |
 | `taxonomy.modalities` | array<string> | Mandatory | Mandatory modalities. |
-| `taxonomy.era` | string | Mandatory | Mandatory era. |
+| `taxonomy.era` | string \| null | Mandatory | Mandatory era, or null only with a typed taxonomy.era availability record. |
 | `taxonomy.architecture_tags` | array<string> | Mandatory | Mandatory architecture tags. |
 | `taxonomy.novel_ops` | array<string> | Mandatory | Mandatory novel ops. |
 | `family_variant_derivation` | object \| null | Optional | Reducer-verifiable mechanical family recipe specialization proof. |

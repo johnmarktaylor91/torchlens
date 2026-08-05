@@ -1530,6 +1530,7 @@ def classify_author_exit(
     combined = f"{stderr}\n{stdout}".strip()
     label = "author command failed" if kind == "author" else "author source request failed"
     tail = combined[-STDIO_TAIL_MAX_CHARS:]
+    session_notice = _structured_author_session_failure_notice(combined)
     signal = classify_author_response(returncode, stdout)
     if signal is None:
         signal = classify_author_response(returncode, stderr)
@@ -1566,13 +1567,22 @@ def classify_author_exit(
             "author executor stage1 failed: discovery-contract-invalid (attempt ",
             "author executor stage2 failed: result-not-json (attempt ",
             "author executor stage2 failed: result-contract-invalid (attempt ",
+            # Pre-publication gate: a wall claim the executor's own clock refuted
+            # (wall_seconds_observed < 0.5*grant, timed_out=false). The session ran
+            # to completion and published an unverified self-report -- model
+            # authoring evidence, never campaign transport.
+            "author executor stage2 failed: unverified-wall-claim (attempt ",
         )
         if returncode == AUTHOR_EXIT_RETRYABLE and any(
             line.startswith(expected_contract_failures) and line.endswith(")")
             for line in combined.splitlines()
         ):
             raise AuthorExecutorContractError(stable_id, tail)
-        raise RetryableOperatorError(f"{label} for {stable_id} (exit {returncode}): {tail}")
+        exc = RetryableOperatorError(f"{label} for {stable_id} (exit {returncode}): {tail}")
+        if session_notice is not None:
+            exc.failure_class = _notice_string(session_notice, "failure_class")
+            exc.failure_class_basis = _notice_failure_class_basis(session_notice)
+        raise exc
     if returncode == AUTHOR_EXIT_PERMANENT:
         # Deliberately does NOT use the historical retryable prefix: a declared
         # contract rejection must not be retried.
@@ -1583,6 +1593,94 @@ def classify_author_exit(
     # ``_is_infrastructure_error`` already treats as one retryable transport
     # failure rather than an immediate permanent model failure.
     raise DriverIntegrationError(f"{label} for {stable_id}: {tail}")
+
+
+def _notice_string(notice: Mapping[str, Any], key: str) -> Optional[str]:
+    """Return a string field from a parsed executor notice.
+
+    Parameters
+    ----------
+    notice:
+        Parsed executor-authored notice.
+    key:
+        Field name to read.
+
+    Returns
+    -------
+    str | None
+        Stripped string field, or ``None`` when absent or non-string.
+    """
+
+    value = notice.get(key)
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+def _notice_failure_class_basis(notice: Mapping[str, Any]) -> Optional[str]:
+    """Return the trusted basis for one executor-authored session failure notice.
+
+    Parameters
+    ----------
+    notice:
+        Parsed executor-authored notice.
+
+    Returns
+    -------
+    str | None
+        Machine-readable weather-authority basis, or ``None`` when absent.
+    """
+
+    explicit = _notice_string(notice, "failure_class_basis")
+    if explicit == "api_error_status:529":
+        return explicit
+    if (
+        notice.get("failure_class") == "provider-overloaded"
+        and notice.get("harness_terminal_reason") == "api_error"
+        and notice.get("harness_is_error") is True
+        and notice.get("returncode") == 1
+    ):
+        return "executor-record:provider-overloaded-api-error"
+    if explicit is not None:
+        return explicit
+    return None
+
+
+def _structured_author_session_failure_notice(text: str) -> Optional[Mapping[str, Any]]:
+    """Return the executor-authored author-session-failure notice in full text.
+
+    The notice is line-oriented JSON printed by ``author_executor`` itself, not
+    arbitrary model/checker transcript text. Callers pass the unsliced combined
+    process output so a verbose quarantined error body cannot push the opening
+    brace out of the stdio tail.
+
+    Parameters
+    ----------
+    text:
+        Full combined process output.
+
+    Returns
+    -------
+    Mapping[str, Any] | None
+        Parsed notice with the exact machine shape, or ``None``.
+    """
+
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("{") or not stripped.endswith("}"):
+            continue
+        try:
+            payload = json.loads(stripped)
+        except json.JSONDecodeError:
+            continue
+        if (
+            isinstance(payload, Mapping)
+            and payload.get("type") == "result"
+            and payload.get("subtype") == "author-session-failure"
+        ):
+            return payload
+    return None
 
 
 def _checker_failure_evidence(request_path: Path, stdout: str, stderr: str) -> str:
@@ -3012,6 +3110,21 @@ def _outage_streak_signal(
 #: blip -- resolves on the order of seconds. The schedule stays short enough that a
 #: genuinely dead host still halts within about half a minute per lane call.
 _INFRASTRUCTURE_RETRY_BACKOFF_SECONDS: tuple[float, ...] = (5.0, 30.0)
+
+#: Weather-scale retry waits for repeated provider-overloaded author crashes. The
+#: first wait stays short in case the wrapper caught a single transient edge; later
+#: waits park the lane through weather-scale provider storms without spending the
+#: ordinary two-entry infrastructure budget on each re-entry.
+_PROVIDER_OVERLOAD_RETRY_BACKOFF_SECONDS: tuple[float, ...] = (
+    5.0,
+    300.0,
+    900.0,
+    900.0,
+    900.0,
+)
+
+#: Hard upper bound for provider-overload weather waits.
+_PROVIDER_OVERLOAD_BACKOFF_CEILING_SECONDS: float = 900.0
 
 #: Campaign-volume free-space floor for the lane-health host check. Deliberately far
 #: below the 30 GiB env-solve floor: this check asks only "can the host still write
@@ -4734,6 +4847,36 @@ class AdmissionEnvironmentMixin:
                         pending_ids.discard(stable_id)
                         continue
                     raise
+                except (AuthorEffortCapExceeded, AuthorEffortExhaustionClaim) as exc:
+                    stage, reason = self._repair_failure_stage_and_reason(exc)
+                    attempt = _driver_failure_attempt(
+                        items_by_id[stable_id],
+                        artifacts[stable_id],
+                        stage,
+                        reason,
+                        exc,
+                        self.config,
+                        diagnostics_root=_diagnostics_root_for_work_root(
+                            self.paths.work_root
+                        ),
+                        environment=None,
+                        created_at=self.dependencies.clock(),
+                    )
+                    persisted_attempt = reducer.append_attempt(attempt).record
+                    self._terminalize(
+                        items_by_id[stable_id],
+                        artifacts[stable_id],
+                        f"failed:{stage}",
+                        reason,
+                        str(exc),
+                        (persisted_attempt,),
+                        reducer,
+                        operational,
+                        state,
+                        human_review=False,
+                    )
+                    pending_ids.discard(stable_id)
+                    continue
                 except RetryableOperatorError:
                     raise
                 except AuthorRepairTerminal as terminal:
@@ -4749,19 +4892,11 @@ class AdmissionEnvironmentMixin:
                         return pause
                     continue
                 except Exception as exc:  # noqa: BLE001 -- repair failure is model-local
-                    # `AuthorResultMalformedError` (incl. the executor-relayed
-                    # contract refusal) is the AUTHOR violating its result
-                    # contract; `internal-error` would indict the engine.
-                    reason = (
-                        "protocol-violation"
-                        if isinstance(exc, (DriverIntegrationError, AuthorResultMalformedError))
-                        and not self._is_infrastructure_error(exc)
-                        else "internal-error"
-                    )
+                    stage, reason = self._repair_failure_stage_and_reason(exc)
                     attempt = _driver_failure_attempt(
                         items_by_id[stable_id],
                         artifacts[stable_id],
-                        "runner",
+                        stage,
                         reason,
                         exc,
                         self.config,
@@ -4773,7 +4908,7 @@ class AdmissionEnvironmentMixin:
                     self._terminalize(
                         items_by_id[stable_id],
                         artifacts[stable_id],
-                        "failed:runner",
+                        f"failed:{stage}",
                         reason,
                         str(exc),
                         (persisted_attempt,),
@@ -4887,6 +5022,38 @@ class AdmissionEnvironmentMixin:
                     # Genuinely campaign-level: a pause, a retryable transport failure,
                     # or a provider backoff must never be recorded as a model defect.
                     raise
+                except (AuthorEffortCapExceeded, AuthorEffortExhaustionClaim) as exc:
+                    for stable_id in batch_ids:
+                        item = items_by_id[stable_id]
+                        stage, reason = self._repair_failure_stage_and_reason(exc)
+                        attempt = _driver_failure_attempt(
+                            item,
+                            artifacts[stable_id],
+                            stage,
+                            reason,
+                            exc,
+                            self.config,
+                            diagnostics_root=_diagnostics_root_for_work_root(
+                                self.paths.work_root
+                            ),
+                            environment=None,
+                            created_at=self.dependencies.clock(),
+                        )
+                        persisted_attempt = reducer.append_attempt(attempt).record
+                        self._terminalize(
+                            item,
+                            artifacts[stable_id],
+                            f"failed:{stage}",
+                            reason,
+                            str(exc),
+                            (persisted_attempt,),
+                            reducer,
+                            operational,
+                            state,
+                            human_review=False,
+                        )
+                        pending_ids.discard(stable_id)
+                    continue
                 except Exception as exc:  # noqa: BLE001 -- invalid checker output is per batch
                     for stable_id in batch_ids:
                         item = items_by_id[stable_id]
@@ -5059,16 +5226,11 @@ class AdmissionEnvironmentMixin:
                             return pause
                         break
                     except Exception as exc:  # noqa: BLE001 -- repair failure is model-local
-                        reason = (
-                            "protocol-violation"
-                            if isinstance(exc, DriverIntegrationError)
-                            and not self._is_infrastructure_error(exc)
-                            else "internal-error"
-                        )
+                        stage, reason = self._repair_failure_stage_and_reason(exc)
                         attempt = _driver_failure_attempt(
                             item,
                             artifact,
-                            "runner",
+                            stage,
                             reason,
                             exc,
                             self.config,
@@ -5080,7 +5242,7 @@ class AdmissionEnvironmentMixin:
                         self._terminalize(
                             item,
                             artifact,
-                            "failed:runner",
+                            f"failed:{stage}",
                             reason,
                             str(exc),
                             (persisted_attempt,),
@@ -5163,6 +5325,36 @@ class AdmissionEnvironmentMixin:
                             metadata_gate_records = emit_gate_records(metadata_ready)
                         except (DriverPaused, RetryableOperatorError, AuthorBackoffError):
                             raise
+                        except (AuthorEffortCapExceeded, AuthorEffortExhaustionClaim) as exc:
+                            stage, reason = self._repair_failure_stage_and_reason(exc)
+                            attempt = _driver_failure_attempt(
+                                item,
+                                artifact,
+                                stage,
+                                reason,
+                                exc,
+                                self.config,
+                                diagnostics_root=_diagnostics_root_for_work_root(
+                                    self.paths.work_root
+                                ),
+                                environment=None,
+                                created_at=self.dependencies.clock(),
+                            )
+                            persisted_attempt = reducer.append_attempt(attempt).record
+                            self._terminalize(
+                                item,
+                                artifact,
+                                f"failed:{stage}",
+                                reason,
+                                str(exc),
+                                (persisted_attempt,),
+                                reducer,
+                                operational,
+                                state,
+                                human_review=False,
+                            )
+                            metadata_blocked = True
+                            break
                         except Exception as exc:  # noqa: BLE001 -- invalid checker contract
                             attempt = _driver_failure_attempt(
                                 item,
@@ -5255,16 +5447,11 @@ class AdmissionEnvironmentMixin:
                             metadata_blocked = True
                             break
                         except Exception as exc:  # noqa: BLE001 -- repair failure is model-local
-                            reason = (
-                                "protocol-violation"
-                                if isinstance(exc, DriverIntegrationError)
-                                and not self._is_infrastructure_error(exc)
-                                else "internal-error"
-                            )
+                            stage, reason = self._repair_failure_stage_and_reason(exc)
                             attempt = _driver_failure_attempt(
                                 item,
                                 artifact,
-                                "runner",
+                                stage,
                                 reason,
                                 exc,
                                 self.config,
@@ -5278,7 +5465,7 @@ class AdmissionEnvironmentMixin:
                             self._terminalize(
                                 item,
                                 artifact,
-                                "failed:runner",
+                                f"failed:{stage}",
                                 reason,
                                 str(exc),
                                 (persisted_attempt,),
@@ -5433,6 +5620,9 @@ class AdmissionEnvironmentMixin:
         backoffs = _INFRASTRUCTURE_RETRY_BACKOFF_SECONDS
         contract_retries = 0
         infrastructure_retries = 0
+        provider_overload_retries = 0
+        failed_attempts = 0
+        observed_backoffs: list[float] = []
         while True:
             if admission is not None:
                 lane, item = admission
@@ -5460,8 +5650,27 @@ class AdmissionEnvironmentMixin:
             except Exception as exc:  # noqa: BLE001 -- typed below before retry
                 if not self._is_infrastructure_error(exc):
                     raise
+                failed_attempts += 1
+                if self._has_provider_overloaded_failure_class(exc):
+                    if provider_overload_retries < len(
+                        _PROVIDER_OVERLOAD_RETRY_BACKOFF_SECONDS
+                    ):
+                        backoff = self._provider_overload_retry_backoff(
+                            provider_overload_retries
+                        )
+                        provider_overload_retries += 1
+                        observed_backoffs.append(backoff)
+                        self._wait_before_infrastructure_retry(backoff)
+                        continue
+                    infrastructure_retries = len(backoffs)
+                else:
+                    provider_overload_retries = 0
                 if infrastructure_retries < len(backoffs):
-                    self._wait_before_infrastructure_retry(backoffs[infrastructure_retries])
+                    backoff = self._infrastructure_retry_backoff(
+                        retry_index=infrastructure_retries
+                    )
+                    observed_backoffs.append(backoff)
+                    self._wait_before_infrastructure_retry(backoff)
                     infrastructure_retries += 1
                     continue
                 if (
@@ -5471,8 +5680,8 @@ class AdmissionEnvironmentMixin:
                 ):
                     raise AuthorSessionRetryExhausted(
                         admission[1].stable_id,
-                        attempts=1 + infrastructure_retries,
-                        backoff_seconds=backoffs,
+                        attempts=failed_attempts,
+                        backoff_seconds=tuple(observed_backoffs),
                         detail=str(exc)[-STDIO_TAIL_MAX_CHARS:],
                     ) from exc
                 raise
@@ -5482,6 +5691,50 @@ class AdmissionEnvironmentMixin:
                     # same-run publication witness for the boundary below.
                     self._note_author_lane_publication(admission[1].stable_id)
                 return result
+
+    @staticmethod
+    def _infrastructure_retry_backoff(
+        *,
+        retry_index: int,
+    ) -> float:
+        """Return the bounded wait before the next infrastructure retry.
+
+        Parameters
+        ----------
+        retry_index:
+            Zero-based retry wait index.
+
+        Returns
+        -------
+        float
+            Backoff duration in seconds.
+        """
+
+        return _INFRASTRUCTURE_RETRY_BACKOFF_SECONDS[retry_index]
+
+    @staticmethod
+    def _provider_overload_retry_backoff(retry_index: int) -> float:
+        """Return the bounded wait before a provider-overload storm retry.
+
+        Parameters
+        ----------
+        retry_index:
+            Zero-based provider-overload wait index.
+
+        Returns
+        -------
+        float
+            Weather backoff duration in seconds, capped by the public ceiling.
+        """
+
+        weather_index = min(
+            retry_index,
+            len(_PROVIDER_OVERLOAD_RETRY_BACKOFF_SECONDS) - 1,
+        )
+        return min(
+            _PROVIDER_OVERLOAD_RETRY_BACKOFF_SECONDS[weather_index],
+            _PROVIDER_OVERLOAD_BACKOFF_CEILING_SECONDS,
+        )
 
     def _wait_before_infrastructure_retry(self, seconds: float) -> None:
         """Wait out one backoff entry without ever outliving a shutdown request.
@@ -5502,6 +5755,70 @@ class AdmissionEnvironmentMixin:
         # event; the admission check on the next loop iteration then raises the
         # typed shutdown, so a SIGTERM never waits out a 30-second backoff.
         self._shutdown_event.wait(seconds)
+
+    @staticmethod
+    def _has_provider_overloaded_failure_class(exc: Exception) -> bool:
+        """Return whether an exception chain carries the structured 529 class.
+
+        Parameters
+        ----------
+        exc:
+            External lane exception.
+
+        Returns
+        -------
+        bool
+            ``True`` only when an executor-authored typed notice carried
+            ``failure_class="provider-overloaded"`` with a trusted executor basis.
+        """
+
+        current: BaseException | None = exc
+        seen: set[int] = set()
+        while current is not None and id(current) not in seen:
+            seen.add(id(current))
+            if (
+                isinstance(current, RetryableOperatorError)
+                and current.failure_class == "provider-overloaded"
+                and current.failure_class_basis
+                in {
+                    "api_error_status:529",
+                    "executor-record:provider-overloaded-api-error",
+                }
+            ):
+                return True
+            current = current.__cause__ or current.__context__
+        return False
+
+    @staticmethod
+    def _repair_failure_stage_and_reason(exc: Exception) -> tuple[str, str]:
+        """Classify a model-local author repair failure for terminal recording.
+
+        Parameters
+        ----------
+        exc:
+            Exception raised by a bounded author repair round.
+
+        Returns
+        -------
+        tuple[str, str]
+            Closed ``(stage, reason_code)`` pair.
+        """
+
+        if isinstance(
+            exc,
+            (
+                AuthorEffortCapExceeded,
+                AuthorEffortExhaustionClaim,
+                AuthorResultMalformedError,
+                ArtifactBindingError,
+            ),
+        ):
+            return _author_lane_failure(exc)
+        if isinstance(exc, DriverIntegrationError) and not AdmissionEnvironmentMixin._is_infrastructure_error(
+            exc
+        ):
+            return "runner", "protocol-violation"
+        return "runner", "internal-error"
 
     def _author_no_publication_class(self, exc: Exception) -> bool:
         """Return whether one exhausted author failure is a NO-PUBLICATION death.
