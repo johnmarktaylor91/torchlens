@@ -518,14 +518,14 @@ a reason to re-crawl external sources.
 | `modes.train_eval_divergence` | enum: `none` \| `statistical` \| `structural` | Mandatory | Mandatory train eval divergence. |
 | `modes.divergence_evidence` | string | Mandatory | Mandatory divergence evidence. |
 | `fidelity` | object | Mandatory | Mandatory implementation-fidelity gate state. |
-| `fidelity.required` | boolean | Mandatory | Mandatory required. |
-| `fidelity.reason` | string | Mandatory | Mandatory reason. |
-| `fidelity.verdict` | enum: `match` \| `minor-drift` \| `major-drift` \| `slop` \| `cannot-verify` \| null | Mandatory | Mandatory checker verdict. |
-| `fidelity.fidelity_identity` | string \| null | Mandatory | Mandatory fidelity identity. |
-| `fidelity.gate_id` | string \| null | Mandatory | Mandatory immutable gate identifier. |
-| `fidelity.current` | boolean | Mandatory | Mandatory current. |
-| `fidelity.permanent_scar` | boolean | Mandatory | Mandatory permanent scar. |
-| `fidelity.deviations` | array<string> | Mandatory | Mandatory deviations. |
+| `fidelity.required` | boolean | Mandatory | Mandatory required. AUTHOR-OWNED: whether an implementation-fidelity gate must adjudicate this record, subject to the machine floor that rungs R3 and R4 always require one. |
+| `fidelity.reason` | string | Mandatory | Mandatory reason. AUTHOR-OWNED prose saying why fidelity is or is not required here. |
+| `fidelity.verdict` | enum: `match` \| `minor-drift` \| `major-drift` \| `slop` \| `cannot-verify` \| null | Mandatory | Mandatory checker verdict. GATE-OWNED: no fidelity gate has run when a proposal is authored, so an authored proposal always writes null. |
+| `fidelity.fidelity_identity` | string \| null | Mandatory | Mandatory fidelity identity, bound when a fidelity gate runs. GATE-OWNED: an authored proposal always writes null. This is NOT the proposal's own top-level fidelity_identity, which the author computes with the identity calculator. |
+| `fidelity.gate_id` | string \| null | Mandatory | Mandatory immutable gate identifier. GATE-OWNED: an authored proposal always writes null. |
+| `fidelity.current` | boolean | Mandatory | Mandatory current: whether a fidelity verdict is current for these exact facts. GATE-OWNED: an authored proposal always writes false. |
+| `fidelity.permanent_scar` | boolean | Mandatory | Mandatory permanent scar: an indelible mark that this record was once judged slop. GATE-OWNED and set only by a fidelity gate -- true for a 'slop' verdict or a checker-preserved prior scar, never an author's self-assessment. It is REQUIRED in every fidelity block, including an authored proposal's, and an authored proposal always writes false, because no gate has run yet. Omitting it because it has no value yet is a refusal, and the authoring campaign runs once. |
+| `fidelity.deviations` | array<string> | Mandatory | Mandatory deviations a fidelity gate recorded. GATE-OWNED: an authored proposal always writes []. |
 | `accuracy_gate` | object | Mandatory | Mandatory metadata-accuracy gate state. |
 | `accuracy_gate.required` | const `True` | Mandatory | Mandatory required. |
 | `accuracy_gate.vet_identity` | string \| null | Mandatory | Mandatory vet identity. |

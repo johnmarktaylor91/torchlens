@@ -2024,11 +2024,11 @@
       "properties": {
         "required": {
           "type": "boolean",
-          "description": "Mandatory required."
+          "description": "Mandatory required. AUTHOR-OWNED: whether an implementation-fidelity gate must adjudicate this record, subject to the machine floor that rungs R3 and R4 always require one."
         },
         "reason": {
           "type": "string",
-          "description": "Mandatory reason."
+          "description": "Mandatory reason. AUTHOR-OWNED prose saying why fidelity is or is not required here."
         },
         "verdict": {
           "oneOf": [
@@ -2045,27 +2045,27 @@
               "type": "null"
             }
           ],
-          "description": "Mandatory checker verdict."
+          "description": "Mandatory checker verdict. GATE-OWNED: no fidelity gate has run when a proposal is authored, so an authored proposal always writes null."
         },
         "fidelity_identity": {
           "$ref": "#/$defs/nullable_hash",
-          "description": "Mandatory fidelity identity."
+          "description": "Mandatory fidelity identity, bound when a fidelity gate runs. GATE-OWNED: an authored proposal always writes null. This is NOT the proposal's own top-level fidelity_identity, which the author computes with the identity calculator."
         },
         "gate_id": {
           "$ref": "#/$defs/nullable_string",
-          "description": "Mandatory immutable gate identifier."
+          "description": "Mandatory immutable gate identifier. GATE-OWNED: an authored proposal always writes null."
         },
         "current": {
           "type": "boolean",
-          "description": "Mandatory current."
+          "description": "Mandatory current: whether a fidelity verdict is current for these exact facts. GATE-OWNED: an authored proposal always writes false."
         },
         "permanent_scar": {
           "type": "boolean",
-          "description": "Mandatory permanent scar."
+          "description": "Mandatory permanent scar: an indelible mark that this record was once judged slop. GATE-OWNED and set only by a fidelity gate -- true for a 'slop' verdict or a checker-preserved prior scar, never an author's self-assessment. It is REQUIRED in every fidelity block, including an authored proposal's, and an authored proposal always writes false, because no gate has run yet. Omitting it because it has no value yet is a refusal, and the authoring campaign runs once."
         },
         "deviations": {
           "$ref": "#/$defs/string_array",
-          "description": "Mandatory deviations."
+          "description": "Mandatory deviations a fidelity gate recorded. GATE-OWNED: an authored proposal always writes []."
         }
       }
     },

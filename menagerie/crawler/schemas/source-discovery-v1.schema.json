@@ -117,7 +117,7 @@
         },
         "media_type_hint": {
           "$ref": "#/$defs/nonempty_string",
-          "description": "Optional authored hint that never controls the manifest media type."
+          "description": "Optional authored hint that never controls the manifest media type. Omit the key entirely rather than sending \"\": the value is a non-empty string and an empty one is refused."
         },
         "basis": {
           "$ref": "#/$defs/nonempty_string",
@@ -125,7 +125,7 @@
         },
         "notes": {
           "$ref": "#/$defs/nonempty_string",
-          "description": "Optional source-specific observations about material architecture, configuration, or inference details found at this locator."
+          "description": "Optional source-specific observations about material architecture, configuration, or inference details found at this locator. OMIT THE KEY ENTIRELY when there is nothing to add: the value is a non-empty string, so \"\" is refused and takes the whole discovery output with it. Omission is the canonical spelling of 'nothing to say' -- the broker records an absent note and an empty one identically, so nothing is lost by omitting and a discovery attempt is lost by sending \"\"."
         }
       }
     },
@@ -152,7 +152,7 @@
         },
         "media_type_hint": {
           "$ref": "#/$defs/nonempty_string",
-          "description": "Optional authored hint that never controls the manifest media type."
+          "description": "Optional authored hint that never controls the manifest media type. Omit the key entirely rather than sending \"\": the value is a non-empty string and an empty one is refused."
         },
         "basis": {
           "$ref": "#/$defs/nonempty_string",
@@ -160,7 +160,7 @@
         },
         "notes": {
           "$ref": "#/$defs/nonempty_string",
-          "description": "Optional source-specific observations about material architecture, configuration, or inference details found at this locator."
+          "description": "Optional source-specific observations about material architecture, configuration, or inference details found at this locator. OMIT THE KEY ENTIRELY when there is nothing to add: the value is a non-empty string, so \"\" is refused and takes the whole discovery output with it. Omission is the canonical spelling of 'nothing to say' -- the broker records an absent note and an empty one identically, so nothing is lost by omitting and a discovery attempt is lost by sending \"\"."
         }
       }
     },
@@ -195,7 +195,7 @@
         },
         "media_type_hint": {
           "$ref": "#/$defs/nonempty_string",
-          "description": "Optional authored hint that never controls a manifest media type."
+          "description": "Optional authored hint that never controls a manifest media type. Omit the key entirely rather than sending \"\": the value is a non-empty string and an empty one is refused."
         },
         "basis": {
           "$ref": "#/$defs/nonempty_string",
@@ -203,7 +203,7 @@
         },
         "notes": {
           "$ref": "#/$defs/nonempty_string",
-          "description": "Optional source-specific observations about material architecture, configuration, or inference details found at this locator."
+          "description": "Optional source-specific observations about material architecture, configuration, or inference details found at this locator. OMIT THE KEY ENTIRELY when there is nothing to add: the value is a non-empty string, so \"\" is refused and takes the whole discovery output with it. Omission is the canonical spelling of 'nothing to say' -- the broker records an absent note and an empty one identically, so nothing is lost by omitting and a discovery attempt is lost by sending \"\"."
         }
       }
     },

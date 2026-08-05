@@ -241,6 +241,39 @@ Rules for `FOUND`:
 - Never cite a search-results page. Never invent a URL. `requested_role: "probe"` marks a
   candidate you want receipted without entering the manifest.
 
+### The lexical rules of a descriptor, because you cannot read the schema at this stage
+
+Stage 2 is handed the registered schema directory and can read every constraint. **You are
+not**: at stage 1 the contract is enforced against your bytes from a file this session may
+not open, so every rule it holds is written out here. A descriptor that breaks one of them
+is refused whole, and this campaign runs once, so the refusal costs the model its attempt
+rather than producing a correction.
+
+- **Optional keys are omitted, never emptied.** A descriptor's optional keys are exactly
+  `notes` and `media_type_hint` (plus `identifier` in place of `url` on a paper). Each is a
+  **non-empty** string: `"notes": ""` is refused and takes the whole discovery output with
+  it. When you have nothing to add, leave the key out. Nothing is lost by doing so -- the
+  broker records an absent note and an empty one identically -- and an attempt is lost by
+  sending `""`. This is not hypothetical: one model's stage-1 output was refused for a
+  single `"notes": ""` among sixteen well-formed sources.
+- **`source_id` is lowercase.** It must match `^[a-z0-9][a-z0-9._-]{0,63}$`: start with a
+  letter or digit, then lowercase letters, digits, `.`, `_`, or `-`, at most 64 characters.
+  `IQL-impl` and `Impl Main` are refused; `impl-iql` and `impl_iql` are fine.
+- **`forge-file` is GitHub-only.** `repo` must be a `github.com/OWNER/NAME` locator; the
+  broker dereferences it through the GitHub API and the contract refuses any other host. A
+  file on another forge is not a `forge-file`: name the direct object as a `raw-url` if one
+  exists, and otherwise say so rather than bending the descriptor.
+- **`raw-url` is `https://` only.** A plain `http://` object is refused. (A `candidate_link`
+  in the negative arms is the one place `http://` is retained, because it is an observed
+  research locator rather than a fetch request.)
+- **The search-record arrays are non-empty and duplicate-free.** `queries`, `places`, and
+  `languages` each need at least one entry, every entry a non-empty string, and no entry
+  repeated. `candidate_links` may be empty for the arms that allow it, but it too refuses a
+  repeated entry.
+
+None of these are style preferences. Each one is a hard refusal at the boundary, and none
+of them are visible to you anywhere but here.
+
 You do **not** fetch source bytes into the campaign yourself. Your web tools are for
 *discovery and grounding*; the broker performs every controlled fetch and freezes the
 manifest that stage 2 reads.
