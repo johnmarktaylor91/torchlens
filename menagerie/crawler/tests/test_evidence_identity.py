@@ -6,7 +6,11 @@ from typing import Any
 
 import pytest
 
+from menagerie.crawler.driver_admission import _validate_trusted_intake_identity
+from menagerie.crawler.driver_contracts import DriverIntegrationError, WorkItem
 from menagerie.crawler.evidence import trusted_intake_identity_mismatches
+from menagerie.crawler.intake import IntakeItem
+from menagerie.crawler.routing import EnvironmentPhase, IntentRoute
 
 
 FROZEN_SMP_REPLAYS = (
@@ -77,6 +81,76 @@ def _proposed_identity(case: dict[str, str], **overrides: Any) -> dict[str, Any]
     return identity
 
 
+def _intake_item(case: dict[str, str]) -> IntakeItem:
+    """Return a real trusted intake row for a frozen SMP replay case.
+
+    Parameters
+    ----------
+    case:
+        Minimal frozen replay fixture.
+
+    Returns
+    -------
+    IntakeItem
+        Trusted intake row whose identity projection matches the rung-7 row.
+    """
+
+    return IntakeItem(
+        stable_id=case["stable_id"],
+        name=case["intake_name"],
+        zoo=case["intake_zoo"],
+        variant="",
+        discovery_source="frozen-rung7-replay",
+        legacy_row_sha256="0" * 64,
+        preserved_legacy_flags=(),
+        variant_scope="family",
+        family_representative_id=case["stable_id"],
+    )
+
+
+def _work_item(case: dict[str, str]) -> WorkItem:
+    """Return the minimal work item shape consumed by the trusted-intake validator.
+
+    Parameters
+    ----------
+    case:
+        Minimal frozen replay fixture.
+
+    Returns
+    -------
+    WorkItem
+        Real driver work item carrying the trusted intake row.
+    """
+
+    return WorkItem(
+        intake=_intake_item(case),
+        route=IntentRoute(
+            stable_id=case["stable_id"],
+            intent="core",
+            phase=EnvironmentPhase.PYTORCH,
+        ),
+    )
+
+
+def _facts(case: dict[str, str], **identity_overrides: Any) -> dict[str, Any]:
+    """Return canonical proposal facts with identity overrides applied.
+
+    Parameters
+    ----------
+    case:
+        Minimal frozen replay fixture.
+    identity_overrides:
+        Identity fields to replace for negative coverage.
+
+    Returns
+    -------
+    dict[str, Any]
+        Proposal fact block accepted by the real trusted-intake validator.
+    """
+
+    return {"identity": _proposed_identity(case, **identity_overrides)}
+
+
 @pytest.mark.parametrize("case", FROZEN_SMP_REPLAYS)
 def test_smp_legacy_full_token_accepts_source_grounded_encoder_variant(
     case: dict[str, str],
@@ -98,6 +172,36 @@ def test_smp_legacy_full_token_accepts_source_grounded_encoder_variant(
         )
         == {}
     )
+
+
+@pytest.mark.parametrize("case", FROZEN_SMP_REPLAYS)
+def test_driver_trusted_intake_identity_accepts_frozen_smp_replay(case: dict[str, str]) -> None:
+    """Replay m9666/m9819 through the real driver trusted-intake tripwire.
+
+    Parameters
+    ----------
+    case:
+        Minimal frozen m9666 or m9819 replay fixture.
+    """
+
+    _validate_trusted_intake_identity(_facts(case), _work_item(case))
+
+
+def test_driver_trusted_intake_identity_rejects_genuine_variant_mismatch() -> None:
+    """The real driver tripwire still refuses an unrelated SMP variant claim."""
+
+    case = {
+        "intake_name": "smp_PAN_se_resnet50",
+        "intake_zoo": "segmentation_models_pytorch-0.5.0",
+        "proposed_variant": "se_resnet50",
+        "stable_id": "m9666",
+    }
+
+    with pytest.raises(DriverIntegrationError, match="identity contradicts trusted intake"):
+        _validate_trusted_intake_identity(
+            _facts(case, variant="se_resnet101"),
+            _work_item(case),
+        )
 
 
 @pytest.mark.parametrize("case", FROZEN_SMP_REPLAYS)

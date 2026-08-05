@@ -137,6 +137,7 @@ from menagerie.crawler.env_lifecycle import (
     parse_resolved_export,
     validate_probe_receipts,
 )
+from menagerie.crawler.evidence import trusted_intake_identity_mismatches
 from menagerie.crawler.effort import StageCap
 from menagerie.crawler.fetcher import (
     CasObjectCorruptError,
@@ -6645,11 +6646,12 @@ def _validate_trusted_intake_identity(facts: Mapping[str, Any], item: WorkItem) 
         expected = trusted_identity_fields(item.intake)
     except IntakeError as exc:
         raise DriverIntegrationError(str(exc)) from exc
-    mismatches = {
-        field: {"proposed": identity.get(field), "trusted": value}
-        for field, value in expected.items()
-        if identity.get(field) != value
-    }
+    mismatches = trusted_intake_identity_mismatches(
+        identity,
+        expected,
+        intake_name=item.intake.name,
+        intake_zoo=item.intake.zoo,
+    )
     if mismatches:
         raise DriverIntegrationError(f"identity contradicts trusted intake: {mismatches}")
 
