@@ -18,7 +18,11 @@ import pytest
 from menagerie.crawler.constants import AUTHOR_PROMPT_NAME, MODEL_SCHEMA_VERSION_V3
 from menagerie.crawler.evidence import EvidenceValidationError, validate_evidence
 from menagerie.crawler.identity import hash_bytes, stable_hash
-from menagerie.crawler.metadata import AVAILABILITY_KEYS, AVAILABILITY_STATUSES
+from menagerie.crawler.metadata import (
+    AVAILABILITY_BASES,
+    AVAILABILITY_KEYS,
+    AVAILABILITY_STATUSES,
+)
 from menagerie.crawler.proposal import (
     AUTHORED_LEAF_COVERAGE_LANES,
     CLAIM_VOCABULARY_BEGIN,
@@ -28,6 +32,7 @@ from menagerie.crawler.proposal import (
     EMPTIABLE_CLAIMS,
     KEYWORD_CLAIM,
     ProposalValidationError,
+    _validate_availability_record,
     gated_claim_vocabulary_block,
     validate_author_proposal,
 )
@@ -119,6 +124,65 @@ def test_both_schemas_declare_exactly_the_enforced_availability_statuses(
     schema = load_schema(schema_version)
     declared = set(schema["$defs"]["availability_claim"]["properties"]["status"]["enum"])
     assert declared == set(AVAILABILITY_STATUSES)
+
+
+@pytest.mark.parametrize(
+    "schema_version",
+    ["menagerie.crawler.author-proposal.v3", "menagerie.crawler.model.v3"],
+)
+def test_both_schemas_declare_exactly_the_enforced_availability_bases(
+    schema_version: str,
+) -> None:
+    """The basis vocabulary is a declared ``enum``, not prose promising one.
+
+    ``status`` was always an enum and no author has ever failed on it. ``basis`` was
+    ``nonempty_string`` with the description "Mandatory closed-vocabulary basis for the
+    disposition" -- a schema that TELLS the author the vocabulary is closed and then
+    declines to say what is in it, leaving the eight members visible only in Python.
+    That is precisely the wall the generated claim vocabulary exists to prevent, and it
+    killed two of twenty models in the 2026-08-05 rung on their one and only attempt
+    (``bounded-source-read`` on m8245, ``bounded-frozen-source-read`` on m9617), both of
+    which were honest descriptions of reading the frozen sources where the enum wanted
+    ``search-exhausted``. The enum is now declared where a schema-reading author looks.
+    """
+
+    schema = load_schema(schema_version)
+    declared = schema["$defs"]["availability_claim"]["properties"]["basis"]["enum"]
+    assert set(declared) == set(AVAILABILITY_BASES)
+    assert len(declared) == len(set(declared))
+
+
+def test_a_non_canonical_basis_refusal_names_the_vocabulary_it_wanted() -> None:
+    """The refusal must carry the closed set, not only the rejected spelling.
+
+    A terminal refusal is read by a human, never by the author that caused it, so the
+    message is the only artifact that can explain which of eight strings was wanted.
+    """
+
+    proposal = make_author_proposal()
+    facts = proposal["proposed_facts"]
+    facts["external_metadata"]["country"] = None
+    facts["external_metadata"].setdefault("availability", {})["country"] = {
+        "status": "not-found-after-search",
+        "values": [],
+        "basis": "bounded-frozen-source-read",
+        "evidence": [],
+    }
+
+    with pytest.raises(ProposalValidationError) as excinfo:
+        _validate_availability_record(
+            "external_metadata.country",
+            facts["external_metadata"]["availability"]["country"],
+            None,
+            True,
+            facts,
+            frozenset(),
+        )
+    message = str(excinfo.value)
+    assert "bounded-frozen-source-read" in message
+    assert "search-exhausted" in message
+    for basis in AVAILABILITY_BASES:
+        assert basis in message
 
 
 @pytest.mark.parametrize(

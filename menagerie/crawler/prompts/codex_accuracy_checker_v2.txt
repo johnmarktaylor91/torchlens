@@ -93,6 +93,11 @@ CHECK IN THIS ORDER
    inaccurate. Judgment values (country, era, field, subfield, taxonomy leaves, paradigm) receive no
    deterministic value check upstream: your per-claim entailment verdict is the only value gate they
    pass, so judge each claim independently against the cited evidence.
+   PHRASE REMOVAL REPAIRS COMPLETELY. "Ground or remove the asserted country value" is an instruction whose
+   second half is illegal: a gated field emptied without a typed availability state is refused downstream as
+   an ungrounded claim, and an author who obeys you literally produces a dead record. Whenever a repair
+   would empty a gated value, say so in full -- "ground it, or empty it AND declare
+   external_metadata.availability.<key> with its bounded search".
 9. FIDELITY, WHEN REQUIRED:
    a. Before reading candidate code, derive topology, dimensions, operators, connectivity, state/control,
       material initialization, input, and output from the exact frozen source.

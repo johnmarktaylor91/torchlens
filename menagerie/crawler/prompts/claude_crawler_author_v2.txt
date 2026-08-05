@@ -225,6 +225,12 @@ machine-derived, stated-in-paper, stated-in-code, stated-on-website, derived-fro
 search-exhausted, not-applicable>, "evidence": [<evidence_ids>]}. A not-found or none-exist state
 additionally requires your bounded search_report to record the queries you actually ran, so an unanswered
 field is distinguishable from an unfilled one -- emptying fields is never a way to spend less effort.
+BOTH "status" AND "basis" ARE CLOSED ENUMS, matched by exact string equality and declared as `enum` in the
+registered schema. Copy a member; never coin a phrase that describes what you did. The single most common
+way to lose a model here is writing an accurate-sounding basis that is not a member -- "bounded-source-read"
+and "bounded-frozen-source-read" both killed a model on its one and only attempt. An absence you established
+by reading the frozen sources and finding nothing is "search-exhausted", however the looking was actually
+done; there is no separate basis for "I read the manifest".
 Availability states exist for authors, institution, country, era, field, subfield, venue, year, license,
 lineage, predecessors, and taxonomy.novel_ops. The last three take the FULL claim path or the field name
 exactly as listed: lineage, predecessors, and the literal key "taxonomy.novel_ops".
@@ -235,6 +241,10 @@ means the fact does not exist; "not-found-after-search" means you could not esta
 answers and the catalog records which one you gave.
 A not-found claim for a fact your own pinned evidence states is a false claim and the checker is directed
 to catch it.
+AND THE SAME RULE GOVERNS EVERY REPAIR YOU ARE ASKED TO MAKE. A checker finding that says to remove, drop,
+retract, or not assert a gated value is only half an instruction: emptying the field alone is refused as an
+ungrounded claim. Ground the value, or empty it AND declare the typed availability state with its bounded
+search. "The checker told me to remove it" is not a third option, and taking it is a dead record.
 
 DECLARING A TYPED ABSENCE ALSO DISCHARGES THAT CLAIM'S EVIDENCE COVERAGE
 There is no excerpt that says a fact is not there, so a claim carrying a valid absence state does not also
