@@ -13,8 +13,9 @@ fact.
 
 Per-target outcomes are independent and typed
 (``fetched | oversized | unreachable | redirect-refused | rate-limited |
-bad-ref``): one dead link never aborts the pack, and every failure carries its
-receipt so stage 2 and the validators see exactly what exists.
+bad-ref | unfetchable-by-policy``): one dead link never aborts the pack, and
+every failure carries its receipt so stage 2 and the validators see exactly
+what exists.
 
 Two of those outcomes are claims about *whose* failure it was, and the
 distinction is load-bearing. ``bad-ref`` says the author supplied a reference
@@ -77,6 +78,14 @@ OUTCOME_RATE_LIMITED = "rate-limited"
 OUTCOME_UNSUPPORTED_FORGE = "unsupported-forge"
 OUTCOME_PAPER_DERIVATION_ONLY = "paper-derivation-only"
 OUTCOME_PROBED = "probed"
+#: OUR fetch policy refused the target before any network contact -- today the
+#: https-only transport posture. This is deliberately NOT ``unreachable``: the
+#: reference may be perfectly real and the host perfectly alive; we chose not
+#: to talk to it. Recording that choice per target keeps an honestly-reported
+#: policy-blocked link recordable evidence (docket W-3/D-4) instead of a
+#: pack-killing refusal, and gives the R4 negative proof a receipt to check an
+#: ``unfetchable-by-policy`` search-report disposition against.
+OUTCOME_UNFETCHABLE_BY_POLICY = "unfetchable-by-policy"
 
 #: Outcomes that describe a failure of ours or of the forge rather than a defect
 #: in the reference the author supplied. Nothing in this set justifies asking an
@@ -87,6 +96,7 @@ NON_AUTHOR_FAULT_OUTCOMES = frozenset(
         OUTCOME_UNREACHABLE,
         OUTCOME_OVERSIZED,
         OUTCOME_UNSUPPORTED_FORGE,
+        OUTCOME_UNFETCHABLE_BY_POLICY,
     }
 )
 
@@ -151,6 +161,77 @@ _IMPLEMENTATION_SUFFIXES = frozenset(
         ".yml",
     }
 )
+
+#: Media types a *paper* can arrive as. The citable paper role is honored only
+#: for these: a requested_role of ``paper`` can never relabel code or an opaque
+#: binary blob as the introducing paper.
+_DOCUMENT_MEDIA_TYPES = frozenset(
+    {
+        "text/html",
+        "application/pdf",
+        "text/plain",
+        "text/markdown",
+        "text/x-rst",
+    }
+)
+
+#: Leading byte patterns (WHATWG-style) that identify an HTML document when the
+#: locator carries no telling suffix. Each must be terminated by whitespace,
+#: ``>``, or ``/`` so ``<a `` matches while ``<abbrev-tag`` does not. Frozen
+#: rung-8 proof this list earns its keep: arXiv abs pages and ar5iv renderings
+#: are extensionless, begin ``<!DOCTYPE html``, and were recorded ``text/plain``
+#: -- a machine falsehood the byte-exact staging echo then FORCED authors to
+#: repeat (docket W-1).
+_HTML_SNIFF_PATTERNS = (
+    b"<!doctype html",
+    b"<html",
+    b"<head",
+    b"<script",
+    b"<iframe",
+    b"<h1",
+    b"<div",
+    b"<font",
+    b"<table",
+    b"<a",
+    b"<style",
+    b"<title",
+    b"<b",
+    b"<body",
+    b"<br",
+    b"<p",
+    b"<!--",
+)
+_HTML_TAG_TERMINATORS = frozenset(b" >/\t\r\n\f")
+
+
+def _sniffs_as_html(body: bytes) -> bool:
+    """Report whether the leading bytes are an HTML document.
+
+    Parameters
+    ----------
+    body:
+        Exact fetched bytes.
+
+    Returns
+    -------
+    bool
+        True when the first non-whitespace bytes (after an optional UTF-8 BOM)
+        case-insensitively open a recognized HTML tag or comment.
+    """
+
+    prefix = body[:1024]
+    if prefix.startswith(b"\xef\xbb\xbf"):
+        prefix = prefix[3:]
+    prefix = prefix.lstrip(b" \t\r\n\f").lower()
+    for pattern in _HTML_SNIFF_PATTERNS:
+        if not prefix.startswith(pattern):
+            continue
+        if pattern == b"<!--":
+            return True
+        terminator = prefix[len(pattern) : len(pattern) + 1]
+        if terminator and terminator[0] in _HTML_TAG_TERMINATORS:
+            return True
+    return False
 
 
 #: Hosts the GitHub credential may be sent to. Deliberately just the API: the raw
@@ -480,8 +561,12 @@ class UrllibTransport:
                             headers=_response_headers(exc.headers),
                         )
                     target = urllib.parse.urljoin(current, location)
-                    host = urllib.parse.urlsplit(target).hostname or ""
-                    if host not in self.redirect_allowlist:
+                    parts = urllib.parse.urlsplit(target)
+                    host = parts.hostname or ""
+                    # The scheme check keeps the https-only posture airtight
+                    # across hops: an allowlisted host downgrading a redirect
+                    # to plaintext is refused exactly like a foreign host.
+                    if host not in self.redirect_allowlist or parts.scheme != "https":
                         raise RedirectRefused(tuple([*chain, target]), target) from exc
                     chain.append(target)
                     current = target
@@ -659,6 +744,13 @@ class BrokerOutcome:
     #: Throttling evidence when ``outcome`` is ``rate-limited``. Present so a
     #: consumer can act on the forge's own reset instant instead of guessing.
     rate_limit: Optional[JsonObject] = None
+    #: Broker-clock instant at which the exact bytes finished fetching. Machine
+    #: -stamped for every byte-producing outcome so the manifest can carry a
+    #: true per-source ``retrieved_at`` -- before this existed the schema
+    #: demanded a timestamp the author had no honest way to know, and the one
+    #: PASS artifact in the rung-8 archive invented a uniform value for all ten
+    #: sources (docket W-6). ``None`` for outcomes that produced no bytes.
+    retrieved_at: Optional[str] = None
 
     @property
     def rate_limit_retry_after(self) -> Optional[float]:
@@ -695,6 +787,7 @@ class BrokerOutcome:
             "derived_citation": self.derived_citation,
             "detail": self.detail,
             "rate_limit": self.rate_limit,
+            "retrieved_at": self.retrieved_at,
         }
 
 
@@ -854,6 +947,10 @@ def broker_source_pack(
         if outcome.outcome == OUTCOME_FETCHED and outcome.bound_role in (
             ROLE_IMPLEMENTATION,
             ROLE_DOCUMENTATION,
+            # A raw-url the author requested as the paper, fetched and bound to
+            # the citable paper role, stays a manifest row: dropping it would
+            # take the very bytes citation grounding quotes out of custody.
+            ROLE_INTRODUCING_PAPER,
         ):
             pack.rows.append(_manifest_row(descriptor, outcome))
     return pack
@@ -1064,8 +1161,10 @@ _MACHINE_OWNED_DESCRIPTOR_FIELDS = frozenset(
         "redirect_chain",
         "resolver_receipt",
         "broker_role",
+        "broker_citable_role",
         "media_type",
         "derived_citation",
+        "retrieved_at",
     }
 )
 
@@ -1133,8 +1232,12 @@ def _validated_descriptor(raw: Mapping[str, Any], position: int) -> JsonObject:
         raise SourceBrokerError(f"raw-url descriptor {position} must name a url")
     if kind == "paper" and not (descriptor["url"] or descriptor["identifier"]):
         raise SourceBrokerError(f"paper descriptor {position} must name a url or identifier")
-    if descriptor["url"] and urllib.parse.urlsplit(str(descriptor["url"])).scheme != "https":
-        raise SourceBrokerError(f"source descriptor {position} url must use https")
+    # A non-https url is deliberately NOT refused here. It is a real reference
+    # our fetch policy declines to contact, not a malformed descriptor, and
+    # raising made one honest legacy link abort the WHOLE pack. The raw-url
+    # path types it ``unfetchable-by-policy`` per target (docket W-3/D-4); the
+    # paper path never fetches the authored url at all -- registry derivation
+    # constructs its own https endpoints from the embedded identifier.
     if kind == "forge-file":
         path = str(descriptor["path"])
         normalized = PurePosixPath(path)
@@ -1172,6 +1275,14 @@ def _derive_media_type(name: str, body: bytes) -> tuple[str, str]:
         return _MEDIA_TYPES[suffix], "path-extension"
     if body.startswith(b"%PDF-"):
         return "application/pdf", "content-sniff"
+    # HTML detection precedes the text fallbacks: extensionless HTML (arXiv abs
+    # pages, ar5iv renderings) used to fall through to ``text/plain``, and the
+    # byte-exact staging echo then institutionalized that falsehood -- an
+    # author writing the true ``text/html`` died at staging AFTER passing
+    # result validation (docket W-1). The broker records the truth; the echo
+    # check stays byte-exact.
+    if _sniffs_as_html(body):
+        return "text/html", "content-sniff"
     try:
         json.loads(body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
@@ -1227,7 +1338,12 @@ def _manifest_row(
         Authoritative row with no spread or merge from the authored descriptor.
     """
 
-    if outcome.sha256 is None or outcome.media_type is None or outcome.bound_role is None:
+    if (
+        outcome.sha256 is None
+        or outcome.media_type is None
+        or outcome.bound_role is None
+        or outcome.retrieved_at is None
+    ):
         raise SourceBrokerError("fetched broker outcome lacks machine-derived manifest facts")
     if outcome.resolver_receipt is not None:
         revision = outcome.resolver_receipt.get("resolved_sha")
@@ -1241,6 +1357,19 @@ def _manifest_row(
     )
     if not authoritative_url or not outcome.final_url:
         raise SourceBrokerError("fetched broker outcome lacks an authoritative final url")
+    # The lane's admission vocabulary for ``broker_role`` is still the closed
+    # pair {implementation, documentation} (driver_admission refuses anything
+    # else), so a citable-paper binding is recorded at two granularities: the
+    # lane byte-custody class stays ``documentation`` -- a paper page IS
+    # documentation in that coarse vocabulary -- and the broker's own citation
+    # authority rides beside it as the machine-owned ``broker_citable_role``.
+    # Both values come from ONE derivation (`_classify_broker_role`); collapse
+    # them into ``broker_role`` alone once the driver vocabulary widens.
+    lane_role = outcome.bound_role
+    citable_role: Optional[str] = None
+    if outcome.bound_role == ROLE_INTRODUCING_PAPER:
+        lane_role = ROLE_DOCUMENTATION
+        citable_role = ROLE_INTRODUCING_PAPER
     row: JsonObject = {
         "source_id": str(descriptor["source_id"]),
         "url": authoritative_url,
@@ -1249,13 +1378,16 @@ def _manifest_row(
         "expected_sha256": outcome.sha256,
         "media_type": outcome.media_type,
         "media_type_method": outcome.media_type_method,
-        "broker_role": outcome.bound_role,
+        "broker_role": lane_role,
         "broker_outcome": OUTCOME_FETCHED,
         "redirect_chain": list(outcome.redirect_chain),
         "requested_role": str(descriptor["requested_role"]),
         "media_type_hint": str(descriptor.get("media_type_hint") or ""),
         "basis": str(descriptor["basis"]),
+        "retrieved_at": outcome.retrieved_at,
     }
+    if citable_role is not None:
+        row["broker_citable_role"] = citable_role
     notes = str(descriptor.get("notes") or "")
     if notes:
         row["notes"] = notes
@@ -1271,6 +1403,15 @@ def _classify_broker_role(
     outcome: BrokerOutcome,
 ) -> str:
     """Classify one fetched object without copying the requested role.
+
+    The observed object always wins over the request: an implementation suffix
+    binds ``implementation`` no matter what role was asked for, so a role
+    string can never relabel a code file. Within that constraint the paper
+    request IS honored: a ``requested_role="paper"`` raw-url whose fetched
+    bytes are a document type binds the broker-assigned ``introducing-paper``
+    role, closing the split where paper-role truth was author-declared over
+    broker-fetched bytes with nothing machine-derived to check it against
+    (docket W-10).
 
     Parameters
     ----------
@@ -1291,6 +1432,11 @@ def _classify_broker_role(
     suffix = Path(urllib.parse.urlsplit(locator).path).suffix.lower()
     if suffix in _IMPLEMENTATION_SUFFIXES:
         return ROLE_IMPLEMENTATION
+    if (
+        descriptor["requested_role"] == "paper"
+        and outcome.media_type in _DOCUMENT_MEDIA_TYPES
+    ):
+        return ROLE_INTRODUCING_PAPER
     return ROLE_DOCUMENTATION
 
 
@@ -1497,9 +1643,10 @@ def _broker_forge_file(
     fetched, body = _bounded_fetch(descriptor, raw_url, transport, max_bytes, timeout)
     if fetched.outcome != OUTCOME_FETCHED:
         return replace(fetched, resolver_receipt=receipt)
+    retrieved_at = clock()
     _store_evidence(evidence_dir, body or b"")
     bound = _classify_broker_role(descriptor, fetched)
-    return replace(fetched, bound_role=bound, resolver_receipt=receipt)
+    return replace(fetched, bound_role=bound, resolver_receipt=receipt, retrieved_at=retrieved_at)
 
 
 # -- raw-url and paper -----------------------------------------------------
@@ -1639,20 +1786,31 @@ def _broker_raw_url(
 ) -> BrokerOutcome:
     """Fetch one direct URL target with a content-digest revision."""
 
-    del clock
     url = str(descriptor["url"])
     if urllib.parse.urlsplit(url).scheme != "https":
+        # OUR policy, honestly typed: the reference was never contacted, so
+        # neither ``unreachable`` nor a pack-killing refusal is a true record.
+        # The receipt row this produces is what lets an author report the link
+        # honestly and lets a validator machine-check that report (W-3/D-4).
         return _failure_outcome(
-            descriptor, OUTCOME_UNREACHABLE, detail="only https urls are brokered"
+            descriptor,
+            OUTCOME_UNFETCHABLE_BY_POLICY,
+            detail=(
+                "broker fetch policy permits only https urls; the target was not "
+                "contacted (an https:// spelling of the same reference may work)"
+            ),
         )
     fetched, body = _bounded_fetch(descriptor, url, transport, max_bytes, timeout)
     if fetched.outcome != OUTCOME_FETCHED:
         return fetched
+    retrieved_at = clock()
     _store_evidence(evidence_dir, body or b"")
     bound = _classify_broker_role(descriptor, fetched)
     if bound == ROLE_PROBE:
-        return replace(fetched, outcome=OUTCOME_PROBED, bound_role=ROLE_PROBE)
-    return replace(fetched, bound_role=bound)
+        return replace(
+            fetched, outcome=OUTCOME_PROBED, bound_role=ROLE_PROBE, retrieved_at=retrieved_at
+        )
+    return replace(fetched, bound_role=bound, retrieved_at=retrieved_at)
 
 
 def _broker_paper(
