@@ -318,7 +318,7 @@ a reason to re-crawl external sources.
 | `source_resolution.sources[].content_sha256` | string \| null | Mandatory | Mandatory content sha256. |
 | `source_resolution.sources[].byte_count` | integer | Mandatory | Mandatory byte count. |
 | `source_resolution.sources[].media_type` | string | Mandatory | Mandatory media type. |
-| `source_resolution.sources[].retrieved_at` | string | Mandatory | Mandatory retrieved at. |
+| `source_resolution.sources[].retrieved_at` | string | Mandatory | Machine-derived: copy the manifest row's retrieved_at verbatim. The broker stamps it from its own resolver receipt; never invent or estimate a timestamp. |
 | `source_resolution.sources[].fetch_recipe` | string | Mandatory | Mandatory fetch recipe. |
 | `source_resolution.sources[].mirror_class` | string | Mandatory | Mandatory mirror class. |
 | `source_resolution.sources[].mirror_digest` | string \| null | Mandatory | Mandatory mirror digest. |

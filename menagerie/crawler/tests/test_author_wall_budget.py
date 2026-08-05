@@ -111,14 +111,50 @@ def test_the_session_budget_matches_the_executors_actual_call_sites() -> None:
 
     # Stage 1 is its own lane round trip, so it is bounded independently. The
     # capability probe carries its own short deadline and is not grant-derived.
+    # The pre-publication gate's continuation rounds run through EXACTLY ONE
+    # call site whose grant is remaining-budget-bounded (see the derivation
+    # test below), so they consume only wall the primary session left unused
+    # and the 2.5 multiplier stays valid without a constant change -- the
+    # census revoked the 2.5 -> 3.0 bump on evidence.
     assert observed == {
         "serve_source_request": ["config.wall_seconds()"],
         "serve_author": ["config.wall_seconds()", "config.wall_seconds()"],
         "_maybe_supplement_round": ["config.wall_seconds() / 2"],
+        "_stage2_continuation": ["wall_seconds"],
         "serve_capability_probe": ["deadline"],
     }
     stage2_multiplier = 1.0 + 1.0 + 0.5
     assert AUTHOR_EXECUTOR_INVOCATION_SESSION_BUDGET == stage2_multiplier
+
+
+def test_a_continuation_round_only_spends_the_attempts_unused_wall() -> None:
+    """The gate's rounds are bounded by ``grant - spent``, never a new budget.
+
+    This is the derivation the call-site tripwire above points at: the wall
+    argument reaching ``_stage2_continuation`` comes from
+    ``_continuation_wall_seconds``, whose ceiling is the wall the attempt's own
+    grant has left. An attempt's sessions therefore never total more than one
+    grant, and the invocation budget the lane bound is derived from is
+    unchanged.
+    """
+
+    from menagerie.crawler.author_executor import (
+        _CONTINUATION_MIN_WALL_SECONDS,
+        _continuation_wall_seconds,
+    )
+
+    grant = 1800.0
+    # The rung-8 shape: a session that bailed at minute ~4 leaves its own wall.
+    assert _continuation_wall_seconds(grant, 250.0) == pytest.approx(1550.0)
+    # spent + continuation never exceeds the grant.
+    for spent in (0.0, 250.0, 900.0, 1650.0, 1799.0, 1800.0, 2500.0):
+        wall = _continuation_wall_seconds(grant, spent)
+        assert wall >= 0.0
+        assert spent + wall <= grant + 1e-9 or wall == 0.0
+    # Below the usefulness floor no round is dispatched at all.
+    assert _continuation_wall_seconds(grant, grant - _CONTINUATION_MIN_WALL_SECONDS + 1.0) == 0.0
+    assert _continuation_wall_seconds(grant, grant) == 0.0
+    assert _continuation_wall_seconds(grant, grant + 100.0) == 0.0
 
 
 def test_the_executor_resolves_the_same_grant_the_lane_sized_its_bound_from(

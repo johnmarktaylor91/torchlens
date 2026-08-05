@@ -165,7 +165,7 @@ the proposal's own top-level `fidelity_identity`, which you do compute with the 
 Everything else in the proposal is yours, **including `proposed_facts.evidence`
 `excerpts[].text_sha256`** -- unlike a terminal `evidence_records` entry, that digest
 feeds the evidence identity the engine re-derives, so it is still required here. Compute
-it as `identity.hash_bytes(text.encode("utf-8"))` over the exact text you quoted.
+it with the calculator's hash mode over the exact text you quoted (see below).
 
 **Hash the STRING YOU PASTED, never the region your `locator` names.** The engine
 recomputes the digest from the `text` field alone and refuses any disagreement, and both
@@ -186,11 +186,22 @@ line endings -- quote a shorter span you can reproduce exactly rather than widen
 digest to cover it. A short exact excerpt grounds a claim; a long approximate one grounds
 nothing and costs the whole proposal.
 
-Always compute the digest with a real tool -- `sha256sum` on the exact pasted string, or
-`identity.hash_bytes` under the calculator's interpreter. A digest written from memory,
-copied from a different excerpt, or eyeballed off the source matches nothing: a real
-proposal died carrying a hand-declared digest that matched no bytes anywhere, while its
-quoted text was byte-perfect.
+Always compute the digest with the granted calculator -- the ONLY command you can run.
+`sha256sum` is **not granted** and auto-denies, like every other shell tool; do not try
+it. Write the exact pasted string to a file under your attempt directory, then run:
+
+```
+<identity calculator> --hash-file <that file>
+```
+
+(`--hash-string '<text>'` also works for short single-line strings.) The tool prints the
+`sha256:<hex>` digest of the exact bytes. If your file-writing tool appended a final
+newline the quote does not contain, use the reported
+`sha256_without_trailing_newline` value instead -- that trap has produced real
+mismatches. A digest written from memory, copied from a different excerpt, or eyeballed
+off the source matches nothing: a real proposal died carrying eight sequential
+hand-declared placeholder digests that matched no bytes anywhere, while its quoted text
+was byte-perfect.
 
 **A citation value is checked against the BOUND EXCERPTS, never against the page.** The
 engine concatenates the text of exactly the excerpts named in
@@ -270,6 +281,9 @@ warning. Check every one before you write the result:
   name one declared source whose `url` starts with `http`. Never add `cas_path` to a
   `source_resolution.sources` row: CAS locations are machine-owned, and an authored one
   refuses the proposal.
+- `source_resolution.sources[].retrieved_at` is machine-derived: copy the manifest row's
+  `retrieved_at` verbatim. The broker stamps it from its own resolver receipt; an
+  invented or estimated timestamp is a false provenance claim.
 - Every `source_to_code_map` row's `code_path` is a **non-empty string** naming a staged
   file. Only the top-level `implementation.code_path` may be `null` -- and for a
   declarative R1 it must be, with `source_to_code_map: []`.
@@ -450,15 +464,32 @@ identity and re-hashes every cited artifact. So:
 
 ### Running out of budget
 
-The wall deadline in JOB FACTS is enforced by an external kill shortly after it passes.
-If it is approaching, do **not** go silent and do not rush a half-grounded proposal.
-Publish a `BLOCKED` result whose `reason_code` is **exactly `wall-exceeded`**, with
-`stage` naming the stage in flight when time ran out (for this brief, `author`) and
-`prerequisite_ids` naming the budget itself, such as `["authoring-wall-budget"]`. That
-exact spelling is recognized as a budget outcome: the engine records `failed:<stage>`
-with a stage-valid effort reason -- a terminal an operator can requeue with a larger
-grant -- and asks no checker to adjudicate it, so it needs no `blocked-prerequisite`
-excerpt. Cite whatever evidence you already grounded, or none.
+You cannot feel time passing, so never GUESS that the deadline "is approaching" --
+OBSERVE it. The JOB FACTS `clock` line is your granted observation: run it and it prints
+the current instant and the exact `remaining_seconds` before your deadline. The full
+grant in JOB FACTS is yours from the attempt-start instant; a prior attempt's failure
+did not consume one second of it.
+
+**Do not bail early.** In one real rung, eight of twenty sessions published
+`wall-exceeded` with 63-88% of their grant remaining -- most before minute eleven of a
+thirty-minute grant, every one a model lost for nothing. The executor VERIFIES every
+wall claim against its own clock: a `wall-exceeded` result published with less than
+half the grant observably consumed and no external timeout is **refused as an
+unverified self-report**, never recorded as a budget terminal. So claim exhaustion only
+after a clock observation shows the remaining seconds genuinely cannot fit the
+remaining work, and cite that observation (the printed `now` and `remaining_seconds`)
+in your result.
+
+When the budget truly is exhausted, do **not** go silent and do not rush a
+half-grounded proposal. The wall deadline in JOB FACTS is enforced by an external kill
+shortly after it passes. Publish a `BLOCKED` result whose `reason_code` is **exactly
+`wall-exceeded`**, with `stage` naming the stage in flight when time ran out (for this
+brief, `author`) and `prerequisite_ids` naming the budget itself, such as
+`["authoring-wall-budget"]`. That exact spelling is recognized as a budget outcome: the
+engine records `failed:<stage>` with a stage-valid effort reason -- a terminal an
+operator can requeue with a larger grant -- and asks no checker to adjudicate it, so it
+needs no `blocked-prerequisite` excerpt. Cite whatever evidence you already grounded,
+or none.
 
 Do not spell exhaustion any other way, and never dress it as a prerequisite. A
 `blocked-prerequisite` claim is adjudicated against frozen source bytes, and no frozen
