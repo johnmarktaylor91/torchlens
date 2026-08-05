@@ -57,8 +57,18 @@ from menagerie.crawler.author_attempts import (
     prior_attempts_summary,
 )
 from menagerie.crawler.author_dispatch import (
+    AuthorDispatchError,
+    AuthorEffortExhaustionClaim,
     AuthorEngineFaultError,
+    # The lane's own claim grammar and production result parser, reused rather
+    # than re-derived: the pre-publication gate must refuse and enumerate with
+    # exactly the authority the driver will apply after publication, or its
+    # feedback teaches the session a different validator than the one that
+    # decides.
+    _names_effort_exhaustion,
+    _validate_author_result_mapping,
     author_identity_binding,
+    checker_identity_binding,
     derive_terminal_evidence_pack,
     derive_terminal_license_disposition,
 )
@@ -90,8 +100,17 @@ from menagerie.crawler.identity import (
     stable_hash,
     utc_now,
 )
+from menagerie.crawler.metadata import (
+    MetadataValidationError,
+    recompute_accepted_identities,
+)
 from menagerie.crawler.models import JsonObject, bounded_json_repr
-from menagerie.crawler.schema import PayloadValidationError, validate_payload
+from menagerie.crawler.schema import (
+    MODEL_SCHEMA_VERSION_V3,
+    PayloadValidationError,
+    get_validator,
+    validate_payload,
+)
 from menagerie.crawler.source_broker import (
     BrokerPack,
     SourceBrokerError,
@@ -359,7 +378,19 @@ _AUTHOR_ENVELOPE_PREFIX = "menagerie.crawler.author-envelope"
 
 
 class AuthorExecutorError(RuntimeError):
-    """Raised when a request cannot be served at all (typed unavailability)."""
+    """Raised when a request cannot be served at all (typed unavailability).
+
+    ``errors`` carries the COMPLETE enumerated defect list when the refusal
+    found several violations at once. Rung 8 measured what first-error-only
+    reporting costs: every two-attempt malformed model burned a full session to
+    surface exactly one error with two to four latents behind it (W-8). The
+    single message stays the exception text; consumers that can repair read
+    the full list.
+    """
+
+    def __init__(self, message: str, *, errors: Optional[Sequence[str]] = None) -> None:
+        super().__init__(message)
+        self.errors: tuple[str, ...] = tuple(errors) if errors else (message,)
 
 
 @dataclass(frozen=True)
@@ -1008,6 +1039,7 @@ def render_stage1_brief(
     """Render the complete stage-1 discovery brief."""
 
     wall = config.wall_seconds()
+    deadline = _deadline_iso(wall)
     facts = _facts(
         [
             f"- stable_id: `{request.get('stable_id')}`",
@@ -1017,7 +1049,11 @@ def render_stage1_brief(
             f"- REQUEST envelope to read first: `{request_path}`",
             f"- DISCOVERY output path, exact: `{attempt.paths.directory / 'discovery.json'}`",
             f"- max_sources: {request.get('max_sources')}",
-            f"- wall deadline: `{_deadline_iso(wall)}` (external kill at +10%)",
+            f"- attempt started: `{utc_now()}` -- the FULL {wall / 60:.0f}-minute grant is"
+            " yours from this instant; prior attempts' time is not deducted",
+            f"- wall deadline: `{deadline}` (external kill at +10%)",
+            f"- clock, exact: `{identity_tool_command()} --clock --deadline {deadline}`"
+            " -- the only granted time observation; never guess elapsed time",
         ]
     )
     sections = [facts, _read_prompt(_EXECUTOR_PROMPTS, "stage1_discovery.md")]
@@ -1042,6 +1078,7 @@ def render_stage2_brief(
     """Render the complete stage-2 authoring brief."""
 
     wall = config.wall_seconds()
+    deadline = _deadline_iso(wall)
     facts = _facts(
         [
             f"- stable_id: `{request.get('stable_id')}`",
@@ -1059,7 +1096,11 @@ def render_stage2_brief(
             # the permission grant pins, so the brief and the allowlist cannot
             # drift into naming two different invocations.
             f"- identity calculator, exact: `{identity_tool_command()}`",
-            f"- wall deadline: `{_deadline_iso(wall)}` (external kill at +10%)",
+            f"- attempt started: `{utc_now()}` -- the FULL {wall / 60:.0f}-minute grant is"
+            " yours from this instant; prior attempts' time is not deducted",
+            f"- wall deadline: `{deadline}` (external kill at +10%)",
+            f"- clock, exact: `{identity_tool_command()} --clock --deadline {deadline}`"
+            " -- the only granted time observation; never guess elapsed time",
         ]
     )
     sections = [facts, _read_prompt(_EXECUTOR_PROMPTS, "stage2_author.md")]
@@ -2030,8 +2071,747 @@ def _author_result_from_author_payload(
     try:
         validate_payload(body, AUTHOR_RESULT_SCHEMA_VERSION)
     except PayloadValidationError as exc:
-        raise AuthorExecutorError(str(exc)) from exc
+        # Refusal authority is unchanged (validate_payload decides); the FULL
+        # enumeration rides along so the one bounded in-session repair round can
+        # fix every violation at once instead of surfacing them one death at a
+        # time (rung-8 W-8).
+        raise AuthorExecutorError(
+            str(exc), errors=_enumerate_schema_violations(body) or [str(exc)]
+        ) from exc
     return body
+
+
+#: Reporting ceiling for one enumerated defect list. The repair brief must stay
+#: readable; a result broken in fifty places is fed its first twenty-five plus a
+#: truncation notice, not a wall of noise.
+_MAX_ENUMERATED_ERRORS = 25
+
+
+def _enumerate_schema_violations(body: Mapping[str, Any]) -> list[str]:
+    """Enumerate EVERY registered-schema violation in one validator pass.
+
+    This is a REPORTING channel, never a refusal authority:
+    :func:`~menagerie.crawler.schema.validate_payload` still decides validity,
+    and this enumeration exists so its refusal can be repaired in one round.
+    ``validate_payload`` reports the single closest error by design; when it
+    grows a full-enumeration mode of its own (schema-stream work), this helper
+    is the seam to replace.
+
+    Union arms are resolved the same way a reader would: for a ``oneOf`` the
+    branch with the FEWEST violations is the branch the author was writing
+    against, and its errors are the actionable ones -- the other branches fail
+    wholesale on their ``arm`` const and would only bury the signal.
+
+    Parameters
+    ----------
+    body:
+        Complete candidate result envelope.
+
+    Returns
+    -------
+    list[str]
+        Deterministic ``$.path: message`` lines, deduplicated and bounded.
+        Empty when enumeration itself is unavailable (the single
+        ``validate_payload`` error then stands alone).
+    """
+
+    try:
+        validator = get_validator(AUTHOR_RESULT_SCHEMA_VERSION)
+        top = sorted(
+            validator.iter_errors(dict(body)),
+            key=lambda err: ([str(part) for part in err.absolute_path], err.message),
+        )
+    except Exception:  # pragma: no cover - enumeration is best-effort reporting
+        return []
+    lines: list[str] = []
+    for error in top:
+        lines.extend(_flatten_union_error(error, prefix=list(error.absolute_path)))
+    deduplicated = list(dict.fromkeys(lines))
+    if len(deduplicated) > _MAX_ENUMERATED_ERRORS:
+        overflow = len(deduplicated) - _MAX_ENUMERATED_ERRORS
+        deduplicated = deduplicated[:_MAX_ENUMERATED_ERRORS] + [
+            f"... {overflow} further schema violations truncated"
+        ]
+    return deduplicated
+
+
+def _flatten_union_error(error: Any, *, prefix: list[Any]) -> list[str]:
+    """Flatten one ``jsonschema`` error tree into actionable per-leaf lines.
+
+    Parameters
+    ----------
+    error:
+        One ``ValidationError``, possibly carrying union ``context`` errors.
+    prefix:
+        The error's own instance path from the document root. ``context``
+        errors chain their parents, so each sub-error's ``absolute_path`` is
+        already root-anchored and replaces the prefix rather than extending it.
+
+    Returns
+    -------
+    list[str]
+        ``$.path: message`` lines for the most-matching union branch.
+    """
+
+    context = getattr(error, "context", None)
+    if not context:
+        path = "$" + "".join(
+            f"[{part}]" if isinstance(part, int) else f".{part}" for part in prefix
+        )
+        return [f"{path}: {error.message}"]
+    branches: dict[str, list[Any]] = {}
+    for sub in context:
+        schema_path = list(sub.schema_path)
+        key = str(schema_path[0]) if schema_path else "0"
+        branches.setdefault(key, []).append(sub)
+
+    def _branch_rank(item: tuple[str, list[Any]]) -> tuple[int, int, str]:
+        key, subs = item
+        # A branch whose discriminator (``arm``) const fails is the WRONG arm:
+        # its remaining errors describe a payload the author never wrote, so it
+        # is only ever selected when every branch mismatches the discriminator.
+        wrong_arm = any(
+            list(sub.absolute_path)[-1:] == ["arm"] and sub.validator == "const"
+            for sub in subs
+        )
+        return (1 if wrong_arm else 0, len(subs), key)
+
+    best = min(branches.items(), key=_branch_rank)[1]
+    flattened: list[str] = []
+    for sub in best:
+        flattened.extend(_flatten_union_error(sub, prefix=list(sub.absolute_path)))
+    return flattened
+
+
+# -- pre-publication verification (rung-8 S2 + W-8) -------------------------
+#
+# Two measured failure classes converge here, both from the 2026-08-05 rung-8
+# census. (1) Eight of twenty sessions published a typed BLOCKED/wall-exceeded
+# with ``timed_out=false`` and 63-88% of their grant UNUSED -- an unverified
+# self-report the machine then recorded as a trusted effort terminal. (2) Every
+# malformed result burned a whole attempt per error, with two to four latent
+# violations behind each visible one. The gate below refuses the first class
+# against the executor's own clock and repairs the second in ONE bounded
+# in-session round, inside the attempt's existing wall grant -- no budget
+# constant moves.
+
+#: A wall/effort exhaustion claim is recordable only when the executor's own
+#: clock corroborates it: below this fraction of the grant the claim is refuted
+#: by the machine's observation and refused (census S2, tripwire finding 2).
+WALL_CLAIM_MIN_OBSERVED_FRACTION = 0.5
+
+#: Floor under which an in-session continuation is not dispatched: a round with
+#: less than this much wall cannot honestly repair or continue anything.
+_CONTINUATION_MIN_WALL_SECONDS = 120.0
+
+
+def _continuation_wall_seconds(grant: float, spent: float) -> float:
+    """Return the wall grant for one bounded in-session continuation round.
+
+    Continuations spend ONLY the wall this attempt's own grant has left:
+    ``grant - spent``. That keeps the original deadline promise to the session
+    exact (an attempt's sessions never total more than one grant) and keeps
+    ``AUTHOR_EXECUTOR_INVOCATION_SESSION_BUDGET`` valid without any constant
+    change -- continuations can only consume wall the primary session did not.
+    The census revoked the 2.5 -> 3.0 budget bump on evidence: no rung-8
+    session ever approached the existing bound.
+
+    Parameters
+    ----------
+    grant:
+        The attempt's authoritative per-session wall grant.
+    spent:
+        Total session wall this invocation has already observed.
+
+    Returns
+    -------
+    float
+        Positive continuation grant, or ``0.0`` when the attempt's own wall is
+        (nearly) exhausted and no continuation may run.
+    """
+
+    remaining = float(grant) - float(spent)
+    if remaining < _CONTINUATION_MIN_WALL_SECONDS:
+        return 0.0
+    return remaining
+
+
+def _unverified_wall_claim(
+    result: Mapping[str, Any], *, spent: float, grant: float
+) -> Optional[JsonObject]:
+    """Return the refusal record when a wall claim is refuted by the clock.
+
+    The claim grammar is the lane's own (:func:`_names_effort_exhaustion`), so
+    a creative spelling cannot dodge the check that its canonical spelling
+    trips. The tripwire direction is fixed: an HONEST exhaustion claim (the
+    session really consumed its grant) is never refused here -- it publishes
+    and the driver routes it to the typed effort terminal exactly as before.
+
+    Parameters
+    ----------
+    result:
+        Materialized result envelope.
+    spent:
+        Executor-observed total session wall for this attempt.
+    grant:
+        The attempt's wall grant.
+
+    Returns
+    -------
+    dict[str, Any] | None
+        Machine-observed refusal evidence, or ``None`` when no wall claim is
+        present or the claim is corroborated.
+    """
+
+    if result.get("kind") != "BLOCKED":
+        return None
+    payload = result.get("payload")
+    reason = str(payload.get("reason_code", "")) if isinstance(payload, Mapping) else ""
+    if not _names_effort_exhaustion(reason):
+        return None
+    if spent >= WALL_CLAIM_MIN_OBSERVED_FRACTION * grant:
+        return None
+    return {
+        "reason_code": reason,
+        "wall_seconds_observed": round(float(spent), 3),
+        "wall_seconds_grant": round(float(grant), 3),
+        "observed_fraction": round(float(spent) / float(grant), 3) if grant else 0.0,
+    }
+
+
+def _prepublication_validation_available(request: Mapping[str, Any]) -> bool:
+    """Whether the request is a verified envelope the production parser accepts.
+
+    The deep validator authenticates ``envelope_sha256`` before anything else,
+    so running it against a transport stub would only manufacture noise. Every
+    production envelope is self-hashed by ``build_author_envelope``; an
+    unverifiable one downgrades the gate to publish-as-before, never to a
+    refusal.
+    """
+
+    digest = request.get("envelope_sha256")
+    if not isinstance(digest, str) or not digest:
+        return False
+    body = {key: value for key, value in request.items() if key != "envelope_sha256"}
+    return stable_hash(body) == digest
+
+
+def _supplement_grounding_rows(attempt: AttemptHandle) -> Optional[list[JsonObject]]:
+    """Return the ONE granted supplementary pack's rows, grounded for reading.
+
+    The broker pack rows carry ``expected_sha256`` (the broker's own digest of
+    its fetch) but no CAS placement -- the driver promotes those bytes into the
+    model's CAS only after the executor exits. For the pre-publication replay
+    the same bytes are still sitting in the attempt's own broker evidence
+    directory, so each row is pointed there. This is fail-closed by
+    construction: the evidence reader re-hashes whatever the path holds against
+    ``content_sha256`` and refuses a mismatch, so a wrong or tampered blob can
+    never ground an excerpt.
+
+    Returns
+    -------
+    list[dict[str, Any]] | None
+        Grounding-ready supplementary rows, or ``None`` when no supplement
+        round was granted (the validator then falls back to the envelope's own
+        manifest rows).
+    """
+
+    record = attempt.record.get("supplement")
+    if not isinstance(record, Mapping):
+        return None
+    manifest_path = record.get("manifest_path")
+    if not isinstance(manifest_path, str) or not manifest_path.strip():
+        return None
+    pack = _read_json_file(Path(manifest_path))
+    rows = pack.get("sources") if isinstance(pack, Mapping) else None
+    if not isinstance(rows, list):
+        return None
+    evidence_dir = attempt.paths.broker / "supplement" / "evidence"
+    grounded: list[JsonObject] = []
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        entry: JsonObject = dict(row)
+        digest = str(entry.get("expected_sha256") or "")
+        if digest.startswith("sha256:") and "content_sha256" not in entry:
+            entry["content_sha256"] = digest
+            candidate = evidence_dir / f"{digest.removeprefix('sha256:')[:16]}.bin"
+            if candidate.is_file():
+                entry["cas_path"] = str(candidate)
+        grounded.append(entry)
+    return grounded
+
+
+def _identity_mirror_errors(
+    result: Mapping[str, Any], request: Mapping[str, Any]
+) -> list[str]:
+    """Mirror the driver's staging identity checks over one drafted proposal.
+
+    ``validate_author_result_mapping`` does not recompute the five accepted
+    identities or the ``verified_hashes.source_manifest`` binding -- those
+    refusals live in ``driver_admission._validate_artifact_identities`` at
+    staging, after the result is published and the session is gone. Both are
+    pure functions of what the executor already holds, so they are mirrored
+    here as REPORTING for the one repair round. The driver's checks are
+    untouched and stay authoritative; rung 8's m538 died exactly on the
+    manifest binding, carrying a digest copied from a prior attempt whose
+    sources had been re-frozen underneath it.
+    """
+
+    kind = result.get("kind")
+    payload = result.get("payload")
+    payload = payload if isinstance(payload, Mapping) else {}
+    if kind == "PROPOSED":
+        proposal = payload.get("proposal")
+    elif kind == "DEFER_RECOMMENDATION":
+        handoff = payload.get("handoff_execution")
+        proposal = handoff.get("proposal") if isinstance(handoff, Mapping) else None
+    else:
+        return []
+    if not isinstance(proposal, Mapping):
+        return []
+    errors: list[str] = []
+    verified = proposal.get("verified_hashes")
+    if isinstance(verified, Mapping) and "source_manifest" in verified:
+        expected = proposal.get("source_manifest_identity")
+        if verified.get("source_manifest") != expected:
+            errors.append(
+                "verified_hashes.source_manifest does not bind the proposal source "
+                f"manifest identity: declared {bounded_json_repr(verified.get('source_manifest'))}, "
+                f"this envelope holds {bounded_json_repr(expected)} -- identities drafted "
+                "in a prior attempt are STALE; recopy every machine value from THIS envelope"
+            )
+    facts = proposal.get("proposed_facts")
+    if not isinstance(facts, Mapping):
+        return errors
+    try:
+        checker = checker_identity_binding(request)
+    except AuthorEngineFaultError:
+        return errors
+    inputs = request.get("identity_inputs")
+    schema_version = MODEL_SCHEMA_VERSION_V3
+    if isinstance(inputs, Mapping) and isinstance(inputs.get("model_schema_version"), str):
+        schema_version = str(inputs["model_schema_version"])
+    try:
+        identities = recompute_accepted_identities(
+            facts,
+            checker_prompt_hash=checker["prompt_sha256"],
+            checker_model=checker["model"],
+            checker_version=checker["version"],
+            schema_version=schema_version,
+        )
+    except MetadataValidationError as exc:
+        errors.append(
+            f"accepted identities cannot be derived from the declared proposed_facts: {exc}"
+        )
+        return errors
+    claimed = {
+        "source_identity": identities.source,
+        "evidence_identity": identities.evidence,
+        "recipe_revision": identities.recipe,
+        "vet_identity": identities.vet,
+        "fidelity_identity": identities.fidelity,
+    }
+    for field, value in claimed.items():
+        if proposal.get(field) != value:
+            errors.append(
+                f"{field} does not follow from the declared proposed_facts: the proposal "
+                f"carries {bounded_json_repr(proposal.get(field))}, the derivation yields "
+                f"{bounded_json_repr(value)} -- rerun the identity calculator on the FINAL facts"
+            )
+    implementation = facts.get("implementation")
+    if not isinstance(implementation, Mapping) or (
+        implementation.get("recipe_revision") != identities.recipe
+    ):
+        errors.append(
+            "embedded implementation.recipe_revision is stale for the derived recipe_revision"
+        )
+    evidence = facts.get("evidence")
+    if not isinstance(evidence, Mapping) or (
+        evidence.get("evidence_identity") != identities.evidence
+    ):
+        errors.append(
+            "embedded evidence.evidence_identity is stale for the derived evidence_identity"
+        )
+    return errors
+
+
+def _collect_prepublication_errors(
+    materialized: Mapping[str, Any],
+    request: Mapping[str, Any],
+    *,
+    attempt: AttemptHandle,
+    author_root: Path,
+) -> list[str]:
+    """Replay the production result validator BEFORE publication.
+
+    Reporting only: the driver re-runs the same validator after publication and
+    stays the authority. NOTE (schema-stream seam): the mapping validator still
+    raises on its FIRST deep violation; whatever list its exceptions learn to
+    carry (an ``errors`` attribute is consumed here already) will widen this
+    enumeration without another executor change.
+
+    Returns
+    -------
+    list[str]
+        Deduplicated, bounded defect lines; empty when the result validates or
+        when its only finding is a doctrine-routed effort claim.
+    """
+
+    errors: list[str] = []
+    try:
+        _validate_author_result_mapping(
+            materialized,
+            request,
+            cas_root=author_root / "source-cas",
+            supplementary_sources=_supplement_grounding_rows(attempt),
+        )
+    except AuthorEffortExhaustionClaim:
+        # An effort claim is doctrine-routed by the driver to a typed effort
+        # terminal; whether it is HONEST is the wall gate's question, not a
+        # content defect this round could repair.
+        return []
+    except AuthorDispatchError as exc:
+        listed = getattr(exc, "errors", None)
+        errors.extend(str(item) for item in (listed or [str(exc)]))
+    except Exception as exc:
+        # The gate is a REPORTING channel over a result the driver will
+        # validate authoritatively anyway; an unexpected replay crash must
+        # degrade to publish-as-before, never cost a publishable result. The
+        # crash is still recorded, and the identity mirror below still runs.
+        attempt.event(
+            "prepublication-validation-unavailable",
+            error=f"{type(exc).__name__}: {exc}"[:500],
+        )
+    try:
+        errors.extend(_identity_mirror_errors(materialized, request))
+    except Exception as exc:  # pragma: no cover - same publish-preserving bar
+        attempt.event(
+            "prepublication-identity-mirror-unavailable",
+            error=f"{type(exc).__name__}: {exc}"[:500],
+        )
+    return list(dict.fromkeys(errors))[:_MAX_ENUMERATED_ERRORS]
+
+
+def _render_validation_repair_brief(
+    errors: Sequence[str], *, result_path: Path, wall_seconds: float
+) -> str:
+    """Render the ONE bounded repair round's continuation brief."""
+
+    numbered = "\n".join(f"{index}. {text}" for index, text in enumerate(errors, start=1))
+    return "\n".join(
+        [
+            "## PRE-PUBLICATION VALIDATION FAILED -- one bounded repair round (the only one)",
+            "",
+            f"- RESULT output path, exact: `{result_path}`",
+            "",
+            "The executor ran the production result validator over the result you wrote,",
+            "BEFORE publication. It found the defects below -- the COMPLETE enumerated",
+            "list as of this run, not merely the first error. Fix ALL of them in one",
+            "pass by editing that result file in place, keeping the same inner",
+            '`{"kind": ..., "payload": ...}` shape.',
+            "",
+            numbered,
+            "",
+            "Binding reminders:",
+            "- Machine-owned fields stay omitted, exactly as the stage brief says.",
+            "- Identities must follow from your corrected facts: after ANY fact edit,",
+            "  re-run the identity calculator and recopy all five identities plus the",
+            "  two embedded copies.",
+            "- Identities and digests drafted in prior attempts are STALE; recopy every",
+            "  machine value from THIS envelope and THIS manifest.",
+            f"- Your wall for this round is {wall_seconds / 60:.1f} minutes.",
+            "",
+            "Then stop. Write nothing else.",
+        ]
+    )
+
+
+def _render_wall_refusal_brief(
+    claim: Mapping[str, Any], *, result_path: Path, wall_seconds: float
+) -> str:
+    """Render the refused-wall-claim continuation brief.
+
+    The refusal is machine-built from the executor's own clock observations;
+    no session text influences it.
+    """
+
+    observed = float(claim.get("wall_seconds_observed", 0.0))
+    grant = float(claim.get("wall_seconds_grant", 0.0))
+    unused = max(0.0, grant - observed)
+    deadline = _deadline_iso(wall_seconds)
+    return "\n".join(
+        [
+            "## WALL CLAIM REFUSED -- THE EXECUTOR'S CLOCK SAYS YOU HAVE TIME (binding)",
+            "",
+            f"- RESULT output path, exact: `{result_path}`",
+            "",
+            f"You published a `{claim.get('reason_code')}` claim, but the executor observed",
+            f"only {observed:.0f}s of this attempt's {grant:.0f}s wall grant consumed --",
+            f"about {unused / 60:.0f} minutes remain unused -- and no external timeout",
+            "fired. A wall-exhaustion claim the machine's own clock refutes is refused,",
+            "never recorded.",
+            "",
+            f"You now have {wall_seconds / 60:.0f} more minutes (deadline `{deadline}`).",
+            "Observe the clock instead of guessing:",
+            "",
+            f"    {identity_tool_command()} --clock --deadline {deadline}",
+            "",
+            "Continue the authoring work NOW and overwrite your result file at",
+            f"`{result_path}` with the real result: a complete proposal, or an honest",
+            "terminal grounded in a real prerequisite. Publish `wall-exceeded` ONLY when",
+            "a fresh clock observation shows the remaining budget genuinely cannot fit",
+            "the remaining work.",
+        ]
+    )
+
+
+def _stage2_continuation(
+    attempt: AttemptHandle,
+    config: ExecutorConfig,
+    *,
+    brief: str,
+    wall_seconds: float,
+    read_roots: Sequence[Path],
+    resume: Optional[str],
+    kind: str,
+) -> SessionOutcome:
+    """Run ONE bounded in-session continuation round and record it durably.
+
+    This is the single spawn site for both continuation kinds, so the wall
+    budget tripwire in ``test_author_wall_budget.py`` pins exactly one new
+    session call whose grant is remaining-budget-bounded by
+    :func:`_continuation_wall_seconds`.
+    """
+
+    attempt.event(
+        "stage2-continuation-dispatched",
+        kind=kind,
+        wall_seconds=round(float(wall_seconds), 3),
+    )
+    continuation = run_claude_session(
+        brief,
+        cwd=attempt.paths.scratch,
+        wall_seconds=wall_seconds,
+        config=config,
+        write_root=attempt.paths.directory,
+        read_roots=read_roots,
+        resume=resume,
+    )
+    rounds = list(attempt.record.get("continuations") or [])
+    rounds.append(
+        {
+            "kind": kind,
+            "completed_at": utc_now(),
+            "effort": effort_from_session(continuation),
+        }
+    )
+    attempt.update(continuations=rounds)
+    return continuation
+
+
+def _settle_result_prepublication(
+    attempt: AttemptHandle,
+    request: Mapping[str, Any],
+    config: ExecutorConfig,
+    *,
+    author_root: Path,
+    result_path: Path,
+    read_roots: Sequence[Path],
+    spent: float,
+    resume_session: Optional[str],
+) -> tuple[Optional[JsonObject], Optional[tuple[int, str]]]:
+    """Settle one authored result through the bounded pre-publication gate.
+
+    At most one repair round (materialization or deep validation -- they share
+    it) and one wall-claim refusal round run, each inside the attempt's own
+    remaining wall. Deep-validation failures never block publication: the
+    driver's identical validation stays authoritative, so the worst case is
+    exactly today's behavior. A wall claim the executor's clock refutes is the
+    one thing this gate refuses outright -- recording it would launder an
+    unverified self-report into a trusted terminal.
+
+    Returns
+    -------
+    tuple[dict[str, Any] | None, tuple[int, str] | None]
+        The materialized result to publish, or the typed failure exit.
+    """
+
+    grant = config.wall_seconds()
+    repair_used = False
+    refusal_used = False
+
+    def _materialize_current() -> tuple[
+        Optional[JsonObject], Optional[tuple[str, list[str]]]
+    ]:
+        parsed = _read_json_file(result_path)
+        if parsed is None:
+            return None, ("result-not-json", ["the result file is not one JSON document"])
+        try:
+            return _author_result_from_author_payload(parsed, request), None
+        except AuthorExecutorError as exc:
+            return None, ("result-contract-invalid", list(exc.errors))
+
+    def _typed_failure(
+        reason: str, errors: Sequence[str], **extra: Any
+    ) -> tuple[int, str]:
+        detail: JsonObject = {"error": errors[0] if errors else reason, **extra}
+        if len(errors) > 1:
+            detail["errors"] = list(errors)
+        return _fail(
+            attempt,
+            stage="stage2",
+            reason=reason,
+            exit_code=EXIT_RETRYABLE,
+            detail=detail,
+        )
+
+    materialized, failure = _materialize_current()
+    while True:
+        if materialized is None:
+            reason, errors = failure or ("result-contract-invalid", [])
+            wall = 0.0 if repair_used else _continuation_wall_seconds(grant, spent)
+            if wall <= 0.0:
+                return None, _typed_failure(reason, errors)
+            repair_used = True
+            continuation = _stage2_continuation(
+                attempt,
+                config,
+                brief=_render_validation_repair_brief(
+                    errors, result_path=result_path, wall_seconds=wall
+                ),
+                wall_seconds=wall,
+                read_roots=read_roots,
+                resume=resume_session,
+                kind="validation-repair",
+            )
+            spent += continuation.wall_seconds
+            limit = structured_limit_signal(continuation.harness)
+            if limit is not None:
+                _fail(
+                    attempt,
+                    stage="stage2",
+                    reason="provider-usage-pause",
+                    exit_code=EXIT_BACKOFF,
+                )
+                return None, (EXIT_BACKOFF, _backoff_detail(limit, continuation.harness))
+            if continuation.timed_out or continuation.returncode != 0:
+                return None, _typed_failure(reason, errors, repair_round="session-failed")
+            resume_session = continuation.session_id or resume_session
+            materialized, failure = _materialize_current()
+            if materialized is None:
+                reason, errors = failure or ("result-contract-invalid", [])
+                return None, _typed_failure(reason, errors, repair_round="did-not-repair")
+            continue
+
+        claim = _unverified_wall_claim(materialized, spent=spent, grant=grant)
+        if claim is not None:
+            wall = 0.0 if refusal_used else _continuation_wall_seconds(grant, spent)
+            if wall <= 0.0:
+                attempt.event("unverified-wall-claim-refused", **dict(claim))
+                return None, _fail(
+                    attempt,
+                    stage="stage2",
+                    reason="unverified-wall-claim",
+                    exit_code=EXIT_RETRYABLE,
+                    detail=dict(claim),
+                )
+            refusal_used = True
+            continuation = _stage2_continuation(
+                attempt,
+                config,
+                brief=_render_wall_refusal_brief(
+                    claim, result_path=result_path, wall_seconds=wall
+                ),
+                wall_seconds=wall,
+                read_roots=read_roots,
+                resume=resume_session,
+                kind="wall-claim-refusal",
+            )
+            spent += continuation.wall_seconds
+            limit = structured_limit_signal(continuation.harness)
+            if limit is not None:
+                _fail(
+                    attempt,
+                    stage="stage2",
+                    reason="provider-usage-pause",
+                    exit_code=EXIT_BACKOFF,
+                )
+                return None, (EXIT_BACKOFF, _backoff_detail(limit, continuation.harness))
+            if continuation.timed_out or continuation.returncode != 0:
+                # The continuation itself consumed wall; the SAME claim may now
+                # be corroborated (a round that ran to its own deadline spent
+                # the time it was disputing). A timed-out session may still be
+                # writing, so the file is NOT re-read.
+                claim = _unverified_wall_claim(materialized, spent=spent, grant=grant)
+                if claim is not None:
+                    attempt.event("unverified-wall-claim-refused", **dict(claim))
+                    return None, _fail(
+                        attempt,
+                        stage="stage2",
+                        reason="unverified-wall-claim",
+                        exit_code=EXIT_RETRYABLE,
+                        detail={**claim, "refusal_round": "session-failed"},
+                    )
+                break
+            resume_session = continuation.session_id or resume_session
+            materialized, failure = _materialize_current()
+            continue
+
+        if not _prepublication_validation_available(request):
+            break
+        residual = _collect_prepublication_errors(
+            materialized, request, attempt=attempt, author_root=author_root
+        )
+        if not residual:
+            break
+        if repair_used:
+            attempt.event(
+                "prepublication-validation-residual",
+                count=len(residual),
+                errors=residual[:5],
+            )
+            break
+        wall = _continuation_wall_seconds(grant, spent)
+        if wall <= 0.0:
+            attempt.event(
+                "prepublication-validation-unrepaired",
+                count=len(residual),
+                errors=residual[:5],
+            )
+            break
+        repair_used = True
+        continuation = _stage2_continuation(
+            attempt,
+            config,
+            brief=_render_validation_repair_brief(
+                residual, result_path=result_path, wall_seconds=wall
+            ),
+            wall_seconds=wall,
+            read_roots=read_roots,
+            resume=resume_session,
+            kind="validation-repair",
+        )
+        spent += continuation.wall_seconds
+        limit = structured_limit_signal(continuation.harness)
+        if limit is not None:
+            # A publishable result outranks the pause; the pause re-surfaces on
+            # the very next dispatch through the primary path.
+            break
+        if continuation.timed_out or continuation.returncode != 0:
+            break
+        resume_session = continuation.session_id or resume_session
+        repaired, repaired_failure = _materialize_current()
+        if repaired is None:
+            attempt.event(
+                "prepublication-repair-broke-result",
+                errors=(repaired_failure or ("", []))[1][:5],
+            )
+            break
+        materialized = repaired
+        continue
+
+    return materialized, None
 
 
 def serve_author(
@@ -2074,6 +2854,10 @@ def serve_author(
         read_roots=stage2_read_roots,
         resume=resume_session,
     )
+    # Executor-observed session wall for this invocation: the machine-side
+    # ledger the pre-publication gate verifies wall claims against and bounds
+    # continuation rounds with. Never self-reported.
+    session_wall_spent = outcome.wall_seconds
     if resume_session is not None and outcome.returncode != 0 and not outcome.timed_out:
         limit = structured_limit_signal(outcome.harness)
         if limit is None and not (attempt.paths.directory / "result.json").is_file():
@@ -2104,6 +2888,7 @@ def serve_author(
                 write_root=attempt.paths.directory,
                 read_roots=stage2_read_roots,
             )
+            session_wall_spent += outcome.wall_seconds
     stage2 = dict(attempt.record.get("stage2") or {})
     stage2.update(
         {
@@ -2151,20 +2936,35 @@ def serve_author(
         return _fail(
             attempt, stage="stage2", reason="no-result-output", exit_code=EXIT_RETRYABLE
         )
-    parsed = _read_json_file(result_path)
-    if parsed is None:
-        return _fail(
-            attempt, stage="stage2", reason="result-not-json", exit_code=EXIT_RETRYABLE
-        )
-    try:
-        materialized_result = _author_result_from_author_payload(parsed, request)
-    except AuthorExecutorError as exc:
+    resume_session_id = outcome.session_id
+    supplement_record = attempt.record.get("supplement")
+    if isinstance(supplement_record, Mapping):
+        # The supplement round already ran inside this invocation: fold its
+        # observed wall into the machine ledger, and resume the newest session.
+        effort = supplement_record.get("effort")
+        observed = effort.get("wall_seconds_observed") if isinstance(effort, Mapping) else None
+        if isinstance(observed, (int, float)) and not isinstance(observed, bool):
+            session_wall_spent += float(observed)
+        if supplement_record.get("session_id"):
+            resume_session_id = str(supplement_record["session_id"])
+    materialized_result, typed_exit = _settle_result_prepublication(
+        attempt,
+        request,
+        config,
+        author_root=author_root,
+        result_path=result_path,
+        read_roots=stage2_read_roots,
+        spent=session_wall_spent,
+        resume_session=resume_session_id,
+    )
+    if typed_exit is not None:
+        return typed_exit
+    if materialized_result is None:  # pragma: no cover - structurally unreachable
         return _fail(
             attempt,
             stage="stage2",
             reason="result-contract-invalid",
             exit_code=EXIT_RETRYABLE,
-            detail={"error": str(exc)},
         )
     _write_json_object(result_path, materialized_result)
     model_dir = str(request.get("allowed_model_dir") or "")

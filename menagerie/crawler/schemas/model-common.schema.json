@@ -975,7 +975,7 @@
         },
         "retrieved_at": {
           "$ref": "#/$defs/timestamp",
-          "description": "Mandatory retrieved at."
+          "description": "Machine-derived: copy the manifest row's retrieved_at verbatim. The broker stamps it from its own resolver receipt; never invent or estimate a timestamp."
         },
         "fetch_recipe": {
           "$ref": "#/$defs/nonempty_string",

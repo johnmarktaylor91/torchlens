@@ -78,7 +78,11 @@ def extract(label):
 discovery_path = extract("- DISCOVERY output path, exact:")
 result_path = extract("- RESULT output path, exact:")
 required_path = extract("- REQUIRED output path, exact:")
-if discovery_path:
+if "PRE-PUBLICATION VALIDATION FAILED" in prompt:
+    stage = "repair"
+elif "WALL CLAIM REFUSED" in prompt:
+    stage = "wall-refusal"
+elif discovery_path:
     stage = "stage1"
 elif "SUPPLEMENTARY SOURCE ROUND" in prompt:
     stage = "supplement"
@@ -261,6 +265,22 @@ elif stage == "supplement" and result_path:
             os.environ.get("FAKE_CLAUDE_RESULT")
             or os.environ["FAKE_CLAUDE_DEFAULT_RESULT"]
         )
+elif stage == "repair" and result_path:
+    # The pre-publication repair round: a scripted session either fixes its
+    # result (FAKE_CLAUDE_REPAIRED_RESULT) or rewrites the same broken one.
+    with open(result_path, "w") as fh:
+        fh.write(
+            os.environ.get("FAKE_CLAUDE_REPAIRED_RESULT")
+            or os.environ.get("FAKE_CLAUDE_RESULT")
+            or os.environ["FAKE_CLAUDE_DEFAULT_RESULT"]
+        )
+elif stage == "wall-refusal" and result_path:
+    # The refused-wall-claim round: a scripted session either resumes the work
+    # (FAKE_CLAUDE_CONTINUED_RESULT) or insists by leaving its claim in place.
+    continued = os.environ.get("FAKE_CLAUDE_CONTINUED_RESULT")
+    if continued:
+        with open(result_path, "w") as fh:
+            fh.write(continued)
 elif stage == "probe" and required_path:
     # Default: evidence shaped like a session that GENUINELY exercised all
     # three tools, derived from the prompt's own challenge facts so the

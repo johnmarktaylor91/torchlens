@@ -49,6 +49,29 @@ envelope's ``identity_inputs`` disclosure. The envelope's own ``envelope_sha256`
 re-verified first, so a doctored binding cannot be smuggled in -- and even if one
 were, the driver recomputes with the binding IT holds, so the only achievable
 outcome is a refusal.
+
+TWO MORE ARITHMETIC MODES, SAME BOUNDARY
+----------------------------------------
+The stage-2 Bash allowlist grants exactly ONE command: this calculator. Two more
+pure-arithmetic needs therefore live here rather than widening the allowlist:
+
+* ``--clock [--deadline <ISO>]`` prints the current UTC instant and, given the
+  JOB FACTS deadline, the exact seconds remaining. Sessions cannot observe time
+  any other way (``date`` is not granted), and in the 2026-08-05 rung eight of
+  twenty sessions guessed -- publishing ``wall-exceeded`` with 63-88% of their
+  grant unused. A wall claim must cite an observation, and this is the granted
+  observer.
+* ``--hash-file <path>`` / ``--hash-string <text>`` print the ``sha256:<hex>``
+  digest of exact bytes. The proposal's ``excerpts[].text_sha256`` is authored,
+  the stage brief used to instruct ``sha256sum`` -- a command the allowlist
+  denies -- and a real session, unable to run it, published sequential
+  placeholder digests over byte-perfect excerpts (m8189). The digest of a file
+  ending in a newline is reported both with and without that final byte,
+  because the one real observed mismatch class is a tool-appended trailing
+  newline the quoted string never had.
+
+Neither mode reads anything but its own operand, writes anything, or fetches
+anything; the calculator remains a calculator.
 """
 
 from __future__ import annotations
@@ -57,6 +80,7 @@ import argparse
 import json
 import sys
 from copy import deepcopy
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 
@@ -82,7 +106,7 @@ from menagerie.crawler.author_dispatch import (
     AuthorEngineFaultError,
     checker_identity_binding,
 )
-from menagerie.crawler.identity import stable_hash
+from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.metadata import (
     MetadataValidationError,
     recompute_accepted_identities,
@@ -332,13 +356,115 @@ def derive_identities(
     return final
 
 
+def _iso_utc(moment: datetime) -> str:
+    """Return one instant in the campaign's canonical ``...Z`` ISO spelling."""
+
+    return moment.isoformat().replace("+00:00", "Z")
+
+
+def _parse_deadline(raw: str) -> datetime:
+    """Parse one ISO-8601 UTC deadline, accepting the canonical ``Z`` suffix.
+
+    Parameters
+    ----------
+    raw:
+        Deadline string, exactly as the JOB FACTS line carries it.
+
+    Returns
+    -------
+    datetime
+        Timezone-aware deadline instant.
+
+    Raises
+    ------
+    IdentityToolError
+        If the string is not one ISO-8601 instant.
+    """
+
+    text = raw.strip()
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise IdentityToolError(
+            f"deadline {raw!r} is not an ISO-8601 instant; pass the JOB FACTS "
+            "wall-deadline value verbatim"
+        ) from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def observe_clock(deadline: Optional[str] = None) -> dict[str, Any]:
+    """Report the current UTC instant, and the seconds left before a deadline.
+
+    This is the session's only granted time observation: the stage allowlist
+    carries no ``date``, so without it "the deadline is approaching" is a guess,
+    and rung 8 measured what guessing costs -- eight sessions self-blocked with
+    63-88% of their grant unused.
+
+    Parameters
+    ----------
+    deadline:
+        Optional ISO-8601 deadline (the JOB FACTS wall-deadline value).
+
+    Returns
+    -------
+    dict[str, Any]
+        ``now``, plus ``deadline`` and ``remaining_seconds`` when one was given.
+        ``remaining_seconds`` goes negative once the deadline has passed.
+    """
+
+    now = datetime.now(timezone.utc)
+    report: dict[str, Any] = {"now": _iso_utc(now)}
+    if deadline is not None:
+        parsed = _parse_deadline(deadline)
+        report["deadline"] = _iso_utc(parsed)
+        report["remaining_seconds"] = round((parsed - now).total_seconds(), 1)
+    return report
+
+
+def hash_report(data: bytes) -> dict[str, Any]:
+    """Digest exact bytes, disarming the trailing-newline trap explicitly.
+
+    Parameters
+    ----------
+    data:
+        Exact bytes to digest.
+
+    Returns
+    -------
+    dict[str, Any]
+        ``sha256`` over the exact bytes and ``bytes_len``. When the bytes end in
+        one newline the report ALSO carries ``sha256_without_trailing_newline``,
+        because a file-writing tool that appends a final newline is the one
+        observed way a byte-perfect excerpt still hashed wrong; the caller picks
+        the digest of the string it actually quoted.
+    """
+
+    report: dict[str, Any] = {"bytes_len": len(data), "sha256": hash_bytes(data)}
+    if data.endswith(b"\n"):
+        report["trailing_newline"] = True
+        report["sha256_without_trailing_newline"] = hash_bytes(data[:-1])
+    return report
+
+
+def _hash_file_report(path: Path) -> dict[str, Any]:
+    """Digest one file's exact bytes."""
+
+    try:
+        data = path.read_bytes()
+    except OSError as exc:
+        raise IdentityToolError(f"hash target is unreadable at {path}: {exc}") from exc
+    return {"path": str(path), **hash_report(data)}
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the calculator's argument parser.
 
     Returns
     -------
     argparse.ArgumentParser
-        Parser taking exactly the request envelope and the authored facts.
+        Parser taking the identity inputs, or exactly one arithmetic mode.
     """
 
     parser = argparse.ArgumentParser(
@@ -346,20 +472,49 @@ def build_parser() -> argparse.ArgumentParser:
         description=(
             "Derive a proposal's source/evidence/recipe/vet/fidelity identities from "
             "the facts you drafted. Computes only from what you supply; never fetches, "
-            "infers, or fills a fact."
+            "infers, or fills a fact. Also carries the session's two other granted "
+            "arithmetic modes: --clock (time observation) and --hash-file/--hash-string "
+            "(exact-byte SHA-256 for excerpt digests)."
         ),
     )
     parser.add_argument(
         "--request",
         type=Path,
-        required=True,
         help="The REQUEST envelope named in JOB FACTS (read for the checker binding).",
     )
     parser.add_argument(
         "--facts",
         type=Path,
-        required=True,
         help="Your drafted proposal, or its proposed_facts object, as one JSON file.",
+    )
+    parser.add_argument(
+        "--clock",
+        action="store_true",
+        help=(
+            "Print the current UTC instant; with --deadline also print the exact "
+            "seconds remaining. The only granted time observation."
+        ),
+    )
+    parser.add_argument(
+        "--deadline",
+        type=str,
+        default=None,
+        help="ISO-8601 deadline (the JOB FACTS wall-deadline value), used with --clock.",
+    )
+    parser.add_argument(
+        "--hash-file",
+        type=Path,
+        default=None,
+        help=(
+            "Print the sha256:<hex> digest of a file's exact bytes (plus the digest "
+            "without one trailing newline when the file ends in one)."
+        ),
+    )
+    parser.add_argument(
+        "--hash-string",
+        type=str,
+        default=None,
+        help="Print the sha256:<hex> digest of the argument's exact UTF-8 bytes.",
     )
     return parser
 
@@ -379,16 +534,38 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     """
 
     args = build_parser().parse_args(argv)
+    modes = [
+        bool(args.clock),
+        args.hash_file is not None,
+        args.hash_string is not None,
+        args.request is not None or args.facts is not None,
+    ]
     try:
-        envelope = _verify_envelope(_read_json(args.request, "request envelope"))
-        identities = derive_identities(
-            envelope=envelope,
-            facts_document=_read_json(args.facts, "facts document"),
-        )
+        if sum(modes) != 1:
+            raise IdentityToolError(
+                "pass exactly one mode: --request/--facts (identities), --clock, "
+                "--hash-file, or --hash-string"
+            )
+        if args.clock:
+            report: Mapping[str, Any] = observe_clock(args.deadline)
+        elif args.hash_file is not None:
+            report = _hash_file_report(args.hash_file)
+        elif args.hash_string is not None:
+            report = hash_report(args.hash_string.encode("utf-8"))
+        else:
+            if args.request is None or args.facts is None:
+                raise IdentityToolError(
+                    "identity derivation needs BOTH --request and --facts"
+                )
+            envelope = _verify_envelope(_read_json(args.request, "request envelope"))
+            report = derive_identities(
+                envelope=envelope,
+                facts_document=_read_json(args.facts, "facts document"),
+            )
     except IdentityToolError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
-    print(json.dumps(identities, indent=2, sort_keys=True, ensure_ascii=False))
+    print(json.dumps(report, indent=2, sort_keys=True, ensure_ascii=False))
     return 0
 
 

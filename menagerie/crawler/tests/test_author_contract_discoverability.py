@@ -637,6 +637,74 @@ def test_the_wall_exhaustion_spelling_is_commanded_where_the_author_reads() -> N
     )
     assert "no frozen source can witness your wall clock" in unwrapped
 
+    # Rung 8 moved the loss: the spelling was followed, but eight sessions used
+    # it at minute 4-11 of a 30-minute grant (63-88% unused, timed_out=false).
+    # The brief must now command OBSERVING the clock before claiming exhaustion
+    # and disclose that an unverified claim is refused, and the executor's JOB
+    # FACTS must actually grant the observation it commands.
+    assert "Do not bail early." in unwrapped
+    assert "never GUESS" in unwrapped, (
+        "the anti-bail floor must be commanded: sessions cannot feel time and "
+        "default to bailing when prior attempts show failures"
+    )
+    assert "refused as an unverified self-report" in unwrapped, (
+        "the brief must disclose that the executor verifies wall claims against "
+        "its own clock, or the refusal reads as a surprise punishment"
+    )
+    assert "`now` and `remaining_seconds`" in unwrapped, (
+        "the brief must tell the session to cite its clock observation"
+    )
+    from menagerie.crawler.author_executor import (
+        WALL_CLAIM_MIN_OBSERVED_FRACTION,
+    )
+
+    assert "less than half the grant" in unwrapped
+    assert WALL_CLAIM_MIN_OBSERVED_FRACTION == 0.5, (
+        "the brief says 'less than half'; if the executor's refusal threshold "
+        "moves, the disclosed rule is lying to the one attempt each author gets"
+    )
+
+
+@pytest.mark.smoke
+def test_the_clock_observation_is_granted_where_it_is_commanded() -> None:
+    """The commanded clock is the granted calculator, and it really tells time.
+
+    The rung-8 census root-caused the bail epidemic to an unobservable clock:
+    the stage allowlist grants exactly ONE command, ``date`` auto-denies, and
+    the deadline ISO in JOB FACTS is unusable relative to "now". The fix is a
+    ``--clock`` mode on the already-granted calculator, so the brief line, the
+    permission grant, and the running tool must all name one program.
+    """
+
+    import subprocess
+    import sys
+
+    from menagerie.crawler.author_executor import identity_tool_command
+
+    facts_source = (_CRAWLER_ROOT / "author_executor.py").read_text(encoding="utf-8")
+    assert "--clock --deadline" in facts_source, (
+        "the JOB FACTS clock line must render the exact runnable invocation"
+    )
+    assert "attempt started:" in facts_source, (
+        "the brief must carry the start instant as a duration anchor, not only "
+        "a deadline instant the session cannot relate to now"
+    )
+
+    command = identity_tool_command().split(" ", 1)
+    completed = subprocess.run(
+        [command[0], command[1], "--clock", "--deadline", "2099-01-01T00:00:00Z"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    report = json.loads(completed.stdout)
+    assert set(report) == {"now", "deadline", "remaining_seconds"}
+    assert report["remaining_seconds"] > 0
+    assert report["now"].endswith("Z")
+    assert sys.executable  # the grant pins this interpreter; presence sanity
+
     reason = json.loads(
         (_SCHEMA_DIR / "author-result-v4.schema.json").read_text(encoding="utf-8")
     )["$defs"]["blocked_payload"]["properties"]["reason_code"]["description"]
@@ -738,9 +806,85 @@ def test_the_digest_tool_rule_is_stated_in_the_stage_brief() -> None:
     """
 
     stage2 = " ".join(_STAGE2_PROMPT.read_text(encoding="utf-8").split())
-    assert "`sha256sum`" in stage2, "a concrete tool must be named"
     assert "A digest written from memory" in stage2
     assert "matched no bytes anywhere" in stage2, (
         "the m10517 failure shape must be described so the instruction reads as "
         "load-bearing rather than pedantry"
+    )
+    # Rung 8 (m8189) proved the OLD instruction was a structural contradiction:
+    # it named ``sha256sum``, the allowlist denies it, and the session -- unable
+    # to run any hash at all -- published eight sequential placeholder digests
+    # over byte-perfect excerpts. The instructed tool must now be the GRANTED
+    # calculator, with ``sha256sum`` named only as the denied trap.
+    assert "--hash-file" in stage2, (
+        "the brief must instruct the granted hash mode; instructing a denied "
+        "command is a wall, not a rule"
+    )
+    assert "--hash-string" in stage2
+    assert "`sha256sum` is **not granted**" in stage2, (
+        "the previously-instructed denied command must be disarmed explicitly"
+    )
+    assert "`sha256_without_trailing_newline`" in stage2, (
+        "the one observed real mismatch class (a tool-appended trailing newline) "
+        "must be disclosed beside the instruction"
+    )
+
+
+@pytest.mark.smoke
+def test_the_instructed_hash_mode_is_the_granted_calculator_and_it_runs() -> None:
+    """The digest instruction names the ONE granted command, and it hashes.
+
+    The failure this prevents is exactly m8189's: an instruction whose tool the
+    allowlist denies is worse than no instruction, because the session trusts
+    it, burns turns on denials, and then fabricates. So the instructed spelling
+    must be the calculator the grant pins, and a live run must produce the same
+    digest the evidence validator would recompute.
+    """
+
+    import hashlib
+    import subprocess
+
+    from menagerie.crawler.author_executor import identity_tool_command
+
+    text = "exact excerpt bytes  with an odd space"
+    command = identity_tool_command().split(" ", 1)
+    completed = subprocess.run(
+        [command[0], command[1], "--hash-string", text],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    report = json.loads(completed.stdout)
+    expected = "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
+    assert report["sha256"] == expected, (
+        "the granted hash mode must produce exactly the digest the evidence "
+        "validator recomputes from the text field's UTF-8 bytes"
+    )
+
+
+@pytest.mark.smoke
+def test_the_retrieved_at_machine_derivation_is_stated_where_the_author_reads() -> None:
+    """``retrieved_at`` is disclosed as machine-derived on both author surfaces.
+
+    WALLS_DOCKET W-6: the honest value already exists on the broker's own
+    resolver receipt, and every author invention of a timestamp is false
+    provenance waiting for the echo check to start biting. The broker stamps
+    the manifest row; the author's whole job is a verbatim copy, and that rule
+    must be stated in the stage brief AND on the schema leaf the author reads.
+    """
+
+    stage2 = " ".join(_STAGE2_PROMPT.read_text(encoding="utf-8").split())
+    assert "`retrieved_at` verbatim" in stage2, (
+        "the brief must command copying the manifest row's machine timestamp"
+    )
+    assert "invented or estimated timestamp" in stage2
+
+    common = _schema("model-common.schema.json")
+    description = common["$defs"]["source"]["properties"]["retrieved_at"]["description"]
+    assert "Machine-derived" in description
+    assert "verbatim" in description, (
+        "the schema leaf must say the value is a verbatim copy of the manifest "
+        "row, or a session reading only the schema will keep inventing one"
     )
