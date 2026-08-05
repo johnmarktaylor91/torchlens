@@ -2443,8 +2443,12 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
         The ladder, in order, is deliberate. A terminal that landed before its progress
         bookkeeping refused is NOT re-appended: superseding a correct record with a
         worse one would lose the very fact just recorded. Otherwise one minimal retry is
-        made with the same disposition but no artifact, attempts or derived evidence,
-        since those are the parts that can refuse; it is flagged for human review and
+        made with the same disposition but no artifact or derived evidence, since those
+        are the parts that can refuse; the already-persisted attempt records are KEPT,
+        because the reducer derives terminal authority from the ledger either way and an
+        attempt-free record contradicts that authority (its placeholder environment
+        generation refuses against the proof's real one) whenever an
+        environment-carrying attempt exists. The retry is flagged for human review and
         cannot publish anything. If even that refuses, the model is reported on the
         operational ledger, because an unrecordable model is itself a fact and must not
         become a silent hole in the catalog. No rung can turn a failure into a pass:
@@ -2516,7 +2520,20 @@ class CrawlerDriver(AdmissionEnvironmentMixin, ReceiptDriverMixin):
                 status_code,
                 reason_code,
                 fallback_detail,
-                (),
+                # The SAME already-persisted attempt records, artifact dropped.
+                # Passing `()` here made the minimal rung UNRECORDABLE for every
+                # model with a persisted environment-carrying attempt: the
+                # reducer derives the terminal proof from the LEDGER regardless
+                # of what this record names, so the placeholder
+                # ``execution.env_generation`` an attempt-free assembly stamps
+                # contradicts the proof's real generation and the one rung that
+                # exists to survive bookkeeping failures refused
+                # deterministically (rung 9: three consecutive models, campaign
+                # halt). These records are reducer-blessed machine facts --
+                # every caller passes attempts returned by
+                # ``reducer.append_attempt`` -- so re-naming them cannot refuse
+                # for the artifact-derived reasons this rung drops.
+                attempts,
                 reducer,
                 operational,
                 state,

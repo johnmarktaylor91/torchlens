@@ -22,6 +22,10 @@ from menagerie.crawler.constants import (
     GateKind,
 )
 from menagerie.crawler.identity import hash_bytes, stable_hash
+from menagerie.crawler.metadata import (
+    MetadataValidationError,
+    validate_authored_facts_for_write,
+)
 from menagerie.crawler.models import JsonObject, bounded_json_repr
 from menagerie.crawler.operator_protocol import build_operator_fields
 from menagerie.crawler.proposal import (
@@ -772,6 +776,8 @@ def validate_checker_result_mapping(
         seen.add(stable_id)
         _validate_item_binding(result_item, expected)
         _validate_item_decision(result_item, GateKind(str(normalized["gate_kind"])))
+        if normalized.get("gate_kind") == GateKind.METADATA_BATCH.value:
+            _validate_item_write_contract(result_item, expected)
     expected_hash = compute_result_envelope_sha256(normalized)
     if normalized.get("result_envelope_sha256") != expected_hash:
         raise CheckerDispatchError("result_envelope_sha256 does not bind the complete gate result")
@@ -1290,6 +1296,69 @@ def _validate_item_decision(result_item: Mapping[str, Any], gate_kind: GateKind)
         raise CheckerDispatchError(
             f"top-level verdict {verdict.value!r} contradicts component verdict {expected.value!r}"
         )
+
+
+def _validate_item_write_contract(
+    result_item: Mapping[str, Any], envelope_item: Mapping[str, Any]
+) -> None:
+    """Replay the canonical-write contract on a write-eligible metadata item.
+
+    A fully accurate metadata item is a promise that canonical write will accept
+    the authored facts against this exact gate item. Rung 9 broke that promise:
+    one batch checker emitted every ``field_checks`` row with EMPTY
+    ``checked_source_ids``, the gate schema's plain ``string_array`` let it
+    publish, and the refusal surfaced only inside
+    :func:`menagerie.crawler.metadata.validate_authored_facts_for_write` at
+    terminal recording -- where the exact same poisoned gate also poisons the
+    terminal fallback, so three consecutive models became unrecordable and the
+    campaign halted with nine models stranded.
+
+    The enforcement here IS the write-time validator, replayed against the same
+    proposal bytes the envelope binds -- not a parallel re-implementation that
+    could drift. A refusal is a structural contract violation, so the operator
+    lane's bounded re-ask feeds the exact error back to the checker (observed
+    live: the same checker emitted complete ``checked_source_ids`` on its
+    single-item repair rounds), and a second refusal exits as the same permanent
+    contract rejection as every other shape violation.
+
+    Items carrying ANY adverse verdict are exempt on purpose: they are never
+    write-eligible (``metadata_accepted`` requires all three verdicts accurate),
+    they route to the bounded repair loop, and the write-time validator itself
+    refuses them as "metadata gate is not accurate" -- replaying it here would
+    turn honest adverse publications into contract rejections.
+
+    Parameters
+    ----------
+    result_item:
+        Schema-valid, machine-stamped metadata gate item.
+    envelope_item:
+        Matching envelope item carrying the bound proposal.
+
+    Raises
+    ------
+    CheckerDispatchError
+        If a fully accurate item would refuse at canonical write.
+    """
+
+    if not (
+        result_item.get("verdict") == AccuracyVerdict.ACCURATE.value
+        and result_item.get("integrity", {}).get("verdict") == AccuracyVerdict.ACCURATE.value
+        and result_item.get("rung_check", {}).get("verdict") == AccuracyVerdict.ACCURATE.value
+    ):
+        return
+    proposal = envelope_item.get("proposal")
+    facts = proposal.get("proposed_facts") if isinstance(proposal, Mapping) else None
+    if not isinstance(facts, Mapping):
+        raise CheckerDispatchError(
+            "metadata envelope item lacks the proposal facts its write contract binds"
+        )
+    try:
+        validate_authored_facts_for_write(facts, result_item)
+    except MetadataValidationError as exc:
+        raise CheckerDispatchError(
+            f"fully accurate metadata item {result_item.get('stable_id')} would refuse "
+            f"at canonical write: {exc}"
+        ) from exc
 
 
 def _read_prompt() -> bytes:
