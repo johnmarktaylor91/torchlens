@@ -53,6 +53,7 @@ from menagerie.crawler.reducer import CanonicalReducer, ReductionError
 from menagerie.crawler.schema import PayloadValidationError, validate_payload
 from menagerie.crawler.tests.conftest import (
     HASH,
+    _model_facts,
     make_authority_context,
     make_attempt,
     make_author_proposal,
@@ -115,7 +116,10 @@ def _checker_item_pack(item: dict[str, Any]) -> dict[str, Any]:
         "verified_hashes": deepcopy(item["verified_hashes"]),
         "proposal": {
             "description": "scoped test proposal",
-            "proposed_facts": {"implementation": {"code_path": None}},
+            # The SAME deterministic facts the shared gate fixture derived its
+            # field checks from, so a fully accurate item is write-conformant
+            # under the rung-9 dispatch-time write-contract replay.
+            "proposed_facts": _model_facts(make_model(item["stable_id"], accepted=True)),
         },
         "source_manifest": {"sources": []},
         "evidence": {"excerpts": []},

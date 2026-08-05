@@ -51,7 +51,7 @@ from menagerie.crawler.operator_protocol import (
     status_sidecar_path,
     telemetry_path,
 )
-from menagerie.crawler.tests.conftest import make_gate
+from menagerie.crawler.tests.conftest import _model_facts, make_gate, make_model
 from menagerie.crawler.tools.checker_latency import build_report, iter_attempt_records
 
 
@@ -79,7 +79,12 @@ def _checker_item_pack(item: dict[str, Any]) -> dict[str, Any]:
         "verified_hashes": deepcopy(item["verified_hashes"]),
         "proposal": {
             "description": "scoped checker wrapper test",
-            "proposed_facts": {"implementation": {"code_path": None}},
+            # The SAME deterministic facts the shared gate fixture derived its
+            # field checks from. The old `{"implementation": {"code_path": None}}`
+            # stub silently disagreed with the gate fixture about the proposal;
+            # the write-contract replay on fully accurate items (the rung-9 fix)
+            # makes that disagreement a refusal, exactly as it would be live.
+            "proposed_facts": _model_facts(make_model(item["stable_id"], accepted=True)),
         },
         "source_manifest": {"sources": []},
         "evidence": {"excerpts": []},
