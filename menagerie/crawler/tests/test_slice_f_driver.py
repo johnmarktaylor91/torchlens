@@ -163,6 +163,7 @@ from menagerie.crawler.fetcher import (
     FetchHashMismatchError,
     FetchRetrievalError,
     UnpinnedTargetError,
+    cas_path as source_cas_object_path,
     fetch_targets as controlled_fetch_targets,
 )
 from menagerie.crawler.metadata import recompute_accepted_identities
@@ -551,6 +552,16 @@ class ScriptedAuthor(AuthorLane):
         source_manifest_row["cas_path"] = str(source_path)
         source_manifest: dict[str, Any] = {"sources": [source_manifest_row]}
         attach_paper_evidence(proposal, source_manifest, source_path.parent)
+        # The validator resolves reads digest-derived under the cas_root it is
+        # handed (recorded cas_path values are metadata, not read authority), so
+        # the fake attempt mirrors every manifest object into the real layout.
+        for manifest_row in source_manifest["sources"]:
+            cas_object = source_cas_object_path(
+                source_path.parent, str(manifest_row["content_sha256"])
+            )
+            cas_object.parent.mkdir(parents=True, exist_ok=True)
+            if not cas_object.exists():
+                cas_object.write_bytes(Path(str(manifest_row["cas_path"])).read_bytes())
         source_manifest["manifest_sha256"] = stable_hash(source_manifest["sources"])
         proposal["source_manifest_identity"] = source_manifest["manifest_sha256"]
         proposal["verified_hashes"]["source_manifest"] = source_manifest["manifest_sha256"]

@@ -2336,7 +2336,11 @@ def _supplement_grounding_rows(attempt: AttemptHandle) -> Optional[list[JsonObje
     its fetch) but no CAS placement -- the driver promotes those bytes into the
     model's CAS only after the executor exits. For the pre-publication replay
     the same bytes are still sitting in the attempt's own broker evidence
-    directory, so each row is pointed there. This is fail-closed by
+    directory, so each row is pointed there through the in-process
+    ``unpromoted_read_path`` channel (NOT ``cas_path``: recorded CAS paths are
+    metadata the readers no longer dereference when a governing ``cas_root`` is
+    supplied, while the unpromoted channel is honored precisely because it is
+    constructed per-run and never persisted). This is fail-closed by
     construction: the evidence reader re-hashes whatever the path holds against
     ``content_sha256`` and refuses a mismatch, so a wrong or tampered blob can
     never ground an excerpt.
@@ -2370,7 +2374,7 @@ def _supplement_grounding_rows(attempt: AttemptHandle) -> Optional[list[JsonObje
             entry["content_sha256"] = digest
             candidate = evidence_dir / f"{digest.removeprefix('sha256:')[:16]}.bin"
             if candidate.is_file():
-                entry["cas_path"] = str(candidate)
+                entry["unpromoted_read_path"] = str(candidate)
         grounded.append(entry)
     return grounded
 

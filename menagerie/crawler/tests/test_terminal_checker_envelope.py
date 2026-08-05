@@ -45,6 +45,7 @@ from menagerie.crawler.driver_contracts import (
     RetryableOperatorError,
 )
 from menagerie.crawler.driver_models import _terminal_checker_item
+from menagerie.crawler.fetcher import cas_path as source_cas_object_path
 from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.operator_checker import TERMINAL_CHECKER_MODEL
 from menagerie.crawler.operator_protocol import status_sidecar_path
@@ -96,11 +97,13 @@ def _stage_sources(author_root: Path) -> dict[str, Any]:
     """Write both frozen sources into the CAS and return their manifest."""
 
     cas_root = author_root / "source-cas"
-    cas_root.mkdir(parents=True, exist_ok=True)
     rows = []
     for source_id, content in (("source-1", SOURCE_ONE_BYTES), ("source-2", SOURCE_TWO_BYTES)):
         digest = hash_bytes(content)
-        path = cas_root / f"{digest.removeprefix('sha256:')}.source"
+        # Fetched sources live at their digest-derived CAS location, which is
+        # where a governing cas_root resolves reads.
+        path = source_cas_object_path(cas_root, digest)
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(content)
         rows.append(
             {

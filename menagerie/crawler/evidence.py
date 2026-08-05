@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import AbstractSet, Any, Iterable, Mapping, Optional, Sequence, Union
 
-from menagerie.crawler.fetcher import cas_path
+from menagerie.crawler.fetcher import UnpinnedTargetError, cas_path
 from menagerie.crawler.identity import hash_bytes
 from menagerie.crawler.source_broker import (
     OUTCOME_PAPER_DERIVATION_ONLY,
@@ -186,7 +186,8 @@ def validate_evidence(
     required_claims:
         Every gated claim category that must have literal support.
     cas_root:
-        Optional CAS root used when manifests do not contain ``cas_path``.
+        Optional governing CAS root; when provided every source read resolves
+        digest-derived beneath it and recorded ``cas_path`` values are ignored.
     require_family_grounding:
         Whether a family-level grounding excerpt is mandatory.
     declared_absences:
@@ -565,7 +566,12 @@ def _read_source(source: Mapping[str, Any], cas_root: Union[str, Path, None]) ->
     source:
         Source manifest row.
     cas_root:
-        Fallback CAS root.
+        Governing CAS root. When provided, resolution is digest-derived under
+        this root and the row's recorded ``cas_path`` is provenance metadata
+        only -- it is never dereferenced, so a manifest frozen on another host
+        (or against a since-pruned working tree) stays readable wherever its
+        CAS objects were relocated. When absent, the recorded path is the only
+        available authority and current behavior stands.
 
     Returns
     -------
@@ -581,13 +587,27 @@ def _read_source(source: Mapping[str, Any], cas_root: Union[str, Path, None]) ->
     digest = source.get("content_sha256")
     if not isinstance(digest, str):
         raise EvidenceValidationError("source content_sha256 is missing")
-    path_value = source.get("cas_path")
-    if isinstance(path_value, str) and path_value:
-        path = Path(path_value)
+    override = source.get("unpromoted_read_path")
+    if isinstance(override, str) and override:
+        # In-process grounding channel for bytes a trusted caller holds OUTSIDE
+        # the CAS: the executor's pre-publication replay reads supplement bytes
+        # from the attempt's broker evidence directory before the driver
+        # promotes them. The key is constructed per-run and never persisted in
+        # artifacts, and the rehash below refuses wrong bytes regardless.
+        path = Path(override)
     elif cas_root is not None:
-        path = cas_path(cas_root, digest)
+        try:
+            path = cas_path(cas_root, digest)
+        except UnpinnedTargetError as exc:
+            raise EvidenceValidationError(
+                f"source content_sha256 is not a canonical digest: {digest}"
+            ) from exc
     else:
-        raise EvidenceValidationError("source manifest has no CAS path")
+        path_value = source.get("cas_path")
+        if isinstance(path_value, str) and path_value:
+            path = Path(path_value)
+        else:
+            raise EvidenceValidationError("source manifest has no CAS path")
     try:
         content = path.read_bytes()
     except OSError as exc:

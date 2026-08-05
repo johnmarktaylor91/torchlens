@@ -19,6 +19,7 @@ from menagerie.crawler.evidence import (
     fetched_sources_for_checked_links,
     validate_evidence,
 )
+from menagerie.crawler.fetcher import UnpinnedTargetError
 from menagerie.crawler.fetcher import cas_path as source_cas_path
 from menagerie.crawler.identity import hash_bytes
 from menagerie.crawler.metadata import (
@@ -2308,7 +2309,11 @@ def _validate_author_read_grants(facts: Mapping[str, Any], allowed_dir: Path) ->
     sources = resolution.get("sources")
     if not isinstance(sources, list):
         raise ProposalValidationError("source_resolution.sources must be a list")
-    if any(isinstance(source, Mapping) and "cas_path" in source for source in sources):
+    if any(
+        isinstance(source, Mapping)
+        and ("cas_path" in source or "unpromoted_read_path" in source)
+        for source in sources
+    ):
         raise ProposalValidationError(
             "source_resolution.sources cannot carry author-controlled CAS paths"
         )
@@ -3029,7 +3034,8 @@ def _source_cas_contains_implementation(
     source:
         Controlled-fetch manifest row.
     cas_root:
-        Optional CAS root for manifests without an explicit object path.
+        Optional governing CAS root; when provided the object resolves
+        digest-derived beneath it and any recorded ``cas_path`` is ignored.
     linkage_terms:
         Normalized model/family symbols required for relevance.
 
@@ -3044,16 +3050,30 @@ def _source_cas_contains_implementation(
         If fetched bytes are absent or no longer match their declared digest.
     """
 
-    path_value = source.get("cas_path")
     digest = source.get("content_sha256")
     if not isinstance(digest, str):
         raise ProposalValidationError("fetched source manifest has no content_sha256")
-    if isinstance(path_value, str) and path_value:
-        path = Path(path_value)
+    override = source.get("unpromoted_read_path")
+    if isinstance(override, str) and override:
+        # In-process grounding channel (see ``evidence._read_source``): bytes a
+        # trusted caller holds outside the CAS, digest-verified below as always.
+        path = Path(override)
     elif cas_root is not None:
-        path = source_cas_path(cas_root, digest)
+        # The caller's CAS root GOVERNS: resolution is digest-derived, never the
+        # manifest's recorded absolute ``cas_path`` -- recorded paths are
+        # provenance metadata pinned to the machine that froze them.
+        try:
+            path = source_cas_path(cas_root, digest)
+        except UnpinnedTargetError as exc:
+            raise ProposalValidationError(
+                f"R4 source inventory content_sha256 is not a canonical digest: {digest}"
+            ) from exc
     else:
-        raise ProposalValidationError("R4 source inventory has no inspectable CAS path")
+        path_value = source.get("cas_path")
+        if isinstance(path_value, str) and path_value:
+            path = Path(path_value)
+        else:
+            raise ProposalValidationError("R4 source inventory has no inspectable CAS path")
     if not _cas_object_matches_digest(path, digest):
         raise ProposalValidationError(f"R4 source inventory CAS object does not match {digest}")
     try:
