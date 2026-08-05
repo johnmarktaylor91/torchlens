@@ -1027,6 +1027,24 @@ class ScriptedChecker(CheckerLane):
             if isinstance(result, BlockedRecommendation)
             else "SKIP_RECOMMENDATION"
         )
+        if isinstance(result, BlockedRecommendation):
+            terminal_source_ids = [
+                str(source["source_id"])
+                for source in artifact.source_manifest["sources"]
+            ]
+            if self.script.terminal_verdict is not None:
+                evidence_source_by_id = {
+                    str(record["evidence_id"]): str(record["source_id"])
+                    for record in result.evidence_records
+                }
+                terminal_source_ids = sorted(
+                    {
+                        evidence_source_by_id[evidence_id]
+                        for evidence_id in result.evidence_ids
+                    }
+                )
+        else:
+            terminal_source_ids = list(result.source_ids)
         gate = make_gate(
             [binding.stable_id],
             gate_id=f"gate-terminal-{binding.stable_id}",
@@ -1058,14 +1076,7 @@ class ScriptedChecker(CheckerLane):
             "predicate": predicate,
             "verdict": self.script.terminal_verdict or "accepted",
             "source_manifest_identity": binding.source_manifest_identity,
-            "source_ids": (
-                [
-                    str(source["source_id"])
-                    for source in artifact.source_manifest["sources"]
-                ]
-                if isinstance(result, BlockedRecommendation)
-                else list(result.source_ids)
-            ),
+            "source_ids": terminal_source_ids,
             "evidence_identity": result.evidence_identity,
             "evidence_ids": list(result.evidence_ids),
             "license_identity": result.license_identity,
@@ -7444,6 +7455,15 @@ _BLOCKED_SOURCE_PAYLOAD: dict[str, Any] = {
     "reason_code": "missing-material-source",
     "prerequisite_ids": ["faithful-torch-implementation-at-pinned-revision"],
     "evidence_ids": ["source-1"],
+    "evidence_records": [
+        {
+            "evidence_id": "source-1",
+            "source_id": "source-1",
+            "locator": "fixture source",
+            "text": _EXECUTOR_LANE_SOURCE.decode("utf-8"),
+            "supports": ["blocked-prerequisite"],
+        }
+    ],
     "evidence_identity": "sha256:" + "3" * 64,
     "license_identity": "sha256:" + "4" * 64,
 }
