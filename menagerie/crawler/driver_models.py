@@ -1379,12 +1379,25 @@ def _redact_terminal_detail(
     return reference
 
 
+#: Failure stages that can only be reached AFTER the author lane published a complete
+#: result: the proposal existed and a later machine stage refused it. A placeholder
+#: that blames the author lane for one of these blames the one stage that worked --
+#: exactly the standard the BLOCKED/DEFER arms already enforce when they rewrite the
+#: placeholder's ``author-lane-failed`` entry (rung 7: m9666/m9819 published valid R1
+#: proposals, died at ``failed:evidence``, and their records said the author lane
+#: failed).
+_POST_AUTHOR_FAILURE_STAGES: frozenset[str] = frozenset(
+    {"evidence", "accuracy-gate", "environment", "runner"}
+)
+
+
 def _placeholder_facts(
     item: WorkItem,
     created_at: str,
     *,
     source: Optional[Mapping[str, Any]] = None,
     reason_code: Optional[str] = None,
+    failing_stage: Optional[str] = None,
 ) -> JsonObject:
     """Build unresolved facts using only a retained exact model source, if any.
 
@@ -1408,22 +1421,41 @@ def _placeholder_facts(
     reason_code:
         Closed failure reason that produced this terminal, used to keep the recorded
         narrative honest about why no rung was selected.
+    failing_stage:
+        Stage named by the terminal's ``failed:<stage>`` status, when there is one.
+        The attempt entry blames THAT stage: hardcoding ``author-lane-failed`` for
+        every non-exhaustion failure blamed the author lane for terminals the author
+        lane demonstrably survived.
     """
 
     exact_source = deepcopy(dict(source)) if isinstance(source, Mapping) else None
     cap_exhausted = reason_code == "effort-cap-exhausted" or bool(
         reason_code and reason_code.startswith("effort-exhausted:")
     )
+    post_author = failing_stage in _POST_AUTHOR_FAILURE_STAGES
     decision = (
         "the author session exhausted its effort grant before a rung was selected"
         if cap_exhausted
+        else f"the {failing_stage} stage failed after the author published; "
+        "no rung was adjudicated"
+        if post_author
         else "source resolution did not complete"
     )
-    attempt_reason = reason_code if cap_exhausted else "author-lane-failed"
+    attempt_reason = (
+        reason_code
+        if cap_exhausted
+        else f"{failing_stage}-lane-failed"
+        if failing_stage
+        else "author-lane-failed"
+    )
     conclusion = (
         "The author session ran out of its effort grant. No bounded search concluded "
         "that source is unavailable; this model is unfinished, not unresolvable."
         if cap_exhausted
+        else f"The author lane published a complete result; the {failing_stage} stage "
+        "then failed, and unadjudicated proposed facts are not retained on a failed "
+        "terminal."
+        if post_author
         else "The model-local lane failed before source resolution completed."
     )
     if exact_source is None and item.discovery_source_url is not None:
@@ -1639,6 +1671,12 @@ def _assemble_terminal_model(
 
     proposed = artifact is not None and isinstance(artifact.author_result, ProposedAuthorResult)
     proposal = artifact.proposal if proposed and artifact is not None else {}
+    # The stage the terminal status itself names. Threaded into the placeholder so
+    # its attempt entry blames the stage that actually failed rather than
+    # hardcoding `author-lane-failed` for terminals the author lane survived.
+    failing_stage = (
+        status_code.removeprefix("failed:") if status_code.startswith("failed:") else None
+    )
     terminal_source = None
     if artifact is not None and not proposed:
         raw_sources = artifact.source_manifest.get("sources", [])
@@ -1655,7 +1693,11 @@ def _assemble_terminal_model(
         deepcopy(dict(proposal["proposed_facts"]))
         if proposed and artifact is not None
         else _placeholder_facts(
-            item, created_at, source=terminal_source, reason_code=reason_code
+            item,
+            created_at,
+            source=terminal_source,
+            reason_code=reason_code,
+            failing_stage=failing_stage,
         )
     )
     facts = deepcopy(raw_facts)
@@ -2038,7 +2080,11 @@ def _assemble_terminal_model(
         )
         if proposed or artifact is None:
             facts = _placeholder_facts(
-                item, created_at, source=exact_source, reason_code=reason_code
+                item,
+                created_at,
+                source=exact_source,
+                reason_code=reason_code,
+                failing_stage=failing_stage,
             )
 
     fidelity_gate = _find_gate(
