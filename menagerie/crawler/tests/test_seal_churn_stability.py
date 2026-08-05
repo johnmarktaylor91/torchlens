@@ -30,6 +30,8 @@ from menagerie.crawler.authority import (
 )
 from menagerie.crawler.tests.conftest import hardlink_bytes
 
+pytestmark = pytest.mark.smoke
+
 _ScanResult = tuple[
     tuple[EnvironmentContentEntry, ...],
     tuple[EnvironmentExternalTarget, ...],

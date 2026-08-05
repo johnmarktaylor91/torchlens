@@ -56,6 +56,8 @@ from menagerie.crawler.driver_admission import (
 from menagerie.crawler.identity import stable_hash
 from menagerie.crawler.schema import validate_payload
 
+pytestmark = pytest.mark.smoke
+
 # The exact author block m3671 published, and the exact one the driver's authority
 # context hashed. They differ in ONE field. `model` matched: the author guessed the
 # campaign's tier model correctly and the prompt digest was disclosed to it in
