@@ -896,14 +896,17 @@
                     "description": "Exact URL checked."
                   },
                   "disposition": {
-                    "const": "unfetchable-by-policy",
-                    "description": "Typed policy refusal; valid only when the broker receipt for this URL records unfetchable-by-policy or redirect-refused."
+                    "enum": [
+                      "unfetchable-by-policy",
+                      "paper-derivation-only"
+                    ],
+                    "description": "Typed non-byte checked-link outcome; valid only when the broker receipt for this URL records the matching outcome. Policy refusal also accepts redirect-refused."
                   }
                 }
               }
             ]
           },
-          "description": "Mandatory exact content URLs checked. For R2/R4 every string entry must bind to fetched, hash-inventoried CAS bytes; an HTTP or otherwise policy-refused link may instead be typed as {url, disposition:\"unfetchable-by-policy\"} and is accepted only with a matching broker receipt."
+          "description": "Mandatory exact content URLs checked. For R2/R4 every string entry must bind to fetched, hash-inventoried CAS bytes; a broker-proven non-byte outcome may instead be typed as {url, disposition:\"unfetchable-by-policy\"} or {url, disposition:\"paper-derivation-only\"} and is accepted only with a matching broker receipt."
         },
         "languages_checked": {
           "$ref": "#/$defs/string_array",

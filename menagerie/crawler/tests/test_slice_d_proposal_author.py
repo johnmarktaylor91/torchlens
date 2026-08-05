@@ -44,6 +44,10 @@ from menagerie.crawler.proposal import (
     model_code_manifest,
     validate_author_proposal,
 )
+from menagerie.crawler.source_broker import (
+    OUTCOME_PAPER_DERIVATION_ONLY,
+    OUTCOME_UNFETCHABLE_BY_POLICY,
+)
 from menagerie.crawler.tests.conftest import (
     attach_paper_evidence,
     bind_handoff_execution,
@@ -1474,7 +1478,10 @@ def test_r4_policy_unfetchable_checked_link_binds_to_broker_receipt(tmp_path: Pa
         "    return (), {}\n"
     )
     _make_r4(proposal, manifest, tmp_path, code)
-    policy_link = {"url": "http://code.example.org/example-net", "disposition": "unfetchable-by-policy"}
+    policy_link = {
+        "url": "http://code.example.org/example-net",
+        "disposition": OUTCOME_UNFETCHABLE_BY_POLICY,
+    }
     proposal["proposed_facts"]["source_resolution"]["search_report"]["links_checked"].append(
         policy_link
     )
@@ -1483,7 +1490,7 @@ def test_r4_policy_unfetchable_checked_link_binds_to_broker_receipt(tmp_path: Pa
             {
                 "url": "http://code.example.org/example-net",
                 "final_url": None,
-                "outcome": "unfetchable-by-policy",
+                "outcome": OUTCOME_UNFETCHABLE_BY_POLICY,
             }
         ]
     }
@@ -1497,6 +1504,56 @@ def test_r4_policy_unfetchable_checked_link_binds_to_broker_receipt(tmp_path: Pa
     assert report.rung.value == "R4_REIMPLEMENT"
 
     manifest["broker"]["outcomes"] = []
+    with pytest.raises(ProposalValidationError, match="matching broker receipt"):
+        validate_author_proposal(
+            proposal,
+            allowed_model_dir=tmp_path,
+            source_manifest=manifest,
+        )
+
+
+def test_r4_paper_derivation_only_checked_link_binds_to_broker_receipt(
+    tmp_path: Path,
+) -> None:
+    """A paper abs link may be reported only with a matching derivation receipt."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    code = (
+        "def build_model() -> object:\n"
+        "    return object()\n\n"
+        "def make_dummy_call(seed: int, device: str) -> tuple[tuple[()], dict[str, object]]:\n"
+        "    return (), {}\n"
+    )
+    _make_r4(proposal, manifest, tmp_path, code)
+    paper_url = "https://arxiv.org/abs/2103.16302"
+    citation_link = {"url": paper_url, "disposition": OUTCOME_PAPER_DERIVATION_ONLY}
+    proposal["proposed_facts"]["source_resolution"]["search_report"]["links_checked"].append(
+        citation_link
+    )
+    manifest["broker"] = {
+        "outcomes": [
+            {
+                "url": paper_url,
+                "final_url": None,
+                "outcome": OUTCOME_PAPER_DERIVATION_ONLY,
+            }
+        ]
+    }
+
+    report = validate_author_proposal(
+        proposal,
+        allowed_model_dir=tmp_path,
+        source_manifest=manifest,
+    )
+
+    assert report.rung.value == "R4_REIMPLEMENT"
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    _make_r4(proposal, manifest, tmp_path, code)
+    proposal["proposed_facts"]["source_resolution"]["search_report"]["links_checked"].append(
+        citation_link
+    )
+    manifest["broker"] = {"outcomes": []}
     with pytest.raises(ProposalValidationError, match="matching broker receipt"):
         validate_author_proposal(
             proposal,

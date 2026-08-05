@@ -9,13 +9,18 @@ from typing import AbstractSet, Any, Iterable, Mapping, Optional, Sequence, Unio
 
 from menagerie.crawler.fetcher import cas_path
 from menagerie.crawler.identity import hash_bytes
-from menagerie.crawler.source_broker import OUTCOME_UNFETCHABLE_BY_POLICY
-
-
-POLICY_CHECKED_LINK_DISPOSITIONS = frozenset({"unfetchable-by-policy"})
-POLICY_CHECKED_LINK_OUTCOMES = frozenset(
-    {OUTCOME_UNFETCHABLE_BY_POLICY, "redirect-refused"}
+from menagerie.crawler.source_broker import (
+    OUTCOME_PAPER_DERIVATION_ONLY,
+    OUTCOME_UNFETCHABLE_BY_POLICY,
 )
+
+
+CHECKED_LINK_RECEIPT_OUTCOMES_BY_DISPOSITION = {
+    OUTCOME_UNFETCHABLE_BY_POLICY: frozenset(
+        {OUTCOME_UNFETCHABLE_BY_POLICY, "redirect-refused"}
+    ),
+    OUTCOME_PAPER_DERIVATION_ONLY: frozenset({OUTCOME_PAPER_DERIVATION_ONLY}),
+}
 
 
 class EvidenceValidationError(ValueError):
@@ -394,7 +399,7 @@ def fetched_sources_for_checked_links(
     bound: list[Mapping[str, Any]] = []
     for link in links:
         if isinstance(link, Mapping):
-            _validate_policy_checked_link(link, receipts_by_url)
+            _validate_receipt_bound_checked_link(link, receipts_by_url)
             continue
         assert isinstance(link, str)
         matches = sources_by_url.get(link, [])
@@ -441,7 +446,7 @@ def _checked_link_url(link: object) -> Optional[str]:
         isinstance(url, str)
         and url.strip()
         and isinstance(disposition, str)
-        and disposition in POLICY_CHECKED_LINK_DISPOSITIONS
+        and disposition in CHECKED_LINK_RECEIPT_OUTCOMES_BY_DISPOSITION
     ):
         return url
     return None
@@ -480,11 +485,11 @@ def _broker_receipts_by_url(
     return indexed
 
 
-def _validate_policy_checked_link(
+def _validate_receipt_bound_checked_link(
     link: Mapping[str, Any],
     receipts_by_url: Mapping[str, Sequence[Mapping[str, Any]]],
 ) -> None:
-    """Require a policy-typed checked link to be backed by a broker receipt.
+    """Require a typed checked link disposition to be backed by a broker receipt.
 
     Parameters
     ----------
@@ -496,21 +501,22 @@ def _validate_policy_checked_link(
     Raises
     ------
     EvidenceValidationError
-        If no matching broker receipt proves the policy refusal.
+        If no matching broker receipt proves the non-byte checked-link outcome.
     """
 
     url = str(link["url"])
     disposition = str(link["disposition"])
-    if disposition not in POLICY_CHECKED_LINK_DISPOSITIONS:
+    receipt_outcomes = CHECKED_LINK_RECEIPT_OUTCOMES_BY_DISPOSITION.get(disposition)
+    if receipt_outcomes is None:
         raise EvidenceValidationError(f"checked search link disposition is unsupported: {url}")
     matches = [
         receipt
         for receipt in receipts_by_url.get(url, ())
-        if receipt.get("outcome") in POLICY_CHECKED_LINK_OUTCOMES
+        if receipt.get("outcome") in receipt_outcomes
     ]
     if len(matches) != 1:
         raise EvidenceValidationError(
-            "checked search link policy disposition lacks a matching broker receipt: "
+            "checked search link disposition lacks a matching broker receipt: "
             f"{url}"
         )
 
