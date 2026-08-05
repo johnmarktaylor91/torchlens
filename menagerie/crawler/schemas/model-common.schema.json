@@ -270,7 +270,7 @@
         },
         "authors": {
           "$ref": "#/$defs/string_array",
-          "description": "Mandatory authors."
+          "description": "Mandatory authors. EVERY listed author is checked individually: each name's components (given name AND surname, diacritics folded, order-insensitive) must all occur inside the text of an excerpt named by source_evidence_ids and drawn from a paper-role source. A name appearing elsewhere in the fetched page grounds nothing, and an excerpt from a documentation source (a README or model-doc page that happens to name the authors) is not a paper-role excerpt and does not count. So excerpt the paper page's COMPLETE author list: the abs-page summary line 'by First Author and N other authors' grounds ONLY the named first author, and a single author's search-link entry grounds only that one author -- the 2026-08-05 rung killed three otherwise-correct models (m5273, m538, m5445) on exactly those two shapes while the full list sat in the already-fetched bytes. Quote lines as printed, including markup: when a rendering fuses a name with a name-derived email address (an ar5iv \\addauthor failure printing 'Hanchao Lilihanchao@bit.edu.com1'), the fused run itself grounds the name, so do not repair or re-space it."
         },
         "year": {
           "oneOf": [

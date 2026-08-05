@@ -143,7 +143,13 @@ Before finishing, fill every source-reading field in author-proposal.v3:
    OF THE EXCERPTS YOU BOUND under citation.source_evidence_ids: an exact resolvable identifier is
    stronger evidence than a matched title, so declare one only when a bound excerpt shows it. Having
    fetched the page is not the same as having quoted the identifier -- bind a second excerpt when the
-   identifier sits on a different line than the title;
+   identifier sits on a different line than the title. The same per-leaf rule holds for authors: EVERY
+   name in authors[] must occur inside a bound paper-role excerpt, so quote the paper page's COMPLETE
+   author list. The abs-page summary "by First Author and N other authors" grounds ONLY the first
+   author, one author's search-link entry grounds only that author, and a documentation page naming
+   the authors is not a paper-role source -- three models died on those shapes with the full list
+   sitting in bytes they had already fetched. Quote author lines as printed, markup and fused email
+   addresses included; do not repair spacing;
 5. first-public year/date basis; authors, labs, institutions; institutional origin countries as ISO alpha-2,
    confidence, basis, and note. Never infer nationality or country from a name;
 6. code, paper-text, weight, and data license facts. Use NOASSERTION, null, or not-found-after-search rather

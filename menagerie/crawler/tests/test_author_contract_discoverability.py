@@ -354,6 +354,64 @@ def test_the_availability_basis_vocabulary_is_declared_where_the_author_reads() 
 
 
 @pytest.mark.smoke
+def test_the_per_author_grounding_rule_is_stated_where_the_author_reads() -> None:
+    """``citation.authors`` documents the per-name paper-excerpt requirement.
+
+    The 2026-08-05 twenty-model rung's largest single failure class: four models died
+    on ``citation leaves are not grounded verbatim in the fetched paper text:
+    ['authors[...]']``, and for three of them -- ``m5273``, ``m538``, ``m5445`` -- the
+    full author list sat spelled out in bytes the author had already fetched. Each had
+    bound a real paper excerpt (a ``<title>`` element, the abs-page collapse ``by Jian
+    Du and 4 other authors``, one author's search-link entry), which is exactly what
+    the prompt's "the citation must be grounded on a verbatim excerpt of that page"
+    asks for; that EVERY declared author must occur inside such an excerpt existed
+    only in Python. The schema description read, in full, "Mandatory authors." Both
+    surfaces must now state the rule, name the two summary-line shapes that do not
+    satisfy it, and say that documentation-source mentions do not count.
+    """
+
+    leaf = _description(
+        _schema("model-common.schema.json"),
+        "$defs",
+        "citation",
+        "properties",
+        "authors",
+    )
+    lowered = leaf.lower()
+    assert "every listed author" in lowered, "the per-name scope must be stated"
+    assert "paper-role" in lowered, "the paper-role restriction must be stated"
+    assert "complete author list" in lowered, "the remedy must be stated"
+    assert "and N other authors" in leaf, (
+        "the abs-page collapse line that killed m538 and m5445 must be shown verbatim"
+    )
+    assert "documentation source" in lowered, (
+        "the ignored-surface trap must be named: m5273's model-doc excerpt named "
+        "eleven authors and silently counted for nothing"
+    )
+    assert "grounds nothing" in lowered, "elsewhere-on-the-page must be named as insufficient"
+    assert "\\addauthor" in leaf, (
+        "the fused-rendering entailment must be disclosed beside the rule it relaxes, "
+        "with the instruction to quote the line as printed"
+    )
+
+    prompt = " ".join(_AUTHOR_PROMPT.read_text(encoding="utf-8").split())
+    assert "EVERY name in authors[] must occur inside a bound paper-role excerpt" in prompt
+    assert "COMPLETE author list" in prompt
+    assert "and N other authors" in prompt, (
+        "the prompt must show the exact line shape that killed two models"
+    )
+
+    proposal_source = (_CRAWLER_ROOT / "proposal.py").read_text(encoding="utf-8")
+    assert "not grounded verbatim in the fetched paper text" in proposal_source, (
+        "the documented refusal must still be the live one"
+    )
+    assert "_email_fused_component_grounded" in proposal_source, (
+        "the fused-rendering entailment is documented in the schema; if it is gone the "
+        "documentation must be revisited rather than left promising a tolerance"
+    )
+
+
+@pytest.mark.smoke
 def test_emptying_a_gated_value_on_repair_is_stated_as_half_an_instruction() -> None:
     """Every repair brief carries the rule that a bare removal is refused.
 

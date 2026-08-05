@@ -322,3 +322,94 @@ def test_byte_locator_still_refuses_an_altered_range(tmp_path: Path) -> None:
 
     with pytest.raises(EvidenceValidationError, match="does not exist verbatim at"):
         _space_case(tmp_path, _TRANSCRIBED.replace("Sea AI Lab", "Sae AI Lab"), byte_locator=True)
+
+
+#: The exact shape that burned model ``m4066`` (Implicit Q-Learning). The arXiv abstract
+#: page packs its whole ``citation_*`` meta-tag run onto one long line; line-based
+#: extraction tooling (``sed -n 'Np'``) prints whatever it emits WITH a trailing newline,
+#: so the author's excerpt reproduced hundreds of visible bytes exactly and still carried
+#: one invisible ``\n`` the source does not have at that position. These bytes follow the
+#: frozen page (source ``doc-arxiv-abs``); the tail continues with no newline before
+#: ``citation_abstract``.
+_M4066_PAGE = (
+    '<script src="x.js"></script><meta name="citation_title" content="Offline'
+    ' Reinforcement Learning with Implicit Q-Learning" /><meta name="citation_author"'
+    ' content="Kostrikov, Ilya" /><meta name="citation_arxiv_id" content="2110.06169" />'
+    '<meta name="citation_abstract" content="..."/> tail'
+)
+_M4066_EXCERPT = (
+    '<meta name="citation_title" content="Offline Reinforcement Learning with Implicit'
+    ' Q-Learning" /><meta name="citation_author" content="Kostrikov, Ilya" />'
+    '<meta name="citation_arxiv_id" content="2110.06169" />\n'
+)
+
+
+def _m4066_case(tmp_path: Path, excerpt_text: str) -> Any:
+    """Validate one membership-locator excerpt against the m4066 page fixture."""
+
+    content_hash = hash_bytes(_M4066_PAGE.encode())
+    path = cas_path(tmp_path, content_hash)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(_M4066_PAGE.encode())
+    manifest = {
+        "sources": [{"source_id": "s1", "content_sha256": content_hash, "cas_path": str(path)}]
+    }
+    evidence = deepcopy(_evidence(excerpt_text, hash_bytes(excerpt_text.encode())))
+    evidence["excerpts"][0]["locator"] = "citation meta-tag run"
+    return validate_evidence(evidence, manifest, ["description"], require_family_grounding=True)
+
+
+def test_a_trailing_newline_from_line_based_extraction_is_verbatim(tmp_path: Path) -> None:
+    """Whitespace AROUND the excerpt is an extraction artifact, not quoted content.
+
+    The excerpt is byte-identical to the source for its entire visible length; only
+    the tooling-appended trailing newline differs. Refusing it burned m4066's one
+    authoring attempt over a byte that quotes nothing.
+    """
+
+    assert _M4066_EXCERPT not in _M4066_PAGE  # raw bytes genuinely differ
+    report = _m4066_case(tmp_path, _M4066_EXCERPT)
+    assert report.supported_claims == frozenset({"description"})
+    assert _m4066_case(tmp_path, "\n  " + _M4066_EXCERPT).excerpt_count == 1
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        pytest.param(("Kostrikov, Ilya", "Kostrikov, Ivan"), id="visible-character-changed"),
+        pytest.param(("2110.06169", "2110.06168"), id="identifier-digit-changed"),
+        pytest.param(("citation_title", "citationtitle"), id="interior-underscore-deleted"),
+        pytest.param(
+            ('Q-Learning" /><meta', 'Q-Learning" />\n<meta'),
+            id="interior-newline-invented-where-source-has-no-gap",
+        ),
+    ],
+)
+def test_outer_whitespace_tolerance_still_refuses_inner_differences(
+    tmp_path: Path, mutation: tuple[str, str]
+) -> None:
+    """Only the excerpt's OUTER whitespace is stripped; the quoted middle is exact.
+
+    An invented interior gap claims the source displays a break it does not have, and
+    a changed visible byte claims text the source does not contain. Both stay refused;
+    the strip runs after the fold and touches nothing between the first and last
+    visible characters.
+    """
+
+    with pytest.raises(EvidenceValidationError, match="not verbatim in its fetched source"):
+        _m4066_case(tmp_path, _M4066_EXCERPT.replace(*mutation))
+
+
+def test_an_all_whitespace_excerpt_quotes_nothing_and_is_refused(tmp_path: Path) -> None:
+    """An excerpt that strips to nothing must not match every source trivially.
+
+    The blank-text gate refuses it before the verbatim check runs, and the verbatim
+    check's own empty-after-strip guard stands behind that gate, so neither surface
+    can be weakened into a trivial match without this failing.
+    """
+
+    with pytest.raises(
+        EvidenceValidationError,
+        match="non-empty string|not verbatim in its fetched source",
+    ):
+        _m4066_case(tmp_path, " \n \n ")

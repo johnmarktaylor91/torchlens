@@ -40,6 +40,7 @@ from menagerie.crawler.proposal import (
     ProposalValidationError,
     _identifier_grounded,
     _normalize_support_text,
+    _validate_citation_leaves,
     model_code_manifest,
     validate_author_proposal,
 )
@@ -888,6 +889,146 @@ def test_the_old_style_arxiv_identifier_gets_the_same_one_way_tolerance() -> Non
     assert not _identifier_grounded(
         "math.GT/0309136v2", _normalize_support_text("arXiv:math.GT/0309136")
     )
+
+
+#: The author-line excerpts model m9666's recorded proposal actually bound to its
+#: citation claim, quoted byte for byte from the archived attempt (rung
+#: ``rung6-479edfd5-census``, source ``paper-pan``, the ar5iv rendering of
+#: arXiv:1805.10180). LaTeXML fails BMVC's ``\addauthor`` macro (``ltx_ERROR``) and runs
+#: its arguments together with no separator, so each surname prints fused with a
+#: name-derived email local part: ``Li`` + ``lihanchao@...``, ``Xiong`` +
+#: ``xiongpengfei@...``. No fetched byte of that campaign spells ``Xiong`` any other way.
+M9666_RECORDED_AUTHOR_EXCERPTS = (
+    "<title>[1805.10180] Pyramid Attention Network for Semantic Segmentation</title>",
+    '<p id="p1.2" class="ltx_p">Hanchao Lilihanchao@bit.edu.com1',
+    '<span id="p1.2.1" class="ltx_ERROR undefined">\\addauthor</span>'
+    "Pengfei Xiongxiongpengfei@megvii.com2",
+    '<span id="p1.2.2" class="ltx_ERROR undefined">\\addauthor</span>'
+    "Jie Anjie.an@pku.edu.cn3",
+    '<span id="p1.2.3" class="ltx_ERROR undefined">\\addauthor</span>'
+    "Lingxue Wang*neobull@bit.edu.cn1",
+)
+
+#: The citation model m9666 declared against those excerpts: the paper's true author
+#: list, refused at the time as ``authors[0]`` and ``authors[1]``.
+_M9666_CITATION = {
+    "status": "present",
+    "title": "Pyramid Attention Network for Semantic Segmentation",
+    "authors": ["Hanchao Li", "Pengfei Xiong", "Jie An", "Lingxue Wang"],
+    "year": 2018,
+    "venue": None,
+    "arxiv_id": "1805.10180",
+    "doi": None,
+    "openreview_id": None,
+    "url": "https://arxiv.org/abs/1805.10180",
+    "bibtex": None,
+}
+
+
+def test_m9666_recorded_author_excerpts_ground_the_true_author_list() -> None:
+    """The m9666 shape: correct names the source spells only fused with emails.
+
+    Both ``Hanchao Li`` and ``Pengfei Xiong`` occur in the fetched paper solely as
+    ``\\addauthor``-failure fusions, so the old component-membership check refused the
+    paper's own author list as fabricated -- a permanent dead record for evidence no
+    honest author could improve. The fused token spells the full declared name
+    contiguously, which is exactly what the check exists to establish.
+    """
+
+    _validate_citation_leaves(dict(_M9666_CITATION), list(M9666_RECORDED_AUTHOR_EXCERPTS))
+
+
+@pytest.mark.parametrize(
+    "impostor",
+    [
+        # A fabricated name sharing no bytes with the page.
+        ["John Smith", "Pengfei Xiong", "Jie An", "Lingxue Wang"],
+        # A real name -- but from a different paper (this page's own bibliography
+        # names Pengfei Chen; the excerpts under test never spell "chen").
+        ["Hanchao Li", "Pengfei Chen", "Jie An", "Lingxue Wang"],
+        # One visible character off the true surname: "Xiang" is not "Xiong", and
+        # the fused token does not start with it.
+        ["Hanchao Li", "Pengfei Xiang", "Jie An", "Lingxue Wang"],
+        # Padding the declared name to fit the fused token: the remainder after the
+        # "xiongxiong" prefix no longer spells the whole declared name.
+        ["Hanchao Li", "Pengfei Xiongxiong", "Jie An", "Lingxue Wang"],
+        # Re-segmenting the fused bytes as a different name: "li" + the whole
+        # declared list is thirteen characters where the page's token has eleven.
+        ["Li Lihanchao", "Pengfei Xiong", "Jie An", "Lingxue Wang"],
+    ],
+)
+def test_email_fusion_tolerance_does_not_admit_a_different_name(
+    impostor: list[str],
+) -> None:
+    """The fusion entailment grounds the printed name and nothing adjacent to it."""
+
+    citation = dict(_M9666_CITATION)
+    citation["authors"] = impostor
+    with pytest.raises(ProposalValidationError, match="not grounded verbatim.*authors"):
+        _validate_citation_leaves(citation, list(M9666_RECORDED_AUTHOR_EXCERPTS))
+
+
+def test_a_mononym_is_never_grounded_by_a_doubled_word() -> None:
+    """Single-component names are excluded from the fusion entailment outright.
+
+    ``murmur`` is ``mur`` + ``mur``, which is formally a component followed by the
+    whole one-component name. A doubled ordinary word must not become a witness, so
+    names with fewer than two components take only the plain membership path.
+    """
+
+    citation = dict(_M9666_CITATION)
+    citation["authors"] = ["Mur"]
+    with pytest.raises(ProposalValidationError, match="not grounded verbatim.*authors"):
+        _validate_citation_leaves(
+            citation,
+            [
+                "<title>[1805.10180] Pyramid Attention Network for Semantic "
+                "Segmentation</title> the murmur of the crowd",
+            ],
+        )
+
+
+def test_the_summary_author_line_still_grounds_only_the_named_author() -> None:
+    """The m538/m5445 shape stays refused; the fusion fix must not reach it.
+
+    ``by Jian Du and 4 other authors`` is the abs-page's own collapse of the list.
+    The four co-authors sat spelled out in the same fetched bytes, so the refusal is
+    correct and the remedy is excerpting the full list, never a looser check. If the
+    email-fusion entailment ever accepts this pair it has stopped being about fused
+    renderings.
+    """
+
+    citation = {
+        "status": "present",
+        "title": "Topology Adaptive Graph Convolutional Networks",
+        "authors": [
+            "Jian Du",
+            "Shanghang Zhang",
+            "Guanhang Wu",
+            "Jose M. F. Moura",
+            "Soummya Kar",
+        ],
+        "year": 2017,
+        "venue": None,
+        "arxiv_id": "1710.10370",
+        "doi": None,
+        "openreview_id": None,
+        "bibtex": None,
+    }
+    with pytest.raises(
+        ProposalValidationError,
+        match=r"not grounded verbatim.*authors\[1\].*authors\[2\].*authors\[3\].*authors\[4\]",
+    ):
+        _validate_citation_leaves(
+            citation,
+            [
+                "Abstract page for arXiv paper 1710.10370: Topology Adaptive Graph "
+                "Convolutional Networks",
+                "View a PDF of the paper titled Topology Adaptive Graph Convolutional "
+                "Networks, by Jian Du and 4 other authors",
+                "[Submitted on 28 Oct 2017 (",
+            ],
+        )
 
 
 def test_omitting_the_citation_while_the_paper_is_bound_is_refused(tmp_path: Path) -> None:
