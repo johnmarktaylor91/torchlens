@@ -307,7 +307,12 @@ _KILL_GRACE_SECONDS = 10.0
 
 #: Structured harness signals that mean a provider usage pause. Free-text
 #: marker scanning is deliberately absent: classification authority is the
-#: parsed harness JSON only (SEAM_REDESIGN section 3.5).
+#: parsed harness JSON only (SEAM_REDESIGN section 3.5). The one place a FAILED
+#: session's own error text is read at all is :func:`session_failure_class`,
+#: which only LABELS an already-retryable failure for the durable record and
+#: the driver's retry-ladder detail -- it never grants pause or backoff
+#: authority (see :func:`_session_failure_notice` for how the label travels
+#: without entering the pause extractor's fields).
 #:
 #: Every value below is transcribed from the shipped harness rather than assumed.
 #: The prior constants (``usage_limit``, ``usage_limit_reached``,
@@ -430,6 +435,12 @@ class SessionOutcome:
         Exact argv, recorded for the attempt record.
     stderr_tail:
         Bounded stderr tail, recorded but never used for classification.
+    stdout_tail:
+        Bounded raw stdout tail. Load-bearing exactly when ``harness`` is
+        ``None``: a session that died emitting unparseable stdout used to leave
+        NO trace of what it said (rung 7, m7362 -- the crash cause was in the
+        discarded payload). Like ``stderr_tail`` it is evidence, never a
+        classification authority.
     """
 
     harness: Optional[JsonObject]
@@ -439,6 +450,7 @@ class SessionOutcome:
     session_id: Optional[str]
     argv: tuple[str, ...]
     stderr_tail: str
+    stdout_tail: str
 
 
 def run_claude_session(
@@ -535,6 +547,7 @@ def run_claude_session(
         session_id=str(reported) if reported else session_id,
         argv=tuple(argv),
         stderr_tail=(stderr or "")[-2000:],
+        stdout_tail=(stdout or "")[-2000:],
     )
 
 
@@ -685,6 +698,183 @@ def _backoff_detail(limit: str, harness: Optional[Mapping[str, Any]]) -> str:
         )
     )
     return detail
+
+
+#: Bounded number of externally-controlled failure-text characters retained.
+_SESSION_FAILURE_TEXT_MAX_CHARS = 2000
+
+#: Case-folded markers naming a host credential outage in a failed session's
+#: own error text (observed verbatim: rung 7 m7362 died rc=1 in 0.6s with
+#: "Not logged in · Please run /login" sitting in the discarded stdout).
+_AUTH_FAILURE_MARKERS = ("not logged in", "please run /login", "invalid api key")
+
+#: Case-folded markers naming transient provider overload (observed verbatim on
+#: the clone-2 specimen: "API Error: Repeated 529 Overloaded"). Deliberately
+#: NOT promoted to a pause: a 529 storm carries no reset timestamp and clears
+#: in seconds -- the driver's bounded backoff ladder is its designed consumer,
+#: while the STRUCTURED ``overloaded_error`` harness field keeps its existing
+#: pause routing through :func:`structured_limit_signal` untouched.
+_OVERLOAD_FAILURE_MARKERS = ("overloaded", "529")
+
+
+def _harness_error_text(harness: Optional[Mapping[str, Any]]) -> Optional[str]:
+    """Return the harness result document's own error-bearing text, bounded.
+
+    Reads the same fields ``author_dispatch._structured_author_error`` reads
+    (``result``, ``message``, and the ``error`` object) but without requiring
+    ``is_error``: a session that died with rc != 0 said whatever it said, and
+    that text is evidence worth keeping either way.
+
+    Parameters
+    ----------
+    harness:
+        Parsed harness JSON, or ``None``.
+
+    Returns
+    -------
+    str | None
+        Joined error-bearing text, bounded, or ``None`` when the harness
+        carried none.
+    """
+
+    if not harness:
+        return None
+    fields: list[str] = []
+    for key in ("result", "message"):
+        value = harness.get(key)
+        if isinstance(value, str) and value.strip():
+            fields.append(value.strip())
+    error = harness.get("error")
+    if isinstance(error, str) and error.strip():
+        fields.append(error.strip())
+    elif isinstance(error, Mapping):
+        for key in ("type", "code", "message"):
+            value = error.get(key)
+            if isinstance(value, str) and value.strip():
+                fields.append(value.strip())
+    if not fields:
+        return None
+    return "\n".join(fields)[:_SESSION_FAILURE_TEXT_MAX_CHARS]
+
+
+def session_failure_class(outcome: SessionOutcome) -> str:
+    """Label one failed session's cause for the durable record and retry detail.
+
+    Structured harness fields decide first; the session's own error text is
+    consulted last and only to LABEL. The label never changes an exit code and
+    never creates a pause: both observed classes stay on the retryable exit,
+    where the driver's bounded backoff ladder (5s, 30s) is exactly the right
+    consumer for a credential blip or a 529 storm.
+
+    Parameters
+    ----------
+    outcome:
+        Machine-observed failed session round trip.
+
+    Returns
+    -------
+    str
+        ``auth-unavailable``, ``provider-overloaded``, or ``unclassified``.
+    """
+
+    harness = outcome.harness or {}
+    status = harness.get("api_error_status")
+    if not isinstance(status, bool) and status == 529:
+        return "provider-overloaded"
+    error = harness.get("error")
+    error_type = str(error.get("type", "")) if isinstance(error, Mapping) else ""
+    if error_type == "authentication_error":
+        return "auth-unavailable"
+    text = (_harness_error_text(harness) or outcome.stdout_tail or "").lower()
+    if any(marker in text for marker in _AUTH_FAILURE_MARKERS):
+        return "auth-unavailable"
+    if any(marker in text for marker in _OVERLOAD_FAILURE_MARKERS):
+        return "provider-overloaded"
+    return "unclassified"
+
+
+def session_failure_evidence(outcome: SessionOutcome) -> JsonObject:
+    """Return bounded, durable evidence for one failed session round trip.
+
+    Rung 7's abort root cause was invisible for exactly this gap: the executor
+    parsed the harness JSON for effort fields and DISCARDED the ``result``
+    error text and raw stdout, and both observed crash causes ("Not logged in
+    · Please run /login" on m7362; "API Error: Repeated 529 Overloaded" on the
+    clone-2 specimen) were sitting in the discarded payload. This record makes
+    the cause durable on the attempt and consumable by the driver's retry
+    ladder.
+
+    Quarantine rules: every ``*_quarantined`` value is externally controlled
+    text (the session/provider wrote it). It is bounded, stored as data, and
+    never used as classification authority beyond the diagnostic
+    ``failure_class`` label.
+
+    Parameters
+    ----------
+    outcome:
+        Machine-observed failed session round trip.
+
+    Returns
+    -------
+    dict[str, Any]
+        Bounded failure evidence for the attempt record and failure notice.
+    """
+
+    harness = outcome.harness
+    subtype = (harness or {}).get("subtype")
+    terminal_reason = (harness or {}).get("terminal_reason")
+    is_error = (harness or {}).get("is_error")
+    evidence: JsonObject = {
+        "returncode": outcome.returncode,
+        "failure_class": session_failure_class(outcome),
+        "harness_subtype": subtype if isinstance(subtype, str) else None,
+        "harness_terminal_reason": (
+            terminal_reason if isinstance(terminal_reason, str) else None
+        ),
+        "harness_is_error": is_error if isinstance(is_error, bool) else None,
+        "session_error_text_quarantined": _harness_error_text(harness),
+    }
+    if harness is None:
+        evidence["stdout_tail_quarantined"] = (
+            outcome.stdout_tail[-_SESSION_FAILURE_TEXT_MAX_CHARS:] or None
+        )
+    return evidence
+
+
+def _session_failure_notice(evidence: JsonObject) -> None:
+    """Print the machine-built failure notice the driver's stdio tail records.
+
+    ``classify_author_exit`` slices the executor's combined stdio into the
+    bounded ``tail`` that becomes the ``RetryableOperatorError`` message -- and,
+    when the retry budget spends, ``AuthorSessionRetryExhausted.detail``. Before
+    this notice the tail carried only the generic status line, so the exhausted
+    record could not name its own cause.
+
+    The notice deliberately carries NO ``result``, ``message``, or ``error``
+    key: ``author_dispatch._structured_author_error`` reads exactly those
+    fields off any ``is_error`` stdout JSON when classifying a backoff pause,
+    and a quarantined session text containing e.g. "overloaded" would otherwise
+    promote an ordinary retryable crash into a campaign-wide usage pause. The
+    quarantined text rides under its own key: visible to the retry ladder's
+    bounded detail, invisible to pause authority.
+
+    Parameters
+    ----------
+    evidence:
+        Bounded failure evidence from :func:`session_failure_evidence`.
+    """
+
+    print(
+        json.dumps(
+            {
+                "type": "result",
+                "subtype": "author-session-failure",
+                **evidence,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    )
 
 
 def effort_from_session(outcome: SessionOutcome) -> JsonObject:
@@ -1153,8 +1343,14 @@ def serve_source_request(
         return EXIT_BACKOFF, _backoff_detail(limit, outcome.harness)
     if outcome.returncode != 0:
         attempt.update(stage1=stage1)
+        evidence = session_failure_evidence(outcome)
+        _session_failure_notice(evidence)
         return _fail(
-            attempt, stage="stage1", reason="session-crashed", exit_code=EXIT_RETRYABLE
+            attempt,
+            stage="stage1",
+            reason="session-crashed",
+            exit_code=EXIT_RETRYABLE,
+            detail=evidence,
         )
 
     discovery_path = attempt.paths.directory / "discovery.json"
@@ -1887,6 +2083,7 @@ def serve_author(
                 "resume-failed",
                 returncode=outcome.returncode,
                 resumed_from=resume_session,
+                failure=session_failure_evidence(outcome),
             )
             stage2 = dict(attempt.record.get("stage2") or {})
             stage2["cold_start_reason"] = f"resume-exit-{outcome.returncode}"
@@ -1932,8 +2129,14 @@ def serve_author(
         _fail(attempt, stage="stage2", reason="provider-usage-pause", exit_code=EXIT_BACKOFF)
         return EXIT_BACKOFF, _backoff_detail(limit, outcome.harness)
     if outcome.returncode != 0:
+        evidence = session_failure_evidence(outcome)
+        _session_failure_notice(evidence)
         return _fail(
-            attempt, stage="stage2", reason="session-crashed", exit_code=EXIT_RETRYABLE
+            attempt,
+            stage="stage2",
+            reason="session-crashed",
+            exit_code=EXIT_RETRYABLE,
+            detail=evidence,
         )
     _pause_hook(config, "stage2")
 
@@ -2231,11 +2434,14 @@ def _maybe_supplement_round(
         status="stage2-running",
     )
     if outcome.timed_out or outcome.returncode != 0:
+        evidence = session_failure_evidence(outcome)
+        _session_failure_notice(evidence)
         return _fail(
             attempt,
             stage="supplement",
             reason="supplement-session-failed",
             exit_code=EXIT_RETRYABLE,
+            detail=evidence,
         )
     return None
 

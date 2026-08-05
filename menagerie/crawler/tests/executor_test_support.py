@@ -187,6 +187,34 @@ if mode == "limit":
         raise SystemExit(f"unknown FAKE_CLAUDE_LIMIT_SHAPE {shape!r}")
     print(json.dumps(payload))
     sys.exit(1)
+if mode == "outage":
+    # The two REAL instant-crash shapes rung 7 and the clone-2 mini-rung
+    # observed in the wild: the harness result document carries the cause in
+    # its `result` text, the process exits 1 in under a second, and stderr is
+    # empty. FAKE_CLAUDE_OUTAGE_SHAPE selects which observed shape to replay.
+    shape = os.environ.get("FAKE_CLAUDE_OUTAGE_SHAPE", "not_logged_in")
+    texts = {
+        "not_logged_in": "Not logged in · Please run /login",
+        "overloaded_529": "API Error: Repeated 529 Overloaded errors from the provider",
+    }
+    if shape not in texts:
+        raise SystemExit(f"unknown FAKE_CLAUDE_OUTAGE_SHAPE {shape!r}")
+    print(
+        json.dumps(
+            {
+                "type": "result",
+                "subtype": "error_during_execution",
+                "is_error": True,
+                "session_id": str(uuid.uuid4()),
+                "duration_ms": 618,
+                "duration_api_ms": 114,
+                "num_turns": 0,
+                "total_cost_usd": 0.0,
+                "result": texts[shape],
+            }
+        )
+    )
+    sys.exit(1)
 if mode == "crash":
     print("boom, not json")
     print("GitHub API rate limit exceeded for 1.2.3.4", file=sys.stderr)
