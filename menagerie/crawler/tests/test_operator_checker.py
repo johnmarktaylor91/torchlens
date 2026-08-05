@@ -22,6 +22,8 @@ from menagerie.crawler.checker_dispatch import (
     build_metadata_vet_envelope,
     compute_result_envelope_sha256,
     machine_owned_gate_fields,
+    metadata_fidelity_state,
+    validate_checker_result,
     validate_checker_result_mapping,
 )
 from menagerie.crawler.constants import GateKind
@@ -707,15 +709,25 @@ def test_missing_codex_binary_is_typed_service_unavailable(tmp_path: Path) -> No
     assert _status(request_path)["classification"] == "service-unavailable"
 
 
-def test_native_output_schema_constrains_the_gate_itself_not_an_opaque_string() -> None:
+@pytest.mark.parametrize(
+    "gate_kind", [GateKind.METADATA_BATCH, GateKind.FIDELITY, GateKind.TERMINAL_DISPOSITION]
+)
+def test_native_output_schema_constrains_the_gate_itself_not_an_opaque_string(
+    gate_kind: GateKind,
+) -> None:
     """The wrapper hands Codex the gate's own vocabulary, not a string transport.
 
     The one-field ``result_json`` STRING schema this replaces made the provider's
     structured-output constraint vacuous: the gate travelled as an opaque string,
     so nothing but prompt prose carried its shape.
+
+    Parameters
+    ----------
+    gate_kind:
+        Gate kind whose derived schema is checked.
     """
 
-    schema = _native_output_schema()
+    schema = _native_output_schema(gate_kind)
 
     assert schema["type"] == "object"
     assert schema["additionalProperties"] is False
@@ -724,6 +736,13 @@ def test_native_output_schema_constrains_the_gate_itself_not_an_opaque_string() 
     # The gate is the constraint, not a payload inside one.
     assert "result_json" not in json.dumps(schema)
     assert schema["properties"]["items"]["items"]["type"] == "object"
+    # The metadata schema is the one the rung-8 batch died on: the whole
+    # fidelity block is machine-owned there and must be unrepresentable.
+    item_properties = schema["properties"]["items"]["items"]["properties"]
+    if gate_kind is GateKind.METADATA_BATCH:
+        assert "fidelity" not in item_properties
+    else:
+        assert "fidelity" in item_properties
 
 
 def test_external_timeout_kills_the_codex_process_group(tmp_path: Path) -> None:
@@ -1289,3 +1308,363 @@ def test_forged_campaign_lineage_is_refused_before_publication(tmp_path: Path) -
         validate_checker_result_mapping(forged, envelope)
 
     assert "campaign_root_work_id" in str(excinfo.value)
+
+
+def _decided(result: dict[str, Any], index: int = 0) -> dict[str, Any]:
+    """Return the result with one item honestly decided ``inaccurate``.
+
+    Parameters
+    ----------
+    result:
+        Compliant candidate whose items all read ``accurate``.
+    index:
+        Item to flip.
+
+    Returns
+    -------
+    dict[str, Any]
+        Result whose flipped item satisfies the verdict-precedence rule.
+    """
+
+    decided = deepcopy(result)
+    item = decided["items"][index]
+    item["field_checks"][0]["verdict"] = "inaccurate"
+    item["field_checks"][0]["required_repair"] = "ground or type-empty the field"
+    item["verdict"] = "inaccurate"
+    item["required_repairs"] = ["ground or type-empty the field"]
+    return decided
+
+
+def _events(request_path: Path) -> list[dict[str, Any]]:
+    """Return every parsed telemetry event for one request.
+
+    Parameters
+    ----------
+    request_path:
+        Exact wrapper request.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Telemetry events in emission order.
+    """
+
+    return [
+        json.loads(line)
+        for line in telemetry_path(request_path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
+def test_metadata_fidelity_is_machine_filled_never_checker_authored(tmp_path: Path) -> None:
+    """A schema-honoring metadata checker omits fidelity; the wrapper stamps it.
+
+    The metadata output schema no longer contains the block at all, so omission
+    is not merely tolerated -- it is the only representable answer -- and the
+    published gate must still satisfy ``gate.v3``'s per-item requirement through
+    the machine fill.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated wrapper root.
+    """
+
+    request_path, result = _request_and_result(tmp_path)
+    authored = deepcopy(result)
+    del authored["items"][0]["fidelity"]
+
+    def invoke(argv: Sequence[str], last_message: Path, timeout: float) -> CodexAttempt:
+        """Inject one schema-honoring metadata answer without a fidelity block."""
+
+        del argv, timeout
+        last_message.write_bytes(_native_final_message(authored))
+        return CodexAttempt(
+            0,
+            '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}\n',
+            "",
+        )
+
+    exit_code = execute_checker_request(
+        request_path,
+        invoke=invoke,
+        sleep=lambda _seconds: None,
+        diagnostic_stream=StringIO(),
+    )
+
+    assert exit_code is OperatorExitCode.SUCCESS
+    published = json.loads((tmp_path / "result.json").read_text(encoding="utf-8"))
+    assert published["items"][0]["fidelity"] == metadata_fidelity_state()
+    # A compliant omission is not a "normalization": nothing divergent was
+    # supplied, so no confusion telemetry is emitted.
+    assert not [
+        event for event in _events(request_path) if event["event"] == "fidelity-normalized"
+    ]
+
+
+def test_contract_rejection_gets_one_bounded_retry_with_the_exact_error(
+    tmp_path: Path,
+) -> None:
+    """A structural contract refusal is re-asked once, with the error fed back.
+
+    Rung 8 (batch ``metadata-c001cad863d95a67``): the wrapper's only response to
+    a refused complete verdict was a permanent exit that terminalized every
+    batch member, and the retry that DID exist (binding mismatch) re-ran an
+    identical prompt that named nothing. The re-ask mirrors the author-side echo
+    retry: bounded to ONE, the refused result is never published, and the next
+    attempt's prompt carries the machine validator's exact refusal.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated wrapper root.
+    """
+
+    request_path, result = _request_and_result(tmp_path)
+    contradictory = deepcopy(result)
+    contradictory["items"][0]["field_checks"][0]["verdict"] = "inaccurate"
+    # Top-level verdict left "accurate": the decision rule refuses the item.
+    prompts: list[str] = []
+
+    def invoke(argv: Sequence[str], last_message: Path, timeout: float) -> CodexAttempt:
+        """Inject one refused decision, then a compliant one."""
+
+        del timeout
+        prompts.append(str(argv[-1]))
+        message = contradictory if len(prompts) == 1 else result
+        last_message.write_bytes(_native_final_message(message))
+        return CodexAttempt(
+            0,
+            '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}\n',
+            "",
+        )
+
+    exit_code = execute_checker_request(
+        request_path,
+        invoke=invoke,
+        sleep=lambda _seconds: None,
+        diagnostic_stream=StringIO(),
+    )
+
+    assert exit_code is OperatorExitCode.SUCCESS
+    assert len(prompts) == 2
+    assert "REFUSED BY THE MACHINE VALIDATOR" not in prompts[0]
+    assert "REFUSED BY THE MACHINE VALIDATOR" in prompts[1]
+    assert "contradicts component verdict" in prompts[1]
+    refusals = [
+        event for event in _events(request_path) if event["event"] == "contract-rejection-refused"
+    ]
+    assert [event["retrying"] for event in refusals] == [True]
+    assert "contradicts component verdict" in refusals[0]["detail"]
+    assert _status(request_path)["classification"] == "success"
+
+
+def test_persistent_contract_rejection_stays_permanent_after_one_retry(
+    tmp_path: Path,
+) -> None:
+    """The re-ask is bounded: a second refusal with the error named is terminal.
+
+    A checker that violates its contract twice, the second time with the exact
+    defect spelled out in its prompt, is systematically divergent -- the
+    permanent classification, sidecar detail, and absent result are all exactly
+    the historical refusal.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated wrapper root.
+    """
+
+    request_path, result = _request_and_result(tmp_path)
+    contradictory = deepcopy(result)
+    contradictory["items"][0]["field_checks"][0]["verdict"] = "inaccurate"
+    calls = 0
+
+    def invoke(argv: Sequence[str], last_message: Path, timeout: float) -> CodexAttempt:
+        """Inject the same refused decision on every attempt."""
+
+        del argv, timeout
+        nonlocal calls
+        calls += 1
+        last_message.write_bytes(_native_final_message(contradictory))
+        return CodexAttempt(
+            0,
+            '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}\n',
+            "",
+        )
+
+    exit_code = execute_checker_request(
+        request_path,
+        invoke=invoke,
+        sleep=lambda _seconds: None,
+        diagnostic_stream=StringIO(),
+    )
+
+    assert exit_code is OperatorExitCode.PERMANENT_CONTRACT_REJECTION
+    assert calls == 2
+    assert not (tmp_path / "result.json").exists()
+    status = _status(request_path)
+    assert status["classification"] == "permanent-contract-rejection"
+    assert "contradicts component verdict" in status["detail"]
+    refusals = [
+        event for event in _events(request_path) if event["event"] == "contract-rejection-refused"
+    ]
+    assert [event["retrying"] for event in refusals] == [True, False]
+
+
+def test_an_adverse_merits_verdict_is_published_never_reasked(tmp_path: Path) -> None:
+    """The retry boundary is shape, not merits: ``inaccurate`` publishes at once.
+
+    A validated adverse verdict is a SUCCESS publication. No code path may spend
+    an attempt because the answer was unwelcome -- that boundary is what keeps
+    the bounded re-ask from ever becoming verdict shopping.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated wrapper root.
+    """
+
+    request_path, result = _request_and_result(tmp_path)
+    adverse = _decided(result)
+    calls = 0
+
+    def invoke(argv: Sequence[str], last_message: Path, timeout: float) -> CodexAttempt:
+        """Inject one compliant adverse verdict."""
+
+        del argv, timeout
+        nonlocal calls
+        calls += 1
+        last_message.write_bytes(_native_final_message(adverse))
+        return CodexAttempt(
+            0,
+            '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}\n',
+            "",
+        )
+
+    exit_code = execute_checker_request(
+        request_path,
+        invoke=invoke,
+        sleep=lambda _seconds: None,
+        diagnostic_stream=StringIO(),
+    )
+
+    assert exit_code is OperatorExitCode.SUCCESS
+    assert calls == 1
+    published = json.loads((tmp_path / "result.json").read_text(encoding="utf-8"))
+    assert published["items"][0]["verdict"] == "inaccurate"
+    events = _events(request_path)
+    assert not [event for event in events if event["event"] == "contract-rejection-refused"]
+    assert not [event for event in events if event["event"] == "binding-mismatch-refused"]
+
+
+def test_rung8_metadata_batch_now_flows_through_both_recorded_slips(tmp_path: Path) -> None:
+    """Replay of ``metadata-c001cad863d95a67``: m10517 and m9666 survive both slips.
+
+    The frozen rung-8 telemetry records exactly two checker faults, one per
+    attempt, and the second killed both models at 12:27:32 in the same second:
+
+    1. attempt 1 -- ``checker item m9666 mismatched binding: fidelity_identity``
+       (the envelope's value is ``null``; the checker echoed a stale identity
+       from the prior gate round);
+    2. attempt 2 -- ``gate.v3 validation failed at items[0].fidelity.verdict ...
+       'not-applicable' was expected`` (a real fidelity verdict on a metadata
+       gate), classified ``permanent-contract-rejection``, exit 64.
+
+    Under the fixed wrapper the same two emissions produce a published gate:
+    the binding flub is retried WITH the refusal named in the next prompt, and
+    the machine-owned fidelity block is stamped so the illegal verdict never
+    reaches ``gate.v3``. Both items' adverse merits verdicts survive verbatim --
+    the fix moves the models forward to their repair round, it does not bless
+    them.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated wrapper root.
+    """
+
+    gate = make_gate(["m10517", "m9666"])
+    packs = [_checker_item_pack(item) for item in gate["items"]]
+    envelope = build_metadata_vet_envelope(
+        packs,
+        gate_round=1,
+        output_path=tmp_path / "result.json",
+        checker_model=required_checker_model(GateKind.METADATA_BATCH),
+        checker_version="current",
+        request_nonce="rung8-replay",
+        final_tail=True,
+    )
+    request_path = tmp_path / "request.json"
+    request_path.write_bytes(canonical_json_bytes(envelope) + b"\n")
+    for field in (*machine_owned_gate_fields(envelope), *LEDGER_ASSIGNED_GATE_FIELDS):
+        gate.pop(field, None)
+    gate.pop("checker", None)
+    gate.pop("result_envelope_sha256", None)
+    # Both models' recorded merits outcome: metadata `inaccurate` with concrete
+    # repairs (m10517: unsupported lineage/paradigm; m9666: original_framework).
+    honest = _decided(_decided(gate, 0), 1)
+
+    # Attempt 1: the recorded stale-identity echo. The envelope's
+    # ``fidelity_identity`` for a metadata item is null; the checker copied a
+    # non-null identity out of the prior round's files.
+    stale_echo = deepcopy(honest)
+    stale_echo["items"][1]["fidelity_identity"] = (
+        "sha256:96c9a32ece5c7f085d73a2d72436ee04e2c019ba6b95bf63eb7b7c27e751b1c3"
+    )
+    # Attempt 2: the recorded illegal fidelity verdict on items[0].
+    illegal_fidelity = deepcopy(honest)
+    illegal_fidelity["items"][0]["fidelity"] = {
+        "required": False,
+        "verdict": "cannot-verify",
+        "material_checks": [],
+        "unsupported_choices": [],
+        "contradictions": [],
+        "omissions": [],
+        "permanent_scar": False,
+    }
+    prompts: list[str] = []
+
+    def invoke(argv: Sequence[str], last_message: Path, timeout: float) -> CodexAttempt:
+        """Inject the two recorded rung-8 emissions in their recorded order."""
+
+        del timeout
+        prompts.append(str(argv[-1]))
+        message = stale_echo if len(prompts) == 1 else illegal_fidelity
+        last_message.write_bytes(_native_final_message(message))
+        return CodexAttempt(
+            0,
+            '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}\n',
+            "",
+        )
+
+    exit_code = execute_checker_request(
+        request_path,
+        invoke=invoke,
+        sleep=lambda _seconds: None,
+        diagnostic_stream=StringIO(),
+    )
+
+    # The batch that died in one second now publishes.
+    assert exit_code is OperatorExitCode.SUCCESS
+    assert len(prompts) == 2
+    # The retry carried the exact recorded refusal, not a blind re-roll.
+    assert "REFUSED BY THE MACHINE VALIDATOR" in prompts[1]
+    assert "mismatched binding: fidelity_identity" in prompts[1]
+    # The published gate is what the DRIVER validates before routing; both
+    # models flow to their repair rounds with their adverse verdicts intact.
+    published = validate_checker_result(tmp_path / "result.json", envelope)
+    by_id = {item["stable_id"]: item for item in published["items"]}
+    assert set(by_id) == {"m10517", "m9666"}
+    for stable_id, item in by_id.items():
+        assert item["verdict"] == "inaccurate", stable_id
+        assert item["fidelity"] == metadata_fidelity_state(), stable_id
+    assert by_id["m9666"]["fidelity_identity"] is None
+    events = _events(request_path)
+    mismatches = [event for event in events if event["event"] == "binding-mismatch-refused"]
+    assert [event["attempt"] for event in mismatches] == [1]
+    assert "fidelity_identity" in mismatches[0]["detail"]
+    normalized = [event for event in events if event["event"] == "fidelity-normalized"]
+    assert [event["attempt"] for event in normalized] == [2]
+    assert normalized[0]["stable_ids"] == ["m10517"]
+    assert _status(request_path)["classification"] == "success"
