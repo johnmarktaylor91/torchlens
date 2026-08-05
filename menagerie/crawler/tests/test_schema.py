@@ -9,7 +9,12 @@ from typing import Any
 
 import pytest
 
+from menagerie.crawler.author_dispatch import (
+    AuthorResultMalformedError,
+    validate_author_result_mapping,
+)
 from menagerie.crawler.constants import FAILURE_REASON_CODES, TERMINAL_STATUS_CODES, FailureStage
+from menagerie.crawler.constants import AUTHOR_PROPOSAL_SCHEMA_VERSION_V3
 from menagerie.crawler.schema import (
     OWNERSHIP_ANNOTATED_SCHEMA_VERSIONS,
     REQUIRED_FIELD_PROJECTION_SPECS,
@@ -34,6 +39,43 @@ from menagerie.crawler.tests.conftest import (
     make_operational_event,
     make_shutdown_interruption_event,
 )
+
+_RUNG8_ARCHIVE = Path(
+    "/Users/jmt/.claude/research/torchlens/crawler-launch-sprint/"
+    "rung-archive/rung8-19a72e4a-complete"
+)
+
+
+def _require_rung8_archive() -> Path:
+    """Return the local frozen rung-8 archive, or skip when absent.
+
+    Returns
+    -------
+    Path
+        Existing rung-8 archive root.
+    """
+
+    if not _RUNG8_ARCHIVE.exists():
+        pytest.skip("frozen rung-8 archive is not present on this host")
+    return _RUNG8_ARCHIVE
+
+
+def _load_rung8_json(*parts: str) -> dict[str, Any]:
+    """Load one JSON object from the frozen rung-8 archive.
+
+    Parameters
+    ----------
+    parts:
+        Path components relative to the archive root.
+
+    Returns
+    -------
+    dict[str, Any]
+        Decoded JSON object.
+    """
+
+    path = _require_rung8_archive().joinpath(*parts)
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 @pytest.mark.parametrize(
@@ -86,6 +128,24 @@ def test_unknown_fields_are_rejected(valid_model: dict[str, Any]) -> None:
         validate_payload(root_unknown)
     with pytest.raises(PayloadValidationError):
         validate_payload(nested_unknown)
+
+
+def test_validate_payload_reports_all_independent_schema_violations(
+    valid_model: dict[str, Any],
+) -> None:
+    """Schema diagnostics enumerate sibling violations in one refusal."""
+
+    malformed = deepcopy(valid_model)
+    del malformed["external_metadata"]["architecture_class"]
+    del malformed["external_metadata"]["domain"]
+
+    with pytest.raises(PayloadValidationError) as caught:
+        validate_payload(malformed)
+
+    diagnostic = str(caught.value)
+    assert "validation failed with" in diagnostic
+    assert "'architecture_class' is a required property" in diagnostic
+    assert "'domain' is a required property" in diagnostic
 
 
 def test_union_validation_error_names_undeclared_property() -> None:
@@ -156,6 +216,81 @@ def test_union_validation_error_names_wrong_enum_and_allowed_values() -> None:
     assert "configuration" in diagnostic
     assert "implementation" in diagnostic
     assert "documentation" in diagnostic
+
+
+def test_rung8_m9577_schema_replay_reports_latent_source_errors() -> None:
+    """The frozen m9577 raw attempt surfaces repeated latent schema failures."""
+
+    raw = _load_rung8_json(
+        "work",
+        "m9577",
+        "author",
+        "attempts",
+        "attempt-002-d1b1978e6e87499b80bce5cac13c181c",
+        "result.json",
+    )
+    proposal = raw["payload"]["proposal"]
+    proposal["schema_version"] = AUTHOR_PROPOSAL_SCHEMA_VERSION_V3
+
+    with pytest.raises(PayloadValidationError) as caught:
+        validate_payload(proposal, AUTHOR_PROPOSAL_SCHEMA_VERSION_V3)
+
+    diagnostic = str(caught.value)
+    assert "validation failed with" in diagnostic
+    assert "source_resolution.sources[0].mirror_digest" in diagnostic
+    assert "source_resolution.sources[1].mirror_digest" in diagnostic
+    assert "source_resolution.sources[10].mirror_digest" in diagnostic
+    assert "implementation.builder_symbol" in diagnostic
+
+
+@pytest.mark.parametrize(
+    ("stable_id", "expected_claims"),
+    [
+        (
+            "m9304",
+            (
+                "external_metadata.architecture_class",
+                "external_metadata.authors",
+                "taxonomy.novel_ops",
+                "website",
+            ),
+        ),
+        (
+            "m9617",
+            (
+                "external_metadata.domain",
+                "external_metadata.run_framework",
+                "taxonomy.family",
+                "taxonomy.tasks",
+            ),
+        ),
+    ],
+)
+def test_rung8_author_result_replay_reports_all_proposal_categories(
+    stable_id: str, expected_claims: tuple[str, ...]
+) -> None:
+    """Frozen author-result validation preserves proposal-level multi-error output.
+
+    Parameters
+    ----------
+    stable_id:
+        Archived model identifier.
+    expected_claims:
+        Representative claim categories that must appear in the same refusal.
+    """
+
+    archive = _require_rung8_archive()
+    author_dir = archive / "work" / stable_id / "author"
+    request = _load_rung8_json("work", stable_id, "author", "request.json")
+    result = _load_rung8_json("work", stable_id, "author", "result.json")
+
+    with pytest.raises(AuthorResultMalformedError) as caught:
+        validate_author_result_mapping(result, request, cas_root=author_dir / "source-cas")
+
+    diagnostic = str(caught.value)
+    assert "ungrounded claim categories" in diagnostic
+    for claim in expected_claims:
+        assert claim in diagnostic
 
 
 @pytest.mark.parametrize("value", [None, "adapter.py"])

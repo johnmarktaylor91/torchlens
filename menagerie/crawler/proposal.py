@@ -140,7 +140,9 @@ SEARCH_BACKED_AVAILABILITY_STATUSES = frozenset({"none-exist", "not-found-after-
 #: facts whose honest answer is often "there are none". See
 #: :data:`menagerie.crawler.metadata.AVAILABILITY_FIELDS` (single source of truth).
 AVAILABILITY_CLAIMS = (
-    frozenset(f"external_metadata.{field}" for field in AVAILABILITY_FIELDS) | EMPTIABLE_CLAIMS
+    frozenset(f"external_metadata.{field}" for field in AVAILABILITY_FIELDS)
+    | EMPTIABLE_CLAIMS
+    | FOREIGN_AVAILABILITY_KEYS
 )
 #: Source roles whose bytes are the *paper*, not the implementation. Paper metadata
 #: (`authors`, `institution`, `country`, `venue`, `year`, `era`, `citation`) essentially
@@ -1448,6 +1450,7 @@ def _validate_availability_record(
         raise ProposalValidationError(
             f"availability state for {claim} declares {status} but the field carries a value"
         )
+    _validate_absence_twin_consistency(claim, facts)
     if status in SEARCH_BACKED_AVAILABILITY_STATUSES:
         # Until the source broker ships probe receipts, the recorded bounded search IS
         # the evidence for an absence state; explicit excerpt IDs may corroborate it.
@@ -1455,6 +1458,33 @@ def _validate_availability_record(
         # that a model HAS no predecessors is a finding, and a finding needs the search
         # that produced it, or "there are none" becomes the cheapest thing to write.
         _validate_absence_is_searched(facts, [claim])
+
+
+def _validate_absence_twin_consistency(claim: str, facts: Mapping[str, Any]) -> None:
+    """Refuse a typed absence that contradicts a machine-visible twin value.
+
+    Parameters
+    ----------
+    claim:
+        Canonical claim path carrying the typed absence record.
+    facts:
+        Complete proposed fact tree.
+
+    Raises
+    ------
+    ProposalValidationError
+        If a taxonomy era absence is contradicted by the external-metadata era value
+        in the same proposal.
+    """
+
+    if claim != "taxonomy.era":
+        return
+    external_era = _claim_value(facts, "external_metadata.era")
+    if not _claim_is_hollow("external_metadata.era", external_era):
+        raise ProposalValidationError(
+            "availability state for taxonomy.era declares absence but "
+            "external_metadata.era carries a value"
+        )
 
 
 def _claim_is_hollow(claim: str, value: object) -> bool:
@@ -1718,8 +1748,8 @@ def _year_grounded(
     year alone would refuse (model ``m8245``, PoolFormer, announced 2111 and published at
     CVPR 2022). It runs one way only -- a year EARLIER than announcement is impossible
     for the work the identifier names, and two or more years later is not entailed, so
-    both stay refused. Old-style identifiers (``cs.CV/0309136``) are not decoded here and
-    fall through to the text check unchanged.
+    both stay refused. Old-style identifiers (``cs.CV/0309136``) carry the same YYMM
+    announcement stamp in their numeric suffix and are decoded by the same one-way rule.
 
     Parameters
     ----------
@@ -1752,12 +1782,13 @@ def _year_grounded(
 def _arxiv_announcement_year(arxiv_id: object) -> Optional[int]:
     """Return the four-digit year a modern arXiv identifier announces, if any.
 
-    Modern identifiers are ``YYMM.NNNNN`` where ``YY`` is the two-digit year and ``MM``
-    is a real month. The scheme began in April 2007 and arXiv has stated it runs to 2029
-    before renumbering, so ``07``-``99`` maps into the 2000s unambiguously. Anything that
-    is not exactly this shape -- an old-style ``archive/YYMMNNN`` locator, a malformed
-    month, a pre-2007 stamp -- returns ``None`` so the caller falls back to the plain
-    text check rather than inventing a year.
+    Modern identifiers are ``YYMM.NNNNN`` and old-style identifiers are
+    ``archive/YYMMNNN``; in both, ``YY`` is the two-digit year and ``MM`` is a real
+    month. The modern scheme began in April 2007, so modern ``07``-``99`` maps into the
+    2000s unambiguously. Old-style ids span 1991 through March 2007, so ``91``-``99``
+    maps to the 1900s and ``00``-``07`` maps to the 2000s. Anything outside those
+    shapes returns ``None`` so the caller falls back to the plain text check rather
+    than inventing a year.
 
     Parameters
     ----------
@@ -1776,15 +1807,27 @@ def _arxiv_announcement_year(arxiv_id: object) -> Optional[int]:
     if parsed is None:
         return None
     core = arxiv_id.strip().lower().removeprefix("arxiv:")
-    if "." not in core:
+    if "/" in core:
+        numeric = core.rsplit("/", 1)[-1]
+        if len(numeric) != 7 or not numeric.isdigit():
+            return None
+        year_part, month_part = int(numeric[:2]), int(numeric[2:4])
+        if not 1 <= month_part <= 12:
+            return None
+        if year_part >= 91:
+            return 1900 + year_part
+        if year_part <= 7:
+            return 2000 + year_part
         return None
-    stamp = core.split(".", 1)[0]
-    if len(stamp) != 4 or not stamp.isdigit():
-        return None
-    year_part, month_part = int(stamp[:2]), int(stamp[2:])
-    if year_part < 7 or not 1 <= month_part <= 12:
-        return None
-    return 2000 + year_part
+    if "." in core:
+        stamp = core.split(".", 1)[0]
+        if len(stamp) != 4 or not stamp.isdigit():
+            return None
+        year_part, month_part = int(stamp[:2]), int(stamp[2:])
+        if year_part < 7 or not 1 <= month_part <= 12:
+            return None
+        return 2000 + year_part
+    return None
 
 
 def _identifier_grounded(value: str, combined: str) -> bool:
@@ -3510,11 +3553,228 @@ def _validate_structural_slop(facts: Mapping[str, Any], code_paths: Sequence[Pat
     generic_structure = ("Sequential" in module_calls or module_calls.count("Linear") >= 2) and set(
         module_calls
     ) <= _GENERIC_MODEL_CALLS
-    if not generic_structure or not _claims_exotic_family(facts):
+    if (
+        not generic_structure
+        or not _claims_exotic_family(facts)
+        or _generic_structure_is_evidence_bound(facts)
+    ):
         return
     raise ProposalValidationError(
         "structural slop tripwire: generic Sequential/MLP staged as an exotic named family"
     )
+
+
+def _generic_structure_is_evidence_bound(facts: Mapping[str, Any]) -> bool:
+    """Return whether evidence says the named family is a generic MLP.
+
+    Parameters
+    ----------
+    facts:
+        Proposed fact tree.
+
+    Returns
+    -------
+    bool
+        True when implementation-architecture evidence explicitly describes the
+        family as an MLP, feed-forward, or Sequential stack.
+    """
+
+    if not _claims_generic_mlp_architecture_class(facts):
+        return False
+    if _claim_identity_has_exotic_mechanism(facts):
+        return False
+    identity_terms = _claimed_identity_terms(facts)
+    evidence = facts.get("evidence")
+    if not isinstance(evidence, Mapping):
+        return False
+    excerpts = evidence.get("excerpts")
+    if not isinstance(excerpts, list):
+        return False
+    for excerpt in excerpts:
+        if not isinstance(excerpt, Mapping):
+            continue
+        supports = excerpt.get("supports")
+        text = excerpt.get("text")
+        if (
+            isinstance(supports, list)
+            and "implementation.architecture" in supports
+            and isinstance(text, str)
+            and not _has_exotic_mechanism_text(text)
+            and _describes_generic_mlp_structure(text)
+            and _mentions_claimed_identity(text, identity_terms)
+        ):
+            return True
+    return False
+
+
+def _claims_generic_mlp_architecture_class(facts: Mapping[str, Any]) -> bool:
+    """Return whether the author classifies the architecture as generic MLP-like.
+
+    Parameters
+    ----------
+    facts:
+        Proposed fact tree.
+
+    Returns
+    -------
+    bool
+        True when at least one declared architecture class is in the generic
+        feed-forward vocabulary.
+    """
+
+    metadata = _mapping(facts.get("external_metadata"), "external_metadata")
+    architecture_classes = metadata.get("architecture_class")
+    if not isinstance(architecture_classes, list):
+        return False
+    return any(
+        isinstance(architecture_class, str)
+        and _normalize_support_text(architecture_class) in _GENERIC_FAMILY_NAMES
+        for architecture_class in architecture_classes
+    )
+
+
+def _claim_identity_has_exotic_mechanism(facts: Mapping[str, Any]) -> bool:
+    """Return whether claimed identity/class surfaces name an exotic mechanism.
+
+    Parameters
+    ----------
+    facts:
+        Proposed fact tree.
+
+    Returns
+    -------
+    bool
+        True when names, family, or architecture class carry non-generic mechanism
+        terms that cannot invoke the MLP evidence-bound exemption.
+    """
+
+    identity = _mapping(facts.get("identity"), "identity")
+    taxonomy = _mapping(facts.get("taxonomy"), "taxonomy")
+    metadata = _mapping(facts.get("external_metadata"), "external_metadata")
+    aliases = identity.get("aliases")
+    architecture_classes = metadata.get("architecture_class")
+    surfaces: list[object] = [
+        identity.get("canonical_name"),
+        taxonomy.get("family"),
+        metadata.get("family"),
+        *(aliases if isinstance(aliases, list) else []),
+        *(architecture_classes if isinstance(architecture_classes, list) else []),
+    ]
+    return any(
+        isinstance(surface, str) and _has_exotic_mechanism_text(surface) for surface in surfaces
+    )
+
+
+def _claimed_identity_terms(facts: Mapping[str, Any]) -> frozenset[str]:
+    """Return normalized non-generic names that can bind an MLP excerpt to a claim.
+
+    Parameters
+    ----------
+    facts:
+        Proposed fact tree.
+
+    Returns
+    -------
+    frozenset[str]
+        Non-empty normalized name, alias, and family terms.
+    """
+
+    identity = _mapping(facts.get("identity"), "identity")
+    taxonomy = _mapping(facts.get("taxonomy"), "taxonomy")
+    metadata = _mapping(facts.get("external_metadata"), "external_metadata")
+    aliases = identity.get("aliases")
+    surfaces: list[object] = [
+        identity.get("canonical_name"),
+        taxonomy.get("family"),
+        metadata.get("family"),
+        *(aliases if isinstance(aliases, list) else []),
+    ]
+    return frozenset(
+        term
+        for surface in surfaces
+        if isinstance(surface, str)
+        for term in (_normalize_support_text(surface),)
+        if term and term not in _GENERIC_FAMILY_NAMES
+    )
+
+
+def _mentions_claimed_identity(text: str, identity_terms: frozenset[str]) -> bool:
+    """Return whether evidence text names the claimed family identity.
+
+    Parameters
+    ----------
+    text:
+        Evidence excerpt text.
+    identity_terms:
+        Normalized non-generic claim names.
+
+    Returns
+    -------
+    bool
+        True when the excerpt contains one of the claim's normalized identity terms,
+        or no non-generic term is available.
+    """
+
+    if not identity_terms:
+        return True
+    normalized = f" {_normalize_support_text(text)} "
+    return any(f" {term} " in normalized for term in identity_terms)
+
+
+def _has_exotic_mechanism_text(text: str) -> bool:
+    """Return whether text names mechanisms outside the generic MLP exemption.
+
+    Parameters
+    ----------
+    text:
+        Authored claim or evidence text.
+
+    Returns
+    -------
+    bool
+        True for attention, convolutional, recurrent, residual, graph, or diffusion
+        mechanism vocabulary.
+    """
+
+    normalized = _normalize_support_text(text)
+    return bool(
+        re.search(
+            r"\b(?:"
+            r"attention|self attention|transformer|conv|convolution|convolutional|"
+            r"cnn|resnet|residual|recurrent|rnn|lstm|gru|graph|gnn|diffusion"
+            r")\b",
+            normalized,
+        )
+    )
+
+
+def _describes_generic_mlp_structure(text: str) -> bool:
+    """Return whether source text explicitly describes a generic MLP topology.
+
+    Parameters
+    ----------
+    text:
+        Evidence excerpt text.
+
+    Returns
+    -------
+    bool
+        True for concrete MLP/feed-forward/Sequential topology descriptions.
+    """
+
+    normalized = _normalize_support_text(text)
+    generic_terms = (
+        "multilayer perceptron",
+        "multi layer perceptron",
+        " feed forward ",
+        " feedforward ",
+        " fully connected ",
+        " sequential ",
+        " linear layers ",
+    )
+    if any(term in f" {normalized} " for term in generic_terms):
+        return True
+    return bool(re.search(r"\bmlp\b", normalized))
 
 
 def _claims_exotic_family(facts: Mapping[str, Any]) -> bool:
