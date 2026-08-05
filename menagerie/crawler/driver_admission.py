@@ -1567,6 +1567,11 @@ def classify_author_exit(
             "author executor stage1 failed: discovery-contract-invalid (attempt ",
             "author executor stage2 failed: result-not-json (attempt ",
             "author executor stage2 failed: result-contract-invalid (attempt ",
+            # Pre-publication gate: a wall claim the executor's own clock refuted
+            # (wall_seconds_observed < 0.5*grant, timed_out=false). The session ran
+            # to completion and published an unverified self-report -- model
+            # authoring evidence, never campaign transport.
+            "author executor stage2 failed: unverified-wall-claim (attempt ",
         )
         if returncode == AUTHOR_EXIT_RETRYABLE and any(
             line.startswith(expected_contract_failures) and line.endswith(")")
