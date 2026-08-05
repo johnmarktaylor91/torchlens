@@ -779,8 +779,8 @@ production path; the pool fragments above serve the operator-mediated lane the e
 replaced. They were unpinned until 2026-07-29, so drift in the two most load-bearing
 prompts was undetectable.
 
-- `stage1_discovery.md`: `sha256:3eac9b1557b9b4df7d5f387b9e3af2cfa6794294f738d7c63acc7fc4660a22d7`
-- `stage2_author.md`: `sha256:ecbc94e4b1ffa3c216955404ad0c551e7df474ecb2ff82dfde0da06bf8dfa0f2`
+- `stage1_discovery.md`: `sha256:0b56756b8a8aabcb1134536bc488e76f43bf1479319e208b90a6cc1a2a0a15aa`
+- `stage2_author.md`: `sha256:8d81d607590250e85f99c7db75e481607bfed9010a1187792113e2a808d7148c`
 
 ## 21. Acceptance tests
 

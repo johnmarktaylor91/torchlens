@@ -130,6 +130,38 @@ bookkeeping: nothing has run when you write a proposal, so there is no per-mode 
 to report. Omit it. Supplying a non-empty one claims attempts that do not exist and is
 refused.
 
+### `proposed_facts.fidelity`: write all eight leaves, judge only two
+
+`fidelity` is a **gate-state** block, and it is the one such block you must write. Nothing
+in it is filled in for you: all eight keys are required, including the six that describe a
+fidelity gate which has not run yet. Do **not** omit a leaf because it has no value --
+"not yet judged" has a spelling, and this is it:
+
+```json
+"fidelity": {
+  "required": true,
+  "reason": "<your judgment, in prose>",
+  "verdict": null,
+  "fidelity_identity": null,
+  "gate_id": null,
+  "current": false,
+  "permanent_scar": false,
+  "deviations": []
+}
+```
+
+`required` and `reason` are yours (R3 and R4 always require a gate; below that it is your
+call). The other six are the gate's, and at authoring time they take exactly the values
+above. Writing them is not self-approving fidelity -- `verdict: null` and `current: false`
+are precisely the claim that *no* verdict exists -- and the checker overwrites all six when
+it runs.
+
+`permanent_scar` is the leaf that has actually been missed, and it cost a model its whole
+authoring campaign: it is a gate-set indelible mark that a record was once judged `slop`,
+never an author's self-assessment, so an authored proposal always writes `false`. The
+embedded `fidelity.fidelity_identity` is likewise `null` here; it is a different field from
+the proposal's own top-level `fidelity_identity`, which you do compute with the calculator.
+
 Everything else in the proposal is yours, **including `proposed_facts.evidence`
 `excerpts[].text_sha256`** -- unlike a terminal `evidence_records` entry, that digest
 feeds the evidence identity the engine re-derives, so it is still required here. Compute
@@ -232,7 +264,9 @@ quote:
   claim will be reported as ungrounded.
 - `supports` -- the claims this excerpt is offered in support of.
 
-`family_level` (boolean) and `disposition` (short string) are optional.
+`family_level` (boolean) and `disposition` (short string) are optional. `disposition`, and
+`license_record`'s `declared_license`, are **non-empty** strings: omit the key when you have
+nothing to put in it rather than sending `""`, which is refused.
 
 Never put `text_sha256`, `content_sha256`, or `evidence_identity` in a record. You have no
 hashing primitive, you are not asked for a digest, and the engine derives every digest
