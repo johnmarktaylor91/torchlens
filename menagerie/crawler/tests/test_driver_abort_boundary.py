@@ -115,6 +115,52 @@ class SubprocessKilledAuthor(FakeAuthor):
         return super().author(item, work_root, config, context)
 
 
+class ProviderOverloadedAuthor(SubprocessKilledAuthor):
+    """Author lane whose victim emits the structured provider-overloaded record."""
+
+    def author(
+        self,
+        item: WorkItem,
+        work_root: Path,
+        config: DriverConfig,
+        context: AuthorityContext,
+    ) -> AuthorArtifact:
+        """Kill a victim child with the rung-8 provider-overloaded JSON payload."""
+
+        stage = self.victims.get(item.stable_id)
+        crashed = self.crashes.get(item.stable_id, 0)
+        if stage is not None and (self.crash_budget is None or crashed < self.crash_budget):
+            self.crashes[item.stable_id] = crashed + 1
+            payload = {
+                "failure_class": "provider-overloaded",
+                "harness_terminal_reason": "api_error",
+                "returncode": 1,
+                "session_error_text_quarantined": "API Error: Repeated 529 Overloaded errors.",
+            }
+            line = (
+                f"author executor {stage} failed: session-crashed (attempt deadbeef)\n"
+                f"{json.dumps(payload, sort_keys=True)}"
+            )
+            completed = _run_operator_command(
+                [
+                    sys.executable,
+                    "-c",
+                    f"import sys; sys.stderr.write({line!r}); sys.exit(75)",
+                ],
+                timeout_seconds=30.0,
+                env=None,
+            )
+            classify_author_exit(
+                "author",
+                item.stable_id,
+                completed.returncode,
+                completed.stdout or "",
+                completed.stderr or "",
+            )
+            raise AssertionError("provider-overloaded subprocess classified as clean exit")
+        return FakeAuthor.author(self, item, work_root, config, context)
+
+
 def _boundary_events(tmp_path: Path, snapshot) -> list[dict]:
     """Return every author-lane boundary decision on the operational ledger."""
 
@@ -229,6 +275,31 @@ def test_transient_author_death_recovers_through_backoff(tmp_path: Path) -> None
     assert models[victim]["status"]["code"] == "runs"
     assert sleeper.waits == [5.0]
     assert _boundary_events(tmp_path, snapshot) == []
+
+
+@pytest.mark.smoke
+def test_repeated_provider_overload_uses_weather_backoff(tmp_path: Path) -> None:
+    """Repeated structured provider-overloaded crashes park before the final retry."""
+
+    snapshot = _snapshot(tmp_path, count=3)
+    victim = snapshot.items[2].stable_id
+    sleeper = _RecordingSleeper()
+    author = ProviderOverloadedAuthor({victim: "stage2"})
+
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=author,
+        author_concurrency=1,
+        sleeper=sleeper,
+    ).run()
+
+    assert result.status == "terminal-partition-complete"
+    assert sleeper.waits == [5.0, 300.0]
+    assert author.crashes[victim] == 3
+    (decision,) = _boundary_events(tmp_path, snapshot)
+    assert decision["details"]["decision"] == "model-scoped"
+    assert decision["details"]["retry_backoff_seconds"] == [5.0, 300.0]
 
 
 @pytest.mark.smoke

@@ -3013,6 +3013,14 @@ def _outage_streak_signal(
 #: genuinely dead host still halts within about half a minute per lane call.
 _INFRASTRUCTURE_RETRY_BACKOFF_SECONDS: tuple[float, ...] = (5.0, 30.0)
 
+#: Weather-scale retry waits for repeated provider-overloaded author crashes. The
+#: first wait stays short in case the wrapper caught a single transient edge; the
+#: second wait parks the lane for minutes instead of re-entering the same 529 cell.
+_PROVIDER_OVERLOAD_RETRY_BACKOFF_SECONDS: tuple[float, ...] = (5.0, 300.0)
+
+#: Hard upper bound for provider-overload weather waits.
+_PROVIDER_OVERLOAD_BACKOFF_CEILING_SECONDS: float = 900.0
+
 #: Campaign-volume free-space floor for the lane-health host check. Deliberately far
 #: below the 30 GiB env-solve floor: this check asks only "can the host still write
 #: records and session artifacts", not "can it solve environments".
@@ -4749,19 +4757,11 @@ class AdmissionEnvironmentMixin:
                         return pause
                     continue
                 except Exception as exc:  # noqa: BLE001 -- repair failure is model-local
-                    # `AuthorResultMalformedError` (incl. the executor-relayed
-                    # contract refusal) is the AUTHOR violating its result
-                    # contract; `internal-error` would indict the engine.
-                    reason = (
-                        "protocol-violation"
-                        if isinstance(exc, (DriverIntegrationError, AuthorResultMalformedError))
-                        and not self._is_infrastructure_error(exc)
-                        else "internal-error"
-                    )
+                    stage, reason = self._repair_failure_stage_and_reason(exc)
                     attempt = _driver_failure_attempt(
                         items_by_id[stable_id],
                         artifacts[stable_id],
-                        "runner",
+                        stage,
                         reason,
                         exc,
                         self.config,
@@ -4773,7 +4773,7 @@ class AdmissionEnvironmentMixin:
                     self._terminalize(
                         items_by_id[stable_id],
                         artifacts[stable_id],
-                        "failed:runner",
+                        f"failed:{stage}",
                         reason,
                         str(exc),
                         (persisted_attempt,),
@@ -5059,16 +5059,11 @@ class AdmissionEnvironmentMixin:
                             return pause
                         break
                     except Exception as exc:  # noqa: BLE001 -- repair failure is model-local
-                        reason = (
-                            "protocol-violation"
-                            if isinstance(exc, DriverIntegrationError)
-                            and not self._is_infrastructure_error(exc)
-                            else "internal-error"
-                        )
+                        stage, reason = self._repair_failure_stage_and_reason(exc)
                         attempt = _driver_failure_attempt(
                             item,
                             artifact,
-                            "runner",
+                            stage,
                             reason,
                             exc,
                             self.config,
@@ -5080,7 +5075,7 @@ class AdmissionEnvironmentMixin:
                         self._terminalize(
                             item,
                             artifact,
-                            "failed:runner",
+                            f"failed:{stage}",
                             reason,
                             str(exc),
                             (persisted_attempt,),
@@ -5255,16 +5250,11 @@ class AdmissionEnvironmentMixin:
                             metadata_blocked = True
                             break
                         except Exception as exc:  # noqa: BLE001 -- repair failure is model-local
-                            reason = (
-                                "protocol-violation"
-                                if isinstance(exc, DriverIntegrationError)
-                                and not self._is_infrastructure_error(exc)
-                                else "internal-error"
-                            )
+                            stage, reason = self._repair_failure_stage_and_reason(exc)
                             attempt = _driver_failure_attempt(
                                 item,
                                 artifact,
-                                "runner",
+                                stage,
                                 reason,
                                 exc,
                                 self.config,
@@ -5278,7 +5268,7 @@ class AdmissionEnvironmentMixin:
                             self._terminalize(
                                 item,
                                 artifact,
-                                "failed:runner",
+                                f"failed:{stage}",
                                 reason,
                                 str(exc),
                                 (persisted_attempt,),
@@ -5433,6 +5423,8 @@ class AdmissionEnvironmentMixin:
         backoffs = _INFRASTRUCTURE_RETRY_BACKOFF_SECONDS
         contract_retries = 0
         infrastructure_retries = 0
+        provider_overload_retries = 0
+        observed_backoffs: list[float] = []
         while True:
             if admission is not None:
                 lane, item = admission
@@ -5461,7 +5453,15 @@ class AdmissionEnvironmentMixin:
                 if not self._is_infrastructure_error(exc):
                     raise
                 if infrastructure_retries < len(backoffs):
-                    self._wait_before_infrastructure_retry(backoffs[infrastructure_retries])
+                    backoff = self._infrastructure_retry_backoff(
+                        exc,
+                        retry_index=infrastructure_retries,
+                        provider_overload_retries=provider_overload_retries,
+                    )
+                    if self._has_provider_overloaded_failure_class(exc):
+                        provider_overload_retries += 1
+                    observed_backoffs.append(backoff)
+                    self._wait_before_infrastructure_retry(backoff)
                     infrastructure_retries += 1
                     continue
                 if (
@@ -5472,7 +5472,7 @@ class AdmissionEnvironmentMixin:
                     raise AuthorSessionRetryExhausted(
                         admission[1].stable_id,
                         attempts=1 + infrastructure_retries,
-                        backoff_seconds=backoffs,
+                        backoff_seconds=tuple(observed_backoffs),
                         detail=str(exc)[-STDIO_TAIL_MAX_CHARS:],
                     ) from exc
                 raise
@@ -5482,6 +5482,44 @@ class AdmissionEnvironmentMixin:
                     # same-run publication witness for the boundary below.
                     self._note_author_lane_publication(admission[1].stable_id)
                 return result
+
+    @staticmethod
+    def _infrastructure_retry_backoff(
+        exc: Exception,
+        *,
+        retry_index: int,
+        provider_overload_retries: int,
+    ) -> float:
+        """Return the bounded wait before the next infrastructure retry.
+
+        Parameters
+        ----------
+        exc:
+            Infrastructure exception observed on the just-failed attempt.
+        retry_index:
+            Zero-based retry wait index.
+        provider_overload_retries:
+            Number of previous provider-overload waits in this retry budget.
+
+        Returns
+        -------
+        float
+            Backoff duration in seconds.
+        """
+
+        if (
+            AdmissionEnvironmentMixin._has_provider_overloaded_failure_class(exc)
+            and provider_overload_retries > 0
+        ):
+            weather_index = min(
+                retry_index,
+                len(_PROVIDER_OVERLOAD_RETRY_BACKOFF_SECONDS) - 1,
+            )
+            return min(
+                _PROVIDER_OVERLOAD_RETRY_BACKOFF_SECONDS[weather_index],
+                _PROVIDER_OVERLOAD_BACKOFF_CEILING_SECONDS,
+            )
+        return _INFRASTRUCTURE_RETRY_BACKOFF_SECONDS[retry_index]
 
     def _wait_before_infrastructure_retry(self, seconds: float) -> None:
         """Wait out one backoff entry without ever outliving a shutdown request.
@@ -5502,6 +5540,73 @@ class AdmissionEnvironmentMixin:
         # event; the admission check on the next loop iteration then raises the
         # typed shutdown, so a SIGTERM never waits out a 30-second backoff.
         self._shutdown_event.wait(seconds)
+
+    @staticmethod
+    def _has_provider_overloaded_failure_class(exc: Exception) -> bool:
+        """Return whether an exception chain carries the structured 529 class.
+
+        Parameters
+        ----------
+        exc:
+            External lane exception.
+
+        Returns
+        -------
+        bool
+            ``True`` only when a JSON object in the exception text carries
+            ``failure_class="provider-overloaded"``.
+        """
+
+        current: BaseException | None = exc
+        seen: set[int] = set()
+        while current is not None and id(current) not in seen:
+            seen.add(id(current))
+            for line in str(current).splitlines():
+                stripped = line.strip()
+                if not stripped.startswith("{") or not stripped.endswith("}"):
+                    continue
+                try:
+                    payload = json.loads(stripped)
+                except json.JSONDecodeError:
+                    continue
+                if (
+                    isinstance(payload, Mapping)
+                    and payload.get("failure_class") == "provider-overloaded"
+                ):
+                    return True
+            current = current.__cause__ or current.__context__
+        return False
+
+    @staticmethod
+    def _repair_failure_stage_and_reason(exc: Exception) -> tuple[str, str]:
+        """Classify a model-local author repair failure for terminal recording.
+
+        Parameters
+        ----------
+        exc:
+            Exception raised by a bounded author repair round.
+
+        Returns
+        -------
+        tuple[str, str]
+            Closed ``(stage, reason_code)`` pair.
+        """
+
+        if isinstance(
+            exc,
+            (
+                AuthorEffortCapExceeded,
+                AuthorEffortExhaustionClaim,
+                AuthorResultMalformedError,
+                ArtifactBindingError,
+            ),
+        ):
+            return _author_lane_failure(exc)
+        if isinstance(exc, DriverIntegrationError) and not AdmissionEnvironmentMixin._is_infrastructure_error(
+            exc
+        ):
+            return "runner", "protocol-violation"
+        return "runner", "internal-error"
 
     def _author_no_publication_class(self, exc: Exception) -> bool:
         """Return whether one exhausted author failure is a NO-PUBLICATION death.
