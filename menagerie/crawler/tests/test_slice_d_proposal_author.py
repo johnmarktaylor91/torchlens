@@ -1490,6 +1490,47 @@ def test_recursive_helper_structural_slop_is_rejected(tmp_path: Path) -> None:
         )
 
 
+def test_evidence_bound_named_mlp_classic_is_not_structural_slop(tmp_path: Path) -> None:
+    """A truthfully named classic MLP can pass when the source says it is an MLP."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    facts = proposal["proposed_facts"]
+    facts["identity"]["canonical_name"] = "NETtalk"
+    facts["identity"]["aliases"] = ["NETtalk"]
+    facts["taxonomy"]["family"] = "nettalk"
+    facts["external_metadata"]["family"] = "nettalk"
+    facts["external_metadata"]["architecture_class"] = ["mlp"]
+    excerpt = facts["evidence"]["excerpts"][0]
+    text = (
+        "NETtalk is a multilayer perceptron for mapping text windows to phoneme "
+        "outputs. The feed-forward network uses fully connected linear layers."
+    )
+    source_path = tmp_path / "source.txt"
+    source_path.write_text(text, encoding="utf-8")
+    source_hash = hash_bytes(text.encode())
+    for row in (*facts["source_resolution"]["sources"], *manifest["sources"]):
+        if row.get("source_id") == "source-1":
+            row["content_sha256"] = source_hash
+    excerpt["text"] = text
+    excerpt["text_sha256"] = hash_bytes(text.encode())
+    excerpt["locator"] = f"bytes:0-{len(text.encode())}"
+    excerpt["supports"] = [*sorted(DEFAULT_GATED_CLAIMS), "implementation.architecture"]
+    manifest["manifest_sha256"] = stable_hash(manifest["sources"])
+    proposal["verified_hashes"]["source_manifest"] = manifest["manifest_sha256"]
+    _make_r4(
+        proposal,
+        manifest,
+        tmp_path,
+        "import torch.nn as nn\n\n"
+        "def build_model() -> object:\n"
+        "    return nn.Sequential(nn.Linear(203, 80), nn.Linear(80, 26))\n\n"
+        "def make_dummy_call(seed: int, device: str) -> tuple[tuple[()], dict[str, object]]:\n"
+        "    return (), {}\n",
+    )
+
+    validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
 @pytest.mark.parametrize("forbidden", ["eval", "exec", "compile"])
 def test_dynamic_execution_code_is_rejected(tmp_path: Path, forbidden: str) -> None:
     """Every dynamic execution primitive is rejected.
@@ -2601,6 +2642,32 @@ def _retext_paper(
     proposal["verified_hashes"]["source_manifest"] = manifest["manifest_sha256"]
 
 
+def test_taxonomy_era_typed_absence_is_accepted(tmp_path: Path) -> None:
+    """A null taxonomy era is valid only through its typed availability route."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    facts = proposal["proposed_facts"]
+    facts["taxonomy"]["era"] = None
+    facts["external_metadata"]["availability"]["taxonomy.era"] = {
+        "status": "not-found-after-search",
+        "values": [],
+        "basis": "search-exhausted",
+        "evidence": ["evidence-1"],
+    }
+
+    validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_taxonomy_era_bare_absence_is_refused(tmp_path: Path) -> None:
+    """A null taxonomy era without typed availability remains a gated refusal."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    proposal["proposed_facts"]["taxonomy"]["era"] = None
+
+    with pytest.raises(ProposalValidationError, match="taxonomy\\.era is bare null"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
 def _paper_without_year(
     tmp_path: Path, *, arxiv_id: str = "2007.04044"
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -2697,8 +2764,8 @@ def test_year_without_an_arxiv_identifier_still_needs_the_paper_text(tmp_path: P
         validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
 
 
-def test_old_style_arxiv_identifier_entails_no_year(tmp_path: Path) -> None:
-    """``archive/YYMMNNN`` is not decoded, so the text check governs unchanged."""
+def test_old_style_arxiv_identifier_entails_announcement_year(tmp_path: Path) -> None:
+    """``archive/YYMMNNN`` grounds its encoded announcement year without text."""
 
     proposal, manifest = _paper_without_year(tmp_path, arxiv_id="cs.CV/0309136")
     for citation in (
@@ -2706,8 +2773,7 @@ def test_old_style_arxiv_identifier_entails_no_year(tmp_path: Path) -> None:
         proposal["proposed_facts"]["external_metadata"]["citation"],
     ):
         citation["year"] = 2003
-    with pytest.raises(ProposalValidationError, match="not grounded verbatim.*year"):
-        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+    validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
 
 
 def _paper_text(proposal: dict[str, Any]) -> str:

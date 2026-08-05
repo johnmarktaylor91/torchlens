@@ -226,8 +226,15 @@
           "description": "Mandatory modalities."
         },
         "era": {
-          "$ref": "#/$defs/nonempty_string",
-          "description": "Mandatory era."
+          "oneOf": [
+            {
+              "$ref": "#/$defs/nonempty_string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mandatory era, or null only with a typed taxonomy.era availability record."
         },
         "architecture_tags": {
           "$ref": "#/$defs/string_array",

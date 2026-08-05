@@ -11,7 +11,7 @@ from types import MappingProxyType
 from typing import Any, Iterable, Mapping, MutableSet, Union
 
 from jsonschema import Draft202012Validator, FormatChecker
-from jsonschema.exceptions import SchemaError, ValidationError, best_match
+from jsonschema.exceptions import SchemaError, ValidationError
 from referencing import Registry, Resource
 
 from menagerie.crawler.constants import (
@@ -539,31 +539,21 @@ def validate_payload(payload: Mapping[str, Any], schema_version: Union[str, None
         validator = get_validator(expected)
     except KeyError as exc:
         raise PayloadValidationError(str(exc)) from exc
-    error = _closest_validation_error(validator.iter_errors(dict(payload)))
-    if error is None:
+    errors = _closest_validation_errors(validator.iter_errors(dict(payload)))
+    if not errors:
         return
-    location = _format_json_path(error.absolute_path)
-    schema_location = _format_json_path(error.absolute_schema_path)
-    constraint = str(error.validator)
-    branch_label = (
-        "closest schema branch"
-        if any(part in {"anyOf", "oneOf"} for part in error.absolute_schema_path)
-        else "schema path"
-    )
+    messages = [_format_validation_error(expected, error) for error in errors]
     message = (
-        f"{expected} validation failed at {location} "
-        f"({branch_label} {schema_location}; constraint {constraint}): {error.message}"
+        messages[0]
+        if len(messages) == 1
+        else f"{expected} validation failed with {len(messages)} violations:\n"
+        + "\n".join(f"- {message}" for message in messages)
     )
-    raise PayloadValidationError(message) from error
+    raise PayloadValidationError(message) from errors[0]
 
 
-def _closest_validation_error(errors: Iterable[ValidationError]) -> ValidationError | None:
-    """Select the most actionable leaf from a JSON Schema error tree.
-
-    ``jsonschema.best_match`` deliberately stops at an ambiguous union. When one
-    union branch has strictly fewer leaf violations than its siblings, that branch
-    is the closest match and can be selected without hiding an equally plausible
-    alternative.
+def _closest_validation_errors(errors: Iterable[ValidationError]) -> list[ValidationError]:
+    """Select one actionable leaf for every independent schema violation.
 
     Parameters
     ----------
@@ -572,35 +562,122 @@ def _closest_validation_error(errors: Iterable[ValidationError]) -> ValidationEr
 
     Returns
     -------
-    ValidationError | None
-        Most actionable unambiguous leaf, or the best enclosing error when the
-        closest branches tie.
+    list[ValidationError]
+        Closest actionable leaves in stable instance-path order.
     """
 
-    selected = best_match(errors)
-    while selected is not None and selected.context:
-        if selected.validator in {"anyOf", "oneOf"}:
-            branch_errors: dict[int, list[ValidationError]] = {}
-            for error in selected.context:
-                schema_path = tuple(error.relative_schema_path)
-                if schema_path and isinstance(schema_path[0], int):
-                    branch_errors.setdefault(schema_path[0], []).append(error)
-            if branch_errors:
-                counts = {
-                    branch: sum(_validation_leaf_count(error) for error in candidates)
-                    for branch, candidates in branch_errors.items()
-                }
-                minimum = min(counts.values())
-                closest = [branch for branch, count in counts.items() if count == minimum]
-                if len(closest) != 1:
-                    return selected
-                selected = best_match(branch_errors[closest[0]])
-                continue
-        nested = best_match(selected.context)
-        if nested is None:
-            return selected
-        selected = nested
-    return selected
+    selected: list[ValidationError] = []
+    for error in errors:
+        selected.extend(_actionable_validation_leaves(error))
+    return sorted(
+        selected,
+        key=lambda error: (
+            tuple(str(part) for part in error.absolute_path),
+            tuple(str(part) for part in error.absolute_schema_path),
+            str(error.message),
+        ),
+    )
+
+
+def _actionable_validation_leaves(error: ValidationError) -> list[ValidationError]:
+    """Return actionable leaves under one schema error.
+
+    Parameters
+    ----------
+    error:
+        JSON Schema error to reduce without widening ambiguous unions.
+
+    Returns
+    -------
+    list[ValidationError]
+        Concrete leaves, or the enclosing union error when no closest branch is unique.
+    """
+
+    if not error.context:
+        return [error]
+    if error.validator in {"anyOf", "oneOf"}:
+        branch_errors: dict[int, list[ValidationError]] = {}
+        for child in error.context:
+            schema_path = tuple(child.relative_schema_path)
+            if schema_path and isinstance(schema_path[0], int):
+                branch_errors.setdefault(schema_path[0], []).append(child)
+        if branch_errors:
+            discriminator_matches = [
+                branch
+                for branch, candidates in branch_errors.items()
+                if not _has_discriminator_const_mismatch(candidates)
+            ]
+            if len(discriminator_matches) == 1:
+                leaves: list[ValidationError] = []
+                for child in branch_errors[discriminator_matches[0]]:
+                    leaves.extend(_actionable_validation_leaves(child))
+                return leaves or [error]
+            counts = {
+                branch: sum(_validation_leaf_count(child) for child in candidates)
+                for branch, candidates in branch_errors.items()
+            }
+            minimum = min(counts.values())
+            closest = [branch for branch, count in counts.items() if count == minimum]
+            if len(closest) != 1:
+                return [error]
+            leaves: list[ValidationError] = []
+            for child in branch_errors[closest[0]]:
+                leaves.extend(_actionable_validation_leaves(child))
+            return leaves or [error]
+    leaves = []
+    for child in error.context:
+        leaves.extend(_actionable_validation_leaves(child))
+    return leaves or [error]
+
+
+def _has_discriminator_const_mismatch(errors: Iterable[ValidationError]) -> bool:
+    """Return whether a union branch contradicts a closed discriminator field.
+
+    Parameters
+    ----------
+    errors:
+        Candidate branch errors.
+
+    Returns
+    -------
+    bool
+        True when the branch explicitly rejects ``arm`` or ``kind`` by ``const``.
+    """
+
+    for error in errors:
+        if error.validator == "const" and tuple(error.path)[-1:] in {("arm",), ("kind",)}:
+            return True
+    return False
+
+
+def _format_validation_error(schema_version: str, error: ValidationError) -> str:
+    """Render one selected JSON Schema violation as a diagnostic line.
+
+    Parameters
+    ----------
+    schema_version:
+        Executable schema version that refused the payload.
+    error:
+        Selected validation leaf to format.
+
+    Returns
+    -------
+    str
+        Human-readable refusal message for one violation.
+    """
+
+    location = _format_json_path(error.absolute_path)
+    schema_location = _format_json_path(error.absolute_schema_path)
+    constraint = str(error.validator)
+    branch_label = (
+        "closest schema branch"
+        if any(part in {"anyOf", "oneOf"} for part in error.absolute_schema_path)
+        else "schema path"
+    )
+    return (
+        f"{schema_version} validation failed at {location} "
+        f"({branch_label} {schema_location}; constraint {constraint}): {error.message}"
+    )
 
 
 def _validation_leaf_count(error: ValidationError) -> int:

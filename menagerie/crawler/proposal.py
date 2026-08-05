@@ -120,6 +120,7 @@ EMPTIABLE_CLAIMS = frozenset(
     {
         "external_metadata.lineage",
         "external_metadata.predecessors",
+        "taxonomy.era",
         "taxonomy.novel_ops",
     }
 )
@@ -1718,8 +1719,8 @@ def _year_grounded(
     year alone would refuse (model ``m8245``, PoolFormer, announced 2111 and published at
     CVPR 2022). It runs one way only -- a year EARLIER than announcement is impossible
     for the work the identifier names, and two or more years later is not entailed, so
-    both stay refused. Old-style identifiers (``cs.CV/0309136``) are not decoded here and
-    fall through to the text check unchanged.
+    both stay refused. Old-style identifiers (``cs.CV/0309136``) carry the same YYMM
+    announcement stamp in their numeric suffix and are decoded by the same one-way rule.
 
     Parameters
     ----------
@@ -1752,12 +1753,13 @@ def _year_grounded(
 def _arxiv_announcement_year(arxiv_id: object) -> Optional[int]:
     """Return the four-digit year a modern arXiv identifier announces, if any.
 
-    Modern identifiers are ``YYMM.NNNNN`` where ``YY`` is the two-digit year and ``MM``
-    is a real month. The scheme began in April 2007 and arXiv has stated it runs to 2029
-    before renumbering, so ``07``-``99`` maps into the 2000s unambiguously. Anything that
-    is not exactly this shape -- an old-style ``archive/YYMMNNN`` locator, a malformed
-    month, a pre-2007 stamp -- returns ``None`` so the caller falls back to the plain
-    text check rather than inventing a year.
+    Modern identifiers are ``YYMM.NNNNN`` and old-style identifiers are
+    ``archive/YYMMNNN``; in both, ``YY`` is the two-digit year and ``MM`` is a real
+    month. The modern scheme began in April 2007, so modern ``07``-``99`` maps into the
+    2000s unambiguously. Old-style ids span 1991 through March 2007, so ``91``-``99``
+    maps to the 1900s and ``00``-``07`` maps to the 2000s. Anything outside those
+    shapes returns ``None`` so the caller falls back to the plain text check rather
+    than inventing a year.
 
     Parameters
     ----------
@@ -1776,15 +1778,27 @@ def _arxiv_announcement_year(arxiv_id: object) -> Optional[int]:
     if parsed is None:
         return None
     core = arxiv_id.strip().lower().removeprefix("arxiv:")
-    if "." not in core:
+    if "/" in core:
+        numeric = core.rsplit("/", 1)[-1]
+        if len(numeric) != 7 or not numeric.isdigit():
+            return None
+        year_part, month_part = int(numeric[:2]), int(numeric[2:4])
+        if not 1 <= month_part <= 12:
+            return None
+        if year_part >= 91:
+            return 1900 + year_part
+        if year_part <= 7:
+            return 2000 + year_part
         return None
-    stamp = core.split(".", 1)[0]
-    if len(stamp) != 4 or not stamp.isdigit():
-        return None
-    year_part, month_part = int(stamp[:2]), int(stamp[2:])
-    if year_part < 7 or not 1 <= month_part <= 12:
-        return None
-    return 2000 + year_part
+    if "." in core:
+        stamp = core.split(".", 1)[0]
+        if len(stamp) != 4 or not stamp.isdigit():
+            return None
+        year_part, month_part = int(stamp[:2]), int(stamp[2:])
+        if year_part < 7 or not 1 <= month_part <= 12:
+            return None
+        return 2000 + year_part
+    return None
 
 
 def _identifier_grounded(value: str, combined: str) -> bool:
@@ -3510,11 +3524,80 @@ def _validate_structural_slop(facts: Mapping[str, Any], code_paths: Sequence[Pat
     generic_structure = ("Sequential" in module_calls or module_calls.count("Linear") >= 2) and set(
         module_calls
     ) <= _GENERIC_MODEL_CALLS
-    if not generic_structure or not _claims_exotic_family(facts):
+    if (
+        not generic_structure
+        or not _claims_exotic_family(facts)
+        or _generic_structure_is_evidence_bound(facts)
+    ):
         return
     raise ProposalValidationError(
         "structural slop tripwire: generic Sequential/MLP staged as an exotic named family"
     )
+
+
+def _generic_structure_is_evidence_bound(facts: Mapping[str, Any]) -> bool:
+    """Return whether evidence says the named family is a generic MLP.
+
+    Parameters
+    ----------
+    facts:
+        Proposed fact tree.
+
+    Returns
+    -------
+    bool
+        True when implementation-architecture evidence explicitly describes the
+        family as an MLP, feed-forward, or Sequential stack.
+    """
+
+    evidence = facts.get("evidence")
+    if not isinstance(evidence, Mapping):
+        return False
+    excerpts = evidence.get("excerpts")
+    if not isinstance(excerpts, list):
+        return False
+    for excerpt in excerpts:
+        if not isinstance(excerpt, Mapping):
+            continue
+        supports = excerpt.get("supports")
+        text = excerpt.get("text")
+        if (
+            isinstance(supports, list)
+            and "implementation.architecture" in supports
+            and isinstance(text, str)
+            and _describes_generic_mlp_structure(text)
+        ):
+            return True
+    return False
+
+
+def _describes_generic_mlp_structure(text: str) -> bool:
+    """Return whether source text explicitly describes a generic MLP topology.
+
+    Parameters
+    ----------
+    text:
+        Evidence excerpt text.
+
+    Returns
+    -------
+    bool
+        True for concrete MLP/feed-forward/Sequential topology descriptions.
+    """
+
+    normalized = _normalize_support_text(text)
+    generic_terms = (
+        "multilayer perceptron",
+        "multi layer perceptron",
+        " feed forward ",
+        " feedforward ",
+        " fully connected ",
+        " sequential ",
+        " linear layers ",
+    )
+    if any(term in f" {normalized} " for term in generic_terms):
+        return True
+    return bool(re.search(r"\bmlp\b", normalized))
 
 
 def _claims_exotic_family(facts: Mapping[str, Any]) -> bool:
