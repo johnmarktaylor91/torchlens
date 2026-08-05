@@ -15,6 +15,10 @@ class EvidenceValidationError(ValueError):
     """Raised when literal evidence is altered, missing, or uncovered."""
 
 
+SMP_ZOO_PREFIX = "segmentation_models_pytorch-"
+SMP_LEGACY_NAME_PREFIX = "smp_"
+
+
 @dataclass(frozen=True)
 class EvidenceValidationReport:
     """Validated evidence coverage.
@@ -37,6 +41,108 @@ class EvidenceValidationReport:
     supported_claims: frozenset[str]
     family_grounded: bool
     absence_covered_claims: frozenset[str] = frozenset()
+
+
+def trusted_intake_identity_mismatches(
+    proposed_identity: Mapping[str, Any],
+    trusted_identity: Mapping[str, Any],
+    *,
+    intake_name: str,
+    intake_zoo: str,
+) -> dict[str, dict[str, Any]]:
+    """Return trusted-intake identity leaves contradicted by proposed facts.
+
+    The trusted-intake tripwire stays exact for every field except one legacy SMP
+    spelling: roster names use ``smp_<model>_<encoder>`` as their full natural-key
+    token, while source-grounded R1 proposals use the encoder token as
+    ``identity.variant``. That equivalence is accepted only when the intake row is
+    from segmentation_models_pytorch and the trusted full token decomposes exactly
+    around the proposed encoder token.
+
+    Parameters
+    ----------
+    proposed_identity:
+        Author-proposed ``identity`` object.
+    trusted_identity:
+        Trusted-intake projection for the same item.
+    intake_name:
+        Raw trusted intake ``name`` token.
+    intake_zoo:
+        Raw trusted intake ``zoo`` token.
+
+    Returns
+    -------
+    dict[str, dict[str, Any]]
+        Mismatched trusted fields, keyed by field name.
+    """
+
+    return {
+        field: {"proposed": proposed_identity.get(field), "trusted": trusted_value}
+        for field, trusted_value in trusted_identity.items()
+        if not _trusted_identity_field_matches(
+            field,
+            proposed_identity.get(field),
+            trusted_value,
+            intake_name=intake_name,
+            intake_zoo=intake_zoo,
+        )
+    }
+
+
+def _trusted_identity_field_matches(
+    field: str,
+    proposed_value: Any,
+    trusted_value: Any,
+    *,
+    intake_name: str,
+    intake_zoo: str,
+) -> bool:
+    """Return whether one trusted identity field is satisfied."""
+
+    if proposed_value == trusted_value:
+        return True
+    if field != "variant" or not isinstance(proposed_value, str) or not isinstance(
+        trusted_value, str
+    ):
+        return False
+    return _smp_legacy_variant_matches(
+        proposed_variant=proposed_value,
+        trusted_variant=trusted_value,
+        intake_name=intake_name,
+        intake_zoo=intake_zoo,
+    )
+
+
+def _smp_legacy_variant_matches(
+    *,
+    proposed_variant: str,
+    trusted_variant: str,
+    intake_name: str,
+    intake_zoo: str,
+) -> bool:
+    """Return whether an SMP full roster token proves the proposed encoder variant."""
+
+    if not intake_zoo.startswith(SMP_ZOO_PREFIX):
+        return False
+    if trusted_variant != intake_name or not trusted_variant.startswith(SMP_LEGACY_NAME_PREFIX):
+        return False
+    if proposed_variant != proposed_variant.strip() or not proposed_variant:
+        return False
+    encoder = _smp_encoder_token(trusted_variant, proposed_variant)
+    return encoder == proposed_variant
+
+
+def _smp_encoder_token(trusted_variant: str, proposed_variant: str) -> Optional[str]:
+    """Extract the SMP encoder suffix from a trusted roster token, if it is exact."""
+
+    prefix = SMP_LEGACY_NAME_PREFIX
+    suffix = f"_{proposed_variant}"
+    if not trusted_variant.startswith(prefix) or not trusted_variant.endswith(suffix):
+        return None
+    model_token = trusted_variant[len(prefix) : -len(suffix)]
+    if not model_token:
+        return None
+    return proposed_variant
 
 
 def validate_evidence(
