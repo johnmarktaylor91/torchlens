@@ -110,6 +110,9 @@ ROLE_IMPLEMENTATION = "implementation"
 ROLE_INTRODUCING_PAPER = "introducing-paper"
 ROLE_DOCUMENTATION = "documentation"
 ROLE_PROBE = "probe"
+BROKER_MANIFEST_ROLES = frozenset(
+    {ROLE_IMPLEMENTATION, ROLE_DOCUMENTATION, ROLE_INTRODUCING_PAPER}
+)
 
 DEFAULT_TARGET_BYTE_CEILING = 8 * 1024 * 1024
 DEFAULT_TOTAL_BYTE_CEILING = 64 * 1024 * 1024
@@ -1357,19 +1360,6 @@ def _manifest_row(
     )
     if not authoritative_url or not outcome.final_url:
         raise SourceBrokerError("fetched broker outcome lacks an authoritative final url")
-    # The lane's admission vocabulary for ``broker_role`` is still the closed
-    # pair {implementation, documentation} (driver_admission refuses anything
-    # else), so a citable-paper binding is recorded at two granularities: the
-    # lane byte-custody class stays ``documentation`` -- a paper page IS
-    # documentation in that coarse vocabulary -- and the broker's own citation
-    # authority rides beside it as the machine-owned ``broker_citable_role``.
-    # Both values come from ONE derivation (`_classify_broker_role`); collapse
-    # them into ``broker_role`` alone once the driver vocabulary widens.
-    lane_role = outcome.bound_role
-    citable_role: Optional[str] = None
-    if outcome.bound_role == ROLE_INTRODUCING_PAPER:
-        lane_role = ROLE_DOCUMENTATION
-        citable_role = ROLE_INTRODUCING_PAPER
     row: JsonObject = {
         "source_id": str(descriptor["source_id"]),
         "url": authoritative_url,
@@ -1378,7 +1368,7 @@ def _manifest_row(
         "expected_sha256": outcome.sha256,
         "media_type": outcome.media_type,
         "media_type_method": outcome.media_type_method,
-        "broker_role": lane_role,
+        "broker_role": outcome.bound_role,
         "broker_outcome": OUTCOME_FETCHED,
         "redirect_chain": list(outcome.redirect_chain),
         "requested_role": str(descriptor["requested_role"]),
@@ -1386,8 +1376,6 @@ def _manifest_row(
         "basis": str(descriptor["basis"]),
         "retrieved_at": outcome.retrieved_at,
     }
-    if citable_role is not None:
-        row["broker_citable_role"] = citable_role
     notes = str(descriptor.get("notes") or "")
     if notes:
         row["notes"] = notes

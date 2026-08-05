@@ -187,6 +187,10 @@ actually hit is never held against you; an unlisted locator is simply an unexami
 - A `forge-file` needs `repo`, normalized relative `path`, and requested `ref`; a
   `raw-url` needs a direct HTTPS `url`; a `paper` needs one HTTPS URL or supported
   arXiv/DOI/OpenReview identifier.
+- HTTP and other policy-refused links are still evidence that you checked a candidate. Do not
+  turn them into malformed HTTPS guesses and do not drop them from negative findings; record the
+  exact locator in the negative arm's candidate links with the appropriate rejection class so the
+  coordinator can attach typed policy evidence instead of treating the link as an author error.
 - A requested ref may be a tag, branch, version, or a SHA you actually observed. It is
   never authoritative: the broker dereferences it independently, retains it as
   `requested_ref`, and takes `revision` only from the resolver receipt.

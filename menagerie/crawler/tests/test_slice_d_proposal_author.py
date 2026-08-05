@@ -1463,6 +1463,48 @@ def test_r4_checked_candidate_withheld_from_fetch_is_rejected(tmp_path: Path) ->
         )
 
 
+def test_r4_policy_unfetchable_checked_link_binds_to_broker_receipt(tmp_path: Path) -> None:
+    """A checked HTTP link is valid only as receipt-backed typed policy evidence."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    code = (
+        "def build_model() -> object:\n"
+        "    return object()\n\n"
+        "def make_dummy_call(seed: int, device: str) -> tuple[tuple[()], dict[str, object]]:\n"
+        "    return (), {}\n"
+    )
+    _make_r4(proposal, manifest, tmp_path, code)
+    policy_link = {"url": "http://code.example.org/example-net", "disposition": "unfetchable-by-policy"}
+    proposal["proposed_facts"]["source_resolution"]["search_report"]["links_checked"].append(
+        policy_link
+    )
+    manifest["broker"] = {
+        "outcomes": [
+            {
+                "url": "http://code.example.org/example-net",
+                "final_url": None,
+                "outcome": "unfetchable-by-policy",
+            }
+        ]
+    }
+
+    report = validate_author_proposal(
+        proposal,
+        allowed_model_dir=tmp_path,
+        source_manifest=manifest,
+    )
+
+    assert report.rung.value == "R4_REIMPLEMENT"
+
+    manifest["broker"]["outcomes"] = []
+    with pytest.raises(ProposalValidationError, match="matching broker receipt"):
+        validate_author_proposal(
+            proposal,
+            allowed_model_dir=tmp_path,
+            source_manifest=manifest,
+        )
+
+
 def test_recursive_helper_structural_slop_is_rejected(tmp_path: Path) -> None:
     """A generic stand-in hidden in an imported helper remains statically visible."""
 

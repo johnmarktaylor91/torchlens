@@ -1021,12 +1021,16 @@ def _validate_context_result(
         for fetched in citable_rows:
             authored = proposed_by_id[str(fetched["source_id"])]
             expected_size = fetched.get("fetched_bytes_len", fetched.get("byte_count"))
+            retrieved_at_matches = "retrieved_at" not in fetched or (
+                authored.get("retrieved_at") == fetched.get("retrieved_at")
+            )
             if (
                 authored.get("url") != fetched.get("url")
                 or authored.get("revision") != fetched.get("revision")
                 or authored.get("content_sha256") != fetched.get("content_sha256")
                 or authored.get("byte_count") != expected_size
                 or authored.get("media_type") != fetched.get("media_type")
+                or not retrieved_at_matches
             ):
                 raise ArtifactBindingError(
                     "proposal source fields differ from controlled-fetch manifest"

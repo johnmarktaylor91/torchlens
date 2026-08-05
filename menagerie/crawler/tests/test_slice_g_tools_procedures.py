@@ -106,6 +106,18 @@ def test_verify_pool_prompts_covers_the_whole_shipped_prompt_surface() -> None:
     }
 
 
+def test_stage_source_request_states_http_links_are_typed_policy_evidence() -> None:
+    """The source-request prompt tells authors not to discard policy-refused links."""
+
+    crawler_root = Path(__file__).resolve().parents[1]
+    text = (crawler_root / "prompts" / "pool" / "stage_source_request.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "policy-refused links are still evidence" in text
+    assert "typed policy evidence" in text
+
+
 def test_verify_pool_prompts_rejects_every_way_a_fragment_can_drift(tmp_path: Path) -> None:
     """A mutated, an unpinned added, and a deleted pinned fragment each fail."""
 

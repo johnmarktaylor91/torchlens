@@ -876,8 +876,34 @@
           "description": "Mandatory places checked."
         },
         "links_checked": {
-          "$ref": "#/$defs/string_array",
-          "description": "Mandatory exact content URLs checked. For R2/R4 every entry must bind to fetched, hash-inventoried CAS bytes; unfetched candidate repositories are a coverage gap."
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/nonempty_string"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "url",
+                  "disposition"
+                ],
+                "properties": {
+                  "url": {
+                    "$ref": "#/$defs/nonempty_string",
+                    "description": "Exact URL checked."
+                  },
+                  "disposition": {
+                    "const": "unfetchable-by-policy",
+                    "description": "Typed policy refusal; valid only when the broker receipt for this URL records unfetchable-by-policy or redirect-refused."
+                  }
+                }
+              }
+            ]
+          },
+          "description": "Mandatory exact content URLs checked. For R2/R4 every string entry must bind to fetched, hash-inventoried CAS bytes; an HTTP or otherwise policy-refused link may instead be typed as {url, disposition:\"unfetchable-by-policy\"} and is accepted only with a matching broker receipt."
         },
         "languages_checked": {
           "$ref": "#/$defs/string_array",

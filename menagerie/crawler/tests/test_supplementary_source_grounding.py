@@ -29,7 +29,7 @@ from typing import Any
 
 import pytest
 
-from menagerie.crawler.artifact_transactions import _validate_context_result
+from menagerie.crawler.artifact_transactions import ArtifactBindingError, _validate_context_result
 from menagerie.crawler.author_attempts import new_attempt
 from menagerie.crawler.author_dispatch import (
     AuthorEffortGrant,
@@ -552,7 +552,7 @@ def _echo_manifest_fields(proposal: dict[str, Any], manifest: dict[str, Any]) ->
         fetched = by_id.get(str(declared["source_id"]))
         if fetched is None:
             continue
-        for field in ("url", "revision", "content_sha256", "media_type"):
+        for field in ("url", "revision", "content_sha256", "media_type", "retrieved_at"):
             # Reconcile toward whichever side actually carries the value; the
             # fixture's manifest rows are partial and its declared rows carry
             # placeholders, and inventing a third value on either side would make
@@ -574,13 +574,45 @@ def _echo_manifest_fields(proposal: dict[str, Any], manifest: dict[str, Any]) ->
     proposal["verified_hashes"]["source_manifest"] = manifest["manifest_sha256"]
 
 
-def _bind(proposal: dict[str, Any], manifest: dict[str, Any]) -> tuple[str, ...]:
+def test_artifact_binding_enforces_retrieved_at_when_the_manifest_carries_it(
+    tmp_path: Path,
+) -> None:
+    """A source timestamp becomes part of the transaction echo only when present."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    manifest["sources"][0]["retrieved_at"] = "2026-08-05T15:00:00Z"
+    manifest["manifest_sha256"] = stable_hash(manifest["sources"])
+    source = proposal["proposed_facts"]["source_resolution"]["sources"][0]
+    source["retrieved_at"] = "2026-08-05T14:59:00Z"
+
+    with pytest.raises(
+        ArtifactBindingError,
+        match="proposal source fields differ from controlled-fetch manifest",
+    ):
+        _bind(proposal, manifest, echo_manifest=False)
+
+
+def test_artifact_binding_does_not_invent_retrieved_at_for_legacy_manifests(
+    tmp_path: Path,
+) -> None:
+    """A legacy manifest without ``retrieved_at`` keeps the old echo surface."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    manifest["sources"][0].pop("retrieved_at", None)
+
+    assert "source-1" in _bind(proposal, manifest)
+
+
+def _bind(
+    proposal: dict[str, Any], manifest: dict[str, Any], *, echo_manifest: bool = True
+) -> tuple[str, ...]:
     """Run the REAL artifact binding over one proposal and return its source set."""
 
     prompt_hash = hash_bytes(
         (Path(__file__).parents[1] / "prompts" / "claude_crawler_author_v2.txt").read_bytes()
     )
-    _echo_manifest_fields(proposal, manifest)
+    if echo_manifest:
+        _echo_manifest_fields(proposal, manifest)
     _bindable(proposal, manifest, prompt_hash)
     context = _author_context(proposal, prompt_hash)
     envelope = build_author_envelope(
