@@ -1172,12 +1172,29 @@ def test_availability_state_contradicting_a_carried_value_is_refused(tmp_path: P
 
 
 def test_availability_state_with_noncanonical_vocabulary_is_refused(tmp_path: Path) -> None:
-    """Status and basis are closed vocabularies, not free text."""
+    """Status and basis are closed vocabularies, not free text.
+
+    The refusal moved EARLIER, not away: ``basis`` is now a declared ``enum`` in the
+    registered schema rather than a ``nonempty_string`` whose description merely
+    promised a closed vocabulary, so payload validation rejects a coined value before
+    ``_validate_availability_record`` is reached. Both layers still refuse -- the
+    deterministic guard is exercised directly in
+    ``test_claim_vocabulary_and_absence`` -- and the message must now ENUMERATE the
+    members, which is the whole point of the move. m8245 and m9617 each lost a model to
+    a coined basis that no surface the author reads ever listed.
+    """
+
+    from menagerie.crawler.metadata import AVAILABILITY_BASES
 
     proposal, manifest = _ground_proposal(tmp_path)
     _declare_absent(proposal, "venue", basis="vibes")
-    with pytest.raises(ProposalValidationError, match="non-canonical basis"):
+    with pytest.raises(ProposalValidationError) as excinfo:
         validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+    message = str(excinfo.value)
+    assert "'vibes'" in message, "the rejected spelling must still be named"
+    assert "availability.venue.basis" in message, "the refusal must locate the exact leaf"
+    for basis in AVAILABILITY_BASES:
+        assert basis in message, f"the refusal must enumerate the member {basis!r}"
 
 
 def test_availability_state_citing_fabricated_evidence_is_refused(tmp_path: Path) -> None:
