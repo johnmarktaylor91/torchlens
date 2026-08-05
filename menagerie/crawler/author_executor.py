@@ -329,9 +329,10 @@ _KILL_GRACE_SECONDS = 10.0
 #: parsed harness JSON only (SEAM_REDESIGN section 3.5). The one place a FAILED
 #: session's own error text is read at all is :func:`session_failure_class`,
 #: which only LABELS an already-retryable failure for the durable record and
-#: the driver's retry-ladder detail -- it never grants pause or backoff
-#: authority (see :func:`_session_failure_notice` for how the label travels
-#: without entering the pause extractor's fields).
+#: the driver's retry-ladder detail. Weather backoff authority belongs to an
+#: executor-authored provider-overload record with the machine-observed harness
+#: shape; quarantined text labels remain diagnostic and never enter the pause
+#: extractor's fields.
 #:
 #: Every value below is transcribed from the shipped harness rather than assumed.
 #: The prior constants (``usage_limit``, ``usage_limit_reached``,
@@ -792,10 +793,11 @@ def session_failure_class(outcome: SessionOutcome) -> str:
     """Label one failed session's cause for the durable record and retry detail.
 
     Structured harness fields decide first; the session's own error text is
-    consulted last and only to LABEL. The label never changes an exit code and
-    never creates a pause: both observed classes stay on the retryable exit,
-    where the driver's bounded backoff ladder (5s, 30s) is exactly the right
-    consumer for a credential blip or a 529 storm.
+    consulted last and only to LABEL. The companion
+    :func:`session_failure_class_basis` records whether the label came from a
+    structured field or from quarantined diagnostic text. The driver grants
+    weather backoff authority only to an executor-authored failure notice whose
+    machine-observed harness fields match the real provider-overloaded shape.
 
     Parameters
     ----------
@@ -822,6 +824,36 @@ def session_failure_class(outcome: SessionOutcome) -> str:
     if any(marker in text for marker in _OVERLOAD_FAILURE_MARKERS):
         return "provider-overloaded"
     return "unclassified"
+
+
+def session_failure_class_basis(outcome: SessionOutcome) -> str:
+    """Return the machine-readable basis for :func:`session_failure_class`.
+
+    Parameters
+    ----------
+    outcome:
+        Machine-observed failed session round trip.
+
+    Returns
+    -------
+    str
+        Stable basis label for the failure-class diagnostic.
+    """
+
+    harness = outcome.harness or {}
+    status = harness.get("api_error_status")
+    if not isinstance(status, bool) and status == 529:
+        return "api_error_status:529"
+    error = harness.get("error")
+    error_type = str(error.get("type", "")) if isinstance(error, Mapping) else ""
+    if error_type == "authentication_error":
+        return "error.type:authentication_error"
+    text = (_harness_error_text(harness) or outcome.stdout_tail or "").lower()
+    if any(marker in text for marker in _AUTH_FAILURE_MARKERS):
+        return "diagnostic-text:auth-marker"
+    if any(marker in text for marker in _OVERLOAD_FAILURE_MARKERS):
+        return "diagnostic-text:overload-marker"
+    return "none"
 
 
 def session_failure_evidence(outcome: SessionOutcome) -> JsonObject:
@@ -858,6 +890,7 @@ def session_failure_evidence(outcome: SessionOutcome) -> JsonObject:
     evidence: JsonObject = {
         "returncode": outcome.returncode,
         "failure_class": session_failure_class(outcome),
+        "failure_class_basis": session_failure_class_basis(outcome),
         "harness_subtype": subtype if isinstance(subtype, str) else None,
         "harness_terminal_reason": (
             terminal_reason if isinstance(terminal_reason, str) else None
