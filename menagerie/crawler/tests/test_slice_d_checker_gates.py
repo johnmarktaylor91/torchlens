@@ -881,6 +881,88 @@ def test_blocked_terminal_gate_still_refuses_a_source_set_it_did_not_derive(
         )
 
 
+def test_m7637_rejected_terminal_gate_binds_adjudicated_subset() -> None:
+    """Replay the m7637 rejection shape without promoting it to runner failure."""
+
+    manifest_source_ids = (
+        "impl-config-transformers",
+        "impl-modeling-transformers",
+        "doc-vllm-nemotron-h-config",
+        "doc-nvidia-8b-config-json",
+        "impl-nvidia-8b-modeling",
+        "doc-modeldoc-transformers",
+        "paper-nemotron-h-abs",
+        "paper-nemotron-h-html",
+    )
+    gate, result, source_manifest, evidence_pack = _blocked_terminal_fixture(
+        manifest_source_ids,
+        ("ev-budget", "ev-entrypoint", "ev-arch-config", "ev-paper-title", "ev-dates"),
+    )
+    gate["items"][0]["terminal_disposition"].update(
+        {
+            "verdict": "rejected",
+            "source_ids": ["impl-config-transformers"],
+            "evidence_ids": ["ev-budget"],
+            "findings": [
+                "ev-budget is verbatim, but it does not establish authoring-time budget expiry."
+            ],
+        }
+    )
+
+    decision = validate_terminal_disposition_gate(
+        gate,
+        result,
+        source_manifest=source_manifest,
+        evidence_pack=evidence_pack,
+        license_identity=HASH,
+    )
+
+    assert decision.accepted is False
+    assert decision.source_ids == ("impl-config-transformers",)
+    assert decision.evidence_ids == ("ev-budget",)
+
+
+def test_m9304_rejected_terminal_gate_uses_literal_excerpt_sources() -> None:
+    """Replay the m9304 rejection where literal sources differ from identity preimage."""
+
+    gate, result, source_manifest, evidence_pack = _blocked_terminal_fixture(
+        (
+            "impl-deeplabv3plus-model",
+            "impl-deeplabv3-decoder",
+            "impl-timm-efficientnet-encoder",
+        ),
+        ("ev-r1-constructor", "ev-encoder-key"),
+    )
+    excerpts = evidence_pack["excerpts"]
+    assert isinstance(excerpts, list)
+    excerpts[1]["source_id"] = "impl-timm-efficientnet-encoder"
+    gate["items"][0]["terminal_disposition"].update(
+        {
+            "verdict": "rejected",
+            "source_ids": ["impl-deeplabv3plus-model", "impl-timm-efficientnet-encoder"],
+            "evidence_ids": ["ev-r1-constructor", "ev-encoder-key"],
+            "findings": [
+                "The excerpts establish constructor defaults and an encoder mapping, not a blocker."
+            ],
+        }
+    )
+
+    decision = validate_terminal_disposition_gate(
+        gate,
+        result,
+        source_manifest=source_manifest,
+        evidence_pack=evidence_pack,
+        license_identity=HASH,
+    )
+
+    assert decision.accepted is False
+    assert set(decision.source_ids) == {
+        "impl-deeplabv3plus-model",
+        "impl-timm-efficientnet-encoder",
+    }
+    assert decision.evidence_ids == ("ev-r1-constructor", "ev-encoder-key")
+
+
 #: The exact ``terminal_disposition`` key set the schema admits. Spelled literally rather
 #: than read back out of the schema, so a widening of the schema block cannot silently
 #: widen the assertion with it.
