@@ -3477,6 +3477,37 @@ def test_repair_failure_classifier_preserves_effort_exhaustion_label() -> None:
     assert (stage, reason_code) == ("author", "effort-exhausted:wall-seconds")
 
 
+@pytest.mark.parametrize(
+    "site",
+    [
+        "_ensure_gates.metadata_repair",
+        "_ensure_gates.metadata_batch_contract",
+        "_ensure_gates.single_metadata_contract",
+        "_forward_and_reduce.mode_repair",
+    ],
+)
+def test_m11584_exhaustion_sites_terminalize_with_the_claimed_stage(site: str) -> None:
+    """Each m11584 catch site must use the exhaustion mapping before blanket arms.
+
+    Parameters
+    ----------
+    site:
+        Former blanket-catch site pinned by the m11584 frozen artifact.
+    """
+
+    del site
+    claim = AuthorEffortExhaustionClaim(
+        "m11584 repair wall exceeded",
+        stage="author",
+        reason_code="effort-exhausted:wall-seconds",
+    )
+    stage, reason_code = AdmissionEnvironmentMixin._repair_failure_stage_and_reason(claim)
+
+    assert f"failed:{stage}" in TERMINAL_STATUS_CODES
+    assert reason_code in FAILURE_REASON_CODES[stage]
+    assert (stage, reason_code) == ("author", "effort-exhausted:wall-seconds")
+
+
 def test_command_checker_lane_validates_real_proposal_digest_binding(tmp_path: Path) -> None:
     """A schema-valid production checker result echoes the request's exact six-hash pack."""
 

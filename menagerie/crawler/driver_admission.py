@@ -1576,7 +1576,7 @@ def classify_author_exit(
         exc = RetryableOperatorError(f"{label} for {stable_id} (exit {returncode}): {tail}")
         if session_notice is not None:
             exc.failure_class = _notice_string(session_notice, "failure_class")
-            exc.failure_class_basis = _notice_string(session_notice, "failure_class_basis")
+            exc.failure_class_basis = _notice_failure_class_basis(session_notice)
         raise exc
     if returncode == AUTHOR_EXIT_PERMANENT:
         # Deliberately does NOT use the historical retryable prefix: a declared
@@ -1611,6 +1611,35 @@ def _notice_string(notice: Mapping[str, Any], key: str) -> Optional[str]:
         return None
     stripped = value.strip()
     return stripped or None
+
+
+def _notice_failure_class_basis(notice: Mapping[str, Any]) -> Optional[str]:
+    """Return the trusted basis for one executor-authored session failure notice.
+
+    Parameters
+    ----------
+    notice:
+        Parsed executor-authored notice.
+
+    Returns
+    -------
+    str | None
+        Machine-readable weather-authority basis, or ``None`` when absent.
+    """
+
+    explicit = _notice_string(notice, "failure_class_basis")
+    if explicit == "api_error_status:529":
+        return explicit
+    if (
+        notice.get("failure_class") == "provider-overloaded"
+        and notice.get("harness_terminal_reason") == "api_error"
+        and notice.get("harness_is_error") is True
+        and notice.get("returncode") == 1
+    ):
+        return "executor-record:provider-overloaded-api-error"
+    if explicit is not None:
+        return explicit
+    return None
 
 
 def _structured_author_session_failure_notice(text: str) -> Optional[Mapping[str, Any]]:
@@ -4813,6 +4842,36 @@ class AdmissionEnvironmentMixin:
                         pending_ids.discard(stable_id)
                         continue
                     raise
+                except (AuthorEffortCapExceeded, AuthorEffortExhaustionClaim) as exc:
+                    stage, reason = self._repair_failure_stage_and_reason(exc)
+                    attempt = _driver_failure_attempt(
+                        items_by_id[stable_id],
+                        artifacts[stable_id],
+                        stage,
+                        reason,
+                        exc,
+                        self.config,
+                        diagnostics_root=_diagnostics_root_for_work_root(
+                            self.paths.work_root
+                        ),
+                        environment=None,
+                        created_at=self.dependencies.clock(),
+                    )
+                    persisted_attempt = reducer.append_attempt(attempt).record
+                    self._terminalize(
+                        items_by_id[stable_id],
+                        artifacts[stable_id],
+                        f"failed:{stage}",
+                        reason,
+                        str(exc),
+                        (persisted_attempt,),
+                        reducer,
+                        operational,
+                        state,
+                        human_review=False,
+                    )
+                    pending_ids.discard(stable_id)
+                    continue
                 except RetryableOperatorError:
                     raise
                 except AuthorRepairTerminal as terminal:
@@ -4958,6 +5017,38 @@ class AdmissionEnvironmentMixin:
                     # Genuinely campaign-level: a pause, a retryable transport failure,
                     # or a provider backoff must never be recorded as a model defect.
                     raise
+                except (AuthorEffortCapExceeded, AuthorEffortExhaustionClaim) as exc:
+                    for stable_id in batch_ids:
+                        item = items_by_id[stable_id]
+                        stage, reason = self._repair_failure_stage_and_reason(exc)
+                        attempt = _driver_failure_attempt(
+                            item,
+                            artifacts[stable_id],
+                            stage,
+                            reason,
+                            exc,
+                            self.config,
+                            diagnostics_root=_diagnostics_root_for_work_root(
+                                self.paths.work_root
+                            ),
+                            environment=None,
+                            created_at=self.dependencies.clock(),
+                        )
+                        persisted_attempt = reducer.append_attempt(attempt).record
+                        self._terminalize(
+                            item,
+                            artifacts[stable_id],
+                            f"failed:{stage}",
+                            reason,
+                            str(exc),
+                            (persisted_attempt,),
+                            reducer,
+                            operational,
+                            state,
+                            human_review=False,
+                        )
+                        pending_ids.discard(stable_id)
+                    continue
                 except Exception as exc:  # noqa: BLE001 -- invalid checker output is per batch
                     for stable_id in batch_ids:
                         item = items_by_id[stable_id]
@@ -5229,6 +5320,36 @@ class AdmissionEnvironmentMixin:
                             metadata_gate_records = emit_gate_records(metadata_ready)
                         except (DriverPaused, RetryableOperatorError, AuthorBackoffError):
                             raise
+                        except (AuthorEffortCapExceeded, AuthorEffortExhaustionClaim) as exc:
+                            stage, reason = self._repair_failure_stage_and_reason(exc)
+                            attempt = _driver_failure_attempt(
+                                item,
+                                artifact,
+                                stage,
+                                reason,
+                                exc,
+                                self.config,
+                                diagnostics_root=_diagnostics_root_for_work_root(
+                                    self.paths.work_root
+                                ),
+                                environment=None,
+                                created_at=self.dependencies.clock(),
+                            )
+                            persisted_attempt = reducer.append_attempt(attempt).record
+                            self._terminalize(
+                                item,
+                                artifact,
+                                f"failed:{stage}",
+                                reason,
+                                str(exc),
+                                (persisted_attempt,),
+                                reducer,
+                                operational,
+                                state,
+                                human_review=False,
+                            )
+                            metadata_blocked = True
+                            break
                         except Exception as exc:  # noqa: BLE001 -- invalid checker contract
                             attempt = _driver_failure_attempt(
                                 item,
@@ -5643,7 +5764,7 @@ class AdmissionEnvironmentMixin:
         -------
         bool
             ``True`` only when an executor-authored typed notice carried
-            ``failure_class="provider-overloaded"`` with structured 529 basis.
+            ``failure_class="provider-overloaded"`` with a trusted executor basis.
         """
 
         current: BaseException | None = exc
@@ -5653,7 +5774,11 @@ class AdmissionEnvironmentMixin:
             if (
                 isinstance(current, RetryableOperatorError)
                 and current.failure_class == "provider-overloaded"
-                and current.failure_class_basis == "api_error_status:529"
+                and current.failure_class_basis
+                in {
+                    "api_error_status:529",
+                    "executor-record:provider-overloaded-api-error",
+                }
             ):
                 return True
             current = current.__cause__ or current.__context__

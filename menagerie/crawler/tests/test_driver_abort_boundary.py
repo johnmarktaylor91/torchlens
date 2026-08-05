@@ -149,7 +149,8 @@ class ProviderOverloadedAuthor(SubprocessKilledAuthor):
                 "type": "result",
                 "subtype": "author-session-failure",
                 "failure_class": "provider-overloaded",
-                "failure_class_basis": "api_error_status:529",
+                "harness_is_error": True,
+                "harness_subtype": "success",
                 "harness_terminal_reason": "api_error",
                 "returncode": 1,
                 "session_error_text_quarantined": self.notice_text,
@@ -222,6 +223,17 @@ def _boundary_events(tmp_path: Path, snapshot) -> list[dict]:
         for event in scan_jsonl(operational)
         if event.get("details", {}).get("kind") == "author-no-publication-boundary"
     ]
+
+
+_REAL_RUNG8_PROVIDER_OVERLOADED_EVENT = (
+    b'{"at":"2026-08-05T09:51:00.248916Z","event":"resume-failed",'
+    b'"failure":{"failure_class":"provider-overloaded","harness_is_error":true,'
+    b'"harness_subtype":"success","harness_terminal_reason":"api_error",'
+    b'"returncode":1,"session_error_text_quarantined":"API Error: Repeated 529 '
+    b"Overloaded errors. The API is at capacity \\u2014 this is usually temporary. "
+    b'Try again in a moment. If it persists, check https://status.claude.com."},'
+    b'"resumed_from":"4232a8da-6579-4db4-96b2-a8602086b57f","returncode":1}'
+)
 
 
 def _stranded_events(tmp_path: Path, snapshot) -> list[dict]:
@@ -451,6 +463,44 @@ def test_checker_printed_provider_overload_notice_has_no_weather_authority(
     driver = _driver(tmp_path, _snapshot(tmp_path, count=1), author_concurrency=1)
     assert driver._is_infrastructure_error(raised.value)
     assert not driver._has_provider_overloaded_failure_class(raised.value)
+
+
+@pytest.mark.smoke
+def test_real_rung8_provider_overload_attempt_record_has_weather_authority(
+    tmp_path: Path,
+) -> None:
+    """The weather tier fires on the executor-authored real rung-8 529 shape."""
+
+    event = json.loads(_REAL_RUNG8_PROVIDER_OVERLOADED_EVENT)
+    notice = {
+        "type": "result",
+        "subtype": "author-session-failure",
+        **event["failure"],
+    }
+    line = (
+        "author executor stage2 failed: session-crashed (attempt deadbeef)\n"
+        f"{json.dumps(notice, sort_keys=True, separators=(',', ':'))}"
+    )
+    with pytest.raises(RetryableOperatorError) as raised:
+        classify_author_exit("author", "m11584", 75, "", line)
+
+    driver = _driver(tmp_path, _snapshot(tmp_path, count=1), author_concurrency=1)
+    assert raised.value.failure_class == "provider-overloaded"
+    assert raised.value.failure_class_basis == "executor-record:provider-overloaded-api-error"
+    assert driver._has_provider_overloaded_failure_class(raised.value)
+
+    notice["failure_class_basis"] = "diagnostic-text:overload-marker"
+    line = (
+        "author executor stage2 failed: session-crashed (attempt deadbeef)\n"
+        f"{json.dumps(notice, sort_keys=True, separators=(',', ':'))}"
+    )
+    with pytest.raises(RetryableOperatorError) as raised_with_basis:
+        classify_author_exit("author", "m11584", 75, "", line)
+    assert (
+        raised_with_basis.value.failure_class_basis
+        == "executor-record:provider-overloaded-api-error"
+    )
+    assert driver._has_provider_overloaded_failure_class(raised_with_basis.value)
 
 
 @pytest.mark.smoke

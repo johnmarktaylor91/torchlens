@@ -310,9 +310,9 @@ _KILL_GRACE_SECONDS = 10.0
 #: parsed harness JSON only (SEAM_REDESIGN section 3.5). The one place a FAILED
 #: session's own error text is read at all is :func:`session_failure_class`,
 #: which only LABELS an already-retryable failure for the durable record and
-#: the driver's retry-ladder detail. The companion basis field keeps weather
-#: backoff authority on the structured ``api_error_status == 529`` case only;
-#: quarantined text labels remain diagnostic and never enter the pause
+#: the driver's retry-ladder detail. Weather backoff authority belongs to an
+#: executor-authored provider-overload record with the machine-observed harness
+#: shape; quarantined text labels remain diagnostic and never enter the pause
 #: extractor's fields.
 #:
 #: Every value below is transcribed from the shipped harness rather than assumed.
@@ -764,8 +764,9 @@ def session_failure_class(outcome: SessionOutcome) -> str:
     Structured harness fields decide first; the session's own error text is
     consulted last and only to LABEL. The companion
     :func:`session_failure_class_basis` records whether the label came from a
-    structured field or from quarantined diagnostic text, so the driver can keep
-    weather backoff authority on machine-observed 529s only.
+    structured field or from quarantined diagnostic text. The driver grants
+    weather backoff authority only to an executor-authored failure notice whose
+    machine-observed harness fields match the real provider-overloaded shape.
 
     Parameters
     ----------

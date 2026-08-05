@@ -26,6 +26,7 @@ from menagerie.crawler.authority import (
     compile_execution_read_manifest_v3_from_closure,
     load_current_attempt_proof,
 )
+from menagerie.crawler.author_dispatch import AuthorEffortExhaustionClaim
 from menagerie.crawler.constants import (
     ATTEMPT_SCHEMA_VERSION_V3,
     DEFAULT_FORWARD_TIMEOUT_SECONDS,
@@ -70,6 +71,7 @@ from menagerie.crawler.driver_contracts import (
     ActivatedHandoffArtifact,
     AuthorArtifact,
     AuthorBackoffError,
+    AuthorEffortCapExceeded,
     AuthorRepairTerminal,
     DriverIntegrationError,
     DriverPaused,
@@ -2414,6 +2416,36 @@ class ReceiptDriverMixin:
                             # carry them or it contradicts that proof and refuses.
                             prior_attempts=tuple(all_attempts),
                         )
+                    except (AuthorEffortCapExceeded, AuthorEffortExhaustionClaim) as exc:
+                        stage, reason = self._repair_failure_stage_and_reason(exc)
+                        repair_failure = reducer.append_attempt(
+                            _driver_failure_attempt(
+                                item,
+                                artifact,
+                                stage,
+                                reason,
+                                exc,
+                                self.config,
+                                diagnostics_root=_diagnostics_root_for_work_root(
+                                    self.paths.work_root
+                                ),
+                                environment=environment.family,
+                                created_at=self.dependencies.clock(),
+                            )
+                        ).record
+                        self._terminalize(
+                            item,
+                            artifact,
+                            f"failed:{stage}",
+                            reason,
+                            str(exc),
+                            (*all_attempts, repair_failure),
+                            reducer,
+                            operational,
+                            state,
+                            human_review=False,
+                        )
+                        return None
                     except Exception as exc:  # noqa: BLE001 -- bounded repair is model-local
                         reason = (
                             "protocol-violation"
