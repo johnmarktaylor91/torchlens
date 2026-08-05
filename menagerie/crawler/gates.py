@@ -399,12 +399,27 @@ def validate_terminal_disposition_gate(
             raise GateRoutingError(
                 f"terminal disposition {terminal_field} does not match author result"
             )
+    verdict = str(terminal.get("verdict"))
     gate_source_ids = _unique_string_tuple(terminal.get("source_ids"), "terminal source_ids")
-    if set(gate_source_ids) != set(result_source_ids):
-        raise GateRoutingError("terminal disposition source IDs do not exactly match result")
     gate_evidence_ids = _unique_string_tuple(terminal.get("evidence_ids"), "terminal evidence_ids")
-    if set(gate_evidence_ids) != set(result_evidence_ids):
-        raise GateRoutingError("terminal disposition evidence IDs do not exactly match result")
+    if verdict == "accepted":
+        checked_source_ids = result_source_ids
+        checked_evidence_ids = result_evidence_ids
+        if set(gate_source_ids) != set(result_source_ids):
+            raise GateRoutingError("terminal disposition source IDs do not exactly match result")
+        if set(gate_evidence_ids) != set(result_evidence_ids):
+            raise GateRoutingError("terminal disposition evidence IDs do not exactly match result")
+    else:
+        checked_source_ids = gate_source_ids
+        checked_evidence_ids = gate_evidence_ids
+        _validate_terminal_rejection_subset(
+            evidence_pack,
+            gate_source_ids=gate_source_ids,
+            gate_evidence_ids=gate_evidence_ids,
+            result_source_ids=result_source_ids,
+            result_evidence_ids=result_evidence_ids,
+            support_claims=support_claims,
+        )
     if _source_manifest_identity(source_manifest) != binding.source_manifest_identity:
         raise GateRoutingError("terminal source manifest identity does not match author result")
     # Coverage, so supplementary rows count: a terminal arm citing a source the
@@ -415,15 +430,15 @@ def validate_terminal_disposition_gate(
         raise GateRoutingError("terminal recommendation references a source outside its manifest")
     if evidence_pack.get("evidence_identity") != result.evidence_identity:
         raise GateRoutingError("terminal evidence-pack identity does not match author result")
-    _validate_terminal_evidence_references(
-        evidence_pack,
-        evidence_ids=result_evidence_ids,
-        source_ids=result_source_ids,
-        support_claims=support_claims,
-    )
+    if verdict == "accepted":
+        _validate_terminal_evidence_references(
+            evidence_pack,
+            evidence_ids=checked_evidence_ids,
+            source_ids=checked_source_ids,
+            support_claims=support_claims,
+        )
     if license_identity != result.license_identity:
         raise GateRoutingError("terminal license identity does not match staged license facts")
-    verdict = str(terminal.get("verdict"))
     if verdict == "accepted":
         integrity = item.get("integrity")
         if (
@@ -442,8 +457,8 @@ def validate_terminal_disposition_gate(
         gate_id=str(gate["gate_id"]),
         predicate=expected_predicate,
         accepted=verdict == "accepted",
-        source_ids=result_source_ids,
-        evidence_ids=result_evidence_ids,
+        source_ids=checked_source_ids,
+        evidence_ids=checked_evidence_ids,
         findings=tuple(findings),
     )
 
@@ -589,6 +604,133 @@ def _validate_terminal_evidence_references(
         raise GateRoutingError("terminal evidence resolves outside the checked source set")
     excerpts = _citation_table(evidence_pack)
     assert isinstance(excerpts, list)
+    by_id = {
+        str(excerpt["evidence_id"]): excerpt
+        for excerpt in excerpts
+        if isinstance(excerpt, Mapping) and "evidence_id" in excerpt
+    }
+    for evidence_id in evidence_ids:
+        supports = by_id[evidence_id].get("supports")
+        if not isinstance(supports, list) or not support_claims.intersection(supports):
+            raise GateRoutingError(
+                f"terminal evidence {evidence_id} does not support its typed predicate"
+            )
+
+
+def _validate_terminal_rejection_subset(
+    evidence_pack: Mapping[str, Any],
+    *,
+    gate_source_ids: tuple[str, ...],
+    gate_evidence_ids: tuple[str, ...],
+    result_source_ids: tuple[str, ...],
+    result_evidence_ids: tuple[str, ...],
+    support_claims: frozenset[str],
+) -> None:
+    """Require a rejected terminal verdict to bind an adjudicated evidence subset.
+
+    Parameters
+    ----------
+    evidence_pack:
+        Terminal checker evidence pack containing literal excerpts.
+    gate_source_ids:
+        Source IDs the checker declared in its terminal disposition.
+    gate_evidence_ids:
+        Evidence IDs the checker declared in its terminal disposition.
+    result_source_ids:
+        Machine-derived source set for the full author terminal result.
+    result_evidence_ids:
+        Author-declared evidence IDs for the full author terminal result.
+    support_claims:
+        Predicate-support vocabulary for this terminal arm.
+
+    Raises
+    ------
+    GateRoutingError
+        If the rejected verdict does not bind a non-empty exact subset of the
+        result's declared terminal evidence.
+    """
+
+    if not gate_evidence_ids:
+        raise GateRoutingError("rejected terminal disposition must cite adjudicated evidence")
+    if not set(gate_source_ids).issubset(result_source_ids):
+        raise GateRoutingError("terminal disposition source IDs are outside result")
+    if not set(gate_evidence_ids).issubset(result_evidence_ids):
+        raise GateRoutingError("terminal disposition evidence IDs are outside result")
+    resolved_sources = _literal_evidence_source_ids(evidence_pack, gate_evidence_ids)
+    if set(resolved_sources) != set(gate_source_ids):
+        raise GateRoutingError(
+            "terminal disposition source IDs do not match adjudicated evidence"
+        )
+    _validate_literal_terminal_evidence_support(
+        evidence_pack,
+        evidence_ids=gate_evidence_ids,
+        support_claims=support_claims,
+    )
+
+
+def _literal_evidence_source_ids(
+    evidence_pack: Mapping[str, Any], evidence_ids: tuple[str, ...]
+) -> tuple[str, ...]:
+    """Resolve source IDs from the checker-visible literal excerpt table.
+
+    Parameters
+    ----------
+    evidence_pack:
+        Terminal evidence pack containing an ``excerpts`` list.
+    evidence_ids:
+        Evidence IDs to resolve.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Sorted unique source IDs attached to the requested literal excerpts.
+    """
+
+    excerpts = evidence_pack.get("excerpts")
+    if not isinstance(excerpts, list):
+        raise GateRoutingError("terminal evidence pack has no literal excerpts")
+    by_id = {
+        str(excerpt.get("evidence_id")): excerpt
+        for excerpt in excerpts
+        if isinstance(excerpt, Mapping) and isinstance(excerpt.get("evidence_id"), str)
+    }
+    if len(by_id) != len(excerpts):
+        raise GateRoutingError("terminal literal evidence IDs are incomplete or duplicated")
+    sources: set[str] = set()
+    for evidence_id in evidence_ids:
+        excerpt = by_id.get(evidence_id)
+        if excerpt is None or not isinstance(excerpt.get("source_id"), str):
+            raise GateRoutingError(f"terminal evidence reference is unresolved: {evidence_id}")
+        sources.add(str(excerpt["source_id"]))
+    return tuple(sorted(sources))
+
+
+def _validate_literal_terminal_evidence_support(
+    evidence_pack: Mapping[str, Any],
+    *,
+    evidence_ids: tuple[str, ...],
+    support_claims: frozenset[str],
+) -> None:
+    """Require checker-adjudicated literal excerpts to name the terminal predicate.
+
+    Parameters
+    ----------
+    evidence_pack:
+        Terminal evidence pack containing an ``excerpts`` list.
+    evidence_ids:
+        Evidence IDs the checker adjudicated.
+    support_claims:
+        Predicate-support vocabulary for this terminal arm.
+
+    Raises
+    ------
+    GateRoutingError
+        If any adjudicated excerpt does not support the terminal predicate.
+    """
+
+    excerpts = evidence_pack.get("excerpts")
+    if not isinstance(excerpts, list):
+        raise GateRoutingError("terminal evidence pack has no literal excerpts")
     by_id = {
         str(excerpt["evidence_id"]): excerpt
         for excerpt in excerpts

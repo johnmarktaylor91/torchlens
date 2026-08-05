@@ -186,6 +186,12 @@ line endings -- quote a shorter span you can reproduce exactly rather than widen
 digest to cover it. A short exact excerpt grounds a claim; a long approximate one grounds
 nothing and costs the whole proposal.
 
+Always compute the digest with a real tool -- `sha256sum` on the exact pasted string, or
+`identity.hash_bytes` under the calculator's interpreter. A digest written from memory,
+copied from a different excerpt, or eyeballed off the source matches nothing: a real
+proposal died carrying a hand-declared digest that matched no bytes anywhere, while its
+quoted text was byte-perfect.
+
 **A citation value is checked against the BOUND EXCERPTS, never against the page.** The
 engine concatenates the text of exactly the excerpts named in
 `citation.source_evidence_ids` and requires each non-null citation leaf -- title, venue,
@@ -244,6 +250,32 @@ whatever facts you give it, so an identity computed from a fact you have not act
 grounded still fails against the real artifacts. Draft the facts honestly first, then
 compute. Re-run it if you change any fact afterwards -- the identities move when the facts
 move.
+
+### Exact-value traps that have each killed a real proposal
+
+Each of these is enforced to the byte, and a near-synonym is a dead proposal, not a
+warning. Check every one before you write the result:
+
+- `licenses.weights.status` is always **exactly `"not-used"`** -- checkpoint access is
+  forbidden for every proposal, so no other value is ever true. `"not-applicable"`
+  killed a real proposal.
+- The `proposed_facts.citation` block and `proposed_facts.external_metadata.citation`
+  must be **exactly equal**, leaf for leaf. Divergence anywhere refuses the proposal.
+- `source_resolution.sources` must list **every** source in the frozen manifest
+  (supplementary rows included) -- one row per `source_id`, no subset, no extras -- and
+  each row's machine fields (`url`, `revision`, `content_sha256`, `byte_count`,
+  `media_type`) must echo the manifest verbatim. A real proposal listed only the 9
+  sources it had used out of 18 and was refused at staging.
+- `source_resolution.mandatory_link_status` must be `"ok"`, and `primary_source_id` must
+  name one declared source whose `url` starts with `http`. Never add `cas_path` to a
+  `source_resolution.sources` row: CAS locations are machine-owned, and an authored one
+  refuses the proposal.
+- Every `source_to_code_map` row's `code_path` is a **non-empty string** naming a staged
+  file. Only the top-level `implementation.code_path` may be `null` -- and for a
+  declarative R1 it must be, with `source_to_code_map: []`.
+- `initialization.policy` is the const `"random"` and `pretrained_disabled` the const
+  `true`. The library's real initialization behavior belongs in
+  `source_specified_choices`, never as prose in `policy`.
 
 ### Every terminal arm carries its excerpts in `evidence_records`
 
@@ -369,7 +401,10 @@ For `BLOCKED`, the authored keys are `stage`, `reason_code`, `prerequisite_ids`,
 `evidence_ids`, and `evidence_records`, plus `research_summary` only for the higher-tier promotion case described
 by the canonical prompt. `prerequisite_ids` names missing external facts or capabilities
 with stable semantic labels such as `runtime-dependency` or `faithful-source`; it never
-lists a schema path, an output field, or a digest the executor owns.
+lists a schema path, an output field, or a digest the executor owns. A `BLOCKED` whose
+`reason_code` names a real prerequisite is adjudicated by the checker against frozen
+source bytes; running out of wall budget is not such a claim and has its own exact
+spelling -- see "Running out of budget" below.
 
 <!-- CONTRACT_FIXTURE: stage2-author-payload -->
 ```json
@@ -416,10 +451,22 @@ identity and re-hashes every cited artifact. So:
 ### Running out of budget
 
 The wall deadline in JOB FACTS is enforced by an external kill shortly after it passes.
-If it is approaching, do **not** go silent and do not rush a half-grounded proposal. Emit
-a valid `BLOCKED` result naming what you could not establish and why. A typed BLOCKED
-flows through the engine's terminal-disposition gate and can be requeued; a timeout costs
-the model an entire retry cycle.
+If it is approaching, do **not** go silent and do not rush a half-grounded proposal.
+Publish a `BLOCKED` result whose `reason_code` is **exactly `wall-exceeded`**, with
+`stage` naming the stage in flight when time ran out (for this brief, `author`) and
+`prerequisite_ids` naming the budget itself, such as `["authoring-wall-budget"]`. That
+exact spelling is recognized as a budget outcome: the engine records `failed:<stage>`
+with a stage-valid effort reason -- a terminal an operator can requeue with a larger
+grant -- and asks no checker to adjudicate it, so it needs no `blocked-prerequisite`
+excerpt. Cite whatever evidence you already grounded, or none.
+
+Do not spell exhaustion any other way, and never dress it as a prerequisite. A
+`blocked-prerequisite` claim is adjudicated against frozen source bytes, and no frozen
+source can witness your wall clock: in one real rung, eight sessions invented their own
+spellings (`authoring-budget-exhausted`, `author-wall-deadline-reached`, and variants
+like them) and every one terminalized as a rejected or unverifiable disposition instead
+of a requeueable budget record. Running out of time is a budget fact about this
+session, never a missing prerequisite of the model.
 
 ### Hard limits
 

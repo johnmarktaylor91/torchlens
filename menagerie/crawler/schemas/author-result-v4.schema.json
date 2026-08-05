@@ -147,7 +147,7 @@
           "enum": ["source", "fetch", "author", "evidence", "environment", "policy", "runner"],
           "description": "Closed recommended blocking stage."
         },
-        "reason_code": {"$ref": "author-result-v3.schema.json#/$defs/nonempty_string", "description": "Typed recommended root reason code."},
+        "reason_code": {"$ref": "author-result-v3.schema.json#/$defs/nonempty_string", "description": "Typed recommended root reason code. A prerequisite reason is adjudicated by the terminal checker against frozen source bytes, so it must name something a frozen source can witness. Effort and budget outcomes are different in kind: spell wall-clock exhaustion exactly 'wall-exceeded' (reserved with 'budget-exhausted', 'effort-cap-exhausted', and the 'effort-exhausted:*' family), which the engine refuses as a prerequisite claim and records instead as failed:<stage> with a stage-valid effort reason -- a requeueable terminal that no checker adjudicates. Any free-form exhaustion spelling parses as a prerequisite claim that no frozen source can support and terminalizes rejected."},
         "prerequisite_ids": {
           "type": "array",
           "minItems": 1,
