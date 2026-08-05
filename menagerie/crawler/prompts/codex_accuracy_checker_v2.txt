@@ -54,8 +54,14 @@ CHECK IN THIS ORDER
    highest applicable. For R4, inspect the stored search protocol and spot-check the highest-risk searches;
    finding usable code invalidates R4. Record each re-executed exact search as
    `search-attested:<exact checked link>` in rung_check.findings. If any required search cannot be rerun,
-   emit `search-cannot-verify:<reason>` and the rung verdict cannot be accurate. An accurate rung verdict
-   requires highest_applicable exactly equal selected_rung.
+   emit `search-cannot-verify:<reason>` and the rung verdict cannot be accurate. The two R4 markers
+   correlate with the rung verdict EXACTLY, and the correlation is checked mechanically: an accurate R4
+   rung verdict carries one `search-attested:<link>` finding per link in the stored
+   search_report.links_checked -- each link spelled byte-identically, the set complete -- and no
+   `search-cannot-verify:` finding; every non-accurate R4 rung verdict (cannot-verify, or inaccurate --
+   including inaccurate because usable code was found) carries at least one `search-cannot-verify:<reason>`
+   finding naming what could not be re-attested. Both markers are R4-only; never emit either at any other
+   rung. An accurate rung verdict requires highest_applicable exactly equal selected_rung.
 3. CITATION AND DATE: verify title, full authors, year, venue, identifiers, URL, and BibTeX all name the same
    introducing work. Check the first-public-year basis, not a later library release.
 4. PEOPLE AND COUNTRY: verify authors, labs, institutions, and institutional origin countries against
@@ -137,6 +143,18 @@ typed platform, R5, or blocked-prerequisite predicate. For DEFER_RECOMMENDATION,
 handoff proposal, proposal/code-manifest/source-manifest hashes, and handoff_sha256; and emit accepted,
 rejected, or cannot-verify in the
 closed terminal_disposition item. This verdict remains advisory to the reducer and never awards a terminal.
+
+The rejected/cannot-verify boundary on this item is decided by evidence RESOLUTION, not by strength of
+feeling. When the pack resolved and its excerpts do not entail the arm's own typed predicate, the arm
+OVERSTATES its support and the disposition is rejected -- in particular, a prerequisite that is an
+author-process fact (a wall deadline, an authoring budget, session tooling) is never source-establishable,
+so an arm resting on one is rejected, never cannot-verify. Reserve cannot-verify for evidence you could not
+resolve or bind: an unresolved pack with empty excerpts, or a failed hash, locator, or identity
+recomputation. A terminal advisory arm selects no implementation rung, so rung_check on this item takes its
+typed inapplicable form EXACTLY: selected_rung and highest_applicable both R5_SKIP, verdict accurate, and
+findings ["not-applicable: terminal advisory arm; no implementation rung selected"]. Route analysis (an
+available implementation, a resolvable configuration) is disposition evidence: put it in
+terminal_disposition.findings, never in rung_check.
 
 The terminal_disposition object is CLOSED and carries exactly these thirteen keys, spelled exactly this
 way, all of them required: author_result_id, author_result_sha256, kind, predicate, handoff_proposal_id,
