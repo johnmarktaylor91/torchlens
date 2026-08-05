@@ -39,6 +39,7 @@ from menagerie.crawler.checker_dispatch import (
     _validate_terminal_evidence_pack,
 )
 from menagerie.crawler.constants import SourceRung
+from menagerie.crawler.fetcher import cas_path as source_cas_object_path
 from menagerie.crawler.identity import hash_bytes, stable_hash
 from menagerie.crawler.proposal import (
     DEFAULT_GATED_CLAIMS,
@@ -651,9 +652,11 @@ def _terminal_fixture(tmp_path: Path) -> dict[str, Any]:
     """
 
     cas = tmp_path / "source-cas"
-    cas.mkdir(parents=True, exist_ok=True)
     digest = hash_bytes(_FROZEN)
-    path = cas / f"{digest.removeprefix('sha256:')}.source"
+    # Fetched sources live at their digest-derived CAS location, which is where
+    # a governing cas_root resolves reads; the recorded path mirrors it.
+    path = source_cas_object_path(cas, digest)
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(_FROZEN)
     return {
         "manifest_sha256": HASH,

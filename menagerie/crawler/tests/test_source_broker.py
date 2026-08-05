@@ -537,10 +537,9 @@ def _paper_page_descriptor() -> dict:
 def test_raw_url_paper_request_binds_the_citable_paper_role(tmp_path: Path) -> None:
     """A fetched document requested as the paper earns a machine-derived paper role.
 
-    The manifest row keeps the lane's closed ``broker_role`` vocabulary
-    (``documentation``) and records the broker's citation authority beside it,
-    so an author's declared ``introducing-paper`` role finally has a
-    machine-derived value to be checked against.
+    The widened admission vocabulary means the broker's single derived role is
+    now the lane role too; the old ``broker_citable_role`` mirror must not
+    reappear.
     """
 
     page = b"<!DOCTYPE html><html><head><title>GroundingDINO</title></head></html>"
@@ -551,8 +550,8 @@ def test_raw_url_paper_request_binds_the_citable_paper_role(tmp_path: Path) -> N
     assert outcome.bound_role == ROLE_INTRODUCING_PAPER
     assert len(pack.rows) == 1
     row = pack.rows[0]
-    assert row["broker_role"] == ROLE_DOCUMENTATION
-    assert row["broker_citable_role"] == ROLE_INTRODUCING_PAPER
+    assert row["broker_role"] == ROLE_INTRODUCING_PAPER
+    assert "broker_citable_role" not in row
     assert row["media_type"] == "text/html"
     assert row["requested_role"] == "paper"
 

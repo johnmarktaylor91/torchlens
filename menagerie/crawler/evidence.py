@@ -7,8 +7,20 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import AbstractSet, Any, Iterable, Mapping, Optional, Sequence, Union
 
-from menagerie.crawler.fetcher import cas_path
+from menagerie.crawler.fetcher import UnpinnedTargetError, cas_path
 from menagerie.crawler.identity import hash_bytes
+from menagerie.crawler.source_broker import (
+    OUTCOME_PAPER_DERIVATION_ONLY,
+    OUTCOME_UNFETCHABLE_BY_POLICY,
+)
+
+
+CHECKED_LINK_RECEIPT_OUTCOMES_BY_DISPOSITION = {
+    OUTCOME_UNFETCHABLE_BY_POLICY: frozenset(
+        {OUTCOME_UNFETCHABLE_BY_POLICY, "redirect-refused"}
+    ),
+    OUTCOME_PAPER_DERIVATION_ONLY: frozenset({OUTCOME_PAPER_DERIVATION_ONLY}),
+}
 
 
 class EvidenceValidationError(ValueError):
@@ -174,7 +186,8 @@ def validate_evidence(
     required_claims:
         Every gated claim category that must have literal support.
     cas_root:
-        Optional CAS root used when manifests do not contain ``cas_path``.
+        Optional governing CAS root; when provided every source read resolves
+        digest-derived beneath it and recorded ``cas_path`` values are ignored.
     require_family_grounding:
         Whether a family-level grounding excerpt is mandatory.
     declared_absences:
@@ -370,10 +383,11 @@ def fetched_sources_for_checked_links(
     if (
         not isinstance(links, list)
         or not links
-        or not all(isinstance(link, str) and link.strip() for link in links)
+        or not all(_checked_link_url(link) is not None for link in links)
     ):
         raise EvidenceValidationError("search_report.links_checked must be non-empty URLs")
-    if len(links) != len(set(links)):
+    link_urls = tuple(str(_checked_link_url(link)) for link in links)
+    if len(link_urls) != len(set(link_urls)):
         raise EvidenceValidationError("search_report.links_checked contains duplicate URLs")
 
     sources_by_url: dict[str, list[Mapping[str, Any]]] = {}
@@ -381,9 +395,14 @@ def fetched_sources_for_checked_links(
         url = source.get("url")
         if isinstance(url, str) and url:
             sources_by_url.setdefault(url, []).append(source)
+    receipts_by_url = _broker_receipts_by_url(source_manifest)
 
     bound: list[Mapping[str, Any]] = []
     for link in links:
+        if isinstance(link, Mapping):
+            _validate_receipt_bound_checked_link(link, receipts_by_url)
+            continue
+        assert isinstance(link, str)
         matches = sources_by_url.get(link, [])
         if len(matches) != 1:
             raise EvidenceValidationError(
@@ -400,6 +419,107 @@ def fetched_sources_for_checked_links(
             )
         bound.append(source)
     return tuple(bound)
+
+
+def _checked_link_url(link: object) -> Optional[str]:
+    """Return the URL named by one ``links_checked`` entry, if well-shaped.
+
+    Parameters
+    ----------
+    link:
+        Raw checked-link entry from an author search report.
+
+    Returns
+    -------
+    str | None
+        Non-empty checked URL, or ``None`` when the entry is structurally invalid.
+    """
+
+    if isinstance(link, str) and link.strip():
+        return link
+    if not isinstance(link, Mapping):
+        return None
+    if set(link) != {"url", "disposition"}:
+        return None
+    url = link.get("url")
+    disposition = link.get("disposition")
+    if (
+        isinstance(url, str)
+        and url.strip()
+        and isinstance(disposition, str)
+        and disposition in CHECKED_LINK_RECEIPT_OUTCOMES_BY_DISPOSITION
+    ):
+        return url
+    return None
+
+
+def _broker_receipts_by_url(
+    source_manifest: Union[Mapping[str, Any], Sequence[Mapping[str, Any]]],
+) -> dict[str, list[Mapping[str, Any]]]:
+    """Index broker outcome receipts by their requested or final URL.
+
+    Parameters
+    ----------
+    source_manifest:
+        Manifest wrapper that may carry ``broker.outcomes``.
+
+    Returns
+    -------
+    dict[str, list[Mapping[str, Any]]]
+        Broker outcome rows keyed by URL.
+    """
+
+    if not isinstance(source_manifest, Mapping):
+        return {}
+    broker = source_manifest.get("broker")
+    outcomes = broker.get("outcomes") if isinstance(broker, Mapping) else None
+    if not isinstance(outcomes, list):
+        return {}
+    indexed: dict[str, list[Mapping[str, Any]]] = {}
+    for outcome in outcomes:
+        if not isinstance(outcome, Mapping):
+            continue
+        for field in ("url", "final_url"):
+            url = outcome.get(field)
+            if isinstance(url, str) and url:
+                indexed.setdefault(url, []).append(outcome)
+    return indexed
+
+
+def _validate_receipt_bound_checked_link(
+    link: Mapping[str, Any],
+    receipts_by_url: Mapping[str, Sequence[Mapping[str, Any]]],
+) -> None:
+    """Require a typed checked link disposition to be backed by a broker receipt.
+
+    Parameters
+    ----------
+    link:
+        Structured ``links_checked`` entry.
+    receipts_by_url:
+        Broker outcomes indexed by URL.
+
+    Raises
+    ------
+    EvidenceValidationError
+        If no matching broker receipt proves the non-byte checked-link outcome.
+    """
+
+    url = str(link["url"])
+    disposition = str(link["disposition"])
+    receipt_outcomes = CHECKED_LINK_RECEIPT_OUTCOMES_BY_DISPOSITION.get(disposition)
+    if receipt_outcomes is None:
+        raise EvidenceValidationError(f"checked search link disposition is unsupported: {url}")
+    matches = [
+        receipt
+        for receipt in receipts_by_url.get(url, ())
+        if receipt.get("outcome") in receipt_outcomes
+    ]
+    if len(matches) != 1:
+        raise EvidenceValidationError(
+            "checked search link disposition lacks a matching broker receipt: "
+            f"{url}"
+        )
 
 
 def _source_index(
@@ -446,7 +566,12 @@ def _read_source(source: Mapping[str, Any], cas_root: Union[str, Path, None]) ->
     source:
         Source manifest row.
     cas_root:
-        Fallback CAS root.
+        Governing CAS root. When provided, resolution is digest-derived under
+        this root and the row's recorded ``cas_path`` is provenance metadata
+        only -- it is never dereferenced, so a manifest frozen on another host
+        (or against a since-pruned working tree) stays readable wherever its
+        CAS objects were relocated. When absent, the recorded path is the only
+        available authority and current behavior stands.
 
     Returns
     -------
@@ -462,13 +587,27 @@ def _read_source(source: Mapping[str, Any], cas_root: Union[str, Path, None]) ->
     digest = source.get("content_sha256")
     if not isinstance(digest, str):
         raise EvidenceValidationError("source content_sha256 is missing")
-    path_value = source.get("cas_path")
-    if isinstance(path_value, str) and path_value:
-        path = Path(path_value)
+    override = source.get("unpromoted_read_path")
+    if isinstance(override, str) and override:
+        # In-process grounding channel for bytes a trusted caller holds OUTSIDE
+        # the CAS: the executor's pre-publication replay reads supplement bytes
+        # from the attempt's broker evidence directory before the driver
+        # promotes them. The key is constructed per-run and never persisted in
+        # artifacts, and the rehash below refuses wrong bytes regardless.
+        path = Path(override)
     elif cas_root is not None:
-        path = cas_path(cas_root, digest)
+        try:
+            path = cas_path(cas_root, digest)
+        except UnpinnedTargetError as exc:
+            raise EvidenceValidationError(
+                f"source content_sha256 is not a canonical digest: {digest}"
+            ) from exc
     else:
-        raise EvidenceValidationError("source manifest has no CAS path")
+        path_value = source.get("cas_path")
+        if isinstance(path_value, str) and path_value:
+            path = Path(path_value)
+        else:
+            raise EvidenceValidationError("source manifest has no CAS path")
     try:
         content = path.read_bytes()
     except OSError as exc:

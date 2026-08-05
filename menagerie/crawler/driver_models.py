@@ -504,17 +504,41 @@ def _metadata_gate_history(
 def _metadata_gate_accepted(
     gates: Sequence[Mapping[str, Any]], stable_id: str, proposal: Mapping[str, Any]
 ) -> bool:
-    """Return whether the latest metadata gate item is fully accurate."""
+    """Return whether the latest metadata gate item is fully accurate AND writable.
+
+    Acceptance is a promise that canonical write will succeed against this exact
+    item, so the write-time validator is replayed here rather than trusted to a
+    verdict echo. Rung 9 persisted a batch gate whose items were all-accurate but
+    whose every field check carried EMPTY ``checked_source_ids``; consulting
+    verdicts alone re-admitted those models straight past the checker on
+    relaunch and marched them into a canonical write that deterministically
+    refuses -- where BOTH terminal rungs also refuse, so the models became
+    unrecordable instead of failed. Treating a write-refusing item as
+    not-accepted routes the model back through ``_ensure_gates`` for a fresh
+    checker round on the SAME proposal (the authored work is preserved; the
+    poisoned gate carries accurate verdicts, so it counts zero repairs), which is
+    the honest disposition for a checker contract slip. No check is weakened:
+    canonical write still replays the identical validator.
+    """
 
     history = _metadata_gate_history(gates, stable_id, proposal)
     if not history:
         return False
     _gate, item = history[-1]
-    return bool(
+    if not (
         item.get("verdict") == "accurate"
         and item.get("integrity", {}).get("verdict") == "accurate"
         and item.get("rung_check", {}).get("verdict") == "accurate"
-    )
+    ):
+        return False
+    facts = proposal.get("proposed_facts")
+    if not isinstance(facts, Mapping):
+        return False
+    try:
+        validate_authored_facts_for_write(facts, item)
+    except MetadataValidationError:
+        return False
+    return True
 
 
 def _fidelity_gate_history(

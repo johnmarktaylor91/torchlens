@@ -203,6 +203,7 @@ from menagerie.crawler.routing import (
     route_model,
 )
 from menagerie.crawler.source_broker import (
+    BROKER_MANIFEST_ROLES,
     BROKER_PACK_VERSION,
     SourceBrokerError,
     broker_evidence_dirs,
@@ -1284,7 +1285,7 @@ class _AuthorLaneBase:
             if any(
                 not isinstance(raw.get(name), str) or not str(raw[name]).strip()
                 for name in required - {"broker_role"}
-            ) or raw.get("broker_role") not in {"implementation", "documentation"}:
+            ) or raw.get("broker_role") not in BROKER_MANIFEST_ROLES:
                 raise DriverIntegrationError(
                     "source broker manifest row has empty or invalid machine-derived facts"
                 )

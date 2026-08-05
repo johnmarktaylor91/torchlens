@@ -299,7 +299,9 @@ a reason to re-crawl external sources.
 | `source_resolution.search_report` | object | Mandatory | Mandatory search report. |
 | `source_resolution.search_report.queries` | array<string> | Mandatory | Mandatory queries. |
 | `source_resolution.search_report.places_checked` | array<string> | Mandatory | Mandatory places checked. |
-| `source_resolution.search_report.links_checked` | array<string> | Mandatory | Mandatory exact content URLs checked. For R2/R4 every entry must bind to fetched, hash-inventoried CAS bytes; unfetched candidate repositories are a coverage gap. |
+| `source_resolution.search_report.links_checked` | array<string \| object> | Mandatory | Mandatory exact content URLs checked. For R2/R4 every string entry must bind to fetched, hash-inventoried CAS bytes; a broker-proven non-byte outcome may instead be typed as {url, disposition:"unfetchable-by-policy"} or {url, disposition:"paper-derivation-only"} and is accepted only with a matching broker receipt. |
+| `source_resolution.search_report.links_checked[].url` | string | Mandatory | Exact URL checked. |
+| `source_resolution.search_report.links_checked[].disposition` | enum: `unfetchable-by-policy` \| `paper-derivation-only` | Mandatory | Typed non-byte checked-link outcome; valid only when the broker receipt for this URL records the matching outcome. Policy refusal also accepts redirect-refused. |
 | `source_resolution.search_report.languages_checked` | array<string> | Mandatory | Mandatory languages checked. |
 | `source_resolution.search_report.archives_checked` | array<string> | Mandatory | Mandatory archives checked. |
 | `source_resolution.search_report.started_at` | string | Mandatory | Mandatory UTC start timestamp. |
