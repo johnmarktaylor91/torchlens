@@ -37,6 +37,10 @@ from menagerie.crawler.identity import (
     fsync_directory,
     hash_bytes,
 )
+from menagerie.crawler.package_namespace import (
+    dependency_spec_name,
+    inventory_row_provides_distribution,
+)
 
 EXIT_SUCCESS = 0
 EXIT_PERMANENT = 64
@@ -214,9 +218,10 @@ class EnvironmentOperator:
         state_root = self._state_root_for(environment_file)
         solve_root = state_root / "solves" / intent / target
         solve_root.mkdir(parents=True, exist_ok=True)
+        declared = _declared_dependency_specs(specification)
         with _exclusive_file_lock(solve_root / ".solve.lock"):
             if not force_resolve:
-                cached = self._cached_solve_result(solve_root, state_root)
+                cached = self._cached_solve_result(solve_root, state_root, declared)
                 if cached is not None:
                     cached["elapsed_seconds"] = time.monotonic() - started
                     cached["cache_hit"] = True
@@ -525,9 +530,26 @@ class EnvironmentOperator:
         }
 
     def _cached_solve_result(
-        self, solve_root: Path, state_root: Path
+        self,
+        solve_root: Path,
+        state_root: Path,
+        declared_dependencies: Sequence[str],
     ) -> dict[str, Any] | None:
-        """Return a fully reverified solve cache or ``None`` for any cache miss."""
+        """Return a fully reverified solve cache or ``None`` for any cache miss.
+
+        A cached solve is keyed only by intent and target, while the declared
+        specification keeps evolving underneath it. A solve satisfies every
+        requested package by construction, so a cached resolved export that
+        omits a declared dependency name is PROOF the cache predates the
+        declaration: it is superseded and reads as no cache at all. Version
+        drift alone never supersedes -- a version is a solver outcome, not part
+        of the currency question -- so an unchanged dependency set keeps the
+        cache (and the environment generation) stable. This mirrors the
+        engine-side ``LockArtifacts`` supersession rule one layer down: without
+        it, the 2026-08-04 pilot rung admitted models against the current
+        declaration, then served them a pre-declaration cached solve, and every
+        model needing the new package died at the environment probes.
+        """
 
         lock_path = solve_root / "explicit.lock"
         export_path = solve_root / "resolved.json"
@@ -541,6 +563,8 @@ class EnvironmentOperator:
                 return None
             _require_lock_export_match(lock_bytes, export_bytes)
         except (OSError, EnvironmentExactnessError, PermanentEnvironmentOperatorError):
+            return None
+        if _missing_declared_dependency(declared_dependencies, export_bytes) is not None:
             return None
         artifacts: list[dict[str, str]] = []
         for receipt in receipts:
@@ -859,6 +883,77 @@ def _refuse_pip_sections(value: Any) -> None:
     elif isinstance(value, list):
         for nested in value:
             _refuse_pip_sections(nested)
+
+
+def _declared_dependency_specs(specification: Mapping[str, Any]) -> tuple[str, ...]:
+    """Return the string dependency match specs one specification declares.
+
+    Parameters
+    ----------
+    specification:
+        Loaded environment specification mapping.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Every string entry of the ``dependencies`` list, in declaration order.
+        Non-list and non-string shapes contribute nothing: pip sections are
+        refused before this runs, and any other malformed shape is conda-lock's
+        refusal to own, not the cache-currency question's.
+    """
+
+    dependencies = specification.get("dependencies")
+    if not isinstance(dependencies, list):
+        return ()
+    return tuple(entry for entry in dependencies if isinstance(entry, str))
+
+
+def _missing_declared_dependency(
+    declared_dependencies: Sequence[str], export_bytes: bytes
+) -> str | None:
+    """Name one declared dependency a resolved export fails to install.
+
+    Same rule as the engine-side ``LockArtifacts.missing_declared_dependency``:
+    names only, never versions or bounds, and an unreadable export is owned by
+    the exactness checks rather than read as evidence of supersession.
+
+    Parameters
+    ----------
+    declared_dependencies:
+        Declared dependency match specs from the current specification.
+    export_bytes:
+        Candidate cached resolved-export bytes.
+
+    Returns
+    -------
+    str | None
+        The first declared dependency name no export row provides, or ``None``
+        when every declared name is present or the export is unreadable.
+    """
+
+    if not declared_dependencies:
+        return None
+    try:
+        value = json.loads(export_bytes.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    packages = value.get("packages") if isinstance(value, Mapping) else None
+    if not isinstance(packages, list):
+        return None
+    row_names = [
+        str(row["name"])
+        for row in packages
+        if isinstance(row, Mapping) and isinstance(row.get("name"), str)
+    ]
+    for spec in declared_dependencies:
+        name = dependency_spec_name(spec)
+        if not name:
+            continue
+        if not any(
+            inventory_row_provides_distribution(row_name, name) for row_name in row_names
+        ):
+            return name
+    return None
 
 
 def _parse_solved_packages(path: Path, target: str) -> tuple[SolvedPackage, ...]:

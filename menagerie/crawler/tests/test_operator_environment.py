@@ -105,9 +105,14 @@ class FakeToolRunner:
 
 
 def _write_environment(path: Path, *, pip: bool = False) -> Path:
-    """Write one minimal conda environment specification."""
+    """Write one minimal conda environment specification.
 
-    dependencies: list[Any] = ["python=3.11"]
+    The declared dependency matches the fake solver's solved row so that the
+    solve-cache currency check sees a satisfied declaration, exactly as a real
+    solve satisfies every requested package by construction.
+    """
+
+    dependencies: list[Any] = ["demo-package=1.2.3"]
     if pip:
         dependencies.append({"pip": ["example==1"]})
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -208,10 +213,15 @@ def test_solve_synthesizes_sha256_lock_export_receipts_and_hits_cache(
     assert all("render" not in command for command in runner.commands)
 
 
-def test_force_resolve_is_the_only_way_to_replace_valid_solve_cache(
+def test_version_drift_keeps_solve_cache_until_operator_force_is_explicit(
     tmp_path: Path,
 ) -> None:
-    """Specification changes remain generation-stable until operator force is explicit."""
+    """Version-only specification drift remains generation-stable without force.
+
+    A version bound is a solver outcome, not part of the cache-currency
+    question, so editing one never supersedes the cached solve; only an
+    explicit operator force replaces it.
+    """
 
     content = b"stable artifact"
     artifact = tmp_path / "demo-package-1.2.3-build_0.conda"
@@ -221,7 +231,9 @@ def test_force_resolve_is_the_only_way_to_replace_valid_solve_cache(
 
     first = operator.solve(environment, "osx-arm64")
     environment.write_text(
-        environment.read_text(encoding="utf-8").replace("python=3.11", "python=3.12"),
+        environment.read_text(encoding="utf-8").replace(
+            "demo-package=1.2.3", "demo-package=1.2.4"
+        ),
         encoding="utf-8",
     )
     cached = operator.solve(environment, "osx-arm64")
@@ -231,6 +243,58 @@ def test_force_resolve_is_the_only_way_to_replace_valid_solve_cache(
     assert cached["cache_hit"] is True
     assert forced["cache_hit"] is False
     assert Path(first["lock_path"]).read_bytes() == Path(forced["lock_path"]).read_bytes()
+
+
+def test_dependency_declared_after_solve_supersedes_cache(tmp_path: Path) -> None:
+    """A cached solve omitting a newly declared dependency re-solves without force.
+
+    Regression for the 2026-08-04 pilot rung: ``segmentation-models-pytorch``
+    was declared in the core intent after the operator's cached solve, the
+    cache kept winning on the intent/target key, and every model needing the
+    package failed its environment probes against a prefix the current
+    declaration never described.
+    """
+
+    content = b"exact conda package bytes"
+    artifact = tmp_path / "demo-package-1.2.3-py311h123_0.conda"
+    runner = FakeToolRunner((_package_row(artifact, content),))
+    operator = _operator(tmp_path, runner)
+    environment = _write_environment(tmp_path / "envs" / "core" / "environment.yml")
+
+    first = operator.solve(environment, "osx-arm64")
+    specification = json.loads(environment.read_text(encoding="utf-8"))
+    specification["dependencies"].append("segmentation-models-pytorch")
+    environment.write_text(json.dumps(specification), encoding="utf-8")
+    second = operator.solve(environment, "osx-arm64")
+
+    assert first["cache_hit"] is False
+    assert second["cache_hit"] is False
+    assert runner.solve_calls == 2
+
+
+def test_satisfied_declaration_under_renamed_package_keeps_cache(tmp_path: Path) -> None:
+    """A declared name provided under the inventory's spelling is not superseded.
+
+    The cached export spells the row ``demo-package``; declaring it as
+    ``demo_package>=1`` (canonical-name variance plus a version bound) still
+    counts as provided, so the cache holds.
+    """
+
+    content = b"exact conda package bytes"
+    artifact = tmp_path / "demo-package-1.2.3-py311h123_0.conda"
+    runner = FakeToolRunner((_package_row(artifact, content),))
+    operator = _operator(tmp_path, runner)
+    environment = _write_environment(tmp_path / "envs" / "core" / "environment.yml")
+
+    first = operator.solve(environment, "osx-arm64")
+    specification = json.loads(environment.read_text(encoding="utf-8"))
+    specification["dependencies"].append("demo_package>=1")
+    environment.write_text(json.dumps(specification), encoding="utf-8")
+    second = operator.solve(environment, "osx-arm64")
+
+    assert first["cache_hit"] is False
+    assert second["cache_hit"] is True
+    assert runner.solve_calls == 1
 
 
 def test_driver_gate_a_accepts_operator_lock_and_artifact_receipts(
