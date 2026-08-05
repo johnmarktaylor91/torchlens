@@ -120,7 +120,6 @@ EMPTIABLE_CLAIMS = frozenset(
     {
         "external_metadata.lineage",
         "external_metadata.predecessors",
-        "taxonomy.era",
         "taxonomy.novel_ops",
     }
 )
@@ -141,7 +140,9 @@ SEARCH_BACKED_AVAILABILITY_STATUSES = frozenset({"none-exist", "not-found-after-
 #: facts whose honest answer is often "there are none". See
 #: :data:`menagerie.crawler.metadata.AVAILABILITY_FIELDS` (single source of truth).
 AVAILABILITY_CLAIMS = (
-    frozenset(f"external_metadata.{field}" for field in AVAILABILITY_FIELDS) | EMPTIABLE_CLAIMS
+    frozenset(f"external_metadata.{field}" for field in AVAILABILITY_FIELDS)
+    | EMPTIABLE_CLAIMS
+    | FOREIGN_AVAILABILITY_KEYS
 )
 #: Source roles whose bytes are the *paper*, not the implementation. Paper metadata
 #: (`authors`, `institution`, `country`, `venue`, `year`, `era`, `citation`) essentially
@@ -1449,6 +1450,7 @@ def _validate_availability_record(
         raise ProposalValidationError(
             f"availability state for {claim} declares {status} but the field carries a value"
         )
+    _validate_absence_twin_consistency(claim, facts)
     if status in SEARCH_BACKED_AVAILABILITY_STATUSES:
         # Until the source broker ships probe receipts, the recorded bounded search IS
         # the evidence for an absence state; explicit excerpt IDs may corroborate it.
@@ -1456,6 +1458,33 @@ def _validate_availability_record(
         # that a model HAS no predecessors is a finding, and a finding needs the search
         # that produced it, or "there are none" becomes the cheapest thing to write.
         _validate_absence_is_searched(facts, [claim])
+
+
+def _validate_absence_twin_consistency(claim: str, facts: Mapping[str, Any]) -> None:
+    """Refuse a typed absence that contradicts a machine-visible twin value.
+
+    Parameters
+    ----------
+    claim:
+        Canonical claim path carrying the typed absence record.
+    facts:
+        Complete proposed fact tree.
+
+    Raises
+    ------
+    ProposalValidationError
+        If a taxonomy era absence is contradicted by the external-metadata era value
+        in the same proposal.
+    """
+
+    if claim != "taxonomy.era":
+        return
+    external_era = _claim_value(facts, "external_metadata.era")
+    if not _claim_is_hollow("external_metadata.era", external_era):
+        raise ProposalValidationError(
+            "availability state for taxonomy.era declares absence but "
+            "external_metadata.era carries a value"
+        )
 
 
 def _claim_is_hollow(claim: str, value: object) -> bool:
@@ -3550,6 +3579,11 @@ def _generic_structure_is_evidence_bound(facts: Mapping[str, Any]) -> bool:
         family as an MLP, feed-forward, or Sequential stack.
     """
 
+    if not _claims_generic_mlp_architecture_class(facts):
+        return False
+    if _claim_identity_has_exotic_mechanism(facts):
+        return False
+    identity_terms = _claimed_identity_terms(facts)
     evidence = facts.get("evidence")
     if not isinstance(evidence, Mapping):
         return False
@@ -3565,10 +3599,153 @@ def _generic_structure_is_evidence_bound(facts: Mapping[str, Any]) -> bool:
             isinstance(supports, list)
             and "implementation.architecture" in supports
             and isinstance(text, str)
+            and not _has_exotic_mechanism_text(text)
             and _describes_generic_mlp_structure(text)
+            and _mentions_claimed_identity(text, identity_terms)
         ):
             return True
     return False
+
+
+def _claims_generic_mlp_architecture_class(facts: Mapping[str, Any]) -> bool:
+    """Return whether the author classifies the architecture as generic MLP-like.
+
+    Parameters
+    ----------
+    facts:
+        Proposed fact tree.
+
+    Returns
+    -------
+    bool
+        True when at least one declared architecture class is in the generic
+        feed-forward vocabulary.
+    """
+
+    metadata = _mapping(facts.get("external_metadata"), "external_metadata")
+    architecture_classes = metadata.get("architecture_class")
+    if not isinstance(architecture_classes, list):
+        return False
+    return any(
+        isinstance(architecture_class, str)
+        and _normalize_support_text(architecture_class) in _GENERIC_FAMILY_NAMES
+        for architecture_class in architecture_classes
+    )
+
+
+def _claim_identity_has_exotic_mechanism(facts: Mapping[str, Any]) -> bool:
+    """Return whether claimed identity/class surfaces name an exotic mechanism.
+
+    Parameters
+    ----------
+    facts:
+        Proposed fact tree.
+
+    Returns
+    -------
+    bool
+        True when names, family, or architecture class carry non-generic mechanism
+        terms that cannot invoke the MLP evidence-bound exemption.
+    """
+
+    identity = _mapping(facts.get("identity"), "identity")
+    taxonomy = _mapping(facts.get("taxonomy"), "taxonomy")
+    metadata = _mapping(facts.get("external_metadata"), "external_metadata")
+    aliases = identity.get("aliases")
+    architecture_classes = metadata.get("architecture_class")
+    surfaces: list[object] = [
+        identity.get("canonical_name"),
+        taxonomy.get("family"),
+        metadata.get("family"),
+        *(aliases if isinstance(aliases, list) else []),
+        *(architecture_classes if isinstance(architecture_classes, list) else []),
+    ]
+    return any(
+        isinstance(surface, str) and _has_exotic_mechanism_text(surface) for surface in surfaces
+    )
+
+
+def _claimed_identity_terms(facts: Mapping[str, Any]) -> frozenset[str]:
+    """Return normalized non-generic names that can bind an MLP excerpt to a claim.
+
+    Parameters
+    ----------
+    facts:
+        Proposed fact tree.
+
+    Returns
+    -------
+    frozenset[str]
+        Non-empty normalized name, alias, and family terms.
+    """
+
+    identity = _mapping(facts.get("identity"), "identity")
+    taxonomy = _mapping(facts.get("taxonomy"), "taxonomy")
+    metadata = _mapping(facts.get("external_metadata"), "external_metadata")
+    aliases = identity.get("aliases")
+    surfaces: list[object] = [
+        identity.get("canonical_name"),
+        taxonomy.get("family"),
+        metadata.get("family"),
+        *(aliases if isinstance(aliases, list) else []),
+    ]
+    return frozenset(
+        term
+        for surface in surfaces
+        if isinstance(surface, str)
+        for term in (_normalize_support_text(surface),)
+        if term and term not in _GENERIC_FAMILY_NAMES
+    )
+
+
+def _mentions_claimed_identity(text: str, identity_terms: frozenset[str]) -> bool:
+    """Return whether evidence text names the claimed family identity.
+
+    Parameters
+    ----------
+    text:
+        Evidence excerpt text.
+    identity_terms:
+        Normalized non-generic claim names.
+
+    Returns
+    -------
+    bool
+        True when the excerpt contains one of the claim's normalized identity terms,
+        or no non-generic term is available.
+    """
+
+    if not identity_terms:
+        return True
+    normalized = f" {_normalize_support_text(text)} "
+    return any(f" {term} " in normalized for term in identity_terms)
+
+
+def _has_exotic_mechanism_text(text: str) -> bool:
+    """Return whether text names mechanisms outside the generic MLP exemption.
+
+    Parameters
+    ----------
+    text:
+        Authored claim or evidence text.
+
+    Returns
+    -------
+    bool
+        True for attention, convolutional, recurrent, residual, graph, or diffusion
+        mechanism vocabulary.
+    """
+
+    normalized = _normalize_support_text(text)
+    return bool(
+        re.search(
+            r"\b(?:"
+            r"attention|self attention|transformer|conv|convolution|convolutional|"
+            r"cnn|resnet|residual|recurrent|rnn|lstm|gru|graph|gnn|diffusion"
+            r")\b",
+            normalized,
+        )
+    )
 
 
 def _describes_generic_mlp_structure(text: str) -> bool:

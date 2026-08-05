@@ -620,14 +620,14 @@ def _actionable_validation_leaves(error: ValidationError) -> list[ValidationErro
             closest = [branch for branch, count in counts.items() if count == minimum]
             if len(closest) != 1:
                 return [error]
-            leaves: list[ValidationError] = []
+            closest_leaves: list[ValidationError] = []
             for child in branch_errors[closest[0]]:
-                leaves.extend(_actionable_validation_leaves(child))
-            return leaves or [error]
-    leaves = []
+                closest_leaves.extend(_actionable_validation_leaves(child))
+            return closest_leaves or [error]
+    child_leaves: list[ValidationError] = []
     for child in error.context:
-        leaves.extend(_actionable_validation_leaves(child))
-    return leaves or [error]
+        child_leaves.extend(_actionable_validation_leaves(child))
+    return child_leaves or [error]
 
 
 def _has_discriminator_const_mismatch(errors: Iterable[ValidationError]) -> bool:

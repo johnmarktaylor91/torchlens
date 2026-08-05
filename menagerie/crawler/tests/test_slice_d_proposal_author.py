@@ -1531,6 +1531,146 @@ def test_evidence_bound_named_mlp_classic_is_not_structural_slop(tmp_path: Path)
     validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
 
 
+_GENERIC_SEQUENTIAL_R4_CODE = (
+    "import torch.nn as nn\n\n"
+    "def build_model() -> object:\n"
+    "    return nn.Sequential(nn.Linear(203, 80), nn.Linear(80, 26))\n\n"
+    "def make_dummy_call(seed: int, device: str) -> tuple[tuple[()], dict[str, object]]:\n"
+    "    return (), {}\n"
+)
+
+
+def _ground_generic_sequential_claim(
+    tmp_path: Path,
+    *,
+    name: str,
+    family: str,
+    architecture_class: list[str],
+    excerpt_text: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Build a grounded R4 proposal claiming a family over a generic Sequential.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated model/source directory.
+    name:
+        Claimed canonical model name.
+    family:
+        Claimed taxonomy and external-metadata family.
+    architecture_class:
+        Claimed architecture classes.
+    excerpt_text:
+        Bound source excerpt text.
+
+    Returns
+    -------
+    tuple[dict[str, Any], dict[str, Any]]
+        Proposal and exact source manifest.
+    """
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    facts = proposal["proposed_facts"]
+    facts["identity"]["canonical_name"] = name
+    facts["identity"]["aliases"] = [name]
+    facts["taxonomy"]["family"] = family
+    facts["external_metadata"]["family"] = family
+    facts["external_metadata"]["architecture_class"] = architecture_class
+    excerpt = facts["evidence"]["excerpts"][0]
+    source_path = tmp_path / "source.txt"
+    source_path.write_text(excerpt_text, encoding="utf-8")
+    source_hash = hash_bytes(excerpt_text.encode())
+    for row in (*facts["source_resolution"]["sources"], *manifest["sources"]):
+        if row.get("source_id") == "source-1":
+            row["content_sha256"] = source_hash
+    excerpt["text"] = excerpt_text
+    excerpt["text_sha256"] = hash_bytes(excerpt_text.encode())
+    excerpt["locator"] = f"bytes:0-{len(excerpt_text.encode())}"
+    excerpt["supports"] = [*sorted(DEFAULT_GATED_CLAIMS), "implementation.architecture"]
+    manifest["manifest_sha256"] = stable_hash(manifest["sources"])
+    proposal["verified_hashes"]["source_manifest"] = manifest["manifest_sha256"]
+    _make_r4(proposal, manifest, tmp_path, _GENERIC_SEQUENTIAL_R4_CODE)
+    return proposal, manifest
+
+
+@pytest.mark.parametrize(
+    ("name", "family", "architecture_class", "excerpt_text"),
+    [
+        (
+            "Transformer",
+            "transformer",
+            ["transformer"],
+            "The Transformer follows this overall architecture using stacked self-attention "
+            "and point-wise, fully connected layers for both the encoder and decoder.",
+        ),
+        (
+            "ResNet",
+            "resnet",
+            ["cnn"],
+            "The network ends with a global average pooling layer and a 1000-way "
+            "fully-connected layer with softmax.",
+        ),
+        (
+            "AWD-LSTM",
+            "awd-lstm",
+            ["recurrent"],
+            "Our recurrent language model with weight-dropped LSTM units outperforms an MLP "
+            "baseline and a feedforward n-gram model on Penn Treebank.",
+        ),
+        (
+            "Transformer",
+            "transformer",
+            ["mlp"],
+            "The Transformer follows this overall architecture using stacked self-attention "
+            "and point-wise, fully connected layers for both the encoder and decoder.",
+        ),
+    ],
+    ids=[
+        "transformer-fully-connected-excerpt",
+        "resnet-classifier-head-excerpt",
+        "lstm-mlp-baseline-excerpt",
+        "self-attention-excerpt-reclassed-mlp",
+    ],
+)
+def test_evidence_bound_mlp_exemption_refuses_inconsistent_family_claims(
+    tmp_path: Path,
+    name: str,
+    family: str,
+    architecture_class: list[str],
+    excerpt_text: str,
+) -> None:
+    """Bound generic-topology excerpts cannot launder exotic family claims.
+
+    Parameters
+    ----------
+    tmp_path:
+        Isolated model/source directory.
+    name:
+        Claimed canonical model name.
+    family:
+        Claimed taxonomy and external-metadata family.
+    architecture_class:
+        Claimed architecture classes.
+    excerpt_text:
+        Bound source excerpt text.
+    """
+
+    proposal, manifest = _ground_generic_sequential_claim(
+        tmp_path,
+        name=name,
+        family=family,
+        architecture_class=architecture_class,
+        excerpt_text=excerpt_text,
+    )
+
+    with pytest.raises(ProposalValidationError, match="structural slop"):
+        validate_author_proposal(
+            proposal,
+            allowed_model_dir=tmp_path,
+            source_manifest=manifest,
+        )
+
+
 @pytest.mark.parametrize("forbidden", ["eval", "exec", "compile"])
 def test_dynamic_execution_code_is_rejected(tmp_path: Path, forbidden: str) -> None:
     """Every dynamic execution primitive is rejected.
@@ -2648,6 +2788,13 @@ def test_taxonomy_era_typed_absence_is_accepted(tmp_path: Path) -> None:
     proposal, manifest = _ground_proposal(tmp_path)
     facts = proposal["proposed_facts"]
     facts["taxonomy"]["era"] = None
+    facts["external_metadata"]["era"] = None
+    facts["external_metadata"]["availability"]["era"] = {
+        "status": "not-found-after-search",
+        "values": [],
+        "basis": "search-exhausted",
+        "evidence": ["evidence-1"],
+    }
     facts["external_metadata"]["availability"]["taxonomy.era"] = {
         "status": "not-found-after-search",
         "values": [],
@@ -2656,6 +2803,25 @@ def test_taxonomy_era_typed_absence_is_accepted(tmp_path: Path) -> None:
     }
 
     validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+
+
+def test_taxonomy_era_absence_contradicting_external_era_is_refused(
+    tmp_path: Path,
+) -> None:
+    """A taxonomy-era absence cannot coexist with a known external era value."""
+
+    proposal, manifest = _ground_proposal(tmp_path)
+    facts = proposal["proposed_facts"]
+    facts["taxonomy"]["era"] = None
+    facts["external_metadata"]["availability"]["taxonomy.era"] = {
+        "status": "not-found-after-search",
+        "values": [],
+        "basis": "search-exhausted",
+        "evidence": ["evidence-1"],
+    }
+
+    with pytest.raises(ProposalValidationError, match="external_metadata\\.era carries a value"):
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
 
 
 def test_taxonomy_era_bare_absence_is_refused(tmp_path: Path) -> None:

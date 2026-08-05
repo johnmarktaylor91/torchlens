@@ -492,6 +492,20 @@ def test_an_empty_emptiable_claim_without_a_typed_record_is_still_refused(
     )
 
 
+def test_taxonomy_era_null_without_a_typed_record_is_still_refused(tmp_path: Path) -> None:
+    """Scalar taxonomy era has an availability route, but bare null still fails."""
+
+    proposal, manifest = _ground(tmp_path)
+    proposal["proposed_facts"]["taxonomy"]["era"] = None
+    with pytest.raises(ProposalValidationError) as excinfo:
+        validate_author_proposal(proposal, allowed_model_dir=tmp_path, source_manifest=manifest)
+    assert str(excinfo.value) == (
+        "gated claim taxonomy.era is bare null/empty; a value must be present or the "
+        "claim must declare a typed availability state (external_metadata.availability) of "
+        "none-exist, not-found-after-search, or not-applicable with its evidence"
+    )
+
+
 @pytest.mark.parametrize("claim", sorted(EMPTIABLE_CLAIMS))
 def test_an_empty_emptiable_claim_passes_on_a_typed_none_exist_record(
     tmp_path: Path, claim: str
