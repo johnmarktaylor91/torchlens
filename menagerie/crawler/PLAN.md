@@ -765,7 +765,7 @@ reuses. Editing any of these files stales its digest by construction: re-pin the
 same change.
 
 - `claude_crawler_author_v2.txt`: `sha256:f44a6a0a515f4feb0d680e35ecacbc2e96796d3b438d1a1e4635dcdc9a36da2c`
-- `codex_accuracy_checker_v2.txt`: `sha256:4e798e5a0f065bffdc2e4c9ad8cc3e9bb8fa37d911076affb7d1fb8e85a79821`
+- `codex_accuracy_checker_v2.txt`: `sha256:c3d899f4afc7bb8ecbd9d58f2cef67d00ee9de070545d4fa7a0f02806e6a4b51`
 - `campaign_c1-mech.md`: `sha256:32fe5a762448793199b91cffd3b2290ac90b33b57213e627f362885d3ed445d2`
 - `campaign_c2-disco.md`: `sha256:d176f8298d8a0ecdfd2519a4905e5047cb214aff377545b34c653b7448ecd5b5`
 - `campaign_c3-classics.md`: `sha256:e6a277891824b72e378c52b1e472357d968d30a91a87b1b8d562ab923b5a11a4`
@@ -780,7 +780,7 @@ replaced. They were unpinned until 2026-07-29, so drift in the two most load-bea
 prompts was undetectable.
 
 - `stage1_discovery.md`: `sha256:0b56756b8a8aabcb1134536bc488e76f43bf1479319e208b90a6cc1a2a0a15aa`
-- `stage2_author.md`: `sha256:935445a496a6e4eb20a4681829a8162bba6328451b69637e617c7e1641616817`
+- `stage2_author.md`: `sha256:526ee213e3a81013e1ce7d49379ff62672839e3a93a49af44612cb2c20a87c92`
 
 ## 21. Acceptance tests
 

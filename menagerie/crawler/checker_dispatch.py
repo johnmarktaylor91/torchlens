@@ -145,6 +145,75 @@ DETERMINISTIC_GATE_SCAFFOLD_FIELDS = (
 )
 
 
+def metadata_fidelity_state() -> JsonObject:
+    """Return one fresh machine-owned ``fidelity`` block for a metadata gate item.
+
+    On a ``metadata_batch`` gate the fidelity block carries ZERO checker
+    judgment: ``gate.v3`` pins ``required`` to ``false`` and ``verdict`` to
+    ``"not-applicable"``, and the check arrays have nothing legal to hold. The
+    whole block is a gate-kind constant, so it is MACHINE-OWNED and stamped by
+    the wrapper -- the checker's native output schema for metadata gates omits
+    it entirely, exactly like the gate scaffold.
+
+    Returns
+    -------
+    dict[str, Any]
+        Fresh typed not-applicable fidelity block (fresh lists, never shared).
+    """
+
+    return {
+        "required": False,
+        "verdict": "not-applicable",
+        "material_checks": [],
+        "unsupported_choices": [],
+        "contradictions": [],
+        "omissions": [],
+        "permanent_scar": False,
+    }
+
+
+def metadata_fidelity_normalizations(
+    result: Mapping[str, Any], envelope: Mapping[str, Any]
+) -> tuple[str, ...]:
+    """Name the items whose supplied fidelity diverges from the machine constant.
+
+    The stamp in :func:`apply_machine_owned_gate_fields` is unconditional, and
+    for THIS field that is safe -- see the laundering boundary documented there
+    -- but overwriting must never be silent: a supplied divergent block is
+    evidence the checker misunderstood its lane, and rung 8 proved exactly that
+    (batch ``metadata-c001cad863d95a67``: a real ``fidelity.verdict`` on a
+    metadata gate killed m10517 and m9666 in the same second). The wrapper calls
+    this BEFORE stamping and emits the returned IDs as telemetry, so the
+    evidence survives the normalization that keeps the batch alive.
+
+    Parameters
+    ----------
+    result:
+        Decoded candidate gate, before stamping.
+    envelope:
+        Hash-bound request envelope.
+
+    Returns
+    -------
+    tuple[str, ...]
+        ``stable_id`` values (in item order) whose supplied ``fidelity`` is
+        present and not the machine-owned constant. Empty for non-metadata
+        gates and for compliant results.
+    """
+
+    if envelope.get("gate_kind") != GateKind.METADATA_BATCH.value:
+        return ()
+    items = result.get("items")
+    if not isinstance(items, list):
+        return ()
+    machine = metadata_fidelity_state()
+    return tuple(
+        str(item.get("stable_id"))
+        for item in items
+        if isinstance(item, Mapping) and "fidelity" in item and item["fidelity"] != machine
+    )
+
+
 class CheckerDispatchError(ValueError):
     """Raised when a checker request or atomic result violates its contract."""
 
@@ -377,7 +446,9 @@ def apply_machine_owned_gate_fields(
     reasoning. Identities and wall timings are the machine's. Stamping happens
     BEFORE validation so a substantively complete verdict is never discarded for
     a scaffold field the model had no way to observe, and it is unconditional so
-    a model-supplied identity can never be believed.
+    a model-supplied identity can never be believed. On a ``metadata_batch``
+    gate the per-item ``fidelity`` block is machine-owned too -- a gate-kind
+    constant with no judgment in it -- and is machine-filled on every item.
 
     OMITTING a machine-owned field is free and always has been. SUPPLYING one
     with a conflicting value is refused, because the stamp cannot both discard
@@ -447,6 +518,26 @@ def apply_machine_owned_gate_fields(
     # for any candidate that happens to carry both kinds of fabrication.
     _refuse_ledger_assigned_fields(stamped, "checker result")
     stamped.update(scaffold)
+    # Per-item machine fill: on a metadata gate the whole ``fidelity`` block is a
+    # gate-kind CONSTANT (gate.v3 pins required=false and verdict=not-applicable;
+    # nothing in it is a judgment), so it is stamped unconditionally, like the
+    # scaffold. Unlike the identity scaffold, a supplied divergent value is
+    # NORMALIZED rather than refused: refusing is what turned one information-free
+    # slip into a whole-batch ``failed:runner/protocol-violation`` on rung 8
+    # (m10517 + m9666, batch ``metadata-c001cad863d95a67``), and overwriting a
+    # value that depends on nothing the checker observed cannot launder anything
+    # -- the machine value is correct independent of what was supplied. The
+    # divergence itself is still surfaced: the wrapper records
+    # ``metadata_fidelity_normalizations`` as telemetry before this stamp.
+    if scaffold.get("gate_kind") == GateKind.METADATA_BATCH.value:
+        raw_items = stamped.get("items")
+        if isinstance(raw_items, list):
+            stamped["items"] = [
+                {**item, "fidelity": metadata_fidelity_state()}
+                if isinstance(item, Mapping)
+                else item
+                for item in raw_items
+            ]
     checker = dict(supplied_checker) if isinstance(supplied_checker, Mapping) else {}
     checker.update(checker_scaffold)
     stamped["checker"] = checker

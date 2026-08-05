@@ -619,3 +619,157 @@ def test_the_grant_command_runs_as_a_real_subprocess_from_the_attempt_directory(
     assert completed.returncode == 0, completed.stderr
     printed = json.loads(completed.stdout)
     assert printed == _driver_recompute(_settled(proposal["proposed_facts"], printed))
+
+
+# -- the two arithmetic modes rung 8 proved missing --------------------------
+#
+# The stage-2 allowlist grants exactly ONE command: this calculator. Rung 8
+# measured what each missing arithmetic cost. No clock: eight sessions guessed
+# at time and self-blocked with 63-88% of their grant unused. No hash: the
+# brief instructed ``sha256sum``, the allowlist denied it, and m8189 published
+# eight sequential PLACEHOLDER digests over byte-perfect excerpts. Both
+# arithmetics now live behind the same single granted prefix.
+
+
+def test_the_clock_mode_reports_now_and_the_exact_remaining_seconds(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """``--clock --deadline`` is the granted time observation, end to end."""
+
+    from datetime import datetime, timedelta, timezone
+
+    deadline = datetime.now(timezone.utc) + timedelta(seconds=600)
+    deadline_iso = deadline.isoformat().replace("+00:00", "Z")
+    assert main(["--clock", "--deadline", deadline_iso]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert set(report) == {"now", "deadline", "remaining_seconds"}
+    assert report["deadline"] == deadline_iso
+    assert 0 < report["remaining_seconds"] <= 600
+    assert report["now"].endswith("Z")
+
+    # Without a deadline the observation is just "now" -- still an observation.
+    assert main(["--clock"]) == 0
+    bare = json.loads(capsys.readouterr().out)
+    assert set(bare) == {"now"}
+
+    # A passed deadline reads NEGATIVE, never wraps or clamps: the session must
+    # be able to see that it is already in the external-kill window.
+    stale = datetime.now(timezone.utc) - timedelta(seconds=120)
+    assert main(["--clock", "--deadline", stale.isoformat()]) == 0
+    late = json.loads(capsys.readouterr().out)
+    assert late["remaining_seconds"] < 0
+
+
+def test_a_malformed_deadline_is_a_typed_refusal(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Garbage in is a refusal naming the fix, never a guessed instant."""
+
+    assert main(["--clock", "--deadline", "half past nine"]) == 2
+    assert "ISO-8601" in capsys.readouterr().err
+
+
+def test_the_hash_modes_produce_the_digest_the_evidence_validator_recomputes(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``--hash-string``/``--hash-file`` are the real excerpt-digest arithmetic.
+
+    The digest must equal ``identity.hash_bytes`` over the exact UTF-8 bytes,
+    because that is precisely what the evidence validator recomputes from the
+    ``text`` field.
+    """
+
+    text = "PoolFormer is instantiated from metaformer configs"
+    assert main(["--hash-string", text]) == 0
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["sha256"] == hash_bytes(text.encode("utf-8"))
+    assert printed["bytes_len"] == len(text.encode("utf-8"))
+    assert "sha256_without_trailing_newline" not in printed
+
+    target = tmp_path / "excerpt.txt"
+    target.write_bytes(text.encode("utf-8"))
+    assert main(["--hash-file", str(target)]) == 0
+    from_file = json.loads(capsys.readouterr().out)
+    assert from_file["sha256"] == printed["sha256"]
+
+
+def test_the_trailing_newline_trap_is_reported_beside_the_digest(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A file ending in a newline reports BOTH digests, labelled.
+
+    The one observed real mismatch class: a file-writing tool appends a final
+    newline the quoted string never had, and the excerpt digest is wrong by
+    exactly one byte. The report names the alternative instead of leaving the
+    session to rediscover the trap one dead proposal at a time.
+    """
+
+    text = "exact quoted line"
+    target = tmp_path / "excerpt.txt"
+    target.write_bytes(text.encode("utf-8") + b"\n")
+    assert main(["--hash-file", str(target)]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["trailing_newline"] is True
+    assert report["sha256"] == hash_bytes(text.encode("utf-8") + b"\n")
+    assert report["sha256_without_trailing_newline"] == hash_bytes(
+        text.encode("utf-8")
+    )
+
+
+def test_an_unreadable_hash_target_is_a_typed_refusal(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A missing file refuses with the path named, never an empty-bytes digest."""
+
+    assert main(["--hash-file", str(tmp_path / "absent.txt")]) == 2
+    assert "unreadable" in capsys.readouterr().err
+
+
+def test_exactly_one_mode_per_invocation(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Modes are exclusive, and the identity mode still demands both inputs."""
+
+    assert main(["--clock", "--hash-string", "x"]) == 2
+    assert "exactly one mode" in capsys.readouterr().err
+    assert main([]) == 2
+    capsys.readouterr()
+    request_only = tmp_path / "request.json"
+    request_only.write_text("{}", encoding="utf-8")
+    assert main(["--request", str(request_only)]) == 2
+    assert "BOTH --request and --facts" in capsys.readouterr().err
+
+
+def test_the_granted_command_carries_the_new_modes_as_a_real_subprocess(
+    tmp_path: Path,
+) -> None:
+    """The exact granted prefix runs ``--clock`` and ``--hash-file`` from an
+    attempt directory -- reachable AND runnable, like the identity mode."""
+
+    attempt = tmp_path / "attempts" / "attempt-001-modes"
+    attempt.mkdir(parents=True)
+    target = attempt / "excerpt.txt"
+    target.write_bytes(b"granted bytes")
+    environment = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+
+    clock = subprocess.run(
+        [*shlex.split(identity_tool_command()), "--clock"],
+        cwd=str(attempt),
+        capture_output=True,
+        text=True,
+        timeout=120,
+        env=environment,
+    )
+    assert clock.returncode == 0, clock.stderr
+    assert "now" in json.loads(clock.stdout)
+
+    digest = subprocess.run(
+        [*shlex.split(identity_tool_command()), "--hash-file", str(target)],
+        cwd=str(attempt),
+        capture_output=True,
+        text=True,
+        timeout=120,
+        env=environment,
+    )
+    assert digest.returncode == 0, digest.stderr
+    assert json.loads(digest.stdout)["sha256"] == hash_bytes(b"granted bytes")

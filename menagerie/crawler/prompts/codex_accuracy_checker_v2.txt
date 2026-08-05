@@ -239,11 +239,13 @@ Field ownership is fixed. Respect it exactly.
   recompute, hash, guess, or look these up anywhere else: work_id, campaign_root_work_id, stable_id,
   family_representative_id, fidelity_identity, vet_identity, verified_hashes.
 - YOURS -- the judgments only you can make. EVERY item carries ALL of them: integrity, verdict,
-  field_checks, fidelity, rung_check, unsupported_claims, required_repairs, confidence, and
-  terminal_disposition. Never drop one because this envelope does not exercise it; give it its typed
-  inapplicable form instead. On a `metadata_batch` item that is fidelity `{"required": false,
-  "verdict": "not-applicable", ...}` with empty check arrays, and terminal_disposition `null`;
-  terminal_disposition is `null` on a `fidelity` item too.
+  field_checks, rung_check, unsupported_claims, required_repairs, confidence, and
+  terminal_disposition -- plus the decided fidelity block on a `fidelity` envelope item. Never drop
+  one because this envelope does not exercise it; give it its typed inapplicable form instead:
+  terminal_disposition is `null` on a `metadata_batch` or `fidelity` item. On a `metadata_batch`
+  item the `fidelity` block is MACHINE-OWNED -- it is a gate-kind constant, it is absent from your
+  output schema by design, and the wrapper stamps its typed not-applicable form -- so never author
+  a fidelity verdict on a metadata gate.
 
 Emit exactly one independently identified result per envelope item, in the same order. A `metadata_batch`
 result carries each item's integrity result, verdict, exhaustive scoped field_checks, excerpt discrepancies,

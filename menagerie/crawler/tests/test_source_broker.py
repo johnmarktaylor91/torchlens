@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import email
 import json
+import urllib.error
 from pathlib import Path
 from typing import Optional
 
@@ -16,13 +18,17 @@ from menagerie.crawler.source_broker import (
     OUTCOME_PAPER_DERIVATION_ONLY,
     OUTCOME_PROBED,
     OUTCOME_REDIRECT_REFUSED,
+    OUTCOME_UNFETCHABLE_BY_POLICY,
     OUTCOME_UNREACHABLE,
+    ROLE_DOCUMENTATION,
     ROLE_IMPLEMENTATION,
     ROLE_INTRODUCING_PAPER,
     FixtureTransport,
     RedirectRefused,
     SourceBrokerError,
     TransportResponse,
+    UrllibTransport,
+    _derive_media_type,
     broker_source_pack,
     derive_paper_metadata,
     write_broker_outputs,
@@ -130,8 +136,10 @@ def test_descriptor_smuggling_exact_strings_is_rejected(tmp_path: Path) -> None:
         "redirect_chain",
         "resolver_receipt",
         "broker_role",
+        "broker_citable_role",
         "media_type",
         "derived_citation",
+        "retrieved_at",
     ],
 )
 def test_descriptor_smuggling_is_rejected_on_presence(
@@ -421,6 +429,243 @@ def test_write_broker_outputs_persists_receipts(tmp_path: Path) -> None:
     # Evidence bytes were stored content-addressed.
     evidence = list((tmp_path / "evidence").iterdir())
     assert evidence
+
+
+# -- W-1: the sniff must record the truth for extensionless HTML ------------
+
+#: Replay-shaped after the frozen rung-8 m5273 manifest: arXiv abs pages and
+#: ar5iv renderings are extensionless and begin with a doctype, and the old
+#: sniff recorded them ``text/plain`` -- a machine falsehood the byte-exact
+#: staging echo then forced authors to repeat (an author writing the true
+#: ``text/html`` died at staging AFTER passing result validation).
+ARXIV_ABS_SHAPED = b'<!DOCTYPE html>\n<html lang="en">\n\n<head><script>x</script></head></html>'
+AR5IV_SHAPED = b'<!DOCTYPE html><html lang="en">\n<head>\n<meta charset="utf-8"></head></html>'
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        (ARXIV_ABS_SHAPED, "text/html"),
+        (AR5IV_SHAPED, "text/html"),
+        (b"  \r\n\t<HTML LANG='EN'><body></body></HTML>", "text/html"),
+        (b"\xef\xbb\xbf<!doctype html><p>bom-prefixed page</p>", "text/html"),
+        (b"<!-- comment first --><html></html>", "text/html"),
+        (b"<div class='x'>fragment without doctype</div>", "text/html"),
+        # Negatives: the HTML branch must not swallow the other truths.
+        (b"plain prose about <angles> that opens no tag", "text/plain"),
+        (b"<abbrev-tag> is not a recognized html opener", "text/plain"),
+        (b'{"a": 1}', "application/json"),
+        (b"\x89PNG\r\n\x1a\n", "application/octet-stream"),
+    ],
+)
+def test_extensionless_body_sniffs_to_its_true_media_type(body: bytes, expected: str) -> None:
+    """Extensionless HTML is recorded ``text/html``; non-HTML stays untouched."""
+
+    media_type, method = _derive_media_type("https://arxiv.org/abs/2303.05499", body)
+    assert media_type == expected
+    assert method == "content-sniff"
+
+
+def test_path_extension_still_beats_the_content_sniff() -> None:
+    """A telling suffix remains authoritative over the body bytes."""
+
+    media_type, method = _derive_media_type("https://x.example/model.py", ARXIV_ABS_SHAPED)
+    assert media_type == "text/x-python"
+    assert method == "path-extension"
+
+
+# -- W-6: retrieved_at is machine-stamped, never authored --------------------
+
+
+def test_manifest_rows_carry_machine_stamped_retrieved_at(tmp_path: Path) -> None:
+    """Every manifest row carries the broker clock's own per-fetch instant."""
+
+    ticks = iter(
+        [
+            "2026-08-05T05:10:43Z",  # forge ref-resolution receipt
+            "2026-08-05T05:10:44Z",  # forge fetch completion
+            "2026-08-05T05:10:45Z",  # raw-url fetch completion
+        ]
+    )
+    body = b"class MuRE: pass\n"
+    page = b"<!DOCTYPE html><html><head><title>paper</title></head></html>"
+    transport = MapTransport(
+        {
+            COMMITS_URL: (200, json.dumps({"sha": RESOLVED_SHA}).encode()),
+            RAW_URL: (200, body),
+            "https://example.org/page": (200, page),
+        }
+    )
+    pack = broker_source_pack(
+        [
+            _impl_descriptor(),
+            {
+                "source_id": "doc-page",
+                "kind": "raw-url",
+                "url": "https://example.org/page",
+                "requested_role": "documentation",
+                "basis": "Candidate documentation endpoint.",
+            },
+        ],
+        broker_dir=tmp_path,
+        transport=transport,
+        clock=lambda: next(ticks),
+    )
+    stamped = {row["source_id"]: row["retrieved_at"] for row in pack.rows}
+    assert stamped == {
+        "impl-mure": "2026-08-05T05:10:44Z",
+        "doc-page": "2026-08-05T05:10:45Z",
+    }
+    persisted = {item.source_id: item.to_dict()["retrieved_at"] for item in pack.outcomes}
+    assert persisted == dict(stamped)
+
+
+# -- W-10: the broker owns the citable paper role -----------------------------
+
+
+def _paper_page_descriptor() -> dict:
+    return {
+        "source_id": "paper-abs",
+        "kind": "raw-url",
+        "url": "https://example.org/abs/2303.05499",
+        "requested_role": "paper",
+        "media_type_hint": "text/html",
+        "basis": "The arXiv abstract page carries the citation facts.",
+    }
+
+
+def test_raw_url_paper_request_binds_the_citable_paper_role(tmp_path: Path) -> None:
+    """A fetched document requested as the paper earns a machine-derived paper role.
+
+    The manifest row keeps the lane's closed ``broker_role`` vocabulary
+    (``documentation``) and records the broker's citation authority beside it,
+    so an author's declared ``introducing-paper`` role finally has a
+    machine-derived value to be checked against.
+    """
+
+    page = b"<!DOCTYPE html><html><head><title>GroundingDINO</title></head></html>"
+    transport = MapTransport({"https://example.org/abs/2303.05499": (200, page)})
+    pack = broker_source_pack([_paper_page_descriptor()], broker_dir=tmp_path, transport=transport)
+    outcome = pack.outcomes[0]
+    assert outcome.outcome == OUTCOME_FETCHED
+    assert outcome.bound_role == ROLE_INTRODUCING_PAPER
+    assert len(pack.rows) == 1
+    row = pack.rows[0]
+    assert row["broker_role"] == ROLE_DOCUMENTATION
+    assert row["broker_citable_role"] == ROLE_INTRODUCING_PAPER
+    assert row["media_type"] == "text/html"
+    assert row["requested_role"] == "paper"
+
+
+def test_paper_request_never_relabels_a_code_file(tmp_path: Path) -> None:
+    """An implementation suffix beats the requested paper role."""
+
+    transport = MapTransport({"https://example.org/model.py": (200, b"class Model: pass\n")})
+    pack = broker_source_pack(
+        [
+            {
+                "source_id": "spoof-paper",
+                "kind": "raw-url",
+                "url": "https://example.org/model.py",
+                "requested_role": "paper",
+                "basis": "Mislabeled code file.",
+            }
+        ],
+        broker_dir=tmp_path,
+        transport=transport,
+    )
+    outcome = pack.outcomes[0]
+    assert outcome.bound_role == ROLE_IMPLEMENTATION
+    row = pack.rows[0]
+    assert row["broker_role"] == ROLE_IMPLEMENTATION
+    assert "broker_citable_role" not in row
+
+
+def test_paper_request_for_a_binary_blob_stays_documentation(tmp_path: Path) -> None:
+    """Only document media types can carry the citable paper role."""
+
+    transport = MapTransport({"https://example.org/weights": (200, b"\x00\x01\x02\xff")})
+    pack = broker_source_pack(
+        [
+            {
+                "source_id": "blob-paper",
+                "kind": "raw-url",
+                "url": "https://example.org/weights",
+                "requested_role": "paper",
+                "basis": "Opaque blob requested as the paper.",
+            }
+        ],
+        broker_dir=tmp_path,
+        transport=transport,
+    )
+    outcome = pack.outcomes[0]
+    assert outcome.bound_role == ROLE_DOCUMENTATION
+    row = pack.rows[0]
+    assert row["broker_role"] == ROLE_DOCUMENTATION
+    assert "broker_citable_role" not in row
+
+
+# -- W-3/D-4: policy refusals are typed, recordable evidence ------------------
+
+
+def test_http_url_is_typed_unfetchable_by_policy_not_pack_killing(tmp_path: Path) -> None:
+    """An http-only reference is recorded per target and never aborts the pack."""
+
+    body = b"class MuRE: pass\n"
+    transport = MapTransport(
+        {
+            COMMITS_URL: (200, json.dumps({"sha": RESOLVED_SHA}).encode()),
+            RAW_URL: (200, body),
+        }
+    )
+    pack = broker_source_pack(
+        [
+            _impl_descriptor(),
+            {
+                "source_id": "doc-legacy",
+                "kind": "raw-url",
+                "url": "http://www.cs.toronto.edu/~hinton/absps/nature.pdf",
+                "requested_role": "documentation",
+                "basis": "Legacy host without TLS.",
+            },
+        ],
+        broker_dir=tmp_path,
+        transport=transport,
+    )
+    outcomes = {item.source_id: item.outcome for item in pack.outcomes}
+    assert outcomes == {
+        "impl-mure": OUTCOME_FETCHED,
+        "doc-legacy": OUTCOME_UNFETCHABLE_BY_POLICY,
+    }
+    refused = next(item for item in pack.outcomes if item.source_id == "doc-legacy")
+    assert "policy" in refused.detail and "https" in refused.detail
+    assert refused.sha256 is None
+    # The bytes were never contacted, the pack survived, and only the fetched
+    # implementation earned a manifest row.
+    assert transport.requested == [COMMITS_URL, RAW_URL]
+    assert [row["source_id"] for row in pack.rows] == ["impl-mure"]
+
+
+def test_redirect_to_plaintext_is_refused_even_on_an_allowlisted_host() -> None:
+    """The https-only posture holds across redirect hops, not just descriptors."""
+
+    class _Redirecting:
+        """Opener stub: first hop answers 302 toward a plaintext location."""
+
+        def open(self, request, timeout):
+            raise urllib.error.HTTPError(
+                request.full_url,
+                302,
+                "Found",
+                email.message_from_string("Location: http://arxiv.org/abs/1"),
+                None,
+            )
+
+    transport = UrllibTransport(token_resolver=lambda: None)
+    transport._opener = _Redirecting()
+    with pytest.raises(RedirectRefused) as refusal:
+        transport("https://arxiv.org/abs/1", max_bytes=1024, timeout=1.0)
+    assert refusal.value.target == "http://arxiv.org/abs/1"
 
 
 def test_fixture_transport_round_trip(tmp_path: Path) -> None:
