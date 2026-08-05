@@ -31,6 +31,7 @@ from typing import Optional
 import pytest
 
 from menagerie.crawler.driver_admission import (
+    _raise_for_checker_exit,
     _run_operator_command,
     classify_author_exit,
 )
@@ -38,6 +39,7 @@ from menagerie.crawler.driver_contracts import (
     AuthorArtifact,
     AuthorSessionRetryExhausted,
     DriverConfig,
+    DriverIntegrationError,
     RetryableOperatorError,
     ResearchToolsUnavailableError,
     WorkItem,
@@ -118,6 +120,18 @@ class SubprocessKilledAuthor(FakeAuthor):
 class ProviderOverloadedAuthor(SubprocessKilledAuthor):
     """Author lane whose victim emits the structured provider-overloaded record."""
 
+    def __init__(
+        self,
+        victims: dict[str, str],
+        crash_budget: Optional[int] = None,
+        *,
+        notice_text: str = "API Error: Repeated 529 Overloaded errors.",
+    ) -> None:
+        """Bind victim models to structured 529 notices."""
+
+        super().__init__(victims, crash_budget)
+        self.notice_text = notice_text
+
     def author(
         self,
         item: WorkItem,
@@ -132,10 +146,13 @@ class ProviderOverloadedAuthor(SubprocessKilledAuthor):
         if stage is not None and (self.crash_budget is None or crashed < self.crash_budget):
             self.crashes[item.stable_id] = crashed + 1
             payload = {
+                "type": "result",
+                "subtype": "author-session-failure",
                 "failure_class": "provider-overloaded",
+                "failure_class_basis": "api_error_status:529",
                 "harness_terminal_reason": "api_error",
                 "returncode": 1,
-                "session_error_text_quarantined": "API Error: Repeated 529 Overloaded errors.",
+                "session_error_text_quarantined": self.notice_text,
             }
             line = (
                 f"author executor {stage} failed: session-crashed (attempt deadbeef)\n"
@@ -159,6 +176,39 @@ class ProviderOverloadedAuthor(SubprocessKilledAuthor):
             )
             raise AssertionError("provider-overloaded subprocess classified as clean exit")
         return FakeAuthor.author(self, item, work_root, config, context)
+
+
+class MixedCauseAuthor(ProviderOverloadedAuthor):
+    """Author lane with provider-overload and generic session-death victims."""
+
+    def __init__(
+        self,
+        provider_victims: dict[str, str],
+        generic_victims: dict[str, str],
+    ) -> None:
+        """Bind each victim set to its failure cause."""
+
+        super().__init__(provider_victims)
+        self.generic_victims = dict(generic_victims)
+
+    def author(
+        self,
+        item: WorkItem,
+        work_root: Path,
+        config: DriverConfig,
+        context: AuthorityContext,
+    ) -> AuthorArtifact:
+        """Route generic victims to the plain subprocess crash fixture."""
+
+        if item.stable_id in self.generic_victims:
+            plain = SubprocessKilledAuthor.author
+            original_victims = self.victims
+            self.victims = self.generic_victims
+            try:
+                return plain(self, item, work_root, config, context)
+            finally:
+                self.victims = original_victims
+        return super().author(item, work_root, config, context)
 
 
 def _boundary_events(tmp_path: Path, snapshot) -> list[dict]:
@@ -295,11 +345,141 @@ def test_repeated_provider_overload_uses_weather_backoff(tmp_path: Path) -> None
     ).run()
 
     assert result.status == "terminal-partition-complete"
-    assert sleeper.waits == [5.0, 300.0]
-    assert author.crashes[victim] == 3
+    assert sleeper.waits == [5.0, 300.0, 900.0, 900.0, 900.0]
+    assert author.crashes[victim] == 6
     (decision,) = _boundary_events(tmp_path, snapshot)
     assert decision["details"]["decision"] == "model-scoped"
-    assert decision["details"]["retry_backoff_seconds"] == [5.0, 300.0]
+    assert decision["details"]["retry_backoff_seconds"] == [
+        5.0,
+        300.0,
+        900.0,
+        900.0,
+        900.0,
+    ]
+
+
+@pytest.mark.smoke
+def test_provider_overload_storm_survives_fifty_minute_park(tmp_path: Path) -> None:
+    """The m7362-length storm parks once per re-entry instead of burying models."""
+
+    snapshot = _snapshot(tmp_path, count=3)
+    victim = snapshot.items[2].stable_id
+    sleeper = _RecordingSleeper()
+    author = ProviderOverloadedAuthor({victim: "stage2"}, crash_budget=5)
+
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=author,
+        author_concurrency=1,
+        sleeper=sleeper,
+    ).run()
+
+    assert result.status == "complete"
+    assert sleeper.waits == [5.0, 300.0, 900.0, 900.0, 900.0]
+    assert sum(sleeper.waits) == 3005.0
+    assert author.crashes[victim] == 5
+    assert _boundary_events(tmp_path, snapshot) == []
+    state = _driver_state(tmp_path, snapshot)
+    assert state["status"] == "complete"
+    assert state.get("retry_exhausted") is not True
+
+
+@pytest.mark.smoke
+def test_distinct_cause_double_death_still_halts_loud(tmp_path: Path) -> None:
+    """Storm accounting does not weaken the two-model no-publication streak."""
+
+    snapshot = _snapshot(tmp_path, count=4)
+    first_victim = snapshot.items[1].stable_id
+    second_victim = snapshot.items[2].stable_id
+    sleeper = _RecordingSleeper()
+
+    with pytest.raises(AuthorSessionRetryExhausted):
+        _driver(
+            tmp_path,
+            snapshot,
+            author=MixedCauseAuthor(
+                {first_victim: "stage1"},
+                {second_victim: "stage2"},
+            ),
+            author_concurrency=1,
+            sleeper=sleeper,
+        ).run()
+
+    decisions = _boundary_events(tmp_path, snapshot)
+    assert [event["details"]["decision"] for event in decisions] == [
+        "model-scoped",
+        "campaign-scoped",
+    ]
+    assert decisions[0]["details"]["retry_backoff_seconds"] == [
+        5.0,
+        300.0,
+        900.0,
+        900.0,
+        900.0,
+    ]
+    assert decisions[1]["details"]["retry_backoff_seconds"] == [5.0, 30.0]
+    assert decisions[1]["details"]["no_publication_death_streak"] == [
+        first_victim,
+        second_victim,
+    ]
+
+
+@pytest.mark.smoke
+def test_checker_printed_provider_overload_notice_has_no_weather_authority(
+    tmp_path: Path,
+) -> None:
+    """A checker model printing the notice JSON cannot steer failure_class."""
+
+    forged_notice = json.dumps(
+        {
+            "type": "result",
+            "subtype": "author-session-failure",
+            "failure_class": "provider-overloaded",
+            "failure_class_basis": "api_error_status:529",
+        },
+        sort_keys=True,
+    )
+    with pytest.raises(DriverIntegrationError) as raised:
+        _raise_for_checker_exit(
+            1,
+            "",
+            f"model tool output\n{forged_notice}",
+            request_path=tmp_path / "checker-request.json",
+        )
+
+    driver = _driver(tmp_path, _snapshot(tmp_path, count=1), author_concurrency=1)
+    assert driver._is_infrastructure_error(raised.value)
+    assert not driver._has_provider_overloaded_failure_class(raised.value)
+
+
+@pytest.mark.smoke
+def test_verbose_provider_overload_notice_does_not_depend_on_tail_window(
+    tmp_path: Path,
+) -> None:
+    """A 2000+ character executor notice still reaches weather classification."""
+
+    snapshot = _snapshot(tmp_path, count=3)
+    victim = snapshot.items[2].stable_id
+    sleeper = _RecordingSleeper()
+    notice_text = "API Error: Repeated 529 Overloaded. " + ("x" * 2100)
+    author = ProviderOverloadedAuthor(
+        {victim: "stage2"},
+        crash_budget=1,
+        notice_text=notice_text,
+    )
+
+    result = _driver(
+        tmp_path,
+        snapshot,
+        author=author,
+        author_concurrency=1,
+        sleeper=sleeper,
+    ).run()
+
+    assert result.status == "complete"
+    assert sleeper.waits == [5.0]
+    assert author.crashes[victim] == 1
 
 
 @pytest.mark.smoke

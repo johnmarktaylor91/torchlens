@@ -1530,6 +1530,7 @@ def classify_author_exit(
     combined = f"{stderr}\n{stdout}".strip()
     label = "author command failed" if kind == "author" else "author source request failed"
     tail = combined[-STDIO_TAIL_MAX_CHARS:]
+    session_notice = _structured_author_session_failure_notice(combined)
     signal = classify_author_response(returncode, stdout)
     if signal is None:
         signal = classify_author_response(returncode, stderr)
@@ -1572,7 +1573,11 @@ def classify_author_exit(
             for line in combined.splitlines()
         ):
             raise AuthorExecutorContractError(stable_id, tail)
-        raise RetryableOperatorError(f"{label} for {stable_id} (exit {returncode}): {tail}")
+        exc = RetryableOperatorError(f"{label} for {stable_id} (exit {returncode}): {tail}")
+        if session_notice is not None:
+            exc.failure_class = _notice_string(session_notice, "failure_class")
+            exc.failure_class_basis = _notice_string(session_notice, "failure_class_basis")
+        raise exc
     if returncode == AUTHOR_EXIT_PERMANENT:
         # Deliberately does NOT use the historical retryable prefix: a declared
         # contract rejection must not be retried.
@@ -1583,6 +1588,65 @@ def classify_author_exit(
     # ``_is_infrastructure_error`` already treats as one retryable transport
     # failure rather than an immediate permanent model failure.
     raise DriverIntegrationError(f"{label} for {stable_id}: {tail}")
+
+
+def _notice_string(notice: Mapping[str, Any], key: str) -> Optional[str]:
+    """Return a string field from a parsed executor notice.
+
+    Parameters
+    ----------
+    notice:
+        Parsed executor-authored notice.
+    key:
+        Field name to read.
+
+    Returns
+    -------
+    str | None
+        Stripped string field, or ``None`` when absent or non-string.
+    """
+
+    value = notice.get(key)
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+def _structured_author_session_failure_notice(text: str) -> Optional[Mapping[str, Any]]:
+    """Return the executor-authored author-session-failure notice in full text.
+
+    The notice is line-oriented JSON printed by ``author_executor`` itself, not
+    arbitrary model/checker transcript text. Callers pass the unsliced combined
+    process output so a verbose quarantined error body cannot push the opening
+    brace out of the stdio tail.
+
+    Parameters
+    ----------
+    text:
+        Full combined process output.
+
+    Returns
+    -------
+    Mapping[str, Any] | None
+        Parsed notice with the exact machine shape, or ``None``.
+    """
+
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("{") or not stripped.endswith("}"):
+            continue
+        try:
+            payload = json.loads(stripped)
+        except json.JSONDecodeError:
+            continue
+        if (
+            isinstance(payload, Mapping)
+            and payload.get("type") == "result"
+            and payload.get("subtype") == "author-session-failure"
+        ):
+            return payload
+    return None
 
 
 def _checker_failure_evidence(request_path: Path, stdout: str, stderr: str) -> str:
@@ -3014,9 +3078,16 @@ def _outage_streak_signal(
 _INFRASTRUCTURE_RETRY_BACKOFF_SECONDS: tuple[float, ...] = (5.0, 30.0)
 
 #: Weather-scale retry waits for repeated provider-overloaded author crashes. The
-#: first wait stays short in case the wrapper caught a single transient edge; the
-#: second wait parks the lane for minutes instead of re-entering the same 529 cell.
-_PROVIDER_OVERLOAD_RETRY_BACKOFF_SECONDS: tuple[float, ...] = (5.0, 300.0)
+#: first wait stays short in case the wrapper caught a single transient edge; later
+#: waits park the lane through weather-scale provider storms without spending the
+#: ordinary two-entry infrastructure budget on each re-entry.
+_PROVIDER_OVERLOAD_RETRY_BACKOFF_SECONDS: tuple[float, ...] = (
+    5.0,
+    300.0,
+    900.0,
+    900.0,
+    900.0,
+)
 
 #: Hard upper bound for provider-overload weather waits.
 _PROVIDER_OVERLOAD_BACKOFF_CEILING_SECONDS: float = 900.0
@@ -5424,6 +5495,7 @@ class AdmissionEnvironmentMixin:
         contract_retries = 0
         infrastructure_retries = 0
         provider_overload_retries = 0
+        failed_attempts = 0
         observed_backoffs: list[float] = []
         while True:
             if admission is not None:
@@ -5452,14 +5524,25 @@ class AdmissionEnvironmentMixin:
             except Exception as exc:  # noqa: BLE001 -- typed below before retry
                 if not self._is_infrastructure_error(exc):
                     raise
+                failed_attempts += 1
+                if self._has_provider_overloaded_failure_class(exc):
+                    if provider_overload_retries < len(
+                        _PROVIDER_OVERLOAD_RETRY_BACKOFF_SECONDS
+                    ):
+                        backoff = self._provider_overload_retry_backoff(
+                            provider_overload_retries
+                        )
+                        provider_overload_retries += 1
+                        observed_backoffs.append(backoff)
+                        self._wait_before_infrastructure_retry(backoff)
+                        continue
+                    infrastructure_retries = len(backoffs)
+                else:
+                    provider_overload_retries = 0
                 if infrastructure_retries < len(backoffs):
                     backoff = self._infrastructure_retry_backoff(
-                        exc,
-                        retry_index=infrastructure_retries,
-                        provider_overload_retries=provider_overload_retries,
+                        retry_index=infrastructure_retries
                     )
-                    if self._has_provider_overloaded_failure_class(exc):
-                        provider_overload_retries += 1
                     observed_backoffs.append(backoff)
                     self._wait_before_infrastructure_retry(backoff)
                     infrastructure_retries += 1
@@ -5471,7 +5554,7 @@ class AdmissionEnvironmentMixin:
                 ):
                     raise AuthorSessionRetryExhausted(
                         admission[1].stable_id,
-                        attempts=1 + infrastructure_retries,
+                        attempts=failed_attempts,
                         backoff_seconds=tuple(observed_backoffs),
                         detail=str(exc)[-STDIO_TAIL_MAX_CHARS:],
                     ) from exc
@@ -5485,21 +5568,15 @@ class AdmissionEnvironmentMixin:
 
     @staticmethod
     def _infrastructure_retry_backoff(
-        exc: Exception,
         *,
         retry_index: int,
-        provider_overload_retries: int,
     ) -> float:
         """Return the bounded wait before the next infrastructure retry.
 
         Parameters
         ----------
-        exc:
-            Infrastructure exception observed on the just-failed attempt.
         retry_index:
             Zero-based retry wait index.
-        provider_overload_retries:
-            Number of previous provider-overload waits in this retry budget.
 
         Returns
         -------
@@ -5507,19 +5584,31 @@ class AdmissionEnvironmentMixin:
             Backoff duration in seconds.
         """
 
-        if (
-            AdmissionEnvironmentMixin._has_provider_overloaded_failure_class(exc)
-            and provider_overload_retries > 0
-        ):
-            weather_index = min(
-                retry_index,
-                len(_PROVIDER_OVERLOAD_RETRY_BACKOFF_SECONDS) - 1,
-            )
-            return min(
-                _PROVIDER_OVERLOAD_RETRY_BACKOFF_SECONDS[weather_index],
-                _PROVIDER_OVERLOAD_BACKOFF_CEILING_SECONDS,
-            )
         return _INFRASTRUCTURE_RETRY_BACKOFF_SECONDS[retry_index]
+
+    @staticmethod
+    def _provider_overload_retry_backoff(retry_index: int) -> float:
+        """Return the bounded wait before a provider-overload storm retry.
+
+        Parameters
+        ----------
+        retry_index:
+            Zero-based provider-overload wait index.
+
+        Returns
+        -------
+        float
+            Weather backoff duration in seconds, capped by the public ceiling.
+        """
+
+        weather_index = min(
+            retry_index,
+            len(_PROVIDER_OVERLOAD_RETRY_BACKOFF_SECONDS) - 1,
+        )
+        return min(
+            _PROVIDER_OVERLOAD_RETRY_BACKOFF_SECONDS[weather_index],
+            _PROVIDER_OVERLOAD_BACKOFF_CEILING_SECONDS,
+        )
 
     def _wait_before_infrastructure_retry(self, seconds: float) -> None:
         """Wait out one backoff entry without ever outliving a shutdown request.
@@ -5553,27 +5642,20 @@ class AdmissionEnvironmentMixin:
         Returns
         -------
         bool
-            ``True`` only when a JSON object in the exception text carries
-            ``failure_class="provider-overloaded"``.
+            ``True`` only when an executor-authored typed notice carried
+            ``failure_class="provider-overloaded"`` with structured 529 basis.
         """
 
         current: BaseException | None = exc
         seen: set[int] = set()
         while current is not None and id(current) not in seen:
             seen.add(id(current))
-            for line in str(current).splitlines():
-                stripped = line.strip()
-                if not stripped.startswith("{") or not stripped.endswith("}"):
-                    continue
-                try:
-                    payload = json.loads(stripped)
-                except json.JSONDecodeError:
-                    continue
-                if (
-                    isinstance(payload, Mapping)
-                    and payload.get("failure_class") == "provider-overloaded"
-                ):
-                    return True
+            if (
+                isinstance(current, RetryableOperatorError)
+                and current.failure_class == "provider-overloaded"
+                and current.failure_class_basis == "api_error_status:529"
+            ):
+                return True
             current = current.__cause__ or current.__context__
         return False
 
