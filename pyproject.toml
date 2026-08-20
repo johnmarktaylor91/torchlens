@@ -165,7 +165,7 @@ dev = [
     "ruff==0.15.4",
     "pytest>=8,<10",
     "pytest-cov>=5,<8",
-    "mypy==2.1.0",
+    "mypy==2.3.1",
     "pip-audit==2.10.1",
     "pre-commit>=4,<5",
     # The packaging gates (test_built_wheel_manifest_is_diet,
