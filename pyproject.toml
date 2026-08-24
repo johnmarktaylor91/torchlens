@@ -162,7 +162,7 @@ dev = [
     # pre-commit config schema, jsonschema validator API), so an unbounded
     # floor lets a future major silently change what the gates enforce. Exact
     # pins stay reserved for the verdict-defining trio (ruff/mypy/pip-audit).
-    "ruff==0.15.4",
+    "ruff==0.16.3",
     "pytest>=8,<10",
     "pytest-cov>=5,<8",
     "mypy==2.1.0",
