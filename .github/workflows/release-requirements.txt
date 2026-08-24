@@ -7,7 +7,7 @@
 # Regenerate (and re-review the diff) with:
 #   uv pip compile --generate-hashes --python-version 3.11 \
 #     --python-platform x86_64-unknown-linux-gnu \
-#     <(echo 'python-semantic-release==9.21.1'; echo 'build==1.5.0'; \
+#     <(echo 'python-semantic-release==10.6.1'; echo 'build==1.5.0'; \
 #        echo 'setuptools>=83') \
 #     -o .github/workflows/release-requirements.txt
 annotated-types==0.8.0 \
@@ -475,7 +475,7 @@ python-gitlab==5.6.0 \
     --hash=sha256:68980cd70929fc7f8f06d8a7b09bd046a6b79e1995c19d61249f046005099100 \
     --hash=sha256:bc531e8ba3e5641b60409445d4919ace68a2c18cb0ec6d48fbced6616b954166
     # via python-semantic-release
-python-semantic-release==9.21.1 \
+python-semantic-release==10.6.1 \
     --hash=sha256:b5c509a573899e88e8f29504d2f83e9ddab9a66af861ec1baf39f2b86bbf3517 \
     --hash=sha256:e69afe5100106390eec9e800132c947ed774bdcf9aa8f0df29589ea9ef375a21
     # via the locked top-level set
