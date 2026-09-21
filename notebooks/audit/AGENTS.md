@@ -7,7 +7,7 @@ Audience: agents and developers maintaining the `notebooks/audit/` tree.
 Coverage-optimized notebooks that exercise EVERY human-facing TorchLens surface.
 Sliced by **user workflow** (not data-structure, not submodule). Locked decisions:
 
-1. **Public/committed.** Notebook source, `_models.py`, README, CLAUDE.md, and
+1. **Public/committed.** Notebook source, `_models.py`, README, AGENTS.md, and
    `visual/generate_visual_pack.py` + `visual/coverage_matrix.md` are all tracked.
    Heavy regenerable artifacts (executed HTML, intermediate PDFs, the stapled PDF) are
    gitignored via `.gitignore` in this directory.
@@ -77,7 +77,7 @@ stops `nbconvert`; add `--allow-errors` only when triaging, never for the commit
 
 Whenever a **public surface is added, renamed, or removed** anywhere in `torchlens/`,
 update the matching audit notebook AND `README.md`'s coverage matrix **in the same
-commit**. This mirrors the glossary lockstep rule in the project root `CLAUDE.md`
+commit**. This mirrors the glossary lockstep rule in the project root `AGENTS.md`
 (spec drives code; a rename is not done until docs + notebooks match).
 
 Concretely:
@@ -147,7 +147,7 @@ maintenance pass:
 1. Add the page spec IN `visual/generate_visual_pack.py` (its spec list is the
    input of record). NEVER hand-edit `visual/coverage_matrix.md`: it is a
    GENERATED OUTPUT of the script (`_write_coverage_matrix`), nothing reads
-   it, and hand edits are lost on regeneration (see `visual/CLAUDE.md`).
+   it, and hand edits are lost on regeneration (see `visual/AGENTS.md`).
 2. Run: `python notebooks/audit/visual/generate_visual_pack.py` — it rebuilds
    `visual_audit.pdf` AND regenerates the matrix idempotently.
 

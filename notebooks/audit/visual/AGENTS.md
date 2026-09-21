@@ -90,7 +90,7 @@ it is in this pack:
    NON-RELEASING commit type such as `docs(audit-viz): ...` or
    `chore(audit-viz): ...` — NEVER `feat`/`fix`/`perf`, which trigger
    semantic-release (the parser has no scope exclusions; see
-   `notebooks/audit/CLAUDE.md` and `.github/AGENTS.md`).
+   `notebooks/audit/AGENTS.md` and `.github/AGENTS.md`).
 
 ### Critic passes
 
