@@ -1651,7 +1651,7 @@ pytest tests/ -m "not rare and not slow" -x --tb=short
   regression, not a fix.
 - If a `@property` raises `AttributeError`, Python falls through to `__getattr__`; use
   `ValueError` for TorchLens multi-pass access errors.
-- `copy()` on `Op` shallow-copies selected graph fields and deep-copies the rest.
+- `copy()` on `Op` deep-copies graph metadata and shares tensor payloads/callables; see data_classes/AGENTS.md.
 - `torchlens.__version__` and `pyproject.toml` are release-pipeline state; do not update them
   in feature/docs tasks unless release work explicitly asks for it.
 
@@ -1666,4 +1666,3 @@ pytest tests/ -m "not rare and not slow"
 pytest tests/
 ruff format && ruff check --fix
 ```
-

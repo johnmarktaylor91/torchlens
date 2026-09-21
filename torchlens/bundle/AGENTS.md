@@ -14,4 +14,4 @@ Single-module package (`__init__.py`) exporting `Bundle` and `AmbiguousLabelErro
   `user_funcs.py`), while `visualization/bundle_diff.py` is the paired-trace
   DIFF renderer. Keep graph/render logic out of this package either way.
 - Public-name changes here must update the glossary and root docs in the same change
-  (see the lockstep rule in the root `CLAUDE.md`).
+  (see the lockstep rule in the root `AGENTS.md`).

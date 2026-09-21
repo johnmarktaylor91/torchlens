@@ -578,4 +578,3 @@ update the class definition, the appropriate FIELD_ORDER constant, metadata test
 Semantic-release uses `scripts/no_major_parser.py` plus commit hooks to block accidental
 major bumps. For docs-only work use `docs(...)` or `chore(...)` and never add major-bump
 markers to commit messages, PR text, or committed docs.
-

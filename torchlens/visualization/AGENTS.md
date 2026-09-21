@@ -152,4 +152,3 @@ pure-Python rank layout above 20,000 cost units.
 - `pytest tests/test_node_spec_api.py tests/test_node_modes.py -x --tb=short`
 - `pytest tests/test_bundle_diff_renderer.py -x --tb=short`
 - `pytest tests/test_large_graphs.py -x --tb=short` for layout backend changes
-

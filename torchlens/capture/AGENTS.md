@@ -147,4 +147,3 @@ storage routing.
   under paused logging. Preserve the boundary parent edge and transform metadata.
 - Unlabeled tensor args are provenance markers, not graph parents. Inputs, params, buffers,
   and module tensor attributes should remain known sources; foreign captured tensors should warn.
-

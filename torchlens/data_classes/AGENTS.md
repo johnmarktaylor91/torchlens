@@ -291,4 +291,3 @@ intervention metadata for removed layers. Keep it in sync with any new cross-ref
   must not inherit it or transform role fields from their parent op.
 - Removing or renaming labels requires updating conditional, intervention, module, and lookup
   references together.
-

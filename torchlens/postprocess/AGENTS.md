@@ -224,4 +224,3 @@ training outs. Step 20 then releases live parameter references.
 - Conditional cleanup must update both primary cond-id structures and derived views.
 - Changing label formats requires checking visualization, validation, I/O, intervention, and
   bundle supergraph code.
-

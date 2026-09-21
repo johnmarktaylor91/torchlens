@@ -2,7 +2,7 @@
 
 Representation-geometry analysis over saved activations (`tl.repgeom`, lazy;
 one module, 12-name `__all__`). Sprint-B/C provisional surface — names are
-review-day provisional per the root `CLAUDE.md`.
+review-day provisional per the root `AGENTS.md`.
 
 ## Surface
 
