@@ -854,20 +854,16 @@ function to replay). Even then the carve-out must be NARROW (only the intended c
 NOT mask the unintended case — e.g. an auto-synthesized placeholder op appearing during PLAIN
 capture is a capture bug, and validation must STILL fail on it.
 
-**Incident (2026-06-02):** `test_mistral` / `test_audio_vits` emitted functionless
-`interventionreplacement` placeholder ops during plain tracing — a real capture gap (ops
-TorchLens failed to wrap). An exemption was added to the metadata invariant to pass them. That
-was backwards: it disarmed the tripwire. The correct fix is to make capture actually trace those
-ops so no placeholder is synthesized during plain capture; any replacement-op exemption must be
-scoped to GENUINE user interventions only.
+Replacement-op exemptions cover genuine user interventions only; a placeholder op during plain
+capture is a capture gap to fix, never to exempt.
 
 ## Keep the glossary + docs in lockstep with code (LOCKED)
 
-The glossary is the **canonical** API spec (vault `brain/projects/torchlens/reports/<date>-glossary-vN/torchlens_glossary.md`); code conforms to it (spec-drives-code). A rename is not *done* until the docs match too:
+The glossary is the **canonical** API spec (vault `Projects/TorchLens/migrated/reports/<date>-glossary-vN/torchlens_glossary.md`); code conforms to it (spec-drives-code). A rename is not *done* until the docs match too:
 
 - **Rename / add / remove any PUBLIC name** (dataclass field, `@property`, method, top-level `tl.*` name, kwarg) → in the SAME change, update: (1) the **glossary** entry (canonical), (2) this `AGENTS.md` examples, (3) the audit notebooks (`notebooks/audit/`) and `examples/` that use it.
 - A change that touches code but leaves the glossary/docs stale is **INCOMPLETE.** This is exactly how the v7 `memory → activation_memory` gap and the stale `log_forward_pass`/`vis_opt` examples slipped through.
-- After a rename/conformance sprint: re-file the updated glossary to the vault (it supersedes the prior dated version), and confirm a `grep` of every old name is clean across `torchlens/`, `tests/`, `examples/`, `notebooks/`, AND the glossary itself.
+- After a rename/conformance sprint: re-file the updated glossary to the vault with `vault-write` (it supersedes the prior dated version), and confirm a `grep` of every old name is clean across `torchlens/`, `tests/`, `examples/`, `notebooks/`, AND the glossary itself.
 
 ### Trusted custom callable imports
 
@@ -1030,7 +1026,7 @@ only** and must NEVER be committed.
 - **Enforcement:** `.gitignore` excludes them and a `no-internal-notes` pre-commit hook
   (`.pre-commit-config.yaml`) HARD-FAILS any commit that stages a private path. Never `git add -f`
   to bypass it; never `git rm` the local files (they are your working notes). Long-form
-  human-readable reports go to the Obsidian vault, not the repo.
+  reports go to the fleet research home named in the global rules, not the repo.
 
 ## Testing Tiers
 
@@ -1044,7 +1040,6 @@ pytest tests/ -m "not rare and not slow" -x --tb=short  # phase-boundary backsto
 ```
 
 Tiers by cost: `smoke` selects ~4.9k tests (4,920/12,840 collect-only, measured 2026-08-16).
-The census tip was adb3d450 (the fixwave-5 settle; tri-lab b2 probe).
 The last instrumented `--durations=0` smoke wall measurement (measured 2026-08-13, 4-core dev
 box under parallel sprint load) took 1194s (~20 min) against the then-selected ~3.2k tests
 (~500s on a quieter box earlier the same sprint); budget at least that at today's ~40%
