@@ -1027,6 +1027,10 @@ only** and must NEVER be committed.
   (`.pre-commit-config.yaml`) HARD-FAILS any commit that stages a private path. Never `git add -f`
   to bypass it; never `git rm` the local files (they are your working notes). Long-form
   reports go to the fleet research home named in the global rules, not the repo.
+- **Agent knowledge (private, hub only):** the `knowledge` folder in `.project-context` holds
+  `torchlens_ui_api_sprint_inputs.md` (read first when the UI/API sprint starts),
+  `torchlens_hardening_protocol.md` (the TorchLens hardening run record; general rules are the
+  fleet's `hardening_protocol.md`), `torchlens_memory_lifetime.md` and `torchlens_test_isolation.md`.
 
 ## Testing Tiers
 
