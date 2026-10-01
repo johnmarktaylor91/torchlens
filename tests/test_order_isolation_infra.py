@@ -28,18 +28,22 @@ import sys
 from pathlib import Path
 
 import pytest
+from test_skip_audit import FULL_TEST_EXTRA_SENTINEL
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 _HAS_RANDOMLY = importlib.util.find_spec("pytest_randomly") is not None
 
-#: An importable full-[test]-extra sentinel (same idiom as the skip audit's
-#: FULL_TEST_EXTRA_SENTINEL): when the environment CLAIMS the full test extra,
-#: a missing pytest-randomly is INSTALL BREAKAGE, not a legitimate partial
+#: Shares the skip audit's FULL_TEST_EXTRA_SENTINEL (never a second, driftable
+#: literal here -- a canary leg that installs "timm" directly without the
+#: rest of [test] previously made the old hardcoded "timm" check here falsely
+#: claim full coverage, same as the skip audit's own sentinel, round-2 CI
+#: triage 2026-10-01): when the environment CLAIMS the full test extra, a
+#: missing pytest-randomly is INSTALL BREAKAGE, not a legitimate partial
 #: environment -- the live guards must then FAIL, never skip (3.16 reopened
 #: row: the declaration landed but every guard skipped everywhere, so the
 #: gate layer stayed unarmed even on full installs).
-_CLAIMS_FULL_TEST_EXTRA = importlib.util.find_spec("timm") is not None
+_CLAIMS_FULL_TEST_EXTRA = importlib.util.find_spec(FULL_TEST_EXTRA_SENTINEL) is not None
 
 
 def _require_randomly_or_skip() -> None:

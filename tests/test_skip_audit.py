@@ -59,7 +59,13 @@ VALID_TIERS = frozenset({TEST_EXTRA, OPTIONAL_PREVIEW, UNAVAILABLE_OK})
 
 # Importing this sentinel is the environment's claim to carry the full [test]
 # extra; a partial install then can no longer masquerade as full coverage.
-FULL_TEST_EXTRA_SENTINEL = "timm"
+# MUST be a [test]-extra-only package: the latest-torch-canary leg installs
+# "transformers timm" directly (unpinned, alongside the [test] extra) without
+# ever installing the rest of [test], so "timm" (the prior sentinel) falsely
+# claimed full coverage there (round-2 CI triage, 2026-10-01). torch_geometric
+# is declared only inside [test] and is not installed standalone by any
+# workflow or job script.
+FULL_TEST_EXTRA_SENTINEL = "torch_geometric"
 
 # Every pytest.importorskip target in tests/ -> (tier, why that tier).
 # Keep sorted; the inventory test enforces exact set equality.
