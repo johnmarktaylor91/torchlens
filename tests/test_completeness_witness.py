@@ -24,10 +24,8 @@ from torchlens.backends.torch.completeness_witness import (
     MAX_AUDITED_COMPLETENESS_BOUNDARIES,
 )
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
+from torchlens.utils._torch_compat import HAS_FUNCTORCH_LEVEL_API
 from torchlens.utils.introspection import INPUT_SEARCH_DEPTH_LIMIT
-
-# (major, minor) of the running torch, dependency-free (e.g. "2.8.0+cpu" -> (2, 8)).
-_TORCH_XY = tuple(int(p) for p in torch.__version__.split("+")[0].split(".")[:2])
 
 
 def _observer_patch_ast() -> ast.FunctionDef:
@@ -923,11 +921,13 @@ def test_vmap_interior_is_expected_opaque() -> None:
 
 @pytest.mark.smoke
 @pytest.mark.skipif(
-    _TORCH_XY < (2, 2),
+    not HAS_FUNCTORCH_LEVEL_API,
     reason=(
         "Graceful pre-wrap-vmap transform-escape handling (witness-only, "
-        "capture_verified=False) requires torch>=2.2; on the 2.1 best-effort floor the "
-        "escaped vmap output honestly raises an output-attribution error instead."
+        "capture_verified=False) needs torch._C._functorch.maybe_current_level to detect "
+        "the escape (_is_inside_functorch_transform); absent it (the whole 2.1/2.2 floor, "
+        "not just 2.1 -- the capability postdates 2.2 too), the escape goes undetected and "
+        "the unattributable output honestly raises an output-attribution error instead."
     ),
 )
 def test_pre_wrap_vmap_is_witness_only_not_capture_verified() -> None:
