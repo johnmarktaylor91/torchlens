@@ -6,7 +6,7 @@ device_map='meta')`` are advertised ONLY after these rows pass —
 could run in four rounds (accelerate absent from the checkout); absence of
 evidence is not an entry-path claim. These rows block ADVERTISING those
 spellings, never the D8 flip; the accelerate test-extra request rides
-sprint/packaging_requests.tsv.
+the packaging-request ledger.
 """
 
 from __future__ import annotations

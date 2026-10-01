@@ -4,7 +4,7 @@ These pin the PANEL-MEASURED losses (trackers memo 3.2/3.3) at the measured
 vendor versions, so a future vendor release that FIXES any of them fails
 visibly and the published fidelity table gets revised. They run only where
 the relay-test extra is installed (wandb 0.28.2 / clearml 2.1.12; see
-sprint/packaging_requests.tsv); everywhere else they skip -- the dep-free
+the packaging-request ledger); everywhere else they skip -- the dep-free
 halves of the relay law (detection + the G6 histogram refusal) are covered
 in test_trackers_sinks_delivery.py.
 """

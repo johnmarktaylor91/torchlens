@@ -56,7 +56,7 @@ draws land as ``ledger_notes`` (lifted into ``FireRecord.determinism_note`` by
 ``build_fire_record``) plus a structured session-side record served by
 :func:`sampling_records`. No new persisted field is introduced (the C07 field
 census is frozen; a structured ``sampling`` FireRecord field would need its
-own adjudicated ``sprint/field_intent.tsv`` row first).
+own adjudicated the field-intent ledger row first).
 
 Axis law (D24/D25): axes are NEVER inferred from rank. The ladder is explicit
 ``axis=`` > facet/recipe-declared semantic role > registered model/site

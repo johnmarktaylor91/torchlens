@@ -1,19 +1,14 @@
 *.ipynb filter=nbstripout
 *.ipynb diff=ipynb
 
-# Append-only multi-writer sprint ledgers (sprint/shared_append.tsv):
-# union merge keeps both lanes' appended rows; P05/C07 adjudicate content.
-sprint/field_intent.tsv merge=union
-sprint/packaging_requests.tsv merge=union
+# Append-only multi-writer ledgers: union merge keeps both branches' appended rows.
 tests/composition_expectations/data/diagnostic_ratchets.tsv merge=union
 tests/composition_expectations/data/refusal_site_classification.tsv merge=union
 tests/composition_expectations/data/universe_cardinalities.tsv merge=union
 tests/oracles/data/numeral_baseline.tsv merge=union
 docs/reference/error_refusal_contract.md merge=union
 docs/reference/warning_contract.md merge=union
-sprint/listA.tsv merge=union
 tests/composition_expectations/data/harvest_counts.tsv merge=union
-sprint/test_prefix_allocation.tsv merge=union
 tests/producer_parity/ledger/PROVENANCE merge=union
 tests/producer_parity/ledger/static_scan.json merge=union
 tests/oracles/data/surface_module_classification.tsv merge=union

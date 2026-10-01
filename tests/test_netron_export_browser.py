@@ -14,7 +14,7 @@ elements per box so ``.node`` count halves; the drill-down is a REAL mouse
 click on the 6x12 px "Show Function Definition" affordance.
 
 Heavy tier (measured 2-6 s per fixture); CI runs it path-filtered per the
-sprint/packaging_requests.tsv row. Requires netron + playwright + its
+the packaging-request ledger row. Requires netron + playwright + its
 Chromium; skips typed when absent.
 """
 

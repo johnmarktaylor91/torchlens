@@ -6,7 +6,7 @@ WOULD draw: matched reader, node/function populations, painted edge
 labels, sidebar strings, drill-down resolution, call-graph acyclicity
 (netron memo D-08; measured 0.08-0.13 s per fixture). Skips typed when
 node or the netron wheel is absent; CI declares both through
-sprint/packaging_requests.tsv (node >= 20 ships on ubuntu-latest).
+the packaging-request ledger (node >= 20 ships on ubuntu-latest).
 """
 
 from __future__ import annotations

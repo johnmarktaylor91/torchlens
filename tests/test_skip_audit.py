@@ -91,7 +91,7 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
     ),
     "bitsandbytes": (
         OPTIONAL_PREVIEW,
-        "deploy extra (requested in sprint/packaging_requests.tsv, F37 "
+        "deploy extra (requested in the packaging-request ledger, F37 "
         "2026-08-31): 8/4-bit quantization dep for the deployment-envelope "
         "suite (test_deploy_env_quantized.py); executes on the D02 "
         "GPU-cluster C-DEPLOY leg (MEMO section 9), where the quantization "
@@ -119,7 +119,7 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
     "scipy": (
         OPTIONAL_PREVIEW,
         "extraction-export extra (MAT exporter); requested in "
-        "sprint/packaging_requests.tsv (F18, extract memo D15)",
+        "the packaging-request ledger (F18, extract memo D15)",
     ),
     "fvcore.nn": (
         UNAVAILABLE_OK,
@@ -185,27 +185,27 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         "netron viewer package: the serve/widget one-liner and the "
         "vendor-execution parser harness (tests/test_netron_export_vendor.py); "
         "user extra netron>=9.2,<10 + CI pin netron==9.2.2 requested via "
-        "sprint/packaging_requests.tsv (F14 2026-08-28)",
+        "the packaging-request ledger (F14 2026-08-28)",
     ),
     "onnx": (
         UNAVAILABLE_OK,
         "netron-export acceptance-contract dependency (strict ModelProto JSON "
         "parse + check_model); test-extra declaration requested via "
-        "sprint/packaging_requests.tsv (F14 2026-08-28)",
+        "the packaging-request ledger (F14 2026-08-28)",
     ),
     "paddle": (OPTIONAL_PREVIEW, "paddle extra (paddlepaddle dist)"),
     "playwright.sync_api": (
         UNAVAILABLE_OK,
         "headless-Chromium driver for the netron T4 browser smoke "
         "(tests/test_netron_export_browser.py); CI installs it only in the "
-        "path-filtered export job requested via sprint/packaging_requests.tsv "
+        "path-filtered export job requested via the packaging-request ledger "
         "(F14 2026-08-28)",
     ),
     "pandas": (OPTIONAL_PREVIEW, "tabular extra"),
     "pandas.api.types": (OPTIONAL_PREVIEW, "tabular extra"),
     "peft": (
         OPTIONAL_PREVIEW,
-        "deploy extra (requested in sprint/packaging_requests.tsv, F37 "
+        "deploy extra (requested in the packaging-request ledger, F37 "
         "2026-08-31): LoRA/adapter dep for the deployment-envelope suite "
         "(test_deploy_env_peft.py); executes on the D02 GPU-cluster "
         "C-DEPLOY leg (MEMO section 9), where the adapter deps are "
@@ -232,7 +232,7 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
     "clearml": (
         UNAVAILABLE_OK,
         "T-RELAY-C fidelity-pin target; relay-test extra requested in "
-        "sprint/packaging_requests.tsv (F26 2026-08-28)",
+        "the packaging-request ledger (F26 2026-08-28)",
     ),
     "sentence_transformers": (OPTIONAL_PREVIEW, "compat-shims extra"),
     "tensorboard": (
@@ -299,7 +299,7 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
     ),
     # F33 weightsfree: the accelerate on-ramp row (init_empty_weights) runs
     # where accelerate is installed; the [test]-extra request is filed in
-    # sprint/packaging_requests.tsv and flips this to TEST_EXTRA when merged.
+    # the packaging-request ledger and flips this to TEST_EXTRA when merged.
     "accelerate": (
         UNAVAILABLE_OK,
         "weightsfree on-ramp target; [test]-extra request filed (F33)",

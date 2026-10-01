@@ -10,7 +10,7 @@ truth -- the per-class ``FIELD_POLICY`` tables (built from ``*_FIELD_ORDER``
 nested value classes -- so the registry can never drift from the code that
 actually serializes state. It declares NO new fields and moves NONE: field-set
 changes land only at the coordinated schema write (C07), through the
-``sprint/field_intent.tsv`` intake.
+the field-intent ledger intake.
 
 Tier partition (WALKTHROUGH section 3 field triage; DIGEST-AUDIT 4b):
 
@@ -102,7 +102,7 @@ COMPONENT_SPEC_MODULES: tuple[str, ...] = (
 #: so the DIGEST-AUDIT-4b lazification is an EMISSION-side move owned by the
 #: capture fence (A05->A06->F20) consuming this table -- persisted policies
 #: do not move until an emission design rules which fields defer. Later
-#: amendments route through sprint/field_intent.tsv, never ad-hoc edits.
+#: amendments route through the field-intent ledger, never ad-hoc edits.
 _FIELD_TIER_OVERRIDES: dict[str, dict[str, FieldTier]] = {
     "op": {
         # P4a ancestry closures: pure folds over the recorded edge table.

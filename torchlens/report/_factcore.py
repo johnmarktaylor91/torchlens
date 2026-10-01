@@ -10,7 +10,7 @@ reason, and coverage; payload figures are tagged ``at_capture`` vs
 refuse mismatched captures.
 
 Everything here is a READ-TIME derivation over persisted facts (live-only,
-declared in sprint/field_intent.tsv); spellings DOCUMENTED-UNSTABLE
+declared in the field-intent ledger); spellings DOCUMENTED-UNSTABLE
 pending naming-session ratification. Renderers are projections; A07 ->
 C02 -> F08/F09/F10 is the fence chain.
 """

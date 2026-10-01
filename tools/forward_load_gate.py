@@ -17,7 +17,7 @@ The per-PR cheap variant (no wheels, no network) is the writer-contract
 lockstep + alias-or-fail suite in tests/test_tlspec_envelope_contract.py.
 
 Usage (CI wiring lives in the release workflow; see
-sprint/packaging_requests.tsv for the P05 request):
+the packaging-request ledger for the P05 request):
 
     python tools/forward_load_gate.py --previous 2.34.1 \
         --corpus tests/release_goldens/genuine_release_artifacts.tar.gz

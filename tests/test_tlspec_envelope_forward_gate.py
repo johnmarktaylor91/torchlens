@@ -1,7 +1,7 @@
 """Forward-load gate verdict semantics (the no-network unit surface).
 
 The wheel-installing leg runs in the release workflow (see
-sprint/packaging_requests.tsv); these tests pin the gate's verdict law so a
+the packaging-request ledger); these tests pin the gate's verdict law so a
 future edit cannot quietly turn "untyped crash" into a pass. Executed
 evidence of the real leg: torchlens==2.34.1 loads the v2.33.0/v2.34.1
 goldens and refuses the tlspec-8 main golden TYPED (run 2026-08-26, green).

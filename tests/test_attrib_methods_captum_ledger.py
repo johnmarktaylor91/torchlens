@@ -3,7 +3,7 @@
 LEDGER_VERSION = 1. One versioned file holds every captum oracle row; it
 SKIPS CLEANLY when the captum extra is absent (the ``captum~=0.7`` ->
 ``>=0.7,<1.0`` pin widening is externally owned; see the F06 row in
-``sprint/packaging_requests.tsv``). Discipline (memo section 4):
+the packaging-request ledger). Discipline (memo section 4):
 
 - numeric values are compared BEFORE any rendering;
 - captum is ALWAYS told ``method="riemann_middle"`` for path integrals (its

@@ -12,7 +12,7 @@ NEGATIVE fixtures proving the checker actually rejects the failure classes
 the gate exists to catch.
 
 The ``onnx``/``protobuf`` dependencies are declared through
-sprint/packaging_requests.tsv (netron memo B0: the historical importorskip
+the packaging-request ledger (netron memo B0: the historical importorskip
 was skipped in every CI leg, making the "contract-tested" claim false).
 """
 

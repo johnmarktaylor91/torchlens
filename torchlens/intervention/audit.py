@@ -16,7 +16,7 @@ Persistence boundary (pre-C07, disclosed): the persisted
 free-form persisted ``state_history`` stream (``op="intervention_event"``
 rows) while the canonical audit gains a closed-schema ACT row per
 transaction. The full ``intervention_event_v2`` persisted row family is
-declared in ``sprint/field_intent.tsv`` for the C07 coordinated schema write;
+declared in the field-intent ledger for the C07 coordinated schema write;
 nothing here edits schema files. Every spelling DOCUMENTED-UNSTABLE pending
 naming-session ratification.
 """
