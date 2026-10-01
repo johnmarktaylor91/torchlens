@@ -64,11 +64,7 @@ from ...utils.tensor_utils import (
     print_override,
     safe_copy,
 )
-from ._modes import (
-    SubclassConstructionUnderDispatchModeError,
-    _any_owned_dispatch_mode_active,
-    pause_own_dispatch_modes,
-)
+from ._modes import SubclassConstructionUnderDispatchModeError, pause_own_dispatch_modes
 from ._op_markers import _pop_op_markers, _push_op_markers
 from ._tl import (
     _DETACHED_ACTIVATION_PROPAGATION_FUNCS,
@@ -1681,23 +1677,36 @@ def torch_func_decorator(
                 materialize_deferred_for_call(_collect_tensor_args(args, kwargs))
             if needs_device_injection:
                 kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
-            if (
-                _fast_path_subclass_cls_index is not None
-                and _constructs_strict_subclass(args, _fast_path_subclass_cls_index)
-                and _any_owned_dispatch_mode_active()
+            if _fast_path_subclass_cls_index is not None and _constructs_strict_subclass(
+                args, _fast_path_subclass_cls_index
             ):
-                raise SubclassConstructionUnderDispatchModeError(
-                    f"torchlens cannot construct the Tensor subclass "
-                    f"{args[_fast_path_subclass_cls_index]!r} via {func_name!r} while a "
-                    "TorchLens dispatch mode is active on this torch build. "
-                    "Remedy: upgrade torch (HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE reports "
-                    "False here) or avoid constructing/converting into a custom Tensor "
-                    "subclass inside a model forward, an intervention hook, or a "
-                    "validate_forward_pass replay on this build.",
-                    code="subclass_ctor_under_dispatch_mode_unsupported",
-                    func_name=func_name,
-                )
-            out = func(*args, **kwargs)
+                # Translate-on-FAILURE, never a preemptive refusal: whether an
+                # active TorchLens mode actually makes THIS construction crash
+                # depends on details (e.g. torch.nn.Parameter construction via
+                # _make_subclass routinely succeeds here even under an active
+                # mode) this gate cannot cheaply predict, so it costs nothing
+                # extra on the common (succeeding) case and only replaces
+                # torch's own cryptic error with a typed one when it actually
+                # raises.
+                try:
+                    out = func(*args, **kwargs)
+                except RuntimeError as exc:
+                    if "already associated to a python object" in str(exc):
+                        raise SubclassConstructionUnderDispatchModeError(
+                            f"torchlens cannot construct the Tensor subclass "
+                            f"{args[_fast_path_subclass_cls_index]!r} via {func_name!r} "
+                            "while a TorchLens dispatch mode is active on this torch "
+                            "build. Remedy: upgrade torch "
+                            "(HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE reports False here) or "
+                            "avoid constructing/converting into a custom Tensor subclass "
+                            "inside a model forward, an intervention hook, or a "
+                            "validate_forward_pass replay on this build.",
+                            code="subclass_ctor_under_dispatch_mode_unsupported",
+                            func_name=func_name,
+                        ) from exc
+                    raise
+            else:
+                out = func(*args, **kwargs)
             fast_collector = _state._active_fast_run_collector
             if fast_collector is not None and fast_collector.wants_function(func_name):
                 fast_collector.capture_function(func_name, out)
