@@ -1495,22 +1495,24 @@ def _setattr_ignoring_advisories(namespace: Any, name: str, value: Any) -> None:
 # TorchDispatchMode on torch 2.1/2.2 (``HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE``).
 # ``__new__``/``_make_subclass`` are called as ``cls(...)``/
 # ``cls._make_subclass(cls, ...)`` (class first); ``as_subclass`` is an
-# instance method, ``tensor.as_subclass(cls)`` (class second). This is the
-# FAST-PATH-only table: the LOGGED path's own ``__new__``-only gap-tracked
-# pause (see ``constructs_tensor_subclass`` below) is unrelated and
-# untouched. A direct top-level call here REFUSES typed instead of pausing:
-# pausing a top-level (non-reentrant) construction call was tried and
-# reverted after it corrupted interpreter state when exercised across
-# several capture paths in one process (segfault on torch 2.1.2) -- see
+# instance method, ``tensor.as_subclass(cls)`` (class second). Shared by the
+# LOGGED path's pause (see ``constructs_tensor_subclass`` below -- ``__new__``
+# unconditionally, ``_make_subclass``/``as_subclass`` only where the
+# capability is absent, so a modern torch build's LOGGED-path behavior for
+# those two is byte-for-byte unchanged) and the FAST-PATH gate just below,
+# which REFUSES typed instead of pausing: pausing a direct top-level
+# (non-reentrant) construction call was tried and reverted after it
+# corrupted interpreter state when exercised across several capture paths in
+# one process (segfault on torch 2.1.2) -- see
 # ``SubclassConstructionUnderDispatchModeError``.
-_FAST_PATH_SUBCLASS_CLS_ARG_INDEX: dict[str, int] = {
+_SUBCLASS_CLS_ARG_INDEX: dict[str, int] = {
     "__new__": 0,
     "_make_subclass": 0,
     "as_subclass": 1,
 }
 
 
-def _fast_path_constructs_strict_subclass(args: tuple[Any, ...], idx: int) -> bool:
+def _constructs_strict_subclass(args: tuple[Any, ...], idx: int) -> bool:
     """Return whether ``args[idx]`` is a strict (non-``torch.Tensor``) subclass cls.
 
     Parameters
@@ -1607,22 +1609,33 @@ def torch_func_decorator(
     force_distinct_return = func_name == "identity"
     # ``TensorBase.__new__`` is the one wrapped callable whose ORIGINAL refuses
     # to run under any python TorchDispatchMode when handed a strict Tensor
-    # subclass cls (see pause_own_dispatch_modes); every other op pays nothing.
-    constructs_tensor_subclass = func_name == "__new__"
+    # subclass cls, on EVERY torch version (see pause_own_dispatch_modes);
+    # ``_make_subclass``/``as_subclass`` share the same original limitation but
+    # ONLY on a torch build lacking ``HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE`` --
+    # torch's own nested ``__torch_function__`` return-conversion reaches one
+    # of these TWO through the LOGGED path just as often as ``__new__`` (e.g.
+    # ``scratch.sum()`` on a subclass reconstructing via ``as_subclass``
+    # inside the SAME logged call), so they need the identical unconditional
+    # treatment there, narrowed to the torch versions that actually need it.
+    # Every other op pays nothing (dict lookup on a decoration-time constant).
+    _logged_subclass_cls_index = (
+        0
+        if func_name == "__new__"
+        else (
+            None if HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE else _SUBCLASS_CLS_ARG_INDEX.get(func_name)
+        )
+    )
+    constructs_tensor_subclass = _logged_subclass_cls_index is not None
     # FAST-PATH-only gate (direct top-level ``__new__``/``_make_subclass``/
     # ``as_subclass`` calls made with logging disabled -- e.g. a user model or
     # intervention hook constructing a subclass during a replay/validation
     # pass, or TorchLens's own paused internal calls): ``None`` whenever the
     # active torch build tolerates subclass construction under a dispatch
     # mode (``HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE``, the common case -- zero
-    # cost there) or ``func_name`` is not one of the three. Deliberately
-    # DISTINCT from ``constructs_tensor_subclass`` above: the LOGGED path's
-    # existing ``__new__``-only pause and its ``mode_paused_interior`` gap
-    # accounting are untouched by this.
+    # cost there) or ``func_name`` is not one of the three. A direct top-level
+    # call here REFUSES typed instead of pausing (see the table's own note).
     _fast_path_subclass_cls_index = (
-        None
-        if HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE
-        else _FAST_PATH_SUBCLASS_CLS_ARG_INDEX.get(func_name)
+        None if HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE else _SUBCLASS_CLS_ARG_INDEX.get(func_name)
     )
     # Decoration-time constant: ``propagate_detached_saved_activation`` is a
     # guaranteed no-op for any name outside the propagation allowlist, but its
@@ -1670,7 +1683,7 @@ def torch_func_decorator(
                 kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
             if (
                 _fast_path_subclass_cls_index is not None
-                and _fast_path_constructs_strict_subclass(args, _fast_path_subclass_cls_index)
+                and _constructs_strict_subclass(args, _fast_path_subclass_cls_index)
                 and _any_owned_dispatch_mode_active()
             ):
                 raise SubclassConstructionUnderDispatchModeError(
@@ -1958,12 +1971,8 @@ def torch_func_decorator(
             func_call_id=func_call_id,
         )
         expected_token = None
-        pauses_owned_modes = (
-            constructs_tensor_subclass
-            and args
-            and isinstance(args[0], type)
-            and args[0] is not torch.Tensor
-            and issubclass(args[0], torch.Tensor)
+        pauses_owned_modes = constructs_tensor_subclass and _constructs_strict_subclass(
+            args, _logged_subclass_cls_index
         )
         # W3 F8: per-op duration must measure the USER op, not TorchLens
         # bookkeeping. The clock starts here -- after RNG/autocast snapshots
