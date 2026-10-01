@@ -1135,29 +1135,39 @@ def test_phase_timing_bucket_names_default_capture() -> None:
         trace.cleanup()
 
 
-def test_step17_5_drops_capture_phase_workspaces() -> None:
-    """Step 17.5 is the contracted terminal consume of the per-phase workspaces.
+class _DictOutputModel(nn.Module):
+    """Model whose forward returns a dict output (populates container records)."""
 
-    Mutation-margin arming (W2): a whole-function ``return None`` disarm of
-    ``_run_step_17_5`` survived because nothing asserted its effect directly
-    (its contract declares no op-store writes, so the write-audit matrix
-    test cannot see it). ``_raw_graph_ws`` and ``_wrapper_runtime_ws`` are
-    set unconditionally at capture start (``data_classes/trace.py``), so
-    their absence here proves the terminal consume ran.
+    def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
+        """Return a two-key dict so the output container registry has a record."""
+
+        return {"a": x.relu(), "b": x.sigmoid()}
+
+
+def test_step17_5_adopts_container_records_before_the_registry_clears() -> None:
+    """Step 17.5's one NON-redundant effect: adopt container records onto the trace.
+
+    Mutation-margin arming (W2, lane L3 triage step 21): a first version of
+    this test asserted the per-phase workspace attrs it also pops
+    (``_raw_graph_ws`` etc.) were gone -- but ``_drop_transient_capture_state``
+    (``postprocess/__init__.py``) unconditionally pops those SAME fields right
+    after ``run_pipeline`` returns, for every capture, step 17.5 included or
+    not. That made the first version vacuously true either way (empirically
+    proven: a whole-function return-None disarm of ``_run_step_17_5``
+    survived it). The one thing ONLY step 17.5 does is copy
+    ``container_registry.records`` into ``trace._containers`` BEFORE that
+    later scrub clears the registry's live state; skip step 17.5 and the
+    records are lost, never adopted, with no second chance to recover them.
     """
 
-    trace = tl.trace(_TinyModel().eval(), torch.randn(2, 3))
+    trace = tl.trace(
+        _DictOutputModel().eval(),
+        torch.randn(2, 3),
+        capture=tl.options.CaptureOptions(capture_container_structure=True),
+    )
     try:
-        for field_name in (
-            "_raw_graph_ws",
-            "_module_capture_ws",
-            "_wrapper_runtime_ws",
-            "capture_events",
-            "_output_container_specs_by_raw_label",
-        ):
-            assert field_name not in trace.__dict__, (
-                f"{field_name} survived step 17.5's terminal consume"
-            )
+        containers = trace.__dict__.get("_containers")
+        assert containers, "container records were never adopted onto the trace"
     finally:
         trace.cleanup()
 
