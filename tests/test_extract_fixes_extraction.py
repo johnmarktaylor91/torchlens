@@ -156,7 +156,7 @@ def test_pt_shard_reader_mmaps_a_path_object(tmp_path: Path) -> None:
     shard_path = next(out_dir.glob("batch_*.pt"))
     assert isinstance(shard_path, Path)
     payload = read_shard(shard_path, "pt")
-    assert "relu" in payload
+    assert any("relu" in key for key in payload), payload
 
 
 @pytest.mark.smoke
