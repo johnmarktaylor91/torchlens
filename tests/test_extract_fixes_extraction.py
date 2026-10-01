@@ -30,6 +30,7 @@ from torch import nn
 from torchlens._errors import InvalidArgumentError
 from torchlens.dataset_extraction import extract_dataset, load_extraction
 from torchlens.errors._base import TorchLensWarning
+from torchlens.utils._torch_compat import TorchCapabilityWarning
 
 
 class _AbsPosModel(nn.Module):
@@ -160,8 +161,17 @@ def test_left_padded_batch_derives_position_ids_and_matches_reference() -> None:
         out = extract_dataset(
             model, _tuple_stimuli(ids, mask), ["proj"], batch_size=2, progress=False
         )
-    disclosures = [entry.message for entry in record if isinstance(entry.message, TorchLensWarning)]
-    assert [w.fields["code"] for w in disclosures] == ["extraction_position_ids_derived"]
+    # Key on the disclosure code, not bare TorchLensWarning membership: a
+    # floor-torch install may also fire a one-time TorchCapabilityWarning
+    # (itself a TorchLensWarning) from an unrelated capability probe during
+    # this capture, which must not be mistaken for the position-ids notice.
+    disclosures = [
+        entry.message
+        for entry in record
+        if isinstance(entry.message, TorchLensWarning)
+        and entry.message.fields.get("code") == "extraction_position_ids_derived"
+    ]
+    assert len(disclosures) == 1
     assert disclosures[0].fields["remedy"].startswith("right-pad the batch")
 
     derived = (mask.long().cumsum(-1) - 1).clamp(min=0)
@@ -203,6 +213,12 @@ def test_right_aligned_batches_are_untouched() -> None:
 
     with warnings.catch_warnings():
         warnings.simplefilter("error", TorchLensWarning)
+        # A floor-torch install may fire a one-time TorchCapabilityWarning
+        # (an unrelated capability probe tripped by this capture) ahead of
+        # the business-logic check this test guards; tolerate that category
+        # specifically without loosening the "no position-ids disclosure"
+        # guarantee.
+        warnings.simplefilter("ignore", TorchCapabilityWarning)
         out = extract_dataset(
             model, _tuple_stimuli(ids, mask), ["proj"], batch_size=2, progress=False
         )
@@ -225,6 +241,10 @@ def test_caller_supplied_position_ids_are_trusted() -> None:
 
     with warnings.catch_warnings():
         warnings.simplefilter("error", TorchLensWarning)
+        # See test_right_aligned_batches_are_untouched: tolerate an unrelated
+        # one-time floor-torch capability notice without loosening the
+        # "no position-ids disclosure" guarantee this test checks.
+        warnings.simplefilter("ignore", TorchCapabilityWarning)
         out = extract_dataset(model, stimuli, ["proj"], batch_size=2, progress=False)
     with torch.no_grad():
         reference = model.proj(model.emb(ids) + model.pos(caller_positions))
