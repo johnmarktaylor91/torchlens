@@ -17,9 +17,11 @@ tests below are no longer trustworthy.
 from __future__ import annotations
 
 import warnings
+from collections.abc import Iterator
 
 import pytest
 import torch
+from conftest import permit_cpu_float8_allocation
 from torch import nn
 
 import torchlens as tl
@@ -31,6 +33,13 @@ from torchlens.utils.tensor_utils import (
     fp8_widen_for_numeric_ops,
     tensor_nanequal,
 )
+
+
+@pytest.fixture(autouse=True)
+def _permit_cpu_float8_allocation_in_module() -> Iterator[None]:
+    """Every test here creates fresh Float8 CPU tensors; see ``conftest.py``."""
+    with permit_cpu_float8_allocation():
+        yield
 
 
 def _fp8_dtypes() -> tuple[torch.dtype, ...]:

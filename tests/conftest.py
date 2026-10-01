@@ -922,6 +922,35 @@ def _reset_rng_state() -> Iterator[None]:
         torch.use_deterministic_algorithms(deterministic, warn_only=deterministic_warn_only)
 
 
+@contextmanager
+def permit_cpu_float8_allocation() -> Iterator[None]:
+    """Temporarily relax forced determinism so a fresh Float8 CPU tensor can allocate.
+
+    ``_reset_rng_state`` above forces ``torch.use_deterministic_algorithms(True)``
+    for every test (RNG reproducibility). torch 2.1/2.2's CPU
+    ``fill_empty_deterministic_`` kernel does not cover Float8 dtypes, so
+    allocating any fresh Float8 CPU tensor (``.to(float8_dtype)``,
+    ``torch.empty(dtype=float8_dtype)``, ...) under that forced determinism
+    raises ``RuntimeError: "fill_empty_deterministic_" not implemented for
+    'Float8_...'`` -- a genuine torch CPU limitation (feature-detected as
+    ``HAS_CPU_FLOAT8_DETERMINISTIC_FILL``), not a per-call bug. A no-op when
+    the running torch covers it.
+    """
+
+    from torchlens.utils._torch_compat import get_cpu_float8_deterministic_fill_support
+
+    if get_cpu_float8_deterministic_fill_support(force_probe=True):
+        yield
+        return
+    was = torch.are_deterministic_algorithms_enabled()
+    was_warn_only = torch.is_deterministic_algorithms_warn_only_enabled()
+    torch.use_deterministic_algorithms(False)
+    try:
+        yield
+    finally:
+        torch.use_deterministic_algorithms(was, warn_only=was_warn_only)
+
+
 @pytest.fixture
 def default_input1():
     return torch.rand(6, 3, 224, 224)
