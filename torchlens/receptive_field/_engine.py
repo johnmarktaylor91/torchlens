@@ -485,6 +485,22 @@ def _rule_result_uncached(op: Op) -> tuple[_RuleResult, str]:
         return ReceptiveFieldRuleContext(op).passthrough(), "graph_identity"
     name = _normalize_func_name(op.func_name)
     rule = _RF_RULES.get(name)
+    if rule is None:
+        # Some preview backends capture a generic implementation-call name as
+        # func_name that loses the actual operation identity -- tinygrad
+        # reconstructs its graph from the UOp DAG, so an elementwise binary op
+        # (add, mul, ...) carries its Python lambda wrapper's own name
+        # ("<lambda>") as func_name, with the real semantic category only on
+        # layer_type. Fall back to layer_type before reporting unsupported, so
+        # RF rules keyed by canonical op name (e.g. "add") still dispatch for
+        # those ops; this only ever widens dispatch (torch/mlx/tf/jax/paddle
+        # already resolve on the first, unchanged lookup).
+        fallback_name = _normalize_func_name(str(getattr(op, "layer_type", "") or ""))
+        if fallback_name != name:
+            fallback_rule = _RF_RULES.get(fallback_name)
+            if fallback_rule is not None:
+                rule = fallback_rule
+                name = fallback_name
     context = ReceptiveFieldRuleContext(op)
     if rule is None:
         return context.unsupported(f"{op.label}: no receptive-field rule for {name}"), name
