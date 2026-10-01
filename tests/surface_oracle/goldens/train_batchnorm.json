@@ -28292,7 +28292,7 @@
    "escape_detector_verified": null,
    "escape_diagnostics": [],
    "event_stream": "<torchlens.ir.capture_events.CaptureEvents>",
-   "facet_registry_snapshot": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
+   "facet_registry_snapshot": null,
    "factcore": "<torchlens.report._factcore.FactCore>",
    "flops_by_op_type": {
     "\"add\"": {
