@@ -36,6 +36,8 @@ hostile input, and every load path here is fail-closed.
   `sparse_descriptor_to_json()`.
 - Load side: `parse_sparse_run_descriptor()`, `preflight_sparse_run_descriptor()`,
   `attach_sparse_run_readiness()`, `validate_witness_obligations()`.
+- `runnable_coherence.py`: r83 registry-coherence names (`_callable_registry_contradiction()`;
+  a private `torch._C._fft`/`_linalg`/`_special` key also accepts its public binding name).
 - Contract of record: `docs/reference/runnable_tlspec_contract.md`.
 
 ## payload_codec.py / lazy.py / streaming.py

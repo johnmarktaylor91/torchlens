@@ -12,7 +12,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import runnable_load
+from torchlens._io import runnable_coherence, runnable_load
 from torchlens._io.runnable import build_sparse_run_descriptor, preflight_sparse_run_descriptor
 from torchlens.intervention.resolver import function_registry_key_from_callable
 from torchlens.intervention.types import FunctionRegistryKey
@@ -204,7 +204,7 @@ def test_registry_coherence_accepts_only_the_keys_own_public_name(
     key = FunctionRegistryKey(
         "custom", qualname, "function", import_path=f"{module_name}:{qualname}"
     )
-    check = runnable_load._callable_registry_contradiction
+    check = runnable_coherence._callable_registry_contradiction
     assert check(key, ("op_1_1:1",), {"op_1_1": public}) is None
     assert check(key, ("op_1_1:1",), {"op_1_1": qualname}) is None
     assert check(key, ("op_1_1:1",), {"op_1_1": "relu"}) == ("relu", "op_1_1:1")
@@ -219,7 +219,7 @@ def test_registry_coherence_still_refuses_a_swapped_fft_builtin() -> None:
     key = FunctionRegistryKey(
         "custom", "fft_irfft", "function", import_path="torch._C._fft:fft_irfft"
     )
-    assert runnable_load._callable_registry_contradiction(
+    assert runnable_coherence._callable_registry_contradiction(
         key, ("rfft_1_1:1",), {"rfft_1_1": "rfft"}
     ) == ("rfft", "rfft_1_1:1")
 
