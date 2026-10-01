@@ -180,6 +180,7 @@ def test_call_site_time_arg_proof_skips_interposed_call_bookkeeping(
 
     class _FakeFrame:
         f_lasti = 100  # the CALL instruction's offset, below
+        f_code = None  # unused by the stubbed get_instructions below
         f_locals: dict = {}
         f_globals: dict = {}
 
