@@ -108,3 +108,58 @@ def test_torch_bare_label_artifact_is_last_pass() -> None:
         assert record.pass_index == record.num_passes, (
             f"torch bare-label artifact for {key!r} no longer resolves to the last pass"
         )
+
+
+def test_singleton_fallback_strips_raw_capture_sentinel() -> None:
+    """N5: the ``assignment=None`` singleton fallback must not leak ``_raw``.
+
+    ``_finalize_single_op`` falls back to the raw backend label (e.g.
+    ``"input_1_1_raw"``, the exact shape ``ir.capture_events.reserve_label``
+    mints) as the layer label whenever recurrence grouping produced no
+    assignment -- the common case for every non-recurrent op on every
+    preview backend (tf, jax, tinygrad, paddle, mlx). Leaving the internal
+    ``_raw`` capture sentinel in place made ``trace.layer_labels`` carry raw
+    labels straight into the public surface, tripping the ``graph_ordering``
+    "Raw label survived postprocessing" invariant on essentially every
+    preview capture.
+    """
+
+    trace = _stub_trace()
+    op_log = SimpleNamespace()
+    _finalize_single_op(trace, op_log, "input_1_1_raw", 0, None)
+
+    assert op_log.layer_label == "input_1_1"
+    assert op_log.layer_label_short == "input_1_1"
+    assert op_log.label == "input_1_1:1"
+    assert op_log._label_raw == "input_1_1_raw"
+    assert op_log._layer_label_raw == "input_1_1_raw"
+    assert trace.layer_labels == ["input_1_1"]
+    # Raw labels stay resolvable through the lookup keys, just not as the
+    # presented layer label.
+    assert trace.layer_dict_all_keys["input_1_1_raw"] is op_log
+
+
+def test_grouped_leader_strips_raw_capture_sentinel() -> None:
+    """A multi-pass group's leader label must also lose its ``_raw`` suffix.
+
+    ``RecurrenceAssignment.layer_label`` is documented as a raw node label:
+    ``group_recurrent_nodes`` picks the group LEADER's own raw label
+    (``_raw`` suffix intact) for every member, so the grouped path needs the
+    same strip as the singleton fallback.
+    """
+
+    trace = _stub_trace()
+    assignment = RecurrenceAssignment(
+        layer_label="cell_1_1_raw",
+        recurrent_labels=("cell_1_1_raw", "cell_2_2_raw"),
+        pass_index=1,
+        num_passes=2,
+        equivalence_key="eq:cell",
+        site_key=None,
+    )
+    op_log = SimpleNamespace()
+    _finalize_single_op(trace, op_log, "cell_1_1_raw", 0, assignment)
+
+    assert op_log.layer_label == "cell_1_1"
+    assert op_log.label == "cell_1_1:1"
+    assert trace.layer_labels == ["cell_1_1"]
