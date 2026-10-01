@@ -84,7 +84,7 @@ _CEILING_DISPOSITIONS = frozenset({"entropy", "mutation", "instance_read"})
 # capability raise never under-marks; the live return-family check skips them when
 # the scratch engine cannot execute them.
 _CAPABILITY_GATED_METHODS = frozenset(
-    {"get_offset", "set_offset", "graphsafe_get_state", "graphsafe_set_state"}
+    {"get_offset", "set_offset", "graphsafe_get_state", "graphsafe_set_state", "philox_state"}
 )
 
 # Pre-window held references (module import time), the r41 held-ref spelling.
@@ -239,6 +239,35 @@ def test_mtia_and_xpu_random_surfaces_classified() -> None:
 
 
 @pytest.mark.smoke
+def test_accelerator_random_surface_classified() -> None:
+    """torch 2.14 named pin: ``torch.accelerator.random`` resolves a frozen row.
+
+    Feature-detected: a torch build without the module (floor through 2.13)
+    skips. ``torch.accelerator.random`` carries only ``initial_seed`` /
+    ``get_rng_state`` / ``get_rng_state_all`` (no ``seed``/``manual_seed``/
+    ``set_rng_state``/``*_all`` setters), unlike the cuda/xpu/mtia device
+    specs it reuses -- the independent discovery sweep in
+    ``test_torch_rng_surface_enumeration_complete`` is what originally caught
+    this module having NO frozen disposition at all.
+    """
+
+    spec_paths = {path for path, _spec in _TORCH_RNG_MODULE_SPECS}
+    assert "torch.accelerator.random" in spec_paths
+    module = _torch_rng_holder_module("torch.accelerator.random")
+    if module is None:
+        pytest.skip("torch.accelerator.random not present on this torch (pre-2.14)")
+    targets = {row.target for row in TORCH_RNG_SURFACE}
+    for name in ("initial_seed", "get_rng_state", "get_rng_state_all"):
+        assert hasattr(module, name), name
+        assert f"torch.accelerator.random.{name}" in targets
+    for name in ("seed", "manual_seed", "set_rng_state", "seed_all", "set_rng_state_all"):
+        assert not hasattr(module, name), (
+            f"torch.accelerator.random grew {name}; extend the module spec, don't "
+            "silently widen it to the full device spec"
+        )
+
+
+@pytest.mark.smoke
 def test_mtia_mutation_spelling_marks_fail_closed() -> None:
     """The mtia mutation patch marks at entry even when the deviceless call raises."""
 
@@ -390,6 +419,16 @@ def test_generator_method_table_return_closure() -> None:
                     f"{row.method}: structural Generator-return column without a "
                     "named classifier-closure proof"
                 )
+        elif row.return_family == "state_tensor_tuple":
+            # philox_state (torch 2.14): a tuple of freshly-minted state tensors
+            # whose MINTING mutates the engine, so neither column may be
+            # structural/None -- honesty-first, it must mark on every receiver.
+            assert row.default_disposition is not None, (
+                f"{row.method}: state-tensor-tuple return unwitnessed on default receivers"
+            )
+            assert row.nondefault_disposition is not None, (
+                f"{row.method}: state-tensor-tuple return unwitnessed on non-default receivers"
+            )
         else:  # device_attr
             assert row.default_disposition is None and row.nondefault_disposition is None
             assert not callable(getattr(generator_type, row.method, None)), row
@@ -413,6 +452,8 @@ def test_generator_method_table_live_return_families() -> None:
             return (0,)
         if method == "graphsafe_set_state":
             return (scratch.clone_state(),)
+        if method == "philox_state":
+            return (1,)
         return ()
 
     for row in GENERATOR_METHOD_TABLE:
@@ -433,6 +474,13 @@ def test_generator_method_table_live_return_families() -> None:
             assert isinstance(result, torch.Tensor), row
         elif row.return_family == "self_generator":
             assert result is scratch, row
+        elif row.return_family == "state_tensor_tuple":
+            # Not reachable on CPU today (philox_state is capability-gated and
+            # always raises above), but correct on a future Philox-capable
+            # scratch engine: a fixed tuple of freshly-minted state tensors.
+            assert isinstance(result, tuple) and all(
+                isinstance(item, torch.Tensor) for item in result
+            ), row
         else:  # generator
             assert isinstance(result, torch.Generator) and result is not scratch, row
 
