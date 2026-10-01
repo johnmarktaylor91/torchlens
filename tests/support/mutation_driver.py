@@ -288,6 +288,9 @@ SUITE = [
     # topology and pass_count_consistency already had direct killers here too.
     "tests/validation_goldens/test_validation_exemption_hardening.py",
     "tests/test_bug_fixes_phase14.py",
+    # W4 registry killer for primitive_op_invariants: an in-memory FK
+    # corruption that a return-None disarm would let through silently.
+    "tests/test_aten_profile.py::test_live_fk_tamper_names_primitive_invariant",
 ]
 
 #: Known baseline reds, deselected so a mutant verdict is never confounded.
