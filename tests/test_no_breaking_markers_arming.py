@@ -76,7 +76,10 @@ def push_repo(tmp_path: Path) -> tuple[Path, dict[str, str], str, str, str]:
     repo = tmp_path / "repo"
     repo.mkdir()
     env = _clean_env(tmp_path)
-    _git(repo, "init", "-q", "-b", "main", env=env)
+    # `init -b` needs git >= 2.28; naming the unborn branch with symbolic-ref
+    # works on every git the hooks run under.
+    _git(repo, "init", "-q", env=env)
+    _git(repo, "symbolic-ref", "HEAD", "refs/heads/main", env=env)
     (repo / "f.txt").write_text("base\n", encoding="utf-8")
     _git(repo, "add", "f.txt", env=env)
     _git(repo, "commit", "-q", "-m", "chore: base", env=env)
