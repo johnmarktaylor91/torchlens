@@ -1492,6 +1492,18 @@ _MUTATING_TENSOR_PROPERTY_SETTERS = frozenset({"real", "imag", "data"})
 # storage: their bytes were never written.
 _STORAGE_REBINDING_PROPERTY_SETTERS = frozenset({"data"})
 
+# Positional index of the target Tensor subclass ``cls`` argument for each
+# wrapped callable whose ORIGINAL can crash under an active python
+# TorchDispatchMode (see the ``constructs_tensor_subclass`` note in
+# ``torch_func_decorator``). ``__new__``/``_make_subclass`` are called as
+# ``cls(...)``/``cls._make_subclass(cls, ...)`` (class first); ``as_subclass``
+# is an instance method, ``tensor.as_subclass(cls)`` (class second).
+_SUBCLASS_CLS_ARG_INDEX: dict[str, int] = {
+    "__new__": 0,
+    "_make_subclass": 0,
+    "as_subclass": 1,
+}
+
 
 def torch_func_decorator(
     func: Callable[..., Any],
@@ -1558,10 +1570,18 @@ def torch_func_decorator(
         or is_mutating_property_setter
     )
     force_distinct_return = func_name == "identity"
-    # ``TensorBase.__new__`` is the one wrapped callable whose ORIGINAL refuses
-    # to run under any python TorchDispatchMode when handed a strict Tensor
-    # subclass cls (see pause_own_dispatch_modes); every other op pays nothing.
-    constructs_tensor_subclass = func_name == "__new__"
+    # ``TensorBase.__new__``, ``Tensor._make_subclass`` and ``Tensor.as_subclass``
+    # are the wrapped callables whose ORIGINAL refuses to run under any python
+    # TorchDispatchMode when handed a strict Tensor subclass cls -- torch's
+    # ``_make_subclass``/``as_subclass`` raise "Creating a new Tensor subclass
+    # X but the raw Tensor object is already associated to a python object of
+    # type Tensor" there (see pause_own_dispatch_modes); every other op pays
+    # nothing. ``__new__``/``_make_subclass`` take the class as their FIRST
+    # positional argument (``cls(...)``); ``as_subclass`` is an instance
+    # method, so the class is its SECOND positional argument
+    # (``tensor.as_subclass(cls)``).
+    _subclass_cls_arg_index = _SUBCLASS_CLS_ARG_INDEX.get(func_name)
+    constructs_tensor_subclass = _subclass_cls_arg_index is not None
     # Decoration-time constant: ``propagate_detached_saved_activation`` is a
     # guaranteed no-op for any name outside the propagation allowlist, but its
     # ARGUMENTS (two tensor collections, each with a BFS fall-back for nested
@@ -1880,12 +1900,15 @@ def torch_func_decorator(
             func_call_id=func_call_id,
         )
         expected_token = None
+        _subclass_cls = (
+            args[_subclass_cls_arg_index]
+            if constructs_tensor_subclass and len(args) > _subclass_cls_arg_index
+            else None
+        )
         pauses_owned_modes = (
-            constructs_tensor_subclass
-            and args
-            and isinstance(args[0], type)
-            and args[0] is not torch.Tensor
-            and issubclass(args[0], torch.Tensor)
+            isinstance(_subclass_cls, type)
+            and _subclass_cls is not torch.Tensor
+            and issubclass(_subclass_cls, torch.Tensor)
         )
         # W3 F8: per-op duration must measure the USER op, not TorchLens
         # bookkeeping. The clock starts here -- after RNG/autocast snapshots
