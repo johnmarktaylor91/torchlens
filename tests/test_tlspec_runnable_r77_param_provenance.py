@@ -22,7 +22,7 @@ precise r73 witness (same-layout VERIFIED, twin ceiled). The save-time "no graph
 provenance" warning now fires for ON-PATH fresh-Parameter consumption (it shares the marker);
 branch-only chains are orphan-pruned before the warning step, so the honesty machinery -- not
 the warning -- is their protection. The ``nn.Buffer`` control never had the exemption and
-stays typed-honest.
+stays honest (twin ceilinged, never VERIFIED).
 """
 
 from __future__ import annotations
@@ -262,5 +262,7 @@ def test_r77_buffer_control_stays_honest(tmp_path: Path) -> None:
     twin = tl.load(path).run(inputs=_twin(x))
     assert twin.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert twin.report.poisoned
+    assert twin.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
     same = tl.load(path).run(inputs=x)
     assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert not same.report.poisoned
