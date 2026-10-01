@@ -109,6 +109,26 @@ def test_paddle_recursion_guard_records_one_composite_op() -> None:
     assert "linear" in op_labels[0]
 
 
+def test_paddle_capture_options_does_not_reject_the_whole_object() -> None:
+    """N5: ``capture=CaptureOptions(...)`` must not raise "does not support: capture".
+
+    ``PaddleBackend.capture_trace`` had no ``capture`` parameter, so the
+    grouped object fell into its ``**extra_kwargs`` catch-all and tripped the
+    generic extra-kwarg rejection naming the whole option, regardless of
+    which (if any) field was actually unsupported.
+    """
+
+    trace = tl.trace(
+        lambda x: x + 1,
+        _input(),
+        backend="paddle",
+        capture=tl.options.CaptureOptions(keep_orphans=True),
+    )
+
+    assert trace.backend == "paddle"
+    assert trace.num_ops > 0
+
+
 def test_paddle_dygraph_guard_rejects_static_or_pir(monkeypatch: pytest.MonkeyPatch) -> None:
     """Paddle capture should reject non-dygraph runtimes."""
 
