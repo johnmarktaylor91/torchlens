@@ -409,6 +409,11 @@ def test_torch_capability_snapshot_contract() -> None:
         # mirror the live post-snapshot capability.
         "HAS_CPU_HALF_KERNELS": tc.HAS_CPU_HALF_KERNELS,
         "HAS_CPU_FLOAT8_DETERMINISTIC_FILL": tc.HAS_CPU_FLOAT8_DETERMINISTIC_FILL,
+        # Test-only structure-only-belt provenance signal: whether meta-tensor
+        # scalar extraction raises torch's own guard (torch 2.1-2.2 fall
+        # through to a generic NotImplementedError instead). Build-dependent,
+        # so mirror the live post-snapshot capability.
+        "HAS_META_ITEM_GUARD": tc.HAS_META_ITEM_GUARD,
         # W21 cold-start: FSDP wrapper detection is lazily probed (never imports
         # torch.distributed.fsdp on plain captures); distributed availability is
         # build-dependent, so mirror the live post-snapshot capability.
