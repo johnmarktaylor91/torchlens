@@ -1280,9 +1280,9 @@ def test_pass_count_consistency_fires_on_op_num_passes_mismatch() -> None:
 def test_pass_count_consistency_fires_on_layer_num_calls_mismatch() -> None:
     """Arm 3: layer_num_calls must match Layer.num_passes."""
 
-    layer_log = SimpleNamespace(ops={}, num_passes=1)
+    layer_log = SimpleNamespace(ops={}, num_passes=0)
     fake_trace = SimpleNamespace(layer_logs={"relu_1": layer_log}, layer_num_calls={"relu_1": 5})
-    with pytest.raises(MetadataInvariantError, match="Layer.num_passes=1"):
+    with pytest.raises(MetadataInvariantError, match="Layer.num_passes=0"):
         _check_pass_count_consistency(fake_trace)  # type: ignore[arg-type]
 
 
