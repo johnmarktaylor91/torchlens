@@ -609,11 +609,24 @@ def _walk_equinox_modules(
 
     address_by_id[module_id] = address
     modules_by_class[type(module)][module_id] = address
-    child_addresses = [
-        child_address
-        for child_address, child_module in _iter_equinox_module_children(module, address)
-        if is_equinox_module(child_module)
-    ]
+    # Torch parity: a module shared across two sibling attributes (e.g.
+    # ``self.left`` and ``self.right`` holding the SAME object) must appear
+    # only ONCE in the parent's own ``address_children`` -- under its
+    # PRIMARY address -- with every other attribute name reachable solely
+    # through ``all_addresses``. Listing every alias here duplicated the
+    # child in the parent's own child list (``['left', 'right']`` instead of
+    # ``['left']``) and let a bare ``tl.in_module(primary)`` selector fan out
+    # to both the primary and alias op sets as if they were distinct sites.
+    seen_child_ids: set[int] = set()
+    child_addresses = []
+    for child_address, child_module in _iter_equinox_module_children(module, address):
+        if not is_equinox_module(child_module):
+            continue
+        child_id = id(child_module)
+        if child_id in seen_child_ids:
+            continue
+        seen_child_ids.add(child_id)
+        child_addresses.append(child_address)
     metadata[address] = {
         **_module_source_metadata(module),
         "cls": type(module),
@@ -679,11 +692,19 @@ def _walk_nnx_modules(
 
     address_by_id[module_id] = address
     modules_by_class[type(module)][module_id] = address
-    child_addresses = [
-        child_address
-        for child_address, child_module in _iter_nnx_module_children(module, address)
-        if is_nnx_module(child_module)
-    ]
+    # Torch parity (see the identical note in ``_walk_equinox_modules``): a
+    # module shared across sibling attributes must appear only once, under
+    # its PRIMARY address, in the parent's own ``address_children``.
+    seen_child_ids: set[int] = set()
+    child_addresses = []
+    for child_address, child_module in _iter_nnx_module_children(module, address):
+        if not is_nnx_module(child_module):
+            continue
+        child_id = id(child_module)
+        if child_id in seen_child_ids:
+            continue
+        seen_child_ids.add(child_id)
+        child_addresses.append(child_address)
     metadata[address] = {
         **_module_source_metadata(module),
         "cls": type(module),
