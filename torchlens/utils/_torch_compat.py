@@ -149,6 +149,7 @@ __all__ = [
     "get_device_context_type",
     "get_device_mesh_type",
     "get_dtensor_type",
+    "get_gradient_edge_support",
     "get_pipelining_module_types",
     "get_fp8_dtypes",
     "get_tracing_tensor_types",
@@ -1329,6 +1330,44 @@ def _probe_gradient_edge() -> bool:
     return True
 
 
+def get_gradient_edge_support(*, force_probe: bool = False) -> bool:
+    """Return whether one-backward reads can rely on GradientEdge, lazily.
+
+    Parameters
+    ----------
+    force_probe:
+        Run the (real, one-op autograd) probe even on first call. Diagnostic
+        surfaces set this to report the real build capability; the
+        one-backward read engine (the only product consumer) calls this
+        without it, so a plain ``import torchlens`` with no one-backward read
+        never pays for an autograd engine invocation.
+
+    Returns
+    -------
+    bool
+        ``True`` once a real ``autograd.grad`` call seeding an output
+        ``GradientEdge`` with an explicit cotangent has been verified to
+        succeed on this process's torch build (see :func:`_probe_gradient_edge`
+        for the torch 2.2-2.3 trap this guards against). Cached after the
+        first call (``force_probe`` included).
+
+    Notes
+    -----
+    Lazy by design: the first invocation of ``torch.autograd.grad`` in a
+    process can pay a one-time autograd-engine-thread-pool initialization
+    cost measured in tens of milliseconds, which must land on the first real
+    one-backward read, never on a plain ``import torchlens`` with no
+    autograd.grad call anywhere in the session (the import-hygiene budget).
+    """
+
+    global HAS_GRADIENT_EDGE, _GRADIENT_EDGE_PROBED
+
+    if not _GRADIENT_EDGE_PROBED or force_probe:
+        HAS_GRADIENT_EDGE = _probe_gradient_edge()
+        _GRADIENT_EDGE_PROBED = True
+    return HAS_GRADIENT_EDGE
+
+
 def _probe_node_prehook() -> bool:
     """Return whether autograd graph nodes support ``register_prehook``.
 
@@ -1530,7 +1569,8 @@ HAS_CODE_QUALNAME: bool = _probe_code_qualname()
 HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG: bool = _probe_transformer_activation_fastpath_flag()
 HAS_ATTENTION_CAUSAL_BIAS: bool = _probe_attention_causal_bias()
 HAS_EXPANDED_WEIGHTS_CONV_PICKER: bool = _probe_expanded_weights_conv_picker()
-HAS_GRADIENT_EDGE: bool = _probe_gradient_edge()
+HAS_GRADIENT_EDGE: bool = False
+_GRADIENT_EDGE_PROBED: bool = False
 HAS_NODE_PREHOOK: bool = _probe_node_prehook()
 HAS_DETERMINISTIC_FILL_FLAG: bool = _probe_deterministic_fill_flag()
 HAS_AMP_GRADSCALER: bool = _probe_amp_gradscaler()
@@ -1738,6 +1778,7 @@ _LAZY_PROBE_FAMILIES: dict[str, tuple[str, ...]] = {
         "_DISPATCH_MODE_STACK_FN",
     ),
     "_DTENSOR_PROBED": ("HAS_DTENSOR", "_DTENSOR_TYPE"),
+    "_GRADIENT_EDGE_PROBED": ("HAS_GRADIENT_EDGE",),
     "_FUNCOL_GROUP_RESOLUTION_PROBED": (
         "HAS_FUNCOL_GROUP_RESOLUTION",
         "_FUNCOL_GROUP_RESOLVERS",
@@ -1983,6 +2024,7 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     get_dynamo_optimized_module_type(force_probe=True)
     get_fsdp_wrapper_type(force_probe=True)
     get_dtensor_type(force_probe=True)
+    get_gradient_edge_support(force_probe=True)
     get_device_mesh_type(force_probe=True)
     get_pipelining_module_types(force_probe=True)
     get_tracing_tensor_types(force_probe=True)

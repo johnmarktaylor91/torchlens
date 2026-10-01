@@ -818,6 +818,35 @@ def test_probe_gradient_edge_is_functional_not_just_attribute_presence(
 def test_probe_gradient_edge_true_when_autograd_grad_succeeds() -> None:
     """On a healthy torch build the functional probe reports True."""
 
-    if not tc.HAS_GRADIENT_EDGE:
+    if not tc.get_gradient_edge_support():
         pytest.skip("this torch build genuinely lacks working GradientEdge support")
     assert tc._probe_gradient_edge() is True
+
+
+def test_get_gradient_edge_support_is_lazy_and_caches(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The real autograd probe runs at most once per latch, not at import time.
+
+    L8 floor fix: the first ``torch.autograd.grad`` call in a process can pay
+    a one-time engine-initialization cost of tens of milliseconds, which must
+    land on the first real one-backward read (or the first forced diagnostic
+    probe), never on a plain ``import torchlens`` -- the import-hygiene
+    budget. This pins the latch/cache behavior independent of the real probe
+    result.
+    """
+
+    calls = 0
+    real_probe = tc._probe_gradient_edge
+
+    def _counting_probe() -> bool:
+        nonlocal calls
+        calls += 1
+        return real_probe()
+
+    monkeypatch.setattr(tc, "_probe_gradient_edge", _counting_probe)
+    monkeypatch.setattr(tc, "_GRADIENT_EDGE_PROBED", False)
+    monkeypatch.setattr(tc, "HAS_GRADIENT_EDGE", False)
+
+    first = tc.get_gradient_edge_support()
+    second = tc.get_gradient_edge_support()
+    assert calls == 1, "the probe must not re-run once latched"
+    assert first == second == tc.HAS_GRADIENT_EDGE
