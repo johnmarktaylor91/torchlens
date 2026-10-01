@@ -449,6 +449,10 @@ def test_torch_capability_snapshot_contract() -> None:
         # hardcoded True as a tripwire; the non-reentrant _checkpoint_hook
         # class is version-dependent, so mirror the live capability.
         "HAS_CHECKPOINT_HOOK_CLASS": tc.HAS_CHECKPOINT_HOOK_CLASS,
+        # torch 2.14 interposes _checkpoint_internal_hook between
+        # _checkpoint_hook/_recomputation_hook and saved_tensors_hooks;
+        # version-dependent, so mirror the live capability.
+        "HAS_CHECKPOINT_INTERNAL_HOOK_CLASS": tc.HAS_CHECKPOINT_INTERNAL_HOOK_CLASS,
         "HAS_AUTOGRAD_ENGINE_QUEUE_CALLBACK": True,
         "HAS_TRACING_TENSOR_TYPES": tc.HAS_TRACING_TENSOR_TYPES,
         # Compile rung-2 probes: set_stance (torch >= 2.6) lets capture run
@@ -469,6 +473,7 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_GENERATOR_CLONE_STATE": hasattr(torch.Generator, "clone_state"),
         "HAS_GENERATOR_GRAPHSAFE_GET_STATE": hasattr(torch.Generator, "graphsafe_get_state"),
         "HAS_GENERATOR_GRAPHSAFE_SET_STATE": hasattr(torch.Generator, "graphsafe_set_state"),
+        "HAS_GENERATOR_PHILOX_STATE": hasattr(torch.Generator, "philox_state"),
         # CVE-2025-32434 fix presence (feature-detected; version-dependent, so mirror
         # the live capability like AUTOCAST rather than hardcoding a boolean).
         "HAS_SAFE_WEIGHTS_ONLY_LOAD": tc.HAS_SAFE_WEIGHTS_ONLY_LOAD,
