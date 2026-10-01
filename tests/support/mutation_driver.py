@@ -266,7 +266,8 @@ SUITE = [
     # _run_step_11_75, _run_step_12, or _run_step_16_5 drops its bucket from
     # the set and fails the exact-equality assert. Step 17.5 is deliberately
     # unwrapped by _vtimed (and declares no op-store writes), so its own
-    # direct killer is test_step17_5_drops_capture_phase_workspaces; step 19
+    # direct killer is test_step17_5_adopts_container_records_before_the_
+    # registry_clears; step 19
     # and its gate are conditional (absent from the bucket golden's default
     # axis either way), so their killer asserts the eviction effect directly
     # on a streaming capture. (test_postprocess_enforcement.py's
@@ -276,7 +277,7 @@ SUITE = [
     # confirmed red on main, unrelated to this change -- so it cannot be
     # added here without breaking the pristine control.)
     "tests/test_postprocess_dag.py::test_phase_timing_bucket_names_default_capture",
-    "tests/test_postprocess_dag.py::test_step17_5_drops_capture_phase_workspaces",
+    "tests/test_postprocess_dag.py::test_step17_5_adopts_container_records_before_the_registry_clears",
     "tests/test_postprocess_dag.py::test_step19_and_gate_evict_streamed_outs_from_memory",
     # W3 exempt killers (X02, X07): direct negative-case calls already proved
     # the data parent/destination must stay strictly perturbed; they lived
