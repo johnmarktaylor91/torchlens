@@ -248,11 +248,24 @@ def _squeeze_size(value: Any) -> Any:
     return int(value)
 
 
-def _coerce_antialias(value: Any) -> bool | None:
-    """Normalize torchvision antialias spellings (bool / None / sentinel)."""
+def _coerce_antialias(value: Any) -> bool | str | None:
+    """Normalize torchvision antialias spellings (bool / None / ``"warn"``).
+
+    torchvision's classification presets default ``antialias`` to the
+    LITERAL STRING ``"warn"`` on torchvision < 0.17ish (its legacy
+    transitional default: antialiasing applies to PIL input but not Tensor
+    input, with a one-time warning) before later releases default to the
+    explicit ``True``. Collapsing that declared sentinel to ``None``
+    ("undeclared") used to make a transform's self-audit against its own
+    declaration register as ``unknown`` (one undeclared-on-both-sides field
+    forces the whole verdict to ``unknown``, memo D4) even though both sides
+    agree exactly -- declare it honestly instead of guessing a bool.
+    """
 
     if isinstance(value, bool):
         return value
+    if value == "warn":
+        return "warn"
     return None
 
 
