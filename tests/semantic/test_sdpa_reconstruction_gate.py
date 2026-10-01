@@ -15,8 +15,15 @@ import pytest
 import torch
 
 from torchlens.semantic.reconstruction import _allclose_sdpa
+from torchlens.utils._torch_compat import get_cpu_half_kernels_support
 
 pytestmark = pytest.mark.smoke
+
+_SKIP_FLOAT16_NEXTAFTER = pytest.mark.skipif(
+    not get_cpu_half_kernels_support(),
+    reason='torch 2.1-2.2\'s CPU nextafter_cpu kernel does not cover float16 ("nextafter_cpu" '
+    "not implemented for 'Half')",
+)
 
 
 @pytest.mark.parametrize(
@@ -53,7 +60,15 @@ def test_sign_flipped_reconstruction_is_refused(dtype: torch.dtype, magnitude: f
     assert not _allclose_sdpa(-target, target)
 
 
-@pytest.mark.parametrize("dtype", [torch.bfloat16, torch.float16, torch.float32, torch.float64])
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        torch.bfloat16,
+        pytest.param(torch.float16, marks=_SKIP_FLOAT16_NEXTAFTER),
+        torch.float32,
+        torch.float64,
+    ],
+)
 def test_storage_rounding_agreement_still_matches(dtype: torch.dtype) -> None:
     """A legitimate one-ULP storage-rounding difference stays a match."""
 
