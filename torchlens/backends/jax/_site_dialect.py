@@ -71,8 +71,13 @@ def jax_site_keys(trace: Trace) -> dict[str, str]:
         # iteration-qualified ``call_instance`` through that same field (a
         # single pseudo "address:1" entry, parseable by
         # ``normalize_op_module_calls`` so a later pytree_module finalize
-        # pass over this field never raises) whenever it is not the root.
-        if call_instance != "<root>":
+        # pass over this field never raises) -- but ONLY when the instance
+        # actually carries an iteration marker: a plain non-recurring
+        # ``call_instance`` like ``"root"`` is not ``ROOT_CALL_INSTANCE``
+        # (``"<root>"``) either, and claiming it as a module_call_stack entry
+        # falsely reads as non-root module attribution under
+        # ``function_root_module_invariants``.
+        if "iter=" in call_instance:
             op_log.module_call_stack = (f"{call_instance}:1",)
         keys[label] = minter.mint_at(
             module_site,
