@@ -2160,13 +2160,31 @@ class JAXBackend:
                 param.num_params for param in trace.param_logs if param.is_trainable
             )
             trace.num_params_frozen = trace.num_params - trace.num_params_trainable
-        trace.output_layers = [
-            trace._raw_graph_ws.raw_layer_dict[label].layer_label
-            if label in trace._raw_graph_ws.raw_layer_dict
-            else label
-            for label in trace.output_layers
-        ]
-        # ``trace.input_layers`` needs the identical raw -> bare relabel:
+
+        def _final_label(label: str) -> str:
+            """Resolve one raw label to its final CONDITIONAL label.
+
+            Torch parity: bare ``layer_label`` for a single-pass op, but the
+            pass-qualified ``label`` for a multi-pass one. Torch's own
+            ``input_layers``/``output_layers`` rename always uses the bare
+            label, but only because torch always wraps real computation in
+            single-pass input/output pseudo-ops -- the two mappings coincide
+            there. JAX does not always wrap this way (``trace.output_layers``
+            can name the real last-pass op of a multi-pass layer directly),
+            where a bare label would be ambiguous (multi-pass bare-label
+            lookups refuse typed), defeating the whole point of
+            ``output_layers`` as "the op that produced this output" (see the
+            identical ``backends/_finalize.py`` fix for the shared preview
+            path).
+            """
+
+            op_log = trace._raw_graph_ws.raw_layer_dict.get(label)
+            if op_log is None:
+                return label
+            return op_log.layer_label if op_log.num_passes == 1 else op_log.label
+
+        trace.output_layers = [_final_label(label) for label in trace.output_layers]
+        # ``trace.input_layers`` needs the identical raw -> final relabel:
         # left raw, it seeded ``compute_preview_input_output_distances``'s
         # "input" flood below with RAW labels (``input_1_1_raw``), which adds
         # the raw string straight into every input op's ``input_ancestors``
@@ -2174,12 +2192,7 @@ class JAXBackend:
         # surviving postprocessing and tripping the ``graph_ordering``
         # invariant on every capture with ``mark_layer_depths`` on (the
         # default) -- i.e. nearly every JAX capture.
-        trace.input_layers = [
-            trace._raw_graph_ws.raw_layer_dict[label].layer_label
-            if label in trace._raw_graph_ws.raw_layer_dict
-            else label
-            for label in trace.input_layers
-        ]
+        trace.input_layers = [_final_label(label) for label in trace.input_layers]
         trace._layers_logged = True
         trace._layers_saved = True
         trace.has_backward_pass = False
