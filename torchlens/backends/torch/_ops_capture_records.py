@@ -275,7 +275,7 @@ def _stamp_same_object_mutation(logged: Any, receiver: Any, mutation_signature: 
             current = tensor_version_or_none(receiver)
         verdict = current is None or current != baseline
     with contextlib.suppress(AttributeError):
-        logged.tl_same_object_mutation = verdict
+        cast(Any, logged).tl_same_object_mutation = verdict
 
 
 def get_capture_producer_policy(mode: CaptureProducerMode) -> CaptureProducerPolicy:
