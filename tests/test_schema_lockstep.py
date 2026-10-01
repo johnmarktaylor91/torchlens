@@ -1492,6 +1492,7 @@ def test_schema_generator_renders_unions_identically_on_every_python() -> None:
     so the generated bindings were stale on every other interpreter.
     """
 
+    from fractions import Fraction
     from typing import Any, Literal, Optional, Union
 
     from tools.generate_record_schema import _render_annotation
@@ -1501,6 +1502,6 @@ def test_schema_generator_renders_unions_identically_on_every_python() -> None:
     assert _render_annotation(int | None) == "int | None"
     assert _render_annotation(Any | None) == "typing.Any | None"
     assert _render_annotation("Any | None") == "Any | None"
-    assert _render_annotation(Path | None) == "pathlib.Path | None"
+    assert _render_annotation(Fraction | None) == "fractions.Fraction | None"
     assert _render_annotation(Union[Literal["a"], str]) == "typing.Literal['a'] | str"  # noqa: UP007
     assert _render_annotation(list[int] | None) == "list[int] | None"
