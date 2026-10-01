@@ -955,7 +955,11 @@ def test_jax_synthetic_control_parent_is_not_a_value_replay_parent() -> None:
 
     assert control_parent._label_raw in _control_parent_labels(mul_op)
     assert control_parent._label_raw not in _data_parent_labels(mul_op)
-    assert _data_parent_arg_positions(mul_op) == {0: add_op.label, 1: add_op.label}
+    # Torch parity: parent_arg_positions resolves through the CONDITIONAL
+    # label map (bare layer_label for a single-pass referenced op, like this
+    # add; pass-qualified only for a multi-pass one), matching parents/
+    # children and `postprocess/labeling.py`'s own arg-location rename.
+    assert _data_parent_arg_positions(mul_op) == {0: add_op.layer_label, 1: add_op.layer_label}
     assert trace.validate_forward_pass([], validate_metadata=False)
 
 
@@ -995,6 +999,7 @@ def test_synthetic_control_parent_is_retained_by_orphan_pruning() -> None:
             self.input_layers: list[str] = []
             self.output_layers = ["output"]
             self.buffer_layers: list[str] = []
+            self.internal_sink_ops: list[str] = []
             self.keep_orphans = False
             self._orphan_labels: list[str] = []
 
