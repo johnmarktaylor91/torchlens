@@ -1,13 +1,26 @@
-import sys
 import tempfile
+from typing import Any
 
 import tensorflow as tf
+from tensorflow import keras
 
-sys.path.insert(0, "tests/backends")
-sys.path.insert(0, "tests")
-from test_tf_static import StaticDenseModel  # noqa: E402
+import torchlens as tl
 
-import torchlens as tl  # noqa: E402
+
+class StaticDenseModel(keras.Model):
+    def __init__(self) -> None:
+        super().__init__(name="static_dense_model")
+        self.dense = keras.layers.Dense(
+            2,
+            activation="relu",
+            kernel_initializer=keras.initializers.Constant([[1.0, -1.0], [2.0, 0.5]]),
+            bias_initializer=keras.initializers.Constant([0.25, -0.5]),
+            name="dense",
+        )
+
+    def call(self, x: Any) -> Any:
+        return self.dense(x)
+
 
 model = StaticDenseModel()
 x = tf.constant([[1.0, 2.0]], dtype=tf.float32)
