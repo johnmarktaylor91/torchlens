@@ -31,6 +31,7 @@ import datetime as _datetime_module
 import dis as _dis_module
 import functools as _functools_module
 import gc as _gc_module
+import importlib.util as _importlib_util
 import os as _os_module
 import random
 import sys as _sys_module
@@ -1007,6 +1008,14 @@ _TORCH_RNG_STRUCTURAL_EXTRAS: tuple[tuple[str, str], ...] = (
         "torch.utils.data.graph_settings.apply_shuffle_seed",
         "deprecated alias delegating to apply_random_seed (same structural coverage)",
     ),
+)
+# Structural extras whose MODULE is never eagerly imported by torch or torchlens
+# (unlike every _TORCH_RNG_STRUCTURAL_EXTRAS target above, all already sitting in
+# sys.modules by the time torch/torchlens finish their own imports): requiring
+# sys.modules presence here would make coverage depend on which OTHER test
+# happened to import the module first in the session. find_spec proves existence
+# without paying the module's own import cost (W21 cold-start guarantee).
+_TORCH_RNG_UNIMPORTED_MODULE_EXTRAS: tuple[tuple[str, str], ...] = (
     (
         "torch.distributed.pipeline.sync.checkpoint.restore_rng_states",
         "torch.distributed.pipeline was removed from torch (gone by the 2.3 era; only "
@@ -1047,6 +1056,24 @@ def _build_torch_rng_surface() -> tuple[TorchRngSurfaceRow, ...]:
         module_path, _, name = target.rpartition(".")
         module = _torch_rng_holder_module(module_path)
         if module is not None and hasattr(module, name):
+            rows.append(TorchRngSurfaceRow(target, "structurally_covered", note))
+    for target, note in _TORCH_RNG_UNIMPORTED_MODULE_EXTRAS:
+        # Unlike _TORCH_RNG_STRUCTURAL_EXTRAS's targets (all already imported by
+        # the time torch/torchlens finish their OWN imports), torch.distributed
+        # .pipeline is never eagerly imported by anything -- requiring it to
+        # already sit in sys.modules would make this row's coverage depend on
+        # which OTHER test happened to import it first in the session, landing
+        # or missing this row by accident. find_spec proves the module exists
+        # without importing it (never paying torch.distributed.pipeline's own
+        # import cost on every "import torchlens", W21): the attribute itself
+        # is trusted present (empirically verified; a frozen legacy module on a
+        # fixed torch build has no live surface to drift).
+        module_path, _, _name = target.rpartition(".")
+        try:
+            found = _importlib_util.find_spec(module_path) is not None
+        except (ImportError, AttributeError, ValueError):
+            found = False
+        if found:
             rows.append(TorchRngSurfaceRow(target, "structurally_covered", note))
     return tuple(rows)
 
