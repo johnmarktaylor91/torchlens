@@ -15,6 +15,7 @@ from __future__ import annotations
 import pytest
 import torch
 
+from torchlens.utils._torch_compat import HAS_CPU_HALF_KERNELS
 from torchlens.utils.tensor_utils import (
     LAYER_GRAD_VALIDATION_ATOL,
     LAYER_GRAD_VALIDATION_RTOL,
@@ -25,6 +26,11 @@ from torchlens.utils.tensor_utils import (
 )
 
 pytestmark = pytest.mark.smoke
+
+_requires_cpu_half_kernels = pytest.mark.skipif(
+    not HAS_CPU_HALF_KERNELS,
+    reason="CPU addmm/nextafter for float16 postdates the torch 2.1 floor",
+)
 
 
 def test_fp32_rows_are_exactly_the_legacy_constants() -> None:
@@ -72,6 +78,7 @@ def test_fp64_corruption_masked_by_legacy_constants_now_fails() -> None:
     assert not torch.allclose(zeroed, true_grads, rtol=rtol, atol=atol)
 
 
+@_requires_cpu_half_kernels
 def test_fp16_one_ulp_agreement_passes_and_corruption_fails() -> None:
     """fp16 rows admit storage rounding while catching sign flips and zeroing."""
 
@@ -197,6 +204,7 @@ def test_fp64_param_grad_clean_run_still_passes() -> None:
     )
 
 
+@_requires_cpu_half_kernels
 def test_fp16_few_ulp_param_grad_agreement_is_not_a_false_fail(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
