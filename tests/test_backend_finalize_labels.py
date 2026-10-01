@@ -21,7 +21,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.backends._finalize import _finalize_single_op
+from torchlens.backends._finalize import _apply_recurrence_relabel_epilogue, _finalize_single_op
 from torchlens.postprocess.loop_grouping_adapter import RecurrenceAssignment
 
 pytestmark = pytest.mark.smoke
@@ -163,3 +163,48 @@ def test_grouped_leader_strips_raw_capture_sentinel() -> None:
     assert op_log.layer_label == "cell_1_1"
     assert op_log.label == "cell_1_1:1"
     assert trace.layer_labels == ["cell_1_1"]
+
+
+def test_relabel_epilogue_fixes_children_even_without_grouping() -> None:
+    """N5: every op's edges must be relabeled, not just multi-pass members.
+
+    Before the fix, ``_apply_recurrence_relabel_epilogue`` only rewrote
+    ``parents``/``children`` for multi-pass group members (``changed`` was
+    filtered to ``num_passes != 1``) and only ran at all when recurrence
+    assignments were present. That was safe while a singleton op's
+    ``layer_label`` equaled its raw label (the historical preview bug this
+    module's other tests pin the fix for) -- but once the raw ``_raw``
+    sentinel is stripped from every op's final label, a children/parents
+    edge that still names the raw string becomes a dangling reference. This
+    must be fixed with ``assignments=None`` (the ``recurrence_detection=False``
+    path), the case with no recurrence grouping at all.
+    """
+
+    producer = SimpleNamespace(
+        label="producer_1_1:1",
+        equivalence_class="producer",
+        parents=[],
+        children=["consumer_1_2_raw"],
+    )
+    consumer = SimpleNamespace(
+        label="consumer_1_2:1",
+        equivalence_class="consumer",
+        parents=["producer_1_1_raw"],
+        children=[],
+    )
+    raw_dict = {"producer_1_1_raw": producer, "consumer_1_2_raw": consumer}
+    trace = SimpleNamespace(
+        _raw_graph_ws=SimpleNamespace(raw_layer_dict=raw_dict),
+        op_equivalence_classes={},
+        input_layers=["producer_1_1_raw"],
+        output_layers=["consumer_1_2_raw"],
+    )
+
+    _apply_recurrence_relabel_epilogue(trace, None, None)
+
+    assert consumer.parents == ["producer_1_1:1"]
+    assert producer.children == ["consumer_1_2:1"]
+    assert trace.input_layers == ["producer_1_1:1"]
+    assert trace.output_layers == ["consumer_1_2:1"]
+    assert producer.recurrent_ops == ["producer_1_1:1"]
+    assert consumer.recurrent_ops == ["consumer_1_2:1"]
