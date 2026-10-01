@@ -690,7 +690,7 @@ def test_force_eager_stance_scope_exit_owned_with_construction(
 
     handle = _RecordingStance()
     monkeypatch.setattr(tc, "HAS_SET_STANCE", True)
-    monkeypatch.setattr(torch.compiler, "set_stance", lambda mode: handle)
+    monkeypatch.setattr(torch.compiler, "set_stance", lambda mode: handle, raising=False)
 
     class _Interrupt(KeyboardInterrupt):
         pass
@@ -716,7 +716,7 @@ def test_force_eager_stance_scope_construction_failure_degrades_without_exit(
     def _refuse(mode: str) -> object:
         raise ValueError("stance refused")
 
-    monkeypatch.setattr(torch.compiler, "set_stance", _refuse)
+    monkeypatch.setattr(torch.compiler, "set_stance", _refuse, raising=False)
 
     with tc.force_eager_stance_scope() as active:
         assert active is False
