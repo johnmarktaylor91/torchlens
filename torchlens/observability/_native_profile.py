@@ -158,6 +158,7 @@ def join_session(
     """
 
     profiler = active.closed_profiler
+    raw_chrome_bytes: bytes | None = None
     if profiler is None:
         extraction_path = "unavailable"
         events: tuple[Any, ...] = ()
@@ -165,22 +166,38 @@ def join_session(
         extraction = extract_events(profiler)
         extraction_path = extraction.path
         events = extraction.events
+        raw_chrome_bytes = extraction.raw_chrome_bytes
     result = join_events(events, extraction_path=extraction_path, trace=trace)
     if trace is not None:
         register_join_result(trace, result)
     if active.result is not None:
         active.result.facts["kineto_join"] = result.availability
     if native_chrome_path is not None and profiler is not None:
-        _write_native_chrome(profiler, result, Path(native_chrome_path))
+        _write_native_chrome(
+            profiler, result, Path(native_chrome_path), raw_chrome_bytes=raw_chrome_bytes
+        )
     return result
 
 
-def _write_native_chrome(profiler: Any, result: KinetoJoinResult, path: Path) -> None:
+def _write_native_chrome(
+    profiler: Any,
+    result: KinetoJoinResult,
+    path: Path,
+    *,
+    raw_chrome_bytes: bytes | None = None,
+) -> None:
     """Preserve the NATIVE chrome artifact plus the exact-ID mapping sidecar.
 
     The native file is torch's own export on Kineto's clock -- TorchLens
     neither rewrites nor re-times it. The sidecar carries the exact marker
     name -> owner rows so a viewer-side join needs no name matching.
+
+    ``raw_chrome_bytes``, when given, is the exact export the event
+    extraction already pulled from this same profiler (the chrome-stream
+    fallback path, W2.1): torch's Kineto result object permits exactly ONE
+    ``export_chrome_trace`` save per profiler and raises ``RuntimeError:
+    Trace is already saved.`` on a second call, so this reuses those bytes
+    verbatim instead of re-exporting.
     """
 
     import json as _stdlib_json
@@ -188,7 +205,10 @@ def _write_native_chrome(profiler: Any, result: KinetoJoinResult, path: Path) ->
     from ..utils.display import atomic_write_text
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    profiler.export_chrome_trace(str(path))
+    if raw_chrome_bytes is not None:
+        path.write_bytes(raw_chrome_bytes)
+    else:
+        profiler.export_chrome_trace(str(path))
     sidecar = {
         "schema": "torchlens.native_chrome_map.v1",
         "clock_note": (
