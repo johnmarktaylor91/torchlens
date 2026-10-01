@@ -19,16 +19,12 @@ import torchlens as tl
 from torchlens import _state
 from torchlens._errors import TorchLensCaptureGapWarning
 from torchlens.backends.torch import completeness_witness as cw
-from torchlens.backends.torch._modes import SubclassConstructionUnderDispatchModeError
 from torchlens.backends.torch.completeness_witness import (
     AUDITED_COMPLETENESS_BOUNDARIES,
     MAX_AUDITED_COMPLETENESS_BOUNDARIES,
 )
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
-from torchlens.utils._torch_compat import (
-    HAS_FUNCTORCH_LEVEL_API,
-    HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE,
-)
+from torchlens.utils._torch_compat import HAS_FUNCTORCH_LEVEL_API
 from torchlens.utils.introspection import INPUT_SEARCH_DEPTH_LIMIT
 
 
@@ -1333,23 +1329,6 @@ def test_subclass_disabled_dispatch_mutation_is_outside_observational_reach() ->
     """
 
     wrap_torch(completeness_witness=True)
-    if not HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE:
-        # Floor-torch capability gap (torch 2.1/2.2): constructing the
-        # _SubclassHiddenMutationTensor subclass while the completeness
-        # witness mode is active refuses typed instead of crashing on
-        # torch's own "already associated to a python object" RuntimeError.
-        # See SubclassConstructionUnderDispatchModeError.
-        with (
-            warnings.catch_warnings(),
-            pytest.raises(SubclassConstructionUnderDispatchModeError),
-        ):
-            warnings.simplefilter("ignore")
-            tl.trace(
-                _SubclassHiddenMutationModel(),
-                torch.tensor([1.0, 2.0]),
-                capture=tl.options.CaptureOptions(save_arg_values=True),
-            )
-        return
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         trace = tl.trace(
