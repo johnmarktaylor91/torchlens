@@ -41,6 +41,7 @@ from torchlens.semantic._norm_reconstruction import (
     reconstruct_norm,
 )
 from torchlens.semantic.tolerances import within_reconstruction_tolerance
+from torchlens.utils._torch_compat import HAS_RMSNORM_MODULE
 
 pytestmark = pytest.mark.smoke
 
@@ -153,6 +154,10 @@ def test_accumulate_recompute_is_within_tolerance_payload_recompute_is_not(
     )
 
 
+@pytest.mark.skipif(
+    not HAS_RMSNORM_MODULE,
+    reason="torch.nn.functional.rms_norm postdates the torch 2.1 floor (added 2.4)",
+)
 @pytest.mark.parametrize("dtype", HALF_DTYPES, ids=["bf16", "fp16"])
 def test_half_precision_rms_norm_reconstructs(dtype: torch.dtype) -> None:
     """The uncentered affine form reconstructs in half precision as well."""

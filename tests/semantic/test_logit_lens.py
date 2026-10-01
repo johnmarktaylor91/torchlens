@@ -8,8 +8,13 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.semantic import LogitLensError, logit_lens
+from torchlens.utils._torch_compat import HAS_RMSNORM_MODULE
 
 pytestmark = pytest.mark.smoke
+
+_requires_rmsnorm = pytest.mark.skipif(
+    not HAS_RMSNORM_MODULE, reason="torch.nn.RMSNorm postdates the torch 2.1 floor (added 2.4)"
+)
 
 
 class Block(nn.Module):
@@ -104,6 +109,7 @@ def test_lm_head_recipe_exposes_unembedding_facets() -> None:
     assert view.menu()["unembed_bias"].status == "structurally_absent"
 
 
+@_requires_rmsnorm
 def test_lm_head_recipe_classifies_rms_norm_without_beta() -> None:
     """RMSNorm-family final norms classify as rms_norm with beta absent."""
 
@@ -134,6 +140,7 @@ def test_logit_lens_validates_and_matches_real_logits_layer_norm() -> None:
     assert torch.allclose(result.entries[-1].logits, result.final_logits, rtol=1e-4, atol=1e-5)
 
 
+@_requires_rmsnorm
 def test_logit_lens_validates_rms_norm_and_head_bias() -> None:
     """RMSNorm reconstruction and unembedding bias both validate end-to-end."""
 
