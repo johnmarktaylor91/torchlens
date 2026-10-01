@@ -1595,6 +1595,36 @@ def torch_func_decorator(
     # See the barcode-transparency note inside ``wrapped_func`` (R16-5).
     is_barcode_transparent = func_name == "as_subclass"
 
+    def _call_pausing_subclass_modes(
+        call_args: tuple[Any, ...], call_kwargs: dict[str, Any]
+    ) -> Any:
+        """Call ``func``, pausing owned dispatch modes around strict-subclass creation.
+
+        Covers the fast and non-owner-thread paths, where TorchLens's OWN
+        internal calls run with logging disabled (``pause_logging()``) -- e.g.
+        ``safe_copy``'s ``x.clone()`` on a strict Tensor subclass payload,
+        whose torch-default ``__torch_function__`` return conversion
+        re-enters ``as_subclass`` on that SAME subclass internally (R16-5).
+        ``_make_subclass``/``as_subclass`` crash there with "Creating a new
+        Tensor subclass X but the raw Tensor object is already associated to
+        a python object of type Tensor" whenever a TorchLens dispatch mode is
+        still active (the completeness witness, armed for validation and
+        runnable-eligible captures) -- regardless of the logging-enabled
+        flag. ``constructs_tensor_subclass`` is False for every op but these
+        three, so the common case pays one cheap bool read.
+        """
+
+        if constructs_tensor_subclass and len(call_args) > _subclass_cls_arg_index:
+            subclass_cls = call_args[_subclass_cls_arg_index]
+            if (
+                isinstance(subclass_cls, type)
+                and subclass_cls is not torch.Tensor
+                and issubclass(subclass_cls, torch.Tensor)
+            ):
+                with pause_own_dispatch_modes():
+                    return func(*call_args, **call_kwargs)
+        return func(*call_args, **call_kwargs)
+
     @wraps(func)
     def wrapped_func(*args: Any, **kwargs: Any) -> Any:
         """Dispatch a decorated torch callable through the logging gate."""
@@ -1626,7 +1656,7 @@ def torch_func_decorator(
                 materialize_deferred_for_call(_collect_tensor_args(args, kwargs))
             if needs_device_injection:
                 kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
-            out = func(*args, **kwargs)
+            out = _call_pausing_subclass_modes(args, kwargs)
             fast_collector = _state._active_fast_run_collector
             if fast_collector is not None and fast_collector.wants_function(func_name):
                 fast_collector.capture_function(func_name, out)
@@ -1655,7 +1685,7 @@ def torch_func_decorator(
                 observe_nonowner_operands(args, kwargs)
             if needs_device_injection:
                 kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
-            out = func(*args, **kwargs)
+            out = _call_pausing_subclass_modes(args, kwargs)
             if is_detached_propagation_func and has_detached_saved_activations():
                 propagate_detached_saved_activation(
                     func_name,
@@ -1900,10 +1930,17 @@ def torch_func_decorator(
             func_call_id=func_call_id,
         )
         expected_token = None
+        # Logged (gap-tracked) pausing stays __new__-only, exactly as before this
+        # module's as_subclass/_make_subclass generalization: those two now pause
+        # on EVERY call path (see _call_pausing_subclass_modes), including the
+        # fast/non-owner paths where the original crash actually lives (TorchLens's
+        # own internal clone() of a strict-subclass payload, made with logging
+        # disabled). Widening the LOGGED pause to them here too would additionally
+        # start counting their own aten activity as mode_paused_interior gaps on
+        # builds where this path IS reached under active logging -- a real but
+        # unrelated accounting change this fix does not make.
         _subclass_cls = (
-            args[_subclass_cls_arg_index]
-            if constructs_tensor_subclass and len(args) > _subclass_cls_arg_index
-            else None
+            args[0] if func_name == "__new__" and args and isinstance(args[0], type) else None
         )
         pauses_owned_modes = (
             isinstance(_subclass_cls, type)
