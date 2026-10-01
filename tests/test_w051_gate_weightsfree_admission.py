@@ -21,6 +21,7 @@ from torch.overrides import TorchFunctionMode
 
 import torchlens as tl
 from torchlens.options import CaptureOptions
+from torchlens.utils._torch_compat import autocast_is_enabled
 
 pytestmark = pytest.mark.smoke
 
@@ -82,8 +83,8 @@ def test_shim_class_delegates_non_null_calls_to_the_shipped_class() -> None:
     real = shim("cpu", dtype=torch.bfloat16, enabled=True)
     assert real.fast_dtype == torch.bfloat16
     with real:
-        assert torch.is_autocast_enabled("cpu")
-    assert not torch.is_autocast_enabled("cpu")
+        assert autocast_is_enabled("cpu")
+    assert not autocast_is_enabled("cpu")
 
 
 class _Passthrough(TorchFunctionMode):
