@@ -2408,6 +2408,30 @@ def test_layer_pass_layer_log_xrefs_fires_on_ops_key_mismatch() -> None:
         _check_layer_pass_to_layer_log_xrefs(fake_trace)  # type: ignore[arg-type]
 
 
+def test_pass_count_consistency_fires_on_ops_key_mismatch() -> None:
+    """Arm 0: a layer's ``ops`` keys must match ``range(1, num_passes + 1)``.
+
+    (M1 raise-arm campaign: ``pass_count_consistency#a00`` survivor. The
+    real-capture killer bumping ``layer.num_passes`` on an Op pulled from
+    ``trace.layer_list`` does NOT reach the ``Layer`` record this checker
+    actually reads from ``trace.layer_logs`` -- empirically proven: it kept
+    this arm a SURVIVOR. A duck-typed fake of the exact object the checker
+    consumes avoids that real-capture aliasing gap.
+    """
+
+    fake_trace = SimpleNamespace(
+        layer_logs={
+            "layer_1_1": SimpleNamespace(
+                ops={1: SimpleNamespace(pass_index=1, num_passes=2)},
+                num_passes=2,
+            ),
+        },
+    )
+
+    with pytest.raises(MetadataInvariantError, match="pass_count_consistency"):
+        _check_pass_count_consistency(fake_trace)  # type: ignore[arg-type]
+
+
 def test_non_torch_backward_inert_fires_on_populated_backward_flag() -> None:
     """A non-torch trace declaring ``has_backward_pass`` must raise."""
 
