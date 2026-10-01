@@ -30,7 +30,8 @@ from __future__ import annotations
 
 import os
 import sys
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -517,3 +518,41 @@ def write_provenance(golden_dir: Path, generator: str, update_env: str, reason: 
         existing += "\n"
     separator = "---\n" if existing else ""
     path.write_text(existing + separator + record)
+
+
+@contextmanager
+def expect_bundle_minor_version_mismatch() -> Iterator[None]:
+    """Narrowly filter the advisory Bundle-torch-minor-mismatch warning.
+
+    R6 (Lead ruling via lane-L3-ci-triage.md section 5 step 18, 2026-10-01):
+    several committed cross-env goldens (``godobject_oracle/goldens/``, the
+    legacy fixture in ``test_grouping_stamp.py``, and siblings) were recorded
+    on a torch 2.13 CUDA build. Loading them under a different torch MINOR
+    fires ``torchlens._io.manifest``'s advisory ``TorchLensWarning`` ("Bundle
+    torch_version=... differs from runtime torch_version=... (minor version
+    mismatch)."), which is correct by design -- a same-major, different-minor
+    bundle loads fine -- not a product bug. The repo's pytest
+    ``filterwarnings`` promotes every TorchLens-originated ``UserWarning`` to
+    an error by default (deliberate: TorchLens warnings should be assertable),
+    so a golden-loading test must narrowly expect/filter THIS exact advisory
+    rather than the loader weakening or the global promotion rule loosening.
+
+    On a runtime whose torch minor happens to match the golden's recording
+    (e.g. a 2.13 CI row), the warning never fires and this filter is simply
+    unused -- safe on every row, not just the mismatched ones. The warning's
+    own firing behavior is pinned independently in
+    ``tests/test_tlspec_envelope_ceiling.py::test_manifest_policy_warns_not_raises_on_minor_mismatch``.
+    """
+
+    import warnings
+
+    from torchlens.errors import TorchLensWarning
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"Bundle torch_version=.* differs from runtime torch_version=.* "
+            r"\(minor version mismatch\)\.",
+            category=TorchLensWarning,
+        )
+        yield
