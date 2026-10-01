@@ -152,6 +152,19 @@ def test_open_ended_bands_carry_a_latest_canary() -> None:
             )
 
 
+#: The torch-FLOOR CI rows (tests.yml) pin torchvision to the exact release
+#: upstream PAIRED with torch's own floor patch for that row -- torchvision
+#: 0.18+ hard-requires torch>=2.3, so a floor row running torch's OWN claimed
+#: floor (>=2.1) physically cannot also satisfy torchvision's independent
+#: >=0.18 extras commitment (vision-shims/test/all-stretch). This is a
+#: reviewed, NAMED floor-pairing leg exactly like hf_5_candidate is a named
+#: pre-release leg: torchvision there is pulled in incidentally (the floor
+#: rows install dev,tabular,viz, never test/vision-shims), never claimed as
+#: "TorchLens supports torchvision 0.16/0.17", so it is an explicit
+#: out-of-band exception, not a silent loosening of the >=0.18 commitment.
+_TORCH_FLOOR_PAIRED_TORCHVISION: frozenset[str] = frozenset({"0.16.2", "0.17.2"})
+
+
 def test_installed_environment_is_inside_a_named_leg() -> None:
     """The venue we actually test in must be one of the named legs' worlds:
     inside the claimed band, or exactly the candidate leg's pin."""
@@ -169,7 +182,10 @@ def test_installed_environment_is_inside_a_named_leg() -> None:
         is_candidate_world = package in candidate_pins and installed == Version(
             candidate_pins[package]
         )
-        assert inside_claim or is_candidate_world, (
+        is_torch_floor_pairing = (
+            package == "torchvision" and str(installed) in _TORCH_FLOOR_PAIRED_TORCHVISION
+        )
+        assert inside_claim or is_candidate_world or is_torch_floor_pairing, (
             f"{package} {installed} is outside the claimed band"
             f" {row['claimed_band']} AND is not the candidate leg's pin --"
             " this venue tests a world no leg claims"
