@@ -260,6 +260,30 @@ SUITE = [
     "tests/test_postprocess_contract_arming.py",
     "tests/test_postprocess_dag.py::test_read_enforcement_trips_on_undeclared_read",
     "tests/test_postprocess_dag.py::test_executor_seam_patched_step_executes_and_audits",
+    # W2 executor killers (lane L3 triage step 21, 2026-10-01): the bucket-name
+    # golden pins every _vtimed-wrapped step's timing bucket on a default
+    # capture, so a whole-function return-None disarm of _run_step_11_5,
+    # _run_step_11_75, _run_step_12, or _run_step_16_5 drops its bucket from
+    # the set and fails the exact-equality assert. The write-audit matrix
+    # test independently proves the same steps (plus _run_step_19 /
+    # _should_run_step_19) by their declared op-store columns never becoming
+    # observed-effective on ANY capture axis when the step never runs. Step
+    # 17.5 is deliberately unwrapped by _vtimed (writes=frozenset() too, so
+    # the matrix test cannot see it either); its own direct killer is
+    # test_step17_5_drops_capture_phase_workspaces.
+    "tests/test_postprocess_dag.py::test_phase_timing_bucket_names_default_capture",
+    "tests/test_postprocess_dag.py::test_step17_5_drops_capture_phase_workspaces",
+    "tests/test_postprocess_enforcement.py::test_matrix_union_reports",
+    # W3 exempt killers (X02, X07): direct negative-case calls already proved
+    # the data parent/destination must stay strictly perturbed; they lived
+    # outside this suite. X05/X06 killers are in test_bug_fixes_phase14.py.
+    # Also hosts the new direct killers for X11/X12/X14 and the W4 registry
+    # survivors (branching_invariants, layer_pass_layer_log_xrefs,
+    # non_torch_backward_inert, non_torch_primitive_op_inert,
+    # receptive_field_metadata, site_key_invariants); backend_neutral_graph_
+    # topology and pass_count_consistency already had direct killers here too.
+    "tests/validation_goldens/test_validation_exemption_hardening.py",
+    "tests/test_bug_fixes_phase14.py",
 ]
 
 #: Known baseline reds, deselected so a mutant verdict is never confounded.
