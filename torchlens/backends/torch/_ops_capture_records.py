@@ -1,5 +1,6 @@
 """Ancestor storage, producer policy, and exhaustive record freezing."""
 
+import contextlib
 import dataclasses
 from typing import TYPE_CHECKING, Any, cast
 
@@ -55,6 +56,7 @@ __all__ = (
     "_is_inplace_augmented_assignment_dunder",
     "_record_label_version_snapshot",
     "_label_version_baseline",
+    "_stamp_same_object_mutation",
     "get_capture_producer_policy",
     "set_capture_producer_policy",
     "_should_keep_alias_mutation_contract",
@@ -241,6 +243,39 @@ def _label_version_baseline(t: Any) -> int | None:
     if session_token is None or session_token != active_label_session_token():
         return None
     return version
+
+
+def _stamp_same_object_mutation(logged: Any, receiver: Any, mutation_signature: bool) -> None:
+    """Stamp a same-object call's mutation verdict on the copy it is logged against.
+
+    The op-output classifier only sees the fresh logging copy, never the live
+    receiver, so the wrapper decides here: the call's mutation signature (an
+    in-place name, a setter, or an ``inplace=True`` request), refined by the
+    receiver's version counter. An unchanged counter since the receiver was last
+    labeled proves no write (eval-mode ``dropout_``); an unknown counter keeps
+    the signature.
+
+    Parameters
+    ----------
+    logged
+        The copy the call's output is logged against.
+    receiver
+        The live first argument the call returned.
+    mutation_signature
+        Whether the call's signature requests mutation.
+    """
+
+    if not isinstance(logged, torch.Tensor):
+        return
+    verdict = mutation_signature
+    baseline = _label_version_baseline(receiver) if verdict else None
+    if baseline is not None:
+        # TorchLens bookkeeping read: the receiver may be registered model state.
+        with internal_scalar_read():
+            current = tensor_version_or_none(receiver)
+        verdict = current is None or current != baseline
+    with contextlib.suppress(AttributeError):
+        logged.tl_same_object_mutation = verdict
 
 
 def get_capture_producer_policy(mode: CaptureProducerMode) -> CaptureProducerPolicy:

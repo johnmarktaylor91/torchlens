@@ -103,6 +103,7 @@ from .escape_detection import (
 from .ops import (
     _is_inplace_augmented_assignment_dunder,
     _record_label_version_snapshot,
+    _stamp_same_object_mutation,
     _walk_output_tensors_with_paths,
     apply_live_hooks_to_outputs,
     log_function_output_tensors,
@@ -1976,7 +1977,13 @@ def torch_func_decorator(
         # also return self but don't modify anything.
         # Both cases need safe_copy so logging doesn't overwrite the original's
         # label, but only true in-place ops should propagate the new label back.
-        was_inplace = same_object_returned and has_inplace_signature
+        # A functional called with ``inplace=True`` (``F.relu6(x, inplace=True)``,
+        # ``nn.Hardtanh(inplace=True)``) mutates its receiver through an unwrapped
+        # private builtin under a plain name, so the name signature alone misses it.
+        mutation_signature = has_inplace_signature or (
+            same_object_returned and _call_requests_inplace(inplace_param_index, args, kwargs)
+        )
+        was_inplace = same_object_returned and mutation_signature
         # The internal identity-forcing decorator (_state._decorated_identity)
         # exists precisely to MINT a distinct logged tensor at module boundaries
         # (nn.Identity / pass-through outputs). Unlike user-visible no-ops such as
@@ -2008,6 +2015,9 @@ def torch_func_decorator(
                 source=args[0],
                 was_inplace=was_inplace,
             )
+            # A storage rebind is recorded as the non-mutating ``detach(rhs)`` call.
+            if not is_storage_rebinding_setter:
+                _stamp_same_object_mutation(out_orig, args[0], mutation_signature)
 
         if canonical_capture_callable is None:
             capture_func, capture_func_name = _canonical_capture_callable(

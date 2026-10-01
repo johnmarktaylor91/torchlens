@@ -642,6 +642,9 @@ _record_label_version_snapshot = _rebind_function(
     _ops_capture_records._record_label_version_snapshot, globals()
 )
 _label_version_baseline = _rebind_function(_ops_capture_records._label_version_baseline, globals())
+_stamp_same_object_mutation = _rebind_function(
+    _ops_capture_records._stamp_same_object_mutation, globals()
+)
 get_capture_producer_policy = _rebind_function(
     _ops_capture_records.get_capture_producer_policy, globals()
 )

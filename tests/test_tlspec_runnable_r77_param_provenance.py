@@ -35,7 +35,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors import RunnablePreflightError
-from torchlens.errors.runnable import PathDivergenceError
 from torchlens.options import CaptureOptions
 from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 
@@ -244,11 +243,14 @@ def test_r77_on_path_fresh_parameter_warns_and_refuses_at_save(tmp_path: Path) -
 
 @pytest.mark.smoke
 def test_r77_buffer_control_stays_honest(tmp_path: Path) -> None:
-    """Control: ``nn.Buffer`` (never exempted) keeps its typed-honest behavior.
+    """Control: ``nn.Buffer`` (never exempted) keeps its honest behavior.
 
-    A fresh in-forward Buffer registration violates its in-place alias/version expectation
-    on replay, so the twin raises typed ``PathDivergenceError`` (raise-and-rollback default)
-    -- never a false VERIFIED.
+    The channels_last twin takes the other arm, so it must never read VERIFIED: it
+    ceilings to UNVERIFIABLE and is poisoned. The original input replays VERIFIED.
+    (Until the in-place verdict was taken from the receiver's version counter, the
+    Buffer constructor's ``requires_grad_`` -- a flag change that writes no data --
+    was recorded as an in-place write, and replay raised ``PathDivergenceError`` on
+    that false claim before reaching the layout question.)
     """
 
     if not hasattr(torch.nn, "Buffer"):
@@ -257,5 +259,8 @@ def test_r77_buffer_control_stays_honest(tmp_path: Path) -> None:
     x = _nchw()
     path = _save(BufferLaunderBranch().eval(), x, tmp_path / "buffer.tlspec")
 
-    with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=_twin(x))
+    twin = tl.load(path).run(inputs=_twin(x))
+    assert twin.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    assert twin.report.poisoned
+    same = tl.load(path).run(inputs=x)
+    assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
