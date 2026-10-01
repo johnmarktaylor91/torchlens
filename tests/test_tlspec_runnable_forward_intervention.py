@@ -45,11 +45,11 @@ def _capture(model: nn.Module, value: torch.Tensor, **kwargs: object) -> tl.Trac
     return tl.trace(
         model,
         value,
-        layers_to_save="all",
         capture=CaptureOptions(
             intervention_ready=True,
             capture_container_structure=True,
             cache=False,
+            layers_to_save="all",
         ),
         **kwargs,
     )

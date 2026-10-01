@@ -40,7 +40,11 @@ def _tiny() -> nn.Module:
 
 
 def _save(tmp_path: Path, name: str = "b.tlspec") -> Path:
-    trace = tl.trace(_tiny().eval(), torch.randn(2, 4), layers_to_save="all")
+    trace = tl.trace(
+        _tiny().eval(),
+        torch.randn(2, 4),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
     spec = tmp_path / name
     tl.save(trace, str(spec))
     return spec
@@ -125,7 +129,11 @@ def test_save_failure_persists_type_name_not_message(tmp_path: Path, monkeypatch
         raise ValueError(secret)
 
     monkeypatch.setattr(bundle_mod, "_scrub_trace_for_bundle", _boom)
-    trace = tl.trace(_tiny().eval(), torch.randn(2, 4), layers_to_save="all")
+    trace = tl.trace(
+        _tiny().eval(),
+        torch.randn(2, 4),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
     spec = tmp_path / "fail.tlspec"
     with pytest.raises(TorchLensIOError):
         tl.save(trace, str(spec))
@@ -221,7 +229,11 @@ def test_persisted_equivalence_class_keys_are_canonically_ordered(tmp_path: Path
     param_token = re.compile(r"param_\d{6}")
     checked = 0
     for index in range(10):
-        trace = tl.trace(_NestedParamModel().eval(), torch.randn(2, 4), layers_to_save="all")
+        trace = tl.trace(
+            _NestedParamModel().eval(),
+            torch.randn(2, 4),
+            capture=tl.options.CaptureOptions(layers_to_save="all"),
+        )
         spec = tmp_path / f"nested_{index}.tlspec"
         tl.save(trace, str(spec))
         groups = pickle.loads((spec / "metadata.pkl").read_bytes()).get("op_equivalence_classes")
@@ -259,7 +271,9 @@ def test_persisted_equivalence_keys_preserve_outindex_suffix(tmp_path: Path) -> 
     import re
 
     trace = tl.trace(
-        _NestedMultiOutputParamModel().eval(), torch.randn(2, 3, 4), layers_to_save="all"
+        _NestedMultiOutputParamModel().eval(),
+        torch.randn(2, 3, 4),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
     )
     live_groups = dict(trace.op_equivalence_classes)
     live_outindex_keys = {key for key in live_groups if "_outindex" in key}
@@ -309,7 +323,11 @@ def test_git_commit_hash_is_dropped_when_source_excluded(tmp_path: Path) -> None
     contained the working directory at save time, with no opt-out or disclosure.
     """
 
-    trace = tl.trace(_tiny().eval(), torch.randn(2, 4), layers_to_save="all")
+    trace = tl.trace(
+        _tiny().eval(),
+        torch.randn(2, 4),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
     excluded = tmp_path / "no_source.tlspec"
     tl.save(trace, str(excluded), include_source=False)
     assert _manifest_git_hash(excluded) is None
@@ -332,7 +350,11 @@ def test_git_commit_hash_is_independent_of_working_directory(tmp_path: Path, mon
     user's unrelated repository commit.
     """
 
-    trace = tl.trace(_tiny().eval(), torch.randn(2, 4), layers_to_save="all")
+    trace = tl.trace(
+        _tiny().eval(),
+        torch.randn(2, 4),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
     first = tmp_path / "a.tlspec"
     tl.save(trace, str(first), include_source=True)
 

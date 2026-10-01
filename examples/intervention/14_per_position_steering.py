@@ -42,13 +42,13 @@ def main() -> None:
     torch.manual_seed(14)
     model = PositionModel().eval()
     x = torch.randn(2, 3, 4)
-    log = tl.trace(model, x, intervention_ready=True)
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     direction = torch.zeros(3, 4)
     direction[1, :] = 0.5
 
     steered = log.fork("steered")
     steered.attach_hooks(tl.func("relu"), tl.steer(direction, magnitude=1.0))
-    steered.replay()
+    steered.push()
 
     delta = (
         steered.find_sites(tl.func("relu")).first().out

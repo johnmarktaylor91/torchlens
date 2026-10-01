@@ -91,7 +91,7 @@ def get_trace(model_key: str, variant: str = "plain", builder=None):
         if variant == "plain":
             trace = tl.trace(m, xs)
         elif variant == "backward":
-            trace = tl.trace(m, xs, backward_ready=True)
+            trace = tl.trace(m, xs, capture=tl.options.CaptureOptions(backward_ready=True))
             out = trace[-1].out
             trace.log_backward(out)
         else:
@@ -110,7 +110,7 @@ def _intervened_trace(model_key: str):
 
     def _build():
         m, x = MODELS[model_key]()
-        trace = tl.trace(m, x, intervention_ready=True)
+        trace = tl.trace(m, x, capture=tl.options.CaptureOptions(intervention_ready=True))
         relu = next(layer for layer in trace.layer_list if layer.func_name == "relu")
         trace.set(tl.func("relu"), torch.zeros(relu.shape))
         return trace
@@ -137,7 +137,13 @@ def _raw_input_first_trace(model_key: str):
 
     def _build():
         m, x = MODELS[model_key]()
-        return tl.trace(m, x, transform=lambda z: (z - 0.5) / 0.5, batch_render="first")
+        return tl.trace(
+            m,
+            x,
+            capture=tl.options.CaptureOptions(
+                transform=lambda z: (z - 0.5) / 0.5, batch_render="first"
+            ),
+        )
 
     return _build
 
@@ -166,7 +172,7 @@ def _ablation_bundle(model_key: str):
         import warnings
 
         m, x = MODELS[model_key]()
-        trace = tl.trace(m, x, intervention_ready=True)
+        trace = tl.trace(m, x, capture=tl.options.CaptureOptions(intervention_ready=True))
         fork = trace.fork("ablated")
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -219,7 +225,9 @@ def _raw_input_trace(model_key: str):
 
     def _build():
         m, x = MODELS[model_key]()
-        return tl.trace(m, x, transform=lambda z: (z - 0.5) / 0.5)
+        return tl.trace(
+            m, x, capture=tl.options.CaptureOptions(transform=lambda z: (z - 0.5) / 0.5)
+        )
 
     return _build
 
@@ -229,7 +237,7 @@ def _container_trace(model_key: str):
 
     def _build():
         m, x = MODELS[model_key]()
-        return tl.trace(m, x, intervention_ready=True)
+        return tl.trace(m, x, capture=tl.options.CaptureOptions(intervention_ready=True))
 
     return _build
 
@@ -331,8 +339,18 @@ VACUOUS_DEMO_GUARDS: tuple[VacuousDemoGuard, ...] = (
         "direction", "tiny_mlp", {"direction": "bottomup"}, {"direction": "leftright"}
     ),
     VacuousDemoGuard("node_mode:profiling", "tiny_mlp", {}, {"node_mode": "profiling"}),
-    VacuousDemoGuard("node_mode:vision", "mini_inception", {}, {"node_mode": "vision"}),
-    VacuousDemoGuard("node_mode:attention", "tiny_transformer", {}, {"node_mode": "attention"}),
+    VacuousDemoGuard(
+        "node_spec_fn:vision",
+        "mini_inception",
+        {},
+        {"node_spec_fn": tl.experimental.node_styles.vision_node_mode},
+    ),
+    VacuousDemoGuard(
+        "node_spec_fn:attention",
+        "tiny_transformer",
+        {},
+        {"node_spec_fn": tl.experimental.node_styles.attention_node_mode},
+    ),
     VacuousDemoGuard("vis_theme", "tiny_mlp", {}, {"vis_theme": "dark"}),
     VacuousDemoGuard("show_legend", "tiny_mlp", {}, {"show_legend": True}),
     VacuousDemoGuard(
@@ -594,8 +612,8 @@ AXES: dict[str, str] = {
     "direction:leftright": "direction='leftright'",
     "node_mode:default": "node_mode='default'",
     "node_mode:profiling": "node_mode='profiling' (time/memory rows)",
-    "node_mode:vision": "node_mode='vision' (conv-oriented rows)",
-    "node_mode:attention": "node_mode='attention' (attention-oriented rows)",
+    "node_spec_fn:vision": "node_spec_fn=vision_node_mode (conv-oriented rows)",
+    "node_spec_fn:attention": "node_spec_fn=attention_node_mode (attention-oriented rows)",
     "theme:torchlens": "vis_theme='torchlens' (default)",
     "theme:paper": "vis_theme='paper'",
     "theme:dark": "vis_theme='dark'",
@@ -721,9 +739,8 @@ NA_AXES: dict[str, str] = {
     "overrides:grad_edge": "vis_grad_edge_overrides styles gradient edges via the same "
     "override dict machinery as vis_edge_overrides (shown).",
     "plumbing": "vis_outpath / vis_fileformat / vis_save_only / return_graph / "
-    "vis_graph_overrides-free aliases (vis_opt, view, depth, renderer, layout, "
-    "node_style, vis_node_mode, vis_buffers, vis_direction) have no visual identity "
-    "of their own.",
+    "vis_graph_overrides and the draw() short-form params (view, depth, renderer, "
+    "layout, node_style) have no visual identity of their own.",
     "show:dispatcher": "Trace.show(method='graph'/'repr') dispatches to draw()/repr(). "
     "method='html' returns Trace._repr_html_() -- see the html_repr entry.",
     "html_repr": "Trace._repr_html_() is a bespoke HTML identity card (layers/ops/"
@@ -1629,27 +1646,34 @@ SECTIONS: list[Section] = [
             ),
             Page(
                 label="f2_domain_modes",
-                title="node_mode: 'vision' and 'attention'",
+                title="node_spec_fn: vision_node_mode and attention_node_mode",
                 caption=(
-                    "Domain presets: 'vision' emphasizes conv-relevant fields (kernel/channels/spatial "
-                    "shapes) -- shown on a conv net; 'attention' emphasizes attention-relevant fields -- "
-                    "shown on a one-layer transformer encoder. Each panel gets the full page width so the "
+                    "Domain node styles (tl.experimental.node_styles): vision_node_mode emphasizes "
+                    "conv-relevant fields (kernel/channels/spatial shapes) -- shown on a conv net; "
+                    "attention_node_mode emphasizes attention-relevant fields -- shown on a one-layer "
+                    "transformer encoder. Each panel gets the full page width so the "
                     "extra label rows stay readable.\n"
                     "CHECK: the extra rows make sense for the domain and do not bloat unrelated ops."
                 ),
                 panels=[
                     Panel(
-                        "mini_inception -- node_mode='vision'",
+                        "mini_inception -- node_spec_fn=vision_node_mode",
                         "mini_inception",
-                        kwargs={"node_mode": "vision", "dpi": 150},
+                        kwargs={
+                            "node_spec_fn": tl.experimental.node_styles.vision_node_mode,
+                            "dpi": 150,
+                        },
                     ),
                     Panel(
-                        "tiny_transformer -- node_mode='attention'",
+                        "tiny_transformer -- node_spec_fn=attention_node_mode",
                         "tiny_transformer",
-                        kwargs={"node_mode": "attention", "dpi": 150},
+                        kwargs={
+                            "node_spec_fn": tl.experimental.node_styles.attention_node_mode,
+                            "dpi": 150,
+                        },
                     ),
                 ],
-                covers=["node_mode:vision", "node_mode:attention"],
+                covers=["node_spec_fn:vision", "node_spec_fn:attention"],
                 ncols=1,
             ),
             Page(

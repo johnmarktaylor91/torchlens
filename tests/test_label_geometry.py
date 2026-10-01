@@ -206,7 +206,11 @@ def _native_svg_outer_frame_min_brightness(svg_path: Path) -> dict[str, int]:
 def test_container_edge_labels_are_midpoint_and_geometry_clean(tmp_path: Path) -> None:
     """Container key labels use midpoint labels without endpoint placement attrs."""
 
-    trace = tl.trace(_ContainerLabelModel(), torch.ones(2), intervention_ready=True)
+    trace = tl.trace(
+        _ContainerLabelModel(),
+        torch.ones(2),
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+    )
     gv_source = trace.draw(
         show_containers="labels",
         vis_save_only=True,
@@ -247,9 +251,7 @@ def test_container_nodes_have_native_svg_frame_margin(
     """Container-node labels do not put ink on the native SVG frame."""
 
     trace = tl.trace(
-        model,
-        args,
-        capture_container_structure=True,
+        model, args, capture=tl.options.CaptureOptions(capture_container_structure=True)
     )
     trace.draw(
         show_containers="nodes",

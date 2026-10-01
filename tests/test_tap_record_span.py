@@ -37,7 +37,9 @@ def test_tap_records_without_modifying_output() -> None:
     x = torch.tensor([[-1.0, 2.0]])
     tap = tl.tap(tl.func("relu"))
 
-    hooked = tl.trace(model, x, intervention_ready=True, hooks=tap)
+    hooked = tl.trace(
+        model, x, capture=tl.options.CaptureOptions(intervention_ready=True, hooks=tap)
+    )
     plain = tl.trace(model, x)
 
     assert tap.values()
@@ -51,7 +53,7 @@ def test_tap_records_without_modifying_output() -> None:
 def test_record_span_and_log_value_metadata() -> None:
     """Record spans and logged values should land on the captured Trace."""
 
-    with tl.record_span("phase_name"):
+    with tl.span("phase_name"):
         log = tl.trace(MetricModel(), torch.tensor([[-1.0, 2.0]]))
 
     assert log.observer_spans

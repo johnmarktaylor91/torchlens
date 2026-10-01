@@ -440,7 +440,11 @@ def test_traced_container_specs_preserve_literal_return_leaves() -> None:
 
             return {"x": x.relu(), "n": 3, "y": x.sigmoid()}
 
-    tuple_trace = tl.trace(TupleLiteralModel(), torch.tensor([-1.0, 2.0]), intervention_ready=True)
+    tuple_trace = tl.trace(
+        TupleLiteralModel(),
+        torch.tensor([-1.0, 2.0]),
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+    )
     tuple_outputs = [tuple_trace.ops[label] for label in tuple_trace.output_layers]
     tuple_spec = next(
         output.container_spec for output in tuple_outputs if output.container_spec is not None
@@ -451,7 +455,11 @@ def test_traced_container_specs_preserve_literal_return_leaves() -> None:
     assert torch.equal(tuple_rebuilt[0], torch.tensor([0.0, 2.0]))
     assert tuple_rebuilt[1] == 5
 
-    dict_trace = tl.trace(DictLiteralModel(), torch.tensor([-1.0, 2.0]), intervention_ready=True)
+    dict_trace = tl.trace(
+        DictLiteralModel(),
+        torch.tensor([-1.0, 2.0]),
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+    )
     dict_outputs = [dict_trace.ops[label] for label in dict_trace.output_layers]
     dict_spec = next(
         output.container_spec for output in dict_outputs if output.container_spec is not None

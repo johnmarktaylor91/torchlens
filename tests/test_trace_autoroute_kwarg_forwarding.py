@@ -43,11 +43,6 @@ AUTOROUTE_EXEMPT_PARAMS = {
     "input_kwargs",
     # autoroute only runs when backend is None
     "backend",
-    # deprecated alias, normalized into capture_container_structure earlier
-    "capture_output_structure",
-    # autoroute only runs when transform is MISSING and capture.transform
-    # is not explicit
-    "transform",
     # chunked forwards skip autoroute (chunk_size gate; chunk_paths without
     # chunk_size raises before the branch)
     "chunk_size",
@@ -123,10 +118,16 @@ def test_detectors_receive_the_once_dropped_kwargs() -> None:
 
     with autoroute.input.snapshot():
         autoroute.input.register(name="test_recorder", priority=-1000)(recorder)
-        log = tl.trace(_Identity(), torch.ones(2), layers_to_save="none")
+        log = tl.trace(
+            _Identity(), torch.ones(2), capture=tl.options.CaptureOptions(layers_to_save="none")
+        )
     assert log is not None
-    for key in ("structure_only", "episode", "grouping"):
+    for key in ("capture", "episode", "grouping"):
         assert key in received, (
             f"autoroute detectors no longer receive {key!r}: it is being "
             f"silently dropped on the autoroute dispatch path again"
         )
+    # structure_only travels inside the grouped capture object now.
+    capture = received["capture"]
+    assert capture is not None
+    assert hasattr(capture, "structure_only")

@@ -158,8 +158,7 @@ def test_output_style_override_and_output_head_select_named_head() -> None:
     trace = tl.trace(
         model,
         torch.ones(1, 2),
-        output_style="classification",
-        output_head="main",
+        capture=tl.options.CaptureOptions(output_style="classification", output_head="main"),
     )
 
     assert trace.output_postprocessor is not None
@@ -193,7 +192,11 @@ def test_custom_registered_output_detector_decodes() -> None:
                 confidence=1.0,
             )
 
-        trace = tl.trace(model, torch.ones(1, 2), output_style="custom_labels")
+        trace = tl.trace(
+            model,
+            torch.ones(1, 2),
+            capture=tl.options.CaptureOptions(output_style="custom_labels"),
+        )
 
     assert _decoded_rows(trace)[0]["label"] == "left"
 
@@ -205,7 +208,7 @@ def test_backward_ready_decode_keeps_graph_connected_output() -> None:
     model = _Classifier(torch.tensor([[0.0, 2.0]]), labels).train()
     x = torch.ones(1, 2, requires_grad=True)
 
-    trace = tl.trace(model, x, backward_ready=True)
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
     output_op = trace.output_ops[0]
     output_tensor = output_op.out
     assert isinstance(output_tensor, torch.Tensor)
@@ -258,7 +261,9 @@ def test_hf_text_decode_uses_attached_tokenizer() -> None:
     model = _Classifier(torch.tensor([[[0.0, 5.0], [6.0, 1.0]]])).eval()
     model._torchlens_output_tokenizer = _Tokenizer()
 
-    trace = tl.trace(model, torch.ones(1, 2), output_style="hf_text")
+    trace = tl.trace(
+        model, torch.ones(1, 2), capture=tl.options.CaptureOptions(output_style="hf_text")
+    )
 
     assert trace.output_postprocessor is not None
     assert trace.output_postprocessor.style == "hf_text"
@@ -285,7 +290,9 @@ def test_hf_text_decode_handles_batch_greater_than_one_independently() -> None:
     model = _Classifier(logits).eval()
     model._torchlens_output_tokenizer = _Tokenizer()
 
-    trace = tl.trace(model, torch.ones(2, 2), output_style="hf_text")
+    trace = tl.trace(
+        model, torch.ones(2, 2), capture=tl.options.CaptureOptions(output_style="hf_text")
+    )
 
     assert trace.decoded_output == [
         {"batch_item": 0, "rank": 1, "text": "tok1 tok0", "token_ids": [1, 0]},
@@ -317,9 +324,13 @@ def test_cache_key_changes_when_only_id2label_changes(tmp_path: Path) -> None:
     model = _Classifier(torch.tensor([[0.0, 3.0]]), {0: "old-no", 1: "old-yes"}).eval()
     input_tensor = torch.ones(1, 2)
 
-    first = tl.trace(model, input_tensor, cache=True, cache_dir=tmp_path)
+    first = tl.trace(
+        model, input_tensor, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path)
+    )
     model.config.id2label = {0: "new-no", 1: "new-yes"}
-    second = tl.trace(model, input_tensor, cache=True, cache_dir=tmp_path)
+    second = tl.trace(
+        model, input_tensor, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path)
+    )
 
     assert first.capture_cache_key != second.capture_cache_key
     assert first.decoded_output is not None

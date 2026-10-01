@@ -14,6 +14,7 @@ import torch
 import torch.nn as nn
 
 import torchlens
+import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens.capture.flops import (
     compute_backward_flops,
@@ -510,7 +511,11 @@ def test_conditional_fields():
 
 def test_distances_with_flag(small_input):
     model = example_models.SimpleFF()
-    mh = trace_fn(model, small_input, mark_layer_depths=True)
+    mh = trace_fn(
+        model,
+        small_input,
+        capture=tl.options.CaptureOptions(compute_input_output_distances=True),
+    )
     for label in mh.layer_labels:
         entry = mh[label]
         assert entry.min_distance_from_input is not None
@@ -622,8 +627,9 @@ def test_output_descendants_complete_when_distances_disabled() -> None:
     trace = trace_fn(
         _SharedMultiOutputModel(),
         torch.ones(1),
-        compute_input_output_distances=False,
-        layers_to_save="all",
+        capture=tl.options.CaptureOptions(
+            compute_input_output_distances=False, layers_to_save="all"
+        ),
     )
     expected_outputs = set(trace.output_layers)
     shared = next(op for op in trace.ops if op.func_name == "__mul__")
@@ -638,7 +644,7 @@ def test_exhaustive_saved_layer_count_uses_finalized_layer_list() -> None:
     trace = trace_fn(
         nn.Sequential(nn.Linear(2, 2), nn.ReLU()),
         torch.ones(1, 2),
-        layers_to_save="all",
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
     )
     expected = len(
         {
@@ -659,7 +665,7 @@ def test_exhaustive_saved_layer_count_uses_finalized_layer_list() -> None:
 
 def test_saved_args_populated(small_input):
     model = example_models.SimpleFF()
-    mh = trace_fn(model, small_input, save_arg_values=True)
+    mh = trace_fn(model, small_input, capture=tl.options.CaptureOptions(save_arg_values=True))
     assert mh.save_arg_values is True
     found = False
     for label in mh.layer_labels:
@@ -683,7 +689,7 @@ def test_saved_args_not_populated(small_input):
 
 def test_transform(small_input):
     model = example_models.SimpleFF()
-    mh = trace_fn(model, small_input, activation_transform=torch.mean)
+    mh = trace_fn(model, small_input, save=tl.options.SaveOptions(activation_transform=torch.mean))
     for label in mh.layer_labels:
         entry = mh[label]
         if entry.transformed_out is not None:
@@ -1213,7 +1219,11 @@ def test_flops_sdpa():
 def _get_code_context_with_flag(small_input, save_code_context: bool):
     """Helper: return a non-input layer's code_context for either source-loading mode."""
     model = example_models.SimpleFF()
-    mh = trace_fn(model, small_input, save_code_context=save_code_context)
+    mh = trace_fn(
+        model,
+        small_input,
+        capture=tl.options.CaptureOptions(save_code_context=save_code_context),
+    )
     for label in mh.layer_labels:
         entry = mh[label]
         if not entry.is_input:
@@ -1420,7 +1430,11 @@ def test_default_num_context_lines(small_input):
 
 def test_custom_num_context_lines(small_input):
     model = example_models.SimpleFF()
-    mh = trace_fn(model, small_input, num_context_lines=3, save_code_context=True)
+    mh = trace_fn(
+        model,
+        small_input,
+        capture=tl.options.CaptureOptions(source_context_lines=3, save_code_context=True),
+    )
     for label in mh.layer_labels:
         entry = mh[label]
         if not entry.is_input and entry.code_context:
@@ -1438,7 +1452,7 @@ def test_custom_num_context_lines(small_input):
 
 def test_num_context_lines_stored_on_trace(small_input):
     model = example_models.SimpleFF()
-    mh = trace_fn(model, small_input, num_context_lines=5)
+    mh = trace_fn(model, small_input, capture=tl.options.CaptureOptions(source_context_lines=5))
     assert mh.num_context_lines == 5
 
 
@@ -1474,7 +1488,11 @@ def valid_mh_and_ground_truth():
     """Return a valid (Trace, ground_truth_tensors) pair for SimpleFF."""
     model = example_models.SimpleFF()
     x = torch.rand(2, 3, 32, 32)
-    mh = trace_fn(model, x, layers_to_save="all", save_arg_values=True)
+    mh = trace_fn(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    )
     ground_truth = [mh[label].out.clone() for label in mh.output_layers]
     return mh, ground_truth
 
@@ -1609,7 +1627,9 @@ class TestConditionalBranchDetection:
 
     @staticmethod
     def _log(model, x, save_code_context=False):
-        return trace_fn(model, x, save_code_context=save_code_context)
+        return trace_fn(
+            model, x, capture=tl.options.CaptureOptions(save_code_context=save_code_context)
+        )
 
     @staticmethod
     def _cond_input():
@@ -1711,11 +1731,17 @@ class TestConditionalBranchDetection:
         mh = self._log(model, self._cond_input())
         assert len(mh.conditional_branch_edges) > 0
 
-    def test_conditional_then_entry_edges_populated(self):
-        """trace.conditional_then_entry_edges non-empty with save_code_context."""
+    def test_conditional_then_arm_edges_populated(self):
+        """Canonical THEN arm edges non-empty with save_code_context."""
         model = example_models.ConditionalBranching()
         mh = self._log(model, self._pos_input(), save_code_context=True)
-        assert len(mh.conditional_then_entry_edges) > 0
+        then_edges = [
+            edge
+            for (_, branch_kind), edges in mh.conditional_arm_entry_edges.items()
+            if branch_kind == "then"
+            for edge in edges
+        ]
+        assert len(then_edges) > 0
 
     def test_edges_reference_valid_labels(self):
         """All labels in edge tuples exist in trace.layer_labels."""
@@ -1725,9 +1751,10 @@ class TestConditionalBranchDetection:
         for parent, child in mh.conditional_branch_edges:
             assert parent in all_labels, f"IF edge parent {parent} not in layer_labels"
             assert child in all_labels, f"IF edge child {child} not in layer_labels"
-        for parent, child in mh.conditional_then_entry_edges:
-            assert parent in all_labels, f"THEN edge parent {parent} not in layer_labels"
-            assert child in all_labels, f"THEN edge child {child} not in layer_labels"
+        for edges in mh.conditional_arm_entry_edges.values():
+            for parent, child in edges:
+                assert parent in all_labels, f"arm edge parent {parent} not in layer_labels"
+                assert child in all_labels, f"arm edge child {child} not in layer_labels"
 
     # --- Post-validation tests ---
 
@@ -1796,10 +1823,10 @@ class TestConditionalBranchDetection:
             show_model_graph(
                 model,
                 x,
-                vis_save_only=True,
-                vis_mode="unrolled",
-                vis_outpath=outpath,
-                vis_fileformat="dot",
+                view="unrolled",
+                visualization=tl.options.VisualizationOptions(
+                    save_only=True, container_path=outpath, file_format="dot"
+                ),
             )
             dot_file = outpath + ".dot"
             if os.path.exists(dot_file):
@@ -1814,7 +1841,7 @@ class TestConditionalBranchDetection:
 
         model = example_models.ConditionalBranching()
         x = self._pos_input()
-        mh = trace_fn(model, x, save_code_context=True)
+        mh = trace_fn(model, x, capture=tl.options.CaptureOptions(save_code_context=True))
         with tempfile.TemporaryDirectory() as tmpdir:
             outpath = os.path.join(tmpdir, "cond_then_test")
             mh.draw(
@@ -1845,10 +1872,10 @@ class TestConditionalBranchDetection:
             show_model_graph(
                 model,
                 x,
-                vis_save_only=True,
-                vis_mode="rolled",
-                vis_outpath=outpath,
-                vis_fileformat="dot",
+                view="rolled",
+                visualization=tl.options.VisualizationOptions(
+                    save_only=True, container_path=outpath, file_format="dot"
+                ),
             )
             dot_file = outpath + ".dot"
             if os.path.exists(dot_file):
@@ -1862,7 +1889,7 @@ class TestConditionalBranchDetection:
         mh = self._log(model, self._pos_input(), save_code_context=True)
         mh2 = copy.deepcopy(mh)
         assert mh2.conditional_branch_edges == mh.conditional_branch_edges
-        assert mh2.conditional_then_entry_edges == mh.conditional_then_entry_edges
+        assert mh2.conditional_arm_entry_edges == mh.conditional_arm_entry_edges
         for label in mh.layer_labels:
             assert mh2[label].conditional_entry_children == mh[label].conditional_entry_children
             assert mh2[label].conditional_then_children == mh[label].conditional_then_children
@@ -1900,8 +1927,7 @@ def test_transpose_positional_args_expose_salient_dims():
     trace = tl.trace(
         _TransposeModel(),
         torch.randn(2, 3),
-        layers_to_save="all",
-        save_arg_values=True,
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
     )
     op = next(o for o in trace.layer_list if "transpose" in o.func_name)
     assert op.func_config.get("dim0") == 0

@@ -74,7 +74,7 @@ def test_sequential_hooks_run_in_order_during_rerun() -> None:
 
     model = ReluModel()
     x = torch.tensor([[-1.0, 2.0]])
-    log = tl.trace(model, x, intervention_ready=True)
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     log.attach_hooks(tl.func("relu"), add_one, times_two, confirm_mutation=True)
 
     rerun_log = log.run(model, x)
@@ -86,7 +86,11 @@ def test_sequential_hooks_run_in_order_during_rerun() -> None:
 def test_hook_handle_remove_and_context_manager_cleanup() -> None:
     """Hook handles should remove specs explicitly and on context exit."""
 
-    log = tl.trace(ReluModel(), torch.randn(1, 2), intervention_ready=True)
+    log = tl.trace(
+        ReluModel(),
+        torch.randn(1, 2),
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+    )
 
     def identity(out: torch.Tensor, *, hook: object) -> torch.Tensor:
         """Return out unchanged.

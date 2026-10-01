@@ -211,7 +211,7 @@ dimension 0, executes one sub-batch at a time, and returns one accumulated in-me
 
 The v1 limits are intentionally narrow: torch backend only, positional inputs only, no
 `backward_ready`, no `save_grads`, no live `hooks=`, no public `intervene=`, and no
-`storage=tl.to_disk(...)` or `save_outs_to`. Loaded or live chunked traces also reject
+`storage=tl.to_disk(...)`/`streaming=`. Loaded or live chunked traces also reject
 `log_backward()` because they do not retain one full-batch autograd graph.
 
 Auto mode splits only when there is exactly one `ndim > 0` tensor leaf under standard Python
@@ -242,7 +242,7 @@ and retained according to `save=`, and preprocessing still sees the full batch i
 materializes it. Disk-backed chunk accumulation is a future item.
 
 For activation extraction without a `Trace`, use `tl.extract_dataset(...)` (the old
-`tl.batched_extract` spelling is a deprecated alias that warns); that path returns
+former `tl.batched_extract` alias is removed); that path returns
 tensors or `.pt` files rather than accumulated graph metadata. `chunk_size=` covers the remaining
 "dataloader wrapper" case for stacked multi-pass trace capture. Disk mode (`output_dir=`) writes
 atomic shards plus a self-describing `manifest.json` (site identity, stimulus provenance, axis

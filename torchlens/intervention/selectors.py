@@ -1252,21 +1252,6 @@ def without_op() -> InterveningSelector:
     return InterveningSelector()
 
 
-def intervening() -> InterveningSelector:
-    """Deprecated alias for :func:`without_op`.
-
-    Returns
-    -------
-    InterveningSelector
-        Immutable selector.
-    """
-
-    from .._deprecations import warn_deprecated_alias
-
-    warn_deprecated_alias("intervening", "without_op")
-    return InterveningSelector()
-
-
 def facet(name: str) -> FacetSelector:
     """Create a semantic facet selector.
 
@@ -1611,7 +1596,6 @@ __all__ = [
     "grad_fn",
     "grad_input",
     "grad_output",
-    "intervening",
     "label",
     "in_module",
     "in_backward_pass",

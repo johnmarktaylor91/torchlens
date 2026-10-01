@@ -1,31 +1,34 @@
-"""The deprecation census and its expiry metadata (grind r2 row 15 / matrix R48).
+"""The package ships ZERO deprecation shims — and stays that way.
 
-The debt this closes: ``torchlens/_deprecations.py`` carries no removal-version
-metadata, so shims accumulate with no expiry and nobody can answer "which of
-these is past its window?". Round 0 counted ~202 "deprecated" mentions with no
-inventory behind them.
+History: this module was the R48 deprecation census. It inventoried eleven
+families (~183 deprecated spellings: moved top-level names, paper-era API
+shims, warning flat option kwargs, renamed callables, alias properties,
+no-op kwargs/functions, deprecated values) with removal metadata, because the
+shims had accumulated with no expiry. The 2026-08-19 shim-removal lane (JMT
+ruling: interim-phase deprecation shims are not justified — remove them)
+deleted every family outright, along with ``warn_deprecated_alias``,
+``TorchLensDeprecationWarning``, and the ``REMOVED_IN`` window.
 
-This module IS the inventory. Every deprecation the package can emit belongs to
-exactly one registered family, each family carries removal metadata, and the
-membership is DERIVED from the shipped tables (runtime imports for the alias
-maps, an AST scan for the emission sites) rather than transcribed -- so a new
-deprecation cannot be added without registering it, and a retired one cannot
-linger as a phantom row.
+This module is now the census INVERTED: the same AST scanners that once
+derived family membership prove the package emits no DeprecationWarning from
+any site, names no deprecated alias, and documents no surface as deprecated.
+Interim-phase policy is remove-and-rename, not shim; a new shim fails here
+until the policy is consciously changed.
 
-Removal is an API decision, not a test's decision: ``remove_in`` is a closed
-vocabulary of honest states, and the report surfaces which families are waiting
-on a maintainer call. Nothing here removes a shim.
+Deliberately NOT covered (they are not API deprecation shims):
 
-The inventory lives in the tests, next to the exemption ledger
-(``tests/test_validation_exemption_ledger.py``), so auditing the deprecation
-surface adds no package code.
+- torch-version compatibility (``torchlens/utils/_torch_compat.py`` HAS_*
+  capability flags and guarded fallbacks);
+- artifact-format compatibility (the tlspec version floor, legacy-save
+  loading, the load-path folding of legacy conditional edge keys, legacy
+  2.16 intervention-spec loading) — load-bearing for artifacts in the wild;
+- the ``ArtifactSchemaAgeWarning`` advisory (a UserWarning about artifact
+  age, not an API deprecation; pinned by tests/test_rehydration_floor.py).
 """
 
 from __future__ import annotations
 
 import ast
-import sys
-import warnings
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -33,349 +36,31 @@ from pathlib import Path
 import pytest
 from _source_corpus import module_ast as _corpus_ast, module_source as _corpus_source
 
-import torchlens as tl
-from torchlens import options as tl_options
-
 pytestmark = pytest.mark.smoke
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _PACKAGE_ROOT = _REPO_ROOT / "torchlens"
 
-#: Warning categories that make a ``warnings.warn`` call a DEPRECATION emission.
-#: ``TorchLensDeprecationWarning`` (grind b4, R48-2/R48-4) is a
-#: ``DeprecationWarning`` subclass introduced so the pytest gate can select
-#: TorchLens's own deprecations by CATEGORY -- correct ``stacklevel`` now blames
-#: the caller, so the old module-keyed filter no longer sees them. The scanner
-#: must recognize both spellings or converting a site to the subclass would make
-#: it vanish from the census, which is exactly the invisibility this file exists
-#: to prevent.
-_DEPRECATION_CATEGORY_NAMES = frozenset({"DeprecationWarning", "TorchLensDeprecationWarning"})
+#: Warning categories whose emission makes a ``warnings.warn`` call a
+#: DEPRECATION emission. ``TorchLensDeprecationWarning`` is deleted, but the
+#: scanner still recognizes the name so a resurrected class cannot hide.
+_DEPRECATION_CATEGORY_NAMES = frozenset(
+    {"DeprecationWarning", "PendingDeprecationWarning", "TorchLensDeprecationWarning"}
+)
 
-#: Docstring-summary phrasings by which a surface declares ITSELF deprecated.
-#: Matched against the first line of a function/property docstring only, so
-#: prose further down cannot manufacture a row, and deliberately narrow enough
-#: to exclude helpers whose summary merely mentions deprecation ("Synchronize
-#: one deprecated wrapper...", "Return lazy package attributes or deprecated
-#: moved names..."). "Deprecated alias for X" is the exact phrasing the
-#: silent option properties use.
+#: Docstring-summary phrasings by which a surface would declare ITSELF
+#: deprecated. Matched against the first line of a function/property
+#: docstring only, so prose further down cannot manufacture a finding, and
+#: narrow enough to exclude helpers whose summary merely mentions deprecation.
 _DEPRECATED_DOC_PREFIXES = ("deprecated",)
 _DEPRECATED_DOC_PHRASES = ("deprecated alias for", "legacy alias for", "deprecated: use")
 
 #: Prefilter tokens: cheap literal check deciding which files get parsed.
 _DEPRECATED_DOC_TOKENS = ("Deprecated", "deprecated", "Legacy alias", "legacy alias")
 
-#: The package's own deprecation-emitting helpers. A function that calls one of
-#: these DOES warn, even though it contains no literal ``warnings.warn``, so the
-#: silent-site detector must treat all three as emissions or every moved-name
-#: wrapper reads as silent.
+#: The historical deprecation-emitting helper names. All deleted; the scanner
+#: keeps recognizing them so a re-added helper registers as an emission.
 _WARN_HELPERS = frozenset({"warn_deprecated_alias", "_warn_moved_name", "_warn_legacy_api_name"})
-
-#: How the deprecated spelling reaches the user.
-_KINDS = frozenset(
-    {
-        "moved_name",  # top-level name that now lives in a submodule
-        "api_shim",  # paper-era public function kept as a shim
-        "kwarg_alias",  # old keyword spelling of a still-supported option
-        "kwarg_value",  # still-accepted kwarg, deprecated VALUE
-        "noop_kwarg",  # accepted and ignored; the feature is gone
-        "noop_function",  # callable retained as an inert stub
-        "attr_alias",  # renamed attribute/method on a public class
-        "artifact_advisory",  # not an API deprecation at all (see the finding)
-    }
-)
-
-#: Honest removal states. Neither invents a version number: TorchLens has never
-#: recorded one for these shims, and picking one is a maintainer call.
-_REMOVE_IN_VOCABULARY = frozenset(
-    {
-        # The package already advertises a vague window in code
-        # (``torchlens/__init__.py::_REMOVED_IN`` == "a future 2.x release").
-        # Registered as-is; tightening it to a real version is the open ask.
-        "unspecified_future_2x",
-        # No window advertised anywhere. Removal is a public-API call and is
-        # forked to the maintainer, never taken by a grind lane.
-        "pending_maintainer_signoff",
-        # Retained deliberately with no removal intent recorded yet.
-        "retained_indefinitely",
-    }
-)
-
-
-@dataclass(frozen=True)
-class DeprecationFamily:
-    """One registered family of deprecated spellings.
-
-    Parameters
-    ----------
-    name:
-        Stable family id.
-    kind:
-        Member of :data:`_KINDS`.
-    replacement:
-        Canonical spelling users should move to.
-    remove_in:
-        Member of :data:`_REMOVE_IN_VOCABULARY`.
-    deprecated_in:
-        TorchLens version that started warning, or ``"unrecorded"`` for families
-        that predate this registry. Deliberately not back-filled by guesswork.
-    sites:
-        ``file::function`` emission sites owned by this family. Closed against an
-        AST scan of the package.
-    members:
-        Explicitly enumerated deprecated spellings, for families whose members
-        are not derivable from a shipped table.
-    note:
-        Anything an auditor needs that the fields above do not carry.
-    """
-
-    name: str
-    kind: str
-    replacement: str
-    remove_in: str
-    deprecated_in: str
-    sites: tuple[str, ...]
-    members: tuple[str, ...] = ()
-    note: str = ""
-
-
-DEPRECATION_FAMILIES: tuple[DeprecationFamily, ...] = (
-    DeprecationFamily(
-        name="moved_top_level_names",
-        kind="moved_name",
-        replacement="the owning submodule (torchlens.types / .errors / .io / ...)",
-        remove_in="unspecified_future_2x",
-        deprecated_in="unrecorded",
-        sites=("torchlens/__init__.py::_warn_moved_name",),
-        note=(
-            "Membership is torchlens.__init__._MOVED_OBJECTS. The warning already "
-            "says 'Removed in <_REMOVED_IN>', whose value is the prose 'a future "
-            "2.x release' -- an advertised but unactionable window."
-        ),
-    ),
-    DeprecationFamily(
-        name="paper_era_api_shims",
-        kind="api_shim",
-        replacement="the 2.x spelling named in torchlens.__init__._LEGACY_API_SHIMS",
-        remove_in="pending_maintainer_signoff",
-        deprecated_in="unrecorded",
-        sites=("torchlens/__init__.py::_warn_legacy_api_name",),
-        note=(
-            "log_forward_pass / render_graph / ModelHistory and friends. The "
-            "warning text calls them a compatibility shim with no window at all."
-        ),
-    ),
-    DeprecationFamily(
-        name="flat_option_kwargs",
-        kind="kwarg_alias",
-        replacement="the grouped options object (capture=/visualization=/...)",
-        remove_in="pending_maintainer_signoff",
-        deprecated_in="unrecorded",
-        sites=("torchlens/_deprecations.py::warn_deprecated_alias",),
-        members=("mode", "node_mode", "max_module_depth", "layout_engine", "vis_opt"),
-        note=(
-            "The largest family by far. Membership is derived from the shipped "
-            "_*_FLAT_TO_GROUP tables, minus the visualization names that are NOT "
-            "in _VISUALIZATION_DEPRECATED_FLAT and minus save.grad_transform, "
-            "which the resolver excludes from warning. The explicitly listed "
-            "members are the pre-2.x draw() spellings resolved outside those "
-            "tables (options.py _normalize_visualization_kwargs). 'vis_opt' is "
-            "the oldest generation of the vis_opt -> vis_mode -> view chain and "
-            "began warning in grind b4 (R48-1); the vis_mode -> view hop is "
-            "forked to the maintainer because Trace.draw() has no canonical "
-            "spelling for most of the vis_* family yet."
-        ),
-    ),
-    DeprecationFamily(
-        name="option_alias_property_reads",
-        kind="attr_alias",
-        replacement="the canonical grouped-option field (visualization.view / .depth / ...)",
-        remove_in="pending_maintainer_signoff",
-        deprecated_in="2.34.1",
-        sites=("torchlens/_deprecations.py::warn_deprecated_alias",),
-        members=(
-            "visualization.max_module_depth",
-            "visualization.layout_engine",
-            "visualization.node_mode",
-        ),
-        note=(
-            "READS of the four documented 'Deprecated alias' properties on "
-            "VisualizationOptions emitted nothing (grind b4, R48-1). Three now "
-            "warn. The fourth, visualization.mode, stays SILENT on purpose and "
-            "is recorded in SILENT_DEPRECATION_LEDGER: torchlens reads it "
-            "internally, so warning would make the package deprecate itself."
-        ),
-    ),
-    DeprecationFamily(
-        name="legacy_buffer_visibility_bools",
-        kind="kwarg_value",
-        replacement="show_buffers='always' / show_buffers='never'",
-        remove_in="pending_maintainer_signoff",
-        deprecated_in="2.34.1",
-        sites=("torchlens/_deprecations.py::warn_deprecated_alias",),
-        members=("show_buffers=True", "show_buffers=False"),
-        note=(
-            "A deprecated VALUE. The docstring called the bools legacy from the "
-            "moment the tri-state landed, but _validate_buffer_visibility "
-            "accepted them in silence (grind b4, R48-1). Spelled through an "
-            "f-string at the call site, so the literal-name scanner cannot see "
-            "them -- enumerated here instead. No caller inside torchlens passes "
-            "a bool, so announcing this originates no self-deprecation."
-        ),
-    ),
-    DeprecationFamily(
-        name="renamed_public_callables",
-        kind="attr_alias",
-        replacement="the canonical name passed as warn_deprecated_alias's second argument",
-        remove_in="pending_maintainer_signoff",
-        deprecated_in="unrecorded",
-        sites=("torchlens/_deprecations.py::warn_deprecated_alias",),
-        members=(
-            "peek",
-            "batched_extract",
-            "record_span",
-            "capture_output_structure",
-            "get_model_metadata",
-            "validate_saved_outs",
-            "vis_node_mode",
-            "replay",
-            "replay_from",
-            "rerun",
-            "intervening",
-            "param",
-            "Trace.replay",
-            "Trace.replay_from",
-            "Trace.rerun",
-            "Trace.validate_saved_outs",
-            "Bundle.replay",
-            "Bundle.rerun",
-            "conditional_then_entry_edges",
-            "conditional_elif_entry_edges",
-            "conditional_else_entry_edges",
-        ),
-    ),
-    DeprecationFamily(
-        name="crawler_era_noop_functions",
-        kind="noop_function",
-        replacement="nothing: the rescue re-run + mechanical belt replaced the crawler",
-        remove_in="pending_maintainer_signoff",
-        deprecated_in="unrecorded",
-        sites=(
-            "torchlens/backends/torch/wrappers.py::patch_detached_references",
-            "torchlens/backends/torch/wrappers.py::clear_patch_detached_references_cache",
-        ),
-        members=("patch_detached_references", "clear_patch_detached_references_cache"),
-        note=(
-            "Inert stubs kept so callers that inspected the old PatchReport "
-            "counters keep importing. Documented in "
-            "docs/migration/scoped_detached_patching.md."
-        ),
-    ),
-    DeprecationFamily(
-        name="crawler_era_noop_kwargs",
-        kind="noop_kwarg",
-        replacement="nothing: accepted and ignored",
-        remove_in="pending_maintainer_signoff",
-        deprecated_in="unrecorded",
-        sites=("torchlens/backends/torch/wrappers.py::wrap_torch",),
-        members=("wrap_torch(patch_policy=)", "wrap_torch(patch_modules=)"),
-        note="CLAUDE.md already records these as deprecated no-ops.",
-    ),
-    DeprecationFamily(
-        name="inert_option_fields",
-        kind="noop_kwarg",
-        replacement="nothing: the fields never had any effect",
-        remove_in="pending_maintainer_signoff",
-        deprecated_in="unrecorded",
-        sites=("torchlens/options.py::_warn_inert_option_field",),
-        members=(
-            "InterventionOptions(helper_validation=)",
-            "InterventionOptions(auto_promote=)",
-            "InterventionOptions(cohort_migration=)",
-            "InterventionOptions(error_severity_threshold=)",
-            "SaveOptions(output_dir=)",
-            "SaveOptions(save_level=)",
-            "SaveOptions(bundle_format=)",
-            "ReplayOptions(is_appended=)",
-            "ReplayOptions(device_override=)",
-        ),
-        note=(
-            "The grind b7 R47-1 write-only option fields: declared as reserved "
-            "'future' fields, accepted and validated, read by NOTHING. The "
-            "fields are deleted (setting them configured behavior that does "
-            "not exist); the keywords survive one window as loud no-ops."
-        ),
-    ),
-    DeprecationFamily(
-        name="domain_node_styles",
-        kind="kwarg_value",
-        replacement="torchlens.experimental.node_styles.<style>_node_mode via node_spec_fn",
-        remove_in="pending_maintainer_signoff",
-        deprecated_in="unrecorded",
-        sites=(
-            "torchlens/options.py::_validate_node_style",
-            "torchlens/visualization/_draw_validation.py::_validate_draw_options",
-        ),
-        members=("node_style='vision'", "node_style='attention'"),
-        note=(
-            "A deprecated VALUE, not a deprecated name: the kwarg stays. Two "
-            "independent validators emit it, so both sites are registered."
-        ),
-    ),
-    DeprecationFamily(
-        name="inert_backward_perturbation_flag",
-        kind="noop_kwarg",
-        replacement="nothing: the flag drove an inert check, never a real comparison",
-        remove_in="pending_maintainer_signoff",
-        deprecated_in="unrecorded",
-        sites=("torchlens/validation/backward.py::validate_backward_pass",),
-        members=("validate_backward_pass(perturb_saved_grads=True)",),
-        note=(
-            "The warning itself states the old implementation was not a "
-            "captured-gradient comparison, so there is nothing to preserve."
-        ),
-    ),
-    # REMOVED in grind r3 (R15-F1): the "artifact_schema_age_advisory" family
-    # was never an API deprecation -- it advises that a loaded bundle predates
-    # the runtime schema. It now raises the visible
-    # `torchlens._io.ArtifactSchemaAgeWarning` (a UserWarning subclass), so it
-    # is out of this inventory's scope by construction. Its behavior is pinned
-    # by tests/test_rehydration_floor.py::
-    # test_between_floor_advisory_is_a_visible_user_warning.
-)
-
-_FAMILIES_BY_NAME = {family.name: family for family in DEPRECATION_FAMILIES}
-
-
-#: Surfaces that DECLARE themselves deprecated in their docstring and emit
-#: nothing, each with the reason it is allowed to stay quiet. Closed and
-#: shrink-only: :func:`test_silent_deprecations_are_exactly_the_declared_ledger`
-#: fails on any new entry.
-#:
-#: This ledger is the R48-1 root cause closed structurally. Every other closure
-#: in this file derives membership from warning EMISSION, so a deprecation that
-#: never warns is invisible to the census *by construction* -- which is how
-#: ``Trace.draw()`` came to honor a 17-name deprecated kwarg family, and
-#: ``draw_combined()`` its entire flat-override set, in total silence while the
-#: identical spellings warned through ``merge_visualization_options``.
-SILENT_DEPRECATION_LEDGER: dict[str, str] = {
-    "torchlens/io/__init__.py::get_model_metadata": (
-        "Pass-through: delegates to user_funcs.get_model_metadata, which warns. "
-        "Warning here too would double-report one user call."
-    ),
-    "torchlens/options.py::mode": (
-        "Its three sibling alias properties now warn on read; this one cannot "
-        "yet. torchlens reads visualization.mode internally when validating the "
-        "MLX visualization mode (user_funcs.py), so warning would make TorchLens "
-        "deprecate itself on a canonical path -- the R48-3 defect. The read site "
-        "is outside the R48 fix lane's territory; fix it there, then delete this "
-        "row and let the property warn."
-    ),
-}
-
-
-# ---------------------------------------------------------------------------
-# Derived side: emission sites and alias membership, read from the package.
-# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -387,31 +72,21 @@ class _PackageScan:
     sites:
         ``path::function`` keys of raw ``warnings.warn(..., DeprecationWarning)``
         calls.
-    alias_names:
-        Literal old names passed to ``warn_deprecated_alias``.
     alias_sites:
-        ``path::function`` keys of ``warn_deprecated_alias`` CALLS. Separate from
-        ``sites`` (raw ``warnings.warn``) because the two closures differ: raw
-        sites are closed by site, helper callers by name.
+        ``path::function`` keys of calls to a historical warn-helper name.
     documented_deprecated:
         ``path::function`` keys of functions/properties whose DOCSTRING calls
-        something deprecated or legacy. Independent of emission, which is the
-        point: see :func:`silently_deprecated_sites`.
+        something deprecated or legacy.
     """
 
     sites: frozenset[str]
-    alias_names: frozenset[str]
     alias_sites: frozenset[str]
     documented_deprecated: frozenset[str]
 
 
 @lru_cache(maxsize=8)
 def scan_package(package_root: Path, base: Path) -> _PackageScan:
-    """Return both deprecation AST facts in ONE cached pass over the tree.
-
-    Parsing the package twice (once per closure test) cost ~30s, which is too
-    slow for a smoke-tier gate; one cached recursive pass with no parent map runs
-    in about a second.
+    """Return the deprecation AST facts in ONE cached pass over the tree.
 
     Parameters
     ----------
@@ -423,19 +98,14 @@ def scan_package(package_root: Path, base: Path) -> _PackageScan:
     Returns
     -------
     _PackageScan
-        Emission sites and literal alias names.
+        Emission sites, helper-call sites, and documented-deprecated surfaces.
     """
 
     sites: set[str] = set()
-    alias_names: set[str] = set()
     alias_sites: set[str] = set()
     documented: set[str] = set()
     for path in sorted(package_root.rglob("*.py")):
         text = _corpus_source(path)
-        # Cheap prefilter: nothing this scan looks for is possible unless one of
-        # these tokens appears literally in the source, so only those files are
-        # parsed. This is what keeps a whole-package AST audit inside the smoke
-        # budget.
         if not any(
             token in text
             for token in ("DeprecationWarning", "warn_deprecated_alias", *_DEPRECATED_DOC_TOKENS)
@@ -443,11 +113,9 @@ def scan_package(package_root: Path, base: Path) -> _PackageScan:
             continue
         relative = path.relative_to(base).as_posix()
         tree = _corpus_ast(path)
-        _visit(tree, relative, "<module>", sites, alias_names, alias_sites)
+        _visit(tree, relative, "<module>", sites, alias_sites)
         _visit_docstrings(tree, relative, documented)
-    return _PackageScan(
-        frozenset(sites), frozenset(alias_names), frozenset(alias_sites), frozenset(documented)
-    )
+    return _PackageScan(frozenset(sites), frozenset(alias_sites), frozenset(documented))
 
 
 def _visit(
@@ -455,10 +123,9 @@ def _visit(
     relative: str,
     enclosing: str,
     sites: set[str],
-    alias_names: set[str],
     alias_sites: set[str],
 ) -> None:
-    """Collect deprecation facts under ``node``, tracking the enclosing function.
+    """Collect deprecation-emission facts under ``node``.
 
     Parameters
     ----------
@@ -469,11 +136,9 @@ def _visit(
     enclosing:
         Name of the innermost enclosing function.
     sites:
-        Accumulator for ``path::function`` emission sites.
-    alias_names:
-        Accumulator for literal deprecated spellings.
+        Accumulator for ``path::function`` raw-emission sites.
     alias_sites:
-        Accumulator for ``path::function`` of ``warn_deprecated_alias`` calls.
+        Accumulator for ``path::function`` warn-helper call sites.
     """
 
     if isinstance(node, ast.Call):
@@ -487,25 +152,15 @@ def _visit(
                 sites.add(f"{relative}::{enclosing}")
         elif isinstance(func, ast.Name) and func.id in _WARN_HELPERS:
             alias_sites.add(f"{relative}::{enclosing}")
-            if func.id == "warn_deprecated_alias" and (
-                node.args
-                and isinstance(node.args[0], ast.Constant)
-                and isinstance(node.args[0].value, str)
-            ):
-                alias_names.add(node.args[0].value)
     for child in ast.iter_child_nodes(node):
         child_enclosing = (
             child.name if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) else enclosing
         )
-        _visit(child, relative, child_enclosing, sites, alias_names, alias_sites)
+        _visit(child, relative, child_enclosing, sites, alias_sites)
 
 
 def _visit_docstrings(node: ast.AST, relative: str, documented: set[str]) -> None:
     """Collect ``path::function`` for functions documented as deprecated.
-
-    Walks every function/property definition and inspects only its own
-    docstring, so a mention inside an unrelated module-level comment cannot
-    manufacture a row.
 
     Parameters
     ----------
@@ -531,6 +186,44 @@ def _visit_docstrings(node: ast.AST, relative: str, documented: set[str]) -> Non
             documented.add(f"{relative}::{child.name}")
 
 
+def deprecation_emission_sites(package_root: Path, base: Path | None = None) -> set[str]:
+    """Return ``file::function`` for every raw DeprecationWarning emission.
+
+    Parameters
+    ----------
+    package_root:
+        Root of the shipped package.
+    base:
+        Base directory the reported paths are relative to.
+
+    Returns
+    -------
+    set[str]
+        ``path::function`` keys relative to ``base``.
+    """
+
+    return set(scan_package(package_root, base if base is not None else _REPO_ROOT).sites)
+
+
+def warn_helper_call_sites(package_root: Path, base: Path | None = None) -> set[str]:
+    """Return ``file::function`` for every historical warn-helper call.
+
+    Parameters
+    ----------
+    package_root:
+        Root of the shipped package.
+    base:
+        Base directory the reported paths are relative to.
+
+    Returns
+    -------
+    set[str]
+        ``path::function`` keys of calls to a deleted warn-helper name.
+    """
+
+    return set(scan_package(package_root, base if base is not None else _REPO_ROOT).alias_sites)
+
+
 def documented_deprecated_sites(package_root: Path, base: Path | None = None) -> set[str]:
     """Return ``file::function`` for every function DOCUMENTED as deprecated.
 
@@ -551,463 +244,58 @@ def documented_deprecated_sites(package_root: Path, base: Path | None = None) ->
     return set(scan.documented_deprecated)
 
 
-def silently_deprecated_sites(package_root: Path, base: Path | None = None) -> set[str]:
-    """Return sites documented as deprecated that emit NOTHING.
-
-    This is the R48-1 root cause made checkable. The rest of this inventory
-    derives membership from warning EMISSION, so a deprecation that never warns
-    is invisible to it *by construction* -- which is exactly how ``draw()``
-    came to accept a 17-name deprecated kwarg family, and ``draw_combined()``
-    its whole flat-override set, in total silence while the same spellings
-    warned through ``merge_visualization_options``.
-
-    Parameters
-    ----------
-    package_root:
-        Root of the shipped package.
-    base:
-        Base directory reported paths are relative to.
-
-    Returns
-    -------
-    set[str]
-        ``path::function`` keys that claim a deprecation but never emit one.
-    """
-
-    scan = scan_package(package_root, base if base is not None else _REPO_ROOT)
-    emitting = set(scan.sites) | set(scan.alias_sites)
-    return set(scan.documented_deprecated) - emitting
-
-
-def deprecation_emission_sites(package_root: Path, base: Path | None = None) -> set[str]:
-    """Return ``file::function`` for every RAW DeprecationWarning emission.
-
-    Only direct ``warnings.warn(..., DeprecationWarning)`` calls count. Families
-    that emit through the shared ``warn_deprecated_alias`` helper are closed by
-    NAME instead (:func:`literal_alias_names`), which is the stronger check for
-    them: the helper has exactly one emission site but dozens of callers.
-
-    Parameters
-    ----------
-    package_root:
-        Root of the shipped package.
-    base:
-        Base directory the reported paths are relative to. Defaults to the repo
-        root; tests planting a synthetic package pass their own.
-
-    Returns
-    -------
-    set[str]
-        ``path::function`` keys relative to ``base``.
-    """
-
-    return set(scan_package(package_root, base if base is not None else _REPO_ROOT).sites)
-
-
-def literal_alias_names(package_root: Path, base: Path | None = None) -> set[str]:
-    """Return every literal old name passed to ``warn_deprecated_alias``.
-
-    Parameters
-    ----------
-    package_root:
-        Root of the shipped package.
-    base:
-        Base directory used for path reporting (irrelevant to the result; kept so
-        both accessors share one cached scan).
-
-    Returns
-    -------
-    set[str]
-        Deprecated spellings named as string literals at the call site.
-    """
-
-    return set(scan_package(package_root, base if base is not None else _REPO_ROOT).alias_names)
-
-
-def warning_flat_kwarg_names() -> set[str]:
-    """Return flat option kwargs whose use emits a deprecation warning.
-
-    Mirrors ``options._resolve_option_group``: every flat name in a
-    ``_*_FLAT_TO_GROUP`` table warns, except that the visualization group warns
-    only for ``_VISUALIZATION_DEPRECATED_FLAT`` and the save group excludes
-    ``grad_transform``.
-
-    Returns
-    -------
-    set[str]
-        Deprecated flat kwarg spellings.
-    """
-
-    names: set[str] = set()
-    names |= set(tl_options._CAPTURE_FLAT_TO_GROUP)
-    names |= set(tl_options._SAVE_FLAT_TO_GROUP) - {"grad_transform"}
-    names |= set(tl_options._VISUALIZATION_DEPRECATED_FLAT)
-    names |= set(tl_options._REPLAY_FLAT_TO_GROUP)
-    names |= set(tl_options._INTERVENTION_FLAT_TO_GROUP)
-    names |= set(tl_options._STREAMING_FLAT_TO_GROUP)
-    return names
-
-
-def registered_alias_members() -> set[str]:
-    """Return every deprecated spelling covered by a registered family.
-
-    Returns
-    -------
-    set[str]
-        Union of explicit family members, the derived flat-kwarg family, the
-        moved-name table, and the paper-era shim table.
-    """
-
-    members: set[str] = set()
-    for family in DEPRECATION_FAMILIES:
-        members |= set(family.members)
-    members |= warning_flat_kwarg_names()
-    members |= set(tl._MOVED_OBJECTS)
-    members |= set(tl._LEGACY_API_SHIMS)
-    return members
-
-
-def inventory_gaps(derived: set[str], registered: set[str]) -> tuple[set[str], set[str]]:
-    """Return unregistered and phantom entries.
-
-    Parameters
-    ----------
-    derived:
-        Entries found in the package.
-    registered:
-        Entries covered by :data:`DEPRECATION_FAMILIES`.
-
-    Returns
-    -------
-    tuple[set[str], set[str]]
-        ``(unregistered, phantom)``.
-    """
-
-    return derived - registered, registered - derived
-
-
 # ---------------------------------------------------------------------------
-# The R48 gate.
+# The no-shim tripwire.
 # ---------------------------------------------------------------------------
 
 
-def test_every_deprecation_has_removal_metadata() -> None:
-    """Every registered family carries an honest removal state and a replacement."""
+def test_package_emits_no_deprecation_warnings() -> None:
+    """No shipped site emits a DeprecationWarning of any spelling."""
 
-    assert DEPRECATION_FAMILIES
-    for family in DEPRECATION_FAMILIES:
-        assert family.kind in _KINDS, f"{family.name}: unknown kind {family.kind!r}"
-        assert family.remove_in in _REMOVE_IN_VOCABULARY, (
-            f"{family.name}: remove_in {family.remove_in!r} is outside the closed "
-            "vocabulary; a new state needs a documented meaning, not a free-text value"
-        )
-        assert family.deprecated_in, f"{family.name}: deprecated_in must be set"
-        assert family.replacement.strip(), f"{family.name}: needs a replacement spelling"
-        assert family.sites, f"{family.name}: needs at least one emission site"
-
-
-def test_family_names_are_unique() -> None:
-    """Family ids are unique, so the registry is a real index."""
-
-    names = [family.name for family in DEPRECATION_FAMILIES]
-    assert len(names) == len(set(names))
-
-
-# ---------------------------------------------------------------------------
-# Closure: the census is exhaustive against the package.
-# ---------------------------------------------------------------------------
-
-
-def test_every_deprecation_emission_site_is_registered() -> None:
-    """A DeprecationWarning cannot be emitted from an unregistered site."""
-
-    derived = deprecation_emission_sites(_PACKAGE_ROOT)
-    registered = {site for family in DEPRECATION_FAMILIES for site in family.sites}
-    unregistered, phantom = inventory_gaps(derived, registered)
-    assert not unregistered, (
-        "DeprecationWarning emitted from a site with no inventory entry (register "
-        f"it in DEPRECATION_FAMILIES with removal metadata): {sorted(unregistered)}"
+    sites = deprecation_emission_sites(_PACKAGE_ROOT)
+    assert sites == set(), (
+        f"new deprecation emission sites appeared: {sorted(sites)}; interim-phase "
+        "policy is remove-and-rename, not shim (see the module docstring)"
     )
-    assert not phantom, f"registered sites that no longer emit: {sorted(phantom)}"
 
 
-def test_every_literal_alias_name_is_registered() -> None:
-    """Every literally-named deprecated spelling belongs to a family."""
+def test_no_warn_helper_calls_remain() -> None:
+    """No shipped site calls a historical deprecation warn-helper."""
 
-    derived = literal_alias_names(_PACKAGE_ROOT)
-    unregistered, _ = inventory_gaps(derived, registered_alias_members())
-    assert not unregistered, f"deprecated spellings with no inventory entry: {sorted(unregistered)}"
-
-
-def test_silent_deprecations_are_exactly_the_declared_ledger() -> None:
-    """A deprecation that warns NOTHING must be declared, with a reason.
-
-    The gate the census could not have (grind b4, R48-1): membership everywhere
-    else in this file is derived from emission, so silence was invisible. A new
-    "Deprecated alias for X" property or wrapper that forgets to warn now fails
-    here instead of shipping as an undocumented removal hazard.
-    """
-
-    silent = silently_deprecated_sites(_PACKAGE_ROOT)
-    undeclared = silent - set(SILENT_DEPRECATION_LEDGER)
-    assert not undeclared, (
-        "surface documents itself as deprecated but emits no warning -- route it "
-        "through warn_deprecated_alias, or add it to SILENT_DEPRECATION_LEDGER "
-        f"with the reason it must stay quiet: {sorted(undeclared)}"
-    )
-    healed = set(SILENT_DEPRECATION_LEDGER) - silent
-    assert not healed, f"ledger rows that now warn (delete the row): {sorted(healed)}"
+    sites = warn_helper_call_sites(_PACKAGE_ROOT)
+    assert sites == set(), f"warn-helper calls reappeared: {sorted(sites)}"
 
 
-def test_documented_deprecated_surface_is_mostly_wired_to_a_warning() -> None:
-    """The scanner sees real deprecated surfaces, and nearly all of them warn.
-
-    Guards the detector against silently matching nothing: a typo in the
-    docstring phrasings would make the ledger test vacuously pass.
-    """
+def test_no_surface_documents_itself_as_deprecated() -> None:
+    """No shipped surface declares itself a deprecated/legacy alias."""
 
     documented = documented_deprecated_sites(_PACKAGE_ROOT)
-    assert len(documented) > 20, (
-        f"the docstring scanner found only {len(documented)} deprecated surfaces; "
-        "it has probably stopped matching the package's phrasing"
-    )
-    assert "torchlens/options.py::mode" in documented
-    assert len(silently_deprecated_sites(_PACKAGE_ROOT)) < len(documented) / 2
-
-
-def test_flat_kwarg_family_membership_is_derived_not_transcribed() -> None:
-    """The flat-kwarg family reads the shipped tables, so it cannot go stale."""
-
-    derived = warning_flat_kwarg_names()
-    assert "save_grads" in derived, "capture flat kwargs warn and must be inventoried"
-    assert "vis_node_mode" in derived, "deprecated visualization flat names are inventoried"
-    assert "grad_transform" not in derived, (
-        "options._resolve_option_group excludes save.grad_transform from warning; "
-        "the inventory must mirror that, not over-claim"
-    )
-    assert "view" not in derived, (
-        "canonical grouped-field spellings that merely also work flat are NOT "
-        "deprecated and must not be counted as debt"
+    assert documented == set(), (
+        f"new deprecated-alias surfaces appeared: {sorted(documented)}; "
+        "interim-phase policy is remove-and-rename, not shim"
     )
 
 
-def test_moved_name_and_shim_tables_are_nonempty_and_disjoint() -> None:
-    """The two top-level tables stay distinct surfaces."""
+def test_deprecation_warning_class_is_gone() -> None:
+    """The dedicated warning category did not quietly come back."""
 
-    moved = set(tl._MOVED_OBJECTS)
-    shims = set(tl._LEGACY_API_SHIMS)
-    assert moved and shims
-    assert not moved & shims, f"a name cannot be both moved and a legacy shim: {moved & shims}"
+    import torchlens._deprecations as deprecations_module
+    import torchlens.errors as errors_module
+
+    assert not hasattr(deprecations_module, "TorchLensDeprecationWarning")
+    assert not hasattr(deprecations_module, "warn_deprecated_alias")
+    assert not hasattr(deprecations_module, "REMOVED_IN")
+    with pytest.raises(AttributeError):
+        errors_module.TorchLensDeprecationWarning  # noqa: B018
 
 
 # ---------------------------------------------------------------------------
-# The census, reported as numbers so the debt is measurable round over round.
+# The tripwire mechanism must be able to go RED.
 # ---------------------------------------------------------------------------
 
 
-def deprecated_spelling_census() -> dict[str, int]:
-    """Return the per-surface count of deprecated public spellings.
-
-    Returns
-    -------
-    dict[str, int]
-        Surface name -> number of deprecated spellings.
-    """
-
-    census = {
-        "moved_top_level_names": len(tl._MOVED_OBJECTS),
-        "paper_era_api_shims": len(tl._LEGACY_API_SHIMS),
-        "flat_option_kwargs": len(
-            warning_flat_kwarg_names() | set(_FAMILIES_BY_NAME["flat_option_kwargs"].members)
-        ),
-    }
-    for family in DEPRECATION_FAMILIES:
-        if family.members and family.name not in census:
-            census[family.name] = len(family.members)
-    return census
-
-
-def test_census_matches_the_recorded_baseline() -> None:
-    """The census is pinned, so growth in the deprecation surface is visible.
-
-    A new shim is not forbidden -- the house rule is "no NEW shims", and this is
-    how that rule becomes checkable instead of aspirational.
-
-    Rebased in grind b4 (R48-1) for +6 spellings, none of them a new shim: they
-    are pre-existing shims that were being honored in SILENCE and now warn.
-    ``flat_option_kwargs`` 80 -> 81 (``vis_opt``), plus the two new families for
-    the alias property reads (3) and the legacy buffer-visibility bools (2).
-
-    Rebased in fixwave-2 (R47-1) for +9 spellings, again not new shims: the
-    nine write-only "future" option fields were DELETED (they were silent
-    no-ops), and their keywords now warn through ``inert_option_fields``.
-
-    Rebased in the wave-0 governance sweep for +1 spelling:
-    ``flat_option_kwargs`` 81 -> 82 (``structure_only``). The L7a
-    structure-only capture flag joined ``_CAPTURE_FLAT_TO_GROUP``, so its
-    flat spelling warns and routes to ``CaptureOptions(structure_only=...)``
-    like every other capture flat kwarg. NOTE for the naming session: this
-    is a deprecated-from-birth alias on a brand-new option (the newer
-    session-time knobs ``save_budget``/``measure_python_peak_memory``/
-    ``distributed_witness`` deliberately got NO flat alias); whether it
-    stays is an S2/naming-slate call.
-    """
-
-    assert deprecated_spelling_census() == {
-        "moved_top_level_names": 50,
-        "paper_era_api_shims": 9,
-        "flat_option_kwargs": 82,
-        "renamed_public_callables": 21,
-        "option_alias_property_reads": 3,
-        "legacy_buffer_visibility_bools": 2,
-        "crawler_era_noop_functions": 2,
-        "crawler_era_noop_kwargs": 2,
-        "inert_option_fields": 9,
-        "domain_node_styles": 2,
-        "inert_backward_perturbation_flag": 1,
-    }
-
-
-#: Source of a throwaway module used to prove caller attribution. Each function
-#: is on its own line so the reported line number identifies the route.
-_ATTRIBUTION_CALLER_SOURCE = '''\
-"""Throwaway caller used to check deprecation-warning attribution."""
-
-import torchlens as tl
-
-
-def use_flat_kwarg_alias():
-    """Trigger the flat-kwarg alias route."""
-    return tl.options.merge_capture_options(capture=None, verbose=True)
-
-
-def use_moved_name():
-    """Trigger the moved-top-level-name route."""
-    return tl.resolve_sites
-
-
-def use_legacy_api_shim():
-    """Trigger the paper-era shim route."""
-    return tl.ModelHistory
-'''
-
-
-@pytest.mark.parametrize(
-    "route",
-    ["use_flat_kwarg_alias", "use_moved_name", "use_legacy_api_shim"],
-)
-def test_deprecations_are_attributed_to_the_caller(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, route: str
-) -> None:
-    """Every deprecation route blames the CALLER's file, not a torchlens frame.
-
-    The gate for grind b4's R48-2. All three routes used a hardcoded
-    ``stacklevel`` and none of the constants was right for its call depth:
-    measured before the fix, ``tl.peek(...)`` reported ``sys:1`` -- which
-    Python's default ``__main__``-keyed filter hides outright, so the warning was
-    invisible to the users it was written for -- while ``tl.ModelHistory``
-    reported ``torchlens/__init__.py`` and the flat-kwarg route reported
-    ``torchlens/user_funcs.py``.
-
-    Driven from a generated module rather than from this file so "the caller" is
-    unambiguous: any torchlens frame, and this test file itself, are both wrong
-    answers.
-    """
-
-    # Module name varies per route: a shared name would be cached in sys.modules
-    # from the first parametrization and the later cases would import that copy.
-    module_name = f"deprecation_attribution_caller_{route}"
-    caller = tmp_path / f"{module_name}.py"
-    caller.write_text(_ATTRIBUTION_CALLER_SOURCE, encoding="utf-8")
-    monkeypatch.syspath_prepend(str(tmp_path))
-    monkeypatch.delitem(sys.modules, module_name, raising=False)
-    module = __import__(module_name)
-
-    with warnings.catch_warnings(record=True) as records:
-        warnings.simplefilter("always")
-        getattr(module, route)()
-
-    deprecations = [record for record in records if issubclass(record.category, DeprecationWarning)]
-    assert deprecations, f"{route} emitted no deprecation warning"
-    for record in deprecations:
-        assert Path(record.filename).resolve() == caller.resolve(), (
-            f"{route}: warning blamed {record.filename}, not the caller. A "
-            "deprecation attributed to a torchlens frame (or to sys:1) is "
-            "unactionable and may be hidden by the default warning filter."
-        )
-
-
-def test_every_route_advertises_the_same_removal_window() -> None:
-    """All deprecation routes quote ONE advertised window.
-
-    Before grind b4 the alias route promised "a future release" while the
-    moved-name route beside it promised "a future 2.x release" -- two windows for
-    one body of debt. Both now interpolate ``_deprecations.REMOVED_IN``.
-    """
-
-    from torchlens._deprecations import REMOVED_IN, warn_deprecated_alias
-
-    assert REMOVED_IN == tl._REMOVED_IN, (
-        "torchlens.__init__ must quote the shared window constant, not its own copy"
-    )
-    with warnings.catch_warnings(record=True) as records:
-        warnings.simplefilter("always")
-        warn_deprecated_alias("probe_old", "probe_new")
-        _ = tl.resolve_sites
-    messages = [str(record.message) for record in records]
-    assert len(messages) >= 2
-    assert all(REMOVED_IN in message for message in messages), messages
-
-
-def test_no_family_is_past_its_advertised_removal_window() -> None:
-    """A family scheduled for a version we have already shipped is overdue.
-
-    The expiry gate the census lacked (grind b4, R48-5, mechanical half): before
-    this, ``remove_in`` could name a concrete version and nothing would ever
-    notice the window closing. Vacuous today by design -- every family is on a
-    prose window or awaiting sign-off -- and load-bearing the moment a real
-    version is chosen. It removes nothing; it reports.
-    """
-
-    current = tuple(int(part) for part in tl.__version__.split(".")[:3])
-    overdue = []
-    for family in DEPRECATION_FAMILIES:
-        parts = family.remove_in.split(".")
-        if not all(part.isdigit() for part in parts):
-            continue  # a prose state from the closed vocabulary, not a version
-        if tuple(int(part) for part in parts) <= current:
-            overdue.append((family.name, family.remove_in))
-    assert not overdue, (
-        f"deprecation families past their advertised removal window (torchlens "
-        f"{tl.__version__}) -- remove the shim or move the window: {overdue}"
-    )
-
-
-def test_no_family_claims_a_concrete_removal_version_yet() -> None:
-    """No shim is scheduled for removal without a maintainer decision.
-
-    Deliberately asserted rather than assumed: a grind lane must not quietly
-    schedule a public-API removal, and this test is where such a change becomes
-    visible. When a real version is chosen it is added to
-    ``_REMOVE_IN_VOCABULARY`` and this expectation is updated in the same diff.
-    """
-
-    scheduled = [
-        family.name
-        for family in DEPRECATION_FAMILIES
-        if family.remove_in
-        not in {"unspecified_future_2x", "pending_maintainer_signoff", "retained_indefinitely"}
-    ]
-    assert not scheduled, f"removal scheduled without sign-off: {scheduled}"
-
-
-# ---------------------------------------------------------------------------
-# The inventory mechanism must be able to go RED.
-# ---------------------------------------------------------------------------
-
-
-class TestInventoryMechanismIsRedCapable:
-    """Plant an unregistered deprecation and prove the closure reports it."""
+class TestTripwireMechanismIsRedCapable:
+    """Plant a shim and prove each scanner reports it."""
 
     def test_site_scanner_finds_a_planted_emission(self, tmp_path: Path) -> None:
         """A new DeprecationWarning site is discovered by the scan."""
@@ -1022,7 +310,7 @@ class TestInventoryMechanismIsRedCapable:
         assert found == {"torchlens/mod.py::f"}, found
 
     def test_site_scanner_ignores_other_warning_categories(self, tmp_path: Path) -> None:
-        """A UserWarning is not a deprecation and is not demanded."""
+        """A UserWarning is not a deprecation and is not reported."""
 
         package = tmp_path / "torchlens"
         package.mkdir()
@@ -1032,26 +320,19 @@ class TestInventoryMechanismIsRedCapable:
         )
         assert deprecation_emission_sites(package, base=tmp_path) == set()
 
-    def test_alias_scanner_finds_a_planted_literal(self, tmp_path: Path) -> None:
-        """A new literal alias name is discovered by the scan."""
+    def test_helper_scanner_finds_a_planted_call(self, tmp_path: Path) -> None:
+        """A resurrected warn-helper call is discovered by the scan."""
 
         package = tmp_path / "torchlens"
         package.mkdir()
         (package / "mod.py").write_text(
-            "def f():\n    warn_deprecated_alias('planted_old', 'planted_new')\n",
+            "def f():\n    warn_deprecated_alias('old', 'new')\n",
             encoding="utf-8",
         )
-        assert literal_alias_names(package, base=tmp_path) == {"planted_old"}
+        assert warn_helper_call_sites(package, base=tmp_path) == {"torchlens/mod.py::f"}
 
-    def test_inventory_gap_checker_reports_both_directions(self) -> None:
-        """Unregistered and phantom entries are both surfaced."""
-
-        unregistered, phantom = inventory_gaps({"new"}, {"old"})
-        assert unregistered == {"new"}
-        assert phantom == {"old"}
-
-    def test_silent_scanner_finds_a_planted_silent_deprecation(self, tmp_path: Path) -> None:
-        """A deprecated-documented surface that never warns is reported."""
+    def test_docstring_scanner_finds_a_planted_alias_surface(self, tmp_path: Path) -> None:
+        """A deprecated-documented surface is reported."""
 
         package = tmp_path / "torchlens"
         package.mkdir()
@@ -1059,23 +340,9 @@ class TestInventoryMechanismIsRedCapable:
             'def f():\n    """Deprecated alias for g."""\n    return 1\n',
             encoding="utf-8",
         )
-        assert silently_deprecated_sites(package, base=tmp_path) == {"torchlens/mod.py::f"}
+        assert documented_deprecated_sites(package, base=tmp_path) == {"torchlens/mod.py::f"}
 
-    def test_silent_scanner_clears_a_surface_that_warns_via_the_helper(
-        self, tmp_path: Path
-    ) -> None:
-        """Routing the same surface through the helper clears it."""
-
-        package = tmp_path / "torchlens"
-        package.mkdir()
-        (package / "mod.py").write_text(
-            'def f():\n    """Deprecated alias for g."""\n'
-            "    warn_deprecated_alias('f', 'g')\n    return 1\n",
-            encoding="utf-8",
-        )
-        assert silently_deprecated_sites(package, base=tmp_path) == set()
-
-    def test_silent_scanner_ignores_helpers_that_merely_mention_deprecation(
+    def test_docstring_scanner_ignores_helpers_that_merely_mention_deprecation(
         self, tmp_path: Path
     ) -> None:
         """A summary ABOUT deprecation is not a deprecated surface."""
@@ -1087,10 +354,4 @@ class TestInventoryMechanismIsRedCapable:
             "    return 1\n",
             encoding="utf-8",
         )
-        assert silently_deprecated_sites(package, base=tmp_path) == set()
-
-    def test_removal_vocabulary_rejects_free_text(self) -> None:
-        """``remove_in`` is closed, so 'soon' cannot masquerade as metadata."""
-
-        assert "soon" not in _REMOVE_IN_VOCABULARY
-        assert "3.0" not in _REMOVE_IN_VOCABULARY
+        assert documented_deprecated_sites(package, base=tmp_path) == set()

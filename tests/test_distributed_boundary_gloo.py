@@ -420,7 +420,7 @@ class TestReplayRefusals:
         model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
         x = torch.randn(2, 4)
         expected = model(x)
-        log = tl.trace(model, x, intervention_ready=True)
+        log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
         # The control: no typed collective refusal fires on either surface.
         # (The save-before-validate order is no longer load-bearing: B1-04
         # declared _last_validation_failure / _validation_diagnostics as

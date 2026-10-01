@@ -27,7 +27,9 @@ def _trace(model: nn.Module, inputs: torch.Tensor, **kwargs: object) -> tl.Trace
         Captured trace.
     """
 
-    return tl.trace(model, inputs, save_raw_activations=False, **kwargs)
+    return tl.trace(
+        model, inputs, **kwargs, save=tl.options.SaveOptions(save_raw_activations=False)
+    )
 
 
 def _canonical_child_edges(trace: tl.Trace) -> set[tuple[str, str]]:

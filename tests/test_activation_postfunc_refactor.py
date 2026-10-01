@@ -138,7 +138,9 @@ def test_save_raw_grads_false_keeps_raw_metadata_only() -> None:
 def test_train_mode_activation_transform_detach_rejected() -> None:
     """Detached train-mode out transforms are rejected."""
 
-    with pytest.raises(tl.TrainingModeConfigError, match="disconnected from the autograd graph"):
+    with pytest.raises(
+        tl.errors.TrainingModeConfigError, match="disconnected from the autograd graph"
+    ):
         tl.trace(
             _TinyModel(),
             torch.randn(2, 4, requires_grad=True),
@@ -150,7 +152,7 @@ def test_train_mode_activation_transform_detach_rejected() -> None:
 def test_train_mode_activation_transform_int_rejected() -> None:
     """Integer train-mode out transforms are rejected."""
 
-    with pytest.raises(tl.TrainingModeConfigError, match="non-grad dtype"):
+    with pytest.raises(tl.errors.TrainingModeConfigError, match="non-grad dtype"):
         tl.trace(
             _TinyModel(),
             torch.randn(2, 4, requires_grad=True),
@@ -180,7 +182,7 @@ def test_transform_error_has_context_and_cause() -> None:
 
         raise ValueError("sentinel")
 
-    with pytest.raises(tl.TorchLensPostfuncError) as exc_info:
+    with pytest.raises(tl.errors.TorchLensPostfuncError) as exc_info:
         tl.trace(_TinyModel(), torch.randn(2, 4), save=SaveOptions(activation_transform=_raise))
 
     message = str(exc_info.value)
@@ -214,8 +216,7 @@ def test_portable_save_roundtrip_preserves_transformed_out(tmp_path: Path) -> No
 def test_transform_type_aliases_exported() -> None:
     """Activation and grad transform aliases are importable from torchlens."""
 
-    with pytest.warns(DeprecationWarning):
-        from torchlens import ActivationPostfunc, GradientPostfunc
+    from torchlens.types import ActivationPostfunc, GradientPostfunc
 
     assert ActivationPostfunc is not None
     assert GradientPostfunc is not None

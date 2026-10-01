@@ -66,6 +66,11 @@ def test_tinygrad_backward_flip_with_binding_refuses_at_trace() -> None:
             return (x + 1.0).relu()
 
         with pytest.raises(BackendCapabilityConformanceError, match="never\\s+dispatches"):
-            tl.trace(model, Tensor([1.0, -2.0]), backend="tinygrad", backward_ready=True)
+            tl.trace(
+                model,
+                Tensor([1.0, -2.0]),
+                backend="tinygrad",
+                capture=tl.options.CaptureOptions(backward_ready=True),
+            )
     finally:
         register_backend_spec(original, replace=True)

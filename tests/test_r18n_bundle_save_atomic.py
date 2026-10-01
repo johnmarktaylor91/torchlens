@@ -54,7 +54,9 @@ def _build_bundle(seed: int) -> tl.Bundle:
     torch.manual_seed(seed)
     model = _TinyBundleModel()
     x = torch.randn(2, 4)
-    member = tl.trace(model, x, layers_to_save="all", random_seed=seed)
+    member = tl.trace(
+        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=seed)
+    )
     return tl.Bundle({f"m{seed}": member})
 
 

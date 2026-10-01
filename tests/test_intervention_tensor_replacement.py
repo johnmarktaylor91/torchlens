@@ -118,8 +118,9 @@ def test_intervention_api_replaces_op_output_preserves_graph() -> None:
     log = tl.trace(
         model,
         torch.randn(3, 4),
-        intervention_ready=True,
-        hooks={tl.func("relu"): _zero_hook},
+        capture=tl.options.CaptureOptions(
+            intervention_ready=True, hooks={tl.func("relu"): _zero_hook}
+        ),
     )
 
     relu_layer = next(layer for layer in log.layer_list if layer.func_name == "relu")
@@ -137,8 +138,9 @@ def test_output_hook_replaces_discarded_inplace_return_storage() -> None:
     log = tl.trace(
         _DiscardedInplaceReturnModel(),
         torch.tensor([-2.0, 3.0]),
-        intervention_ready=True,
-        hooks={tl.func("relu_"): tl.zero_ablate()},
+        capture=tl.options.CaptureOptions(
+            intervention_ready=True, hooks={tl.func("relu_"): tl.zero_ablate()}
+        ),
     )
     relu_layer = next(layer for layer in log.layer_list if layer.func_name == "relu_")
 
@@ -184,11 +186,13 @@ def test_chain_of_interventions_preserves_graph() -> None:
     log = tl.trace(
         model,
         torch.randn(3, 4),
-        intervention_ready=True,
-        hooks={
-            tl.func("relu"): _zero_hook,
-            tl.func("sigmoid"): _zero_hook,
-        },
+        capture=tl.options.CaptureOptions(
+            intervention_ready=True,
+            hooks={
+                tl.func("relu"): _zero_hook,
+                tl.func("sigmoid"): _zero_hook,
+            },
+        ),
     )
 
     relu_layer = next(layer for layer in log.layer_list if layer.func_name == "relu")
@@ -207,8 +211,9 @@ def test_quantization_sensitivity_pattern() -> None:
     log = tl.trace(
         _HookedMlp(),
         torch.randn(3, 4),
-        intervention_ready=True,
-        hooks={tl.func("sigmoid"): _quantize_dequantize_hook},
+        capture=tl.options.CaptureOptions(
+            intervention_ready=True, hooks={tl.func("sigmoid"): _quantize_dequantize_hook}
+        ),
     )
 
     sigmoid_layer = next(layer for layer in log.layer_list if layer.func_name == "sigmoid")
@@ -246,7 +251,9 @@ def test_fresh_tensor_replacement_at_nested_boundary_and_model_output() -> None:
     nested_handle = model.block.register_forward_hook(nested_hook)
     root_handle = model.register_forward_hook(root_hook)
     try:
-        log = tl.trace(model, torch.randn(3, 4), intervention_ready=True)
+        log = tl.trace(
+            model, torch.randn(3, 4), capture=tl.options.CaptureOptions(intervention_ready=True)
+        )
     finally:
         nested_handle.remove()
         root_handle.remove()

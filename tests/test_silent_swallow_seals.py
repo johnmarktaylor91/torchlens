@@ -101,7 +101,11 @@ def test_failed_decode_leaves_a_durable_annotation(monkeypatch) -> None:
 
     monkeypatch.setattr(_builtin_output, "_decode_outputs_for_trace_unguarded", _raising_decode)
     with pytest.warns(match="decode_skipped"):
-        trace = tl.trace(nn.Linear(4, 2), torch.randn(1, 4), output_style="imagenet")
+        trace = tl.trace(
+            nn.Linear(4, 2),
+            torch.randn(1, 4),
+            capture=tl.options.CaptureOptions(output_style="imagenet"),
+        )
 
     assert trace.decoded_output is None, "partial decode write survived the belt"
     assert trace.output_postprocessor is None

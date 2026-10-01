@@ -42,15 +42,15 @@ def main() -> None:
     torch.manual_seed(4)
     model = TinyMLP().eval()
     x = torch.randn(2, 8)
-    clean = tl.trace(model, x, intervention_ready=True)
+    clean = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
 
     replayed = clean.fork("replay")
     replayed.attach_hooks(tl.func("relu"), tl.zero_ablate())
-    replayed.replay()
+    replayed.push()
 
     rerun = clean.fork("rerun")
     rerun.attach_hooks(tl.func("relu"), tl.zero_ablate())
-    rerun.rerun(model, x)
+    rerun.run(model, x)
 
     assert torch.allclose(replayed.layer_list[-1].out, rerun.layer_list[-1].out)
     assert replayed.last_run_records()[-1].engine == "replay"

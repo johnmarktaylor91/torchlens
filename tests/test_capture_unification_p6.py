@@ -88,7 +88,7 @@ def test_trace_backward_ready_rejects_disk_only_storage(tmp_path: Path) -> None:
             torch.ones(1, 4),
             save=tl.func("linear"),
             storage=tl.to_disk(tmp_path / "backward_ready.tlspec"),
-            backward_ready=True,
+            capture=tl.options.CaptureOptions(backward_ready=True),
         )
 
 

@@ -64,7 +64,9 @@ def _trace(model: torch.nn.Module) -> Trace:
         Captured trace.
     """
 
-    return tl.trace(model, torch.randn(4), save_code_context=True)
+    return tl.trace(
+        model, torch.randn(4), capture=tl.options.CaptureOptions(save_code_context=True)
+    )
 
 
 class _SingleAssign(torch.nn.Module):
@@ -278,7 +280,11 @@ def test_var_names_adversarial_source_forms() -> None:
 def test_var_names_save_code_context_false() -> None:
     """Disabling source context leaves ``var_names`` empty."""
 
-    trace = tl.trace(_SingleAssign(), torch.randn(4), save_code_context=False)
+    trace = tl.trace(
+        _SingleAssign(),
+        torch.randn(4),
+        capture=tl.options.CaptureOptions(save_code_context=False),
+    )
     assert _first_var_names(trace, "relu") == []
 
 

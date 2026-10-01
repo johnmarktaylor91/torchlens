@@ -119,9 +119,8 @@ def _fake_capture_trace(*args: Any, **kwargs: Any) -> tl.Trace:
     trace = tl.trace(
         _TinyModel().eval(),
         torch.ones(1),
-        layers_to_save="all",
-        random_seed=1,
         backend="torch",
+        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=1),
     )
     trace.backend = "fake"
     trace.module_identity_mode = "function_root"
@@ -228,8 +227,15 @@ def test_explicit_torch_backend_matches_legacy_trace() -> None:
 
     model = _TinyModel()
     x = torch.ones(1)
-    legacy = tl.trace(model, x, layers_to_save="all", random_seed=1)
-    explicit = tl.trace(model, x, layers_to_save="all", random_seed=1, backend="torch")
+    legacy = tl.trace(
+        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=1)
+    )
+    explicit = tl.trace(
+        model,
+        x,
+        backend="torch",
+        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=1),
+    )
     assert explicit.backend == legacy.backend == "torch"
     assert explicit.layer_labels == legacy.layer_labels
 
@@ -257,9 +263,9 @@ def test_torch_accepts_default_equivalent_trace_option_values() -> None:
         _TinyModel(),
         torch.ones(1),
         backend="torch",
-        module_identity_mode="torch_module",
-        payload_policy="full",
-        save_preview=False,
+        capture=tl.options.CaptureOptions(
+            module_identity_mode="torch_module", payload_policy="full", save_preview=False
+        ),
     )
 
     assert trace.backend == "torch"
@@ -861,7 +867,12 @@ def test_paddle_preview_unsupported_options_raise_typed_error() -> None:
             return x
 
     with pytest.raises(BackendUnsupportedError):
-        tl.trace(_PaddleLayer(), paddle.to_tensor([1.0]), backend="paddle", backward_ready=True)
+        tl.trace(
+            _PaddleLayer(),
+            paddle.to_tensor([1.0]),
+            backend="paddle",
+            capture=tl.options.CaptureOptions(backward_ready=True),
+        )
 
 
 def test_paddle_preview_applies_static_label_save_selector() -> None:
@@ -1034,7 +1045,7 @@ def test_public_option_spine_rejects_unsupported_explicit_option() -> None:
                 _FakeModel(),
                 object(),
                 backend="fake",
-                module_identity_mode="function_root",
+                capture=tl.options.CaptureOptions(module_identity_mode="function_root"),
             )
     finally:
         unregister_backend_spec("fake")

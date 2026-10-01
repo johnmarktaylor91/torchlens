@@ -31,6 +31,10 @@ def test_multi_output_module_smoke() -> None:
 
             return x + 1, x * 2
 
-    log = tl.trace(MultiOut(), torch.ones(1, 2), intervention_ready=True)
+    log = tl.trace(
+        MultiOut(),
+        torch.ones(1, 2),
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+    )
     container_paths = [layer.container_path for layer in log.layer_list if layer.is_output]
     assert container_paths

@@ -309,7 +309,11 @@ def test_m3_dropped_zipped_edge_still_fails_validation() -> None:
     ]
     model = _ForeachOutOfPlace().eval()
     ground_truth = model(*inputs)
-    trace = tl.trace(model, inputs, save_arg_values=True, save_rng_states=True)
+    trace = tl.trace(
+        model,
+        inputs,
+        capture=tl.options.CaptureOptions(save_arg_values=True, save_rng_states=True),
+    )
     member0 = _ops_by_func(trace, "_foreach_add")[0]
     member0.parents = [p for p in member0.parents if p != "input_3"]
     member0.parent_arg_positions["args"] = {

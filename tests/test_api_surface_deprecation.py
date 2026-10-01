@@ -1,18 +1,23 @@
-"""Tests for TorchLens 2.0 top-level deprecation shims."""
+"""Absence pins for the removed top-level deprecation shims.
+
+The moved-name ``__getattr__`` table, the paper-era API shims, and the
+deprecated top-level wrapper functions were deleted by the 2026-08-19
+shim-removal lane. Contract now: the historical top-level spellings raise
+``AttributeError`` and the canonical submodule spellings resolve.
+"""
 
 from __future__ import annotations
 
-import inspect
-from pathlib import Path
-from typing import Any
+import importlib
 
 import pytest
-import torch
-from torch import nn
 
 import torchlens
 
-OBJECT_ALIAS_CASES = [
+pytestmark = pytest.mark.smoke
+
+#: (removed top-level name, canonical module, canonical attribute).
+REMOVED_TOP_LEVEL_CASES = [
     ("ActivationPostfunc", "torchlens.types", "ActivationPostfunc"),
     ("Buffer", "torchlens.types", "Buffer"),
     ("FuncCallLocation", "torchlens.types", "FuncCallLocation"),
@@ -42,7 +47,8 @@ OBJECT_ALIAS_CASES = [
     ("check_metadata_invariants", "torchlens.validation", "check_metadata_invariants"),
     ("check_spec_compat", "torchlens.validation", "check_spec_compat"),
     ("cleanup_tmp", "torchlens.io", "cleanup_tmp"),
-    ("get_model_metadata", "torchlens.io", "get_model_metadata"),
+    # get_model_metadata was itself a deprecated alias; canonical is log_model_metadata.
+    ("get_model_metadata", "torchlens.io", "log_model_metadata"),
     ("list_logs", "torchlens.io", "list_logs"),
     ("log_model_metadata", "torchlens.io", "log_model_metadata"),
     ("trace_to_dagua_graph", "torchlens.experimental.dagua", "trace_to_dagua_graph"),
@@ -64,202 +70,61 @@ OBJECT_ALIAS_CASES = [
     ("wrapped", "torchlens.backends.torch.wrappers", "wrapped"),
 ]
 
-WRAPPER_CASES = [
-    ("validate_forward_pass", torchlens.validation.validate_forward_pass),
-    ("validate_backward_pass", torchlens.validation.validate_backward_pass),
-    ("validate_saved_outs", torchlens.validation.validate_saved_outs),
-    ("summary", torchlens.visualization.summary),
-    ("show_model_graph", torchlens.visualization.show_model_graph),
-    ("draw_backward", torchlens.visualization.draw_backward),
-    ("load_intervention_spec", torchlens.io.load_intervention_spec),
+#: Removed top-level wrapper functions whose canonical spelling lives in a
+#: submodule (validation/visualization/io).
+REMOVED_WRAPPER_NAMES = [
+    "validate_forward_pass",
+    "validate_backward_pass",
+    "validate_saved_outs",
+    "summary",
+    "show_model_graph",
+    "draw_backward",
+    "draw_combined",
+    "load_intervention_spec",
+]
+
+#: Removed paper-era shim names.
+REMOVED_PAPER_ERA_NAMES = [
+    "log_forward_pass",
+    "validate_model_activations",
+    "validate_saved_activations",
+    "render_graph",
+    "render_model_graph",
+    "draw_model_graph",
+    "ModelHistory",
+    "get_model_structure",
+    "show_model_structure",
 ]
 
 
-class _TinyModel(nn.Module):
-    """Small deterministic model for API compatibility checks."""
-
-    def __init__(self) -> None:
-        """Initialize the toy network."""
-
-        super().__init__()
-        self.net = nn.Sequential(nn.Linear(3, 4), nn.ReLU(), nn.Linear(4, 2))
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Run the toy network."""
-
-        return self.net(x)
-
-
-@pytest.fixture
-def small_model() -> _TinyModel:
-    """Return a deterministic tiny model."""
-
-    torch.manual_seed(0)
-    return _TinyModel()
-
-
-@pytest.fixture
-def small_input() -> torch.Tensor:
-    """Return a deterministic tiny input."""
-
-    torch.manual_seed(1)
-    return torch.randn(1, 3)
-
-
-@pytest.mark.parametrize(("old_name", "module_name", "new_name"), OBJECT_ALIAS_CASES)
-def test_object_aliases_warn_and_return_new_object(
+@pytest.mark.parametrize(("old_name", "module_name", "new_name"), REMOVED_TOP_LEVEL_CASES)
+def test_moved_name_is_gone_and_canonical_resolves(
     old_name: str, module_name: str, new_name: str
 ) -> None:
-    """Deprecated object aliases should warn and return the canonical object."""
+    """The old top-level spelling refuses; the canonical spelling resolves."""
 
-    module = __import__(module_name, fromlist=[new_name])
-    with pytest.warns(DeprecationWarning):
-        old_obj = getattr(torchlens, old_name)
-    assert old_obj is getattr(module, new_name)
-
-
-@pytest.mark.parametrize(("old_name", "new_func"), WRAPPER_CASES)
-def test_wrapper_signatures_preserved(old_name: str, new_func: Any) -> None:
-    """``functools.wraps`` wrappers should expose canonical shipped signatures."""
-
-    old_func = getattr(torchlens, old_name)
-    assert inspect.signature(old_func) == inspect.signature(new_func)
+    with pytest.raises(AttributeError):
+        getattr(torchlens, old_name)
+    module = importlib.import_module(module_name)
+    assert getattr(module, new_name) is not None
 
 
-def test_validate_forward_pass_positional_random_seed(
-    small_model: _TinyModel, small_input: torch.Tensor
-) -> None:
-    """Legacy positional random_seed should still bind correctly."""
+@pytest.mark.parametrize("name", REMOVED_WRAPPER_NAMES + REMOVED_PAPER_ERA_NAMES)
+def test_removed_top_level_wrapper_is_gone(name: str) -> None:
+    """Removed wrapper and paper-era spellings raise AttributeError."""
 
-    with pytest.warns(DeprecationWarning):
-        result = torchlens.validate_forward_pass(small_model, small_input, None, 42)
-    assert isinstance(result, bool)
+    with pytest.raises(AttributeError):
+        getattr(torchlens, name)
 
 
-def test_validate_backward_pass_positional_loss_fn(
-    small_model: _TinyModel, small_input: torch.Tensor
-) -> None:
-    """Legacy positional loss_fn should still bind as the fourth argument."""
+def test_dir_lists_no_removed_names() -> None:
+    """``dir(torchlens)`` no longer advertises any removed spelling."""
 
-    def loss_fn(output: torch.Tensor) -> torch.Tensor:
-        """Return a scalar loss for backward validation."""
-
-        return output.sum()
-
-    with pytest.warns(DeprecationWarning):
-        result = torchlens.validate_backward_pass(small_model, small_input, None, loss_fn)
-    assert isinstance(result, bool)
-
-
-def test_validate_saved_outs_positional_random_seed(
-    small_model: _TinyModel, small_input: torch.Tensor
-) -> None:
-    """Legacy saved-out validator args should still bind correctly."""
-
-    with pytest.warns(DeprecationWarning):
-        result = torchlens.validate_saved_outs(small_model, small_input, None, 43)
-    assert isinstance(result, bool)
-
-
-def test_summary_legacy_call(small_model: _TinyModel, small_input: torch.Tensor) -> None:
-    """Top-level summary should warn and return text for legacy callers."""
-
-    with pytest.warns(DeprecationWarning):
-        result = torchlens.summary(small_model, small_input, None)
-    assert isinstance(result, str)
-
-
-def test_show_model_graph_legacy_kwargs(
-    tmp_path: Path, small_model: _TinyModel, small_input: torch.Tensor
-) -> None:
-    """Top-level forward graph helper should accept representative legacy kwargs."""
-
-    outpath = tmp_path / "forward_graph"
-    with pytest.warns(DeprecationWarning):
-        result = torchlens.show_model_graph(
-            small_model,
-            small_input,
-            None,
-            vis_mode="unrolled",
-            vis_outpath=str(outpath),
-            vis_save_only=True,
-            vis_fileformat="svg",
-        )
-    assert result is None
-
-
-def test_draw_backward_legacy_kwargs(
-    tmp_path: Path, small_model: _TinyModel, small_input: torch.Tensor
-) -> None:
-    """Top-level backward graph helper should accept representative legacy kwargs."""
-
-    log = torchlens.trace(small_model, small_input, layers_to_save="all")
-    loss = log[log.output_layers[0]].out.sum()
-    log.log_backward(loss)
-
-    def node_spec_fn(grad_fn_handle: Any, default_spec: Any) -> Any:
-        """Keep default grad_fn_handle node specs."""
-
-        del grad_fn_handle
-        return default_spec
-
-    with pytest.warns(DeprecationWarning):
-        result = torchlens.draw_backward(
-            log,
-            vis_outpath=str(tmp_path / "backward_graph"),
-            vis_save_only=True,
-            vis_fileformat="svg",
-            node_spec_fn=node_spec_fn,
-        )
-    assert isinstance(result, str)
-
-
-def test_load_intervention_spec_wrapper_warns(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Top-level intervention-spec loader should warn and forward old args."""
-
-    sentinel = object()
-
-    def fake_load_intervention_spec(path: str) -> object:
-        """Return a stable sentinel for wrapper forwarding tests."""
-
-        assert path == "demo.tlspec"
-        return sentinel
-
-    monkeypatch.setattr(torchlens, "_moved_load_intervention_spec", fake_load_intervention_spec)
-    with pytest.warns(DeprecationWarning):
-        result = torchlens.load_intervention_spec("demo.tlspec")
-    assert result is sentinel
-
-
-@pytest.mark.parametrize(
-    ("legacy_kwarg", "legacy_value", "canonical"),
-    [
-        ("vis_node_mode", "default", "node_style"),
-        ("vis_buffers", "meaningful", "show_buffer_layers"),
-        ("vis_direction", "bottomup", "direction"),
-    ],
-)
-def test_draw_legacy_vis_kwargs_warn(
-    tmp_path: Path,
-    small_model: _TinyModel,
-    small_input: torch.Tensor,
-    legacy_kwarg: str,
-    legacy_value: str,
-    canonical: str,
-) -> None:
-    """The three sentinel-detected ``draw`` translations must warn (R48-a).
-
-    ``draw(vis_node_mode=)`` / ``draw(vis_buffers=)`` / ``draw(vis_direction=)``
-    were silently translated to their canonical spellings while the sibling
-    ``vis_opt=`` hop warned -- an unannounced removal hazard (grind b4 R48-a,
-    carried byte-identical through fixwave-5).
-    """
-
-    log = torchlens.trace(small_model, small_input)
-    with pytest.warns(DeprecationWarning, match=rf"`{legacy_kwarg}`.*`{canonical}`"):
-        log.draw(
-            vis_outpath=str(tmp_path / "graph"),
-            vis_save_only=True,
-            vis_fileformat="dot",
-            **{legacy_kwarg: legacy_value},
-        )
+    visible = set(dir(torchlens))
+    removed = (
+        {case[0] for case in REMOVED_TOP_LEVEL_CASES}
+        | set(REMOVED_WRAPPER_NAMES)
+        | set(REMOVED_PAPER_ERA_NAMES)
+    )
+    still_visible = sorted(visible & removed)
+    assert not still_visible, still_visible

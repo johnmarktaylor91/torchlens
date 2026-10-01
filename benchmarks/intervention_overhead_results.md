@@ -1,5 +1,11 @@
 # Intervention Overhead Results
 
+> Historical record: the rows below were measured before the 2026-08 shim
+> removal and keep the API spellings current at measurement time
+> (`log_forward_pass`/`replay`/`rerun`). Rerunning
+> `benchmarks/intervention_overhead.py` regenerates this page with the modern
+> spellings (`trace`/`push`/`run`).
+
 Model: `TinyMLP` with dimensions 8 -> 16 -> 16 -> 8, batch size 32.
 
 Budget reference: PLAN.md v5.2 section 13.12 is qualitative. It requires inactive overhead to stay behind existing cheap gates, replay to scale with cone size, rerun to use pre-normalized hook dispatch, fork to stay shallow, and Bundle supergraph construction to remain lazy.

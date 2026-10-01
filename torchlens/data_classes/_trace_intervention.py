@@ -23,7 +23,6 @@ if TYPE_CHECKING:
     _TraceMixinBase = Trace
 else:
     _TraceMixinBase = object
-from .._deprecations import MISSING, MissingType
 from .._errors import InvalidArgumentError
 from .._trace_state import TraceState
 from ..intervention.types import (
@@ -507,9 +506,6 @@ class TraceInterventionMixin(_TraceMixinBase):
         *,
         model: nn.Module | None = None,
         x: Any = None,
-        engine: str | MissingType = MISSING,
-        confirm_mutation: bool | MissingType = MISSING,
-        strict: bool | MissingType = MISSING,
         intervention: InterventionOptions | None = None,
         direction: str | None = None,
     ) -> "Trace":
@@ -525,13 +521,10 @@ class TraceInterventionMixin(_TraceMixinBase):
             Model required when ``engine="rerun"``.
         x:
             Input required when ``engine="rerun"``.
-        engine:
-            ``"auto"``, ``"replay"``, ``"rerun"``, or ``"set_only"``.
-        confirm_mutation:
-            Suppress the once-per-root mutate-in-place warning for callers that
-            intentionally mutate this log.
-        strict:
-            Whether selector and propagation checks should raise.
+        intervention:
+            Grouped intervention options (``InterventionOptions``: ``engine``
+            in ``"auto"``/``"replay"``/``"rerun"``/``"set_only"``,
+            ``confirm_mutation``, ``strict``).
         direction:
             Optional signal direction override for hook-style mutations.
 
@@ -543,12 +536,7 @@ class TraceInterventionMixin(_TraceMixinBase):
 
         from ..intervention.errors import EngineDispatchError
 
-        intervention_options = merge_intervention_options(
-            intervention=intervention,
-            engine=engine,
-            confirm_mutation=confirm_mutation,
-            strict=strict,
-        )
+        intervention_options = merge_intervention_options(intervention=intervention)
         engine_value = intervention_options.engine
         confirm_mutation_value = intervention_options.confirm_mutation
         strict_value = intervention_options.strict

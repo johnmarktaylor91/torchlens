@@ -18,7 +18,7 @@ from torchvision.models import resnet18
 
 model = resnet18(weights=None).eval()
 x = torch.randn(1, 3, 224, 224, requires_grad=True)
-trace = tl.trace(model, x, backward_ready=True)
+trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
 
 op = trace["layer4.1.conv2"]
 rf = op.receptive_field

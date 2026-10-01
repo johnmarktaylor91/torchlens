@@ -229,9 +229,7 @@ class TestBranchFastSkip:
         assert log.internally_terminated_bool_ops == []
         assert log.conditional_records == []
         assert log.conditional_branch_edges == []
-        assert log.conditional_then_entry_edges == []
-        assert log.conditional_elif_entry_edges == []
-        assert log.conditional_else_entry_edges == []
+        assert log.conditional_arm_entry_edges == {}
         assert log.conditional_arm_entry_edges == {}
         assert log.conditional_edge_call_indices == {}
 

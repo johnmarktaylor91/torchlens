@@ -6,6 +6,7 @@ import pytest
 import torch
 from torch import nn
 
+import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens.semantic import MissingFacetError
 
@@ -135,7 +136,9 @@ def test_distilbert_attention_q_shape_and_head_view() -> None:
     """DistilBERT recipe reshapes Q and slices heads correctly."""
 
     log = trace_fn(
-        _AttentionModel(DistilBertSdpaAttention()), torch.randn(2, 3, 8), layers_to_save="all"
+        _AttentionModel(DistilBertSdpaAttention()),
+        torch.randn(2, 3, 8),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
     )
     view = log.modules["attn"].facets
     assert view.q.shape == (2, 3, 2, 4)
@@ -153,7 +156,9 @@ def test_distilbert_eager_attention_q_shape_and_head_view() -> None:
     """
 
     log = trace_fn(
-        _AttentionModel(MultiHeadSelfAttention()), torch.randn(2, 3, 8), layers_to_save="all"
+        _AttentionModel(MultiHeadSelfAttention()),
+        torch.randn(2, 3, 8),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
     )
     view = log.modules["attn"].facets
     assert view.recipe_source == "distilbert_attention"
@@ -175,7 +180,9 @@ def test_distilbert_unified_attention_q_shape_and_pattern_missing() -> None:
     """
 
     log = trace_fn(
-        _AttentionModel(DistilBertSelfAttention()), torch.randn(2, 3, 8), layers_to_save="all"
+        _AttentionModel(DistilBertSelfAttention()),
+        torch.randn(2, 3, 8),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
     )
     view = log.modules["attn"].facets
     assert view.recipe_source == "distilbert_attention"
@@ -192,7 +199,11 @@ def test_distilbert_unified_attention_q_shape_and_pattern_missing() -> None:
 def test_gpt2_fused_qkv_split_matches_manual_reference() -> None:
     """GPT-2 recipe splits fused QKV output into equal thirds."""
 
-    log = trace_fn(_AttentionModel(GPT2Attention()), torch.randn(2, 3, 8), layers_to_save="all")
+    log = trace_fn(
+        _AttentionModel(GPT2Attention()),
+        torch.randn(2, 3, 8),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
     view = log.modules["attn"].facets
     c_attn = log.modules["attn.c_attn"].out
     q_ref, _k_ref, _v_ref = c_attn.split(c_attn.shape[-1] // 3, dim=-1)
@@ -204,7 +215,11 @@ def test_gpt2_fused_qkv_split_matches_manual_reference() -> None:
 def test_gqa_kv_head_selection_is_aliasing_read_grad_only() -> None:
     """GQA K/V query-head selection records aliasing capability."""
 
-    log = trace_fn(_AttentionModel(LlamaAttention()), torch.randn(2, 3, 8), layers_to_save="all")
+    log = trace_fn(
+        _AttentionModel(LlamaAttention()),
+        torch.randn(2, 3, 8),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
     view = log.modules["attn"].facets
     k_head = view.head(3).k
 

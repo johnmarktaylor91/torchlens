@@ -115,7 +115,7 @@ from .hooks import (
     normalize_hook_plan,
 )
 from .predicates import add, replace_with, when
-from .replay import push, push_from, replay, replay_from
+from .replay import push, push_from
 from .resolver import SiteTable, resolve_sites
 from .runtime import do
 from .save import (
@@ -140,7 +140,6 @@ from .selectors import (
     in_backward_pass,
     in_module,
     input_at,
-    intervening,
     label,
     module,
     output,
@@ -182,7 +181,7 @@ from .types import (
 
 if TYPE_CHECKING:  # typing-only mirror of the lazy names below
     from .bundle import Bundle
-    from .rerun import rerun, run
+    from .rerun import run
 
 __all__ = [
     "AppendBatchDependenceError",
@@ -294,7 +293,6 @@ __all__ = [
     "input_at",
     "in_backward_pass",
     "in_module",
-    "intervening",
     "label",
     "regex",
     "load_intervention_spec",
@@ -314,9 +312,6 @@ __all__ = [
     "replace_with",
     "push",
     "push_from",
-    "replay",
-    "replay_from",
-    "rerun",
     "run",
     "resample_ablate",
     "relative_l1_scalar",
@@ -345,7 +340,6 @@ __all__ = [
 # ever observed.
 _LAZY_NAMES: dict[str, str] = {
     "Bundle": ".bundle",
-    "rerun": ".rerun",
     "run": ".rerun",
 }
 

@@ -12,8 +12,8 @@ add names to the top-level `torchlens` namespace:
 - `ArgumentTypeError(ConfigurationError, TypeError)`
 - `ArgumentConflictError(ConfigurationError, ValueError)` — VALUE-combination
   conflicts (well-typed options whose values are mutually exclusive, e.g.
-  `save_outs_to` + `out_sink`) were historically raw `ValueError`s; the typed
-  refusal preserves that catchability.
+  `streaming.bundle_path` + `streaming.out_callback`) were historically raw
+  `ValueError`s; the typed refusal preserves that catchability.
 - `KeywordConflictError(ConfigurationError, TypeError)` — KEYWORD/call-surface
   conflicts (deprecated kwarg + replacement, grouped option + flat field, two
   exclusive call surfaces) were historically raw `TypeError`s (Python's
@@ -110,7 +110,6 @@ add names to the top-level `torchlens` namespace:
 | `derived_field_assignment_invalid` | Assignment to a derived compatibility field | Do not assign derived fields |
 | `compiled_callable_unsupported` | Compiled plain callable has no module capture surface | Pass the original eager module |
 | `compile_counts_unavailable` | `tl.debug.count_compiles()` found no Dynamo compile counters in this torch runtime (`CompileCountsUnavailableError`, `RuntimeError` lineage) | Upgrade torch or skip the verification on this runtime |
-| `deprecated_argument_conflict` | Deprecated and replacement arguments were both supplied | Remove the deprecated argument |
 | `diagnostic_severity_invalid` | Diagnostic severity is outside the closed vocabulary | Choose a documented severity |
 | `distributed_payload_witness_unsupported` | Payload witnesses are reserved | Use digest witnesses |
 | `distributed_witness_invalid` | Distributed witness mode is unknown | Choose `none` or `digest` |
@@ -165,7 +164,8 @@ add names to the top-level `torchlens` namespace:
 | `intervention_action_direction_invalid` | Predicate-side intervention action names an unknown direction (`ArgumentTypeError`; historically `TypeError`, so the live capture path converts it to `PredicateError`) | Choose `forward`, `backward`, or `both` |
 | `intervention_action_type_invalid` | Intervention action has an unsupported type | Pass a decision, helper, callable, or `None` |
 | `intervention_direction_invalid` | Trace-side intervention direction is unknown (`InvalidArgumentError`; historically `ValueError`) | Choose `forward`, `backward`, or `both` |
-| `intervention_engine_invalid` | `do(..., engine=...)` value is unknown | Choose `auto`, `replay`, `rerun`, or `set_only` |
+| `intervention_engine_invalid` | `do(..., intervention=InterventionOptions(engine=...))` value is unknown | Choose `auto`, `replay`, `rerun`, or `set_only` |
+| `extra_positional_input_invalid` | A tensor landed in `trace`'s fourth positional slot (`grad_transform`) -- almost always an extra positional model input | Bundle positional inputs into one tuple |
 | `intervention_helper_unknown` | Built-in helper name is unknown | Choose a registered helper |
 | `jax_control_flow_invalid` | JAX control-flow mode is unknown | Choose `reject`, `unroll`, or `region` |
 | `layer_pass_ambiguous` | Per-pass field read on a multi-pass layer | Access the field on one pass via `.ops[k]` |

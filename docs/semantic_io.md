@@ -27,8 +27,10 @@ overridden or when a multi-output model needs an explicit logits head:
 trace = tl.trace(
     model,
     x,
-    output_style="classification",
-    output_head="logits",
+    capture=tl.options.CaptureOptions(
+        output_style="classification",
+        output_head="logits",
+    ),
 )
 ```
 
@@ -85,7 +87,7 @@ def my_labels(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocessing | No
     )
 
 
-trace = tl.trace(model, x, output_style="my_labels")
+trace = tl.trace(model, x, capture=tl.options.CaptureOptions(output_style="my_labels"))
 ```
 
 The registration API is intentionally fail-closed: return `None` for non-matches,
@@ -103,8 +105,10 @@ portable save policy is controlled by `save_raw_input`.
 trace = tl.trace(
     model,
     "0.1,0.2,2.0,1.0",
-    transform=text_to_tensor,
-    save_raw_input="small",
+    capture=tl.options.CaptureOptions(
+        transform=text_to_tensor,
+        save_raw_input="small",
+    ),
 )
 trace.draw(show_input_transform_summary=True)
 ```
@@ -157,9 +161,11 @@ the trace has enough semantic metadata for the image-classifier keystone flow.
 trace = tl.trace(
     model,
     image_list,
-    transform=image_batch_to_tensor,
-    output_style="classification",
-    save_raw_input=True,
+    capture=tl.options.CaptureOptions(
+        transform=image_batch_to_tensor,
+        output_style="classification",
+        save_raw_input=True,
+    ),
 )
 trace.model_profile
 ```
@@ -183,10 +189,12 @@ mds_layers = tl.in_module("block1") | tl.in_module("block2")
 trace = tl.trace(
     model,
     image_list,
-    transform=image_batch_to_tensor,
     save=mds_layers,
-    save_raw_input=True,
-    output_style="classification",
+    capture=tl.options.CaptureOptions(
+        transform=image_batch_to_tensor,
+        save_raw_input=True,
+        output_style="classification",
+    ),
 )
 coords_by_layer = tl.repgeom.mds_evolution(trace, save=mds_layers, min_n=8)
 ```
@@ -289,10 +297,12 @@ mds_layers = tl.in_module("block1") | tl.in_module("block2")
 trace = tl.trace(
     model,
     image_list,
-    transform=image_batch_to_tensor,
     save=mds_layers,
-    save_raw_input=True,
-    output_style="classification",
+    capture=tl.options.CaptureOptions(
+        transform=image_batch_to_tensor,
+        save_raw_input=True,
+        output_style="classification",
+    ),
 )
 
 trace.model_profile
@@ -325,7 +335,7 @@ core flow runs without downloading external model weights.
 
 ## Provisional Public Names
 
-- `tl.trace(..., output_style=..., output_head=...)`
+- `tl.trace(..., capture=CaptureOptions(output_style=..., output_head=...))`
 - `Trace.output_table(top_n=5, batch_items=None)`
 - `Trace.decode_output(top_n=None)`
 - `Trace.output_postprocessor`
@@ -334,7 +344,7 @@ core flow runs without downloading external model weights.
 - `tl.autoroute.output.unregister(...)`
 - `tl.autoroute.output.list()`
 - `tl.autoroute.output.info(...)`
-- `tl.trace(..., transform=..., save_raw_input=..., batch_render=...)`
+- `tl.trace(..., capture=CaptureOptions(transform=..., save_raw_input=..., batch_render=...))`
 - `Trace.raw_input`
 - `Trace.input_preprocessor`
 - `Trace.draw(show_input_transform_summary=True)`

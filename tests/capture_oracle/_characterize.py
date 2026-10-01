@@ -590,9 +590,26 @@ def _run_capture(
 
     config = case.config
     if config == "exhaustive":
-        return tl.trace(model, input_tensor, layers_to_save="all", random_seed=_SEED), None, None
+        return (
+            tl.trace(
+                model,
+                input_tensor,
+                capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=_SEED),
+            ),
+            None,
+            None,
+        )
     if config == "predicate_live":
-        return tl.trace(model, input_tensor, save=_save_all_ops, random_seed=_SEED), None, None
+        return (
+            tl.trace(
+                model,
+                input_tensor,
+                save=_save_all_ops,
+                capture=tl.options.CaptureOptions(random_seed=_SEED),
+            ),
+            None,
+            None,
+        )
     if config == "record":
         recording = tl.record(
             model,
@@ -603,9 +620,25 @@ def _run_capture(
         )
         return recording, None, None
     if config == "two_pass_negative":
-        return tl.trace(model, input_tensor, layers_to_save=[-1], random_seed=_SEED), None, None
+        return (
+            tl.trace(
+                model,
+                input_tensor,
+                capture=tl.options.CaptureOptions(layers_to_save=[-1], random_seed=_SEED),
+            ),
+            None,
+            None,
+        )
     if config == "mixed_selector":
-        return tl.trace(model, input_tensor, layers_to_save=[1, -1], random_seed=_SEED), None, None
+        return (
+            tl.trace(
+                model,
+                input_tensor,
+                capture=tl.options.CaptureOptions(layers_to_save=[1, -1], random_seed=_SEED),
+            ),
+            None,
+            None,
+        )
     if config == "lookback_trace":
         selector = tl.func("conv2d") & tl.followed_by(tl.func("relu"))
         trace = tl.trace(
@@ -614,7 +647,7 @@ def _run_capture(
             save=selector,
             lookback=4,
             lookback_payload_policy="detached_raw",
-            random_seed=_SEED,
+            capture=tl.options.CaptureOptions(random_seed=_SEED),
         )
         return trace, None, None
     if config == "intervene_trace":
@@ -623,7 +656,7 @@ def _run_capture(
             input_tensor,
             save=_save_all_ops,
             intervene=tl.when(tl.func("relu"), tl.add(0.0)),
-            random_seed=_SEED,
+            capture=tl.options.CaptureOptions(random_seed=_SEED),
         )
         return trace, None, None
     if config == "intervene_record":
@@ -642,7 +675,7 @@ def _run_capture(
             input_tensor,
             save=_save_all_ops,
             halt=_halt_on_relu,
-            random_seed=_SEED,
+            capture=tl.options.CaptureOptions(random_seed=_SEED),
         )
         return trace, None, None
     if config == "halt_record":
@@ -659,10 +692,9 @@ def _run_capture(
         trace = tl.trace(
             model,
             input_tensor.requires_grad_(True),
-            layers_to_save="all",
-            save_grads="all",
-            backward_ready=True,
-            random_seed=_SEED,
+            capture=tl.options.CaptureOptions(
+                layers_to_save="all", save_grads="all", backward_ready=True, random_seed=_SEED
+            ),
         )
         output_op = trace[trace.output_layers[0]]
         if not getattr(output_op, "has_saved_activation", False):
@@ -689,9 +721,8 @@ def _run_capture(
         trace = tl.trace(
             model,
             input_tensor,
-            layers_to_save="all",
             storage=tl.to_disk(disk_path, retain_in_memory=True),
-            random_seed=_SEED,
+            capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=_SEED),
         )
         return trace, None, None
     if config == "disk_predicate":
@@ -700,7 +731,7 @@ def _run_capture(
             input_tensor,
             save=_save_all_ops,
             storage=tl.to_disk(disk_path, retain_in_memory=True),
-            random_seed=_SEED,
+            capture=tl.options.CaptureOptions(random_seed=_SEED),
         )
         return trace, None, None
     if config == "disk_record":
@@ -725,7 +756,11 @@ def _run_capture(
         return recording, RuntimeError("capture-oracle intentional forward failure"), None
     if config == "failed_trace":
         try:
-            tl.trace(model, input_tensor, layers_to_save="all", random_seed=_SEED)
+            tl.trace(
+                model,
+                input_tensor,
+                capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=_SEED),
+            )
         except RuntimeError as exc:
             return tl.partial.from_failed_capture(exc), exc, None
         raise AssertionError("intentional failing trace unexpectedly completed")

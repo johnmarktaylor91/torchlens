@@ -16,7 +16,7 @@ from torchlens.intervention.errors import (
     ControlFlowDivergenceError,
     ControlFlowDivergenceWarning,
 )
-from torchlens.intervention.rerun import rerun
+from torchlens.intervention.rerun import run
 from torchlens.intervention.types import InterventionSpec, Relationship, TargetSpec
 from torchlens.io import TraceState
 from torchlens.options import CaptureOptions
@@ -332,7 +332,7 @@ def test_rerun_strict_divergence_raises_before_swap() -> None:
     original_raw_hash = log._raw_event_shape_hash  # noqa: SLF001
 
     with pytest.raises(ControlFlowDivergenceError):
-        log.run(BranchModel(), negative, strict=True)
+        log.run(BranchModel(), negative, replay=tl.options.ReplayOptions(strict=True))
 
     assert log.graph_shape_hash == original_hash
     assert log._raw_event_shape_hash == original_raw_hash  # noqa: SLF001
@@ -376,7 +376,12 @@ def test_rerun_matching_graph_refreshes_existing_ops_without_full_swap() -> None
 
     x = torch.tensor([[-1.0, 2.0, 3.0]])
     new_x = torch.tensor([[4.0, 5.0, -6.0]])
-    log = tl.trace(ReluAdd(), x, intervention_ready=True, activation_transform=lambda t: t * 2)
+    log = tl.trace(
+        ReluAdd(),
+        x,
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+        save=tl.options.SaveOptions(activation_transform=lambda t: t * 2),
+    )
     relu_site = next(layer for layer in log.layer_list if layer.func_name == "relu")
     original_relu_site_id = id(relu_site)
     original_out = relu_site.out.clone()
@@ -403,7 +408,9 @@ def test_rerun_fast_refresh_repopulates_child_versions() -> None:
 
     x = torch.tensor([-2.0, 3.0])
     new_x = torch.tensor([-5.0, 1.0])
-    log = tl.trace(InplaceVersionModel(), x, save_arg_values=True)
+    log = tl.trace(
+        InplaceVersionModel(), x, capture=tl.options.CaptureOptions(save_arg_values=True)
+    )
     add_site = log["add_1_1"]
     original_add_site_id = id(add_site)
 
@@ -486,7 +493,11 @@ def test_rerun_fast_refresh_keeps_every_pass_of_a_multi_pass_layer_distinct() ->
     model = MultiPassAdd()
     x = torch.randn(2, 4)
     new_x = torch.randn(2, 4)
-    log = tl.trace(model, x, layers_to_save="all", save_arg_values=True)
+    log = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    )
     assert log.layer_logs["add_1_3"].num_passes == 2
 
     log.run(model, new_x)
@@ -557,7 +568,7 @@ def test_rerun_append_true_dispatches_to_append() -> None:
     x = torch.randn(2, 3)
     log = _capture(ReluAdd(), x)
 
-    rerun(log, ReluAdd(), x, append=True)
+    run(log, ReluAdd(), x, append=True)
 
     assert log.state is TraceState.APPENDED
 

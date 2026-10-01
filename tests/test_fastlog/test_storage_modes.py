@@ -96,7 +96,7 @@ def test_reference_save_mode_to_trace_checks_version() -> None:
 
     saved_out.add_(1)
 
-    with pytest.raises(tl.MutatedReferenceError, match="mutated after capture"):
+    with pytest.raises(tl.errors.MutatedReferenceError, match="mutated after capture"):
         _ = op.out
 
 

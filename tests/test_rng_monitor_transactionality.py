@@ -89,7 +89,11 @@ def test_base_exception_during_arm_leaks_nothing(monkeypatch):
 
     monkeypatch.setattr(host_nondeterminism_monitor, "_sweep_model_generators", _interrupt)
     with pytest.raises(KeyboardInterrupt):
-        tl.trace(_tiny_model(), torch.randn(1, 4), intervention_ready=True)
+        tl.trace(
+            _tiny_model(),
+            torch.randn(1, 4),
+            capture=tl.options.CaptureOptions(intervention_ready=True),
+        )
 
     assert _surface_leaks(before) == []
     assert sys.getprofile() is None
@@ -111,7 +115,11 @@ def test_base_exception_after_profile_install_leaks_nothing(monkeypatch):
         host_nondeterminism_monitor, "_install_profile_hooks", _install_then_interrupt
     )
     with pytest.raises(KeyboardInterrupt):
-        tl.trace(_tiny_model(), torch.randn(1, 4), intervention_ready=True)
+        tl.trace(
+            _tiny_model(),
+            torch.randn(1, 4),
+            capture=tl.options.CaptureOptions(intervention_ready=True),
+        )
 
     assert _surface_leaks(before) == []
     assert sys.getprofile() is None
@@ -188,7 +196,9 @@ def test_patch_stacks_do_not_grow_across_captures():
 
     model = _tiny_model()
     for _ in range(3):
-        tl.trace(model, torch.randn(1, 4), intervention_ready=True)
+        tl.trace(
+            model, torch.randn(1, 4), capture=tl.options.CaptureOptions(intervention_ready=True)
+        )
     assert rng_module._PATCH_STACKS == {}
 
 
@@ -358,7 +368,11 @@ def test_rng_monitor_verdict_is_prestamped_fail_closed(monkeypatch):
 
     monkeypatch.setattr(capture_trace, "host_rng_advanced", _raise, raising=False)
     with pytest.raises(Exception) as excinfo:
-        tl.trace(_tiny_model(), torch.randn(1, 4), intervention_ready=True)
+        tl.trace(
+            _tiny_model(),
+            torch.randn(1, 4),
+            capture=tl.options.CaptureOptions(intervention_ready=True),
+        )
     partial = getattr(excinfo.value, "partial_log", None)
     assert partial is not None, "the failed capture must still expose its partial trace"
     runnable = partial.trace._runnable

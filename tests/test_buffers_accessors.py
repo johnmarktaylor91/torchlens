@@ -39,7 +39,11 @@ class BufferWriteModel(nn.Module):
 def test_buffer_source_and_sink_accessor_counts() -> None:
     """Trace and Op buffer source/sink accessors reflect read/write Ops."""
 
-    trace = tl.trace(BufferWriteModel(), torch.ones(2), save_arg_values=True)
+    trace = tl.trace(
+        BufferWriteModel(),
+        torch.ones(2),
+        capture=tl.options.CaptureOptions(save_arg_values=True),
+    )
     buffer_sources = [
         op.label for op in trace.layer_list if op.is_buffer and op.buffer_write_kind is None
     ]

@@ -252,7 +252,6 @@ _LAZY_EXCEPTION_PATHS = {
     "SparseCorePayloadError": ("torchlens.errors.runnable", "SparseCorePayloadError"),
     "StructuralHashMismatchError": ("torchlens.hash", "StructuralHashMismatchError"),
     "TorchCapabilityWarning": ("torchlens.utils._torch_compat", "TorchCapabilityWarning"),
-    "TorchLensDeprecationWarning": ("torchlens._deprecations", "TorchLensDeprecationWarning"),
     "UncapturedCollectiveOpError": (
         "torchlens.distributed._recognizer",
         "UncapturedCollectiveOpError",

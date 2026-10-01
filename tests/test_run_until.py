@@ -104,7 +104,7 @@ def test_live_truncation_does_not_assert_replay_arg_completeness():
 
     model = _Chain()
     x = torch.randn(2, 4)
-    log = tl.trace(model, x, save_arg_values=True)
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(save_arg_values=True))
     result = log.run(inputs=torch.randn(2, 4), until=_type_label(log, "relu"))
     assert result.trace._replay_arg_version_data_complete is False
 

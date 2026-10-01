@@ -51,7 +51,9 @@ def _captured_two_pass_trace() -> tl.Trace:
     torch.manual_seed(0)
     model = _TwoPassModel()
     x = torch.randn(3, 4, requires_grad=True)
-    trace = tl.trace(model, x, layers_to_save="all", save_grads="all")
+    trace = tl.trace(
+        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all")
+    )
     loss = trace[trace.output_layers[0]].out.sum()
     trace.log_backward(loss, retain_graph=True)
     trace.log_backward(loss, retain_graph=True)
@@ -127,7 +129,7 @@ def test_higher_order_autograd_grad_records_creator_order() -> None:
 
     torch.manual_seed(0)
     x = torch.randn(3, requires_grad=True)
-    trace = tl.trace(HigherOrderModel(), x, save_grads="all")
+    trace = tl.trace(HigherOrderModel(), x, capture=tl.options.CaptureOptions(save_grads="all"))
     try:
         loss = trace[trace.output_layers[0]].out
         first_grad = torch.autograd.grad(loss, x, create_graph=True, retain_graph=True)[0]
@@ -163,7 +165,7 @@ def test_higher_order_nodes_reach_third_order() -> None:
 
     torch.manual_seed(0)
     x = torch.randn(3, requires_grad=True)
-    trace = tl.trace(ThirdOrderModel(), x, save_grads="all")
+    trace = tl.trace(ThirdOrderModel(), x, capture=tl.options.CaptureOptions(save_grads="all"))
     try:
         grad = trace[trace.output_layers[0]].out
         for _order_index in range(2):
@@ -204,7 +206,9 @@ def test_third_order_scalar_chain_records_root_based_pass_order() -> None:
 
     model = ScalarPowerModel()
     x = torch.tensor(3.0)
-    trace = tl.trace(model, x, save_grads="all", backward_ready=True)
+    trace = tl.trace(
+        model, x, capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True)
+    )
     try:
         output = trace[trace.output_layers[0]].out
         grad = torch.autograd.grad(output, model.w, create_graph=True, retain_graph=True)[0]
@@ -230,7 +234,7 @@ def test_higher_order_induction_stress_reaches_expected_depth() -> None:
     num_grad_passes = 4
     torch.manual_seed(0)
     x = torch.randn(2, requires_grad=True)
-    trace = tl.trace(InductionModel(), x, save_grads="all")
+    trace = tl.trace(InductionModel(), x, capture=tl.options.CaptureOptions(save_grads="all"))
     try:
         grad = trace[trace.output_layers[0]].out
         for _pass_index in range(num_grad_passes):
@@ -264,7 +268,7 @@ def test_higher_order_mixed_order_pass_records_reused_and_created_nodes() -> Non
 
     torch.manual_seed(0)
     x = torch.randn(3, requires_grad=True)
-    trace = tl.trace(MixedOrderModel(), x, save_grads="all")
+    trace = tl.trace(MixedOrderModel(), x, capture=tl.options.CaptureOptions(save_grads="all"))
     try:
         grad = trace[trace.output_layers[0]].out
         grad = torch.autograd.grad(grad.sum(), x, create_graph=True, retain_graph=True)[0]
@@ -304,7 +308,11 @@ def test_backward_epoch_publication_is_atomic(monkeypatch: pytest.MonkeyPatch) -
 
     torch.manual_seed(0)
     x = torch.randn(1, 3, requires_grad=True)
-    trace = tl.trace(TinyGrad(), x, save_grads="all", backward_ready=True)
+    trace = tl.trace(
+        TinyGrad(),
+        x,
+        capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
+    )
     try:
         out = trace[trace.output_layers[0]].out
         out.backward(retain_graph=True)

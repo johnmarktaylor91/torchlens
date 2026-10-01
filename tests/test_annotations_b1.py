@@ -75,7 +75,7 @@ def _trace_tiny() -> tuple[Trace, _TinyAnnotatedModel, torch.Tensor]:
     torch.manual_seed(901)
     model = _TinyAnnotatedModel()
     x = torch.randn(2, 4)
-    return tl.trace(model, x, layers_to_save="all"), model, x
+    return tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all")), model, x
 
 
 def _first_compute_op(trace: Trace) -> Any:
@@ -139,7 +139,11 @@ def test_json_breadcrumb_round_trips_and_ndarray_rejects(tmp_path: Path) -> None
 def test_annotate_uses_large_default_fanout() -> None:
     """The public annotate default should not inherit resolver max_fanout=8."""
 
-    trace = tl.trace(_ManyReluModel(), torch.randn(1, 4), layers_to_save="none")
+    trace = tl.trace(
+        _ManyReluModel(),
+        torch.randn(1, 4),
+        capture=tl.options.CaptureOptions(layers_to_save="none"),
+    )
 
     with pytest.warns(MultiMatchWarning, match="matched 10 sites"):
         trace.annotate(tl.func("relu"), data={"fanout": True})

@@ -122,13 +122,17 @@ def _save_all_levels(tmp_path: Path) -> dict[str, Path]:
     audit = tmp_path / "audit"
     cf_a = _ControlFlow()
     keep_alive.append(cf_a)
-    tl.trace(cf_a, x, layers_to_save="all").save(audit, level="audit")
+    tl.trace(cf_a, x, capture=tl.options.CaptureOptions(layers_to_save="all")).save(
+        audit, level="audit"
+    )
     paths["analysis"] = audit
 
     portable = tmp_path / "portable"
     cf_p = _ControlFlow()
     keep_alive.append(cf_p)
-    tl.trace(cf_p, x, layers_to_save="all").save(portable, level="portable")
+    tl.trace(cf_p, x, capture=tl.options.CaptureOptions(layers_to_save="all")).save(
+        portable, level="portable"
+    )
     paths["portable"] = portable
 
     run = tmp_path / "runnable"
@@ -308,9 +312,15 @@ def test_real_cnn_and_attention_models_load(tmp_path: Path) -> None:
     """A real CNN and attention model saved portably still load under the guard."""
 
     cnn_path = tmp_path / "cnn"
-    tl.trace(_CNN(), torch.randn(2, 3, 8, 8), layers_to_save="all").save(cnn_path, level="portable")
+    tl.trace(
+        _CNN(),
+        torch.randn(2, 3, 8, 8),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    ).save(cnn_path, level="portable")
     assert tl.load(cnn_path) is not None
 
     attn_path = tmp_path / "attn"
-    tl.trace(_Attn(), torch.randn(2, 5, 8), layers_to_save="all").save(attn_path, level="portable")
+    tl.trace(
+        _Attn(), torch.randn(2, 5, 8), capture=tl.options.CaptureOptions(layers_to_save="all")
+    ).save(attn_path, level="portable")
     assert tl.load(attn_path) is not None

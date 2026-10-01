@@ -193,7 +193,7 @@ def test_plain_requires_grad_leaf_input_links_and_backprops_to_original() -> Non
     model = _TinyStimulusModel()
     x = _stimulus()
 
-    trace = tl.trace(model, x, save_grads="all")
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads="all"))
     trace.log_backward(trace[trace.output_layers[0]].out)
 
     input_label = trace.input_layers[0]
@@ -233,7 +233,7 @@ def test_parameter_input_links_and_backprops_to_original_after_fix() -> None:
     model = _TinyStimulusModel()
     z = _parameter_stimulus()
 
-    trace = tl.trace(model, z, save_grads="all")
+    trace = tl.trace(model, z, capture=tl.options.CaptureOptions(save_grads="all"))
     trace.log_backward(trace[trace.output_layers[0]].out)
 
     input_label = trace.input_layers[0]
@@ -250,7 +250,7 @@ def test_parameter_input_replay_template_uses_parent_ref() -> None:
     model = _TinyStimulusModel()
     z = _parameter_stimulus()
 
-    trace = tl.trace(model, z, intervention_ready=True)
+    trace = tl.trace(model, z, capture=tl.options.CaptureOptions(intervention_ready=True))
     first_op = _first_non_boundary_op(trace)
 
     assert first_op.args_template is not None
@@ -294,7 +294,11 @@ def test_nested_parameter_input_links_to_child_op() -> None:
 def test_inference_only_parameter_input_traces() -> None:
     """inference_only=True traces a parameter stimulus as a normal input."""
 
-    trace = tl.trace(_TinyStimulusModel(), _parameter_stimulus(), inference_only=True)
+    trace = tl.trace(
+        _TinyStimulusModel(),
+        _parameter_stimulus(),
+        capture=tl.options.CaptureOptions(inference_only=True),
+    )
 
     _assert_input_parent_edge(trace)
 
@@ -302,7 +306,11 @@ def test_inference_only_parameter_input_traces() -> None:
 def test_backward_ready_parameter_input_traces() -> None:
     """backward_ready=True traces a parameter stimulus as a normal input."""
 
-    trace = tl.trace(_TinyStimulusModel(), _parameter_stimulus(), backward_ready=True)
+    trace = tl.trace(
+        _TinyStimulusModel(),
+        _parameter_stimulus(),
+        capture=tl.options.CaptureOptions(backward_ready=True),
+    )
 
     _assert_input_parent_edge(trace)
 

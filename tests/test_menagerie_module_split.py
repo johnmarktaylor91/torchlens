@@ -109,7 +109,7 @@ def _trace_signature(row: CatalogRow) -> tuple[str, int]:
     if hasattr(model, "eval"):
         model.eval()
     with torch.no_grad():
-        trace = tl.trace(model, input_value, inference_only=True)
+        trace = tl.trace(model, input_value, capture=tl.options.CaptureOptions(inference_only=True))
     graph_shape_hash = str(getattr(trace, "graph_shape_hash", "") or "")
     n_nodes = int(getattr(trace, "num_ops", 0) or len(getattr(trace, "layer_logs", {}) or {}))
     return graph_shape_hash, n_nodes

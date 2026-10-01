@@ -259,7 +259,7 @@ def render_combined_graph(
     direction: VisDirectionLiteral = "leftright",
     vis_mode: VisModeLiteral = "unrolled",
     intervening_cluster: InterveningClusterMode = "upstream",
-    show_buffer_layers: BufferVisibilityLiteral | bool = "meaningful",
+    show_buffer_layers: BufferVisibilityLiteral = "meaningful",
     bwd: int | Iterable[int] | None = None,
 ) -> str:
     """Render one Graphviz graph containing forward ops and backward grad_fns.

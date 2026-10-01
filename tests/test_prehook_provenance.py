@@ -43,13 +43,15 @@ class _Nested(nn.Module):
         return self.child(x, **kwargs)
 
 
-def _call(trace: tl.Trace, label: str = "child:1") -> tl.ModuleCall:
+def _call(trace: tl.Trace, label: str = "child:1") -> tl.types.ModuleCall:
     """Return one ModuleCall by label."""
 
     return trace.module_calls[label]
 
 
-def _tensor(snapshot: tl.ModuleInputSnapshot, path: tuple[Any, ...] = ("args", 0)) -> torch.Tensor:
+def _tensor(
+    snapshot: tl.types.ModuleInputSnapshot, path: tuple[Any, ...] = ("args", 0)
+) -> torch.Tensor:
     """Return the retained tensor payload at ``path``."""
 
     observation = next(item for item in snapshot.tensor_observations if item.path == path)
@@ -94,7 +96,11 @@ def test_in_place_mutation_truthful_snapshots_and_validation_replay() -> None:
 
     model.child.register_forward_pre_hook(mutate)
     x = torch.tensor([-2.0, 1.0])
-    trace = tl.trace(model, x, save_arg_values=True, layers_to_save="all")
+    trace = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(save_arg_values=True, layers_to_save="all"),
+    )
     call = _call(trace)
 
     assert torch.equal(call.inputs_before_pre_hooks.args[0], x)
@@ -220,8 +226,7 @@ def test_opaque_object_tensor_mutation_downgrades_provenance_fail_closed() -> No
     trace = tl.trace(
         model,
         _Box(torch.tensor([-2.0, 1.0])),
-        save_arg_values=True,
-        layers_to_save="all",
+        capture=tl.options.CaptureOptions(save_arg_values=True, layers_to_save="all"),
     )
     call = _call(trace)
     effect = call.forward_pre_hook_effects[0]
@@ -562,7 +567,9 @@ def test_record_to_trace_ram_and_disk_preserve_provenance(tmp_path: Path) -> Non
 
     for streaming in (
         None,
-        tl.StreamingOptions(bundle_path=tmp_path / "recording.tlfast", retain_in_memory=False),
+        tl.options.StreamingOptions(
+            bundle_path=tmp_path / "recording.tlfast", retain_in_memory=False
+        ),
     ):
         model = _Nested()
         model.child.register_forward_pre_hook(lambda _m, args: (args[0] + 1,))
@@ -803,7 +810,11 @@ def test_full_backward_hook_rewrap_does_not_redefine_snapshot_b() -> None:
     model.register_forward_pre_hook(lambda _m, args: (args[0] + 2,))
     backward_handle = model.register_full_backward_hook(lambda _m, grad_in, _grad_out: grad_in)
     try:
-        trace = tl.trace(model, torch.ones(1, requires_grad=True), backward_ready=True)
+        trace = tl.trace(
+            model,
+            torch.ones(1, requires_grad=True),
+            capture=tl.options.CaptureOptions(backward_ready=True),
+        )
     finally:
         backward_handle.remove()
 

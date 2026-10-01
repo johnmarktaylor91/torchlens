@@ -5,6 +5,7 @@ import pytest
 import torch
 import torch.nn as nn
 
+import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens.data_classes import ModuleAccessor, ParamAccessor
 from torchlens.types import Module, ModuleCall
@@ -188,7 +189,11 @@ class TestModuleLogFields:
         assert ml.class_name == "Linear"
 
     def test_source_info(self):
-        log = trace_fn(_make_simple_model(), _simple_input(), save_code_context=True)
+        log = trace_fn(
+            _make_simple_model(),
+            _simple_input(),
+            capture=tl.options.CaptureOptions(save_code_context=True),
+        )
         ml = log.modules["0"]
         assert ml.class_source_file is not None  # nn.Linear has inspectable source
         assert ml.forward_signature is not None
@@ -436,7 +441,9 @@ class TestModuleAccessorSummary:
         # activation_transform=identity forces transformed_out to be populated
         # (it stays None with no transform), so the single-pass-vs-multi-pass
         # None-guard assertions below are meaningful rather than trivially true.
-        log = trace_fn(model, input_2d, activation_transform=lambda x: x)
+        log = trace_fn(
+            model, input_2d, save=tl.options.SaveOptions(activation_transform=lambda x: x)
+        )
 
         # The whole table renders without raising.
         df = log.modules.to_pandas()

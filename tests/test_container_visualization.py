@@ -86,7 +86,9 @@ class MidGraphContainerModel(nn.Module):
 def _trace(model: nn.Module) -> Any:
     """Trace a model with final-output structure enabled."""
 
-    return tl.trace(model, torch.ones(2), intervention_ready=True)
+    return tl.trace(
+        model, torch.ones(2), capture=tl.options.CaptureOptions(intervention_ready=True)
+    )
 
 
 def test_show_containers_false_is_default_dot_identity(tmp_path: Path) -> None:
@@ -176,7 +178,7 @@ def test_show_containers_nodes_adds_source_and_sink_nodes(tmp_path: Path) -> Non
     trace = tl.trace(
         DictInputModel(),
         {"a": torch.ones(2), "b": torch.ones(2)},
-        capture_container_structure=True,
+        capture=tl.options.CaptureOptions(capture_container_structure=True),
     )
     source = trace.draw(
         show_containers="nodes",
@@ -198,7 +200,7 @@ def test_show_containers_nodes_adds_midgraph_member_ties(tmp_path: Path) -> None
     trace = tl.trace(
         MidGraphContainerModel(),
         torch.ones(2),
-        capture_container_structure=True,
+        capture=tl.options.CaptureOptions(capture_container_structure=True),
     )
     source = trace.draw(
         show_containers="nodes",
@@ -228,7 +230,7 @@ def test_show_containers_nodes_homogeneous_collapse_is_coherent(tmp_path: Path) 
     trace = tl.trace(
         WideTupleOutputModel(),
         torch.ones(2, 4),
-        capture_container_structure=True,
+        capture=tl.options.CaptureOptions(capture_container_structure=True),
     )
     source = trace.draw(
         show_containers="nodes",
@@ -261,7 +263,7 @@ def test_show_containers_nodes_draw_then_save_round_trips(tmp_path: Path) -> Non
     trace = tl.trace(
         DictInputModel(),
         {"a": torch.ones(2), "b": torch.ones(2)},
-        capture_container_structure=True,
+        capture=tl.options.CaptureOptions(capture_container_structure=True),
     )
     trace.draw(
         show_containers="nodes",

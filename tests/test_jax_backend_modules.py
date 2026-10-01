@@ -535,7 +535,7 @@ def test_jax_nnx_explicit_function_root_keeps_raw_callable_behavior() -> None:
             SimpleNnxMlp(),
             jnp.ones(3, dtype=jnp.float32),
             backend="jax",
-            module_identity_mode="function_root",
+            capture=tl.options.CaptureOptions(module_identity_mode="function_root"),
         )
 
 

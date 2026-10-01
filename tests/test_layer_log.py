@@ -395,7 +395,11 @@ class TestLayerNumPasses:
 def test_colon_named_module_traces_without_postprocess_split_error() -> None:
     """Module call labels parse from the right when module names contain colons."""
 
-    trace = tl.trace(ColonNamedModule(), torch.randn(1, 5), layers_to_save="all")
+    trace = tl.trace(
+        ColonNamedModule(),
+        torch.randn(1, 5),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
 
     assert "a:b" in trace.modules
 

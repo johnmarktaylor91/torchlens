@@ -392,34 +392,6 @@ def span(
             )
 
 
-@contextmanager
-def record_span(
-    name: str,
-    *,
-    direction: Literal["forward", "backward", "both"] = "both",
-) -> Iterator[dict[str, Any]]:
-    """Deprecated alias for :func:`span`.
-
-    Parameters
-    ----------
-    name:
-        Span name.
-    direction:
-        Direction scope metadata for this span.
-
-    Yields
-    ------
-    dict[str, Any]
-        Mutable span metadata record.
-    """
-
-    from ._deprecations import warn_deprecated_alias
-
-    warn_deprecated_alias("record_span", "span")
-    with span(name, direction=direction) as s:
-        yield s
-
-
 def active_span_records() -> list[dict[str, Any]]:
     """Return currently active span records.
 
@@ -432,4 +404,4 @@ def active_span_records() -> list[dict[str, Any]]:
     return list(_state._active_record_spans.get())
 
 
-__all__ = ["TapObserver", "TapRecord", "active_span_records", "record_span", "span", "tap"]
+__all__ = ["TapObserver", "TapRecord", "active_span_records", "span", "tap"]

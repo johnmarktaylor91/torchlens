@@ -92,7 +92,9 @@ class _LinearSum(torch.nn.Module):
 def test_differentiable_replay_fork_annotation_is_independent_of_parent() -> None:
     """BLOCKER-1: annotating a diff-replay fork must not mutate the parent trace."""
 
-    log = tl.trace(_ReluMul(), torch.randn(4), intervention_ready=True)
+    log = tl.trace(
+        _ReluMul(), torch.randn(4), capture=tl.options.CaptureOptions(intervention_ready=True)
+    )
     log.annotate("input_1", data={"owner": "original"})
     parent_op = log.layer_dict_all_keys["input_1"]
     original_annotations = {"user": {"data": {"owner": "original"}}}
@@ -117,7 +119,11 @@ def test_fork_shares_optimizer_aliasing_live_params() -> None:
 
     model = _LinearSum()
     opt = torch.optim.SGD(model.parameters(), lr=0.1)
-    log = tl.trace(model, torch.randn(2, 4), intervention_ready=True, optimizer=opt)
+    log = tl.trace(
+        model,
+        torch.randn(2, 4),
+        capture=tl.options.CaptureOptions(intervention_ready=True, optimizer=opt),
+    )
     assert getattr(log, "_optimizer", None) is opt
 
     fork = log.fork()
@@ -181,7 +187,11 @@ def test_output_at_composed_with_grad_input_resolves_nonzero_sites() -> None:
     # Gradient retention is opt-in: log_backward no longer silently widens the
     # trace's save_grads selection (per-pass retention scoping), so grad-input
     # payload sites only exist when the capture arms save_grads itself.
-    log = tl.trace(model, torch.randn(2, 4), intervention_ready=True, save_grads="all")
+    log = tl.trace(
+        model,
+        torch.randn(2, 4),
+        capture=tl.options.CaptureOptions(intervention_ready=True, save_grads="all"),
+    )
     branch0 = log.find_sites(tl.output_at(0))
     assert branch0, "expected output_at(0) to match the first tuple branch"
     log.log_backward(branch0[0].out.sum())

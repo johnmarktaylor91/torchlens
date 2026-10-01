@@ -53,7 +53,7 @@ class _TupleOut(nn.Module):
 def test_validation_survives_pristine_tuple_output():
     """Control: the 2-tuple model validates before any plant."""
 
-    assert tl.validate_forward_pass(_TupleOut(), [torch.randn(3)], input_kwargs={})
+    assert tl.validation.validate_forward_pass(_TupleOut(), [torch.randn(3)], input_kwargs={})
 
 
 def test_planted_walker_leaf_drop_fails_validation(monkeypatch: pytest.MonkeyPatch):
@@ -85,7 +85,7 @@ def test_planted_walker_leaf_drop_fails_validation(monkeypatch: pytest.MonkeyPat
 
     monkeypatch.setattr(torch_ops, "_walk_output_tensors_with_paths", _dropping_walker)
     with pytest.warns(RuntimeWarning, match="output-enumeration defect"):
-        result = tl.validate_forward_pass(_TupleOut(), [torch.randn(3)], input_kwargs={})
+        result = tl.validation.validate_forward_pass(_TupleOut(), [torch.randn(3)], input_kwargs={})
     assert result is False, (
         "a dropped output leaf in the shared walker still validated True: "
         "the independent cross-check is disarmed"
@@ -203,7 +203,9 @@ def test_planted_deep_leaf_drop_fails_validation(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(torch_ops, "_walk_output_tensors_with_paths", _dropping_walker)
     with pytest.warns(RuntimeWarning, match="output-enumeration defect"):
-        result = tl.validate_forward_pass(_DeepNestOut(), [torch.randn(3)], input_kwargs={})
+        result = tl.validation.validate_forward_pass(
+            _DeepNestOut(), [torch.randn(3)], input_kwargs={}
+        )
     assert result is False, (
         "a dropped output leaf nested past the old walker ceiling still "
         "validated True: the cross-check is one-sided"
@@ -213,4 +215,4 @@ def test_planted_deep_leaf_drop_fails_validation(monkeypatch: pytest.MonkeyPatch
 def test_validation_survives_pristine_deep_nest_output():
     """Control: the depth-12 nested output validates with no plant."""
 
-    assert tl.validate_forward_pass(_DeepNestOut(), [torch.randn(3)], input_kwargs={})
+    assert tl.validation.validate_forward_pass(_DeepNestOut(), [torch.randn(3)], input_kwargs={})

@@ -580,7 +580,8 @@ def _report_escape(
         "TorchLens shadow detector observed a raw torch callable outside its registered "
         f"wrapper edge: {callable_name} at {detail['file']}:{detail['line']} in "
         f"{detail['function']} (storage hint: {detail['storage_hint']}). The Trace is marked "
-        "capture_verified=False. Rebind after tl.wrap_torch() or use a live torch "
+        "capture_verified=False. Rebind after torchlens.backends.torch.wrappers"
+        ".wrap_torch() or use a live torch "
         "namespace lookup; escapes with a signal are recovered by the rescue re-run.",
         TorchLensCaptureGapWarning,
         stacklevel=2,

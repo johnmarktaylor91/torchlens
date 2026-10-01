@@ -54,7 +54,7 @@ def _log(model: nn.Module | None = None, x: torch.Tensor | None = None) -> tl.Tr
 
     model = model or _ReluModel()
     x = x if x is not None else torch.randn(2, 3)
-    return tl.trace(model, x, intervention_ready=True)
+    return tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
 
 
 def test_bundle_construction_shapes_and_member_indexing() -> None:

@@ -37,8 +37,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens import validate_forward_pass
 from torchlens.options import CaptureOptions
+from torchlens.validation import validate_forward_pass
 from torchlens.validation.core import validate_saved_outs
 from torchlens.validation.exemptions import _multiplicative_zero_annihilator_decision
 from torchlens.validation.invariants import (
@@ -236,9 +236,8 @@ def test_w32_genuine_intervene_capture_keeps_exemption() -> None:
     trace = tl.trace(
         model,
         x,
-        layers_to_save="all",
-        save_arg_values=True,
         intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
     )
     replaced_ops = [op for op in trace.layer_list if getattr(op, "intervention_replaced", False)]
     assert replaced_ops, "zero_ablate must stamp its site"
@@ -284,7 +283,11 @@ def test_raw_hook_recontainer_does_not_mint_replacement_evidence() -> None:
     model = nn.Linear(4, 4)
     handle = model.register_forward_hook(lambda _module, _args, out: (out,))
     try:
-        trace = tl.trace(model, torch.randn(3, 4), layers_to_save="all", save_arg_values=True)
+        trace = tl.trace(
+            model,
+            torch.randn(3, 4),
+            capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        )
     finally:
         handle.remove()
 

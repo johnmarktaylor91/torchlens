@@ -101,7 +101,7 @@ def test_demo_1_zero_ablation_via_do():
             return inputs / (inputs - inputs)
 
     with pytest.raises(Exception) as excinfo:
-        tl.trace(_NanNet(), torch.ones(2, 2), raise_on_nan=True)
+        tl.trace(_NanNet(), torch.ones(2, 2), capture=tl.options.CaptureOptions(raise_on_nan=True))
     assert "non-finite" in str(excinfo.value).lower()
 
 

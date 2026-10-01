@@ -34,6 +34,7 @@ import pytest
 import torch
 import torch.nn as nn
 
+import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens.errors import MetadataInvariantError
 from torchlens.validation import check_metadata_invariants
@@ -146,7 +147,11 @@ def _planted_edge_drop_trace():
     # so validation raises PostTraceParamUnavailable whenever a gc cycle
     # collection happens to run before the value-rooted replay reads params.
     model = _TwoStage()
-    log = trace_fn(model, torch.randn(2, 6), layers_to_save="all", save_arg_values=True)
+    log = trace_fn(
+        model,
+        torch.randn(2, 6),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    )
     log._tl_test_model_keepalive = model
     outputs = [log.layer_dict_all_keys[label].out for label in log.output_layers]
     relu_label = next(op.label for op in log.compute_ops if op.func_name == "relu")
@@ -310,7 +315,7 @@ def test_symmetric_edge_drop_is_caught_by_value_rooted_replay():
 
     log, outputs = _planted_edge_drop_trace()
     try:
-        status = log.validate_saved_outs(outputs, validate_metadata=False)
+        status = log.validate_forward_pass(outputs, validate_metadata=False)
         assert not status, (
             "a symmetric edge drop validated clean through the value-rooted "
             "sweeps: the loaded-artifact half of edge-drop detection is dark"
@@ -342,7 +347,11 @@ def _loaded_edge_drop_trace(tmp_path):
 
     import torchlens as tl
 
-    log = trace_fn(_TwoStage(), torch.randn(2, 6), layers_to_save="all", save_arg_values=True)
+    log = trace_fn(
+        _TwoStage(),
+        torch.randn(2, 6),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    )
     outputs = [log.layer_dict_all_keys[label].out for label in log.output_layers]
     path = tmp_path / "edge_drop_plant.tlspec"
     log.save(path)

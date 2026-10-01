@@ -72,8 +72,7 @@ def _strict_trace() -> tl.Trace:
     return tl.trace(
         StrictAccessorModel(),
         torch.randn(2, 3, requires_grad=True),
-        layers_to_save="all",
-        save_grads="all",
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all"),
     )
 
 

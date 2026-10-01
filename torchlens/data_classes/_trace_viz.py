@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     _TraceMixinBase = Trace
 else:
     _TraceMixinBase = object
-from .._deprecations import MISSING, MissingType, warn_deprecated_alias
+from .._deprecations import MISSING, MissingType
 from .._errors import InvalidArgumentError
 from .._literals import (
     BufferVisibilityLiteral,
@@ -70,22 +70,15 @@ class TraceVisualizationMixin(_TraceMixinBase):
             Display method. ``"graph"`` delegates to :meth:`draw`, ``"repr"``
             returns ``repr(self)``, and ``"html"`` returns ``_repr_html_()``.
         **kwargs:
-            Visualization keyword arguments forwarded to :meth:`draw`. The
-            legacy ``vis_opt`` spelling is accepted as an alias for ``vis_mode``.
+            Visualization keyword arguments forwarded to :meth:`draw`.
 
         Returns
         -------
         str | None
             Rendered representation, Graphviz DOT source, or ``None`` when
-            rendering is explicitly disabled with ``vis_opt="none"`` or
-            ``vis_mode="none"``.
+            rendering is explicitly disabled with ``vis_mode="none"``.
         """
 
-        vis_opt = kwargs.pop("vis_opt", None)
-        if vis_opt is not None:
-            warn_deprecated_alias("vis_opt", "view")
-            if "vis_mode" not in kwargs:
-                kwargs["vis_mode"] = vis_opt
         if kwargs.get("vis_mode") == "none":
             return None
         if method == "repr":
@@ -96,7 +89,6 @@ class TraceVisualizationMixin(_TraceMixinBase):
 
     def draw(
         self: "Trace",
-        vis_opt: VisModeLiteral | MissingType = MISSING,
         view: VisModeLiteral | MissingType = MISSING,
         depth: int | MissingType = MISSING,
         renderer: VisRendererLiteral | MissingType = MISSING,
@@ -108,7 +100,6 @@ class TraceVisualizationMixin(_TraceMixinBase):
         vis_graph_overrides: dict[str, Any] | None = None,
         module: "Module | str | None" = None,
         node_mode: VisNodeModeLiteral = "default",
-        vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
         node_spec_fn: Callable[..., Any] | None = None,
         collapsed_node_spec_fn: Callable[..., Any] | None = None,
         collapse_fn: Callable[..., Any] | None = None,
@@ -120,9 +111,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         vis_module_overrides: dict[str, Any] | None = None,
         vis_save_only: bool = False,
         vis_fileformat: str = "pdf",
-        vis_buffers: BufferVisibilityLiteral | bool | MissingType = MISSING,
-        show_buffer_layers: BufferVisibilityLiteral | bool = "meaningful",
-        vis_direction: VisDirectionLiteral | MissingType = MISSING,
+        show_buffer_layers: BufferVisibilityLiteral = "meaningful",
         direction: VisDirectionLiteral = "bottomup",
         vis_node_placement: VisNodePlacementLiteral = "auto",
         vis_renderer: VisRendererLiteral = "graphviz",
@@ -166,8 +155,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             instead of omitting them. Orphans must have been retained at capture time
             (capture with ``keep_orphans=True``).
             ``show_buffer_layers`` accepts ``"never"``, ``"meaningful"``, or
-            ``"always"``. Legacy bools are deprecated but supported by the
-            Graphviz renderer.
+            ``"always"``.
         collapse:
             Smart module-collapse mode. ``"none"`` preserves the full graph,
             ``"auto"`` uses the v2 readability-targeted engine, and ``"max"``
@@ -269,15 +257,6 @@ class TraceVisualizationMixin(_TraceMixinBase):
         """
         from ..visualization._render_dot import draw as _impl
 
-        if vis_opt is not MISSING:
-            # The oldest of three generations (vis_opt -> vis_mode -> view), and
-            # the whole chain warned nowhere until grind b4 (R48-1). This hop is
-            # announced because BOTH replacements are accepted by this very
-            # method and no caller inside torchlens passes vis_opt; the
-            # vis_mode -> view hop is forked (see the lane report), since draw()
-            # has no canonical spelling for most of the vis_* family yet.
-            warn_deprecated_alias("vis_opt", "view")
-            vis_mode = cast(VisModeLiteral, vis_opt)
         if view is not MISSING:
             vis_mode = cast(VisModeLiteral, view)
         if depth is not MISSING:
@@ -288,17 +267,6 @@ class TraceVisualizationMixin(_TraceMixinBase):
             vis_node_placement = cast(VisNodePlacementLiteral, layout)
         if node_style is not MISSING:
             node_mode = cast(VisNodeModeLiteral, node_style)
-        # The three legacy vis_* sentinels warn like the vis_opt hop above:
-        # a silent translation is an unannounced removal hazard (R48-a).
-        if vis_node_mode is not MISSING:
-            warn_deprecated_alias("vis_node_mode", "node_style")
-            node_mode = cast(VisNodeModeLiteral, vis_node_mode)
-        if vis_buffers is not MISSING:
-            warn_deprecated_alias("vis_buffers", "show_buffer_layers")
-            show_buffer_layers = cast(BufferVisibilityLiteral | bool, vis_buffers)
-        if vis_direction is not MISSING:
-            warn_deprecated_alias("vis_direction", "direction")
-            direction = cast(VisDirectionLiteral, vis_direction)
         if vis_mode == "none":
             return None
 
@@ -607,7 +575,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         vis_direction: VisDirectionLiteral = "leftright",
         vis_mode: VisModeLiteral = "unrolled",
         intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
-        show_buffer_layers: BufferVisibilityLiteral | bool = "meaningful",
+        show_buffer_layers: BufferVisibilityLiteral = "meaningful",
         bwd: int | Iterable[int] | None = None,
     ) -> str:
         """Render forward ops and backward grad_fns in one graph.

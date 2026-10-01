@@ -44,7 +44,7 @@ def test_fast_pass_selective_save_matches_fresh_trace_outputs() -> None:
     initial_input = torch.randn(2, 3)
     replacement_input = torch.randn(2, 3)
 
-    fast_trace = tl.trace(model, initial_input, random_seed=11)
+    fast_trace = tl.trace(model, initial_input, capture=tl.options.CaptureOptions(random_seed=11))
     fresh_trace = None
     try:
         relu_label = next(layer.layer_label for layer in fast_trace if layer.layer_type == "relu")
@@ -56,7 +56,11 @@ def test_fast_pass_selective_save_matches_fresh_trace_outputs() -> None:
             layers_to_save=selected_labels,
             random_seed=11,
         )
-        fresh_trace = tl.trace(model, replacement_input, layers_to_save="all", random_seed=11)
+        fresh_trace = tl.trace(
+            model,
+            replacement_input,
+            capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=11),
+        )
 
         fast_saved = _saved_tensor_by_label(fast_trace, selected_labels)
         fresh_saved = _saved_tensor_by_label(fresh_trace, selected_labels)

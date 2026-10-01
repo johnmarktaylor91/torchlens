@@ -172,7 +172,7 @@ def _cnn_log() -> tuple[_TinyCnn, torch.Tensor, Any]:
     torch.manual_seed(12)
     model = _TinyCnn().eval()
     x = torch.randn(3, 1, 8, 8)
-    log = tl.trace(model, x, layers_to_save="all")
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
     return model, x, log
 
 
@@ -197,7 +197,7 @@ def test_sae_lens_bridge_encode_matches_direct_sae() -> None:
     torch.manual_seed(13)
     model = _TinyTransformer().eval()
     tokens = torch.tensor([[1, 2, 3], [4, 5, 6]])
-    log = tl.trace(model, tokens, layers_to_save="all")
+    log = tl.trace(model, tokens, capture=tl.options.CaptureOptions(layers_to_save="all"))
     out = log["linear_1_2"].out
     sae = _TinySae(width=out.shape[-1])
 
@@ -214,7 +214,7 @@ def test_sae_lens_bridge_decode_matches_direct_sae() -> None:
     torch.manual_seed(14)
     model = _TinyTransformer().eval()
     tokens = torch.tensor([[1, 2, 3], [4, 5, 6]])
-    log = tl.trace(model, tokens, layers_to_save="all")
+    log = tl.trace(model, tokens, capture=tl.options.CaptureOptions(layers_to_save="all"))
     out = log["linear_1_2"].out
     sae = _TinySae(width=out.shape[-1])
 
@@ -233,7 +233,7 @@ def test_sae_lens_bridge_decode_with_fake_optional_dependency(
     torch.manual_seed(15)
     model = _TinyTransformer().eval()
     tokens = torch.tensor([[1, 2, 3], [4, 5, 6]])
-    log = tl.trace(model, tokens, layers_to_save="all")
+    log = tl.trace(model, tokens, capture=tl.options.CaptureOptions(layers_to_save="all"))
     out = log["linear_1_2"].out
     sae = _TinySae(width=out.shape[-1])
 

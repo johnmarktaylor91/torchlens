@@ -751,9 +751,7 @@ def _mlx_capture_trace(*args: Any, **kwargs: Any) -> Any:
     """
 
     from ..user_funcs import _trace_mlx_model_from_public_kwargs
-    from ._options import resolve_public_depth_alias
 
-    resolve_public_depth_alias(kwargs)
     return _trace_mlx_model_from_public_kwargs(*args, **kwargs)
 
 
@@ -771,10 +769,8 @@ def _jax_capture_trace(*args: Any, **kwargs: Any) -> Any:
         Captured trace.
     """
 
-    from ._options import resolve_public_depth_alias
     from .jax import JAXBackend
 
-    resolve_public_depth_alias(kwargs)
     return JAXBackend().capture_trace(*args, **kwargs)
 
 
@@ -792,10 +788,8 @@ def _tinygrad_capture_trace(*args: Any, **kwargs: Any) -> Any:
         Captured trace.
     """
 
-    from ._options import resolve_public_depth_alias
     from .tinygrad import TinygradBackend
 
-    resolve_public_depth_alias(kwargs)
     return TinygradBackend().capture_trace(*args, **kwargs)
 
 
@@ -829,10 +823,8 @@ def _paddle_capture_trace(*args: Any, **kwargs: Any) -> Any:
         Captured trace.
     """
 
-    from ._options import resolve_public_depth_alias
     from .paddle import PaddleBackend
 
-    resolve_public_depth_alias(kwargs)
     return PaddleBackend().capture_trace(*args, **kwargs)
 
 
@@ -850,10 +842,8 @@ def _tf_capture_trace(*args: Any, **kwargs: Any) -> Any:
         Captured trace.
     """
 
-    from ._options import resolve_public_depth_alias
     from .tf import TFBackend
 
-    resolve_public_depth_alias(kwargs)
     return TFBackend().capture_trace(*args, **kwargs)
 
 

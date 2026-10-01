@@ -54,7 +54,7 @@ def test_hf_vit_uses_auto_image_processor() -> None:
 
     model = transformers.ViTModel.from_pretrained("google/vit-base-patch16-224")
 
-    log = tl.trace(model, _pil_image(), layers_to_save="none")
+    log = tl.trace(model, _pil_image(), capture=tl.options.CaptureOptions(layers_to_save="none"))
 
     assert log.input_preprocessor is not None
     assert log.input_preprocessor.source == "hf_auto_image_processor"
@@ -70,7 +70,7 @@ def test_clip_image_uses_auto_processor_fallback() -> None:
 
     model = transformers.CLIPVisionModel.from_pretrained("openai/clip-vit-base-patch32")
 
-    log = tl.trace(model, _pil_image(), layers_to_save="none")
+    log = tl.trace(model, _pil_image(), capture=tl.options.CaptureOptions(layers_to_save="none"))
 
     assert log.input_preprocessor is not None
     assert log.input_preprocessor.source == "hf_auto_image_processor"
@@ -89,7 +89,7 @@ def test_torchvision_resnet_weights_uses_tier_two_or_default() -> None:
     model = torchvision_models.resnet50(weights=None)
     model._torchlens_weights = weights
 
-    log = tl.trace(model, _pil_image(), layers_to_save="none")
+    log = tl.trace(model, _pil_image(), capture=tl.options.CaptureOptions(layers_to_save="none"))
 
     assert log.input_preprocessor is not None
     assert log.input_preprocessor.source in {"torchvision_weights", "imagenet_default"}
@@ -109,7 +109,7 @@ def test_timm_model_uses_default_cfg_transform() -> None:
     timm = pytest.importorskip("timm")
     model = timm.create_model("resnet18", pretrained=False)
 
-    log = tl.trace(model, _pil_image(), layers_to_save="none")
+    log = tl.trace(model, _pil_image(), capture=tl.options.CaptureOptions(layers_to_save="none"))
 
     assert log.input_preprocessor is not None
     assert log.input_preprocessor.source == "timm"
@@ -124,7 +124,9 @@ def test_unknown_cnn_uses_imagenet_default_with_warning() -> None:
     pytest.importorskip("torchvision.transforms")
 
     with pytest.warns(UserWarning, match="ImageNet default preprocessing"):
-        log = tl.trace(_ImageModel(), _pil_image(), layers_to_save="none")
+        log = tl.trace(
+            _ImageModel(), _pil_image(), capture=tl.options.CaptureOptions(layers_to_save="none")
+        )
 
     assert log.input_preprocessor is not None
     assert log.input_preprocessor.source == "imagenet_default"
@@ -141,8 +143,9 @@ def test_transform_override_skips_image_autoroute() -> None:
     log = tl.trace(
         _ImageModel(),
         _pil_image(),
-        transform=lambda image: torch.ones(1, 3, 8, 8),
-        layers_to_save="none",
+        capture=tl.options.CaptureOptions(
+            transform=lambda image: torch.ones(1, 3, 8, 8), layers_to_save="none"
+        ),
     )
 
     assert log.input_preprocessor is None
@@ -160,8 +163,9 @@ def test_pil_raw_input_svg_embeds_montage_data_uri(tmp_path: Path) -> None:
     log = tl.trace(
         _ImageModel(),
         images,
-        transform=lambda _: torch.ones(2, 3, 8, 8),
-        layers_to_save="none",
+        capture=tl.options.CaptureOptions(
+            transform=lambda _: torch.ones(2, 3, 8, 8), layers_to_save="none"
+        ),
     )
     output_path = tmp_path / "input_display.svg"
 
@@ -191,7 +195,11 @@ def test_tensor_input_does_not_route_to_image_bridge(monkeypatch: pytest.MonkeyP
 
     monkeypatch.setattr(hf_bridge, "trace_image", fail_trace_image)
 
-    log = tl.trace(_ImageModel(), torch.ones(1, 3, 8, 8), layers_to_save="none")
+    log = tl.trace(
+        _ImageModel(),
+        torch.ones(1, 3, 8, 8),
+        capture=tl.options.CaptureOptions(layers_to_save="none"),
+    )
 
     assert log.input_preprocessor is None
 
@@ -204,7 +212,11 @@ def test_list_of_pil_images_batches() -> None:
     pytest.importorskip("torchvision.transforms")
 
     with pytest.warns(UserWarning, match="ImageNet default preprocessing"):
-        log = tl.trace(_ImageModel(), [_pil_image(), _pil_image()], layers_to_save="none")
+        log = tl.trace(
+            _ImageModel(),
+            [_pil_image(), _pil_image()],
+            capture=tl.options.CaptureOptions(layers_to_save="none"),
+        )
 
     assert log.input_preprocessor is not None
     assert log.num_ops > 0

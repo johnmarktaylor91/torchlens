@@ -112,7 +112,9 @@ def test_recording_and_trace_are_captured_run_activation_lookup_siblings() -> No
     x = torch.randn(1, 1, 4, 4)
 
     recording = tl.record(model, x, save=tl.func("conv2d"), random_seed=17)
-    trace = tl.trace(model, x, save=tl.func("conv2d"), random_seed=17)
+    trace = tl.trace(
+        model, x, save=tl.func("conv2d"), capture=tl.options.CaptureOptions(random_seed=17)
+    )
 
     assert issubclass(type(recording), tl.CapturedRun)
     assert issubclass(type(trace), tl.CapturedRun)
@@ -129,7 +131,7 @@ def test_recording_to_trace_matches_trace_structure_and_unsaved_out_fails() -> N
 
     recording = tl.record(model, x, save=tl.func("conv2d"), random_seed=23)
     cooked = recording.to_trace()
-    full = tl.trace(model, x, random_seed=23)
+    full = tl.trace(model, x, capture=tl.options.CaptureOptions(random_seed=23))
 
     assert _structure(cooked) == _structure(full)
     # Provenance honesty: the cooked projection runs exhaustive-style
@@ -284,7 +286,9 @@ def test_recording_to_trace_module_tree_matches_exhaustive(model_factory) -> Non
     x = torch.randn(2, 4)
 
     cooked = tl.record(model_factory().eval(), x, save=tl.func("relu"), random_seed=41).to_trace()
-    exhaustive = tl.trace(model_factory().eval(), x, random_seed=41)
+    exhaustive = tl.trace(
+        model_factory().eval(), x, capture=tl.options.CaptureOptions(random_seed=41)
+    )
 
     assert _module_tree(cooked) == _module_tree(exhaustive)
     assert _module_call_stacks(cooked) == _module_call_stacks(exhaustive)
@@ -416,7 +420,9 @@ def test_recording_to_trace_backfills_all_special_layer_lists() -> None:
     x = torch.randn(2, 4)
 
     cooked = tl.record(model, x, save=tl.func("relu"), random_seed=11).to_trace()
-    exhaustive = tl.trace(AllCategory().eval(), x, random_seed=11)
+    exhaustive = tl.trace(
+        AllCategory().eval(), x, capture=tl.options.CaptureOptions(random_seed=11)
+    )
 
     # FULL invariant chain -- both must be clean.
     check_metadata_invariants(cooked)

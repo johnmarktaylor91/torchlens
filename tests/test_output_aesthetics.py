@@ -28,6 +28,7 @@ import pytest
 import torch
 import torch.nn as nn
 
+import torchlens as tl
 from torchlens import func, trace as trace_fn
 from torchlens.options import CaptureOptions
 from torchlens.visualization import show_model_graph
@@ -491,7 +492,9 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     if len(log.params) > 0:
         out.write(_section("G. Gradient System (save_grads=True + backward)", level=2))
         try:
-            grad_log = trace_fn(model, x, save_grads=True, random_seed=42)
+            grad_log = trace_fn(
+                model, x, capture=tl.options.CaptureOptions(save_grads=True, random_seed=42)
+            )
             output_label = grad_log.output_layers[0]
             output_tensor = grad_log[output_label].out
             output_tensor.sum().backward()
@@ -1027,7 +1030,7 @@ def _build_latex_report() -> str:
 
     for name, model_cls, x, description in AESTHETIC_TEXT_MODELS:
         model = model_cls()
-        log = trace_fn(model, x, random_seed=42)
+        log = trace_fn(model, x, capture=tl.options.CaptureOptions(random_seed=42))
         doc.write(f"\\subsection{{{_tex_escape(name)} --- {_tex_escape(description)}}}\n\n")
 
         # A. Model Summary
@@ -1396,15 +1399,17 @@ def _vis(
     show_model_graph(
         model,
         x,
-        vis_mode=vis_mode,
-        vis_call_depth=depth,
-        vis_outpath=opj(VIS_DIR, filename),
-        vis_save_only=True,
-        vis_fileformat="pdf",
-        vis_buffers=buffer_layers,
-        vis_direction=direction,
+        view=vis_mode,
+        depth=depth,
         code_panel=code_panel,
         random_seed=42,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_DIR, filename),
+            save_only=True,
+            file_format="pdf",
+            show_buffers=buffer_layers,
+            direction=direction,
+        ),
     )
     _assert_generated_pdf(pdf_path)
 
@@ -1424,7 +1429,7 @@ def _vis_grad(
     """
     pdf_path = Path(VIS_DIR) / f"{filename}.pdf"
     pdf_path.unlink(missing_ok=True)
-    log = trace_fn(model, x, save_grads=True, random_seed=42)
+    log = trace_fn(model, x, capture=tl.options.CaptureOptions(save_grads=True, random_seed=42))
     output = log[log.output_layers[0]].out
     output.sum().backward()
     log.draw(
@@ -1656,7 +1661,7 @@ class TestVisualizationBugfixes:
         log = trace_fn(
             ReluAdd(),
             torch.randn(2, 3),
-            intervention_ready=True,
+            capture=tl.options.CaptureOptions(intervention_ready=True),
         )
         log.set(func("relu"), torch.zeros(2, 3))
         try:
@@ -1681,7 +1686,9 @@ class TestVisualizationBugfixes:
     def test_vis_selective_save(self):
         """Selective activation saving should render a real PDF, not just not crash."""
         model = _SimpleLinear()
-        log = trace_fn(model, torch.randn(2, 10), layers_to_save="all")
+        log = trace_fn(
+            model, torch.randn(2, 10), capture=tl.options.CaptureOptions(layers_to_save="all")
+        )
         pdf_path = Path(VIS_DIR) / "test_selective_save.pdf"
         pdf_path.unlink(missing_ok=True)
         try:

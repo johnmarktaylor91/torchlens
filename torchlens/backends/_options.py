@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from .._deprecations import MISSING, warn_deprecated_alias
+from .._deprecations import MISSING
 from .registry import (
     BackendCapabilityConformanceError,
     BackendSpec,
@@ -498,41 +498,6 @@ def default_if_missing(value: Any, default: Any) -> Any:
     """
 
     return default if is_missing(value) else value
-
-
-def resolve_public_depth_alias(kwargs: dict[str, Any]) -> None:
-    """Resolve the deprecated ``mark_layer_depths`` trace kwarg for previews.
-
-    Torch resolves this public alias inside ``CaptureOptions``; preview
-    backends receive the raw public kwarg bundle and must honor the same
-    opt-in surface instead of classifying the alias as an unsupported extra.
-
-    Parameters
-    ----------
-    kwargs:
-        Mutable public ``trace`` keyword bundle. When ``mark_layer_depths``
-        is explicitly set, its value moves to
-        ``compute_input_output_distances`` with the standard deprecation
-        warning; passing both explicitly raises the same ``TypeError`` the
-        torch path raises.
-
-    Returns
-    -------
-    None
-        ``kwargs`` is updated in place.
-    """
-
-    alias_value = kwargs.get("mark_layer_depths", MISSING)
-    if is_missing(alias_value):
-        return
-    if not is_missing(kwargs.get("compute_input_output_distances", MISSING)):
-        raise TypeError(
-            "kwarg mark_layer_depths deprecated, use "
-            "compute_input_output_distances; do not pass both"
-        )
-    warn_deprecated_alias("mark_layer_depths", "capture.compute_input_output_distances")
-    kwargs["compute_input_output_distances"] = alias_value
-    kwargs["mark_layer_depths"] = MISSING
 
 
 def reject_extra_trace_kwargs(

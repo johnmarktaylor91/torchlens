@@ -193,7 +193,7 @@ def _mds_trace(model: nn.Module, save: Any) -> tl.Trace:
     torch.manual_seed(1001)
     zeros = np.zeros((ANALYTIC_POINTS.shape[0], 3), dtype=np.float64)
     x = torch.tensor(np.concatenate([ANALYTIC_POINTS, zeros], axis=1), dtype=torch.float32)
-    return tl.trace(model, x, save=save, random_seed=1001)
+    return tl.trace(model, x, save=save, capture=tl.options.CaptureOptions(random_seed=1001))
 
 
 def test_classical_mds_recovers_closed_form_asymmetric_fixture() -> None:

@@ -194,14 +194,14 @@ For full `tl.trace(...)` failures, inspect `exc.partial_log` directly or call
 | `log.attach_hooks(site, hook)` | Add sticky helper/callable hooks to the recipe. |
 | `log.do(...)` / `tl.do(log, ...)` | Apply an intervention and dispatch to `push`, `run`, or `set_only`. |
 | `log.fork(name=None)` | Create an isolated branch for experiments. |
-| `log.push(hooks=None)` | Propagate over the saved DAG without calling `model.forward` (`replay` is a deprecated alias that warns). |
-| `log.run(model, x, append=False)` | Re-execute the model under the active spec (`rerun` is a deprecated alias that warns). |
+| `log.push(replay=ReplayOptions(...))` | Propagate over the saved DAG without calling `model.forward` (the former `replay()` alias is removed). |
+| `log.run(model, x, replay=ReplayOptions(append=False))` | Re-execute the model under the active spec (the former `rerun()` alias is removed). |
 | `log.save_intervention(path, level=...)` | Write a `.tlspec/` intervention recipe. |
 
 There are two distinct intervention paths, and they do not mix implicitly:
 (1) edit a SAVED value and push the effect downstream on the captured DAG
 (`do()` on a resolved selection, `push_from`, direct writes), and (2)
-intervene on a FRESH execution (`do(..., engine="rerun", model=..., x=...)`
+intervene on a FRESH execution (`do(..., model=..., x=..., intervention=InterventionOptions(engine="rerun"))`
 or a new capture with `intervene=...`). A new-input `run(inputs=...)` on a
 trace carrying path-1 value-edits is a fresh execution — the edits do NOT
 apply to it, and TorchLens discloses that at the run door with
@@ -232,7 +232,7 @@ Common operations:
 | `bundle.node(site)` | Return a `SuperOp` across members after relationship checks. |
 | `bundle.compare_at(site)` | Pairwise comparison matrix at a shared site. |
 | `bundle.joint_metric(fn)` | Apply a metric to the whole bundle. |
-| `bundle.do(...)`, `bundle.attach_hooks(...)`, `bundle.push()`, `bundle.run(model, x)` | Apply mutator/propagation calls to each member (`replay`/`rerun` are deprecated aliases that warn). |
+| `bundle.do(...)`, `bundle.attach_hooks(...)`, `bundle.push()`, `bundle.run(model, x)` | Apply mutator/propagation calls to each member (the former `replay`/`rerun` aliases are removed). |
 | `bundle.fork(name=None)` | Fork all members into a new bundle. |
 
 Relationship gates are intentional. Operations that require shared topology or

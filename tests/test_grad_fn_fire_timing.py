@@ -37,7 +37,12 @@ class _Tiny(nn.Module):
 
 def _backward_trace() -> tl.Trace:
     torch.manual_seed(0)
-    trace = tl.trace(_Tiny(), torch.randn(3, 4), backward_ready=True, save_mode="reference")
+    trace = tl.trace(
+        _Tiny(),
+        torch.randn(3, 4),
+        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True),
+    )
     trace.log_backward(trace.output_ops[0].out.sum())
     return trace
 
@@ -74,7 +79,12 @@ def test_timing_keys_align_with_grad_fn_calls() -> None:
 
 def test_repeat_fires_get_independent_spans_and_monotone_wall_stamps() -> None:
     torch.manual_seed(0)
-    trace = tl.trace(_Tiny(), torch.randn(3, 4), backward_ready=True, save_mode="reference")
+    trace = tl.trace(
+        _Tiny(),
+        torch.randn(3, 4),
+        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True),
+    )
     loss = trace.output_ops[0].out.sum()
     trace.log_backward(loss, retain_graph=True)
     trace.log_backward(loss)
@@ -95,7 +105,12 @@ def test_repeat_fires_get_independent_spans_and_monotone_wall_stamps() -> None:
 
 def test_higher_order_backward_pairs_lifo_correctly() -> None:
     torch.manual_seed(0)
-    trace = tl.trace(_Tiny(), torch.randn(3, 4), backward_ready=True, save_mode="reference")
+    trace = tl.trace(
+        _Tiny(),
+        torch.randn(3, 4),
+        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True),
+    )
     loss = trace.output_ops[0].out.pow(2).sum()
     trace.log_backward(loss, create_graph=True)
     for event in _fired_events(trace):
@@ -122,7 +137,12 @@ def test_pop_matching_fire_start_discards_stale_entries() -> None:
 
 def test_stale_prehook_entry_never_becomes_a_wrong_positive_span() -> None:
     torch.manual_seed(0)
-    trace = tl.trace(_Tiny(), torch.randn(3, 4), backward_ready=True, save_mode="reference")
+    trace = tl.trace(
+        _Tiny(),
+        torch.randn(3, 4),
+        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True),
+    )
     # Seed retry debris: a stale keyed entry for a call index that will never
     # match, on every node list minted by the walk. The next real fire must
     # pair to ITS OWN stamp and discard the debris.
@@ -147,7 +167,12 @@ def test_stale_prehook_entry_never_becomes_a_wrong_positive_span() -> None:
 
 def test_timing_registration_failure_degrades_to_untimed_not_coverage_gap() -> None:
     torch.manual_seed(0)
-    trace = tl.trace(_Tiny(), torch.randn(3, 4), backward_ready=True, save_mode="reference")
+    trace = tl.trace(
+        _Tiny(),
+        torch.randn(3, 4),
+        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True),
+    )
     original = backward_mod._register_fire_timing_prehook
 
     def failing(inner_trace, grad_fn_handle, grad_fn_object_id, fire_start_stamps):

@@ -8,6 +8,7 @@ import torch
 from torch import nn
 
 import torchlens
+import torchlens as tl
 from torchlens.data_classes import FuncCallLocation
 from torchlens.utils import introspection
 
@@ -308,7 +309,11 @@ def test_trace_module_code_context_uses_capture_cache(monkeypatch: pytest.Monkey
 
     monkeypatch.setattr(introspection, "_get_col_offset", fake_get_col_offset)
 
-    trace = torchlens.trace(RepeatedCaller(), torch.ones(1), save_code_context=True)
+    trace = torchlens.trace(
+        RepeatedCaller(),
+        torch.ones(1),
+        capture=tl.options.CaptureOptions(save_code_context=True),
+    )
     child_contexts = [
         module_call.code_context
         for module_call in trace.module_calls

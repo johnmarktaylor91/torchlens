@@ -127,8 +127,8 @@ def _bundle() -> tl.Bundle:
 
     torch.manual_seed(20)
     x = torch.randn(2, 3)
-    first = tl.trace(_ModuleModel(), x, intervention_ready=True)
-    second = tl.trace(_ModuleModel(), x, intervention_ready=True)
+    first = tl.trace(_ModuleModel(), x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    second = tl.trace(_ModuleModel(), x, capture=tl.options.CaptureOptions(intervention_ready=True))
     return tl.bundle({"first": first, "second": second})
 
 
@@ -146,8 +146,12 @@ def test_compare_topology_rejects_reordered_graphs() -> None:
     """Reordered unique-fingerprint graphs are not reported identical."""
 
     x = torch.randn(2, 3)
-    first = tl.trace(_ReorderedReluSigmoid(), x, intervention_ready=True)
-    second = tl.trace(_ReorderedSigmoidRelu(), x, intervention_ready=True)
+    first = tl.trace(
+        _ReorderedReluSigmoid(), x, capture=tl.options.CaptureOptions(intervention_ready=True)
+    )
+    second = tl.trace(
+        _ReorderedSigmoidRelu(), x, capture=tl.options.CaptureOptions(intervention_ready=True)
+    )
 
     diff = compare_topology(first, second)
 
@@ -162,8 +166,16 @@ def test_supergraph_topological_order_respects_edges_after_reordered_bundle() ->
     x = torch.randn(2, 3)
     bundle = tl.bundle(
         {
-            "first": tl.trace(_ReorderedReluSigmoid(), x, intervention_ready=True),
-            "second": tl.trace(_ReorderedSigmoidRelu(), x, intervention_ready=True),
+            "first": tl.trace(
+                _ReorderedReluSigmoid(),
+                x,
+                capture=tl.options.CaptureOptions(intervention_ready=True),
+            ),
+            "second": tl.trace(
+                _ReorderedSigmoidRelu(),
+                x,
+                capture=tl.options.CaptureOptions(intervention_ready=True),
+            ),
         }
     )
 
@@ -180,8 +192,8 @@ def test_super_buffer_and_param_views_use_public_live_values() -> None:
     x = torch.randn(2, 3)
     model_a = _BufferParamModel(scale=1.0, weight=1.0)
     model_b = _BufferParamModel(scale=2.0, weight=3.0)
-    trace_a = tl.trace(model_a, x, intervention_ready=True)
-    trace_b = tl.trace(model_b, x, intervention_ready=True)
+    trace_a = tl.trace(model_a, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace_b = tl.trace(model_b, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     bundle = tl.bundle({"a": trace_a, "b": trace_b})
 
     buffer_out = bundle.buffers["scale"].out

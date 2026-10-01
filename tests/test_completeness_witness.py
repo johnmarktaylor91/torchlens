@@ -542,7 +542,7 @@ def test_input_copy_preserves_alias_mutation_semantics_and_validation() -> None:
     assert trace.completeness_witness_verified is True
     validation_input = torch.tensor([1.0])
     assert (
-        tl.validate_forward_pass(
+        tl.validation.validate_forward_pass(
             _AliasedInputMutationModel(),
             [validation_input, validation_input],
         )
@@ -1332,7 +1332,9 @@ def test_subclass_disabled_dispatch_mutation_is_outside_observational_reach() ->
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         trace = tl.trace(
-            _SubclassHiddenMutationModel(), torch.tensor([1.0, 2.0]), save_arg_values=True
+            _SubclassHiddenMutationModel(),
+            torch.tensor([1.0, 2.0]),
+            capture=tl.options.CaptureOptions(save_arg_values=True),
         )
 
     operators = [d["operator"] for d in trace.completeness_diagnostics]

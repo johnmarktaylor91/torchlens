@@ -74,7 +74,11 @@ def _build_trace(seed: int = 0) -> Trace:
     torch.manual_seed(seed)
     model = _PlainPickleModel()
     inputs = torch.randn(2, 4)
-    return trace_fn(model, inputs, layers_to_save="all", random_seed=seed)
+    return trace_fn(
+        model,
+        inputs,
+        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=seed),
+    )
 
 
 def _first_saved_layer(trace: Trace) -> Any:
@@ -117,7 +121,11 @@ def test_plain_pickle_dump_and_load_still_work(tmp_path: Path) -> None:
 def test_conditional_body_cache_survives_pickle_and_tlspec_round_trips(tmp_path: Path) -> None:
     """The property-backed conditional cache must not clobber its backing field."""
 
-    trace = trace_fn(_ConditionalBodyCacheModel(), torch.ones(2, 3), layers_to_save="all")
+    trace = trace_fn(
+        _ConditionalBodyCacheModel(),
+        torch.ones(2, 3),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
     cached_op = next(op for op in trace.ops if op._is_in_conditional_body is True)
     label = cached_op.layer_label
     assert cached_op.is_in_conditional_body is True
@@ -503,7 +511,11 @@ def test_plain_pickle_survives_a_lambda_activation_transform() -> None:
     live-user-object DROP field.
     """
 
-    log = trace_fn(_PlainPickleModel(), torch.ones(1, 3), activation_transform=lambda t: t * 2)
+    log = trace_fn(
+        _PlainPickleModel(),
+        torch.ones(1, 3),
+        save=tl.options.SaveOptions(activation_transform=lambda t: t * 2),
+    )
     restored = pickle.loads(pickle.dumps(log))
     assert restored.activation_transform is None
     assert restored.layer_list[0].activation_transform is None
@@ -519,7 +531,11 @@ def test_plain_pickle_survives_a_lambda_input_transform() -> None:
     pickle <lambda>`` while ``tl.save`` succeeded on the same trace.
     """
 
-    log = trace_fn(_PlainPickleModel(), torch.ones(1, 3), transform=lambda a: a * 2)
+    log = trace_fn(
+        _PlainPickleModel(),
+        torch.ones(1, 3),
+        capture=tl.options.CaptureOptions(transform=lambda a: a * 2),
+    )
     restored = pickle.loads(pickle.dumps(log))
     assert restored._transform is None
 

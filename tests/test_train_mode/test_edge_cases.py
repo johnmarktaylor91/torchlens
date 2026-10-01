@@ -99,8 +99,7 @@ def test_autocast_wrapping_slow_keeps_grad() -> None:
         trace = tl.trace(
             model,
             torch.randn(3, 4, requires_grad=True),
-            backward_ready=True,
-            random_seed=0,
+            capture=tl.options.CaptureOptions(backward_ready=True, random_seed=0),
         )
     saved = trace[trace.output_layers[0]].out
 
@@ -122,8 +121,7 @@ def test_ddp_wrapped_slow_keeps_local_module_grad(tmp_path: Path) -> None:
     trace = tl.trace(
         ddp_model,
         torch.randn(3, 4, requires_grad=True),
-        backward_ready=True,
-        random_seed=0,
+        capture=tl.options.CaptureOptions(backward_ready=True, random_seed=0),
     )
     saved = trace[trace.output_layers[0]].out
 
@@ -141,8 +139,7 @@ def test_view_reshape_ops_keep_grad() -> None:
     trace = tl.trace(
         model,
         torch.randn(3, 4, requires_grad=True),
-        backward_ready=True,
-        random_seed=0,
+        capture=tl.options.CaptureOptions(backward_ready=True, random_seed=0),
     )
     saved = trace[trace.output_layers[0]].out
 
@@ -160,8 +157,7 @@ def test_inplace_relu_keeps_grad_slow() -> None:
     trace = tl.trace(
         model,
         torch.randn(3, 4, requires_grad=True),
-        backward_ready=True,
-        random_seed=0,
+        capture=tl.options.CaptureOptions(backward_ready=True, random_seed=0),
     )
     saved = trace[trace.output_layers[0]].out
 
@@ -181,8 +177,7 @@ def test_no_grad_wrapping_forward_severs_grad_slow() -> None:
         trace = tl.trace(
             model,
             torch.randn(3, 4, requires_grad=True),
-            backward_ready=True,
-            random_seed=0,
+            capture=tl.options.CaptureOptions(backward_ready=True, random_seed=0),
         )
     saved = trace[trace.output_layers[0]].out
 
@@ -199,8 +194,7 @@ def test_mixed_grad_model_slow() -> None:
     trace = tl.trace(
         model,
         torch.randn(3, 4, requires_grad=True),
-        backward_ready=True,
-        random_seed=0,
+        capture=tl.options.CaptureOptions(backward_ready=True, random_seed=0),
     )
     saved = trace[trace.output_layers[0]].out
 
@@ -220,7 +214,7 @@ def test_compile_wrapped_model_unwrapped_cross_link() -> None:
         trace = tl.trace(
             _compile_model(nn.Linear(4, 2)),
             torch.randn(3, 4, requires_grad=True),
-            backward_ready=True,
+            capture=tl.options.CaptureOptions(backward_ready=True),
         )
     assert trace.layer_list
     trace.cleanup()

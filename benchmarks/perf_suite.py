@@ -102,9 +102,9 @@ OP_LABELS = {
     "tl_trace_profile": "TL Trace, phase profile",
     "trace_no_save": "TL Trace, metadata only (no saved outs)",
     "tl_trace_intervention_ready": "TL Trace, intervention_ready=True",
-    "tl_rerun": "Trace.rerun(model, x)",
-    "rerun_metadata_only": "Trace.rerun(model, x), metadata-only save scope",
-    "rerun_no_save": "Trace.rerun(model, x), metadata-only save scope (legacy alias)",
+    "tl_rerun": "Trace.run(model, x)",
+    "rerun_metadata_only": "Trace.run(model, x), metadata-only save scope",
+    "rerun_no_save": "Trace.run(model, x), metadata-only save scope (legacy alias)",
     "fastlog_module": "fastlog module-boundary metadata",
     "fastlog_zero": "fastlog zero-retention predicates",
     "fastlog_halt_25": "fastlog halt at 25% op depth",
@@ -902,7 +902,7 @@ def _write_report(payload: dict[str, Any], path: Path = RESULT_MD) -> None:
         "",
         "Gradient mode is enabled for headline rows, models are in eval mode, dtype is "
         "float32, autocast is not used, TF32 is disabled, and seeds are fixed to 0. "
-        "`Trace.rerun(model, x)` uses the round-4 steady-state contract: capture once before "
+        "`Trace.run(model, x)` uses the round-4 steady-state contract: capture once before "
         "the timing loop, run warmups, then measure repeated reruns on that same Trace.",
         "",
         "## Environment",

@@ -267,7 +267,9 @@ def test_module_call_and_grad_fn_call_indexes_match_scan() -> None:
     model = Recurrent(3)
     model.eval()
     x = torch.randn(3, 6, requires_grad=True)
-    trace = tl.trace(model, x, layers_to_save="all", save_grads="all")
+    trace = tl.trace(
+        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all")
+    )
     try:
         loss = trace[trace.output_layers[0]].out.sum()
         trace.log_backward(loss, retain_graph=True)

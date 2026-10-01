@@ -45,7 +45,11 @@ def _assert_render_bucket(trace: tl.Trace, bucket: str) -> None:
 def test_graphviz_render_phase_timings_are_recorded(tmp_path: Path) -> None:
     """Forward, backward, and combined Graphviz renders populate timing buckets."""
 
-    trace = tl.trace(_TinyModel(), torch.randn(2, 3, requires_grad=True), save_grads="all")
+    trace = tl.trace(
+        _TinyModel(),
+        torch.randn(2, 3, requires_grad=True),
+        capture=tl.options.CaptureOptions(save_grads="all"),
+    )
     trace.draw(
         vis_outpath=str(tmp_path / "forward"),
         vis_save_only=True,

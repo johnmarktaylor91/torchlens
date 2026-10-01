@@ -9,6 +9,7 @@ import pytest
 import torch
 import torch.nn as nn
 
+import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens._errors import AmbiguousOpLookupError
 from torchlens.types import Param
@@ -454,7 +455,11 @@ class TestGradientTracking:
             assert pl.grad_shape is None
 
     def test_no_grad_without_save_grads(self):
-        mh = trace_fn(_make_simple_model(), _simple_input(), save_grads=False)
+        mh = trace_fn(
+            _make_simple_model(),
+            _simple_input(),
+            capture=tl.options.CaptureOptions(save_grads=False),
+        )
         # Even if we could call backward, save_grads=False means no hooks
         for pl in mh.params:
             assert pl.has_grad is False
@@ -462,7 +467,7 @@ class TestGradientTracking:
     def test_grad_after_backward(self):
         model = _make_simple_model()
         x = _simple_input()
-        mh = trace_fn(model, x, save_grads=True)
+        mh = trace_fn(model, x, capture=tl.options.CaptureOptions(save_grads=True))
         output = mh["output_1"].out
         output.sum().backward()
 
@@ -477,7 +482,7 @@ class TestGradientTracking:
     def test_grad_frozen_params_no_grad(self):
         model = _make_frozen_first_layer()
         x = _simple_input()
-        mh = trace_fn(model, x, save_grads=True)
+        mh = trace_fn(model, x, capture=tl.options.CaptureOptions(save_grads=True))
         output = mh["output_1"].out
         output.sum().backward()
 
@@ -491,7 +496,7 @@ class TestGradientTracking:
     def test_tle_grad_saved(self):
         model = _make_simple_model()
         x = _simple_input()
-        mh = trace_fn(model, x, save_grads=True)
+        mh = trace_fn(model, x, capture=tl.options.CaptureOptions(save_grads=True))
         output = mh["output_1"].out
         output.sum().backward()
 
@@ -505,7 +510,7 @@ class TestGradientTracking:
     def test_saved_grad_ops_populated(self):
         model = _make_simple_model()
         x = _simple_input()
-        mh = trace_fn(model, x, save_grads=True)
+        mh = trace_fn(model, x, capture=tl.options.CaptureOptions(save_grads=True))
         output = mh["output_1"].out
         output.sum().backward()
 
@@ -516,7 +521,7 @@ class TestGradientTracking:
     def test_grad_shape_matches_param_shape(self):
         model = _make_simple_model()
         x = _simple_input()
-        mh = trace_fn(model, x, save_grads=True)
+        mh = trace_fn(model, x, capture=tl.options.CaptureOptions(save_grads=True))
         output = mh["output_1"].out
         output.sum().backward()
 
@@ -541,7 +546,9 @@ class TestOptimizerSupport:
     def test_has_optimizer_true(self):
         model = _make_simple_model()
         optimizer = torch.optim.Adam(model.parameters())
-        mh = trace_fn(model, _simple_input(), optimizer=optimizer)
+        mh = trace_fn(
+            model, _simple_input(), capture=tl.options.CaptureOptions(optimizer=optimizer)
+        )
         for pl in mh.params:
             assert pl.has_optimizer is True
 
@@ -549,7 +556,9 @@ class TestOptimizerSupport:
         model = _make_simple_model()
         # Only optimize second linear layer
         optimizer = torch.optim.Adam(model[2].parameters())
-        mh = trace_fn(model, _simple_input(), optimizer=optimizer)
+        mh = trace_fn(
+            model, _simple_input(), capture=tl.options.CaptureOptions(optimizer=optimizer)
+        )
         assert mh.params["0.weight"].has_optimizer is False
         assert mh.params["0.bias"].has_optimizer is False
         assert mh.params["2.weight"].has_optimizer is True
@@ -696,7 +705,7 @@ class TestIntegration:
 
     def test_grad_tracking_recurrent(self, input_2d):
         model = example_models.RecurrentParamsSimple()
-        mh = trace_fn(model, input_2d, save_grads=True)
+        mh = trace_fn(model, input_2d, capture=tl.options.CaptureOptions(save_grads=True))
         output = mh["output_1"].out
         output.sum().backward()
 
@@ -720,8 +729,9 @@ class TestIntegration:
         show_model_graph(
             model,
             _simple_input(),
-            vis_save_only=True,
-            vis_outpath=str(all_trainable.with_suffix("")),
+            visualization=tl.options.VisualizationOptions(
+                save_only=True, container_path=str(all_trainable.with_suffix(""))
+            ),
         )
         _assert_generated_pdf(all_trainable)
 
@@ -731,8 +741,9 @@ class TestIntegration:
         show_model_graph(
             model,
             _simple_input(),
-            vis_save_only=True,
-            vis_outpath=str(mixed.with_suffix("")),
+            visualization=tl.options.VisualizationOptions(
+                save_only=True, container_path=str(mixed.with_suffix(""))
+            ),
         )
         _assert_generated_pdf(mixed)
 
@@ -742,8 +753,9 @@ class TestIntegration:
         show_model_graph(
             model,
             _simple_input(),
-            vis_save_only=True,
-            vis_outpath=str(all_frozen.with_suffix("")),
+            visualization=tl.options.VisualizationOptions(
+                save_only=True, container_path=str(all_frozen.with_suffix(""))
+            ),
         )
         _assert_generated_pdf(all_frozen)
 
@@ -755,9 +767,10 @@ class TestIntegration:
         show_model_graph(
             model,
             _simple_input(),
-            vis_save_only=True,
-            vis_call_depth=1,
-            vis_outpath=str(collapsed_trainable.with_suffix("")),
+            depth=1,
+            visualization=tl.options.VisualizationOptions(
+                save_only=True, container_path=str(collapsed_trainable.with_suffix(""))
+            ),
         )
         _assert_generated_pdf(collapsed_trainable)
 
@@ -766,9 +779,10 @@ class TestIntegration:
         show_model_graph(
             model,
             _simple_input(),
-            vis_save_only=True,
-            vis_call_depth=1,
-            vis_outpath=str(collapsed_mixed.with_suffix("")),
+            depth=1,
+            visualization=tl.options.VisualizationOptions(
+                save_only=True, container_path=str(collapsed_mixed.with_suffix(""))
+            ),
         )
         _assert_generated_pdf(collapsed_mixed)
 
@@ -777,9 +791,10 @@ class TestIntegration:
         show_model_graph(
             model,
             _simple_input(),
-            vis_save_only=True,
-            vis_call_depth=1,
-            vis_outpath=str(collapsed_frozen.with_suffix("")),
+            depth=1,
+            visualization=tl.options.VisualizationOptions(
+                save_only=True, container_path=str(collapsed_frozen.with_suffix(""))
+            ),
         )
         _assert_generated_pdf(collapsed_frozen)
 

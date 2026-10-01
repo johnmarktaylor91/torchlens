@@ -140,7 +140,7 @@ def test_mlx_recurrence_detection_off_preserves_single_pass_layout() -> None:
         _repeated_fn,
         (mx.ones((2, 4)), _weight()),
         backend="mlx",
-        recurrence_detection=False,
+        capture=tl.options.CaptureOptions(recurrence_detection=False),
     )
 
     assert trace.recurrence_detection is False
@@ -231,7 +231,11 @@ def test_mlx_intermediate_derived_grads_survive_grouping() -> None:
     )
     x = mx.array([1.5, -2.0], dtype=mx.float32)
     ungrouped = tl.trace(
-        repeated_loss, x, backend="mlx", recurrence_detection=False, grad_options=grad_options
+        repeated_loss,
+        x,
+        backend="mlx",
+        grad_options=grad_options,
+        capture=tl.options.CaptureOptions(recurrence_detection=False),
     )
     grouped = tl.trace(repeated_loss, x, backend="mlx", grad_options=grad_options)
     grouped_add = [op for op in grouped.layer_list if op.func_name == "add"]

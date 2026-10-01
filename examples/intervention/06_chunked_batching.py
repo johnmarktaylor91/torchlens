@@ -45,10 +45,10 @@ def main() -> None:
     first = torch.randn(2, 8)
     second = torch.randn(3, 8)
 
-    log = tl.trace(model, first, intervention_ready=True)
+    log = tl.trace(model, first, capture=tl.options.CaptureOptions(intervention_ready=True))
     log.attach_hooks(tl.func("relu"), tl.scale(1.0), confirm_mutation=True)
-    log.rerun(model, first)
-    log.rerun(model, second, append=True)
+    log.run(model, first)
+    log.run(model, second, append=True)
 
     output = log.layer_list[-1].out
     assert output.shape[0] == first.shape[0] + second.shape[0]

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import warnings
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -13,8 +12,6 @@ import torch
 from ._deprecations import (
     MISSING,
     MissingType,
-    TorchLensDeprecationWarning,
-    warn_deprecated_alias,
 )
 from ._errors import (
     ArgumentConflictError,
@@ -44,29 +41,6 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 ActivationPostfunc = Callable[[torch.Tensor], torch.Tensor]
 GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
-
-
-def _warn_inert_option_field(class_name: str, field_name: str) -> None:
-    """Warn that a removed never-implemented option kwarg was supplied.
-
-    These spellings were declared as reserved "future" fields, accepted,
-    validated, and then read by nothing (grind b7 R47-1). Keeping them as
-    stored fields let callers configure behavior that does not exist, so the
-    fields are gone; the keyword survives one deprecation window as an
-    explicit no-op so setting it is at least VISIBLE instead of silent.
-    Registered in ``tests/test_deprecation_inventory.py`` under the
-    ``inert_option_fields`` family.
-    """
-
-    from ._deprecations import REMOVED_IN
-    from .utils.display import user_stacklevel
-
-    warnings.warn(
-        f"{class_name}.{field_name} never had any effect and no longer exists "
-        f"as a field; the keyword is ignored and will be removed in {REMOVED_IN}.",
-        TorchLensDeprecationWarning,
-        stacklevel=user_stacklevel(),
-    )
 
 
 _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
@@ -204,15 +178,12 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "save_rng_states": "save_rng_states",
     "random_seed": "random_seed",
     "source_context_lines": "source_context_lines",
-    "num_context_lines": "source_context_lines",
     "optimizer": "optimizer",
     "compute_input_output_distances": "compute_input_output_distances",
-    "mark_layer_depths": "compute_input_output_distances",
     "detach_saved_activations": "detach_saved_activations",
     "recurrence_detection": "recurrence_detection",
     "intervention_ready": "intervention_ready",
     "capture_container_structure": "capture_container_structure",
-    "capture_output_structure": "capture_container_structure",
     "hooks": "hooks",
     "unwrap_when_done": "unwrap_when_done",
     "verbose": "verbose",
@@ -239,49 +210,13 @@ _SAVE_FLAT_TO_GROUP: Final[dict[str, str]] = {
 }
 _VISUALIZATION_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "view": "view",
-    "vis_mode": "view",
     "depth": "depth",
-    "vis_call_depth": "depth",
-    "vis_outpath": "container_path",
-    "vis_save_only": "save_only",
-    "vis_fileformat": "file_format",
-    "vis_buffers": "show_buffers",
-    "vis_direction": "direction",
-    "vis_graph_overrides": "graph_overrides",
+    "layout": "layout",
     "node_style": "node_style",
-    "vis_node_mode": "node_style",
+    "renderer": "renderer",
     "collapse": "collapse",
     "fold_repeats": "fold_repeats",
-    "vis_edge_overrides": "edge_overrides",
-    "vis_grad_edge_overrides": "grad_edge_overrides",
-    "vis_module_overrides": "module_overrides",
-    "layout": "layout",
-    "vis_node_placement": "layout",
-    "renderer": "renderer",
-    "vis_renderer": "renderer",
-    "vis_theme": "theme",
-    "vis_intervention_mode": "intervention_mode",
-    "vis_show_cone": "show_cone",
     "order_siblings": "order_siblings",
-}
-_VISUALIZATION_DEPRECATED_FLAT: Final[set[str]] = {
-    "vis_mode",
-    "vis_call_depth",
-    "vis_outpath",
-    "vis_save_only",
-    "vis_fileformat",
-    "vis_buffers",
-    "vis_direction",
-    "vis_graph_overrides",
-    "vis_node_mode",
-    "vis_edge_overrides",
-    "vis_grad_edge_overrides",
-    "vis_module_overrides",
-    "vis_node_placement",
-    "vis_renderer",
-    "vis_theme",
-    "vis_intervention_mode",
-    "vis_show_cone",
 }
 _REPLAY_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "strict": "strict",
@@ -297,11 +232,8 @@ _INTERVENTION_FLAT_TO_GROUP: Final[dict[str, str]] = {
 }
 _STREAMING_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "bundle_path": "bundle_path",
-    "save_outs_to": "bundle_path",
     "retain_in_memory": "retain_in_memory",
-    "keep_outs_in_memory": "retain_in_memory",
     "out_callback": "out_callback",
-    "out_sink": "out_callback",
 }
 
 
@@ -413,33 +345,6 @@ def _resolve_option_value(
     return supplied_value
 
 
-def _deprecated_argument_conflict(
-    old_name: str,
-    replacement_name: str,
-) -> KeywordConflictError:
-    """Build a typed refusal for old and replacement arguments supplied together.
-
-    Parameters
-    ----------
-    old_name:
-        Deprecated argument supplied by the caller.
-    replacement_name:
-        Current replacement argument supplied by the caller.
-
-    Returns
-    -------
-    KeywordConflictError
-        Actionable conflict with the shared stable code.
-    """
-
-    return KeywordConflictError(
-        f"kwarg {old_name} deprecated, use {replacement_name}; do not pass both",
-        code="deprecated_argument_conflict",
-        remedy=f"remove {old_name!r} and pass only {replacement_name!r}",
-        arguments=(old_name, replacement_name),
-    )
-
-
 def _validate_node_style(node_style: VisNodeModeLiteral) -> None:
     """Validate a visualization node-style preset name.
 
@@ -454,27 +359,15 @@ def _validate_node_style(node_style: VisNodeModeLiteral) -> None:
         If ``node_style`` is not a registered public preset.
     """
 
-    if node_style not in {"default", "profiling", "vision", "attention"}:
+    if node_style not in {"default", "profiling"}:
         raise InvalidArgumentError(
             f"Visualization node_style={node_style!r} is not a supported preset",
             code="visualization_node_style_invalid",
-            remedy="set node_style to 'default', 'profiling', 'vision', or 'attention'",
+            remedy=(
+                "set node_style to 'default' or 'profiling'; domain styles moved to "
+                "torchlens.experimental.node_styles.<style>_node_mode via node_spec_fn"
+            ),
             argument="node_style",
-        )
-    if node_style in {"vision", "attention"}:
-        # The advice used to name examples/recipes/<style>.py and a
-        # torchlens.<style> plugin. NEITHER exists (grind b4, R48-6): the
-        # recipes directory ships five notebooks and no such file, and no
-        # plugin was ever published. torchlens.experimental.node_styles is the
-        # destination that actually resolves today.
-        from .utils.display import user_stacklevel as _user_stacklevel
-
-        warnings.warn(
-            f"node_style={node_style!r} is moving out of core; use "
-            f"torchlens.experimental.node_styles.{node_style}_node_mode "
-            f"(exported today) via node_spec_fn instead",
-            TorchLensDeprecationWarning,
-            stacklevel=_user_stacklevel(),
         )
 
 
@@ -530,38 +423,27 @@ def _validate_intervention_mode(intervention_mode: VisInterventionModeLiteral) -
         )
 
 
-def _validate_buffer_visibility(value: BufferVisibilityLiteral | bool) -> None:
+def _validate_buffer_visibility(value: BufferVisibilityLiteral) -> None:
     """Validate buffer visibility options.
 
     Parameters
     ----------
     value:
-        Buffer visibility mode. Legacy bools are still accepted: ``True`` maps
-        to ``"always"`` and ``False`` maps to ``"never"``.
+        Tri-state buffer visibility mode.
 
     Raises
     ------
     ValueError
-        If ``value`` is not a supported tri-state mode.
+        If ``value`` is not a supported tri-state mode. The former legacy
+        bools refuse here too: pass ``'always'`` / ``'never'``.
     """
 
-    if value is True or value is False:
-        # A deprecated VALUE, not a deprecated name. The docstring has called
-        # these "legacy" since the tri-state landed, but nothing warned, so the
-        # bools were on a silent removal path (grind b4, R48-1). No caller
-        # inside torchlens passes a bool, so announcing it originates no
-        # internal self-deprecation.
-        warn_deprecated_alias(
-            f"show_buffers={value!r}",
-            "show_buffers='always'" if value else "show_buffers='never'",
-        )
-        return
     if value in {"never", "meaningful", "always"}:
         return
     raise InvalidArgumentError(
         f"Visualization show_buffers={value!r} is not a supported visibility policy",
         code="buffer_visibility_invalid",
-        remedy="set show_buffers to 'never', 'meaningful', 'always', True, or False",
+        remedy="set show_buffers to 'never', 'meaningful', or 'always'",
         argument="show_buffers",
     )
 
@@ -811,10 +693,8 @@ def _merge_grouped_options(
     flat_values: Mapping[str, Any],
     group_name: str,
     conflict_message: str,
-    deprecated_flat_names: set[str] | None = None,
-    warn_individual_kwargs: bool = True,
 ) -> Any:
-    """Merge flat kwargs into a grouped options object.
+    """Merge flat kwargs into a grouped options object (internal plumbing).
 
     Parameters
     ----------
@@ -830,11 +710,6 @@ def _merge_grouped_options(
         Public grouped option parameter name.
     conflict_message:
         Message for same-field grouped/flat conflicts.
-    deprecated_flat_names:
-        Flat names that should warn as renamed aliases. If ``None``, every flat
-        name warns when supplied.
-    warn_individual_kwargs:
-        Whether canonical individual kwargs should warn when supplied.
 
     Returns
     -------
@@ -881,11 +756,6 @@ def _merge_grouped_options(
                 remedy=f"pass either {group_name} or its individual keyword arguments",
                 arguments=(flat_name, f"{group_name}.{group_field}"),
             )
-        should_warn = warn_individual_kwargs
-        if deprecated_flat_names is not None:
-            should_warn = flat_name in deprecated_flat_names
-        if should_warn:
-            warn_deprecated_alias(flat_name, f"{group_name}.{group_field}")
         values[group_field] = flat_value
         specified_fields = frozenset((*specified_fields, group_field))
     return option_factory().from_values(values, specified_fields)
@@ -1183,39 +1053,9 @@ class CaptureOptions:
         *,
         track_nonfinite: bool | MissingType = MISSING,
         structure_only: bool | MissingType = MISSING,
-        mark_layer_depths: bool | MissingType = MISSING,
-        num_context_lines: int | MissingType = MISSING,
-        capture_output_structure: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen capture option bundle."""
 
-        if mark_layer_depths is not MISSING:
-            if compute_input_output_distances is not MISSING:
-                raise _deprecated_argument_conflict(
-                    "mark_layer_depths",
-                    "compute_input_output_distances",
-                )
-            warn_deprecated_alias("mark_layer_depths", "capture.compute_input_output_distances")
-            compute_input_output_distances = mark_layer_depths
-        if num_context_lines is not MISSING:
-            if source_context_lines is not MISSING:
-                raise _deprecated_argument_conflict(
-                    "num_context_lines",
-                    "source_context_lines",
-                )
-            warn_deprecated_alias("num_context_lines", "capture.source_context_lines")
-            source_context_lines = num_context_lines
-        if capture_output_structure is not MISSING:
-            if capture_container_structure is not MISSING:
-                raise _deprecated_argument_conflict(
-                    "capture_output_structure",
-                    "capture_container_structure",
-                )
-            warn_deprecated_alias(
-                "capture_output_structure",
-                "capture.capture_container_structure",
-            )
-            capture_container_structure = capture_output_structure
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
             "layers_to_save": _resolve_option_value(
@@ -1408,12 +1248,6 @@ class SaveOptions:
         Whether raw outs remain available when transformed.
     save_raw_gradients:
         Whether raw grads remain available when transformed.
-    output_dir:
-        Deprecated no-op keyword; the field never had any effect (R47-1).
-    save_level:
-        Deprecated no-op keyword; the field never had any effect (R47-1).
-    bundle_format:
-        Deprecated no-op keyword; the field never had any effect (R47-1).
 
     Examples
     --------
@@ -1430,23 +1264,13 @@ class SaveOptions:
 
     def __init__(
         self,
-        output_dir: str | Path | None | MissingType = MISSING,
         activation_transform: ActivationPostfunc | None | MissingType = MISSING,
         grad_transform: GradientPostfunc | None | MissingType = MISSING,
         save_raw_activations: bool | MissingType = MISSING,
         save_raw_gradients: bool | MissingType = MISSING,
-        save_level: str | None | MissingType = MISSING,
-        bundle_format: str | None | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen save option bundle."""
 
-        for inert_name, inert_value in (
-            ("output_dir", output_dir),
-            ("save_level", save_level),
-            ("bundle_format", bundle_format),
-        ):
-            if inert_value is not MISSING:
-                _warn_inert_option_field("SaveOptions", inert_name)
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
             "activation_transform": _resolve_option_value(
@@ -1660,34 +1484,8 @@ class VisualizationOptions:
         for_paper: bool | MissingType = MISSING,
         return_graph: bool | MissingType = MISSING,
         order_siblings: bool | MissingType = MISSING,
-        *,
-        mode: VisModeLiteral | MissingType = MISSING,
-        max_module_depth: int | MissingType = MISSING,
-        layout_engine: VisNodePlacementLiteral | MissingType = MISSING,
-        node_mode: VisNodeModeLiteral | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen visualization option bundle."""
-
-        if mode is not MISSING:
-            if view is not MISSING:
-                raise _deprecated_argument_conflict("mode", "view")
-            warn_deprecated_alias("mode", "visualization.view")
-            view = mode
-        if max_module_depth is not MISSING:
-            if depth is not MISSING:
-                raise _deprecated_argument_conflict("max_module_depth", "depth")
-            warn_deprecated_alias("max_module_depth", "visualization.depth")
-            depth = max_module_depth
-        if layout_engine is not MISSING:
-            if layout is not MISSING:
-                raise _deprecated_argument_conflict("layout_engine", "layout")
-            warn_deprecated_alias("layout_engine", "visualization.layout")
-            layout = layout_engine
-        if node_mode is not MISSING:
-            if node_style is not MISSING:
-                raise _deprecated_argument_conflict("node_mode", "node_style")
-            warn_deprecated_alias("node_mode", "visualization.node_style")
-            node_style = node_mode
 
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
@@ -1779,46 +1577,6 @@ class VisualizationOptions:
         _set_frozen_fields(self, _VISUALIZATION_FIELDS, values)
         object.__setattr__(self, "_specified_fields", frozenset(specified_fields))
 
-    @property
-    def mode(self) -> VisModeLiteral:
-        """Deprecated alias for ``view``.
-
-        Notes
-        -----
-        Documented as deprecated but deliberately still SILENT on read, unlike
-        its three sibling aliases below (grind b4, R48-1). ``user_funcs.py``
-        reads ``visualization.mode`` internally when validating the MLX
-        visualization mode; warning here would make TorchLens deprecate itself
-        on that path, which is the very defect R48-3 is about. The read site is
-        outside this lane's territory, so this property stays silent and is
-        recorded in the silent-deprecation ledger
-        (``tests/test_deprecation_inventory.py``) rather than being quietly
-        forgotten.
-        """
-
-        return self.view
-
-    @property
-    def max_module_depth(self) -> int:
-        """Deprecated alias for ``depth``."""
-
-        warn_deprecated_alias("visualization.max_module_depth", "visualization.depth")
-        return self.depth
-
-    @property
-    def layout_engine(self) -> VisNodePlacementLiteral:
-        """Deprecated alias for ``layout``."""
-
-        warn_deprecated_alias("visualization.layout_engine", "visualization.layout")
-        return self.layout
-
-    @property
-    def node_mode(self) -> VisNodeModeLiteral:
-        """Deprecated alias for ``node_style``."""
-
-        warn_deprecated_alias("visualization.node_mode", "visualization.node_style")
-        return self.node_style
-
     def as_dict(self) -> dict[str, Any]:
         """Return the option values as a plain dictionary."""
 
@@ -1869,10 +1627,6 @@ class ReplayOptions:
     chunk_size:
         Forward chunk size for rerun chunking sugar. Splits positional input
         along dimension 0 and appends compatible chunks.
-    is_appended:
-        Deprecated no-op keyword; the field never had any effect (R47-1).
-    device_override:
-        Deprecated no-op keyword; the field never had any effect (R47-1).
 
     Examples
     --------
@@ -1895,17 +1649,9 @@ class ReplayOptions:
         differentiable: bool | MissingType = MISSING,
         append: bool | MissingType = MISSING,
         chunk_size: int | None | MissingType = MISSING,
-        is_appended: bool | None | MissingType = MISSING,
-        device_override: str | torch.device | None | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen replay option bundle."""
 
-        for inert_name, inert_value in (
-            ("is_appended", is_appended),
-            ("device_override", device_override),
-        ):
-            if inert_value is not MISSING:
-                _warn_inert_option_field("ReplayOptions", inert_name)
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
             "strict": _resolve_option_value("strict", strict, False, specified_fields),
@@ -1953,14 +1699,6 @@ class InterventionOptions:
         Whether root-mutation warnings are suppressed for intentional mutation.
     strict:
         Whether selector and propagation checks raise instead of warning.
-    helper_validation:
-        Deprecated no-op keyword; the field never had any effect (R47-1).
-    auto_promote:
-        Deprecated no-op keyword; the field never had any effect (R47-1).
-    cohort_migration:
-        Deprecated no-op keyword; the field never had any effect (R47-1).
-    error_severity_threshold:
-        Deprecated no-op keyword; the field never had any effect (R47-1).
 
     Examples
     --------
@@ -1979,21 +1717,9 @@ class InterventionOptions:
         engine: str | MissingType = MISSING,
         confirm_mutation: bool | MissingType = MISSING,
         strict: bool | MissingType = MISSING,
-        helper_validation: str | MissingType = MISSING,
-        auto_promote: bool | MissingType = MISSING,
-        cohort_migration: bool | MissingType = MISSING,
-        error_severity_threshold: str | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen intervention option bundle."""
 
-        for inert_name, inert_value in (
-            ("helper_validation", helper_validation),
-            ("auto_promote", auto_promote),
-            ("cohort_migration", cohort_migration),
-            ("error_severity_threshold", error_severity_threshold),
-        ):
-            if inert_value is not MISSING:
-                _warn_inert_option_field("InterventionOptions", inert_name)
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
             "engine": _resolve_option_value("engine", engine, "auto", specified_fields),
@@ -2095,30 +1821,8 @@ class StreamingOptions:
         include_buffer_values: bool | MissingType = MISSING,
         async_writes: bool | None | MissingType = MISSING,
         max_pending_bytes: int | None | MissingType = MISSING,
-        save_outs_to: str | Path | None | MissingType = MISSING,
-        keep_outs_in_memory: bool | MissingType = MISSING,
-        out_sink: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen streaming option bundle."""
-
-        if save_outs_to is not MISSING:
-            if bundle_path is not MISSING:
-                raise _deprecated_argument_conflict("save_outs_to", "bundle_path")
-            warn_deprecated_alias("save_outs_to", "streaming.bundle_path")
-            bundle_path = save_outs_to
-        if keep_outs_in_memory is not MISSING:
-            if retain_in_memory is not MISSING:
-                raise _deprecated_argument_conflict(
-                    "keep_outs_in_memory",
-                    "retain_in_memory",
-                )
-            warn_deprecated_alias("keep_outs_in_memory", "streaming.retain_in_memory")
-            retain_in_memory = keep_outs_in_memory
-        if out_sink is not MISSING:
-            if out_callback is not MISSING:
-                raise _deprecated_argument_conflict("out_sink", "out_callback")
-            warn_deprecated_alias("out_sink", "streaming.out_callback")
-            out_callback = out_sink
 
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
@@ -2235,17 +1939,6 @@ def merge_capture_options(
 ) -> CaptureOptions:
     """Merge individual capture kwargs into a grouped options object."""
 
-    for old_name, new_name in (
-        ("num_context_lines", "source_context_lines"),
-        ("mark_layer_depths", "compute_input_output_distances"),
-        ("capture_output_structure", "capture_container_structure"),
-    ):
-        if (
-            flat_values.get(old_name, MISSING) is not MISSING
-            and flat_values.get(new_name, MISSING) is not MISSING
-        ):
-            raise _deprecated_argument_conflict(old_name, new_name)
-
     return cast(
         CaptureOptions,
         _merge_grouped_options(
@@ -2275,7 +1968,6 @@ def merge_save_options(*, save: SaveOptions | None, **flat_values: Any) -> SaveO
             conflict_message=(
                 "conflicting save options: pass either SaveOptions or individual kwargs, not both"
             ),
-            deprecated_flat_names=set(_SAVE_FLAT_TO_GROUP) - {"grad_transform"},
         ),
     )
 
@@ -2289,28 +1981,11 @@ def merge_visualization_options(
     layout: VisNodePlacementLiteral | MissingType = MISSING,
     node_style: VisNodeModeLiteral | MissingType = MISSING,
     renderer: VisRendererLiteral | MissingType = MISSING,
-    vis_mode: VisModeLiteral | MissingType = MISSING,
-    vis_call_depth: int | MissingType = MISSING,
-    vis_outpath: str | MissingType = MISSING,
-    vis_save_only: bool | MissingType = MISSING,
-    vis_fileformat: str | MissingType = MISSING,
-    vis_buffers: BufferVisibilityLiteral | bool | MissingType = MISSING,
-    vis_direction: VisDirectionLiteral | MissingType = MISSING,
-    vis_graph_overrides: dict[str, Any] | None | MissingType = MISSING,
-    vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
     collapse: CollapseLiteral | MissingType = MISSING,
     fold_repeats: FoldRepeatsLiteral | MissingType = MISSING,
-    vis_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
-    vis_grad_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
-    vis_module_overrides: dict[str, Any] | None | MissingType = MISSING,
-    vis_node_placement: VisNodePlacementLiteral | MissingType = MISSING,
-    vis_renderer: VisRendererLiteral | MissingType = MISSING,
-    vis_theme: str | MissingType = MISSING,
-    vis_intervention_mode: VisInterventionModeLiteral | MissingType = MISSING,
-    vis_show_cone: bool | MissingType = MISSING,
     order_siblings: bool | MissingType = MISSING,
 ) -> VisualizationOptions:
-    """Merge flat visualization kwargs into a grouped options object."""
+    """Merge the canonical flat visualization kwargs into a grouped options object."""
 
     if visualization is None:
         values = VisualizationOptions().as_dict()
@@ -2326,25 +2001,8 @@ def merge_visualization_options(
         "layout": layout,
         "node_style": node_style,
         "renderer": renderer,
-        "vis_mode": vis_mode,
-        "vis_call_depth": vis_call_depth,
-        "vis_outpath": vis_outpath,
-        "vis_save_only": vis_save_only,
-        "vis_fileformat": vis_fileformat,
-        "vis_buffers": vis_buffers,
-        "vis_direction": vis_direction,
-        "vis_graph_overrides": vis_graph_overrides,
-        "vis_node_mode": vis_node_mode,
         "collapse": collapse,
         "fold_repeats": fold_repeats,
-        "vis_edge_overrides": vis_edge_overrides,
-        "vis_grad_edge_overrides": vis_grad_edge_overrides,
-        "vis_module_overrides": vis_module_overrides,
-        "vis_node_placement": vis_node_placement,
-        "vis_renderer": vis_renderer,
-        "vis_theme": vis_theme,
-        "vis_intervention_mode": vis_intervention_mode,
-        "vis_show_cone": vis_show_cone,
         "order_siblings": order_siblings,
     }
     for flat_name, group_name in _VISUALIZATION_FLAT_TO_GROUP.items():
@@ -2358,8 +2016,6 @@ def merge_visualization_options(
                 remedy=f"remove either {flat_name!r} or {f'visualization.{group_name}'!r}",
                 arguments=(flat_name, f"visualization.{group_name}"),
             )
-        if flat_name in _VISUALIZATION_DEPRECATED_FLAT:
-            warn_deprecated_alias(flat_name, f"visualization.{group_name}")
         values[group_name] = flat_value
         specified_fields = frozenset((*specified_fields, group_name))
     return VisualizationOptions.from_values(values, specified_fields)

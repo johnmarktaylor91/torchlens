@@ -66,16 +66,23 @@ def test_capture_cache_separates_training_and_nonpersistent_state(tmp_path: Path
 
     x = torch.ones(1)
     model = _NonPersistentBufferModel().eval()
-    first = tl.trace(model, x, cache=True, cache_dir=tmp_path)
+    first = tl.trace(model, x, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path))
     assert first.capture_cache_hit is False
-    assert tl.trace(model, x, cache=True, cache_dir=tmp_path).capture_cache_hit is True
+    assert (
+        tl.trace(
+            model, x, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path)
+        ).capture_cache_hit
+        is True
+    )
 
     model.train()
-    training = tl.trace(model, x, cache=True, cache_dir=tmp_path)
+    training = tl.trace(model, x, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path))
     assert training.capture_cache_hit is False
 
     model.offset.fill_(3)
-    changed_buffer = tl.trace(model, x, cache=True, cache_dir=tmp_path)
+    changed_buffer = tl.trace(
+        model, x, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path)
+    )
     assert changed_buffer.capture_cache_hit is False
     assert torch.equal(changed_buffer[changed_buffer.output_layers[0]].out, torch.tensor([4.0]))
 
@@ -156,7 +163,7 @@ def test_capture_cache_lru_and_clear(tmp_path: Path, monkeypatch: pytest.MonkeyP
     for value in (1.0, 2.0, 3.0):
         model = nn.Linear(1, 1, bias=False)
         model.weight.data.fill_(value)
-        tl.trace(model, x, cache=True, cache_dir=tmp_path)
+        tl.trace(model, x, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path))
 
     cache_root = tmp_path / "capture"
     assert len(list(cache_root.glob("*.pkl"))) == 2
@@ -313,9 +320,8 @@ def test_streamed_bundle_lazy_load_keeps_relation_labels_as_strings(tmp_path: Pa
     tl.trace(
         _TwoOpModel(),
         torch.randn(1, 1, 8, 8),
-        layers_to_save="all",
-        save_outs_to=bundle_path,
-        random_seed=0,
+        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=0),
+        streaming=tl.options.StreamingOptions(bundle_path=bundle_path),
     )
     lazy_log = tl.load(bundle_path, lazy=True)
     for op in lazy_log.ops:
@@ -393,7 +399,7 @@ def test_over_ceiling_entry_is_refused_at_store_not_wiped_at_evict(
     for value in (1.0, 2.0):
         model = nn.Linear(1, 1, bias=False)
         model.weight.data.fill_(value)
-        tl.trace(model, x, cache=True, cache_dir=tmp_path)
+        tl.trace(model, x, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path))
     cache_root = tmp_path / "capture"
     small_entries = sorted(path.name for path in cache_root.glob("*.pkl"))
     assert len(small_entries) == 2
@@ -405,7 +411,7 @@ def test_over_ceiling_entry_is_refused_at_store_not_wiped_at_evict(
     big = nn.Linear(1, 1, bias=False)
     big.register_buffer("big_buffer", torch.arange(120_000, dtype=torch.float32))
     with pytest.warns(UserWarning, match="above the .*byte cache-entry ceiling"):
-        first = tl.trace(big, x, cache=True, cache_dir=tmp_path)
+        first = tl.trace(big, x, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path))
     assert first.capture_cache_hit is False
 
     surviving = sorted(path.name for path in cache_root.glob("*.pkl"))
@@ -425,7 +431,7 @@ def test_clear_capture_cache_is_public(tmp_path: Path) -> None:
     assert "clear_capture_cache" in tl.__all__
     x = torch.ones(1, 1)
     model = nn.Linear(1, 1, bias=False)
-    tl.trace(model, x, cache=True, cache_dir=tmp_path)
+    tl.trace(model, x, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path))
     assert len(list((tmp_path / "capture").glob("*.pkl"))) == 1
     assert tl.clear_capture_cache(tmp_path) == 1
     assert list((tmp_path / "capture").glob("*.pkl")) == []

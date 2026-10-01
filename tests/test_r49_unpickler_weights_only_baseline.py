@@ -349,7 +349,9 @@ def test_legit_bundles_round_trip_under_the_gate(tmp_path: Path) -> None:
     portable = tmp_path / "portable"
     cf = _ControlFlow()
     keep_alive.append(cf)
-    tl.trace(cf, x, layers_to_save="all").save(portable, level="portable")
+    tl.trace(cf, x, capture=tl.options.CaptureOptions(layers_to_save="all")).save(
+        portable, level="portable"
+    )
     assert tl.load(portable) is not None
 
     for suffix, kwargs in (

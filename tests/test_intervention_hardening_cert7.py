@@ -157,8 +157,8 @@ def test_most_changed_happy_path_unbroken_by_symmetric_guard() -> None:
     x = torch.randn(2, 4)
     model_a = torch.nn.Linear(4, 4)
     model_b = torch.nn.Linear(4, 4)
-    log_a = tl.trace(model_a, x, intervention_ready=True)
-    log_b = tl.trace(model_b, x, intervention_ready=True)
+    log_a = tl.trace(model_a, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    log_b = tl.trace(model_b, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     bundle = tl.bundle({"a": log_a, "b": log_b}, baseline="a")
 
     rows = bundle.most_changed()

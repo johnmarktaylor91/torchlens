@@ -129,13 +129,11 @@ def trace_graph_shape_hash(model: Any, input_value: Any) -> str:
         model.eval()
     with torch.no_grad():
         trace = tl.trace(
-            model,
-            input_value,
-            layers_to_save=None,
-            save=None,
-            save_rng_states=False,
-            inference_only=True,
-        )
+                    model,
+                    input_value,
+                    save=None,
+                    capture=tl.options.CaptureOptions(layers_to_save=None, save_rng_states=False, inference_only=True),
+                )
     return str(getattr(trace, "graph_shape_hash", "") or "")
 
 

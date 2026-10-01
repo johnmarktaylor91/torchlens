@@ -82,7 +82,10 @@ def test_paddle_depth_parity() -> None:
             return self.l2(paddle.nn.functional.relu(self.l1(x)))
 
     trace = tl.trace(
-        M(), paddle.ones([1, 4]), backend="paddle", compute_input_output_distances=True
+        M(),
+        paddle.ones([1, 4]),
+        backend="paddle",
+        capture=tl.options.CaptureOptions(compute_input_output_distances=True),
     )
     # Paddle runs the neutral recurrence grouper by default (parity wave 2), so
     # the stored EFFECTIVE value is True; this model has no recurrence and all
@@ -90,14 +93,24 @@ def test_paddle_depth_parity() -> None:
     _assert_depths(trace, expect_recurrence=True, expected_max_depth=3)
     assert _depth_by_prefix(trace, "functional.relu") == (2, 2)
     _assert_alias_matches(
-        lambda: tl.trace(M(), paddle.ones([1, 4]), backend="paddle", mark_layer_depths=True)
+        lambda: tl.trace(
+            M(),
+            paddle.ones([1, 4]),
+            backend="paddle",
+            capture=tl.options.CaptureOptions(compute_input_output_distances=True),
+        )
     )
     _assert_default_on_and_off_switch(
         lambda kw: tl.trace(M(), paddle.ones([1, 4]), backend="paddle", **kw)
     )
     base = tl.trace(M(), paddle.ones([1, 4]), backend="paddle")
     assert base.recurrence_detection is True
-    ungrouped = tl.trace(M(), paddle.ones([1, 4]), backend="paddle", recurrence_detection=False)
+    ungrouped = tl.trace(
+        M(),
+        paddle.ones([1, 4]),
+        backend="paddle",
+        capture=tl.options.CaptureOptions(recurrence_detection=False),
+    )
     assert ungrouped.recurrence_detection is False
 
 
@@ -115,7 +128,7 @@ def test_tinygrad_depth_parity() -> None:
         model,
         Tensor([1.0, -2.0, 3.0]),
         backend="tinygrad",
-        compute_input_output_distances=True,
+        capture=tl.options.CaptureOptions(compute_input_output_distances=True),
     )
     # tinygrad runs the neutral recurrence grouper by default (parity wave 2);
     # this model has no recurrence and all layers stay single-pass.
@@ -125,7 +138,10 @@ def test_tinygrad_depth_parity() -> None:
     assert _depth_by_prefix(trace, "mul_1") == (3, 4)
     _assert_alias_matches(
         lambda: tl.trace(
-            model, Tensor([1.0, -2.0, 3.0]), backend="tinygrad", mark_layer_depths=True
+            model,
+            Tensor([1.0, -2.0, 3.0]),
+            backend="tinygrad",
+            capture=tl.options.CaptureOptions(compute_input_output_distances=True),
         )
     )
     _assert_default_on_and_off_switch(
@@ -142,7 +158,12 @@ def test_jax_depth_parity() -> None:
         hidden = jnp.tanh(x @ jnp.ones((4, 3)))
         return hidden + jnp.tanh(hidden)
 
-    trace = tl.trace(model, jnp.ones((1, 4)), backend="jax", compute_input_output_distances=True)
+    trace = tl.trace(
+        model,
+        jnp.ones((1, 4)),
+        backend="jax",
+        capture=tl.options.CaptureOptions(compute_input_output_distances=True),
+    )
     _assert_depths(trace, expect_recurrence=True, expected_max_depth=3)
     # Branch/merge exactness: dot(1) -> tanh(2) -> tanh(3); the merge add sees
     # the short path (tanh#1 + 1 = 3) and the long path (tanh#2 + 1 = 4).
@@ -151,7 +172,12 @@ def test_jax_depth_parity() -> None:
     assert _depth_by_prefix(trace, "tanh_2") == (3, 3)
     assert _depth_by_prefix(trace, "add_1") == (3, 4)
     _assert_alias_matches(
-        lambda: tl.trace(model, jnp.ones((1, 4)), backend="jax", mark_layer_depths=True)
+        lambda: tl.trace(
+            model,
+            jnp.ones((1, 4)),
+            backend="jax",
+            capture=tl.options.CaptureOptions(compute_input_output_distances=True),
+        )
     )
     _assert_default_on_and_off_switch(
         lambda kw: tl.trace(model, jnp.ones((1, 4)), backend="jax", **kw)
@@ -173,7 +199,12 @@ def test_mlx_depth_parity() -> None:
         def __call__(self, x):
             return self.l2(mnn.relu(self.l1(x)))
 
-    trace = tl.trace(M(), mx.ones((1, 4)), backend="mlx", compute_input_output_distances=True)
+    trace = tl.trace(
+        M(),
+        mx.ones((1, 4)),
+        backend="mlx",
+        capture=tl.options.CaptureOptions(compute_input_output_distances=True),
+    )
     # MLX runs the neutral recurrence grouper by default (parity wave 2); this
     # model has no recurrence and all layers stay single-pass.
     _assert_depths(trace, expect_recurrence=True, expected_max_depth=3)
@@ -181,7 +212,12 @@ def test_mlx_depth_parity() -> None:
     assert _depth_by_prefix(trace, "relu_1") == (2, 2)
     assert _depth_by_prefix(trace, "linear_2") == (3, 3)
     _assert_alias_matches(
-        lambda: tl.trace(M(), mx.ones((1, 4)), backend="mlx", mark_layer_depths=True)
+        lambda: tl.trace(
+            M(),
+            mx.ones((1, 4)),
+            backend="mlx",
+            capture=tl.options.CaptureOptions(compute_input_output_distances=True),
+        )
     )
     # F1 regression: the public kwarg is threaded through the MLX dispatch, so
     # =False actually disables the flood instead of being silently dropped.
@@ -207,7 +243,12 @@ def test_mlx_depth_branch_merge_exact() -> None:
             hidden = self.l1(x)
             return mx.add(mnn.relu(hidden), hidden)
 
-    trace = tl.trace(M(), mx.ones((1, 4)), backend="mlx", compute_input_output_distances=True)
+    trace = tl.trace(
+        M(),
+        mx.ones((1, 4)),
+        backend="mlx",
+        capture=tl.options.CaptureOptions(compute_input_output_distances=True),
+    )
     assert _depth_by_prefix(trace, "linear_1") == (1, 1)
     assert _depth_by_prefix(trace, "relu_1") == (2, 2)
     assert _depth_by_prefix(trace, "add_1") == (2, 3)
@@ -222,13 +263,25 @@ def test_tf_depth_parity() -> None:
     model = keras.Sequential([keras.layers.Dense(3, activation="relu"), keras.layers.Dense(2)])
     inputs = tf.ones((1, 4))
     model(inputs)
-    trace = tl.trace(model, inputs, backend="tf", compute_input_output_distances=True)
+    trace = tl.trace(
+        model,
+        inputs,
+        backend="tf",
+        capture=tl.options.CaptureOptions(compute_input_output_distances=True),
+    )
     # TF eager runs the neutral recurrence grouper by default (parity wave
     # 2); this model has no recurrence and all layers stay single-pass.
     # matmul(1) -> biasadd(2) -> relu(3) -> matmul(4) -> biasadd(5)
     _assert_depths(trace, expect_recurrence=True, expected_max_depth=5)
     assert _depth_by_prefix(trace, "relu_1") == (3, 3)
-    _assert_alias_matches(lambda: tl.trace(model, inputs, backend="tf", mark_layer_depths=True))
+    _assert_alias_matches(
+        lambda: tl.trace(
+            model,
+            inputs,
+            backend="tf",
+            capture=tl.options.CaptureOptions(compute_input_output_distances=True),
+        )
+    )
     # F2 regression: compute_input_output_distances joins tf's
     # default_if_missing block, so the flood has a real off switch instead of
     # a truthy MISSING sentinel keeping it unconditionally on.

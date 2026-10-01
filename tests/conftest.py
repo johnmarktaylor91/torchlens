@@ -40,7 +40,6 @@ _WARN_ONCE_SENTINELS: tuple[tuple[str, str, object], ...] = (
     ("torchlens._capture_state_helpers", "_VALIDATION_DEEPCOPY_WARNING_TYPES", weakref.WeakSet()),
     ("torchlens._capture_state_helpers", "_COMPILED_MODEL_UNWRAP_WARNED", False),
     ("torchlens._capture_state_helpers", "_COMPILED_FORCED_EAGER_WARNED", False),
-    ("torchlens._deprecations", "_WARNED_DEPRECATIONS", set()),
     ("torchlens._io", "_LEGACY_THREAD_WARNING_EMITTED", {"flag": False}),
     ("torchlens._io.bundle", "_NONPERSISTENT_DISCLOSURE_WARNED", False),
     ("torchlens._io.bundle", "_UNATTESTABLE_ACTIVATION_DISCLOSURE_WARNED", False),

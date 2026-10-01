@@ -36,14 +36,14 @@ def _tooltip_repr(value: Any) -> str:
 
 
 def _normalize_buffer_visibility(
-    show_buffer_layers: BufferVisibilityLiteral | bool,
+    show_buffer_layers: BufferVisibilityLiteral,
 ) -> BufferVisibilityLiteral:
-    """Normalize buffer visibility values accepted by the render path.
+    """Validate the tri-state buffer visibility mode for the render path.
 
     Parameters
     ----------
     show_buffer_layers:
-        Tri-state buffer visibility mode or legacy bool.
+        Tri-state buffer visibility mode.
 
     Returns
     -------
@@ -53,20 +53,17 @@ def _normalize_buffer_visibility(
     Raises
     ------
     ValueError
-        If ``show_buffer_layers`` is not supported.
+        If ``show_buffer_layers`` is not supported (the former legacy bools
+        refuse here too).
     """
 
-    if show_buffer_layers is True:
-        return "always"
-    if show_buffer_layers is False:
-        return "never"
     if show_buffer_layers in {"never", "meaningful", "always"}:
         return show_buffer_layers
     raise InvalidArgumentError(
-        "show_buffer_layers must be 'never', 'meaningful', 'always', or a bool; "
+        "show_buffer_layers must be 'never', 'meaningful', or 'always'; "
         f"received {show_buffer_layers!r}",
         code="buffer_visibility_invalid",
-        remedy="pass show_buffer_layers='never', 'meaningful', 'always', or a bool",
+        remedy="pass show_buffer_layers='never', 'meaningful', or 'always'",
         argument="show_buffer_layers",
     )
 
@@ -1722,7 +1719,7 @@ def _format_rolling_suffix(annotation: RollingAnnotation | None) -> str:
 def _get_node_address_shape_color(
     self: "Trace",
     node: GraphNode,
-    show_buffer_layers: BufferVisibilityLiteral | bool,
+    show_buffer_layers: BufferVisibilityLiteral,
     sibling_counts: Mapping[str, int] | None = None,
 ) -> Tuple[str, str, str]:
     """Gets the node shape, address, and color for the graphviz figure.

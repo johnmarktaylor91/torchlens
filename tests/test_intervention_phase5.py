@@ -172,17 +172,17 @@ def test_graph_shape_hash_is_stable_and_sensitive() -> None:
     log1 = tl.trace(
         _LinearSplitModel(),
         torch.randn(2, 3),
-        intervention_ready=True,
+        capture=tl.options.CaptureOptions(intervention_ready=True),
     )
     log2 = tl.trace(
         _LinearSplitModel(),
         torch.randn(2, 3),
-        intervention_ready=True,
+        capture=tl.options.CaptureOptions(intervention_ready=True),
     )
     log3 = tl.trace(
         _DifferentGraphModel(),
         torch.randn(2, 3),
-        intervention_ready=True,
+        capture=tl.options.CaptureOptions(intervention_ready=True),
     )
 
     assert log1.graph_shape_hash is not None
@@ -197,7 +197,7 @@ def test_graph_shape_hash_is_referentially_transparent() -> None:
     log = tl.trace(
         _LinearSplitModel(),
         torch.randn(2, 3),
-        intervention_ready=True,
+        capture=tl.options.CaptureOptions(intervention_ready=True),
     )
     target = next(layer for layer in log.layer_list if layer.module is not None)
     target._address_normalized = "sentinel"
@@ -213,9 +213,17 @@ def test_graph_shape_hash_address_free_variant_ignores_module_names() -> None:
     """Address-free graph hash matches equivalent topology under renamed modules."""
 
     torch.manual_seed(123)
-    left = tl.trace(_LinearSplitModel(), torch.randn(2, 3), intervention_ready=True)
+    left = tl.trace(
+        _LinearSplitModel(),
+        torch.randn(2, 3),
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+    )
     torch.manual_seed(123)
-    right = tl.trace(_RenamedLinearSplitModel(), torch.randn(2, 3), intervention_ready=True)
+    right = tl.trace(
+        _RenamedLinearSplitModel(),
+        torch.randn(2, 3),
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+    )
 
     assert compute_graph_shape_hash(left) != compute_graph_shape_hash(right)
     assert compute_graph_shape_hash(left, include_module_address=False) == compute_graph_shape_hash(
@@ -229,7 +237,7 @@ def test_label_rewrite_preserves_templates_edges_and_call_groups() -> None:
     log = tl.trace(
         _SplitModel(),
         torch.randn(2, 3),
-        intervention_ready=True,
+        capture=tl.options.CaptureOptions(intervention_ready=True),
     )
 
     split_layers = [layer for layer in log.layer_list if layer.func_name == "split"]
@@ -254,7 +262,7 @@ def test_selective_save_preserves_replay_call_group_siblings() -> None:
         _SplitModel(),
         torch.randn(2, 3),
         save=_save_only_outputs,
-        intervention_ready=True,
+        capture=tl.options.CaptureOptions(intervention_ready=True),
     )
 
     split_layers = [layer for layer in log.layer_list if layer.func_name == "split"]
@@ -270,7 +278,7 @@ def test_recurrent_iterations_keep_distinct_func_call_ids() -> None:
     log = tl.trace(
         _RecurrentReluModel(),
         torch.randn(2, 3),
-        intervention_ready=True,
+        capture=tl.options.CaptureOptions(intervention_ready=True),
     )
 
     relu_layers = [layer for layer in log.layer_list if layer.func_name == "relu"]
@@ -285,7 +293,7 @@ def test_func_call_id_invariant_catches_duplicate_container_paths() -> None:
     log = tl.trace(
         _SplitModel(),
         torch.randn(2, 3),
-        intervention_ready=True,
+        capture=tl.options.CaptureOptions(intervention_ready=True),
     )
     split_layers = [layer for layer in log.layer_list if layer.func_name == "split"]
     split_layers[1].container_path = split_layers[0].container_path
@@ -304,7 +312,7 @@ def test__address_normalized_strips_pass_qualifiers() -> None:
     log = tl.trace(
         _LinearSplitModel(),
         torch.randn(2, 3),
-        intervention_ready=True,
+        capture=tl.options.CaptureOptions(intervention_ready=True),
     )
     linear_layers = [layer for layer in log.layer_list if layer.module is not None]
 

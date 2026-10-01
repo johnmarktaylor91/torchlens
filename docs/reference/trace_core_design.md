@@ -180,7 +180,7 @@ postprocess ran.
 Pack-on-expose dissolves by construction (facades exist from step 0, so `exc.partial_log`
 and `return_diverged` traces are facade-backed automatically), but the escape-path
 inventory survives: every place a Trace/Op leaves `torchlens.*` mid-postprocess
-(observers, `tap()`, `record_span()`, validation internals, bridge adapters) is
+(observers, `tap()`, `span()`, validation internals, bridge adapters) is
 inventoried at M0 and covered by oracle scenarios.
 
 "C10" is split (opus's adjudication): "no transient fat-Op graph" is IN (the M5 seam);

@@ -108,7 +108,7 @@ def test_negative_gate_no_live_mutation_during_forward() -> None:
     """A real forward pass should not populate mutable live-op structures."""
 
     model = _MidForwardProbe()
-    tl.trace(model, torch.randn(1, 3), layers_to_save="all")
+    tl.trace(model, torch.randn(1, 3), capture=tl.options.CaptureOptions(layers_to_save="all"))
 
     assert model.observations["raw_dict_len"] == 0
     assert model.observations["raw_labels_len"] == 0
@@ -140,7 +140,7 @@ def test_in_pass_getitem_returns_event_backed_op() -> None:
     """In-pass raw-label lookup should return the current event-backed op."""
 
     model = _MidForwardProbe()
-    tl.trace(model, torch.randn(1, 3), layers_to_save="all")
+    tl.trace(model, torch.randn(1, 3), capture=tl.options.CaptureOptions(layers_to_save="all"))
 
     assert model.observations["getitem_label"].startswith("linear_")
     assert model.observations["getitem_shape"] == (1, 4)
@@ -150,7 +150,7 @@ def test_live_preview_summary_reads_events_during_capture() -> None:
     """Live preview rows should be rendered from emitted events."""
 
     model = _MidForwardProbe()
-    tl.trace(model, torch.randn(1, 3), layers_to_save="all")
+    tl.trace(model, torch.randn(1, 3), capture=tl.options.CaptureOptions(layers_to_save="all"))
 
     rows = model.observations["summary_rows"]
     assert model.observations["summary_count"] == model.observations["event_count"]
@@ -169,7 +169,11 @@ def test_atomic_module_classification_matches_phase1_expectation() -> None:
     the detector was restored, which is why this once expected ``False``.)
     """
 
-    log = tl.trace(_AtomicBlockModel(), torch.randn(1, 3), layers_to_save="all")
+    log = tl.trace(
+        _AtomicBlockModel(),
+        torch.randn(1, 3),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
     by_func = {op.func_name: op for op in log.ops if op.func_name in {"linear", "relu"}}
 
     assert by_func["linear"].is_module_output is True

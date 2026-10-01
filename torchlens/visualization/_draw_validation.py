@@ -8,8 +8,6 @@ ceiling raise); behavior unchanged.
 
 from __future__ import annotations
 
-import warnings
-
 from .._errors import InvalidArgumentError
 from .._literals import (
     CollapseLiteral,
@@ -17,8 +15,7 @@ from .._literals import (
     VisInterventionModeLiteral,
     VisNodeModeLiteral,
 )
-from ..utils.display import user_stacklevel
-from .modes import DOMAIN_NODE_MODES, MODE_REGISTRY
+from .modes import MODE_REGISTRY
 from .request import ShowContainersLiteral
 
 
@@ -38,25 +35,14 @@ def _validate_draw_options(
 
     if node_mode not in MODE_REGISTRY:
         raise InvalidArgumentError(
-            "Visualization node_style/node_mode must be one of 'default', "
-            f"'profiling', 'vision', or 'attention'; received {node_mode!r}",
+            "Visualization node_style/node_mode must be one of 'default' or "
+            f"'profiling'; received {node_mode!r}",
             code="visualization_node_style_invalid",
-            remedy="pass node_style='default', 'profiling', 'vision', or 'attention'",
+            remedy=(
+                "pass node_style='default' or 'profiling'; domain styles moved to "
+                "torchlens.experimental.node_styles.<style>_node_mode via node_spec_fn"
+            ),
             argument="node_style",
-        )
-    if node_mode in DOMAIN_NODE_MODES:
-        # The advice used to name examples/recipes/<style>.py and a
-        # torchlens.<style> plugin. NEITHER exists (grind b4, R48-b);
-        # torchlens.experimental.node_styles is the destination that actually
-        # resolves today -- same treatment as the options.py sibling.
-        from .._deprecations import TorchLensDeprecationWarning
-
-        warnings.warn(
-            f"node_style={node_mode!r} is moving out of core; use "
-            f"torchlens.experimental.node_styles.{node_mode}_node_mode "
-            f"(exported today) via node_spec_fn instead",
-            TorchLensDeprecationWarning,
-            stacklevel=user_stacklevel(),
         )
     if intervention_mode not in {"node_mark", "as_node"}:
         raise InvalidArgumentError(

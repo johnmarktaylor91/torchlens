@@ -57,13 +57,13 @@ def main() -> None:
     torch.manual_seed(9)
     model = Model().eval()
     x = torch.randn(2, 8)
-    log = tl.trace(model, x, intervention_ready=True)
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
 
     block_sites = log.find_sites(tl.in_module("block"), max_fanout=4)
     target = tl.label(block_sites.where(lambda site: site.func_name == "relu").labels()[0])
     edited = log.fork("block_relu")
     edited.attach_hooks(target, tl.zero_ablate())
-    edited.replay()
+    edited.push()
 
     assert any(site.func_name == "relu" for site in block_sites)
     assert edited.last_run_records()[-1].helper_name == "zero_ablate"

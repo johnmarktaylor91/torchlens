@@ -1,4 +1,10 @@
-"""Entry-point wiring tests for grouped option classes."""
+"""Entry-point wiring tests for grouped option classes.
+
+The flat option kwargs were removed by the 2026-08-19 shim-removal lane, so
+the grouped objects are the ONE spelling: these tests pin that the grouped
+door works warning-free and that the removed flat spellings refuse as unknown
+keywords instead of silently doing nothing.
+"""
 
 from __future__ import annotations
 
@@ -10,7 +16,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.options import CaptureOptions, SaveOptions, VisualizationOptions
+from torchlens.options import CaptureOptions, VisualizationOptions
 
 
 class _TinyModel(nn.Module):
@@ -41,64 +47,44 @@ def _capture_summary(log: Any) -> tuple[list[str], int]:
     return (list(log.layer_logs.keys()), int(log.num_saved_ops))
 
 
-def test_trace_capture_options_equivalent_to_individual_kwargs() -> None:
-    """Grouped capture options should preserve individual-kwarg behavior."""
-
-    grouped = tl.trace(
-        _TinyModel(),
-        _input(),
-        capture=CaptureOptions(layers_to_save="all"),
-    )
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
-            individual = tl.trace(_TinyModel(), _input(), layers_to_save="all")
-        try:
-            assert _capture_summary(grouped) == _capture_summary(individual)
-        finally:
-            individual.cleanup()
-    finally:
-        grouped.cleanup()
-
-
-def test_trace_capture_conflict_raises() -> None:
-    """Same capture field supplied both ways should fail early."""
-
-    with pytest.raises(ValueError, match="conflicting capture options"):
-        tl.trace(
-            _TinyModel(),
-            _input(),
-            capture=CaptureOptions(layers_to_save="all"),
-            layers_to_save="none",
-        )
-
-
-def test_trace_save_conflict_raises() -> None:
-    """Same save field supplied both ways should fail early."""
-
-    with pytest.raises(ValueError, match="conflicting save options"):
-        tl.trace(
-            _TinyModel(),
-            _input(),
-            save=SaveOptions(save_raw_activations=True),
-            save_raw_activations=False,
-        )
-
-
-def test_trace_individual_capture_kwarg_warns() -> None:
-    """Individual capture kwargs should warn during the migration window."""
+def test_trace_grouped_capture_options_route_warning_free() -> None:
+    """The grouped capture door works and emits no deprecation warnings."""
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        log = tl.trace(_TinyModel(), _input(), layers_to_save="all")
-    try:
-        messages = [str(record.message) for record in records]
-        assert any(
-            "layers_to_save" in message and "capture.layers_to_save" in message
-            for message in messages
+        log = tl.trace(
+            _TinyModel(),
+            _input(),
+            capture=CaptureOptions(layers_to_save="all"),
         )
+    try:
+        labels, saved = _capture_summary(log)
+        assert labels
+        assert saved > 0
+        deprecations = [
+            record for record in records if issubclass(record.category, DeprecationWarning)
+        ]
+        assert deprecations == []
     finally:
         log.cleanup()
+
+
+@pytest.mark.parametrize(
+    "flat_kwargs",
+    [
+        {"layers_to_save": "none"},
+        {"random_seed": 1},
+        {"verbose": True},
+        {"save_raw_activations": False},
+        {"save_outs_to": "somewhere"},
+    ],
+    ids=["layers_to_save", "random_seed", "verbose", "save_raw_activations", "save_outs_to"],
+)
+def test_removed_flat_trace_kwargs_refuse(flat_kwargs: dict[str, Any]) -> None:
+    """The removed flat trace kwargs raise TypeError as unknown keywords."""
+
+    with pytest.raises(TypeError):
+        tl.trace(_TinyModel(), _input(), **flat_kwargs)
 
 
 def test_visualization_canonical_kwargs_route_without_deprecation() -> None:

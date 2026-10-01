@@ -167,7 +167,11 @@ def forward_trace() -> Trace:
 def backward_trace() -> Trace:
     """Return a tiny Trace with backward metadata."""
 
-    trace = tl.trace(_TinyRenderModel(), torch.randn(2, 3, requires_grad=True), save_grads="all")
+    trace = tl.trace(
+        _TinyRenderModel(),
+        torch.randn(2, 3, requires_grad=True),
+        capture=tl.options.CaptureOptions(save_grads="all"),
+    )
     trace.log_backward(trace[trace.output_layers[0]].out)
     return trace
 
@@ -732,7 +736,7 @@ def test_grad_edges_use_preserved_edge_cluster_key(
     trace = tl.trace(
         _NestedTorchOpModel(),
         torch.randn(2, 3, requires_grad=True),
-        save_grads="all",
+        capture=tl.options.CaptureOptions(save_grads="all"),
     )
     try:
         trace.log_backward(trace[trace.output_layers[0]].out)
@@ -860,7 +864,7 @@ def test_container_edge_label_escapes_html_special_dict_key(tmp_path: Path) -> N
     trace = tl.trace(
         _SpecialCharDictOutputModel(),
         torch.ones(2),
-        capture_container_structure=True,
+        capture=tl.options.CaptureOptions(capture_container_structure=True),
     )
     outpath = tmp_path / "container_edge_special_char"
     try:

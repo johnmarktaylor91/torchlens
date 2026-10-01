@@ -265,7 +265,9 @@ def test_live_followed_by_refused_under_nonmatching_and() -> None:
         tl.trace(
             TinyConvNet(),
             _conv_input(),
-            hooks=[(tl.func("zzz_never") & tl.followed_by(tl.func("relu")), _noop_hook)],
+            capture=tl.options.CaptureOptions(
+                hooks=[(tl.func("zzz_never") & tl.followed_by(tl.func("relu")), _noop_hook)]
+            ),
         )
 
 
@@ -276,7 +278,9 @@ def test_live_preceded_by_refused_under_nonmatching_and() -> None:
         tl.trace(
             TinyConvNet(),
             _conv_input(),
-            hooks=[(tl.func("zzz_never") & tl.preceded_by(tl.func("relu")), _noop_hook)],
+            capture=tl.options.CaptureOptions(
+                hooks=[(tl.func("zzz_never") & tl.preceded_by(tl.func("relu")), _noop_hook)]
+            ),
         )
 
 
@@ -287,7 +291,9 @@ def test_live_capability_refusal_is_site_resolution_subclass() -> None:
         tl.trace(
             TinyConvNet(),
             _conv_input(),
-            hooks=[(tl.followed_by(tl.func("relu")), _noop_hook)],
+            capture=tl.options.CaptureOptions(
+                hooks=[(tl.followed_by(tl.func("relu")), _noop_hook)]
+            ),
         )
 
 
@@ -470,7 +476,11 @@ def test_bare_string_live_is_exact_raw_label() -> None:
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        tl.trace(TinyConvNet(), _conv_input(), hooks=[("relu_1_3_raw", _hook)])
+        tl.trace(
+            TinyConvNet(),
+            _conv_input(),
+            capture=tl.options.CaptureOptions(hooks=[("relu_1_3_raw", _hook)]),
+        )
     assert fired == ["relu_1_3_raw"]
 
 

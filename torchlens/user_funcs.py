@@ -6,7 +6,6 @@ This module contains every user-facing function:
   - ``show_model_graph`` - visualization convenience wrapper
   - ``draw_backward`` - backward grad_fn_handle visualization wrapper
   - ``log_model_metadata`` - metadata-only convenience wrapper
-  - ``get_model_metadata`` - deprecated alias for ``log_model_metadata``
   - ``validate_batch_of_models_and_inputs`` - bulk validation harness
 
 **Selective save strategy**:
@@ -58,7 +57,7 @@ from ._chunked_capture_helpers import (
     _validate_chunked_forward_capture,
 )
 from ._chunking import iter_chunked_inputs, normalize_chunk_paths, normalize_chunk_size, plan_chunks
-from ._deprecations import MISSING, MissingType, warn_deprecated_alias
+from ._deprecations import MISSING, MissingType
 from ._errors import (
     ArgumentConflictError,
     ArgumentTypeError,
@@ -103,7 +102,6 @@ from .backends._options import (
     MLX_EXTRA_KWARG_POLICY,
     TRACE_OPTION_CAPABILITY_GATES,
     reject_extra_trace_kwargs,
-    resolve_public_depth_alias,
 )
 from .backends._selective_save import apply_static_label_save_policy, reject_selector_outside_kinds
 from .backends.torch._tl import get_tensor_label
@@ -832,12 +830,12 @@ def _trace_mlx_model(
             "MLX backend does not support pre-attached hooks. "
             "Omit hooks or use the PyTorch backend."
         )
-    if visualization is not None and visualization.mode not in ["none", "rolled", "unrolled"]:
+    if visualization is not None and visualization.view not in ["none", "rolled", "unrolled"]:
         raise InvalidArgumentError(
-            f"MLX visualization mode={visualization.mode!r} is not supported",
+            f"MLX visualization mode={visualization.view!r} is not supported",
             code="visualization_mode_invalid",
-            remedy="set visualization.mode to 'none', 'rolled', or 'unrolled'",
-            argument="visualization.mode",
+            remedy="set visualization.view to 'none', 'rolled', or 'unrolled'",
+            argument="visualization.view",
         )
     if capture_options.save_grads:
         raise BackendUnsupportedError("backward capture is not supported on the mlx backend")
@@ -913,7 +911,6 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
 
     # Idempotent when the registry entry already resolved it; load-bearing for
     # direct/autoroute callers so the deprecated alias is honored, not dropped.
-    resolve_public_depth_alias(kwargs)
     # intervene=/halt= are DISPATCHED options on MLX (static-label live
     # interventions); recipes= is refused typed by the capture path below.
     # None of the three may flow through the capability-gated reject helper:
@@ -2268,43 +2265,9 @@ def trace(
     model: nn.Module,
     input_args: str | torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
-    layers_to_save: str | list[Any] | None | MissingType = MISSING,
-    transform: Callable[[Any], Any] | None | MissingType = MISSING,
-    save_raw_input: str | bool | MissingType = MISSING,
-    batch_render: str | MissingType = MISSING,
-    output_transform: Callable[[Any], Any] | None | MissingType = MISSING,
-    output_style: str | None | MissingType = MISSING,
-    output_head: str | None | MissingType = MISSING,
-    save_raw_output: str | bool | MissingType = MISSING,
-    keep_orphans: bool | MissingType = MISSING,
-    output_device: OutputDeviceLiteral | MissingType = MISSING,
-    activation_transform: ActivationPostfunc | None | MissingType = MISSING,
     grad_transform: GradientPostfunc | None | MissingType = MISSING,
-    save_raw_activations: bool | MissingType = MISSING,
-    save_raw_gradients: bool | MissingType = MISSING,
     save_mode: SaveMode | MissingType = MISSING,
-    capture_tensor_grad_hooks: bool | MissingType = MISSING,
-    mark_layer_depths: bool | MissingType = MISSING,
-    detach_saved_activations: bool | MissingType = MISSING,
-    save_arg_values: bool | MissingType = MISSING,
-    save_grads: bool | str | list[Any] | PredicateFn | BaseSelector | None | MissingType = MISSING,
-    save_code_context: bool | MissingType = MISSING,
-    save_rng_states: bool | MissingType = MISSING,
     reconstruction_ready: bool | MissingType = MISSING,
-    random_seed: int | None | MissingType = MISSING,
-    num_context_lines: int | MissingType = MISSING,
-    optimizer: Any | MissingType = MISSING,
-    save_outs_to: str | Path | None | MissingType = MISSING,
-    keep_outs_in_memory: bool | MissingType = MISSING,
-    out_sink: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
-    intervention_ready: bool | MissingType = MISSING,
-    capture_container_structure: bool | MissingType = MISSING,
-    hooks: Any | None | MissingType = MISSING,
-    unwrap_when_done: bool | MissingType = MISSING,
-    verbose: bool | MissingType = MISSING,
-    source_context_lines: int | MissingType = MISSING,
-    compute_input_output_distances: bool | MissingType = MISSING,
-    recurrence_detection: bool | MissingType = MISSING,
     capture: CaptureOptions | None = None,
     save: SaveOptions | PredicateFn | BaseSelector | None = None,
     intervene: InterventionPredicate | None = None,
@@ -2313,14 +2276,6 @@ def trace(
     lookback_payload_policy: str = "metadata_only",
     storage: StreamingOptions | None = None,
     streaming: StreamingOptions | None = None,
-    backward_ready: bool | MissingType = MISSING,
-    inference_only: bool | MissingType = MISSING,
-    name: str | None | MissingType = MISSING,
-    cache: bool | MissingType = MISSING,
-    cache_dir: str | Path | None | MissingType = MISSING,
-    module_filter: Callable[[Any], bool] | None | MissingType = MISSING,
-    stop_after: Any | None | MissingType = MISSING,
-    raise_on_nan: bool | MissingType = MISSING,
     profile: bool | MissingType = MISSING,
     recipes: (
         list[Callable[[Any], dict[str, Any]]]
@@ -2330,16 +2285,9 @@ def trace(
     ) = MISSING,
     *,
     grouping: str | MissingType = MISSING,
-    structure_only: bool | MissingType = MISSING,
-    jax_control_flow: Literal["reject", "unroll", "region"] | MissingType = MISSING,
-    jax_max_control_flow_unroll: int | MissingType = MISSING,
-    module_identity_mode: str | None | MissingType = MISSING,
-    payload_policy: str | None | MissingType = MISSING,
-    save_preview: bool | MissingType = MISSING,
     jax_static_argnums: int | Sequence[int] | MissingType = MISSING,
     grad_options: Any | None | MissingType = MISSING,
     episode: EpisodeSpec | None = None,
-    capture_output_structure: bool | MissingType = MISSING,
     chunk_size: int | None | MissingType = MISSING,
     chunk_paths: Iterable[Any] | None | MissingType = MISSING,
     backend: BackendName | None = None,
@@ -2352,8 +2300,8 @@ def trace(
     dict-like access to every layer's data.
 
     Torch functions are automatically wrapped on the first call and stay wrapped
-    afterward.  Pass ``unwrap_when_done=True`` to restore the original torch
-    callables after logging completes.
+    afterward.  Pass ``capture=CaptureOptions(unwrap_when_done=True)`` to restore
+    the original torch callables after logging completes.
 
     **Layer selection** (``save=``, the canonical spelling):
 
@@ -2371,9 +2319,7 @@ def trace(
     Most string and substring layer selections are absorbed into a single-pass
     predicate save. TorchLens falls back to the two-pass discovery/replay path
     only for selectors that require finalized labels, such as negative indexes,
-    identity/output labels, or gradient-specific selection. The bare
-    ``layers_to_save=`` kwarg is a deprecated alias for the same selection and
-    warns when passed.
+    identity/output labels, or gradient-specific selection.
 
     Parameters
     ----------
@@ -2389,146 +2335,32 @@ def trace(
         label/module/index/substring lists, predicate selectors
         (``tl.func``, ``tl.in_module``, ``tl.followed_by``, ``tl.when``
         combinators), or a grouped ``SaveOptions``.
-    transform:
-        Optional callable applied once to ``input_args`` before ``model.forward``.
-        If it returns a mapping, TorchLens calls the model with ``**transformed``.
-    save_raw_input:
-        Raw user-input save policy for portable bundles:
-        ``"small"`` (default), ``True``, or ``False``.
-    batch_render:
-        Raw-input batch rendering policy for visualization:
-        ``"auto"`` (default), ``"all"``, ``"first"``, ``"first_n:<N>"``, or
-        ``"shape_only"``.
-    output_transform:
-        Optional callable applied once to the model output
-        after ``model.forward``. The returned value is stored as
-        ``Trace.raw_output`` and does not affect the computational graph.
-    output_style:
-        Optional semantic output decode style.
-    output_head:
-        Optional live-output head to decode.
-    save_raw_output:
-        Raw output save policy for portable bundles:
-        ``"small"`` (default), ``True``, or ``False``.
-    layers_to_save:
-        Deprecated alias for ``save=`` (warns when passed).
-    keep_orphans:
-        If True, retain island ops -- computations unreachable from both
-        the model inputs and outputs -- in raw metadata and expose them via
-        ``trace.orphans`` instead of silently dropping them. They do not enter
-        ``layer_list``/summaries. Default False (islands pruned) until the validation
-        invariants account for retained islands.
-    output_device:
-        Device for stored tensors: ``'same'``, ``'cpu'``, or ``'cuda'``.
-    activation_transform:
-        Optional function applied to each out before saving. The
-        raw out remains in ``layer.tensor``/``layer.out`` by default, and
-        the transform result is stored in ``layer.transformed_out``.
     grad_transform:
         Optional function applied to each grad before saving. The raw
         grad remains in ``layer.grad`` by default, and the transform result is stored
         in ``layer.transformed_grad``.
-    save_raw_activations:
-        When ``False`` and ``activation_transform`` is set, do not retain
-        raw out tensors in memory; raw out metadata is still populated.
-    save_raw_gradients:
-        When ``False`` and ``grad_transform`` is set, do not retain raw
-        grad tensors in memory; raw grad metadata is still populated.
     save_mode:
         Tensor retention mode for saved activation and gradient payloads.
         ``"copy"`` is the safe cloning default; ``"reference"`` preserves the
         captured value through in-place handling; ``"view"`` is a live alias that
         downstream in-place operations can mutate; and ``"cpu_async"`` clones to CPU.
-    capture_tensor_grad_hooks:
-        If False, skip tensor-level backward hooks on
-        forward tensors while preserving grad-fn registration for ``log_backward``.
-    mark_layer_depths:
-        Deprecated alias for
-        ``compute_input_output_distances``.
-    detach_saved_activations:
-        If True, detach saved tensors from the autograd graph.
-    save_arg_values:
-        Deprecated flat alias for ``capture=CaptureOptions(save_arg_values=...)``
-        (warns when passed). Stores non-tensor args for each function call
-        (needed for ``validate_forward_pass``).
-    save_grads:
-        Deprecated flat alias for ``capture=CaptureOptions(save_grads=...)``
-        (warns when passed). ``True`` captures all gradients during subsequent
-        backward passes, ``False``/``None`` disables capture, and selectors
-        restrict retention.
-    save_code_context:
-        Python call-stack identity is always recorded for each
-        tensor operation. If False (default), identity fields such as ``file``,
-        ``line_number``, ``func_name``, ``code_firstlineno``,
-        ``func_qualname``, and ``col_offset`` are still captured, but the rich
-        source-text properties return their existing empty-placeholder values.
-        If True, TorchLens also captures source text on each ``FuncCallLocation``
-        (``source_context``, ``code_context``, etc.) plus module source metadata.
-        Full ``if``/``elif``/``else`` and ternary branch attribution
-        (``conditional_records``, ``conditional_arm_entry_edges``,
-        ``conditional_edge_call_indices``, etc.) works regardless of this flag because it
-        relies only on the always-captured identity fields.
-    save_rng_states:
-        If True, capture RNG states before each operation (needed for
-        validation replay of stochastic ops like dropout). Auto-enabled when
-        ``validate_forward_pass`` is used. Default False for speed.
     reconstruction_ready:
         If True, auto-enable the argument and RNG capture
         prerequisites needed by read-only reconstructed facets such as fused
         SDPA ``scores``, ``pattern``, and ``z``.
-    random_seed:
-        Fixed RNG seed for reproducibility with stochastic models.
-        Process-global side effect: the capture reseeds all four global RNG
-        engines at entry and never restores them; when ``None`` the seed is
-        drawn from the entropy-seeded global ``random`` stream (an outer
-        ``torch.manual_seed`` does not make an unseeded capture
-        reproducible). Recorded on ``trace.random_seed``.
-    num_context_lines:
-        Deprecated alias for ``source_context_lines``.
-    optimizer:
-        Optional optimizer to annotate which params are being optimized.
-    save_outs_to:
-        Deprecated alias for ``streaming.bundle_path``.
-    keep_outs_in_memory:
-        Deprecated alias for
-        ``streaming.retain_in_memory``.
-    out_sink:
-        Deprecated alias for ``streaming.out_callback``.
-    intervention_ready:
-        If True, capture replay-template metadata and mark the
-        returned log as eligible for intervention mutators, replay, rerun, and
-        intervention spec persistence. This does not imply
-        ``save_arg_values=True``.
-    capture_container_structure:
-        If True, persist input and output container
-        structure without enabling intervention replay metadata. Default
-        ``False`` preserves legacy bytes and graph shape.
-    hooks:
-        Optional live forward post-hook plan. Accepts the same shapes as
-        ``Trace.attach_hooks`` and executes during this capture when supplied.
-    unwrap_when_done:
-        If True, restore original torch callables after logging.
-        Default False - torch stays wrapped for subsequent calls.
-    verbose:
-        If True, print timed progress messages at each major pipeline stage.
-    source_context_lines:
-        Lines of source context to capture per function call.
-    compute_input_output_distances:
-        Compute graph distances from inputs/outputs.
-    recurrence_detection:
-        If True (default), run full isomorphic
-        subgraph expansion. Set this to False when the forward pass has more than
-        about 1M operations and postprocessing speed matters; the False path skips
-        the expensive expansion step and only groups operations that share the same
-        parameters.
-    lookback:
-        Number of recent capture events queryable by predicate-window helpers.
+    capture:
+        Grouped capture options (``CaptureOptions``). The one spelling for
+        every capture knob (``layers_to_save``, ``random_seed``,
+        ``intervention_ready``, ``verbose``, ``structure_only``, ...); the
+        former flat kwargs are removed.
     intervene:
         Optional predicate returning an intervention decision for
         current-op live mutation.
     halt:
         Optional predicate returning ``True`` to stop after the matching
         source, operation, or module-boundary event and return the partial trace.
+    lookback:
+        Number of recent capture events queryable by predicate-window helpers.
     lookback_payload_policy:
         Retention policy for retroactive ``followed_by`` saves.
         ``"metadata_only"`` keeps the default metadata-only window and cannot
@@ -2540,14 +2372,7 @@ def trace(
         streams predicate-selected saves to a disk bundle during the
         forward pass. ``None`` preserves the existing in-RAM behavior.
     streaming:
-        Grouped streaming-save options.
-    backward_ready:
-        If True, validate training-compatible settings and keep saved
-        outs attached to autograd.
-    inference_only:
-        If True, run the user forward under ``torch.no_grad()``.
-        This skips autograd graph construction and cannot be combined with
-        backward-related capture.
+        Grouped streaming-save options (``StreamingOptions``).
     chunk_size:
         If supplied, split a positional tensor input into forward
         chunks of this size along dimension 0 and append them into one
@@ -2555,20 +2380,6 @@ def trace(
     chunk_paths:
         Optional explicit tensor leaf paths to split when multiple
         batched tensor leaves are present.
-    name:
-        Optional user-facing name for the returned ``Trace``. When omitted,
-        TorchLens uses a process-local counter based on the model class name after
-        stripping common HuggingFace suffixes. The counter is not thread-safe; it
-        relies on TorchLens' single active logging session guard.
-    cache:
-        Whether to use the content-hash capture cache.
-    cache_dir:
-        Optional cache directory.
-    module_filter:
-        Optional predicate receiving each op log. Returning ``False`` keeps
-        metadata but skips out saving for that op.
-    stop_after:
-        Experimental stop-early site. Unsupported for ``trace``.
     profile:
         If True, explicitly marks the returned trace as profiled. Phase timings are
         always populated on ``trace._phase_timings``.
@@ -2585,36 +2396,6 @@ def trace(
         policy that actually ran on ``trace.grouping_policy``. Distinct
         from the display-only ``fold_repeats`` viz knob, which folds
         repeated module runs at RENDER time and never changes grouping.
-    structure_only:
-        If True, run this capture under the structure-only contract
-        (DOCUMENTED-UNSTABLE surface, pending naming-session/S2 ratification;
-        no deprecation shim owed on rename). The op graph, module hierarchy,
-        parameter geometry, and per-op shape/dtype are recorded with every
-        value-bearing claim treated as a HYPOTHESIS; value payloads are never
-        retained, value-requiring consumers refuse typed, and value-dependent
-        branches refuse with the user's source line. Torch-only. See
-        ``docs/reference/structure_only_capabilities.md`` for the capability
-        contract and ``Trace.discharge_against`` for real-run discharge.
-    jax_control_flow:
-        Declared JAX control-flow policy. JAX accepts
-        ``"reject"``, default ``"unroll"``, and explicit ``"region"``.
-    jax_max_control_flow_unroll:
-        Declared maximum number of JAX
-        control-flow body iterations to unroll when that phase lands.
-    module_identity_mode:
-        Declared module-mode selection passthrough.
-        Current non-torch preview phases reject explicit use until module
-        adapters land.
-    payload_policy:
-        Declared payload materialization/codec policy
-        passthrough. Current non-torch preview phases reject explicit use
-        until codec support lands.
-    save_preview:
-        Non-torch preview backends' declared flag reserving extended ``save=``
-        semantics for a later preview phase. Explicit use refuses typed on
-        backends whose phase does not support it (torch refuses
-        ``save_preview=True``); the shipped torch ``save=`` kwarg is
-        independent of this flag.
     jax_static_argnums:
         JAX-only positional argument indexes passed to
         ``jax.make_jaxpr(..., static_argnums=...)`` when
@@ -2624,21 +2405,23 @@ def trace(
         Backend-specific derived-gradient options for the
         leaf-level preview. Supported by explicit ``backend="jax"`` and
         ``backend="tinygrad"`` only.
+    episode:
+        Torch-only episode capture declaration (``EpisodeSpec``).
     backend:
         Explicit backend name. ``None`` preserves legacy auto-resolution.
 
     Postfunc behavior:
-        ``activation_transform`` and ``grad_transform`` both take a tensor, should return a
+        ``save.activation_transform`` and ``grad_transform`` both take a tensor, should return a
         tensor for portable-save and streaming compatibility, run under ``pause_logging()``, and
         raise ``TorchLensPostfuncError`` with layer/function/tensor context if they fail.
 
-        Activation transforms run during forward capture. Their result is stored alongside the raw
-        out by default, and ``backward_ready=True`` requires the transformed out to stay
-        graph-connected and differentiable when the raw out requires grads.
+        Activation transforms run during forward capture. Their result is stored alongside the
+        raw out by default, and ``capture.backward_ready=True`` requires the transformed out to
+        stay graph-connected and differentiable when the raw out requires grads.
 
         Gradient transforms run from the backward hook output, so they follow the grad tensor's
         shorter lifetime rather than forward out retention. When the raw grad itself
-        requires grads in ``backward_ready=True``, the same differentiability checks apply.
+        requires grads under ``capture.backward_ready=True``, the same checks apply.
 
     Returns
     -------
@@ -2653,20 +2436,17 @@ def trace(
             remedy="pass the original eager nn.Module instead of the compiled callable",
             argument="model",
         )
-    if capture_output_structure is not MISSING:
-        if capture_container_structure is not MISSING:
-            raise KeywordConflictError(
-                "Deprecated capture_output_structure and replacement "
-                "capture_container_structure were both supplied",
-                code="deprecated_argument_conflict",
-                remedy="remove capture_output_structure and pass only capture_container_structure",
-                arguments=("capture_output_structure", "capture_container_structure"),
-            )
-        warn_deprecated_alias("capture_output_structure", "capture_container_structure")
-        capture_container_structure = capture_output_structure
+    if isinstance(grad_transform, torch.Tensor):
+        raise ArgumentTypeError(
+            "grad_transform (the fourth positional slot) received a "
+            "torch.Tensor -- this is almost always an extra positional model "
+            "input. Bundle model inputs as one tuple, e.g. "
+            "tl.trace(model, (input_a, input_b, input_c)).",
+            code="extra_positional_input_invalid",
+            remedy="bundle positional inputs into one tuple",
+        )
     public_trace_kwargs = locals().copy()
     public_trace_kwargs.pop("backend")
-    public_trace_kwargs.pop("capture_output_structure")
     # grouping= (UNSTABLE, keyword-only; L1 wave 0): closed-vocabulary knob.
     # Only "structural" (today's grouping, the default) is entry-legal;
     # "strict_shapes" waits on its own reviewed design and "fold_sites" on
@@ -2692,49 +2472,18 @@ def trace(
     if (
         backend is None
         and chunk_size in (MISSING, None)
-        and transform is MISSING
         and (capture is None or not capture.is_field_explicit("transform"))
     ):
         from . import autoroute
 
+        # Only the surviving public kwargs are forwarded: capture knobs travel
+        # inside the grouped ``capture=`` object, so re-entrant trace() calls
+        # inside detectors receive exactly what the user could have passed.
         autoroute_kwargs = {
             "input_kwargs": input_kwargs,
-            "layers_to_save": layers_to_save,
-            "save_raw_input": save_raw_input,
-            "batch_render": batch_render,
-            "output_transform": output_transform,
-            "output_style": output_style,
-            "output_head": output_head,
-            "save_raw_output": save_raw_output,
-            "keep_orphans": keep_orphans,
-            "output_device": output_device,
-            "activation_transform": activation_transform,
             "grad_transform": grad_transform,
-            "save_raw_activations": save_raw_activations,
-            "save_raw_gradients": save_raw_gradients,
             "save_mode": save_mode,
-            "capture_tensor_grad_hooks": capture_tensor_grad_hooks,
-            "mark_layer_depths": mark_layer_depths,
-            "detach_saved_activations": detach_saved_activations,
-            "save_arg_values": save_arg_values,
-            "save_grads": save_grads,
-            "save_code_context": save_code_context,
-            "save_rng_states": save_rng_states,
             "reconstruction_ready": reconstruction_ready,
-            "random_seed": random_seed,
-            "num_context_lines": num_context_lines,
-            "optimizer": optimizer,
-            "save_outs_to": save_outs_to,
-            "keep_outs_in_memory": keep_outs_in_memory,
-            "out_sink": out_sink,
-            "intervention_ready": intervention_ready,
-            "capture_container_structure": capture_container_structure,
-            "hooks": hooks,
-            "unwrap_when_done": unwrap_when_done,
-            "verbose": verbose,
-            "source_context_lines": source_context_lines,
-            "compute_input_output_distances": compute_input_output_distances,
-            "recurrence_detection": recurrence_detection,
             "capture": capture,
             "save": save,
             "intervene": intervene,
@@ -2743,27 +2492,8 @@ def trace(
             "lookback_payload_policy": lookback_payload_policy,
             "storage": storage,
             "streaming": streaming,
-            "backward_ready": backward_ready,
-            "inference_only": inference_only,
-            "name": name,
-            "cache": cache,
-            "cache_dir": cache_dir,
-            "module_filter": module_filter,
-            "stop_after": stop_after,
-            "raise_on_nan": raise_on_nan,
             "profile": profile,
             "recipes": recipes,
-            "jax_control_flow": jax_control_flow,
-            "jax_max_control_flow_unroll": jax_max_control_flow_unroll,
-            "module_identity_mode": module_identity_mode,
-            "payload_policy": payload_policy,
-            "save_preview": save_preview,
-            # Forwarded so re-entrant trace() calls inside detectors honor or
-            # refuse them typed; omitted they were SILENTLY DROPPED (e.g.
-            # trace(hf_model, "text", structure_only=True) returned a full
-            # value-bearing capture). transform/chunk_*/jax_static_argnums/
-            # grad_options are provably guarded before this branch.
-            "structure_only": structure_only,
             "episode": episode,
             "grouping": grouping,
         }
@@ -2927,16 +2657,6 @@ def _trace_torch_model(
             code="input_kwargs_type_invalid",
             remedy="pass keyword args as a dict, or bundle positional inputs into one tuple",
         )
-    if isinstance(layers_to_save, torch.Tensor):
-        raise ArgumentTypeError(
-            "layers_to_save (deprecated positional slot) received a "
-            "torch.Tensor -- this is almost always a fourth positional model "
-            "input. Bundle model inputs as one tuple, e.g. "
-            "tl.trace(model, (input_a, input_b, input_c)), and use save= for "
-            "selective capture.",
-            code="layers_to_save_type_invalid",
-            remedy="bundle positional inputs into one tuple; use save= for selection",
-        )
     model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
     if reconstruction_ready is not MISSING and reconstruction_ready:
@@ -2991,6 +2711,15 @@ def _trace_torch_model(
         raise_on_nan=raise_on_nan,
         structure_only=structure_only,
     )
+    if isinstance(capture_options.layers_to_save, torch.Tensor):
+        raise ArgumentTypeError(
+            "capture.layers_to_save received a torch.Tensor -- this is almost "
+            "always a model input routed to the wrong slot. Bundle model inputs "
+            "as one tuple, e.g. tl.trace(model, (input_a, input_b, input_c)), "
+            "and use save= for selective capture.",
+            code="layers_to_save_type_invalid",
+            remedy="bundle positional inputs into one tuple; use save= for selection",
+        )
     _reject_unsupported_torch_trace_option_values(capture_options)
     profile_enabled = False if isinstance(profile, MissingType) else bool(profile)
     raw_input = None
@@ -3110,9 +2839,6 @@ def _trace_torch_model(
         )
     streaming_options = merge_streaming_options(
         streaming=storage if storage is not None else streaming,
-        save_outs_to=save_outs_to,
-        keep_outs_in_memory=keep_outs_in_memory,
-        out_sink=out_sink,
     )
     chunk_size_value = None if isinstance(chunk_size, MissingType) else chunk_size
     chunk_paths_value = None if isinstance(chunk_paths, MissingType) else chunk_paths
@@ -3895,13 +3621,6 @@ def log_model_metadata(
     )
 
 
-def get_model_metadata(*args: Any, **kwargs: Any) -> Trace:
-    """Deprecated alias for :func:`log_model_metadata`."""
-
-    warn_deprecated_alias("get_model_metadata", "log_model_metadata")
-    return log_model_metadata(*args, **kwargs)
-
-
 def _public_impls_module() -> Any:
     """Return private public-command implementations with refreshed globals."""
 
@@ -3986,13 +3705,6 @@ def validate_backward_pass(*args: Any, **kwargs: Any) -> bool:
     return cast(bool, _public_impls_module().validate_backward_pass(*args, **kwargs))
 
 
-def validate_saved_outs(*args: Any, **kwargs: Any) -> bool:
-    """Deprecated alias for :func:`validate_forward_pass`."""
-
-    warn_deprecated_alias("validate_saved_outs", "validate_forward_pass")
-    return validate_forward_pass(*args, **kwargs)
-
-
 def validate_batch_of_models_and_inputs(*args: Any, **kwargs: Any) -> Any:
     """Forward to the batch validation implementation."""
 
@@ -4007,7 +3719,6 @@ _PUBLIC_IMPL_WRAPPER_NAMES = (
     "show_bundle_graph",
     "validate_forward_pass",
     "validate_backward_pass",
-    "validate_saved_outs",
     "validate_batch_of_models_and_inputs",
 )
 

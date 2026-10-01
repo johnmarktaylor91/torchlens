@@ -114,8 +114,12 @@ def test_selective_capture_cache_preserves_unsaved_payload_contract(
     model = torch.nn.Sequential(torch.nn.Linear(2, 2), torch.nn.ReLU())
     x = torch.ones(1, 2)
 
-    first = tl.trace(model, x, cache=True, cache_dir=tmp_path, **kwargs)
-    second = tl.trace(model, x, cache=True, cache_dir=tmp_path, **kwargs)
+    first = tl.trace(
+        model, x, **kwargs, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path)
+    )
+    second = tl.trace(
+        model, x, **kwargs, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path)
+    )
 
     assert first.capture_cache_hit is False
     assert second.capture_cache_hit is True
@@ -132,8 +136,16 @@ def test_absorbed_layers_to_save_cache_key_is_stable(tmp_path: Path) -> None:
     model = torch.nn.Sequential(torch.nn.Linear(2, 2), torch.nn.ReLU())
     x = torch.ones(1, 2)
 
-    first = tl.trace(model, x, cache=True, cache_dir=tmp_path, layers_to_save=["relu"])
-    second = tl.trace(model, x, cache=True, cache_dir=tmp_path, layers_to_save=["relu"])
+    first = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path, layers_to_save=["relu"]),
+    )
+    second = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path, layers_to_save=["relu"]),
+    )
 
     assert first.capture_cache_key == second.capture_cache_key
     assert second.capture_cache_hit is True
@@ -278,7 +290,7 @@ def test_trace_reference_save_mode_raises_if_saved_out_mutates(
 
     saved_out.add_(1)
 
-    with pytest.raises(tl.MutatedReferenceError, match="mutated after capture"):
+    with pytest.raises(tl.errors.MutatedReferenceError, match="mutated after capture"):
         _ = op.out
 
 

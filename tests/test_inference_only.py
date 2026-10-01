@@ -54,7 +54,9 @@ def test_inference_only_discards_saved_output_grad_fn() -> None:
     """Inference-only capture saves outputs without autograd history."""
 
     model, x = _model_and_input()
-    trace = tl.trace(model, x, layers_to_save="all", inference_only=True)
+    trace = tl.trace(
+        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", inference_only=True)
+    )
     try:
         assert trace.inference_only is True
         assert trace[trace.output_layers[0]].out.grad_fn is None
@@ -66,7 +68,7 @@ def test_default_capture_retains_saved_output_grad_fn() -> None:
     """Default capture keeps the existing grad-fn behavior."""
 
     model, x = _model_and_input()
-    trace = tl.trace(model, x, layers_to_save="all")
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
     try:
         assert trace.inference_only is False
         assert trace[trace.output_layers[0]].out.grad_fn is not None
@@ -89,14 +91,18 @@ def test_inference_only_rejects_backward_related_capture_flags(
 
     model, x = _model_and_input()
     with pytest.raises(TrainingModeConfigError, match=flag_name):
-        tl.trace(model, x, inference_only=True, **kwargs)
+        tl.trace(model, x, **kwargs, capture=tl.options.CaptureOptions(inference_only=True))
 
 
 def test_inference_only_allows_default_tensor_grad_hook_flag() -> None:
     """The moot tensor-hook flag does not conflict with inference-only capture."""
 
     model, x = _model_and_input()
-    trace = tl.trace(model, x, inference_only=True, capture_tensor_grad_hooks=True)
+    trace = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(inference_only=True, capture_tensor_grad_hooks=True),
+    )
     try:
         assert trace.inference_only is True
     finally:
@@ -107,7 +113,9 @@ def test_inference_only_deferred_backward_raises_clear_error() -> None:
     """Deferred backward is rejected because inference-only has no autograd graph."""
 
     model, x = _model_and_input()
-    trace = tl.trace(model, x, layers_to_save="all", inference_only=True)
+    trace = tl.trace(
+        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", inference_only=True)
+    )
     try:
         loss = model(x)
         with pytest.raises(ConfigurationError, match="autograd graph was discarded"):

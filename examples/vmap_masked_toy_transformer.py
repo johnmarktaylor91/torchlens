@@ -52,7 +52,7 @@ def main() -> None:
     torch.manual_seed(0)
     model = VmapMaskedToyTransformer(width=4).eval()
     x = torch.randn(5, 4)
-    trace = tl.trace(model, x, layers_to_save="all")
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
 
     print(trace.transforms)
     print(trace["vmap_1_1"].transform_config)

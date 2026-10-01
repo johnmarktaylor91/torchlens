@@ -65,15 +65,9 @@ def _capture_pair(seed: int, offset: float) -> tl.Bundle:
     baseline_model = _TinyRelu()
     changed_model = _TinyRelu(offset=offset)
     baseline = tl.trace(
-        baseline_model,
-        x,
-        intervention_ready=True,
+        baseline_model, x, capture=tl.options.CaptureOptions(intervention_ready=True)
     )
-    changed = tl.trace(
-        changed_model,
-        x,
-        intervention_ready=True,
-    )
+    changed = tl.trace(changed_model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     return tl.bundle({"baseline": baseline, "changed": changed}, baseline="baseline")
 
 
@@ -83,7 +77,7 @@ def test_bundle_call_accessors_resolve_listed_labels() -> None:
     torch.manual_seed(0)
     model = _TinyRelu()
     x = torch.randn(2, 3, requires_grad=True)
-    trace = tl.trace(model, x, intervention_ready=True)
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     loss = trace[trace.output_layers[0]].out.sum()
     trace.log_backward(loss)
     bundle = tl.bundle({"first": trace, "second": trace}, baseline="first")
@@ -150,7 +144,11 @@ def test_bundle_add_remove_accept_single_and_list_forms() -> None:
     source_bundle = _capture_pair(seed=41, offset=0.1)
     log_a = source_bundle["baseline"]
     log_b = source_bundle["changed"]
-    log_c = tl.trace(_TinyRelu(offset=0.2), torch.randn(2, 3), intervention_ready=True)
+    log_c = tl.trace(
+        _TinyRelu(offset=0.2),
+        torch.randn(2, 3),
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+    )
     bundle = tl.bundle({"a": log_a})
 
     assert bundle.add(log_b, names="b") is bundle

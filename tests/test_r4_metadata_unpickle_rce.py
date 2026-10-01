@@ -126,13 +126,17 @@ def _save_all_levels(tmp_path: Path) -> dict[str, Path]:
     audit = tmp_path / "audit"
     cf_a = _ControlFlow()
     keep_alive.append(cf_a)
-    tl.trace(cf_a, x, layers_to_save="all").save(audit, level="audit")
+    tl.trace(cf_a, x, capture=tl.options.CaptureOptions(layers_to_save="all")).save(
+        audit, level="audit"
+    )
     paths["analysis"] = audit
 
     portable = tmp_path / "portable"
     cf_p = _ControlFlow()
     keep_alive.append(cf_p)
-    tl.trace(cf_p, x, layers_to_save="all").save(portable, level="portable")
+    tl.trace(cf_p, x, capture=tl.options.CaptureOptions(layers_to_save="all")).save(
+        portable, level="portable"
+    )
     paths["portable"] = portable
 
     run = tmp_path / "runnable"
@@ -193,7 +197,9 @@ def test_control_flow_bundle_round_trips(tmp_path: Path) -> None:
 
     x = torch.randn(2, 4)
     bundle = tmp_path / "cf"
-    tl.trace(_ControlFlow(), x, layers_to_save="all").save(bundle, level="portable")
+    tl.trace(_ControlFlow(), x, capture=tl.options.CaptureOptions(layers_to_save="all")).save(
+        bundle, level="portable"
+    )
     assert b"_load_from_bytes" not in _metadata_path(bundle).read_bytes()
     loaded = tl.load(bundle)
     assert loaded is not None
@@ -222,7 +228,9 @@ def test_malicious_metadata_is_denied_and_executes_nothing(tmp_path: Path, gadge
 
     x = torch.randn(2, 4)
     bundle = tmp_path / "victim"
-    tl.trace(_ControlFlow(), x, layers_to_save="all").save(bundle, level="portable")
+    tl.trace(_ControlFlow(), x, capture=tl.options.CaptureOptions(layers_to_save="all")).save(
+        bundle, level="portable"
+    )
 
     marker = tmp_path / "PWNED"
     _overwrite_metadata(bundle, gadget_factory(marker))

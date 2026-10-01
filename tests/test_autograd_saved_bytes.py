@@ -112,7 +112,7 @@ def test_add_op_reports_zero_autograd_memory() -> None:
     model = TinyAddModel()
     x = torch.ones(2, 3, requires_grad=True)
     y = torch.ones(2, 3, requires_grad=True)
-    trace = tl.trace(model, (x, y), layers_to_save="all")
+    trace = tl.trace(model, (x, y), capture=tl.options.CaptureOptions(layers_to_save="all"))
     add_pass = next(layer for layer in trace.layer_list if layer.layer_type == "add")
 
     assert add_pass.grad_fn_object_id is not None
@@ -129,7 +129,9 @@ def test_no_grad_sets_autograd_saved_fields_to_none() -> None:
     x = torch.randn(4, 10, requires_grad=True)
 
     with torch.no_grad():
-        trace = tl.trace(model, x, layers_to_save="all", random_seed=0)
+        trace = tl.trace(
+            model, x, capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=0)
+        )
 
     assert all(layer.autograd_memory is None for layer in trace.layer_list)
     assert all(layer.num_autograd_tensors is None for layer in trace.layer_list)
@@ -145,7 +147,11 @@ def test_requires_grad_false_sets_autograd_saved_fields_to_none() -> None:
     for parameter in model.parameters():
         parameter.requires_grad_(False)
     x = torch.randn(4, 10, requires_grad=False)
-    trace = tl.trace(model, x, layers_to_save="all", random_seed=0, backward_ready=True)
+    trace = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=0, backward_ready=True),
+    )
 
     assert all(layer.autograd_memory is None for layer in _non_source_ops(trace))
     assert all(layer.num_autograd_tensors is None for layer in _non_source_ops(trace))

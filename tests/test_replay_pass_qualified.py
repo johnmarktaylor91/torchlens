@@ -249,8 +249,10 @@ def test_differentiable_replay_multipass_frontier_keys_are_per_pass(recurrent):
     _model, _x, trace = recurrent
     fork = trace.fork()
     replayed = fork.push(
-        hooks={tl.label("relu_1_2:1"): lambda out, *, hook: torch.zeros_like(out)},
-        replay=tl.options.ReplayOptions(differentiable=True),
+        replay=tl.options.ReplayOptions(
+            differentiable=True,
+            hooks={tl.label("relu_1_2:1"): lambda out, *, hook: torch.zeros_like(out)},
+        ),
     )
     assert replayed is not fork
     assert bool((replayed.layer_dict_all_keys["relu_1_2:1"].out == 0).all())

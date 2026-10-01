@@ -17,6 +17,7 @@ import torch.nn as nn
 
 pd = pytest.importorskip("pandas")
 
+import torchlens as tl  # noqa: E402
 import torchlens.backends.torch.ops as output_tensors  # noqa: E402
 import torchlens.backends.torch.sources as source_tensors  # noqa: E402
 import torchlens.postprocess.ast_branches as ast_branches  # noqa: E402
@@ -949,8 +950,9 @@ def _log_model(
     return trace_fn(
         model,
         x,
-        save_code_context=save_code_context,
-        layers_to_save=layers_to_save,
+        capture=tl.options.CaptureOptions(
+            save_code_context=save_code_context, layers_to_save=layers_to_save
+        ),
     )
 
 
@@ -1139,15 +1141,6 @@ def _collect_model_conditional_labels(trace: Trace) -> set[str]:
     for parent_label, child_label in trace.conditional_branch_edges:
         referenced_labels.add(parent_label)
         referenced_labels.add(child_label)
-    for parent_label, child_label in trace.conditional_then_entry_edges:
-        referenced_labels.add(parent_label)
-        referenced_labels.add(child_label)
-    for _, _, parent_label, child_label in trace.conditional_elif_entry_edges:
-        referenced_labels.add(parent_label)
-        referenced_labels.add(child_label)
-    for _, parent_label, child_label in trace.conditional_else_entry_edges:
-        referenced_labels.add(parent_label)
-        referenced_labels.add(child_label)
     for edge_list in trace.conditional_arm_entry_edges.values():
         for parent_label, child_label in edge_list:
             referenced_labels.add(parent_label)
@@ -1168,9 +1161,6 @@ def _assert_branchless_log(trace: Trace) -> None:
     assert trace.conditional_records == []
     assert trace.conditional_branch_edges == []
     assert trace.conditional_arm_entry_edges == {}
-    assert trace.conditional_then_entry_edges == []
-    assert trace.conditional_elif_entry_edges == []
-    assert trace.conditional_else_entry_edges == []
 
 
 def test_nested_if_then_if_model_materializes_nested_branch_stack() -> None:

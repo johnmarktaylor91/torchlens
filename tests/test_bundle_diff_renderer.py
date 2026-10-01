@@ -54,13 +54,13 @@ def _canonical_bundle() -> tl.Bundle:
     torch.manual_seed(0)
     model = torchvision_models.resnet18(weights=None).eval()
     x = torch.randn(1, 3, 224, 224)
-    trace = tl.trace(model, x, intervention_ready=True)
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     ablated_log = trace.fork("ablated")
     with pytest.warns(MultiMatchWarning):
         ablated_log.do(
             tl.module("layer1.0.relu"),
             tl.zero_ablate(),
-            confirm_mutation=True,
+            intervention=tl.options.InterventionOptions(confirm_mutation=True),
         )
     return tl.bundle({"clean": trace, "ablated": ablated_log}, baseline="clean")
 

@@ -290,7 +290,7 @@ def test_tinygrad_object_model_can_force_function_root() -> None:
         TinyLinearModel(),
         Tensor.ones(1, 3),
         backend="tinygrad",
-        module_identity_mode="function_root",
+        capture=tl.options.CaptureOptions(module_identity_mode="function_root"),
     )
 
     assert trace.module_identity_mode == "function_root"
@@ -323,7 +323,7 @@ def test_tinygrad_object_module_requires_discoverable_object() -> None:
             raw_fn,
             Tensor.ones(3),
             backend="tinygrad",
-            module_identity_mode="object_module",
+            capture=tl.options.CaptureOptions(module_identity_mode="object_module"),
         )
 
 

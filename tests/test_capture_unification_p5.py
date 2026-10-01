@@ -206,9 +206,10 @@ def test_intervene_only_mutates_forward_output_without_saving_site() -> None:
     log = tl.trace(
         LinearRelu(),
         torch.ones(1, 4),
-        layers_to_save="none",
         intervene=tl.when(tl.func("linear"), tl.zero_ablate()),
-        output_transform=lambda output: output,
+        capture=tl.options.CaptureOptions(
+            layers_to_save="none", output_transform=lambda output: output
+        ),
     )
     output = log.raw_output
 
@@ -256,7 +257,11 @@ def test_save_new_outs_rebuilds_child_versions_and_validates_alias_mutation() ->
     model = InplaceVersionModel()
     x = torch.tensor([-2.0, 3.0])
     new_x = torch.tensor([-5.0, 1.0])
-    log = tl.trace(model, x, layers_to_save="all", save_arg_values=True)
+    log = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    )
 
     log.save_new_outs(model, new_x, layers_to_save="all")
 
@@ -271,7 +276,11 @@ def test_selective_fast_save_rebuilds_versions_without_unsaved_out_postprocess()
 
     model = RecordingAliasMutation()
     x = torch.ones(2, 4)
-    log = tl.trace(model, x, layers_to_save=["mul"], save_arg_values=True)
+    log = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(layers_to_save=["mul"], save_arg_values=True),
+    )
 
     assert log._replay_arg_version_data_complete
     assert log["mul_1_4"].has_saved_activation
@@ -288,7 +297,11 @@ def test_selective_fast_save_without_arg_values_marks_replay_versions_incomplete
 
     model = RecordingAliasMutation()
     x = torch.ones(2, 4)
-    log = tl.trace(model, x, layers_to_save=["mul"], save_arg_values=False)
+    log = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(layers_to_save=["mul"], save_arg_values=False),
+    )
 
     assert not log._replay_arg_version_data_complete
     assert all(not op.out_versions_by_child for op in log.layer_list)

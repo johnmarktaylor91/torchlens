@@ -14,7 +14,6 @@ import warnings
 import weakref
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager, nullcontext
-from dataclasses import dataclass
 from functools import partial, wraps
 from typing import TYPE_CHECKING, Any, cast
 
@@ -30,7 +29,6 @@ import torch
 from torch.overrides import handle_torch_function, has_torch_function_unary  # noqa: F401
 
 from ... import _state
-from ..._deprecations import MISSING, MissingType
 from ..._errors import CaptureContextError
 from ...capture.arg_positions import _ensure_schema_tensor_position_corrections
 from ...constants import _get_torchvision_funcs, get_orig_torch_funcs
@@ -124,24 +122,6 @@ def _diagnostic_edge_armed() -> bool:
     """
 
     return _state.diagnostic_observer_armed()
-
-
-@dataclass(frozen=True)
-class PatchReport:
-    """Deprecated: summary shape of the deleted detached-reference crawler.
-
-    The sys.modules crawler was replaced by the stage-2 rescue re-run +
-    mechanical belt; :func:`patch_detached_references` is a no-op shim that
-    returns a zeroed report. This class will be removed in a future release.
-    """
-
-    policy: str = "deleted"
-    epoch: int = 0
-    module_identities_scanned: int = 0
-    deep_modules_scanned: int = 0
-    direct_attributes_inspected: int = 0
-    slots_patched: int = 0
-    source_files_opened: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -3118,8 +3098,6 @@ def _configure_completeness_witness(
 
 def wrap_torch(
     *,
-    patch_policy: str | None | MissingType = MISSING,
-    patch_modules: tuple[str, ...] | MissingType = MISSING,
     escape_detector: EscapeDetectorMode | None = None,
     completeness_witness: bool | CompletenessWitnessMode | None = None,
 ) -> None:
@@ -3135,11 +3113,6 @@ def wrap_torch(
 
     Parameters
     ----------
-    patch_policy:
-        Deprecated and ignored. The detached-reference crawler was replaced
-        by the stage-2 rescue re-run + mechanical belt.
-    patch_modules:
-        Deprecated and ignored (see ``patch_policy``).
     escape_detector:
         Opt-in callable diagnostic mode. ``"shadow"`` reports exact raw-call
         escapes and marks traces unverified; the release default is ``"off"``.
@@ -3147,17 +3120,6 @@ def wrap_torch(
         Opt-in aten dispatcher census. ``True`` or ``"shadow"`` reports
         unaccounted dispatches and marks traces unverified; default is off.
     """
-    # r-b4 R48: MISSING sentinels so ANY explicit pass warns -- the truthiness
-    # guard silently swallowed patch_modules=[]/()/{} (and an explicit
-    # patch_policy=None), the exact silent-deprecation shape the census misses.
-    if patch_policy is not MISSING or patch_modules is not MISSING:
-        warnings.warn(
-            "wrap_torch(patch_policy=, patch_modules=) are deprecated and ignored: "
-            "the detached-reference crawler was replaced by the stage-2 rescue "
-            "re-run + mechanical belt.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
     # Whole install under one lock: every mutation below is a check-then-mutate
     # over process-global wrapper state (see ``_wrapper_install_lock``).
     with _wrapper_install_lock:
@@ -3302,8 +3264,6 @@ def _renormalize_released_models_after_flip() -> None:
 @contextmanager
 def wrapped(
     *,
-    patch_policy: str | None | MissingType = MISSING,
-    patch_modules: tuple[str, ...] | MissingType = MISSING,
     escape_detector: EscapeDetectorMode | None = None,
     completeness_witness: bool | CompletenessWitnessMode | None = None,
 ) -> Iterator[None]:
@@ -3317,18 +3277,12 @@ def wrapped(
 
     Parameters
     ----------
-    patch_policy:
-        Deprecated and ignored (crawler replaced by rescue re-run + belt).
-    patch_modules:
-        Deprecated and ignored (see ``patch_policy``).
     escape_detector:
         Optional ``"off"`` or diagnostic ``"shadow"`` mode.
     completeness_witness:
         Optional bool or ``"off"``/``"shadow"`` dispatcher witness mode.
     """
     wrap_torch(
-        patch_policy=patch_policy,
-        patch_modules=patch_modules,
         escape_detector=escape_detector,
         completeness_witness=completeness_witness,
     )
@@ -3336,38 +3290,3 @@ def wrapped(
         yield
     finally:
         unwrap_torch()
-
-
-# ---------------------------------------------------------------------------
-# Deprecated crawler shims (stage-2: crawler deleted)
-# ---------------------------------------------------------------------------
-
-
-def patch_detached_references(*args: Any, **kwargs: Any) -> PatchReport:
-    """Deprecated no-op: the sys.modules crawler was deleted (stage 2).
-
-    Stale pre-wrap references are handled by the rescue re-run
-    (:mod:`torchlens.backends.torch.rescue`) and the mechanical belt
-    (:mod:`torchlens.backends.torch.belt`). Returns a zeroed
-    :class:`PatchReport` for callers that inspected the counters.
-    """
-
-    warnings.warn(
-        "patch_detached_references() is deprecated and does nothing: the "
-        "detached-reference crawler was replaced by the stage-2 rescue re-run "
-        "+ mechanical belt.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return PatchReport()
-
-
-def clear_patch_detached_references_cache() -> None:
-    """Deprecated no-op: the crawler and its caches were deleted (stage 2)."""
-
-    warnings.warn(
-        "clear_patch_detached_references_cache() is deprecated and does "
-        "nothing: the detached-reference crawler was deleted.",
-        DeprecationWarning,
-        stacklevel=2,
-    )

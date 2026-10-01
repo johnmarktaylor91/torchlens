@@ -15,7 +15,6 @@ from ..user_funcs import (
     validate_backward_pass,
     validate_batch_of_models_and_inputs,
     validate_forward_pass,
-    validate_saved_outs,
 )
 from .consolidated import InterventionValidationReport, validate
 from .core import validate_saved_outs as validate_trace_saved_outs
@@ -1296,7 +1295,6 @@ __all__ = [
     "validate_batch_of_models_and_inputs",
     "validate",
     "validate_forward_pass",
-    "validate_saved_outs",
     "validate_trace_saved_outs",
     "check_metadata_invariants",
     "check_spec_compat",

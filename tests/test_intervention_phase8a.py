@@ -200,8 +200,7 @@ def test_intervention_spec_cached_property_invalidates_after_mutators() -> None:
     log.do(
         tl.func("relu"),
         torch.ones(2, 3),
-        engine="set_only",
-        confirm_mutation=True,
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
     )
     after_do = log.intervention_spec
     assert after_do is not after_clear
@@ -301,6 +300,9 @@ def test_fork_and_auto_do_are_implemented_by_phase8b() -> None:
     assert fork.trace_label == "candidate"
     assert fork.parent_run() is log
 
-    result = log.do({tl.func("relu"): _identity_hook}, confirm_mutation=True)
+    result = log.do(
+        {tl.func("relu"): _identity_hook},
+        intervention=tl.options.InterventionOptions(confirm_mutation=True),
+    )
     assert result is log
     assert log.state is TraceState.REPLAY_PROPAGATED

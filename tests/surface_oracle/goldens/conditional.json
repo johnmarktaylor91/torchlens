@@ -5064,16 +5064,8 @@
      1
     ]
    },
-   "conditional_elif_entry_edges": [],
-   "conditional_else_entry_edges": [],
    "conditional_records": [
     "<torchlens.data_classes.trace.ConditionalEvent>"
-   ],
-   "conditional_then_entry_edges": [
-    [
-     "add_1_2",
-     "sigmoid_1_5"
-    ]
    ],
    "conditionals": "<torchlens.data_classes.trace.ConditionalAccessor>",
    "decoded_output": null,
@@ -10849,16 +10841,8 @@
      1
     ]
    },
-   "conditional_elif_entry_edges": [],
-   "conditional_else_entry_edges": [],
    "conditional_records": [
     "<torchlens.data_classes.trace.ConditionalEvent>"
-   ],
-   "conditional_then_entry_edges": [
-    [
-     "add_1_2",
-     "sigmoid_1_5"
-    ]
    ],
    "conditionals": "<torchlens.data_classes.trace.ConditionalAccessor>",
    "decoded_output": null,
@@ -16637,16 +16621,8 @@
      1
     ]
    },
-   "conditional_elif_entry_edges": [],
-   "conditional_else_entry_edges": [],
    "conditional_records": [
     "<torchlens.data_classes.trace.ConditionalEvent>"
-   ],
-   "conditional_then_entry_edges": [
-    [
-     "add_1_2",
-     "sigmoid_1_5"
-    ]
    ],
    "conditionals": "<torchlens.data_classes.trace.ConditionalAccessor>",
    "decoded_output": null,
@@ -22416,16 +22392,8 @@
      1
     ]
    },
-   "conditional_elif_entry_edges": [],
-   "conditional_else_entry_edges": [],
    "conditional_records": [
     "<torchlens.data_classes.trace.ConditionalEvent>"
-   ],
-   "conditional_then_entry_edges": [
-    [
-     "add_1_2",
-     "sigmoid_1_5"
-    ]
    ],
    "conditionals": "<torchlens.data_classes.trace.ConditionalAccessor>",
    "decoded_output": null,
@@ -28074,16 +28042,8 @@
      1
     ]
    },
-   "conditional_elif_entry_edges": [],
-   "conditional_else_entry_edges": [],
    "conditional_records": [
     "<torchlens.data_classes.trace.ConditionalEvent>"
-   ],
-   "conditional_then_entry_edges": [
-    [
-     "add_1_2",
-     "sigmoid_1_5"
-    ]
    ],
    "conditionals": "<torchlens.data_classes.trace.ConditionalAccessor>",
    "decoded_output": null,

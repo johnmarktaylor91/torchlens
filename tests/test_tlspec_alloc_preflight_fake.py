@@ -51,7 +51,7 @@ from torchlens.runnable import LiteralAtom, LiteralAtomKind, LiteralSequence, Li
 
 pytestmark = pytest.mark.smoke
 
-_CAPTURE = {"intervention_ready": True}
+_CAPTURE = {"capture": tl.options.CaptureOptions(intervention_ready=True)}
 
 
 class _Factory(nn.Module):

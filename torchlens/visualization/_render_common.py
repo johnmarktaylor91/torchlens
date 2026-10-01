@@ -89,7 +89,7 @@ from .code_panel import (
     resolve_code_panel_source,
 )
 from .collapse_plan import CollapsePlan, RawOp, SegmentDescriptor
-from .modes import COLLAPSED_MODE_REGISTRY, DOMAIN_NODE_MODES, MODE_REGISTRY
+from .modes import COLLAPSED_MODE_REGISTRY, MODE_REGISTRY
 from .node_spec import (
     INTERVENTION_CONE_COLOR,
     INTERVENTION_HOOK_BORDER_COLOR,
@@ -778,7 +778,6 @@ __all__ = [
     "ContainerSnapshot",
     "ContainerSpec",
     "DEFAULT_BG_COLOR",
-    "DOMAIN_NODE_MODES",
     "DataclassField",
     "Dict",
     "DictKey",

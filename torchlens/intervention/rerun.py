@@ -12,7 +12,6 @@ import torch
 from torch import nn
 
 from .._chunking import iter_chunked_inputs, normalize_chunk_paths, plan_chunks
-from .._deprecations import MISSING, MissingType
 from .._errors import InvalidArgumentError
 from .._input_coerce import _coerce_input_args
 from .._trace_state import TraceState
@@ -40,10 +39,7 @@ def run(
     model: nn.Module,
     x: Any = None,
     *,
-    append: bool | MissingType = MISSING,
-    chunk_size: int | None | MissingType = MISSING,
     chunk_paths: Any | None = None,
-    strict: bool | MissingType = MISSING,
     replay: ReplayOptions | None = None,
     output_transform: Any | None = None,
 ) -> Trace:
@@ -63,19 +59,12 @@ def run(
     x:
         Forward input. Rerun does not retain strong references to original
         inputs, so callers must pass the input explicitly.
-    append:
-        If true, capture ``x`` as a compatible chunk and append saved tensors
-        along batch dimension 0 instead of replacing the run state.
-    chunk_size:
-        If supplied, split positional tensor input into chunks of this size,
-        run the first chunk normally, then append remaining chunks.
     chunk_paths:
         Optional explicit tensor leaf paths to split when multiple batched
         tensor leaves are present.
-    strict:
-        If true, graph-shape divergence raises ``ControlFlowDivergenceError``.
-        If false, divergence emits ``ControlFlowDivergenceWarning`` and the
-        atomic swap proceeds.
+    replay:
+        Grouped replay options (``ReplayOptions``: ``append``, ``chunk_size``,
+        ``strict``).
     output_transform:
         Optional callable applied to the fresh model output for raw-output
         metadata storage.
@@ -86,12 +75,7 @@ def run(
         The same ``log`` object after atomic run-state replacement.
     """
 
-    replay_options = merge_replay_options(
-        replay=replay,
-        append=append,
-        chunk_size=chunk_size,
-        strict=strict,
-    )
+    replay_options = merge_replay_options(replay=replay)
     if replay_options.chunk_size is not None:
         if replay_options.append:
             raise ChunkedForwardConfigError(
@@ -1223,45 +1207,4 @@ def _reconcile_rerun_hook_fires(
     return total_fired, tuple(unfired)
 
 
-def rerun(
-    log: Trace,
-    model: nn.Module,
-    x: Any = None,
-    *,
-    append: bool | MissingType = MISSING,
-    chunk_size: int | None | MissingType = MISSING,
-    chunk_paths: Any | None = None,
-    strict: bool | MissingType = MISSING,
-    replay: ReplayOptions | None = None,
-    output_transform: Any | None = None,
-) -> Trace:
-    """Deprecated alias for :func:`run`.
-
-    Parameters
-    ----------
-    log, model, x, append, chunk_size, chunk_paths, strict, replay, output_transform:
-        Forwarded unchanged to :func:`run`.
-
-    Returns
-    -------
-    Trace
-        The same ``log`` object after atomic run-state replacement.
-    """
-
-    from .._deprecations import warn_deprecated_alias
-
-    warn_deprecated_alias("rerun", "run")
-    return run(
-        log,
-        model,
-        x,
-        append=append,
-        chunk_size=chunk_size,
-        chunk_paths=chunk_paths,
-        strict=strict,
-        replay=replay,
-        output_transform=output_transform,
-    )
-
-
-__all__ = ["rerun", "run"]
+__all__ = ["run"]

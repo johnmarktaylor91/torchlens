@@ -54,7 +54,11 @@ def _tiny() -> nn.Module:
 
 
 def _trace() -> tl.Trace:
-    return tl.trace(_tiny().eval(), torch.randn(2, 4), layers_to_save="all")
+    return tl.trace(
+        _tiny().eval(),
+        torch.randn(2, 4),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
 
 
 def _save(tmp_path: Path, name: str = "b.tlspec") -> Path:

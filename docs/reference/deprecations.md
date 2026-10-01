@@ -1,124 +1,127 @@
-# TorchLens Deprecation Ledger
+# TorchLens Removed-Spellings Ledger
 
-This ledger tracks warning-producing compatibility shims. Where the exact first
-release is not encoded in source, the since-version is recorded conservatively as
-`2.x compatibility shim`. Planned removal is `2.0 API freeze - TBD by maintainer`
-unless a narrower policy is later set.
+Every warning-producing compatibility shim listed below was REMOVED outright in
+the 2026-08 shim-removal pass (interim-phase ruling: deprecation shims are not
+justified before launch; policy is remove-and-rename, not shim). The old
+spelling now raises (``AttributeError``/``TypeError``); the "New name" column
+is the spelling to use. Torch-version compatibility and artifact-format
+compatibility (tlspec floors, legacy-save loading) are NOT shims and are
+unaffected.
 
 ## Top-Level Moved Names
 
-| Old name | New name | Since-version | Planned removal |
-| --- | --- | --- | --- |
-| `ActivationPostfunc` | `torchlens.types.ActivationPostfunc` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `Buffer` | `torchlens.types.Buffer` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `FuncCallLocation` | `torchlens.types.FuncCallLocation` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `GradientPostfunc` | `torchlens.types.GradientPostfunc` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `GradFnAccessor` | `torchlens.accessors.GradFnAccessor` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `GradFn` | `torchlens.types.GradFn` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `GradFnCall` | `torchlens.types.GradFnCall` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `LayerAccessor` | `torchlens.accessors.LayerAccessor` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `MetadataInvariantError` | `torchlens.errors.MetadataInvariantError` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `MutatedReferenceError` | `torchlens.errors.MutatedReferenceError` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `ModuleAccessor` | `torchlens.accessors.ModuleAccessor` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `Module` | `torchlens.types.Module` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `ModuleCall` | `torchlens.types.ModuleCall` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `NodeSpec` | `torchlens.experimental.dagua.NodeSpec` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `Param` | `torchlens.types.Param` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `PostTraceParamUnavailable` | `torchlens.errors.PostTraceParamUnavailable` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `TraceState` | `torchlens.io.TraceState` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `SaveLevel` | `torchlens.types.SaveLevel` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `SiteTable` | `torchlens.types.SiteTable` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `SpecCompat` | `torchlens.types.SpecCompat` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `StreamingOptions` | `torchlens.options.StreamingOptions` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `TargetManifestDiff` | `torchlens.types.TargetManifestDiff` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `TensorLog` | `torchlens.types.TensorLog` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `TensorSliceSpec` | `torchlens.types.TensorSliceSpec` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `TorchLensPostfuncError` | `torchlens.errors.TorchLensPostfuncError` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `TrainingModeConfigError` | `torchlens.errors.TrainingModeConfigError` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `VisualizationOptions` | `torchlens.options.VisualizationOptions` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `build_render_audit` | `torchlens.experimental.dagua.build_render_audit` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `check_metadata_invariants` | `torchlens.validation.check_metadata_invariants` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `check_spec_compat` | `torchlens.validation.check_spec_compat` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `cleanup_tmp` | `torchlens.io.cleanup_tmp` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `get_model_metadata` | `torchlens.io.get_model_metadata` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `list_logs` | `torchlens.io.list_logs` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `log_model_metadata` | `torchlens.io.log_model_metadata` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `trace_to_dagua_graph` | `torchlens.experimental.dagua.trace_to_dagua_graph` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `preview_fastlog` | `torchlens.fastlog.preview` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `rehydrate_nested` | `torchlens.io.rehydrate_nested` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `render_lines_to_html` | `torchlens.experimental.dagua.render_lines_to_html` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `render_trace_with_dagua` | `torchlens.experimental.dagua.render_trace_with_dagua` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `reset_naming_counter` | `torchlens.io.reset_naming_counter` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `resolve_sites` | `torchlens.validation.resolve_sites` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `save_intervention` | `torchlens.io.save_intervention` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `suppress_mutate_warnings` | `torchlens.io.suppress_mutate_warnings` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `unwrap_torch` | `torchlens.backends.torch.wrappers.unwrap_torch` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `validate_batch_of_models_and_inputs` | `torchlens.validation.validate_batch_of_models_and_inputs` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `wrap_torch` | `torchlens.backends.torch.wrappers.wrap_torch` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `wrapped` | `torchlens.backends.torch.wrappers.wrapped` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
+| Old name | New name | Status |
+| --- | --- | --- |
+| `ActivationPostfunc` | `torchlens.types.ActivationPostfunc` | removed |
+| `Buffer` | `torchlens.types.Buffer` | removed |
+| `FuncCallLocation` | `torchlens.types.FuncCallLocation` | removed |
+| `GradientPostfunc` | `torchlens.types.GradientPostfunc` | removed |
+| `GradFnAccessor` | `torchlens.accessors.GradFnAccessor` | removed |
+| `GradFn` | `torchlens.types.GradFn` | removed |
+| `GradFnCall` | `torchlens.types.GradFnCall` | removed |
+| `LayerAccessor` | `torchlens.accessors.LayerAccessor` | removed |
+| `MetadataInvariantError` | `torchlens.errors.MetadataInvariantError` | removed |
+| `MutatedReferenceError` | `torchlens.errors.MutatedReferenceError` | removed |
+| `ModuleAccessor` | `torchlens.accessors.ModuleAccessor` | removed |
+| `Module` | `torchlens.types.Module` | removed |
+| `ModuleCall` | `torchlens.types.ModuleCall` | removed |
+| `NodeSpec` | `torchlens.experimental.dagua.NodeSpec` | removed |
+| `Param` | `torchlens.types.Param` | removed |
+| `PostTraceParamUnavailable` | `torchlens.errors.PostTraceParamUnavailable` | removed |
+| `TraceState` | `torchlens.io.TraceState` | removed |
+| `SaveLevel` | `torchlens.types.SaveLevel` | removed |
+| `SiteTable` | `torchlens.types.SiteTable` | removed |
+| `SpecCompat` | `torchlens.types.SpecCompat` | removed |
+| `StreamingOptions` | `torchlens.options.StreamingOptions` | removed |
+| `TargetManifestDiff` | `torchlens.types.TargetManifestDiff` | removed |
+| `TensorLog` | `torchlens.types.TensorLog` | removed |
+| `TensorSliceSpec` | `torchlens.types.TensorSliceSpec` | removed |
+| `TorchLensPostfuncError` | `torchlens.errors.TorchLensPostfuncError` | removed |
+| `TrainingModeConfigError` | `torchlens.errors.TrainingModeConfigError` | removed |
+| `VisualizationOptions` | `torchlens.options.VisualizationOptions` | removed |
+| `build_render_audit` | `torchlens.experimental.dagua.build_render_audit` | removed |
+| `check_metadata_invariants` | `torchlens.validation.check_metadata_invariants` | removed |
+| `check_spec_compat` | `torchlens.validation.check_spec_compat` | removed |
+| `cleanup_tmp` | `torchlens.io.cleanup_tmp` | removed |
+| `get_model_metadata` | `torchlens.io.get_model_metadata` | removed |
+| `list_logs` | `torchlens.io.list_logs` | removed |
+| `log_model_metadata` | `torchlens.io.log_model_metadata` | removed |
+| `trace_to_dagua_graph` | `torchlens.experimental.dagua.trace_to_dagua_graph` | removed |
+| `preview_fastlog` | `torchlens.fastlog.preview` | removed |
+| `rehydrate_nested` | `torchlens.io.rehydrate_nested` | removed |
+| `render_lines_to_html` | `torchlens.experimental.dagua.render_lines_to_html` | removed |
+| `render_trace_with_dagua` | `torchlens.experimental.dagua.render_trace_with_dagua` | removed |
+| `reset_naming_counter` | `torchlens.io.reset_naming_counter` | removed |
+| `resolve_sites` | `torchlens.validation.resolve_sites` | removed |
+| `save_intervention` | `torchlens.io.save_intervention` | removed |
+| `suppress_mutate_warnings` | `torchlens.io.suppress_mutate_warnings` | removed |
+| `unwrap_torch` | `torchlens.backends.torch.wrappers.unwrap_torch` | removed |
+| `validate_batch_of_models_and_inputs` | `torchlens.validation.validate_batch_of_models_and_inputs` | removed |
+| `wrap_torch` | `torchlens.backends.torch.wrappers.wrap_torch` | removed |
+| `wrapped` | `torchlens.backends.torch.wrappers.wrapped` | removed |
 
 ## Top-Level Paper-Era Names
 
-| Old name | New name | Since-version | Planned removal |
-| --- | --- | --- | --- |
-| `log_forward_pass` | `trace` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `validate_model_activations` | `validate(scope="forward")` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `validate_saved_activations` | `validate(scope="saved")` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `render_graph` | `Trace.draw()` (or `torchlens.visualization.show_model_graph`, itself a moved top-level alias below) | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `render_model_graph` | `Trace.draw()` (or `torchlens.visualization.show_model_graph`, itself a moved top-level alias below) | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `draw_model_graph` | `Trace.draw()` (or `torchlens.visualization.show_model_graph`, itself a moved top-level alias below) | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `ModelHistory` | `Trace` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `get_model_structure` | structure trace accessors | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `show_model_structure` | structure trace accessors | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
+| Old name | New name | Status |
+| --- | --- | --- |
+| `log_forward_pass` | `trace` | removed |
+| `validate_model_activations` | `validate(scope="forward")` | removed |
+| `validate_saved_activations` | `validate(scope="saved")` | removed |
+| `render_graph` | `Trace.draw()` (or `torchlens.visualization.show_model_graph`, itself a moved top-level alias below) | removed |
+| `render_model_graph` | `Trace.draw()` (or `torchlens.visualization.show_model_graph`, itself a moved top-level alias below) | removed |
+| `draw_model_graph` | `Trace.draw()` (or `torchlens.visualization.show_model_graph`, itself a moved top-level alias below) | removed |
+| `ModelHistory` | `Trace` | removed |
+| `get_model_structure` | structure trace accessors | removed |
+| `show_model_structure` | structure trace accessors | removed |
 
 ## Top-Level Convenience Aliases
 
-| Old name | New name | Since-version | Planned removal |
-| --- | --- | --- | --- |
-| `peek` | `pluck` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `batched_extract` | `extract_dataset` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `validate_forward_pass` | `torchlens.validation.validate_forward_pass` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `validate_backward_pass` | `torchlens.validation.validate_backward_pass` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `validate_saved_outs` | `torchlens.validation.validate_saved_outs` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `summary` | `torchlens.visualization.summary` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `show_model_graph` | `torchlens.visualization.show_model_graph` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `draw_backward` | `torchlens.visualization.draw_backward` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `draw_combined` | `torchlens.visualization.draw_combined` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `load_intervention_spec` | `torchlens.io.load_intervention_spec` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `ModuleInputSnapshot` | `torchlens.types.ModuleInputSnapshot` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `PreHookEffect` | `torchlens.types.PreHookEffect` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `TensorInputObservation` | `torchlens.types.TensorInputObservation` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
+| Old name | New name | Status |
+| --- | --- | --- |
+| `peek` | `pluck` | removed |
+| `batched_extract` | `extract_dataset` | removed |
+| `validate_forward_pass` | `torchlens.validation.validate_forward_pass` | removed |
+| `validate_backward_pass` | `torchlens.validation.validate_backward_pass` | removed |
+| `validate_saved_outs` | `torchlens.validation.validate_saved_outs` | removed |
+| `summary` | `torchlens.visualization.summary` | removed |
+| `show_model_graph` | `torchlens.visualization.show_model_graph` | removed |
+| `draw_backward` | `torchlens.visualization.draw_backward` | removed |
+| `draw_combined` | `torchlens.visualization.draw_combined` | removed |
+| `load_intervention_spec` | `torchlens.io.load_intervention_spec` | removed |
+| `ModuleInputSnapshot` | `torchlens.types.ModuleInputSnapshot` | removed |
+| `PreHookEffect` | `torchlens.types.PreHookEffect` | removed |
+| `TensorInputObservation` | `torchlens.types.TensorInputObservation` | removed |
 
 ## Capture And Option Keyword Aliases
 
-| Old name | New name | Since-version | Planned removal |
-| --- | --- | --- | --- |
-| `capture_output_structure` | `capture_container_structure` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `layers_to_save` | `save` or grouped capture options | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `random_seed` | grouped capture options | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `save_grads` | backward capture options | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `vis_node_mode` | `node_style` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `vis_opt` | `view` (full alias chain `vis_opt` -> `vis_mode` -> `view`; the warning names `view`) | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| flat `CaptureOptions` fields | grouped option fields | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `mark_layer_depths` | `capture.compute_input_output_distances` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `num_context_lines` | `capture.source_context_lines` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `mode` | `visualization.view` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `max_module_depth` | `visualization.depth` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `layout_engine` | `visualization.layout` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `node_mode` | `visualization.node_style` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `save_outs_to` | `streaming.bundle_path` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `keep_outs_in_memory` | `streaming.retain_in_memory` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `out_sink` | `streaming.out_callback` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `log_forward_pass(layers=...)` | `trace(layers_to_save=...)` | paper-era compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `log_forward_pass(save_function_args=...)` | `trace(save_arg_values=...)` | paper-era compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `log_forward_pass(save_gradients=...)` | `trace(save_grads=...)` | paper-era compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `log_forward_pass(keep_unsaved_layers=...)` | no direct equivalent; see migration guide | paper-era compatibility shim | 2.0 API freeze - TBD by maintainer |
-| flat visualization option fields | grouped visualization option fields | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
+| Old name | New name | Status |
+| --- | --- | --- |
+| `capture_output_structure` | `capture_container_structure` | removed |
+| `layers_to_save` | `save` or grouped capture options | removed |
+| `random_seed` | grouped capture options | removed |
+| `save_grads` | backward capture options | removed |
+| `vis_node_mode` | `node_style` | removed |
+| `vis_opt` | `view` (full alias chain `vis_opt` -> `vis_mode` -> `view`; the warning names `view`) | removed |
+| flat `CaptureOptions` fields | grouped option fields | removed |
+| `mark_layer_depths` | `capture.compute_input_output_distances` | removed |
+| `num_context_lines` | `capture.source_context_lines` | removed |
+| `mode` | `visualization.view` | removed |
+| `max_module_depth` | `visualization.depth` | removed |
+| `layout_engine` | `visualization.layout` | removed |
+| `node_mode` | `visualization.node_style` | removed |
+| `save_outs_to` | `streaming.bundle_path` | removed |
+| `keep_outs_in_memory` | `streaming.retain_in_memory` | removed |
+| `out_sink` | `streaming.out_callback` | removed |
+| `log_forward_pass(layers=...)` | `trace(layers_to_save=...)` | removed |
+| `log_forward_pass(save_function_args=...)` | `trace(save_arg_values=...)` | removed |
+| `log_forward_pass(save_gradients=...)` | `trace(save_grads=...)` | removed |
+| `log_forward_pass(keep_unsaved_layers=...)` | no direct equivalent; see migration guide | removed |
+| flat visualization option fields | grouped visualization option fields | removed |
 
 ## Recording And Fastlog Aliases
 
-| Old name | New name | Since-version | Planned removal |
-| --- | --- | --- | --- |
+| Old name | New name | Status |
+| --- | --- | --- |
 | `record(keep_op=...)` | `record(save=...)` | REMOVED (predicate consolidation) | removed; raises TypeError |
 | `record(keep_module=...)` | no equivalent; see note below | REMOVED (predicate consolidation) | removed; raises TypeError |
 | `Recorder(keep_op=...)` | `Recorder(save=...)` | REMOVED (predicate consolidation) | removed; raises TypeError |
@@ -143,26 +146,26 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 
 ## Trace And Conditional Aliases
 
-| Old name | New name | Since-version | Planned removal |
-| --- | --- | --- | --- |
-| `Trace.conditional_then_entry_edges` | `Trace.conditional_arm_entry_edges` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `Trace.conditional_elif_entry_edges` | `Trace.conditional_arm_entry_edges` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `Trace.conditional_else_entry_edges` | `Trace.conditional_arm_entry_edges` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `Trace.validate_saved_outs()` | `Trace.validate_forward_pass()` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `Trace.replay()` | `Trace.push()` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `Trace.replay_from()` | `Trace.push_from()` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `Trace.rerun()` | `Trace.run()` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
+| Old name | New name | Status |
+| --- | --- | --- |
+| `Trace.conditional_then_entry_edges` | `Trace.conditional_arm_entry_edges` | removed |
+| `Trace.conditional_elif_entry_edges` | `Trace.conditional_arm_entry_edges` | removed |
+| `Trace.conditional_else_entry_edges` | `Trace.conditional_arm_entry_edges` | removed |
+| `Trace.validate_saved_outs()` | `Trace.validate_forward_pass()` | removed |
+| `Trace.replay()` | `Trace.push()` | removed |
+| `Trace.replay_from()` | `Trace.push_from()` | removed |
+| `Trace.rerun()` | `Trace.run()` | removed |
 
 ## Intervention, Sweep, And Observer Aliases
 
-| Old name | New name | Since-version | Planned removal |
-| --- | --- | --- | --- |
-| `replay()` | `push()` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `replay_from()` | `push_from()` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `rerun()` | `run()` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `Bundle.replay()` | `Bundle.push()` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `Bundle.rerun()` | `Bundle.run()` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `intervening()` | `without_op()` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `sweep(param=...)` | `sweep(at=...)` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `record_span()` | `span()` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
-| `get_model_metadata()` | `log_model_metadata()` | 2.x compatibility shim | 2.0 API freeze - TBD by maintainer |
+| Old name | New name | Status |
+| --- | --- | --- |
+| `replay()` | `push()` | removed |
+| `replay_from()` | `push_from()` | removed |
+| `rerun()` | `run()` | removed |
+| `Bundle.replay()` | `Bundle.push()` | removed |
+| `Bundle.rerun()` | `Bundle.run()` | removed |
+| `intervening()` | `without_op()` | removed |
+| `sweep(param=...)` | `sweep(at=...)` | removed |
+| `record_span()` | `span()` | removed |
+| `get_model_metadata()` | `log_model_metadata()` | removed |

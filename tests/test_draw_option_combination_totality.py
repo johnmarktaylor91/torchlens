@@ -107,15 +107,11 @@ DECLARED: dict[str, tuple[str, Any]] = {
     "vis_save_only": (HARNESS, "True everywhere: no display side effects"),
     "vis_fileformat": (HARNESS, '"dot" everywhere: no graphviz binary cost'),
     # -- alias sentinels (dedicated deprecation suites own the hop) ---------
-    "vis_opt": (ALIAS, "vis_mode / view"),
     "view": (ALIAS, "vis_mode"),
     "depth": (ALIAS, "vis_call_depth"),
     "renderer": (ALIAS, "vis_renderer"),
     "layout": (ALIAS, "vis_node_placement"),
     "node_style": (ALIAS, "node_mode"),
-    "vis_node_mode": (ALIAS, "node_mode (deprecated)"),
-    "vis_buffers": (ALIAS, "show_buffer_layers (deprecated)"),
-    "vis_direction": (ALIAS, "direction (deprecated)"),
     # -- default-only ---------------------------------------------------------
     "vis_renderer": (DEFAULT_ONLY, 'non-default "dagua" needs the optional dagua runtime'),
     # -- paired semantic options -------------------------------------------

@@ -63,7 +63,7 @@ from torchlens._runnable_state import (
 )
 from torchlens.errors import RunCapabilityUnavailableError
 
-_CAPTURE = {"intervention_ready": True}
+_CAPTURE = {"capture": tl.options.CaptureOptions(intervention_ready=True)}
 
 
 # --------------------------------------------------------------------------- #

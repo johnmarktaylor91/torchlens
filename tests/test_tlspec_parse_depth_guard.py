@@ -148,7 +148,11 @@ class _M(nn.Module):
 def test_deeply_nested_manifest_does_not_crash_load(tmp_path: Path) -> None:
     """A depth-900 nested ``manifest.json`` never escapes ``tl.load`` as a crash."""
 
-    trace = tl.trace(_M().eval(), torch.randn(2, 4), intervention_ready=True)
+    trace = tl.trace(
+        _M().eval(),
+        torch.randn(2, 4),
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+    )
     bundle = tmp_path / "deep.tlspec"
     tl.save(trace, str(bundle), level="runnable", include_weights=True)
 
@@ -172,7 +176,11 @@ def test_deeply_nested_manifest_does_not_crash_load(tmp_path: Path) -> None:
 def test_normal_bundle_still_loads(tmp_path: Path) -> None:
     """The bounded reader does not perturb a legitimate load."""
 
-    trace = tl.trace(_M().eval(), torch.randn(2, 4), intervention_ready=True)
+    trace = tl.trace(
+        _M().eval(),
+        torch.randn(2, 4),
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+    )
     bundle = tmp_path / "clean.tlspec"
     tl.save(trace, str(bundle), level="runnable", include_weights=True)
     loaded = tl.load(str(bundle))

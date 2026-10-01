@@ -251,7 +251,7 @@ def _axis_backward_armed() -> Any:
 def _axis_save_code_context() -> Any:
     _seed_everything()
     model, model_input = _oracle_case("plain_cnn")
-    return tl.trace(model, model_input, save_code_context=True)
+    return tl.trace(model, model_input, capture=tl.options.CaptureOptions(save_code_context=True))
 
 
 def _axis_streaming(tmp_dir: str) -> Any:
@@ -263,13 +263,19 @@ def _axis_streaming(tmp_dir: str) -> Any:
 def _axis_layer_depths() -> Any:
     _seed_everything()
     model, model_input = _oracle_case("plain_cnn")
-    return tl.trace(model, model_input, mark_layer_depths=True)
+    return tl.trace(
+        model,
+        model_input,
+        capture=tl.options.CaptureOptions(compute_input_output_distances=True),
+    )
 
 
 def _axis_recurrence_off() -> Any:
     _seed_everything()
     model, model_input = _oracle_case("recurrent")
-    return tl.trace(model, model_input, recurrence_detection=False)
+    return tl.trace(
+        model, model_input, capture=tl.options.CaptureOptions(recurrence_detection=False)
+    )
 
 
 def _axis_intervention() -> Any:
@@ -285,7 +291,11 @@ def _axis_intervention() -> Any:
 
 def _axis_orphan_keep() -> Any:
     _seed_everything()
-    return tl.trace(OrphanEquivalenceModel(), torch.ones(5, 5), keep_orphans=True)
+    return tl.trace(
+        OrphanEquivalenceModel(),
+        torch.ones(5, 5),
+        capture=tl.options.CaptureOptions(keep_orphans=True),
+    )
 
 
 def _axis_orphan_remove() -> Any:
@@ -296,13 +306,21 @@ def _axis_orphan_remove() -> Any:
 def _axis_transform() -> Any:
     _seed_everything()
     model, model_input = _oracle_case("plain_cnn")
-    return tl.trace(model, model_input, activation_transform=lambda t: t.detach().float() * 1.0)
+    return tl.trace(
+        model,
+        model_input,
+        save=tl.options.SaveOptions(activation_transform=lambda t: t.detach().float() * 1.0),
+    )
 
 
 def _axis_container_structure() -> Any:
     _seed_everything()
     model, model_input = _oracle_case("plain_cnn")
-    return tl.trace(model, model_input, capture_container_structure=True)
+    return tl.trace(
+        model,
+        model_input,
+        capture=tl.options.CaptureOptions(capture_container_structure=True),
+    )
 
 
 def _axis_internal_source() -> Any:
@@ -365,7 +383,11 @@ def _axis_buffer_divergent_reach() -> Any:
 
 def _axis_buffer_from_input() -> Any:
     _seed_everything()
-    return tl.trace(BufferFromInputModel(), torch.randn(2, 4), mark_layer_depths=False)
+    return tl.trace(
+        BufferFromInputModel(),
+        torch.randn(2, 4),
+        capture=tl.options.CaptureOptions(compute_input_output_distances=False),
+    )
 
 
 def _axis_lookback(tmp_dir: str, *, streaming: bool, transform: bool) -> Any:
@@ -392,7 +414,7 @@ def _axis_deferred_retention() -> Any:
     # A final-label-only selector (negative index) defers the retention
     # decision to step 11.75 (resolve_deferred_retention), the axis that
     # populates its save_activation write family.
-    return tl.trace(model, model_input, layers_to_save=[-2, -1])
+    return tl.trace(model, model_input, capture=tl.options.CaptureOptions(layers_to_save=[-2, -1]))
 
 
 def _axis_transform_streaming(tmp_dir: str) -> Any:
@@ -402,8 +424,8 @@ def _axis_transform_streaming(tmp_dir: str) -> Any:
     return tl.trace(
         model,
         model_input,
-        activation_transform=lambda t: t.detach() * 1.0,
         storage=tl.to_disk(Path(tmp_dir) / "transform.tlspec"),
+        save=tl.options.SaveOptions(activation_transform=lambda t: t.detach() * 1.0),
     )
 
 
@@ -441,7 +463,11 @@ def _axis_conditional_elif_else() -> Any:
 
 def _axis_var_names() -> Any:
     _seed_everything()
-    return tl.trace(AssigningVarNamesModel().eval(), torch.randn(2, 3), save_code_context=True)
+    return tl.trace(
+        AssigningVarNamesModel().eval(),
+        torch.randn(2, 3),
+        capture=tl.options.CaptureOptions(save_code_context=True),
+    )
 
 
 def _axis_refresh() -> Any:

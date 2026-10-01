@@ -45,15 +45,15 @@ def main() -> None:
     torch.manual_seed(15)
     model = TinyMLP().eval()
     x = torch.randn(2, 8)
-    log = tl.trace(model, x, intervention_ready=True)
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     log.attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         path = Path(tmpdir) / "zero_relu.tlspec"
         log.save_intervention(path, level="portable")
-        spec = tl.load_intervention_spec(path)
-        fresh = tl.trace(model, x, intervention_ready=True)
-        compat = tl.check_spec_compat(spec, fresh)
+        spec = tl.io.load_intervention_spec(path)
+        fresh = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+        compat = tl.validation.check_spec_compat(spec, fresh)
 
     assert spec.metadata["save_level"] == "portable"
     assert compat.outcome in {"EXACT", "COMPATIBLE_WITH_CONFIRMATION"}

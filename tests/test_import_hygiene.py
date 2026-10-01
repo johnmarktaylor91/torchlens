@@ -127,19 +127,13 @@ _TORCHLENS_IMPORT_RSS_BUDGET_KIB = 64 * 1024
 #: helpers deliberately outside ``__all__`` plus typing-import leakage.
 #: SHRINK-ONLY -- a new top-level public name either enters ``__all__``
 #: consciously or is a namespace leak (R31 axis b, namespace identity).
+# The deprecated top-level wrapper functions left this ledger with the
+# shim-removal lane (2026-08-19); only typing artifacts remain.
 _LEGACY_NON_ALL_PUBLIC_NAMES = frozenset(
     {
         "Any",
         "TYPE_CHECKING",
         "annotations",
-        "draw_backward",
-        "draw_combined",
-        "load_intervention_spec",
-        "show_model_graph",
-        "summary",
-        "validate_backward_pass",
-        "validate_forward_pass",
-        "validate_saved_outs",
     }
 )
 
@@ -354,7 +348,7 @@ assert collisions == {
     "data_classes": [], "dataset_extraction": [], "debug": [], "distributed": [],
     "errors": [], "examples": [],
     "experimental": ["dagua", "node_styles"], "export": [],
-    "fastlog": ["dry_run", "recover"], "intervention": ["replay", "rerun", "sites"],
+    "fastlog": ["dry_run", "recover"], "intervention": ["sites"],
     "hash": [], "io": [], "ir": [], "merged": [], "observers": [], "options": [],
     "partial": [], "quantities": [], "report": [], "repgeom": [],
     "receptive_field": ["rules"], "stats": [], "user_funcs": [], "validation": [], "viz": [],
@@ -703,7 +697,9 @@ def test_torchvision_cpp_ops_record_real_func_name() -> None:
 
     boxes = torch.tensor([[0.0, 0.0, 1.0, 1.0], [0.1, 0.1, 1.1, 1.1], [3.0, 3.0, 4.0, 4.0]])
     scores = torch.tensor([0.9, 0.8, 0.7])
-    trace = tl.trace(NmsModel(), (boxes, scores), layers_to_save="all")
+    trace = tl.trace(
+        NmsModel(), (boxes, scores), capture=tl.options.CaptureOptions(layers_to_save="all")
+    )
 
     assert any(op.func_name == "nms" for op in trace.ops)
     assert any(op.has_saved_activation for op in trace.ops if op.func_name == "nms")

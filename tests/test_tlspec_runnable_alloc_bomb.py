@@ -57,7 +57,11 @@ class _Tiny(nn.Module):
 
 
 def _build(tmp_path: Path, name: str) -> Path:
-    trace = tl.trace(_Tiny().eval(), torch.randn(2, 4), intervention_ready=True)
+    trace = tl.trace(
+        _Tiny().eval(),
+        torch.randn(2, 4),
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+    )
     bundle = tmp_path / name
     tl.save(trace, str(bundle), level="runnable", include_weights=True)
     return bundle

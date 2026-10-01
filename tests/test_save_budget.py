@@ -194,7 +194,7 @@ def test_metadata_only_capture_is_never_charged() -> None:
     """
 
     trace = tl.trace(
-        _model(), _input(), layers_to_save="none", capture=CaptureOptions(save_budget=64)
+        _model(), _input(), capture=CaptureOptions(save_budget=64, layers_to_save="none")
     )
     assert len(trace.layer_labels) > 0
     assert trace.num_saved_ops == 0
@@ -342,9 +342,8 @@ def test_aliasing_raw_and_transformed_payloads_are_charged_once() -> None:
     trace = tl.trace(
         nn.ReLU(),
         torch.randn(8),
-        save=tl.func("relu"),
-        activation_transform=lambda tensor: tensor,
-        capture=CaptureOptions(save_budget=40),
+        save=tl.options.SaveOptions(activation_transform=lambda tensor: tensor),
+        capture=CaptureOptions(save_budget=40, layers_to_save=tl.func("relu")),
     )
     relu = next(op for op in trace.layer_list if getattr(op, "func_name", None) == "relu")
     assert relu.out is relu.transformed_out
@@ -716,7 +715,7 @@ def test_saved_arg_value_copies_are_charged() -> None:
     torch.manual_seed(0)
     plain = tl.trace(model, x)
     torch.manual_seed(0)
-    with_args = tl.trace(model, x, save_arg_values=True)
+    with_args = tl.trace(model, x, capture=tl.options.CaptureOptions(save_arg_values=True))
 
     plain_committed = sum(
         ledger.committed_bytes

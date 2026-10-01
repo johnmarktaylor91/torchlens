@@ -234,16 +234,15 @@ def test_backward_graph_marks_order_and_accumulation_edges(tmp_path: Path) -> No
 
 @pytest.mark.smoke
 def test_draw_backward_top_level_function(tmp_path: Path) -> None:
-    """The top-level ``tl.draw_backward`` helper renders a Trace."""
+    """The top-level ``tl.visualization.draw_backward`` helper renders a Trace."""
     trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
-    with pytest.warns(DeprecationWarning, match="draw_backward"):
-        dot = tl.draw_backward(
-            trace,
-            vis_outpath=str(tmp_path / "top_level"),
-            vis_save_only=True,
-            vis_fileformat="svg",
-        )
+    dot = tl.visualization.draw_backward(
+        trace,
+        visualization=tl.options.VisualizationOptions(
+            container_path=str(tmp_path / "top_level"), save_only=True, file_format="svg"
+        ),
+    )
 
     assert "addmm_back" in dot
 

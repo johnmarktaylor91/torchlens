@@ -278,12 +278,16 @@ def trace_text(
     tokenizer_was_explicit = tokenizer is not None
     tok = tokenizer or _resolve_tokenizer(model)
     transform, transform_state = _make_text_transform(tok, chat_template=chat_template)
-    kwargs.setdefault("output_style", "hf_text")
+    capture = tl.options.merge_capture_options(
+        capture=kwargs.pop("capture", None),
+        transform=transform,
+        output_style="hf_text",
+    )
     had_tokenizer = hasattr(model, "_torchlens_output_tokenizer")
     previous_tokenizer = getattr(model, "_torchlens_output_tokenizer", None)
     model._torchlens_output_tokenizer = tok
     try:
-        log = tl.trace(model, cast(Any, text), transform=transform, **kwargs)
+        log = tl.trace(model, cast(Any, text), capture=capture, **kwargs)
     finally:
         if had_tokenizer:
             model._torchlens_output_tokenizer = previous_tokenizer
@@ -319,7 +323,11 @@ def trace_image(model: Any, image: Any, **kwargs: Any) -> Trace:
     import torchlens as tl
 
     transform, record = _resolve_image_preprocessing(model)
-    log = tl.trace(model, image, transform=_make_image_transform(transform), **kwargs)
+    capture = tl.options.merge_capture_options(
+        capture=kwargs.pop("capture", None),
+        transform=_make_image_transform(transform),
+    )
+    log = tl.trace(model, image, capture=capture, **kwargs)
     log.input_preprocessor = record
     return log
 
@@ -374,7 +382,11 @@ def trace_multimodal(model: Any, input_dict: dict[str, Any], **kwargs: Any) -> T
         config=_extract_hf_processor_config(processor),
         description=f"AutoProcessor: {name_or_path}",
     )
-    log = tl.trace(model, cast(Any, input_dict), transform=transform, **kwargs)
+    capture = tl.options.merge_capture_options(
+        capture=kwargs.pop("capture", None),
+        transform=transform,
+    )
+    log = tl.trace(model, cast(Any, input_dict), capture=capture, **kwargs)
     log.input_preprocessor = record
     return log
 

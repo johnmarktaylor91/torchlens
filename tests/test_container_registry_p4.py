@@ -109,12 +109,13 @@ def test_flag_off_container_persistence_is_semantically_neutral(
 ) -> None:
     """Flag-off traces stay container-free through every persistence path."""
 
-    baseline = tl.trace(NestedRoundTripModel(), _payload(), random_seed=0)
+    baseline = tl.trace(
+        NestedRoundTripModel(), _payload(), capture=tl.options.CaptureOptions(random_seed=0)
+    )
     explicit_false = tl.trace(
         NestedRoundTripModel(),
         _payload(),
-        random_seed=0,
-        capture_container_structure=False,
+        capture=tl.options.CaptureOptions(random_seed=0, capture_container_structure=False),
     )
 
     if save_path == "tlspec":
@@ -125,18 +126,22 @@ def test_flag_off_container_persistence_is_semantically_neutral(
         first = tl.trace(
             NestedRoundTripModel(),
             _payload(),
-            random_seed=0,
-            cache=True,
-            cache_dir=tmp_path / "cache",
-            capture_container_structure=False,
+            capture=tl.options.CaptureOptions(
+                random_seed=0,
+                cache=True,
+                cache_dir=tmp_path / "cache",
+                capture_container_structure=False,
+            ),
         )
         round_tripped = tl.trace(
             NestedRoundTripModel(),
             _payload(),
-            random_seed=0,
-            cache=True,
-            cache_dir=tmp_path / "cache",
-            capture_container_structure=False,
+            capture=tl.options.CaptureOptions(
+                random_seed=0,
+                cache=True,
+                cache_dir=tmp_path / "cache",
+                capture_container_structure=False,
+            ),
         )
         assert first.capture_cache_key == round_tripped.capture_cache_key
         assert round_tripped.capture_cache_hit is True
@@ -145,9 +150,8 @@ def test_flag_off_container_persistence_is_semantically_neutral(
         tl.trace(
             NestedRoundTripModel(),
             _payload(),
-            random_seed=0,
             storage=tl.to_disk(path),
-            capture_container_structure=False,
+            capture=tl.options.CaptureOptions(random_seed=0, capture_container_structure=False),
         )
         round_tripped = tl.load(path)
 
@@ -170,8 +174,7 @@ def test_flag_on_container_structure_round_trips(
         trace = tl.trace(
             NestedRoundTripModel(),
             _payload(),
-            random_seed=0,
-            capture_container_structure=True,
+            capture=tl.options.CaptureOptions(random_seed=0, capture_container_structure=True),
         )
         path = tmp_path / "on.tlspec"
         trace.save(path)
@@ -180,18 +183,22 @@ def test_flag_on_container_structure_round_trips(
         trace = tl.trace(
             NestedRoundTripModel(),
             _payload(),
-            random_seed=0,
-            cache=True,
-            cache_dir=tmp_path / "cache",
-            capture_container_structure=True,
+            capture=tl.options.CaptureOptions(
+                random_seed=0,
+                cache=True,
+                cache_dir=tmp_path / "cache",
+                capture_container_structure=True,
+            ),
         )
         round_tripped = tl.trace(
             NestedRoundTripModel(),
             _payload(),
-            random_seed=0,
-            cache=True,
-            cache_dir=tmp_path / "cache",
-            capture_container_structure=True,
+            capture=tl.options.CaptureOptions(
+                random_seed=0,
+                cache=True,
+                cache_dir=tmp_path / "cache",
+                capture_container_structure=True,
+            ),
         )
         assert round_tripped.capture_cache_hit is True
         assert trace.capture_cache_key == round_tripped.capture_cache_key
@@ -200,9 +207,8 @@ def test_flag_on_container_structure_round_trips(
         streamed_trace = tl.trace(
             NestedRoundTripModel(),
             _payload(),
-            random_seed=0,
             storage=tl.to_disk(path),
-            capture_container_structure=True,
+            capture=tl.options.CaptureOptions(random_seed=0, capture_container_structure=True),
         )
         assert "_containers" in streamed_trace.__dict__
         round_tripped = tl.load(path)
@@ -216,16 +222,15 @@ def test_capture_container_structure_rename_and_cache_key(tmp_path: Path) -> Non
     canonical = tl.trace(
         NestedRoundTripModel(),
         _payload(),
-        random_seed=0,
-        capture_container_structure=True,
+        capture=tl.options.CaptureOptions(random_seed=0, capture_container_structure=True),
     )
-    with pytest.warns(DeprecationWarning, match="capture_output_structure"):
-        alias = tl.trace(
-            NestedRoundTripModel(),
-            _payload(),
-            random_seed=0,
-            capture_output_structure=True,
-        )
+    with pytest.raises(TypeError):
+        tl.options.CaptureOptions(capture_output_structure=True)  # removed alias
+    alias = tl.trace(
+        NestedRoundTripModel(),
+        _payload(),
+        capture=tl.options.CaptureOptions(random_seed=0, capture_container_structure=True),
+    )
 
     _assert_structural_roundtrip(canonical)
     _assert_structural_roundtrip(alias)
@@ -234,18 +239,22 @@ def test_capture_container_structure_rename_and_cache_key(tmp_path: Path) -> Non
     off = tl.trace(
         NestedRoundTripModel(),
         _payload(),
-        random_seed=0,
-        cache=True,
-        cache_dir=tmp_path / "cache",
-        capture_container_structure=False,
+        capture=tl.options.CaptureOptions(
+            random_seed=0,
+            cache=True,
+            cache_dir=tmp_path / "cache",
+            capture_container_structure=False,
+        ),
     )
     on = tl.trace(
         NestedRoundTripModel(),
         _payload(),
-        random_seed=0,
-        cache=True,
-        cache_dir=tmp_path / "cache",
-        capture_container_structure=True,
+        capture=tl.options.CaptureOptions(
+            random_seed=0,
+            cache=True,
+            cache_dir=tmp_path / "cache",
+            capture_container_structure=True,
+        ),
     )
     assert off.capture_cache_key != on.capture_cache_key
 
@@ -257,9 +266,8 @@ def test_after_save_tensor_fill_is_best_effort(tmp_path: Path) -> None:
     streamed_trace = tl.trace(
         NestedRoundTripModel(),
         _payload(),
-        random_seed=0,
         storage=tl.to_disk(path),
-        capture_container_structure=True,
+        capture=tl.options.CaptureOptions(random_seed=0, capture_container_structure=True),
     )
     output_container = streamed_trace.ops[streamed_trace.output_layers[0]].container
     assert isinstance(output_container, tl.Container)

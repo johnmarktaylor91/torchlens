@@ -17,6 +17,7 @@ import pytest
 import torch
 from torch import nn
 
+import torchlens as tl
 import torchlens.backends.torch.wrappers as torch_funcs_module
 from torchlens import _state, trace as trace_fn
 from torchlens.backends.torch._tl import get_module_meta, get_tensor_label, is_decorated_function
@@ -222,7 +223,9 @@ class TestLazyDecoration:
     def test_unwrap_when_done_parameter(self):
         """trace_fn(unwrap_when_done=True) restores originals after."""
         model = SimpleModel()
-        result = trace_fn(model, torch.randn(5), unwrap_when_done=True)
+        result = trace_fn(
+            model, torch.randn(5), capture=tl.options.CaptureOptions(unwrap_when_done=True)
+        )
         assert result is not None
         assert len(result.output_layers) > 0
         assert _state._is_decorated is False
@@ -451,7 +454,7 @@ class TestSequenceSlotFix:
     def test_tensor_from_0d_after_unwrap_when_done(self):
         """torch.tensor([0-d, 0-d]) works after trace_fn(unwrap_when_done=True)."""
         model = SimpleModel()
-        trace_fn(model, torch.randn(5), unwrap_when_done=True)
+        trace_fn(model, torch.randn(5), capture=tl.options.CaptureOptions(unwrap_when_done=True))
         self._check_tensor_from_0d("after unwrap_when_done")
 
     def test_tensor_from_0d_nested_list(self):
@@ -699,7 +702,9 @@ class TestPauseLogging:
     def test_activation_transform_not_logged(self):
         """activation_transform runs inside pause_logging, ops should not appear."""
         model = SimpleModel()
-        result = trace_fn(model, torch.randn(5), activation_transform=torch.sigmoid)
+        result = trace_fn(
+            model, torch.randn(5), save=tl.options.SaveOptions(activation_transform=torch.sigmoid)
+        )
         # sigmoid from transform should NOT appear in graph
         sigmoid_layers = [lbl for lbl in result.layer_labels if "sigmoid" in lbl.lower()]
         assert len(sigmoid_layers) == 0, f"transform sigmoid leaked into graph: {sigmoid_layers}"
@@ -1070,7 +1075,11 @@ class TestEdgeCases:
         # Get a specific layer to save
         all_labels = result.layer_labels
         if len(all_labels) > 2:
-            result2 = trace_fn(model, torch.randn(5), layers_to_save=[all_labels[1]])
+            result2 = trace_fn(
+                model,
+                torch.randn(5),
+                capture=tl.options.CaptureOptions(layers_to_save=[all_labels[1]]),
+            )
             assert result2 is not None
 
     def test_consecutive_logging_sessions(self):

@@ -185,12 +185,7 @@ def coverage_trace() -> Any:
     torch.manual_seed(0)
     model = _FieldCoverageModel()
     x = torch.ones(2, 2, requires_grad=True)  # forces mean() > 0 -> the relu (then) arm
-    trace = trace_fn(
-        model,
-        x,
-        capture=CaptureOptions(save_code_context=True),
-        save_grads="all",
-    )
+    trace = trace_fn(model, x, capture=CaptureOptions(save_code_context=True, save_grads="all"))
     trace.log_backward(trace[trace.output_layers[0]].out)
     try:
         yield trace

@@ -83,8 +83,8 @@ def test_diff_pair_members_multi_element_uses_vector_metric_no_truncation() -> N
 
     torch.manual_seed(0)
     x = torch.randn(2, 8)
-    log_a = tl.trace(nn.Linear(8, 8), x, intervention_ready=True)
-    log_b = tl.trace(nn.Linear(8, 8), x, intervention_ready=True)
+    log_a = tl.trace(nn.Linear(8, 8), x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    log_b = tl.trace(nn.Linear(8, 8), x, capture=tl.options.CaptureOptions(intervention_ready=True))
     bundle = tl.bundle({"a": log_a, "b": log_b}, baseline="a")
 
     rows = dict(bundle.diff_pair("a", "b"))
@@ -111,8 +111,8 @@ def test_diff_pair_node_multi_element_uses_vector_metric() -> None:
 
     torch.manual_seed(1)
     x = torch.randn(2, 6)
-    log_a = tl.trace(nn.Linear(6, 6), x, intervention_ready=True)
-    log_b = tl.trace(nn.Linear(6, 6), x, intervention_ready=True)
+    log_a = tl.trace(nn.Linear(6, 6), x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    log_b = tl.trace(nn.Linear(6, 6), x, capture=tl.options.CaptureOptions(intervention_ready=True))
     bundle = tl.bundle({"a": log_a, "b": log_b}, baseline="a")
 
     linear_site = next(s.layer_label for s in log_a.layer_list if "linear" in str(s.layer_label))

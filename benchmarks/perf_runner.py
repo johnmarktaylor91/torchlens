@@ -462,20 +462,22 @@ def _operation(
         import torchlens as tl
 
         _prime_target_model(model, x, device)
-        return lambda: tl.trace(model, x, intervention_ready=True)
+        return lambda: tl.trace(
+            model, x, capture=tl.options.CaptureOptions(intervention_ready=True)
+        )
     if operation == "tl_rerun":
         import torchlens as tl
 
-        trace = tl.trace(model, x, intervention_ready=True)
+        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
         state["rerun_policy"] = "steady_state"
-        return lambda: trace.rerun(model, x)
+        return lambda: trace.run(model, x)
     if operation in {"rerun_metadata_only", "rerun_no_save"}:
         import torchlens as tl
 
         trace = tl.trace(model, x, save=lambda _ctx: False)
         _record_no_save_invariant(trace, state)
         state["rerun_policy"] = "steady_state_new_inputs_not_interventions"
-        return lambda: trace.rerun(model, x)
+        return lambda: trace.run(model, x)
     if operation == "fastlog_module":
         import torchlens as tl
 

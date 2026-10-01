@@ -3,7 +3,8 @@
 Three families of silent no-op configuration killed in grind b7 R47:
 
 - R47-1: nine write-only "future" option fields (declared, validated, read by
-  NOTHING). The fields are deleted; the keywords warn loudly for one window.
+  NOTHING). The fields and their keywords are deleted outright (shim-removal
+  lane, 2026-08-19: the loud-no-op deprecation window was dropped).
 - R47-3: the postprocess audit env knobs parsed permissively — a typo silently
   DISARMED the audit. They now refuse unrecognized values.
 - R47-5: the ``_module_containment_engine`` capture knob was validated and
@@ -12,12 +13,9 @@ Three families of silent no-op configuration killed in grind b7 R47:
 
 from __future__ import annotations
 
-import warnings
-
 import pytest
 
 import torchlens as tl
-from torchlens._deprecations import TorchLensDeprecationWarning
 from torchlens._errors import InvalidArgumentError
 from torchlens.postprocess import (
     _POSTPROCESS_ASSERT_ENV,
@@ -49,24 +47,13 @@ INERT_OPTION_KWARGS = [
     INERT_OPTION_KWARGS,
     ids=[f"{cls.__name__}.{kwarg}" for cls, kwarg, _ in INERT_OPTION_KWARGS],
 )
-def test_inert_option_kwarg_warns_and_field_is_gone(cls, kwarg, value):
-    """Setting a deleted write-only field warns and stores nothing (R47-1)."""
+def test_inert_option_kwarg_is_gone(cls, kwarg, value):
+    """A deleted write-only field refuses as an unknown keyword (R47-1)."""
 
-    with pytest.warns(TorchLensDeprecationWarning, match=f"{cls.__name__}.{kwarg}"):
-        opts = cls(**{kwarg: value})
-    assert not hasattr(opts, kwarg)
-    assert kwarg not in opts.as_dict()
-
-
-@pytest.mark.parametrize(
-    "cls", [tl.options.InterventionOptions, tl.options.SaveOptions, tl.options.ReplayOptions]
-)
-def test_option_default_construction_is_warning_free(cls):
-    """Omitting the deprecated keywords emits nothing."""
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", TorchLensDeprecationWarning)
-        cls()
+    with pytest.raises(TypeError):
+        cls(**{kwarg: value})
+    assert not hasattr(cls(), kwarg)
+    assert kwarg not in cls().as_dict()
 
 
 def test_module_containment_engine_kwarg_is_deleted():

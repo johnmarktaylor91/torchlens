@@ -241,12 +241,22 @@ def test_s2_trace_surfaces_match_exhaustive_projection(case: ModelCase) -> None:
     model = case.factory().eval()
     x = case.input_factory()
 
-    exhaustive = tl.trace(model, x.clone(), layers_to_save="all", random_seed=7)
+    exhaustive = tl.trace(
+        model,
+        x.clone(),
+        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=7),
+    )
     exhaustive_projection = _projection(exhaustive)
     target_label = next(row["label"] for row in _op_rows(exhaustive_projection))
 
-    predicate = tl.trace(model, x.clone(), save=_save_all_ops, random_seed=7)
-    two_pass = tl.trace(model, x.clone(), layers_to_save=[target_label], random_seed=7)
+    predicate = tl.trace(
+        model, x.clone(), save=_save_all_ops, capture=tl.options.CaptureOptions(random_seed=7)
+    )
+    two_pass = tl.trace(
+        model,
+        x.clone(),
+        capture=tl.options.CaptureOptions(layers_to_save=[target_label], random_seed=7),
+    )
     recording = tl.record(
         model,
         x.clone(),
@@ -278,13 +288,16 @@ def test_s2_intervention_trace_preserves_projection_identity() -> None:
     torch.manual_seed(20260705)
     model = S2Intervention().eval()
     x = torch.randn(2, 4)
-    baseline = tl.trace(model, x.clone(), layers_to_save="all", random_seed=11)
+    baseline = tl.trace(
+        model,
+        x.clone(),
+        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=11),
+    )
     intervened = tl.trace(
         model,
         x.clone(),
-        layers_to_save="all",
         intervene=tl.when(tl.func("relu"), tl.add(0.0)),
-        random_seed=11,
+        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=11),
     )
 
     assert _topology(_projection(intervened)) == _topology(_projection(baseline))

@@ -123,7 +123,6 @@ def _validate_scope_keywords(
     scope: str,
     *,
     loss_fn: Callable[[Any], torch.Tensor] | None,
-    perturb_saved_grads: bool,
     atol: float | None,
     rtol: float | None,
     validate_layer_grads: bool | None,
@@ -138,8 +137,6 @@ def _validate_scope_keywords(
         Requested validation scope.
     loss_fn:
         Optional backward loss function.
-    perturb_saved_grads:
-        Backward perturbation flag.
     atol:
         Backward absolute tolerance (``None`` = dtype-derived default).
     rtol:
@@ -156,8 +153,6 @@ def _validate_scope_keywords(
         return
     if loss_fn is not None:
         _raise_backward_only("loss_fn", scope)
-    if perturb_saved_grads:
-        _raise_backward_only("perturb_saved_grads", scope)
     if atol is not None:
         _raise_backward_only("atol", scope)
     if rtol is not None:
@@ -329,7 +324,6 @@ def validate(
     verbose: bool = False,
     validate_metadata: bool = True,
     loss_fn: Callable[[Any], torch.Tensor] | None = None,
-    perturb_saved_grads: bool = False,
     atol: float | None = None,
     rtol: float | None = None,
     validate_layer_grads: bool | None = None,
@@ -358,8 +352,6 @@ def validate(
         Whether metadata invariant checks should run for forward-like scopes.
     loss_fn:
         Backward-only loss function.
-    perturb_saved_grads:
-        Backward-only perturbation flag.
     atol:
         Backward-only absolute tolerance. ``None`` (default) derives per
         gradient dtype in ``validate_backward_pass``.
@@ -397,7 +389,6 @@ def validate(
     _validate_scope_keywords(
         normalized_scope,
         loss_fn=loss_fn,
-        perturb_saved_grads=perturb_saved_grads,
         atol=atol,
         rtol=rtol,
         validate_layer_grads=validate_layer_grads,
@@ -415,7 +406,6 @@ def validate(
             input_args,
             input_kwargs=input_kwargs,
             loss_fn=loss_fn,
-            perturb_saved_grads=perturb_saved_grads,
             validate_metadata=validate_metadata,
             random_seed=random_seed,
             atol=atol,

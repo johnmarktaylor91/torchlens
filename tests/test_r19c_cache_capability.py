@@ -42,11 +42,19 @@ def test_cache_with_activation_transform_roundtrips(tmp_path):
     x = torch.randn(2, 4)
     cache_dir = str(tmp_path / "cache")
 
-    first = tl.trace(model, x, cache=True, cache_dir=cache_dir, activation_transform=_act_transform)
+    first = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir),
+        save=tl.options.SaveOptions(activation_transform=_act_transform),
+    )
     assert first.capture_cache_hit is False
 
     second = tl.trace(
-        model, x, cache=True, cache_dir=cache_dir, activation_transform=_act_transform
+        model,
+        x,
+        capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir),
+        save=tl.options.SaveOptions(activation_transform=_act_transform),
     )
     assert second.capture_cache_hit is True
 
@@ -61,22 +69,20 @@ def test_cache_with_grad_transform_roundtrips(tmp_path):
     first = tl.trace(
         model,
         x,
-        cache=True,
-        cache_dir=cache_dir,
         grad_transform=_grad_transform,
-        save_grads=True,
-        backward_ready=True,
+        capture=tl.options.CaptureOptions(
+            cache=True, cache_dir=cache_dir, save_grads=True, backward_ready=True
+        ),
     )
     assert first.capture_cache_hit is False
 
     second = tl.trace(
         model,
         x,
-        cache=True,
-        cache_dir=cache_dir,
         grad_transform=_grad_transform,
-        save_grads=True,
-        backward_ready=True,
+        capture=tl.options.CaptureOptions(
+            cache=True, cache_dir=cache_dir, save_grads=True, backward_ready=True
+        ),
     )
     assert second.capture_cache_hit is True
 
@@ -94,11 +100,21 @@ def test_cache_key_distinguishes_intervention_ready(tmp_path):
     x = torch.randn(2, 4)
     cache_dir = str(tmp_path / "cache")
 
-    first = tl.trace(model, x, cache=True, cache_dir=cache_dir, intervention_ready=False)
+    first = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(
+            cache=True, cache_dir=cache_dir, intervention_ready=False
+        ),
+    )
     assert first.capture_cache_hit is False
     assert first.intervention_ready is False
 
-    second = tl.trace(model, x, cache=True, cache_dir=cache_dir, intervention_ready=True)
+    second = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir, intervention_ready=True),
+    )
     # Different capability => must not reuse the intervention_ready=False trace.
     assert second.capture_cache_hit is False
     assert second.intervention_ready is True
@@ -111,10 +127,18 @@ def test_cache_key_distinguishes_save_raw_input(tmp_path):
     x = torch.randn(2, 4)
     cache_dir = str(tmp_path / "cache")
 
-    first = tl.trace(model, x, cache=True, cache_dir=cache_dir, save_raw_input=False)
+    first = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir, save_raw_input=False),
+    )
     assert first.capture_cache_hit is False
 
-    second = tl.trace(model, x, cache=True, cache_dir=cache_dir, save_raw_input=True)
+    second = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir, save_raw_input=True),
+    )
     assert second.capture_cache_hit is False
 
 
@@ -125,11 +149,19 @@ def test_cache_hit_preserved_for_identical_capability(tmp_path):
     x = torch.randn(2, 4)
     cache_dir = str(tmp_path / "cache")
 
-    first = tl.trace(model, x, cache=True, cache_dir=cache_dir, intervention_ready=True)
+    first = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir, intervention_ready=True),
+    )
     assert first.capture_cache_hit is False
     assert first.intervention_ready is True
 
-    second = tl.trace(model, x, cache=True, cache_dir=cache_dir, intervention_ready=True)
+    second = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir, intervention_ready=True),
+    )
     assert second.capture_cache_hit is True
     assert second.intervention_ready is True
 
@@ -148,7 +180,9 @@ def test_trace_docstring_has_no_self_referential_aliases():
     doc = tl.trace.__doc__ or ""
     signature_params = set(inspect.signature(tl.trace).parameters)
 
-    for name in ("activation_transform", "grad_transform", "recurrence_detection"):
+    # activation_transform and recurrence_detection moved into the grouped
+    # options with the flat-kwarg removal; grad_transform stays a real param.
+    for name in ("grad_transform",):
         # No second spelling exists, so any "alias for <itself>" line is a lie.
         assert f"{name}: Alias for ``{name}``" not in doc
         assert f"{name}: Deprecated alias for ``{name}``" not in doc
@@ -158,6 +192,8 @@ def test_trace_docstring_has_no_self_referential_aliases():
         # spelling as a substring, so the check is style-agnostic.
         assert name in signature_params
         assert doc.count(f"    {name}:") == 1
+    for removed in ("activation_transform", "recurrence_detection"):
+        assert removed not in signature_params
 
 
 # -------------------------------------------------------------------- SOL-A5-002
@@ -185,7 +221,7 @@ def test_pre_forward_failure_resets_capture_runtime_context(monkeypatch):
     try:
         monkeypatch.setattr(uf, "Trace", _ExplodingTrace)
         with pytest.raises(RuntimeError, match="boom-in-ctor"):
-            tl.trace(model, x, intervention_ready=True)
+            tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
         # The pre-forward failure window must have reset the capture-global state.
         assert getattr(_state, "_capture_replay_templates") is False
         assert getattr(_state, "_relationship_model_id") is None
@@ -222,7 +258,9 @@ def test_unpicklable_capture_degrades_to_uncached(tmp_path):
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        trace = tl.trace(model, x, cache=True, cache_dir=cache_dir)
+        trace = tl.trace(
+            model, x, capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir)
+        )
     assert trace.num_ops > 0
     degrade = [w for w in caught if "Not caching this capture" in str(w.message)]
     assert degrade, "expected the not-cached degrade warning"
@@ -231,5 +269,7 @@ def test_unpicklable_capture_degrades_to_uncached(tmp_path):
     # The failed store must not poison later captures either (still warning,
     # never raising -- pytest's warnings-as-errors needs the explicit expect).
     with pytest.warns(UserWarning, match="Not caching this capture"):
-        second = tl.trace(model, x, cache=True, cache_dir=cache_dir)
+        second = tl.trace(
+            model, x, capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir)
+        )
     assert second.num_ops == trace.num_ops

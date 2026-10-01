@@ -270,8 +270,8 @@ def test_save_none_refuses_value_mode_episode():
         tl.trace(
             GreedyRunner(model, 2),
             _prompt(),
-            layers_to_save="none",
             episode=EpisodeSpec(stepped_module=model),
+            capture=tl.options.CaptureOptions(layers_to_save="none"),
         )
     assert excinfo.value.fields["code"] == "episode_declaration_invalid"
 
@@ -287,8 +287,8 @@ def test_structure_only_episode_refuses_typed():
         tl.trace(
             GreedyRunner(model, 2),
             _prompt(),
-            structure_only=True,
             episode=EpisodeSpec(stepped_module=model),
+            capture=tl.options.CaptureOptions(structure_only=True),
         )
     assert excinfo.value.fields["code"] == "structure_only_episode_unsupported"
 

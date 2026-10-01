@@ -39,7 +39,11 @@ def test_facets_rerive_after_tlspec_load_when_recipe_registered(tmp_path: Any) -
             return {"linear_out_shape": tuple(record.out.shape)}
 
         path = tmp_path / "linear.tlspec"
-        log = tl.trace(_LinearModel(), torch.randn(1, 3), layers_to_save="all")
+        log = tl.trace(
+            _LinearModel(),
+            torch.randn(1, 3),
+            capture=tl.options.CaptureOptions(layers_to_save="all"),
+        )
         log.save(path)
 
         facets_mod._REGISTRY[:] = original
@@ -64,7 +68,11 @@ def test_facets_read_before_save_does_not_poison_tlspec(tmp_path: Any) -> None:
     which is why the gap shipped.
     """
 
-    log = tl.trace(_LinearModel(), torch.randn(1, 3), layers_to_save="all")
+    log = tl.trace(
+        _LinearModel(),
+        torch.randn(1, 3),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
     module_call = next(iter(log.module_calls))
     assert module_call.facets is module_call.facets  # cached, not rebuilt per read
     assert log.modules["linear"].facets is not None
@@ -83,7 +91,11 @@ def test_facets_read_before_pickle_round_trips(tmp_path: Any) -> None:
 
     import pickle
 
-    log = tl.trace(_LinearModel(), torch.randn(1, 3), layers_to_save="all")
+    log = tl.trace(
+        _LinearModel(),
+        torch.randn(1, 3),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
     module_call = next(iter(log.module_calls))
     _ = module_call.facets
     _ = log.modules["linear"].facets

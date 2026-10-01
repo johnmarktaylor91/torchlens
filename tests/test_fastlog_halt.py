@@ -398,7 +398,7 @@ def test_fastlog_halt_finalizes_disk_storage(tmp_path: Path) -> None:
             FiveOpModel(),
             torch.tensor(1.0),
             save=_keep_ops_until_fourth,
-            streaming=tl.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+            streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
         )
     )
     loaded = tl.fastlog.load(bundle_path)

@@ -86,7 +86,7 @@ def _bridge_log() -> tuple[_TinyBridgeModel, torch.Tensor, Any]:
     torch.manual_seed(120)
     model = _TinyBridgeModel().eval()
     x = torch.randn(2, 1, 8, 8)
-    log = tl.trace(model, x, layers_to_save="all")
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
     return model, x, log
 
 

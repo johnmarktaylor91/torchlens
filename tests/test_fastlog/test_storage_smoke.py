@@ -81,7 +81,7 @@ def test_disk_only_roundtrip_loads_bundle(tmp_path: Path) -> None:
         TinyModel(),
         torch.ones(1, 3),
         default_op=True,
-        streaming=tl.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+        streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
     )
     loaded = tl.fastlog.load(bundle_path)
 
@@ -111,7 +111,7 @@ def test_disk_only_deep_stack_stays_linear_and_round_trips(
         model,
         inputs,
         save=lambda ctx: ctx.kind == "op",
-        streaming=tl.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+        streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
     )
     elapsed = time.perf_counter() - start
     loaded = tl.fastlog.load(bundle_path)
@@ -134,7 +134,7 @@ def test_keep_grad_disk_only_default_raises_at_construction(tmp_path: Path) -> N
             TinyModel(),
             torch.ones(1, 3),
             default_op=CaptureSpec(keep_grad=True),
-            streaming=tl.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+            streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
         )
 
     assert not bundle_path.exists()
@@ -155,7 +155,7 @@ def test_keep_grad_disk_only_predicate_raises_at_runtime(tmp_path: Path) -> None
             TinyModel(),
             torch.ones(1, 3),
             save=keep_first,
-            streaming=tl.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+            streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
         )
 
 
@@ -186,7 +186,7 @@ def test_crash_recovery_from_partial_bundle(tmp_path: Path) -> None:
         TinyModel(),
         torch.ones(1, 3),
         default_op=True,
-        streaming=tl.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+        streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
     )
     partial_path = tmp_path / "partial_unfinalized.tlfast"
     bundle_path.rename(partial_path)

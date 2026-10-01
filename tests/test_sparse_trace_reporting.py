@@ -195,7 +195,11 @@ def test_full_capture_answer_claims_no_gap() -> None:
 def test_answer_hedges_when_nothing_is_saved() -> None:
     """``layers_to_save="none"`` retains no payloads, and says so."""
 
-    trace = tl.trace(_plain_model(), torch.randn(2, 4), layers_to_save="none")
+    trace = tl.trace(
+        _plain_model(),
+        torch.randn(2, 4),
+        capture=tl.options.CaptureOptions(layers_to_save="none"),
+    )
     assert unexamined_payload_count(trace, kind="saved") > 0
     assert "could not be examined" in trace.first_nonfinite(link_format="text")
 

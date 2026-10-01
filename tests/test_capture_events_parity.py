@@ -464,7 +464,7 @@ def test_released_param_dead_model_raises_clear_error() -> None:
 
     model = nn.Linear(3, 1)
     model_ref = weakref.ref(model)
-    trace = tl.trace(model, torch.randn(2, 3), random_seed=123)
+    trace = tl.trace(model, torch.randn(2, 3), capture=tl.options.CaptureOptions(random_seed=123))
     param_log = trace.params["weight"]
 
     assert param_log._param_ref is None

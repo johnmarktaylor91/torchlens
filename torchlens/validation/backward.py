@@ -408,7 +408,6 @@ def validate_backward_pass(
     input_kwargs: dict[str, Any] | None = None,
     loss_fn: Callable[[Any], torch.Tensor] | None = None,
     *,
-    perturb_saved_grads: bool = False,
     validate_metadata: bool = True,
     random_seed: int | None = None,
     atol: float | None = None,
@@ -430,10 +429,6 @@ def validate_backward_pass(
     loss_fn:
         Optional callable that maps model outputs to a scalar loss. Defaults to
         summing all returned tensors.
-    perturb_saved_grads:
-        Deprecated unsupported option. The previous implementation did not
-        compare the perturbed captured grads and therefore had no detection
-        power.
     validate_metadata:
         If True, run metadata invariant checks on the captured backward trace.
     random_seed:
@@ -469,26 +464,13 @@ def validate_backward_pass(
     Returns
     -------
     bool
-        True when captured grads match stock autograd and perturbation is
-        not requested.
+        True when captured grads match stock autograd.
     """
     from ..user_funcs import _reject_opaque_wrappers, _unwrap_data_parallel, trace as trace_fn
     from .invariants import check_metadata_invariants
 
     if _is_appended_trace(model):
         return _warn_and_skip_appended_trace_validation(model)
-    if perturb_saved_grads:
-        warnings.warn(
-            "perturb_saved_grads=True is deprecated and unsupported because the previous "
-            "implementation was an inert flag-driven check, not a captured-gradient "
-            "comparison.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        raise ValueError(
-            "perturb_saved_grads=True is unsupported: TorchLens does not currently provide "
-            "a sound saved-gradient perturbation validation check."
-        )
 
     warn_parallel()
     _reject_opaque_wrappers(model)

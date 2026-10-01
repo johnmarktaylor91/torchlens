@@ -214,12 +214,20 @@ def test_mixed_live_and_negative_selectors_retain_exact_values(live_selector: in
     """Mixed selectors retain the live winner and the deferred tail exactly once."""
 
     input_tensor = torch.tensor([1.0, 4.0])
-    live_trace = tl.trace(FourOpArithmetic(), input_tensor, layers_to_save=[live_selector])
-    tail_trace = tl.trace(FourOpArithmetic(), input_tensor, layers_to_save=[-1])
+    live_trace = tl.trace(
+        FourOpArithmetic(),
+        input_tensor,
+        capture=tl.options.CaptureOptions(layers_to_save=[live_selector]),
+    )
+    tail_trace = tl.trace(
+        FourOpArithmetic(),
+        input_tensor,
+        capture=tl.options.CaptureOptions(layers_to_save=[-1]),
+    )
     mixed_trace = tl.trace(
         FourOpArithmetic(),
         input_tensor,
-        layers_to_save=[live_selector, -1],
+        capture=tl.options.CaptureOptions(layers_to_save=[live_selector, -1]),
     )
 
     expected = {
@@ -236,7 +244,11 @@ def test_mixed_live_and_negative_selectors_retain_exact_values(live_selector: in
 def test_missing_explicit_deferred_activation_raises() -> None:
     """Deferred resolution never silently skips an explicit activation request."""
 
-    trace = tl.trace(FourOpArithmetic(), torch.ones(2), layers_to_save="none")
+    trace = tl.trace(
+        FourOpArithmetic(),
+        torch.ones(2),
+        capture=tl.options.CaptureOptions(layers_to_save="none"),
+    )
     trace._deferred_retention_selector = [1]
     session = _retention_session(RetentionProfile())
     output_tensors = [trace[output_label].out for output_label in trace.output_layers]

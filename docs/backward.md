@@ -15,7 +15,7 @@ research.
 ## Capturing Gradients
 
 Use `capture=tl.options.CaptureOptions(save_grads=...)` to choose which operation gradients
-are retained (the bare `save_grads=` kwarg is a deprecated alias that warns):
+are retained (`capture=CaptureOptions(save_grads=...)`; the bare flat kwarg is removed):
 
 ```python
 trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=True))
@@ -28,7 +28,7 @@ relu_trace.log_backward(relu_trace[relu_trace.output_layers[0]].out.sum())
 `save_grads=True` saves all observed op gradients. `False` or `None` observes backward structure
 without retaining gradient tensors. Predicate expressions use the same forward selector language,
 plus backward selectors such as `tl.grad_fn(...)`, `tl.grad_fn_label(...)`,
-`tl.without_op()` (formerly `tl.intervening()`, now a deprecated alias), `tl.grad_input()`, `tl.grad_output()`, and `tl.in_backward_pass(k)`.
+`tl.without_op()` (the former `tl.intervening()` alias is removed), `tl.grad_input()`, `tl.grad_output()`, and `tl.in_backward_pass(k)`.
 
 `storage=tl.to_disk(path)` streams retained gradient payloads into a `.tlspec` bundle. The
 standing trace policy can be widened or narrowed per trigger:
@@ -125,7 +125,7 @@ and custom hooks.
 Differentiable replay creates a new trace:
 
 ```python
-patched = source_trace.replay(..., differentiable=True)
+patched = source_trace.push(replay=tl.options.ReplayOptions(differentiable=True))
 patched.log_backward(patched[patched.output_layers[0]].out.sum())
 ```
 

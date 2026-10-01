@@ -518,9 +518,9 @@ def test_buffer_write_models_validate_and_expose_entities(
         # Expect that documented warning here instead of letting the warning-hygiene
         # filter promote a known `.data` limitation to a fatal error.
         with pytest.warns(UserWarning, match="no graph/source provenance"):
-            trace = tl.trace(model, x, save_arg_values=True)
+            trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_arg_values=True))
     else:
-        trace = tl.trace(model, x, save_arg_values=True)
+        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_arg_values=True))
     for address, overwrite_count in expected_overwrites.items():
         assert address in trace.buffers
         buffer = trace.buffers[address]
@@ -534,7 +534,9 @@ def test_batchnorm_buffer_reads_materialize_in_raw_index_order() -> None:
     """Assert deferred BatchNorm buffer reads do not precede earlier raw ops."""
 
     model = nn.BatchNorm1d(3).train()
-    trace = tl.trace(model, torch.randn(4, 3), save_arg_values=True)
+    trace = tl.trace(
+        model, torch.randn(4, 3), capture=tl.options.CaptureOptions(save_arg_values=True)
+    )
     raw_indices = [op.raw_index for op in trace.layer_list]
     add_op = trace.layer_dict_all_keys["add_1_1"]
     buffer_2_op = trace.layer_dict_all_keys["buffer_2"]
@@ -645,7 +647,11 @@ def _assert_op_level_buffer_accessors(trace: tl.Trace) -> None:
 def test_buffer_op_accessors_partition_read_and_write_versions() -> None:
     """Read/write op accessors partition buffer versions, including dual-role buffers."""
 
-    trace = tl.trace(DualRoleInplace(), torch.ones(2), save_arg_values=True)
+    trace = tl.trace(
+        DualRoleInplace(),
+        torch.ones(2),
+        capture=tl.options.CaptureOptions(save_arg_values=True),
+    )
 
     _assert_buffer_op_accessors_partition_buffer_ops(trace)
     _assert_op_level_buffer_accessors(trace)
@@ -662,7 +668,11 @@ def test_buffer_op_accessors_round_trip_through_tlspec(tmp_path: Path) -> None:
 
     import safetensors  # noqa: F401
 
-    trace = tl.trace(DualRoleInplace(), torch.ones(2), save_arg_values=True)
+    trace = tl.trace(
+        DualRoleInplace(),
+        torch.ones(2),
+        capture=tl.options.CaptureOptions(save_arg_values=True),
+    )
     path = tmp_path / "buffer_ops.tlspec"
 
     trace.save(path, level="portable")
@@ -680,7 +690,11 @@ def test_buffer_op_accessors_round_trip_through_tlspec(tmp_path: Path) -> None:
 def test_reassignment_double_count_is_exact() -> None:
     """Assert N top-level reassignments produce exactly N write events."""
 
-    trace = tl.trace(RecurrentReassign(steps=5), torch.ones(2), save_arg_values=True)
+    trace = tl.trace(
+        RecurrentReassign(steps=5),
+        torch.ones(2),
+        capture=tl.options.CaptureOptions(save_arg_values=True),
+    )
     events = [event for event in trace.event_stream.buffer_write_events if event.address == "h"]
     assert len(events) == 5
     assert trace.buffers["h"].num_overwrites == 5
@@ -721,7 +735,7 @@ def test_recurrent_cell_reassignment_does_not_break_loop_detection() -> None:
     assert tl.validation.validate_forward_pass(
         RecurrentCell(), x.clone(), random_seed=7, validate_metadata=True
     )
-    trace = tl.trace(model, x, save_arg_values=True)
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_arg_values=True))
     assert "h" in trace.buffers
     assert trace.buffers["h"].num_overwrites == 5  # one reset + four loop steps
 
@@ -807,7 +821,9 @@ def test_buffer_capture_preserves_gradient_flow(
 def test_data_setter_reconciliation_records_buffer_write() -> None:
     """Assert ``.data = tensor`` changes are recorded as buffer writes."""
 
-    trace = tl.trace(DataSetter(), torch.ones(2), save_arg_values=True)
+    trace = tl.trace(
+        DataSetter(), torch.ones(2), capture=tl.options.CaptureOptions(save_arg_values=True)
+    )
     writes = [trace[label] for label in trace.buffer_write_ops]
 
     assert len(writes) == 1

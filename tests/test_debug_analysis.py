@@ -135,7 +135,7 @@ def test_compare_matches_diverges_and_skips_unsaved() -> None:
     x = torch.randn(2, 4)
     trace_a = tl.trace(model_a, x)
     trace_b = tl.trace(model_b, x + 0.01)
-    unsaved = tl.trace(model_b, x, layers_to_save="none")
+    unsaved = tl.trace(model_b, x, capture=tl.options.CaptureOptions(layers_to_save="none"))
 
     same = tl.debug.compare(trace_a, trace_a)
     diff = tl.debug.compare(trace_a, trace_b)
@@ -190,7 +190,9 @@ def test_gradient_flow_audit_empty_torch_only_and_defaults() -> None:
     """gradient_flow_audit handles no-backward and non-torch-like traces."""
 
     torch.manual_seed(4)
-    trace = tl.trace(TinyMlp(), torch.randn(2, 4), save_grads=True)
+    trace = tl.trace(
+        TinyMlp(), torch.randn(2, 4), capture=tl.options.CaptureOptions(save_grads=True)
+    )
 
     no_backward = tl.debug.gradient_flow_audit(trace)
     non_torch = tl.debug.gradient_flow_audit(RaisingGradTrace())  # type: ignore[arg-type]
@@ -207,7 +209,7 @@ def test_gradient_flow_audit_reports_saved_gradients() -> None:
 
     torch.manual_seed(5)
     x = torch.randn(2, 4, requires_grad=True)
-    trace = tl.trace(TinyMlp(), x, save_grads=True)
+    trace = tl.trace(TinyMlp(), x, capture=tl.options.CaptureOptions(save_grads=True))
     loss = trace[trace.output_layers[0]].out.sum()
     trace.log_backward(loss)
 

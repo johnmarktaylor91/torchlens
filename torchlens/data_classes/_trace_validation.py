@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     _TraceMixinBase = Trace
 else:
     _TraceMixinBase = object
-from .._deprecations import MISSING, MissingType, warn_deprecated_alias
+from .._deprecations import MISSING, MissingType
 from .._errors import InvalidArgumentError, KeywordConflictError, RecordBindingError
 from ..options import ReplayOptions, merge_replay_options
 from ..runnable import DivergencePolicy, RunProvider, RunResult
@@ -279,36 +279,6 @@ class TraceValidationMixin(_TraceMixinBase):
             _run_until_plan=_run_until_plan,
         )
 
-    def validate_saved_outs(
-        self: "Trace",
-        ground_truth_output_tensors: list[torch.Tensor],
-        verbose: bool = False,
-        validate_metadata: bool = True,
-    ) -> Union[bool, "ValidationReplayStatus"]:
-        """Deprecated alias for :meth:`validate_forward_pass`.
-
-        Parameters
-        ----------
-        ground_truth_output_tensors, verbose, validate_metadata:
-            Forwarded unchanged to :meth:`validate_forward_pass`.
-
-        Returns
-        -------
-        bool or ValidationReplayStatus
-            ``True`` if validation succeeds. Loaded non-torch traces whose
-            runtime replay captures were stripped return an explicit
-            unavailable status.
-        """
-        warn_deprecated_alias(
-            "Trace.validate_saved_outs",
-            "Trace.validate_forward_pass",
-        )
-        return self.validate_forward_pass(
-            ground_truth_output_tensors=ground_truth_output_tensors,
-            verbose=verbose,
-            validate_metadata=validate_metadata,
-        )
-
     def validate_forward_pass(
         self: "Trace",
         ground_truth_output_tensors: list[torch.Tensor] | torch.Tensor,
@@ -404,22 +374,15 @@ class TraceValidationMixin(_TraceMixinBase):
 
     def push(
         self: "Trace",
-        strict: bool | MissingType = MISSING,
-        hooks: dict[Any, Any] | None | MissingType = MISSING,
-        differentiable: bool | MissingType = MISSING,
         replay: ReplayOptions | None = None,
     ) -> "Trace":
         """Push the edit downstream through the recorded graph (DAG replay).
 
         Parameters
         ----------
-        strict:
-            Whether divergence warnings should raise.
-        hooks:
-            Optional mapping from selector-like targets to hook callables.
-        differentiable:
-            If true, return a new Trace whose replayed tensors remain
-            differentiable from fresh replay-frontier leaves.
+        replay:
+            Grouped replay options (``ReplayOptions``: ``strict``, ``hooks``,
+            ``differentiable``).
 
         Returns
         -------
@@ -433,46 +396,15 @@ class TraceValidationMixin(_TraceMixinBase):
         from ..capture.structure_only import require_structure_only_capability
 
         require_structure_only_capability(self, "live_replay")
-        replay_options = merge_replay_options(
-            replay=replay,
-            strict=strict,
-            hooks=hooks,
-            differentiable=differentiable,
-        )
+        replay_options = merge_replay_options(replay=replay)
 
         from ..intervention.replay import push as _impl
 
         return _impl(self, replay=replay_options)
 
-    def replay(
-        self: "Trace",
-        strict: bool | MissingType = MISSING,
-        hooks: dict[Any, Any] | None | MissingType = MISSING,
-        differentiable: bool | MissingType = MISSING,
-        replay: ReplayOptions | None = None,
-    ) -> "Trace":
-        """Deprecated alias for :meth:`push`.
-
-        Parameters
-        ----------
-        strict, hooks, differentiable, replay:
-            Forwarded unchanged to :meth:`push`.
-
-        Returns
-        -------
-        Trace
-            This model log, mutated in place.
-        """
-
-        from .._deprecations import warn_deprecated_alias
-
-        warn_deprecated_alias("Trace.replay", "Trace.push")
-        return self.push(strict=strict, hooks=hooks, differentiable=differentiable, replay=replay)
-
     def push_from(
         self: "Trace",
         site: Any,
-        strict: bool | MissingType = MISSING,
         replay: ReplayOptions | None = None,
     ) -> "Trace":
         """Push downstream from a pre-mutated site.
@@ -482,8 +414,8 @@ class TraceValidationMixin(_TraceMixinBase):
         site:
             Layer pass or selector resolving to one origin. The origin's
             current out is preserved and used as the override.
-        strict:
-            Whether divergence warnings should raise.
+        replay:
+            Grouped replay options (``ReplayOptions``).
 
         Returns
         -------
@@ -497,35 +429,11 @@ class TraceValidationMixin(_TraceMixinBase):
         from ..capture.structure_only import require_structure_only_capability
 
         require_structure_only_capability(self, "live_replay")
-        replay_options = merge_replay_options(replay=replay, strict=strict)
+        replay_options = merge_replay_options(replay=replay)
 
         from ..intervention.replay import push_from as _impl
 
         return _impl(self, site, replay=replay_options)
-
-    def replay_from(
-        self: "Trace",
-        site: Any,
-        strict: bool | MissingType = MISSING,
-        replay: ReplayOptions | None = None,
-    ) -> "Trace":
-        """Deprecated alias for :meth:`push_from`.
-
-        Parameters
-        ----------
-        site, strict, replay:
-            Forwarded unchanged to :meth:`push_from`.
-
-        Returns
-        -------
-        Trace
-            This model log, mutated in place.
-        """
-
-        from .._deprecations import warn_deprecated_alias
-
-        warn_deprecated_alias("Trace.replay_from", "Trace.push_from")
-        return self.push_from(site, strict=strict, replay=replay)
 
     def run(
         self: "Trace",
@@ -539,10 +447,7 @@ class TraceValidationMixin(_TraceMixinBase):
         until: Any = None,
         save: Any = None,
         on_divergence: DivergencePolicy = DivergencePolicy.RAISE,
-        append: bool | MissingType = MISSING,
-        chunk_size: int | None | MissingType = MISSING,
         chunk_paths: Any | None = None,
-        strict: bool | MissingType = MISSING,
         replay: ReplayOptions | None = None,
         transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
         output_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
@@ -583,11 +488,6 @@ class TraceValidationMixin(_TraceMixinBase):
             (staged clones have no live model for state to carry into).
         on_divergence:
             Strict divergence behavior or the sole poison-return opt-in.
-        append:
-            If true, append a compatible chunk along batch dimension 0.
-        chunk_size:
-            If supplied, split positional tensor input into chunks of this size,
-            run the first chunk normally, then append remaining chunks.
         chunk_paths:
             Optional explicit tensor leaf paths to split.
         strict:
@@ -713,15 +613,11 @@ class TraceValidationMixin(_TraceMixinBase):
                         remedy="pass one input tree, preferably via inputs=",
                     )
                 run_inputs = model
-            if any(value is not MISSING for value in (append, chunk_size, strict)) or (
-                chunk_paths is not None or replay is not None
-            ):
+            if chunk_paths is not None or replay is not None:
                 raise KeywordConflictError(
                     "Sparse/unified run does not accept legacy rerun options",
                     code="run_legacy_options_conflict",
-                    remedy=(
-                        "drop append/chunk_size/strict/chunk_paths/replay from the unified run call"
-                    ),
+                    remedy="drop chunk_paths/replay from the unified run call",
                 )
             if fast and DivergencePolicy(on_divergence) is not DivergencePolicy.RAISE:
                 raise InvalidArgumentError(
@@ -932,12 +828,7 @@ class TraceValidationMixin(_TraceMixinBase):
                     code="run_source_model_collected",
                     remedy="pass the model explicitly as trace.run(model, input)",
                 )
-        replay_options = merge_replay_options(
-            replay=replay,
-            append=append,
-            chunk_size=chunk_size,
-            strict=strict,
-        )
+        replay_options = merge_replay_options(replay=replay)
         if isinstance(model, nn.Module):
             transformed_input = self._apply_rerun_transform(user_input, transform=transform)
         _warn_stateful_live_run_once(self, run_model)
@@ -958,47 +849,6 @@ class TraceValidationMixin(_TraceMixinBase):
         # current input rather than the prior trace's.
         result.raw_input = user_input
         return result
-
-    def rerun(
-        self: "Trace",
-        model: Any = None,
-        x: Any = None,
-        *,
-        append: bool | MissingType = MISSING,
-        chunk_size: int | None | MissingType = MISSING,
-        chunk_paths: Any | None = None,
-        strict: bool | MissingType = MISSING,
-        replay: ReplayOptions | None = None,
-        transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
-        output_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
-    ) -> "Trace":
-        """Deprecated alias for :meth:`run`.
-
-        Parameters
-        ----------
-        model, x, append, chunk_size, chunk_paths, strict, replay, transform, output_transform:
-            Forwarded unchanged to :meth:`run`.
-
-        Returns
-        -------
-        Trace
-            This model log, mutated in place after a validated atomic swap.
-        """
-
-        from .._deprecations import warn_deprecated_alias
-
-        warn_deprecated_alias("Trace.rerun", "Trace.run")
-        return self.run(
-            model,
-            x,
-            append=append,
-            chunk_size=chunk_size,
-            chunk_paths=chunk_paths,
-            strict=strict,
-            replay=replay,
-            transform=transform,
-            output_transform=output_transform,
-        )
 
     def _apply_rerun_transform(
         self: "Trace",

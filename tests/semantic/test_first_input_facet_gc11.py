@@ -29,7 +29,11 @@ def test_layer_norm_input_facet_resolves_on_default_backend() -> None:
 
     model = nn.Sequential(nn.Linear(4, 4), nn.LayerNorm(4))
     x = torch.randn(2, 4)
-    log = tl.trace(model, x, layers_to_save="all", save_arg_values=True)
+    log = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    )
     ln_module = log.modules["1"]
 
     assert ln_module.calls[0].forward_args is None, "GC-11 should still null forward_args"
@@ -60,7 +64,11 @@ def test_rms_norm_input_facet_resolves_on_default_backend() -> None:
     TinyRMSNorm.__name__ = "RMSNorm"
     model = nn.Sequential(nn.Linear(4, 4), TinyRMSNorm(4))
     x = torch.randn(2, 4)
-    log = tl.trace(model, x, layers_to_save="all", save_arg_values=True)
+    log = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    )
     norm_module = log.modules["1"]
 
     assert norm_module.facets.recipe_source == "rms_norm"
@@ -75,7 +83,11 @@ def test_embedding_indices_facet_resolves_on_default_backend() -> None:
 
     model = nn.Embedding(10, 4)
     x = torch.tensor([1, 2, 3])
-    log = tl.trace(model, x, layers_to_save="all", save_arg_values=True)
+    log = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    )
     embedding_module = log.modules["self"]
 
     assert embedding_module.calls[0].forward_args is None
@@ -96,7 +108,11 @@ def test_first_input_spec_falls_back_when_forward_args_absent() -> None:
 
     model = nn.Sequential(nn.Linear(4, 4), nn.LayerNorm(4))
     x = torch.randn(2, 4)
-    log = tl.trace(model, x, layers_to_save="all", save_arg_values=True)
+    log = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    )
     ln_module = log.modules["1"]
 
     spec = first_input_spec(ln_module, "layer_norm")

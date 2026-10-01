@@ -1111,7 +1111,7 @@ def validate_saved_outs(
         # instead caught structurally on this path by the orphan-arg sweep
         # (``_check_unattributed_arg_slots``) and the hardened
         # ``graph_connectivity`` invariant; the census stays the authoritative
-        # backstop on the public ``tl.validate_forward_pass(model, x)`` path,
+        # backstop on the public ``torchlens.validation.validate_forward_pass`` path,
         # which always collects it.
         from .diagnostics import ValidationDiagnostic, record_validation_diagnostic
 

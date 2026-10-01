@@ -4,7 +4,7 @@ Round 26 W3 audit MED-1: ``normalize_hook_plan`` stamped the per-entry
 ``force_shape_change`` metadata from its own default-False parameter instead of
 the helper's kwargs. No production caller passes the parameter, so the
 documented escape hatch was dead through every public path (``intervene=``,
-``hooks=``, ``Trace.replay(hooks=)``): a requested shape/dtype-changing
+``hooks=``, ``Trace.push(replay=ReplayOptions(hooks=...))``): a requested shape/dtype-changing
 intervention raised ``HookValueError``. These tests drive the flag through the
 PUBLIC chain (the prior test called ``_execute_hook`` directly, which bypassed
 the exact hop that dropped the flag) and pin the default-False guard.
@@ -126,7 +126,9 @@ def test_hooks_kwarg_shape_change_applies() -> None:
         model,
         x,
         save=lambda ctx: True,
-        hooks={tl.func("relu"): tl.replace_with(torch.ones(1, 8), force_shape_change=True)},
+        capture=tl.options.CaptureOptions(
+            hooks={tl.func("relu"): tl.replace_with(torch.ones(1, 8), force_shape_change=True)}
+        ),
     )
     assert float(_output_out(log)) == pytest.approx(8.0)
     assert tuple(_relu_layer(log).out.shape) == (1, 8)
@@ -135,12 +137,19 @@ def test_hooks_kwarg_shape_change_applies() -> None:
 @pytest.mark.smoke
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_replay_hooks_shape_change_applies() -> None:
-    """Trace.replay(hooks=) with force_shape_change=True applies the replacement."""
+    """Trace.push(replay=ReplayOptions(hooks=...)) with force_shape_change=True applies the replacement."""
 
     model, x = _model_and_input()
-    log = tl.trace(model, x, save=lambda ctx: True, intervention_ready=True)
-    replayed = log.replay(
-        hooks={tl.func("relu"): tl.replace_with(torch.ones(1, 8), force_shape_change=True)}
+    log = tl.trace(
+        model,
+        x,
+        save=lambda ctx: True,
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+    )
+    replayed = log.push(
+        replay=tl.options.ReplayOptions(
+            hooks={tl.func("relu"): tl.replace_with(torch.ones(1, 8), force_shape_change=True)}
+        )
     )
     assert float(_output_out(replayed)) == pytest.approx(8.0)
 
@@ -152,7 +161,12 @@ def test_push_replay_options_shape_change_applies() -> None:
     from torchlens.options import ReplayOptions
 
     model, x = _model_and_input()
-    log = tl.trace(model, x, save=lambda ctx: True, intervention_ready=True)
+    log = tl.trace(
+        model,
+        x,
+        save=lambda ctx: True,
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+    )
     pushed = log.push(
         replay=ReplayOptions(
             hooks={tl.func("relu"): tl.replace_with(torch.ones(1, 8), force_shape_change=True)}
@@ -195,6 +209,15 @@ def test_default_false_still_raises_on_shape_change_replay() -> None:
     """Replay without the flag still rejects an unexpected shape change."""
 
     model, x = _model_and_input()
-    log = tl.trace(model, x, save=lambda ctx: True, intervention_ready=True)
+    log = tl.trace(
+        model,
+        x,
+        save=lambda ctx: True,
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+    )
     with pytest.raises(HookValueError):
-        log.replay(hooks={tl.func("relu"): tl.replace_with(torch.ones(1, 8))})
+        log.push(
+            replay=tl.options.ReplayOptions(
+                hooks={tl.func("relu"): tl.replace_with(torch.ones(1, 8))}
+            )
+        )

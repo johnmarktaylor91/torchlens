@@ -1596,10 +1596,10 @@ def smoke_worker(env_key: str, stable_ids: Sequence[str]) -> int:
             model.eval()
         input_value = build_input_for_row(row)
         with torch.no_grad():
-            trace = tl.trace(model, input_value, inference_only=True)
+            trace = tl.trace(model, input_value, capture=tl.options.CaptureOptions(inference_only=True))
         if int(getattr(trace, "num_ops", 0) or 0) <= 0:
             raise RuntimeError(f"{row.stable_id} produced an empty trace in {env_key}")
-        result = tl.validate_forward_pass(model, input_value, validate_metadata=True)
+        result = tl.validation.validate_forward_pass(model, input_value, validate_metadata=True)
         if not bool(result):
             raise RuntimeError(f"{row.stable_id} smoke validation failed: {result!r}")
     print(json.dumps({"event": "smoke_passed", "env_key": env_key, "stable_ids": list(stable_ids)}))

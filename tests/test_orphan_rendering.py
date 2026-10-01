@@ -33,7 +33,11 @@ def _orphan_trace() -> tl.Trace:
     """Trace the island model with orphans retained (opt-in)."""
 
     torch.manual_seed(0)
-    return tl.trace(WithOrphanIsland(), torch.ones(1, 4), keep_orphans=True)
+    return tl.trace(
+        WithOrphanIsland(),
+        torch.ones(1, 4),
+        capture=tl.options.CaptureOptions(keep_orphans=True),
+    )
 
 
 @pytest.mark.parametrize("show_orphans", (False, True))
@@ -43,7 +47,7 @@ def test_orphan_models_render_and_validate_with_either_visibility(
 ) -> None:
     """Incident orphan models validate whether islands are rendered or hidden."""
 
-    trace = tl.trace(model, torch.ones(1, 4), keep_orphans=True)
+    trace = tl.trace(model, torch.ones(1, 4), capture=tl.options.CaptureOptions(keep_orphans=True))
     assert trace.orphans
 
     dot = trace.draw(show_orphans=show_orphans, return_graph=True, vis_save_only=True)

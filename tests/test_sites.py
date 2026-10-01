@@ -25,7 +25,7 @@ def test_sites_can_expand_to_hook_pairs() -> None:
     log = tl.trace(
         torch.nn.ReLU(),
         torch.randn(2, 3),
-        intervention_ready=True,
+        capture=tl.options.CaptureOptions(intervention_ready=True),
     )
 
     def hook_fn(out: torch.Tensor, *, hook: object) -> torch.Tensor:

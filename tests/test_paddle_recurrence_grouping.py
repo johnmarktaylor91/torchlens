@@ -150,7 +150,7 @@ def test_paddle_recurrence_detection_off_preserves_single_pass_layout() -> None:
         _repeated_fn,
         (paddle.ones([2, 4], dtype="float32"), weight, bias),
         backend="paddle",
-        recurrence_detection=False,
+        capture=tl.options.CaptureOptions(recurrence_detection=False),
     )
 
     assert trace.recurrence_detection is False

@@ -70,7 +70,7 @@ def _capture_log() -> Trace:
     return tl.trace(
         _LifecycleModel(),
         torch.tensor([[-1.0, 2.0, 3.0]]),
-        intervention_ready=True,
+        capture=tl.options.CaptureOptions(intervention_ready=True),
     )
 
 
@@ -120,7 +120,7 @@ def test_run_state_transitions() -> None:
     assert stale.state is TraceState.PRISTINE
     stale.attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
     assert stale.state is TraceState.SPEC_STALE
-    stale.replay()
+    stale.push()
     assert stale.state is TraceState.REPLAY_PROPAGATED
 
     rerun_log = _capture_log()
@@ -133,13 +133,18 @@ def test_run_state_transitions() -> None:
     live = tl.trace(
         _LifecycleModel(),
         torch.tensor([[-1.0, 2.0, 3.0]]),
-        intervention_ready=True,
-        hooks={tl.func("relu"): _zero_hook},
+        capture=tl.options.CaptureOptions(
+            intervention_ready=True, hooks={tl.func("relu"): _zero_hook}
+        ),
     )
     assert live.state is TraceState.LIVE_CAPTURED
 
     appended = _capture_log()
-    appended.run(_LifecycleModel(), torch.tensor([[0.5, 1.0, 1.5]]), append=True)
+    appended.run(
+        _LifecycleModel(),
+        torch.tensor([[0.5, 1.0, 1.5]]),
+        replay=tl.options.ReplayOptions(append=True),
+    )
     assert appended.state is TraceState.APPENDED
 
     dirty = _capture_log()

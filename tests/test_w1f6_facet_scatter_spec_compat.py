@@ -92,7 +92,11 @@ def _traced_attention() -> tuple[nn.Module, torch.Tensor, Any]:
     torch.manual_seed(0)
     model = _AttnWrapper()
     x = torch.randn(2, 3, 8)
-    clean = tl.trace(model, x, layers_to_save="all", save_arg_values=True)
+    clean = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    )
     return model, x, clean
 
 
@@ -202,7 +206,11 @@ def _saved_relu_scale_spec(tmp_path: Any, *, level: str = "executable_with_calla
 
     torch.manual_seed(0)
     x = torch.randn(2, 3)
-    log_a = tl.trace(ReluModel(), x, layers_to_save="all", save_arg_values=True)
+    log_a = tl.trace(
+        ReluModel(),
+        x,
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    )
     log_a.attach_hooks(tl.func("relu"), tl.scale(2.0), confirm_mutation=True)
     path = tmp_path / f"scale_relu_{level}.tlspec"
     log_a.save_intervention(path, level=level)
@@ -223,7 +231,9 @@ def test_check_spec_compat_executable_hash_mismatch_returns_confirmation(tmp_pat
 
     torch.manual_seed(0)
     log_b = tl.trace(
-        SigmoidReluModel(), torch.randn(2, 3), layers_to_save="all", save_arg_values=True
+        SigmoidReluModel(),
+        torch.randn(2, 3),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
     )
     compat = check_spec_compat(spec, log_b)
     assert compat.outcome == "COMPATIBLE_WITH_CONFIRMATION"
@@ -237,7 +247,11 @@ def test_check_spec_compat_executable_unresolvable_mismatch_still_raises(tmp_pat
     spec = _saved_relu_scale_spec(tmp_path)
     torch.manual_seed(0)
     # A model with no relu op: the saved 'relu' target cannot resolve -> FAIL + mismatch.
-    other = tl.trace(nn.Sigmoid(), torch.randn(2, 3), layers_to_save="all", save_arg_values=True)
+    other = tl.trace(
+        nn.Sigmoid(),
+        torch.randn(2, 3),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    )
     with pytest.raises(GraphShapeMismatchError):
         check_spec_compat(spec, other)
 
@@ -247,7 +261,11 @@ def test_check_spec_compat_same_graph_stays_exact(tmp_path: Any) -> None:
 
     spec = _saved_relu_scale_spec(tmp_path)
     torch.manual_seed(0)
-    same_log = tl.trace(ReluModel(), torch.randn(2, 3), layers_to_save="all", save_arg_values=True)
+    same_log = tl.trace(
+        ReluModel(),
+        torch.randn(2, 3),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    )
 
     compat = check_spec_compat(spec, same_log)
     assert compat.outcome == "EXACT"
@@ -263,7 +281,9 @@ def test_check_spec_compat_nonexecutable_mismatch_still_confirmation(tmp_path: A
 
     torch.manual_seed(0)
     log_b = tl.trace(
-        SigmoidReluModel(), torch.randn(2, 3), layers_to_save="all", save_arg_values=True
+        SigmoidReluModel(),
+        torch.randn(2, 3),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
     )
     compat = check_spec_compat(spec, log_b)
     assert compat.outcome == "COMPATIBLE_WITH_CONFIRMATION"
@@ -313,6 +333,10 @@ def _capture_cnn_relu_ablation() -> Any:
             return torch.relu(self.conv(x))
 
     torch.manual_seed(1101)
-    log = tl.trace(_CNN(), torch.randn(1, 3, 8, 8), layers_to_save="all", save_arg_values=True)
+    log = tl.trace(
+        _CNN(),
+        torch.randn(1, 3, 8, 8),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    )
     log.set(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
     return log

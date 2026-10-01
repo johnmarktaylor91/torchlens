@@ -22,7 +22,6 @@ if TYPE_CHECKING:
 else:
     _TraceMixinBase = object
 
-from .._deprecations import warn_deprecated_alias
 from .._errors import InvalidArgumentError
 from ..quantities import Duration, Flops, Macs, as_duration
 from ._accessor_base import Accessor
@@ -70,78 +69,6 @@ class _CallableDict(dict[Any, Any]):
         return dict(self)
 
 
-def _legacy_conditional_then_entry_edges(
-    conditional_arm_entry_edges: Mapping[tuple[int, str], list[tuple[str, str]]],
-) -> list[tuple[str, str]]:
-    """Return the legacy THEN-edge view from canonical conditional arm edges.
-
-    Parameters
-    ----------
-    conditional_arm_entry_edges:
-        Canonical ``(cond_id, branch_kind) -> edge list`` mapping.
-
-    Returns
-    -------
-    List[Tuple[str, str]]
-        Legacy ``(parent, child)`` THEN-edge view.
-    """
-
-    return [
-        edge
-        for (_conditional_id, branch_kind), edges in conditional_arm_entry_edges.items()
-        if branch_kind == "then"
-        for edge in edges
-    ]
-
-
-def _legacy_conditional_elif_entry_edges(
-    conditional_arm_entry_edges: Mapping[tuple[int, str], list[tuple[str, str]]],
-) -> list[tuple[int, int, str, str]]:
-    """Return the legacy ELIF-edge view from canonical conditional arm edges.
-
-    Parameters
-    ----------
-    conditional_arm_entry_edges:
-        Canonical ``(cond_id, branch_kind) -> edge list`` mapping.
-
-    Returns
-    -------
-    List[Tuple[int, int, str, str]]
-        Legacy ``(cond_id, elif_index, parent, child)`` ELIF-edge view.
-    """
-
-    return [
-        (conditional_id, int(branch_kind.split("_", 1)[1]), parent, child)
-        for (conditional_id, branch_kind), edges in conditional_arm_entry_edges.items()
-        if branch_kind.startswith("elif_")
-        for parent, child in edges
-    ]
-
-
-def _legacy_conditional_else_entry_edges(
-    conditional_arm_entry_edges: Mapping[tuple[int, str], list[tuple[str, str]]],
-) -> list[tuple[int, str, str]]:
-    """Return the legacy ELSE-edge view from canonical conditional arm edges.
-
-    Parameters
-    ----------
-    conditional_arm_entry_edges:
-        Canonical ``(cond_id, branch_kind) -> edge list`` mapping.
-
-    Returns
-    -------
-    List[Tuple[int, str, str]]
-        Legacy ``(cond_id, parent, child)`` ELSE-edge view.
-    """
-
-    return [
-        (conditional_id, parent, child)
-        for (conditional_id, branch_kind), edges in conditional_arm_entry_edges.items()
-        if branch_kind == "else"
-        for parent, child in edges
-    ]
-
-
 def _grad_fn_site_key(
     grad_fn_record: Any, layer_lookup: Mapping[str, Any]
 ) -> tuple[str | None, bool]:
@@ -184,107 +111,6 @@ class TraceStatsMixin(_TraceMixinBase):
     # ********************************************
     # ********** Computed Properties *************
     # ********************************************
-
-    @property
-    def conditional_then_entry_edges(self: "Trace") -> list[tuple[str, str]]:
-        """Deprecated THEN-edge view derived from ``conditional_arm_entry_edges``.
-
-        Returns
-        -------
-        List[Tuple[str, str]]
-            Legacy ``(parent, child)`` edge view.
-        """
-
-        warn_deprecated_alias("conditional_then_entry_edges", "conditional_arm_entry_edges")
-        return _legacy_conditional_then_entry_edges(self.conditional_arm_entry_edges)
-
-    @conditional_then_entry_edges.setter
-    def conditional_then_entry_edges(self: "Trace", value: list[tuple[str, str]]) -> None:
-        """Set the deprecated THEN-edge view by updating canonical arm edges.
-
-        Parameters
-        ----------
-        value:
-            Legacy ``(parent, child)`` edge list. Edges are assigned to
-            conditional id 0 because the legacy view did not carry ids.
-        """
-
-        warn_deprecated_alias("conditional_then_entry_edges", "conditional_arm_entry_edges")
-        self.conditional_arm_entry_edges = {
-            key: edges
-            for key, edges in self.conditional_arm_entry_edges.items()
-            if key[1] != "then"
-        }
-        if value:
-            self.conditional_arm_entry_edges[(0, "then")] = list(value)
-
-    @property
-    def conditional_elif_entry_edges(self: "Trace") -> list[tuple[int, int, str, str]]:
-        """Deprecated ELIF-edge view derived from ``conditional_arm_entry_edges``.
-
-        Returns
-        -------
-        List[Tuple[int, int, str, str]]
-            Legacy ``(cond_id, elif_index, parent, child)`` edge view.
-        """
-
-        warn_deprecated_alias("conditional_elif_entry_edges", "conditional_arm_entry_edges")
-        return _legacy_conditional_elif_entry_edges(self.conditional_arm_entry_edges)
-
-    @conditional_elif_entry_edges.setter
-    def conditional_elif_entry_edges(self: "Trace", value: list[tuple[int, int, str, str]]) -> None:
-        """Set the deprecated ELIF-edge view by updating canonical arm edges.
-
-        Parameters
-        ----------
-        value:
-            Legacy ``(cond_id, elif_index, parent, child)`` edge list.
-        """
-
-        warn_deprecated_alias("conditional_elif_entry_edges", "conditional_arm_entry_edges")
-        self.conditional_arm_entry_edges = {
-            key: edges
-            for key, edges in self.conditional_arm_entry_edges.items()
-            if not key[1].startswith("elif_")
-        }
-        for conditional_id, elif_index, parent, child in value:
-            self.conditional_arm_entry_edges.setdefault(
-                (conditional_id, f"elif_{elif_index}"), []
-            ).append((parent, child))
-
-    @property
-    def conditional_else_entry_edges(self: "Trace") -> list[tuple[int, str, str]]:
-        """Deprecated ELSE-edge view derived from ``conditional_arm_entry_edges``.
-
-        Returns
-        -------
-        List[Tuple[int, str, str]]
-            Legacy ``(cond_id, parent, child)`` edge view.
-        """
-
-        warn_deprecated_alias("conditional_else_entry_edges", "conditional_arm_entry_edges")
-        return _legacy_conditional_else_entry_edges(self.conditional_arm_entry_edges)
-
-    @conditional_else_entry_edges.setter
-    def conditional_else_entry_edges(self: "Trace", value: list[tuple[int, str, str]]) -> None:
-        """Set the deprecated ELSE-edge view by updating canonical arm edges.
-
-        Parameters
-        ----------
-        value:
-            Legacy ``(cond_id, parent, child)`` edge list.
-        """
-
-        warn_deprecated_alias("conditional_else_entry_edges", "conditional_arm_entry_edges")
-        self.conditional_arm_entry_edges = {
-            key: edges
-            for key, edges in self.conditional_arm_entry_edges.items()
-            if key[1] != "else"
-        }
-        for conditional_id, parent, child in value:
-            self.conditional_arm_entry_edges.setdefault((conditional_id, "else"), []).append(
-                (parent, child)
-            )
 
     @property
     def is_recurrent(self: "Trace") -> bool:

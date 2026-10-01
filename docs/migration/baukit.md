@@ -4,7 +4,7 @@
 | --- | --- | --- |
 | `Trace` a module output | `tl.trace(...); log.find_sites(tl.module("module.path"))` | Similar for module boundaries. |
 | `TraceDict` over many layers | `log.find_sites(tl.in_module(...), max_fanout=...)` and iterate results | Equivalent discovery, different object model. |
-| Edit an activation in a trace | `log.fork().set(site, value).replay()` | Equivalent post-hoc mutation for stable graphs. |
+| Edit an activation in a trace | `log.fork().set(site, value).push()` | Equivalent post-hoc mutation for stable graphs. |
 | Retain input/output tensors | TorchLens records activations and selected argument metadata in `Op` records | TorchLens is broader but heavier. |
 | Stop or replace module output inline | Use live `hooks=...` during capture or `rerun` hooks | Similar for visible module/op outputs. |
 | Patch generated-token traces | Capture the generation loop and replay/rerun target sites | Equivalent when the Python loop is visible. |

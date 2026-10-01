@@ -347,7 +347,11 @@ def test_trace_to_pandas_covers_all_op_fields() -> None:
     from torchlens.constants import LAYER_PASS_LOG_FIELD_ORDER
     from torchlens.data_classes._trace_export import _TO_PANDAS_EXCLUDED_OP_FIELDS
 
-    log = trace_fn(_CondConvModel(), torch.rand(1, 1, 8, 8), layers_to_save="all")
+    log = trace_fn(
+        _CondConvModel(),
+        torch.rand(1, 1, 8, 8),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
     try:
         model_df = log.to_pandas()
         columns = list(model_df.columns)
@@ -375,7 +379,11 @@ def test_trace_to_pandas_covers_all_op_fields() -> None:
 def test_trace_to_pandas_func_config_and_conditional_values() -> None:
     """``func_config`` and ``conditional_then_children`` carry per-op values."""
 
-    log = trace_fn(_CondConvModel(), torch.rand(1, 1, 8, 8), layers_to_save="all")
+    log = trace_fn(
+        _CondConvModel(),
+        torch.rand(1, 1, 8, 8),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
     try:
         model_df = log.to_pandas()
 

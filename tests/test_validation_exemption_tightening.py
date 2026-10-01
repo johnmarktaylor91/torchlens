@@ -30,8 +30,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens import validate_forward_pass
 from torchlens.options import CaptureOptions
+from torchlens.validation import validate_forward_pass
 from torchlens.validation.core import (
     _check_whether_func_on_saved_parents_yields_saved_tensor,
 )
@@ -797,7 +797,7 @@ def test_meshgrid_perturbation_decisions_are_real_not_whole_op_skipped() -> None
     with torch.no_grad():
         ground_truth = model(*inputs)
     trace = _capture(model, inputs)
-    status = validation_core.validate_saved_outs(trace, [ground_truth])
+    status = validation_core.validate_forward_pass(trace, [ground_truth])
     assert bool(status)
     meshgrid_perturbations = [
         decision

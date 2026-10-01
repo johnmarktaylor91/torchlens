@@ -243,7 +243,11 @@ def _register_pair_box() -> None:
 def test_hf_model_output_container_reconstructs_round_trip() -> None:
     """HF-like final output reconstructs to the original container type."""
 
-    trace = tl.trace(HFLikeModel(), torch.tensor([1.0]), intervention_ready=True)
+    trace = tl.trace(
+        HFLikeModel(),
+        torch.tensor([1.0]),
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+    )
     rebuilt = trace.reconstruct_output()
 
     assert isinstance(rebuilt, DemoModelOutput)
@@ -259,7 +263,11 @@ def test_hf_model_output_container_reconstructs_round_trip() -> None:
 def test_container_repr_summary_uses_output_cross_references() -> None:
     """Container repr and summary expose an indented tree with output refs."""
 
-    trace = tl.trace(HFLikeModel(), torch.tensor([1.0]), intervention_ready=True)
+    trace = tl.trace(
+        HFLikeModel(),
+        torch.tensor([1.0]),
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+    )
     output_container = trace.ops[trace.output_layers[0]].container
 
     assert isinstance(output_container, tl.Container)
@@ -274,7 +282,11 @@ def test_container_repr_summary_uses_output_cross_references() -> None:
 def test_trace_to_pandas_adds_output_role_column() -> None:
     """Trace.to_pandas exports the leaf role within output containers."""
 
-    trace = tl.trace(HFLikeModel(), torch.tensor([1.0]), intervention_ready=True)
+    trace = tl.trace(
+        HFLikeModel(),
+        torch.tensor([1.0]),
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+    )
     frame = trace.to_pandas()
     roles = dict(zip(frame["layer_label"], frame["output_role"], strict=True))
 
@@ -287,7 +299,11 @@ def test_trace_to_pandas_adds_output_role_column() -> None:
 def test_capture_container_structure_reconstructs_without_intervention_ready() -> None:
     """Opt-in final-output structure reconstructs without intervention metadata."""
 
-    trace = tl.trace(HFLikeModel(), torch.tensor([1.0]), capture_container_structure=True)
+    trace = tl.trace(
+        HFLikeModel(),
+        torch.tensor([1.0]),
+        capture=tl.options.CaptureOptions(capture_container_structure=True),
+    )
     rebuilt = trace.reconstruct_output()
 
     assert trace.intervention_ready is False
@@ -301,8 +317,12 @@ def test_capture_container_structure_default_off_preserves_output_shape_metadata
 
     model = HFLikeModel()
     x = torch.tensor([1.0])
-    default_trace = tl.trace(model, x, random_seed=0)
-    explicit_false_trace = tl.trace(model, x, random_seed=0, capture_container_structure=False)
+    default_trace = tl.trace(model, x, capture=tl.options.CaptureOptions(random_seed=0))
+    explicit_false_trace = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(random_seed=0, capture_container_structure=False),
+    )
 
     assert default_trace.graph_shape_hash == explicit_false_trace.graph_shape_hash
     assert (
@@ -356,7 +376,11 @@ def test_custom_registered_container_reconstructs() -> None:
     """Registered custom containers are captured and reconstructable."""
 
     _register_pair_box()
-    trace = tl.trace(PairBoxModel(), torch.tensor([2.0]), intervention_ready=True)
+    trace = tl.trace(
+        PairBoxModel(),
+        torch.tensor([2.0]),
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+    )
     rebuilt = trace.reconstruct_output()
 
     assert isinstance(rebuilt, PairBox)
@@ -367,7 +391,11 @@ def test_custom_registered_container_reconstructs() -> None:
 def test_output_at_selects_nested_container_path() -> None:
     """Nested output selector resolves typed captured container paths."""
 
-    trace = tl.trace(HFLikeModel(), torch.tensor([1.0]), intervention_ready=True)
+    trace = tl.trace(
+        HFLikeModel(),
+        torch.tensor([1.0]),
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+    )
     site = trace.resolve_sites(tl.output_at(("past_key_values", 0, 1))).first()
 
     assert site.layer_label in trace.output_layers
@@ -377,7 +405,11 @@ def test_output_at_selects_nested_container_path() -> None:
 def test_post_load_reconstruct_output_round_trips(tmp_path: Path) -> None:
     """Portable save/load preserves enough output structure to reconstruct."""
 
-    trace = tl.trace(HFLikeModel(), torch.tensor([1.0]), intervention_ready=True)
+    trace = tl.trace(
+        HFLikeModel(),
+        torch.tensor([1.0]),
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+    )
     path = tmp_path / "container.tlspec"
     trace.save(path)
 
@@ -392,7 +424,11 @@ def test_post_load_reconstruct_output_round_trips(tmp_path: Path) -> None:
 def test_path_only_container_view_degrades_without_reconstruction() -> None:
     """An op with only path metadata exposes a non-reconstructable view."""
 
-    trace = tl.trace(TupleModel(), torch.tensor([1.0]), intervention_ready=True)
+    trace = tl.trace(
+        TupleModel(),
+        torch.tensor([1.0]),
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+    )
     op = trace.ops[trace.output_layers[0]].copy()
     op.source_trace = trace
     op.container_spec = None
@@ -412,7 +448,7 @@ def test_paths_only_backend_registry_view_does_not_fake_reconstruct() -> None:
     trace = tl.trace(
         StackTupleOutputModel(),
         (torch.tensor([1.0]), torch.tensor([2.0])),
-        capture_container_structure=True,
+        capture=tl.options.CaptureOptions(capture_container_structure=True),
     )
     trace.backend = "jax"
 
@@ -437,7 +473,7 @@ def test_backend_none_container_capability_returns_no_false_view() -> None:
     trace = tl.trace(
         StackTupleOutputModel(),
         (torch.tensor([1.0]), torch.tensor([2.0])),
-        capture_container_structure=True,
+        capture=tl.options.CaptureOptions(capture_container_structure=True),
     )
     trace.backend = "mlx"
 

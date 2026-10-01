@@ -83,7 +83,9 @@ ATTENTION_PROJECTION_ROLES: Final[dict[str, str]] = {
     "out_proj": "out",
     "qkv_proj": "qkv",
 }
-DOMAIN_NODE_MODES: Final[frozenset[str]] = frozenset({"vision", "attention"})
+# The former "vision"/"attention" node_style presets are removed; the style
+# functions stay exported through torchlens.experimental.node_styles for use
+# via node_spec_fn.
 
 
 def default_node_mode(layer_log: Op | Layer, spec: NodeSpec) -> NodeSpec:
@@ -353,14 +355,10 @@ def identity_collapsed_node_mode(
 MODE_REGISTRY: Final[dict[VisNodeModeLiteral, NodeModeFn]] = {
     "default": default_node_mode,
     "profiling": profiling_node_mode,
-    "vision": vision_node_mode,
-    "attention": attention_node_mode,
 }
 COLLAPSED_MODE_REGISTRY: Final[dict[VisNodeModeLiteral, CollapsedNodeModeFn]] = {
     "default": identity_collapsed_node_mode,
     "profiling": profiling_collapsed_node_mode,
-    "vision": identity_collapsed_node_mode,
-    "attention": identity_collapsed_node_mode,
 }
 
 

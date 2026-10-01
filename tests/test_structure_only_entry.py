@@ -62,11 +62,10 @@ def test_structure_only_defaults_false_and_validates_bool() -> None:
 
 
 @smoke
-def test_flat_kwarg_mirror_reaches_the_grouped_field() -> None:
-    from torchlens.options import merge_capture_options
+def test_grouped_structure_only_reaches_the_field() -> None:
+    from torchlens.options import CaptureOptions
 
-    with pytest.warns(tl.errors.TorchLensDeprecationWarning):
-        merged = merge_capture_options(capture=None, structure_only=True)
+    merged = CaptureOptions(structure_only=True)
     assert merged.structure_only is True
     assert merged.is_field_explicit("structure_only")
 

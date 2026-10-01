@@ -89,7 +89,11 @@ def test_aggregate_grad_basic_norms() -> None:
 
     expected_norms: list[float] = []
     for inputs, targets in batches:
-        trace = tl.trace(model, inputs, layers_to_save="all", save_grads=True)
+        trace = tl.trace(
+            model,
+            inputs,
+            capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=True),
+        )
         loss = _mse_loss(trace[trace.output_layers[-1]].out, targets)
         trace.log_backward(loss)
         grad = next(layer.grad for layer in trace.layer_list if layer.layer_type == "relu")
@@ -104,7 +108,11 @@ def test_aggregate_grad_warns_on_ambiguous_saved_selector_and_uses_first_match()
 
     model = TwoLinearClassifier()
     batch = (torch.arange(6, dtype=torch.float32).reshape(2, 3), torch.ones(2, 1))
-    trace = tl.trace(model, batch[0], layers_to_save="all", save_grads=tl.func("linear"))
+    trace = tl.trace(
+        model,
+        batch[0],
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=tl.func("linear")),
+    )
     loss = _mse_loss(trace[trace.output_layers[-1]].out, batch[1])
     trace.log_backward(loss)
     matches = [

@@ -84,7 +84,7 @@ def _log_backward_model(model: nn.Module, x: torch.Tensor) -> tl.Trace:
         Trace with backward metadata.
     """
 
-    trace = tl.trace(model, x, save_grads="all")
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads="all"))
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
     return trace
 
@@ -105,7 +105,7 @@ def _log_two_backward_passes(model: nn.Module, x: torch.Tensor) -> tl.Trace:
         Trace with two backward passes.
     """
 
-    trace = tl.trace(model, x, save_grads="all")
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads="all"))
     loss = trace[trace.output_layers[0]].out.sum()
     trace.log_backward(loss, retain_graph=True)
     trace.log_backward(loss)
@@ -134,13 +134,14 @@ def test_draw_combined_top_level_function(tmp_path: Path) -> None:
     """Top-level draw_combined renders a Trace."""
     trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
-    with pytest.warns(DeprecationWarning):
-        dot = tl.draw_combined(
-            trace,
-            vis_outpath=str(tmp_path / "top_level_combined"),
-            vis_save_only=True,
-            vis_fileformat="svg",
-        )
+    dot = tl.visualization.draw_combined(
+        trace,
+        visualization=tl.options.VisualizationOptions(
+            container_path=str(tmp_path / "top_level_combined"),
+            save_only=True,
+            file_format="svg",
+        ),
+    )
 
     assert "relu_back" in dot
 
@@ -282,7 +283,7 @@ def test_forward_rolled_grad_overlay_labels_partial_passes(tmp_path: Path) -> No
     trace = tl.trace(
         _LinearReluModel(),
         torch.randn(2, 3, requires_grad=True),
-        save_grads=tl.in_backward_pass(2),
+        capture=tl.options.CaptureOptions(save_grads=tl.in_backward_pass(2)),
     )
     loss = trace[trace.output_layers[0]].out.sum()
     trace.log_backward(loss, retain_graph=True)

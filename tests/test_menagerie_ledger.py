@@ -475,7 +475,7 @@ def test_verified_count_rises_after_real_torchlens_trace(tmp_path: Path) -> None
     conn = connect(tmp_path / "verification.db")
     model = torch.nn.Linear(4, 2).eval()
     with torch.no_grad():
-        trace = tl.trace(model, torch.ones(1, 4), inference_only=True)
+        trace = tl.trace(model, torch.ones(1, 4), capture=tl.options.CaptureOptions(inference_only=True))
     n_ops = int(getattr(trace, "num_ops", 0) or len(getattr(trace, "layer_logs", {}) or {}))
     graph_shape_hash = str(getattr(trace, "graph_shape_hash", "") or "")
 

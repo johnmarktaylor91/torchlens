@@ -8,8 +8,8 @@ from typing import Any
 import torch
 from torch import nn
 
-from .._deprecations import MISSING, MissingType, warn_deprecated_alias
-from .._errors import ArgumentTypeError, InvalidArgumentError, KeywordConflictError
+from .._deprecations import MISSING, MissingType
+from .._errors import ArgumentTypeError, InvalidArgumentError
 from ..bundle import Bundle
 from .hooks import HookContext
 from .predicates import when
@@ -24,7 +24,6 @@ def sweep(
     at: str | BaseSelector | Callable[[Any], bool] | MissingType = MISSING,
     values: Iterable[Any] | MissingType = MISSING,
     *,
-    param: str | BaseSelector | Callable[[Any], bool] | MissingType = MISSING,
     input_kwargs: dict[Any, Any] | None = None,
     names: Sequence[str] | None = None,
     **trace_kwargs: Any,
@@ -40,11 +39,8 @@ def sweep(
     at:
         Intervention site target. Strings match either an exact TorchLens label
         or a function name; selectors and predicate callables are used directly.
-        (Formerly named ``param``; ``param=`` is accepted as a deprecated alias.)
     values:
         Replacement values to sweep at ``at``.
-    param:
-        Deprecated alias for ``at``. Do not pass both.
     input_kwargs:
         Optional keyword inputs passed to ``model.forward``.
     names:
@@ -67,18 +63,7 @@ def sweep(
         If ``at`` cannot be used as a capture-time intervention predicate.
     """
 
-    # Resolve deprecated `param=` kwarg alias
-    if param is not MISSING and at is not MISSING:
-        raise KeywordConflictError(
-            "sweep() received deprecated param and replacement at together",
-            code="deprecated_argument_conflict",
-            remedy="remove param and pass only at",
-            arguments=("param", "at"),
-        )
-    if param is not MISSING:
-        warn_deprecated_alias("param", "at")
-        resolved_at = param
-    elif at is MISSING:
+    if at is MISSING:
         raise ArgumentTypeError(
             "sweep() is missing its required at site target",
             code="sweep_site_missing",

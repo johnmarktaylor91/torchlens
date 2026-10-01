@@ -241,10 +241,20 @@ def test_engine_scoping_refusals(capture):
     model, x, trace = capture
     selection = _edge(trace).__selection__()
     with pytest.raises(SelectionError) as excinfo:
-        trace.fork().do(selection, tl.zero_ablate(), model=model, x=x, engine="rerun")
+        trace.fork().do(
+            selection,
+            tl.zero_ablate(),
+            model=model,
+            x=x,
+            intervention=tl.options.InterventionOptions(engine="rerun"),
+        )
     assert excinfo.value.fields["code"] == "edge_intervention_engine_unsupported"
     with pytest.raises(SelectionError) as excinfo:
-        trace.fork().do(selection, tl.zero_ablate(), engine="set_only")
+        trace.fork().do(
+            selection,
+            tl.zero_ablate(),
+            intervention=tl.options.InterventionOptions(engine="set_only"),
+        )
     assert excinfo.value.fields["code"] == "edge_intervention_engine_unsupported"
     # auto with model+x resolves to rerun -> same refusal
     with pytest.raises(SelectionError) as excinfo:

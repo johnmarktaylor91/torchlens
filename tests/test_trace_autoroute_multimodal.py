@@ -48,7 +48,7 @@ def test_clip_style_dict_routes_via_auto_processor() -> None:
     log = tl.trace(
         model,
         {"text": "a cat", "images": _pil_image()},
-        layers_to_save="none",
+        capture=tl.options.CaptureOptions(layers_to_save="none"),
     )
 
     assert log.input_preprocessor is not None
@@ -66,7 +66,11 @@ def test_non_modality_dict_does_not_route(monkeypatch: pytest.MonkeyPatch) -> No
 
     monkeypatch.setattr(hf_bridge, "trace_multimodal", fail_trace_multimodal)
 
-    log = tl.trace(_DictModel(), {"key": "value"}, layers_to_save="none")
+    log = tl.trace(
+        _DictModel(),
+        {"key": "value"},
+        capture=tl.options.CaptureOptions(layers_to_save="none"),
+    )
 
     assert log.input_preprocessor is None
 
@@ -96,7 +100,11 @@ def test_model_without_auto_processor_gate_fails(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(hf_bridge, "trace_multimodal", fail_trace_multimodal)
     monkeypatch.setattr(user_funcs, "_can_resolve_hf_processor", lambda model: False)
 
-    log = tl.trace(_DictModel(), {"images": _pil_image()}, layers_to_save="none")
+    log = tl.trace(
+        _DictModel(),
+        {"images": _pil_image()},
+        capture=tl.options.CaptureOptions(layers_to_save="none"),
+    )
 
     assert log.input_preprocessor is None
 
@@ -118,8 +126,9 @@ def test_dict_transform_override_skips_multimodal_autoroute(
     log = tl.trace(
         nn.Linear(1, 1),
         {"text": "hello", "images": _pil_image()},
-        transform=lambda value: torch.ones(1),
-        layers_to_save="none",
+        capture=tl.options.CaptureOptions(
+            transform=lambda value: torch.ones(1), layers_to_save="none"
+        ),
     )
 
     assert log.input_preprocessor is None

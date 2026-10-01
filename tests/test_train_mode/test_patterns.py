@@ -105,8 +105,7 @@ def test_train_mode_preserves_user_requires_grad(
         trace = tl.trace(
             tiny_resnet_with_probe,
             torch.randn(3, 4, requires_grad=True),
-            backward_ready=True,
-            random_seed=0,
+            capture=tl.options.CaptureOptions(backward_ready=True, random_seed=0),
         )
     finally:
         handle.remove()
@@ -131,8 +130,7 @@ def test_aux_loss_slow(two_layer_mlp: TwoLayerMlp) -> None:
     trace = tl.trace(
         two_layer_mlp,
         torch.randn(3, 4, requires_grad=True),
-        backward_ready=True,
-        random_seed=0,
+        capture=tl.options.CaptureOptions(backward_ready=True, random_seed=0),
     )
     hidden = trace["relu_1_2"].out
     output = trace[trace.output_layers[0]].out
@@ -149,7 +147,9 @@ def test_aux_loss_slow(two_layer_mlp: TwoLayerMlp) -> None:
 def test_aux_loss_replay(two_layer_mlp: TwoLayerMlp) -> None:
     """Pattern A: replay capture supports an auxiliary loss on an intermediate out."""
 
-    trace = tl.trace(two_layer_mlp, torch.randn(3, 4), random_seed=0)
+    trace = tl.trace(
+        two_layer_mlp, torch.randn(3, 4), capture=tl.options.CaptureOptions(random_seed=0)
+    )
     trace.save_new_outs(
         two_layer_mlp,
         torch.randn(3, 4, requires_grad=True),
@@ -192,8 +192,7 @@ def test_probe_frozen_backbone_slow(tiny_resnet_with_probe: TinyResnetWithProbe)
     trace = tl.trace(
         tiny_resnet_with_probe,
         torch.randn(3, 4, requires_grad=True),
-        backward_ready=True,
-        random_seed=0,
+        capture=tl.options.CaptureOptions(backward_ready=True, random_seed=0),
     )
     saved = trace[trace.output_layers[0]].out
 
@@ -208,7 +207,11 @@ def test_probe_frozen_backbone_slow(tiny_resnet_with_probe: TinyResnetWithProbe)
 def test_probe_frozen_backbone_replay(tiny_resnet_with_probe: TinyResnetWithProbe) -> None:
     """Pattern B: replay capture trains only the probe on a frozen backbone."""
 
-    trace = tl.trace(tiny_resnet_with_probe, torch.randn(3, 4), random_seed=0)
+    trace = tl.trace(
+        tiny_resnet_with_probe,
+        torch.randn(3, 4),
+        capture=tl.options.CaptureOptions(random_seed=0),
+    )
     trace.save_new_outs(
         tiny_resnet_with_probe,
         torch.randn(3, 4, requires_grad=True),
@@ -249,8 +252,7 @@ def test_multi_tap_loss_slow(multi_tap_model: MultiTapModel) -> None:
     trace = tl.trace(
         multi_tap_model,
         torch.randn(3, 4, requires_grad=True),
-        backward_ready=True,
-        random_seed=0,
+        capture=tl.options.CaptureOptions(backward_ready=True, random_seed=0),
     )
     hidden = trace["relu_1_2"].out
     output = trace[trace.output_layers[1]].out
@@ -287,8 +289,7 @@ def test_distillation_slow(teacher_student_pair: TeacherStudentPair) -> None:
     trace = tl.trace(
         teacher_student_pair,
         torch.randn(3, 4, requires_grad=True),
-        backward_ready=True,
-        random_seed=0,
+        capture=tl.options.CaptureOptions(backward_ready=True, random_seed=0),
     )
     teacher = trace[trace.output_layers[0]].out
     student = trace[trace.output_layers[1]].out
@@ -364,8 +365,7 @@ def test_train_mode_shared_module_requires_grad() -> None:
         trace = tl.trace(
             model,
             torch.randn(3, 4, requires_grad=True),
-            backward_ready=True,
-            random_seed=0,
+            capture=tl.options.CaptureOptions(backward_ready=True, random_seed=0),
         )
     finally:
         handle.remove()
@@ -390,8 +390,7 @@ def test_save_new_outs_train_mode_inherits() -> None:
     trace = tl.trace(
         model,
         torch.randn(3, 4, requires_grad=True),
-        backward_ready=True,
-        random_seed=0,
+        capture=tl.options.CaptureOptions(backward_ready=True, random_seed=0),
     )
 
     trace.save_new_outs(
@@ -414,8 +413,7 @@ def test_save_new_outs_train_mode_overrides() -> None:
     trace = tl.trace(
         model,
         torch.randn(3, 4, requires_grad=True),
-        detach_saved_activations=True,
-        random_seed=0,
+        capture=tl.options.CaptureOptions(detach_saved_activations=True, random_seed=0),
     )
     original_layer_flags = [layer.detach_saved_activations for layer in trace]
 
@@ -467,7 +465,7 @@ def test_fastlog_train_mode_explicit_default_op_false() -> None:
 def test_fastlog_train_mode_default_op_true_errors() -> None:
     """default_op=True contradicts backward_ready keep-grad sugar."""
 
-    with pytest.raises(tl.TrainingModeConfigError, match="default_op=True"):
+    with pytest.raises(tl.errors.TrainingModeConfigError, match="default_op=True"):
         tl.fastlog.record(
             SharedFrozenModule(),
             torch.randn(3, 4, requires_grad=True),
@@ -479,7 +477,7 @@ def test_fastlog_train_mode_default_op_true_errors() -> None:
 def test_fastlog_train_mode_explicit_capspec_keepgrad_false_errors() -> None:
     """CaptureSpec keep_grad=False contradicts backward_ready keep-grad sugar."""
 
-    with pytest.raises(tl.TrainingModeConfigError, match="keep_grad=False"):
+    with pytest.raises(tl.errors.TrainingModeConfigError, match="keep_grad=False"):
         tl.fastlog.record(
             SharedFrozenModule(),
             torch.randn(3, 4, requires_grad=True),
@@ -495,8 +493,7 @@ def test_save_new_outs_train_mode_restored_on_graph_mismatch() -> None:
     trace = tl.trace(
         model,
         torch.ones(2, 4, requires_grad=True),
-        detach_saved_activations=True,
-        random_seed=0,
+        capture=tl.options.CaptureOptions(detach_saved_activations=True, random_seed=0),
     )
     original_layer_flags = [layer.detach_saved_activations for layer in trace]
 

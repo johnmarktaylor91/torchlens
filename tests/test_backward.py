@@ -227,7 +227,7 @@ def test_connected_output_and_backward_ready_saved_activation_are_unchanged() ->
         ready_model,
         ready_x,
         save=tl.func("relu"),
-        backward_ready=True,
+        capture=tl.options.CaptureOptions(backward_ready=True),
     )
     ready_saved = _saved_relu(ready_trace)
     ready_saved.sum().backward()
@@ -808,9 +808,9 @@ def test_replay_fork_does_not_inherit_gradient_state() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save="all", save_grads="all"),
-        intervention_ready=True,
-        backward_ready=True,
+        capture=CaptureOptions(
+            layers_to_save="all", save_grads="all", intervention_ready=True, backward_ready=True
+        ),
     )
     trace.log_backward(_output_loss(trace))
     assert trace.has_gradients
@@ -820,7 +820,11 @@ def test_replay_fork_does_not_inherit_gradient_state() -> None:
     def _identity_hook(out: torch.Tensor, *, hook: object) -> torch.Tensor:
         return out
 
-    fork = trace.replay(hooks={tl.func("relu"): _identity_hook}, differentiable=True)
+    fork = trace.push(
+        replay=tl.options.ReplayOptions(
+            hooks={tl.func("relu"): _identity_hook}, differentiable=True
+        )
+    )
 
     assert fork.has_gradients is False
     assert fork._saved_grad_labels == set()
@@ -848,9 +852,7 @@ def test_replay_fork_cannot_resurrect_has_grad_from_derived_payload() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save="all"),
-        intervention_ready=True,
-        backward_ready=True,
+        capture=CaptureOptions(layers_to_save="all", intervention_ready=True, backward_ready=True),
     )
     address, param_log = next(iter(trace.param_logs.items()))
     param_log._derived_grad_payload = torch.ones(1)
@@ -859,7 +861,11 @@ def test_replay_fork_cannot_resurrect_has_grad_from_derived_payload() -> None:
     def _identity_hook(out: torch.Tensor, *, hook: object) -> torch.Tensor:
         return out
 
-    fork = trace.replay(hooks={tl.func("relu"): _identity_hook}, differentiable=True)
+    fork = trace.push(
+        replay=tl.options.ReplayOptions(
+            hooks={tl.func("relu"): _identity_hook}, differentiable=True
+        )
+    )
 
     fork_param = fork.param_logs[address]
     assert fork_param._derived_grad_payload is None
@@ -1071,15 +1077,13 @@ def test_flat_transform_kwargs_populate_transformed_payloads() -> None:
 
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
-    with pytest.warns(DeprecationWarning):
-        trace = tl.trace(
-            model,
-            x,
-            activation_transform=lambda out: out.half(),
-            grad_transform=lambda grad: grad.half(),
-            save_grads=True,
-            backward_ready=True,
-        )
+    trace = tl.trace(
+        model,
+        x,
+        grad_transform=lambda grad: grad.half(),
+        capture=tl.options.CaptureOptions(save_grads=True, backward_ready=True),
+        save=tl.options.SaveOptions(activation_transform=lambda out: out.half()),
+    )
     relu_op = next(op for op in trace.ops if op.func_name == "relu")
 
     trace.log_backward(_output_loss(trace), retain_graph=True)
@@ -1181,14 +1185,11 @@ def test_validate_backward_pass_random_seed_kwarg_public_wrapper() -> None:
 
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
-    with (
-        mock.patch(
-            "torchlens.validation.consolidated.validate_backward_pass",
-            wraps=consolidated_validation.validate_backward_pass,
-        ) as validator,
-        pytest.warns(DeprecationWarning),
-    ):
-        assert tl.validate_backward_pass(model, x, random_seed=42)
+    with mock.patch(
+        "torchlens.validation.consolidated.validate_backward_pass",
+        wraps=consolidated_validation.validate_backward_pass,
+    ) as validator:
+        assert tl.validate(model, x, scope="backward", random_seed=42)
     assert validator.call_args is not None
     assert validator.call_args.kwargs["random_seed"] == 42
 
@@ -1336,16 +1337,12 @@ def test_accumulategrad_labels_deterministic_across_captures() -> None:
 
 
 @pytest.mark.smoke
-@pytest.mark.filterwarnings("ignore:`layers_to_save` is deprecated:DeprecationWarning")
-@pytest.mark.filterwarnings("ignore:`random_seed` is deprecated:DeprecationWarning")
-@pytest.mark.filterwarnings("ignore:`save_grads` is deprecated:DeprecationWarning")
-def test_validate_backward_pass_perturbed() -> None:
-    """The inert saved-grad perturbation option is loudly unsupported."""
+def test_validate_backward_pass_perturb_kwarg_removed() -> None:
+    """The inert saved-grad perturbation kwarg is deleted outright."""
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
-    with pytest.warns(DeprecationWarning, match="perturb_saved_grads"):
-        with pytest.raises(ValueError, match="unsupported"):
-            tl_validation.validate_backward_pass(model, x, perturb_saved_grads=True)
+    with pytest.raises(TypeError):
+        tl_validation.validate_backward_pass(model, x, perturb_saved_grads=True)
 
 
 @pytest.mark.smoke
@@ -1515,7 +1512,7 @@ def test_higher_order_discovery_bracketing_is_armed() -> None:
 
     torch.manual_seed(0)
     x = torch.randn(3, requires_grad=True)
-    trace = tl.trace(_HigherOrderModel(), x, save_grads="all")
+    trace = tl.trace(_HigherOrderModel(), x, capture=tl.options.CaptureOptions(save_grads="all"))
     loss = trace[trace.output_layers[0]].out
     first_grad = torch.autograd.grad(loss, x, create_graph=True, retain_graph=True)[0]
     torch.autograd.grad(first_grad.sum(), x, retain_graph=True)

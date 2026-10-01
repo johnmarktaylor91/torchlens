@@ -339,7 +339,7 @@ class TestFuncConfigIntegration:
         """func_config should survive save_new_outs (fast path)."""
         model = nn.Linear(10, 5)
         x1 = torch.randn(1, 10)
-        log = tl.trace(model, x1, layers_to_save="all")
+        log = tl.trace(model, x1, capture=tl.options.CaptureOptions(layers_to_save="all"))
 
         # Run with new input via Trace method
         x2 = torch.randn(1, 10)

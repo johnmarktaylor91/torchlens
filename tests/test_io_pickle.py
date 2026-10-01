@@ -9,6 +9,7 @@ import torch
 from safetensors.torch import save_file
 from torch import nn
 
+import torchlens as tl
 from torchlens import Trace, trace as trace_fn
 from torchlens._io import TLSPEC_VERSION, TorchLensIOError
 from torchlens._io.rehydrate import rehydrate_trace
@@ -46,11 +47,13 @@ def _build_live_log() -> Trace:
     return trace_fn(
         model,
         x,
-        layers_to_save="all",
-        save_arg_values=True,
-        save_rng_states=True,
-        save_code_context=True,
-        random_seed=0,
+        capture=tl.options.CaptureOptions(
+            layers_to_save="all",
+            save_arg_values=True,
+            save_rng_states=True,
+            save_code_context=True,
+            random_seed=0,
+        ),
     )
 
 
@@ -200,8 +203,7 @@ def test_plain_pickle_roundtrip_still_works() -> None:
     live_log = trace_fn(
         _PlainPickleModel(),
         torch.randn(2, 4),
-        layers_to_save="all",
-        random_seed=0,
+        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=0),
     )
     restored = pickle.loads(pickle.dumps(live_log))
 

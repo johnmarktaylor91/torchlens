@@ -471,7 +471,12 @@ def test_tinygrad_preview_rejects_random_seed() -> None:
     """tinygrad preview rejects random_seed instead of storing inert metadata."""
 
     with pytest.raises(BackendUnsupportedError, match="random_seed"):
-        tl.trace(_tiny_block, Tensor([1.0, -2.0, 3.0]), backend="tinygrad", random_seed=123)
+        tl.trace(
+            _tiny_block,
+            Tensor([1.0, -2.0, 3.0]),
+            backend="tinygrad",
+            capture=tl.options.CaptureOptions(random_seed=123),
+        )
 
 
 def test_tinygrad_multi_output_marks_outputs() -> None:
@@ -641,7 +646,12 @@ def test_tinygrad_backward_ready_rejected() -> None:
 
     x = Tensor([1.0, 2.0])
     with pytest.raises(BackendUnsupportedError, match="backward_ready"):
-        tl.trace(_tiny_block, x, backend="tinygrad", backward_ready=True)
+        tl.trace(
+            _tiny_block,
+            x,
+            backend="tinygrad",
+            capture=tl.options.CaptureOptions(backward_ready=True),
+        )
 
 
 def test_tinygrad_derived_grads_match_backward_oracle() -> None:

@@ -58,20 +58,22 @@ def test_trace_unwraps_torch_compile_once(
 
     compiled_model = _compile_model(two_layer_mlp)
     inputs = torch.randn(3, 4, requires_grad=True)
-    eager_trace = tl.trace(two_layer_mlp, inputs.clone(), backward_ready=True)
+    eager_trace = tl.trace(
+        two_layer_mlp, inputs.clone(), capture=tl.options.CaptureOptions(backward_ready=True)
+    )
     reset_compiled_model_unwrap_warning_state()
 
     with pytest.warns(UserWarning, match="compiled model detected"):
         compiled_trace = tl.trace(
-            compiled_model,
-            inputs,
-            backward_ready=True,
+            compiled_model, inputs, capture=tl.options.CaptureOptions(backward_ready=True)
         )
     assert _op_structure(compiled_trace) == _op_structure(eager_trace)
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        repeated_trace = tl.trace(compiled_model, inputs.clone(), backward_ready=True)
+        repeated_trace = tl.trace(
+            compiled_model, inputs.clone(), capture=tl.options.CaptureOptions(backward_ready=True)
+        )
     assert not any("compiled model detected" in str(warning.message) for warning in caught)
 
     repeated_trace.cleanup()
@@ -87,7 +89,7 @@ def test_save_new_outs_unwraps_torch_compile(
     trace = tl.trace(
         two_layer_mlp,
         torch.randn(3, 4, requires_grad=True),
-        random_seed=0,
+        capture=tl.options.CaptureOptions(random_seed=0),
     )
     compiled_model = _compile_model(two_layer_mlp)
 

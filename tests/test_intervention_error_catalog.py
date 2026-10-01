@@ -319,14 +319,16 @@ def test_axis_a_public_verbs_success_paths() -> None:
     log = _capture()
     log.set(tl.func("relu"), torch.zeros(1, 3), confirm_mutation=True)
     log.attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
-    with pytest.warns(DeprecationWarning, match="Trace.replay"):
-        replay_result = log.replay()
+    replay_result = log.push()
     assert replay_result is log
     assert log.state is TraceState.REPLAY_PROPAGATED
 
     do_log = _capture()
-    with pytest.warns(DeprecationWarning):
-        do_log.do(tl.func("relu"), torch.ones(1, 3), engine="set_only", confirm_mutation=True)
+    do_log.do(
+        tl.func("relu"),
+        torch.ones(1, 3),
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     assert do_log.state is TraceState.SPEC_STALE
 
     fork = do_log.fork("phase14")
@@ -337,8 +339,7 @@ def test_axis_a_public_verbs_success_paths() -> None:
     rerun_log = _capture(model, x)
     rerun_log.run(model, x)
     assert rerun_log.state is TraceState.RERUN_PROPAGATED
-    with pytest.warns(DeprecationWarning, match="append"):
-        rerun_log.run(model, torch.randn(1, 3), append=True)
+    rerun_log.run(model, torch.randn(1, 3), replay=tl.options.ReplayOptions(append=True))
     assert rerun_log.state is TraceState.APPENDED
 
 
@@ -363,18 +364,23 @@ def test_axis_a_public_verbs_success_paths() -> None:
         (
             "do",
             lambda log: log.do(
-                tl.func("relu"), _zero_hook, x=torch.zeros(1, 3), confirm_mutation=True
+                tl.func("relu"),
+                _zero_hook,
+                x=torch.zeros(1, 3),
+                intervention=tl.options.InterventionOptions(confirm_mutation=True),
             ),
             terrors.EngineDispatchError,
         ),
-        ("replay", lambda log: log.replay(), terrors.ReplayPreconditionError),
+        ("replay", lambda log: log.push(), terrors.ReplayPreconditionError),
         # NOTE (untyped-error finding, follow-up): ``log.run(model)`` with no forward input
         # raises a bare ``ValueError`` instead of a typed catalog error. Pinned to the real
         # type so a wrong-exception mutation still fails; product raise is unchanged here.
         ("rerun", lambda log: log.run(_ReluAdd()), ValueError),
         (
             "append",
-            lambda log: log.run(_ReluAdd(), torch.ones(1, 4), append=True),
+            lambda log: log.run(
+                _ReluAdd(), torch.ones(1, 4), replay=tl.options.ReplayOptions(append=True)
+            ),
             terrors.AppendMismatchError,
         ),
     ),
@@ -403,7 +409,7 @@ def test_axis_b_replay_and_rerun_match_for_graph_stable_hook() -> None:
 
     replay_log.attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
     rerun_log.attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
-    replay_log.replay()
+    replay_log.push()
     rerun_log.run(_ReluAdd(), x)
 
     replay_output = replay_log[replay_log.output_layers[0]].out
@@ -413,7 +419,7 @@ def test_axis_b_replay_and_rerun_match_for_graph_stable_hook() -> None:
 
 @pytest.mark.smoke
 def test_axis_i_list_logs_snapshot_survives_concurrent_log_creation() -> None:
-    """``tl.list_logs()`` returns valid snapshots while logs are created concurrently."""
+    """``tl.io.list_logs()`` returns valid snapshots while logs are created concurrently."""
 
     errors: list[BaseException] = []
     snapshots: list[tuple[tl.Trace, ...]] = []

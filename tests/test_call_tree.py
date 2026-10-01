@@ -92,7 +92,11 @@ def _trace() -> tl.Trace:
         Trace with a three-level ModuleCall tree.
     """
 
-    return tl.trace(CallTreeModel(), torch.randn(2, 3), layers_to_save="all")
+    return tl.trace(
+        CallTreeModel(),
+        torch.randn(2, 3),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
 
 
 def _printed_call_labels(trace: tl.Trace) -> list[str]:

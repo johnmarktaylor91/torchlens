@@ -12,6 +12,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.data_classes.layer import Layer
+from torchlens.experimental import node_styles
 from torchlens.experimental.dagua import NodeSpec
 
 
@@ -40,9 +41,6 @@ def _render_dot(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
         "vis_outpath": str(tmp_path / "graph"),
         **kwargs,
     }
-    if kwargs.get("node_mode") in {"attention", "vision"}:
-        with pytest.warns(DeprecationWarning, match="moving out of core"):
-            return log.draw(**draw_kwargs)
     return log.draw(**draw_kwargs)
 
 
@@ -92,7 +90,7 @@ def test_vision_mode_adds_io_shape_for_conv(tmp_path: Path) -> None:
     model = nn.Conv2d(3, 8, kernel_size=3, stride=2, padding=1)
     log = tl.trace(model, torch.randn(2, 3, 8, 8))
 
-    dot = _render_dot(log, tmp_path, node_mode="vision")
+    dot = _render_dot(log, tmp_path, node_spec_fn=node_styles.vision_node_mode)
 
     assert "in=(2, 3, 8, 8), out=(2, 8, 4, 4)" in dot
 
@@ -104,7 +102,7 @@ def test_vision_mode_no_op_for_linear(tmp_path: Path) -> None:
     log = tl.trace(model, torch.randn(1, 4))
 
     default_dot = _render_dot(log, tmp_path / "default")
-    vision_dot = _render_dot(log, tmp_path / "vision", node_mode="vision")
+    vision_dot = _render_dot(log, tmp_path / "vision", node_spec_fn=node_styles.vision_node_mode)
 
     assert vision_dot == default_dot
 
@@ -134,7 +132,7 @@ def test_attention_mode_shows_heads(tmp_path: Path) -> None:
 
     log = tl.trace(AttentionModel(), torch.randn(1, 4, 8))
 
-    dot = _render_dot(log, tmp_path, node_mode="attention")
+    dot = _render_dot(log, tmp_path, node_spec_fn=node_styles.attention_node_mode)
 
     assert "heads=2 embed=8" in dot
     assert "head_dim=4" in dot
@@ -332,51 +330,33 @@ def test_profiling_multipass_rows_omitted_when_untimed(tmp_path: Path) -> None:
 
 
 def test_invalid_mode_raises() -> None:
-    """Invalid vis_node_mode values should fail during option merging."""
+    """Invalid node_style values should fail during option merging."""
 
     log = tl.trace(nn.Linear(4, 4), torch.randn(1, 4))
-    with pytest.raises(ValueError, match="node_mode"):
+    with pytest.raises(ValueError, match="node_style"):
         log.draw(
             vis_mode="unrolled",
-            vis_node_mode="bogus",  # type: ignore[arg-type]
+            node_style="bogus",  # type: ignore[arg-type]
             vis_save_only=True,
         )
 
 
-def test_domain_node_style_advice_resolves(tmp_path: Path) -> None:
-    """The draw-path domain-style warning names a destination that exists (R48-b).
+def test_domain_node_style_presets_refuse(tmp_path: Path) -> None:
+    """The former 'vision'/'attention' presets refuse typed (shims removed).
 
-    ``_render_dot._validate_draw_options`` advertised ``examples/recipes/
-    <style>.py`` and a ``torchlens.<style>`` plugin -- NEITHER exists. Its
-    sibling validator (``options._validate_node_style``) was already fixed to
-    point at ``torchlens.experimental.node_styles`` with the typed category
-    and caller attribution; this pins the ported treatment.
+    The style functions themselves stay available through
+    ``torchlens.experimental.node_styles`` via ``node_spec_fn``.
     """
-
-    import warnings as warnings_module
-
-    from torchlens._deprecations import TorchLensDeprecationWarning
-    from torchlens.experimental import node_styles
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
     log = tl.trace(model, torch.randn(1, 4))
 
-    with warnings_module.catch_warnings(record=True) as caught:
-        warnings_module.simplefilter("always")
+    with pytest.raises(ValueError, match="node_style"):
         log.draw(
-            node_mode="vision",
+            node_mode="vision",  # type: ignore[arg-type]
             vis_save_only=True,
             vis_fileformat="dot",
             vis_outpath=str(tmp_path / "graph"),
         )
-    advisories = [w for w in caught if "moving out of core" in str(w.message)]
-    assert len(advisories) == 1
-    advisory = advisories[0]
-    assert issubclass(advisory.category, TorchLensDeprecationWarning)
-    message = str(advisory.message)
-    assert "torchlens.experimental.node_styles.vision_node_mode" in message
-    assert "examples/recipes" not in message
-    # The advertised destination actually resolves.
     assert callable(node_styles.vision_node_mode)
-    # Attributed to the caller's frame, not a torchlens internal.
-    assert advisory.filename == __file__
+    assert callable(node_styles.attention_node_mode)

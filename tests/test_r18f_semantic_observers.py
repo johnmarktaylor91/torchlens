@@ -60,7 +60,11 @@ def test_residual_recipe_rejects_non_transformer_named_block() -> None:
     """A ``*Block*``-named module without attn+mlp children exposes no residual facets."""
 
     torch.manual_seed(0)
-    log = tl.trace(_ScaleBlock(), torch.randn(2, 4), layers_to_save="all")
+    log = tl.trace(
+        _ScaleBlock(),
+        torch.randn(2, 4),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
     facets = log.modules["self"].facets
 
     assert not facets.has("resid_pre")
@@ -72,7 +76,11 @@ def test_residual_recipe_marks_genuine_transformer_block() -> None:
     """A genuine attn+mlp block exposes resid_pre/mid/post; mid is not degenerate."""
 
     torch.manual_seed(0)
-    log = tl.trace(_GenuineBlock(), torch.randn(2, 4), layers_to_save="all")
+    log = tl.trace(
+        _GenuineBlock(),
+        torch.randn(2, 4),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
     facets = log.modules["self"].facets
 
     assert facets.has("resid_pre")
@@ -236,7 +244,7 @@ def test_forward_tap_site_label_is_public_not_raw() -> None:
     x = torch.randn(2, 3)
     tap = tl.tap(tl.func("relu"))
 
-    log = tl.trace(model, x, intervention_ready=True, hooks=tap)
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True, hooks=tap))
 
     assert tap.records
     site_label = tap.records[0].site_label

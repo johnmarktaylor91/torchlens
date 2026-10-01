@@ -117,7 +117,12 @@ def test_reconstructed_sdpa_facets_validate_against_actual_post_rope_inputs() ->
 
     model = _AttentionWrapper(LlamaSdpaAttention())
     x = torch.randn(2, 3, 8)
-    log = tl.trace(model, x, layers_to_save="all", reconstruction_ready=True)
+    log = tl.trace(
+        model,
+        x,
+        reconstruction_ready=True,
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
     view = log.modules["attn"].facets
     op = _sdpa_op(log)
 
@@ -136,7 +141,12 @@ def test_reconstructed_sdpa_validation_is_non_vacuous_after_corruption() -> None
     """Corrupting saved Q makes validation fail with a MissingFacet value."""
 
     model = _AttentionWrapper(LlamaSdpaAttention())
-    log = tl.trace(model, torch.randn(2, 3, 8), layers_to_save="all", reconstruction_ready=True)
+    log = tl.trace(
+        model,
+        torch.randn(2, 3, 8),
+        reconstruction_ready=True,
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
     op = _sdpa_op(log)
     op.saved_args[0] = op.saved_args[0] + 10.0
     log.modules["attn"].facets.invalidate()
@@ -150,7 +160,12 @@ def test_reconstructed_sdpa_gqa_and_causal_mask_validate() -> None:
     """GQA expansion and causal masking reconstruct against fused SDPA output."""
 
     model = _AttentionWrapper(LlamaSdpaAttention(n_heads=4, n_kv_heads=2, causal=True))
-    log = tl.trace(model, torch.randn(1, 4, 8), layers_to_save="all", reconstruction_ready=True)
+    log = tl.trace(
+        model,
+        torch.randn(1, 4, 8),
+        reconstruction_ready=True,
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
     view = log.modules["attn"].facets
     op = _sdpa_op(log)
 
@@ -162,7 +177,9 @@ def test_reconstructed_sdpa_missing_prerequisite_names_arg_capture() -> None:
     """Default capture names the missing arg-capture prerequisite."""
 
     model = _AttentionWrapper(LlamaSdpaAttention())
-    log = tl.trace(model, torch.randn(2, 3, 8), layers_to_save="all")
+    log = tl.trace(
+        model, torch.randn(2, 3, 8), capture=tl.options.CaptureOptions(layers_to_save="all")
+    )
     facets = log.modules["attn"].facets
 
     assert "pattern" not in facets.keys()
@@ -175,7 +192,12 @@ def test_fused_pattern_intervention_requires_real_eager_facet() -> None:
     """Read-only reconstructed pattern facets cannot be scatter-back edited."""
 
     model = _AttentionWrapper(LlamaSdpaAttention())
-    log = tl.trace(model, torch.randn(2, 3, 8), layers_to_save="all", reconstruction_ready=True)
+    log = tl.trace(
+        model,
+        torch.randn(2, 3, 8),
+        reconstruction_ready=True,
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
 
     with pytest.raises(SiteResolutionError, match="read-only"):
         log.attach_hooks(tl.facet("pattern"), tl.zero_ablate())
@@ -186,7 +208,13 @@ def test_residual_facets_read_and_grad() -> None:
 
     model = TransformerBlock()
     x = torch.randn(2, 4, requires_grad=True)
-    log = tl.trace(model, x, layers_to_save="all", backward_ready=True, save_grads="all")
+    log = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(
+            layers_to_save="all", backward_ready=True, save_grads="all"
+        ),
+    )
     log.log_backward(log[log.output_layers[0]].out.sum())
     facets = log.modules["self"].facets
 
@@ -224,7 +252,7 @@ def test_module_path_fallback_on_unreciped_model() -> None:
             return self.custom(x)
 
     x = torch.randn(2, 3)
-    log = tl.trace(Model(), x, layers_to_save="all")
+    log = tl.trace(Model(), x, capture=tl.options.CaptureOptions(layers_to_save="all"))
     assert torch.equal(log.modules["custom"].facets["out"], x.sin())
 
 
@@ -233,12 +261,22 @@ def test_transformerlens_aliases_are_opt_in() -> None:
 
     model = _AttentionWrapper(LlamaSdpaAttention())
     x = torch.randn(2, 3, 8)
-    log = tl.trace(model, x, layers_to_save="all", reconstruction_ready=True)
+    log = tl.trace(
+        model,
+        x,
+        reconstruction_ready=True,
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
     assert "hook_pattern" not in log.modules["attn"].facets.keys()
 
     facets_mod.enable_transformerlens_aliases(True)
     try:
-        aliased = tl.trace(model, x, layers_to_save="all", reconstruction_ready=True)
+        aliased = tl.trace(
+            model,
+            x,
+            reconstruction_ready=True,
+            capture=tl.options.CaptureOptions(layers_to_save="all"),
+        )
         view = aliased.modules["attn"].facets
         assert "hook_pattern" in view.keys()
         assert torch.allclose(view["hook_pattern"], view.pattern)
@@ -254,7 +292,7 @@ def test_transformerlens_alias_menu_mirrors_missing_native_facet() -> None:
 
     facets_mod.enable_transformerlens_aliases(True)
     try:
-        log = tl.trace(model, x, layers_to_save="all")
+        log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
         view = log.modules["attn"].facets
         menu = view.menu()
 

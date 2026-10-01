@@ -130,7 +130,11 @@ def _policy_trace() -> Trace:
     """
 
     model = _PolicyModel().eval()
-    trace = tl.trace(model, torch.randn(2, 3, requires_grad=True), save_grads="all")
+    trace = tl.trace(
+        model,
+        torch.randn(2, 3, requires_grad=True),
+        capture=tl.options.CaptureOptions(save_grads="all"),
+    )
     trace.log_backward(trace[trace.output_layers[0]].out)
     return trace
 
@@ -284,7 +288,11 @@ def test_postprocess_contract_assertions_run_over_standard_model(
     """The standard torch capture path passes debug postprocess boundary assertions."""
 
     monkeypatch.setenv("TORCHLENS_POSTPROCESS_ASSERTIONS", "1")
-    trace = tl.trace(_PolicyModel().eval(), torch.randn(2, 3), save_grads=False)
+    trace = tl.trace(
+        _PolicyModel().eval(),
+        torch.randn(2, 3),
+        capture=tl.options.CaptureOptions(save_grads=False),
+    )
     try:
         assert trace.graph_shape_hash is not None
         assert trace.layer_logs
@@ -306,7 +314,11 @@ def test_postprocess_write_audit_enforces_declared_columns(
     """
 
     monkeypatch.setenv("TORCHLENS_POSTPROCESS_ASSERTIONS", "1")
-    trace = tl.trace(_PolicyModel().eval(), torch.randn(2, 3), save_grads=False)
+    trace = tl.trace(
+        _PolicyModel().eval(),
+        torch.randn(2, 3),
+        capture=tl.options.CaptureOptions(save_grads=False),
+    )
     trace.cleanup()
 
 
@@ -334,7 +346,9 @@ def test_postprocess_write_audit_covers_save_code_context_axis(
 
     monkeypatch.setenv("TORCHLENS_POSTPROCESS_ASSERTIONS", "1")
     trace = tl.trace(
-        _AssigningModel().eval(), torch.randn(2, 3), save_code_context=True, save_grads=False
+        _AssigningModel().eval(),
+        torch.randn(2, 3),
+        capture=tl.options.CaptureOptions(save_code_context=True, save_grads=False),
     )
     try:
         assert any(op.var_names for op in trace.layer_list if op.type != "output")
@@ -360,7 +374,7 @@ def test_postprocess_write_audit_covers_streaming_axis(
         _PolicyModel().eval(),
         torch.randn(2, 3),
         storage=tl.to_disk(tmp_path / "run.tlspec"),
-        save_grads=False,
+        capture=tl.options.CaptureOptions(save_grads=False),
     )
     try:
         streamed = [op for op in trace.layer_list if getattr(op, "out_ref", None) is not None]
@@ -401,7 +415,11 @@ def test_postprocess_write_audit_covers_orphan_keep_axis(
     """
 
     monkeypatch.setenv("TORCHLENS_POSTPROCESS_ASSERTIONS", "1")
-    trace = tl.trace(_OrphanEquivalenceModel(), torch.ones(5, 5), keep_orphans=True)
+    trace = tl.trace(
+        _OrphanEquivalenceModel(),
+        torch.ones(5, 5),
+        capture=tl.options.CaptureOptions(keep_orphans=True),
+    )
     try:
         assert trace.orphans, "the island must be retained as orphans"
         assert all(op.is_orphan for op in trace.orphans)
@@ -451,7 +469,11 @@ def test_postprocess_write_audit_trips_on_undeclared_column(
     monkeypatch.setenv("TORCHLENS_POSTPROCESS_ASSERTIONS", "1")
     monkeypatch.setitem(POSTPROCESS_STEP_CONTRACTS, "4", narrowed)
     with pytest.raises(AssertionError, match="undeclared op-store columns"):
-        tl.trace(_PolicyModel().eval(), torch.randn(2, 3), save_grads=False)
+        tl.trace(
+            _PolicyModel().eval(),
+            torch.randn(2, 3),
+            capture=tl.options.CaptureOptions(save_grads=False),
+        )
 
 
 @pytest.mark.requires_assertions
@@ -481,7 +503,11 @@ def test_postprocess_write_audit_catches_in_place_container_mutation(
     with pytest.raises(
         AssertionError, match=r"Step 10 .* undeclared op-store columns.*annotations"
     ):
-        tl.trace(_PolicyModel().eval(), torch.randn(2, 3), save_grads=False)
+        tl.trace(
+            _PolicyModel().eval(),
+            torch.randn(2, 3),
+            capture=tl.options.CaptureOptions(save_grads=False),
+        )
 
 
 @pytest.mark.requires_assertions

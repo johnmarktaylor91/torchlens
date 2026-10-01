@@ -508,13 +508,11 @@ def render_one(
 
         with torch.no_grad():
             trace = tl.trace(
-                attempt_model,
-                attempt_input,
-                layers_to_save=None,
-                save=None,
-                save_rng_states=False,
-                inference_only=True,
-            )
+                        attempt_model,
+                        attempt_input,
+                        save=None,
+                        capture=tl.options.CaptureOptions(layers_to_save=None, save_rng_states=False, inference_only=True),
+                    )
         graph_shape_hash = str(getattr(trace, "graph_shape_hash", "") or "")
         n_nodes = len(getattr(trace, "layer_logs", {}) or {})
         draw_call_kwargs = {

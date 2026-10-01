@@ -103,8 +103,12 @@ def test_end_to_end_replayed_count_excludes_ground_truth_phase() -> None:
     x = torch.randn(2, 4)
     with torch.no_grad():
         ground_truth = model(x)
-    trace = tl.trace(model, x, layers_to_save="all", save_arg_values=True)
-    status = validation_core.validate_saved_outs(trace, [ground_truth])
+    trace = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    )
+    status = validation_core.validate_forward_pass(trace, [ground_truth])
     assert bool(status)
     replay_labels = {
         decision["op_label"]

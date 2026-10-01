@@ -122,8 +122,14 @@ def _assert_saved_ops_match_full_trace(
 ) -> None:
     """Assert selective saved payloads are byte-identical to full trace payloads."""
 
-    full = tl.trace(model, x.clone(), layers_to_save="all", random_seed=123)
-    selective = tl.trace(model, x.clone(), save=predicate, random_seed=123)
+    full = tl.trace(
+        model,
+        x.clone(),
+        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=123),
+    )
+    selective = tl.trace(
+        model, x.clone(), save=predicate, capture=tl.options.CaptureOptions(random_seed=123)
+    )
     saved_ops = [
         op
         for op in selective.layer_list
@@ -145,7 +151,9 @@ def test_trace_save_func_selector_keeps_only_matching_payloads() -> None:
 
     model = PredicateToy()
     x = torch.randn(2, 4)
-    log = tl.trace(model, x, save=tl.func("relu"), random_seed=11)
+    log = tl.trace(
+        model, x, save=tl.func("relu"), capture=tl.options.CaptureOptions(random_seed=11)
+    )
     saved_ops = [
         op
         for op in log.layer_list
@@ -165,7 +173,9 @@ def test_trace_save_func_selector_preserves_predicate_event_fields() -> None:
 
     model = PredicateToy()
     x = torch.randn(2, 4)
-    log = tl.trace(model, x, save=tl.func("relu"), random_seed=17)
+    log = tl.trace(
+        model, x, save=tl.func("relu"), capture=tl.options.CaptureOptions(random_seed=17)
+    )
 
     relu_op = next(op for op in log.layer_list if op.func_name == "relu")
     event = log.event_stream.op_event_by_label_raw[relu_op._label_raw]
@@ -184,7 +194,9 @@ def test_selective_save_keeps_unsaved_non_orphan_op_metadata() -> None:
 
     model = PredicateToy()
     x = torch.randn(2, 4)
-    log = tl.trace(model, x, save=tl.func("relu"), random_seed=13)
+    log = tl.trace(
+        model, x, save=tl.func("relu"), capture=tl.options.CaptureOptions(random_seed=13)
+    )
 
     unsaved = next(
         op for op in log.layer_list if op.layer_type == "add" and not op.has_saved_activation
@@ -234,7 +246,9 @@ def test_layers_to_save_retains_output_parent_when_selector_misses_parent() -> N
 
     model = PredicateToy()
     x = torch.randn(2, 4)
-    log = tl.trace(model, x, layers_to_save=["relu"], random_seed=17)
+    log = tl.trace(
+        model, x, capture=tl.options.CaptureOptions(layers_to_save=["relu"], random_seed=17)
+    )
 
     output = log["output_1"]
     assert output.has_saved_activation is True
@@ -270,7 +284,9 @@ def test_layers_to_save_matches_legacy_label_spellings(
 
     model = FinalLabelDriftToy()
     x = torch.randn(2, 4)
-    log = tl.trace(model, x, layers_to_save=[selector], random_seed=19)
+    log = tl.trace(
+        model, x, capture=tl.options.CaptureOptions(layers_to_save=[selector], random_seed=19)
+    )
 
     saved_relu_labels = {
         op.layer_label
@@ -285,7 +301,7 @@ def test_integer_layers_to_save_uses_single_legacy_layer_index() -> None:
 
     model = IntegerSelectorToy()
     x = torch.randn(2, 4)
-    log = tl.trace(model, x, layers_to_save=[2], random_seed=23)
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=[2], random_seed=23))
 
     saved_compute_labels = [
         op.layer_label
@@ -300,7 +316,9 @@ def test_layers_to_save_unqualified_module_label_saves_all_passes() -> None:
 
     model = RecurrentToy(passes=3)
     x = torch.randn(2, 4)
-    log = tl.trace(model, x, layers_to_save=["attn"], random_seed=7)
+    log = tl.trace(
+        model, x, capture=tl.options.CaptureOptions(layers_to_save=["attn"], random_seed=7)
+    )
     linear_layer = next(layer for layer in log.layers if layer.layer_type == "linear")
     assert linear_layer.num_passes == 3
     assert [op.has_saved_activation for op in linear_layer.ops._list] == [True, True, True]
@@ -314,7 +332,9 @@ def test_layers_to_save_pass_qualified_module_label_saves_one_pass() -> None:
 
     model = RecurrentToy(passes=3)
     x = torch.randn(2, 4)
-    log = tl.trace(model, x, layers_to_save=["attn:2"], random_seed=7)
+    log = tl.trace(
+        model, x, capture=tl.options.CaptureOptions(layers_to_save=["attn:2"], random_seed=7)
+    )
     linear_layer = next(layer for layer in log.layers if layer.layer_type == "linear")
     assert [op.has_saved_activation for op in linear_layer.ops._list] == [False, True, False]
     assert linear_layer.ops[1].out is not None

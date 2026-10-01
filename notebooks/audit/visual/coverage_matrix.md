@@ -26,8 +26,8 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | `direction:leftright` | direction='leftright' | p10 |
 | `node_mode:default` | node_mode='default' | p42 |
 | `node_mode:profiling` | node_mode='profiling' (time/memory rows) | p42 |
-| `node_mode:vision` | node_mode='vision' (conv-oriented rows) | p43 |
-| `node_mode:attention` | node_mode='attention' (attention-oriented rows) | p43 |
+| `node_spec_fn:vision` | node_spec_fn=vision_node_mode (conv-oriented rows) | p43 |
+| `node_spec_fn:attention` | node_spec_fn=attention_node_mode (attention-oriented rows) | p43 |
 | `theme:torchlens` | vis_theme='torchlens' (default) | p53 |
 | `theme:paper` | vis_theme='paper' | p53 |
 | `theme:dark` | vis_theme='dark' | p53 |
@@ -139,7 +139,7 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | `overlay:others` | node_overlay 'bytes'/'grad-norm'/'bundle_delta' use the same generic numeric-row + bold-border machinery as the overlays shown ('nan' and 'intervention', the two color-coded overlays, both have pages). |
 | `combined:cluster_rest` | intervening_cluster 'outside'/'downstream' mirror the two placements shown ('upstream'/'own') with different cluster targets. |
 | `overrides:grad_edge` | vis_grad_edge_overrides styles gradient edges via the same override dict machinery as vis_edge_overrides (shown). |
-| `plumbing` | vis_outpath / vis_fileformat / vis_save_only / return_graph / vis_graph_overrides-free aliases (vis_opt, view, depth, renderer, layout, node_style, vis_node_mode, vis_buffers, vis_direction) have no visual identity of their own. |
+| `plumbing` | vis_outpath / vis_fileformat / vis_save_only / return_graph / vis_graph_overrides and the draw() short-form params (view, depth, renderer, layout, node_style) have no visual identity of their own. |
 | `show:dispatcher` | Trace.show(method='graph'/'repr') dispatches to draw()/repr(). method='html' returns Trace._repr_html_() -- see the html_repr entry. |
 | `html_repr` | Trace._repr_html_() is a bespoke HTML identity card (layers/ops/save-level/NaN summary) for notebooks; an HTML widget, not a static Graphviz render, so it cannot appear in this PDF. |
 | `animate_ops` | Trace.animate_ops() returns an HTML play/pause widget for repeated-pass ops; interactive HTML, out of scope for a static PDF. |
@@ -184,7 +184,7 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | 39 | E | `e8_interleaved_artifact` | KNOWN ARTIFACT: interleaved repeat-folds can look like a cycle | `interleaved_stack` | 2 |
 | 40 | E | `e9_collapse_diagnostics` | Diagnostics: Trace.collapse_plan() and Trace.collapse_schedule() | `(text page)` | - |
 | 42 | F | `f1_node_modes` | node_mode: 'default' vs 'profiling' | `tiny_mlp` | 2 |
-| 43 | F | `f2_domain_modes` | node_mode: 'vision' and 'attention' | `mini_inception`, `tiny_transformer` | 2 |
+| 43 | F | `f2_domain_modes` | node_spec_fn: vision_node_mode and attention_node_mode | `mini_inception`, `tiny_transformer` | 2 |
 | 44 | F | `f3_overlays` | node_overlay: builtin metrics and custom scores | `tiny_mlp` | 4 |
 | 45 | F | `f4_nan_overlay` | Diagnostic overlays: 'nan' and 'intervention' recolor borders | `nan_midway`, `tiny_mlp` | 2 |
 | 46 | F | `f5_label_fields` | node_label_fields: choosing the label rows | `tiny_mlp` | 2 |

@@ -49,7 +49,11 @@ class _FinderModel(nn.Module):
 def test_trace_finders_return_matching_modules() -> None:
     """Trace finders locate attention and normalization facet providers."""
 
-    log = trace_fn(_FinderModel(), torch.randn(2, 3, 8), layers_to_save="all")
+    log = trace_fn(
+        _FinderModel(),
+        torch.randn(2, 3, 8),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
     attention_blocks = list(log.attention_blocks())
     q_modules = list(log.modules_with_facet("q"))
     norm_modules = list(log.modules_with_facet("normalized"))

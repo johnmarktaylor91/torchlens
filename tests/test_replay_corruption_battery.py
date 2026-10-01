@@ -23,6 +23,7 @@ import pytest
 import torch
 import torch.nn as nn
 
+import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens.validation.diagnostics import TRACE_FAILURE_ATTR
 
@@ -51,7 +52,11 @@ def _capture(model: nn.Module, x: torch.Tensor):
     """
 
     model = model.eval()
-    log = trace_fn(model, x, layers_to_save="all", save_arg_values=True)
+    log = trace_fn(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    )
     with torch.no_grad():
         ground_truth = model(x)
     outputs = list(ground_truth) if isinstance(ground_truth, (tuple, list)) else [ground_truth]
@@ -121,7 +126,7 @@ def _corrupt_and_assert(model: nn.Module, x: torch.Tensor, func_name: str) -> No
         gc.collect()
         # (a) pristine control: an already-red baseline would make the
         # corruption verdict meaningless (the b9 lesson).
-        assert log.validate_saved_outs(outputs), "pristine trace failed validation"
+        assert log.validate_forward_pass(outputs), "pristine trace failed validation"
 
         target = next(op for op in log.compute_ops if op.func_name == func_name)
         with torch.no_grad():
@@ -129,7 +134,7 @@ def _corrupt_and_assert(model: nn.Module, x: torch.Tensor, func_name: str) -> No
         target.out = corrupted
 
         # (b) the corruption must be caught ...
-        status = log.validate_saved_outs(outputs)
+        status = log.validate_forward_pass(outputs)
         assert not status, f"corrupted {target.label} payload validated as clean"
 
         # (c) ... and the failure record must localize it.
@@ -296,13 +301,13 @@ def test_corrupted_output_payload_fails_ground_truth():
         # Same forced-GC arming as _corrupt_and_assert: `model` is the strong
         # ref that keeps post-trace parameter access alive across this pass.
         gc.collect()
-        assert log.validate_saved_outs(outputs), "pristine trace failed validation"
+        assert log.validate_forward_pass(outputs), "pristine trace failed validation"
         target = log.output_ops[0]
         # The output op's ``out`` mirrors its producer and is not assignable;
         # in-place mutation corrupts the stored payload itself.
         with torch.no_grad():
             target.out.add_(1.0)
-        status = log.validate_saved_outs(outputs)
+        status = log.validate_forward_pass(outputs)
         assert not status, "corrupted output payload validated as clean"
         failure = getattr(log, TRACE_FAILURE_ATTR, None)
         assert failure is not None, "validation failed without recording a failure"

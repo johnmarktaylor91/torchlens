@@ -55,7 +55,7 @@ repair stale bindings. Coverage is now:
 - An armed completeness witness that VERIFIES the capture outranks the heuristic provenance signal
   (for example an `autograd.grad` boundary is a known no-provenance source); no rescue runs.
 - Ineligible captures skip only the RE-RUN, never the disclosure. Every channel the re-run would
-  invoke a second time refuses (fail closed): streaming saves, `out_sink` callbacks, disk grad
+  invoke a second time refuses (fail closed): streaming saves, `streaming.out_callback` callbacks, disk grad
   storage, `halt=` predicates, `intervene=` predicates, pre-attached `hooks=`, and the
   `activation_transform`, `grad_transform`, and `output_transform` callables. A live escape
   signal on such a capture still settles `capture_verified=False` with reason
@@ -81,12 +81,11 @@ repair stale bindings. Coverage is now:
   multiset. Mode presence can de-fuse fused fast paths; any op LOSS keeps the mode-free primary
   authoritative, with both deltas disclosed (`recovered_ops` / `lost_ops`).
 
-## Deprecated surface
+## Removed surface
 
-- `tl.wrap_torch(patch_policy=..., patch_modules=...)` — accepted, warns `DeprecationWarning`,
-  ignored.
-- `patch_detached_references(...)` — no-op shim returning a zeroed `PatchReport`.
-- `clear_patch_detached_references_cache()` — no-op shim.
+- `tl.wrap_torch(patch_policy=..., patch_modules=...)` — removed (formerly deprecated no-ops).
+- `patch_detached_references(...)` / `clear_patch_detached_references_cache()` — removed
+  (formerly no-op shims for the deleted crawler; `PatchReport` removed with them).
 - Trace fields `detached_patch_policy` / `detached_patch_epoch` — removed.
 - The `"scoped_dispatch_witness_not_enabled"` verification reason — removed with the policy
   machinery.

@@ -73,15 +73,14 @@ def _capture(*, name: str | None = None) -> tl.Trace:
     return tl.trace(
         M(),
         torch.randn(2, 3),
-        intervention_ready=True,
-        name=name,
+        capture=tl.options.CaptureOptions(intervention_ready=True, name=name),
     )
 
 
 def test_auto_naming_explicit_name_and_reset_counter() -> None:
     """Automatic naming increments and explicit names are preserved."""
 
-    tl.reset_naming_counter()
+    tl.io.reset_naming_counter()
     log1 = _capture()
     log2 = _capture()
     log3 = _capture(name="custom_name")
@@ -90,7 +89,7 @@ def test_auto_naming_explicit_name_and_reset_counter() -> None:
     assert log2.trace_label == "m_2"
     assert log3.trace_label == "custom_name"
 
-    tl.reset_naming_counter("m")
+    tl.io.reset_naming_counter("m")
     log4 = _capture()
     assert log4.trace_label == "m_1"
 
@@ -98,11 +97,11 @@ def test_auto_naming_explicit_name_and_reset_counter() -> None:
 def test_huggingface_suffix_is_stripped_for_auto_name() -> None:
     """Common HuggingFace suffixes are stripped before lowercasing."""
 
-    tl.reset_naming_counter()
+    tl.io.reset_naming_counter()
     log = tl.trace(
         BertForSequenceClassification(),
         torch.randn(1, 2),
-        intervention_ready=True,
+        capture=tl.options.CaptureOptions(intervention_ready=True),
     )
 
     assert log.trace_label == "bert_1"
@@ -112,7 +111,7 @@ def test_list_logs_returns_tuple_snapshot() -> None:
     """The process registry exposes an immutable tuple snapshot."""
 
     log = _capture()
-    logs = tl.list_logs()
+    logs = tl.io.list_logs()
 
     assert isinstance(logs, tuple)
     assert log in logs
@@ -137,7 +136,7 @@ def test_last_run_records_returns_tuple_snapshot() -> None:
 
     log = _capture()
     log.attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
-    log.replay()
+    log.push()
 
     records = log.last_run_records()
 
@@ -177,7 +176,7 @@ def test_bundle_default_names_derive_from_log_names_with_collision_suffix() -> N
 def test_loaded_log_preserves_name_without_incrementing_counter(tmp_path: Path) -> None:
     """Loading preserves saved names and does not consume fresh auto-name counters."""
 
-    tl.reset_naming_counter()
+    tl.io.reset_naming_counter()
     log = _capture(name="saved_name")
     path = tmp_path / "saved.tl"
     tl.save(log, path, overwrite=True)

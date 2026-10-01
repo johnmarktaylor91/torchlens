@@ -10,7 +10,6 @@ import torch.nn as nn
 pd = pytest.importorskip("pandas")
 
 import torchlens as tl  # noqa: E402
-from torchlens._deprecations import _WARNED_DEPRECATIONS  # noqa: E402
 from torchlens.data_classes.cleanup import _remove_log_entry_references  # noqa: E402
 from torchlens.data_classes.trace import ConditionalEvent, Trace  # noqa: E402
 from torchlens.postprocess.labeling import (  # noqa: E402
@@ -54,9 +53,6 @@ class _StubTrace:
         self.op_equivalence_classes: dict[str, set] = {}
 
         self.conditional_branch_edges = []
-        self.conditional_then_entry_edges = []
-        self.conditional_elif_entry_edges = []
-        self.conditional_else_entry_edges = []
         self.conditional_arm_entry_edges = {}
         self.conditional_edge_call_indices = {}
         self.conditional_records: list[ConditionalEvent] = []
@@ -216,9 +212,6 @@ def test_conditional_labels_rename_across_lifecycle_surfaces() -> None:
     trace._raw_to_final_parent_layer_labels = mapping
     trace._raw_to_final_op_labels = mapping
     trace.conditional_branch_edges = [("raw_bool", "raw_parent")]
-    trace.conditional_then_entry_edges = [("raw_parent", "raw_child_then")]
-    trace.conditional_elif_entry_edges = [(0, 1, "raw_parent", "raw_child_elif")]
-    trace.conditional_else_entry_edges = [(0, "raw_parent", "raw_child_else")]
     trace.conditional_arm_entry_edges = {
         (0, "then"): [("raw_parent", "raw_child_then")],
         (0, "elif_1"): [("raw_parent", "raw_child_elif")],
@@ -291,12 +284,6 @@ def test_conditional_cleanup_scrubs_removed_labels() -> None:
         ("removed_child:2", "parent:1"),
         ("kept_start:1", "parent:1"),
     ]
-    trace.conditional_then_entry_edges = [
-        ("parent:1", "removed_child:2"),
-        ("parent:1", "kept_child:1"),
-    ]
-    trace.conditional_elif_entry_edges = [(0, 1, "parent:1", "removed_child:2")]
-    trace.conditional_else_entry_edges = [(0, "parent:1", "removed_child:2")]
     trace.conditional_arm_entry_edges = {
         (0, "then"): [("parent:1", "removed_child:2"), ("parent:1", "kept_child:1")],
         (0, "else"): [("parent:1", "removed_child:2")],
@@ -345,7 +332,11 @@ def test_batch_remove_log_entries_accepts_finished_layer_objects() -> None:
 
 def test_to_pandas_exports_conditional_columns() -> None:
     """`to_pandas()` exposes the Phase 3 conditional export columns."""
-    trace = tl.trace(_TinyModel(), torch.ones(1, 3), layers_to_save="all")
+    trace = tl.trace(
+        _TinyModel(),
+        torch.ones(1, 3),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
     target_layer = next(
         layer for layer in trace.layer_list if layer.layer_type not in {"input", "output"}
     )
@@ -390,20 +381,17 @@ def test_to_pandas_exports_conditional_columns() -> None:
     assert target_row["func_config"] == {"alpha": 1}
 
 
-def test_conditional_edge_legacy_aliases_warn() -> None:
-    """Legacy conditional edge views warn while projecting canonical arm edges."""
+def test_conditional_edge_legacy_aliases_removed() -> None:
+    """The legacy conditional edge views are deleted; canonical arm edges stay."""
 
     trace = Trace("Tiny")
-    _WARNED_DEPRECATIONS.clear()
     trace.conditional_arm_entry_edges = {
         (0, "then"): [("parent", "then_child")],
         (0, "elif_1"): [("parent", "elif_child")],
         (0, "else"): [("parent", "else_child")],
     }
 
-    with pytest.warns(DeprecationWarning):
-        assert trace.conditional_then_entry_edges == [("parent", "then_child")]
-    with pytest.warns(DeprecationWarning):
-        assert trace.conditional_elif_entry_edges == [(0, 1, "parent", "elif_child")]
-    with pytest.warns(DeprecationWarning):
-        assert trace.conditional_else_entry_edges == [(0, "parent", "else_child")]
+    assert not hasattr(type(trace), "conditional_then_entry_edges")
+    assert not hasattr(type(trace), "conditional_elif_entry_edges")
+    assert not hasattr(type(trace), "conditional_else_entry_edges")
+    assert trace.conditional_arm_entry_edges[(0, "then")] == [("parent", "then_child")]

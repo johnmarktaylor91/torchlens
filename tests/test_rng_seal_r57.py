@@ -227,7 +227,7 @@ def test_capture_restores_user_global_rng_streams() -> None:
     np.random.seed(4711)
     torch.manual_seed(99)
     before = _global_rng_fingerprint()
-    tl.trace(model, torch.ones(2, 3), random_seed=1234)
+    tl.trace(model, torch.ones(2, 3), capture=tl.options.CaptureOptions(random_seed=1234))
     assert _global_rng_fingerprint() == before, (
         "capture left the user's global RNG engines reseeded"
     )
@@ -243,7 +243,7 @@ def test_failed_capture_restores_user_global_rng_streams() -> None:
     torch.manual_seed(939)
     before = _global_rng_fingerprint()
     with pytest.raises(RuntimeError, match="injected forward failure"):
-        tl.trace(model, torch.ones(2, 3), random_seed=77)
+        tl.trace(model, torch.ones(2, 3), capture=tl.options.CaptureOptions(random_seed=77))
     assert _global_rng_fingerprint() == before, (
         "failed capture leaked the seeded RNG engines to the user"
     )

@@ -12,6 +12,7 @@ import safetensors  # noqa: F401
 import torch
 from torch import nn
 
+import torchlens as tl
 from torchlens import load, save, trace as trace_fn
 from torchlens._io import BlobRef, TorchLensIOError
 from torchlens.data_classes.trace import Trace
@@ -74,10 +75,12 @@ def _build_log(
     return trace_fn(
         model,
         inputs,
-        layers_to_save="all",
-        save_arg_values=save_arg_values,
-        save_rng_states=save_rng_states,
-        random_seed=seed,
+        capture=tl.options.CaptureOptions(
+            layers_to_save="all",
+            save_arg_values=save_arg_values,
+            save_rng_states=save_rng_states,
+            random_seed=seed,
+        ),
     )
 
 
@@ -363,7 +366,7 @@ def test_save_rejects_unmaterialized_nested_blob_refs(tmp_path: Path) -> None:
 
     with pytest.raises(
         TorchLensIOError,
-        match="Call torchlens.rehydrate_nested\\(trace\\) before saving",
+        match="Call torchlens.io.rehydrate_nested\\(trace\\) before saving",
     ):
         save(lazy_log, tmp_path / "resaved.tl", include_saved_args=True)
 

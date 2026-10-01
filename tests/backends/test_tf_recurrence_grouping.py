@@ -99,7 +99,12 @@ def test_tf_grouping_matches_ungrouped_validation_verdict() -> None:
     inputs = tf.ones((2, 4))
     model(inputs)
     grouped = tl.trace(model, inputs, backend="tf")
-    ungrouped = tl.trace(model, inputs, backend="tf", recurrence_detection=False)
+    ungrouped = tl.trace(
+        model,
+        inputs,
+        backend="tf",
+        capture=tl.options.CaptureOptions(recurrence_detection=False),
+    )
 
     grouped_status = TFBackend().validate_trace(grouped)
     ungrouped_status = TFBackend().validate_trace(ungrouped)
@@ -215,8 +220,8 @@ def test_tf_intermediate_derived_grads_survive_grouping() -> None:
         model,
         inputs,
         backend="tf",
-        recurrence_detection=False,
         grad_options=grad_options,
+        capture=tl.options.CaptureOptions(recurrence_detection=False),
     )
 
     grouped_raw = {grouped[label]._label_raw for label in grouped.intermediate_derived_grads}

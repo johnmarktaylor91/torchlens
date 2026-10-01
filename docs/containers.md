@@ -39,7 +39,7 @@ For model returns, use the trace convenience:
 output = trace.reconstruct_output()
 ```
 
-Final model-output and input-container reconstruction require container structure to be captured. Use `capture_container_structure=True` when you need nested inputs or the top-level return object reconstructed after capture or after `.tlspec` load without enabling intervention replay metadata. `intervention_ready=True` also captures final-output structure as part of its broader replay-template metadata. `capture_output_structure=True` remains as a deprecated alias for existing callers.
+Final model-output and input-container reconstruction require container structure to be captured. Use `capture_container_structure=True` when you need nested inputs or the top-level return object reconstructed after capture or after `.tlspec` load without enabling intervention replay metadata. `intervention_ready=True` also captures final-output structure as part of its broader replay-template metadata. (The former `capture_output_structure=` alias is removed.)
 
 ## Nested Output Selection
 

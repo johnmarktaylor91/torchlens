@@ -306,19 +306,11 @@ filterwarnings = [
     # TorchLens-originated warnings should be deliberate and locally asserted.
     # NOTE: pytest applies filterwarnings bottom-to-top priority (later entries win),
     # so the broad error rules go FIRST and the message-specific "default" exceptions
-    # below them take precedence for their exact messages. Public compatibility aliases
-    # (layers_to_save=, etc.) and older-bundle-version loads are intentionally exercised
-    # across legacy tests and stay visible-not-fatal; deprecation-specific tests assert
-    # them locally.
+    # below them take precedence for their exact messages. The deprecation-shim
+    # families (and TorchLensDeprecationWarning) were deleted by the 2026-08-19
+    # shim-removal lane, so no alias-warning carve-outs remain.
     "error::DeprecationWarning:torchlens(\\.|$)",
     "error::UserWarning:torchlens(\\.|$)",
-    # TorchLens's own deprecations are promoted by CATEGORY, not by attributed
-    # module. Since the alias/shim routes resolve `stacklevel` dynamically to
-    # blame the CALLER (torchlens/_deprecations.py), the warning is attributed
-    # to user/test code, so the module-keyed rule above can no longer see them
-    # -- keying on the dedicated subclass is depth-independent and cannot be
-    # disarmed by a change in call depth.
-    "error::torchlens._deprecations.TorchLensDeprecationWarning",
     # Expected graceful torch-capability degradations (e.g. functorch level API absent on
     # torch 2.1) flip a HAS_* flag and warn once; visible-not-fatal across the torch matrix.
     "default:TorchLens torch capability .* is unavailable;.*:UserWarning:torchlens(\\.|$)",
@@ -355,25 +347,6 @@ filterwarnings = [
     # torch-internal suffix exempts the whole third-party class without listing messages;
     # genuine TorchLens-originated UserWarnings still error.
     "default:(?s).*\\(Triggered internally at :UserWarning:torchlens(\\.|$)",
-    # Public compatibility aliases are exercised deliberately across legacy tests,
-    # so the alias-deprecation message shape stays visible-not-fatal. QUALIFIED to
-    # the TorchLens category (grind b4, R48-4): the unqualified rule matched ANY
-    # library's deprecation whose message happened to fit this shape, and it is the
-    # rule that makes `error::...TorchLensDeprecationWarning` above non-fatal for
-    # these, so it must not reach further than TorchLens's own aliases. Internal
-    # self-deprecation is caught by tests/test_no_internal_self_deprecation.py,
-    # which bypasses ini filters; no message-shape rule can distinguish origin.
-    "default:`.*` is deprecated; use `.*` instead\\..*:torchlens._deprecations.TorchLensDeprecationWarning",
-    # The other two documented legacy families, same doctrine as the alias rule
-    # above: moved top-level names and paper-era API shims are deliberately
-    # exercised across legacy tests, and deprecation-specific tests assert them
-    # locally. Before the stacklevel fix these were fatal or not depending purely
-    # on whether the hardcoded stacklevel happened to land inside torchlens/ --
-    # `tl.ModelHistory` errored, `tl.log_forward_pass(...)` did not. Stating the
-    # policy explicitly replaces that accident. A TorchLens deprecation that is
-    # NOT one of these three families still errors.
-    "default:torchlens\\..* is deprecated; use .* instead\\. Removed in .*:torchlens._deprecations.TorchLensDeprecationWarning",
-    "default:torchlens\\..* is deprecated; use .* instead\\. The old paper-era name.*:torchlens._deprecations.TorchLensDeprecationWarning",
     # Between-floor artifact-age advisory (grind r3, R15-F1). Recategorized from
     # DeprecationWarning to the visible ArtifactSchemaAgeWarning (a UserWarning
     # subclass) because it deprecates no API; legacy-bundle tests exercise it

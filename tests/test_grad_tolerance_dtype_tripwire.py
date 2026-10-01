@@ -291,7 +291,7 @@ def test_legacy_public_spellings_default_to_dtype_derived_tolerances() -> None:
     import torchlens.validation.backward as backward_validation
 
     for spelling in (
-        torchlens.validate_backward_pass,
+        torchlens.validation.validate_backward_pass,
         user_public_impls.validate_backward_pass,
         backward_validation.validate_backward_pass,
     ):
@@ -321,7 +321,7 @@ def test_fp64_corruption_fails_through_every_legacy_spelling(
     import torchlens.user_funcs as user_funcs
 
     fns = {
-        "top_level": torchlens.validate_backward_pass,
+        "top_level": torchlens.validation.validate_backward_pass,
         "user_public_impls": user_public_impls.validate_backward_pass,
         "user_funcs": user_funcs.validate_backward_pass,
     }

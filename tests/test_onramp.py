@@ -142,15 +142,15 @@ def test_batched_extract_memory_and_disk_on_three_architectures(
     architecture: tuple[nn.Module, torch.Tensor],
     tmp_path: Path,
 ) -> None:
-    """``tl.batched_extract`` supports in-memory and per-batch disk outputs."""
+    """``tl.extract_dataset`` supports in-memory and per-batch disk outputs."""
 
     model, x = architecture
     label = _first_saved_label(model, x)
     stimuli = torch.cat([x, x], dim=0)
-    in_memory = tl.batched_extract(model, stimuli, [label], batch_size=x.shape[0], progress=False)
+    in_memory = tl.extract_dataset(model, stimuli, [label], batch_size=x.shape[0], progress=False)
     assert in_memory[label].shape[0] == stimuli.shape[0]
 
-    container_paths = tl.batched_extract(
+    container_paths = tl.extract_dataset(
         model,
         stimuli,
         [label],

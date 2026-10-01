@@ -19,7 +19,7 @@ first:
 
 ```python
 candidate = clean_log.fork("candidate")
-candidate.attach_hooks(tl.func("relu"), tl.zero_ablate()).replay()
+candidate.attach_hooks(tl.func("relu"), tl.zero_ablate()).push()
 ```
 
 Forked logs have independent intervention specs and intervention logs while
@@ -56,16 +56,16 @@ A `.tlspec/` directory contains:
 - `tensors/`: tensor payloads stored separately from JSON.
 - `README.md`: a generated human-readable summary.
 
-Load with `tl.load_intervention_spec(path)` and check a fresh capture with
-`tl.check_spec_compat(spec, new_log)`.
+Load with `torchlens.io.load_intervention_spec(path)` and check a fresh capture
+with `torchlens.validation.check_spec_compat(spec, new_log)`.
 
 ## Append Constraints
 
 Append mode is for memory-constrained evaluation over compatible chunks:
 
 ```python
-log.rerun(model, first_chunk)
-log.rerun(model, next_chunk, append=True)
+log.run(model, first_chunk)
+log.run(model, next_chunk, replay=tl.options.ReplayOptions(append=True))
 ```
 
 The appended rerun must match the original graph shape, labels, dtypes, and

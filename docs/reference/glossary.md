@@ -364,7 +364,7 @@ attribution-target alias. See the [attribution reference](attribution.md).
 : `tl.grad_fn` (backward grad_fn), `tl.grad_fn_label` (exact grad_fn label),
   `tl.grad_input` / `tl.grad_output` (backward event tensors), `tl.in_backward_pass`
   (one backward pass number), and `tl.without_op` (grad_fns without a paired forward op;
-  the old `tl.intervening` spelling is a deprecated alias that warns).
+  the former `intervening` alias is removed).
 
 ## Intervention helpers
 
@@ -387,8 +387,7 @@ attribution-target alias. See the [attribution reference](attribution.md).
   downstream through the recorded graph (DAG replay) and `tl.push_from` pushes from a
   pre-mutated site; `tl.run` performs a full-forward run with the log's active
   intervention spec; `tl.sweep` captures one intervened trace per swept replacement
-  value. `tl.replay`, `tl.replay_from`, and `tl.rerun` are deprecated aliases of `push`,
-  `push_from`, and `run`. The replay engine operates on pass-qualified op labels
+  value. (The former `replay`/`replay_from`/`rerun` aliases are removed.) The replay engine operates on pass-qualified op labels
   (`label:pass`): cone traversal, the replay overlay, hook targets, and commits are
   keyed per pass, so edits on multi-pass (recurrence-grouped) layers touch exactly the
   addressed pass and recompute every downstream pass; a bare label naming a multi-pass
@@ -400,8 +399,8 @@ attribution-target alias. See the [attribution reference](attribution.md).
 
 **Extraction helpers**
 : `tl.pluck` returns the saved out for one layer, `tl.extract` for many layers, and
-  `tl.extract_dataset` extracts outs from an iterable dataset in batches. `tl.peek` and
-  `tl.batched_extract` are deprecated aliases that warn. Disk-mode `extract_dataset`
+  `tl.extract_dataset` extracts outs from an iterable dataset in batches. (The former
+  `peek` and `batched_extract` aliases are removed.) Disk-mode `extract_dataset`
   (``output_dir=``) writes a SELF-DESCRIBING artifact: atomic ``batch_XXXXX.pt`` shards
   plus a ``manifest.json`` recording the run signature, per-site identity (layer label
   and structural site key where derivable), stimulus ordering/provenance
@@ -413,7 +412,7 @@ attribution-target alias. See the [attribution reference](attribution.md).
 
 **Observers**
 : `tl.tap` creates a tap observer for a site; `tl.span` records a named observer span
-  around captures or hook execution (`tl.record_span` is its deprecated alias);
+  around captures or hook execution (the former `record_span` alias is removed);
   `tl.record_kpi_in_graph` records a user KPI on the active capture graph;
   `tl.register_tensor_connection` registers a manual parent-child tensor edge during
   capture; `tl.decide_recording_of_batch` retroactively keeps or discards a captured
@@ -426,7 +425,7 @@ attribution-target alias. See the [attribution reference](attribution.md).
 **Session admin**
 : `tl.release_model` releases a traced model from persistent TorchLens preparation
   (restoring whole-model pickle / `torch.save` serializability); `tl.clear_capture_cache`
-  empties the capture cache; `tl.list_logs` / `tl.reset_naming_counter` manage log
+  empties the capture cache; `tl.io.list_logs` / `tl.io.reset_naming_counter` manage log
   bookkeeping.
 
 ## Persistence, containers, and namespaces

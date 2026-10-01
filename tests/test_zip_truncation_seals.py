@@ -46,8 +46,8 @@ def test_bundle_output_delta_refuses_output_arity_mismatch() -> None:
 
     torch.manual_seed(3)
     x = torch.randn(2, 3)
-    two = tl.trace(_TwoOutputModel(), x, intervention_ready=True)
-    one = tl.trace(_OneOutputModel(), x, intervention_ready=True)
+    two = tl.trace(_TwoOutputModel(), x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    one = tl.trace(_OneOutputModel(), x, capture=tl.options.CaptureOptions(intervention_ready=True))
     bundle = tl.bundle({"baseline": two, "lost_output": one}, baseline="baseline")
 
     with pytest.raises(BundleMemberError, match="structurally divergent"):
@@ -60,8 +60,12 @@ def test_bundle_output_delta_still_works_on_matching_arity() -> None:
 
     torch.manual_seed(4)
     x = torch.randn(2, 3)
-    first = tl.trace(_TwoOutputModel(), x, intervention_ready=True)
-    second = tl.trace(_TwoOutputModel(), x, intervention_ready=True)
+    first = tl.trace(
+        _TwoOutputModel(), x, capture=tl.options.CaptureOptions(intervention_ready=True)
+    )
+    second = tl.trace(
+        _TwoOutputModel(), x, capture=tl.options.CaptureOptions(intervention_ready=True)
+    )
     bundle = tl.bundle({"baseline": first, "other": second}, baseline="baseline")
 
     delta = bundle.output_delta("baseline")

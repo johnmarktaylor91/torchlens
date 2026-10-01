@@ -147,8 +147,8 @@ def test_paddle_intermediate_grads_match_direct_oracle_and_skip_unused() -> None
         model,
         x,
         backend="paddle",
-        keep_orphans=True,
         grad_options=GradOptions(intermediate_grads=True, max_intermediate_grads=8),
+        capture=tl.options.CaptureOptions(keep_orphans=True),
     )
 
     records = trace.intermediate_derived_grads

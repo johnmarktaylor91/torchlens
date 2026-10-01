@@ -40,7 +40,11 @@ def test_selective_save_rebuilds_out_versions_for_child_lookup() -> None:
     model = FastPassAliasMutationModel()
     x = torch.ones(2, 4)
 
-    trace = tl.trace(model, x, layers_to_save=["mul"], save_arg_values=True)
+    trace = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(layers_to_save=["mul"], save_arg_values=True),
+    )
 
     parent = trace["add_1_1"]
     assert trace._replay_arg_version_data_complete
@@ -58,7 +62,11 @@ def test_selective_save_without_arg_values_reports_versions_incomplete() -> None
     model = FastPassAliasMutationModel()
     x = torch.ones(2, 4)
 
-    trace = tl.trace(model, x, layers_to_save=["mul"], save_arg_values=False)
+    trace = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(layers_to_save=["mul"], save_arg_values=False),
+    )
 
     assert not trace._replay_arg_version_data_complete
     assert all(not op.out_versions_by_child for op in trace.layer_list)

@@ -61,7 +61,7 @@ def _trace_max_model() -> tl.Trace:
         _MaxModel(),
         torch.randn(2, 4),
         save=tl.func("max"),
-        intervention_ready=True,
+        capture=tl.options.CaptureOptions(intervention_ready=True),
     )
 
 

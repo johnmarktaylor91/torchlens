@@ -217,13 +217,17 @@ def test_forward_exception_restores_capture_state() -> None:
     x = torch.ones(2, 2)
 
     with pytest.raises(RuntimeError, match="boom during forward"):
-        tl.trace(model, x, layers_to_save="all")
+        tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
 
     assert torchlens_state._logging_enabled is False
     assert torchlens_state._active_trace is None
     assert not hasattr(x, "_tl")
 
-    followup = tl.trace(_FiveOpTraceModel(), torch.ones(2, 2), layers_to_save="all")
+    followup = tl.trace(
+        _FiveOpTraceModel(),
+        torch.ones(2, 2),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
     assert followup.num_ops == 4
 
 
@@ -257,8 +261,7 @@ def test_selective_layers_to_save_uses_fast_pass_save_new_outs() -> None:
     trace = tl.trace(
         _SelectiveFastPassModel(),
         torch.randn(2, 3),
-        layers_to_save=["relu"],
-        random_seed=1703,
+        capture=tl.options.CaptureOptions(layers_to_save=["relu"], random_seed=1703),
     )
 
     saved = [(layer.func_name, layer.has_saved_activation) for layer in trace.layer_list]
@@ -281,7 +284,7 @@ def test_intervention_ready_walks_nested_output_containers() -> None:
         trace = tl.trace(
             _ContainerOutputModel(),
             torch.ones(2, 2),
-            intervention_ready=True,
+            capture=tl.options.CaptureOptions(intervention_ready=True),
         )
 
     output_paths = [trace[label].container_path for label in trace.output_layers]
@@ -317,7 +320,9 @@ def test_buffer_mutation_reconciliation_orders_initial_and_written_versions() ->
     """Buffer reconciliation emits the initial source before the in-place write version."""
 
     model = _BufferMutationModel()
-    trace = tl.trace(model, torch.ones(2, 2), layers_to_save="all")
+    trace = tl.trace(
+        model, torch.ones(2, 2), capture=tl.options.CaptureOptions(layers_to_save="all")
+    )
     buffer_versions = [layer for layer in trace.layer_list if layer.is_buffer]
 
     assert len(buffer_versions) == 2
@@ -334,12 +339,15 @@ def test_dropout_two_pass_rng_alignment_matches_full_trace() -> None:
     """Absorbed selective saving preserves the full-trace dropout RNG stream."""
 
     x = torch.ones(4, 4)
-    full = tl.trace(_DropoutTwoPassModel().train(), x, layers_to_save="all", random_seed=1704)
+    full = tl.trace(
+        _DropoutTwoPassModel().train(),
+        x,
+        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=1704),
+    )
     selective = tl.trace(
         _DropoutTwoPassModel().train(),
         x,
-        layers_to_save=["dropout"],
-        random_seed=1704,
+        capture=tl.options.CaptureOptions(layers_to_save=["dropout"], random_seed=1704),
     )
 
     assert selective.capture_mode == "exhaustive"

@@ -273,7 +273,12 @@ def _probe_live(model_key: str, make_selector: Callable[[], Any]) -> Any:
         selector = make_selector()
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            tl.trace(model, x, hooks=[(selector, _probe_hook)], **_extra_trace_kwargs(model_key))
+            tl.trace(
+                model,
+                x,
+                **_extra_trace_kwargs(model_key),
+                capture=tl.options.CaptureOptions(hooks=[(selector, _probe_hook)]),
+            )
     except Exception as exc:  # noqa: BLE001
         return _error_cell(exc)
     return sorted(fired)

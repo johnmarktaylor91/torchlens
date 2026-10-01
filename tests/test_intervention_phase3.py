@@ -214,7 +214,9 @@ def test_sites_callable_predicate_is_preserved_with_ops_filter() -> None:
 
             return torch.relu(x)
 
-    log = tl.trace(_Relu(), torch.randn(1, 3), intervention_ready=True)
+    log = tl.trace(
+        _Relu(), torch.randn(1, 3), capture=tl.options.CaptureOptions(intervention_ready=True)
+    )
 
     selected = log.find_sites(sites(lambda ctx: False, ops=["relu"]).entries[0].selector)
 
@@ -423,8 +425,10 @@ def test_splice_module_input_splices_multi_input_module_end_to_end() -> None:
     log = tl.trace(
         _Model().eval(),
         (a, b),
-        intervention_ready=True,
-        hooks={tl.in_module("block"): tl.splice_module(_SubtractReplacement())},
+        capture=tl.options.CaptureOptions(
+            intervention_ready=True,
+            hooks={tl.in_module("block"): tl.splice_module(_SubtractReplacement())},
+        ),
     )
 
     assert torch.equal(log[log.output_layers[0]].out, a - b)
@@ -460,8 +464,10 @@ def test_splice_module_input_splices_module_scope_once_end_to_end() -> None:
     log = tl.trace(
         _Model().eval(),
         x,
-        intervention_ready=True,
-        hooks={tl.in_module("block"): tl.splice_module(_HundredModule())},
+        capture=tl.options.CaptureOptions(
+            intervention_ready=True,
+            hooks={tl.in_module("block"): tl.splice_module(_HundredModule())},
+        ),
     )
 
     assert torch.equal(log[log.output_layers[0]].out, 100 * x)
@@ -505,8 +511,10 @@ def test_module_scoped_splice_records_replacement_parent_and_fire_record(tmp_pat
     log = tl.trace(
         _Model(),
         x,
-        intervention_ready=True,
-        hooks={tl.module("block"): tl.splice_module(_DoubleReplacement())},
+        capture=tl.options.CaptureOptions(
+            intervention_ready=True,
+            hooks={tl.module("block"): tl.splice_module(_DoubleReplacement())},
+        ),
     )
     sigmoid = next(layer for layer in log.layer_list if layer.func_name == "sigmoid")
     replacement = log[sigmoid.parents[0]]
@@ -558,10 +566,14 @@ def test_splice_module_input_rejects_module_scoped_op_granularity() -> None:
         tl.trace(
             _Model().eval(),
             torch.ones(1, 3),
-            intervention_ready=True,
-            hooks={
-                tl.in_module("block") & tl.func("relu"): tl.splice_module(_IdentityReplacement())
-            },
+            capture=tl.options.CaptureOptions(
+                intervention_ready=True,
+                hooks={
+                    tl.in_module("block") & tl.func("relu"): tl.splice_module(
+                        _IdentityReplacement()
+                    )
+                },
+            ),
         )
 
 
@@ -625,13 +637,15 @@ def test_splice_module_input_preserves_common_op_arg_orders() -> None:
     log = tl.trace(
         _Ops().eval(),
         (a, b),
-        intervention_ready=True,
-        hooks={
-            tl.func("add"): tl.splice_module(_AddReplacement()),
-            tl.func("where"): tl.splice_module(_WhereReplacement()),
-            tl.func("addmm"): tl.splice_module(_AddmmReplacement()),
-            tl.func("cat"): tl.splice_module(_CatReplacement()),
-        },
+        capture=tl.options.CaptureOptions(
+            intervention_ready=True,
+            hooks={
+                tl.func("add"): tl.splice_module(_AddReplacement()),
+                tl.func("where"): tl.splice_module(_WhereReplacement()),
+                tl.func("addmm"): tl.splice_module(_AddmmReplacement()),
+                tl.func("cat"): tl.splice_module(_CatReplacement()),
+            },
+        ),
     )
     outputs = [log[label].out for label in log.output_layers]
 

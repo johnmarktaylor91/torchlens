@@ -859,7 +859,11 @@ def _capture_backward_combined(tmp_path: Path) -> dict[str, Any]:
     """
 
     torch.manual_seed(161803)
-    trace = tl.trace(OracleBranch(), _seeded_input((1, 4)), save_grads="all")
+    trace = tl.trace(
+        OracleBranch(),
+        _seeded_input((1, 4)),
+        capture=tl.options.CaptureOptions(save_grads="all"),
+    )
     try:
         loss = trace[trace.output_layers[0]].out.sum()
         trace.log_backward(loss)

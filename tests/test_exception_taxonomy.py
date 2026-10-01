@@ -27,7 +27,6 @@ from torchlens.intervention.errors import SiteResolutionError
 from torchlens.intervention.types import InterventionDecision
 from torchlens.options import (
     CaptureOptions,
-    StreamingOptions,
     VisualizationOptions,
     merge_capture_options,
     merge_visualization_options,
@@ -495,7 +494,6 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "TorchCapabilityWarning": ("Warning",),
     "TorchLensCaptureGapError": ("RuntimeError",),
     "TorchLensCaptureGapWarning": ("Warning",),
-    "TorchLensDeprecationWarning": ("Warning",),
     "TorchLensError": (),
     "TorchLensIOError": ("RuntimeError",),
     "TorchLensInterventionError": ("RuntimeError",),
@@ -751,38 +749,6 @@ TOP_REFUSAL_CASES: tuple[tuple[str, Callable[[], object]], ...] = (
     (
         "distributed_payload_witness_unsupported",
         lambda: CaptureOptions(distributed_witness="payload"),
-    ),
-    (
-        "deprecated_argument_conflict",
-        lambda: CaptureOptions(mark_layer_depths=True, compute_input_output_distances=True),
-    ),
-    (
-        "deprecated_argument_conflict",
-        lambda: CaptureOptions(num_context_lines=1, source_context_lines=2),
-    ),
-    (
-        "deprecated_argument_conflict",
-        lambda: CaptureOptions(capture_output_structure=True, capture_container_structure=True),
-    ),
-    (
-        "deprecated_argument_conflict",
-        lambda: VisualizationOptions(mode="rolled", view="unrolled"),
-    ),
-    (
-        "deprecated_argument_conflict",
-        lambda: VisualizationOptions(max_module_depth=1, depth=2),
-    ),
-    (
-        "deprecated_argument_conflict",
-        lambda: VisualizationOptions(layout_engine="dot", layout="rank"),
-    ),
-    (
-        "deprecated_argument_conflict",
-        lambda: VisualizationOptions(node_mode="default", node_style="profiling"),
-    ),
-    (
-        "deprecated_argument_conflict",
-        lambda: StreamingOptions(save_outs_to="old", bundle_path="new"),
     ),
     (
         "option_group_conflict",
@@ -1497,8 +1463,15 @@ def test_layers_to_save_type_invalid_provoked() -> None:
 
     model = torch.nn.Identity()
     with pytest.raises(ArgumentTypeError) as excinfo:
-        # layers_to_save is the FOURTH positional slot (after input_kwargs).
+        # grad_transform is the FOURTH positional slot (after input_kwargs).
         tl.trace(model, torch.ones(2), None, torch.ones(2))  # type: ignore[misc]
+    assert excinfo.value.fields["code"] == "extra_positional_input_invalid"
+    with pytest.raises(ArgumentTypeError) as excinfo:
+        tl.trace(
+            model,
+            torch.ones(2),
+            capture=tl.options.CaptureOptions(layers_to_save=torch.ones(2)),  # type: ignore[arg-type]
+        )
     assert excinfo.value.fields["code"] == "layers_to_save_type_invalid"
 
 

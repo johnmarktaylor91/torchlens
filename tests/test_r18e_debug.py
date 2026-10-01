@@ -142,7 +142,9 @@ def test_audit_multi_backward_gradient_is_skipped_not_run() -> None:
     that ran, this test's ``not in checks_run`` / ``in skipped`` assertions fail.
     """
 
-    trace = tl.trace(nn.Linear(3, 3), torch.randn(2, 3), save_grads=True)
+    trace = tl.trace(
+        nn.Linear(3, 3), torch.randn(2, 3), capture=tl.options.CaptureOptions(save_grads=True)
+    )
     output = trace[trace.output_layers[0]].out
     trace.log_backward(output.sum(), retain_graph=True)
     trace.log_backward((output**2).sum())

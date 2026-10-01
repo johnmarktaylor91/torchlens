@@ -193,7 +193,11 @@ def test_ancestry_closure_holds_with_layer_depths_on() -> None:
     """The distance arm must agree with the flood that populates it."""
 
     check_metadata_invariants(
-        tl.trace(nn.BatchNorm1d(4).train(), torch.randn(4, 4), mark_layer_depths=True)
+        tl.trace(
+            nn.BatchNorm1d(4).train(),
+            torch.randn(4, 4),
+            capture=tl.options.CaptureOptions(compute_input_output_distances=True),
+        )
     )
 
 

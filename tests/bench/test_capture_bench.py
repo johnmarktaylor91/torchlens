@@ -322,7 +322,7 @@ def _run_capture_cells(
             workload.model,
             list(workload.args),
             workload.kwargs or None,
-            layers_to_save=["relu"],
+            capture=tl.options.CaptureOptions(layers_to_save=["relu"]),
         )
 
     try:

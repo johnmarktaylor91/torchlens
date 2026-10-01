@@ -136,7 +136,11 @@ def _save_seeded_trace(path: Path, *, random_seed: int) -> tl.Trace:
     """
 
     torch.manual_seed(0)
-    trace = tl.trace(_LinearModel(), torch.ones(1, 2), random_seed=random_seed)
+    trace = tl.trace(
+        _LinearModel(),
+        torch.ones(1, 2),
+        capture=tl.options.CaptureOptions(random_seed=random_seed),
+    )
     tl.save(trace, path)
     return tl.load(path)
 
@@ -171,7 +175,7 @@ def test_save_scrub_remaps_autograd_identity_joins(tmp_path: Path) -> None:
     """Autograd ids become dense while all persisted graph joins remain valid."""
 
     value = torch.ones(1, 2, requires_grad=True)
-    trace = tl.trace(_LinearModel(), value, backward_ready=True)
+    trace = tl.trace(_LinearModel(), value, capture=tl.options.CaptureOptions(backward_ready=True))
     trace.log_backward(trace.output_ops[0].out.sum())
     path = tmp_path / "backward.tlspec"
     tl.save(trace, path)
@@ -194,8 +198,8 @@ def test_bundle_writer_resolves_lazy_conjugate_payloads(tmp_path: Path) -> None:
     trace = tl.trace(
         _ComplexModel(),
         torch.tensor([1 + 2j], dtype=torch.complex64),
-        layers_to_save="all",
-        activation_transform=lambda value: value.conj(),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save=tl.options.SaveOptions(activation_transform=lambda value: value.conj()),
     )
     expected = trace.output_ops[0].transformed_out.clone()
     path = tmp_path / "conjugate.tlspec"

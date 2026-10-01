@@ -1275,20 +1275,6 @@ class Bundle:
             member.push(**kwargs)
         return self
 
-    def replay(self, **kwargs: Any) -> Bundle:
-        """Deprecated alias for :meth:`push`.
-
-        Returns
-        -------
-        Bundle
-            This bundle.
-        """
-
-        from .._deprecations import warn_deprecated_alias
-
-        warn_deprecated_alias("Bundle.replay", "Bundle.push")
-        return self.push(**kwargs)
-
     def run(self, model: nn.Module, x: Any = None, **kwargs: Any) -> Bundle:
         """Run all member logs with a supplied model and input.
 
@@ -1308,27 +1294,6 @@ class Bundle:
         for member in self._members.values():
             member.run(model, x, **kwargs)
         return self
-
-    def rerun(self, model: nn.Module, x: Any = None, **kwargs: Any) -> Bundle:
-        """Deprecated alias for :meth:`run`.
-
-        Parameters
-        ----------
-        model:
-            Model forwarded to each member.
-        x:
-            Forward input.
-
-        Returns
-        -------
-        Bundle
-            This bundle.
-        """
-
-        from .._deprecations import warn_deprecated_alias
-
-        warn_deprecated_alias("Bundle.rerun", "Bundle.run")
-        return self.run(model, x, **kwargs)
 
     def apply(self, fn: Callable[[Trace], Any]) -> dict[str, Any]:
         """Apply a function independently to each member.

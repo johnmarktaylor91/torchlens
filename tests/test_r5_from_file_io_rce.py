@@ -340,12 +340,16 @@ def test_all_five_save_levels_still_load(tmp_path: Path) -> None:
     audit = tmp_path / "audit"
     cf_a = _ControlFlow()
     keep_alive.append(cf_a)
-    tl.trace(cf_a, x, layers_to_save="all").save(audit, level="audit")
+    tl.trace(cf_a, x, capture=tl.options.CaptureOptions(layers_to_save="all")).save(
+        audit, level="audit"
+    )
 
     portable = tmp_path / "portable"
     cf_p = _ControlFlow()
     keep_alive.append(cf_p)
-    tl.trace(cf_p, x, layers_to_save="all").save(portable, level="portable")
+    tl.trace(cf_p, x, capture=tl.options.CaptureOptions(layers_to_save="all")).save(
+        portable, level="portable"
+    )
 
     run = tmp_path / "runnable"
     lin = _StatefulLinear()

@@ -40,7 +40,9 @@ class _PlainModel(nn.Module):
 def _plain_trace() -> tl.Trace:
     torch.manual_seed(0)
     return tl.trace(
-        _PlainModel(), torch.randn(3, 4, requires_grad=True), layers_to_save="all", save_grads="all"
+        _PlainModel(),
+        torch.randn(3, 4, requires_grad=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all"),
     )
 
 
@@ -129,9 +131,8 @@ def _cpu_async_capture(*, engine_drain: bool, monkeypatch) -> tuple[tl.Trace, nn
     trace = tl.trace(
         model,
         torch.randn(3, 4, requires_grad=True),
-        layers_to_save="all",
-        save_grads="all",
         save_mode="cpu_async",
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all"),
     )
     _run_unmanaged_backward(trace)
     backward_mod._close_implicit_backward_pass_if_open(trace)
@@ -294,7 +295,11 @@ def test_back_to_back_engine_calls_close_and_reopen_cleanly() -> None:
 def test_error_path_backstop_sync_point_still_closes(monkeypatch) -> None:
     torch.manual_seed(0)
     x = torch.randn(3, 4, requires_grad=True)
-    trace = tl.trace(_PlainModel(), x, layers_to_save="all", save_grads="all")
+    trace = tl.trace(
+        _PlainModel(),
+        x,
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all"),
+    )
     loss = trace[trace.output_layers[0]].out.sum()
     original_backward = backward_mod._ORIGINAL_AUTOGRAD_BACKWARD
     assert original_backward is not None

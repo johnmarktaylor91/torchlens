@@ -109,7 +109,12 @@ def _conv_trace(save: Any = None, *, n_stimuli: int = 4) -> tl.Trace:
     """
 
     selector = tl.func("conv2d") if save is None else save
-    return tl.trace(_TinyConv().eval(), _input_batch(n_stimuli), save=selector, random_seed=123)
+    return tl.trace(
+        _TinyConv().eval(),
+        _input_batch(n_stimuli),
+        save=selector,
+        capture=tl.options.CaptureOptions(random_seed=123),
+    )
 
 
 def _pil_stimuli(n_stimuli: int = 4) -> list[Image.Image]:

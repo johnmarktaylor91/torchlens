@@ -83,7 +83,7 @@ def test_output_registry_keeps_repeated_tensor_path_occurrences() -> None:
     trace = tl.trace(
         RepeatedTensorOutput(),
         torch.tensor([-1.0, 2.0]),
-        capture_container_structure=True,
+        capture=tl.options.CaptureOptions(capture_container_structure=True),
     )
 
     model_records = [
@@ -139,7 +139,7 @@ def test_no_live_container_registry_state_survives_final_streamed_or_cached_trac
     final_trace = tl.trace(
         model,
         torch.tensor([1.0]),
-        capture_container_structure=True,
+        capture=tl.options.CaptureOptions(capture_container_structure=True),
     )
     final_ref = model.last_output_ref
     assert final_ref is not None
@@ -151,8 +151,8 @@ def test_no_live_container_registry_state_survives_final_streamed_or_cached_trac
     streamed_trace = tl.trace(
         streamed_model,
         torch.tensor([1.0]),
-        capture_container_structure=True,
         storage=tl.to_disk(tmp_path / "streamed.tlspec"),
+        capture=tl.options.CaptureOptions(capture_container_structure=True),
     )
     streamed_ref = streamed_model.last_output_ref
     assert streamed_ref is not None
@@ -164,9 +164,9 @@ def test_no_live_container_registry_state_survives_final_streamed_or_cached_trac
     cached_trace = tl.trace(
         cached_model,
         torch.tensor([1.0]),
-        capture_container_structure=True,
-        cache=True,
-        cache_dir=tmp_path / "cache",
+        capture=tl.options.CaptureOptions(
+            capture_container_structure=True, cache=True, cache_dir=tmp_path / "cache"
+        ),
     )
     cached_ref = cached_model.last_output_ref
     assert cached_ref is not None
@@ -178,7 +178,11 @@ def test_no_live_container_registry_state_survives_final_streamed_or_cached_trac
 def test_output_container_views_match_legacy_fields() -> None:
     """Registry-backed views preserve op.container and final reconstruction behavior."""
 
-    trace = tl.trace(PairOutputModel(), torch.tensor([1.0]), capture_container_structure=True)
+    trace = tl.trace(
+        PairOutputModel(),
+        torch.tensor([1.0]),
+        capture=tl.options.CaptureOptions(capture_container_structure=True),
+    )
     output_op = trace.ops[trace.output_layers[0]]
 
     container = output_op.container

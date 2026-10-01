@@ -93,7 +93,7 @@ def _build_buffer_trace() -> tl.Trace:
     torch.manual_seed(0)
     model = _BufferModel()
     x = torch.randn(3, 4)
-    return trace_fn(model, x, layers_to_save="all")
+    return trace_fn(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
 
 
 # ---------------------------------------------------------------------------

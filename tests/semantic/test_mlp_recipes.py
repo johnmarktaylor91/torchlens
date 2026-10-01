@@ -6,6 +6,7 @@ import pytest
 import torch
 from torch import nn
 
+import torchlens as tl
 from torchlens import trace as trace_fn
 
 
@@ -71,7 +72,11 @@ def test_distilbert_ffn_current_class_populates_facets() -> None:
     empty (silent) on current transformers.
     """
 
-    log = trace_fn(_FFNModel(FFN()), torch.randn(2, 3, 8), layers_to_save="all")
+    log = trace_fn(
+        _FFNModel(FFN()),
+        torch.randn(2, 3, 8),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
     view = log.modules["ffn"].facets
     assert view.recipe_source == "distilbert_ffn"
     assert view.up_out.shape == (2, 3, 16)
@@ -88,7 +93,11 @@ def test_distilbert_ffn_legacy_class_still_populates_facets() -> None:
     recipe must keep matching it so the fix is robust across versions.
     """
 
-    log = trace_fn(_FFNModel(DistilBertFFN()), torch.randn(2, 3, 8), layers_to_save="all")
+    log = trace_fn(
+        _FFNModel(DistilBertFFN()),
+        torch.randn(2, 3, 8),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
     view = log.modules["ffn"].facets
     assert view.recipe_source == "distilbert_ffn"
     assert view.up_out.shape == (2, 3, 16)
@@ -125,7 +134,11 @@ def test_real_distilbert_ffn_facets_populate() -> None:
     ]
     assert ffn_addrs, "expected at least one FFN module in DistilBERT"
 
-    log = trace_fn(model, torch.randint(0, 100, (1, 8)), layers_to_save="all")
+    log = trace_fn(
+        model,
+        torch.randint(0, 100, (1, 8)),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
     view = log.modules[ffn_addrs[0]].facets
     assert view.recipe_source == "distilbert_ffn"
     assert view.up_out.ndim == 3 and view.up_out.shape[0] == 1

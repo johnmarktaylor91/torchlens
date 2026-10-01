@@ -67,7 +67,7 @@ def _trace() -> Any:
     """
 
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
-    return tl.trace(model, torch.ones(1, 4), layers_to_save="all")
+    return tl.trace(model, torch.ones(1, 4), capture=tl.options.CaptureOptions(layers_to_save="all"))
 
 
 def test_structure_only_tlspec_round_trips_without_activation_blobs(tmp_path: Path) -> None:

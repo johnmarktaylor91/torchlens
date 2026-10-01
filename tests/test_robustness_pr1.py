@@ -225,7 +225,7 @@ def test_opaque_non_iterable_arg_does_not_hide_tensor_capture() -> None:
     model = OpaqueArgModel()
     x = torch.randn(2, 4)
 
-    trace = tl.trace(model, x, layers_to_save="all")
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
 
     assert tl.validation.validate_forward_pass(model, x)
     assert any(label.startswith("relu") for label in trace.layer_labels)

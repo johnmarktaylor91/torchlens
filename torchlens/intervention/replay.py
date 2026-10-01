@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import torch
 
-from .._deprecations import MISSING, MissingType
 from .._trace_state import TraceState
 from ..ir import CaptureEvents
 from ..ir.container import (
@@ -125,8 +124,6 @@ def _walk_call_cone(
 def push(
     log: Trace,
     *,
-    strict: bool | MissingType = MISSING,
-    hooks: dict[Any, Any] | None | MissingType = MISSING,
     replay: ReplayOptions | None = None,
 ) -> Trace:
     """Push the edit downstream through the recorded graph (DAG replay).
@@ -135,10 +132,8 @@ def push(
     ----------
     log:
         Model log to mutate in place.
-    strict:
-        Whether control-flow divergence warnings should be raised as errors.
-    hooks:
-        Optional mapping from selector-like targets to hook callables.
+    replay:
+        Grouped replay options (``ReplayOptions``: ``strict``, ``hooks``).
 
     Returns
     -------
@@ -146,7 +141,7 @@ def push(
         The same model log, mutated in place.
     """
 
-    replay_options = merge_replay_options(replay=replay, strict=strict, hooks=hooks)
+    replay_options = merge_replay_options(replay=replay)
     _preflight_log(log)
     _warn_if_direct_writes_will_be_overlaid(log)
     hook_entries = _normalize_replay_hooks(log, replay_options.hooks)
@@ -170,37 +165,10 @@ def push(
     )
 
 
-def replay(
-    log: Trace,
-    *,
-    strict: bool | MissingType = MISSING,
-    hooks: dict[Any, Any] | None | MissingType = MISSING,
-    replay: ReplayOptions | None = None,
-) -> Trace:
-    """Deprecated alias for :func:`push`.
-
-    Parameters
-    ----------
-    log, strict, hooks, replay:
-        Forwarded unchanged to :func:`push`.
-
-    Returns
-    -------
-    Trace
-        The same model log, mutated in place.
-    """
-
-    from .._deprecations import warn_deprecated_alias
-
-    warn_deprecated_alias("replay", "push")
-    return push(log, strict=strict, hooks=hooks, replay=replay)
-
-
 def push_from(
     log: Trace,
     site: SelectorLike | str | Op,
     *,
-    strict: bool | MissingType = MISSING,
     replay: ReplayOptions | None = None,
 ) -> Trace:
     """Push downstream from a pre-mutated site.
@@ -212,8 +180,8 @@ def push_from(
     site:
         Layer pass or selector resolving to the origin site. The origin's
         current out is treated as the override value.
-    strict:
-        Whether control-flow divergence warnings should be raised as errors.
+    replay:
+        Grouped replay options (``ReplayOptions``).
 
     Returns
     -------
@@ -221,7 +189,7 @@ def push_from(
         The same model log, mutated in place.
     """
 
-    replay_options = merge_replay_options(replay=replay, strict=strict)
+    replay_options = merge_replay_options(replay=replay)
     _preflight_log(log)
     _warn_if_direct_writes_will_be_overlaid(log)
     origin = _resolve_single_origin(log, site, strict=replay_options.strict)
@@ -230,32 +198,6 @@ def push_from(
     return _run_replay(
         log, [origin], hook_entries=[], strict=replay_options.strict, preserve_origins=True
     )
-
-
-def replay_from(
-    log: Trace,
-    site: SelectorLike | str | Op,
-    *,
-    strict: bool | MissingType = MISSING,
-    replay: ReplayOptions | None = None,
-) -> Trace:
-    """Deprecated alias for :func:`push_from`.
-
-    Parameters
-    ----------
-    log, site, strict, replay:
-        Forwarded unchanged to :func:`push_from`.
-
-    Returns
-    -------
-    Trace
-        The same model log, mutated in place.
-    """
-
-    from .._deprecations import warn_deprecated_alias
-
-    warn_deprecated_alias("replay_from", "push_from")
-    return push_from(log, site, strict=strict, replay=replay)
 
 
 def _run_differentiable_replay(
@@ -1882,8 +1824,6 @@ __all__ = [
     "cone_of_effect",
     "push",
     "push_from",
-    "replay",
-    "replay_from",
     "_reconstruct_args_from_template",
     "_slice_output_by_path",
 ]

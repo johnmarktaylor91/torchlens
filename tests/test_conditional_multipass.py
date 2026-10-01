@@ -8,6 +8,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
+import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens.data_classes.layer import Layer
 from torchlens.data_classes.trace import Trace
@@ -175,7 +176,7 @@ def _log_model(model: nn.Module) -> Trace:
         Fully postprocessed model log.
     """
     x = torch.ones(1, 4)
-    return trace_fn(model, x, layers_to_save="all")
+    return trace_fn(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
 
 
 def _get_only_event(trace: Trace) -> int:

@@ -96,11 +96,13 @@ def _build_live_log() -> Trace:
     return trace_fn(
         model,
         x,
-        layers_to_save="all",
-        save_arg_values=True,
-        save_rng_states=True,
-        save_code_context=True,
-        random_seed=0,
+        capture=tl.options.CaptureOptions(
+            layers_to_save="all",
+            save_arg_values=True,
+            save_rng_states=True,
+            save_code_context=True,
+            random_seed=0,
+        ),
     )
 
 
@@ -158,8 +160,8 @@ def test_partial_activation_transform_repr_does_not_leak_bound_values(tmp_path: 
     trace = trace_fn(
         _TinyIOModel(),
         torch.randn(2, 4),
-        layers_to_save="all",
-        activation_transform=transform,
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save=tl.options.SaveOptions(activation_transform=transform),
     )
     spec = tmp_path / "partial.tlspec"
     tl.save(trace, str(spec))
@@ -358,9 +360,6 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "remove": "removal scrub (mutates the graph)",
     "push": "replay/push engine; execution, not presentation",
     "push_from": "replay/push engine; execution, not presentation",
-    "replay": "replay engine; execution, not presentation",
-    "replay_from": "replay engine; execution, not presentation",
-    "rerun": "rerun engine; execution, not presentation",
     "save_new_outs": "fast re-capture engine; execution, not presentation",
     "replace_state_from": "state mutator (cross-trace state transplant)",
     "append_state_from": "state mutator (cross-trace state transplant)",
@@ -371,7 +370,6 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "save": "the save boundary itself is the sweep's assertion, not a subject",
     "save_intervention": "save boundary (intervention spec artifact)",
     "validate_forward_pass": "full replay validation; execution-tier compute",
-    "validate_saved_outs": "full replay validation; execution-tier compute",
     "discharge_against": "requires a second real capture as input",
     "render_dagua_graph": "optional external dagua renderer dependency",
     "to_dagua_graph": "optional external dagua renderer dependency",
@@ -771,10 +769,12 @@ def test_r69_sparse_runnable_save_always_drops_raw_fields(tmp_path: Path, raw_po
     trace = trace_fn(
         _NestedStr(),
         [torch.randn(3), {"mode": "fast"}],
-        save_raw_input=raw_policy,
-        save_raw_output=raw_policy,
         capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
+            intervention_ready=True,
+            capture_container_structure=True,
+            cache=False,
+            save_raw_input=raw_policy,
+            save_raw_output=raw_policy,
         ),
     )
     path = tmp_path / f"sparse_raw_{raw_policy}.tlspec"
@@ -800,8 +800,7 @@ def test_r69_ordinary_analysis_save_retains_raw_values(tmp_path: Path) -> None:
     trace = trace_fn(
         _NestedStr(),
         [torch.randn(3), {"mode": "fast"}],
-        layers_to_save="none",
-        save_raw_input="small",
+        capture=tl.options.CaptureOptions(layers_to_save="none", save_raw_input="small"),
     )
     path = tmp_path / "analysis_raw.tlspec"
     trace.save(path)
@@ -819,7 +818,11 @@ def test_small_raw_input_pil_round_trips_bounded_image(tmp_path: Path) -> None:
     from PIL import Image as pil_image
 
     image = pil_image.new("RGB", (512, 300), color=(10, 120, 200))
-    trace = trace_fn(_TinyImageInputModel(), image, layers_to_save="none")
+    trace = trace_fn(
+        _TinyImageInputModel(),
+        image,
+        capture=tl.options.CaptureOptions(layers_to_save="none"),
+    )
     path = tmp_path / "pil_raw_input.tlspec"
 
     trace.save(path)

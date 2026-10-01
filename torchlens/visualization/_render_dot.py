@@ -978,7 +978,7 @@ def draw(
     vis_module_overrides: Optional[Dict[str, Any]] = None,
     vis_save_only: bool = False,
     vis_fileformat: str = "pdf",
-    show_buffer_layers: BufferVisibilityLiteral | bool = "meaningful",
+    show_buffer_layers: BufferVisibilityLiteral = "meaningful",
     direction: VisDirectionLiteral = "bottomup",
     vis_node_placement: VisNodePlacementLiteral = "auto",
     vis_renderer: VisRendererLiteral = "graphviz",

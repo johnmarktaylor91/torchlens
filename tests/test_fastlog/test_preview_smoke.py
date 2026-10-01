@@ -45,7 +45,7 @@ def test_preview_fastlog_catches_record_context_field_error(tmp_path: Path) -> N
             raise
         return True
 
-    dot = tl.preview_fastlog(
+    dot = tl.fastlog.preview(
         trace,
         predicate=bad_predicate,
         color_predicate_error="#FF7AB6",

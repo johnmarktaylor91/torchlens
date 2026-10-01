@@ -24,14 +24,13 @@ from ._capture_state_helpers import (
     _unwrap_data_parallel,
     unwrap_compiled_model,
 )
-from ._deprecations import MISSING, MissingType, warn_deprecated_alias
+from ._deprecations import MISSING, MissingType
 from ._input_coerce import _coerce_input_args
 from ._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
     FoldRepeatsLiteral,
     VisDirectionLiteral,
-    VisInterventionModeLiteral,
     VisModeLiteral,
     VisNodeModeLiteral,
     VisNodePlacementLiteral,
@@ -139,17 +138,6 @@ def log_model_metadata(
     return model_trace
 
 
-def get_model_metadata(
-    model: nn.Module,
-    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
-    input_kwargs: dict[Any, Any] | None = None,
-) -> Trace:
-    """Deprecated alias for :func:`log_model_metadata`."""
-
-    warn_deprecated_alias("get_model_metadata", "log_model_metadata")
-    return log_model_metadata(model, input_args, input_kwargs)
-
-
 def summary(
     model: nn.Module,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
@@ -204,24 +192,7 @@ def show_model_graph(
     renderer: VisRendererLiteral | MissingType = MISSING,
     layout: VisNodePlacementLiteral | MissingType = MISSING,
     node_style: VisNodeModeLiteral | MissingType = MISSING,
-    vis_mode: VisModeLiteral | MissingType = MISSING,
-    vis_call_depth: int | MissingType = MISSING,
-    vis_outpath: str | MissingType = MISSING,
-    vis_graph_overrides: dict[str, Any] | None | MissingType = MISSING,
     module: Module | str | None = None,
-    vis_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
-    vis_grad_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
-    vis_module_overrides: dict[str, Any] | None | MissingType = MISSING,
-    vis_save_only: bool | MissingType = MISSING,
-    vis_fileformat: str | MissingType = MISSING,
-    vis_buffers: BufferVisibilityLiteral | bool | MissingType = MISSING,
-    vis_direction: VisDirectionLiteral | MissingType = MISSING,
-    vis_node_placement: VisNodePlacementLiteral | MissingType = MISSING,
-    vis_renderer: VisRendererLiteral | MissingType = MISSING,
-    vis_theme: str | MissingType = MISSING,
-    vis_intervention_mode: VisInterventionModeLiteral | MissingType = MISSING,
-    vis_show_cone: bool | MissingType = MISSING,
-    vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
     collapse: CollapseLiteral | MissingType = MISSING,
     fold_repeats: FoldRepeatsLiteral | MissingType = MISSING,
     order_siblings: bool | MissingType = MISSING,
@@ -246,50 +217,9 @@ def show_model_graph(
         Positional args for ``model.forward()``.
     input_kwargs:
         Keyword args for ``model.forward()``.
-    vis_mode:
-        Deprecated alias for ``visualization.mode``.
-    vis_call_depth:
-        Deprecated alias for ``visualization.max_module_depth``.
-    vis_outpath:
-        Deprecated alias for ``visualization.container_path``.
-    vis_graph_overrides:
-        Deprecated alias for ``visualization.graph_overrides``.
     module:
         Optional module focus. Pass a Module or module address string to render
         only layers that ran inside that module.
-    vis_edge_overrides:
-        Deprecated alias for ``visualization.edge_overrides``.
-    vis_grad_edge_overrides:
-        Deprecated alias for ``visualization.grad_edge_overrides``.
-    vis_module_overrides:
-        Deprecated alias for ``visualization.module_overrides``.
-    vis_save_only:
-        Deprecated alias for ``visualization.save_only``.
-    vis_fileformat:
-        Deprecated alias for ``visualization.file_format``.
-    vis_buffers:
-        Deprecated alias for ``visualization.show_buffers``. Accepts
-        ``"never"``, ``"meaningful"``, or ``"always"``. Legacy bools are
-        deprecated but supported: ``True`` maps to ``"always"`` and ``False``
-        maps to ``"never"``.
-    vis_direction:
-        Deprecated alias for ``visualization.direction``.
-    vis_node_placement:
-        Deprecated alias for ``visualization.layout_engine``. Accepts
-        ``"auto"``, ``"dot"``, or ``"rank"``.
-    vis_renderer:
-        Deprecated alias for ``visualization.renderer``. The ``"dagua"``
-        renderer is experimental and requires ``from torchlens.experimental
-        import dagua`` before use.
-    vis_theme:
-        Deprecated alias for ``visualization.theme``.
-    vis_intervention_mode:
-        Intervention overlay mode. ``"node_mark"`` marks intervention sites
-        and optionally their cones. ``"as_node"`` inserts a small hook node
-        after each intervention site.
-    vis_show_cone:
-        Whether ``"node_mark"`` mode also marks downstream cone-of-effect
-        members.
     order_siblings:
         Whether Graphviz ``dot`` renders should verify and apply
         execution-order placement for true parallel siblings.
@@ -342,30 +272,11 @@ def show_model_graph(
         renderer=renderer,
         layout=layout,
         node_style=node_style,
-        vis_mode=vis_mode,
-        vis_call_depth=vis_call_depth,
-        vis_outpath=vis_outpath,
-        vis_save_only=vis_save_only,
-        vis_fileformat=vis_fileformat,
-        vis_buffers=vis_buffers,
-        vis_direction=vis_direction,
-        vis_graph_overrides=vis_graph_overrides,
-        vis_node_mode=vis_node_mode,
         collapse=collapse,
         fold_repeats=fold_repeats,
-        vis_edge_overrides=vis_edge_overrides,
-        vis_grad_edge_overrides=vis_grad_edge_overrides,
-        vis_module_overrides=vis_module_overrides,
-        vis_node_placement=vis_node_placement,
-        vis_renderer=vis_renderer,
-        vis_theme=vis_theme,
-        vis_intervention_mode=vis_intervention_mode,
-        vis_show_cone=vis_show_cone,
         order_siblings=order_siblings,
     )
 
-    # Reads the canonical `view`, not the deprecated `mode` alias: torchlens must
-    # not consume its own deprecated spellings (grind b4, R48-3).
     if visualization_options.view not in ["none", "rolled", "unrolled"]:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
@@ -399,16 +310,9 @@ def show_model_graph(
 
 def draw_backward(
     trace: Trace,
-    vis_outpath: str | MissingType = MISSING,
-    vis_save_only: bool | MissingType = MISSING,
-    vis_fileformat: str | MissingType = MISSING,
-    vis_direction: VisDirectionLiteral | MissingType = MISSING,
-    vis_graph_overrides: dict[str, Any] | None | MissingType = MISSING,
-    vis_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
     node_spec_fn: Callable[[Any, Any], Any] | None = None,
     collapsed_node_spec_fn: Callable[[Any, Any], Any] | None = None,
     node_style: VisNodeModeLiteral | MissingType = MISSING,
-    vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
     code_panel: CodePanelOption = False,
     vis_mode: VisModeLiteral = "rolled",
     bwd: int | Iterable[int] | None = None,
@@ -421,26 +325,13 @@ def draw_backward(
     trace:
         Trace with backward metadata captured by ``trace.log_backward(loss)``
         or ``trace.recording_backward()``.
-    vis_outpath:
-        Output path for the rendered graph.
-    vis_save_only:
-        If True, save without opening a viewer.
-    vis_fileformat:
-        Output format.
-    vis_direction:
-        Layout direction. Defaults to ``"topdown"`` for backward graphs.
-    vis_graph_overrides:
-        Graphviz graph-level overrides.
-    vis_edge_overrides:
-        Graphviz edge-level overrides.
     node_spec_fn:
         Optional callback receiving ``(grad_fn_handle, default_spec)``.
     collapsed_node_spec_fn:
         Accepted for forward-visualization API symmetry. Not applied because
         backward graphs do not render collapsed module nodes.
-    vis_node_mode:
-        Accepted for forward-visualization API symmetry. Not applied to grad_fn_handle
-        nodes.
+    node_style:
+        Node-style preset applied to grad_fn nodes.
     code_panel:
         Optional source-code panel mode.
     vis_mode:
@@ -475,31 +366,6 @@ def draw_backward(
         edge_overrides = visualization.edge_overrides
         node_mode = visualization.node_style
 
-    # Six of these seven flat overrides warned nowhere, so `draw_backward` was a
-    # silent-removal surface while the SAME spellings warned through
-    # `merge_visualization_options` (grind b4, R48-1). The canonical replacement
-    # exists and works here: pass `visualization=VisualizationOptions(...)`.
-    if vis_outpath is not MISSING:
-        warn_deprecated_alias("vis_outpath", "visualization.container_path")
-        container_path = cast(str, vis_outpath)
-    if vis_save_only is not MISSING:
-        warn_deprecated_alias("vis_save_only", "visualization.save_only")
-        save_only = cast(bool, vis_save_only)
-    if vis_fileformat is not MISSING:
-        warn_deprecated_alias("vis_fileformat", "visualization.file_format")
-        file_format = cast(str, vis_fileformat)
-    if vis_direction is not MISSING:
-        warn_deprecated_alias("vis_direction", "visualization.direction")
-        direction = cast(VisDirectionLiteral, vis_direction)
-    if vis_graph_overrides is not MISSING:
-        warn_deprecated_alias("vis_graph_overrides", "visualization.graph_overrides")
-        graph_overrides = cast(dict[str, Any] | None, vis_graph_overrides)
-    if vis_edge_overrides is not MISSING:
-        warn_deprecated_alias("vis_edge_overrides", "visualization.edge_overrides")
-        edge_overrides = cast(dict[str, Any] | None, vis_edge_overrides)
-    if vis_node_mode is not MISSING:
-        warn_deprecated_alias("vis_node_mode", "node_style")
-        node_mode = cast(VisNodeModeLiteral, vis_node_mode)
     if node_style is not MISSING:
         node_mode = cast(VisNodeModeLiteral, node_style)
 
@@ -521,17 +387,11 @@ def draw_backward(
 
 def draw_combined(
     trace: Trace,
-    vis_outpath: str | MissingType = MISSING,
-    vis_save_only: bool | MissingType = MISSING,
-    vis_fileformat: str | MissingType = MISSING,
-    vis_direction: VisDirectionLiteral | MissingType = MISSING,
-    vis_graph_overrides: dict[str, Any] | None | MissingType = MISSING,
-    vis_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
     node_spec_fn: Callable[[Any, Any], Any] | None = None,
     backward_node_spec_fn: Callable[[Any, Any], Any] | None = None,
     vis_mode: VisModeLiteral = "unrolled",
     intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
-    show_buffer_layers: BufferVisibilityLiteral | bool = "meaningful",
+    show_buffer_layers: BufferVisibilityLiteral = "meaningful",
     bwd: int | Iterable[int] | None = None,
     visualization: VisualizationOptions | None = None,
 ) -> str:
@@ -542,18 +402,6 @@ def draw_combined(
     trace:
         Trace with backward metadata captured by ``trace.log_backward(loss)``
         or ``trace.recording_backward()``.
-    vis_outpath:
-        Output path for the rendered graph.
-    vis_save_only:
-        If True, save without opening a viewer.
-    vis_fileformat:
-        Output format.
-    vis_direction:
-        Layout direction. Defaults to ``"leftright"`` for combined graphs.
-    vis_graph_overrides:
-        Graphviz graph-level overrides.
-    vis_edge_overrides:
-        Graphviz forward-edge overrides.
     node_spec_fn:
         Optional callback receiving ``(layer_log, default_spec)``.
     backward_node_spec_fn:
@@ -590,27 +438,6 @@ def draw_combined(
         direction = visualization.direction
         graph_overrides = visualization.graph_overrides
         edge_overrides = visualization.edge_overrides
-
-    # `draw_combined` warned on NOTHING at all (grind b4, R48-1); same canonical
-    # replacement as `draw_backward` above.
-    if vis_outpath is not MISSING:
-        warn_deprecated_alias("vis_outpath", "visualization.container_path")
-        container_path = cast(str, vis_outpath)
-    if vis_save_only is not MISSING:
-        warn_deprecated_alias("vis_save_only", "visualization.save_only")
-        save_only = cast(bool, vis_save_only)
-    if vis_fileformat is not MISSING:
-        warn_deprecated_alias("vis_fileformat", "visualization.file_format")
-        file_format = cast(str, vis_fileformat)
-    if vis_direction is not MISSING:
-        warn_deprecated_alias("vis_direction", "visualization.direction")
-        direction = cast(VisDirectionLiteral, vis_direction)
-    if vis_graph_overrides is not MISSING:
-        warn_deprecated_alias("vis_graph_overrides", "visualization.graph_overrides")
-        graph_overrides = cast(dict[str, Any] | None, vis_graph_overrides)
-    if vis_edge_overrides is not MISSING:
-        warn_deprecated_alias("vis_edge_overrides", "visualization.edge_overrides")
-        edge_overrides = cast(dict[str, Any] | None, vis_edge_overrides)
 
     return trace.draw_combined(
         vis_outpath=container_path,
@@ -1630,7 +1457,6 @@ def validate_backward_pass(
     input_kwargs: dict[Any, Any] | None = None,
     loss_fn: Callable[[Any], torch.Tensor] | None = None,
     *,
-    perturb_saved_grads: bool = False,
     validate_metadata: bool = True,
     random_seed: int | None = None,
     atol: float | None = None,
@@ -1652,8 +1478,6 @@ def validate_backward_pass(
     loss_fn:
         Optional callable mapping model outputs to a scalar loss. Defaults to
         summing all returned tensors.
-    perturb_saved_grads:
-        If True, perturb a saved grad and require validation to fail.
     validate_metadata:
         If True, run metadata invariant checks on the captured backward trace.
     random_seed:
@@ -1687,7 +1511,6 @@ def validate_backward_pass(
         input_args,
         input_kwargs=input_kwargs,
         loss_fn=loss_fn,
-        perturb_saved_grads=perturb_saved_grads,
         validate_metadata=validate_metadata,
         random_seed=random_seed,
         atol=atol,
@@ -1695,27 +1518,6 @@ def validate_backward_pass(
         validate_layer_grads=validate_layer_grads,
         layer_grad_atol=layer_grad_atol,
         layer_grad_rtol=layer_grad_rtol,
-    )
-
-
-def validate_saved_outs(
-    model: nn.Module,
-    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
-    input_kwargs: dict[Any, Any] | None = None,
-    random_seed: int | None = None,
-    verbose: bool = False,
-    validate_metadata: bool = True,
-) -> bool:
-    """Deprecated alias for :func:`validate_forward_pass`."""
-
-    warn_deprecated_alias("validate_saved_outs", "validate_forward_pass")
-    return validate_forward_pass(
-        model,
-        input_args,
-        input_kwargs,
-        random_seed=random_seed,
-        verbose=verbose,
-        validate_metadata=validate_metadata,
     )
 
 

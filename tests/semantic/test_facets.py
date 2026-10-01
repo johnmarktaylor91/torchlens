@@ -170,7 +170,9 @@ def test_trace_snapshot_is_immune_to_later_registry_mutation() -> None:
 
         return {"snapshot_value": 1}
 
-    log = tl.trace(Tiny(), torch.randn(1, 2), layers_to_save="all")
+    log = tl.trace(
+        Tiny(), torch.randn(1, 2), capture=tl.options.CaptureOptions(layers_to_save="all")
+    )
 
     @tl.facets.register(class_name="Linear")
     def second_linear(record: Any) -> dict[str, Any]:
@@ -199,14 +201,19 @@ def test_trace_recipes_and_using_are_capture_time_additive() -> None:
 
     model = Tiny()
     x = torch.randn(1, 2)
-    per_trace = tl.trace(model, x, layers_to_save="all", recipes=[local_recipe])
+    per_trace = tl.trace(
+        model,
+        x,
+        recipes=[local_recipe],
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
     assert per_trace.modules["self"].facets.local_value == "present"
 
     with tl.facets.using(local_recipe):
-        contextual = tl.trace(model, x, layers_to_save="all")
+        contextual = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
     assert contextual.modules["self"].facets.local_value == "present"
 
-    outside = tl.trace(model, x, layers_to_save="all")
+    outside = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
     assert not outside.modules["self"].facets.has("local_value")
 
 
@@ -236,7 +243,7 @@ def test_structural_output_facets_expose_names_and_method_collisions() -> None:
             return self.block(x)
 
     x = torch.randn(2, 3)
-    log = tl.trace(Model(), x, layers_to_save="all")
+    log = tl.trace(Model(), x, capture=tl.options.CaptureOptions(layers_to_save="all"))
     facets = log.modules["block"].facets
 
     assert torch.equal(facets["keys"], x + 1)
@@ -278,7 +285,9 @@ def test_structural_output_facets_expose_namedtuple_and_dataclass_names() -> Non
 
             return self.block(x)
 
-    log = tl.trace(Model(), torch.randn(2, 3), layers_to_save="all")
+    log = tl.trace(
+        Model(), torch.randn(2, 3), capture=tl.options.CaptureOptions(layers_to_save="all")
+    )
     facets = log.modules["block"].facets
 
     assert "out0.values" in facets.keys()
@@ -313,7 +322,7 @@ def test_structseq_output_facets_expose_torch_return_type_names() -> None:
             return self.block(x)
 
     x = torch.randn(2, 3)
-    log = tl.trace(Model(), x, layers_to_save="all")
+    log = tl.trace(Model(), x, capture=tl.options.CaptureOptions(layers_to_save="all"))
     facets = log.modules["block"].facets
     expected = torch.max(x, dim=1)
 
@@ -384,7 +393,9 @@ def test_structurally_absent_declared_facet_raises_plain_keyerror() -> None:
 
             return self.norm(x)
 
-    log = tl.trace(Model(), torch.randn(2, 4), layers_to_save="all")
+    log = tl.trace(
+        Model(), torch.randn(2, 4), capture=tl.options.CaptureOptions(layers_to_save="all")
+    )
     facets = log.modules["norm"].facets
 
     assert "beta" not in facets.keys()
@@ -415,7 +426,7 @@ def test_lstm_multi_output_facets_preserve_single_call_roles() -> None:
             return self.lstm(x)
 
     x = torch.randn(4, 2, 3)
-    log = tl.trace(LSTMModel(), x, layers_to_save="all")
+    log = tl.trace(LSTMModel(), x, capture=tl.options.CaptureOptions(layers_to_save="all"))
     lstm = log.modules["lstm"]
 
     assert lstm.num_calls == 1
@@ -453,7 +464,9 @@ def test_facetspec_read_and_default_missing_gradient() -> None:
         op = module.trace.ops[module.calls[0].output_ops[0]]
         return {"first_feature": FacetSpec.from_home(op, recipe_id="first_feature").select(-1, 0)}
 
-    log = tl.trace(Tiny(), torch.randn(4, 3), layers_to_save="all")
+    log = tl.trace(
+        Tiny(), torch.randn(4, 3), capture=tl.options.CaptureOptions(layers_to_save="all")
+    )
     facet = log.modules["linear"].facets["first_feature"]
 
     assert torch.equal(facet, log.modules["linear"].out[..., 0])
@@ -491,7 +504,11 @@ def test_facetspec_grad_matches_manual_slice_when_saved() -> None:
         op = module.trace.ops[module.calls[0].output_ops[0]]
         return {"first_feature": FacetSpec.from_home(op, recipe_id="first_feature").select(-1, 0)}
 
-    log = tl.trace(Tiny(), torch.randn(4, 3), layers_to_save="all", save_grads="all")
+    log = tl.trace(
+        Tiny(),
+        torch.randn(4, 3),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all"),
+    )
     log.log_backward(log[log.output_layers[0]].out.sum())
     facet = log.modules["linear"].facets["first_feature"]
     home = log.ops[log.modules["linear"].calls[0].output_ops[0]]
@@ -524,7 +541,11 @@ def test_facetspec_grad_missing_for_unselected_home() -> None:
         op = module.trace.ops[module.calls[0].output_ops[0]]
         return {"first_feature": FacetSpec.from_home(op, recipe_id="first_feature").select(-1, 0)}
 
-    log = tl.trace(Tiny(), torch.randn(4, 3), layers_to_save="all", save_grads=["relu"])
+    log = tl.trace(
+        Tiny(),
+        torch.randn(4, 3),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=["relu"]),
+    )
     log.log_backward(log[log.output_layers[0]].out.sum())
     missing = log.modules["linear"].facets["first_feature"].grad
 
@@ -550,7 +571,9 @@ def test_parameter_builtin_facets_are_read_only_parameter_homes() -> None:
             return self.norm(x)
 
     model = Model()
-    log = tl.trace(model, torch.randn(2, 3), layers_to_save="all")
+    log = tl.trace(
+        model, torch.randn(2, 3), capture=tl.options.CaptureOptions(layers_to_save="all")
+    )
     gamma = log.modules["norm"].facets["gamma"]
     beta = log.modules["norm"].facets["beta"]
 
@@ -729,7 +752,11 @@ def test_facet_head_zero_and_patch_rerun_changes_output_and_validates() -> None:
     torch.manual_seed(0)
     model = _FacetP2Model(MultiHeadSelfAttention())
     x = torch.randn(2, 3, 8)
-    clean = tl.trace(model, x, layers_to_save="all", save_arg_values=True)
+    clean = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    )
     clean_out = _trace_output(clean).clone()
 
     zeroed = clean.fork("zero_q_head")
@@ -756,7 +783,11 @@ def test_gpt2_fused_c_attn_facet_edits_compose_and_conflicts_error() -> None:
     torch.manual_seed(1)
     model = _FacetP2Model(GPT2Attention())
     x = torch.randn(2, 3, 8)
-    clean = tl.trace(model, x, layers_to_save="all", save_arg_values=True)
+    clean = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    )
     clean_out = _trace_output(clean).clone()
 
     edited = clean.fork("fused_qk")
@@ -792,9 +823,9 @@ def test_gqa_kv_aliasing_write_refuses_but_read_and_grad_work() -> None:
     log = tl.trace(
         model,
         x,
-        layers_to_save="all",
-        save_grads="all",
-        save_arg_values=True,
+        capture=tl.options.CaptureOptions(
+            layers_to_save="all", save_grads="all", save_arg_values=True
+        ),
     )
     log.log_backward(_trace_output(log).sum())
     k_head = log.modules["attn"].facets.head(3).k
@@ -813,7 +844,11 @@ def test_computed_facet_write_refuses() -> None:
 
     torch.manual_seed(3)
     model = _MLPModel()
-    log = tl.trace(model, torch.randn(2, 3, 8), layers_to_save="all", save_arg_values=True)
+    log = tl.trace(
+        model,
+        torch.randn(2, 3, 8),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    )
 
     with pytest.raises(RuntimeError, match="computed facets are read-only"):
         log.fork("computed_refuse").attach_hooks(tl.facet("intermediate"), tl.zero_ablate())
@@ -844,7 +879,11 @@ def test_in_place_or_view_version_facet_write_refuses() -> None:
         spec = FacetSpec.from_home(op, recipe_id="unsafe_version").select(-1, 0)
         return {"unsafe": replace(spec, value_version="out_versions_by_child")}
 
-    log = tl.trace(Tiny(), torch.randn(2, 4), layers_to_save="all", save_arg_values=True)
+    log = tl.trace(
+        Tiny(),
+        torch.randn(2, 4),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    )
 
     with pytest.raises(RuntimeError, match="not intervention-safe"):
         log.fork("unsafe_refuse").attach_hooks(tl.facet("unsafe"), tl.zero_ablate())
@@ -856,7 +895,11 @@ def test_whole_model_head_selector_ablation_reruns_and_validates() -> None:
     torch.manual_seed(4)
     model = _FacetP2Model(MultiHeadSelfAttention())
     x = torch.randn(2, 3, 8)
-    clean = tl.trace(model, x, layers_to_save="all", save_arg_values=True)
+    clean = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    )
     clean_out = _trace_output(clean).clone()
 
     edited = clean.fork("head_all")

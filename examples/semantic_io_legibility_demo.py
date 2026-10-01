@@ -130,13 +130,17 @@ def main() -> None:
     print("\n## output-node pandas summary")
     print(output_preview.to_string(index=False))
 
-    override_trace = tl.trace(model, x, output_style="classification")
+    override_trace = tl.trace(
+        model, x, capture=tl.options.CaptureOptions(output_style="classification")
+    )
     print_table("override: output_style='classification'", override_trace, top_n=1)
     print(f"override postprocessor: {override_trace.output_postprocessor.description}")
 
     register_custom_decoder()
     try:
-        custom_trace = tl.trace(model, x, output_style="demo_custom_labels")
+        custom_trace = tl.trace(
+            model, x, capture=tl.options.CaptureOptions(output_style="demo_custom_labels")
+        )
         print_table("custom decoder: output_style='demo_custom_labels'", custom_trace, top_n=1)
         print(f"custom postprocessor: {custom_trace.output_postprocessor.description}")
     finally:
@@ -145,8 +149,7 @@ def main() -> None:
     text_trace = tl.trace(
         model,
         "0.1,0.2,2.0,1.0",
-        transform=text_to_tensor,
-        output_style="classification",
+        capture=tl.options.CaptureOptions(transform=text_to_tensor, output_style="classification"),
     )
     text_trace.input_preprocessor = ResolvedPreprocessing(
         source="example.transform",

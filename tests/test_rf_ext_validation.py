@@ -36,7 +36,12 @@ def built_in_rule_pack() -> Iterator[None]:
 def _trace(model: nn.Module, inputs: object) -> object:
     """Capture a graph-connected model suitable for repeated RF probes."""
 
-    return tl.trace(model, inputs, backward_ready=True, save_mode="reference")
+    return tl.trace(
+        model,
+        inputs,
+        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True),
+    )
 
 
 def _op(trace: object, name: str) -> Op:

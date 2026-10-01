@@ -156,7 +156,9 @@ def test_trace_defaults_are_stable(
 
     captured_calls, dummy_logs = stubbed_runner
 
-    result = tl.trace(_TinyModel(), _tiny_input(), layers_to_save=None)
+    result = tl.trace(
+        _TinyModel(), _tiny_input(), capture=tl.options.CaptureOptions(layers_to_save=None)
+    )
 
     assert result is dummy_logs[-1]
     assert captured_calls[-1]["layers_to_save"] is None
@@ -187,10 +189,12 @@ def test_trace_accepts_explicit_opt_in_overrides(
     result = tl.trace(
         _TinyModel(),
         _tiny_input(),
-        layers_to_save=None,
-        compute_input_output_distances=True,
-        save_code_context=True,
-        recurrence_detection=False,
+        capture=tl.options.CaptureOptions(
+            layers_to_save=None,
+            compute_input_output_distances=True,
+            save_code_context=True,
+            recurrence_detection=False,
+        ),
     )
 
     assert result is dummy_logs[-1]
@@ -207,8 +211,7 @@ def test_show_model_graph_defaults_are_stable(
 
     captured_calls, dummy_logs = stubbed_runner
 
-    with pytest.warns(DeprecationWarning, match="show_model_graph"):
-        tl.show_model_graph(_TinyModel(), _tiny_input())
+    tl.visualization.show_model_graph(_TinyModel(), _tiny_input())
 
     assert captured_calls[-1]["layers_to_save"] is None
     assert captured_calls[-1]["mark_layer_depths"] is False
@@ -227,13 +230,12 @@ def test_show_model_graph_accepts_explicit_opt_in_overrides(
 
     captured_calls, dummy_logs = stubbed_runner
 
-    with pytest.warns(DeprecationWarning, match="show_model_graph"):
-        tl.show_model_graph(
-            _TinyModel(),
-            _tiny_input(),
-            recurrence_detection=False,
-            visualization=VisualizationOptions(mode="rolled"),
-        )
+    tl.visualization.show_model_graph(
+        _TinyModel(),
+        _tiny_input(),
+        recurrence_detection=False,
+        visualization=VisualizationOptions(view="rolled"),
+    )
 
     assert captured_calls[-1]["recurrence_detection"] is False
     assert dummy_logs[-1].render_calls[-1]["vis_mode"] == "rolled"
@@ -268,7 +270,7 @@ def test_log_model_metadata_forces_metadata_defaults(monkeypatch: pytest.MonkeyP
 
     monkeypatch.setattr(user_funcs, "trace", _fake_trace)
 
-    result = tl.log_model_metadata(_TinyModel(), _tiny_input())
+    result = tl.io.log_model_metadata(_TinyModel(), _tiny_input())
 
     assert result is dummy_log
     # The metadata wrapper migrated from the deprecated flat kwargs to the
@@ -288,7 +290,7 @@ def test_summary_uses_metadata_only_defaults(
 
     captured_calls, dummy_logs = stubbed_runner
 
-    result = tl.summary(_TinyModel(), _tiny_input(), depth=2)
+    result = tl.visualization.summary(_TinyModel(), _tiny_input(), depth=2)
 
     assert result == "summary output"
     assert captured_calls[-1]["layers_to_save"] is None
@@ -304,13 +306,12 @@ def test_validate_forward_pass_uses_validation_overrides(
 
     captured_calls, dummy_logs = stubbed_runner
 
-    with pytest.warns(DeprecationWarning, match="validate_forward_pass"):
-        result = tl.validate_forward_pass(
-            _TinyModel(),
-            _tiny_input(),
-            random_seed=123,
-            validate_metadata=False,
-        )
+    result = tl.validation.validate_forward_pass(
+        _TinyModel(),
+        _tiny_input(),
+        random_seed=123,
+        validate_metadata=False,
+    )
 
     assert result is True
     replay_call, reproducibility_call = captured_calls[-2:]

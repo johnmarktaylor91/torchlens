@@ -290,7 +290,7 @@ class TinyTransformer(nn.Module):
     """ONE TransformerEncoder layer on a short sequence.
 
     Small enough that every node label stays readable at page scale, which is
-    what the attention-pattern and node_mode='attention' pages need.
+    what the attention-pattern and node_spec_fn=attention_node_mode pages need.
     """
 
     def __init__(self) -> None:

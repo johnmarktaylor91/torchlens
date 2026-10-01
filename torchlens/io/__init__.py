@@ -40,14 +40,6 @@ def log_model_metadata(*args: Any, **kwargs: Any) -> Any:
     return user_funcs.log_model_metadata(*args, **kwargs)
 
 
-def get_model_metadata(*args: Any, **kwargs: Any) -> Any:
-    """Deprecated metadata alias routed through the public user_funcs surface."""
-
-    from .. import user_funcs
-
-    return user_funcs.get_model_metadata(*args, **kwargs)
-
-
 def detect_tlspec_format(path: str | Path) -> str:
     """Detect the on-disk TorchLens ``.tlspec`` format.
 
@@ -244,7 +236,6 @@ __all__ = [
     "PayloadLoadHints",
     "cleanup_tmp",
     "detect_tlspec_format",
-    "get_model_metadata",
     "inspect_tlspec",
     "list_logs",
     "load",

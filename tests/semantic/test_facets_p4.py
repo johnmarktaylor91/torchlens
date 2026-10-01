@@ -166,8 +166,16 @@ def test_activation_patch_head_cell_matches_manual_patch() -> None:
     model = PatchingToyModel()
     clean, corrupted = _inputs()
     scores = tl.facets.patching.activation_patch_attention_heads(model, clean, corrupted, _metric)
-    clean_log = tl.trace(model, clean, layers_to_save="all", save_arg_values=True)
-    corrupted_log = tl.trace(model, corrupted, layers_to_save="all", save_arg_values=True)
+    clean_log = tl.trace(
+        model,
+        clean,
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    )
+    corrupted_log = tl.trace(
+        model,
+        corrupted,
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    )
     clean_head = clean_log.modules["block.attn"].facets.head(0).result.detach().clone()
 
     def _manual_patch(out: torch.Tensor, *, hook: Any) -> torch.Tensor:

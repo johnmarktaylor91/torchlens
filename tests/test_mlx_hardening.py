@@ -219,7 +219,11 @@ def test_mlx_intervention_ready_raises() -> None:
     """MLX capture rejects intervention metadata requests explicitly."""
 
     with pytest.raises(BackendUnsupportedError, match="intervention_ready"):
-        tl.trace(TinyMLP(), _tiny_mlp_input(), intervention_ready=True)
+        tl.trace(
+            TinyMLP(),
+            _tiny_mlp_input(),
+            capture=tl.options.CaptureOptions(intervention_ready=True),
+        )
 
 
 @pytest.mark.optional
@@ -227,7 +231,7 @@ def test_mlx_save_grads_raises() -> None:
     """MLX capture rejects backward-gradient capture explicitly."""
 
     with pytest.raises(BackendUnsupportedError, match="backward.capture"):
-        tl.trace(TinyMLP(), _tiny_mlp_input(), save_grads=True)
+        tl.trace(TinyMLP(), _tiny_mlp_input(), capture=tl.options.CaptureOptions(save_grads=True))
 
 
 @pytest.mark.optional
@@ -235,7 +239,12 @@ def test_mlx_layers_to_save_raises_typed_error() -> None:
     """MLX capture rejects the unsupported legacy ``layers_to_save`` selector."""
 
     with pytest.raises(BackendUnsupportedError, match="layers_to_save"):
-        tl.trace(TinyMLP(), _tiny_mlp_input(), backend="mlx", layers_to_save=["relu_1_3_raw:1"])
+        tl.trace(
+            TinyMLP(),
+            _tiny_mlp_input(),
+            backend="mlx",
+            capture=tl.options.CaptureOptions(layers_to_save=["relu_1_3_raw:1"]),
+        )
 
 
 @pytest.mark.optional
@@ -524,7 +533,7 @@ def test_mlx_hooks_raise() -> None:
 
     hooks: list[dict[str, Any]] = [{"target": "linear_1_1", "action": lambda x: x}]
     with pytest.raises(BackendUnsupportedError, match="hooks"):
-        tl.trace(TinyMLP(), _tiny_mlp_input(), hooks=hooks)
+        tl.trace(TinyMLP(), _tiny_mlp_input(), capture=tl.options.CaptureOptions(hooks=hooks))
 
 
 @pytest.mark.optional

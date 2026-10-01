@@ -39,7 +39,7 @@ class _TinyModel(nn.Module):
 def _save_runnable(tmp_path: Path, **save_kwargs: Any) -> Path:
     model = _TinyModel().eval()
     x = torch.randn(2, 4)
-    trace = tl.trace(model, x, intervention_ready=True)
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     bundle = tmp_path / "artifact.tlspec"
     tl.save(trace, str(bundle), level="runnable", **save_kwargs)
     return bundle

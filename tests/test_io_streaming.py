@@ -124,7 +124,12 @@ def test_streaming_writes_blobs_before_postprocess(
     monkeypatch.setattr(postprocess_module, "_add_output_layers", _capturing_add_output_layers)
 
     model, inputs = _make_streaming_model()
-    trace_fn(model, inputs, save_outs_to=bundle_path, layers_to_save="all")
+    trace_fn(
+        model,
+        inputs,
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        streaming=tl.options.StreamingOptions(bundle_path=bundle_path),
+    )
 
     assert observed["final_exists"] is False
     tmp_dirs = observed["tmp_dirs"]
@@ -144,9 +149,8 @@ def test_step_19_finalizes_bundle_and_keeps_outs_in_memory(tmp_path: Path) -> No
     trace = tl.trace(
         model,
         inputs,
-        save_outs_to=bundle_path,
-        keep_outs_in_memory=True,
-        layers_to_save="all",
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=True),
     )
 
     saved_layers = _saved_layers(trace)
@@ -171,9 +175,8 @@ def test_step_20_evicts_streamed_outs_when_requested(tmp_path: Path) -> None:
     trace = tl.trace(
         model,
         inputs,
-        save_outs_to=bundle_path,
-        keep_outs_in_memory=False,
-        layers_to_save="all",
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
     )
 
     saved_layers = _saved_layers(trace)
@@ -198,9 +201,9 @@ def test_streaming_mid_pass_exception_marks_partial_tmp_dir(tmp_path: Path) -> N
         trace_fn(
             model,
             inputs,
-            save_outs_to=bundle_path,
-            activation_transform=_raise_on_out,
-            layers_to_save="all",
+            capture=tl.options.CaptureOptions(layers_to_save="all"),
+            save=tl.options.SaveOptions(activation_transform=_raise_on_out),
+            streaming=tl.options.StreamingOptions(bundle_path=bundle_path),
         )
 
     assert not bundle_path.exists()
@@ -219,9 +222,11 @@ def test_streaming_rejects_non_tensor_activation_transform_output(tmp_path: Path
         trace_fn(
             model,
             inputs,
-            save_outs_to=bundle_path,
-            activation_transform=lambda tensor: tensor.detach().cpu().numpy(),
-            layers_to_save="all",
+            capture=tl.options.CaptureOptions(layers_to_save="all"),
+            save=tl.options.SaveOptions(
+                activation_transform=lambda tensor: tensor.detach().cpu().numpy()
+            ),
+            streaming=tl.options.StreamingOptions(bundle_path=bundle_path),
         )
 
     assert not bundle_path.exists()
@@ -239,9 +244,9 @@ def test_streaming_is_always_strict_for_sparse_tensors(tmp_path: Path) -> None:
         trace_fn(
             model,
             inputs,
-            save_outs_to=bundle_path,
-            activation_transform=lambda tensor: tensor.to_sparse(),
-            layers_to_save="all",
+            capture=tl.options.CaptureOptions(layers_to_save="all"),
+            save=tl.options.SaveOptions(activation_transform=lambda tensor: tensor.to_sparse()),
+            streaming=tl.options.StreamingOptions(bundle_path=bundle_path),
         )
 
     assert not bundle_path.exists()
@@ -291,7 +296,7 @@ def test_streaming_finalize_baseexception_marks_partial_and_is_sweepable(
             model,
             inputs,
             storage=tl.to_disk(bundle_path),
-            layers_to_save="all",
+            capture=tl.options.CaptureOptions(layers_to_save="all"),
         )
 
     # The KeyboardInterrupt must propagate unwrapped (not swallowed, not
@@ -334,7 +339,7 @@ def test_streaming_finalize_rename_failure_marks_partial(
             model,
             inputs,
             storage=tl.to_disk(bundle_path),
-            layers_to_save="all",
+            capture=tl.options.CaptureOptions(layers_to_save="all"),
         )
 
     tmp_dirs = _tmp_dirs_for(bundle_path)
@@ -378,7 +383,7 @@ def test_streaming_write_blob_baseexception_marks_partial_and_is_sweepable(
             model,
             inputs,
             storage=tl.to_disk(bundle_path),
-            layers_to_save="all",
+            capture=tl.options.CaptureOptions(layers_to_save="all"),
         )
 
     assert not bundle_path.exists()
@@ -403,7 +408,12 @@ def test_out_sink_receives_saved_tensors_and_is_mutually_exclusive(
         received.append((label, tensor))
 
     model, inputs = _make_streaming_model()
-    trace = tl.trace(model, inputs, out_sink=_sink, layers_to_save="all")
+    trace = tl.trace(
+        model,
+        inputs,
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        streaming=tl.options.StreamingOptions(out_callback=_sink),
+    )
     capture_time_layers = [layer for layer in _saved_layers(trace) if not layer.is_output]
 
     assert received
@@ -418,8 +428,9 @@ def test_out_sink_receives_saved_tensors_and_is_mutually_exclusive(
         trace_fn(
             model2,
             inputs2,
-            save_outs_to=tmp_path / "stream_bundle.tl",
-            out_sink=_sink,
+            streaming=tl.options.StreamingOptions(
+                bundle_path=tmp_path / "stream_bundle.tl", out_callback=_sink
+            ),
         )
 
 
@@ -432,9 +443,8 @@ def test_selective_streaming_save_writes_selected_payloads(tmp_path: Path) -> No
     trace = trace_fn(
         model,
         inputs,
-        layers_to_save="linear",
-        save_outs_to=bundle_path,
-        keep_outs_in_memory=False,
+        capture=tl.options.CaptureOptions(layers_to_save="linear"),
+        streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
     )
 
     saved = _saved_layers(trace)
@@ -453,7 +463,12 @@ def test_selective_out_sink_still_works() -> None:
         received.append((label, tensor))
 
     model, inputs = _make_streaming_model()
-    trace = tl.trace(model, inputs, out_sink=_sink, layers_to_save="linear")
+    trace = tl.trace(
+        model,
+        inputs,
+        capture=tl.options.CaptureOptions(layers_to_save="linear"),
+        streaming=tl.options.StreamingOptions(out_callback=_sink),
+    )
 
     capture_time_layers = [layer for layer in _saved_layers(trace) if not layer.is_output]
     assert capture_time_layers
@@ -490,9 +505,8 @@ def test_lazy_refs_point_at_final_bundle_path_after_streaming_save(tmp_path: Pat
     trace = tl.trace(
         model,
         inputs,
-        save_outs_to=bundle_path,
-        keep_outs_in_memory=True,
-        layers_to_save="all",
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=True),
     )
 
     first_saved_layer = _saved_layers(trace)[0]
@@ -513,7 +527,12 @@ def test_streaming_bundle_manifest_is_unified_and_schema_valid(tmp_path: Path) -
 
     bundle_path = tmp_path / "stream_bundle.tl"
     model, inputs = _make_streaming_model()
-    trace = trace_fn(model, inputs, save_outs_to=bundle_path, layers_to_save="all")
+    trace = trace_fn(
+        model,
+        inputs,
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        streaming=tl.options.StreamingOptions(bundle_path=bundle_path),
+    )
 
     assert detect_tlspec_format(bundle_path) == "v2.0_unified"
     validate_tlspec(bundle_path)

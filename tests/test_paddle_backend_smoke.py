@@ -122,7 +122,12 @@ def test_paddle_preview_rejects_random_seed() -> None:
     """Paddle preview rejects random_seed instead of storing inert metadata."""
 
     with pytest.raises(BackendUnsupportedError, match="random_seed"):
-        tl.trace(lambda x: x + 1, _input(), backend="paddle", random_seed=123)
+        tl.trace(
+            lambda x: x + 1,
+            _input(),
+            backend="paddle",
+            capture=tl.options.CaptureOptions(random_seed=123),
+        )
 
 
 @pytest.mark.parametrize(

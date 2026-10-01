@@ -59,7 +59,12 @@ class _TwoIdenticalCheckpoints(nn.Module):
 
 def _captured(model: nn.Module, x: torch.Tensor, *, backward: bool = True) -> tl.Trace:
     torch.manual_seed(0)
-    trace = tl.trace(model, x, backward_ready=True, save_mode="reference")
+    trace = tl.trace(
+        model,
+        x,
+        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True),
+    )
     if backward:
         trace.log_backward(trace.output_ops[0].out.sum())
     return trace
@@ -109,7 +114,10 @@ def test_backward_derived_site_candidates_resolve_under_armed_brackets() -> None
     torch.manual_seed(0)
     with _activate_aten_recording_for_tests():
         trace = tl.trace(
-            _OneCheckpoint(), torch.randn(3, 4), backward_ready=True, save_mode="reference"
+            _OneCheckpoint(),
+            torch.randn(3, 4),
+            save_mode="reference",
+            capture=tl.options.CaptureOptions(backward_ready=True),
         )
         trace.log_backward(trace.output_ops[0].out.sum())
     witness = trace.checkpoint_invocation_witness
@@ -188,7 +196,10 @@ def test_unwitnessed_enter_sets_d6_instead_of_staying_silent() -> None:
     # TorchLens discloses that honestly and the disclosure is expected here.
     with pytest.warns(UserWarning, match="no graph/source provenance"):
         trace = tl.trace(
-            _PausedCheckpoint(), torch.randn(3, 4), backward_ready=True, save_mode="reference"
+            _PausedCheckpoint(),
+            torch.randn(3, 4),
+            save_mode="reference",
+            capture=tl.options.CaptureOptions(backward_ready=True),
         )
     trace.log_backward(trace.output_ops[0].out.sum())
     witness = trace.checkpoint_invocation_witness
@@ -208,7 +219,11 @@ def test_classifier_unavailable_sets_d1_and_no_tokens(monkeypatch) -> None:
 
 def test_unmatched_backward_warn_sets_d4_and_warn_once_preserved() -> None:
     torch.manual_seed(0)
-    trace = tl.trace(nn.Linear(4, 2), torch.randn(3, 4), backward_ready=True)
+    trace = tl.trace(
+        nn.Linear(4, 2),
+        torch.randn(3, 4),
+        capture=tl.options.CaptureOptions(backward_ready=True),
+    )
     foreign = torch.randn(3, requires_grad=True)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")

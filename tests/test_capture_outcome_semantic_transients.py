@@ -75,7 +75,11 @@ def _leaked(trace: tl.Trace) -> list[str]:
 def test_completed_capture_drops_the_semantic_output_scratch() -> None:
     """The historical normal-return arm keeps working."""
 
-    trace = tl.trace(_model_with_tokenizer(), torch.ones(1, 3), output_style="classification")
+    trace = tl.trace(
+        _model_with_tokenizer(),
+        torch.ones(1, 3),
+        capture=tl.options.CaptureOptions(output_style="classification"),
+    )
     assert _leaked(trace) == []
 
 
@@ -90,7 +94,7 @@ def test_halted_capture_drops_the_semantic_output_scratch() -> None:
         _model_with_tokenizer(),
         torch.ones(1, 3),
         halt=tl.func("relu"),
-        output_style="classification",
+        capture=tl.options.CaptureOptions(output_style="classification"),
     )
     assert trace.halted is True
     assert _leaked(trace) == []
@@ -104,7 +108,7 @@ def test_intervened_capture_drops_the_semantic_output_scratch() -> None:
         torch.ones(1, 3),
         save=tl.func("relu"),
         intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
-        output_style="classification",
+        capture=tl.options.CaptureOptions(output_style="classification"),
     )
     assert _leaked(trace) == []
 
@@ -124,7 +128,11 @@ def test_failed_capture_drops_the_semantic_output_scratch() -> None:
     model = Boom().eval()
     model._torchlens_output_tokenizer = _Tokenizer()
     with pytest.raises(RuntimeError) as excinfo:
-        tl.trace(model, torch.ones(1, 3), output_style="classification")
+        tl.trace(
+            model,
+            torch.ones(1, 3),
+            capture=tl.options.CaptureOptions(output_style="classification"),
+        )
     partial = getattr(excinfo.value, "partial_log", None)
     if partial is None:
         pytest.skip("this capture path attaches no partial product")
@@ -150,7 +158,9 @@ def test_halt_does_not_break_decoding_on_the_completed_path() -> None:
 
     model = Text().eval()
     model._torchlens_output_tokenizer = _Tokenizer()
-    trace = tl.trace(model, torch.ones(1, 2), output_style="hf_text")
+    trace = tl.trace(
+        model, torch.ones(1, 2), capture=tl.options.CaptureOptions(output_style="hf_text")
+    )
     assert trace.output_postprocessor is not None
     assert trace.output_postprocessor.style == "hf_text"
     assert trace.decoded_output is not None
@@ -201,7 +211,12 @@ def test_plain_pickle_never_carries_the_live_tokenizer(halt: bool) -> None:
 
     model = _model_with_tokenizer()
     kwargs = {"halt": tl.func("relu")} if halt else {}
-    trace = tl.trace(model, torch.ones(1, 3), output_style="classification", **kwargs)
+    trace = tl.trace(
+        model,
+        torch.ones(1, 3),
+        **kwargs,
+        capture=tl.options.CaptureOptions(output_style="classification"),
+    )
     state = trace.__getstate__()
     for name in _SEMANTIC_OUTPUT_TRANSIENT_FIELDS:
         assert name not in state, name
@@ -223,13 +238,13 @@ def test_pickle_of_a_halted_trace_stays_tokenizer_free_by_size() -> None:
         _HaltableClassifier().eval(),
         torch.ones(1, 3),
         halt=tl.func("relu"),
-        output_style="classification",
+        capture=tl.options.CaptureOptions(output_style="classification"),
     )
     with_tok = tl.trace(
         _model_with_tokenizer(),
         torch.ones(1, 3),
         halt=tl.func("relu"),
-        output_style="classification",
+        capture=tl.options.CaptureOptions(output_style="classification"),
     )
     tokenizer_bytes = len(pickle.dumps(_Tokenizer()))
     delta = abs(len(pickle.dumps(with_tok)) - len(pickle.dumps(plain)))
@@ -246,7 +261,7 @@ def test_halted_trace_with_tokenizer_saves_and_reloads(tmp_path) -> None:
         _model_with_tokenizer(),
         torch.ones(1, 3),
         halt=tl.func("relu"),
-        output_style="classification",
+        capture=tl.options.CaptureOptions(output_style="classification"),
     )
     path = tmp_path / "halted_semantic.tlspec"
     tl.save(trace, str(path))

@@ -53,7 +53,7 @@ def tiny_summary_log() -> Generator[tl.Trace, None, None]:
     """Return a metadata-only log for the tiny summary model."""
     model = TinySummaryModel()
     x = torch.randn(1, 3, 8, 8)
-    log = tl.trace(model, x, layers_to_save=None)
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=None))
     try:
         yield log
     finally:
@@ -161,7 +161,11 @@ def test_all_level_options(
 def test_compute_summary_handles_multi_pass_layers(level: str) -> None:
     """Compute and cost summaries should aggregate repeated-layer timing."""
 
-    log = tl.trace(RecurrentSummaryModel(), torch.randn(1, 3), layers_to_save=None)
+    log = tl.trace(
+        RecurrentSummaryModel(),
+        torch.randn(1, 3),
+        capture=tl.options.CaptureOptions(layers_to_save=None),
+    )
     try:
         summary_text = log.summary(level=level)  # type: ignore[arg-type]
     finally:
@@ -182,7 +186,11 @@ def test_memory_summary_names_recurrent_layers_with_pass_count() -> None:
     on each of N rows; those rows carry the pass-qualified label instead.
     """
 
-    log = tl.trace(RecurrentSummaryModel(), torch.randn(1, 3), layers_to_save=None)
+    log = tl.trace(
+        RecurrentSummaryModel(),
+        torch.randn(1, 3),
+        capture=tl.options.CaptureOptions(layers_to_save=None),
+    )
     try:
         rolled_text = log.summary(level="memory", mode="rolled")
         auto_text = log.summary(level="memory")
@@ -227,7 +235,7 @@ def test_repr_remains_short_for_resnet18() -> None:
     torchvision_models = pytest.importorskip("torchvision.models")
     model = torchvision_models.resnet18()
     x = torch.randn(1, 3, 64, 64)
-    log = tl.trace(model, x, layers_to_save=None)
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=None))
     try:
         rendered = repr(log)
     finally:
@@ -239,6 +247,6 @@ def test_torchlens_summary_wrapper() -> None:
     """The top-level wrapper should return the rendered summary string."""
     model = TinySummaryModel()
     x = torch.randn(1, 3, 8, 8)
-    summary_text = tl.summary(model, x)
+    summary_text = tl.visualization.summary(model, x)
     assert isinstance(summary_text, str)
     assert "Model: TinySummaryModel" in summary_text

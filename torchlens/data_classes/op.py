@@ -52,7 +52,6 @@ from typing import (
 
 import torch
 
-from .._deprecations import MISSING
 from .._errors import (
     ArgumentTypeError,
     InvalidArgumentError,
@@ -3529,9 +3528,6 @@ class Op(_SelectionOperand):
         *,
         model: Any = None,
         x: Any = None,
-        engine: Any = MISSING,
-        confirm_mutation: Any = MISSING,
-        strict: Any = MISSING,
         intervention: Any = None,
     ) -> "Trace":
         """Apply an intervention to this op through the owning Trace.
@@ -3541,17 +3537,11 @@ class Op(_SelectionOperand):
         transform:
             Transform or hook to apply to this operation's output.
         model:
-            Model required when ``engine="rerun"``.
+            Model required when ``intervention.engine="rerun"``.
         x:
-            Input required when ``engine="rerun"``.
-        engine:
-            ``"auto"``, ``"replay"``, ``"rerun"``, or ``"set_only"``.
-        confirm_mutation:
-            Suppress root mutation warnings when intentionally mutating.
-        strict:
-            Whether selector and propagation checks should raise.
+            Input required when ``intervention.engine="rerun"``.
         intervention:
-            Grouped intervention options.
+            Grouped intervention options (``InterventionOptions``).
 
         Returns
         -------
@@ -3564,9 +3554,6 @@ class Op(_SelectionOperand):
             transform,
             model=model,
             x=x,
-            engine=engine,
-            confirm_mutation=confirm_mutation,
-            strict=strict,
             intervention=intervention,
         )
 

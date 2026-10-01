@@ -423,10 +423,10 @@ def test_backward_accessors_raise_for_all_non_backward_backends() -> None:
     ("flag", "trace_kwargs"),
     [
         ("interventions", {"intervene": "PREDICATE"}),
-        ("rng_replay", {"random_seed": 0}),
-        ("rng_replay", {"save_rng_states": True}),
-        ("backward_capture", {"backward_ready": True}),
-        ("backward_capture", {"save_grads": "all"}),
+        ("rng_replay", {"capture": tl.options.CaptureOptions(random_seed=0)}),
+        ("rng_replay", {"capture": tl.options.CaptureOptions(save_rng_states=True)}),
+        ("backward_capture", {"capture": tl.options.CaptureOptions(backward_ready=True)}),
+        ("backward_capture", {"capture": tl.options.CaptureOptions(save_grads="all")}),
         ("streaming", {"storage": "STORAGE"}),
     ],
 )

@@ -208,7 +208,7 @@ log = tl.trace(
 )
 edited = log.fork("ablated")
 edited.attach_hooks(tl.head(3, "q"), tl.zero_ablate())
-edited.rerun(model, x)
+edited.run(model, x)
 ```
 
 Static patching uses the same scatter-back path:
@@ -217,7 +217,7 @@ Static patching uses the same scatter-back path:
 patch = torch.zeros_like(log.modules["blocks.0.attn"].facets.head(3).q)
 edited = log.fork("patched")
 edited.set(tl.facet("q").head(3), patch)
-edited.rerun(model, x)
+edited.run(model, x)
 ```
 
 `tl.head(index)` without a facet name targets the default attention projection

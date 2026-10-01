@@ -274,7 +274,7 @@ def test_mlx_function_root_mode_remains_available() -> None:
         MLXSimpleMLP(),
         _input(),
         backend="mlx",
-        module_identity_mode="function_root",
+        capture=tl.options.CaptureOptions(module_identity_mode="function_root"),
     )
 
     assert trace.module_identity_mode == "function_root"

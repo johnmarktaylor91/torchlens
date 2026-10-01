@@ -169,10 +169,10 @@ def _retro_trace(model: nn.Module, x: torch.Tensor, successor: object) -> tl.Tra
     return tl.trace(
         model,
         x,
-        save=tl.func("conv2d") & tl.followed_by(successor),  # type: ignore[arg-type]
+        save=tl.func("conv2d") & tl.followed_by(successor),
         lookback=4,
         lookback_payload_policy="detached_raw",
-        random_seed=123,
+        capture=tl.options.CaptureOptions(random_seed=123),
     )
 
 
@@ -218,9 +218,9 @@ def test_copy_policies_pause_logging_for_internal_tensor_ops() -> None:
     log = tl.trace(
         CopyDuringLoggingModel(),
         torch.ones(2),
-        layers_to_save="all",
-        save_arg_values=True,
-        random_seed=123,
+        capture=tl.options.CaptureOptions(
+            layers_to_save="all", save_arg_values=True, random_seed=123
+        ),
     )
 
     layer_types = [op.layer_type for op in log.layer_list]
@@ -303,9 +303,9 @@ def test_nested_container_inplace_arg_snapshot_preserves_pre_call_value() -> Non
     log = tl.trace(
         ForeachNestedMutationModel(),
         torch.ones(2),
-        layers_to_save="all",
-        save_arg_values=True,
-        random_seed=123,
+        capture=tl.options.CaptureOptions(
+            layers_to_save="all", save_arg_values=True, random_seed=123
+        ),
     )
 
     foreach = log["foreachadd_1_2"]
@@ -358,7 +358,11 @@ def test_followed_by_saves_only_conv_feeding_relu_with_matching_payload() -> Non
 
     model = PartialConvRelu()
     x = torch.randn(1, 1, 4, 4)
-    full = tl.trace(model, x.clone(), layers_to_save="all", random_seed=123)
+    full = tl.trace(
+        model,
+        x.clone(),
+        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=123),
+    )
     log = _retro_trace(model, x.clone(), tl.func("relu"))
     saved = _saved_conv_ops(log)
     assert [op.label for op in saved] == [_conv_ops(log)[0].label]
@@ -395,7 +399,7 @@ def test_followed_by_out_of_window_parent_warns() -> None:
             save=tl.func("conv2d") & tl.followed_by(tl.func("relu")),
             lookback=1,
             lookback_payload_policy="detached_raw",
-            random_seed=123,
+            capture=tl.options.CaptureOptions(random_seed=123),
         )
     assert _saved_conv_ops(log) == []
 
@@ -422,7 +426,7 @@ def test_lookback_payload_window_is_bounded_and_evicts_candidates() -> None:
                 save=tl.func("conv2d") & tl.followed_by(tl.func("relu")),
                 lookback=1,
                 lookback_payload_policy="detached_raw",
-                random_seed=123,
+                capture=tl.options.CaptureOptions(random_seed=123),
             )
     candidates = getattr(log, "_predicate_lookback_candidates")
     assert len(candidates) <= 1

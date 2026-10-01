@@ -334,8 +334,8 @@ Available helpers: `tl.zero_ablate`, `tl.mean_ablate`, `tl.resample_ablate`,
 `tl.project_off`, `tl.swap_with`, `tl.splice_module`.
 
 For post-hoc DAG replay and isolated experiments, capture with
-`intervention_ready=True` and use `log.fork()` + `log.replay()` /
-`log.rerun(model, x)`. Live hooks during rerun require capture-time selectors
+`intervention_ready=True` and use `log.fork()` + `log.push()` /
+`log.run(model, x)`. Live hooks during rerun require capture-time selectors
 (e.g. `tl.func(...)`, `tl.module(...)`); finalized labels resolve via
 `log.find_sites(...)`. See [docs/intervention_api.md](docs/intervention_api.md)
 for the full reference.
@@ -518,7 +518,7 @@ works, and the recommended workaround for each context.
 
 TorchLens recovers most detached `from torch import ...` references with a disclosed rescue
 re-run and a small mechanical belt. The historical broad `sys.modules` crawl and
-`patch_policy=` rollout are deleted; those arguments are deprecated no-ops. For the strongest
+`patch_policy=` rollout are deleted, along with the former no-op arguments. For the strongest
 and simplest guarantee, call `torchlens.backends.torch.wrappers.wrap_torch()` before creating
 detached references. The optional `escape_detector="shadow"` diagnoses raw callable escapes. See
 [detached-reference handling](docs/migration/scoped_detached_patching.md) and the

@@ -35,7 +35,6 @@ import weakref
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, Literal, Optional, cast
 
-from .._deprecations import MISSING
 from .._errors import AmbiguousOpLookupError, InvalidArgumentError, RecordBindingError
 from .._io import (
     TLSPEC_VERSION,
@@ -1858,9 +1857,6 @@ class Layer(_SelectionOperand):
         *,
         model: Any = None,
         x: Any = None,
-        engine: Any = MISSING,
-        confirm_mutation: Any = MISSING,
-        strict: Any = MISSING,
         intervention: Any = None,
     ) -> "Trace":
         """Apply an intervention to this layer through the owning Trace.
@@ -1870,17 +1866,11 @@ class Layer(_SelectionOperand):
         transform:
             Transform or hook to apply to this layer's output.
         model:
-            Model required when ``engine="rerun"``.
+            Model required when ``intervention.engine="rerun"``.
         x:
-            Input required when ``engine="rerun"``.
-        engine:
-            ``"auto"``, ``"replay"``, ``"rerun"``, or ``"set_only"``.
-        confirm_mutation:
-            Suppress root mutation warnings when intentionally mutating.
-        strict:
-            Whether selector and propagation checks should raise.
+            Input required when ``intervention.engine="rerun"``.
         intervention:
-            Grouped intervention options.
+            Grouped intervention options (``InterventionOptions``).
 
         Returns
         -------
@@ -1893,9 +1883,6 @@ class Layer(_SelectionOperand):
             transform,
             model=model,
             x=x,
-            engine=engine,
-            confirm_mutation=confirm_mutation,
-            strict=strict,
             intervention=intervention,
         )
 

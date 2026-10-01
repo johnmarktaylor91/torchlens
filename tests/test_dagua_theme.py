@@ -7,6 +7,7 @@ import example_models
 import pytest
 import torch
 
+import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens.experimental import dagua
 
@@ -48,7 +49,7 @@ finally:
 def test_trace_to_dagua_graph_builds_semantic_nodes_and_clusters() -> None:
     pytest.importorskip("dagua")
     model = example_models.AestheticFrozenMix().eval()
-    log = trace_fn(model, torch.rand(1, 8), layers_to_save=None)
+    log = trace_fn(model, torch.rand(1, 8), capture=tl.options.CaptureOptions(layers_to_save=None))
     try:
         graph = dagua.trace_to_dagua_graph(log, vis_mode="unrolled", direction="leftright")
         labels = [graph.node_labels[i] for i in range(graph.num_nodes)]
@@ -63,7 +64,11 @@ def test_trace_to_dagua_graph_builds_semantic_nodes_and_clusters() -> None:
 def test_dagua_renderer_exports_svg(tmp_path: Path) -> None:
     pytest.importorskip("dagua")
     model = example_models.ResidualBlockModel().eval()
-    log = trace_fn(model, torch.rand(1, 16, 16, 16), layers_to_save=None)
+    log = trace_fn(
+        model,
+        torch.rand(1, 16, 16, 16),
+        capture=tl.options.CaptureOptions(layers_to_save=None),
+    )
     out = tmp_path / "residual.svg"
     try:
         log.draw(
@@ -84,7 +89,7 @@ def test_dagua_renderer_exports_svg(tmp_path: Path) -> None:
 def test_render_audit_exposes_unused_fields() -> None:
     pytest.importorskip("dagua")
     model = example_models.SimpleFF().eval()
-    log = trace_fn(model, torch.rand(5, 5), layers_to_save=None)
+    log = trace_fn(model, torch.rand(5, 5), capture=tl.options.CaptureOptions(layers_to_save=None))
     try:
         audit = dagua.build_render_audit(log).to_dict()
         assert "trace_unused" in audit

@@ -104,7 +104,7 @@ def test_tinygrad_recurrence_detection_off_preserves_single_pass_layout() -> Non
         _repeated_fn,
         (Tensor.ones(2, 4), _weight()),
         backend="tinygrad",
-        recurrence_detection=False,
+        capture=tl.options.CaptureOptions(recurrence_detection=False),
     )
 
     assert trace.recurrence_detection is False
@@ -195,8 +195,8 @@ def test_tinygrad_derived_grads_survive_grouping() -> None:
         loss_fn,
         (x, _weight()),
         backend="tinygrad",
-        recurrence_detection=False,
         grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True),
+        capture=tl.options.CaptureOptions(recurrence_detection=False),
     )
 
     assert set(grouped.derived_grads.keys()) == set(ungrouped.derived_grads.keys())

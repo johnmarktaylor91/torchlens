@@ -36,7 +36,9 @@ def test_backward_ready_input_leaf_gradient_is_bit_exact_to_eager() -> None:
     traced_input = input_values.clone().requires_grad_(True)
 
     eager_model(eager_input).sum().backward()
-    trace = tl.trace(traced_model, traced_input, backward_ready=True)
+    trace = tl.trace(
+        traced_model, traced_input, capture=tl.options.CaptureOptions(backward_ready=True)
+    )
     traced_output = trace.output_ops[0].out
     assert isinstance(traced_output, torch.Tensor)
     traced_output.sum().backward()
