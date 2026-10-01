@@ -557,12 +557,16 @@ def _finalize_single_op(
         (``strip_raw_label_suffix``), becomes the layer label; the RAW label
         (``_raw`` suffix intact) stays the main lookup key. Multi-pass
         members become pass-qualified: ``label`` is ``layer_label:pass_index``,
-        and the main key is the pass label. The bare shared layer label lands
-        in ``layer_dict_all_keys`` as an INCIDENTAL raw-index artifact (each
-        pass overwrites it, so it resolves to the LAST pass, matching the
-        torch backend) — it is NOT a contract; bare-label addressing of
-        multi-pass layers refuses on every path that matters
-        (``multipass_bare_label_ambiguous``).
+        and the main key is the pass label. The bare shared layer label is
+        ALWAYS registered in ``layer_dict_all_keys`` too (torch parity:
+        ``postprocess/labeling.py::_add_lookup_keys_for_layer_entry``
+        unconditionally includes ``layer_entry.layer_label`` in every op's
+        lookup keys). For a single-pass op the bare key is unambiguous and
+        resolves exactly that op. For a multi-pass layer it stays an
+        INCIDENTAL raw-index artifact (each pass overwrites it, so it
+        resolves to the LAST pass, matching the torch backend) — it is NOT
+        a contract there; bare-label addressing of multi-pass layers refuses
+        on every path that matters (``multipass_bare_label_ambiguous``).
 
     Returns
     -------
@@ -591,11 +595,16 @@ def _finalize_single_op(
     trace.layer_dict_main_keys[label if num_passes == 1 else pass_label] = op_log
     trace.layer_dict_all_keys[label] = op_log
     trace.layer_dict_all_keys[pass_label] = op_log
-    if num_passes > 1:
-        # Incidental, not a contract: the bare layer label is a raw-index
-        # artifact that every pass overwrites (last pass wins, torch parity).
-        trace.layer_dict_all_keys[layer_label] = op_log
-        op_log.lookup_keys.append(layer_label)
+    # Torch parity: always register the bare layer label (not just for
+    # multi-pass groups). Without this, single-pass ops -- the common case --
+    # were never resolvable by bare layer_label through layer_dict_all_keys,
+    # which silently starved module-hierarchy building
+    # (postprocess/finalization.py::_build_module_logs looks each recorded
+    # layer up by its bare label via this exact dict) of every single-pass
+    # op, leaving Module.layer_labels empty for any module whose ops never
+    # recur and tripping the module_layer_containment invariant.
+    trace.layer_dict_all_keys[layer_label] = op_log
+    op_log.lookup_keys.append(layer_label)
     trace.op_labels.append(pass_label)
     if layer_label not in trace.layer_num_calls:
         trace.layer_labels.append(layer_label)
