@@ -155,7 +155,8 @@ jobs:
             --index-strategy unsafe-best-match \
             -e ".[dev,test,tabular]" \
             "torch==2.7.1+cpu" \
-            "torchvision==0.22.1+cpu"
+            "torchvision==0.22.1+cpu" \
+            "transformers==5.14.1"
           uv pip check
           python - <<'PY'
           import torch
@@ -274,7 +275,8 @@ jobs:
             --index-strategy unsafe-best-match \
             -e ".[dev,test,tabular]" \
             "torch==2.8.0+cpu" \
-            "torchvision==0.23.0+cpu"
+            "torchvision==0.23.0+cpu" \
+            "transformers==5.14.1"
           uv pip check
 
       - name: Run the smoke tier under coverage with a floor
@@ -868,7 +870,8 @@ jobs:
             --index-strategy unsafe-best-match \
             -e ".[dev,test,tabular]" \
             "torch==2.8.0+cpu" \
-            "torchvision==0.23.0+cpu"
+            "torchvision==0.23.0+cpu" \
+            "transformers==5.14.1"
           uv pip check
 
       - name: Smoke tier under three fresh shuffle seeds
@@ -1053,7 +1056,7 @@ jobs:
             "torch==2.13.0+cpu" \
             "numpy==1.26.4"
           uv pip check
-          python -c 'import lit_nlp, numpy, transformers; assert numpy.__version__.startswith("1."), numpy.__version__; print("lit-nlp", lit_nlp.__version__, "transformers", transformers.__version__)'
+          python -c 'import importlib.metadata, lit_nlp, numpy, transformers; assert numpy.__version__.startswith("1."), numpy.__version__; print("lit-nlp", importlib.metadata.version("lit-nlp"), "transformers", transformers.__version__)'
 
       - name: Warm the tiny-checkpoint cache (the test file itself runs OFFLINE)
         run: |
