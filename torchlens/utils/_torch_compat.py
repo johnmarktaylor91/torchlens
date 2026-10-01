@@ -126,6 +126,7 @@ __all__ = [
     "HAS_REDUCE_TUPLE_DIM",
     "HAS_CPU_HALF_KERNELS",
     "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
+    "HAS_META_ITEM_GUARD",
     "tensor_any_over_dims",
     "HAS_CACHED_UNTYPED_STORAGE_WRAPPER",
     "HAS_TENSOR_SEQUENCE_SLOT_FIX",
@@ -1447,6 +1448,31 @@ def get_cpu_float8_deterministic_fill_support(*, force_probe: bool = False) -> b
     return HAS_CPU_FLOAT8_DETERMINISTIC_FILL
 
 
+def get_meta_item_guard_support(*, force_probe: bool = False) -> bool:
+    """Return whether meta-tensor scalar extraction raises torch's own guard, lazily.
+
+    Parameters
+    ----------
+    force_probe:
+        Run the probe even on first call. Diagnostic surfaces set this; no
+        product code consumes this flag today (test-only), so a plain
+        ``import torchlens`` never pays for the transient meta-tensor
+        allocation and ``.item()`` call.
+
+    Returns
+    -------
+    bool
+        See :func:`_probe_meta_item_guard`. Cached after the first call.
+    """
+
+    global HAS_META_ITEM_GUARD, _META_ITEM_GUARD_PROBED
+
+    if not _META_ITEM_GUARD_PROBED or force_probe:
+        HAS_META_ITEM_GUARD = _probe_meta_item_guard()
+        _META_ITEM_GUARD_PROBED = True
+    return HAS_META_ITEM_GUARD
+
+
 def _probe_node_prehook() -> bool:
     """Return whether autograd graph nodes support ``register_prehook``.
 
@@ -1614,6 +1640,37 @@ def _probe_reduce_tuple_dim() -> bool:
     return True
 
 
+def _probe_meta_item_guard() -> bool:
+    """Return whether ``Tensor.item()`` raises its own guard on meta tensors.
+
+    Returns
+    -------
+    bool
+        ``True`` when calling ``.item()`` (or any other scalar extraction,
+        e.g. ``bool()``) on a meta tensor raises a plain ``RuntimeError``
+        carrying torch's own "Tensor.item() cannot be called on meta
+        tensors" guard. torch 2.1-2.2 have no such guard: the call instead
+        falls all the way through to the aten dispatcher's generic
+        ``NotImplementedError`` ("... not implemented for this backend").
+        TorchLens's structure-only forward-boundary backstop
+        (``backends/torch/structure_only_belt.py``) classifies a caught
+        ``NotImplementedError`` as ``meta_kernel_unavailable`` and a generic
+        ``RuntimeError`` as ``value_dependent_branch_unsupported`` by
+        raising-frame PROVENANCE, never message text -- correctly, since
+        the two exception FAMILIES genuinely differ here. Absence is a
+        healthy old install surfacing the honest alternate typed refusal,
+        not a TorchLens degradation.
+    """
+
+    try:
+        torch.ones((), device="meta").item()
+    except NotImplementedError:
+        return False
+    except RuntimeError:
+        return True
+    return False
+
+
 HAS_VARIABLE_FUNCTIONS: bool = _probe_variable_functions()
 HAS_TORCH_VF: bool = _probe_torch_vf()
 HAS_TORCH_FUNC: bool = _probe_torch_func()
@@ -1666,6 +1723,8 @@ HAS_CPU_HALF_KERNELS: bool = False
 _CPU_HALF_KERNELS_PROBED: bool = False
 HAS_CPU_FLOAT8_DETERMINISTIC_FILL: bool = False
 _CPU_FLOAT8_DETERMINISTIC_FILL_PROBED: bool = False
+HAS_META_ITEM_GUARD: bool = False
+_META_ITEM_GUARD_PROBED: bool = False
 _DYNAMO_OPTIMIZED_MODULE_TYPE: type[Any] | None = None
 _DYNAMO_OPTIMIZED_MODULE_PROBED: bool = False
 _DYNAMO_ORIG_CALLABLE_MARKER_PROBED: bool = False
@@ -1855,6 +1914,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_REDUCE_TUPLE_DIM",
     "HAS_CPU_HALF_KERNELS",
     "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
+    "HAS_META_ITEM_GUARD",
 )
 
 
@@ -1881,6 +1941,7 @@ _LAZY_PROBE_FAMILIES: dict[str, tuple[str, ...]] = {
     "_REDUCE_TUPLE_DIM_PROBED": ("HAS_REDUCE_TUPLE_DIM",),
     "_CPU_HALF_KERNELS_PROBED": ("HAS_CPU_HALF_KERNELS",),
     "_CPU_FLOAT8_DETERMINISTIC_FILL_PROBED": ("HAS_CPU_FLOAT8_DETERMINISTIC_FILL",),
+    "_META_ITEM_GUARD_PROBED": ("HAS_META_ITEM_GUARD",),
     "_FUNCOL_GROUP_RESOLUTION_PROBED": (
         "HAS_FUNCOL_GROUP_RESOLUTION",
         "_FUNCOL_GROUP_RESOLVERS",
@@ -2061,6 +2122,13 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # degradations -- tests that need them skip on these flags.
         "HAS_CPU_HALF_KERNELS",
         "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
+        # torch's own "Tensor.item() cannot be called on meta tensors" guard
+        # postdates the torch 2.1/2.2 floor: its absence means the identical
+        # user situation (a value-dependent branch on a meta tensor) still
+        # refuses typed, just via the sibling meta_kernel_unavailable code
+        # instead of value_dependent_branch_unsupported -- a healthy old
+        # install classified by the honest alternate path, not a degradation.
+        "HAS_META_ITEM_GUARD",
     }
 )
 """Capability flags whose ``False`` is an absent OPTIONAL feature, not a degradation.
