@@ -15,12 +15,12 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens.attribution import onebackward as ob
-from torchlens.utils._torch_compat import HAS_GRADIENT_EDGE
+from torchlens.utils._torch_compat import get_gradient_edge_support
 
 pytestmark = pytest.mark.smoke
 
 _requires_gradient_edge = pytest.mark.skipif(
-    not HAS_GRADIENT_EDGE,
+    not get_gradient_edge_support(),
     reason="one-backward reads require torch.autograd.graph.GradientEdge (2.4+)",
 )
 
@@ -424,7 +424,7 @@ class TestTorchBandGate:
     def test_refusal_when_flag_is_off(self, monkeypatch) -> None:
         from torchlens.attribution.onebackward import _accessor
 
-        monkeypatch.setattr(_accessor, "HAS_GRADIENT_EDGE", False)
+        monkeypatch.setattr(_accessor, "get_gradient_edge_support", lambda: False)
         trace = _trace()
         _read_error(
             lambda: ob.read_edge_index(trace),
@@ -443,7 +443,7 @@ class TestTypedDoorProvocations:
     def test_onebackward_torch_unsupported(self, monkeypatch) -> None:
         from torchlens.attribution.onebackward import _accessor
 
-        monkeypatch.setattr(_accessor, "HAS_GRADIENT_EDGE", False)
+        monkeypatch.setattr(_accessor, "get_gradient_edge_support", lambda: False)
         trace = _trace()
         with pytest.raises(ob.ReadError) as excinfo:
             ob.read_edge_index(trace)
