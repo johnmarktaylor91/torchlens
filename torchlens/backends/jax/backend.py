@@ -24,6 +24,7 @@ from ...backends._finalize import (
     session_callable_identity as _callable_identity,
     value_nbytes as _nbytes,
 )
+from ...capture._nonfinite_prefix import strip_raw_label_suffix
 from ...capture.outcome import stamp_backend_finalized
 from ...data_classes._compaction import compact_op_metadata
 from ...data_classes.derived_grad import (
@@ -65,7 +66,6 @@ from ...postprocess.loop_grouping_adapter import (
     RecurrenceGroupingGraph,
     RecurrenceNode,
     group_recurrent_nodes,
-    strip_raw_label_suffix,
 )
 from ...quantities import Bytes, Duration
 from ...validation.status import (

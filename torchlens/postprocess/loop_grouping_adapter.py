@@ -222,30 +222,6 @@ class RecurrenceAssignment:
     site_key: str | None = None
 
 
-_RAW_LABEL_SUFFIX = "_raw"
-
-
-def strip_raw_label_suffix(label: str) -> str:
-    """Strip the raw-capture ``_raw`` sentinel suffix from a leader label.
-
-    ``RecurrenceAssignment.layer_label`` is always a RAW node label (the
-    singleton fallback and the grouped leader are both drawn straight from
-    ``raw_layer_dict`` keys, e.g. ``"input_1_1_raw"``). Torch's own
-    postprocess renumbers every op into a pretty final label in a later,
-    torch-only step (``postprocess.labeling``), so its callers never expose
-    ``RecurrenceAssignment.layer_label`` directly. The preview/neutral
-    finishers (``backends._finalize``, ``backends.jax.backend``) have no such
-    later step: they set ``op_log.layer_label`` straight from this value, so
-    without stripping, the internal ``_raw`` sentinel leaked into the public
-    ``layer_label``/``trace.layer_labels`` surface and tripped the
-    ``graph_ordering`` "Raw label survived postprocessing" invariant.
-    """
-
-    if label.endswith(_RAW_LABEL_SUFFIX):
-        return label[: -len(_RAW_LABEL_SUFFIX)]
-    return label
-
-
 _ParamCallIdentity = tuple[
     str,
     tuple[str, ...],

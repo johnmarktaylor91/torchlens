@@ -8,6 +8,7 @@ from collections import defaultdict
 from collections.abc import Callable
 from typing import Any, Literal, TypeAlias, cast
 
+from ..capture._nonfinite_prefix import strip_raw_label_suffix
 from ..data_classes._compaction import compact_op_metadata
 from ..data_classes._site_key import SiteKeyMinter
 from ..data_classes.layer import Layer
@@ -18,7 +19,7 @@ from ..ir.workspaces import _init_module_hierarchy_data
 from ..postprocess._grouping_stamp import build_grouping_policy_stamp
 from ..postprocess._recurrence import compute_preview_recurrence_assignments, relabel_edge_metadata
 from ..postprocess.finalization import _build_module_logs, _build_root_module_log
-from ..postprocess.loop_grouping_adapter import RecurrenceAssignment, strip_raw_label_suffix
+from ..postprocess.loop_grouping_adapter import RecurrenceAssignment
 from ..quantities import Bytes
 from .registry import BackendName
 
