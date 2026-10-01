@@ -851,3 +851,44 @@ def test_small_raw_input_pil_round_trips_bounded_image(tmp_path: Path) -> None:
     assert loaded.raw_input is not None
     assert loaded.raw_input.size[0] <= 256
     assert loaded.raw_input.size[1] <= 256
+
+
+@pytest.mark.smoke
+def test_defaultdict_op_equivalence_classes_scrub_does_not_raise() -> None:
+    """N5: a defaultdict ``op_equivalence_classes`` must not crash the scrub.
+
+    ``Trace.op_equivalence_classes`` starts life as ``defaultdict(set)``
+    (``data_classes/trace.py``); the torch backend's postprocessing always
+    reassigns it to a plain ``dict`` before save (``cleanup.py``,
+    ``labeling.py``), but the neutral/preview backends (tf, jax, tinygrad,
+    paddle, mlx) never run that reassignment, so a defaultdict reaches
+    ``_scrub_nondeterministic_identities`` unchanged. The remap rebuilt the
+    mapping with ``type(equivalence_groups)(generator_of_pairs)``, and
+    ``defaultdict.__init__`` treats its first positional argument as
+    ``default_factory``, which must be callable or None: a generator raised
+    ``TypeError: first argument must be callable or None`` on every preview
+    suite that saved a trace.
+    """
+
+    import collections
+
+    from torchlens._io.scrub import _scrub_nondeterministic_identities
+
+    groups = collections.defaultdict(set)
+    groups["conv2d_param_000002_param_000001"] = {"conv2d_1_1"}
+    groups["relu"] = {"relu_2_1"}
+    state: dict[str, Any] = {"op_equivalence_classes": groups}
+
+    _scrub_nondeterministic_identities(state)
+
+    rebuilt = state["op_equivalence_classes"]
+    assert isinstance(rebuilt, collections.defaultdict)
+    assert rebuilt.default_factory is set
+    # No matching param barcode was registered (no params/ops/layers were
+    # supplied), so canonical_equivalence_key's barcode-sort fallback fires:
+    # the trailing param_NNNNNN run is sorted in place.
+    assert set(rebuilt) == {"conv2d_param_000001_param_000002", "relu"}
+    assert rebuilt["conv2d_param_000001_param_000002"] == {"conv2d_1_1"}
+    assert rebuilt["relu"] == {"relu_2_1"}
+    # The preserved factory still behaves like a defaultdict on a miss.
+    assert rebuilt["unseen"] == set()
