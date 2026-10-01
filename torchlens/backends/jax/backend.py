@@ -2019,9 +2019,17 @@ class JAXBackend:
                 if member in raw_to_final_op_label
             ]
             op_log.equivalent_ops = equivalent_labels_by_key.get(op_log.equivalence_class, set())
-            op_log.lookup_keys = [label, op_log.label]
-            if op_log.num_passes > 1:
-                op_log.lookup_keys.append(op_log.layer_label)
+            # Torch parity (see the identical fix in
+            # ``backends/_finalize.py::_finalize_single_op``): always
+            # register the bare layer label, not just for multi-pass groups.
+            # For a single-pass op the bare key is unambiguous and resolves
+            # exactly that op; without it, ``postprocess/finalization.py``'s
+            # ``_build_module_logs`` -- which looks each module's recorded
+            # ops up by bare layer label through ``layer_dict_all_keys`` --
+            # silently dropped every single-pass op (the common case) from
+            # ``Module.layer_labels``, tripping the ``module_attribution``
+            # metadata invariant.
+            op_log.lookup_keys = [label, op_log.label, op_log.layer_label]
             trace.layer_list.append(op_log)
             trace.layer_dict_main_keys[op_log.label] = op_log
             for lookup_key in op_log.lookup_keys:
