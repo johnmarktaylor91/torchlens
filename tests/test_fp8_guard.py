@@ -21,7 +21,7 @@ from collections.abc import Iterator
 
 import pytest
 import torch
-from conftest import permit_cpu_float8_allocation
+from support.fp8_guard import permit_cpu_float8_allocation
 from torch import nn
 
 import torchlens as tl
