@@ -292,6 +292,10 @@ SUITE = [
     # W4 registry killer for primitive_op_invariants: an in-memory FK
     # corruption that a return-None disarm would let through silently.
     "tests/test_aten_profile.py::test_live_fk_tamper_names_primitive_invariant",
+    # mutants2 lane (2026-10-01): direct per-arm killers for the shard-4 (and
+    # un-sharded family) survivor list -- one duck-typed-fake test per raise
+    # arm, each proving every earlier arm on the same checker stays silent.
+    "tests/validation_goldens/test_arm_campaign_killers_mutants2.py",
 ]
 
 #: Known baseline reds, deselected so a mutant verdict is never confounded.
