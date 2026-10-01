@@ -1668,7 +1668,13 @@ def test_jax_trace_unrolls_cond_executed_branch_with_control_edge() -> None:
     assert decisions[0].out.item() == 1
     assert branch_ops
     assert not other_branch_ops
-    assert {decisions[0].label} <= set().union(*(_control_parent_labels(op) for op in branch_ops))
+    # Torch parity: a control-parent reference resolves through the
+    # CONDITIONAL label map (bare ``layer_label`` for a single-pass
+    # referenced op, like this decision node; pass-qualified ``label`` only
+    # for a multi-pass one -- see dbfd72d51's identical fix).
+    assert {decisions[0].layer_label} <= set().union(
+        *(_control_parent_labels(op) for op in branch_ops)
+    )
     assert trace.validate_forward_pass([]) is True
 
 
