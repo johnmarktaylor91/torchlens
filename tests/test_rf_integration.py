@@ -118,10 +118,17 @@ class _TwoInputRF(nn.Module):
         return self.left(left) + self.right(right)
 
 
-def _last_op(trace: Any, func_name: str) -> Any:
-    """Return the last operation with an exact captured function name."""
+def _last_op(trace: Any, func_name: str, *, field: str = "func_name") -> Any:
+    """Return the last operation with an exact captured function or layer-type name.
 
-    matches = [op for op in trace.layer_list if op.func_name == func_name]
+    ``func_name`` is the backend's raw captured call name, which is NOT
+    always the canonical op name: tinygrad elementwise ops are reconstructed
+    from the UOp DAG and carry the lambda wrapper's own name (``"<lambda>"``)
+    as ``func_name``, with the semantic op name (``"add"``, ``"mul"``, ...)
+    only on ``layer_type`` instead. Pass ``field="layer_type"`` for those.
+    """
+
+    matches = [op for op in trace.layer_list if getattr(op, field) == func_name]
     assert matches
     return matches[-1]
 
@@ -322,7 +329,7 @@ def test_non_torch_geometry_works_but_gradient_probe_is_gated() -> None:
         return value + 1.0
 
     trace = tl.trace(add_one, tinygrad.Tensor([1.0, 2.0, 3.0]), backend="tinygrad")
-    target = _last_op(trace, "add")
+    target = _last_op(trace, "add", field="layer_type")
     descriptor = next(iter(target.receptive_field.per_input.values()))
 
     assert descriptor.status is tl.receptive_field.ReceptiveFieldStatus.EXACT
