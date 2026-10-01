@@ -18,7 +18,7 @@ from ..ir.workspaces import _init_module_hierarchy_data
 from ..postprocess._grouping_stamp import build_grouping_policy_stamp
 from ..postprocess._recurrence import compute_preview_recurrence_assignments, relabel_edge_metadata
 from ..postprocess.finalization import _build_module_logs, _build_root_module_log
-from ..postprocess.loop_grouping_adapter import RecurrenceAssignment
+from ..postprocess.loop_grouping_adapter import RecurrenceAssignment, strip_raw_label_suffix
 from ..quantities import Bytes
 from .registry import BackendName
 
@@ -549,7 +549,9 @@ def _finalize_single_op(
     assignment:
         Recurrence assignment for this op when grouping ran. ``None`` (and any
         singleton assignment) reproduces the historical single-pass layout:
-        the raw label stays the layer label and the main lookup key. Multi-pass
+        the raw label, with its internal ``_raw`` capture sentinel stripped
+        (``strip_raw_label_suffix``), becomes the layer label; the RAW label
+        (``_raw`` suffix intact) stays the main lookup key. Multi-pass
         members become pass-qualified: ``label`` is ``layer_label:pass_index``,
         and the main key is the pass label. The bare shared layer label lands
         in ``layer_dict_all_keys`` as an INCIDENTAL raw-index artifact (each
@@ -564,7 +566,9 @@ def _finalize_single_op(
         ``op_log`` and trace lookup dictionaries are mutated in place.
     """
 
-    layer_label = assignment.layer_label if assignment is not None else label
+    layer_label = strip_raw_label_suffix(
+        assignment.layer_label if assignment is not None else label
+    )
     pass_index = assignment.pass_index if assignment is not None else 1
     num_passes = assignment.num_passes if assignment is not None else 1
     pass_label = f"{layer_label}:{pass_index}"

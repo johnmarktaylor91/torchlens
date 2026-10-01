@@ -64,6 +64,7 @@ from ...postprocess.loop_grouping_adapter import (
     RecurrenceGroupingGraph,
     RecurrenceNode,
     group_recurrent_nodes,
+    strip_raw_label_suffix,
 )
 from ...quantities import Bytes, Duration
 from ...validation.status import (
@@ -1881,13 +1882,14 @@ class JAXBackend:
                     equivalence_key=op_log.equivalence_class or label,
                 ),
             )
-            pass_label = f"{assignment.layer_label}:{assignment.pass_index}"
+            layer_label = strip_raw_label_suffix(assignment.layer_label)
+            pass_label = f"{layer_label}:{assignment.pass_index}"
             op_log._label_raw = label
             op_log._layer_label_raw = assignment.layer_label
             op_log.label = pass_label
             op_log.label_short = pass_label
-            op_log.layer_label = assignment.layer_label
-            op_log.layer_label_short = assignment.layer_label
+            op_log.layer_label = layer_label
+            op_log.layer_label_short = layer_label
             op_log.pass_index = assignment.pass_index
             op_log.num_passes = assignment.num_passes
             op_log.equivalence_class = assignment.equivalence_key
