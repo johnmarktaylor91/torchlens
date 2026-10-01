@@ -117,6 +117,12 @@ __all__ = [
     "HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG",
     "HAS_ATTENTION_CAUSAL_BIAS",
     "HAS_EXPANDED_WEIGHTS_CONV_PICKER",
+    "HAS_DETERMINISTIC_FILL_FLAG",
+    "HAS_AMP_GRADSCALER",
+    "HAS_NN_ATTENTION_MODULE",
+    "HAS_RMSNORM_MODULE",
+    "HAS_REDUCE_TUPLE_DIM",
+    "tensor_any_over_dims",
     "HAS_CACHED_UNTYPED_STORAGE_WRAPPER",
     "HAS_TENSOR_SEQUENCE_SLOT_FIX",
     "HAS_TORCH_FUNC",
@@ -1314,6 +1320,96 @@ def _probe_node_prehook() -> bool:
     return node_cls is not None and hasattr(node_cls, "register_prehook")
 
 
+def _probe_deterministic_fill_flag() -> bool:
+    """Return whether ``torch.utils.deterministic.fill_uninitialized_memory`` exists.
+
+    Returns
+    -------
+    bool
+        ``True`` when the ``torch.utils.deterministic`` submodule is
+        discoverable (``find_spec``, never imported eagerly here to avoid
+        paying for a module nothing else needs). Absent on torch 2.1.x (the
+        submodule postdates the 2.1 floor), which is a healthy old install,
+        not a degradation: :func:`read_fill_uninitialized_memory` returns
+        ``None`` and :func:`write_fill_uninitialized_memory` no-ops.
+    """
+
+    try:
+        return importlib.util.find_spec("torch.utils.deterministic") is not None
+    except (ImportError, AttributeError, ValueError):
+        return False
+
+
+def _probe_amp_gradscaler() -> bool:
+    """Return whether the device-agnostic ``torch.amp.GradScaler`` exists.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``torch.amp`` exposes ``GradScaler`` directly (the
+        device-agnostic constructor; torch 2.1-2.2 only ship the CUDA-specific
+        ``torch.cuda.amp.GradScaler``). Absence is a healthy old install, not
+        a degradation -- TorchLens product code never constructs a scaler.
+    """
+
+    return _import_module_attr_or_none("torch.amp", "GradScaler") is not None
+
+
+def _probe_nn_attention_module() -> bool:
+    """Return whether ``torch.nn.attention`` (``SDPBackend``/``sdpa_kernel``) exists.
+
+    Returns
+    -------
+    bool
+        ``True`` when the ``torch.nn.attention`` namespace exposes
+        ``SDPBackend`` and ``sdpa_kernel``. The parent package body is
+        dynamo-free (unlike ``torch.nn.attention.bias``, see
+        :func:`_probe_attention_causal_bias`), so it is safe to import
+        directly. Absent on torch 2.1-2.2 (the namespace postdates the 2.1
+        floor), a healthy old install, not a degradation.
+    """
+
+    return (
+        _import_module_attr_or_none("torch.nn.attention", "SDPBackend") is not None
+        and _import_module_attr_or_none("torch.nn.attention", "sdpa_kernel") is not None
+    )
+
+
+def _probe_rmsnorm_module() -> bool:
+    """Return whether ``torch.nn.RMSNorm`` exists.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``torch.nn`` exposes the built-in ``RMSNorm`` module
+        (added torch 2.4). Absence is a healthy old install, not a
+        degradation -- TorchLens classifies RMSNorm-family modules by class
+        name, never by constructing ``torch.nn.RMSNorm`` itself.
+    """
+
+    return getattr(torch.nn, "RMSNorm", None) is not None
+
+
+def _probe_reduce_tuple_dim() -> bool:
+    """Return whether ``Tensor.any``/``Tensor.all`` accept a tuple ``dim``.
+
+    Returns
+    -------
+    bool
+        ``True`` when a boolean tensor's ``.any(dim=(0, 1))`` accepts a tuple
+        of axes directly (added torch 2.2; torch 2.1 only accepts a single
+        int). Absence is a healthy old install: :func:`tensor_any_over_dims`
+        falls back to sequential single-axis reduction.
+    """
+
+    probe = torch.zeros((2, 2), dtype=torch.bool)
+    try:
+        probe.any(dim=(0, 1))
+    except TypeError:
+        return False
+    return True
+
+
 HAS_VARIABLE_FUNCTIONS: bool = _probe_variable_functions()
 HAS_TORCH_VF: bool = _probe_torch_vf()
 HAS_TORCH_FUNC: bool = _probe_torch_func()
@@ -1354,6 +1450,11 @@ HAS_ATTENTION_CAUSAL_BIAS: bool = _probe_attention_causal_bias()
 HAS_EXPANDED_WEIGHTS_CONV_PICKER: bool = _probe_expanded_weights_conv_picker()
 HAS_GRADIENT_EDGE: bool = _probe_gradient_edge()
 HAS_NODE_PREHOOK: bool = _probe_node_prehook()
+HAS_DETERMINISTIC_FILL_FLAG: bool = _probe_deterministic_fill_flag()
+HAS_AMP_GRADSCALER: bool = _probe_amp_gradscaler()
+HAS_NN_ATTENTION_MODULE: bool = _probe_nn_attention_module()
+HAS_RMSNORM_MODULE: bool = _probe_rmsnorm_module()
+HAS_REDUCE_TUPLE_DIM: bool = _probe_reduce_tuple_dim()
 _DYNAMO_OPTIMIZED_MODULE_TYPE: type[Any] | None = None
 _DYNAMO_OPTIMIZED_MODULE_PROBED: bool = False
 _DYNAMO_ORIG_CALLABLE_MARKER_PROBED: bool = False
@@ -1524,6 +1625,11 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_EXPANDED_WEIGHTS_CONV_PICKER",
     "HAS_GRADIENT_EDGE",
     "HAS_NODE_PREHOOK",
+    "HAS_DETERMINISTIC_FILL_FLAG",
+    "HAS_AMP_GRADSCALER",
+    "HAS_NN_ATTENTION_MODULE",
+    "HAS_RMSNORM_MODULE",
+    "HAS_REDUCE_TUPLE_DIM",
 )
 
 
@@ -1694,6 +1800,18 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # one-backward read refuses typed instead of degrading.
         "HAS_GRADIENT_EDGE",
         "HAS_NODE_PREHOOK",
+        # Deterministic uninit-memory fill, device-agnostic GradScaler,
+        # torch.nn.attention, torch.nn.RMSNorm, and tuple-dim any()/all() all
+        # postdate the torch>=2.1 floor: their absence is a healthy old
+        # install with a real fallback (fill flag) or nothing to shim
+        # (TorchLens product code never constructs a GradScaler/RMSNorm or
+        # calls sdpa_kernel itself; the tuple-dim reduction falls back to
+        # sequential single-axis reduction).
+        "HAS_DETERMINISTIC_FILL_FLAG",
+        "HAS_AMP_GRADSCALER",
+        "HAS_NN_ATTENTION_MODULE",
+        "HAS_RMSNORM_MODULE",
+        "HAS_REDUCE_TUPLE_DIM",
     }
 )
 """Capability flags whose ``False`` is an absent OPTIONAL feature, not a degradation.
@@ -3801,26 +3919,93 @@ else:
 # Every control below is a PUBLIC torch surface present since before the 2.1
 # support floor (r-b7 R42-1 retired the six HAS_* flags that used to guard
 # them: their False branches were unreachable on any supported torch, and the
-# CUDA-named ones read True even on CUDA-less wheels). Snapshots record every
-# control affirmatively; ``None`` survives only in the APPLY direction as
-# schema tolerance for artifacts recorded by older producers.
+# CUDA-named ones read True even on CUDA-less wheels) -- WITH ONE EXCEPTION:
+# ``torch.utils.deterministic.fill_uninitialized_memory`` (just below)
+# postdates the 2.1 floor -- the ``torch.utils.deterministic`` submodule does
+# not exist at all on torch 2.1.x -- and is feature-detected through
+# ``HAS_DETERMINISTIC_FILL_FLAG``. Snapshots record every control
+# affirmatively; ``None`` survives as the feature-detected absence of the
+# fill flag and, in the APPLY direction, as schema tolerance for artifacts
+# recorded by older producers.
+
+if HAS_DETERMINISTIC_FILL_FLAG:
+    import torch.utils.deterministic as _torch_deterministic_module
+else:
+    _torch_deterministic_module = None
 
 
 def read_fill_uninitialized_memory() -> bool | None:
-    """Return the deterministic uninit-memory fill flag.
+    """Return the deterministic uninit-memory fill flag, or ``None`` if absent.
 
     THE one sanctioned read of ``torch.utils.deterministic.fill_uninitialized_memory``
     (a module-``__getattr__`` property invisible to static typing): the ambient
     snapshot and the producer-side determinism refinement both route here.
+
+    Returns
+    -------
+    bool | None
+        The live flag value, or ``None`` on torch 2.1.x, where the
+        ``torch.utils.deterministic`` submodule does not exist
+        (``HAS_DETERMINISTIC_FILL_FLAG`` is ``False``) -- a healthy old
+        install, not a degradation.
     """
 
-    return bool(torch.utils.deterministic.fill_uninitialized_memory)  # type: ignore[attr-defined]
+    if _torch_deterministic_module is None:
+        return None
+    return bool(_torch_deterministic_module.fill_uninitialized_memory)
 
 
 def write_fill_uninitialized_memory(value: bool) -> None:
-    """Set the deterministic uninit-memory fill flag (caller checks the flag)."""
+    """Set the deterministic uninit-memory fill flag (caller checks the flag).
 
-    torch.utils.deterministic.fill_uninitialized_memory = bool(value)  # type: ignore[attr-defined]
+    No-ops on torch 2.1.x, where the ``torch.utils.deterministic`` submodule
+    does not exist (``HAS_DETERMINISTIC_FILL_FLAG`` is ``False``) -- there is
+    nothing to set and nothing to degrade.
+    """
+
+    if _torch_deterministic_module is None:
+        return
+    _torch_deterministic_module.fill_uninitialized_memory = bool(value)
+
+
+def tensor_any_over_dims(tensor: torch.Tensor, dims: tuple[int, ...]) -> torch.Tensor:
+    """Reduce a boolean tensor with ``any`` over multiple axes at once.
+
+    ``Tensor.any(dim=<tuple>)`` postdates the torch 2.1 floor (torch 2.1 only
+    accepts a single int axis). THE one sanctioned multi-axis ``any`` reduction:
+    product code that needs to OR-reduce several axes together routes here
+    instead of calling ``tensor.any(dim=dims)`` directly.
+
+    Parameters
+    ----------
+    tensor:
+        Tensor to reduce (typically boolean).
+    dims:
+        Axes to reduce over. An empty tuple returns ``tensor`` unchanged.
+
+    Returns
+    -------
+    torch.Tensor
+        ``tensor`` with every axis in ``dims`` reduced away, identical to
+        ``tensor.any(dim=dims)`` on torch>=2.2.
+
+    Notes
+    -----
+    On torch 2.1 (``HAS_REDUCE_TUPLE_DIM`` is ``False``), falls back to
+    sequential single-axis reduction, removing axes from highest to lowest so
+    an already-normalized smaller target axis never shifts as a larger one is
+    removed.
+    """
+
+    if not dims:
+        return tensor
+    if HAS_REDUCE_TUPLE_DIM:
+        return tensor.any(dim=dims)
+    ndim = tensor.ndim
+    result = tensor
+    for axis in sorted({axis % ndim for axis in dims}, reverse=True):
+        result = result.any(dim=axis)
+    return result
 
 
 def tensor_version_or_none(tensor: Any) -> int | None:

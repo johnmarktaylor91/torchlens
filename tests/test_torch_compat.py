@@ -393,6 +393,16 @@ def test_torch_capability_snapshot_contract() -> None:
         # values so floor legs stay green.
         "HAS_GRADIENT_EDGE": tc.HAS_GRADIENT_EDGE,
         "HAS_NODE_PREHOOK": tc.HAS_NODE_PREHOOK,
+        # L8 floor fixes: deterministic uninit-memory fill, device-agnostic
+        # GradScaler, torch.nn.attention, torch.nn.RMSNorm, and tuple-dim
+        # any()/all() all postdate the torch>=2.1 floor (OPTIONAL flags --
+        # absence is a healthy old install with a real fallback or nothing to
+        # shim). Build-dependent, so mirror the live post-snapshot capability.
+        "HAS_DETERMINISTIC_FILL_FLAG": tc.HAS_DETERMINISTIC_FILL_FLAG,
+        "HAS_AMP_GRADSCALER": tc.HAS_AMP_GRADSCALER,
+        "HAS_NN_ATTENTION_MODULE": tc.HAS_NN_ATTENTION_MODULE,
+        "HAS_RMSNORM_MODULE": tc.HAS_RMSNORM_MODULE,
+        "HAS_REDUCE_TUPLE_DIM": tc.HAS_REDUCE_TUPLE_DIM,
         # W21 cold-start: FSDP wrapper detection is lazily probed (never imports
         # torch.distributed.fsdp on plain captures); distributed availability is
         # build-dependent, so mirror the live post-snapshot capability.
@@ -701,3 +711,77 @@ def test_force_eager_stance_scope_construction_failure_degrades_without_exit(
         assert active is False
     # The capability flag degraded (monkeypatch restores it at teardown).
     assert tc.HAS_SET_STANCE is False
+
+
+def test_fill_uninitialized_memory_flag_visible_in_capability_snapshot() -> None:
+    """``HAS_DETERMINISTIC_FILL_FLAG`` and friends are published, not silent.
+
+    L8 floor fix: a torch build whose ``torch.utils.deterministic`` submodule
+    is absent (torch 2.1.x) must still show the flag in the diagnostic
+    snapshot (``tl.compat.report()`` / ``tl.utils.doctor()``), mirroring the
+    live capability rather than dropping the key.
+    """
+
+    snapshot = tc.get_torch_capability_snapshot()
+    assert snapshot["HAS_DETERMINISTIC_FILL_FLAG"] == tc.HAS_DETERMINISTIC_FILL_FLAG
+    assert snapshot["HAS_AMP_GRADSCALER"] == tc.HAS_AMP_GRADSCALER
+    assert snapshot["HAS_NN_ATTENTION_MODULE"] == tc.HAS_NN_ATTENTION_MODULE
+    assert snapshot["HAS_RMSNORM_MODULE"] == tc.HAS_RMSNORM_MODULE
+    assert snapshot["HAS_REDUCE_TUPLE_DIM"] == tc.HAS_REDUCE_TUPLE_DIM
+
+
+def test_read_fill_uninitialized_memory_returns_none_when_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The read degrades to ``None`` (never crashes) when the submodule is absent."""
+
+    monkeypatch.setattr(tc, "_torch_deterministic_module", None)
+    assert tc.read_fill_uninitialized_memory() is None
+
+
+def test_write_fill_uninitialized_memory_noops_when_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The write is a no-op (never crashes) when the submodule is absent."""
+
+    monkeypatch.setattr(tc, "_torch_deterministic_module", None)
+    tc.write_fill_uninitialized_memory(True)  # must not raise
+
+
+def test_read_fill_uninitialized_memory_reads_live_module_when_present(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The read/write pair round-trips through a stubbed submodule when present."""
+
+    stub = SimpleNamespace(fill_uninitialized_memory=True)
+    monkeypatch.setattr(tc, "_torch_deterministic_module", stub)
+    assert tc.read_fill_uninitialized_memory() is True
+    tc.write_fill_uninitialized_memory(False)
+    assert stub.fill_uninitialized_memory is False
+
+
+def test_tensor_any_over_dims_matches_native_any_on_every_axis_combo() -> None:
+    """The multi-axis ``any`` helper matches ``tensor.any(dim=<int>)`` chaining."""
+
+    mask = torch.zeros((2, 3, 4), dtype=torch.bool)
+    mask[1, 2, 3] = True
+    for dims in ((0,), (1, 2), (0, 2), (0, 1, 2), ()):
+        expected = mask
+        for axis in sorted(dims, reverse=True):
+            expected = expected.any(dim=axis)
+        assert torch.equal(tc.tensor_any_over_dims(mask, dims), expected)
+
+
+def test_tensor_any_over_dims_fallback_matches_native_tuple_dim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The torch-2.1 fallback path is byte-identical to the native tuple-dim call."""
+
+    if not tc.HAS_REDUCE_TUPLE_DIM:
+        pytest.skip("native tuple-dim any() unavailable; nothing to compare against")
+    mask = torch.rand((3, 4, 5)) > 0.5
+    monkeypatch.setattr(tc, "HAS_REDUCE_TUPLE_DIM", False)
+    fallback = tc.tensor_any_over_dims(mask, (0, 2))
+    monkeypatch.setattr(tc, "HAS_REDUCE_TUPLE_DIM", True)
+    native = tc.tensor_any_over_dims(mask, (0, 2))
+    assert torch.equal(fallback, native)
