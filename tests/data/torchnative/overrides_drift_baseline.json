@@ -5,6 +5,7 @@
  "unseen": [
   "torch.H.__get__",
   "torch.T.__get__",
+  "torch.__cuda_array_interface__.__get__",
   "torch._backward_hooks.__get__",
   "torch._base.__get__",
   "torch._cdata.__get__",
