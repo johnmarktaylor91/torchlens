@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import gc
 import json
-import runpy
 from collections import Counter
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -15,6 +13,7 @@ from torch import nn
 from torch.nn import functional as F
 
 import torchlens as tl
+from tests.classics_corpus._loader import build_entry, corpus_entries
 from torchlens._io.runnable import build_sparse_run_descriptor, preflight_sparse_run_descriptor
 from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
@@ -238,16 +237,19 @@ def classics_resolver_coverage_report(
     max_models: int = 300,
     start_index: int = 0,
 ) -> dict[str, Any]:
-    """Run reattachment readiness over direct-build menagerie classics.
+    """Run reattachment readiness over the classics corpus (``tests/classics_corpus``).
+
+    This is the expanded-corpus release report of the resolver gate; the per-entry
+    gate itself runs in ``tests/test_classics_corpus.py``.
 
     Parameters
     ----------
     max_models:
-        Maximum number of sorted classic source modules to attempt. Every
+        Maximum number of corpus entries (manifest order) to attempt. Every
         attempted failure is retained in the returned report.
     start_index:
-        Zero-based sorted candidate offset. This permits process-isolated
-        shards so one hostile legacy module cannot terminate the corpus run.
+        Zero-based entry offset. This permits process-isolated shards so one
+        hostile model cannot terminate the corpus run.
 
     Returns
     -------
@@ -255,24 +257,15 @@ def classics_resolver_coverage_report(
         Counts, complete unavailable-key lists, and every model failure.
     """
 
-    classic_root = Path(__file__).parents[1] / "menagerie" / "classics"
-    candidates = []
-    for path in sorted(classic_root.glob("*.py")):
-        source = path.read_text(encoding="utf-8", errors="replace")
-        if "def build(" in source and "def example_input(" in source:
-            candidates.append(path)
+    candidates = corpus_entries()
     selected = candidates[start_index : start_index + max_models]
     records_by_key: dict[FunctionRegistryKey, ResolverRecord] = {}
     failures: list[dict[str, str]] = []
     registry_occurrences = 0
     successful_models = 0
-    for path in selected:
+    for entry in selected:
         try:
-            namespace = runpy.run_path(str(path))
-            build = namespace["build"]
-            example_input = namespace["example_input"]
-            model = build().eval()
-            inputs = example_input()
+            model, inputs = build_entry(entry)
             trace = tl.trace(
                 model,
                 inputs,
@@ -290,7 +283,7 @@ def classics_resolver_coverage_report(
                     f"{diagnostic.code.value}:{diagnostic.message}"
                     for diagnostic in report.diagnostics
                 )
-                failures.append({"model": path.stem, "error": details})
+                failures.append({"model": entry.id, "error": details})
             else:
                 successful_models += 1
             for record in report.resolver_records:
@@ -298,14 +291,14 @@ def classics_resolver_coverage_report(
                 if previous.status is not record.status:
                     failures.append(
                         {
-                            "model": path.stem,
+                            "model": entry.id,
                             "error": f"inconsistent resolver status for {_key_label(record.recorded_key)}",
                         }
                     )
         except Exception as exc:  # noqa: BLE001 - corpus report must retain every failed case
             failures.append(
                 {
-                    "model": path.stem,
+                    "model": entry.id,
                     "error": f"{type(exc).__name__}: {exc}",
                 }
             )

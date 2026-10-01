@@ -2964,7 +2964,7 @@ already-retained capture-time `save=` selection, not a second selector.
 
 ### Source-code embedding and `include_source` (privacy disclosure)
 
-A `.tlspec` is the portable, shareable format (menagerie snapshots, paper artifacts, bug reports,
+A `.tlspec` is the portable, shareable format (model-catalog snapshots, paper artifacts, bug reports,
 model-zoo entries). By default it embeds the traced model's **verbatim source code** -- the whole
 class body (including class-level constants), `__init__`/`forward` source, docstrings, and per-call
 `code_context` source lines. This powers the `Trace.draw(code_panel=...)` source panels, so it is
@@ -3090,14 +3090,19 @@ Glossary of v2 vocabulary introduced by this amendment (canonical here per the l
 
 ## 13. Resolver compatibility release gate
 
-Every release runs readiness over a representative torch corpus covering the menagerie classics and
-test-suite model families, deduplicates by complete `FunctionRegistryKey`, and reports exact, alias,
-unresolved, and ambiguous counts. The threshold is **zero unresolved or ambiguous torch keys**. A
-nonzero result is release-blocking unless each key is explicitly documented here with a bounded
-compatibility disposition; filtering, skipping, or reporting only successful keys is forbidden.
+Every release runs readiness over a representative torch corpus covering the classics corpus
+(`tests/classics_corpus/`, a coverage-chosen sample of hand-built historical and unusual
+architectures) and test-suite model families, deduplicates by complete `FunctionRegistryKey`, and
+reports exact, alias, unresolved, and ambiguous counts. The threshold is **zero unresolved or
+ambiguous torch keys**. A nonzero result is release-blocking unless each key is explicitly documented
+here with a bounded compatibility disposition; filtering, skipping, or reporting only successful keys
+is forbidden.
 
 The checked-in fast gate covers linear, convolution, normalization, pooling, embedding, recurrent,
-attention, Tensor-method, operator, and special-function families. The Stage 9 release report records
-the expanded classics run, including all unsuccessful model attempts as well as every unavailable
-unique key. A sweep of the entire 10,000+ menagerie catalog is deliberately separate and deferred;
-the classics plus test-suite corpus is the runnable release gate.
+attention, Tensor-method, operator, and special-function families. Every classics corpus entry is
+gated individually by `tests/test_classics_corpus.py` (smoke subset per commit, the comprehensive
+tier with the slow suite), and `classics_resolver_coverage_report` in
+`tests/test_tlspec_resolver_coverage.py` produces the release report over the whole corpus, including
+all unsuccessful model attempts as well as every unavailable unique key. A sweep of the full model
+catalog (the Model Menagerie battery) is deliberately separate and runs downstream; the classics
+corpus plus test-suite corpus is the runnable release gate.
