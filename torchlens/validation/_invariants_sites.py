@@ -89,19 +89,22 @@ def _check_site_key_uniqueness(ops: list, name: str) -> None:
             # function_root capture, e.g. JAX's source-path-based scan/while
             # recurrence, never populates one). Site keys are INTENTIONALLY
             # shared across recurring passes of one site (the whole point of
-            # site_key_v1): ``equivalence_class`` is the grouping algorithm's
-            # own "these occurrences are interchangeable" signal, computed
-            # independently of whether every such occurrence actually landed
-            # in the same multi-pass Layer (a JAX while loop's pre-loop
-            # condition check shares its "lt" equivalence_class with every
-            # in-loop repeat, but is a separate singleton Layer -- the N+1
-            # cond-vs-N-body asymmetry is a distinct, pre-existing grouping
-            # boundary, not a site-identity bug). Two ops sharing BOTH a
-            # site_key and an equivalence_class are therefore never a
-            # collision regardless of their individual pass_index; two ops
-            # sharing a site_key with DIFFERENT equivalence classes still is
-            # -- the real bug class I-S2 exists for.
-            call_instance = (ROOT_CALL_INSTANCE, getattr(op, "equivalence_class", None))
+            # site_key_v1), and neither ``equivalence_class`` (shared by
+            # every structurally-interchangeable occurrence, so it alone
+            # collapses distinct passes back together) nor ``pass_index``
+            # (restarts at 1 per Layer, so a site split across more than one
+            # Layer by a pre-existing grouping boundary -- e.g. a JAX while
+            # loop's pre-loop condition check, which shares its "lt"
+            # equivalence_class with every in-loop repeat but lands in its
+            # own singleton Layer because of the N+1-cond-vs-N-body arity
+            # mismatch -- collides on pass_index too) reliably reconstructs
+            # "which occurrence is this" across that boundary. The raw
+            # capture-time label is the one signal guaranteed unique per
+            # occurrence regardless of how grouping resolved; falling back to
+            # it makes I-S2 a true no-op for backends without a module stack
+            # (never a false positive) while leaving the check exactly as
+            # strict as before for every backend that populates one.
+            call_instance = (ROOT_CALL_INSTANCE, getattr(op, "_label_raw", op.label))
         identity = (str(op.site_key), call_instance)
         if identity in seen:
             raise MetadataInvariantError(
