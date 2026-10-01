@@ -311,10 +311,23 @@ def test_capability_dump_moved_to_detail_accessor() -> None:
     report = tl.compat.report(nn.Linear(3, 4), torch.randn(2, 3))
     row = report.row("torch_capabilities")
     assert "capabilities present" in row.details
-    assert len(row.details) < 600
     snapshot = report.capability_snapshot()
     assert isinstance(snapshot, dict) and len(snapshot) > 10
     assert all(isinstance(value, bool) for value in snapshot.values())
+    # The compact absences-first format vs. the legacy full name=value dump
+    # (sumfam wave-0 item 2, ~1,900 chars for ALL ~70 flags with their
+    # values): a fixed byte budget doesn't scale across the declared
+    # torch>=2.1 matrix, where an old-floor build genuinely has far more
+    # absent (healthy-old-install) flags than current dev torch. Bound the
+    # cell relative to what it MUST contain (every absent name, comma-joined)
+    # plus a small fixed prefix, so the check still catches a regression to
+    # the verbose per-flag "name=value" dump (roughly double the length,
+    # since it repeats for every flag, present or absent) on any torch.
+    absent_names = [name for name, available in snapshot.items() if not available]
+    minimum_len = len("capabilities present; absent: ") + sum(
+        len(name) + 2 for name in absent_names
+    )
+    assert minimum_len <= len(row.details) < minimum_len + 200
     # Absent flags stay NAMED in the cell (absences-first doctrine).
     for name, available in snapshot.items():
         if not available:
