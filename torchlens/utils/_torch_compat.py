@@ -350,7 +350,7 @@ _RUNNABLE_TORCH_ALIASES: tuple[RunnableTorchAlias, ...] = (
         None,
         "private_to_public:_C._linalg.linalg_*->torch.linalg.*",
         (2, 1),
-        (2, 13),
+        (2, 14),
         "linalg_",
     ),
     RunnableTorchAlias(
