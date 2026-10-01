@@ -32,6 +32,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens.utils import rng as rng_module
+from torchlens.utils._torch_compat import autocast_is_enabled
 from torchlens.utils.rng import AutocastRestore, host_nondeterminism_monitor
 
 pytestmark = pytest.mark.smoke
@@ -316,7 +317,7 @@ def test_autocast_restore_unwinds_a_partial_enter(monkeypatch):
         raise TypeError("injected second-device autocast failure")
 
     monkeypatch.setattr(torch.amp, "autocast", _second_entry_fails)
-    assert not torch.is_autocast_enabled("cpu")
+    assert not autocast_is_enabled("cpu")
     with pytest.raises(TypeError, match="injected second-device autocast failure"):
         with AutocastRestore(
             {
@@ -326,7 +327,7 @@ def test_autocast_restore_unwinds_a_partial_enter(monkeypatch):
         ):
             pass
     monkeypatch.undo()
-    assert not torch.is_autocast_enabled("cpu")
+    assert not autocast_is_enabled("cpu")
     assert calls["n"] == 2
 
 
