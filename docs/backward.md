@@ -159,13 +159,21 @@ as of the tlspec v8 coordinated bump): token count, per-token pack counts / unpa
 site-key candidates, degrade flags, and an evidence-scoped completeness verdict. Degrade flags
 cover: classifier unavailable, patch unavailable, exotic subclass, the unmatched-backward warn,
 the reentrant node sentinel (`CheckpointFunctionBackward` in the discovery stream — reentrant
-checkpointing is definitionally token-free), and unwitnessed checkpoint enters (paused logging,
-non-owner thread, inside an engine invocation). Any flag withdraws the affirmative
-"no checkpoint invocation observed" verdict. The private `_checkpoint_hook` class resolves
-through the compat chokepoint behind the named `HAS_CHECKPOINT_HOOK_CLASS` capability flag
-(visible in `tl.utils.doctor()` / `tl.compat.report()`); a torch without it degrades
-fail-closed — the classifier mints NO tokens, never a false one. The typed checkpoint-ambiguity refusal is an S2
-amendment (R-L9-1) and lands with the identity-read accessors once the amendment is ratified.
+checkpointing is definitionally token-free), unwitnessed checkpoint enters (paused logging,
+non-owner thread, inside an engine invocation), and an unpreserved hook-identity attribute
+(torch >= 2.14's `_checkpoint_internal_hook` stashes a private `_user_hooks` attribute directly
+on the pack-hook callable across its `__enter__`/`__exit__` pair; when the token wrapper cannot
+carry that attribute forward, the replacement is skipped instead of installed, so no token mints
+for that enter and torch's own hook-stack accounting is never desynced). Any flag withdraws the
+affirmative "no checkpoint invocation observed" verdict. The private `_checkpoint_hook` class
+resolves through the compat chokepoint behind the named `HAS_CHECKPOINT_HOOK_CLASS` capability
+flag (visible in `tl.utils.doctor()` / `tl.compat.report()`); a torch without it degrades
+fail-closed — the classifier mints NO tokens, never a false one. The sibling
+`HAS_CHECKPOINT_INTERNAL_HOOK_CLASS` flag (same visibility) tracks whether this torch runtime's
+checkpoint hooks carry that private identity state at all; its absence (torch 2.13 and earlier)
+means the token wrapper's hook-object replacement is unconditionally safe. The typed
+checkpoint-ambiguity refusal is an S2 amendment (R-L9-1) and lands with the identity-read
+accessors once the amendment is ratified.
 
 ## Validation
 
