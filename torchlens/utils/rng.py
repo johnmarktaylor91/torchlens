@@ -73,6 +73,7 @@ from ._torch_compat import (
     HAS_GENERATOR_CLONE_STATE,
     HAS_GENERATOR_GRAPHSAFE_GET_STATE,
     HAS_GENERATOR_GRAPHSAFE_SET_STATE,
+    HAS_GENERATOR_PHILOX_STATE,
     autocast_get_dtype,
     autocast_is_enabled,
     warm_lazy_torch_imports,
@@ -925,6 +926,13 @@ _TORCH_RNG_MODULE_SPECS: tuple[tuple[str, tuple[tuple[str, str, str], ...]], ...
     # ``torch.cuda.random`` does for cuda; found by the independent no-list module
     # discovery immunizer (the same shared-blind-spot class as mtia).
     ("torch.xpu.random", _TORCH_RNG_DEVICE_SPEC),
+    # torch 2.14 adds ``torch.accelerator.random`` (generic accelerator-agnostic
+    # RNG surface, eagerly imported by ``torch.accelerator``, itself eagerly
+    # imported by ``torch/__init__.py``): only ``initial_seed``/``get_rng_state``/
+    # ``get_rng_state_all`` exist there (no ``seed``/``manual_seed``/
+    # ``set_rng_state``/``*_all`` setters), so the broader device spec's
+    # feature-detected ``hasattr`` gate naturally selects just those three rows.
+    ("torch.accelerator.random", _TORCH_RNG_DEVICE_SPEC),
 )
 # Non-function endpoints the enumeration meta-test still demands dispositions for.
 _TORCH_RNG_STRUCTURAL_EXTRAS: tuple[tuple[str, str], ...] = (
@@ -1065,13 +1073,22 @@ structurally covered there (the row's ``note`` names the covering mechanism).
 """
 
 GENERATOR_RETURN_FAMILIES: frozenset[str] = frozenset(
-    {"host_scalar", "state_tensor", "generator", "self_generator", "device_attr"}
+    {
+        "host_scalar",
+        "state_tensor",
+        "generator",
+        "self_generator",
+        "device_attr",
+        "state_tensor_tuple",
+    }
 )
 """Closed return-family vocabulary for :data:`GENERATOR_METHOD_TABLE` rows.
 
 ``host_scalar`` -- Python int; ``state_tensor`` -- ``torch.Tensor`` engine state;
 ``generator`` -- a NEW ``torch.Generator``; ``self_generator`` -- returns the
-receiver (fluent setter); ``device_attr`` -- non-callable getset attribute.
+receiver (fluent setter); ``device_attr`` -- non-callable getset attribute;
+``state_tensor_tuple`` -- a fixed tuple of freshly-minted ``torch.Tensor``
+engine-state values (``philox_state``'s ``(seed, offset, intragraph_offset)``).
 """
 
 
@@ -1158,6 +1175,20 @@ _GENERATOR_METHOD_ROWS: tuple[GeneratorMethodRow, ...] = (
         "capability-raise still marks fail-closed (r66 hon1-F5)",
     ),
     GeneratorMethodRow(
+        "philox_state",
+        "state_tensor_tuple",
+        "mutation",
+        "mutation",
+        "torch 2.14: reserves `increment` Philox outputs, ADVANCING the engine's "
+        "internal offset on every receiver (c10::GeneratorImpl::philox_state; only "
+        "Philox-based engines implement it, so CPU's default mt19937 generator "
+        "raises NotImplementedError -- capability-gated like get_offset/set_offset). "
+        "Marks mutation on BOTH columns (never structural): unlike get_state, this "
+        "call changes engine state as a side effect, so a non-default receiver's "
+        "mutation is still a real, honestly-marked consumption, not inert instance "
+        "state (r67 C1 honesty-first: unknown consumption must ceiling)",
+    ),
+    GeneratorMethodRow(
         "get_state",
         "state_tensor",
         None,
@@ -1197,6 +1228,7 @@ _OPTIONAL_GENERATOR_METHOD_CAPABILITIES: dict[str, bool] = {
     "clone_state": HAS_GENERATOR_CLONE_STATE,
     "graphsafe_get_state": HAS_GENERATOR_GRAPHSAFE_GET_STATE,
     "graphsafe_set_state": HAS_GENERATOR_GRAPHSAFE_SET_STATE,
+    "philox_state": HAS_GENERATOR_PHILOX_STATE,
 }
 
 GENERATOR_METHOD_TABLE: tuple[GeneratorMethodRow, ...] = tuple(
