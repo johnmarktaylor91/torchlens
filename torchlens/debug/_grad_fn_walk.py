@@ -186,6 +186,22 @@ def walk_grad_fn(
     edges: list[tuple[int, int]] = []
     truncated = False
 
+    # Every discovered grad_fn is kept alive (by reference, not just by id())
+    # for the whole walk. Torch's autograd Node Python bindings are not
+    # necessarily interned per underlying C++ node -- accessing
+    # ``next_functions`` can hand back a freshly allocated wrapper object each
+    # time. A node already popped off ``stack`` is held nowhere else (``nodes``
+    # stores only the derived ``GradFnNode`` record, never the grad_fn itself),
+    # so CPython is free to recycle its memory; a later wrapper allocation can
+    # then legitimately receive that SAME address, making ``id(parent) in
+    # nodes`` a false-positive "already visited" hit that silently truncates
+    # the walk before it ever reaches the leaves (observed on torch 2.8: the
+    # walk stopped at the first multi-parent op node, one id() collision away
+    # from every AccumulateGrad leaf). ``_keep_alive`` closes that hazard by
+    # construction, independent of allocator behavior on any given torch/
+    # Python build.
+    _keep_alive: list[Any] = []
+
     stack: list[Any] = []
     for tensor in walkable:
         root_id = id(tensor)
@@ -200,6 +216,7 @@ def walk_grad_fn(
         fn_id = id(fn)
         edges.append((fn_id, root_id))
         if fn_id not in nodes:
+            _keep_alive.append(fn)
             stack.append(fn)
             nodes[fn_id] = _op_node(fn, names_by_id)
 
@@ -216,6 +233,7 @@ def walk_grad_fn(
                 truncated = True
                 nodes[parent_id] = _op_node(parent, names_by_id)
                 continue
+            _keep_alive.append(parent)
             nodes[parent_id] = _op_node(parent, names_by_id)
             stack.append(parent)
 
