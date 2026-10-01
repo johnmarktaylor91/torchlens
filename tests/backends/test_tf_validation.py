@@ -148,12 +148,21 @@ def test_tf_validation_fails_on_initializer_contamination() -> None:
 
 
 def test_tf_validation_identity_annotation_passes_legitimate_passthrough() -> None:
-    """Identity is classified as a label-preserving annotation."""
+    """Identity is classified as a label-preserving annotation.
+
+    The graph needs at least one genuinely replayable (non-exempt) node:
+    a bare ``tf.identity`` call is the ONLY op, so with Identity exempted as
+    an annotation ``replayed_node_count`` would be 0 and validation would
+    legitimately refuse to call that "passed" (exemptions alone cannot
+    produce a passing result -- see ``validation/status.py``'s
+    ``no_nodes_replay_validated`` guard). Add a real op so the identity
+    passthrough is checked alongside something replay actually verifies.
+    """
 
     def identity(x: Any) -> Any:
-        """Return an eager TensorFlow identity."""
+        """Return an eager TensorFlow identity composed with a real op."""
 
-        return tf.identity(x)
+        return tf.identity(x) + 0.0
 
     trace = tl.trace(identity, tf.constant([1.0, 2.0]), backend="tf")
 
