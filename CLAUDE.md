@@ -1007,10 +1007,10 @@ text. The exhaustive error vocabulary and release threshold are maintained in
 specs, adversarial reviews, STATE/SUMMARY files, and the working task tracker are **JMT's eyes
 only** and must NEVER be committed.
 
-- **Private (gitignored, never commit):** all of `.research/`, and `.project-context/` EXCEPT the
-  two whitelisted curated docs. The agent task tracker `.project-context/todos.md` and the
-  agent-facing `.project-context/torchlens_glossary.md` (canonical lives in the vault) are private.
-- **Public (the only tracked `.project-context/` files):** `architecture.md`,
+- **Private (gitignored, never commit):** all of `.research/`, and `.project-context` EXCEPT the
+  two whitelisted curated docs. The agent task tracker `todos.md` in `.project-context` and the
+  agent-facing `torchlens_glossary.md` in `.project-context` (canonical lives in the vault) are private.
+- **Public (the only tracked `.project-context` files):** `architecture.md`,
   `state_of_torchlens.md`. The user-facing glossary is `docs/reference/glossary.md` (shipped)
   — a separate, curated artifact, NOT the agent copy.
 - **Enforcement:** `.gitignore` excludes them and a `no-internal-notes` pre-commit hook
@@ -1031,8 +1031,8 @@ pytest tests/ -m "not rare and not slow" -x --tb=short  # phase-boundary backsto
 
 Tiers by cost: `smoke` selects ~4.9k tests (4,920/12,840 collect-only, measured 2026-08-16).
 The census tip was adb3d450 (the fixwave-5 settle; tri-lab b2 probe).
-The last instrumented `--durations=0` smoke wall measurement (measured 2026-08-13, 4-core
-devbox under parallel sprint load) took 1194s (~20 min) against the then-selected ~3.2k tests
+The last instrumented `--durations=0` smoke wall measurement (measured 2026-08-13, 4-core dev
+box under parallel sprint load) took 1194s (~20 min) against the then-selected ~3.2k tests
 (~500s on a quieter box earlier the same sprint); budget at least that at today's ~40%
 larger selection. Smoke is NOT
 sub-minute and NOT a per-step gate — per-step verification is the targeted test files for
