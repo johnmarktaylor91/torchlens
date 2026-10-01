@@ -132,7 +132,13 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # merged measurement (4794).
     "torchlens/data_classes/op.py": 4800,
     "torchlens/_io/runnable.py": 5000,
-    "torchlens/utils/rng.py": 4950,
+    # 4950 -> 5100 (2026-10-01 L8 floor2 fix): two find_spec-detected
+    # structural-extras rows (the vendored torch.distributed.pipeline
+    # checkpoint save/restore RNG pair, never eagerly imported by anything,
+    # so sys.modules-based detection missed them) land at the one
+    # TORCH_RNG_SURFACE chokepoint; next 50-line step above the measured
+    # 5065.
+    "torchlens/utils/rng.py": 5100,
     # 4600 -> 4350 (2026-08-27 C05 fix cycle): the segment descriptor/label
     # family split to _segment_descriptors.py under R43; re-keyed down to the
     # next 50-line step above the post-split measurement (4326).
