@@ -215,7 +215,9 @@ def _box_for_descriptor(
         empty=False,
         covers_input=all(axis.kind in {"pointwise", "full"} for axis in axes),
         direction=direction,
-        unit_shape=tuple(owner.shape),
+        # ``shape`` is legitimately ``None`` for a non-tensor-valued op (see
+        # the identical note in ``_indeterminate_unit``).
+        unit_shape=tuple(owner.shape) if owner.shape is not None else (),
     )
 
 
