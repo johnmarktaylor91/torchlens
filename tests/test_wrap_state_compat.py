@@ -527,28 +527,7 @@ class TestDerivedCacheCensus:
                 "original torch.cos missing from the dynamo rule map after "
                 "wrap_torch(): the pre-warm did not run before decoration"
             )
-            poisoned_fns = [fn for fn in rule_map if id(fn) in wrapper_ids]
-            if poisoned_fns:
-                import sys as _sys
-
-                for _fn in poisoned_fns:
-                    _orig = _state._decorated_to_orig.get(id(_fn))
-                    print(
-                        "DIAGPRINT poisoned fn=",
-                        _fn,
-                        "module=",
-                        getattr(_fn, "__module__", None),
-                        "qualname=",
-                        getattr(_fn, "__qualname__", None),
-                        "rule=",
-                        rule_map.get(_fn),
-                        "orig=",
-                        _orig,
-                        "orig_module=",
-                        getattr(_orig, "__module__", None),
-                        file=_sys.stderr,
-                    )
-            poisoned = len(poisoned_fns)
+            poisoned = sum(1 for fn in rule_map if id(fn) in wrapper_ids)
             assert poisoned == 0, (
                 f"{poisoned} torchlens wrappers keyed into the dynamo rule map "
                 "despite the pre-wrap warm"
