@@ -21,6 +21,7 @@ from typing import Any
 import pytest
 import torch
 import torch.nn as nn
+from _oracle_env import expect_bundle_minor_version_mismatch
 
 import torchlens as tl
 from torchlens._io import TorchLensIOError
@@ -135,7 +136,7 @@ def test_migrated_artifact_keeps_its_witnessed_stamp_lineage(tmp_path: Path) -> 
     assert len(loaded.layer_list) == 151
     # Delete the witness: the same bytes now refuse (the lineage is unproven).
     (artifact / "tl_migration_provenance.json").unlink()
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with expect_bundle_minor_version_mismatch(), pytest.raises(TorchLensIOError) as excinfo:
         tl.load(artifact)
     assert excinfo.value.fields["code"] in {
         "bundle_manifest_metadata_mismatch",

@@ -14,6 +14,7 @@ import warnings
 import pytest
 import torch
 import torch.nn as nn
+from _oracle_env import expect_bundle_minor_version_mismatch
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
@@ -260,7 +261,11 @@ def test_g5_legacy_v7_artifact_settles_silently() -> None:
         # Silent wrt TorchLensWarning; the version-age advisory is expected.
         warnings.simplefilter("error", TorchLensWarning)
         warnings.simplefilter("default", ArtifactSchemaAgeWarning)
-        loaded = tl.load(str(fixture))  # real v7 write: the stamp was DROPped
+        # This fixture was recorded on a torch 2.13 CUDA build (R6): the
+        # minor-mismatch advisory is also expected on any other torch minor,
+        # narrowly, same as the age advisory above.
+        with expect_bundle_minor_version_mismatch():
+            loaded = tl.load(str(fixture))  # real v7 write: the stamp was DROPped
     assert loaded.grouping_policy == degraded_grouping_policy_stamp("legacy")
     assert loaded.grouping_policy["settlement_note"] == "grouping_stamp_legacy"
     # The mirror field restores its default.

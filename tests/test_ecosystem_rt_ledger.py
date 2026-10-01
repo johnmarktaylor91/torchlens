@@ -16,6 +16,7 @@ import warnings
 from pathlib import Path
 
 import pytest
+from _oracle_env import expect_bundle_minor_version_mismatch
 
 import torchlens as tl
 from torchlens._io import TorchLensIOError
@@ -143,7 +144,7 @@ def test_forged_pair_refuses_typed(corpus_dir: Path, tmp_path: Path) -> None:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["torchlens_version"] = "2.30.0"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with expect_bundle_minor_version_mismatch(), pytest.raises(TorchLensIOError) as excinfo:
         tl.load(str(forged))
     assert excinfo.value.fields["code"] == "artifact_producer_pair_ungoverned"
     assert "2.30.0" in str(excinfo.value)
