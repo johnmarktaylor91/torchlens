@@ -1035,6 +1035,10 @@ def test_r67_private_generator_seed_ceilings_every_run(model_cls: type, tmp_path
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
+@pytest.mark.skipif(
+    not HAS_GENERATOR_CLONE_STATE,
+    reason="torch.Generator.clone_state is absent on this supported torch runtime",
+)
 @pytest.mark.parametrize("run_seed", [1, 2])
 def test_r67_clone_state_initial_seed_ceilings_every_run(run_seed: int, tmp_path: Path) -> None:
     """r66 corr1-1 (HIGH): the clone's second read ceilings every run.

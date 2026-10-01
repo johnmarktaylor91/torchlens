@@ -1007,6 +1007,16 @@ _TORCH_RNG_STRUCTURAL_EXTRAS: tuple[tuple[str, str], ...] = (
         "torch.utils.data.graph_settings.apply_shuffle_seed",
         "deprecated alias delegating to apply_random_seed (same structural coverage)",
     ),
+    (
+        "torch.distributed.pipeline.sync.checkpoint.restore_rng_states",
+        "torch.distributed.pipeline was removed from torch (gone by the 2.3 era; only "
+        "the torch>=2.1 floor still carries it). Its checkpoint recomputation pairs "
+        "save_rng_states/restore_rng_states exactly like torchgpipe's upstream "
+        "implementation, whose restore calls torch.set_rng_state/torch.cuda.set_rng_state "
+        "on the saved snapshot -- its in-forward RESTORE transits the module-patched "
+        "set_rng_state/cuda.set_rng_state mutation rows, same composition as "
+        "torch.random.fork_rng above (behaviorally pinned)",
+    ),
 )
 
 
