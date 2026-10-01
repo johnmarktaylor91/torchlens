@@ -1,10 +1,9 @@
-import warnings
-
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 
 import torchlens as tl
+from torchlens.backends.jax.backend import JAXBackend
 
 
 class SimpleEquinoxMlp(eqx.Module):
@@ -23,19 +22,8 @@ class SimpleEquinoxMlp(eqx.Module):
 model = SimpleEquinoxMlp()
 trace = tl.trace(model, jnp.ones(3, dtype=jnp.float32), backend="jax")
 
-print("module addresses:", [m.address for m in trace.modules])
-print("fc1 address_children:", trace.modules["self"].address_children)
-print("fc1.num_calls:", trace.modules["fc1"].num_calls)
-print(
-    "fc1 call keys:",
-    list(trace.modules._pass_dict.keys()) if hasattr(trace.modules, "_pass_dict") else "n/a",
-)
-for op in trace.layer_list:
-    print(op.label, "modules=", op.modules, "module=", op.module)
-
-with warnings.catch_warnings(record=True) as w:
-    warnings.simplefilter("always")
-    fc1_labels = trace.resolve_sites(tl.in_module("fc1"), max_fanout=8).labels()
-    print("fc1_labels:", fc1_labels)
-    for warning in w:
-        print("WARNING:", warning.category, warning.message)
+backend = JAXBackend()
+print("equations ok:", backend._validate_jax_equations(trace))
+print("regions ok:", backend._validate_jax_regions(trace))
+print("validate_forward_pass([]):", trace.validate_forward_pass([]))
+print("validation_replay_status:", trace.validation_replay_status)
