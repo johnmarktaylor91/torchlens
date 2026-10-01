@@ -186,6 +186,24 @@ def test_cpu_default_unaffected_under_active_logging() -> None:
     assert torch.equal(factory_layer.out, torch.zeros(3, 4))
 
 
+@pytest.mark.smoke
+def test_meta_tensor_has_no_retained_storage_identity() -> None:
+    """A meta tensor is billed zero bytes, never a spurious "meta" ledger charge.
+
+    ``torch.Tensor.untyped_storage()`` is not reliably zero-byte for a meta
+    tensor across the whole torch>=2.1 floor (it either raises on some
+    builds, routing into the logical-bytes fallback, or hands back a storage
+    whose reported size is not guaranteed zero), so the save-budget charging
+    path must short-circuit on ``is_meta`` before ever touching storage.
+    """
+    from torchlens._save_budget import _retained_storage_identities
+
+    with torch.device("meta"):
+        z = torch.zeros(3, 4)
+    assert z.is_meta
+    assert _retained_storage_identities(z) == []
+
+
 def test_meta_device_context_fast_path_with_torch_wrapped() -> None:
     """Fast path (wrapped but not logging) keeps injecting the device kwarg."""
     # Ensure torch is wrapped (lazy wrapping happens on first capture).
