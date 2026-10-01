@@ -25,7 +25,7 @@ incomplete and biased toward GPT-2/Llama-era decoder LMs.
 
    Extend the roster with `--spec your_models.py` (a module exposing
    `iter_models()` yielding `(name, model, input_args)`), e.g. drawn from the
-   menagerie catalog or fresh HF releases. Traces feed
+   Model Menagerie catalog (modelmenagerie.ai) or fresh HF releases. Traces feed
    `torchlens.semantic.facet_coverage`, whose per-module rows split
    recipe-classified modules from structural-only ones and carry typed absence
    reasons.

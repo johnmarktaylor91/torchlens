@@ -18,12 +18,5 @@ paths = [
   '''tests/capture_oracle/goldens/.*''',
   '''tests/godobject_oracle/goldens/.*''',
   '''tests/snapshots/.*''',
-  '''menagerie/crawler/records/.*''',
-  # Generated menagerie catalogs (same class as the crawler records above and
-  # the menagerie/data exclusions in .pre-commit-config.yaml): sha256 content
-  # digests and captured error-log excerpts read as generic-api-key hits.
-  # Surfaced by the first REAL full-tree scan (grind r4, R87-1 -- the staged
-  # -diff hook had never read these files' contents).
-  '''menagerie/data/.*''',
   '''\.secrets\.baseline''',
 ]

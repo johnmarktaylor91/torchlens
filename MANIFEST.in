@@ -3,7 +3,7 @@
 # goldens, ENV markers, or data artifacts — a half-shipped, unrunnable test
 # suite — while excluding everything else. The sdist is the wheel's source:
 # the importable package plus licensing/build metadata, nothing more. Tests,
-# docs, the menagerie corpus, and the dev tooling live in the repo checkout.
+# docs, and the dev tooling live in the repo checkout.
 # Enforced by tests/test_ci_packaging_gates.py::test_built_sdist_manifest_is_governed.
 #
 # Data includes are ENUMERATED per directory, not blanket recursive-include
@@ -24,7 +24,6 @@ recursive-include torchlens/mechinterp *.json
 # Belt: agent docs must never ship even if a blanket include returns.
 recursive-exclude torchlens CLAUDE.md AGENTS.md
 prune tests
-prune menagerie
 prune docs
 prune examples
 prune notebooks

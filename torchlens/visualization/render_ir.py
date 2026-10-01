@@ -390,7 +390,7 @@ def build_render_ir(
 
 #: Disclosure ceiling for one render (R60): draw() has no hard node/edge cap
 #: anywhere — a hard refusal is a public-behavior decision (it would break
-#: legitimate giant renders such as menagerie sweeps) — but past this size
+#: legitimate giant renders such as model-catalog sweeps) — but past this size
 #: Graphviz layout time and memory grow super-linearly, so the user gets an
 #: actionable warning instead of an unexplained multi-minute hang.
 RENDER_DISCLOSURE_NODE_CEILING = 10_000

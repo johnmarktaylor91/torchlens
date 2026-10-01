@@ -3,7 +3,7 @@
 This module is **ADD-ONLY relative to the pass/fail decision**: nothing here
 changes whether ``validate_saved_outs`` returns ``True`` or ``False``. Its sole
 purpose is to capture *why* a validation failed so the reason can reach a caller
-(e.g. the model-menagerie ledger) instead of the bare ``repr(False) == "False"``.
+(e.g. a downstream model-catalog ledger) instead of the bare ``repr(False) == "False"``.
 
 The validation core (``core.py``) records a :class:`ValidationFailure` on a
 side-channel attached to the live ``Trace`` at the FIRST mismatch it surfaces.

@@ -220,9 +220,9 @@
       "id": "menagerie-phrasing",
       "competitor": "none (self-claim about the menagerie catalog)",
       "neutral_fact": "The menagerie README's own claim is '11,600+ cataloged, ~89% algorithmically verified'. Several lanes compressed this to 'verified entries' -- an overclaim corrected fleet-wide.",
-      "allowed_public_wording": "The RULINGS.md:51 hedge: 'verified on thousands of models across all major architecture families'; the repository catalog counts may be stated once with their measurement date (8,533 rows / 3,637 families, measured 2026-08-16; '8,500+ across ~3,600 families').",
+      "allowed_public_wording": "The RULINGS.md:51 hedge: 'verified on thousands of models across all major architecture families'; the menagerie catalog counts may be stated once with their measurement date (8,533 rows / 3,637 families, measured 2026-08-16; '8,500+ across ~3,600 families').",
       "narrowed_scope_wording": "none -- the hedge is the ceiling; no percentage paraphrase is approved.",
-      "limitation_wording": "State the repository catalog counts with their measurement date; never a verification percentage until the campaign closes (the verification ledger is not in the public checkout, so no percentage is reproducible from the tree).",
+      "limitation_wording": "State the menagerie catalog counts with their measurement date; never a verification percentage until the campaign closes (the verification ledger is not in the public checkout, so no percentage is reproducible from the tree).",
       "required_credit": null,
       "evidence_refs": [
         "DIGEST-A s4 #28",

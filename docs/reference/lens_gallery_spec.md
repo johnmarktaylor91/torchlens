@@ -20,9 +20,9 @@ revisions. The manifest names the EXACT checkpoint.
   (cross-attention is not self-attention); `openai/clip-vit-base-patch32`
   (two towers); timm `convit_base`; `densenet121` (917 ops); `gpt2-large`
   (above the optimizer ceiling); pinned Milesial `unet_carvana`;
-  torchvision `raft_small` (GRU iterations); menagerie `phased_lstm`; one
+  torchvision `raft_small` (GRU iterations); the `phased_lstm` classic; one
   `nn.LSTM` classifier beside a Python-loop `LSTMCell`; `yolov4`
-  (menagerie); one real double-backprop render.
+  (Model Menagerie catalog); one real double-backprop render.
 - **The single most valuable member: the distilgpt2 10-token generation
   episode (2,802 ops)** -- the only member exercising the above-ceiling
   path, the rolled/unrolled source pairing, and the aggregation-line

@@ -8,7 +8,6 @@ docs-md	AGENTS.md	10
 docs-md	AGENTS.md	10,
 docs-md	AGENTS.md	10.
 docs-md	AGENTS.md	100
-docs-md	AGENTS.md	1029
 docs-md	AGENTS.md	106
 docs-md	AGENTS.md	11
 docs-md	AGENTS.md	11,
@@ -41,7 +40,6 @@ docs-md	AGENTS.md	18.
 docs-md	AGENTS.md	19
 docs-md	AGENTS.md	19.
 docs-md	AGENTS.md	1_2
-docs-md	AGENTS.md	2,700
 docs-md	AGENTS.md	2.0
 docs-md	AGENTS.md	2.1
 docs-md	AGENTS.md	2.12
@@ -73,8 +71,6 @@ docs-md	AGENTS.md	28
 docs-md	AGENTS.md	29
 docs-md	AGENTS.md	291
 docs-md	AGENTS.md	2_3
-docs-md	AGENTS.md	3,600
-docs-md	AGENTS.md	3,637
 docs-md	AGENTS.md	3.11
 docs-md	AGENTS.md	3.12
 docs-md	AGENTS.md	3.2
@@ -106,9 +102,6 @@ docs-md	AGENTS.md	64,
 docs-md	AGENTS.md	657
 docs-md	AGENTS.md	71
 docs-md	AGENTS.md	79
-docs-md	AGENTS.md	8,400
-docs-md	AGENTS.md	8,500
-docs-md	AGENTS.md	8,533
 docs-md	AGENTS.md	873
 docs-md	AGENTS.md	9,910
 docs-md	AGENTS.md	9.2.2
@@ -134,6 +127,7 @@ docs-md	README.md	13
 docs-md	README.md	13,
 docs-md	README.md	14
 docs-md	README.md	14375
+docs-md	README.md	16
 docs-md	README.md	17,
 docs-md	README.md	18
 docs-md	README.md	180
@@ -150,6 +144,7 @@ docs-md	README.md	2.6,
 docs-md	README.md	200
 docs-md	README.md	202.0
 docs-md	README.md	2023
+docs-md	README.md	2026
 docs-md	README.md	22
 docs-md	README.md	224
 docs-md	README.md	224,
@@ -678,16 +673,6 @@ docs-md	docs/memory_debugging.md	100_000
 docs-md	docs/memory_debugging.md	17.7
 docs-md	docs/memory_debugging.md	2.13
 docs-md	docs/memory_debugging.md	2.13.0.
-docs-md	docs/menagerie-validation.md	16
-docs-md	docs/menagerie-validation.md	2026
-docs-md	docs/menagerie-validation.md	240
-docs-md	docs/menagerie-validation.md	256
-docs-md	docs/menagerie-validation.md	3,600
-docs-md	docs/menagerie-validation.md	3,637
-docs-md	docs/menagerie-validation.md	48
-docs-md	docs/menagerie-validation.md	70
-docs-md	docs/menagerie-validation.md	8,500
-docs-md	docs/menagerie-validation.md	8,533
 docs-md	docs/method_x_model_compatibility.md	25
 docs-md	docs/migration/coming_from_torchsnooper.md	12.6
 docs-md	docs/migration/coming_from_torchsnooper.md	16
@@ -1352,7 +1337,6 @@ docs-md	docs/reference/runnable_tlspec_contract.md	051,
 docs-md	docs/reference/runnable_tlspec_contract.md	051_
 docs-md	docs/reference/runnable_tlspec_contract.md	1.0
 docs-md	docs/reference/runnable_tlspec_contract.md	10
-docs-md	docs/reference/runnable_tlspec_contract.md	10,000
 docs-md	docs/reference/runnable_tlspec_contract.md	10.
 docs-md	docs/reference/runnable_tlspec_contract.md	11
 docs-md	docs/reference/runnable_tlspec_contract.md	11,
@@ -4662,6 +4646,7 @@ test-docstrings	tests/capture_oracle/test_capture_oracle.py	130
 test-docstrings	tests/capture_oracle/test_capture_oracle.py	2.13.0
 test-docstrings	tests/capture_oracle/test_capture_oracle.py	256
 test-docstrings	tests/capture_oracle/test_capture_oracle.py	78
+test-docstrings	tests/classics_corpus/_loader.py	256
 test-docstrings	tests/composition_expectations/_censuses.py	159
 test-docstrings	tests/composition_expectations/_censuses.py	17
 test-docstrings	tests/composition_expectations/_censuses.py	18
@@ -5090,6 +5075,7 @@ test-docstrings	tests/test_ci_packaging_gates.py	78
 test-docstrings	tests/test_ci_packaging_gates.py	82
 test-docstrings	tests/test_ci_packaging_gates.py	82,
 test-docstrings	tests/test_ci_packaging_gates.py	85
+test-docstrings	tests/test_classics_corpus.py	256
 test-docstrings	tests/test_collapse_optimizer.py	0957027
 test-docstrings	tests/test_collapse_optimizer.py	1.5
 test-docstrings	tests/test_collapse_optimizer.py	1.75

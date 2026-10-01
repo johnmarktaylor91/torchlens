@@ -277,7 +277,7 @@ SUITE = [
 DESELECT: list[str] = []
 
 #: Directories/patterns a sandbox never needs (b9p3 R74p3-F3: without these
-#: --make-sandbox copied 6.0 GB -- 5.3 GB .venv + 127 MB menagerie -- vs
+#: --make-sandbox copied 6.0 GB -- 5.3 GB .venv + a 127 MB model corpus -- vs
 #: ~450 MB with them; --python supplies the interpreter, so the sandbox
 #: needs no venv).
 SANDBOX_IGNORE = (
@@ -286,7 +286,6 @@ SANDBOX_IGNORE = (
     ".ruff_cache",
     "*.egg-info",
     ".venv",
-    "menagerie",
     ".pytest_cache",
     ".mypy_cache",
     "build",

@@ -40,8 +40,8 @@ NUMERAL_FLOOR = 10
 NUMERAL_COUNTED_SET = (
     "multi-digit numerals (value >= 10, comma/underscore groupings allowed) in "
     "published prose positions: markdown docs (README/CLAUDE/AGENTS/docs/**), "
-    "test function/class NAMES and DOCSTRINGS (tests/**, menagerie+crawler "
-    "excluded), package docstrings, and raise-statement message literals "
+    "test function/class NAMES and DOCSTRINGS (tests/**, vendored "
+    "tests/classics_corpus/models excluded), package docstrings, and raise-statement message literals "
     "(torchlens/**); keyed (corpus, file, numeral), line-position-free"
 )
 
@@ -247,7 +247,7 @@ def _test_numerals(repo_root: Path) -> set[tuple[str, str, str]]:
     keys: set[tuple[str, str, str]] = set()
     for path in sorted((repo_root / "tests").rglob("*.py")):
         as_posix = path.relative_to(repo_root).as_posix()
-        if as_posix.startswith("tests/crawler/") or "menagerie" in as_posix:
+        if as_posix.startswith("tests/classics_corpus/models/"):
             continue
         try:
             tree = ast.parse(path.read_text(errors="replace"))

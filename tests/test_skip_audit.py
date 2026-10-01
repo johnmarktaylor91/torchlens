@@ -215,10 +215,8 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         UNAVAILABLE_OK,
         "quantum-ML research-model dependency, deliberately undeclared",
     ),
-    "psutil": (TEST_EXTRA, "psutil"),
     "pyarrow": (OPTIONAL_PREVIEW, "tabular extra"),
     "pyarrow.parquet": (OPTIONAL_PREVIEW, "tabular extra"),
-    "pydantic": (TEST_EXTRA, "pydantic"),
     "pydot": (TEST_EXTRA, "pydot"),
     "pytorch_lightning": (TEST_EXTRA, "ships inside the 'lightning' distribution"),
     "rsatoolbox": (OPTIONAL_PREVIEW, "neuro extra"),
@@ -317,7 +315,6 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
 DYNAMIC_IMPORTORSKIP_SITES = frozenset(
     {
         "test_backend_registry.py",  # importorskips the registry's own dependency map
-        "test_menagerie_module_split.py",  # importorskips a parametrized optional dep
     }
 )
 
@@ -689,41 +686,7 @@ def test_unconditional_skip_scanner_is_red_capable(tmp_path: Path) -> None:
 
 #: scanner key (``relpath::qualname``) -> dated justification for a skipif
 #: whose condition is UNSATISFIABLE in every repo-defined environment.
-_MENAGERIE_LOCAL_DATA = (
-    "[2026-08-15] menagerie catalog.db is a local research artifact (gitignored, "
-    "never in a fresh clone or CI); the routing tests run only on boxes that "
-    "built the menagerie locally — documented as out of the portable suite"
-)
-_MENAGERIE_CLUSTER_ENV = (
-    "[2026-08-15] TORCHLENS_MENAGERIE_CLUSTER is set by no repo config; the "
-    "cluster-dispatch tests run only on the owner's cluster-connected boxes — "
-    "documented as out of the portable suite"
-)
-REPO_UNSATISFIABLE_SKIPIF_LEDGER: dict[str, str] = {
-    "test_menagerie_module_split.py::<pytestmark>": _MENAGERIE_LOCAL_DATA,
-    # Sibling sweep (this audit's first run) beyond b10 R79-1's ten:
-    "test_menagerie_cluster_cascade_gate.py::<pytestmark>": _MENAGERIE_LOCAL_DATA,
-    "test_menagerie_csv_export.py::test_public_csv_export_schema_join_and_dictionary": (
-        "[2026-08-15] gated on .research/menagerie-csv-schema/SCHEMA_v2.md — a "
-        "PRIVATE gitignored notes artifact that exists only on the owner's "
-        "boxes; the schema-join check runs there only (found by this audit's "
-        "first sweep; consider committing a public schema doc to re-arm it)"
-    ),
-    "test_menagerie_csv_export.py::test_stale_trace_summary_nulls_retrace_fields_and_side_tables": (
-        "[2026-08-15] gated on .research/menagerie-csv-schema/SCHEMA_v2.md — a "
-        "PRIVATE gitignored notes artifact that exists only on the owner's "
-        "boxes (see the sibling row above)"
-    ),
-    "test_menagerie_cluster_routing.py::test_catalog_cuda_required_ids_route_to_local_rtx_2080_ti": _MENAGERIE_LOCAL_DATA,
-    "test_menagerie_cluster_routing.py::test_cuda_required_catalog_recipes_request_cuda": _MENAGERIE_LOCAL_DATA,
-    "test_menagerie_cluster_routing.py::test_cuda_required_catalog_rows_resolve_to_cuda_env": _MENAGERIE_LOCAL_DATA,
-    "test_menagerie_cluster_routing.py::test_giant_registry_force_cluster_only_for_genuine_giants": _MENAGERIE_LOCAL_DATA,
-    "test_menagerie_cluster_routing.py::test_cluster_candidates_exclude_pixi_island_giants": _MENAGERIE_LOCAL_DATA,
-    "test_menagerie_cluster_routing.py::test_auto_runner_dispatches_static_giant_and_keeps_non_giant_local": _MENAGERIE_CLUSTER_ENV,
-    "test_menagerie_cluster_routing.py::test_cluster_routing_resume_uses_ledger_not_manifest": _MENAGERIE_CLUSTER_ENV,
-    "test_menagerie_cluster_routing.py::test_cluster_unreachable_writes_terminal_rows_and_continues": _MENAGERIE_CLUSTER_ENV,
-    "test_menagerie_cluster_routing.py::test_cluster_timeout_writes_terminal_rows_and_continues": _MENAGERIE_CLUSTER_ENV,
-}
+REPO_UNSATISFIABLE_SKIPIF_LEDGER: dict[str, str] = {}
 
 
 def _module_path_literal_constants(tree: ast.AST) -> dict[str, str]:

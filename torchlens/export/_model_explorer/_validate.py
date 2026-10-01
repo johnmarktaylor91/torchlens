@@ -9,7 +9,7 @@ prefix group rows, the stackless-non-boundary counter, and unique graph ids
 (the app silently RENAMES duplicates, disconnecting graph-keyed node data).
 
 ``validate_model_explorer_payload`` returns a structured report (the
-menagerie ``validate_only`` seam); ``strict=True`` raises the typed refusal
+downstream catalog ``validate_only`` seam); ``strict=True`` raises the typed refusal
 for the first failure instead.
 """
 

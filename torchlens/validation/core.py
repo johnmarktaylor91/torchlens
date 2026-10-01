@@ -527,8 +527,8 @@ def _band_c_bounds(depth: int, payload_dtype: torch.dtype) -> tuple[float, float
 # kernels in the same process, so the only legitimate divergence is inter-run
 # multi-thread reduction-order drift -- measured ~3e-7 relative (~2.5 fp32 ULP)
 # on the spectral-GCN family (see _user_public_impls.py thread-pin notes; the
-# menagerie harness retries a strict failure once under num_threads=1, where
-# the comparison goes bit-exact). 8 ULP keeps the fp32 bar at its historical
+# downstream catalog harness retries a strict failure once under num_threads=1,
+# where the comparison goes bit-exact). 8 ULP keeps the fp32 bar at its historical
 # ~1e-6 strength with ~3x headroom over that drift. fp16/bf16 forwards
 # accumulate in fp32 and round once to storage, so their drift is
 # storage-rounding dominated: 4 ULP of the storage dtype.

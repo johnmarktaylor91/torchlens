@@ -177,17 +177,11 @@ notebooks/audit/_artifacts/
 # Perf-suite per-cell scratch (incremental run state; committed baselines live in perf_baselines/)
 benchmarks/.perf_cells/
 
-# Menagerie verification ledger is environment-specific append-only run state.
-menagerie/data/verification.db*
-
 # Codex CLI per-session working artifact (file or dir).
 .codex
 
 # Internal capture-unification stage reports (codex writes to repo root; harvested to .research)
 /STAGE*_REPORT.md
-
-# Menagerie crawler disposable runtime state. Canonical records and manifests stay tracked.
-/.crawl-local/
 
 # Repo-root sprint ledgers and agent result files are internal working state
 # (the no-internal-notes pre-commit hook hard-fails them as well).

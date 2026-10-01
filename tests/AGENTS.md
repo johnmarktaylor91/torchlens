@@ -23,7 +23,7 @@ pytest config excludes `rare` tests via `addopts = -m 'not rare'`.
 | Backend contracts | `backend_conformance/`, `backend_parity/`, `backends/` |
 | Capture and surface oracles | `capture_oracle/`, `godobject_oracle/`, `surface_oracle/` |
 | Producer and semantic parity | `producer_parity/`, `semantic/`; the producer ledger is a committed gate artifact |
-| Crawler and benchmarks | `crawler/`, `bench/` |
+| Classics corpus and benchmarks | `classics_corpus/`, `bench/` |
 | Validation and visualization goldens | `validation_goldens/`, `visualization/`, `golden/`, `snapshots/` |
 | Shared data and helpers | `fixtures/`, `support/` |
 

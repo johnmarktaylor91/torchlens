@@ -60,7 +60,7 @@ _KNOWN_STEM_COLLISIONS = frozenset(
 
 
 def _iter_test_files() -> list[Path]:
-    """Return every test module under tests/ (menagerie surface included)."""
+    """Return every test module under tests/."""
 
     return sorted(_TESTS_DIR.rglob("test_*.py"))
 

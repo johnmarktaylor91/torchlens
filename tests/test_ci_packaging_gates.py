@@ -444,7 +444,6 @@ def test_built_sdist_manifest_is_governed(tmp_path: Path) -> None:
     # gitignored roots no `prune` can cover — not just the original five.
     for banned_prefix in (
         "tests/",
-        "menagerie/",
         "docs/",
         "examples/",
         "notebooks/",

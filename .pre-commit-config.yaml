@@ -20,10 +20,11 @@ repos:
     rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # v6.0.0 (git sha, not a secret)  # pragma: allowlist secret
     hooks:
       # The two FORMATTERS exclude generator-owned artifacts (oracle/snapshot
-      # goldens are byte-compared to fresh generator output, crawler records
-      # and rendered images are corpus data): a formatter "fixing" a missing
-      # trailing newline there breaks the byte oracles or silently rewrites
-      # corpus files. Same generated-data doctrine as the ruff extend-exclude
+      # goldens are byte-compared to fresh generator output, rendered images
+      # and the sha256-pinned classics corpus models are corpus data): a
+      # formatter "fixing" a missing trailing newline there breaks the byte
+      # oracles or silently rewrites corpus files. Same generated-data
+      # doctrine as the ruff extend-exclude
       # in pyproject.toml and the exclusions below. Surfaced by the CI
       # `pre-commit run --all-files` job (grind r3, R87): the staged-file-only
       # runs had never touched these trees.
@@ -35,10 +36,9 @@ repos:
             tests/godobject_oracle/goldens/|
             tests/snapshots/|
             tests/release_goldens/|
-            menagerie/crawler/records/|
-            menagerie/data/|
             docs/images/|
             tests/real_model/vendored/|
+            tests/classics_corpus/models/|
             tests/test_modelexplorer_assets/worker\.js|
             tests/test_modelexplorer_assets/visualizer_custom_element\.d\.ts
           )
@@ -46,14 +46,14 @@ repos:
         exclude: *generated_artifacts
       - id: check-yaml
       - id: check-added-large-files
-        # canonical perf baselines + the menagerie catalog are intentional large data
-        # artifacts; the harvested release golden corpus is irreplaceable byte-pinned
+        # canonical perf baselines are intentional large data artifacts; the
+        # harvested release golden corpus is irreplaceable byte-pinned
         # test data (ecosystem MEMO 3.7 G1, digest-enforced by
         # tests/test_tlspec_envelope_goldens.py)
         # tests/test_modelexplorer_assets/worker.js is the byte-pinned Model
         # Explorer worker oracle (F15 vendor contract harness; sha256-enforced
         # by tests/test_modelexplorer_contract.py).
-        exclude: ^(benchmarks/perf_baselines/.*\.json|menagerie/data/master_catalog\.jsonl|menagerie/data/routing_manifest\.tsv|menagerie/data/stable_ids\.jsonl|menagerie/data/crawl_roster\.jsonl|tests/release_goldens/genuine_release_artifacts\.tar\.gz|tests/test_modelexplorer_assets/worker\.js)$
+        exclude: ^(benchmarks/perf_baselines/.*\.json|tests/release_goldens/genuine_release_artifacts\.tar\.gz|tests/test_modelexplorer_assets/worker\.js)$
       - id: detect-private-key
   - repo: https://github.com/gitleaks/gitleaks
     # Repo-portable secret scanning: this is what makes .gitleaks.toml (the
@@ -83,26 +83,22 @@ repos:
     hooks:
       - id: detect-secrets
         args: ["--baseline", ".secrets.baseline"]
-        # crawl_roster.jsonl is an auto-generated model-metadata catalog (names,
-        # repo URLs, triage notes). Model config-names like
-        # mmflow_..._384x768 read as high-entropy strings; no credentials ever
-        # belong in it. The surface/capture oracle goldens are auto-generated
+        # The surface/capture oracle goldens are auto-generated
         # test fixtures full of deterministic per-op barcodes and source-ids
         # (high-entropy hex) that are regenerated on every reviewed rebaseline;
-        # no credentials ever belong in them either. Excluded like the other
-        # generated data catalogs. The godobject-oracle goldens, module-
-        # containment snapshots, and crawler records/tests are the same
+        # no credentials ever belong in them. Excluded like the other
+        # generated data catalogs. The godobject-oracle goldens and module-
+        # containment snapshots are the same
         # deterministic-fixture class (tlspec manifests are FULL of sha256
         # digests by design), surfaced when the CI all-files job first
         # scanned the whole tree (grind r3, R87). The real-model
         #         artifact registry, vendored-config provenance, and R0
         #         expectation goldens are the same class: revision shas and
         #         per-blob sha256 digests BY DESIGN (testing memo A1/A2).
+        #         The classics corpus manifest is the same class: per-file
+        #         sha256 provenance pins and the source commit sha.
         exclude: >-
           (?x)^(
-            menagerie/data/crawl_roster\.jsonl|
-            menagerie/crawler/records/.*|
-            menagerie/crawler/tests/.*|
             tests/surface_oracle/goldens/.*|
             tests/capture_oracle/goldens/.*|
             tests/godobject_oracle/goldens/.*|
@@ -115,6 +111,7 @@ repos:
             tests/real_model/artifact_registry\.jsonl|
             tests/real_model/vendored/.*|
             tests/real_model/r0/expectations_r0\.json|
+            tests/classics_corpus/manifest\.json|
             tests/transforms_corpus/.*
           )$
   - repo: https://github.com/astral-sh/ruff-pre-commit

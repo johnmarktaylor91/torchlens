@@ -1,1 +1,0 @@
-Small neural systems reveal structure when every input is explicit and reproducible.

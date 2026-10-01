@@ -610,7 +610,7 @@ final acceptance.
 | **M2** | **Compiler**: generate `__tl_state_items__`/`__tl_state_restore__` (closes the CRITICAL state-adapter hole, 13 consumers, BEFORE any field moves), checked-in annotated descriptors, `to_pandas` row, `.pyi`; regenerate-and-diff CI. Still object-backed | byte-identical |
 | **M3** (parallel lanes) | (a) slot dict-backed classes from the table with `__slots__`+`"__dict__"` (laziness measured); (b) `FunctionCallRef`/`ArgTemplateRef` identity-assumption grep (precondition for M7) | byte-identical |
 | **M4** | `_trace_core/` substrate, zero consumers: ids, columns, pools, edge-occurrence + CSR, ancestor-closure pool, groups, overlays, payload arena, facade cache. Executable prototypes immediately: `Op.copy` policy, COW fork + rollback, payload identity, parallel-edge order, partial capture, mutable-container hydration, GC lifetime | standalone unit suite |
-| **M5** | **The seam**: `_materialize.py` switches to builder ingress; Op facades authoritative (strong cache); scalars columnar, relations staged mutable; per-plane freeze lands; pools absorb `_compact_op_metadata`, bitsets absorb `_compact_ancestor_sets`; kills the `fields_dict` + 39-container transient; partial/no-op/error paths facade-backed. Shadow dual-write parity oracle runs one full CI cycle INSIDE this wave, then is deleted | dual-path parity, deletion proof, scale benchmark, classics spot-check |
+| **M5** | **The seam**: `_materialize.py` switches to builder ingress; Op facades authoritative (strong cache); scalars columnar, relations staged mutable; per-plane freeze lands; pools absorb `_compact_op_metadata`, bitsets absorb `_compact_ancestor_sets`; kills the `fields_dict` + 39-container transient; partial/no-op/error paths facade-backed. Shadow dual-write parity oracle runs one full CI cycle INSIDE this wave, then is deleted | dual-path parity, deletion proof, scale benchmark, classics corpus spot-check |
 | **M6** | Relations family-by-family: parents/children + arg positions -> module membership/stacks -> conditionals -> param uses/aliases; each family compared old-vs-new before its legacy container dies; ancestor closures wired; relation accessors become IMMUTABLE views (JMT-FORK-1 decided) | aliases-v1 green per family |
 | **M7** | Groups: FunctionCall/Equivalence/Recurrence/ParamAlias/conditional group blocks + group_id columns; delete `_copy_shared_fields_for_output`; journal-side shared `FunctionCallRef` per call; `equivalent_ops`/`recurrent_ops` become LIVE group-membership views (JMT-FORK-1 decided) | byte-identical |
 | **M8** | Layer as aggregate facade over layer->op relations (kills the ~78-field per-pass copy); Module/ModuleCall/Param/Buffer/FuncCallLocation tables + facades; live-handle/lazy-grad/version/release semantics preserved; Module responsibility decomposition; Trace label maps -> core indexes | per-class oracle |
@@ -618,7 +618,7 @@ final acceptance.
 | **M10** (parallel from M2) | **Trace decomposition — the deliverable**: 220 fields -> header + owned components; `TraceBuildState` -> named per-phase workspaces; POSTPROCESS_STEP_CONTRACTS become enforced declared read/write sets; C2-style private-family collapses only as lockstep table diffs if needed | <=~60 fields per component |
 | **M11** | Cutover + deletions: COW `Trace.fork()` + transactions; exact public `Op.copy()`; direct semantic serialization (byte-identical artifacts; old-golden loads); facade cache flips strong -> weak-valued (per the M0 lifetime evidence); DELETE forkcopier, standalone compaction passes, legacy writers, the generic core-record state walker | artifacts-v1 + old-golden matrix |
 | **M12** | Reserved for the streaming lane ONLY if capacity remains (see section 4; the r2 majority ships it separately). Cut-first, by name | additive only |
-| **M13** | De-bloat with LOC delta reported first-class; docs lockstep (glossary -> vault, CLAUDE.md, AGENTS.md, notebooks/audit, examples); JMT-FORK-2 UI-regrouping plan doc; full menagerie validation; final real-IDE gate | grep-clean of retired names |
+| **M13** | De-bloat with LOC delta reported first-class; docs lockstep (glossary -> vault, CLAUDE.md, AGENTS.md, notebooks/audit, examples); JMT-FORK-2 UI-regrouping plan doc; full classics corpus plus downstream Model Menagerie validation; final real-IDE gate | grep-clean of retired names |
 
 Sequencing rules baked in: keystone/compiler enablers before anything structural; the
 ONE seam riskiest-first-at-narrowest (Op has one construction site and the largest
@@ -650,9 +650,10 @@ reported separately; facade-free AND fully-materialized modes separately; payloa
 separate from structural metadata. Perf claims by `time.process_time` CPU A/B only,
 never cProfile.
 
-Menagerie: deterministic stratified catalog slice after M5/M8/M9/M11; all classics after
-the facade cutover; one forced full catalog validation before merge — zero new failure /
-timeout / unverifiable / topology-digest / metadata-invariant regressions vs the ledger.
+Model corpus: the classics corpus tier (`tests/classics_corpus/`, smoke subset per step,
+comprehensive tier after M5/M8/M9/M11 and after the facade cutover); one forced full
+downstream catalog validation (the Model Menagerie battery) before merge — zero new failure /
+timeout / unverifiable / topology-digest / metadata-invariant regressions vs its ledger.
 
 Success metrics (targets set at M0 from measured baselines, not folklore): <=1 KiB
 deep-retained structural metadata per uninspected op row (target: hundreds of bytes);

@@ -1552,8 +1552,8 @@ def _validate_forward_pass_torch(
     # -- this does NOT loosen any tolerance, it removes the inter-run thread
     # non-determinism the bar was never meant to police.
     #
-    # The menagerie validator normally runs this harness at the worker process
-    # default thread count for throughput, then retries exactly the failed forward
+    # Downstream catalog validators (the Model Menagerie) run this harness at the
+    # worker process default thread count for throughput, then retry exactly the failed forward
     # validation once with ``num_threads=1``. A genuine capture/replay bug still
     # fails the single-thread retry; the known reduction-order flakes are rescued
     # by a strict bit-exact rerun instead of by loosening any tolerance.

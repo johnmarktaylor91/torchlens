@@ -13,9 +13,9 @@ computational graph, exposes rich per-op metadata, and lets you intervene on the
 network as it runs. Any architecture, even dynamic and recurrent ones.
 
 > **[Explore the Model Menagerie](https://modelmenagerie.ai)** -- a live, browsable atlas of
-> **thousands of cataloged neural-network architecture entries** (8,500+ in this repository's
-> catalog, across ~3,600 architecture families) captured with TorchLens, from McCulloch & Pitts
-> (1943) to today's frontier models. *(Early preview.)*
+> **thousands of cataloged neural-network architecture entries** (8,500+ catalog entries
+> across ~3,600 architecture families, measured 2026-08-16) captured with TorchLens, from
+> McCulloch & Pitts (1943) to today's frontier models. *(Early preview.)*
 
 Run across **thousands of cataloged entries** in the Model Menagerie (image, video, audio,
 multimodal, language; feedforward, recurrent, transformer, GNN, MoE, diffusion) --
@@ -69,11 +69,10 @@ log = tl.trace(lm, "The quick brown fox")            # HF models: a string is a 
 
 ## Validated across thousands of catalog entries
 
-TorchLens is not just smoke-tested on example models. Its menagerie validation
+TorchLens is not just smoke-tested on example models. The Model Menagerie validation
 campaign runs the same adversarial check across the cataloged architecture
-entries (**8,500+ rows across ~3,600 families** in this repository's
-`menagerie/data/master_catalog.jsonl`; the live site carries additional
-locally-validated entries): capture the model with TorchLens, forward-replay the
+entries (**8,500+ rows across ~3,600 families** in the menagerie catalog, measured
+2026-08-16; the live site carries additional locally-validated entries): capture the model with TorchLens, forward-replay the
 captured DAG, compare replayed outputs against the original forward pass, and
 run metadata-invariant tripwires over the resulting graph. If replay or an
 invariant fails, the capture is treated as genuinely wrong and caught
@@ -85,8 +84,10 @@ model forward -> TorchLens capture -> DAG replay -> output parity + metadata inv
 
 Today the campaign has algorithmically verified **thousands of models across all major
 architecture families**, and the count is climbing; the exact per-row verification status
-lives in the append-only menagerie ledger (see `docs/menagerie-validation.md`) rather than
-in this README, so the public claim stays hedged until the campaign closes. That is the wedge:
+lives in the menagerie project's append-only ledger rather than in this README, so the public
+claim stays hedged until the campaign closes. Inside this repository, a coverage-chosen sample of
+the hand-built classics (`tests/classics_corpus/`) runs the same capture, replay, and invariant
+checks as part of the test suite. That is the wedge:
 TorchLens aims for captures that are **provably faithful, not just plausible**.
 Plain forward hooks and static extraction utilities can be fast and useful, but
 they can also silently miss dynamic paths, reused modules, functional ops,

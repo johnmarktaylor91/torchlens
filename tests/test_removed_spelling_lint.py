@@ -316,21 +316,9 @@ _ALLOWED: dict[str, tuple[frozenset[str], str]] = {
 
 
 def _in_scan_scope(rel: str) -> bool:
-    """Return whether a tracked path is inside the lint's sweep boundary.
+    """Return whether a tracked path is inside the lint's sweep boundary."""
 
-    ``menagerie/`` vendored subtrees (classics, data, per-model sources) are
-    the ONE exempt region -- the removal ruling's sweeps never rewrote
-    vendored model code (repo lint-exclude respected); the menagerie
-    TOP-LEVEL tooling and ``menagerie/tools/`` stay in scope because they
-    call the live TorchLens surface.
-    """
-
-    if not rel.endswith(_SCAN_SUFFIXES):
-        return False
-    if rel.startswith("menagerie/"):
-        remainder = rel[len("menagerie/") :]
-        return "/" not in remainder or rel.startswith("menagerie/tools/")
-    return True
+    return rel.endswith(_SCAN_SUFFIXES)
 
 
 def _tracked_scan_files() -> list[Path]:

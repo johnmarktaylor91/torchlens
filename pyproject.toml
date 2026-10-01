@@ -257,15 +257,11 @@ dev = [
     # gates have a real installed dependency instead of an ambient one
     # (2026-08-19).
     "build>=1.2",
-    # jsonschema/referencing back the menagerie crawler's payload validation
-    # (menagerie/crawler/schema.py: Draft202012Validator + a referencing Registry).
-    # This is internal contributor/automation tooling, not a torchlens runtime
-    # feature, so it lives alongside the other dev-tooling packages rather than
-    # in `test` (ML-framework test deps) or core `dependencies` (shipped library
-    # surface). `registry=` on Draft202012Validator needs jsonschema>=4.18, the
-    # version that adopted the `referencing` library for $ref resolution.
+    # jsonschema validates the shipped agent-surface JSON schemas against real
+    # envelopes (tests/test_agent_surface_schemas.py, Draft202012Validator).
+    # Contributor tooling, not a torchlens runtime feature, so it lives with the
+    # other dev-tooling packages rather than in `test` or core `dependencies`.
     "jsonschema>=4.18,<5",
-    "referencing>=0.28,<1",
 ]
 test = [
     # BAND COHERENCE (r7 R83-2): the four ML packages the bridge/ adapters
@@ -304,18 +300,11 @@ test = [
     "torchaudio",
     "torch_geometric",
     "torchvision>=0.18,<1",
-    # menagerie catalog machinery (menagerie/schema.py, menagerie/envs.py,
-    # menagerie/ledger.py) hard-imports these at module load / call time with no
-    # try/except guard. They are exercised directly by tests/test_menagerie_*.py
-    # (e.g. test_menagerie_schema.py imports pydantic.ValidationError,
-    # test_menagerie_envs.py calls envs.load_registry() which parses YAML).
-    # pydantic is not currently pulled in transitively by anything else in this
-    # extra and its absence is a hard ModuleNotFoundError on a clean install;
-    # PyYAML/psutil happen to be pulled in transitively today (e.g. via
-    # lightning/timm/transformers) but are undeclared direct imports, so they are
-    # declared explicitly here too rather than relying on incidental transitive
+    # PyYAML/psutil are direct test imports (tests/test_ci_packaging_gates.py
+    # parses the workflow YAML; the memory tests read process RSS). They happen
+    # to be pulled in transitively today (e.g. via lightning/timm/transformers)
+    # but are declared explicitly rather than relying on incidental transitive
     # resolution.
-    "pydantic>=2.0",
     "PyYAML>=6.0",
     "psutil>=5.9",
     "transformers>=4.45,<6",
@@ -344,13 +333,9 @@ Homepage = "https://github.com/johnmarktaylor91/torchlens"
 Repository = "https://github.com/johnmarktaylor91/torchlens"
 
 [tool.setuptools.packages.find]
-# menagerie* is deliberately NOT distributed. It is a dated reference corpus (the
-# model atlas + its crawler), not part of the importable library: it depends on
-# torchlens rather than the reverse, nothing in torchlens imports it, and
-# including it shipped 2886 of the wheel's 3316 members (~13.5 MB) into every
-# `pip install torchlens` while squatting `menagerie` as a top-level import name.
-# It stays in the repo ONLY: MANIFEST.in prunes it from the sdist too (the old
-# "sdist-from-git" wording predated that prune), so consumers use a checkout.
+# Only the importable library is distributed. A broad find once shipped a
+# non-library reference corpus as 2886 of the wheel's 3316 members (~13.5 MB)
+# into every `pip install torchlens`.
 # Asserted by tests/test_packaging_diet.py::test_built_wheel_manifest_is_diet.
 include = ["torchlens*"]
 
@@ -528,10 +513,9 @@ line-length = 100
 # pre-commit (which passes explicit staged filenames) and CI (which passes
 # directories) reach the SAME verdict. `extend-exclude` participates in
 # --force-exclude, which the ruff-pre-commit hooks pass by default.
-#   menagerie/            - vendored/ported real model source + generated recipes
-#                           (see the per-file-ignores rationale below)
-#   tests/crawler/        - menagerie crawler harness, same provenance
-#   tests/test_menagerie_*- menagerie-only test surface
+#   tests/classics_corpus/models/ - vendored classics model sources, kept
+#                           byte-identical to their provenance (sha256 pinned in
+#                           tests/classics_corpus/manifest.json)
 #
 # GENERATED ARTIFACTS are excluded too: their GENERATOR is the authority and
 # tests/test_schema_lockstep.py compares them BYTE-FOR-BYTE to fresh generator
@@ -542,11 +526,9 @@ line-length = 100
 # list equal to that self-declaring set -- a new generated module cannot land
 # without its exclusion, and a stale exclusion cannot outlive its generator.
 extend-exclude = [
-    "menagerie",
-    "tests/crawler",
-    "tests/test_menagerie_*.py",
-    # Harvested-corpus provenance dir: same generated-data doctrine as the
-    # menagerie/ rows (P05 request, sprint packaging queue, landed by A12).
+    "tests/classics_corpus/models",
+    # Harvested-corpus provenance dir: same vendored-data doctrine as the
+    # classics corpus row (P05 request, sprint packaging queue, landed by A12).
     "tests/release_goldens",
     "torchlens/data_classes/_schema_bindings.py",
     "torchlens/ir/op_record_manifest.py",
@@ -660,12 +642,6 @@ combine-as-imports = true
 # importing the model zoo / torchlens, so module-level imports legitimately follow
 # code (E402). This shim is mandated by notebooks/audit/CLAUDE.md.
 "notebooks/audit/*.ipynb" = ["E402", "F401"]
-
-# NOTE (R70 grind r4): menagerie/ is WHOLLY extend-excluded above (and the
-# hooks pass --force-exclude), so nothing in it is linted at all — a former
-# menagerie/classics per-file-ignores entry here was dead config whose
-# "real-bug lints stay enforced" comment was false. Re-including menagerie in
-# lint scope is an owner decision; until then, no per-file-ignores for it.
 
 # =============================================================================
 # RELEASE POLICY (locked): TorchLens stays on the 2.x family on PyPI.

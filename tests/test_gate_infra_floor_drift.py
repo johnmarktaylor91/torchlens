@@ -54,8 +54,6 @@ def _live_smoke_selection_count() -> int:
         "tests/",
         "-m",
         "smoke",
-        "--ignore-glob=*menagerie*",
-        "--ignore=tests/crawler",
         "--collect-only",
         "-q",
         "-p",

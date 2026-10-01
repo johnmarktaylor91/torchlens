@@ -186,23 +186,19 @@ def test_packaging_metadata_uses_resolvable_gradcam_and_guarded_tinygrad_extra()
     assert "tinygrad = [\"tinygrad>=0.13,<0.14; python_version >= '3.11'\"]" in pyproject_text
 
 
-def test_precommit_and_conftest_guard_use_python3_safe_predicates() -> None:
-    """The hook entrypoints and menagerie guard stay on the hardened conditions."""
+def test_precommit_hook_entrypoints_use_python3_safe_predicates() -> None:
+    """The hook entrypoints stay on the hardened conditions."""
 
     project_root = Path(__file__).resolve().parent.parent
     precommit_text = project_root.joinpath(".pre-commit-config.yaml").read_text()
-    conftest_text = project_root.joinpath("tests", "conftest.py").read_text()
 
     assert "entry: python scripts/check_no_breaking_markers.py" not in precommit_text
     assert "entry: scripts/check_no_breaking_markers.py --commit-msg" in precommit_text
     assert "entry: scripts/check_no_breaking_markers.py --pre-push" in precommit_text
-    assert "if sys.version_info < (3, 11):" in conftest_text
-    assert 'collect_ignore_glob.append("test_menagerie_*.py")' in conftest_text
-    assert 'collect_ignore_glob.append("crawler/*.py")' in conftest_text
 
 
 def test_ci_workflows_pin_torch_and_scope_lint_to_owned_paths() -> None:
-    """Packaging CI keeps torch pins honest and excludes the external menagerie boundary."""
+    """Packaging CI keeps torch pins honest and scopes lint to the owned paths."""
 
     project_root = Path(__file__).resolve().parent.parent
     nightly_text = project_root.joinpath(".github", "workflows", "nightly.yml").read_text()
@@ -241,13 +237,12 @@ def test_ci_workflows_pin_torch_and_scope_lint_to_owned_paths() -> None:
     # the self-declaring generated set by
     # test_schema_lockstep.py::test_ruff_excludes_every_generated_artifact.
     # tests/release_goldens is the harvested-corpus provenance dir (P05 request,
-    # landed by the A12 packaging batch): same generated-data doctrine as the
-    # menagerie/ rows -- the harvest is the authority, not ruff.
+    # landed by the A12 packaging batch) and tests/classics_corpus/models holds
+    # the vendored classics sources, sha256-pinned in the corpus manifest: the
+    # provenance is the authority, not ruff.
     assert excluded == {
-        "menagerie",
-        "tests/crawler",
+        "tests/classics_corpus/models",
         "tests/release_goldens",
-        "tests/test_menagerie_*.py",
         "torchlens/data_classes/_schema_bindings.py",
         "torchlens/ir/op_record_manifest.py",
     }
@@ -432,11 +427,11 @@ def test_release_job_python_stack_is_hash_locked() -> None:
 
 @pytest.mark.slow
 def test_built_wheel_manifest_is_diet(tmp_path: Path) -> None:
-    """Assert the built wheel's manifest: schemas in, py.typed in, menagerie OUT.
+    """Assert the built wheel's manifest: schemas in, py.typed in, nothing else top-level.
 
     Nothing used to test the wheel manifest, and it had drifted three ways at
-    once: ``menagerie*`` was in the distributed package set (2886 of 3316
-    members, ~13.5 MB, plus ``menagerie`` squatting as a top-level import name),
+    once: a non-library reference corpus was in the distributed package set
+    (2886 of 3316 members, ~13.5 MB, plus a second top-level import name),
     ``torchlens/py.typed`` was missing so downstream mypy ignored every
     annotation in the package (PEP 561), and only the schema files were checked.
     """
@@ -507,11 +502,11 @@ def test_built_wheel_manifest_is_diet(tmp_path: Path) -> None:
     # package as untyped and skip every annotation it ships.
     assert "torchlens/py.typed" in members, "wheel must ship the PEP 561 py.typed marker"
 
-    # The menagerie corpus is repo/sdist-only, never part of the installed library.
-    menagerie_members = [m for m in members if m.startswith("menagerie")]
-    assert not menagerie_members, (
-        f"wheel ships {len(menagerie_members)} menagerie member(s); the corpus is "
-        "not part of the distributed library (see [tool.setuptools.packages.find])"
+    # Only the library and its dist-info ship; repo corpora never do.
+    stray_members = [m for m in members if not m.startswith(("torchlens/", "torchlens-"))]
+    assert not stray_members, (
+        f"wheel ships {len(stray_members)} non-library member(s), e.g. {stray_members[:3]}; "
+        "only the torchlens package is distributed (see [tool.setuptools.packages.find])"
     )
     assert top_level == ["torchlens"], (
         f"wheel installs top-level name(s) {top_level}; torchlens must be the only one"
@@ -685,31 +680,6 @@ def test_pip_audit_inline_pin_matches_the_dev_extra_authority() -> None:
         f"authority {authority}: the inline copy is the one that actually "
         "audits releases"
     )
-
-
-@pytest.mark.smoke
-def test_jsonschema_inline_pins_agree_and_sit_inside_the_dev_band() -> None:
-    """Inline jsonschema pins are single-valued and inside the dev band.
-
-    The inline copies validate the menagerie release lock, so a partial bump
-    forks lock-validation verdicts between legs.
-    """
-
-    pyproject = (_REPO_ROOT / "pyproject.toml").read_text()
-    inline = set(re.findall(r"jsonschema==([0-9][^\"'\s]*)", _all_workflow_text()))
-    assert len(inline) <= 1, f"inline jsonschema pins disagree across workflows: {inline}"
-    if inline:
-        band = re.search(r'"jsonschema>=([0-9.]+),<([0-9.]+)"', pyproject)
-        assert band is not None, "dev extra lost its jsonschema band"
-        pinned = next(iter(inline))
-
-        def _key(version: str) -> tuple[int, ...]:
-            return tuple(int(part) for part in version.split("."))
-
-        assert _key(band.group(1)) <= _key(pinned) < _key(band.group(2)), (
-            f"inline jsonschema {pinned} escaped the dev-extra band "
-            f">={band.group(1)},<{band.group(2)}"
-        )
 
 
 @pytest.mark.smoke

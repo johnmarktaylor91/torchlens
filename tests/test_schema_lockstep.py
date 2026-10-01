@@ -818,9 +818,9 @@ def test_ruff_excludes_every_generated_artifact() -> None:
         f"generated modules ruff would rewrite (add to [tool.ruff] extend-exclude): {missing}"
     )
 
-    # Only the generated half is pinned; the menagerie/crawler entries are excluded
-    # for unrelated provenance reasons and are legitimately extra.
-    py_excludes = {path for path in excluded if path.endswith(".py") and "menagerie" not in path}
+    # Only the generated half is pinned; the vendored-corpus directory entries are
+    # excluded for unrelated provenance reasons and are legitimately extra.
+    py_excludes = {path for path in excluded if path.endswith(".py")}
     assert py_excludes <= generated, (
         "extend-exclude names a .py file that is no longer a generated artifact: "
         f"{sorted(py_excludes - generated)}"
