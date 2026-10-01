@@ -59,26 +59,6 @@ def jax_site_keys(trace: Trace) -> dict[str, str]:
         if getattr(op_log, "is_orphan", False):
             continue
         module_site, call_instance = _jax_site_components(op_log)
-        # The shared ``module_attribution``/site invariants (I-S2,
-        # ``_check_site_key_uniqueness``) key per-instance uniqueness on
-        # ``op.module_call_stack[-1]`` -- a torch/object-module concept a bare
-        # jax function_root capture never populates. Site keys are
-        # INTENTIONALLY shared across scan/while iterations (the whole point
-        # of ``site_key_v1`` is to bridge recurring passes), so without a
-        # call-instance marker two different iterations' same-site ops (e.g.
-        # two ``scan_read`` reads) collide on ``(site_key, "<root>")`` and
-        # trip I-S2. Expose this module's own already-computed
-        # iteration-qualified ``call_instance`` through that same field (a
-        # single pseudo "address:1" entry, parseable by
-        # ``normalize_op_module_calls`` so a later pytree_module finalize
-        # pass over this field never raises) -- but ONLY when the instance
-        # actually carries an iteration marker: a plain non-recurring
-        # ``call_instance`` like ``"root"`` is not ``ROOT_CALL_INSTANCE``
-        # (``"<root>"``) either, and claiming it as a module_call_stack entry
-        # falsely reads as non-root module attribution under
-        # ``function_root_module_invariants``.
-        if "iter=" in call_instance:
-            op_log.module_call_stack = (f"{call_instance}:1",)
         keys[label] = minter.mint_at(
             module_site,
             call_instance,

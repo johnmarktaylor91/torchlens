@@ -79,11 +79,24 @@ def _check_site_key_uniqueness(ops: list, name: str) -> None:
 
     from .invariants import MetadataInvariantError
 
-    seen: dict[tuple[str, str], str] = {}
+    seen: dict[tuple[str, object], str] = {}
     for op in ops:
         stack = tuple(getattr(op, "module_call_stack", ()) or ())
-        call_instance = stack[-1] if stack else ROOT_CALL_INSTANCE
-        identity = (str(op.site_key), str(call_instance))
+        if stack:
+            call_instance: object = stack[-1]
+        else:
+            # No torch/object-module call stack to tell passes apart (a bare
+            # function_root capture, e.g. JAX's source-path-based scan/while
+            # recurrence, never populates one). Site keys are INTENTIONALLY
+            # shared across recurring passes of one site (the whole point of
+            # site_key_v1), so two retained ops of the SAME recurring site in
+            # DIFFERENT passes must not collide here; ``pass_index`` is the
+            # backend-neutral "which invocation of this site is this" signal
+            # every op carries (1 for the overwhelming majority of ops, which
+            # are single-pass and already rely on their site_key alone being
+            # distinct -- this never masks a genuine same-pass collision).
+            call_instance = (ROOT_CALL_INSTANCE, getattr(op, "pass_index", 1))
+        identity = (str(op.site_key), call_instance)
         if identity in seen:
             raise MetadataInvariantError(
                 name,
