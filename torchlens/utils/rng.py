@@ -1771,6 +1771,19 @@ _SINGLE_PUSH_LOAD_OPNAMES = frozenset(
     {"LOAD_CONST", "LOAD_FAST", "LOAD_NAME", "LOAD_DEREF", "LOAD_GLOBAL"}
 )
 
+#: Call-sequence bookkeeping opcodes that carry no argument push of their own and can
+#: sit between the last argument-push instruction and the ``CALL``/``CALL_FUNCTION``/
+#: ``CALL_METHOD`` instruction, depending on interpreter. Python 3.11 alone splits the
+#: call into ``PRECALL`` (argument-count/shape dispatch) followed by ``CALL`` (the
+#: actual invocation); 3.10 has no such opcode (``CALL_FUNCTION``/``CALL_METHOD``
+#: follow the arguments directly) and 3.12+ folded ``PRECALL`` back into ``CALL``. A
+#: naive fixed-width slice ending at the ``CALL`` position silently swallows
+#: ``PRECALL`` as if it were the last argument instruction on 3.11, which starves the
+#: decode of its real last argument and misclassifies every held-alias call on that
+#: interpreter as "unknown" (grind-pyver R8). Walking backward and skipping opcodes in
+#: this set keeps the decode interpreter-shape-agnostic.
+_CALL_BOOKKEEPING_OPNAMES = frozenset({"PRECALL"})
+
 
 def _call_site_argcount(frame: Any) -> int | None:
     """Decode the positional argument count of a profile-observed ``c_call`` site.
@@ -1890,9 +1903,28 @@ def _call_site_time_arg_proof(frame: Any, argcount: int, time_arg_index: int) ->
             (index for index, ins in enumerate(instructions) if ins.offset == lasti),
             None,
         )
-        if call_position is None or call_position < argcount:
+        if call_position is None:
             return "unknown"
-        arg_instructions = instructions[call_position - argcount : call_position]
+        # Walk backward from the CALL instruction collecting exactly ``argcount``
+        # single-push argument loads, skipping any interposed call-bookkeeping
+        # opcode (``PRECALL`` on Python 3.11 -- see _CALL_BOOKKEEPING_OPNAMES).
+        # A fixed-width slice ending at ``call_position`` assumes the ``argcount``
+        # instructions immediately preceding CALL are all argument pushes, which
+        # is false on 3.11: ``PRECALL`` sits there instead of the real last
+        # argument instruction, starving the decode and misclassifying every
+        # held-alias call on that interpreter as "unknown" (grind-pyver R8).
+        cursor = call_position - 1
+        arg_instructions: list[Any] = []
+        while cursor >= 0 and len(arg_instructions) < argcount:
+            candidate = instructions[cursor]
+            if candidate.opname in _CALL_BOOKKEEPING_OPNAMES:
+                cursor -= 1
+                continue
+            arg_instructions.append(candidate)
+            cursor -= 1
+        if len(arg_instructions) != argcount:
+            return "unknown"
+        arg_instructions.reverse()
         if any(ins.opname not in _SINGLE_PUSH_LOAD_OPNAMES for ins in arg_instructions):
             return "unknown"
         time_instruction = arg_instructions[time_arg_index]
