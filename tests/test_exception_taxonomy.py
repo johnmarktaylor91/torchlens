@@ -1094,10 +1094,14 @@ def test_selector_direction_refusal_is_not_swallowed(monkeypatch: pytest.MonkeyP
 
     predicate.selector = object()  # type: ignore[attr-defined]
     predicate.decision = InterventionDecision(action="transform")  # type: ignore[attr-defined]
-    monkeypatch.setattr(user_funcs, "_selector_resolution_direction", _raise_typed_refusal)
+    from torchlens import _capture_intervention
+
+    monkeypatch.setattr(
+        _capture_intervention, "_selector_resolution_direction", _raise_typed_refusal
+    )
 
     with pytest.raises(SiteResolutionError) as exc_info:
-        user_funcs._backward_intervention_spec_from_predicate(predicate)
+        _capture_intervention._backward_intervention_spec_from_predicate(predicate)
 
     assert exc_info.value.fields["code"] == "selector_taxonomy_refusal"
 
@@ -1162,11 +1166,65 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "TransformerBridge); errors-namespace registration deferred to "
         "A10's _errors homing"
     ),
-    "torchlens._io.PreReleaseArtifactError": (
+    "torchlens._io.format_errors.PreReleaseArtifactError": (
         "S3 registrar fail-closed load refusal for switch-stamped pre-release "
         "artifacts; surfaced by the first standing registration importing the "
         "registrar eagerly. Registration decision belongs to the S3 "
-        "registrar owner at the coordinated bump"
+        "registrar owner at the coordinated bump. Defined in the C01 _io "
+        "split's L0 error module with __module__ preserved as torchlens._io"
+    ),
+    # -- C01 _io four-way split: the format-error vocabulary moved to
+    # _io/format_errors.py with __module__ preserved as "torchlens._io" (the
+    # public facade home). These classes ARE registered through
+    # torchlens.errors at that runtime home; the static scanner keys the
+    # DEFINING file, so each carries its defining-path row here. --
+    "torchlens._io.format_errors.TorchLensIOError": (
+        "registered in torchlens.errors under the preserved runtime home "
+        "torchlens._io; this row records the post-split defining file"
+    ),
+    "torchlens._io.format_errors.ArtifactVersionBelowFloorError": (
+        "registered in torchlens.errors under the preserved runtime home "
+        "torchlens._io; this row records the post-split defining file"
+    ),
+    "torchlens._io.format_errors.ArtifactVersionAboveRuntimeError": (
+        "registered in torchlens.errors under the preserved runtime home "
+        "torchlens._io; this row records the post-split defining file"
+    ),
+    "torchlens._io.format_errors.ArtifactRuntimeIncompatibleError": (
+        "registered in torchlens.errors under the preserved runtime home "
+        "torchlens._io; this row records the post-split defining file"
+    ),
+    "torchlens._io.format_errors.UnknownPersistedFieldError": (
+        "registered in torchlens.errors under the preserved runtime home "
+        "torchlens._io; this row records the post-split defining file"
+    ),
+    "torchlens._io.format_errors.ArtifactSchemaAgeWarning": (
+        "warning category defined in the C01 _io split's L0 error module "
+        "with __module__ preserved as torchlens._io; surfaced through "
+        "torchlens.errors at that runtime home"
+    ),
+    "torchlens._io.sidecar.SidecarError": (
+        "C01 sidecar-seam internal typed refusal (fail-closed sidecar "
+        "read/write); errors-namespace registration deferred to the naming "
+        "sprint with the sidecar spellings"
+    ),
+    "torchlens._registry.kernel.RegistryError": (
+        "private registry-kernel refusal (C01); surfaced through typed "
+        "domain-door errors, never caught by kernel class in user code — "
+        "no public universal registry, so no public registration"
+    ),
+    # -- C04 data substrates (DOCUMENTED-UNSTABLE pending the naming sprint;
+    # registration rides the naming ratification with the tl.transforms /
+    # extraction-v2 spellings) --
+    "torchlens.transforms._errors.TransformContractError": (
+        "C04 transforms-contract teaching refusal (ConfigurationError "
+        "subclass); errors-namespace registration deferred to the naming "
+        "sprint with the tl.transforms spellings"
+    ),
+    "torchlens._data_substrate.artifact.ExtractionArtifactError": (
+        "C04 extraction artifact-v2 typed refusal (ConfigurationError "
+        "subclass); errors-namespace registration deferred to the naming "
+        "sprint with the extraction-v2 spellings"
     ),
     # -- Internal control-flow signals / private helpers (never user-caught) --
     "torchlens.fastlog._halt.HaltSignal": (

@@ -32,7 +32,10 @@ from ...intervention.selectors import BaseSelector
 from ...intervention.types import HelperSpec, InterventionDecision
 from ...ir.intervention import FireResult
 from ...ir.op_record import amend_module_exit_intervention
-from .._selective_save import _STATIC_INTERVENTION_SELECTOR_KINDS, reject_selector_outside_kinds
+from ...postprocess._selective_save import (
+    _STATIC_INTERVENTION_SELECTOR_KINDS,
+    reject_selector_outside_kinds,
+)
 from ..registry import BackendUnsupportedError
 
 # Alias of the neutral authority table (the ``output`` drop is declared

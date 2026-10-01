@@ -639,10 +639,55 @@ def _build_overview_rows(
         f"Ops: {trace.num_ops} total",
         f"Edges: {trace.num_edges} total",
         f"Branching factor: {trace.branching_factor:.2f}",
-        f"Saved outs: {human_readable_size(trace.saved_activation_memory)}",
+        _saved_outs_footer_line(trace),
         *_compute_footer_lines(trace, count_fma_as_two),
+        *_health_footer_lines(trace),
     ]
     return rows, footer_lines
+
+
+def _health_footer_lines(trace: Trace) -> list[str]:
+    """One conditional health line from the three states (sumfam D5/F3).
+
+    Silent when CHECKED-AND-CLEAN so clean goldens stay byte-stable;
+    FOUND and NOT-CHECKED render with the basis and the follow-up
+    spelling. Never scans payloads beyond the memoized health basis.
+    """
+
+    from ...report._health import health_facts
+
+    facts = health_facts(trace)
+    if facts.verdict == "checked_and_clean":
+        return []
+    if facts.verdict == "found":
+        total = facts.nonfinite_count + len(facts.alias_nonfinite_labels)
+        return [
+            f"Health: NaN/Inf FOUND in {total} op output(s) "
+            f"(basis: {facts.source_basis or facts.basis}; see trace.health_facts)"
+        ]
+    return [
+        f"Health: NOT-CHECKED ({facts.unexamined} op output(s) unexamined; see trace.health_facts)"
+    ]
+
+
+def _saved_outs_footer_line(trace: Trace) -> str:
+    """The saved-outs footer under the payload-scope law (C02; sumfam D8).
+
+    The footer prints retained_now (what THIS object holds) and names
+    at_capture only when the two differ -- a payload-stripped artifact
+    stops claiming bytes it does not contain, and clean live goldens stay
+    byte-stable.
+    """
+
+    from ...report._factcore import _memory
+
+    memory = _memory(trace)
+    if memory.retained_now_bytes == memory.at_capture_bytes:
+        return f"Saved outs: {human_readable_size(memory.retained_now_bytes)}"
+    return (
+        f"Saved outs: {human_readable_size(memory.retained_now_bytes)} retained now "
+        f"({human_readable_size(memory.at_capture_bytes)} at capture)"
+    )
 
 
 def _compute_footer_lines(trace: Trace, count_fma_as_two: bool | None) -> list[str]:

@@ -18,6 +18,12 @@ _SCOPED_CAPTURE_STATE = frozenset(
         # a survivor past the load window would arm the unknown-field refusal
         # for plain session pickles -- exactly the leak class this row catches.
         ("torchlens/_io/state_contract.py", "_GOVERNED_LOAD_DEPTH"),
+        # The ONE active profiler-session slot (C06): set on ProfilerSession
+        # __enter__ under its lock, restored to None in the finally of BOTH
+        # __enter__'s failure path and __exit__ -- a survivor past the context
+        # would make every later session refuse profiler_session_nested,
+        # exactly the leak class this row catches.
+        ("torchlens/observability/_session.py", "_ACTIVE_SESSION"),
         # The four scalar control slots below are assigned ONLY through the
         # module object from other modules (no ast.Global anywhere), so the
         # pre-rebind-detector inventory could never classify them
@@ -127,6 +133,11 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         ("torchlens/_io/prerelease.py", "_REGISTRY"),
         # Selection-AST term dispatch: import-time table, sibling producers register at import.
         ("torchlens/selection.py", "_TERM_RESOLVERS"),
+        # Transforms builtin seal (C04): one-way sentinel flipped by
+        # _seal_builtins() when _kernels finishes import-time builtin
+        # registration; from then on the builtin door refuses
+        # transform_builtin_shadowed -- install-time fact, not a cache.
+        ("torchlens/transforms/_registry.py", "_BUILTINS_SEALED"),
         # Wrapper-lifecycle slots rebound only through the module object
         # (visible since the cross-module rebind detector, hunt-b2-sol R54).
         # Kernel-telemetry correlation installs by rebinding these two aten-call
@@ -245,6 +256,9 @@ _WARN_ONCE_STATE = frozenset(
         ("torchlens/backends/torch/buffer_writes.py", "_PARAM_BYTE_WITNESS_NOT_ARMED"),
         ("torchlens/backends/torch/completeness_witness.py", "_HOST_ESCAPE_OBSERVER_FAILED"),
         ("torchlens/backends/torch/ops.py", "_UNSUPPORTED_OUTPUT_CONTAINER_WARNED"),
+        # BatchNorm train-mode running-stats disclosure fires once per process
+        # (user_funcs warn-once flag, C02 lovely tranche).
+        ("torchlens/user_funcs.py", "_BATCHNORM_TRAIN_STATS_WARNED"),
         ("torchlens/data_classes/op.py", "_WARNED_REFERENCE_SAVE_MODE"),
         ("torchlens/distributed/_lifecycle.py", "_AUTO_ARM_DEGRADATION"),
         ("torchlens/fastlog/_storage_resolver.py", "_WARNED_REFERENCE_SAVE_MODE"),
@@ -478,6 +492,15 @@ dict would otherwise keep its whole subject graph alive.
 _PUBLIC_REGISTRATION_STATE = frozenset(
     {
         ("torchlens/backends/registry.py", "_REGISTRY"),
+        # The C01 registry-kernel inventory: domain doors enroll their one
+        # Registry at import (create_registry refuses duplicates); public door
+        # registrations mutate the enrolled Registry objects, and the kernel
+        # inventory itself is what makes domains COUNTABLE (universe rows).
+        ("torchlens/_registry/kernel.py", "_REGISTRIES"),
+        # Semantic recipe-provider activation: activate_recipes() is a public
+        # trust opt-in that changes which entry-point providers resolve for
+        # the rest of the process -- registration state, not a cache.
+        ("torchlens/semantic/recipes/__init__.py", "_ACTIVATED_RECIPE_PROVIDERS"),
         ("torchlens/capture/flops.py", "_CUSTOM_OP_RULES"),
         ("torchlens/ir/container.py", "_CONTAINER_REGISTRY"),
         ("torchlens/receptive_field/_rules.py", "_BUILTIN_RF_RULES"),
@@ -491,6 +514,11 @@ _PUBLIC_REGISTRATION_STATE = frozenset(
         # mutates this table, so a leaked entry changes predicate resolution for
         # the rest of the process exactly like a registered facet or RF rule.
         ("torchlens/ir/predicate_registry.py", "_USER_PREDICATES"),
+        # Transforms closed builtin name set (C04): populated at import by
+        # _kernels through the SAME door custom registrations use, then
+        # sealed; membership drives the transform_builtin_shadowed refusal on
+        # register_transform(), so it steers public registration behavior.
+        ("torchlens/transforms/_registry.py", "_BUILTIN_NAMES"),
     }
 )
 """Process state a PUBLIC API mutates: registries, rule tables, feature toggles.
@@ -508,6 +536,15 @@ _PROCESS_CACHES = frozenset(
         # holds only a builtin type, re-derivable at any time.
         ("torchlens/_input_walk.py", "_TUPLEGETTER_TYPE_CACHE"),
         ("torchlens/_input_walk.py", "_STOCK_NP_SCALAR_CACHE"),
+        # C02 numbers-substrate caches: id-keyed, weakref-evicted,
+        # _version-invalidated derivation caches over live subjects;
+        # re-derivable at any time, never behavior-changing.
+        ("torchlens/report/_factcore.py", "_FACTCORE_CACHE"),
+        # C04 digest-kernel memo: per-device Horner weight tensors, a pure
+        # deterministic derivation (base powers mod 2^64) re-computable at
+        # any time; keyed by device string, never behavior-changing.
+        ("torchlens/_data_substrate/digests.py", "_WEIGHTS_BY_DEVICE"),
+        ("torchlens/stats/_tensor_stats.py", "_STATS_CACHE"),
         ("torchlens/_io/bundle.py", "_NESTED_BLOB_KINDS"),
         ("torchlens/_io/payload_codec.py", "_CODECS"),
         ("torchlens/_io/rehydrate.py", "_REHYDRATE_KINDS"),

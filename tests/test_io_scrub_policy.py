@@ -442,6 +442,10 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
         # catch, and a presenter that builds a sub-DAG view is a prime candidate.
         "bill_of_materials": lambda t: t.bill_of_materials(),
         "sites_table": lambda t: t.sites_table(),
+        # C02: a pure read over retained payloads (typed row states, no
+        # persistence side effects) -- swept for the same reason as
+        # sites_table/bill_of_materials.
+        "stats_table": lambda t: t.stats_table(),
         "to_agent_json": lambda t: t.to_agent_json(),
         "between": lambda t: t.between(t.input_ops[0].label, t.output_ops[0].label),
         "subgraph": lambda t: t.subgraph(tl.func("relu")),

@@ -30,6 +30,7 @@ class UnsupportedRendererCapabilityError(_ActionableErrorMixin, ConfigurationErr
         problem: str,
         *,
         remedy: str | None = None,
+        code: str | None = None,
         **context: object,
     ) -> None:
         """Initialize an actionable renderer-capability refusal.
@@ -40,6 +41,10 @@ class UnsupportedRendererCapabilityError(_ActionableErrorMixin, ConfigurationErr
             Description of the renderer and its missing capabilities.
         remedy:
             Concrete caller action. The class default is used when omitted.
+        code:
+            Stable refusal code; the class attribute when omitted. Raise
+            sites may spell it inline so the S-17 census sees the code at
+            the site.
         **context:
             Structured, non-authoritative diagnostic context.
         """
@@ -47,7 +52,7 @@ class UnsupportedRendererCapabilityError(_ActionableErrorMixin, ConfigurationErr
         resolved_remedy = remedy or type(self).default_remedy
         super().__init__(
             _actionable_message(problem, resolved_remedy),
-            code=type(self).code,
+            code=code or type(self).code,
             remedy=resolved_remedy,
             **cast(dict[str, Any], context),
         )
@@ -55,12 +60,19 @@ class UnsupportedRendererCapabilityError(_ActionableErrorMixin, ConfigurationErr
 
 @dataclass(frozen=True)
 class RendererCapabilities:
-    """Features a renderer can execute without semantic approximation."""
+    """Features a renderer can execute without semantic approximation.
+
+    ``encodings`` is the N14 capability bit (themes memo item 6): whether the
+    renderer can execute value-encoding channels (color_by/size_by ramps and
+    legends). "Refuse by capability, never draw an unencoded imitation" needs
+    the vocabulary to say so.
+    """
 
     nested_regions: bool = False
     ordering_constraints: bool = False
     html_labels: bool = False
     layout_execution: bool = False
+    encodings: bool = False
 
     def require(self, required: RendererCapabilities, renderer_name: str) -> None:
         """Validate that every requested renderer feature is supported.
@@ -91,11 +103,18 @@ class RendererCapabilities:
 
 @dataclass(frozen=True)
 class RenderReport:
-    """Result of renderer execution, kept separate from immutable RenderIR."""
+    """Result of renderer execution, kept separate from immutable RenderIR.
+
+    ``engine`` and ``layout_stderr`` disclose what actually executed
+    (vizmech D24): the engine binary invoked and everything it wrote to
+    stderr even on exit 0 (the cairo clamp warning class).
+    """
 
     source: str
     source_path: Path | None = None
     output_path: Path | None = None
+    engine: str = ""
+    layout_stderr: str = ""
 
 
 @runtime_checkable

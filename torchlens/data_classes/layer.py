@@ -412,17 +412,29 @@ class OpAccessor(Accessor["Op"]):
             return True
         return False
 
-    # This scoped accessor intentionally iterates call-index keys, unlike the generic
-    # Trace-level accessors that iterate log values.
-    def __iter__(self) -> Iterator[int]:  # type: ignore[override]
-        """Iterate call-index keys."""
+    # BREAKING (lovely bug 27, C02; MIGRATIONS entry owed): iteration now
+    # inherits the base value semantics (yields Ops), where the deleted
+    # override yielded 1-BASED call-index ints while ``[]`` indexed 0-based
+    # Ops -- a silent off-by-one on multi-pass layers. ``get`` and ``repr``
+    # share the one 0-based/pass-qualified basis ``__getitem__`` uses.
+    def get(self, key: int | str, default: "Op | None" = None) -> "Op | None":
+        """Return an Op by 0-based position or label, or ``default``."""
 
-        return iter(self._dict)
+        try:
+            return self[key]
+        except (KeyError, IndexError, ValueError):
+            return default
 
-    def get(self, key: int, default: "Op | None" = None) -> "Op | None":
-        """Return an Op by call index, or default."""
+    def __repr__(self) -> str:
+        """Return a bounded summary teaching the REAL index basis."""
 
-        return self._dict.get(key, default)
+        labels = [str(getattr(op, "label", getattr(op, "layer_label", "?"))) for op in self._list]
+        shown = ", ".join(repr(label) for label in labels[:5])
+        suffix = ", ..." if len(labels) > 5 else ""
+        return (
+            f"OpAccessor with {len(self._list)} ops "
+            f"(0-based positions or pass-qualified labels): [{shown}{suffix}]"
+        )
 
     def _resolve_substring(self, key: str) -> "Op | None":
         """Resolve Op by any scoped layer-label variant."""

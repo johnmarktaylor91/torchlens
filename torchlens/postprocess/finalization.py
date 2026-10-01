@@ -1133,9 +1133,7 @@ def _reconcile_multipass_layer_fields(layer_log: "Layer") -> None:
 
     if len(layer_log.ops) <= 1:
         return
-    # OpAccessor iterates 1-based pass-index keys; ``get`` is the dict lookup
-    # (``[]`` is 0-based positional access).
-    pass_ops = [layer_log.ops.get(index) for index in sorted(layer_log.ops)]
+    pass_ops = list(layer_log.ops.values())
     varying: dict[str, list[Any]] = {}
 
     def record_if_varying(field_name: str, values: list[Any]) -> bool:

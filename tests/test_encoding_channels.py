@@ -552,7 +552,7 @@ def test_mirrored_per_call_numeric_unencoded(varying_log: tl.Trace, tmp_path: Pa
     """
 
     layer = _varying_layer(varying_log)
-    per_pass_truth = [layer.ops.get(index).raw_index for index in sorted(layer.ops)]
+    per_pass_truth = [op.raw_index for op in layer.ops.values()]
     assert len(set(per_pass_truth)) > 1, "fixture no longer varies raw_index"
     assert layer.raw_index == per_pass_truth[0]  # the mirror IS a pass-1 projection
 

@@ -115,7 +115,7 @@ from .hooks import (
     normalize_hook,
     normalize_hook_plan,
 )
-from .predicates import add, replace_with, when
+from .predicates import add, replace_with
 from .replay import push, push_from
 from .resolver import SiteTable, resolve_sites
 from .runtime import do
@@ -147,10 +147,23 @@ from .selectors import (
     output_at,
     preceded_by,
     regex,
+    site,
     where,
     without_op,
 )
 from .sites import SiteCollection, SiteSpec, sites
+
+# The PUBLIC immutable multi-clause spec (C03 substrate; surgery memo 3.1)
+# claims the package-level ``InterventionSpec`` name. The historical mutable
+# sticky-hook recipe keeps its identity at ``.types.InterventionSpec`` --
+# internal code and persisted pickles are untouched.
+from .spec import (
+    InterventionRule,
+    InterventionSpec,
+    classify_where,
+    refuse_unreplayable_rules,
+    when,
+)
 from .types import (
     ArgComponent,
     CapturedArgTemplate,
@@ -167,7 +180,6 @@ from .types import (
     HelperSpec,
     HFKey,
     InterventionDecision,
-    InterventionSpec,
     LiteralTensor,
     LiteralValue,
     NamedField,
@@ -224,6 +236,7 @@ __all__ = [
     "HookContext",
     "HookSiteCoverageError",
     "HookValueError",
+    "InterventionRule",
     "InterventionSpec",
     "InterventionReadyConflictError",
     "LiveModeLabelError",
@@ -272,6 +285,7 @@ __all__ = [
     "build_supergraph",
     "clamp",
     "check_spec_compat",
+    "classify_where",
     "compare_topology",
     "contains",
     "cosine_distance",
@@ -310,6 +324,7 @@ __all__ = [
     "pearson_correlation_distance",
     "project_off",
     "project_onto",
+    "refuse_unreplayable_rules",
     "replace_with",
     "push",
     "push_from",
@@ -322,6 +337,7 @@ __all__ = [
     "save_intervention",
     "scramble_elements",
     "scale",
+    "site",
     "splice_module",
     "sites",
     "steer",

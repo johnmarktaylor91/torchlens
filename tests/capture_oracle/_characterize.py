@@ -210,6 +210,13 @@ def _population_state(value: Any) -> str:
         return "defaulted_zero"
     if isinstance(value, (tuple, list, dict, set, frozenset)) and not value:
         return "defaulted_empty"
+    # Sentinel blind spot (lovely bug 24, C02): a field whose VALUE is a
+    # not-known marker string must not certify as populated -- 112 goldens
+    # certified ``view_or_copy == "unknown"`` (dead at all 3 construction
+    # sites) as a live field. Sentinels get their own category so a golden
+    # can pin "this field never populates" honestly.
+    if isinstance(value, str) and value.strip().lower() in {"unknown", "unavailable", "n/a"}:
+        return "sentinel_unknown"
     return "populated"
 
 

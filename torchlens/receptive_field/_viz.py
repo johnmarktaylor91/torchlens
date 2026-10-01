@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 from PIL import Image, ImageDraw
 
-from ..visualization.node_spec import NodeSpec, NodeSpecFn
+from .._vocab.node_spec import NodeSpec, NodeSpecFn
 from ..viz.node_plots import render_heatmap
 from ._errors import (
     AmbiguousInputError,

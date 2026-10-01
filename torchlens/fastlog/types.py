@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+__tl_layer__ = "L1"
+__tl_vocabulary__ = True
+
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
@@ -238,6 +241,35 @@ class ActivationRecord:
     transformed_disk_payload: torch.Tensor | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     recorded_at: float = field(default_factory=time.time)
+
+    def __repr__(self) -> str:
+        """Return a bounded one-line record summary.
+
+        Payloads render as metadata descriptors (dtype/shape/storage), never
+        contents: the dataclass auto-repr printed full tensor payloads AND
+        the recursive ``ctx`` lookback (lovely bug 1, CRITICAL).
+        """
+
+        stores = [
+            name
+            for name, payload in (
+                ("ram", self.ram_payload),
+                ("disk", self.disk_payload),
+                ("transformed_ram", self.transformed_ram_payload),
+                ("transformed_disk", self.transformed_disk_payload),
+            )
+            if payload is not None
+        ]
+        payload = self.ram_payload if self.ram_payload is not None else self.disk_payload
+        if payload is None:
+            descriptor = "metadata_only"
+        else:
+            dtype = str(payload.dtype).replace("torch.", "")
+            descriptor = f"{dtype}[{','.join(str(d) for d in payload.shape)}]"
+        return (
+            f"ActivationRecord(label={self.ctx.label!r}, pass={self.ctx.pass_index}, "
+            f"payload={descriptor}, stored={'+'.join(stores) if stores else 'none'})"
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -582,6 +614,53 @@ class Recording(CapturedRun):
         """
 
         return self.n_ops
+
+    def __repr__(self) -> str:
+        """Return an O(1) identity/status card.
+
+        Never materializes lazy records and never renders payloads: the
+        dataclass auto-repr grew ~34x per saved site (recursive
+        ``RecordContext`` lookback times full tensor payloads) and OOMed an
+        8 GiB box at four saved sites (lovely bug 1, CRITICAL).
+        """
+
+        built = object.__getattribute__(self, "_records_built")
+        records = "lazy" if not built else str(len(object.__getattribute__(self, "records")))
+        grads = len(self.grad_records)
+        return (
+            f"Recording(status={self.status}, records={records}, "
+            f"passes={self.n_passes}, grad_records={grads}, "
+            f"bundle={str(self.bundle_path) if self.bundle_path else 'none'})"
+        )
+
+    def __str__(self) -> str:
+        """Return a bounded per-pass status table (<= 24 lines).
+
+        Status precedes detail; failure evidence renders above the fold and
+        lazy records stay lazy (a repr is never a compute trigger).
+        """
+
+        lines = [self.__repr__()]
+        built = object.__getattribute__(self, "_records_built")
+        if built:
+            pass_rows = sorted(self.by_pass.items())
+            for pass_index, indexes in pass_rows[:16]:
+                lines.append(f"  pass {pass_index}: {len(indexes)} records")
+            if len(pass_rows) > 16:
+                lines.append(f"  (+{len(pass_rows) - 16} more passes)")
+        else:
+            lines.append("  records: lazy (materialized on first read)")
+        if self.halted:
+            lines.append(f"  halted: {self.halt_reason or 'halt predicate fired'}")
+        if self.failed:
+            lines.append(f"  FAILED after {self.n_ops_completed} ops: {self.error_repr}")
+            if self.last_event_label is not None:
+                lines.append(
+                    f"  last event: {self.last_event_label} ({self.last_event_func or '?'})"
+                )
+        if self.recovered:
+            lines.append("  recovered: from a persisted partial bundle")
+        return "\n".join(lines[:24])
 
     def __getattribute__(self, name: str) -> Any:
         """Populate lazy record projections when ``records`` is read."""

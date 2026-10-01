@@ -30,7 +30,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -63,7 +63,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -159,7 +159,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -322,7 +322,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -545,20 +545,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 276921,
+      "python_peak_memory_median_bytes": 281862,
       "sample_count": 3,
       "torch_version": "2.13.0+cu130",
-      "wall_time_median_ms": 23.619076004251838
+      "wall_time_median_ms": 20.66104207187891
     }
   },
   "sha256_chunks": [
-    "9baf115c",
-    "c0fc53bf",
-    "72cfb771",
-    "fcac9fde",
-    "f7877007",
-    "a597dd0b",
-    "81a010d9",
-    "0fb20e7c"
+    "99419348",
+    "76297209",
+    "59a1b236",
+    "7a7bf573",
+    "06ad1652",
+    "47aba7fd",
+    "f386fa0f",
+    "cce6ed8f"
   ]
 }

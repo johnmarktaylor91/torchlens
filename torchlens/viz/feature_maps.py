@@ -11,9 +11,9 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw
 
+from .._vocab.node_spec import NodeSpec, NodeSpecFn
 from ..utils._multipass_access import get_multipass_attr
 from ..utils.display import ensure_trace_visualizer_dir
-from ..visualization.node_spec import NodeSpec, NodeSpecFn
 from .node_plots import _apply_colormap, _normalize_finite
 
 FeatureMapEvolution: TypeAlias = "OrderedDict[str, torch.Tensor]"

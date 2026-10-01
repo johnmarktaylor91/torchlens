@@ -17,6 +17,11 @@ from ...data_classes.trace import Trace
 from ...intervention.selectors import BaseSelector
 from ...ir.capture_events import CaptureEvents
 from ...postprocess._materialize import materialize_from_events
+from ...postprocess._selective_save import (
+    _STATIC_SELECTOR_KINDS,
+    reject_selector_outside_kinds,
+    warn_zero_match_save_predicate,
+)
 from ...quantities import Duration
 from .._finalize import (
     attach_function_root_module,
@@ -33,11 +38,6 @@ from .._options import (
     is_missing,
     reject_extra_trace_kwargs,
     reject_unsupported_trace_options,
-)
-from .._selective_save import (
-    _STATIC_SELECTOR_KINDS,
-    reject_selector_outside_kinds,
-    warn_zero_match_save_predicate,
 )
 from ..registry import BackendUnsupportedError, get_backend_spec
 from .funcgraph import capture_static_funcgraph

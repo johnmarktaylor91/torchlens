@@ -271,7 +271,8 @@ def test_kernel_rows_persist_and_registrations_are_retired() -> None:
     inventory = registered_prerelease_fields()
     assert "KernelLaunch" not in inventory
     assert "_TelemetryPayload" not in inventory
-    assert "Trace.annotations" not in inventory
+    # v8 telemetry keys retired; the standing row is C01's gated sidecar key.
+    assert inventory.get("Trace.annotations", ()) in ((), ("sidecar",))
     assert set(KernelLaunch.PORTABLE_STATE_SPEC.values()) == {FieldPolicy.KEEP}
     assert set(telemetry._TelemetryPayload.PORTABLE_STATE_SPEC.values()) == {FieldPolicy.KEEP}
 

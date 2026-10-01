@@ -7,6 +7,7 @@ serialization, callable resolution, state binding, or execution.
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
@@ -1399,6 +1400,17 @@ class ReadinessReport:
     witness_completeness: WitnessCompleteness | None
     diagnostics: tuple[RunnableDiagnostic, ...]
 
+    def __repr__(self) -> str:
+        """Return a bounded status-first card (auto-repr dumped every record)."""
+
+        sources = ",".join(source.value for source in self.state_sources_available) or "none"
+        return (
+            f"ReadinessReport(status={self.status.value}, provider={self.provider.value}, "
+            f"backend={self.backend}, capability={self.capability}, "
+            f"resolvers={len(self.resolver_records)}, state_sources=[{sources}], "
+            f"diagnostics={len(self.diagnostics)})"
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class ContractCheck:
@@ -1513,6 +1525,43 @@ class RunReport:
     #: Ratified flat reading surface (S2 sec 2): the stop-frontier site label.
     stopped_at: str | None = None
 
+    def __repr__(self) -> str:
+        """Return a bounded verdict-first card (auto-repr embedded every record)."""
+
+        checks = sum(1 for check in self.contract_checks if check.passed)
+        parts = [
+            f"path_faithfulness={self.path_faithfulness.value}",
+            f"numeric_attestation={self.numeric_attestation.value}",
+            f"state_source={self.state_source.value}",
+            f"poisoned={self.poisoned}",
+            f"contract_checks={checks}/{len(self.contract_checks)} passed",
+        ]
+        if self.truncated:
+            parts.append(f"truncated_at={self.stopped_at!r}")
+        if self.nondeterministic_sources:
+            parts.append(f"nondeterministic={','.join(self.nondeterministic_sources)}")
+        return f"RunReport({', '.join(parts)})"
+
+
+def _describe_value(value: Any) -> str:
+    """Return a bounded metadata descriptor for an arbitrary run output.
+
+    torch resolves through ``sys.modules`` so this typing-light module never
+    imports it (the vocabulary spine must stay importable torch-clean).
+    """
+
+    torch_mod = sys.modules.get("torch")
+    if torch_mod is not None and isinstance(value, torch_mod.Tensor):
+        dtype = str(value.dtype).replace("torch.", "")
+        return f"{dtype}[{','.join(str(d) for d in value.shape)}]@{value.device}"
+    if isinstance(value, (list, tuple)):
+        inner = ", ".join(_describe_value(item) for item in list(value)[:3])
+        extra = "" if len(value) <= 3 else f", ... ({len(value)} items)"
+        return f"{type(value).__name__}({inner}{extra})"
+    if isinstance(value, dict):
+        return f"dict({len(value)} keys)"
+    return type(value).__name__
+
 
 @dataclass(frozen=True, slots=True)
 class RunResult:
@@ -1521,6 +1570,23 @@ class RunResult:
     output: Any
     trace: Any
     report: RunReport
+
+    def __repr__(self) -> str:
+        """Return a bounded card: output DESCRIPTOR only, never recursive.
+
+        The auto-repr printed the raw output tensor plus the whole Trace plus
+        the full report (14.9k chars measured; lovely bug 9). State precedes
+        detail: faithfulness/poison verdicts lead, the output is described by
+        metadata, and the trace renders through its own one-line repr.
+        """
+
+        report = self.report
+        return (
+            f"RunResult(output={_describe_value(self.output)}, "
+            f"faithfulness={report.path_faithfulness.value}, "
+            f"attestation={report.numeric_attestation.value}, "
+            f"poisoned={report.poisoned})"
+        )
 
 
 class RunnableTraceProtocol(Protocol):

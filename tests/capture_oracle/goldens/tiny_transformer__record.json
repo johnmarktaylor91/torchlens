@@ -28,7 +28,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -61,7 +61,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -94,7 +94,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -127,7 +127,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -160,7 +160,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -193,7 +193,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -226,7 +226,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -259,7 +259,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -292,7 +292,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -325,7 +325,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -358,7 +358,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -391,7 +391,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -424,7 +424,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -457,7 +457,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -490,7 +490,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -523,7 +523,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -556,7 +556,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -589,7 +589,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -622,7 +622,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -655,11 +655,11 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated",
+              "parents[0].edge_use": "sentinel_unknown",
               "parents[1].arg_position": "unknown",
-              "parents[1].edge_use": "populated",
+              "parents[1].edge_use": "sentinel_unknown",
               "parents[2].arg_position": "unknown",
-              "parents[2].edge_use": "populated"
+              "parents[2].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -696,7 +696,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -729,7 +729,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -762,7 +762,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -795,7 +795,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -828,7 +828,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -861,7 +861,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -894,9 +894,9 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated",
+              "parents[0].edge_use": "sentinel_unknown",
               "parents[1].arg_position": "unknown",
-              "parents[1].edge_use": "populated"
+              "parents[1].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -931,7 +931,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -964,7 +964,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -997,7 +997,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -1030,7 +1030,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -1063,7 +1063,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -1096,7 +1096,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -1129,9 +1129,9 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated",
+              "parents[0].edge_use": "sentinel_unknown",
               "parents[1].arg_position": "unknown",
-              "parents[1].edge_use": "populated"
+              "parents[1].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -1166,7 +1166,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -1261,7 +1261,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -1435,7 +1435,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -1610,7 +1610,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -1786,7 +1786,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -1962,7 +1962,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -2137,7 +2137,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -2312,7 +2312,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -2486,7 +2486,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -2660,7 +2660,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -2834,7 +2834,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -3008,7 +3008,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -3182,7 +3182,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -3356,7 +3356,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -3530,7 +3530,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -3704,7 +3704,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -3878,7 +3878,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -4053,7 +4053,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -4228,7 +4228,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -4403,7 +4403,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -4580,13 +4580,13 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.parents[1].arg_position": "unknown",
-            "core.parents[1].edge_use": "populated",
+            "core.parents[1].edge_use": "sentinel_unknown",
             "core.parents[1].parent_label_raw": "populated",
             "core.parents[2].arg_position": "unknown",
-            "core.parents[2].edge_use": "populated",
+            "core.parents[2].edge_use": "sentinel_unknown",
             "core.parents[2].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -4763,7 +4763,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -4936,7 +4936,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -5109,7 +5109,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -5283,7 +5283,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -5457,7 +5457,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -5631,7 +5631,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -5806,10 +5806,10 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.parents[1].arg_position": "unknown",
-            "core.parents[1].edge_use": "populated",
+            "core.parents[1].edge_use": "sentinel_unknown",
             "core.parents[1].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -5972,7 +5972,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -6146,7 +6146,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -6320,7 +6320,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -6482,7 +6482,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -6656,7 +6656,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -6830,7 +6830,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -7005,10 +7005,10 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.parents[1].arg_position": "unknown",
-            "core.parents[1].edge_use": "populated",
+            "core.parents[1].edge_use": "sentinel_unknown",
             "core.parents[1].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -7171,7 +7171,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -8150,20 +8150,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 616976,
+      "python_peak_memory_median_bytes": 623112,
       "sample_count": 3,
       "torch_version": "2.13.0+cu130",
-      "wall_time_median_ms": 93.44579398748465
+      "wall_time_median_ms": 187.1055830270052
     }
   },
   "sha256_chunks": [
-    "c8c208df",
-    "3032bd0b",
-    "d670d058",
-    "0a1de74f",
-    "3e0679e6",
-    "6d75377d",
-    "2e2f6fcc",
-    "99187291"
+    "74db5486",
+    "befcd614",
+    "2b873693",
+    "10c43572",
+    "87fc587e",
+    "fa3287de",
+    "5342f4aa",
+    "dfd8a861"
   ]
 }

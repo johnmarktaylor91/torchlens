@@ -191,6 +191,11 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     # capture-evidence disclosures, not graph structure.
     "grad_fn_timing_provenance": "witness",
     "checkpoint_invocation_witness": "witness",
+    # tlspec v9 entry-dark Trace slots (C07): the F30 source-snapshot table is
+    # a model-source fact beside the other source rows; the F33 structure-only
+    # evidence envelope is capture-honesty evidence beside structure_only.
+    "source_snapshots": "source_metadata",
+    "structure_evidence": "witness",
     "verbose": "capture_config",
     "profile_enabled": "capture_config",
     "has_gradients": "totals",
@@ -485,6 +490,10 @@ TRACE_EXTERNAL_WRITE_EXEMPTIONS: dict[str, str] = {
     "_last_encoding_state": (
         "viz: last draw's encoding-channel state (L5 color_by) for diagnostics "
         "(scrub-declared runtime-only)"
+    ),
+    "_last_render_geometry": (
+        "viz: last draw's layout-execution geometry record (vizmech D24) for "
+        "diagnostics (scrub-declared runtime-only)"
     ),
     # --- __dict__-spelled transients surfaced by the r6 R45 gate widening --
     # Every row below is popped/consumed within its own window; none can

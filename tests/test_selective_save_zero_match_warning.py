@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 
 import torchlens as tl
-from torchlens.backends._selective_save import apply_static_label_save_policy
+from torchlens.postprocess._selective_save import apply_static_label_save_policy
 
 pytestmark = pytest.mark.smoke
 
@@ -92,7 +92,7 @@ def test_none_predicate_does_not_warn() -> None:
 def test_shared_zero_match_warning_names_the_backend() -> None:
     """The extracted shared helper is the one disclosure text for all backends."""
 
-    from torchlens.backends._selective_save import warn_zero_match_save_predicate
+    from torchlens.postprocess._selective_save import warn_zero_match_save_predicate
 
     with pytest.warns(UserWarning, match="tf trace\\(save=...\\) predicate matched zero"):
         warn_zero_match_save_predicate("tf")

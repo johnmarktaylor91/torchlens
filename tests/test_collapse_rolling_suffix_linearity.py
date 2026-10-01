@@ -89,14 +89,15 @@ def _historical_dependency_components(layer_log: Layer) -> tuple[tuple[int, ...]
     """Compute pass components through the historical per-pass reachability walk."""
 
     reachability = _render_leaf._same_layer_reachability(layer_log)
-    adjacency = {pass_index: set() for pass_index in layer_log.ops}
+    # OpAccessor iteration yields Ops (C02); .keys() is the pass-index view.
+    adjacency = {pass_index: set() for pass_index in layer_log.ops.keys()}  # noqa: SIM118
     for source, targets in reachability.items():
         for target in targets:
             adjacency[source].add(target)
             adjacency[target].add(source)
     components: list[tuple[int, ...]] = []
     seen: set[int] = set()
-    for pass_index in sorted(layer_log.ops):
+    for pass_index in sorted(layer_log.ops.keys()):
         if pass_index in seen:
             continue
         stack = [pass_index]

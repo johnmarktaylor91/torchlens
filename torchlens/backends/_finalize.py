@@ -9,16 +9,16 @@ from collections.abc import Callable
 from typing import Any, Literal, TypeAlias, cast
 
 from ..data_classes._compaction import compact_op_metadata
+from ..data_classes._site_key import SiteKeyMinter
 from ..data_classes.layer import Layer
 from ..data_classes.module import ModuleAccessor
 from ..data_classes.trace import Trace, _init_module_hierarchy_data
 from ..ir.op_record import amend_preview_output_parent_mark
 from ..postprocess._grouping_stamp import build_grouping_policy_stamp
-from ..postprocess._site_key import SiteKeyMinter
+from ..postprocess._recurrence import compute_preview_recurrence_assignments, relabel_edge_metadata
 from ..postprocess.finalization import _build_module_logs, _build_root_module_log
 from ..postprocess.loop_grouping_adapter import RecurrenceAssignment
 from ..quantities import Bytes
-from ._recurrence import compute_preview_recurrence_assignments, relabel_edge_metadata
 from .registry import BackendName
 
 OpHook: TypeAlias = Callable[[Any, Trace, set[str]], None]

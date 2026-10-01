@@ -167,6 +167,9 @@ CELL_SOURCES: dict[str, str] = {
     "equivalent_ops": "JOIN:equivalence",
     "recurrent_ops": "DEFAULT",
     "site_key": "DEFAULT",  # STEP:7 mints the site_key_v1 value
+    # tlspec v9 entry-dark injected-op identity (C07): default None on every
+    # model op; the F01 log_injections writer stamps injected ops post-hoc.
+    "injection_provenance": "DEFAULT",
     # ---- ancestry --------------------------------------------------------------
     "root_ancestors": "FACET:ancestry",
     "children": "JOIN:children",

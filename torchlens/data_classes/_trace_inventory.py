@@ -63,7 +63,7 @@ def build_sites_table(trace: Trace) -> pd.DataFrame:
         never a silently empty table.
     """
 
-    from ..postprocess._site_key import parse_site_key
+    from ._site_key import parse_site_key
 
     pd = _require_pandas()
     ops = list(trace.ops)
@@ -166,6 +166,9 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
     outcome = getattr(trace, "outcome", None)
     capture_duration = getattr(trace, "capture_duration", None)
     from .._capture_honesty import capture_advisories, poison_facts
+    from ..report._factcore import _memory
+
+    memory_facts = _memory(trace)
 
     logged_values = (getattr(trace, "annotations", {}) or {}).get("logged_values", {})
     return {
@@ -202,9 +205,18 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
         "buffers": {
             "num_buffer_tensors": len(getattr(trace, "buffers", {}) or {}),
         },
+        # Payload-scope law (C02; sumfam D8): BOM answers "what does THIS
+        # object retain?", so its byte figures are retained_now -- the
+        # at_capture facts print beside them, never under the same name.
+        # (Before-pin: three surfaces claimed 64 MB of data an artifact did
+        # not contain.)
         "activations": {
-            "num_saved": len(saved_ops),
-            "saved_activation_memory": saved_bytes,
+            "payload_scope": "retained_now",
+            "num_saved_at_capture": len(saved_ops),
+            "at_capture_memory": saved_bytes,
+            "retained_now_memory": Bytes(memory_facts.retained_now_bytes),
+            "num_present_now": memory_facts.retained_now_present_ops,
+            "num_lazy_now": memory_facts.retained_now_lazy_ops,
             "total_activation_memory": getattr(trace, "total_activation_memory", None),
         },
         "backward": {

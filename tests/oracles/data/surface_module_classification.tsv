@@ -90,6 +90,7 @@ neighborhood	declared
 neuro	submodule
 noise	declared
 notebook	submodule
+observability	submodule
 observers	submodule
 options	declared
 output	declared
@@ -148,6 +149,7 @@ top_fraction	declared
 top_k	declared
 trace	declared
 trace_slice	submodule
+transforms	submodule
 types	submodule
 units	declared
 user_funcs	submodule

@@ -3,7 +3,7 @@
 Three guarantees (ecosystem MEMO 3.1/3.3/3.4, megaplan P05):
 
 1. LOCKSTEP -- regenerating the writer contract from the live tree reproduces
-   ``torchlens/schemas/writer_contract_v8.json`` exactly. Any persistence
+   ``torchlens/schemas/writer_contract_v<TLSPEC_VERSION>.json`` exactly. Any persistence
    contract change (a field added/removed/re-policied, a codec or component
    schema bumped) fails here until the golden is consciously regenerated in
    the same PR, making every contract diff reviewable. Regenerate with
@@ -27,6 +27,7 @@ from pathlib import Path
 
 import pytest
 
+from torchlens._io import TLSPEC_VERSION
 from torchlens._io.field_registry import (
     RECORD_CONTRACT_CLASSES,
     FieldTier,
@@ -38,7 +39,12 @@ from torchlens._io.writer_contract import writer_contract, writer_contract_diges
 
 pytestmark = [pytest.mark.smoke]
 
-GOLDEN_PATH = Path(__file__).parent.parent / "torchlens" / "schemas" / "writer_contract_v8.json"
+GOLDEN_PATH = (
+    Path(__file__).parent.parent
+    / "torchlens"
+    / "schemas"
+    / f"writer_contract_v{TLSPEC_VERSION}.json"
+)
 UPDATE_FLAG = "TORCHLENS_UPDATE_WRITER_CONTRACT"
 
 

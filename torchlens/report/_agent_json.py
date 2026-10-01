@@ -204,6 +204,39 @@ def _json_shape(shape: Any) -> list[int] | None:
         return None
 
 
+def _memory_scopes(log: Any) -> dict[str, Any]:
+    """Both payload-scope byte figures, named (C02; sumfam D8)."""
+
+    from ._factcore import _memory
+
+    memory = _memory(log)
+    return {
+        "at_capture_bytes": memory.at_capture_bytes,
+        "at_capture_saved_ops": memory.at_capture_saved_ops,
+        "retained_now_bytes": memory.retained_now_bytes,
+        "retained_now_present_ops": memory.retained_now_present_ops,
+        "retained_now_lazy_ops": memory.retained_now_lazy_ops,
+        "scope_note": memory.scope_note,
+    }
+
+
+def _health_summary(log: Any) -> dict[str, Any]:
+    """The three-state health verdict + coverage (C02; sumfam D5/D9)."""
+
+    from ._health import health_facts
+
+    facts = health_facts(log)
+    return {
+        "verdict": facts.verdict,
+        "basis": facts.basis,
+        "checked": facts.checked,
+        "nonfinite_labels": list(facts.nonfinite_labels),
+        "alias_nonfinite_labels": list(facts.alias_nonfinite_labels),
+        "unexamined": facts.unexamined,
+        "unchecked": facts.unchecked,
+    }
+
+
 def _payload_state(op: Any) -> str:
     """Return the op's CURRENT payload state: present | lazy | unsaved.
 
@@ -446,6 +479,11 @@ def build_agent_json(log: Any, *, max_ops: int | None = None) -> dict[str, Any]:
             "parameters": int(getattr(log, "num_params", 0) or 0),
             "modules": len(module_rows),
         },
+        # Payload-scope law (C02; sumfam D8): every byte figure names its
+        # scope -- at_capture (immutable capture fact) vs retained_now
+        # (what THIS object holds; zero on a payload-stripped artifact).
+        "memory": _memory_scopes(log),
+        "health": _health_summary(log),
         "inputs": _op_labels(getattr(log, "input_ops", None)),
         "outputs": _op_labels(getattr(log, "output_ops", None)),
         "layer_labels": [str(label) for label in getattr(log, "layer_labels", []) or []],

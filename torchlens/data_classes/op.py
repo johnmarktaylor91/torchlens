@@ -89,7 +89,6 @@ from .._trace_core.relation_views import (
     materialize_dataflow_view,
 )
 from .._trace_state import TraceState
-from .._training_validation import _NON_GRAD_DTYPES, TrainingModeConfigError
 from .._transport import digest_byte_view
 from ..backends.torch._tl import mark_detached_saved_activation
 from ..constants import ARG_EXPRESSIONS_FIELD, LAYER_PASS_LOG_FIELD_ORDER, RAW_LABEL_SUFFIX
@@ -126,6 +125,12 @@ from ..utils.tensor_utils import (
 )
 from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture
+from ._op_transforms import (
+    apply_transform,
+    transform_error_message,
+    validate_streaming_transform_output,
+    validate_train_mode_transform_output,
+)
 from ._repr import format_config_items, format_shape_list
 from ._state_adapter import state_items, state_restore
 from .field_policy import (
@@ -404,6 +409,10 @@ _UNPOOLED_SLOTS = frozenset(
         "func_rng_states",
         "activation_transform",
         "interventions",
+        # Per-op UNIQUE injected-op identity record (tlspec v9 entry-dark
+        # slot): a mutable mapping distinct per injected op, never a shared
+        # internable value. None on every model op until F01 writes it.
+        "injection_provenance",
         "parent_params",
         "_param_logs",
         "_grad_records",
@@ -1251,201 +1260,6 @@ def _summarize_call_kwargs(saved_kwargs: Any, non_tensor_kwargs: Any) -> str | N
     return ", ".join(rendered)
 
 
-def apply_transform(
-    *,
-    label: str | None,
-    tensor: torch.Tensor,
-    transform: Callable[..., Any],
-    transform_kind: str,
-    streaming_active: bool = False,
-    raw_label: str | None = None,
-    func_name: str | None = None,
-) -> Any:
-    """Apply a user transform with logging paused and contextual errors.
-
-    Parameters
-    ----------
-    label:
-        Raw layer label for error context, or ``None`` when unavailable.
-    tensor:
-        Raw tensor passed to the user transform.
-    transform:
-        Callable applied to ``tensor``.
-    transform_kind:
-        Transform kind, either ``"out"`` or ``"grad"``.
-    streaming_active:
-        Whether a streaming bundle writer is active.
-    raw_label:
-        Raw layer label for error context when it differs from ``label``.
-    func_name:
-        Function name for error context.
-
-    Returns
-    -------
-    Any
-        Value returned by ``transform``.
-    """
-
-    # R36: a cpu_async payload may still be an in-flight pinned buffer; a
-    # user transform is a host-side byte read and must never observe partial
-    # bytes. No-op unless async fence events are actually pending.
-    from ..utils.tensor_utils import synchronize_pending_cpu_async_copies
-
-    synchronize_pending_cpu_async_copies()
-    try:
-        with pause_logging():
-            return transform(tensor)
-    except Exception as exc:
-        raise TorchLensPostfuncError(
-            transform_error_message(
-                label=label,
-                raw_label=raw_label,
-                func_name=func_name,
-                tensor=tensor,
-                transform_kind=transform_kind,
-                streaming_active=streaming_active,
-            )
-        ) from exc
-
-
-def transform_error_message(
-    *,
-    label: str | None,
-    raw_label: str | None = None,
-    func_name: str | None = None,
-    tensor: torch.Tensor,
-    transform_kind: str,
-    streaming_active: bool,
-) -> str:
-    """Build context for an out or grad transform failure.
-
-    Parameters
-    ----------
-    label:
-        Raw layer label for error context, or ``None`` when unavailable.
-    raw_label:
-        Raw layer label for error context when it differs from ``label``.
-    func_name:
-        Function name for error context.
-    tensor:
-        Raw tensor passed to the transform.
-    transform_kind:
-        Transform kind, either ``"out"`` or ``"grad"``.
-    streaming_active:
-        Whether a streaming bundle writer is active.
-
-    Returns
-    -------
-    str
-        Contextual error message.
-    """
-
-    return (
-        f"{transform_kind}_transform raised for layer {label} "
-        f"(raw={raw_label or label}, func={func_name}, "
-        f"shape={tuple(tensor.shape)}, dtype={tensor.dtype}, "
-        f"streaming_active={streaming_active})."
-    )
-
-
-def validate_train_mode_transform_output(
-    *,
-    raw_tensor: torch.Tensor,
-    transformed_tensor: Any,
-    transform_kind: str,
-    backward_ready: bool,
-    label: str | None = None,
-) -> None:
-    """Validate differentiability requirements for train-mode transform outputs.
-
-    Parameters
-    ----------
-    raw_tensor:
-        Raw tensor passed to the transform.
-    transformed_tensor:
-        Value returned by the transform.
-    transform_kind:
-        Transform kind, either ``"out"`` or ``"grad"``.
-    backward_ready:
-        Whether TorchLens is preserving autograd graph connectivity.
-    label:
-        Raw layer label for error context, or ``None`` when unavailable.
-
-    Returns
-    -------
-    None
-        Raises if the transformed value violates train-mode requirements.
-    """
-
-    if not backward_ready or not raw_tensor.requires_grad:
-        return
-    if not isinstance(transformed_tensor, torch.Tensor):
-        raise TrainingModeConfigError(
-            f"{transform_kind}_transform must return a torch.Tensor while backward_ready=True "
-            f"for layer {label}. "
-            "Remedy: return a differentiable torch.Tensor from the transform.",
-            code="transform_not_differentiable",
-        )
-    if transformed_tensor.dtype in _NON_GRAD_DTYPES:
-        raise TrainingModeConfigError(
-            f"backward_ready=True with non-grad dtype {transformed_tensor.dtype} on layer "
-            f"{label}. Integer and bool dtypes cannot propagate grads. "
-            "Remedy: return a floating-dtype tensor from the transform.",
-            code="transform_not_differentiable",
-        )
-    if not transformed_tensor.requires_grad or (
-        transformed_tensor.grad_fn is None and transformed_tensor is not raw_tensor
-    ):
-        raise TrainingModeConfigError(
-            f"{transform_kind}_transform returned a tensor disconnected from the autograd "
-            "graph (grad_fn is None) while backward_ready=True. The transformed out "
-            "must remain differentiable. "
-            "Remedy: keep the transform on the autograd graph (no detach/no_grad).",
-            code="transform_not_differentiable",
-        )
-
-
-def validate_streaming_transform_output(
-    *,
-    transformed_tensor: Any,
-    transform_kind: str,
-    streaming_active: bool,
-    label: str | None = None,
-) -> None:
-    """Validate transformed tensors before streaming bundle finalization.
-
-    Parameters
-    ----------
-    transformed_tensor:
-        Value returned by the user transform.
-    transform_kind:
-        Transform kind, either ``"out"`` or ``"grad"``.
-    streaming_active:
-        Whether a streaming bundle writer is active for this trace.
-    label:
-        Raw layer label for error context, or ``None`` when unavailable.
-
-    Returns
-    -------
-    None
-        Raises if streaming cannot serialize the transformed value.
-    """
-
-    if not streaming_active:
-        return
-    if not isinstance(transformed_tensor, torch.Tensor):
-        raise TorchLensIOError(
-            f"Streaming save requires {transform_kind}_transform outputs to be "
-            f"torch.Tensor instances, but layer {label} produced "
-            f"{type(transformed_tensor).__name__}."
-        )
-    if transformed_tensor.layout != torch.strided:
-        raise TorchLensIOError(
-            f"Streaming save does not support sparse {transform_kind}_transform outputs "
-            f"for layer {label}."
-        )
-
-
 def _set_saved_out_metadata(entry: "Op", tensor: torch.Tensor) -> None:
     """Refresh saved output metadata from a replacement tensor.
 
@@ -1907,6 +1721,7 @@ class Op(_SelectionOperand):
         equivalent_ops: Any
         recurrent_ops: Any
         site_key: str | None
+        injection_provenance: dict[str, Any] | None
         parents: Any
         parent_arg_positions: Any
         _edge_uses: Any
@@ -2100,6 +1915,10 @@ class Op(_SelectionOperand):
         # site_key_v1 structural-position identity: persists as of tlspec v8
         # with byte-exact recomputation at load (_io/forgery_validation.py).
         "site_key": FieldPolicy.KEEP,
+        # tlspec v9 entry-dark injected-op identity (C07; surgery memo 3.5):
+        # None on every model op until the F01 log_injections writer lands;
+        # fail-closed shape validation at load (_io/forgery_validation.py).
+        "injection_provenance": FieldPolicy.KEEP,
         "parents": FieldPolicy.KEEP,
         "parent_arg_positions": FieldPolicy.KEEP,
         "_edge_uses": FieldPolicy.KEEP,
@@ -4789,7 +4608,9 @@ class Op(_SelectionOperand):
             if self.func_config:
                 config_str = format_config_items(self.func_config)
                 s += f"\n\tConfig: {config_str}"
-            s += f"\n\tTime elapsed: {self.func_duration: .3E}s"
+            # Units come from the quantity, never the caller: a manual
+            # trailing "s" doubled Duration's unit into "mss" (lovely bug 2).
+            s += f"\n\tTime elapsed: {self.func_duration}"
         if len(self.output_of_modules) > 0:
             output_of_modules_str = ", ".join(self.output_of_modules)
             s += f"\n\tOutput of modules: {output_of_modules_str}"

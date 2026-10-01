@@ -19,6 +19,7 @@ SelectorKind: TypeAlias = Literal[
     "output",
     "output_at",
     "input_at",
+    "site",
     "contains",
     "predicate",
     "in_module",
@@ -35,6 +36,7 @@ SelectorKind: TypeAlias = Literal[
     "regex",
     "followed_by",
     "preceded_by",
+    "site",
 ]
 
 
@@ -535,6 +537,185 @@ class WhereSelector(BaseSelector):
         if self.name_hint is None:
             return "tl.where(<predicate>)"
         return f"tl.where(<predicate>, name_hint={self.name_hint!r})"
+
+
+@dataclass(frozen=True, repr=False)
+class SiteSelector(BaseSelector):
+    """Structural-position selector over ``site_key_v1`` components (C03).
+
+    The site-key-primary WHERE spelling (surgery memo Build 0a/0c): valid in
+    EVERY lane under the address law -- post hoc against ``op.site_key``,
+    and during a live capture against the streaming live minter
+    (``intervention/site_keys.py``). Every spelling DOCUMENTED-UNSTABLE
+    pending naming-session ratification.
+    """
+
+    key: str | None = None
+    module_path: str | None = None
+    op_type: str | None = None
+    slot: int | None = None
+    ordinal: int | None = None
+
+    def __init__(
+        self,
+        key: str | None = None,
+        *,
+        module_path: str | None = None,
+        op_type: str | None = None,
+        slot: int | None = None,
+        ordinal: int | None = None,
+    ) -> None:
+        """Build a site selector from a rendered key or components.
+
+        Raises
+        ------
+        ArgumentTypeError
+            ``site_selector_empty`` without any component;
+            ``site_selector_key_conflict`` when a rendered key is combined
+            with component filters (the key already fixes every component);
+            ``site_selector_key_invalid`` for a malformed rendered key.
+        """
+
+        if (
+            key is None
+            and module_path is None
+            and op_type is None
+            and ordinal is None
+            and slot is None
+        ):
+            raise ArgumentTypeError(
+                "tl.site() needs a rendered site key or at least one "
+                "component (module_path=, op_type=, slot=, ordinal=)",
+                code="site_selector_empty",
+                remedy="pass op.site_key, or components such as "
+                "tl.site(module_path='encoder.0', op_type='linear')",
+                argument="key",
+            )
+        if key is not None:
+            if (
+                module_path is not None
+                or op_type is not None
+                or slot is not None
+                or ordinal is not None
+            ):
+                raise ArgumentTypeError(
+                    "tl.site(key) already fixes every component; combining it "
+                    "with component filters has nothing extra to match",
+                    code="site_selector_key_conflict",
+                    remedy="pass either the rendered key or components, not both",
+                    argument="key",
+                )
+            from ..postprocess._site_key import parse_site_key
+
+            try:
+                parse_site_key(key)
+            except ValueError as exc:
+                raise ArgumentTypeError(
+                    f"tl.site(key) received a malformed site key: {exc}",
+                    code="site_selector_key_invalid",
+                    remedy="pass a rendered op.site_key string (site_key_v1)",
+                    argument="key",
+                ) from exc
+        object.__setattr__(self, "selector_kind", "site")
+        object.__setattr__(
+            self,
+            "selector_value",
+            {
+                "key": key,
+                "module_path": module_path,
+                "op_type": op_type,
+                "slot": slot,
+                "ordinal": ordinal,
+            },
+        )
+        object.__setattr__(self, "key", key)
+        object.__setattr__(self, "module_path", module_path)
+        object.__setattr__(self, "op_type", op_type)
+        object.__setattr__(self, "slot", slot)
+        object.__setattr__(self, "ordinal", ordinal)
+
+    def matches_key(self, rendered_key: str | None) -> bool:
+        """Whether one rendered ``site_key_v1`` string satisfies this selector.
+
+        A ``None`` key never matches (keyless legacy/orphan rows are not
+        silently guessed); component filters compare against the parsed key.
+        """
+
+        if not rendered_key:
+            return False
+        if self.key is not None:
+            return rendered_key == self.key
+        from ..postprocess._site_key import parse_site_key
+
+        try:
+            module_site, layer_type, output_slot, call_ordinal = parse_site_key(rendered_key)
+        except ValueError:
+            return False
+        if self.module_path is not None:
+            joined = "/".join(module_site)
+            if self.module_path != joined and self.module_path not in module_site:
+                return False
+        if self.op_type is not None and self.op_type != layer_type:
+            return False
+        if self.slot is not None and self.slot != output_slot:
+            return False
+        return not (self.ordinal is not None and self.ordinal != call_ordinal)
+
+    def __repr__(self) -> str:
+        """Return the component-form repr."""
+
+        parts = [
+            f"{name}={value!r}"
+            for name, value in (
+                ("key", self.key),
+                ("module_path", self.module_path),
+                ("op_type", self.op_type),
+                ("slot", self.slot),
+                ("ordinal", self.ordinal),
+            )
+            if value is not None
+        ]
+        return f"tl.site({', '.join(parts)})"
+
+
+def site(
+    key: str | None = None,
+    *,
+    module_path: str | None = None,
+    op_type: str | None = None,
+    slot: int | None = None,
+    ordinal: int | None = None,
+) -> SiteSelector:
+    """Select ops by structural position (``site_key_v1`` components).
+
+    Parameters
+    ----------
+    key:
+        A rendered ``op.site_key`` string (exact match).
+    module_path:
+        Module-site match: the full ``/``-joined site axis or any one
+        module address on it.
+    op_type:
+        TorchLens layer type (``"linear"``, ``"relu"``, ...).
+    slot:
+        Multi-output slot index (``None`` = single-output ops).
+    ordinal:
+        1-based occurrence ordinal of the position within its
+        pass-qualified innermost call instance.
+
+    Returns
+    -------
+    SiteSelector
+        Structural selector valid in every lane (address law).
+    """
+
+    return SiteSelector(
+        key,
+        module_path=module_path,
+        op_type=op_type,
+        slot=slot,
+        ordinal=ordinal,
+    )
 
 
 @dataclass(frozen=True, repr=False)
@@ -1453,6 +1634,7 @@ def _classify_selector_direction(
             "predicate",
             "in_module",
             "facet",
+            "site",
             "and",
             "or",
             "not",
@@ -1484,6 +1666,7 @@ def _classify_selector_direction(
             FacetSelector,
             WhereSelector,
             InModuleSelector,
+            SiteSelector,
             FollowedBySelector,
             PrecededBySelector,
             CompositeSelector,
@@ -1587,6 +1770,7 @@ __all__ = [
     "PrecededBySelector",
     "RegexSelector",
     "SelectorLike",
+    "SiteSelector",
     "WhereSelector",
     "contains",
     "facet",
@@ -1605,6 +1789,7 @@ __all__ = [
     "output",
     "output_at",
     "input_at",
+    "site",
     "preceded_by",
     "regex",
     "where",

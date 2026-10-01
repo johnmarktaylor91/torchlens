@@ -1428,7 +1428,12 @@ def _normalize_replay_hooks(
     """
 
     if hooks is None:
-        return normalize_hooks_from_spec(getattr(log, "_intervention_spec", None))
+        # Replay matches against FINISHED ops (site lifecycle), so the
+        # live-forward preflight does not apply: replay-only structural
+        # targets (tl.site) are exactly what this engine can serve.
+        return normalize_hooks_from_spec(
+            getattr(log, "_intervention_spec", None), live_forward=False
+        )
     return normalize_hook_plan(hooks)
 
 
@@ -1948,8 +1953,9 @@ def _replay_fire_record(entry: NormalizedHookEntry, site: Op, *, replaced: bool)
         Hook fire record.
     """
 
-    helper_kwargs = dict(entry.helper_spec.kwargs) if entry.helper_spec is not None else {}
-    return FireRecord(
+    from .audit import build_fire_record
+
+    return build_fire_record(
         target_label=site.layer_label,
         call_label=site.label,
         func_call_id=site.func_call_id,
@@ -1960,8 +1966,6 @@ def _replay_fire_record(entry: NormalizedHookEntry, site: Op, *, replaced: bool)
         timing="post",
         direction="forward",
         helper_name=_hook_name(entry),
-        seed=helper_kwargs.get("seed"),
-        timestamp=time.monotonic(),
         replaced=replaced,
     )
 

@@ -315,8 +315,10 @@ _NOISE_BUFFER_NAMES = frozenset({"running_mean", "running_var", "num_batches_tra
 # bundle and Trace clusters scale identically by depth.
 
 # Commutative functions: argument order doesn't matter, so we skip arg-position
-# labels on their incoming edges to reduce visual clutter.
-COMMUTE_FUNCS = ["add", "mul", "cat", "eq", "ne"]
+# labels on their incoming edges to reduce visual clutter. ``cat`` is NOT here:
+# concatenation is order-sensitive at every degree, and listing it suppressed
+# argument-order labels exactly where they carry meaning (vizmech D14).
+COMMUTE_FUNCS = ["add", "mul", "eq", "ne"]
 SIBLING_ORDER_NODE_CAP = 2000
 SIBLING_ORDER_STRETCH_CAP = 4.5
 SIBLING_ORDER_EPSILON = 1e-9

@@ -1,24 +1,32 @@
 """Batched dataset extraction with a self-describing, resumable disk artifact.
 
 This module owns :func:`torchlens.extract_dataset`'s implementation. In disk
-mode (``output_dir=``) the artifact directory is SELF-DESCRIBING: alongside the
-``batch_XXXXX.pt`` shards it carries a ``manifest.json`` recording site
-identity (layer label plus structural site key where derivable), stimulus
-ordering and provenance, axis semantics, dtypes, devices, the transform
-disclosure, and the TorchLens version — so the artifact can be handed to a
-collaborator who never saw the producing script.
+mode (``output_dir=``) the artifact directory is the v2 layout (extract memo
+D1): a BOUNDED ``manifest.json`` (written at creation, once when batch zero
+freezes the plan, and at terminal status — never per shard), an APPEND-ONLY
+fsynced ``ledger.jsonl`` with one line per committed shard, a write-once
+ordered ``stimulus_ids.json`` sidecar, and immutable ``batch_XXXXX.pt``
+shards. The commit protocol is validate -> temp shard -> flush/fsync ->
+atomic rename -> append/fsync ledger row, so a crash at any point leaves an
+ignorable temp file, an unledgered orphan, or a torn final ledger line —
+never a trusted lie. Completed v1 artifacts migrate without a forward;
+in-progress v1 artifacts refuse resume typed (they recorded neither model
+identity nor mode/grad state).
 
-The manifest doubles as the RESUME ledger: shard writes are atomic (temp file
-plus ``os.replace``) and the manifest is atomically rewritten after every
-shard with that shard's exact row count, so a run killed mid-extraction can be
-resumed with ``resume=True`` from the last completed shard. Resume-from-shard
-was chosen over content-addressed caching because one-shot stimulus iterables
-cannot be hashed without being consumed, and the shard layout is already the
-public on-disk contract.
+The run signature carries MODEL IDENTITY (extract D6): by default a
+cryptographic threaded-Merkle digest over the complete ordered model state,
+compared field-by-field on resume — a pretrained prefix resumed with a
+random-init model now REFUSES typed instead of completing (T-MODELSWAP).
+
+The ``transform=`` slot goes through the ONE :func:`torchlens.transforms.
+coerce_transform` door: frozen spec chains plan against batch zero and every
+shard is validated against the frozen plan BEFORE publication (T-C6); raw
+callables stay accepted with identification-only disclosure; ctx dispatch is
+by explicit DECLARATION, never ``inspect.signature`` (transforms memo P2).
 
 Every spelling introduced here (``resume=``, ``stimulus_ids=``,
-:func:`load_extraction`, :class:`LoadedExtraction`, the manifest schema) is
-DOCUMENTED-UNSTABLE pending the naming/UI sprint.
+``model_identity=``, :func:`load_extraction`, :class:`LoadedExtraction`, the
+manifest schema) is DOCUMENTED-UNSTABLE pending the naming/UI sprint.
 """
 
 from __future__ import annotations
@@ -27,25 +35,52 @@ import contextlib
 import dataclasses
 import hashlib
 import inspect
-import json
-import os
 import warnings
-from collections.abc import Callable, Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from pathlib import Path
 from typing import Any, cast
 
 import torch
 from torch import nn
 
-from ._errors import _actionable_message, _ActionableErrorMixin
+from ._data_substrate import (
+    LEDGER_FILENAME,
+    MANIFEST_SCHEMA_V1,
+    MANIFEST_SCHEMA_V2,
+    STIMULUS_IDS_FILENAME,
+    VALUE_REDUCTION_ALGORITHM_ID,
+    VALUE_REDUCTION_ALGORITHM_VERSION,
+    ArtifactWriter,
+    compare_signatures,
+    compute_model_identity,
+    migrate_v1_artifact,
+    read_trusted_rows,
+    repair_ledger_tail,
+    shard_filename as _shard_filename,
+    stimulus_ids_digest,
+    value_reduction,
+)
+from ._errors import InvalidArgumentError, _actionable_message, _ActionableErrorMixin
 from ._io import _json
 from .errors._base import ConfigurationError, TorchLensWarning
+from .transforms import (
+    TransformContext,
+    TransformContractError,
+    TransformPipeline,
+    coerce_transform,
+    coerce_transform_mapping,
+    pipeline_record,
+)
 
-#: Manifest schema identifier written to and required from ``manifest.json``.
-MANIFEST_SCHEMA = "tl_extract_manifest_v1"
+#: Legacy v1 manifest schema id (still readable forever; superseded on write).
+MANIFEST_SCHEMA = MANIFEST_SCHEMA_V1
 
 #: Filename of the self-describing manifest inside an extraction directory.
 MANIFEST_FILENAME = "manifest.json"
+
+#: Native shard format recorded in the v2 signature (a manifest FIELD, so a
+#: later format change is a value change, not a layout break).
+NATIVE_FORMAT = "pt_shards_v1"
 
 #: Maximum number of tensor elements sampled into the stimulus digest.
 _DIGEST_SAMPLE_ELEMENTS = 4096
@@ -510,7 +545,7 @@ def _iter_batches(stimuli: Any, batch_size: int) -> Iterable[Any]:
 def _merge_batch_outputs(
     accumulator: dict[str, list[torch.Tensor]],
     batch_outputs: dict[str, torch.Tensor],
-    transform: Callable[[torch.Tensor], torch.Tensor] | None,
+    pipelines: Mapping[str, TransformPipeline | None],
 ) -> None:
     """Append one batch of extracted outs to an accumulator.
 
@@ -520,62 +555,14 @@ def _merge_batch_outputs(
         Mutable mapping from layer label to per-batch tensors.
     batch_outputs:
         Extraction output from one batch.
-    transform:
-        Optional transform applied to each out before storage.
+    pipelines:
+        Per-output-key transform chains (declared ctx dispatch + T-C2 guard
+        applied by :func:`_apply_site_pipeline`).
     """
 
     for layer_name, tensor in batch_outputs.items():
-        stored = transform(tensor) if transform is not None else tensor
+        stored = _apply_site_pipeline(pipelines.get(layer_name), layer_name, tensor)
         accumulator.setdefault(layer_name, []).append(stored.detach().cpu())
-
-
-def _shard_filename(index: int) -> str:
-    """Return the canonical shard filename for a batch index.
-
-    Parameters
-    ----------
-    index:
-        Zero-based batch index.
-
-    Returns
-    -------
-    str
-        Filename of the form ``batch_00042.pt``.
-    """
-
-    return f"batch_{index:05d}.pt"
-
-
-def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
-    """Write a JSON document atomically (temp file plus ``os.replace``).
-
-    Parameters
-    ----------
-    path:
-        Final destination path.
-    payload:
-        JSON-serializable document.
-    """
-
-    tmp_path = path.with_name(path.name + ".tmp")
-    tmp_path.write_text(json.dumps(payload, indent=1, sort_keys=True), encoding="utf-8")
-    os.replace(tmp_path, path)
-
-
-def _atomic_torch_save(payload: Any, path: Path) -> None:
-    """Save a torch payload atomically so a partial file never bears the final name.
-
-    Parameters
-    ----------
-    payload:
-        Object passed to ``torch.save``.
-    path:
-        Final destination path.
-    """
-
-    tmp_path = path.with_name(path.name + ".tmp")
-    torch.save(payload, tmp_path)
-    os.replace(tmp_path, path)
 
 
 def _tensor_digest(stimuli: torch.Tensor) -> str:
@@ -606,33 +593,107 @@ def _tensor_digest(stimuli: torch.Tensor) -> str:
     return f"sha256:{hasher.hexdigest()}"
 
 
-def _transform_signature(
-    transform: Callable[[torch.Tensor], torch.Tensor] | None,
-) -> dict[str, str] | None:
-    """Describe a transform callable for the manifest signature.
+def _coerce_transform_slot(
+    transform: Any, layer_plan: dict[str, str]
+) -> tuple[dict[str, TransformPipeline | None], Any]:
+    """Route the ``transform=`` slot through the one coercion door (memo B1).
 
-    Callable identity cannot be verified across processes; the qualified name
-    is a DISCLOSURE (and a resume compatibility check), not a proof.
+    A Mapping is resolved PER OUTPUT KEY before coercion (transforms memo
+    decision 13: the engine holds ``(label, tensor)`` at both call sites, so
+    heterogeneous per-site chains need no ctx machinery); everything else
+    coerces to one chain applied to every key.
 
     Parameters
     ----------
     transform:
-        Optional tensor transform supplied by the caller.
+        ``None`` | unary callable | registered name | spec | ordered
+        sequence | per-site Mapping.
+    layer_plan:
+        Normalized ``output key -> layer lookup`` plan (its keys are the
+        run's output keys).
 
     Returns
     -------
-    dict[str, str] | None
-        ``{"module": ..., "qualname": ...}`` or ``None`` when no transform.
+    tuple[dict[str, TransformPipeline | None], Any]
+        One coerced chain (or ``None``) per output key, and the
+        JSON-portable signature record: ``None``, a single
+        ``tl_transform_pipeline_v1`` record, or ``{"per_site": {...}}``.
     """
 
-    if transform is None:
-        return None
-    return {
-        "module": getattr(transform, "__module__", "") or "",
-        "qualname": getattr(
-            transform, "__qualname__", getattr(type(transform), "__qualname__", "")
-        ),
-    }
+    output_keys = list(layer_plan)
+    if isinstance(transform, Mapping):
+        pipelines = coerce_transform_mapping(transform, output_keys)
+        record: Any = {
+            "per_site": {key: pipeline_record(chain) for key, chain in pipelines.items()}
+        }
+        return pipelines, record
+    pipeline = coerce_transform(transform)
+    return dict.fromkeys(output_keys, pipeline), pipeline_record(pipeline)
+
+
+def _apply_site_pipeline(
+    pipeline: TransformPipeline | None, key: str, tensor: torch.Tensor
+) -> torch.Tensor:
+    """Apply one output key's chain with the T-C2 stimulus-axis guard.
+
+    Dispatch inside the chain is by DECLARATION (transforms memo P2): raw
+    callables are invoked unary, declared :class:`ContextTransform` steps
+    receive the context — never ``inspect.signature``. The guard runs for
+    built-ins AND raw callables: every step must preserve row count and
+    order, so a launderer (mask-blind flatten across the batch, per-batch
+    standardization) refuses instead of writing wrong rows.
+
+    Parameters
+    ----------
+    pipeline:
+        The output key's coerced chain, or ``None``.
+    key:
+        Output key (rides the context for per-site refusal text).
+    tensor:
+        Captured batch tensor, stimulus axis leading.
+
+    Returns
+    -------
+    torch.Tensor
+        The transformed tensor.
+
+    Raises
+    ------
+    TransformContractError
+        ``transform_output_invalid`` when a step returns a non-tensor;
+        ``transform_row_axis_violated`` when the stimulus axis changed
+        (T-C2: the row count and order are inviolable).
+    """
+
+    if pipeline is None:
+        return tensor
+    result = pipeline.apply(tensor, TransformContext(site_label=key))
+    if not isinstance(result, torch.Tensor):
+        raise TransformContractError(
+            f"Transform chain for output key {key!r} returned "
+            f"{type(result).__name__}, not a tensor.",
+            code="transform_output_invalid",
+            remedy="return a torch.Tensor from every transform step",
+            site=key,
+            result_type=type(result).__name__,
+        )
+    if result.dim() == 0 or result.shape[0] != tensor.shape[0]:
+        raise TransformContractError(
+            f"Transform chain for output key {key!r} changed the stimulus "
+            f"axis: {tensor.shape[0]} rows in, "
+            f"{'a 0-dim scalar' if result.dim() == 0 else result.shape[0]} out. "
+            "Every transform step must preserve row count and order (T-C2); "
+            "a per-batch reduction over the stimulus axis makes each row "
+            "depend on its batch-mates.",
+            code="transform_row_axis_violated",
+            remedy=(
+                "reduce over non-batch axes only (e.g. tl.transforms.reduce "
+                "with axis>=1), or drop the offending step"
+            ),
+            site=key,
+            rows_in=int(tensor.shape[0]),
+        )
+    return result
 
 
 def _stimuli_signature(stimuli: Any) -> dict[str, Any]:
@@ -666,40 +727,76 @@ def _stimuli_signature(stimuli: Any) -> dict[str, Any]:
     }
 
 
-def _build_signature(
-    layer_plan: dict[str, str],
-    layers_kind: str,
-    batch_size: int,
-    transform: Callable[[torch.Tensor], torch.Tensor] | None,
-    stimuli: Any,
-) -> dict[str, Any]:
-    """Build the resume-compatibility signature block of the manifest.
+def _resolve_model_identity(model: nn.Module, model_identity: Any) -> dict[str, Any]:
+    """Resolve the ``model_identity=`` kwarg into the D6 identity record.
 
     Parameters
     ----------
-    layer_plan:
-        Normalized ``output key -> layer lookup`` extraction plan.
-    layers_kind:
-        ``"mapping"`` or ``"sequence"``, preserving list-versus-dict semantics.
-    batch_size:
-        Number of stimuli per forward pass.
-    transform:
-        Optional tensor transform supplied by the caller.
-    stimuli:
-        Stimulus tensor or iterable.
+    model:
+        The model being harvested.
+    model_identity:
+        ``"measured"`` (default: cryptographic state digest) | ``"none"``
+        (explicit recorded opt-out) | a Mapping (an explicit caller
+        assertion, e.g. ``{"checkpoint": ..., "revision": ...}``, for
+        models whose state cannot be measured).
 
     Returns
     -------
     dict[str, Any]
-        JSON-serializable signature compared verbatim on resume.
+        The JSON-portable identity record for the run signature.
+    """
+
+    if isinstance(model_identity, Mapping):
+        return compute_model_identity(model, level="asserted", assertion=dict(model_identity))
+    return compute_model_identity(model, level=str(model_identity))
+
+
+def _build_signature(plan: _RunPlan, model_identity_record: dict[str, Any]) -> dict[str, Any]:
+    """Build the v2 resume-compatibility signature (the D16 KNOWN-FIELDS).
+
+    Every field is SEMANTIC and compared individually on resume. Fields whose
+    engine knobs have not shipped yet carry the engine's fixed policy string
+    (honest constants that become variable when the knob lands): the engine
+    always runs eval + no_grad (A11), always derives-or-refuses left-padded
+    positions (D5), and refuses ragged outputs.
+
+    Parameters
+    ----------
+    plan:
+        Resolved run configuration.
+    model_identity_record:
+        The D6 identity record from :func:`_resolve_model_identity`.
+
+    Returns
+    -------
+    dict[str, Any]
+        JSON-serializable signature compared field-by-field on resume.
     """
 
     return {
-        "layer_plan": dict(layer_plan),
-        "layers_kind": layers_kind,
-        "batch_size": batch_size,
-        "transform": _transform_signature(transform),
-        "stimuli": _stimuli_signature(stimuli),
+        "schema_version": MANIFEST_SCHEMA_V2,
+        "native_format": NATIVE_FORMAT,
+        "layer_plan": dict(plan.layer_plan),
+        "layers_kind": plan.layers_kind,
+        "batch_size": plan.batch_size,
+        "transform_pipeline": plan.transform_record,
+        "stimuli": _stimuli_signature(plan.stimuli),
+        "stimulus_ids_digest": stimulus_ids_digest(plan.stimulus_ids),
+        "model_identity": model_identity_record,
+        "padding_side": "as_collated",
+        "position_ids_source": "derived_or_refused",
+        "model_mode": "eval_no_grad",
+        "pool": None,
+        "dtype_policy": None,
+        "ragged": "refuse",
+        "integrity": {
+            "checksums": "fast",
+            "file_fact": "crc32_final_file_bytes",
+            "value_reduction": {
+                "algorithm_id": VALUE_REDUCTION_ALGORITHM_ID,
+                "algorithm_version": VALUE_REDUCTION_ALGORITHM_VERSION,
+            },
+        },
     }
 
 
@@ -753,7 +850,11 @@ def _layer_metadata(
 
 
 def _base_manifest(signature: dict[str, Any], stimulus_ids: list[str] | None) -> dict[str, Any]:
-    """Create a fresh in-progress manifest document.
+    """Create a fresh in-progress v2 manifest document (the bounded header).
+
+    The manifest is written exactly three times (extract D1): at creation,
+    once when batch zero freezes the plan, and at terminal status. Per-shard
+    facts live in the append-only ledger, never here.
 
     Parameters
     ----------
@@ -765,36 +866,34 @@ def _base_manifest(signature: dict[str, Any], stimulus_ids: list[str] | None) ->
     Returns
     -------
     dict[str, Any]
-        Manifest with an empty batch ledger and no layer metadata yet.
+        Bounded manifest header with no layer metadata or totals yet.
     """
 
     from . import __version__
 
     return {
-        "schema": MANIFEST_SCHEMA,
+        "schema": MANIFEST_SCHEMA_V2,
         "torchlens_version": __version__,
         "status": "in_progress",
         "signature": signature,
         "stimulus_provenance": {
             "order": (
-                "row i of every concatenated activation tensor corresponds to "
-                "stimulus i in iteration order of the stimuli argument; within "
-                "shard k, global stimulus index = (sum of prior shards' "
-                "n_stimuli) + row"
+                "row i of every shard, consumed in ledger order, is stimulus i "
+                "in the caller's iteration order"
             ),
             "n_stimuli": None,
-            "stimulus_ids": list(stimulus_ids) if stimulus_ids is not None else None,
+            "ids_recorded": stimulus_ids is not None,
+            "ids_digest": signature.get("stimulus_ids_digest"),
         },
         "storage": {
-            "shard_filename_format": "batch_{index:05d}.pt",
-            "shard_payload": ("dict[output key -> torch.Tensor] with the stimulus axis leading"),
-            "tensor_placement": "cpu",
-            "writes": (
-                "atomic (temp file + os.replace); a shard file bearing its final name is complete"
-            ),
+            "shard_format": "pt",
+            "shard_pattern": "batch_XXXXX.pt",
+            "ledger": LEDGER_FILENAME,
         },
         "layers": None,
-        "batches": [],
+        "run": {},
+        "totals": None,
+        "ledger_digest": None,
     }
 
 
@@ -831,10 +930,12 @@ def _load_manifest(manifest_path: Path) -> dict[str, Any]:
             remedy="delete the output directory and re-run the extraction from scratch",
             manifest_path=str(manifest_path),
         ) from exc
-    if not isinstance(manifest, dict) or manifest.get("schema") != MANIFEST_SCHEMA:
+    known_schemas = (MANIFEST_SCHEMA_V1, MANIFEST_SCHEMA_V2)
+    if not isinstance(manifest, dict) or manifest.get("schema") not in known_schemas:
         raise DatasetExtractionResumeError(
-            f"Extraction manifest {str(manifest_path)!r} does not carry schema "
-            f"{MANIFEST_SCHEMA!r} (found {manifest.get('schema') if isinstance(manifest, dict) else type(manifest).__name__!r}).",
+            f"Extraction manifest {str(manifest_path)!r} does not carry a known "
+            f"schema {known_schemas} (found "
+            f"{manifest.get('schema') if isinstance(manifest, dict) else type(manifest).__name__!r}).",
             code="extraction_manifest_invalid",
             remedy="delete the output directory and re-run the extraction from scratch",
             manifest_path=str(manifest_path),
@@ -931,45 +1032,69 @@ def _consume_skipped_stimuli(stimuli: Any, n_skip: int) -> Any:
     return iterator
 
 
-def _check_resume_signature(
-    existing: dict[str, Any], signature: dict[str, Any], manifest_path: Path
+def _refuse_signature_mismatch(
+    recorded: Mapping[str, Any], current: Mapping[str, Any], manifest_path: Path
 ) -> None:
-    """Refuse a resume whose run parameters differ from the artifact's.
+    """Compare v2 signatures field by field and refuse typed on mismatch (D16).
+
+    ``model_identity`` mismatches get their own code: a pretrained prefix
+    resumed with a random-init (or otherwise different) model is the
+    T-MODELSWAP hazard, the exact fails-open defect this record exists to
+    kill — the artifact would silently mix checkpoint activations with the
+    resuming model's.
 
     Parameters
     ----------
-    existing:
-        Manifest found in the output directory.
-    signature:
-        Signature block of the current call.
+    recorded:
+        The artifact's recorded signature.
+    current:
+        The signature of the run asking to resume.
     manifest_path:
         Manifest path, for the refusal message.
 
     Raises
     ------
     DatasetExtractionResumeError
-        If any signature field differs.
+        ``extraction_resume_model_identity_mismatch`` when the model identity
+        record differs (or either side cannot be compared);
+        ``extraction_resume_signature_mismatch`` when any other semantic
+        field differs. Both name the exact fields.
     """
 
-    recorded = existing.get("signature")
-    if recorded == signature:
+    mismatched = compare_signatures(recorded, current)
+    if not mismatched:
         return
-    mismatched = sorted(
-        key
-        for key in set(signature) | set(recorded or {})
-        if (recorded or {}).get(key) != signature.get(key)
-    )
+    if "model_identity" in mismatched:
+        recorded_identity = recorded.get("model_identity")
+        current_identity = current.get("model_identity")
+        raise DatasetExtractionResumeError(
+            f"Extraction artifact at {str(manifest_path.parent)!r} records a "
+            f"different MODEL IDENTITY than the resuming run (all mismatched "
+            f"fields: {mismatched}). Continuing would silently mix the "
+            "artifact's activations with a different model's — the exact "
+            "failure a random-init resume used to complete with.",
+            code="extraction_resume_model_identity_mismatch",
+            remedy=(
+                "resume with the exact model state that produced the artifact "
+                "(same checkpoint, same in-place edits), or extract into a "
+                "fresh directory"
+            ),
+            mismatched_fields=mismatched,
+            recorded_identity=recorded_identity,
+            requested_identity=current_identity,
+        )
     raise DatasetExtractionResumeError(
         f"Extraction artifact at {str(manifest_path.parent)!r} was produced by a "
         f"different run configuration (mismatched signature fields: {mismatched}).",
         code="extraction_resume_signature_mismatch",
         remedy=(
             "re-run with the artifact's original layers, batch_size, transform, "
-            "and stimuli, or delete the output directory to start fresh"
+            "stimuli, and stimulus_ids, or delete the output directory to "
+            "start fresh"
         ),
         mismatched_fields=mismatched,
-        recorded_signature=recorded,
-        requested_signature=signature,
+        recorded_signature=dict(recorded),
+        requested_signature=dict(current),
     )
 
 
@@ -993,12 +1118,19 @@ class _RunPlan:
         Number of stimuli per forward pass.
     device:
         Optional device for stimuli movement.
-    transform:
-        Optional tensor transform applied before storage.
+    pipelines:
+        One coerced transform chain (or ``None``) per output key, from the
+        single :func:`torchlens.transforms.coerce_transform` door.
+    transform_record:
+        JSON-portable signature record of the transform slot (``None``, one
+        ``tl_transform_pipeline_v1`` record, or ``{"per_site": {...}}``).
     progress:
         Whether to wrap batch iteration with ``tqdm``.
     stimulus_ids:
         Optional per-stimulus identifiers recorded as provenance.
+    model_identity:
+        The caller's ``model_identity=`` value (level string or assertion
+        Mapping), resolved lazily in disk mode.
     """
 
     model: nn.Module
@@ -1008,9 +1140,26 @@ class _RunPlan:
     layers_kind: str
     batch_size: int
     device: torch.device | str | None
-    transform: Callable[[torch.Tensor], torch.Tensor] | None
+    pipelines: dict[str, TransformPipeline | None]
+    transform_record: Any
     progress: bool
     stimulus_ids: list[str] | None
+    model_identity: Any
+
+    @property
+    def resume_verifiable(self) -> bool:
+        """Whether every output key's chain reconstructs from its record.
+
+        Returns
+        -------
+        bool
+            ``False`` iff any chain holds an opaque (identification-only)
+            step; the strict opaque-resume rule keys on this.
+        """
+
+        return all(
+            pipeline is None or pipeline.resume_verifiable for pipeline in self.pipelines.values()
+        )
 
 
 def extract_dataset(
@@ -1020,11 +1169,12 @@ def extract_dataset(
     batch_size: int = 32,
     device: torch.device | str | None = None,
     output_dir: str | Path | None = None,
-    transform: Callable[[torch.Tensor], torch.Tensor] | None = None,
+    transform: Any = None,
     progress: bool = True,
     *,
     resume: bool = False,
     stimulus_ids: Iterable[str] | None = None,
+    model_identity: Any = "measured",
 ) -> dict[str, torch.Tensor] | list[Path]:
     """Extract outs from an iterable dataset in batches.
 
@@ -1055,23 +1205,45 @@ def extract_dataset(
         Optional directory. When supplied, each batch output is written as
         ``batch_XXXXX.pt`` and paths are returned, alongside ``manifest.json``.
     transform:
-        Optional tensor transform applied to each out before storage.
+        Transform slot, through the ONE :func:`torchlens.transforms.
+        coerce_transform` door (DOCUMENTED-UNSTABLE): ``None`` | unary
+        callable | registered name | frozen spec / chain | ordered sequence
+        | per-site Mapping (``{output_key: chain, tl.transforms.DEFAULT:
+        fallback}``). Frozen spec chains are planned against batch zero and
+        every shard is validated against the plan before publication; raw
+        callables are accepted with identification-only disclosure and make
+        the artifact non-resumable across interruptions. Context dispatch is
+        by explicit declaration (``tl.transforms.ContextTransform`` /
+        ``with_context``), never signature inspection.
     progress:
         Whether to wrap batch iteration with ``tqdm``.
     resume:
         Disk mode only (DOCUMENTED-UNSTABLE): continue an interrupted run in
-        ``output_dir`` from its last completed shard. The recorded run
-        signature (layers, batch size, transform disclosure, stimulus
-        descriptor) must match; iterable stimuli are assumed to replay in the
-        original order, which resume cannot verify. A completed artifact
-        returns its shard paths without running the model or touching its
-        device placement.
+        ``output_dir`` from its trusted ledger prefix. Every semantic
+        signature field (layers, batch size, transform chain, stimulus
+        descriptor, stimulus-id digest, MODEL IDENTITY, ...) is compared
+        individually; any mismatch refuses typed naming the exact fields.
+        Iterable stimuli are assumed to replay in the original order, which
+        resume cannot verify. A completed compatible artifact returns its
+        shard paths without running the model or touching its device
+        placement. Completed v1 artifacts migrate to v2 without a forward;
+        in-progress v1 artifacts refuse typed.
     stimulus_ids:
         Optional per-stimulus identifiers (DOCUMENTED-UNSTABLE), recorded in
-        the manifest as provenance in iteration order. Disk mode only: the
-        in-memory result is a bare tensor mapping that could neither carry
-        nor be affected by validated identifiers, so passing them there is a
-        false affordance and refuses typed.
+        the write-once ordered sidecar and digested into the run signature.
+        Disk mode only: the in-memory result is a bare tensor mapping that
+        could neither carry nor be affected by validated identifiers, so
+        passing them there is a false affordance and refuses typed.
+    model_identity:
+        Disk mode (DOCUMENTED-UNSTABLE): ``"measured"`` (default — a
+        cryptographic threaded-Merkle digest over the complete ordered model
+        state: every parameter and persistent buffer, int/bool/0-dim
+        included), ``"none"`` (explicit recorded opt-out; resume proceeds
+        with no identity claim), or a Mapping (an explicit caller assertion,
+        e.g. ``{"checkpoint": ..., "revision": ...}``, for models whose
+        state cannot be measured — meta-device or disk-offloaded). When
+        measurement is impossible and no assertion is given the record is
+        ``"unavailable"`` and resume refuses typed.
 
     Returns
     -------
@@ -1082,10 +1254,18 @@ def extract_dataset(
     ------
     torchlens.errors.InvalidArgumentError
         If ``resume=True`` or ``stimulus_ids=`` is combined with in-memory
-        mode, or a batch's pad geometry is not right-aligned and correct
-        ``position_ids`` cannot be derived for this model.
+        mode, ``model_identity`` is outside its closed vocabulary, sized
+        stimuli and ``stimulus_ids`` disagree on cardinality, or a batch's
+        pad geometry is not right-aligned and correct ``position_ids``
+        cannot be derived for this model.
     DatasetExtractionResumeError
-        If the artifact in ``output_dir`` cannot be safely continued.
+        If the artifact in ``output_dir`` cannot be safely continued
+        (signature/model-identity mismatch, opaque transform continuation,
+        broken ledger prefix, in-progress v1 artifact, ...).
+    torchlens.transforms.TransformContractError
+        If the transform slot cannot be coerced, a chain violates the
+        stimulus-axis contract, or a shard's observed output contradicts
+        the frozen plan.
 
     Notes
     -----
@@ -1121,17 +1301,32 @@ def extract_dataset(
 
     import torchlens as _tl
 
+    layer_plan = _tl._normalize_extract_layers(layers)
+    pipelines, transform_record = _coerce_transform_slot(transform, layer_plan)
+    ids = list(stimulus_ids) if stimulus_ids is not None else None
+    if ids is not None and isinstance(stimuli, torch.Tensor) and len(ids) != stimuli.shape[0]:
+        raise InvalidArgumentError(
+            f"stimulus_ids has {len(ids)} entries but the stimulus tensor has "
+            f"{stimuli.shape[0]} rows; a mis-lengthed id list would mislabel "
+            "every row after the shorter of the two.",
+            code="extraction_stimulus_ids_cardinality",
+            remedy="pass exactly one identifier per stimulus row, in order",
+            n_ids=len(ids),
+            n_stimuli=int(stimuli.shape[0]),
+        )
     plan = _RunPlan(
         model=model,
         stimuli=stimuli,
         layers=layers,
-        layer_plan=_tl._normalize_extract_layers(layers),
+        layer_plan=layer_plan,
         layers_kind="mapping" if isinstance(layers, Mapping) else "sequence",
         batch_size=batch_size,
         device=device,
-        transform=transform,
+        pipelines=pipelines,
+        transform_record=transform_record,
         progress=progress,
-        stimulus_ids=list(stimulus_ids) if stimulus_ids is not None else None,
+        stimulus_ids=ids,
+        model_identity=model_identity,
     )
     if output_dir is None:
         return _extract_in_memory(plan)
@@ -1192,14 +1387,14 @@ def _extract_in_memory(plan: _RunPlan) -> dict[str, torch.Tensor]:
             _trace, batch_outputs, _views = _tl._extract_layers_with_trace(
                 plan.model, batch, plan.layers
             )
-            _merge_batch_outputs(accumulator, batch_outputs, plan.transform)
+            _merge_batch_outputs(accumulator, batch_outputs, plan.pipelines)
     return {label: torch.cat(tensors, dim=0) for label, tensors in accumulator.items()}
 
 
 def _prepare_disk_run(
     plan: _RunPlan, container_path: Path, resume: bool
-) -> tuple[dict[str, Any], list[dict[str, Any]], list[Path] | None]:
-    """Prepare the disk-mode manifest and resolve the resume state.
+) -> tuple[ArtifactWriter, list[dict[str, Any]], list[Path] | None]:
+    """Prepare the v2 artifact writer and resolve the resume state.
 
     Parameters
     ----------
@@ -1212,39 +1407,74 @@ def _prepare_disk_run(
 
     Returns
     -------
-    tuple[dict[str, Any], list[dict[str, Any]], list[Path] | None]
-        The (written) manifest, the trusted completed-shard ledger rows, and —
+    tuple[ArtifactWriter, list[dict[str, Any]], list[Path] | None]
+        The bound writer, the trusted completed-shard ledger rows, and —
         when the artifact is already complete with every shard present — the
         final shard paths (callers return them without running the model).
 
     Raises
     ------
     DatasetExtractionResumeError
-        On unmanifested shard directories or signature mismatches.
+        On unmanifested shard directories, signature or model-identity
+        mismatches, or an opaque-transform continuation.
+    ExtractionArtifactError
+        On a broken ledger prefix or an in-progress v1 artifact.
     """
 
     container_path.mkdir(parents=True, exist_ok=True)
     manifest_path = container_path / MANIFEST_FILENAME
-    signature = _build_signature(
-        plan.layer_plan, plan.layers_kind, plan.batch_size, plan.transform, plan.stimuli
-    )
-    manifest: dict[str, Any] | None = None
-    completed_rows: list[dict[str, Any]] = []
+
     if resume and manifest_path.exists():
         existing = _load_manifest(manifest_path)
-        _check_resume_signature(existing, signature, manifest_path)
-        ledgered_total = len(existing.get("batches") or [])
-        completed_rows = _completed_prefix(existing, container_path)
-        manifest = existing
-        manifest["batches"] = list(completed_rows)
-        if manifest.get("status") == "complete" and len(completed_rows) == ledgered_total:
+        if existing.get("schema") == MANIFEST_SCHEMA_V1:
+            # Completed v1 artifacts migrate without a forward; in-progress
+            # v1 artifacts refuse typed inside (they recorded neither model
+            # identity nor mode/grad state, so the prefix is unprovable).
+            existing, _migrated_rows = migrate_v1_artifact(container_path, existing)
+        identity = _resolve_model_identity(plan.model, plan.model_identity)
+        signature = _build_signature(plan, identity)
+        _refuse_signature_mismatch(existing.get("signature") or {}, signature, manifest_path)
+        rows = read_trusted_rows(container_path)
+        totals = existing.get("totals") or {}
+        if existing.get("status") == "complete" and len(rows) == totals.get("n_shards"):
+            # A completed compatible resume is a true no-op: the model is
+            # neither moved to a device nor mode-flipped (extract memo D3).
             return (
-                manifest,
-                completed_rows,
-                [container_path / str(row["file"]) for row in completed_rows],
+                ArtifactWriter(container_path, existing),
+                rows,
+                [container_path / str(row["file"]) for row in rows],
             )
-        manifest["status"] = "in_progress"
-    elif resume and any(container_path.glob("batch_*.pt")):
+        if not plan.resume_verifiable:
+            opaque = sorted(
+                key
+                for key, pipeline in plan.pipelines.items()
+                if pipeline is not None and not pipeline.resume_verifiable
+            )
+            raise DatasetExtractionResumeError(
+                f"Resuming this artifact would run forwards through an OPAQUE "
+                f"transform step (output keys {opaque}); an opaque callable's "
+                "identity is a disclosure, not a proof, so a continuation "
+                "cannot be verified to produce the same numbers as the prefix "
+                "(transforms memo decision 14).",
+                code="extraction_resume_opaque_transform",
+                remedy=(
+                    "register the transform under a versioned name "
+                    "(torchlens.transforms.register_transform) and pass the "
+                    "registered spelling on both runs, or extract into a "
+                    "fresh directory"
+                ),
+                opaque_keys=opaque,
+            )
+        _clean_orphan_tmp_files(container_path)
+        # A torn final ledger line is crash debris: cleared before appends
+        # resume, or the next commit would concatenate into it.
+        repair_ledger_tail(container_path)
+        existing["status"] = "in_progress"
+        # No manifest rewrite for a continuation: creation, batch-zero plan
+        # freeze, and terminal status are the only three writes (D1).
+        return ArtifactWriter(container_path, existing), rows, None
+
+    if resume and any(container_path.glob("batch_*.pt")):
         raise DatasetExtractionResumeError(
             f"Output directory {str(container_path)!r} contains batch shards "
             "but no manifest; it predates resumable extraction or lost its "
@@ -1253,17 +1483,179 @@ def _prepare_disk_run(
             remedy="delete the output directory (or point output_dir at a fresh one) and re-run",
             output_dir=str(container_path),
         )
-    if manifest is None:
-        manifest = _base_manifest(signature, plan.stimulus_ids)
-    elif plan.stimulus_ids is not None:
-        manifest["stimulus_provenance"]["stimulus_ids"] = plan.stimulus_ids
+
+    # Fresh run (resume=False, or resume=True into an empty directory): any
+    # prior artifact machinery in the directory belongs to a different run
+    # identity, so the append-only ledger and write-once sidecar reset with
+    # the manifest (the v1 engine's manifest overwrite, made explicit).
     _clean_orphan_tmp_files(container_path)
-    _atomic_write_json(manifest_path, manifest)
-    return manifest, completed_rows, None
+    for stale in (LEDGER_FILENAME, STIMULUS_IDS_FILENAME):
+        with contextlib.suppress(OSError):
+            (container_path / stale).unlink()
+    identity = _resolve_model_identity(plan.model, plan.model_identity)
+    manifest = _base_manifest(_build_signature(plan, identity), plan.stimulus_ids)
+    writer = ArtifactWriter(container_path, manifest)
+    writer.write_manifest()
+    if plan.stimulus_ids is not None:
+        writer.write_stimulus_ids_sidecar(plan.stimulus_ids)
+    return writer, [], None
+
+
+def _freeze_transform_plans(
+    plan: _RunPlan, batch_outputs: dict[str, torch.Tensor]
+) -> dict[str, Any]:
+    """Plan every output key's chain against batch zero (the T-C6 freeze).
+
+    Parameters
+    ----------
+    plan:
+        Resolved run configuration.
+    batch_outputs:
+        Batch zero's captured (pre-transform) tensors, keyed by output key.
+
+    Returns
+    -------
+    dict[str, Any]
+        Per-key frozen plan: the planned step rows (``None`` for opaque or
+        post-opaque steps, which are validated from observation per shard
+        instead of trusted from batch one) and the final predicted output
+        spec every later shard is validated against before publication.
+    """
+
+    from .transforms import TensorSpec
+
+    plans: dict[str, Any] = {}
+    for key, tensor in batch_outputs.items():
+        pipeline = plan.pipelines.get(key)
+        if pipeline is None or not pipeline.steps:
+            plans[key] = None
+            continue
+        planned = pipeline.plan(TensorSpec.of(tensor), TransformContext(site_label=key))
+        final = planned[-1] if planned else None
+        plans[key] = {
+            "steps": [
+                None
+                if step is None
+                else {
+                    "name": step.name,
+                    "version": step.version,
+                    "per_stimulus_shape": list(step.output.shape[1:]),
+                    "dtype": step.output.dtype,
+                    "stream_safe": step.stream_safe,
+                    "may_alias": step.may_alias,
+                }
+                for step in planned
+            ],
+            "final_output": None
+            if final is None
+            else {
+                "per_stimulus_shape": list(final.output.shape[1:]),
+                "dtype": final.output.dtype,
+            },
+        }
+    return plans
+
+
+def _validate_against_plan(manifest: dict[str, Any], processed: dict[str, torch.Tensor]) -> None:
+    """Refuse a shard whose observed output contradicts the frozen plan (T-C6).
+
+    Parameters
+    ----------
+    manifest:
+        The artifact manifest holding the batch-zero frozen plans.
+    processed:
+        The shard's stored (post-transform) tensors, keyed by output key.
+
+    Raises
+    ------
+    TransformContractError
+        ``transform_plan_violated`` naming the key, the plan, and the
+        observation; the shard is refused BEFORE publication.
+    """
+
+    plans = (manifest.get("run") or {}).get("transform_plans") or {}
+    for key, stored in processed.items():
+        final = (plans.get(key) or {}).get("final_output") if plans.get(key) else None
+        if not final:
+            continue
+        expected_shape = list(final.get("per_stimulus_shape") or [])
+        expected_dtype = final.get("dtype")
+        observed_shape = list(stored.shape[1:])
+        shape_ok = len(observed_shape) == len(expected_shape) and all(
+            want is None or want == got for want, got in zip(expected_shape, observed_shape)
+        )
+        if not shape_ok or str(stored.dtype) != expected_dtype:
+            raise TransformContractError(
+                f"Output key {key!r} produced {observed_shape} / "
+                f"{stored.dtype}, contradicting the frozen transform plan "
+                f"{expected_shape} / {expected_dtype}; the shard is refused "
+                "BEFORE publication (T-C6: runtime output must match the "
+                "declared plan, and ragged shape is validated per shard, "
+                "never inferred forever from batch one).",
+                code="transform_plan_violated",
+                remedy=(
+                    "keep per-stimulus shapes fixed across batches (pad or "
+                    "pool before the chain), or re-extract into a fresh "
+                    "directory if the chain itself changed"
+                ),
+                site=key,
+                planned_shape=expected_shape,
+                planned_dtype=expected_dtype,
+                observed_shape=observed_shape,
+                observed_dtype=str(stored.dtype),
+            )
+
+
+def _ids_range_digest(plan: _RunPlan, row_start: int, n_rows: int) -> str | None:
+    """Digest one shard's stimulus-id slice for its ledger row (D1 ID facts).
+
+    Parameters
+    ----------
+    plan:
+        Resolved run configuration.
+    row_start:
+        Global row index of the shard's first stimulus.
+    n_rows:
+        Number of stimulus rows in the shard.
+
+    Returns
+    -------
+    str | None
+        ``"sha256:..."`` over the ordered id slice, or ``None`` when the run
+        carries no ids.
+
+    Raises
+    ------
+    torchlens.errors.InvalidArgumentError
+        ``extraction_stimulus_ids_cardinality`` when the id list runs out
+        before the shard's rows (refused BEFORE the commit: a short id list
+        would mislabel every later row).
+    """
+
+    if plan.stimulus_ids is None:
+        return None
+    ids_slice = plan.stimulus_ids[row_start : row_start + n_rows]
+    if len(ids_slice) != n_rows:
+        raise InvalidArgumentError(
+            f"stimulus_ids supplies {len(plan.stimulus_ids)} identifiers but "
+            f"the stimuli reach row {row_start + n_rows}; the shard is refused "
+            "before its commit (a short id list would mislabel every later "
+            "row).",
+            code="extraction_stimulus_ids_cardinality",
+            remedy="pass exactly one identifier per stimulus, in order",
+            n_ids=len(plan.stimulus_ids),
+            rows_needed=row_start + n_rows,
+        )
+    return stimulus_ids_digest(ids_slice)
 
 
 def _extract_to_disk(plan: _RunPlan, container_path: Path, resume: bool) -> list[Path]:
-    """Run the disk-mode extraction engine (atomic shards + manifest ledger).
+    """Run the disk-mode extraction engine (the v2 commit protocol).
+
+    Per shard: validate (frozen plan + stimulus axis + id cardinality) ->
+    temp shard -> flush/fsync -> atomic rename -> append/fsync ledger row.
+    The manifest is written at creation, once at the batch-zero plan freeze,
+    and at terminal status — never per shard.
 
     Parameters
     ----------
@@ -1277,24 +1669,29 @@ def _extract_to_disk(plan: _RunPlan, container_path: Path, resume: bool) -> list
     Returns
     -------
     list[pathlib.Path]
-        Every shard path in consumption order, including resumed prefixes.
+        Every shard path in ledger order, including resumed prefixes.
     """
+
+    import functools
 
     import torchlens as _tl
 
-    manifest, completed_rows, complete_paths = _prepare_disk_run(plan, container_path, resume)
+    writer, completed_rows, complete_paths = _prepare_disk_run(plan, container_path, resume)
     if complete_paths is not None:
         # A completed compatible resume is a true no-op: the model is neither
         # moved to a device nor mode-flipped (extract MEMO D3).
         return complete_paths
     if plan.device is not None:
         plan.model.to(plan.device)
-    n_skip = sum(int(row["n_stimuli"]) for row in completed_rows)
+    manifest = writer.manifest
+    n_skip = sum(int(row["n_rows"]) for row in completed_rows)
     remaining = _consume_skipped_stimuli(plan.stimuli, n_skip) if n_skip else plan.stimuli
     start_index = len(completed_rows)
     container_paths = [container_path / str(row["file"]) for row in completed_rows]
 
     run_state: dict[str, Any] = {}
+    row_start = n_skip
+    n_committed = start_index
     with _inference_guard(plan.model):
         for offset, batch in enumerate(_batch_iterable(plan, remaining)):
             batch_index = start_index + offset
@@ -1303,28 +1700,41 @@ def _extract_to_disk(plan: _RunPlan, container_path: Path, resume: bool) -> list
             _trace, batch_outputs, layer_views = _tl._extract_layers_with_trace(
                 plan.model, batch, plan.layers
             )
-            processed = {
-                label: (plan.transform(tensor) if plan.transform is not None else tensor)
-                .detach()
-                .cpu()
-                for label, tensor in batch_outputs.items()
-            }
+            n_rows = next(iter(batch_outputs.values())).shape[0] if batch_outputs else 0
+            processed: dict[str, torch.Tensor] = {}
+            shard_key_facts: dict[str, dict[str, Any]] = {}
+            for key, tensor in batch_outputs.items():
+                stored = _apply_site_pipeline(plan.pipelines.get(key), key, tensor)
+                # D7: the order-sensitive value reduction runs ON the
+                # tensor's device BEFORE the host copy, so a corruption
+                # between here and the written file is catchable later.
+                shard_key_facts[key] = {
+                    "per_stimulus_shape": list(stored.shape[1:]),
+                    "dtype": str(stored.dtype),
+                    "value_reduction": value_reduction(key, stored),
+                }
+                processed[key] = stored.detach().cpu()
             if manifest.get("layers") is None:
                 manifest["layers"] = _layer_metadata(layer_views, processed)
-            batch_path = container_path / _shard_filename(batch_index)
-            _atomic_torch_save(processed, batch_path)
-            n_rows = next(iter(processed.values())).shape[0] if processed else 0
-            manifest["batches"].append(
-                {"index": batch_index, "file": batch_path.name, "n_stimuli": n_rows}
+                manifest.setdefault("run", {})["transform_plans"] = _freeze_transform_plans(
+                    plan, batch_outputs
+                )
+                writer.write_manifest()
+            _validate_against_plan(manifest, processed)
+            ids_range = _ids_range_digest(plan, row_start, n_rows)
+            row = writer.commit_shard(
+                index=batch_index,
+                row_start=row_start,
+                n_rows=n_rows,
+                save_payload=functools.partial(torch.save, processed),
+                row_facts={"keys": shard_key_facts, "ids_range_digest": ids_range},
             )
-            _atomic_write_json(container_path / MANIFEST_FILENAME, manifest)
-            container_paths.append(batch_path)
+            container_paths.append(container_path / str(row["file"]))
+            row_start += n_rows
+            n_committed += 1
 
-    manifest["status"] = "complete"
-    manifest["stimulus_provenance"]["n_stimuli"] = sum(
-        int(row["n_stimuli"]) for row in manifest["batches"]
-    )
-    _atomic_write_json(container_path / MANIFEST_FILENAME, manifest)
+    manifest["stimulus_provenance"]["n_stimuli"] = row_start
+    writer.finalize(n_shards=n_committed, n_stimuli=row_start)
     return container_paths
 
 
@@ -1383,16 +1793,36 @@ def load_extraction(
             remedy="finish the run first: extract_dataset(..., resume=True)",
             status=manifest.get("status"),
         )
-    rows = _completed_prefix(manifest, container_path)
-    if len(rows) != len(manifest.get("batches") or []):
-        raise DatasetExtractionResumeError(
-            f"Extraction artifact at {str(container_path)!r} is missing ledgered "
-            f"shard files ({len(rows)} of {len(manifest.get('batches') or [])} present).",
-            code="extraction_manifest_invalid",
-            remedy="re-run extract_dataset(..., resume=True) to restore the missing shards",
-            n_present=len(rows),
-            n_ledgered=len(manifest.get("batches") or []),
-        )
+    if manifest.get("schema") == MANIFEST_SCHEMA_V2:
+        # Readers consume LEDGER order, never filename order; a ledgered
+        # shard that is missing or byte-size-mismatched refuses typed inside
+        # read_trusted_rows (a broken member ends the trusted prefix).
+        rows = read_trusted_rows(container_path)
+        n_ledgered = (manifest.get("totals") or {}).get("n_shards")
+        if len(rows) != n_ledgered:
+            raise DatasetExtractionResumeError(
+                f"Extraction artifact at {str(container_path)!r} ledgers "
+                f"{len(rows)} trusted shard rows but its terminal totals "
+                f"record {n_ledgered}.",
+                code="extraction_manifest_invalid",
+                remedy="re-run extract_dataset(..., resume=True) to finish the artifact",
+                n_present=len(rows),
+                n_ledgered=n_ledgered,
+            )
+    else:
+        rows = [
+            {"file": row["file"], "n_rows": row["n_stimuli"]}
+            for row in _completed_prefix(manifest, container_path)
+        ]
+        if len(rows) != len(manifest.get("batches") or []):
+            raise DatasetExtractionResumeError(
+                f"Extraction artifact at {str(container_path)!r} is missing ledgered "
+                f"shard files ({len(rows)} of {len(manifest.get('batches') or [])} present).",
+                code="extraction_manifest_invalid",
+                remedy="re-run extract_dataset(..., resume=True) to restore the missing shards",
+                n_present=len(rows),
+                n_ledgered=len(manifest.get("batches") or []),
+            )
     available = set((manifest.get("layers") or {}).keys())
     selected = list(layers) if layers is not None else None
     if selected is not None:
@@ -1425,6 +1855,8 @@ def load_extraction(
 __all__ = [
     "MANIFEST_FILENAME",
     "MANIFEST_SCHEMA",
+    "MANIFEST_SCHEMA_V2",
+    "NATIVE_FORMAT",
     "DatasetExtractionResumeError",
     "LoadedExtraction",
     "extract_dataset",

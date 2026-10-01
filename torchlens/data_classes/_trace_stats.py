@@ -243,10 +243,15 @@ class TraceStatsMixin(_TraceMixinBase):
 
     @property
     def total_flops_forward(self: "Trace") -> Flops:
-        """Total forward FLOPs across all layers (skipping None/unknown)."""
-        return Flops(
-            sum(entry.flops_forward for entry in self.layer_list if entry.flops_forward is not None)
-        )
+        """Total forward FLOPs (the canonical identity-partition aggregation).
+
+        Reads the ONE aggregation service (costreport D1) -- never a
+        private re-sum over raw per-op fields.
+        """
+
+        from ..report._compute_truth import aggregate_forward_compute
+
+        return aggregate_forward_compute(self).flops_fma2
 
     @property
     def total_flops_backward(self: "Trace") -> Flops:
@@ -271,14 +276,18 @@ class TraceStatsMixin(_TraceMixinBase):
         Returns:
             Callable dict mapping layer_type to forward/backward/count totals.
         """
+        from ..report._compute_truth import compute_aggregation
+
         result: dict[str, dict[str, int | Flops]] = {}
+        rows_by_label = {row.label: row for row in compute_aggregation(self).rows}
         for entry in self.layer_list:
             lt = entry.layer_type
             if lt not in result:
                 result[lt] = {"forward": Flops(0), "backward": Flops(0), "count": 0}
             result[lt]["count"] += 1
-            if entry.flops_forward is not None:
-                result[lt]["forward"] += entry.flops_forward
+            row = rows_by_label.get(str(entry.layer_label))
+            if row is not None and row.flops_fma2 is not None:
+                result[lt]["forward"] += Flops(row.flops_fma2)
             if entry.flops_backward is not None:
                 result[lt]["backward"] += entry.flops_backward
         return _CallableDict(result)
@@ -300,12 +309,67 @@ class TraceStatsMixin(_TraceMixinBase):
         lower bound (the summary footer says so).
         """
 
-        total = 0
-        for entry in self.layer_list:
-            macs = entry.macs_forward
-            if macs is not None:
-                total += int(macs)
-        return Macs(total)
+        from ..report._compute_truth import aggregate_forward_compute
+
+        return aggregate_forward_compute(self).macs
+
+    @property
+    def factcore(self: "Trace") -> Any:
+        """The ONE numbers substrate for this trace (C02; sumfam D1/D6).
+
+        DOCUMENTED-UNSTABLE spelling. Counts (with the explicit grain
+        menu), the identity spine with refusing joins, parameter truth,
+        the canonical compute aggregation, and the D8 payload-scope
+        memory figures -- every reporting surface reads THIS, never raw
+        trace attributes.
+        """
+
+        from ..report._factcore import factcore
+
+        return factcore(self)
+
+    @property
+    def health_facts(self: "Trace") -> Any:
+        """Normalized, serializable health observations (C02; sumfam D9).
+
+        DOCUMENTED-UNSTABLE spelling. Basis + pass-qualified nonfinite
+        identities (alias rows excluded per D19, disclosed separately) +
+        coverage counts + capture revision; persists through save/load on
+        the annotations channel; an artifact without a re-derivable basis
+        renders NOT-CHECKED, never clean.
+        """
+
+        from ..report._health import health_facts
+
+        return health_facts(self)
+
+    @property
+    def nonfinite_verdict(self: "Trace") -> str:
+        """Three-state health verdict: found / checked_and_clean / not_checked.
+
+        DOCUMENTED-UNSTABLE spelling (C02; sumfam D5). The ONLY health
+        fact a builder may branch on -- ``nonfinite_ops`` truthiness is a
+        false-negative trap on payload-stripped artifacts and is linted
+        against in builder code.
+        """
+
+        from ..report._health import nonfinite_verdict
+
+        return nonfinite_verdict(self)
+
+    def stats_table(self: "Trace") -> Any:
+        """Per-op payload observations of ONE captured batch (C02; sumfam D18).
+
+        DOCUMENTED-UNSTABLE spelling. A FactCore projection through the
+        sound stats kernel: typed row states for unsaved / disk-backed /
+        unsupported payloads (never a hollow zero row), per-family
+        exact/sampled evidence, and an explicit scan-cost policy.
+        Observations only -- audit owns judgments.
+        """
+
+        from ..report._stats_table import build_stats_table
+
+        return build_stats_table(self)
 
     @property
     def unknown_flop_ops(self: "Trace") -> tuple[Any, ...]:
@@ -343,13 +407,9 @@ class TraceStatsMixin(_TraceMixinBase):
     def macs_unknown_split_ops(self: "Trace") -> tuple[str, ...]:
         """Labels of compute ops whose exact MAC split cannot be derived."""
 
-        return tuple(
-            entry.layer_label
-            for entry in self.layer_list
-            if entry.is_compute_op
-            and entry.flops_forward is not None
-            and entry.macs_forward is None
-        )
+        from ..report._compute_truth import aggregate_forward_compute
+
+        return aggregate_forward_compute(self).macs_unknown_split
 
     @property
     def total_macs_backward(self: "Trace") -> Macs | None:
@@ -371,16 +431,19 @@ class TraceStatsMixin(_TraceMixinBase):
             Callable dict mapping layer_type to forward/backward/count
             entries. ``backward`` is always ``None`` (not derivable).
         """
+        from ..report._compute_truth import compute_aggregation
+
         result: dict[str, dict[str, int | Macs | None]] = {}
+        rows_by_label = {row.label: row for row in compute_aggregation(self).rows}
         for entry in self.layer_list:
             lt = entry.layer_type
             if lt not in result:
                 result[lt] = {"forward": Macs(0), "backward": None, "count": 0}
             bucket = result[lt]
             bucket["count"] = int(bucket["count"] or 0) + 1
-            macs = entry.macs_forward
-            if macs is not None:
-                bucket["forward"] = Macs(int(bucket["forward"] or 0) + int(macs))
+            row = rows_by_label.get(str(entry.layer_label))
+            if row is not None and row.fma_macs is not None:
+                bucket["forward"] = Macs(int(bucket["forward"] or 0) + int(row.fma_macs))
         return _CallableDict(result)
 
     # ********************************************

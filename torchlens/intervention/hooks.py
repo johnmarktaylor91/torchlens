@@ -197,8 +197,8 @@ def normalize_hook_plan(
     hook: HookInput | None = None,
     *,
     default_site_target: Any | None = None,
-    force_shape_change: bool = False,
     direction: HookDirectionRequest | None = None,
+    allow_replay_only_site_targets: bool = False,
 ) -> list[NormalizedHookEntry]:
     """Normalize all supported attach-hook shapes into hook-plan entries.
 
@@ -211,8 +211,6 @@ def normalize_hook_plan(
     default_site_target:
         Site target for bare callable/helper input. Without this, bare hooks
         fail closed because they do not imply a model-log site.
-    force_shape_change:
-        Escape hatch metadata consumed by execution.
     direction:
         Optional signal direction override. ``"both"`` expands to one forward
         and one backward entry.
@@ -227,17 +225,17 @@ def normalize_hook_plan(
     entries: list[NormalizedHookEntry] = []
     for order, (site_target, hook_like) in enumerate(pairs):
         helper_spec = hook_like if isinstance(hook_like, HelperSpec) else None
-        # The escape hatch is requested either by the caller's parameter or by the
-        # helper's own force_shape_change kwarg (e.g. tl.replace_with(t,
-        # force_shape_change=True)). OR them so a helper-requested shape change
-        # reaches validate_hook_output; this mirrors the append-safety check in
-        # rerun.py. Without the helper side, the flag dies here: no production
-        # caller passes the parameter, and execution reads only entry metadata.
-        entry_force_shape_change = bool(force_shape_change) or (
-            helper_spec is not None
-            and bool(dict(helper_spec.kwargs).get("force_shape_change", False))
+        # The escape hatch is requested by the helper's own force_shape_change
+        # kwarg (e.g. tl.replace_with(t, force_shape_change=True)); it rides
+        # entry metadata so a helper-requested shape change reaches
+        # validate_hook_output, mirroring the append-safety check in rerun.py.
+        entry_force_shape_change = helper_spec is not None and bool(
+            dict(helper_spec.kwargs).get("force_shape_change", False)
         )
-        _validate_live_site_target(site_target)
+        _validate_live_site_target(
+            site_target,
+            allow_replay_only=allow_replay_only_site_targets,
+        )
         for concrete_direction in _hook_directions(
             hook_like,
             helper_spec,
@@ -267,7 +265,7 @@ def normalize_hook_plan(
     return entries
 
 
-def _validate_live_site_target(site_target: Any) -> None:
+def _validate_live_site_target(site_target: Any, *, allow_replay_only: bool = False) -> None:
     """Reject selector targets that cannot be live hook application sites.
 
     Refusal happens upfront, before any per-site evaluation, so a capability
@@ -279,29 +277,45 @@ def _validate_live_site_target(site_target: Any) -> None:
     ----------
     site_target:
         Selector-like target passed to live hook attachment.
+    allow_replay_only:
+        Whether replay-capable structural kinds (``site``, the C03
+        structural selector) may pass: the trace-side attach door resolves
+        them post hoc on the finished graph, and the RERUN preflight
+        (:func:`normalize_hooks_from_spec`) re-validates without this
+        allowance, so a sticky site hook still refuses typed BEFORE any
+        rerun forward.
     """
 
     selector = _normalize_live_selector(site_target)
-    _reject_live_incapable_selector(selector)
+    _reject_live_incapable_selector(selector, allow_replay_only=allow_replay_only)
 
 
-def _reject_live_incapable_selector(selector: BaseSelector) -> None:
+def _reject_live_incapable_selector(
+    selector: BaseSelector, *, allow_replay_only: bool = False
+) -> None:
     """Raise for live-incapable selector kinds nested in a live hook target.
 
     Parameters
     ----------
     selector:
         Normalized selector to inspect.
+    allow_replay_only:
+        Whether the replay-capable ``site`` kind may pass (attach-door
+        carve-out; the rerun preflight never sets it).
     """
 
     kind = str(selector.selector_kind)
-    if kind in _UPFRONT_UNSUPPORTED_KINDS["live"]:
+    if kind in _UPFRONT_UNSUPPORTED_KINDS["live"] and not (allow_replay_only and kind == "site"):
         raise _capability_error(kind, "live")
     if isinstance(selector, CompositeSelector):
         for child in selector.selectors:
-            _reject_live_incapable_selector(_normalize_live_selector(child))
+            _reject_live_incapable_selector(
+                _normalize_live_selector(child), allow_replay_only=allow_replay_only
+            )
     if isinstance(selector, NotSelector):
-        _reject_live_incapable_selector(_normalize_live_selector(selector.selector))
+        _reject_live_incapable_selector(
+            _normalize_live_selector(selector.selector), allow_replay_only=allow_replay_only
+        )
 
 
 def _hook_directions(
@@ -472,7 +486,11 @@ def _adapt_tensor_backward_hook(
     return cast(HookCallable, _tuple_hook)
 
 
-def normalize_hooks_from_spec(spec: InterventionSpec | None) -> list[NormalizedHookEntry]:
+def normalize_hooks_from_spec(
+    spec: InterventionSpec | None,
+    *,
+    live_forward: bool = True,
+) -> list[NormalizedHookEntry]:
     """Normalize an intervention spec into live-capture hook-plan entries.
 
     Parameters
@@ -480,6 +498,14 @@ def normalize_hooks_from_spec(spec: InterventionSpec | None) -> list[NormalizedH
     spec:
         Mutable intervention spec attached to a ``Trace``. ``None`` or an
         empty spec produces no hook entries.
+    live_forward:
+        Whether the plan will fire against LIVE mid-forward proxies (the
+        rerun/backward engines). Live-forward plans preflight every entry
+        against the live capability set here, before any forward runs, so a
+        sticky replay-only target (a ``site`` selector staged through the
+        attach door) refuses typed at the door instead of mid-forward. The
+        replay engine matches against finished ops and skips the live
+        preflight.
 
     Returns
     -------
@@ -492,13 +518,31 @@ def normalize_hooks_from_spec(spec: InterventionSpec | None) -> list[NormalizedH
 
     entries: list[NormalizedHookEntry] = []
     entries.extend(_normalize_value_specs(spec.target_value_specs))
-    entries.extend(_normalize_sticky_hook_specs(spec.hook_specs))
+    entries.extend(
+        _normalize_sticky_hook_specs(
+            spec.hook_specs,
+            allow_replay_only_site_targets=not live_forward,
+        )
+    )
 
     if spec.targets:
         hook_like = _hook_like_from_spec(spec)
         if hook_like is not None:
             for target in spec.targets:
-                entries.extend(normalize_hook_plan(target, hook_like))
+                entries.extend(
+                    normalize_hook_plan(
+                        target,
+                        hook_like,
+                        allow_replay_only_site_targets=not live_forward,
+                    )
+                )
+    if live_forward:
+        # RERUN/backward preflight: sticky entries staged through the attach
+        # door's replay-only carve-out (site selectors) must refuse HERE,
+        # before any forward runs -- a mid-forward capability error is a
+        # late, ugly refusal.
+        for entry in entries:
+            _validate_live_site_target(entry.site_target)
     return entries
 
 
@@ -659,13 +703,20 @@ def _normalize_value_specs(value_specs: Sequence[TargetValueSpec]) -> list[Norma
     return entries
 
 
-def _normalize_sticky_hook_specs(hook_specs: Sequence[HookSpec]) -> list[NormalizedHookEntry]:
+def _normalize_sticky_hook_specs(
+    hook_specs: Sequence[HookSpec],
+    *,
+    allow_replay_only_site_targets: bool = False,
+) -> list[NormalizedHookEntry]:
     """Normalize sticky hook specs into hook-plan entries.
 
     Parameters
     ----------
     hook_specs:
         Mutable sticky hook specs from an intervention recipe.
+    allow_replay_only_site_targets:
+        Whether replay-capable structural targets (``site``) may pass; set
+        by the replay-engine caller, never the live-forward engines.
 
     Returns
     -------
@@ -714,6 +765,7 @@ def _normalize_sticky_hook_specs(hook_specs: Sequence[HookSpec]) -> list[Normali
             hook_spec.site_target,
             hook_like,
             direction=requested_direction,
+            allow_replay_only_site_targets=allow_replay_only_site_targets,
         )
         for entry in normalized_entries:
             metadata = {**entry.metadata, **hook_spec.metadata}

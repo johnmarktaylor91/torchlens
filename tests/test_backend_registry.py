@@ -978,7 +978,7 @@ def test_public_backend_literal_branches_stay_in_registry_or_backends() -> None:
         project_root / "torchlens" / "_io" / "bundle.py",
         project_root / "torchlens" / "_io" / "tlspec.py",
         project_root / "torchlens" / "data_classes" / "trace.py",
-        project_root / "torchlens" / "repgeom" / "__init__.py",
+        project_root / "torchlens" / "repgeom" / "_trace_views.py",
     }
     backend_literals = {"torch", "mlx", "jax", "tinygrad", "paddle", "fake"}
     offenders: list[str] = []

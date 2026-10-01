@@ -24,7 +24,7 @@ from ...intervention.hooks import make_hook_context, normalize_hook
 from ...intervention.selectors import BaseSelector
 from ...intervention.types import HelperSpec, InterventionDecision
 from ...ir.selector_eval import first_selector_kind_outside, selector_contains_kind
-from .._selective_save import _STATIC_INTERVENTION_SELECTOR_KINDS
+from ...postprocess._selective_save import _STATIC_INTERVENTION_SELECTOR_KINDS
 from ..registry import BackendUnsupportedError
 
 MLX_STATIC_INTERVENTION_SELECTOR_KINDS = _STATIC_INTERVENTION_SELECTOR_KINDS

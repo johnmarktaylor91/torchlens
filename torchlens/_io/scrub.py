@@ -1320,6 +1320,8 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         # Sibling render diagnostic (same _render_dot write site as the row
         # above); left unenrolled, ONE draw() poisoned every later tl.save.
         "_last_encoding_state",
+        # Layout-execution geometry record (vizmech D24), same write site class.
+        "_last_render_geometry",
         "_pending_container_collapse_nodes",
         "_defer_streaming_bundle_finalization",
         "_capture_producer_policy",

@@ -142,7 +142,6 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "recording_halt_frontier_missing",
         "recording_multipass_not_convertible",
         "recording_option_duplicate",
-        "renderer_capability_unsupported",
         # run_fast_divergence_policy_invalid, run_fast_requires_inputs,
         # run_legacy_options_conflict, run_source_model_collected: rows
         # DELETED (shrink-only lock-in) -- the L4 S1-seam merge's compat pins

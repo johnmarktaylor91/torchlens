@@ -497,8 +497,13 @@ def render_dot_to_file(
     render_succeeded = False
     try:
         rendered_path = f"{outpath}.{file_format}"
-        cmd = [dot.engine, f"-T{file_format}", "-o", rendered_path, source_path]
-        run_bounded_subprocess(cmd, timeout=timeout_seconds)
+        from .render_execution import atomic_render_target, surface_layout_stderr
+
+        # Atomic publish + exit-0 stderr surfacing (vizmech D20/D24).
+        with atomic_render_target(rendered_path) as temp_rendered_path:
+            cmd = [dot.engine, f"-T{file_format}", "-o", temp_rendered_path, source_path]
+            completed = run_bounded_subprocess(cmd, timeout=timeout_seconds)
+        surface_layout_stderr(completed.stderr, engine=dot.engine)
         render_succeeded = True
         if not save_only:
             _open_file_quietly(rendered_path)

@@ -1,5 +1,11 @@
 """Static export helpers for TorchLens logs.
 
+Promoted to a real subpackage (architecture memo rule 4 corollary, C01 items
+17-18): tracker sinks live in ``_trackers``, foreign graph-viewer writers in
+``_graphs``, shared helpers in ``_common``, and EVERY member -- builtin or
+out-of-tree -- registers through the ONE export-target door
+(:mod:`torchlens.export._registry`) with a per-member tier row.
+
 Every exporter here carries the shared capture-honesty facts
 (:mod:`torchlens._capture_honesty`) in the most format-appropriate slot --
 comment preamble, metadata block, ``DataFrame.attrs``, or a dedicated key --
@@ -14,13 +20,21 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
-from .._capture_honesty import (
-    attach_dataframe_honesty,
-    capture_honesty_facts,
-    honesty_preamble_lines,
-)
+from .._capture_honesty import capture_honesty_facts, honesty_preamble_lines
 from .._io._json import loads_bounded
 from ..utils.display import atomic_write_text
+from ._common import _iter_layers, _scalarize_cell, _static_graph_data
+from ._graphs import NETRON_DISCLAIMER, model_explorer, netron
+from ._registry import (
+    export_target_info,
+    export_targets,
+    register_export_target,
+    resolve_export_target,
+    unregister_export_target,
+)
+from ._trackers import aim, mlflow, tensorboard, wandb
+
+__tl_layer__ = "L7"
 
 
 def _honesty_comment_block(log: Any, prefix: str) -> str:
@@ -419,151 +433,6 @@ def xarray(log: Any) -> Any:
     )
 
 
-def tensorboard(log: Any, writer: Any, step: int = 0, prefix: str = "torchlens") -> Any:
-    """Write TorchLens scalar/text summaries to an existing TensorBoard writer.
-
-    Parameters
-    ----------
-    log:
-        TorchLens ``Trace`` to summarize.
-    writer:
-        Existing writer object, for example ``SummaryWriter``.
-    step:
-        Global step for emitted summaries.
-    prefix:
-        Metric name prefix.
-
-    Returns
-    -------
-    Any
-        The writer object passed in.
-    """
-
-    _require_tracker_object(writer, method_name="tensorboard", required_method="add_scalar")
-    writer.add_scalar(f"{prefix}/num_layers", len(getattr(log, "layer_list", [])), step)
-    writer.add_scalar(
-        f"{prefix}/total_activation_memory",
-        int(getattr(log, "total_activation_memory", 0) or 0),
-        step,
-    )
-    writer.add_text(f"{prefix}/model_class_name", str(getattr(log, "model_class_name", "")), step)
-    add_text = getattr(writer, "add_text", None)
-    if callable(add_text):
-        add_text(f"{prefix}/capture_honesty", "; ".join(honesty_preamble_lines(log)), step)
-    flush = getattr(writer, "flush", None)
-    if callable(flush):
-        flush()
-    return writer
-
-
-def wandb(log: Any, run: Any | None = None, name: str = "torchlens_trace") -> dict[str, Any]:
-    """Create and optionally log a Weights & Biases table for a TorchLens log.
-
-    Parameters
-    ----------
-    log:
-        TorchLens ``Trace`` to export.
-    run:
-        Optional existing W&B run object. If omitted, ``wandb.run`` is used when
-        present, but a new run is not created.
-    name:
-        Logged table key.
-
-    Returns
-    -------
-    dict[str, Any]
-        Mapping containing the created table and artifact placeholder.
-
-    Raises
-    ------
-    ImportError
-        If W&B is unavailable.
-    """
-
-    try:
-        import wandb as wandb_module
-    except ImportError as exc:
-        raise ImportError(
-            "wandb export requires the `wandb` extra: install torchlens[wandb]."
-        ) from exc
-
-    dataframe = _tracker_dataframe(log)
-    table = wandb_module.Table(dataframe=dataframe)
-    target_run = run if run is not None else getattr(wandb_module, "run", None)
-    if target_run is not None:
-        target_run.log({name: table})
-    return {"table": table, "artifact": None, "capture_honesty": capture_honesty_facts(log)}
-
-
-def mlflow(log: Any, client: Any | None = None, prefix: str = "torchlens") -> dict[str, Any]:
-    """Log simple TorchLens metrics to an existing MLflow-like client.
-
-    Parameters
-    ----------
-    log:
-        TorchLens ``Trace`` to summarize.
-    client:
-        Optional object exposing ``log_metric``.
-    prefix:
-        Metric name prefix.
-
-    Returns
-    -------
-    dict[str, Any]
-        Metrics that were prepared for logging.
-    """
-
-    metrics = _summary_metrics(log)
-    if client is not None:
-        _require_tracker_object(client, method_name="mlflow", required_method="log_metric")
-        for key, value in metrics.items():
-            client.log_metric(f"{prefix}.{key}", value)
-    # Honesty facts are returned (not logged): log_metric accepts numerics
-    # only, and coercing verification facts to numbers would misstate them.
-    return {**metrics, "capture_honesty": capture_honesty_facts(log)}
-
-
-def aim(log: Any, run: Any | None = None, prefix: str = "torchlens") -> dict[str, Any]:
-    """Track simple TorchLens metrics on an existing Aim-like run.
-
-    Parameters
-    ----------
-    log:
-        TorchLens ``Trace`` to summarize.
-    run:
-        Optional object exposing ``track``.
-    prefix:
-        Metric name prefix.
-
-    Returns
-    -------
-    dict[str, Any]
-        Metrics that were prepared for tracking.
-    """
-
-    metrics = _summary_metrics(log)
-    if run is not None:
-        _require_tracker_object(run, method_name="aim", required_method="track")
-        for key, value in metrics.items():
-            run.track(value, name=f"{prefix}.{key}")
-    return {**metrics, "capture_honesty": capture_honesty_facts(log)}
-
-
-def _require_tracker_object(target: Any, *, method_name: str, required_method: str) -> None:
-    """Validate that a tracker export received a live tracker object."""
-
-    if isinstance(target, str | Path):
-        raise TypeError(
-            f"torchlens.export.{method_name} expects an existing tracker object with "
-            f"{required_method}(...), not a filesystem path."
-        )
-    if not callable(getattr(target, required_method, None)):
-        raise TypeError(
-            f"torchlens.export.{method_name} expects an object with "
-            f"{required_method}(...); got {type(target).__name__}."
-        )
-
-
 def csv(log: Any, path: str | Path, **kwargs: Any) -> Path:
     """Write ``Trace.to_pandas()`` to CSV.
 
@@ -670,208 +539,6 @@ def json(
     }
     atomic_write_text(destination, _json.dumps(payload, indent=2))
     return destination
-
-
-def model_explorer(log: Any, path: str | Path) -> Path:
-    """Export a JSON graph using Google Model Explorer's graph schema.
-
-    Parameters
-    ----------
-    log:
-        TorchLens ``Trace`` to export.
-    path:
-        Destination JSON path.
-
-    Returns
-    -------
-    Path
-        Written JSON path.
-    """
-
-    destination = Path(path)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    data = _static_graph_data(log)
-    incoming_edges: dict[str, list[dict[str, str]]] = {
-        str(node["id"]): [] for node in data["nodes"]
-    }
-    for edge in data["edges"]:
-        incoming_edges[str(edge["target"])].append({"sourceNodeId": str(edge["source"])})
-    label = str(getattr(log, "trace_label", None) or getattr(log, "model_class_name", "model"))
-    payload = {
-        "schema": "torchlens.model_explorer.v2",
-        "disclaimer": (
-            "TorchLens graph-collection JSON for Google Model Explorer; a data export of the "
-            "captured graph, not a runnable model. The top-level label/graphs shape matches "
-            "Model Explorer's file-ingest contract (pinned against ai-edge-model-explorer "
-            "0.1.32); acceptance by future external releases is not guaranteed."
-        ),
-        # Model Explorer's JSON ingest requires BOTH top-level keys label and
-        # graphs to treat the file as a graph collection; without label the
-        # app refuses with "Unsupported JSON format". Extra top-level keys
-        # (schema, disclaimer, capture honesty) are tolerated by the pinned
-        # ingest contract.
-        "torchlens_capture_honesty": capture_honesty_facts(log),
-        "label": label,
-        "graphs": [
-            {
-                "id": str(
-                    getattr(log, "trace_label", None) or getattr(log, "model_class_name", "model")
-                ),
-                "nodes": [
-                    {
-                        "id": node["id"],
-                        "label": node["label"],
-                        "namespace": node["type"],
-                        "attrs": [
-                            {"key": "shape", "value": node["shape"]},
-                            {"key": "memory", "value": node["memory"]},
-                        ],
-                        "incomingEdges": incoming_edges[str(node["id"])],
-                    }
-                    for node in data["nodes"]
-                ],
-            }
-        ],
-    }
-    atomic_write_text(destination, _json.dumps(payload, indent=2))
-    return destination
-
-
-#: Disclaimer embedded in the Netron export's model and graph doc strings.
-NETRON_DISCLAIMER = (
-    "TorchLens lossy graph export: not a runnable ONNX model; graph inspection "
-    "only. Ops keep their captured TorchLens names under the ai.torchlens.lossy "
-    "domain and carry no standard-ONNX execution semantics."
-)
-
-
-def netron(log: Any, path: str | Path) -> Path:
-    """Export a lossy ONNX ``ModelProto`` JSON graph that Netron can open.
-
-    The payload is valid ONNX protobuf JSON (camelCase field names, parseable
-    into ``onnx.ModelProto``), which is the exact acceptance contract of
-    Netron's ONNX JSON reader. It is intentionally NOT a runnable model: ops
-    keep their captured TorchLens names under the custom
-    ``ai.torchlens.lossy`` operator domain, only names, edges, and output
-    shapes are preserved, and the disclaimer rides ``docString`` and
-    ``metadataProps``.
-
-    Parameters
-    ----------
-    log:
-        TorchLens ``Trace`` to export.
-    path:
-        Destination JSON path.
-
-    Returns
-    -------
-    Path
-        Written JSON path.
-    """
-
-    destination = Path(path)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    entries = _iter_layers(log)
-    repeated_labels = _repeated_layer_labels(entries)
-    nodes = []
-    for layer in entries:
-        node_id = _export_node_id(layer, repeated_labels)
-        shape = list(getattr(layer, "shape", ()) or ())
-        node: dict[str, Any] = {
-            "name": node_id,
-            "opType": str(getattr(layer, "layer_type", None) or getattr(layer, "func_name", "")),
-            "domain": "ai.torchlens.lossy",
-            "input": [str(parent) for parent in (getattr(layer, "parents", []) or [])],
-            "output": [node_id],
-        }
-        if shape and all(isinstance(dim, int) and not isinstance(dim, bool) for dim in shape):
-            node["attribute"] = [{"name": "shape", "type": "INTS", "ints": shape}]
-        nodes.append(node)
-    payload = {
-        "irVersion": 8,
-        "producerName": "torchlens",
-        "docString": NETRON_DISCLAIMER,
-        "opsetImport": [{"domain": "ai.torchlens.lossy", "version": 1}],
-        "metadataProps": [
-            {"key": "torchlens.lossy_export", "value": "true"},
-            {"key": "torchlens.runnable", "value": "false"},
-            # Honesty facts as a JSON string value: metadataProps is the one
-            # slot valid ONNX protobuf JSON offers for free-form metadata.
-            {
-                "key": "torchlens.capture_honesty",
-                "value": _json.dumps(capture_honesty_facts(log)),
-            },
-        ],
-        "graph": {
-            "name": str(getattr(log, "model_class_name", "TorchLens graph")),
-            "docString": NETRON_DISCLAIMER,
-            "node": nodes,
-        },
-    }
-    atomic_write_text(destination, _json.dumps(payload, indent=2))
-    return destination
-
-
-def _iter_layers(log: Any) -> list[Any]:
-    """Return layer-pass entries in export order.
-
-    Parameters
-    ----------
-    log:
-        Model log-like object.
-
-    Returns
-    -------
-    list[Any]
-        Layer entries.
-    """
-
-    return list(
-        getattr(log, "layer_list", None) or getattr(log, "layer_dict_main_keys", {}).values()
-    )
-
-
-def _repeated_layer_labels(entries: list[Any]) -> set[str]:
-    """Return rolled layer labels that occur in multiple execution passes.
-
-    Parameters
-    ----------
-    entries:
-        Layer-pass entries in export order.
-
-    Returns
-    -------
-    set[str]
-        Labels requiring pass qualification for unique export node IDs.
-    """
-
-    counts: dict[str, int] = {}
-    for entry in entries:
-        label = str(getattr(entry, "layer_label", ""))
-        counts[label] = counts.get(label, 0) + 1
-    return {label for label, count in counts.items() if count > 1}
-
-
-def _export_node_id(entry: Any, repeated_labels: set[str]) -> str:
-    """Return a unique static-export node ID for one layer pass.
-
-    Parameters
-    ----------
-    entry:
-        Layer-pass entry.
-    repeated_labels:
-        Rolled labels requiring pass qualification.
-
-    Returns
-    -------
-    str
-        Pass-qualified ID for recurrent layers, otherwise the stable rolled label.
-    """
-
-    layer_label = str(getattr(entry, "layer_label", ""))
-    if layer_label in repeated_labels:
-        return str(getattr(entry, "label", layer_label))
-    return layer_label
 
 
 def _duration_us(layer: Any) -> int:
@@ -1010,46 +677,6 @@ def _chrome_trace_diff_events(bundle: Any) -> list[dict[str, Any]]:
     return events
 
 
-def _summary_metrics(log: Any) -> dict[str, int]:
-    """Return common scalar metrics for tracker exports.
-
-    Parameters
-    ----------
-    log:
-        Model log to summarize.
-
-    Returns
-    -------
-    dict[str, int]
-        Scalar metrics.
-    """
-
-    return {
-        "num_layers": len(getattr(log, "layer_list", [])),
-        "num_saved_ops": int(getattr(log, "num_saved_ops", 0) or 0),
-        "total_activation_memory": int(getattr(log, "total_activation_memory", 0) or 0),
-    }
-
-
-def _tracker_dataframe(log: Any) -> Any:
-    """Return a tracker-safe dataframe with primitive cell values.
-
-    Parameters
-    ----------
-    log:
-        Model log to export.
-
-    Returns
-    -------
-    Any
-        Pandas dataframe suitable for strict tracker table types.
-    """
-
-    dataframe = log.to_pandas()
-    # ``apply`` builds a new frame, which does not reliably propagate attrs.
-    return attach_dataframe_honesty(dataframe.apply(lambda column: column.map(_tracker_cell)), log)
-
-
 def _parquet_safe_dataframe(dataframe: Any) -> Any:
     """Return a dataframe whose object columns are pyarrow-compatible.
 
@@ -1071,57 +698,8 @@ def _parquet_safe_dataframe(dataframe: Any) -> Any:
     return sanitized
 
 
-def _scalarize_cell(value: Any) -> Any:
-    """Return a scalar-safe representation of a table cell.
-
-    Shared body for :func:`_parquet_cell` and :func:`_tracker_cell`, which apply
-    the identical primitive-or-repr coercion for two distinct call sites
-    (pyarrow/Parquet column safety and strict tracker table types respectively).
-
-    Parameters
-    ----------
-    value:
-        Original dataframe cell.
-
-    Returns
-    -------
-    Any
-        Primitive value or string representation.
-    """
-
-    if value is None or isinstance(value, str | int | float | bool):
-        return value
-    try:
-        import numpy as np
-        import pandas as pd
-
-        missing = pd.isna(value)
-        if isinstance(missing, bool | np.bool_) and bool(missing):
-            return None
-    except Exception:
-        pass
-    return repr(value)
-
-
 def _parquet_cell(value: Any) -> Any:
     """Return a pyarrow-compatible representation of a table cell.
-
-    Parameters
-    ----------
-    value:
-        Original dataframe cell.
-
-    Returns
-    -------
-    Any
-        Primitive value or string representation.
-    """
-
-    return _scalarize_cell(value)
-
-
-def _tracker_cell(value: Any) -> Any:
-    """Return a scalar tracker-safe representation of a table cell.
 
     Parameters
     ----------
@@ -1152,81 +730,6 @@ def _sanitize_flamegraph_frame(frame: str) -> str:
     """
 
     return frame.replace(";", "_").replace("\n", " ").strip() or "<unknown>"
-
-
-def _static_graph_data(log: Any) -> dict[str, Any]:
-    """Serialize a Trace into static graph data.
-
-    Parameters
-    ----------
-    log:
-        TorchLens ``Trace`` to serialize.
-
-    Returns
-    -------
-    dict[str, Any]
-        Node and edge metadata for SVG/HTML exporters.
-    """
-
-    entries = _iter_layers(log)
-    repeated_labels = _repeated_layer_labels(entries)
-    node_ids = {_export_node_id(entry, repeated_labels) for entry in entries}
-    nodes: list[dict[str, Any]] = []
-    for index, entry in enumerate(entries):
-        node_id = _export_node_id(entry, repeated_labels) or f"node_{index}"
-        nodes.append(
-            {
-                "id": node_id,
-                "label": str(getattr(entry, "layer_label", node_id)),
-                "type": _node_type(entry),
-                "shape": "x".join(str(dim) for dim in getattr(entry, "shape", ()) or ()),
-                "memory": str(getattr(entry, "activation_memory", "")),
-                "x": 80 + (index % 8) * 180,
-                "y": 80 + (index // 8) * 110,
-            }
-        )
-    edges: list[dict[str, str]] = []
-    for entry in entries:
-        target = _export_node_id(entry, repeated_labels)
-        for parent in getattr(entry, "parents", None) or []:
-            if parent in node_ids:
-                edges.append({"source": str(parent), "target": target})
-    width = max((int(node["x"]) for node in nodes), default=0) + 160
-    height = max((int(node["y"]) for node in nodes), default=0) + 100
-    return {
-        "title": getattr(log, "model_class_name", "TorchLens graph"),
-        "nodes": nodes,
-        "edges": edges,
-        "width": width,
-        "height": height,
-    }
-
-
-def _node_type(entry: Any) -> str:
-    """Return the semantic node type for an exported entry.
-
-    Parameters
-    ----------
-    entry:
-        Layer-pass log entry.
-
-    Returns
-    -------
-    str
-        Semantic node type.
-    """
-
-    if getattr(entry, "is_input", False):
-        return "input"
-    if getattr(entry, "is_output", False):
-        return "output"
-    if getattr(entry, "is_buffer", False):
-        return "buffer"
-    if getattr(entry, "is_terminal_bool", False):
-        return "bool"
-    if int(getattr(entry, "num_params", 0) or 0) > 0:
-        return "parameterized"
-    return "operation"
 
 
 def _render_svg(data: dict[str, Any], *, editable: bool) -> str:
@@ -1358,6 +861,67 @@ __all__ = [
     "speedscope",
     "svg",
     "tensorboard",
+    "wandb",
+    "xarray",
+]
+
+# ---------------------------------------------------------------------------
+# Builtin registrations: through the SAME public door out-of-tree exporters
+# use (registry law 6.1 -- builtins never take a kernel side channel). The
+# tier row is authoritative per member: present = native emitter, bridge =
+# foreign-peer-shaped writer.
+# ---------------------------------------------------------------------------
+_BUILTIN_EXPORT_TARGETS: tuple[tuple[str, Any, str, dict[str, Any]], ...] = (
+    ("svg", svg, "present", {"output": "file", "requires_extra": "none"}),
+    ("html", html, "present", {"output": "file", "requires_extra": "none"}),
+    ("chrome_trace", chrome_trace, "present", {"output": "file", "requires_extra": "none"}),
+    (
+        "chrome_trace_diff",
+        chrome_trace_diff,
+        "present",
+        {"output": "file", "requires_extra": "none"},
+    ),
+    ("speedscope", speedscope, "present", {"output": "file", "requires_extra": "none"}),
+    ("flamegraph", flamegraph, "present", {"output": "file", "requires_extra": "none"}),
+    ("memory_timeline", memory_timeline, "present", {"output": "file", "requires_extra": "none"}),
+    ("csv", csv, "present", {"output": "file", "requires_extra": "pandas"}),
+    ("parquet", parquet, "present", {"output": "file", "requires_extra": "pandas"}),
+    ("json", json, "present", {"output": "file", "requires_extra": "pandas"}),
+    ("xarray", xarray, "present", {"output": "object", "requires_extra": "xarray"}),
+    ("netron", netron, "bridge", {"output": "file", "requires_extra": "none"}),
+    ("model_explorer", model_explorer, "bridge", {"output": "file", "requires_extra": "none"}),
+    ("tensorboard", tensorboard, "bridge", {"output": "tracker", "requires_extra": "none"}),
+    ("wandb", wandb, "bridge", {"output": "tracker", "requires_extra": "wandb"}),
+    ("mlflow", mlflow, "bridge", {"output": "tracker", "requires_extra": "none"}),
+    ("aim", aim, "bridge", {"output": "tracker", "requires_extra": "none"}),
+)
+
+for _name, _fn, _tier, _caps in _BUILTIN_EXPORT_TARGETS:
+    register_export_target(_name, _fn, tier=_tier, capabilities=_caps)
+del _name, _fn, _tier, _caps
+
+__all__ = [
+    "NETRON_DISCLAIMER",
+    "aim",
+    "chrome_trace",
+    "chrome_trace_diff",
+    "csv",
+    "export_target_info",
+    "export_targets",
+    "flamegraph",
+    "html",
+    "json",
+    "memory_timeline",
+    "mlflow",
+    "model_explorer",
+    "netron",
+    "parquet",
+    "register_export_target",
+    "resolve_export_target",
+    "speedscope",
+    "svg",
+    "tensorboard",
+    "unregister_export_target",
     "wandb",
     "xarray",
 ]

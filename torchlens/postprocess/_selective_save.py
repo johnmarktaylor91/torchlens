@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+__tl_layer__ = "L3"
+
 import warnings
 from collections.abc import Callable
 from typing import Any
 
+from ..backends.registry import BackendUnsupportedError
 from ..intervention.selectors import BaseSelector
 from ..ir.selector_eval import first_selector_kind_outside
-from ..postprocess.saved_summary import refresh_saved_module_call_count
 from ..quantities import Bytes
-from .registry import BackendUnsupportedError
+from .saved_summary import refresh_saved_module_call_count
 
 _STATIC_SELECTOR_KINDS = frozenset(
     {

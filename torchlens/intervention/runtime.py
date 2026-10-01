@@ -1742,10 +1742,9 @@ def _build_live_fire_record(
         Immutable fire record appended to the eventual layer pass.
     """
 
-    helper_name = _hook_display_name(entry)
-    new_notes = tuple(run_ctx.get("ledger_notes", ()))[len(previous_notes) :]
-    helper_kwargs = dict(entry.helper_spec.kwargs) if entry.helper_spec is not None else {}
-    return FireRecord(
+    from .audit import build_fire_record
+
+    return build_fire_record(
         target_label=site._layer_label_raw,
         call_label=site._layer_label_raw,
         func_call_id=site.func_call_id,
@@ -1755,10 +1754,9 @@ def _build_live_fire_record(
         site_label=site._layer_label_raw,
         timing="post",
         direction="forward",
-        helper_name=helper_name,
-        seed=helper_kwargs.get("seed"),
-        determinism_note="; ".join(str(note) for note in new_notes) if new_notes else None,
-        timestamp=time.monotonic(),
+        helper_name=_hook_display_name(entry),
+        run_ctx=run_ctx,
+        previous_notes=previous_notes,
         replaced=replaced,
     )
 
@@ -1803,11 +1801,12 @@ def _build_live_backward_fire_record(
         Immutable backward fire record.
     """
 
-    helper_kwargs = dict(entry.helper_spec.kwargs) if entry.helper_spec is not None else {}
+    from .audit import build_fire_record
+
     tuple_index = _first_replaced_tuple_index(previous, current)
     label = str(getattr(grad_fn_handle, "label", ""))
     pass_index = _active_backward_pass_index(grad_fn_handle)
-    return FireRecord(
+    return build_fire_record(
         target_label=label,
         call_label=f"{label}:{call_index}" if label else str(call_index),
         func_call_id=None,
@@ -1818,8 +1817,6 @@ def _build_live_backward_fire_record(
         timing=timing,  # type: ignore[arg-type]
         direction="backward",
         helper_name=_hook_display_name(entry),
-        seed=helper_kwargs.get("seed"),
-        timestamp=time.monotonic(),
         backward_pass_index=pass_index,
         call_index=call_index,
         grad_kind=grad_kind,  # type: ignore[arg-type]

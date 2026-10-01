@@ -58,7 +58,10 @@ def test_trace_call_tree_and_num_modules() -> None:
 
     trace.show_call_tree(file=stream)
     assert "self:1" in stream.getvalue()
-    assert "├──" in stream.getvalue() or "└──" in stream.getvalue()
+    # ASCII rails (C02 safety tranche, lovely bug 10): emitted text is
+    # ASCII-canonical -- and stays free of the former unicode rails.
+    assert "|--" in stream.getvalue() or "`--" in stream.getvalue()
+    assert "├" not in stream.getvalue() and "└" not in stream.getvalue()
 
 
 @pytest.mark.smoke

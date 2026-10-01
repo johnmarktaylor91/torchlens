@@ -975,7 +975,7 @@ def _rolled_structural(state: EncodingState, node: Any, field_name: str) -> floa
 
     op_field = _mirror_backed_op_field(field_name)
     if op_field is not None:
-        per_pass = [getattr(node.ops.get(index), op_field, None) for index in sorted(node.ops)]
+        per_pass = [getattr(op, op_field, None) for op in node.ops.values()]
         if len({repr(value) for value in per_pass}) > 1:
             state.note(NOTE_VARIES)
             return None
@@ -1197,7 +1197,7 @@ def _validate_structural_size_value(node: Any, field_name: str) -> None:
     op_field = _mirror_backed_op_field(field_name)
     if op_field is None:
         return
-    per_pass = [getattr(node.ops.get(index), op_field, None) for index in sorted(node.ops)]
+    per_pass = [getattr(op, op_field, None) for op in node.ops.values()]
     if len({repr(value) for value in per_pass}) > 1:
         raise _size_rolled_refusal(node, field_name, "per-pass values disagree (defensive check)")
 

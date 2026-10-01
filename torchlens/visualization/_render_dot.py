@@ -42,6 +42,11 @@ from ._svg_compose import (
     _render_graph_only_svg,
     _write_composed_code_panel,
 )
+from .render_execution import (
+    atomic_render_target,
+    build_render_geometry_record,
+    surface_layout_stderr,
+)
 from .renderers.graphviz import GraphvizRenderer
 from .request import RenderTarget, ResolvedRenderRequest
 from .source_graph import _resolve_focus_module, build_source_graph
@@ -322,38 +327,41 @@ def _resolve_collapse_request(
     return request, repeat_folds, segments, segment_lookup
 
 
-def _build_graphviz_shell(
-    trace: "Trace",
-    request: ResolvedRenderRequest,
-    target: RenderTarget,
-    theme: VisualizationTheme,
-    rankdir: str,
-) -> tuple[str, graphviz.Digraph]:
-    """Build the caption and configured Graphviz graph shell.
+def _params_caption_detail(trace: "Trace") -> str:
+    """Return the caption's parameter-count line for one trace.
 
     Returns
     -------
-    tuple
-        Graph caption and configured empty Graphviz graph.
+    str
+        Human-readable parameter summary (count, trainable split, memory).
     """
 
     if trace.num_params == 0:
-        params_detail = "0 params"
-    elif trace.num_params_frozen == 0:
-        params_detail = f"{trace.num_params} params (all trainable, {trace.total_param_memory})"
-    elif trace.num_params_trainable == 0:
-        params_detail = f"{trace.num_params} params (all frozen, {trace.total_param_memory})"
-    else:
-        params_detail = (
-            f"{trace.num_params} params "
-            f"({trace.num_params_trainable}/{trace.num_params} trainable, "
-            f"{trace.total_param_memory})"
-        )
+        return "0 params"
+    if trace.num_params_frozen == 0:
+        return f"{trace.num_params} params (all trainable, {trace.total_param_memory})"
+    if trace.num_params_trainable == 0:
+        return f"{trace.num_params} params (all frozen, {trace.total_param_memory})"
+    return (
+        f"{trace.num_params} params "
+        f"({trace.num_params_trainable}/{trace.num_params} trainable, "
+        f"{trace.total_param_memory})"
+    )
+
+
+def _graph_caption_body(trace: "Trace", request: ResolvedRenderRequest) -> str:
+    """Assemble the caption body: stats, honesty banner, and disclosures.
+
+    Returns
+    -------
+    str
+        HTML-like caption body without the outer FONT wrapper.
+    """
 
     caption_body = (
         f"<B>{html_escape(trace.model_class_name)}</B>"
         f"<br align='left'/>{trace.num_tensors} tensors total ({trace.total_activation_memory})"
-        f"<br align='left'/>{params_detail}<br align='left'/>"
+        f"<br align='left'/>{_params_caption_detail(trace)}<br align='left'/>"
     )
     if getattr(trace, "_has_direct_writes", False):
         caption_body += "Direct writes detected - recipe propagation will overlay<br align='left'/>"
@@ -371,6 +379,35 @@ def _build_graphviz_shell(
         caption_body += (
             f"stacked by: {html_escape(encoding_state.stack_spec.display_name)}<br align='left'/>"
         )
+    # No silent floor (collapse memo D4): a floor-fallback plan renders with a
+    # VISIBLE notice, never as if the optimizer had chosen it.
+    collapse_result = getattr(request.collapse_fn, "_torchlens_v2_result", None)
+    if collapse_result is not None and getattr(collapse_result, "planner", "") == "floor_fallback":
+        floor_note = (
+            f"collapse fell back to the floor plan ({collapse_result.visible_count} nodes visible)"
+        )
+        if getattr(collapse_result, "k_cap_exhausted", False):
+            floor_note += f" -- root owns {collapse_result.root_own_units} units, above K_CAP"
+        caption_body += f"<B>{html_escape(floor_note)}</B><br align='left'/>"
+    return caption_body
+
+
+def _build_graphviz_shell(
+    trace: "Trace",
+    request: ResolvedRenderRequest,
+    target: RenderTarget,
+    theme: VisualizationTheme,
+    rankdir: str,
+) -> tuple[str, graphviz.Digraph]:
+    """Build the caption and configured Graphviz graph shell.
+
+    Returns
+    -------
+    tuple
+        Graph caption and configured empty Graphviz graph.
+    """
+
+    caption_body = _graph_caption_body(trace, request)
     graph_caption = f"<<FONT COLOR='{theme.default_font}'>{caption_body}</FONT>>"
 
     dot = graphviz.Digraph(
@@ -392,7 +429,14 @@ def _build_graphviz_shell(
     # Graphviz OUT OF BAND (subprocess cwd at render time), never as an
     # in-source ``imagepath`` — a baked per-run mkdtemp path made every
     # user-saved DOT unrenderable once the trace's scratch dir was GC'd.
-    graph_args.update(theme_graph_attrs(theme, font_size=request.font_size, dpi=request.dpi))
+    graph_args.update(
+        theme_graph_attrs(
+            theme,
+            font_size=request.font_size,
+            dpi=request.dpi,
+            fileformat=target.fileformat,
+        )
+    )
     overrides = cast(VisualizationOverrides, request.overrides)
     for arg_name, arg_val in overrides.graph.items():  # type: ignore[union-attr]
         if callable(arg_val):
@@ -784,6 +828,7 @@ def _emit_and_finish_forward(
             # string and a failure-path leftover — a disclosed residual
             # until the rank internals grow a cwd-based root.
             resolved_graph_overrides["imagepath"] = str(rank_visualizer_dir)
+        rank_execution: dict[str, str] = {}
         with _timed_phase(trace, "render:graphviz:forward"):
             result = render_rank_layout(
                 forward_render_ir,
@@ -801,7 +846,15 @@ def _emit_and_finish_forward(
                 theme=context.theme,
                 dpi=request.dpi,
                 graph_overrides=resolved_graph_overrides,
+                execution_record=rank_execution,
             )
+        trace._last_render_geometry = build_render_geometry_record(
+            engine=rank_execution.get("engine", "neato"),
+            layout_path="rank",
+            fileformat=target.fileformat,
+            output_path=f"{target.outpath}.{target.fileformat}",
+            stderr_text=rank_execution.get("stderr_text", ""),
+        )
         _vprint(trace, f"Graph saved to {target.outpath}.{target.fileformat}")
         return result
 
@@ -916,6 +969,7 @@ def _emit_and_finish_forward(
         try:
             rendered_path = f"{target.outpath}.{target.fileformat}"
             render_image_root = Path(late_visualizer_dir) if late_visualizer_dir else None
+            layout_stderr = ""
             if compose_code_panel:
                 _write_composed_code_panel(
                     dot.engine,
@@ -927,24 +981,40 @@ def _emit_and_finish_forward(
                     render_image_root,
                 )
             else:
-                cmd = [
-                    dot.engine,
-                    f"-T{target.fileformat}",
-                    "-o",
-                    os.path.abspath(rendered_path),
-                    os.path.abspath(source_path),
-                ]
-                _render_utils.run_bounded_subprocess(
-                    cmd,
-                    timeout=render_timeout,
-                    # T9 (grind-p3): relative node image refs resolve against
-                    # the scratch root via cwd, keeping the per-run temp path
-                    # out of the saved DOT source.
-                    cwd=str(render_image_root) if render_image_root else None,
-                )
-                if target.fileformat == "svg":
-                    _inline_svg_file_local_images(rendered_path, render_image_root)
+                # Atomic publish (vizmech D20/D24): render into a sibling temp
+                # file, validate it, and only then rename it over the user's
+                # path -- a failed/timed-out layout never leaves a stub -- and
+                # surface stderr even on exit 0 (the cairo "too large ...
+                # scaling by N" clamp warning is the signal that raster
+                # dimensions are fiction; it was silently discarded).
+                with atomic_render_target(rendered_path) as temp_rendered_path:
+                    cmd = [
+                        dot.engine,
+                        f"-T{target.fileformat}",
+                        "-o",
+                        os.path.abspath(temp_rendered_path),
+                        os.path.abspath(source_path),
+                    ]
+                    completed = _render_utils.run_bounded_subprocess(
+                        cmd,
+                        timeout=render_timeout,
+                        # T9 (grind-p3): relative node image refs resolve against
+                        # the scratch root via cwd, keeping the per-run temp path
+                        # out of the saved DOT source.
+                        cwd=str(render_image_root) if render_image_root else None,
+                    )
+                    layout_stderr = surface_layout_stderr(completed.stderr, engine=dot.engine)
+                    if target.fileformat == "svg":
+                        _inline_svg_file_local_images(temp_rendered_path, render_image_root)
+                    _validate_rendered_output(temp_rendered_path, source_path, "forward graph")
             _validate_rendered_output(rendered_path, source_path, "forward graph")
+            trace._last_render_geometry = build_render_geometry_record(
+                engine=dot.engine,
+                layout_path="dot",
+                fileformat=target.fileformat,
+                output_path=rendered_path,
+                stderr_text=layout_stderr,
+            )
             if not target.save_only:
                 _view_rendered_file(rendered_path)
             _vprint(trace, f"Graph saved to {target.outpath}.{target.fileformat}")
@@ -1106,7 +1176,21 @@ def draw(
         )
     show_buffer_layers = request.show_buffer_layers
 
-    if vis_renderer == "dagua" and request.encoding is not None:
+    from .renderer_registry import renderer_info, renderer_names
+
+    if vis_renderer not in renderer_names():
+        raise InvalidArgumentError(
+            f"vis_renderer must be one of {sorted(renderer_names())}; received "
+            f"{vis_renderer!r}. Out-of-tree renderers register through "
+            "torchlens.visualization.renderer_registry.register_renderer.",
+            code="visualization_renderer_invalid",
+            remedy="pass a registered renderer name",
+            argument="vis_renderer",
+        )
+    renderer_capability_rows = renderer_info(vis_renderer).capabilities
+    if request.encoding is not None and not bool(
+        renderer_capability_rows.get("encoding_channels", False)
+    ):
         from ._encoding import raise_encoding_dagua_refusal
 
         raise_encoding_dagua_refusal(request.encoding.active_channels())
@@ -1130,13 +1214,6 @@ def draw(
             vis_buffers=show_buffer_layers == "always",
             vis_direction=direction,
             vis_theme=vis_theme,
-        )
-    if vis_renderer not in {"graphviz", "dagua"}:
-        raise InvalidArgumentError(
-            f"vis_renderer must be 'graphviz' or 'dagua'; received {vis_renderer!r}",
-            code="visualization_renderer_invalid",
-            remedy="pass vis_renderer='graphviz' or 'dagua'",
-            argument="vis_renderer",
         )
     request, repeat_folds, segments, segment_lookup = _resolve_collapse_request(self, request)
 

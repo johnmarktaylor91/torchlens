@@ -286,6 +286,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
 # for legacy states (still ``.values()``/``.items()``-usable); fresh captures
 # always carry the exact runtime container, so this only affects legacy fill.
 _MODEL_LOG_CONTAINER_DEFAULTS: dict[str, Any] = {
+    "source_snapshots": [],
     "escape_diagnostics": [],
     "completeness_diagnostics": [],
     "completeness_decompositions": [],
@@ -1176,6 +1177,7 @@ class Trace(
     _annotation_blobs: dict[str, Any] | None
     _last_sibling_ordering_decision: Any
     _last_encoding_state: Any
+    _last_render_geometry: Any
     _module_call_accessor: Any
     _op_accessor_cache: Any
     _layer_accessor_cache: Any
@@ -1239,6 +1241,10 @@ class Trace(
         # torchlens/_io/forgery_validation.py (M-C2/M-C3; M-C1's form-(a)
         # stripped-marker case is a documented scope statement there).
         "structure_only": FieldPolicy.KEEP,
+        # tlspec v9 entry-dark evidence envelope (C07; weightsfree memo
+        # section 5): None until the F33 writer lands; coherence-validated
+        # at load (only a structure-only capture may carry one).
+        "structure_evidence": FieldPolicy.KEEP,
         # L6 resolved-intervention audit record: persists as of tlspec v8
         # (reprs/identities/digests only, never raw values) with its load
         # validation in torchlens/_io/forgery_validation.py.
@@ -1358,6 +1364,10 @@ class Trace(
         "forward_signature": FieldPolicy.KEEP,
         "forward_docstring": FieldPolicy.KEEP,
         "code_context": FieldPolicy.KEEP,
+        # tlspec v9 entry-dark source-snapshot table (C07; convert memo item
+        # 24): one row per (path, digest), empty until the F30 writer lands;
+        # fail-closed row validation at load.
+        "source_snapshots": FieldPolicy.KEEP,
         "capture_cache_hit": FieldPolicy.KEEP,
         "capture_cache_key": FieldPolicy.KEEP,
         "capture_cache_path": FieldPolicy.KEEP,
@@ -1780,6 +1790,11 @@ class Trace(
         # gate through torchlens.capture.structure_only). DOCUMENTED-UNSTABLE
         # spelling pending naming-session ratification.
         self.structure_only: bool = False
+        # tlspec v9 entry-dark slots (C07): the structure-only evidence
+        # envelope (F33 writer) and the (path, digest) source-snapshot table
+        # (F30 writer). Declared, persisted, load-validated; no writer yet.
+        self.structure_evidence: dict[str, Any] | None = None
+        self.source_snapshots: list[dict[str, Any]] = []
         # L6: session-time audit records for resolved-selection interventions
         # (query repr + resolve digest + per-site relations; patch_from adds
         # source identity + value digests). DROP under v7; pre-release-
@@ -2445,6 +2460,7 @@ class Trace(
 
         self.__dict__.pop("_last_sibling_ordering_decision", None)
         self.__dict__.pop("_last_encoding_state", None)
+        self.__dict__.pop("_last_render_geometry", None)
 
     def find_layers(self, query: str, *, limit: int = 10) -> list[str]:
         """Return layer labels matching a fuzzy query.
@@ -2750,37 +2766,22 @@ class Trace(
         str
             HTML fragment for IPython/Jupyter display.
 
-        Falls back to ``repr(self)`` when the notebook extra is unavailable.
+        Generated through the CardTree presentation IR
+        (``torchlens.notebook.cardtree``; treescope memo B1): card
+        generation is stdlib-only, so there is no IPython gate -- the
+        historical gate returned a 94-byte plain repr whenever IPython was
+        not importable, which also let naive card tests pass against the
+        fallback. Any internal failure degrades to a one-line
+        ``card unavailable`` fragment (never-raise boundary).
         """
-        try:
-            import IPython  # noqa: F401
-        except ImportError:
-            return repr(self)
+        from ..notebook.cardtree import safe_card_html, trace_overview_card
 
-        from html import escape
+        def build() -> Any:
+            """Assemble the Trace overview Card from session-safe reads."""
 
-        layers = len(getattr(self, "layer_logs", {}) or {})
-        ops = getattr(self, "num_ops", 0)
-        save_level = "all" if getattr(self, "_layers_saved", False) else "selected"
-        if getattr(self, "num_saved_ops", 0) == 0:
-            save_level = "metadata only"
-        nonfinite = self.first_nonfinite(link_format="html")
-        nonfinite_summary = nonfinite
-        title = escape(str(getattr(self, "trace_label", None) or self.model_label))
-        state = escape(str(getattr(getattr(self, "state", None), "name", "UNKNOWN")))
-        return (
-            "<div style='border:1px solid #d0d7de;border-radius:8px;"
-            "padding:10px 12px;font-family:system-ui,sans-serif;max-width:560px'>"
-            f"<div style='font-weight:700;margin-bottom:6px'>TorchLens Trace: {title}</div>"
-            "<div style='display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 12px'>"
-            f"<div><b>Layers</b>: {layers}</div>"
-            f"<div><b>Ops</b>: {ops}</div>"
-            f"<div><b>Save level</b>: {escape(save_level)}</div>"
-            f"<div><b>Run state</b>: {state}</div>"
-            "</div>"
-            f"<div style='margin-top:8px'><b>NaN/Inf</b>: {nonfinite_summary}</div>"
-            "</div>"
-        )
+            return trace_overview_card(self)
+
+        return safe_card_html(build)
 
     def __iter__(self) -> Iterator[Any]:
         """Loops through all tensors in the log."""
@@ -2911,6 +2912,9 @@ class Trace(
         # tl.save succeeded on the same trace (the R10-7 raw-callable class).
         # Runtime-only either way; it rebuilds on the next draw.
         state.pop("_last_encoding_state", None)
+        # Same runtime-only class: the last draw's layout-execution geometry
+        # record (vizmech D24) rebuilds on the next draw and never serializes.
+        state.pop("_last_render_geometry", None)
         state.pop("_container_ordinals_by_output_op_label", None)
         state.pop("_container_ordinals_by_input_func_call_id", None)
         # B1-02: the semantic-output scratch never serializes. Plain pickle

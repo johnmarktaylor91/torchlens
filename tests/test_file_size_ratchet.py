@@ -118,11 +118,21 @@ _NEW_FILE_LINE_CAP = 2000
 #: staleness rule.
 _GOD_FILE_CEILINGS: dict[str, int] = {
     "torchlens/validation/core.py": 5350,
-    "torchlens/data_classes/op.py": 5250,
+    # 5250 -> 5100 (2026-08-27 C07 fix cycle): the user-transform apply +
+    # validation helpers split to _op_transforms.py under R43 (the v9
+    # injection_provenance rows nudged op.py over); re-keyed down to the
+    # next 50-line step above the measured 5069.
+    "torchlens/data_classes/op.py": 5100,
     "torchlens/_io/runnable.py": 5000,
     "torchlens/utils/rng.py": 4950,
-    "torchlens/visualization/collapse_optimizer.py": 4600,
-    "torchlens/backends/jax/backend.py": 4400,
+    # 4600 -> 4350 (2026-08-27 C05 fix cycle): the segment descriptor/label
+    # family split to _segment_descriptors.py under R43; re-keyed down to the
+    # next 50-line step above the post-split measurement (4326).
+    "torchlens/visualization/collapse_optimizer.py": 4350,
+    # 4400 -> 4403 (2026-08-27 C01 item 5): the _selective_save relocation
+    # re-sorted one import into a 4-line parenthesized block (+3 mechanical
+    # lines, zero behavior); the god file itself did not grow.
+    "torchlens/backends/jax/backend.py": 4403,
     # 4600 -> 4650: the L8 C2-recording settle above re-stepped bundle to 4600
     # but the merged file MEASURES 4603 -- the settle's own re-step was three
     # lines short, red on main since the merge. Reconciled to the next 50-line
@@ -167,7 +177,8 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     "torchlens/backends/torch/wrappers.py": 3300,
-    "torchlens/backends/tinygrad/backend.py": 3300,
+    # 3300 -> 3301 (2026-08-27 C01 item 5): same relocation import re-sort (+1).
+    "torchlens/backends/tinygrad/backend.py": 3301,
     "torchlens/backends/mlx/backend.py": 3250,
     # A07 (2026-08-26): +9 lines -- the step-1 contract gains the
     # flops_forward/flops_backward boundary-reset writes and their pinned-pair
@@ -183,17 +194,19 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     "torchlens/backends/jax/jaxpr.py": 2550,
     "torchlens/_capture_state_helpers.py": 2350,
     "torchlens/bundle/__init__.py": 2750,
-    "torchlens/data_classes/layer.py": 2350,
+    # 2350 -> 2400: C02 safety tranche lands the OpAccessor basis fix
+    # (bug 27) with its coherent get/repr in-place -- the accessor lives
+    # with its Layer owner; +11 measured lines, next 50-line step.
+    "torchlens/data_classes/layer.py": 2400,
     "torchlens/postprocess/loop_grouping_adapter.py": 2600,
     "torchlens/visualization/_render_leaf.py": 2400,
     "torchlens/visualization/_render_edges.py": 2450,
-    # Raised 2350 -> 2400 at the A08 persistence-honesty lane (2026-08-26): the
-    # +38 lines are the intervention-spec door's settled-outcome gate, typed
-    # spec.json structural validation (was a bare KeyError), and the
-    # edge_address deserializer that stops the silent load-time discard (WT1
-    # A-IV item 20). Reviewed raise with a stated reason; save.py stays on the
-    # debloat-pass list.
-    "torchlens/intervention/save.py": 2400,
+    # Re-keyed 2400 -> 2300 at the C03 fix cycle (2026-08-27): the site-key-first
+    # compat checker (check_spec_compat + SpecCompat/TargetManifestDiff and its
+    # private helpers) moved to intervention/spec_compat.py, decomposed under
+    # the complexity ratchet; save.py re-exports the public names. Ceilings
+    # follow files down (R43-F2); save.py stays on the debloat-pass list.
+    "torchlens/intervention/save.py": 2300,
     # Raised 2400 -> 2425 at the facet-cache persistence fix (2026-08-17): the
     # +22 lines are the TEACHING half of the completeness refusal -- for an
     # undeclared `_<name>_cache` cell backed by a public property it now names

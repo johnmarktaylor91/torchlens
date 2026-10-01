@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from ...postprocess._site_key import SiteKeyMinter
+from ...data_classes._site_key import SiteKeyMinter
 
 if TYPE_CHECKING:
     from ...data_classes.trace import Trace

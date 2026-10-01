@@ -370,8 +370,9 @@ def test_growing_recurrence_aggregate_is_not_call_1() -> None:
     torch.manual_seed(0)
     traced = trace_fn(_GrowingRecurrent(), torch.randn(2, 4))
     layer = traced.layer_logs["linear_1_1"]
-    first_pass = layer.ops.get(1)
-    last_pass = layer.ops.get(layer.num_passes)
+    # OpAccessor get/[] are 0-based positional (C02 basis fix, lovely bug 27).
+    first_pass = layer.ops.get(0)
+    last_pass = layer.ops.get(layer.num_passes - 1)
     assert int(first_pass.activation_memory) < int(last_pass.activation_memory)
     assert int(layer.activation_memory) == int(last_pass.activation_memory)
     assert tuple(layer.shape) != tuple(first_pass.shape)

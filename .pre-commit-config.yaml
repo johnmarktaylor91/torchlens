@@ -105,7 +105,7 @@ repos:
             tests/perf_baselines/.*|
             tests/fixtures/tlspec_v7/.*|
             tests/release_goldens/.*|
-            torchlens/schemas/writer_contract_v8\.json|
+            torchlens/schemas/writer_contract_v[0-9]+\.json|
             tests/real_model/artifact_registry\.jsonl|
             tests/real_model/vendored/.*|
             tests/real_model/r0/expectations_r0\.json

@@ -2950,6 +2950,7 @@
    "in_conditionals": [],
    "in_multi_output": false,
    "in_submodule": true,
+   "injection_provenance": null,
    "input_activations": "<raises AttributeError>",
    "input_ancestors": {
     "__set__": [
@@ -3324,6 +3325,7 @@
    "in_conditionals": [],
    "in_multi_output": false,
    "in_submodule": false,
+   "injection_provenance": null,
    "input_activations": "<raises AttributeError>",
    "input_ancestors": {
     "__set__": [
@@ -3715,6 +3717,7 @@
    "in_conditionals": [],
    "in_multi_output": false,
    "in_submodule": true,
+   "injection_provenance": null,
    "input_activations": "<raises AttributeError>",
    "input_ancestors": {
     "__set__": [
@@ -4108,6 +4111,7 @@
    "in_conditionals": [],
    "in_multi_output": false,
    "in_submodule": false,
+   "injection_provenance": null,
    "input_activations": "<raises AttributeError>",
    "input_ancestors": {
     "__set__": [
@@ -4460,6 +4464,7 @@
    "in_conditionals": [],
    "in_multi_output": false,
    "in_submodule": false,
+   "injection_provenance": null,
    "input_activations": "<raises AttributeError>",
    "input_ancestors": {
     "__set__": [
@@ -4820,6 +4825,7 @@
    "in_conditionals": [],
    "in_multi_output": false,
    "in_submodule": false,
+   "injection_provenance": null,
    "input_activations": "<raises AttributeError>",
    "input_ancestors": {
     "__set__": [
@@ -5621,6 +5627,7 @@
   "escape_diagnostics": [],
   "event_stream": "<torchlens.ir.capture_events.CaptureEvents>",
   "facet_registry_snapshot": null,
+  "factcore": "<torchlens.report._factcore.FactCore>",
   "flops_by_op_type": {
    "\"conv2d\"": {
     "\"backward\"": 1216,
@@ -5645,7 +5652,7 @@
    "\"output\"": {
     "\"backward\"": 30,
     "\"count\"": 1,
-    "\"forward\"": 15
+    "\"forward\"": 0
    },
    "\"relu\"": {
     "\"backward\"": 32,
@@ -5691,6 +5698,7 @@
   "has_frozen_params": false,
   "has_gradients": false,
   "has_trainable_params": true,
+  "health_facts": "<torchlens.report._health.HealthFacts>",
   "inference_only": false,
   "init_docstring": "Initialize conv and head layers.",
   "init_signature": "(self) -> 'None'",
@@ -6095,6 +6103,7 @@
   "modules": "<torchlens.data_classes.module.ModuleAccessor>",
   "nonfinite_coverage": "<torchlens.data_classes._nonfinite.NonfiniteCoverage>",
   "nonfinite_ops": [],
+  "nonfinite_verdict": "checked_and_clean",
   "num_backward_edges": null,
   "num_backward_passes": 0,
   "num_buffer_edges": 0,
@@ -6260,8 +6269,10 @@
   "saved_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
   "setup_duration": "<measured>",
   "sibling_events": [],
+  "source_snapshots": [],
   "state": "TraceState.PRISTINE",
   "state_history": [],
+  "structure_evidence": null,
   "structure_only": false,
   "tied_param_groups": [],
   "tlspec_version": 6,
@@ -6269,9 +6280,9 @@
   "total_autograd_memory": "<measured>",
   "total_backward_duration": "<measured>",
   "total_backward_memory": "<measured>",
-  "total_flops": 2042,
+  "total_flops": 2027,
   "total_flops_backward": 1340,
-  "total_flops_forward": 702,
+  "total_flops_forward": 687,
   "total_gradient_memory": "<measured>",
   "total_macs": null,
   "total_macs_backward": null,

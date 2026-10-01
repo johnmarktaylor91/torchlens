@@ -52,16 +52,18 @@ from torchlens.visualization._render_edges import (
     _plan_separately_rendered_op_labels,
     _run_fold_ellipsis_label,
 )
+from torchlens.visualization._segment_descriptors import (
+    _child_segment_covered_ops,
+    _child_segment_label,
+    _make_child_segment_descriptor,
+    _op_segment_owner_key,
+)
 from torchlens.visualization.auto_collapse import _make_run_fold, analyze_collapse
 from torchlens.visualization.collapse_optimizer import (
     _RESULT_CACHE,
     OptimizerWeights,
-    _child_segment_covered_ops,
-    _child_segment_label,
     _condense_plan_with_child_segments,
     _legal_plan_op_segment_run,
-    _make_child_segment_descriptor,
-    _op_segment_owner_key,
     _optimizer_total_units,
     _own_ops_segment_is_legal,
     _plan_box_owned_surfaced_labels,
@@ -1238,14 +1240,18 @@ def test_op_segment_module_call_containment(kind, calls, tmp_path):
     ids=["functional_6", "residual_12"],
 )
 def test_op_segment_per_call_containment_pin(builder, address, calls, tmp_path):
-    """Round-24 C1 exact pin: one segment per call, inside that call's cluster.
+    """Round-24 C1 pin: exactly one per-call unit, inside that call's cluster.
 
     The executed seal repro: six calls of a parameter-free functional module
     (and twelve of a real residual cell) produced TWO max segments declared
     ``owner=<addr>:1`` / ``owner=<addr>:4`` with most represented ops outside
-    the owner and the other call clusters empty. Post-fix, max must produce
-    exactly one op segment per call, owned by and rendered inside THAT call's
-    cluster, and every call cluster must be non-empty in the DOT.
+    the owner and the other call clusters empty. Post-fix, max must cover
+    every call with exactly ONE unit that absorbs no cross-call ops. Honest
+    per-call box pricing (megaplan row C05, collapse M2a) may now win with
+    one ModuleBox per call instead of one op segment per call -- both shapes
+    are legal; two spanning units for six calls never are. When segments win,
+    each must be owned by and rendered inside THAT call's cluster, and every
+    call cluster must be non-empty in the DOT.
     """
 
     torch.manual_seed(0)
@@ -1256,18 +1262,27 @@ def test_op_segment_per_call_containment_pin(builder, address, calls, tmp_path):
     descriptors = {
         name: segment for name, segment in (result.segments or {}).items() if segment.kind == "op"
     }
-    assert len(descriptors) == calls, (
-        f"expected one per-call op segment per call, got {len(descriptors)}"
+    box_calls = sorted(
+        node.call
+        for node in result.plan.nodes
+        if isinstance(node, ModuleBox) and node.call.rsplit(":", 1)[0] == address
     )
-    assert sorted(segment.owner for segment in descriptors.values()) == sorted(
-        f"{address}:{index}" for index in range(1, calls + 1)
-    )
-    for name, segment in descriptors.items():
-        represented_calls = {_effective_stack(trace.ops[str(op)])[-1] for op in segment.ops}
-        assert represented_calls == {segment.owner}, (
-            f"{name}: represents calls {sorted(represented_calls)} but claims "
-            f"sole ownership of {segment.owner}"
+    expected_calls = sorted(f"{address}:{index}" for index in range(1, calls + 1))
+    if not descriptors:
+        assert box_calls == expected_calls, (
+            f"segment-free max plan must draw one box per call; got {box_calls}"
         )
+    else:
+        assert len(descriptors) == calls, (
+            f"expected one per-call op segment per call, got {len(descriptors)}"
+        )
+        assert sorted(segment.owner for segment in descriptors.values()) == expected_calls
+        for name, segment in descriptors.items():
+            represented_calls = {_effective_stack(trace.ops[str(op)])[-1] for op in segment.ops}
+            assert represented_calls == {segment.owner}, (
+                f"{name}: represents calls {sorted(represented_calls)} but claims "
+                f"sole ownership of {segment.owner}"
+            )
 
     out = tmp_path / f"per_call_{address}"
     source = trace.draw(
@@ -1279,11 +1294,12 @@ def test_op_segment_per_call_containment_pin(builder, address, calls, tmp_path):
     node_cluster, members = _dot_node_clusters(source)
     for segment in descriptors.values():
         assert node_cluster.get(segment.name) == _owner_cluster_name(segment.owner)
-    for index in range(1, calls + 1):
-        cluster = f"cluster_{address}_pass{index}"
-        assert members.get(cluster), (
-            f"call cluster {cluster} owns represented ops but contains no node"
-        )
+    if descriptors:
+        for index in range(1, calls + 1):
+            cluster = f"cluster_{address}_pass{index}"
+            assert members.get(cluster), (
+                f"call cluster {cluster} owns represented ops but contains no node"
+            )
     assert _svg_node_group_count(str(out) + ".svg") == result.plan.total
 
 
@@ -1608,12 +1624,24 @@ def test_surfaced_exit_op_not_double_represented(tmp_path):
     )
     with open(str(out) + ".svg", encoding="utf-8") as handle:
         svg = handle.read()
+    # Honest per-call box pricing (megaplan row C05, collapse M2a) may win
+    # this toy's max plan with spanning segments instead of the historical
+    # six sibling boxes -- the box checks bind to however many boxes the
+    # winning plan actually draws, and the conservation check below carries
+    # the seal either way.
+    box_nodes = sum(isinstance(node, ModuleBox) for node in plan.nodes)
     box_counts = re.findall(r">(\d+) ops?<", svg)
-    assert len(box_counts) == 6, f"expected six sibling box content labels, got {box_counts}"
-    assert len(set(box_counts)) == 1, (
+    assert len(box_counts) == box_nodes, (
+        f"expected one box content label per plan ModuleBox ({box_nodes}), got {box_counts}"
+    )
+    assert len(set(box_counts)) <= 1, (
         f"structurally identical sibling blocks render inconsistent op counts: {box_counts}"
     )
-    seg_counts = [int(match) for match in re.findall(r">[^<>]*&#45;&#45; (\d+) ops?<", svg)]
+    # Segment labels may carry a trailing spanned-modules disclosure
+    # (" -- spans @..."), so the op count is matched mid-run, not at the end.
+    seg_counts = [
+        int(match) for match in re.findall(r">[^<>]*?&#45;&#45; (\d+) ops?\b[^<>]*<", svg)
+    ]
     standalone_raw = sum(isinstance(node, RawOp) for node in plan.nodes)
     label_total = sum(int(count) for count in box_counts) + sum(seg_counts) + standalone_raw
     assert label_total == len(list(trace.ops)), (
@@ -1832,7 +1860,7 @@ class TestNameConsecutiveTrailingDigitSplit:
     def test_consecutive_and_rejections(self) -> None:
         """Trailing-digit semantics match the old (.*?)(\\d+) fullmatch."""
 
-        from torchlens.visualization.collapse_optimizer import _members_are_name_consecutive
+        from torchlens.visualization._segment_descriptors import _members_are_name_consecutive
 
         assert _members_are_name_consecutive(("m.block1", "m.block2", "m.block3"))
         assert not _members_are_name_consecutive(("m.block1", "m.block3"))

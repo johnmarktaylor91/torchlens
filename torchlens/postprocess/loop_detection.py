@@ -9,8 +9,8 @@ import hashlib
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
+from ..data_classes._site_key import SiteKeyMinter
 from ._grouping_stamp import build_grouping_policy_stamp
-from ._site_key import SiteKeyMinter
 from .loop_grouping_adapter import (
     RecurrenceAssignment,
     RecurrenceGroupingGraph,

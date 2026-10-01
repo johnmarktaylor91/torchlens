@@ -205,7 +205,7 @@ def test_all_matches_frozen_target_ledger() -> None:
     `between` (executed-DAG n-hop region; source-to-sink influence sub-DAG);
     the comparative producers `changed`, `top_changed`,
     `stable_across_passes`, and `pass_variance`; and the semantic/appliance
-    additions from the same sprint. The RUNTIME total is 118 -- asserted
+    additions from the same sprint. The RUNTIME total is 114 -- asserted
     against TARGET_ALL below rather than re-derived here, because three
     concurrent lanes each computed an increment from 111 without knowing about
     the others and every hand-derived subtotal was wrong. The subspace

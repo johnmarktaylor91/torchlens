@@ -25,9 +25,9 @@ def _simple_model_and_input() -> tuple[torch.nn.Module, torch.Tensor]:
 
 
 def test_io_format_version_and_floor() -> None:
-    """The coordinated tlspec v8 bump stamps 8; the 2.33 rehydration floor stays 6."""
+    """The coordinated tlspec v9 bump stamps 9; the 2.33 rehydration floor stays 6."""
 
-    assert TLSPEC_VERSION == 8
+    assert TLSPEC_VERSION == 9
     assert MIN_TLSPEC_VERSION == 6
 
 

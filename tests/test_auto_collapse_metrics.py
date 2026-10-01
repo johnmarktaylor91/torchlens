@@ -2873,7 +2873,15 @@ def test_v2_zero_frontier_falls_back_to_visible_full_plan(
         assert not result.declined
         assert count(result.plan) >= 1
         assert result.visible_count == count(result.plan)
-        assert result.reason == "floor_fallback: no optimizer frontier was produced"
+        # No silent floor (collapse memo D4): the fallback reason now names
+        # the diagnosed cause (here: K_CAP exhaustion by root own units) and
+        # the remedy, and the typed fields carry the machine-readable half.
+        assert result.reason is not None
+        assert result.reason.startswith("floor_fallback:")
+        assert "module= focus" in result.reason
+        assert result.planner == "floor_fallback"
+        assert result.k_cap_exhausted is True
+        assert result.root_own_units > 64
     finally:
         trace.cleanup()
 

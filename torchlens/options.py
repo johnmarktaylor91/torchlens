@@ -47,7 +47,7 @@ from ._options_validation import (
     _validate_visualization_flag_fields,
 )
 from ._save_budget import SaveBudgetOption
-from .visualization.node_spec import NodeSpec
+from ._vocab.node_spec import NodeSpec
 
 if TYPE_CHECKING:
     from .data_classes.layer import Layer

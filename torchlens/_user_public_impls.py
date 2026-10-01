@@ -234,10 +234,20 @@ def summary(
         set_rng_from_saved_states(rng_snapshot)
 
     try:
-        text = trace.summary(**summary_kwargs)
+        report = trace.summary(**summary_kwargs)
     finally:
         trace.cleanup()
-    return text + "\n" + _summary_execution_note(execution_mode, grad_mode)
+    # Keep the typed detached report (C02, summary item 10) around the
+    # disclosure-suffixed text: the report survives the cleanup above by
+    # construction (it retains neither the model nor the Trace).
+    from .report._summary_report import SummaryReport
+
+    full_text = str(report) + "\n" + _summary_execution_note(execution_mode, grad_mode)
+    if isinstance(report, SummaryReport):
+        return SummaryReport(
+            full_text, rows=report.rows, totals=report.totals, capture=report.capture
+        )
+    return full_text
 
 
 def _summary_execution_note(execution_mode: str, grad_mode: str) -> str:

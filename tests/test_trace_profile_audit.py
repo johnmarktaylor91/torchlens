@@ -145,8 +145,10 @@ def test_trace_profile_tree_follows_module_call_nesting() -> None:
 
     features_line = next(line for line in lines if line.endswith("features:1"))
     linear_line = next(line for line in lines if line.endswith("features.0:1"))
-    assert features_line.startswith("├── ")
-    assert linear_line.startswith("│   ")
+    # ASCII rails (C02 safety tranche, lovely bug 10): returned report
+    # strings are ASCII-canonical.
+    assert features_line.startswith("|-- ")
+    assert linear_line.startswith("|   ")
     assert lines.index(linear_line) > lines.index(features_line)
 
 

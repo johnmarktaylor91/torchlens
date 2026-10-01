@@ -395,6 +395,7 @@ _KIND_PAYLOADS: dict[str, Any] = {
     "regex": "x",
     "followed_by": None,
     "preceded_by": None,
+    "site": {"key": "x"},
 }
 
 

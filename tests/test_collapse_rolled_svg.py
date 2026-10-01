@@ -35,11 +35,11 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.visualization.collapse_optimizer import (
+from torchlens.visualization._segment_descriptors import (
     _op_segment_owner_key,
     _segment_owner_key,
-    select_collapse_plan,
 )
+from torchlens.visualization.collapse_optimizer import select_collapse_plan
 from torchlens.visualization.collapse_plan import RenderContext
 
 

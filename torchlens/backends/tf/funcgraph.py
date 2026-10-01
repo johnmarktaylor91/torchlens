@@ -679,7 +679,7 @@ def _selected_fetch_names(
         # Graph outputs are always fetched, so a typo'd predicate still
         # produced payloads for them -- but the SELECTOR matched nothing,
         # exactly the silent-typo case the shared disclosure family warns on.
-        from .._selective_save import warn_zero_match_save_predicate
+        from ...postprocess._selective_save import warn_zero_match_save_predicate
 
         warn_zero_match_save_predicate("tf")
     return tuple(dict.fromkeys((*output_names, *names)))

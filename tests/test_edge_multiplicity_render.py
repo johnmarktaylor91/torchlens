@@ -179,14 +179,21 @@ def test_add_same_parent_arg_slots_render_two_unlabeled_edges(tmp_path: Path) ->
 
 
 @pytest.mark.smoke
-def test_cat_same_parent_sequence_slots_render_two_unlabeled_edges(tmp_path: Path) -> None:
-    """``torch.cat([x, x])`` renders one arrow per sequence-slot occurrence."""
+def test_cat_same_parent_sequence_slots_render_two_labeled_edges(tmp_path: Path) -> None:
+    """``torch.cat([x, x])`` renders one slot-labeled arrow per occurrence.
+
+    Pin superseded by vizmech memo D14 (megaplan row C05): ``torch.cat`` is
+    NOT commutative, so it left ``COMMUTE_FUNCS`` and its repeated-parent
+    edges must SHOW slot-self-identifying ``arg (0, k)`` labels instead of
+    rendering unlabeled (the old pin asserted the pre-D14 suppression).
+    """
 
     dot_source = _render_dot(_CatTwice(), tmp_path, "cat_twice")
     edges = _matching_edge_lines(dot_source, "cat")
 
     assert len(edges) == 2
-    assert all("label=" not in edge and "headlabel=" not in edge for edge in edges)
+    assert any("arg (0, 0)" in edge for edge in edges)
+    assert any("arg (0, 1)" in edge for edge in edges)
 
 
 @pytest.mark.smoke

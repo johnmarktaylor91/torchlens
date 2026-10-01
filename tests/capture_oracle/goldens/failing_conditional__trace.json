@@ -57,7 +57,7 @@
             "_edge_uses[0].edge_use": "populated",
             "_edge_uses[0].parent_func_call_id": "unknown",
             "_edge_uses[0].parent_label": "populated",
-            "_edge_uses[0].view_or_copy": "populated",
+            "_edge_uses[0].view_or_copy": "sentinel_unknown",
             "backend_semantics.aliased_output_inputs": "defaulted_empty",
             "backend_semantics.autograd_memory": "unknown",
             "backend_semantics.backend_grad_handle": "unknown",
@@ -198,7 +198,7 @@
             "_edge_uses[0].edge_use": "populated",
             "_edge_uses[0].parent_func_call_id": "unknown",
             "_edge_uses[0].parent_label": "populated",
-            "_edge_uses[0].view_or_copy": "populated",
+            "_edge_uses[0].view_or_copy": "sentinel_unknown",
             "backend_semantics.aliased_output_inputs": "defaulted_empty",
             "backend_semantics.autograd_memory": "unknown",
             "backend_semantics.backend_grad_handle": "unknown",
@@ -339,7 +339,7 @@
             "_edge_uses[0].edge_use": "populated",
             "_edge_uses[0].parent_func_call_id": "populated",
             "_edge_uses[0].parent_label": "populated",
-            "_edge_uses[0].view_or_copy": "populated",
+            "_edge_uses[0].view_or_copy": "sentinel_unknown",
             "backend_semantics.aliased_output_inputs": "defaulted_empty",
             "backend_semantics.autograd_memory": "unknown",
             "backend_semantics.backend_grad_handle": "unknown",
@@ -483,7 +483,7 @@
             "_edge_uses[0].edge_use": "populated",
             "_edge_uses[0].parent_func_call_id": "populated",
             "_edge_uses[0].parent_label": "populated",
-            "_edge_uses[0].view_or_copy": "populated",
+            "_edge_uses[0].view_or_copy": "sentinel_unknown",
             "backend_semantics.aliased_output_inputs": "defaulted_empty",
             "backend_semantics.autograd_memory": "unknown",
             "backend_semantics.backend_grad_handle": "unknown",
@@ -865,20 +865,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 441351,
+      "python_peak_memory_median_bytes": 460909,
       "sample_count": 3,
       "torch_version": "2.13.0+cu130",
-      "wall_time_median_ms": 39.28256197832525
+      "wall_time_median_ms": 156.1639909632504
     }
   },
   "sha256_chunks": [
-    "e6bafc68",
-    "4cbc7d89",
-    "d4beda56",
-    "aa92dc58",
-    "0da740b6",
-    "ad50fe9d",
-    "63bfa520",
-    "353f4ca0"
+    "3ed2f132",
+    "523d6498",
+    "2b2d356b",
+    "d44eade5",
+    "81ec05ef",
+    "a688ec71",
+    "111ff3d2",
+    "5789160a"
   ]
 }

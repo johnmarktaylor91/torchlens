@@ -50,6 +50,11 @@ _PLANT_FIELD = "_tl_save_selector_fire_count"
 #: profile constellation, kernel telemetry, Op site_key + edge stores, the
 #: eight Trace markers, and the episode/_kernel_telemetry annotation keys):
 #: the registry is EMPTY again until the next sprint gates a new family.
+# The C01 sidecar seam's "sidecar" annotations sub-key persisted plainly at
+# the C07 tlspec v9 write; the registry is empty again (import kept so the
+# inventory pins stay import-order-deterministic either way).
+import torchlens._io.sidecar  # noqa: F401,E402
+
 _STANDING_REGISTRATIONS: dict[str, tuple[str, ...]] = {}
 
 
@@ -98,9 +103,10 @@ def test_registry_inventory_and_unregister(planted_field: str) -> None:
 
 def test_annotations_keys_retired_at_the_bump() -> None:
     # The S7 episode-ledger home and the L3 telemetry relation persisted
-    # plainly at the tlspec v8 bump; their gated annotation sub-keys are
-    # retired and no synthetic "Trace.annotations" owner remains.
-    assert "Trace.annotations" not in registered_prerelease_fields()
+    # plainly at the tlspec v8 bump; the C01 sidecar namespace persisted
+    # plainly at the tlspec v9 bump (C07). No gated annotation sub-keys
+    # remain until a future sprint registers a new family.
+    assert registered_prerelease_fields().get("Trace.annotations", ()) == ()
 
 
 # ---------------------------------------------------------------------------

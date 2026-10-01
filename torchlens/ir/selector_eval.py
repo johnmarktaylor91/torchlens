@@ -490,6 +490,14 @@ def _capability_error(kind: str, lifecycle: str) -> SelectorCapabilityError:
             "tl.facet(...) / tl.head(...) selectors resolve through intervention mutators "
             f"(Trace.set, attach_hooks), not through {where}."
         )
+    if kind == "site":
+        return SelectorCapabilityError(
+            "tl.site(...) needs a structural site key, which does not exist on "
+            f"{where}: final structural numbering is absent mid-attach. Resolve "
+            "the site on the finished trace (log.resolve_sites / do), or pass "
+            "the site selector through trace(save=/intervene=), which arms the "
+            "live minter."
+        )
     return SelectorCapabilityError(f"Unsupported selector kind {kind!r} for {where}.")
 
 
@@ -499,7 +507,11 @@ def _capability_error(kind: str, lifecycle: str) -> SelectorCapabilityError:
 #: out because backward live hooks route them through the backward matcher.
 _UPFRONT_UNSUPPORTED_KINDS: dict[str, frozenset[str]] = {
     "site": frozenset({"followed_by", "preceded_by", "facet"}),
-    "live": frozenset({"followed_by", "preceded_by", "input_at"}),
+    # "site" (the C03 structural selector): live hook-attach proxies carry no
+    # structural key mid-forward; final structural addressing there is
+    # exactly the impossibility that creates the escrow lane (leverage
+    # G-LIVE), so it refuses typed rather than guessing.
+    "live": frozenset({"followed_by", "preceded_by", "input_at", "site"}),
 }
 
 
@@ -972,6 +984,30 @@ def _evaluate_subject(selector: BaseSelector, subject: Any, lifecycle: str) -> b
             module_address_matches(candidate, target)
             for candidate in _module_containment_candidates(subject, lifecycle)
         )
+    if kind == "site":
+        # C03 structural-position selector (address law: valid in every
+        # lane). Post hoc it reads the persisted op.site_key; on the capture
+        # lane it reads the streaming live minter armed by the tl.trace
+        # entry; the live hook-proxy lane refuses upfront (mid-attach
+        # proxies carry no structural key -- see _UPFRONT_UNSUPPORTED_KINDS).
+        if lifecycle == "site":
+            return _site_key_matches(selector, getattr(subject, "site_key", None))
+        if lifecycle == "capture":
+            from torchlens.intervention.site_keys import active_live_minter
+
+            minter = active_live_minter()
+            if minter is None:
+                raise SelectorCapabilityError(
+                    "tl.site(...) on the capture lane needs the live site-key "
+                    "minter, which tl.trace arms automatically when save=/"
+                    "intervene= contains a site selector. This capture surface "
+                    "did not arm it (tl.record and preview backends do not "
+                    "support live site keys yet). Address the finished trace "
+                    "post hoc (log.resolve_sites / do), or use tl.trace with "
+                    "the site selector in save=/intervene=."
+                )
+            return _site_key_matches(selector, minter.key_for_context(subject))
+        raise _capability_error(kind, lifecycle)
     if kind == "output":
         return _output_matches(subject, value, lifecycle)
     if kind == "output_at":
@@ -1309,6 +1345,17 @@ def selector_from_spec(
                     module_address=None if module_address is None else str(module_address),
                 )
         raise SiteResolutionError(f"Unsupported facet selector payload {value!r}.")
+    if kind == "site":
+        from ..intervention.selectors import SiteSelector
+
+        payload = dict(value or {})
+        return SiteSelector(
+            payload.get("key"),
+            module_path=payload.get("module_path"),
+            op_type=payload.get("op_type"),
+            slot=payload.get("slot"),
+            ordinal=payload.get("ordinal"),
+        )
     if kind == "predicate" and callable(value):
         return where(value, name_hint=metadata.get("name_hint"))
     if kind == "grad_fn":
@@ -1352,6 +1399,16 @@ def selector_from_spec(
             return FollowedBySelector(inner)
         return PrecededBySelector(inner)
     raise SiteResolutionError(f"Unsupported target spec selector kind {kind!r}.")
+
+
+def _site_key_matches(selector: Any, rendered_key: Any) -> bool:
+    """Match one ``site`` selector against one rendered site key (or None)."""
+
+    from ..intervention.selectors import SiteSelector
+
+    if not isinstance(selector, SiteSelector):
+        selector = selector_from_spec("site", selector.selector_value, None)
+    return bool(selector.matches_key(rendered_key if isinstance(rendered_key, str) else None))
 
 
 def normalize_selector_like(selector_like: Any, *, lifecycle: Lifecycle) -> BaseSelector:

@@ -216,7 +216,10 @@ def test_do_dispatch_replay_rerun_set_only_and_top_level_alias() -> None:
     )
     assert replay_result is replay_log
     assert replay_log.state is TraceState.REPLAY_PROPAGATED
-    assert replay_log.state_history[-1]["op"] == "replay"
+    assert [record["op"] for record in replay_log.state_history[-2:]] == [
+        "replay",
+        "intervention_event",
+    ]
     assert any(record["op"] == "do" for record in replay_log.state_history)
 
     rerun_model = ReluLinear()
@@ -229,7 +232,10 @@ def test_do_dispatch_replay_rerun_set_only_and_top_level_alias() -> None:
     )
     assert rerun_result is rerun_log
     assert rerun_log.state is TraceState.RERUN_PROPAGATED
-    assert rerun_log.state_history[-1]["op"] == "rerun"
+    assert [record["op"] for record in rerun_log.state_history[-2:]] == [
+        "rerun",
+        "intervention_event",
+    ]
 
     set_only_log, _ = _capture()
     set_only_log.do(
@@ -238,7 +244,10 @@ def test_do_dispatch_replay_rerun_set_only_and_top_level_alias() -> None:
         intervention=InterventionOptions(engine="set_only", confirm_mutation=True),
     )
     assert set_only_log.state is TraceState.SPEC_STALE
-    assert set_only_log.state_history[-1]["op"] == "do"
+    assert [record["op"] for record in set_only_log.state_history[-2:]] == [
+        "do",
+        "intervention_event",
+    ]
 
 
 @pytest.mark.smoke

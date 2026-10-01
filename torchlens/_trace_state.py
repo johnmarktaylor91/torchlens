@@ -1,22 +1,11 @@
-"""Run-state ownership for TorchLens intervention execution.
+"""Re-export shim: ``TraceState`` moved to :mod:`torchlens._vocab.trace_state`.
 
-This module intentionally stays outside ``torchlens.intervention`` so
-``torchlens._state`` can import ``TraceState`` later without creating a cycle.
+Ratified V2 relocation (architecture memo 3.3, C01 item 6). Every historical
+spelling and the pickle-visible identity stay unchanged; new lower-layer
+consumers import from the vocabulary home.
 """
 
-from enum import Enum
+from ._vocab.trace_state import TraceState
 
-
-class TraceState(Enum):
-    """User-visible operational state machine for intervention runs."""
-
-    PRISTINE = "pristine"
-    SPEC_STALE = "spec_stale"
-    REPLAY_PROPAGATED = "replay_propagated"
-    RERUN_PROPAGATED = "rerun_propagated"
-    LIVE_CAPTURED = "live_captured"
-    DIRECT_WRITE_DIRTY = "direct_write_dirty"
-    APPENDED = "appended"
-
-
+__tl_layer__ = "FACADE"
 __all__ = ["TraceState"]

@@ -108,6 +108,8 @@ def test_bill_of_materials_reports_captured_facts() -> None:
         "activations",
         "backward",
         "annotations",
+        # A09 sumfam D20: logged values are inventory (read-back surface).
+        "logged_values",
     }
     assert bom["capture"]["backend"] == "torch"
     assert bom["capture"]["outcome_status"] == "complete"
@@ -119,10 +121,13 @@ def test_bill_of_materials_reports_captured_facts() -> None:
     assert bom["parameters"]["num_param_tensors"] == len(trace.params)
     assert bom["buffers"]["num_buffer_tensors"] == len(trace.buffers)
     saved = [op for op in trace.ops if op.has_saved_activation]
-    assert bom["activations"]["num_saved"] == len(saved)
-    assert bom["activations"]["saved_activation_memory"] == sum(
-        int(op.activation_memory) for op in saved
-    )
+    # Payload-scope law (C02; sumfam D8): BOM's byte figures are
+    # retained_now; the at_capture facts print BESIDE them.
+    assert bom["activations"]["payload_scope"] == "retained_now"
+    assert bom["activations"]["num_saved_at_capture"] == len(saved)
+    assert bom["activations"]["at_capture_memory"] == sum(int(op.activation_memory) for op in saved)
+    # A live full-save trace still holds everything it captured.
+    assert bom["activations"]["retained_now_memory"] == bom["activations"]["at_capture_memory"]
     assert bom["backward"]["num_grad_fn_records"] == 0
     assert bom["annotations"] == ()
 

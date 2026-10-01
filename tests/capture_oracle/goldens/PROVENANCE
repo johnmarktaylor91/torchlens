@@ -253,3 +253,251 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 9fb0dac87004c577c24a6803dd6faf0c89067069 (dirty)
 recorded: 2026-08-17T10:55:51.644719+00:00
+---
+generator: tests/capture_oracle (plain_cnn__backward_trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:01:59.390393+00:00
+---
+generator: tests/capture_oracle (recurrent__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:02:04.015317+00:00
+---
+generator: tests/capture_oracle (plain_cnn__halt_trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:02:08.840407+00:00
+---
+generator: tests/capture_oracle (plain_cnn__mixed_selector)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:02:13.540827+00:00
+---
+generator: tests/capture_oracle (plain_cnn__intervene_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:02:17.762244+00:00
+---
+generator: tests/capture_oracle (conditional__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:02:22.437097+00:00
+---
+generator: tests/capture_oracle (plain_cnn__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:02:27.047503+00:00
+---
+generator: tests/capture_oracle (tiny_transformer__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:02:32.643543+00:00
+---
+generator: tests/capture_oracle (recurrent__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:02:36.787127+00:00
+---
+generator: tests/capture_oracle (plain_cnn__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:02:41.459964+00:00
+---
+generator: tests/capture_oracle (plain_cnn__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:02:46.451434+00:00
+---
+generator: tests/capture_oracle (failing_conditional__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:02:50.598861+00:00
+---
+generator: tests/capture_oracle (train_batchnorm__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:02:55.247191+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:02:59.593202+00:00
+---
+generator: tests/capture_oracle (plain_cnn__halt_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:03:03.661889+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:03:08.614797+00:00
+---
+generator: tests/capture_oracle (in_place__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:03:13.240418+00:00
+---
+generator: tests/capture_oracle (plain_cnn__lookback)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:03:17.750144+00:00
+---
+generator: tests/capture_oracle (tiny_transformer__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:03:22.281590+00:00
+---
+generator: tests/capture_oracle (plain_cnn__backward_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:03:26.490723+00:00
+---
+generator: tests/capture_oracle (mutating_pre_hook__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:03:31.244842+00:00
+---
+generator: tests/capture_oracle (recurrent__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:03:35.942981+00:00
+---
+generator: tests/capture_oracle (mutating_pre_hook__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:03:40.610615+00:00
+---
+generator: tests/capture_oracle (plain_cnn__intervene_trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:03:45.181759+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_predicate)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:03:49.974692+00:00
+---
+generator: tests/capture_oracle (plain_cnn__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:03:54.071818+00:00
+---
+generator: tests/capture_oracle (conditional__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:03:58.720419+00:00
+---
+generator: tests/capture_oracle (train_batchnorm__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:04:03.394706+00:00
+---
+generator: tests/capture_oracle (in_place__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:04:07.927601+00:00
+---
+generator: tests/capture_oracle (failing_conditional__trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:04:12.425242+00:00
+---
+generator: tests/capture_oracle (train_batchnorm__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C02 lovely bug 24: _population_state gains sentinel_unknown so string sentinels ('unknown'/'unavailable'/'n/a') stop certifying dead fields as populated; goldens re-characterized under the new vocabulary
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
+recorded: 2026-08-27T08:04:17.107774+00:00

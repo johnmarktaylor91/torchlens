@@ -23,6 +23,7 @@ from ..errors._base import TorchLensWarning
 # surface); call sites below that tests monkeypatch on _condensed_flow go
 # through the module attribute so the patch seam has one home.
 from . import _condensed_flow
+from ._collapse_disclosures import _warn_undisclosed_floor
 from ._condensed_flow import (  # noqa: F401
     JUNCTION_FUNC_NAMES,
     ChildCondensedFlowGraph,
@@ -540,6 +541,7 @@ def resolve_collapse_fn(
 
         result = select_collapse_plan(trace, resolved_context, mode=collapse)
         if not result.declined:
+            _warn_undisclosed_floor(trace, collapse, result, resolved_context)
 
             def v2_collapse_fn(module: Module) -> bool:
                 """Return whether ``module`` is selected by the v2 optimizer."""

@@ -165,3 +165,35 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 874c399e9ec852a4922c6d84f90f91ae0e5bae97 (dirty)
 recorded: 2026-08-26T21:51:13.358987+00:00
+---
+generator: tests/godobject_oracle legacy
+flag: TORCHLENS_UPDATE_LEGACY_ARTIFACT_ORACLE=1
+reason: C02: the LOADED-surface snapshot gains the new read-only substrate accessors (factcore, health_facts, nonfinite_verdict, stats_table) and the D8-scoped BOM keys; values unchanged, new derivation surfaces only
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: a461fbf73c0ad2375bad63819b060179531ceb3a (dirty)
+recorded: 2026-08-27T09:35:58.914757+00:00
+---
+generator: tests/godobject_oracle legacy
+flag: TORCHLENS_UPDATE_LEGACY_ARTIFACT_ORACLE=1
+reason: C02: (1) new read-only substrate accessors appear on the loaded surface (factcore, health_facts, nonfinite_verdict, stats_table; D8-scoped BOM keys); (2) total_flops_forward 702->687 and the output bucket 15->0 -- the legacy artifact's persisted OUTPUT pseudo-row carried a duplicated 15 FLOPs and the canonical aggregation (costreport D1/D7, boundary rows own nothing) now denies alias rows compute ownership at READ time, on legacy artifacts too; artifact bytes untouched
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: a461fbf73c0ad2375bad63819b060179531ceb3a (dirty)
+recorded: 2026-08-27T09:37:16.419485+00:00
+---
+generator: tests/test_state_keyset_contract.py
+flag: TORCHLENS_UPDATE_STATE_KEYSET_ORACLE=1
+reason: tlspec v9 (C07): the three entry-dark slots enter the declared state key sets -- Op.injection_provenance, Trace.source_snapshots, Trace.structure_evidence
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 8fb56555d8cee755f7ed05cb41b5d934f2d871df (dirty)
+recorded: 2026-08-27T22:52:26.016822+00:00
+---
+generator: tests/godobject_oracle legacy
+flag: TORCHLENS_UPDATE_LEGACY_ARTIFACT_ORACLE=1
+reason: tlspec v9 (C07): the three declared entry-dark fields appear at canonical defaults on every loaded surface (injection_provenance=None, source_snapshots=[], structure_evidence=None); the frozen v6 artifact bytes and loaded values are unchanged
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 8fb56555d8cee755f7ed05cb41b5d934f2d871df (dirty)
+recorded: 2026-08-27T22:52:36.082664+00:00

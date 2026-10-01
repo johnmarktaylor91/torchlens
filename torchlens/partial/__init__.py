@@ -6,7 +6,6 @@ import weakref
 from collections import OrderedDict
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from html import escape
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
@@ -264,17 +263,32 @@ class PartialTrace:
         Returns
         -------
         str
-            HTML fragment summarizing the failed capture.
+            HTML fragment summarizing the failed capture, generated through
+            the CardTree presentation IR (treescope memo B1) with the
+            failure-first contract: the partial/failure banner is the badge
+            in the always-visible header, never folded.
         """
 
-        summary = escape(self.first_nonfinite())
-        error = escape(safe_exception_str(self.original_exception))
-        return (
-            "<div><b>PartialTrace</b>"
-            f"<div>raw_layers={len(self.raw_layers)}</div>"
-            f"<div>{summary}</div>"
-            f"<div>error={error}</div></div>"
-        )
+        from ..notebook.cardtree import Card, CardText, safe_card_html
+
+        def build() -> Card:
+            """Assemble the failure-first PartialTrace Card."""
+
+            return Card(
+                title="PartialTrace",
+                badge="FAILED CAPTURE",
+                kind="partial",
+                children=(
+                    CardText(f"raw_layers={len(self.raw_layers)}"),
+                    CardText(self.first_nonfinite()),
+                    CardText(
+                        f"error: {safe_exception_str(self.original_exception)}",
+                        role="notice",
+                    ),
+                ),
+            )
+
+        return safe_card_html(build)
 
     def __repr__(self) -> str:
         """Return a concise partial capture representation.

@@ -1,0 +1,27 @@
+"""Run-state ownership for TorchLens intervention execution.
+
+This module intentionally stays outside ``torchlens.intervention`` so
+``torchlens._state`` can import ``TraceState`` later without creating a cycle.
+"""
+
+from enum import Enum
+
+
+class TraceState(Enum):
+    """User-visible operational state machine for intervention runs."""
+
+    PRISTINE = "pristine"
+    SPEC_STALE = "spec_stale"
+    REPLAY_PROPAGATED = "replay_propagated"
+    RERUN_PROPAGATED = "rerun_propagated"
+    LIVE_CAPTURED = "live_captured"
+    DIRECT_WRITE_DIRTY = "direct_write_dirty"
+    APPENDED = "appended"
+
+
+__all__ = ["TraceState"]
+
+# Pickle-visible identity stays the historical path (move-compat law).
+TraceState.__module__ = "torchlens._trace_state"
+__tl_layer__ = "L0"
+__tl_vocabulary__ = True

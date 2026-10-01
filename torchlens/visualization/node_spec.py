@@ -1,110 +1,55 @@
-"""NodeSpec helpers for TorchLens graph visualization labels."""
+"""NodeSpec helpers for TorchLens graph visualization labels.
+
+The NodeSpec VALUE vocabulary (dataclass, callback aliases, style constants)
+lives in :mod:`torchlens._vocab.node_spec` after the ratified V2 relocation
+(architecture memo 3.3, C01 item 6) -- it is consumed by strata below
+PRESENT. This module re-exports it unchanged and keeps the render BEHAVIOR
+helpers, which are L7 code (they reach into the resolver, replay cone, and
+render node internals and may not ride a vocabulary module under Rule V3).
+"""
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass, field, replace as dataclass_replace
 from html import escape
 from typing import TYPE_CHECKING, Any, cast
 
+from .._vocab.node_spec import (  # noqa: F401
+    INTERVENTION_CONE_COLOR,
+    INTERVENTION_HOOK_BORDER_COLOR,
+    INTERVENTION_HOOK_FILL_COLOR,
+    INTERVENTION_OVERRIDE_KEYS,
+    INTERVENTION_SITE_COLOR,
+    BackwardNodeSpecFn,
+    CollapsedNodeSpecFn,
+    NodeSpec,
+    NodeSpecFn,
+)
 from ..utils._multipass_access import get_multipass_attr
 
 if TYPE_CHECKING:
-    from ..data_classes.grad_fn import GradFn
     from ..data_classes.layer import Layer
-    from ..data_classes.module import Module
     from ..data_classes.op import Op
     from ..data_classes.trace import Trace
 
-INTERVENTION_SITE_COLOR = "#FF00FF"
-INTERVENTION_CONE_COLOR = "#FFB3FF"
-INTERVENTION_HOOK_FILL_COLOR = "#FFE6FF"
-INTERVENTION_HOOK_BORDER_COLOR = "#CC00CC"
-INTERVENTION_OVERRIDE_KEYS = frozenset(
-    {
-        "intervention_site_color",
-        "intervention_cone_color",
-        "intervention_site_penwidth",
-        "intervention_cone_penwidth",
-        "intervention_hook_fillcolor",
-        "intervention_hook_color",
-        "intervention_hook_penwidth",
-    }
-)
+__tl_layer__ = "L7"
 
-
-@dataclass
-class NodeSpec:
-    """Graphviz node attributes produced by TorchLens before user customization.
-
-    The dataclass is intentionally mutable because visualization callbacks are
-    user ergonomics APIs: mutating and returning the supplied default spec is a
-    natural pattern for small display tweaks.
-
-    Attributes
-    ----------
-    lines:
-        Plain-text rows to render in the node label.
-    shape:
-        Graphviz node shape.
-    fillcolor:
-        Optional fill color.
-    fontcolor:
-        Optional font color.
-    style:
-        Graphviz node style.
-    color:
-        Optional border color.
-    penwidth:
-        Optional border width.
-    tooltip:
-        Optional node tooltip.
-    image:
-        Optional image path to embed in the node.
-    width:
-        Optional node width minimum in inches (size encoding channel). With
-        ``fixedsize="false"`` the box can only GROW from the label's natural
-        size, so a label can never be truncated by an encoding. Dropped by
-        the spec funnel when ``image`` is set: an image node's size is
-        pixel-derived, and a width minimum would become a live scaling
-        floor (``extra_attrs`` remains the power-valve override).
-    height:
-        Optional node height minimum in inches (see ``width``).
-    fixedsize:
-        Optional Graphviz ``fixedsize`` value emitted with the size fields.
-    extra_attrs:
-        Additional Graphviz node attributes.
-    """
-
-    lines: list[str]
-    shape: str = "box"
-    fillcolor: str | None = None
-    fontcolor: str | None = None
-    style: str = "filled,rounded"
-    color: str | None = None
-    penwidth: float | None = None
-    tooltip: str | None = None
-    image: str | None = None
-    width: float | None = None
-    height: float | None = None
-    fixedsize: str | None = None
-    extra_attrs: dict[str, str] = field(default_factory=dict)
-
-    def replace(self, **kwargs: Any) -> NodeSpec:
-        """Return a copy of this spec with selected fields replaced.
-
-        Parameters
-        ----------
-        **kwargs:
-            Dataclass fields to replace.
-
-        Returns
-        -------
-        NodeSpec
-            A copied ``NodeSpec`` with the requested field changes.
-        """
-
-        return dataclass_replace(self, **kwargs)
+__all__ = [
+    "BackwardNodeSpecFn",
+    "CollapsedNodeSpecFn",
+    "INTERVENTION_CONE_COLOR",
+    "INTERVENTION_HOOK_BORDER_COLOR",
+    "INTERVENTION_HOOK_FILL_COLOR",
+    "INTERVENTION_OVERRIDE_KEYS",
+    "INTERVENTION_SITE_COLOR",
+    "NodeSpec",
+    "NodeSpecFn",
+    "graphviz_graph_overrides",
+    "intervention_graph_override",
+    "intervention_site_and_cone_labels",
+    "intervention_sites_for_log",
+    "make_intervention_node_spec_fn",
+    "render_lines_to_html",
+]
 
 
 def _annotation_image_path_for_node(trace: Trace, node: Any) -> str | None:
@@ -140,13 +85,6 @@ def _annotation_image_path_for_node(trace: Trace, node: Any) -> str | None:
         if isinstance(image, str) and image:
             return image
     return None
-
-
-# S5 contract (C4): the three node-callback aliases have ONE declaration home
-# (this module); ``_render_common`` re-exports them for internal consumers.
-NodeSpecFn = Callable[["Layer", NodeSpec], NodeSpec | None]
-BackwardNodeSpecFn = Callable[["GradFn", NodeSpec], NodeSpec | None]
-CollapsedNodeSpecFn = Callable[["Module", NodeSpec], NodeSpec | None]
 
 
 def render_lines_to_html(lines: list[str]) -> str:

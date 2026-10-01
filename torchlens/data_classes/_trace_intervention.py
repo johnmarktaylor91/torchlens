@@ -12,7 +12,7 @@ import uuid
 import warnings
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 import torch
 from torch import nn
@@ -44,6 +44,21 @@ __all__ = [
     "_ForkMemo",
     "_memoized_deep_copy",
 ]
+
+
+class _DoTransaction(NamedTuple):
+    """Identity of one ``do()`` transaction, minted once at the door.
+
+    ``transaction_start`` is the monotonic bound scoping this transaction's
+    FireRecords; ``audit_rows_before`` detects whether the mutation step
+    already appended its own audit row.
+    """
+
+    hooks_or_site: Any
+    value_or_hook: Any
+    engine: str
+    transaction_start: float
+    audit_rows_before: int
 
 
 class TraceInterventionMixin(_TraceMixinBase):
@@ -295,6 +310,10 @@ class TraceInterventionMixin(_TraceMixinBase):
         from ..intervention.errors import HookSignatureError
         from ..intervention.handles import HookHandle
         from ..intervention.hooks import normalize_hook_plan
+        from ..intervention.spec import (
+            InterventionSpec as PublicInterventionSpec,
+            entries_from_spec,
+        )
 
         if direction is not None and direction not in {"forward", "backward", "both"}:
             raise InvalidArgumentError(
@@ -304,15 +323,36 @@ class TraceInterventionMixin(_TraceMixinBase):
                 remedy="pass direction='forward', 'backward', 'both', or None",
                 argument="direction",
             )
-        if extra_hooks:
+        if isinstance(hooks_or_site, PublicInterventionSpec):
+            # C03 spec door: the ONE immutable spec is accepted unchanged.
+            # Its rules already carry site, action, and direction, so extra
+            # call arguments have nothing sound to bind to.
+            if hook is not None or extra_hooks or direction is not None:
+                raise InvalidArgumentError(
+                    "attach_hooks(spec) takes the InterventionSpec alone: its "
+                    "rules already carry the site, action, and direction, so "
+                    "extra hook/direction arguments have nothing to bind to",
+                    code="spec_door_extra_arguments",
+                    remedy="pass only the spec (build clauses with tl.when and "
+                    "merge them), or use the (site, hook) call shape without a spec",
+                    argument="hooks_or_site",
+                )
+            entries = entries_from_spec(hooks_or_site, door="attach_hooks")
+        elif extra_hooks:
             if hook is None:
                 raise HookSignatureError("extra hooks require an initial hook argument.")
             entries = normalize_hook_plan(
                 [(hooks_or_site, hook_like) for hook_like in (hook, *extra_hooks)],
                 direction=cast(Any, direction),
+                allow_replay_only_site_targets=True,
             )
         else:
-            entries = normalize_hook_plan(hooks_or_site, hook, direction=cast(Any, direction))
+            entries = normalize_hook_plan(
+                hooks_or_site,
+                hook,
+                direction=cast(Any, direction),
+                allow_replay_only_site_targets=True,
+            )
         from ..intervention.hooks import expand_facet_hook_entries
 
         entries = expand_facet_hook_entries(self, entries)
@@ -555,14 +595,29 @@ class TraceInterventionMixin(_TraceMixinBase):
             if model is None:
                 raise EngineDispatchError("do(..., engine='rerun') requires model= and x=.")
             self._validate_supplied_model_matches_capture(model)
-        mutation_kind, attached_handles = self._apply_do_mutation(
-            hooks_or_site,
-            value_or_hook,
+        # C03 fire-evidence rule: ONE transaction envelope per do() attempt,
+        # written on success, no-fire, AND failure -- intervention_audit is
+        # never empty after an attempt. The monotonic bound scopes exactly
+        # this transaction's FireRecords (the ONE builder stamps every one).
+        txn = _DoTransaction(
+            hooks_or_site=hooks_or_site,
+            value_or_hook=value_or_hook,
             engine=selected_engine,
-            strict=strict_value,
-            confirm_mutation=confirm_mutation_value,
-            direction=direction,
+            transaction_start=time.monotonic(),
+            audit_rows_before=len(self.intervention_audit),
         )
+        try:
+            mutation_kind, attached_handles = self._apply_do_mutation(
+                hooks_or_site,
+                value_or_hook,
+                engine=selected_engine,
+                strict=strict_value,
+                confirm_mutation=confirm_mutation_value,
+                direction=direction,
+            )
+        except BaseException as exc:
+            self._record_do_intervention_event(txn, status="error", error=repr(exc))
+            raise
         self._record_operation(
             "do",
             mutation_kind=mutation_kind,
@@ -574,24 +629,122 @@ class TraceInterventionMixin(_TraceMixinBase):
             direction=direction,
         )
 
-        if mutation_kind in ("selection_replayed", "selection_set"):
+        if (
+            mutation_kind in ("selection_replayed", "selection_set")
+            or selected_engine == "set_only"
+        ):
             # Leaf-site selection edits propagate (or deliberately do not)
             # inside the mutation step; no hook targets exist to push.
-            return self
-        if selected_engine == "set_only":
+            self._record_do_intervention_event(
+                txn,
+                status=None,
+                staged_only=selected_engine == "set_only"
+                and mutation_kind not in ("selection_replayed", "selection_set"),
+            )
             return self
         try:
             if selected_engine == "replay":
-                return self.push(replay=ReplayOptions(strict=strict_value))
-            assert model is not None
-            return self.run(model, x, replay=ReplayOptions(strict=strict_value))
-        except BaseException:
+                result = self.push(replay=ReplayOptions(strict=strict_value))
+            else:
+                assert model is not None
+                result = self.run(model, x, replay=ReplayOptions(strict=strict_value))
+        except BaseException as exc:
             # A failed do() must not leave its sticky hooks attached: the
             # next push would silently re-fire them (contamination). Detach
             # exactly the hooks THIS call attached, then re-raise.
             for handle_id in attached_handles:
                 self.detach_hooks(handle=handle_id, confirm_mutation=True)
+            self._record_do_intervention_event(txn, status="error", error=repr(exc))
             raise
+        self._record_do_intervention_event(txn, status=None)
+        return result
+
+    def _record_do_intervention_event(
+        self: "Trace",
+        txn: _DoTransaction,
+        *,
+        status: str | None,
+        error: str | None = None,
+        staged_only: bool = False,
+    ) -> None:
+        """Write the ONE InterventionEvent envelope for one do() transaction.
+
+        Parameters
+        ----------
+        txn:
+            The transaction identity minted at the do() door (WHERE/edit
+            arguments, selected engine, FireRecord time bound, and the
+            audit-row watermark).
+        status:
+            Explicit status (``"error"``), or ``None`` to derive
+            fired/no_fire from the transaction's FireRecords.
+        error:
+            Stringified failure for error rows.
+        staged_only:
+            Whether the edit was staged without any propagation attempt.
+        """
+
+        from ..intervention.audit import (
+            fire_records_since,
+            record_intervention_event,
+            rules_payload,
+            site_keys_for_labels,
+        )
+        from ..intervention.spec import InterventionSpec as PublicInterventionSpec, _canonical_repr
+
+        hooks_or_site = txn.hooks_or_site
+        value_or_hook = txn.value_or_hook
+        engine = txn.engine
+        fires = fire_records_since(self, txn.transaction_start) if status != "error" else []
+        fired_labels = tuple(
+            dict.fromkeys(record.call_label or record.target_label for record in fires)
+        )
+        if isinstance(hooks_or_site, PublicInterventionSpec):
+            rules = rules_payload(hooks_or_site)
+            edit_names = tuple(str(rule["action"]) for rule in rules)
+            selection_repr = " | ".join(str(rule["where"]) for rule in rules)
+            fired_action_reprs = {
+                _canonical_repr(record.helper) for record in fires if record.helper is not None
+            }
+            zero_fire_rule_ids = tuple(
+                str(rule["rule_id"])
+                for rule in rules
+                if str(rule["action"]) not in fired_action_reprs
+            )
+        else:
+            rules = ()
+            edit_name = getattr(
+                value_or_hook,
+                "helper_name",
+                getattr(value_or_hook, "__name__", type(value_or_hook).__name__),
+            )
+            edit_names = (str(edit_name),)
+            selection_repr = self._history_site_payload(hooks_or_site)
+            if not isinstance(selection_repr, str):
+                selection_repr = repr(selection_repr)
+            zero_fire_rule_ids = ()
+        if status is None:
+            resolved_status = "fired" if fires else "no_fire"
+        else:
+            resolved_status = status
+        extra: dict[str, Any] = {}
+        if staged_only:
+            extra["staged_only"] = True
+        record_intervention_event(
+            self,
+            lane="set_only" if engine == "set_only" else engine,  # type: ignore[arg-type]
+            door="do",
+            edit_names=edit_names,
+            selection_repr=str(selection_repr),
+            status=resolved_status,  # type: ignore[arg-type]
+            fire_count=len(fires),
+            site_keys=site_keys_for_labels(self, fired_labels),
+            rules=rules,
+            zero_fire_rule_ids=zero_fire_rule_ids,
+            error=error,
+            extra=extra or None,
+            append_audit_row=len(self.intervention_audit) == txn.audit_rows_before,
+        )
 
     def fork(self: "Trace", name: str | None = None) -> "Trace":
         """Create a copy-on-write intervention fork of this log.
@@ -742,7 +895,29 @@ class TraceInterventionMixin(_TraceMixinBase):
             attached (for the caller's failure cleanup).
         """
 
+        from ..intervention.spec import InterventionSpec as PublicInterventionSpec
         from ..selection import ResolvedSelection, Selection
+
+        if isinstance(hooks_or_site, PublicInterventionSpec):
+            # C03 spec door: do(spec) applies the whole immutable spec through
+            # the attach path (one preflight, all rules or none), then the
+            # caller's selected engine propagates.
+            if value_or_hook is not None:
+                raise InvalidArgumentError(
+                    "do(spec, edit) conflicts: the InterventionSpec already "
+                    "carries its actions, so a second edit argument has "
+                    "nothing to bind to",
+                    code="spec_door_extra_arguments",
+                    remedy="pass only the spec to do(), or use the "
+                    "(site, edit) call shape without a spec",
+                    argument="value_or_hook",
+                )
+            handle = self.attach_hooks(
+                hooks_or_site,
+                strict=strict,
+                confirm_mutation=confirm_mutation,
+            )
+            return "attach_hooks", tuple(handle.handle_ids)
 
         # A TraceSlice targets its member family: lift it to the whole-site
         # QUERY (re-resolved on THIS trace by site name, so a slice built on
@@ -902,6 +1077,17 @@ class TraceInterventionMixin(_TraceMixinBase):
             for handle_id in attached:
                 self.detach_hooks(handle=handle_id, confirm_mutation=True)
             raise
+        # These sticky hooks are the do() plan's edit-then-scatter residue of
+        # an edit applied NOW (the caller propagates and appends the audit
+        # record), not user-staged future-run material, so the run(inputs=...)
+        # staged-spec honesty gate must skip them: a value-edited fork gets the
+        # PendingValueEditsWarning disclosure at the run door, never a refusal
+        # (D1 2026-08-19).
+        attached_ids = set(attached)
+        for hook_spec in self._ensure_intervention_spec().hook_specs:
+            if hook_spec.handle in attached_ids:
+                hook_spec.metadata["selection_do_engine_owned"] = True
+        self._mark_intervention_spec_mutated()
         return tuple(attached)
 
     def _apply_selection_edge_do(
@@ -1007,9 +1193,10 @@ class TraceInterventionMixin(_TraceMixinBase):
         disclosure matches the hook path.
         """
 
+        from ..intervention.audit import build_fire_record
         from ..intervention.hooks import make_hook_context
         from ..intervention.replay import _commit_replay_updates, _replay_site_key
-        from ..intervention.types import FireRecord, HelperSpec
+        from ..intervention.types import HelperSpec
         from ..selection import _apply_invalid
 
         pending_updates: dict[str, torch.Tensor] = {}
@@ -1057,7 +1244,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 )
             pending_updates[_replay_site_key(op)] = applied
             pending_records[_replay_site_key(op)] = [
-                FireRecord(
+                build_fire_record(
                     target_label=op.layer_label,
                     call_label=op.label,
                     func_call_id=op.func_call_id,
@@ -1068,6 +1255,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                     timing="post",
                     direction="forward",
                     helper_name=helper_name,
+                    run_ctx=context.run_ctx if hasattr(context, "run_ctx") else None,
                     replaced=applied is not saved,
                 )
             ]

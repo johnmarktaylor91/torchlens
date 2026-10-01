@@ -55,7 +55,7 @@
             "_edge_uses[0].edge_use": "populated",
             "_edge_uses[0].parent_func_call_id": "unknown",
             "_edge_uses[0].parent_label": "populated",
-            "_edge_uses[0].view_or_copy": "populated",
+            "_edge_uses[0].view_or_copy": "sentinel_unknown",
             "backend_semantics.aliased_output_inputs": "defaulted_empty",
             "backend_semantics.autograd_memory": "unknown",
             "backend_semantics.backend_grad_handle": "unknown",
@@ -199,7 +199,7 @@
             "_edge_uses[0].edge_use": "populated",
             "_edge_uses[0].parent_func_call_id": "populated",
             "_edge_uses[0].parent_label": "populated",
-            "_edge_uses[0].view_or_copy": "populated",
+            "_edge_uses[0].view_or_copy": "sentinel_unknown",
             "backend_semantics.aliased_output_inputs": "defaulted_empty",
             "backend_semantics.autograd_memory": "unknown",
             "backend_semantics.backend_grad_handle": "unknown",
@@ -343,7 +343,7 @@
             "_edge_uses[0].edge_use": "populated",
             "_edge_uses[0].parent_func_call_id": "populated",
             "_edge_uses[0].parent_label": "populated",
-            "_edge_uses[0].view_or_copy": "populated",
+            "_edge_uses[0].view_or_copy": "sentinel_unknown",
             "backend_semantics.aliased_output_inputs": "defaulted_empty",
             "backend_semantics.autograd_memory": "unknown",
             "backend_semantics.backend_grad_handle": "unknown",
@@ -740,20 +740,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 486465,
+      "python_peak_memory_median_bytes": 483739,
       "sample_count": 3,
       "torch_version": "2.13.0+cu130",
-      "wall_time_median_ms": 51.81350599741563
+      "wall_time_median_ms": 39.37410190701485
     }
   },
   "sha256_chunks": [
-    "a1ed2b44",
-    "5c1568ca",
-    "3d4d7ef0",
-    "5eb3771f",
-    "b474af26",
-    "63c17b5c",
-    "6ff43593",
-    "0444835e"
+    "6d32ca4c",
+    "c0c82fc1",
+    "ccc48012",
+    "68d6f144",
+    "7286f1cf",
+    "8c5e591e",
+    "c56bc1d3",
+    "3e30aae6"
   ]
 }

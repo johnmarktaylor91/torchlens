@@ -176,6 +176,7 @@ def theme_graph_attrs(
     *,
     font_size: int | None = None,
     dpi: int | None = None,
+    fileformat: str | None = None,
 ) -> dict[str, str]:
     """Build graph-level attributes for a theme and convenience knobs.
 
@@ -186,7 +187,15 @@ def theme_graph_attrs(
     font_size:
         Optional graph font size.
     dpi:
-        Optional output DPI.
+        Optional output DPI. RASTER-ONLY (vizmech D23): on vector formats
+        graphviz's ``dpi`` attribute multiplies the coordinate space itself,
+        so ``draw(dpi=300)`` produced a 36-inch PDF page and an SVG whose
+        ``viewBox`` and declared size disagreed. When ``fileformat`` names a
+        vector format the knob is dropped; raster pixels still scale
+        linearly with it.
+    fileformat:
+        Output format the attributes will render to. ``None`` (unknown)
+        conservatively treats the target as vector and drops ``dpi``.
 
     Returns
     -------
@@ -194,10 +203,12 @@ def theme_graph_attrs(
         Graphviz graph attributes.
     """
 
+    from .render_execution import is_raster_format
+
     attrs: dict[str, str] = dict(theme.graph)
     if font_size is not None:
         attrs["fontsize"] = str(font_size)
-    if dpi is not None:
+    if dpi is not None and fileformat is not None and is_raster_format(fileformat):
         attrs["dpi"] = str(dpi)
     return attrs
 

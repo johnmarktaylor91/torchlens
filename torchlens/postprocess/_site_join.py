@@ -48,7 +48,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .._errors import InvalidArgumentError
-from ._site_key import ROOT_CALL_INSTANCE, operation_witness, parse_site_key
+from ..data_classes._site_key import ROOT_CALL_INSTANCE, operation_witness, parse_site_key
 
 #: Cohort identity of one structural position family: (module_site,
 #: layer_type, output_slot) -- the key minus its ordinal.

@@ -12,8 +12,9 @@ from .._deprecations import MISSING, MissingType
 from .._errors import ArgumentTypeError, InvalidArgumentError
 from ..bundle import Bundle
 from .hooks import HookContext
-from .predicates import when
 from .selectors import BaseSelector, func, label
+from .spec import InterventionSpec, when
+from .types import HelperSpec
 
 SWEEP_NAME = "sweep"
 
@@ -63,16 +64,6 @@ def sweep(
         If ``at`` cannot be used as a capture-time intervention predicate.
     """
 
-    if at is MISSING:
-        raise ArgumentTypeError(
-            "sweep() is missing its required at site target",
-            code="sweep_site_missing",
-            remedy="pass at as a label, selector, or predicate callable",
-            argument="at",
-        )
-    else:
-        resolved_at = at
-
     # Resolve positional `values` (may be MISSING if it was skipped when param was keyword-only)
     if values is MISSING:
         raise ArgumentTypeError(
@@ -90,14 +81,65 @@ def sweep(
             argument="intervene",
         )
 
+    # C03 spec door: the ONE immutable InterventionSpec is accepted unchanged
+    # as sweep values -- one member per spec, each captured with
+    # intervene=<that spec>. Site and action already live inside each spec,
+    # so at= must be omitted, and mixing spec and plain values is refused
+    # (a plain value NEEDS at=, a spec FORBIDS it; guessing per-element
+    # would silently re-target half the sweep).
+    from collections.abc import Iterable as _EarlyIterable
+    from typing import cast as _cast
+
+    early_values = list(_cast("_EarlyIterable[Any]", values))
+    spec_count = sum(isinstance(value, InterventionSpec) for value in early_values)
+    if spec_count:
+        if spec_count != len(early_values):
+            raise InvalidArgumentError(
+                f"sweep() received {spec_count} InterventionSpec values mixed "
+                f"with {len(early_values) - spec_count} plain replacement "
+                "values; a sweep is either one site swept over plain values "
+                "(at=..., values=[v1, v2]) or one member per spec "
+                "(values=[spec1, spec2])",
+                code="sweep_spec_values_mixed",
+                remedy="pass all-spec values without at=, or all-plain values with at=",
+                argument="values",
+            )
+        if at is not MISSING:
+            raise InvalidArgumentError(
+                "sweep(at=..., values=[InterventionSpec, ...]) conflicts: each "
+                "spec already names its own WHERE and action, so at= has "
+                "nothing sound to address",
+                code="sweep_spec_at_conflict",
+                remedy="drop at= when sweeping over InterventionSpec values",
+                argument="at",
+            )
+        return _sweep_over_specs(
+            model,
+            x,
+            early_values,
+            input_kwargs=input_kwargs,
+            names=names,
+            **trace_kwargs,
+        )
+
+    if at is MISSING:
+        raise ArgumentTypeError(
+            "sweep() is missing its required at site target",
+            code="sweep_site_missing",
+            remedy="pass at as a label, selector, or predicate callable",
+            argument="at",
+        )
+    else:
+        resolved_at = at
+
     # At this point both resolved_at and values are fully resolved (not MISSING).
-    from collections.abc import Iterable as _Iterable
     from typing import cast
 
     resolved_at_typed = cast("str | BaseSelector | Callable[[Any], bool]", resolved_at)
-    resolved_values = cast("_Iterable[Any]", values)
 
-    swept_values = list(resolved_values)
+    # early_values already materialized the iterable once (generators would
+    # be exhausted by a second pass).
+    swept_values = early_values
     if not swept_values:
         raise InvalidArgumentError(
             "sweep() received an empty values iterable",
@@ -118,15 +160,86 @@ def sweep(
     traces = {}
     from ..user_funcs import trace as _trace
 
-    for member_name, value in zip(member_names, swept_values):
+    for member_name, value in zip(member_names, swept_values, strict=True):
+        # C03 (ledger memo item 1): the swept value rides a TYPED builtin
+        # helper spec whose args carry the value, never an anonymous closure
+        # -- before this, a swept member's only value linkage was its default
+        # name (measured amnesia: byte-identical audit rows across members).
         traces[member_name] = _trace(
             model,
             x,
             input_kwargs=input_kwargs,
-            intervene=when(site, _replacement_hook(value)),
+            intervene=when(site, sweep_replace(value)),
             **trace_kwargs,
         )
     return Bundle(traces)
+
+
+def _sweep_over_specs(
+    model: nn.Module,
+    x: Any,
+    specs: list[InterventionSpec],
+    *,
+    input_kwargs: dict[Any, Any] | None,
+    names: Sequence[str] | None,
+    **trace_kwargs: Any,
+) -> Bundle:
+    """Capture one intervened trace per swept InterventionSpec (C03 spec door)."""
+
+    if not specs:
+        raise InvalidArgumentError(
+            "sweep() received an empty values iterable",
+            code="sweep_values_empty",
+            remedy="pass at least one replacement value",
+            argument="values",
+        )
+    if names is not None and len(names) != len(specs):
+        raise InvalidArgumentError(
+            f"sweep() received {len(names)} names for {len(specs)} values",
+            code="sweep_names_length_mismatch",
+            remedy="pass exactly one name per replacement value or omit names",
+            argument="names",
+        )
+    member_names = list(names) if names is not None else _default_member_names(len(specs))
+    from ..user_funcs import trace as _trace
+
+    traces = {}
+    for member_name, member_spec in zip(member_names, specs, strict=True):
+        traces[member_name] = _trace(
+            model,
+            x,
+            input_kwargs=input_kwargs,
+            intervene=member_spec,
+            **trace_kwargs,
+        )
+    return Bundle(traces)
+
+
+def sweep_replace(value: Any) -> HelperSpec:
+    """Typed builtin replacement helper carrying one swept value.
+
+    Same replacement semantics the historical sweep closure applied (scalar
+    broadcast fill, tensor ``expand_as`` where broadcastable), with the value
+    declared in the helper's portable ``args`` so audit rows, saved specs,
+    and provenance joins can distinguish swept members by content.
+
+    Parameters
+    ----------
+    value:
+        Scalar or tensor replacement value.
+
+    Returns
+    -------
+    HelperSpec
+        Built-in-compatible forward helper spec.
+    """
+
+    return HelperSpec(
+        helper_name="sweep_replace",
+        args=(value,),
+        factory=lambda: _replacement_hook(value),
+        batch_independent=True,
+    )
 
 
 def _coerce_sweep_site(param: str | BaseSelector | Callable[[Any], bool]) -> Callable[[Any], bool]:

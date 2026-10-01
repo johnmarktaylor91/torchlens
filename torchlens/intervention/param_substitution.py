@@ -587,7 +587,9 @@ def _param_fire_record(
 ) -> FireRecord:
     """Mint the per-occurrence FireRecord (discloses substitution, not change)."""
 
-    return FireRecord(
+    from .audit import build_fire_record
+
+    return build_fire_record(
         target_label=child_op.layer_label,
         call_label=child_op.label,
         func_call_id=child_op.func_call_id,

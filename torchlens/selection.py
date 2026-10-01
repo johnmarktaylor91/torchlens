@@ -1732,6 +1732,11 @@ def build_selection_do_plan(
             }
         )
 
+    # The per-site "source" disclosure (the A04 dense-subspace point-of-use
+    # stamp) is admitted as an OPTIONAL string field in the closed
+    # load-validator site schema as of tlspec v9 (C07 amendment; the pre-v9
+    # validator refused it, so a saved selection-intervened artifact refused
+    # its own load -- C03 measured defect, field_intent.tsv row).
     audit: dict[str, Any] = {
         "kind": resolved.kind,
         "selection_repr": repr(selection_like),
@@ -1821,7 +1826,8 @@ def _require_edge_provenance(trace: Any) -> None:
         raise SelectionError(
             "edge provenance requires an intervention_ready capture "
             "(EdgeUseRecords exist only under it). Re-capture with "
-            "capture=CaptureOptions(intervention_ready=True).",
+            "tl.trace(model, x, capture=tl.options.CaptureOptions("
+            "intervention_ready=True)).",
             code="edge_provenance_unavailable",
         )
 

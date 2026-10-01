@@ -17,20 +17,61 @@ from typing import Any
 from ..._errors import InvalidArgumentError
 from ...utils.display import atomic_write_text, user_stacklevel
 from .. import _render_utils
+from .._render_common import GraphvizRenderError
 from .._render_utils import _open_file_quietly, compute_module_penwidth
 from ..code_panel import _code_panel_label
+from ..render_execution import atomic_render_target, is_raster_format, surface_layout_stderr
 from ..render_ir import RenderIR, RenderIRDotStatement
+
+
+class RankRenderEndpointError(GraphvizRenderError):
+    """Raised when rank-path DOT references an undeclared or unpositioned node.
+
+    The emit-time declared-endpoint invariant (vizmech D20): shipping such
+    DOT is a guaranteed ``neato -n`` hard error after the layout work is
+    already spent, and fabricating positions for dropped nodes would draw a
+    graph that lies about the capture. Assert-and-fail, never fall back.
+    """
+
+    code: str = "rank_render_endpoint_undeclared"
+    default_remedy: str = (
+        "this is a TorchLens render-pipeline bug (a node was hidden while its edges "
+        "were kept); report it with the model and draw() arguments, and render with "
+        "vis_node_placement='dot' meanwhile"
+    )
+
+    def __init__(
+        self,
+        problem: str,
+        *,
+        code: str | None = None,
+        remedy: str | None = None,
+        **context: object,
+    ) -> None:
+        """Initialize the typed emit-time invariant refusal.
+
+        The parent pins its own class code; this override lets the raise
+        site spell ``code=`` inline (the S-17 census reads the site).
+        """
+
+        del code  # the class attribute is the single authority
+        super().__init__(problem, remedy=remedy, **context)
+
 
 SPAN_LOCAL = 12
 # Calibrated 2026-06-11: local 5k-node chains cost about 5k and dot rendered
 # in ~14s; 3.5k-node hub graphs with 24 long edges cost about 42k and dot
 # exceeded 30s. 20k keeps local topology on dot and sends hub topology to rank.
 RANK_LAYOUT_COST_THRESHOLD = 20_000
+# Measured phrasing (vizmech D31): dot on stock densenet121 took ~8 s, not
+# "minutes" -- overstating dot's cost steered users away from the more
+# polished path for no reason.
 RANK_LAYOUT_NOTICE = (
     "TorchLens auto-selected rank layout (estimated layout cost={cost}, "
     "threshold={threshold}). Reduce graph complexity with vis_call_depth, "
     "rolled mode, or module= focus; force Graphviz dot with "
-    "vis_node_placement='dot' if you are willing to wait minutes."
+    "vis_node_placement='dot' if you can wait longer (measured: seconds to "
+    "a few minutes at this scale)."
 )
 _NEATO_TIMEOUT = 120
 _DEFAULT_NODE_WIDTH = 200  # points — fallback when label isn't available
@@ -503,6 +544,7 @@ def render_rank_layout(
     theme: Any = None,
     dpi: int | None = None,
     graph_overrides: dict[str, str] | None = None,
+    execution_record: dict[str, str] | None = None,
 ) -> str:
     """Render a graph with the pure-Python rank layout.
 
@@ -531,6 +573,9 @@ def render_rank_layout(
         dpi: Optional Graphviz output DPI, applied as a graph attribute.
         graph_overrides: Resolved (string-valued) graph-attribute overrides,
             applied last so they win, matching the dot path.
+        execution_record: Optional caller-owned dict this function fills with
+            the executed engine, layout path, and captured stderr so the
+            caller can build the structured geometry record (vizmech D24).
 
     Returns:
         The generated DOT source string.
@@ -624,7 +669,9 @@ def render_rank_layout(
         "labeljust=left",
         "ordering=out",
     ]
-    if dpi is not None:
+    if dpi is not None and is_raster_format(vis_fileformat):
+        # Raster-only, matching the dot path (vizmech D23): on vector formats
+        # graphviz's dpi attribute multiplies the coordinate space instead.
         graph_attr_parts.append(f"dpi={int(dpi)}")
     for override_key, override_val in (graph_overrides or {}).items():
         graph_attr_parts.append(f"{override_key}={_dot_quote(str(override_val))}")
@@ -734,6 +781,34 @@ def render_rank_layout(
     for mod in top_modules:
         _write_cluster(mod, 0, 1)
 
+    # Emit-time declared-endpoint invariant (vizmech D20): every emitted edge
+    # endpoint must be a DECLARED and POSITIONED node. Shipping DOT that
+    # violates this is a guaranteed downstream ``neato -n`` hard error
+    # ("node X has no position") after the layout work is already spent --
+    # assert and fail typed HERE, never fall back to fabricated positions
+    # (242 dropped buffer statements on stock densenet121 disqualify any
+    # silent fallback).
+    undeclared: list[str] = []
+    unpositioned: list[str] = []
+    for edge_data in all_edges:
+        for endpoint in (edge_data["tail_name"], edge_data["head_name"]):
+            if endpoint not in node_data:
+                undeclared.append(str(endpoint))
+            elif node_data[endpoint]["node_label"] not in positions:
+                unpositioned.append(str(endpoint))
+    if undeclared or unpositioned:
+        problems = []
+        if undeclared:
+            shown = ", ".join(sorted(set(undeclared))[:5])
+            problems.append(f"{len(set(undeclared))} undeclared edge endpoint(s) (e.g. {shown})")
+        if unpositioned:
+            shown = ", ".join(sorted(set(unpositioned))[:5])
+            problems.append(f"{len(set(unpositioned))} unpositioned node(s) (e.g. {shown})")
+        raise RankRenderEndpointError(
+            "rank layout produced DOT that neato -n must reject: " + "; ".join(problems),
+            code="rank_render_endpoint_undeclared",
+        )
+
     # Edges (at top level — neato -n routes them fine).
     # Capture the count BEFORE the loop mutates each edge dict (it pops keys).
     num_edges = len(all_edges)
@@ -773,13 +848,22 @@ def render_rank_layout(
     render_timeout = max(_NEATO_TIMEOUT, int(num_nodes * 0.01))
     render_succeeded = False
     try:
-        _run_neato_with_fallbacks(
-            rendered_path=rendered_path,
-            source_path=source_path,
-            vis_fileformat=vis_fileformat,
-            spline_mode=spline_mode,
-            render_timeout=render_timeout,
-        )
+        # Atomic publish (vizmech D20): neato writes a sibling temp file that
+        # is renamed over the final path only on success, so a failed or
+        # timed-out layout can never leave a partial stub at the user's path.
+        with atomic_render_target(rendered_path) as temp_rendered_path:
+            result = _run_neato_with_fallbacks(
+                rendered_path=temp_rendered_path,
+                source_path=source_path,
+                vis_fileformat=vis_fileformat,
+                spline_mode=spline_mode,
+                render_timeout=render_timeout,
+            )
+        surface_layout_stderr(result.stderr, engine="neato")
+        if execution_record is not None:
+            execution_record["engine"] = "neato"
+            execution_record["layout_path"] = "rank"
+            execution_record["stderr_text"] = str(result.stderr or "").strip()
         render_succeeded = True
         if not vis_save_only:
             _open_file_quietly(rendered_path)
@@ -881,7 +965,7 @@ def _run_neato_with_fallbacks(
     vis_fileformat: str,
     spline_mode: str,
     render_timeout: int,
-) -> None:
+) -> subprocess.CompletedProcess:
     """Render with ``neato -n``, degrading gracefully on two known failures.
 
     1. **rtree overflow** — very high-resolution models produce a layout whose
@@ -948,3 +1032,4 @@ def _run_neato_with_fallbacks(
 
     if result.returncode != 0:
         raise RuntimeError(f"neato rendering failed (exit {result.returncode}):\n{result.stderr}")
+    return result

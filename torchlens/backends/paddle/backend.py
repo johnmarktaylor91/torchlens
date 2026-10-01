@@ -39,6 +39,10 @@ from ...ir.predicate import RecordContext
 from ...ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
 from ...postprocess._materialize import materialize_from_events
+from ...postprocess._selective_save import (
+    apply_static_label_save_policy,
+    pop_static_label_save_predicate,
+)
 from ...quantities import Duration
 from ...validation.status import ValidationReplaySource, ValidationReplayStatus
 from .._finalize import (
@@ -60,7 +64,6 @@ from .._options import (
     reject_extra_trace_kwargs,
     reject_unsupported_trace_options,
 )
-from .._selective_save import apply_static_label_save_policy, pop_static_label_save_predicate
 from .interventions import PaddleInterventionCapture, PaddleInterventionRuntime
 from .model_prep import (
     PaddleModuleTree,

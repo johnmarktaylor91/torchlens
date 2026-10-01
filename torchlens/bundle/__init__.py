@@ -243,10 +243,12 @@ class Bundle:
     def __repr__(self) -> str:
         """Return an informative one-line bundle representation."""
 
-        baseline = self._baseline_name if self._baseline_name is not None else "None"
+        # A missing baseline renders as unquoted None, never the string
+        # 'None' masquerading as a member name (lovely bug 17).
         return (
             f"Bundle(n_members={len(self)}, names={self.names!r}, "
-            f"baseline={baseline!r}, structurally_consistent={self.is_structurally_consistent})"
+            f"baseline={self._baseline_name!r}, "
+            f"structurally_consistent={self.is_structurally_consistent})"
         )
 
     def __getitem__(self, name: str) -> Trace:

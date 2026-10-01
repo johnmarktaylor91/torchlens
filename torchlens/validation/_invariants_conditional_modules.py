@@ -270,7 +270,9 @@ def _check_pass_count_consistency(ml: Trace) -> None:
     for layer_label, layer_log in ml.layer_logs.items():
         ops = getattr(layer_log, "ops", {}) or {}
         expected_keys = set(range(1, getattr(layer_log, "num_passes", 0) + 1))
-        actual_keys = set(ops)
+        # OpAccessor iteration yields Ops (C02 basis fix); the pass-index key
+        # map stays reachable through the explicit dict protocol.
+        actual_keys = set(ops.keys()) if hasattr(ops, "keys") else set(ops)
         if actual_keys != expected_keys:
             raise MetadataInvariantError(
                 name,

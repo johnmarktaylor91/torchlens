@@ -1206,7 +1206,12 @@ def _same_layer_reachability(layer_log: "Layer") -> dict[int, set[int]]:
     trace = layer_log.source_trace
     same_layer_labels = {op.label for op in layer_log.ops.values()}
     label_to_pass = {op.label: pass_index for pass_index, op in layer_log.ops.items()}
-    reachability: dict[int, set[int]] = {pass_index: set() for pass_index in layer_log.ops}
+    reachability: dict[int, set[int]] = {
+        pass_index: set()
+        # OpAccessor iteration yields Ops (C02); .keys() IS the pass-index
+        # view here, not a dict redundancy.
+        for pass_index in layer_log.ops.keys()  # noqa: SIM118
+    }
 
     for pass_index, op in layer_log.ops.items():
         seen: set[str] = set()
@@ -1472,7 +1477,7 @@ def _call_groups_for_layer_uncached(layer_log: "Layer") -> tuple[tuple[int, ...]
         return ()
     pass_to_call_index = dict(
         zip(
-            layer_log.ops,
+            layer_log.ops.keys(),
             next(iter(common_calls.values())),
             strict=True,
         )

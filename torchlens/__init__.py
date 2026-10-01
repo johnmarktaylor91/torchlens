@@ -154,6 +154,10 @@ _LAZY_ATTRS = {
     "sweep": ("torchlens.intervention.sweep", "sweep"),
     "swap_with": ("torchlens.intervention", "swap_with"),
     "trace": ("torchlens.user_funcs", "trace"),
+    # Built-in activation transforms (transforms memo s7 home; the submodule
+    # spelling tl.transforms is DOCUMENTED-UNSTABLE — the collision with the
+    # input-side transform= slot is a named naming-sprint item).
+    "transforms": ("torchlens.transforms", None),
     "user_funcs": ("torchlens.user_funcs", None),
     "validate": ("torchlens.validation.consolidated", "validate"),
     "validation": ("torchlens.validation", None),

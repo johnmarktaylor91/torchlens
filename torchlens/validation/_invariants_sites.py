@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from ..postprocess._site_key import ROOT_CALL_INSTANCE, SITE_KEY_PREFIX, parse_site_key
+from ..data_classes._site_key import ROOT_CALL_INSTANCE, SITE_KEY_PREFIX, parse_site_key
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace

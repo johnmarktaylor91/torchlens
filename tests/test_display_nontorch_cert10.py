@@ -197,10 +197,12 @@ class TestTensorStatsSummaryTorchControl:
         )
         result = tensor_stats_summary(tensor)
 
+        # C02 re-pin: sound kernel + precision law (trailing zeros KEPT,
+        # lovely D7) + ASCII '!' hazard marker (lovely D4/bug 10).
         expected = (
-            "Tensor[2, 4] float32 cpu mean=0.75 std=1.677 "
-            "min=-2 max=3 nan=12.5% inf=12.5% neg=12.5% zero=25% "
-            "[⚠ 12.5% NaN] [⚠ 12.5% Inf]"
+            "Tensor[2, 4] float32 cpu mean=0.7500 std=1.677 "
+            "min=-2.000 max=3.000 nan=12.5% inf=12.5% neg=12.5% zero=25% "
+            "[! 12.5% NaN] [! 12.5% Inf]"
         )
         assert result == expected
 
@@ -216,6 +218,8 @@ class TestTensorStatsSummaryTorchControl:
 
         tensor = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
         result = tensor_stats_summary(tensor)
+        # C02 re-pin: precision law keeps trailing zeros (lovely D7).
         assert result == (
-            "Tensor[2, 2] float32 cpu mean=2.5 std=1.118 min=1 max=4 nan=0% inf=0% neg=0% zero=0%"
+            "Tensor[2, 2] float32 cpu mean=2.500 std=1.118 min=1.000 max=4.000 "
+            "nan=0% inf=0% neg=0% zero=0%"
         )

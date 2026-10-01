@@ -420,18 +420,21 @@ def _print_call_tree_from_root(
     def print_node(node: "ModuleCall", prefix: str, is_last: bool, depth: int) -> None:
         """Print one node and its descendants."""
 
-        connector = "" if depth == 0 else ("└── " if is_last else "├── ")
+        # ASCII rails: emitted text is ASCII-canonical (lovely bug 10 /
+        # summary-memo string contract); unicode belongs to explicit display
+        # boundaries only, which this printer does not verify.
+        connector = "" if depth == 0 else ("`-- " if is_last else "|-- ")
         label = _display_call_label(node, show_call_index)
         print(f"{prefix}{connector}{label}{_module_call_summary(node)}", file=file)
 
         children = _visible_call_children(node, include_atomic)
         if max_depth is not None and depth >= max_depth:
             if children:
-                child_prefix = prefix if depth == 0 else prefix + ("    " if is_last else "│   ")
-                print(f"{child_prefix}└── ...", file=file)
+                child_prefix = prefix if depth == 0 else prefix + ("    " if is_last else "|   ")
+                print(f"{child_prefix}`-- ...", file=file)
             return
 
-        child_prefix = prefix if depth == 0 else prefix + ("    " if is_last else "│   ")
+        child_prefix = prefix if depth == 0 else prefix + ("    " if is_last else "|   ")
         for index, child in enumerate(children):
             print_node(child, child_prefix, index == len(children) - 1, depth + 1)
 

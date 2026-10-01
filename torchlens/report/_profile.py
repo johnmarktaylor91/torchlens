@@ -403,13 +403,15 @@ def _build_call_tree(trace: Trace) -> str:
         """Append one call and its recorded descendants."""
 
         label = str(call.call_label)
-        connector = "" if is_root else ("└── " if is_last else "├── ")
+        # ASCII rails: returned report strings are ASCII-canonical (lovely
+        # bug 10 / summary-memo string contract).
+        connector = "" if is_root else ("`-- " if is_last else "|-- ")
         lines.append(f"{prefix}{connector}{label}")
         if label in visited:
             return
         visited.add(label)
         descendants = children[label]
-        child_prefix = prefix if is_root else prefix + ("    " if is_last else "│   ")
+        child_prefix = prefix if is_root else prefix + ("    " if is_last else "|   ")
         for index, child in enumerate(descendants):
             visit(child, child_prefix, index == len(descendants) - 1, False)
 

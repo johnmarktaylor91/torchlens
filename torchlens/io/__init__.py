@@ -10,6 +10,16 @@ from typing import Any
 from .._errors import ArgumentTypeError
 from .._io import JaxPayloadLoadHint, PayloadLoadHints, TorchLensIOError, _json, rehydrate_nested
 from .._io.bundle import cleanup_tmp, load, save
+from .._io.sidecar import (
+    AnalysisOnlySidecar,
+    SidecarError,
+    SidecarFamily,
+    attach_sidecar,
+    list_sidecar_families,
+    read_sidecar,
+    register_sidecar_family,
+    unregister_sidecar_family,
+)
 from .._io.state_contract import inspect_state_contract
 from .._trace_state import TraceState
 from ..intervention.save import save_intervention
@@ -232,20 +242,28 @@ def load_intervention_spec(
 
 
 __all__ = [
+    "AnalysisOnlySidecar",
+    "SidecarError",
+    "SidecarFamily",
     "TraceState",
     "JaxPayloadLoadHint",
     "PayloadLoadHints",
+    "attach_sidecar",
     "cleanup_tmp",
     "detect_tlspec_format",
     "inspect_state_contract",
     "inspect_tlspec",
     "list_logs",
     "load",
+    "list_sidecar_families",
     "load_intervention_spec",
     "log_model_metadata",
+    "read_sidecar",
+    "register_sidecar_family",
     "rehydrate_nested",
     "reset_naming_counter",
     "save",
     "save_intervention",
     "suppress_mutate_warnings",
+    "unregister_sidecar_family",
 ]

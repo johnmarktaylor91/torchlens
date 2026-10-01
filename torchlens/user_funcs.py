@@ -34,6 +34,10 @@ import torch
 from torch import nn
 
 from . import _state
+from ._capture_intervention import (
+    _backward_intervention_spec_from_predicate,
+    _record_capture_intervention_event,
+)
 from ._capture_state_helpers import (
     _capture_cache_dir,
     _capture_cache_key,
@@ -103,7 +107,6 @@ from .backends._options import (
     TRACE_OPTION_CAPABILITY_GATES,
     reject_extra_trace_kwargs,
 )
-from .backends._selective_save import apply_static_label_save_policy, reject_selector_outside_kinds
 from .backends.torch._tl import get_tensor_label
 from .bridge import hf as _hf_bridge
 from .capture._episode_ledger import (
@@ -142,6 +145,10 @@ from .options import (
     merge_capture_options,
     merge_save_options,
     merge_streaming_options,
+)
+from .postprocess._selective_save import (
+    apply_static_label_save_policy,
+    reject_selector_outside_kinds,
 )
 from .types import ActivationPostfunc, GradientPostfunc
 from .utils._torch_compat import is_dynamo_compiled_callable
@@ -1006,68 +1013,6 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
         intervene=kwargs["intervene"],
         halt=kwargs["halt"],
     )
-
-
-def _backward_intervention_spec_from_predicate(
-    intervene_predicate: InterventionPredicate | None,
-) -> InterventionSpec | None:
-    """Build a sticky intervention spec for backward-only ``tl.when`` predicates.
-
-    Parameters
-    ----------
-    intervene_predicate:
-        Predicate supplied to ``trace(intervene=...)``.
-
-    Returns
-    -------
-    InterventionSpec | None
-        Spec containing one backward hook for a backward selector, or ``None``.
-    """
-
-    if intervene_predicate is None:
-        return None
-    selector = getattr(intervene_predicate, "selector", None)
-    decision = getattr(intervene_predicate, "decision", None)
-    if selector is None or not isinstance(decision, InterventionDecision):
-        return None
-    selector_direction = _selector_resolution_direction(selector)
-    if selector_direction == "backward" and decision.direction not in {"backward", "both"}:
-        warnings.warn(
-            "Forward intervention helper attached to a backward-only selector will not fire. "
-            "Use a gradient helper such as tl.grad_zero(), tl.grad_scale(), or tl.bwd_hook().",
-            UserWarning,
-            stacklevel=3,
-        )
-        return None
-    if selector_direction != "backward" or decision.direction not in {"backward", "both"}:
-        return None
-    if decision.hook is None:
-        return None
-    target = (
-        selector.to_target_spec()
-        if hasattr(selector, "to_target_spec")
-        else TargetSpec("label", selector)
-    )
-    spec = InterventionSpec()
-    spec.targets.append(target)
-    entries = normalize_hook_plan(
-        target,
-        decision.hook,
-        direction="backward",
-    )
-    for entry in entries:
-        metadata = {
-            **dict(entry.metadata),
-            "created_by": "intervene_backward_selector",
-            "direction": "backward",
-        }
-        spec.add_hook(
-            target,
-            entry.helper_spec if entry.helper_spec is not None else entry.normalized_callable,
-            helper=entry.helper_spec,
-            metadata=metadata,
-        )
-    return spec
 
 
 def _intervention_spec_from_hook_plan(hook_plan: Any) -> InterventionSpec | None:
@@ -2150,15 +2095,33 @@ def _run_model_and_save_specified_outs(
         _release_capture_slot()
         raise
     try:
-        trace._run_and_log_inputs_through_model(
-            model,
-            cast(torch.Tensor | list[Any], input_args),
-            input_kwargs,
-            layers_to_save,
-            grads_to_save,
-            random_seed,
-            reservation_resume=_reservation_token,
+        # C03 live site-key minting (surgery Build 0c): when a configured
+        # predicate addresses by structural site (tl.site), arm one streaming
+        # minter for exactly this capture -- captures are single-threaded, so
+        # the ContextVar scope is exact and unarmed surfaces keep their typed
+        # capability refusal.
+        from contextlib import nullcontext
+
+        from .intervention.site_keys import (
+            armed_live_minter,
+            predicate_needs_live_site_keys,
         )
+
+        live_minter_scope = (
+            armed_live_minter()
+            if predicate_needs_live_site_keys(save_predicate, intervene_predicate, halt_predicate)
+            else nullcontext()
+        )
+        with live_minter_scope:
+            trace._run_and_log_inputs_through_model(
+                model,
+                cast(torch.Tensor | list[Any], input_args),
+                input_kwargs,
+                layers_to_save,
+                grads_to_save,
+                random_seed,
+                reservation_resume=_reservation_token,
+            )
     except BaseException as exc:
         # F5: postprocess pops ``_out_writer`` at its transient-state seam, so
         # a post-seam failure (teardown, streaming tail) reaches this handler
@@ -2196,6 +2159,9 @@ def _run_model_and_save_specified_outs(
         # halt zero-match warning would double-disclose ahead of that refusal.
         halt_selector=None if _halt_from_stop_after else halt_predicate,
         layers_to_save_request=_selective_layers_to_save_request,
+    )
+    _record_capture_intervention_event(
+        trace, intervene_predicate if intervene_predicate is not None else module_intervene_selector
     )
     return trace
 

@@ -115,9 +115,13 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # family (_make_funcol_wrap/wrapped_funcol) mirrors the ledgered c10d wrap
     # shape -- inherently branchy armed/nested/binding/capturing dispatch.
     # Debloat pass keeps the pre-sprint count as its target.
-    "C901": 453,
-    "PLR0911": 195,
-    "PLR0912": 262,
+    # C901 453 -> 455, PLR0911 195 -> 196, PLR0912 262 -> 264, PLR0915
+    # 155 -> 156 (below): C02's sound stats kernel routes per dtype family
+    # and per gate (_float_kernel/run_kernel/_distribution_zone) -- the
+    # branching IS the per-family policy table; deliberate, reviewed.
+    "C901": 455,
+    "PLR0911": 196,
+    "PLR0912": 264,
     # 422->423 (same L8 settle): _build_funcol_payload carries the C0 payload
     # argument surface (mirrors the ledgered _build_payload in collectives).
     # 423->425 (2026-08-19 semantic-builds lane): the two new PUBLIC entry
@@ -143,10 +147,15 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # dodge the count would be a worse surface). FOUR independent lanes each
     # raised this ceiling this sprint with a stated reason; the value is their
     # UNION, measured at merge, never a hand-derived subtotal or a pick-one.
+    # 2026-08-27 megasprint C06 (fix cycle 2): the lane's two new offenders
+    # (HistoryCollector.__init__ / .step) were refactored below the ceiling
+    # instead of ledgered -- plumbing knobs bundle into WatchSettings and the
+    # per-step optimizer-truth disclosures into StepTruth (both frozen
+    # dataclasses). Ceiling stays at the pre-lane 428.
     "PLR0913": 428,
     # 152->155 (same L8 settle): wrapped_funcol + the criterion-3 census body
     # + capture_completeness_witness gained reviewed statements with plane-P.
-    "PLR0915": 155,
+    "PLR0915": 156,  # C02 stats kernel (see the C901 note above)
     # The broad-catch / silent-swallow family (grind-r5 b1 R22-1, 4th round,
     # + b7 fable/opus corroboration): the population grew 369 -> 463 AST
     # handlers across the sprint with zero tripwire while every neighbour

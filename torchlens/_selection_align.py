@@ -124,8 +124,19 @@ def _require_same_policy(resolved: ResolvedSelection, target: Any) -> None:
             )
 
 
-def _target_op_for_entry(entry: Any, target: Any) -> Any:
-    """Find the ONE target op matching an entry's key AND address, or refuse."""
+def _target_op_for_entry(entry: Any, target: Any, source_trace: Any = None) -> Any:
+    """Find the ONE target op for an entry, SITE-KEY-FIRST (C03 / leverage B4).
+
+    The fast path keeps the shipped behavior: the same-policy
+    ``(layer_label, pass_index)`` address resolves and its structural key
+    agrees. When the LABEL misses or disagrees -- one live edit renumbers
+    31-62 labels on real resnet18, so a structurally-intact site used to
+    refuse here -- the label leaves the join key: the target is looked up by
+    structural site key alone, and the SHIPPED guarded join must return a
+    ``corroborated`` verdict for the key before the rebind is authorized
+    (``positional`` is display-only, per the verdict policy; a multi-op key
+    family stays ambiguous and refuses).
+    """
 
     from .selection import _find_act_ops
 
@@ -144,17 +155,57 @@ def _target_op_for_entry(entry: Any, target: Any) -> Any:
         for op in _find_act_ops(target, layer_label)
         if (getattr(op, "pass_index", 1) or 1) == pass_index
     ]
-    if not candidates or getattr(candidates[0], "site_key", None) != structural_key:
+    if candidates and getattr(candidates[0], "site_key", None) == structural_key:
+        return candidates[0]
+    key_family = [
+        target.ops[label]
+        for label in target.op_labels
+        if getattr(target.ops[label], "site_key", None) == structural_key
+    ]
+    if len(key_family) == 1:
+        verdict = _join_verdict_for_key(source_trace, target, structural_key)
+        if verdict == "corroborated":
+            return key_family[0]
         raise _alignment_invalid(
             "site_not_in_target",
-            f"the target trace has no op at address {entry.site_key!r} with "
-            f"structural site key {structural_key!r}; cross-run alignment "
-            "requires both the position proof (site key) and the same-policy "
-            "address to agree.",
+            f"the target trace holds structural site key {structural_key!r} "
+            f"but the guarded site join verdict is {verdict!r}, not "
+            "'corroborated' -- positional agreement is display-only and a "
+            "refused join names a structural change; cross-run action is "
+            "authorized only by a corroborated join (verdict policy D-2).",
             site=repr(entry.site_key),
             structural_site_key=structural_key,
+            join_verdict=verdict,
         )
-    return candidates[0]
+    raise _alignment_invalid(
+        "site_not_in_target",
+        f"the target trace has no op at address {entry.site_key!r} with "
+        f"structural site key {structural_key!r}"
+        + (
+            f" ({len(key_family)} target ops share that key -- a reuse family "
+            "is ambiguous without the same-policy address)"
+            if key_family
+            else ""
+        )
+        + "; cross-run alignment requires the position proof (site key) and, "
+        "when the label survives, the same-policy address to agree.",
+        site=repr(entry.site_key),
+        structural_site_key=structural_key,
+    )
+
+
+def _join_verdict_for_key(source_trace: Any, target: Any, structural_key: str) -> str:
+    """Run the SHIPPED guarded join for one key and return its verdict value."""
+
+    from .postprocess._site_join import join_site_profiles, site_profile
+
+    if source_trace is None:
+        return "unjoined"
+    rows = join_site_profiles(site_profile(source_trace), site_profile(target))
+    row = rows.get(structural_key)
+    if row is None:
+        return "unjoined"
+    return str(row.verdict.value)
 
 
 def align_resolved_selection(resolved: ResolvedSelection, target: Any) -> ResolvedSelection:
@@ -191,7 +242,7 @@ def align_resolved_selection(resolved: ResolvedSelection, target: Any) -> Resolv
     source_label = str(getattr(resolved._trace, "trace_label", "") or "source trace")
     entries = []
     for entry in resolved:
-        op = _target_op_for_entry(entry, target)
+        op = _target_op_for_entry(entry, target, resolved._trace)
         target_shape = _site_shape(op)
         if target_shape != entry.shape:
             raise _alignment_invalid(
@@ -207,5 +258,14 @@ def align_resolved_selection(resolved: ResolvedSelection, target: Any) -> Resolv
             relation=entry.provenance.relation,
             source=f"{entry.provenance.source} [cross-run aligned from {source_label!r}]",
         )
-        entries.append(dataclasses.replace(entry, provenance=provenance))
+        target_address = (op.layer_label, getattr(op, "pass_index", 1) or 1)
+        if target_address != entry.site_key:
+            # Site-key-first rebind under label drift (C03/B4): the aligned
+            # entry addresses the TARGET op's same-policy address; the
+            # provenance line above already discloses the cross-run origin.
+            entries.append(
+                dataclasses.replace(entry, site_key=target_address, provenance=provenance)
+            )
+        else:
+            entries.append(dataclasses.replace(entry, provenance=provenance))
     return ResolvedSelection(target, "ACT", entries)

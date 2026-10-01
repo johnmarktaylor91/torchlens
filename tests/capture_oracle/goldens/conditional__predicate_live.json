@@ -186,7 +186,7 @@
             "_edge_uses[0].edge_use": "populated",
             "_edge_uses[0].parent_func_call_id": "unknown",
             "_edge_uses[0].parent_label": "populated",
-            "_edge_uses[0].view_or_copy": "populated",
+            "_edge_uses[0].view_or_copy": "sentinel_unknown",
             "_edge_uses[1].arg_kind": "populated",
             "_edge_uses[1].arg_path": "populated",
             "_edge_uses[1].child_func_call_id": "populated",
@@ -194,7 +194,7 @@
             "_edge_uses[1].edge_use": "populated",
             "_edge_uses[1].parent_func_call_id": "populated",
             "_edge_uses[1].parent_label": "populated",
-            "_edge_uses[1].view_or_copy": "populated",
+            "_edge_uses[1].view_or_copy": "sentinel_unknown",
             "backend_semantics.aliased_output_inputs": "defaulted_empty",
             "backend_semantics.autograd_memory": "unknown",
             "backend_semantics.backend_grad_handle": "unknown",
@@ -338,7 +338,7 @@
             "_edge_uses[0].edge_use": "populated",
             "_edge_uses[0].parent_func_call_id": "unknown",
             "_edge_uses[0].parent_label": "populated",
-            "_edge_uses[0].view_or_copy": "populated",
+            "_edge_uses[0].view_or_copy": "sentinel_unknown",
             "backend_semantics.aliased_output_inputs": "defaulted_empty",
             "backend_semantics.autograd_memory": "unknown",
             "backend_semantics.backend_grad_handle": "unknown",
@@ -479,7 +479,7 @@
             "_edge_uses[0].edge_use": "populated",
             "_edge_uses[0].parent_func_call_id": "populated",
             "_edge_uses[0].parent_label": "populated",
-            "_edge_uses[0].view_or_copy": "populated",
+            "_edge_uses[0].view_or_copy": "sentinel_unknown",
             "backend_semantics.aliased_output_inputs": "defaulted_empty",
             "backend_semantics.autograd_memory": "unknown",
             "backend_semantics.backend_grad_handle": "unknown",
@@ -623,7 +623,7 @@
             "_edge_uses[0].edge_use": "populated",
             "_edge_uses[0].parent_func_call_id": "populated",
             "_edge_uses[0].parent_label": "populated",
-            "_edge_uses[0].view_or_copy": "populated",
+            "_edge_uses[0].view_or_copy": "sentinel_unknown",
             "backend_semantics.aliased_output_inputs": "defaulted_empty",
             "backend_semantics.autograd_memory": "unknown",
             "backend_semantics.backend_grad_handle": "unknown",
@@ -1082,20 +1082,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 605323,
+      "python_peak_memory_median_bytes": 604149,
       "sample_count": 3,
       "torch_version": "2.13.0+cu130",
-      "wall_time_median_ms": 64.5276750146877
+      "wall_time_median_ms": 54.61518606171012
     }
   },
   "sha256_chunks": [
-    "820a49b0",
-    "c3c55f38",
-    "7c83fc31",
-    "e5458b83",
-    "6b9b201a",
-    "3de00d5f",
-    "137f9d78",
-    "1a58b8b4"
+    "59406b85",
+    "34cab42b",
+    "c0c8e042",
+    "4dd837fe",
+    "a62c1404",
+    "bcdf0a1b",
+    "1c0bd87f",
+    "3661100f"
   ]
 }

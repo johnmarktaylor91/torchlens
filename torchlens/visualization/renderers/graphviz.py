@@ -8,6 +8,7 @@ from typing import Any
 import graphviz
 
 from .. import _render_utils
+from ..render_execution import atomic_render_target, surface_layout_stderr
 from ..render_ir import RenderIR, RenderIRDotStatement
 from ..request import RenderTarget
 from .base import RendererCapabilities, RenderReport
@@ -22,6 +23,7 @@ class GraphvizRenderer:
         ordering_constraints=True,
         html_labels=True,
         layout_execution=True,
+        encodings=True,
     )
 
     def emit(self, ir: RenderIR, dot: graphviz.Digraph) -> None:
@@ -62,11 +64,22 @@ class GraphvizRenderer:
         self.emit(ir, dot)
         source_path = Path(dot.save(target.outpath))
         output_path = Path(f"{target.outpath}.{target.fileformat}")
-        _render_utils.run_bounded_subprocess(
-            [dot.engine, f"-T{target.fileformat}", "-o", str(output_path), str(source_path)],
-            timeout=target.timeout,
+        # Atomic publish + exit-0 stderr surfacing (vizmech D20/D24): a
+        # failed layout leaves nothing at the user's path, and the cairo
+        # clamp warning is never silently discarded.
+        with atomic_render_target(str(output_path)) as temp_output_path:
+            completed = _render_utils.run_bounded_subprocess(
+                [dot.engine, f"-T{target.fileformat}", "-o", temp_output_path, str(source_path)],
+                timeout=target.timeout,
+            )
+        stderr_text = surface_layout_stderr(completed.stderr, engine=dot.engine)
+        return RenderReport(
+            dot.source,
+            source_path,
+            output_path,
+            engine=dot.engine,
+            layout_stderr=stderr_text,
         )
-        return RenderReport(dot.source, source_path, output_path)
 
     def _emit_statements(
         self,

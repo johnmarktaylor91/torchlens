@@ -264,6 +264,10 @@ def format_flops(
 def _format_number(value: float | None) -> str:
     """Format a compact tensor statistic value.
 
+    Precision law (C02 / lovely D7): 4 significant digits with trailing
+    zeros KEPT -- ``%.4g`` stripped them, so ``0.99997`` printed ``1`` and
+    no column aligned (the former live bug here).
+
     Parameters
     ----------
     value:
@@ -277,7 +281,9 @@ def _format_number(value: float | None) -> str:
 
     if value is None:
         return "n/a"
-    return f"{value:.4g}"
+    from ..stats._stats_render import format_sig
+
+    return format_sig(float(value))
 
 
 def _format_percent(value: float) -> str:
@@ -374,38 +380,52 @@ def tensor_stats_summary(tensor: Any) -> str:
     if tensor.numel() == 0:
         return f"{prefix} empty"
 
+    # COMPAT WRAPPER over the sound stats kernel (C02; lovely bug 4): the
+    # former body cast the whole tensor to f64, built boolean masks, and
+    # synced eight times per line. Field layout is preserved; the numbers
+    # now come from ``torchlens.stats``.
     try:
-        work = tensor.detach()
-        if work.is_complex():
-            stat_tensor = work.abs().to(torch.float64)
-            negative_percent = 0.0
+        from ..stats._stats_kernel import WIDEN_CHUNK
+        from ..stats._tensor_stats import tensor_stats
+
+        stats = tensor_stats(tensor)
+        if stats.true_count is not None:
+            # bool family: the truth rate IS the semantics (lovely D12).
+            return f"{prefix} true={stats.true_count}/{stats.numel}"
+        numel = stats.numel
+        nan_percent = 100.0 * stats.nan_count / numel
+        inf_percent = 100.0 * (stats.posinf_count + stats.neginf_count) / numel
+        zero_percent = 100.0 * (stats.zero_count or 0) / numel
+        if tensor.is_complex():
+            negative_percent = None
         else:
-            stat_tensor = work.to(torch.float64)
-            negative_percent = float((stat_tensor < 0).sum().item()) / work.numel() * 100
-        nan_percent = float(torch.isnan(stat_tensor).sum().item()) / work.numel() * 100
-        inf_percent = float(torch.isinf(stat_tensor).sum().item()) / work.numel() * 100
-        zero_percent = float((stat_tensor == 0).sum().item()) / work.numel() * 100
-        finite = stat_tensor[torch.isfinite(stat_tensor)]
-        if finite.numel() == 0:
-            mean_value = std_value = min_value = max_value = None
-        else:
-            mean_value = float(finite.mean().item())
-            std_value = float(finite.std(unbiased=False).item())
-            min_value = float(finite.min().item())
-            max_value = float(finite.max().item())
+            work = tensor.detach().reshape(-1)
+            negative_count = 0
+            for start in range(0, numel, WIDEN_CHUNK):
+                chunk = work[start : start + WIDEN_CHUNK]
+                negative_count += int((chunk < 0).sum())
+            negative_percent = 100.0 * negative_count / numel
+        mean_value, std_value = stats.mean, stats.sd
+        min_value, max_value = stats.finite_min, stats.finite_max
     except (RuntimeError, TypeError, ValueError):
         return prefix
 
+    # Complex moments are magnitude statistics and say so (lovely bug 3);
+    # the sign field is meaningless for magnitudes and is omitted.
+    mean_label, std_label = ("|mean|", "|std|") if stats.magnitude_basis else ("mean", "std")
+    neg_field = "" if negative_percent is None else f"neg={_format_percent(negative_percent)} "
     summary = (
-        f"{prefix} mean={_format_number(mean_value)} std={_format_number(std_value)} "
+        f"{prefix} {mean_label}={_format_number(mean_value)} "
+        f"{std_label}={_format_number(std_value)} "
         f"min={_format_number(min_value)} max={_format_number(max_value)} "
         f"nan={_format_percent(nan_percent)} inf={_format_percent(inf_percent)} "
-        f"neg={_format_percent(negative_percent)} zero={_format_percent(zero_percent)}"
+        f"{neg_field}zero={_format_percent(zero_percent)}"
     )
+    # Hazard marker is ASCII '!' in both encodings (lovely D4/bug 10).
     if nan_percent > 0:
-        summary += f" [⚠ {_format_percent(nan_percent)} NaN]"
+        summary += f" [! {_format_percent(nan_percent)} NaN]"
     if inf_percent > 0:
-        summary += f" [⚠ {_format_percent(inf_percent)} Inf]"
+        summary += f" [! {_format_percent(inf_percent)} Inf]"
     return summary
 
 

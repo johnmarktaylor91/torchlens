@@ -11,7 +11,7 @@ from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import asdict, dataclass, fields as dataclass_fields
 from enum import Enum
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import torch
 from safetensors.torch import load_file, save_file
@@ -26,7 +26,6 @@ from ..ir.container import DataclassField, DictKey, HFKey, NamedField, TupleInde
 from .errors import (
     DirectActivationWriteWarning,
     DirectWriteInExecutableSaveError,
-    GraphShapeMismatchError,
     MultiMatchWarning,
     OpaqueCallableInExecutableSaveError,
     ReplayPreconditionError,
@@ -40,6 +39,13 @@ from .resolver import (
     resolve_function_registry_key,
     resolve_import_ref,
     resolve_sites,
+)
+from .spec_compat import (
+    SpecCompat,
+    TargetManifestDiff,
+    _resolution_fanout_bound,
+    _site_key_for_label,
+    check_spec_compat,
 )
 from .types import (
     FireRecord,
@@ -81,25 +87,6 @@ class SaveLevel(str, Enum):
     AUDIT = "audit"
     EXECUTABLE_WITH_CALLABLES = "executable_with_callables"
     PORTABLE = "portable"
-
-
-@dataclass(frozen=True)
-class TargetManifestDiff:
-    """Diff between saved target manifest labels and a new model log."""
-
-    matched: list[str]
-    new_labels: list[str]
-    missing_labels: list[str]
-    selector_resolution_diffs: dict[str, dict[str, Any]]
-
-
-@dataclass(frozen=True)
-class SpecCompat:
-    """Compatibility result for applying a saved spec to a model log."""
-
-    outcome: Literal["EXACT", "COMPATIBLE_WITH_CONFIRMATION", "FAIL"]
-    diff: TargetManifestDiff
-    targets_resolve_identically: bool
 
 
 @dataclass(frozen=True)
@@ -259,6 +246,19 @@ def save_intervention(
             write_tensor_blob_fn=_write_tensor_blob_fn,
         )
 
+        # C03 / leverage B7: a spec whose every hook was staged by the
+        # capture-time predicate door carries only DERIVED resolved-label
+        # targets, never the user's original WHERE expression (the predicate
+        # door lowers a fired selector into per-site label targets). Stamp
+        # the fact so a reload discloses "labels survive, the expression did
+        # not" instead of presenting derived labels as authored addressing.
+        # Spec-door hooks carry their rule expressions in hook metadata
+        # (spec_where_repr / spec_rule_id), so they are NOT derived.
+        spec_derived = bool(spec.hook_specs) and all(
+            dict(hook_spec.metadata).get("created_by") == "intervene_predicate"
+            and "spec_where_repr" not in dict(hook_spec.metadata)
+            for hook_spec in spec.hook_specs
+        )
         spec_json = {
             "format_version": TLSPEC_FORMAT_VERSION,
             "helper_registry_version": HELPER_REGISTRY_VERSION,
@@ -269,6 +269,7 @@ def save_intervention(
             "helpers": _collect_helpers(serialized_spec),
             "intervention_spec": serialized_spec,
             "function_registry_keys": function_keys,
+            "spec_derived": spec_derived,
         }
         _write_json_file(tmp_path / _SPEC_FILE, spec_json)
         _TlSpecWriter.write_intervention_manifest(
@@ -385,6 +386,20 @@ def load_intervention_spec(
             "function_registry_keys": data.get("function_registry_keys", []),
             "append_state": data.get("append_state", {}),
             "loaded_from_tlspec": str(spec_path),
+            # C03 / leverage B7: disclose reloads where only resolved labels
+            # survive (predicate-door lowering); legacy artifacts without the
+            # stamp settle by the same derivation over the loaded hooks.
+            "spec_derived": bool(
+                data.get(
+                    "spec_derived",
+                    bool(spec.hook_specs)
+                    and all(
+                        dict(hook_spec.metadata).get("created_by") == "intervene_predicate"
+                        and "spec_where_repr" not in dict(hook_spec.metadata)
+                        for hook_spec in spec.hook_specs
+                    ),
+                )
+            ),
         }
     )
     spec.metadata = metadata
@@ -481,126 +496,6 @@ def _append_state_for_json(log: Any) -> dict[str, Any]:
         "append_history": list(getattr(log, "append_history", [])),
         "state_history": append_records,
     }
-
-
-def check_spec_compat(spec: InterventionSpec, new_log: Any) -> SpecCompat:
-    """Check whether a loaded intervention spec targets a new model log.
-
-    Parameters
-    ----------
-    spec:
-        Loaded or in-memory intervention spec.
-    new_log:
-        Model log to check.
-
-    Returns
-    -------
-    SpecCompat
-        Compatibility classification and target diff.
-    """
-
-    target_manifest = list(spec.metadata.get("target_manifest", []))
-    graph_hash = getattr(new_log, "graph_shape_hash", None)
-    all_saved: set[str] = set()
-    all_resolved: set[str] = set()
-    selector_diffs: dict[str, dict[str, Any]] = {}
-    unresolved = False
-    graph_matches = True
-
-    for index, entry in enumerate(target_manifest):
-        saved_labels = list(entry.get("resolved_labels", []))
-        all_saved.update(saved_labels)
-        selector = _target_spec_from_json(entry["selector"])
-        selector_key = f"selector_{index}"
-        saved_hash = entry.get("graph_shape_hash")
-        if saved_hash != graph_hash:
-            graph_matches = False
-        try:
-            resolved_labels = list(
-                resolve_sites(
-                    new_log,
-                    selector,
-                    strict=True,
-                    max_fanout=_resolution_fanout_bound(new_log, min_required=len(saved_labels)),
-                ).labels()
-            )
-        except SiteResolutionError as exc:
-            selector_diffs[selector_key] = {
-                "selector": entry["selector"],
-                "saved_labels": saved_labels,
-                "resolved_labels": [],
-                "error": str(exc),
-            }
-            unresolved = True
-            continue
-        all_resolved.update(resolved_labels)
-        if resolved_labels != saved_labels:
-            selector_diffs[selector_key] = {
-                "selector": entry["selector"],
-                "saved_labels": saved_labels,
-                "resolved_labels": resolved_labels,
-            }
-
-    matched = sorted(all_saved & all_resolved)
-    new_labels = sorted(all_resolved - all_saved)
-    missing_labels = sorted(all_saved - all_resolved)
-    targets_identical = not selector_diffs and not new_labels and not missing_labels
-    diff = TargetManifestDiff(
-        matched=matched,
-        new_labels=new_labels,
-        missing_labels=missing_labels,
-        selector_resolution_diffs=selector_diffs,
-    )
-
-    if unresolved or missing_labels:
-        outcome: Literal["EXACT", "COMPATIBLE_WITH_CONFIRMATION", "FAIL"] = "FAIL"
-    elif targets_identical and graph_matches:
-        outcome = "EXACT"
-    elif all_saved.issubset(all_resolved) or not graph_matches:
-        outcome = "COMPATIBLE_WITH_CONFIRMATION"
-    else:
-        outcome = "FAIL"
-
-    # A graph_shape_hash mismatch alone cannot distinguish a genuinely different
-    # target graph from mere cross-version hash drift on the SAME graph (an older
-    # torchlens computes a different hash for identical topology; the v2.16 backcompat
-    # fixtures encode exactly this and resolve to identical labels). Refusing at
-    # compat-preview time on any mismatch would break every cross-version executable
-    # spec reuse. ``COMPATIBLE_WITH_CONFIRMATION`` is the honest preview verdict here --
-    # it flags the shape difference and defers to explicit confirmation. The genuine
-    # "wrong graph" tripwire lives at REPLAY time (see torchlens/intervention/replay.py
-    # _warn_if_unexpected_parent / _check_edge_expectations), which compares actual
-    # parent/edge topology and raises ControlFlowDivergenceError under strict replay --
-    # a version-stable structural check, not a coarse hash string. The narrow existing
-    # refusal below stays: an executable spec whose targets cannot even resolve on a
-    # mismatched graph is a hard GraphShapeMismatchError.
-    if outcome == "FAIL" and bool(spec.metadata.get("executable", False)) and not graph_matches:
-        raise GraphShapeMismatchError(
-            "Saved spec's graph_shape_hash doesn't match target log; refusing to apply at "
-            "executable level."
-        )
-    return SpecCompat(outcome, diff, targets_identical)
-
-
-def _resolution_fanout_bound(log: Any, *, min_required: int = 1) -> int:
-    """Return the strict resolver fanout bound for persistence workflows.
-
-    Parameters
-    ----------
-    log:
-        Trace-like object used for resolution.
-    min_required:
-        Minimum bound required by already-validated saved labels.
-
-    Returns
-    -------
-    int
-        Explicit resolver fanout bound.
-    """
-
-    layer_list = getattr(log, "layer_list", None)
-    layer_count = len(layer_list) if layer_list is not None else len(getattr(log, "layer_logs", {}))
-    return max(1, int(min_required), int(layer_count))
 
 
 def _coerce_save_level(level: str | SaveLevel) -> SaveLevel:
@@ -1831,6 +1726,13 @@ def _build_target_manifest(
             {
                 "selector": _target_spec_to_json(target, save_level),
                 "resolved_labels": list(resolved.labels()),
+                # C03 site-key-primary targets (surgery Build 0a): the join
+                # identity is the structural site key; labels are display-only
+                # disclosure (ME ordinal rule). Keyless rows (backward sites,
+                # legacy captures) record None.
+                "resolved_site_keys": [
+                    _site_key_for_label(log, label) for label in resolved.labels()
+                ],
                 "resolved_status": "resolved",
                 "graph_shape_hash": getattr(log, "graph_shape_hash", None),
                 "_address_normalized": _normalized_address(target),

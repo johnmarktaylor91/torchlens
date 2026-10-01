@@ -175,6 +175,176 @@ def unknown_op_ledger(trace: Trace) -> tuple[UnknownOpGroup, ...]:
     return tuple(ledger)
 
 
+#: Phase enum for compute rows (costreport item 2). Backward rows land when
+#: the C07 backward-fire fields persist (F09); the vocabulary is closed NOW
+#: so consumers never invent a third spelling.
+COMPUTE_PHASES: tuple[str, ...] = ("forward", "backward")
+
+#: Row-kind vocabulary (identity partition): real compute ops, boundary
+#: pseudo-rows (own nothing), buffer state rows (own nothing).
+COMPUTE_ROW_KINDS: tuple[str, ...] = ("op", "boundary", "buffer")
+
+
+@dataclass(frozen=True)
+class ComputeRow:
+    """One accounting-unit row of the canonical aggregation (D1/D5/D7).
+
+    Boundary and buffer rows RENDER but own nothing: every additive value
+    is ``None`` there, and the CI plant pins that a non-``None`` additive
+    cell on a non-op row fails. All numeric fields are plain ints or None
+    (the raw-numbers pin).
+    """
+
+    row_id: str
+    label: str
+    site_key: str | None
+    kind: str
+    phase: str
+    func_name: str | None
+    layer_type: str | None
+    dtype: str | None
+    flops_fma2: int | None
+    fma_macs: int | None
+    other_flops: int | None
+    coverage_class: str
+    evidence: str
+    applicability: str
+    reason: str | None
+
+
+@dataclass(frozen=True)
+class RatioFact:
+    """A ratio with NAMED numerator/denominator row/section IDs (D6).
+
+    A percent without its denominator identity is how the 3.878x naive-sum
+    class of error ships; the IDs make the scope auditable.
+    """
+
+    value: float | None
+    numerator_id: str
+    denominator_id: str
+    scope: str
+
+
+@dataclass(frozen=True)
+class ComputeAggregation:
+    """The canonical aggregation service result (costreport item 2 / D1).
+
+    ``partition_total`` is returned SEPARATELY and is never a column sum;
+    ``rows`` carry per-cell evidence and applicability; ``coverage`` is the
+    four-way classification; ``convention`` and ``scope`` are explicit.
+    This object is the compute FACE of the C02 FactCore -- summary,
+    profile, flop_count, and the report family are projections of it, and
+    the import lint (tests/test_factcore_import_lint.py) keeps this module
+    the only aggregation-layer reader of raw per-op compute fields.
+    """
+
+    rows: tuple[ComputeRow, ...]
+    partition_total: Flops
+    macs_total: Macs
+    coverage: ComputeTotals
+    convention: str
+    scope: str
+    by_dtype: tuple[tuple[str, int], ...]
+    execution_modes: tuple[tuple[str, int], ...]
+
+    def ratio(self, numerator_row_id: str, denominator: str = "partition_total") -> RatioFact:
+        """Return a ratio fact against the partition total (or a named row)."""
+
+        numerator_row = next((row for row in self.rows if row.row_id == numerator_row_id), None)
+        numerator = None if numerator_row is None else numerator_row.flops_fma2
+        if denominator == "partition_total":
+            denominator_value: int | None = int(self.partition_total)
+        else:
+            denominator_row = next((row for row in self.rows if row.row_id == denominator), None)
+            denominator_value = None if denominator_row is None else denominator_row.flops_fma2
+        value = (
+            None if numerator is None or not denominator_value else numerator / denominator_value
+        )
+        return RatioFact(
+            value=value,
+            numerator_id=numerator_row_id,
+            denominator_id=denominator,
+            scope=self.scope,
+        )
+
+
+def compute_aggregation(trace: Trace) -> ComputeAggregation:
+    """Build the canonical per-row compute aggregation over one trace.
+
+    ONE walk over the identity partition; every reporting surface derives
+    from these rows or the separately-returned partition total -- never a
+    private re-sum. Backward rows are honestly ABSENT until the persisted
+    backward-fire fields land (C07/F09); the phase vocabulary is closed
+    already.
+    """
+
+    rows: list[ComputeRow] = []
+    by_dtype: dict[str, int] = {}
+    execution_modes: dict[str, int] = {}
+    for index, op in enumerate(trace.layer_list):
+        row_class = classify_row(op)
+        if getattr(op, "is_buffer", False):
+            kind = "buffer"
+        elif getattr(op, "is_input", False) or getattr(op, "is_output", False):
+            kind = "boundary"
+        else:
+            kind = "op"
+        label = str(getattr(op, "layer_label", index))
+        flops = getattr(op, "flops_forward", None) if kind == "op" else None
+        record = getattr(op, "compute_record", None) if kind == "op" else None
+        fma_macs = None if record is None else getattr(record, "fma_macs", None)
+        other_flops = None if record is None else getattr(record, "other_flops", None)
+        if kind != "op":
+            evidence, applicability = "unknown", "not_applicable"
+            reason = "boundary/buffer rows own no compute (identity partition)"
+        elif row_class == "unknown":
+            evidence, applicability = "unknown", "applicable"
+            reason = "no cost rule for this op (see trace.unknown_flop_ops)"
+        elif row_class == "zero_by_rule":
+            evidence, applicability = "formula_exact", "applicable"
+            reason = "zero by named rule"
+        else:
+            evidence, applicability = "formula_exact", "applicable"
+            reason = None
+        dtype = getattr(op, "dtype", None)
+        dtype_token = str(dtype).replace("torch.", "") if dtype is not None else None
+        if kind == "op" and flops is not None:
+            if dtype_token is not None:
+                by_dtype[dtype_token] = by_dtype.get(dtype_token, 0) + int(flops)
+            execution_modes["forward"] = execution_modes.get("forward", 0) + int(flops)
+        rows.append(
+            ComputeRow(
+                row_id=f"op:{label}",
+                label=label,
+                site_key=getattr(op, "site_key", None),
+                kind=kind,
+                phase="forward",
+                func_name=getattr(op, "func_name", None),
+                layer_type=getattr(op, "layer_type", None),
+                dtype=dtype_token,
+                flops_fma2=None if kind != "op" or flops is None else int(flops),
+                fma_macs=None if fma_macs is None else int(fma_macs),
+                other_flops=None if other_flops is None else int(other_flops),
+                coverage_class=row_class,
+                evidence=evidence,
+                applicability=applicability,
+                reason=reason,
+            )
+        )
+    totals = aggregate_forward_compute(trace)
+    return ComputeAggregation(
+        rows=tuple(rows),
+        partition_total=totals.flops_fma2,
+        macs_total=totals.macs,
+        coverage=totals,
+        convention="fma2",
+        scope="whole_trace",
+        by_dtype=tuple(sorted(by_dtype.items())),
+        execution_modes=tuple(sorted(execution_modes.items())),
+    )
+
+
 def forward_flops_total(trace: Trace, *, fma: int = 2) -> Flops:
     """Total forward FLOPs under an explicit FMA convention.
 

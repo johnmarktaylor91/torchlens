@@ -1227,10 +1227,12 @@ def rebuild_builtin_helper(
     # here made a saved/pickled spec a dead artifact (R10-1: save succeeded,
     # load raised intervention_helper_unknown).
     from .predicates import add, replace_with
+    from .sweep import sweep_replace
 
     constructors: dict[str, Callable[..., HelperSpec]] = {
         "add": add,
         "replace_with": replace_with,
+        "sweep_replace": sweep_replace,
         "zero_ablate": zero_ablate,
         "mean_ablate": mean_ablate,
         "scramble_elements": scramble_elements,

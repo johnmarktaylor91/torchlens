@@ -53,6 +53,10 @@ from ...ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
 from ...postprocess._grouping_stamp import build_grouping_policy_stamp
 from ...postprocess._materialize import materialize_from_events
+from ...postprocess._selective_save import (
+    apply_static_label_save_policy,
+    pop_static_label_save_predicate,
+)
 from ...postprocess.finalization import _build_module_logs
 from ...postprocess.loop_grouping_adapter import (
     RecurrenceAssignment,
@@ -78,7 +82,6 @@ from .._options import (
     reject_extra_trace_kwargs,
     reject_unsupported_trace_options,
 )
-from .._selective_save import apply_static_label_save_policy, pop_static_label_save_predicate
 from .._validation_shared import float_replay_tolerances
 from ._site_dialect import jax_site_keys
 from .jaxpr import (

@@ -28,7 +28,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -61,7 +61,7 @@
               "function.is_inplace": "defaulted_false",
               "params_facet": "unknown",
               "parents[0].arg_position": "unknown",
-              "parents[0].edge_use": "populated"
+              "parents[0].edge_use": "sentinel_unknown"
             },
             "values": {
               "is_inplace": false,
@@ -157,7 +157,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -320,7 +320,7 @@
             "core.output.transformed_tensor": "unknown",
             "core.output.visualizer_path": "unknown",
             "core.parents[0].arg_position": "unknown",
-            "core.parents[0].edge_use": "populated",
+            "core.parents[0].edge_use": "sentinel_unknown",
             "core.parents[0].parent_label_raw": "populated",
             "core.pass_index": "populated",
             "core.raw_index": "populated",
@@ -543,20 +543,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 280475,
+      "python_peak_memory_median_bytes": 290305,
       "sample_count": 3,
       "torch_version": "2.13.0+cu130",
-      "wall_time_median_ms": 23.546151991467923
+      "wall_time_median_ms": 23.21279188618064
     }
   },
   "sha256_chunks": [
-    "55ab7645",
-    "b930b075",
-    "c28920b7",
-    "a7e8f385",
-    "568e0e6f",
-    "bd169f1a",
-    "c9f74a9b",
-    "686e41de"
+    "46c2faa9",
+    "411bb2ed",
+    "ff2d526d",
+    "c6fc2e56",
+    "2f7dc41e",
+    "fc499015",
+    "7d10c3d5",
+    "0f64f595"
   ]
 }

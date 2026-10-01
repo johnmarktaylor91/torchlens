@@ -21,14 +21,16 @@ can never be claimed as recurrent passes of anything.
 
 from __future__ import annotations
 
+__tl_layer__ = "L3"
+
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import replace as _dataclass_replace
 from typing import TYPE_CHECKING, Any
 
 from ..ir.events import is_control_edge_use
-from ..postprocess.loop_detection import _module_site, _structural_arg_signature
-from ..postprocess.loop_grouping_adapter import (
+from .loop_detection import _module_site, _structural_arg_signature
+from .loop_grouping_adapter import (
     _PSEUDO_FUNC_NAME,
     RecurrenceAssignment,
     RecurrenceGroupingGraph,

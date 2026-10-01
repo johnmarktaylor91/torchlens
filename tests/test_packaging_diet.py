@@ -147,26 +147,33 @@ def test_to_pandas_missing_pandas_mentions_tabular_extra() -> None:
 
 
 def test_repr_html_succeeds_when_notebook_extra_is_available() -> None:
-    """Trace._repr_html_ returns the Phase 3 HTML card when IPython is installed."""
+    """Trace._repr_html_ returns the CardTree card when IPython is installed."""
     pytest.importorskip("IPython")
 
     log = _make_log()
     html = log._repr_html_()
 
-    assert html.startswith("<div")
+    assert html.startswith("<style>")
     assert "TorchLens Trace" in html
     assert "NaN/Inf" in html
 
 
-def test_repr_html_missing_ipython_falls_back_to_text() -> None:
-    """Trace._repr_html_ falls back to text when IPython is missing."""
+def test_repr_html_without_ipython_still_renders_the_card() -> None:
+    """Card generation is stdlib-only: no IPython gate (treescope memo B1).
+
+    The historical gate returned a 94-byte plain repr whenever IPython was
+    not importable, which also let naive card tests pass against the
+    fallback -- card tests assert CONTENT.
+    """
 
     log = _make_log()
 
     with patch.dict("sys.modules", {"IPython": None, "IPython.display": None}):
         html = log._repr_html_()
 
-    assert html == repr(log)
+    assert "TorchLens Trace" in html
+    assert "NaN/Inf" in html
+    assert html != repr(log)
 
 
 def test_packaging_metadata_uses_resolvable_gradcam_and_guarded_tinygrad_extra() -> None:

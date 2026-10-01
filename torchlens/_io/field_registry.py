@@ -94,7 +94,13 @@ COMPONENT_SPEC_MODULES: tuple[str, ...] = (
 #: Tier overrides for persisted fields with census evidence (DIGEST-AUDIT 4b,
 #: r2-corrected). Everything not listed is FACT by conservative default:
 #: treating a derived field as fact never loses truth, while the reverse
-#: launders evidence into "recomputable". PROVISIONAL pending the C07 census;
+#: launders evidence into "recomputable". RATIFIED at the C07 v9 write
+#: (2026-08-27) with ZERO persistence-policy flips: every enrichment-tier
+#: candidate has live readers (code_context -> code panels/convert-25,
+#: func_config -> replay context, bytes_* -> 8+ pinning surfaces per r2 C3),
+#: so the DIGEST-AUDIT-4b lazification is an EMISSION-side move owned by the
+#: capture fence (A05->A06->F20) consuming this table -- persisted policies
+#: do not move until an emission design rules which fields defer. Later
 #: amendments route through sprint/field_intent.tsv, never ad-hoc edits.
 _FIELD_TIER_OVERRIDES: dict[str, dict[str, FieldTier]] = {
     "op": {
@@ -245,7 +251,7 @@ def registry_snapshot() -> dict[str, Any]:
     """One JSON-serializable snapshot of the whole registry.
 
     The canonical input to the writer contract digest and the committed
-    contract-of-record golden (``torchlens/schemas/writer_contract_v8.json``).
+    contract-of-record golden (``torchlens/schemas/writer_contract_v9.json``).
     """
 
     records: dict[str, Any] = {}

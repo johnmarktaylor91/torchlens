@@ -731,3 +731,227 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 300785ea3ba17c5e195298a5d1b227b440a32486 (clean)
 recorded: 2026-08-27T09:28:55.184436+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C01 move-class relocations: sites moved verbatim between files (backends/_recurrence -> postprocess/_recurrence, backends/_selective_save -> postprocess/_selective_save, visualization/node_spec vocabulary -> _vocab/node_spec, postprocess/_site_key -> data_classes/_site_key, _io/__init__ split into format_contract/format_errors); per-file rows re-keyed, no site added or removed
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 8e171f5464eeab29d902bb736a45d33e0a58192a (dirty)
+recorded: 2026-08-27T05:51:20.680596+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C01 move-class relocations: sites moved verbatim between files (backends/_recurrence -> postprocess/_recurrence, backends/_selective_save -> postprocess/_selective_save, visualization/node_spec vocabulary -> _vocab/node_spec, postprocess/_site_key -> data_classes/_site_key, _io/__init__ split into format_contract/format_errors); per-file rows re-keyed, no site added or removed
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 8e171f5464eeab29d902bb736a45d33e0a58192a (dirty)
+recorded: 2026-08-27T05:51:23.314163+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C01 settle: renderer-registry wiring in _render_dot (registry-resolved renderer names) and the node_spec vocabulary/behavior split re-keyed per-file read-site rows; sites moved verbatim, none added or removed
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: ab5ba1c90b9437f9819e4f0970564560d5915206 (clean)
+recorded: 2026-08-27T06:49:18.806616+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C01 settle: renderer-registry wiring in _render_dot (registry-resolved renderer names) and the node_spec vocabulary/behavior split re-keyed per-file read-site rows; sites moved verbatim, none added or removed
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: ab5ba1c90b9437f9819e4f0970564560d5915206 (clean)
+recorded: 2026-08-27T06:49:22.078526+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C01 phase-2 rebase onto 3fbf89c6: re-keyed move-class rows reconciled with the landed A05-A12 regens
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: f6e5f0ffded2375a90be2891e8cd9e669e8b9140 (dirty)
+recorded: 2026-08-27T11:19:46.830926+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C01 phase-2 rebase onto 3fbf89c6: re-keyed move-class rows reconciled with the landed A05-A12 regens
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: f6e5f0ffded2375a90be2891e8cd9e669e8b9140 (dirty)
+recorded: 2026-08-27T11:19:49.514959+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C03 intervention substrate: FireRecord construction consolidated into the ONE builder (intervention/audit.py); producer/consumer sites moved by review
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: c5c23c7f06400312f17340c0e6fd5615b9418528 (dirty)
+recorded: 2026-08-27T06:40:12.313349+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C03 phase-2 rebase
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5aedc10719410034f29054c2d260ae47b2feb35a (dirty)
+recorded: 2026-08-27T11:15:40.437002+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C03 phase-2 rebase
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5aedc10719410034f29054c2d260ae47b2feb35a (dirty)
+recorded: 2026-08-27T11:15:43.044164+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C03 phase-2 rebase reconcile onto 364f2d67: C01 relocations + C03 intervention-substrate sites unioned on the merged tree
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 8951dbb7b95eda1d99f81110be24ea8a72fa5a6f (dirty)
+recorded: 2026-08-27T12:01:56.626967+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C03 phase-2 rebase reconcile onto 364f2d67: C01 relocations + C03 intervention-substrate sites unioned on the merged tree
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 8951dbb7b95eda1d99f81110be24ea8a72fa5a6f (dirty)
+recorded: 2026-08-27T12:01:59.244307+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C02: my fastlog/predicate repr additions moved static read-site line anchors; ledger regenerated after review (no producer/consumer semantics changed)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 38e179e2ccc78888281db8219b2b16e6d740cf20 (dirty)
+recorded: 2026-08-27T08:48:34.392484+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C02: my fastlog/predicate repr additions moved static read-site line anchors; ledger regenerated after review (no producer/consumer semantics changed)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 38e179e2ccc78888281db8219b2b16e6d740cf20 (dirty)
+recorded: 2026-08-27T08:48:37.009427+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C02 gate debt: the _nonfinite sync-batching split moved static read-site line anchors again; regenerated after review (no producer/consumer semantics changed)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: a461fbf73c0ad2375bad63819b060179531ceb3a (dirty)
+recorded: 2026-08-27T09:46:25.290116+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C02 gate debt: the _nonfinite sync-batching split moved static read-site line anchors again; regenerated after review (no producer/consumer semantics changed)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: a461fbf73c0ad2375bad63819b060179531ceb3a (dirty)
+recorded: 2026-08-27T09:46:28.664486+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C02 phase-2 rebase regen onto 3fbf89c6
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: d62ba316e257bf52d60d34f0c07f87a94b9093e0 (dirty)
+recorded: 2026-08-27T11:22:54.172768+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C02 phase-2 rebase regen onto 3fbf89c6
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: d62ba316e257bf52d60d34f0c07f87a94b9093e0 (dirty)
+recorded: 2026-08-27T11:22:57.502955+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C04 data substrates: new transforms/_data_substrate modules + dataset_extraction v2 rewiring add static read sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: d34ae7d488dd3518a38472547f15479306c266f0 (dirty)
+recorded: 2026-08-27T14:39:19.876183+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C04 phase-2 rebase reconcile onto d2ee93c5: transforms/_data_substrate/dataset_extraction read sites unioned with landed C01+C02+C03 on the merged tree
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4f1c69ed04f555387ffb339ab54ee493a6e42f35 (dirty)
+recorded: 2026-08-27T15:31:01.095756+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C04 phase-2 rebase reconcile onto d2ee93c5: transforms/_data_substrate/dataset_extraction read sites unioned with landed C01+C02+C03 on the merged tree
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4f1c69ed04f555387ffb339ab54ee493a6e42f35 (dirty)
+recorded: 2026-08-27T15:31:04.540242+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C06 observability substrate: new L5 package (kernels/schema/artifact/collector/chassis/spans/session) adds producer/consumer sites; reviewed with the lane diff
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: f480c49125732c7d5efba1766b2f80a212408044 (dirty)
+recorded: 2026-08-27T16:17:31.643882+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C06 phase-2 rebase reconcile onto c5882771: observability package read sites unioned with landed C01-C04 on the merged tree
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: a17aa948aadc22f8432f8f6132b7a54b975b8d14 (dirty)
+recorded: 2026-08-27T17:40:02.849322+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C06 phase-2 rebase reconcile onto c5882771: observability package read sites unioned with landed C01-C04 on the merged tree
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: a17aa948aadc22f8432f8f6132b7a54b975b8d14 (dirty)
+recorded: 2026-08-27T17:40:05.495886+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C05 phase-2 rebase
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: e16b0ea38d03d6282d2774392d7ae972e412f77d (dirty)
+recorded: 2026-08-27T17:55:21.557415+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C05 phase-2 rebase
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: e16b0ea38d03d6282d2774392d7ae972e412f77d (dirty)
+recorded: 2026-08-27T17:55:24.345393+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C05 fix cycle R43 split: segment descriptor/label family moved collapse_optimizer.py -> _segment_descriptors.py; arg-label builders _render_edges.py -> _edge_multiplicity.py; sites moved, none added or removed
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: ac8ae6b40d716b4be75c0257c1b039753c360481 (dirty)
+recorded: 2026-08-27T19:24:12.486251+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C05 reconcile onto 9fd534e9
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 478016ab05c6f54bba3fbd9b96610729ea8dca89 (clean)
+recorded: 2026-08-27T19:48:19.905171+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C05 reconcile onto 9fd534e9
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 478016ab05c6f54bba3fbd9b96610729ea8dca89 (clean)
+recorded: 2026-08-27T19:48:23.487394+00:00

@@ -255,6 +255,24 @@ class RecordContext:
 
         raise RecordContextFieldError(name)
 
+    def __repr__(self) -> str:
+        """Return a bounded one-line context summary.
+
+        The dataclass auto-repr embedded ``recent_events``/``recent_ops`` --
+        each itself a ``RecordContext`` carrying its own lookback -- so one
+        repr grew ~34x per saved site and OOMed an 8 GiB box at four toy-MLP
+        sites (lovely bug 1, CRITICAL). Lookback tuples render as COUNTS;
+        recursion is structurally impossible here.
+        """
+
+        kind = getattr(self.kind, "value", self.kind)
+        shape = "?" if self.shape is None else "(" + ",".join(str(d) for d in self.shape) + ")"
+        return (
+            f"RecordContext(kind={kind!s}, label={self.label!r}, "
+            f"pass={self.pass_index}, event={self.event_index}, shape={shape}, "
+            f"recent_events={len(self.recent_events)}, recent_ops={len(self.recent_ops)})"
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class RetroactiveCaptureDecision:

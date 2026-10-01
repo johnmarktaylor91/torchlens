@@ -738,9 +738,10 @@ class TraceVisualizationMixin(_TraceMixinBase):
         str
             Rendered summary string.
         """
+        from ..report._summary_report import build_summary_report
         from ..visualization._summary_internal import render_model_summary
 
-        return render_model_summary(
+        text = render_model_summary(
             self,
             level=level,
             preset=preset,
@@ -754,6 +755,9 @@ class TraceVisualizationMixin(_TraceMixinBase):
             count_fma_as_two=count_fma_as_two,
             show_input_preprocessing_details=show_input_preprocessing_details,
         )
+        # C02 (summary item 10): the summary is a detached typed report --
+        # a str subclass carrying rows/totals/capture, byte-identical text.
+        return build_summary_report(self, text)
 
     def render_dagua_graph(
         self: "Trace",

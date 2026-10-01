@@ -46,10 +46,37 @@ from ..utils.tensor_utils import fp8_widen_for_numeric_ops
 class _ScanMemo(NamedTuple):
     """One recorded scan: what it examined, what it found, how far it got."""
 
-    keys: tuple[tuple[weakref.ref, int | None], ...]
+    keys: tuple[tuple[weakref.ref, object], ...]
     hits: tuple[int, ...]
     complete: bool
     unchecked: tuple[int, ...] = ()
+    inference: tuple[int, ...] = ()
+
+
+# Version stand-in for inference-mode tensors, which torch keeps NO version
+# counter for (``tensor._version`` raises RuntimeError on them). A stable
+# sentinel keeps memo keys comparable across scan and revalidation.
+_INFERENCE_VERSION = "inference"
+
+
+def _tensor_version(out: torch.Tensor) -> object:
+    """Return a tensor's mutation-oracle key, or the inference sentinel.
+
+    ``torch.inference_mode()`` tensors track no version counter at all --
+    reading ``_version`` on one raises ``RuntimeError`` ("Inference tensors do
+    not track version counter."), which used to escape ``getattr``'s
+    AttributeError-only default and take ``print(trace)`` / ``_repr_html_`` /
+    ``report.explain`` down on any capture run under inference mode. Guard on
+    ``torch.is_inference`` first and catch the RuntimeError defensively for
+    exotic subclasses whose ``is_inference`` probe itself misbehaves.
+    """
+
+    try:
+        if torch.is_inference(out):
+            return _INFERENCE_VERSION
+        return getattr(out, "_version", None)
+    except RuntimeError:
+        return _INFERENCE_VERSION
 
 
 # Keyed by log object so a memo never keeps a Trace alive, and holding only
@@ -196,31 +223,113 @@ def _ref(tensor: torch.Tensor) -> weakref.ref | None:
         return None
 
 
+def _nonfinite_verdict_tensor(out: torch.Tensor) -> torch.Tensor | None:
+    """Return the DEVICE-SIDE 0-d finiteness verdict, ``None`` if unrunnable.
+
+    The device-side half of :func:`_has_nonfinite` (same fp8 widening, same
+    unrunnable contract) WITHOUT the host read, so a full scan can batch
+    every verdict into one transfer.
+    """
+
+    tensor = out.detach()
+    if tensor.dtype in get_fp8_dtypes():
+        with pause_logging():
+            tensor = fp8_widen_for_numeric_ops(tensor)
+    try:
+        return torch.isfinite(tensor).all()
+    except (RuntimeError, TypeError):
+        return None
+
+
 def _scan(log: Any, kind: str, stop_at_first: bool) -> tuple[list[Any], _ScanMemo]:
-    """Run a real scan, returning the examined layers and the memo to record."""
+    """Run a real scan, returning the examined layers and the memo to record.
+
+    SYNC BATCHING (C02; sumfam item 17): the full scan computes every
+    payload's 0-d finiteness verdict device-side, then reads them back in
+    ONE host transfer per device -- the historical loop synced once per op
+    (~151 syncs on resnet18). The stop-at-first path keeps the sequential
+    early exit: there the first sync IS the point. This shares the batched
+    single-transfer discipline of the stats kernel
+    (``torchlens/stats/_stats_kernel.py``).
+    """
+
+    if stop_at_first:
+        return _scan_stop_at_first(log, kind)
+    return _scan_batched(log, kind)
+
+
+def _scan_stop_at_first(log: Any, kind: str) -> tuple[list[Any], _ScanMemo]:
+    """Sequential early-exit scan: one sync per op, stopping on the first hit."""
 
     layers: list[Any] = []
-    keys: list[tuple[weakref.ref | None, int | None]] = []
+    keys: list[tuple[weakref.ref | None, object]] = []
     hits: list[int] = []
     unchecked: list[int] = []
+    inference: list[int] = []
     complete = True
     for layer, out in _examined(log, kind):
         layers.append(layer)
-        keys.append((_ref(out), getattr(out, "_version", None)))
+        version = _tensor_version(out)
+        keys.append((_ref(out), version))
+        if version is _INFERENCE_VERSION:
+            # No version counter exists to revalidate a memoized verdict
+            # against, so no verdict is claimed: coverage is disclosed as
+            # unknown (inference tensors) rather than risking a silently
+            # stale CLEAN answer -- the disarmed-tripwire class this
+            # module exists to prevent.
+            inference.append(len(layers) - 1)
+            continue
         verdict = _has_nonfinite(out)
         if verdict is None:
             unchecked.append(len(layers) - 1)
             continue
         if verdict:
             hits.append(len(layers) - 1)
-            if stop_at_first:
-                complete = False
-                break
+            complete = False
+            break
     return layers, _ScanMemo(
         tuple(keys),  # type: ignore[arg-type]
         tuple(hits),
         complete,
         tuple(unchecked),
+        tuple(inference),
+    )
+
+
+def _scan_batched(log: Any, kind: str) -> tuple[list[Any], _ScanMemo]:
+    """Full scan with device-side verdicts read back in one sync per device."""
+
+    layers: list[Any] = []
+    keys: list[tuple[weakref.ref | None, object]] = []
+    hits: list[int] = []
+    unchecked: list[int] = []
+    inference: list[int] = []
+    pending: dict[str, list[tuple[int, torch.Tensor]]] = {}
+    for layer, out in _examined(log, kind):
+        layers.append(layer)
+        version = _tensor_version(out)
+        keys.append((_ref(out), version))
+        index = len(layers) - 1
+        if version is _INFERENCE_VERSION:
+            inference.append(index)
+            continue
+        verdict_tensor = _nonfinite_verdict_tensor(out)
+        if verdict_tensor is None:
+            unchecked.append(index)
+            continue
+        pending.setdefault(str(verdict_tensor.device), []).append((index, verdict_tensor))
+    for device_pending in pending.values():
+        stacked = torch.stack([verdict for _, verdict in device_pending])
+        for (index, _), all_finite in zip(device_pending, stacked.tolist(), strict=True):
+            if not all_finite:
+                hits.append(index)
+    hits.sort()
+    return layers, _ScanMemo(
+        tuple(keys),  # type: ignore[arg-type]
+        tuple(hits),
+        True,
+        tuple(unchecked),
+        tuple(inference),
     )
 
 
@@ -250,7 +359,7 @@ def _revalidate(log: Any, kind: str, memo: _ScanMemo) -> list[Any] | None:
             # A complete scan saw every payload; a new one means new evidence.
             return None
         ref, version = keys[len(layers)]
-        if ref() is not out or getattr(out, "_version", None) != version:
+        if ref() is not out or _tensor_version(out) != version:
             return None
         layers.append(layer)
         if not memo.complete and len(layers) == len(keys):
@@ -422,6 +531,31 @@ def uncheckable_payload_count(log: Any, *, kind: str = "saved") -> int:
     return len(memo.unchecked)
 
 
+def inference_payload_count(log: Any, *, kind: str = "saved") -> int:
+    """Return how many examined payloads are inference-mode tensors.
+
+    ``torch.inference_mode()`` tensors track no version counter, so a memoized
+    finiteness verdict on one could go stale with no oracle to catch it. The
+    scan therefore claims NO verdict for them, and every clean answer must
+    disclose the gap: nonfinite coverage is unknown (inference tensors).
+
+    Parameters
+    ----------
+    log:
+        Trace-like object to inspect.
+    kind:
+        Scan contract whose sequence and gate to use.
+
+    Returns
+    -------
+    int
+        Number of examined payloads that are inference tensors.
+    """
+
+    _, memo = _resolve_memo(log, kind, stop_at_first=False)
+    return len(memo.inference)
+
+
 def coverage_gap_note(log: Any, *, kind: str = "saved") -> str:
     """Return a parenthetical naming what a clean scan could not examine.
 
@@ -452,9 +586,10 @@ def coverage_gap_note(log: Any, *, kind: str = "saved") -> str:
     disk_backed = _unmaterialized_disk_payload_count(log, kind=kind)
     unsaved = max(0, unexamined - disk_backed)
     uncheckable = uncheckable_payload_count(log, kind=kind)
-    if not unexamined and not uncheckable:
+    inference = inference_payload_count(log, kind=kind)
+    if not unexamined and not uncheckable and not inference:
         return ""
-    if not uncheckable and not disk_backed:
+    if not uncheckable and not disk_backed and not inference:
         # Unchanged wording for the save=-scoped case, which is the common one.
         return (
             f" ({unexamined} op(s) retained no payload and could not be examined; "
@@ -463,6 +598,12 @@ def coverage_gap_note(log: Any, *, kind: str = "saved") -> str:
     gaps = [f"{uncheckable} op(s) hold a dtype with no runnable finiteness check"]
     if not uncheckable:
         gaps = []
+    if inference:
+        gaps.append(
+            f"nonfinite coverage is unknown (inference tensors) for {inference} "
+            "payload(s) captured under torch.inference_mode(), which track no "
+            "version counter to revalidate a verdict against"
+        )
     if disk_backed:
         gaps.append(f"{disk_backed} disk-backed payload(s) were not materialized by reporting")
     if unsaved:
@@ -604,6 +745,14 @@ class NonfiniteCoverage:
     unchecked:
         Op outputs whose dtype has no runnable finiteness kernel (quantized,
         sparse); they yield no evidence either way.
+    inference:
+        ``"saved_payloads"`` basis only: examined payloads that are
+        ``torch.inference_mode()`` tensors. They track no version counter, so
+        the memoized scan claims no verdict for them -- their nonfinite
+        coverage is unknown (inference tensors). Capture-time checks
+        (``basis="capture"``) settle verdicts at record time and need no
+        revalidation, so inference tensors ARE checked there and this count
+        stays 0.
     unexamined:
         Ops the scan could not look at: on the ``"saved_payloads"`` basis,
         ops that retained no payload (or whose disk-backed payload reporting
@@ -621,6 +770,7 @@ class NonfiniteCoverage:
     unchecked: int
     unexamined: int
     unmapped: int = 0
+    inference: int = 0
 
 
 def _capture_raw_to_final(log: Any) -> dict[str, str]:
@@ -707,8 +857,9 @@ def nonfinite_coverage(log: Any) -> NonfiniteCoverage:
     _, memo = _resolve_memo(log, "saved", stop_at_first=False)
     return NonfiniteCoverage(
         basis="saved_payloads",
-        checked=max(0, len(memo.keys) - len(memo.unchecked)),
+        checked=max(0, len(memo.keys) - len(memo.unchecked) - len(memo.inference)),
         nonfinite=len(memo.hits),
         unchecked=len(memo.unchecked),
         unexamined=unexamined_payload_count(log, kind="saved"),
+        inference=len(memo.inference),
     )

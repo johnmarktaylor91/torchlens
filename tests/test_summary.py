@@ -84,7 +84,8 @@ def test_small_model_default_output_golden(tiny_summary_log: tl.Trace) -> None:
         "Forward FLOPs: 16.6 KFLOPs  MACs: 8.19 KMACs\n"
         "Unknown-FLOPs ops: 0\n"
         "FLOP convention: fma=2 (one multiply-accumulate = 2 FLOPs); "
-        "MACs are true multiply-accumulate counts."
+        "MACs are true multiply-accumulate counts.\n"
+        "Health: NOT-CHECKED (6 op output(s) unexamined; see trace.health_facts)"
     )
 
 

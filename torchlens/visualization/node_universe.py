@@ -111,6 +111,78 @@ class NodeUniverse:
         return tuple(unit.emission for unit in self.units)
 
 
+def _project_endpoint_units(
+    source_graph: SourceGraph,
+    collapse_fn: Callable[[Module], bool] | None,
+    repeat_folds: Mapping[str, ModuleRepeatFold] | None,
+    collapsed_containers: Any,
+    show_buffers: Any,
+) -> tuple[
+    dict[str, RenderedNodeEmission],
+    dict[str, list[Any]],
+    dict[str, list[str]],
+    dict[str, str],
+]:
+    """Project every plottable node onto its visible unit identifier.
+
+    Returns
+    -------
+    tuple
+        ``(visible_by_id, provenance, hidden, endpoint_projection)`` maps
+        keyed by visible unit id (raw render label for the projection map).
+    """
+
+    from ._render_edges import _is_buffer_visible
+    from ._render_flow import _base_rendered_node_emission, _render_node_label
+    from ._render_leaf import _run_fold_graph_node_name
+
+    trace = source_graph.trace
+    request = source_graph.request
+    visible_by_id: dict[str, RenderedNodeEmission] = {}
+    provenance: dict[str, list[Any]] = {}
+    hidden: dict[str, list[str]] = {}
+    endpoint_projection: dict[str, str] = {}
+    for node in source_graph.entries_to_plot.values():
+        raw_label = _render_node_label(node, request.vis_mode)
+        if getattr(node, "is_buffer", False) and not _is_buffer_visible(node, show_buffers):
+            # A buffer hidden by the visibility policy gets NO endpoint
+            # projection: projecting it kept its dataflow edges alive while
+            # the node itself was never emitted, so the rank path shipped
+            # DOT whose buffer-write edges pointed at undeclared,
+            # unpositioned endpoints and ``neato -n`` hard-errored on stock
+            # densenet121 (vizmech defect 1 / D20). The dot path already
+            # suppresses these edges at emission; this makes the typed edge
+            # list agree with it.
+            continue
+        emission = _base_rendered_node_emission(
+            trace,
+            node,
+            vis_mode=request.vis_mode,
+            vis_call_depth=request.vis_call_depth,
+            collapse_fn=collapse_fn,
+            repeat_folds=repeat_folds,
+            show_containers=request.show_containers,
+            collapsed_container_nodes=collapsed_containers,
+        )
+        if emission is None:
+            continue
+        if emission.kind == "hidden_run_member" and emission.fold is not None:
+            unit_id = _run_fold_graph_node_name(
+                emission.fold.representative,
+                request.vis_mode,
+                repeat_folds,
+            )
+        else:
+            unit_id = emission.name
+        endpoint_projection[raw_label] = unit_id
+        provenance.setdefault(unit_id, []).append(node)
+        if emission.kind == "hidden_run_member":
+            hidden.setdefault(unit_id, []).append(raw_label)
+        else:
+            visible_by_id.setdefault(unit_id, emission)
+    return visible_by_id, provenance, hidden, endpoint_projection
+
+
 def build_node_universe(
     source_graph: SourceGraph,
     collapse_fn: Callable[[Module], bool] | None,
@@ -141,14 +213,12 @@ def build_node_universe(
 
     del segments, containers
     from ._render_flow import (
-        _base_rendered_node_emission,
         _collapsed_container_leaf_nodes,
         _enumerate_base_rendered_node_emissions,
         _enumerate_run_fold_ellipsis_emissions,
         _normalize_buffer_visibility,
         _render_node_label,
     )
-    from ._render_leaf import _run_fold_graph_node_name
 
     trace = source_graph.trace
     request = source_graph.request
@@ -185,38 +255,13 @@ def build_node_universe(
         repeat_folds=repeat_folds,
         collapsed_container_nodes=collapsed_containers,
     )
-    visible_by_id: dict[str, RenderedNodeEmission] = {}
-    provenance: dict[str, list[Any]] = {}
-    hidden: dict[str, list[str]] = {}
-    endpoint_projection: dict[str, str] = {}
-    for node in source_graph.entries_to_plot.values():
-        raw_label = _render_node_label(node, request.vis_mode)
-        emission = _base_rendered_node_emission(
-            trace,
-            node,
-            vis_mode=request.vis_mode,
-            vis_call_depth=request.vis_call_depth,
-            collapse_fn=collapse_fn,
-            repeat_folds=repeat_folds,
-            show_containers=request.show_containers,
-            collapsed_container_nodes=collapsed_containers,
-        )
-        if emission is None:
-            continue
-        if emission.kind == "hidden_run_member" and emission.fold is not None:
-            unit_id = _run_fold_graph_node_name(
-                emission.fold.representative,
-                request.vis_mode,
-                repeat_folds,
-            )
-        else:
-            unit_id = emission.name
-        endpoint_projection[raw_label] = unit_id
-        provenance.setdefault(unit_id, []).append(node)
-        if emission.kind == "hidden_run_member":
-            hidden.setdefault(unit_id, []).append(raw_label)
-        else:
-            visible_by_id.setdefault(unit_id, emission)
+    visible_by_id, provenance, hidden, endpoint_projection = _project_endpoint_units(
+        source_graph,
+        collapse_fn,
+        repeat_folds,
+        collapsed_containers,
+        show_buffers,
+    )
     for emission in base_emissions:
         if emission.kind != "hidden_run_member":
             visible_by_id.setdefault(emission.name, emission)

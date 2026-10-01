@@ -105,6 +105,7 @@ CELL_SOURCE_MANIFEST: dict[str, str] = {
     'has_saved_args': 'FACET:templates',
     'in_conditionals': 'DEFAULT',
     'in_multi_output': 'CORE',
+    'injection_provenance': 'DEFAULT',
     'input_ancestors': 'FACET:ancestry',
     'input_to_module_calls': 'JOIN:module_enter',
     'input_was_parameter': 'FACET:graph',

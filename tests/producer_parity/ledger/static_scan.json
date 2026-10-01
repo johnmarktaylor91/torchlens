@@ -332,7 +332,7 @@
   "field": "pass_index",
   "file": "torchlens/_selection_align.py",
   "has_default": true,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": true
  },
  {
@@ -462,46 +462,6 @@
   "has_default": false,
   "sites": 1,
   "via_getattr": false
- },
- {
-  "ambiguous": false,
-  "field": "_edge_uses",
-  "file": "torchlens/backends/_recurrence.py",
-  "has_default": true,
-  "sites": 2,
-  "via_getattr": true
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/backends/_recurrence.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
-  "ambiguous": false,
-  "field": "parent_arg_positions",
-  "file": "torchlens/backends/_recurrence.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
-  "ambiguous": true,
-  "field": "parents",
-  "file": "torchlens/backends/_recurrence.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "parents",
-  "file": "torchlens/backends/_recurrence.py",
-  "has_default": true,
-  "sites": 2,
-  "via_getattr": true
  },
  {
   "ambiguous": false,
@@ -3232,6 +3192,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "output",
+  "file": "torchlens/dataset_extraction.py",
+  "has_default": false,
+  "sites": 4,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "step_index",
   "file": "torchlens/debug/_common.py",
@@ -3372,7 +3340,7 @@
   "field": "layer_type",
   "file": "torchlens/export/__init__.py",
   "has_default": true,
-  "sites": 2,
+  "sites": 1,
   "via_getattr": true
  },
  {
@@ -3384,17 +3352,33 @@
   "via_getattr": true
  },
  {
-  "ambiguous": true,
-  "field": "parents",
+  "ambiguous": false,
+  "field": "step_index",
   "file": "torchlens/export/__init__.py",
   "has_default": true,
-  "sites": 2,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/export/_common.py",
+  "has_default": true,
+  "sites": 1,
   "via_getattr": true
  },
  {
   "ambiguous": false,
-  "field": "step_index",
-  "file": "torchlens/export/__init__.py",
+  "field": "layer_type",
+  "file": "torchlens/export/_graphs.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/export/_graphs.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -3564,7 +3548,7 @@
   "field": "pass_index",
   "file": "torchlens/fastlog/types.py",
   "has_default": false,
-  "sites": 7,
+  "sites": 8,
   "via_getattr": false
  },
  {
@@ -3846,6 +3830,46 @@
   "has_default": true,
   "sites": 1,
   "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "layer_type",
+  "file": "torchlens/intervention/site_keys.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "layer_type",
+  "file": "torchlens/intervention/site_keys.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "module_stack",
+  "file": "torchlens/intervention/site_keys.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/intervention/site_keys.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/intervention/site_keys.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
  },
  {
   "ambiguous": false,
@@ -4728,6 +4752,22 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/ir/predicate.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/ir/predicate.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "is_transform",
   "file": "torchlens/ir/selector_eval.py",
@@ -4837,6 +4877,46 @@
   "file": "torchlens/merged/_presenter.py",
   "has_default": false,
   "sites": 8,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/notebook/cardtree.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "policy",
+  "file": "torchlens/observability/_artifact.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/observability/_chassis.py",
+  "has_default": false,
+  "sites": 6,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/observability/_collector.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/observability/_schema.py",
+  "has_default": false,
+  "sites": 1,
   "via_getattr": false
  },
  {
@@ -5099,6 +5179,46 @@
   "ambiguous": true,
   "field": "seq",
   "file": "torchlens/postprocess/_primitive_profile.py",
+  "has_default": true,
+  "sites": 2,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "_edge_uses",
+  "file": "torchlens/postprocess/_recurrence.py",
+  "has_default": true,
+  "sites": 2,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/postprocess/_recurrence.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/postprocess/_recurrence.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/postprocess/_recurrence.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/postprocess/_recurrence.py",
   "has_default": true,
   "sites": 2,
   "via_getattr": true
@@ -5778,7 +5898,7 @@
  {
   "ambiguous": false,
   "field": "source_trace",
-  "file": "torchlens/repgeom/__init__.py",
+  "file": "torchlens/repgeom/_node_visuals.py",
   "has_default": true,
   "sites": 3,
   "via_getattr": true
@@ -5808,11 +5928,35 @@
   "via_getattr": true
  },
  {
+  "ambiguous": false,
+  "field": "layer_type",
+  "file": "torchlens/report/_compute_truth.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/report/_explain.py",
   "has_default": true,
   "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/report/_factcore.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/report/_factcore.py",
+  "has_default": true,
+  "sites": 2,
   "via_getattr": true
  },
  {
@@ -5826,6 +5970,38 @@
  {
   "ambiguous": true,
   "field": "kind",
+  "file": "torchlens/report/_summary_report.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/report/_summary_report.py",
+  "has_default": false,
+  "sites": 6,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/runnable.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/runnable.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "output",
   "file": "torchlens/runnable.py",
   "has_default": false,
   "sites": 1,
@@ -6074,7 +6250,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/stats/__init__.py",
+  "file": "torchlens/stats/_aggregate.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -6082,7 +6258,7 @@
  {
   "ambiguous": false,
   "field": "layer_type",
-  "file": "torchlens/stats/__init__.py",
+  "file": "torchlens/stats/_aggregate.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
@@ -6090,7 +6266,7 @@
  {
   "ambiguous": true,
   "field": "modules",
-  "file": "torchlens/stats/__init__.py",
+  "file": "torchlens/stats/_aggregate.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -6098,7 +6274,7 @@
  {
   "ambiguous": true,
   "field": "parents",
-  "file": "torchlens/stats/__init__.py",
+  "file": "torchlens/stats/_aggregate.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -6106,7 +6282,7 @@
  {
   "ambiguous": true,
   "field": "parents",
-  "file": "torchlens/stats/__init__.py",
+  "file": "torchlens/stats/_aggregate.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -6114,7 +6290,23 @@
  {
   "ambiguous": false,
   "field": "raw_index",
-  "file": "torchlens/stats/__init__.py",
+  "file": "torchlens/stats/_aggregate.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "policy",
+  "file": "torchlens/stats/_stats_render.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "policy",
+  "file": "torchlens/stats/_tensor_stats.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -6134,6 +6326,22 @@
   "has_default": true,
   "sites": 1,
   "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "output",
+  "file": "torchlens/transforms/_pipeline.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/transforms/_spec.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
  },
  {
   "ambiguous": false,
@@ -7233,6 +7441,22 @@
  },
  {
   "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/visualization/_segment_descriptors.py",
+  "has_default": false,
+  "sites": 5,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/visualization/_segment_descriptors.py",
+  "has_default": true,
+  "sites": 2,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
   "field": "kind",
   "file": "torchlens/visualization/_stacking.py",
   "has_default": false,
@@ -7372,7 +7596,7 @@
   "field": "modules",
   "file": "torchlens/visualization/collapse_optimizer.py",
   "has_default": false,
-  "sites": 21,
+  "sites": 16,
   "via_getattr": false
  },
  {
@@ -7380,7 +7604,7 @@
   "field": "modules",
   "file": "torchlens/visualization/collapse_optimizer.py",
   "has_default": true,
-  "sites": 4,
+  "sites": 2,
   "via_getattr": true
  },
  {

@@ -51,8 +51,8 @@ def _refuse_loaded_backward_capture(trace: "Trace", entry_point: str) -> None:
         "artifact carries no live autograd graph tied to its recorded "
         "forward, so a backward here would capture whatever unrelated graph "
         "the loss came from and record a wrong backward pass. Re-capture "
-        "live (tl.trace(model, x, capture=CaptureOptions(backward_ready="
-        "True))) and call log_backward on that Trace, or inspect the "
+        "live (tl.trace(model, x, capture=tl.options.CaptureOptions("
+        "backward_ready=True))) and call log_backward on that Trace, or inspect the "
         "backward metadata this artifact already persisted.",
         code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
         detection_stage="loaded_backward_capture",
@@ -626,6 +626,45 @@ class TraceValidationMixin(_TraceMixinBase):
             }
         )
         if use_unified_provider:
+            # C03 honesty gate: the unified provider is a FRESH verified
+            # execution and never installs the staged intervention spec, while
+            # the legacy run(model, x) surface DOES (rerun.py reads
+            # _intervention_spec). Silently returning an un-intervened run for
+            # a trace that carries staged hooks/value replacements was a
+            # measured silent wrong answer (surgery memo, build item 1); it is
+            # a typed refusal now. Settled under both OP1 branches.
+            # D1 carve-out (2026-08-19): sticky hooks the selection-do() plan
+            # attached are engine-owned residue of an edit ALREADY applied to
+            # this trace's saved values (audit-recorded and propagated); their
+            # inertness on a new-input run is the PendingValueEditsWarning
+            # DISCLOSURE at the run door below, never a refusal.
+            staged_spec = getattr(self, "_intervention_spec", None)
+            staged_user_hooks = [
+                hook_spec
+                for hook_spec in getattr(staged_spec, "hook_specs", ())
+                if not (getattr(hook_spec, "metadata", None) or {}).get("selection_do_engine_owned")
+            ]
+            staged_value_specs = getattr(staged_spec, "target_value_specs", ())
+            if staged_user_hooks or staged_value_specs:
+                from ..intervention.errors import EngineDispatchError
+
+                staged_hooks = len(staged_user_hooks)
+                staged_values = len(staged_value_specs)
+                raise EngineDispatchError(
+                    "run(inputs=...) is a fresh verified execution and does NOT "
+                    "apply this trace's staged intervention spec "
+                    f"({staged_hooks} sticky hook(s), {staged_values} value "
+                    "replacement(s) staged); running would silently return an "
+                    "un-intervened result. To run WITH the intervention, use "
+                    "the legacy intervened rerun trace.run(model, x) or capture "
+                    "fresh with tl.trace(model, x, intervene=...); to run "
+                    "WITHOUT it, detach the staged spec first "
+                    "(trace.clear_hooks() or detach_hooks(site=/handle=)).",
+                    code="run_staged_spec_unapplied",
+                    remedy="apply the spec via run(model, x) / tl.trace(..., "
+                    "intervene=...), or detach the staged hooks before "
+                    "run(inputs=...)",
+                )
             if inputs is not MISSING:
                 if model is not None or x is not None:
                     raise KeywordConflictError(

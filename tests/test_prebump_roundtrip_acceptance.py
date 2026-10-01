@@ -18,7 +18,7 @@ v8 artifacts -- no activation switch anywhere:
    (tests/test_marker_combination_totality.py owns the full product).
 
 Version proofs live at the bottom: a real checked-in v7 artifact still loads
-at its recorded schema, v8 artifacts are distinguishable, and a claimed v9
+at its recorded schema, v9 artifacts are distinguishable, and a claimed v10
 refuses as newer-than-runtime.
 """
 
@@ -219,8 +219,12 @@ def test_every_family_activated_and_registrar_retired() -> None:
             if owner.PORTABLE_STATE_SPEC[field_name] is FieldPolicy.DROP:
                 still_dropped.append(row)
     assert not still_dropped, f"families left inactive by the bump: {sorted(still_dropped)}"
-    assert registered_prerelease_fields() == {}, "the bump must retire every registration"
-    assert gated_annotations_keys() == frozenset(), "annotations sub-keys must be retired"
+    # The v8 bump retired every v8 registration and the v9 bump (C07)
+    # retired the C01 sidecar row: the registry is empty again.
+    inventory = registered_prerelease_fields()
+    assert set(inventory) <= {"Trace.annotations"}, "the bump must retire every v8 registration"
+    assert inventory.get("Trace.annotations", ()) == ()
+    assert gated_annotations_keys() == frozenset(), "gated sub-keys must be retired at the bump"
 
 
 # ---------------------------------------------------------------------------
@@ -259,16 +263,18 @@ def _persisted_eq(a: object, b: object) -> bool:
 
 
 def _plain_roundtrip(trace: tl.Trace, tmp_path, name: str) -> tl.Trace:
-    """Save plainly, prove the v8 stamp and the marker's absence, load plainly.
+    """Save plainly, prove the current stamp and the marker's absence, load plainly.
 
-    The write must stamp ``tlspec_version == TLSPEC_VERSION`` (8) and carry NO
-    pre-release marker -- v8 artifacts are real current-version artifacts.
+    The write must stamp ``tlspec_version == TLSPEC_VERSION`` (9) and carry NO
+    pre-release marker -- v9 artifacts are real current-version artifacts.
     """
 
     path = tmp_path / f"{name}.tlspec"
     state, _, _ = scrub_for_save(trace)
     assert state["tlspec_version"] == TLSPEC_VERSION
-    assert PRERELEASE_STATE_KEY not in state, "a plain v8 write never carries the marker"
+    assert PRERELEASE_STATE_KEY not in state, (
+        "a plain current-version write never carries the marker"
+    )
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         tl.save(trace, str(path))
@@ -947,7 +953,7 @@ def test_tamper_structure_only_nonbool_marker_refuses_typed(tmp_path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Version proofs: v7 still loads, v8 is distinguishable, v9 refuses.
+# Version proofs: v7 still loads, v9 is distinguishable, v10 refuses.
 # ---------------------------------------------------------------------------
 
 _V7_FIXTURE = Path(__file__).parent / "fixtures" / "tlspec_v7" / "tiny_v7.tlspec"
@@ -976,24 +982,24 @@ def test_real_v7_artifact_still_loads_at_recorded_schema() -> None:
 
 
 @pytest.mark.smoke
-def test_v8_artifact_is_distinguishable_from_v7(tmp_path) -> None:
-    """A fresh save stamps tlspec_version 8; the v7 fixture stays 7."""
+def test_v9_artifact_is_distinguishable_from_v7(tmp_path) -> None:
+    """A fresh save stamps tlspec_version 9; the v7 fixture stays 7."""
 
     trace = _tiny_trace()
     state, _, _ = scrub_for_save(trace)
-    assert state["tlspec_version"] == TLSPEC_VERSION == 8
-    path = tmp_path / "fresh_v8.tlspec"
+    assert state["tlspec_version"] == TLSPEC_VERSION == 9
+    path = tmp_path / "fresh_v9.tlspec"
     tl.save(trace, str(path))
     loaded = tl.load(str(path))
-    assert loaded.tlspec_version == 8
+    assert loaded.tlspec_version == 9
     assert [op.site_key for op in loaded.ops] == [op.site_key for op in trace.ops]
 
 
 @pytest.mark.smoke
 def test_newer_than_runtime_version_refuses_typed() -> None:
-    """A claimed tlspec_version=9 state refuses as newer-than-runtime."""
+    """A claimed tlspec_version=10 state refuses as newer-than-runtime."""
 
     from torchlens._io import read_tlspec_version
 
-    with pytest.raises(TorchLensIOError, match="only supports up to 8"):
-        read_tlspec_version({"tlspec_version": 9}, cls_name="Trace")
+    with pytest.raises(TorchLensIOError, match="only supports up to 9"):
+        read_tlspec_version({"tlspec_version": 10}, cls_name="Trace")

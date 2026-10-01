@@ -2,7 +2,12 @@
 
 # ruff: noqa: F403, F405
 
-from ._edge_multiplicity import _bump_deduped_edge_multiplicity, _register_deduped_edge
+from ._edge_multiplicity import (
+    _bump_deduped_edge_multiplicity,
+    _html_argument_edge_label,
+    _register_deduped_edge,
+    _set_argument_edge_label,
+)
 from ._render_common import *
 from ._render_leaf import *
 from ._render_utils import html_escape
@@ -1381,12 +1386,21 @@ def _add_edges_for_node(
                     rolled_maps=rolled_maps,
                 )
 
-        # Label the arguments to the next node if multiple inputs
+        # Label the arguments to the next node if multiple inputs. An edge
+        # whose rendered endpoint was projected onto a run-fold ellipsis gets
+        # NO per-occurrence argument label: the label would attribute a slot
+        # to a HIDDEN member the ellipsis merely summarizes, and the distinct
+        # labels would defeat the visual dedupe (39 parallel ellipsis->cat
+        # edges instead of one summary edge with an xN disclosure).
+        edge_touches_ellipsis = tail_name.endswith("___runfoldellipsis") or head_name.endswith(
+            "___runfoldellipsis"
+        )
         if (
             not edge_is_self_loop
             and not child_is_collapsed_module
             and metadata_child is not None
             and not edge_has_boundary
+            and not edge_touches_ellipsis
         ):
             _label_node_arguments_if_needed(
                 self,
@@ -1668,31 +1682,10 @@ def _label_node_arguments_if_needed(
                 if parent_node.layer_label == arg_label:
                     arg_labels.append(f"{arg_type[:-1]} {str(arg_loc)}")
 
-    arg_labels = "<br/>".join(html_escape(label) for label in arg_labels)  # type: ignore[assignment]
     if not arg_labels:
         return
-    arg_label = f"<<FONT POINT-SIZE='10'><b>{arg_labels}</b></FONT>>"
+    arg_label = _html_argument_edge_label(arg_labels)
     _set_argument_edge_label(edge_dict, arg_label)
-
-
-def _set_argument_edge_label(edge_dict: Dict[str, Any], arg_label: str) -> None:
-    """Attach an argument-position label without overwriting semantic edge labels.
-
-    Args:
-        edge_dict:
-            Mutable Graphviz edge attribute dict.
-        arg_label:
-            HTML label string describing edge argument positions.
-    """
-    if "headlabel" not in edge_dict:
-        edge_dict["headlabel"] = arg_label
-        return
-    if "xlabel" not in edge_dict:
-        edge_dict["xlabel"] = arg_label
-        return
-    if edge_dict["xlabel"] == arg_label:
-        return
-    edge_dict["xlabel"] = edge_dict["xlabel"][:-1] + "<br/>" + arg_label[1:]
 
 
 def _should_mark_arguments_on_edge(
@@ -1703,8 +1696,9 @@ def _should_mark_arguments_on_edge(
 ) -> bool:
     """Returns True if argument position labels should be shown on the edge to child_node.
 
-    Skips commutative functions (add, mul, cat, eq, ne) where arg order is
+    Skips commutative functions (add, mul, eq, ne) where arg order is
     interchangeable -- showing "arg 0" vs "arg 1" would be misleading.
+    ``cat`` is deliberately NOT skipped: concatenation is order-sensitive.
     For non-commutative ops, labels are shown when the child has multiple
     visible parents.
 

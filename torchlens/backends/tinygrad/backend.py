@@ -37,6 +37,10 @@ from ...ir.predicate import RecordContext
 from ...ir.refs import DeviceRef, DtypeRef, ParamRef, ReservedLabel, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
 from ...postprocess._materialize import materialize_from_events
+from ...postprocess._selective_save import (
+    apply_static_label_save_policy,
+    pop_static_label_save_predicate,
+)
 from ...quantities import Duration
 from ...validation.status import (
     ValidationReplaySource,
@@ -64,7 +68,6 @@ from .._options import (
     reject_extra_trace_kwargs,
     reject_unsupported_trace_options,
 )
-from .._selective_save import apply_static_label_save_policy, pop_static_label_save_predicate
 from .._validation_shared import float_replay_tolerances_for_dtype_name, scalar_replay_close
 
 _ACTIVE_TINYGRAD_MODULE_STACK: list[TinygradModuleFrame] = []

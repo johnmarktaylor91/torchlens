@@ -57,7 +57,7 @@ from ..selection import (
     edge_address_of,
 )
 from .masked_edit import _validate_edited
-from .types import FireRecord, HelperSpec
+from .types import HelperSpec
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -247,7 +247,9 @@ def apply_edge_substitution_do(
             )
             committed.append((child_op, store_key))
 
-            fire_record = FireRecord(
+            from .audit import build_fire_record
+
+            fire_record = build_fire_record(
                 target_label=child_op.layer_label,
                 call_label=child_op.label,
                 func_call_id=child_op.func_call_id,

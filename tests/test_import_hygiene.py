@@ -373,7 +373,10 @@ assert collisions == {
     "fastlog": ["dry_run", "recover"], "intervention": ["sites"],
     "hash": [], "io": [], "ir": [], "merged": [], "observers": [], "options": [],
     "partial": [], "quantities": [], "report": [], "repgeom": [],
-    "receptive_field": ["rules"], "stats": [], "types": [], "user_funcs": [],
+    "receptive_field": ["rules"], "stats": [],
+    # C04: the transforms facade's children are all underscore-private.
+    "transforms": [],
+    "types": [], "user_funcs": [],
     "validation": [], "visualization": [], "viz": [],
 }
 

@@ -78,6 +78,11 @@ MODEL_LOG_FIELD_ORDER = [
     "derived_grads",
     "capture_mode",
     "structure_only",
+    # tlspec v9 entry-dark slot (C07; weightsfree memo section 5 / item 14):
+    # the immutable structure-only evidence envelope. Declared with
+    # fail-closed load validation now; the F33 writer lands later with no
+    # further version bump. None everywhere until then.
+    "structure_evidence",
     "intervention_audit",
     "_runnable",
     "_fast_run_session",
@@ -155,6 +160,12 @@ MODEL_LOG_FIELD_ORDER = [
     "forward_signature",
     "forward_docstring",
     "code_context",
+    # tlspec v9 entry-dark slot (C07; convert memo item 24): the source
+    # snapshot table, one row per (path, digest) -- per-file digests at
+    # capture with optional snapshot text. Declared with fail-closed load
+    # validation now; the F30 writer lands later with no further version
+    # bump. Empty everywhere until then.
+    "source_snapshots",
     "capture_cache_hit",
     "capture_cache_key",
     "capture_cache_path",
@@ -438,6 +449,13 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     # bridging relation -- FieldPolicy.DROP until the coordinated tlspec bump,
     # prerelease-registered)
     "site_key",
+    # tlspec v9 entry-dark slot (C07; surgery memo 3.5 / items 8-9, 12): the
+    # injected-op identity record ("from intervention X, not the model") --
+    # the durable structural key (host_site_key, spec_rule_id, host_pass,
+    # firing_index, nesting_path, local_op_ordinal, output_slot). None on
+    # every model op; the F01 log_injections writer lands later with no
+    # further version bump. Fail-closed load validation from day one.
+    "injection_provenance",
     # Graph info
     "parents",
     "parent_arg_positions",

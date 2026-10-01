@@ -32,6 +32,13 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 from .._errors import InvalidArgumentError
 from ..errors._base import TorchLensWarning
 from ..utils.display import user_stacklevel
+from ._segment_descriptors import (
+    _child_segment_covered_ops,
+    _crosses_module_call_boundary,
+    _effective_render_module_stack,
+    _make_child_segment_descriptor,
+    _make_op_segment_descriptor,
+)
 from .auto_collapse import (
     GENERIC_CONTAINER_CLASSES,
     RUN_FOLD_MIN_LENGTH,
@@ -74,7 +81,6 @@ from .collapse_plan import (
 
 if TYPE_CHECKING:
     from ..data_classes.module import Module
-    from ..data_classes.op import Op
     from ..data_classes.trace import Trace
     from .auto_collapse import ChildCondensedFlowGraph
     from .source_graph import SourceGraph
@@ -178,6 +184,19 @@ class OptimizerResult:
         Segment descriptors keyed by segment node name.
     level:
         Max-mode ladder level that produced the plan.
+    planner:
+        Which planner produced the plan: ``"frontier"`` (the DP optimizer)
+        or ``"floor_fallback"`` (the conservative plan used when the DP
+        frontier is empty). A ``"floor_fallback"`` plan can be the ENTIRE
+        uncollapsed graph -- callers must disclose it, never present it as
+        an optimized result (collapse memo D4: no silent floor).
+    k_cap_exhausted:
+        True when the frontier emptied because the root's own rendered
+        units exceed ``K_CAP`` -- every candidate point overshoots the cap
+        (the measured cliff mechanism on cached decoders).
+    root_own_units:
+        Rendered units the root owns directly (outside every top-level
+        child module); the variable that drives ``k_cap_exhausted``.
     """
 
     selected: frozenset[str]
@@ -191,6 +210,15 @@ class OptimizerResult:
     reason: str | None = None
     segments: Mapping[str, SegmentDescriptor] | None = None
     level: str | None = None
+    planner: str = "frontier"
+    k_cap_exhausted: bool = False
+    root_own_units: int = 0
+    #: The DP's scored node count for the winning frontier point, or ``None``
+    #: when no frontier point directly produced the plan (floor fallback,
+    #: schedule steps, post-pass segment condensation). The three-way parity
+    #: gate pins ``scored_k == count(plan) == emitted render units`` -- the
+    #: phantom-k class is exactly a divergence here.
+    scored_k: int | None = None
 
     def __post_init__(self) -> None:
         """Refuse construction when segment descriptors were dropped.
@@ -395,7 +423,13 @@ def select_collapse_plan(
 
             source_graph = build_source_graph(trace, context)
         full_plan = collapse_plan_for_source_graph(source_graph, None, None)
-        if trace not in _CEILING_WARNED_TRACES:
+        # N15 (themes memo item 1): an EXPLICIT compaction request above the
+        # ceiling must never be a silent byte-identical no-op. ``max`` (and
+        # float levels, which route through max at t=1.0 and the schedule
+        # elsewhere) re-warns on EVERY call; only the default-path ``auto``
+        # keeps the once-per-trace dedupe. Compact-above-ceiling arrives with
+        # the F11 deterministic fallback planner.
+        if mode == "max" or trace not in _CEILING_WARNED_TRACES:
             _CEILING_WARNED_TRACES.add(trace)
             warnings.warn(
                 f"TorchLens is skipping smart collapse: this trace has {op_count} "
@@ -495,6 +529,18 @@ def select_collapse_plan(
         first_pass_plan = None
     if best is None:
         selected, plan = _floor_fallback_selection(trace, context, source_graph)
+        # No silent floor (collapse memo D4): the frontier emptied, so this
+        # plan is the conservative fallback -- possibly the ENTIRE
+        # uncollapsed graph. Say so typed: name the planner, whether K_CAP
+        # exhaustion caused it, the root own-unit count, and the remedy.
+        root_own_units = _root_own_unit_count(trace, context, analysis, child_addresses)
+        k_cap_exhausted = root_own_units > K_CAP
+        cause = (
+            f"the root owns {root_own_units} rendered units, above K_CAP={K_CAP}, "
+            "so every frontier candidate overshoots the cap"
+            if k_cap_exhausted
+            else "no optimizer frontier was produced"
+        )
         result = OptimizerResult(
             selected=selected,
             repeat_folds={},
@@ -503,7 +549,13 @@ def select_collapse_plan(
             analyze_ms=analysis.elapsed_ms,
             select_ms=(time.perf_counter() - start) * 1000.0,
             g_star=None,
-            reason="floor_fallback: no optimizer frontier was produced",
+            reason=(
+                f"floor_fallback: {cause}; reduce the rendered graph with "
+                "module= focus, vis_call_depth, or rolled mode"
+            ),
+            planner="floor_fallback",
+            k_cap_exhausted=k_cap_exhausted,
+            root_own_units=root_own_units,
         )
         cached_by_context[cache_key] = result
         return result
@@ -576,6 +628,9 @@ def select_collapse_plan(
         select_ms=(time.perf_counter() - start) * 1000.0,
         g_star=winning_g,
         segments=segments,
+        # The scored claim binds only when the winning point's realization IS
+        # the returned plan; the segment post-pass discloses via None.
+        scored_k=instantiated_point.k if not segments else None,
     )
     cached_by_context[cache_key] = result
     return result
@@ -1091,6 +1146,8 @@ def _select_max_plan(
                 segments=segments,
                 level=level,
                 reason=None,
+                # The plan was swapped: auto's scored claim no longer binds.
+                scored_k=None,
             )
     # The auto fallback must keep auto's own segment descriptors: auto's
     # band-pressure branch can legitimately return a segmented plan, and
@@ -1241,11 +1298,9 @@ def _max_salience_floor_replacement(
         return None
     candidates: list[_FrontierPoint] = []
     for decision in _frontier_for_module(address, state, memo):
-        if (
-            decision.k == 1
-            and isinstance(decision.decision, _ModuleDecision)
-            and decision.decision.kind == "box"
-        ):
+        # M2b: a box is recognized by its decision KIND. The historical
+        # ``k == 1`` conjunct was only true under the phantom-k pricing.
+        if isinstance(decision.decision, _ModuleDecision) and decision.decision.kind == "box":
             continue
         candidates.append(_instantiate_module(address, decision.k, state, memo))
     if not candidates:
@@ -1962,413 +2017,6 @@ def _segment_prefix_candidate_ends(
     return candidates
 
 
-def _encode_segment_address(address: str) -> str:
-    """Return an injective Graphviz-safe encoding of one module address.
-
-    Escaping literal underscores before mapping dots keeps distinct addresses
-    distinct: ``a.b0`` becomes ``a_b0`` while ``a_b0`` becomes ``a__b0``.
-    """
-
-    return address.replace("_", "__").replace(".", "_")
-
-
-def _make_child_segment_descriptor(
-    trace: Trace,
-    context: RenderContext,
-    addresses: tuple[str, ...],
-    covered_ops: tuple[str, ...],
-) -> SegmentDescriptor:
-    """Build a renderer descriptor for one child segment."""
-
-    if covered_ops:
-        covered_entries = tuple(_trace_op_for_concrete_label(trace, label) for label in covered_ops)
-        if context.vis_mode == "rolled":
-            seen_bases: set[str] = set()
-            num_layers = 0
-            num_buffers = 0
-            for label, entry in zip(covered_ops, covered_entries, strict=True):
-                base = str(label).rsplit(":", 1)[0]
-                if base in seen_bases:
-                    continue
-                seen_bases.add(base)
-                num_layers += 1
-                num_buffers += bool(entry.is_buffer)
-        else:
-            num_layers = len(covered_entries)
-            num_buffers = sum(bool(entry.is_buffer) for entry in covered_entries)
-    else:
-        num_layers = sum(
-            int(getattr(trace.modules[address], "num_layers", 0) or 0) for address in addresses
-        )
-        buffer_labels = {
-            label
-            for address in addresses
-            for label in (getattr(trace.modules[address], "buffer_layers", ()) or ())
-        }
-        num_buffers = len(buffer_labels)
-    num_ops = max(0, num_layers - num_buffers)
-    num_params = sum(
-        int(getattr(trace.modules[address], "num_params", 0) or 0) for address in addresses
-    )
-    owner = _segment_owner_key(trace, addresses, context.vis_mode)
-    label = _child_segment_label(addresses, num_layers, num_buffers, num_params)
-    name = (
-        f"{_encode_segment_address(addresses[0])}__segment__"
-        f"{_encode_segment_address(addresses[-1])}pass1"
-    )
-    return SegmentDescriptor(
-        name=name,
-        kind="child",
-        label=label,
-        members=addresses,
-        ops=covered_ops,
-        owner=owner,
-        num_ops=num_ops,
-        num_buffers=num_buffers,
-        num_params=num_params,
-    )
-
-
-def _child_segment_covered_ops(
-    analysis: CollapseAnalysis,
-    addresses: tuple[str, ...],
-) -> tuple[str, ...]:
-    """Return concrete pass-qualified op labels covered by a child segment."""
-
-    labels: list[str] = []
-    for address in addresses:
-        signal = analysis.signals.get(address)
-        if signal is None:
-            continue
-        labels.extend(str(label) for label in signal.subtree_ops)
-    return tuple(dict.fromkeys(labels))
-
-
-def _make_op_segment_descriptor(
-    trace: Trace,
-    context: RenderContext,
-    labels: tuple[str, ...],
-    concrete: tuple[str, ...] | None = None,
-) -> SegmentDescriptor:
-    """Build a renderer descriptor for one operation segment.
-
-    Parameters
-    ----------
-    trace:
-        Trace being optimized.
-    context:
-        Rendering context.
-    labels:
-        Pass-free plan labels in segment order.
-    concrete:
-        Pass-qualified op labels matching ``labels``. Falls back to the plan
-        labels when concrete attribution is unavailable.
-    """
-
-    resolved = tuple(concrete) if concrete else tuple(labels)
-    owner = _op_segment_owner_key(trace, resolved, context.vis_mode)
-    label = _op_segment_label(trace, labels, resolved)
-    spanned = _op_segment_spanned_modules(trace, resolved, owner, context.vis_mode)
-    if spanned:
-        # r-b6 R19-5: a segment placed above its ops' module homes (top level
-        # or a shared ancestor) must DISCLOSE the modules it spans — the box
-        # otherwise silently strips module containment from every hidden op.
-        shown = ", ".join(f"@{module}" for module in spanned[:3])
-        if len(spanned) > 3:
-            shown += f", +{len(spanned) - 3} more"
-        label = f"{label} -- spans {shown}"
-    name = f"{resolved[0].replace(':', 'pass')}__segment__{resolved[-1].replace(':', 'pass')}"
-    return SegmentDescriptor(
-        name=name,
-        kind="op",
-        label=label,
-        ops=resolved,
-        owner=owner,
-        num_ops=len(resolved),
-        num_params=0,
-    )
-
-
-def _effective_render_module_stack(op: Op) -> tuple[str, ...]:
-    """Return the call-qualified module stack that clusters a visible op.
-
-    Mirrors the renderer's ``_raw_render_node_owner_key``: an atomic module's
-    own exit op stays visible while its innermost atomic box is dropped, so
-    that op clusters under the atomic module's parent call.
-    """
-
-    modules = [str(module) for module in getattr(op, "modules", ()) or ()]
-    if getattr(op, "is_atomic_module", False) and modules:
-        modules = modules[:-1]
-    return tuple(modules)
-
-
-def _crosses_module_call_boundary(
-    previous: tuple[str, ...],
-    current: tuple[str, ...],
-) -> bool:
-    """Return whether two adjacent rendered stacks cross a module-CALL reuse boundary.
-
-    A boundary is crossed exactly when some shared stack level holds two
-    different CALLS of the same module address (``core:1`` -> ``core:2``).
-    Levels holding genuinely different sibling modules are not boundaries:
-    merging across siblings is honest because the segment then owns their
-    exact call-qualified LCA.
-    """
-
-    for prev_entry, entry in zip(previous, current):
-        if prev_entry == entry:
-            continue
-        if prev_entry.rsplit(":", 1)[0] == entry.rsplit(":", 1)[0]:
-            return True
-    return False
-
-
-def _op_segment_owner_key(
-    trace: Trace,
-    labels: tuple[str, ...],
-    vis_mode: str = "unrolled",
-) -> str | None:
-    """Return the lowest common rendered module cluster for operation labels.
-
-    Unrolled clusters are per module CALL, so commonality is exact
-    call-qualified stack equality: a segment whose ops span several calls of
-    one reused module has no common call-level entry and owns the honest LCA
-    (the shared parent call, or ``None`` for top level) instead of falsely
-    claiming the first call (round-24 C1). Rolled clusters merge passes per
-    address, so rolled commonality stays pass-free AND the returned owner
-    must be the pass-free address itself: the rolled cluster flush drains
-    buckets by pass-free address, so a pass-qualified owner posts the labeled
-    segment node into a bucket no rolled cluster ever drains and Graphviz
-    materializes an unlabeled default ellipse instead (round-27).
-    """
-
-    module_stacks: list[tuple[str, ...]] = []
-    for label in labels:
-        op = _trace_op_for_concrete_label(trace, label)
-        module_stacks.append(_effective_render_module_stack(op))
-    if not module_stacks or any(not stack for stack in module_stacks):
-        return None
-    common: str | None = None
-    for values in zip(*module_stacks, strict=False):
-        if vis_mode == "rolled":
-            keys = {value.rsplit(":", 1)[0] for value in values}
-        else:
-            keys = set(values)
-        if len(keys) != 1:
-            break
-        common = next(iter(keys))
-    return common
-
-
-def _trace_op_for_render_label(trace: Trace, label: str) -> Op:
-    """Return the trace op for a pass-free rendered label."""
-
-    try:
-        return trace.ops[f"{label}:1"]
-    except (KeyError, IndexError):
-        return trace.ops[label]
-
-
-def _op_segment_spanned_modules(
-    trace: Trace,
-    labels: tuple[str, ...],
-    owner: str | None,
-    vis_mode: str,
-) -> list[str]:
-    """Return the distinct module homes an op segment spans below its owner.
-
-    r-b6 R19-5: an op segment owns the honest LCA of its members, which can
-    sit ABOVE the modules the ops actually live in (top level when the
-    members straddle sibling modules). The rendered box then carries no
-    module containment at all, so the label must name the spanned modules.
-    Returns the ordered distinct immediate homes below ``owner`` when the
-    placement actually loses containment information, else ``[]``.
-
-    T9 (grind-p3): the walk reads the op's FULL module stack, not the
-    renderer's effective stack. The effective stack drops an atomic
-    module's own innermost level — a presentation choice (the renderer
-    keeps the op and drops the box) — and inheriting that drop here made
-    the disclosure silently omit hidden atomic module calls from the
-    ``spans @...`` list.
-    """
-
-    homes: list[str] = []
-    has_direct_member = False
-    for label in labels:
-        op = _trace_op_for_concrete_label(trace, label)
-        stack: tuple[str, ...] = tuple(str(module) for module in getattr(op, "modules", ()) or ())
-        if vis_mode == "rolled":
-            stack = tuple(value.rsplit(":", 1)[0] for value in stack)
-        if owner is None or owner not in stack:
-            home = stack[0] if stack else None
-        else:
-            owner_depth = stack.index(owner)
-            home = stack[owner_depth + 1] if owner_depth + 1 < len(stack) else None
-        if home is None:
-            has_direct_member = True
-        elif home not in homes:
-            homes.append(home)
-    if not homes:
-        return []
-    if len(homes) > 1 or owner is None or has_direct_member:
-        return homes
-    return []
-
-
-def _trace_op_for_concrete_label(trace: Trace, label: str) -> Op:
-    """Return the trace op for a concrete or legacy pass-free label.
-
-    Pass-qualified labels are exact accessor keys and resolve without any
-    fuzzy lookup; legacy pass-free labels fall back to the render-label
-    helper.
-    """
-
-    if ":" in label:
-        return trace.ops[label]
-    return _trace_op_for_render_label(trace, label)
-
-
-def _op_segment_label(
-    trace: Trace,
-    labels: tuple[str, ...],
-    concrete: tuple[str, ...],
-) -> str:
-    """Return a class-free range label for an operation segment.
-
-    Endpoints stay pass-free for single-pass layers and show the concrete
-    pass-qualified label when the layer runs multiple passes, so two per-pass
-    segments of a reused block are visually distinguishable and each label
-    stands for exactly its own hidden ops.
-    """
-
-    # Exact-key membership only: probing missing keys through the public
-    # accessor would enter fuzzy lookup, which canonical collapse work must
-    # never do.
-    valid = {str(op.label) for op in trace.ops}
-
-    def endpoint(base: str, resolved: str) -> str:
-        """Render a range endpoint, keeping its pass suffix only for a multi-pass label."""
-
-        multipass = f"{base}:2" in valid
-        return resolved if ":" in resolved and multipass else base
-
-    first = endpoint(labels[0], concrete[0])
-    last = endpoint(labels[-1], concrete[-1])
-    return f"{first} ... {last} -- {len(labels)} ops"
-
-
-def _segment_owner_key(
-    trace: Trace,
-    addresses: tuple[str, ...],
-    vis_mode: str = "unrolled",
-) -> str | None:
-    """Return the lowest rendered module cluster that owns ``addresses``.
-
-    Child segments replace consecutive single-call child BOXES (multi-call
-    members are refused at run construction), and the renderer places those
-    boxes with the lexical parent plus the member's own call index
-    (``_collapsed_module_owner_key``) -- always ``parent:1`` here. The
-    segment owner mirrors that exact box rule so a segment always renders in
-    the same cluster the boxes it replaces would have; deriving it from call
-    nesting instead would split a segment from its unabsorbed sibling boxes.
-
-    Rolled clusters are keyed by pass-FREE address (mirroring
-    ``_collapsed_module_owner_key``'s rolled branch), so the rolled owner is
-    the bare parent address: a pass-qualified owner lands in a bucket the
-    rolled cluster flush never drains and the labeled segment node is
-    silently dropped (round-27).
-    """
-
-    parent = addresses[0].rsplit(".", 1)[0] if "." in addresses[0] else "self"
-    if parent == "self" or parent not in trace.modules:
-        return None
-    if vis_mode == "rolled":
-        return parent
-    parent_key = f"{parent}:1"
-    return parent_key if parent_key in trace.modules else parent
-
-
-def _members_are_name_consecutive(addresses: tuple[str, ...]) -> bool:
-    """Return whether member leaf names form an ascending consecutive range.
-
-    Segment legality is flow-based, so members can be name-noncontiguous or
-    name-descending; a ``first-last`` interval label is only honest when the
-    leaf names share one parent and one stem and count up by exactly one.
-    """
-
-    parents = {address.rsplit(".", 1)[0] if "." in address else "" for address in addresses}
-    if len(parents) != 1:
-        return False
-    stems: list[str] = []
-    values: list[int] = []
-    for address in addresses:
-        leaf = address.rsplit(".", 1)[-1]
-        # Manual trailing-digit split, equivalent to
-        # ``re.fullmatch(r"(.*?)(\d+)", leaf)`` (lazy stem = maximal digit
-        # suffix): that pattern backtracks QUADRATICALLY on
-        # artifact-supplied leaves like "9"*n + "x" (measured 9s at 40k
-        # chars). ``str.isdecimal`` is exactly the ``\d`` character class.
-        cut = len(leaf)
-        while cut > 0 and leaf[cut - 1].isdecimal():
-            cut -= 1
-        if cut == len(leaf):
-            return False
-        stems.append(leaf[:cut])
-        values.append(int(leaf[cut:]))
-    if len(set(stems)) != 1:
-        return False
-    return all(right == left + 1 for left, right in zip(values, values[1:]))
-
-
-def _child_segment_range_text(addresses: tuple[str, ...]) -> str:
-    """Return an honest member summary for a child-segment label.
-
-    Name-consecutive runs keep the compact ``prefix.first-last`` interval.
-    Flow-legal but name-noncontiguous runs enumerate their members IN FULL,
-    regardless of count (R19): an elided ``first, second, ..., last`` reads
-    as a complete interval and overstates hidden membership whenever the
-    run skips names that render as separate visible boxes.
-    """
-
-    first = addresses[0]
-    prefix = first.rsplit(".", 1)[0] if "." in first else ""
-    leaves = [address.rsplit(".", 1)[-1] for address in addresses]
-    if _members_are_name_consecutive(addresses):
-        range_text = f"{leaves[0]}-{leaves[-1]}"
-        return f"{prefix}.{range_text}" if prefix else range_text
-    listed = ", ".join(leaves)
-    return f"{prefix}.{{{listed}}}" if prefix else f"{{{listed}}}"
-
-
-def _child_segment_label(
-    addresses: tuple[str, ...],
-    num_layers: int,
-    num_buffers: int,
-    num_params: int,
-) -> str:
-    """Return a class-free range label for a child segment."""
-
-    from ._render_common import format_collapsed_module_contents
-
-    range_text = _child_segment_range_text(addresses)
-    contents = format_collapsed_module_contents(num_layers, num_buffers)
-    return (
-        f"{range_text} -- {len(addresses)} blocks, {contents}, "
-        f"{_format_param_count(num_params)} params"
-    )
-
-
-def _format_param_count(value: int) -> str:
-    """Return a compact parameter count for segment labels."""
-
-    if value >= 1_000_000:
-        return f"{value / 1_000_000:.1f}M"
-    if value >= 1_000:
-        return f"{value / 1_000:.1f}K"
-    return str(value)
-
-
 def _instantiate_best_point(
     trace: Trace,
     context: RenderContext,
@@ -2899,7 +2547,13 @@ def _frontier_for_module(
         box_cost = _cached_box_cost(state.trace, signal, state)
         points.append(
             _DecisionPoint(
-                k=1,
+                # M2a (collapse memo D1): a selected box renders one box PER
+                # CALL plus the atomic own-output ops the renderer keeps, so
+                # the scored k is that realized count from the cached render
+                # units -- k=1 here was the phantom-k pricing lie (the DP
+                # optimized a number that is not what gets drawn). Rolled
+                # contexts render one merged box and genuinely charge 1.
+                k=_module_box_k(state, address),
                 cost=box_cost,
                 decision=_ModuleDecision("box"),
                 box_costs=(box_cost,),
@@ -2910,6 +2564,17 @@ def _frontier_for_module(
     frontier = _prune_frontier(points)
     memo[key] = frontier
     return frontier
+
+
+def _module_box_k(state: _OptimizerState, address: str) -> int:
+    """Return the honest rendered-unit count for selecting ``address`` as a box.
+
+    Delegates to :func:`_module_box_plan_nodes` -- the exact function that
+    REALIZES the box in the plan -- so the scored k and the realized plan
+    count agree by construction (the three-way parity gate pins this).
+    """
+
+    return len(_module_box_plan_nodes(state.trace, state.context, address))
 
 
 def _expanded_points(
@@ -2994,32 +2659,44 @@ def _expanded_structure(
     return result
 
 
-def _cheap_synthetic_child_condensed_flow_graph(
+def _synthetic_parent_owned_ops(
     parent_address: str,
-    child_addresses: Sequence[str],
+    child_sets: Mapping[str, set[str]],
     state: _OptimizerState,
-) -> ChildCondensedFlowGraph:
-    """Build a lightweight child graph without trace substring lookups."""
+) -> tuple[str, ...]:
+    """Return the parent's own non-buffer ops for a synthetic child graph.
 
-    op_order = {op.label: index for index, op in enumerate(state.trace.ops)}
-    child_sets = {
-        child: set(state.analysis.signals[child].subtree_ops)
-        for child in child_addresses
-        if child in state.analysis.signals
-    }
-    flow_children = tuple(
-        sorted(
-            child_sets,
-            key=lambda child: (
-                min((op_order.get(label, 10**12) for label in child_sets[child]), default=10**12),
-                child,
-            ),
-        )
+    M1 (collapse memo D1): the parent's own ops come from the SAME subtree
+    set-difference the root path uses honestly. Stamping () here made every
+    synthetic-graph parent claim zero own ops, so the optimizer scored a
+    node count that was not what gets drawn (phantom k) on albert-class and
+    branchy models.
+    """
+
+    parent_signal = state.analysis.signals.get(parent_address)
+    if parent_signal is None:
+        return ()
+    child_ops = {label for labels in child_sets.values() for label in labels}
+    return tuple(
+        label
+        for label in parent_signal.subtree_ops
+        if label not in child_ops and not getattr(state.trace.ops[label], "is_buffer", False)
     )
-    owner_by_label: dict[str, str] = {}
-    for child, labels in child_sets.items():
-        for label in labels:
-            owner_by_label[label] = child
+
+
+def _cross_owner_edges(
+    state: _OptimizerState,
+    owner_by_label: Mapping[str, str],
+) -> set[tuple[str, str]]:
+    """Return owner-to-owner dataflow edges implied by op-level children.
+
+    Returns
+    -------
+    set
+        Directed edges between owning children, plus ``external_source:``
+        pseudo-nodes for dataflow entering from outside every child.
+    """
+
     edges: set[tuple[str, str]] = set()
     for op in state.trace.ops:
         source = owner_by_label.get(op.label)
@@ -3035,6 +2712,37 @@ def _cheap_synthetic_child_condensed_flow_graph(
                 continue
             elif source != target:
                 edges.add((source, target))
+    return edges
+
+
+def _cheap_synthetic_child_condensed_flow_graph(
+    parent_address: str,
+    child_addresses: Sequence[str],
+    state: _OptimizerState,
+) -> ChildCondensedFlowGraph:
+    """Build a lightweight child graph without trace substring lookups."""
+
+    op_order = {op.label: index for index, op in enumerate(state.trace.ops)}
+    child_sets = {
+        child: set(state.analysis.signals[child].subtree_ops)
+        for child in child_addresses
+        if child in state.analysis.signals
+    }
+    parent_owned_ops = _synthetic_parent_owned_ops(parent_address, child_sets, state)
+    flow_children = tuple(
+        sorted(
+            child_sets,
+            key=lambda child: (
+                min((op_order.get(label, 10**12) for label in child_sets[child]), default=10**12),
+                child,
+            ),
+        )
+    )
+    owner_by_label: dict[str, str] = {}
+    for child, labels in child_sets.items():
+        for label in labels:
+            owner_by_label[label] = child
+    edges = _cross_owner_edges(state, owner_by_label)
     for left, right in zip(flow_children[:-1], flow_children[1:], strict=True):
         edges.add((left, right))
     ordered_nodes = (
@@ -3055,7 +2763,7 @@ def _cheap_synthetic_child_condensed_flow_graph(
     return ChildCondensedFlowGraph(
         parent=parent_address,
         flow_children=flow_children,
-        parent_owned_ops=(),
+        parent_owned_ops=parent_owned_ops,
         nodes=ordered_nodes,
         edges=sorted_edges,
         child_external_endpoint_counts=_external_endpoint_counts(sorted_edges, flow_children),
@@ -3231,14 +2939,18 @@ def _component_boxes(component: RoleComponent, state: _OptimizerState) -> _Decis
     """Return the all-boxes treatment for a component when legal."""
 
     costs: list[float] = []
+    total_k = 0
     for address in component.members:
         signal = state.analysis.signals[address]
         if not _eligible_module_box(state, address, signal):
             return None
         cost = _cached_box_cost(state.trace, signal, state)
         costs.append(cost)
+        # M2a: one box per rendered CALL plus kept atomic ops, per member --
+        # scoring one unit per member address was the phantom-k pricing lie.
+        total_k += _module_box_k(state, address)
     return _DecisionPoint(
-        k=len(component.members),
+        k=total_k,
         cost=round(sum(costs), 6),
         decision=_ComponentDecision("boxes"),
         box_costs=tuple(costs),
@@ -3259,11 +2971,8 @@ def _component_expanded(
         tuple(
             point
             for point in _frontier_for_module(address, state, memo)
-            if not (
-                point.k == 1
-                and isinstance(point.decision, _ModuleDecision)
-                and point.decision.kind == "box"
-            )
+            # M2b: recognize boxes by decision kind, never by k == 1.
+            if not (isinstance(point.decision, _ModuleDecision) and point.decision.kind == "box")
         )
         for address in component.members
     ]
@@ -3299,11 +3008,8 @@ def _single_member_expanded(
         return cached
     points: list[_DecisionPoint] = []
     for point in _frontier_for_module(address, state, memo):
-        if (
-            point.k == 1
-            and isinstance(point.decision, _ModuleDecision)
-            and point.decision.kind == "box"
-        ):
+        # M2b: recognize boxes by decision kind, never by k == 1.
+        if isinstance(point.decision, _ModuleDecision) and point.decision.kind == "box":
             continue
         points.append(
             _DecisionPoint(
@@ -4289,6 +3995,33 @@ def _optimizer_total_units(trace: Trace, context: RenderContext) -> int:
     if context.vis_mode != "rolled":
         return max(len(trace.ops), 1)
     return max(count(collapse_plan_for_trace(trace, None, None, context)), 1)
+
+
+def _root_own_unit_count(
+    trace: Trace,
+    context: RenderContext,
+    analysis: CollapseAnalysis,
+    child_addresses: Mapping[str, tuple[str, ...]],
+) -> int:
+    """Return how many rendered units the root owns outside every top-level child.
+
+    The K_CAP cliff variable (collapse memo D4): when this exceeds ``K_CAP``
+    every frontier candidate overshoots the cap and the DP frontier empties.
+    Rolled contexts count merged rendered units; unrolled contexts count the
+    same non-buffer op set-difference ``_expanded_structure`` scores.
+    """
+
+    if context.vis_mode == "rolled":
+        return len(_rendered_own_unit_map(trace, context).get("self", ()))
+    top_level = child_addresses.get("self", ()) or _top_level_fallback_addresses(trace)
+    child_ops = {
+        label
+        for child in top_level
+        for label in getattr(analysis.signals.get(child), "subtree_ops", ())
+    }
+    return sum(
+        1 for op in trace.ops if op.label not in child_ops and not getattr(op, "is_buffer", False)
+    )
 
 
 def _child_address_map(trace: Trace) -> dict[str, tuple[str, ...]]:

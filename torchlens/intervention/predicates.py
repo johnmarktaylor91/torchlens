@@ -80,43 +80,6 @@ def as_intervention_decision(
     )
 
 
-def when(
-    condition: Callable[[Any], bool],
-    action: InterventionPredicateDecision,
-    *,
-    direction: HelperDirection | None = None,
-) -> InterventionPredicate:
-    """Return a predicate that fires ``action`` when ``condition`` matches.
-
-    Parameters
-    ----------
-    condition:
-        Predicate or selector evaluated against a ``RecordContext``.
-    action:
-        Intervention action sugar to normalize when the condition matches.
-    direction:
-        Signal direction to intervene on.
-
-    Returns
-    -------
-    InterventionPredicate
-        Predicate returning an ``InterventionDecision`` or ``None``.
-    """
-
-    decision = as_intervention_decision(action, direction=direction)
-
-    def _predicate(ctx: Any) -> InterventionDecision | None:
-        """Evaluate the conditional intervention predicate."""
-
-        if condition(ctx):
-            return decision
-        return None
-
-    _predicate.selector = condition  # type: ignore[attr-defined]
-    _predicate.decision = decision  # type: ignore[attr-defined]
-    return _predicate
-
-
 def add(delta: torch.Tensor | float | int, *, force_shape_change: bool = False) -> HelperSpec:
     """Create a helper that adds ``delta`` to an out tensor.
 
@@ -214,5 +177,4 @@ __all__ = [
     "add",
     "as_intervention_decision",
     "replace_with",
-    "when",
 ]

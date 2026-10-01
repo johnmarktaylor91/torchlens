@@ -905,7 +905,11 @@ default-keep); mask-application semantics documented-unstable*
   default there — rerun/set_only keep refusing typed). Each
   Selection-targeted do() appends an audit record (query repr + resolve
   digest + per-site relations) to `trace.intervention_audit` (persisted as
-  of tlspec v8 with its load-validated digest relation).
+  of tlspec v8 with its load-validated digest relation; the tlspec v9 write
+  admits the shipped per-site `source` disclosure, the PARAM row kind and
+  PARAM-shaped recipes, and the EVENT transaction-envelope row kind with
+  its optional hash-chain extension -- pre-v9 readers refused a saved
+  selection- or param-intervened artifact's own load).
 
 **tl.patch_from(source_trace)** — *unstable — no deprecation shim owed*
 : Edit factory patching targeted sites from another trace's recorded

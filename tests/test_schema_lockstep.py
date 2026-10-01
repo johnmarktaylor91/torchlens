@@ -1173,11 +1173,17 @@ def test_facade_plumbing_allowance_stays_minimal() -> None:
 #: also update ``docs/reference/merged_trace_contract.md``, whose stated value
 #: is checked against the code below.
 VERSION_AUTHORITY_PINS: dict[str, int] = {
-    # v8: the coordinated feature-sprint activation bump (2026-08-17) —
-    # every S3 pre-release-gated family flipped to its persisting policy
-    # together with its load-validation rows. MERGED_TLSPEC_VERSION versions
-    # the merged ROOT manifest independently and did not move.
-    "TLSPEC_VERSION": 8,
+    # v9: the completeness-megasprint coordinated schema write (2026-08-27,
+    # lane C07) — audit-row grammar admissions (ACT site source, PARAM
+    # rows/recipes, EVENT envelope + hash-chain extension), the sidecar
+    # annotations flip to plain persistence, reserved annotation families
+    # (health_facts, capture_advisories), and the entry-dark v9 field slots
+    # (injection provenance, source snapshots, structure evidence), each
+    # with fail-closed load validation. Contract of record:
+    # torchlens/schemas/writer_contract_v9.json (v8 pinned at
+    # tests/release_goldens/writer_contract_v8.json). MERGED_TLSPEC_VERSION
+    # versions the merged ROOT manifest independently and did not move.
+    "TLSPEC_VERSION": 9,
     "MIN_TLSPEC_VERSION": 6,
     "MERGED_TLSPEC_VERSION": 7,
 }

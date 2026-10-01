@@ -29,8 +29,8 @@ from __future__ import annotations
 import warnings
 from typing import Any
 
+from ..data_classes._site_key import SITE_KEY_PREFIX
 from ..errors._base import TorchLensWarning
-from ._site_key import SITE_KEY_PREFIX
 
 GROUPING_POLICY_SCHEMA = "grouping_policy_v1"
 
