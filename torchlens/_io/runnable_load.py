@@ -100,6 +100,7 @@ from ..utils._callable_safety import (
     unsafe_callable_reason,
 )
 from ..utils._torch_compat import resolve_runnable_torch_alias
+from ..utils.display import identity as _module_boundary_identity
 from ._torch_symbols import torch_attr
 
 _ALLOWED_EXACT_ROOTS: Mapping[str, Any] = {
@@ -117,6 +118,13 @@ _ENUMERATED_TORCH_NAMESPACES = frozenset(
         "torch.nn.functional",
         "torch.Tensor",
         "torch._C._nn",
+        # ``torch.fft.<name>`` / ``torch.linalg.<name>`` ARE ``torch._C._fft.fft_<name>`` /
+        # ``torch._C._linalg.linalg_<name>`` (bound by ``_add_docstr``), so captured keys
+        # record the private module. Enumerating it resolves the recorded callable itself
+        # on every torch version, instead of relying on the producer-version-bounded
+        # private-to-public alias rows.
+        "torch._C._fft",
+        "torch._C._linalg",
         "torch._C._special",
         "torch._C._VariableFunctions",
         "torch._C._VariableFunctionsClass",
@@ -126,6 +134,26 @@ _ENUMERATED_TORCH_NAMESPACES = frozenset(
     }
 )
 _REMOVED_TORCH_CALLABLES = frozenset({"torch.gesv"})
+# Private builtin modules whose callables torch re-exports under a public namespace with
+# this name prefix dropped (``torch.fft.rfft is torch._C._fft.fft_rfft``).
+_PRIVATE_BUILTIN_PUBLIC_PREFIXES: Mapping[str, str] = {
+    "torch._C._fft": "fft_",
+    "torch._C._linalg": "linalg_",
+    "torch._C._special": "special_",
+}
+# TorchLens-owned synthetic ops that capture records as computational calls. The module
+# boundary mint (``_state._decorated_identity``: ``nn.Identity`` and pass-through module
+# outputs) records ``torchlens.utils.display.identity``, a pure pass-through. This is a
+# closed table keyed on the exact persisted registry key and resolved by in-memory
+# reference: no artifact-selected module is ever imported.
+_TORCHLENS_SYNTHETIC_CALLABLES: Mapping[FunctionRegistryKey, tuple[str, Callable[..., Any]]] = {
+    FunctionRegistryKey(
+        "custom",
+        "identity",
+        "function",
+        import_path="torchlens.utils.display:identity",
+    ): ("torchlens.utils.display.identity", _module_boundary_identity),
+}
 # Canonical copy lives in ``torchlens.utils._callable_safety`` so the capture-side
 # keyer, this resolver, and the security gate's recognized-operator predicate can
 # never drift apart on the safe pure-read property surface.
@@ -1481,7 +1509,7 @@ def _normalized_callable_name(name: str | None) -> str | None:
 
 
 def _callable_registry_contradiction(
-    registry_qualname: str,
+    registry_key: FunctionRegistryKey,
     affected_ops: tuple[str, ...],
     recorded_func_names: Mapping[str, str | None],
 ) -> tuple[str, str] | None:
@@ -1504,12 +1532,15 @@ def _callable_registry_contradiction(
     registry qualname (not the resolved one) so a version-alias move never
     false-refuses, and normalizes the operator dunder so the measured
     record-spelling divergences (``__neg__``/``neg``, ``__pow__``/``pow``,
-    ``__ipow__``/``pow_``) are not read as contradictions. A record that states no name (a source op's
-    ``"none"``, a missing label) is no opinion, never a contradiction.
+    ``__ipow__``/``pow_``) are not read as contradictions. A private torch builtin
+    key (``torch._C._fft:fft_rfft``) also accepts its public binding name
+    (``rfft``, see ``_registry_name_spellings``), the name the op records. A record
+    that states no name (a source op's ``"none"``, a missing label) is no opinion,
+    never a contradiction.
 
     Parameters
     ----------
-    registry_qualname:
+    registry_key:
         The persisted execution authority for the resolved registry entry.
     affected_ops:
         Op labels driven by this registry entry (``"add_1_2:1"`` form).
@@ -1524,13 +1555,17 @@ def _callable_registry_contradiction(
         ``None`` when every op that states a name agrees with the authority.
     """
 
-    authority = _normalized_callable_name(registry_qualname)
-    if authority is None:
+    authorities = {
+        name
+        for name in map(_normalized_callable_name, _registry_name_spellings(registry_key))
+        if name is not None
+    }
+    if not authorities:
         return None
     for op_label in affected_ops:
         raw_recorded = recorded_func_names.get(op_label.split(":")[0])
         recorded = _normalized_callable_name(raw_recorded)
-        if recorded is None or recorded == authority:
+        if recorded is None or recorded in authorities:
             continue
         # Sanctioned canonicalization pair (round-31 M6, r28 reconcile): the
         # ``Tensor.data`` surface records the canonical ``detach`` callable as
@@ -1541,10 +1576,45 @@ def _callable_registry_contradiction(
         # not a self-contradiction. One direction only: any OTHER authority for
         # a ``data`` op, and a ``detach``-named op with a non-detach authority,
         # still refuse.
-        if recorded == "data" and authority == "detach":
+        if recorded == "data" and "detach" in authorities:
             continue
         return str(raw_recorded), op_label
     return None
+
+
+def _registry_name_spellings(key: FunctionRegistryKey) -> tuple[str, ...]:
+    """Return the callable names an op driven by ``key`` may legitimately record.
+
+    Torch binds each private builtin of ``torch._C._fft`` / ``_linalg`` / ``_special``
+    under its public namespace with the namespace prefix dropped
+    (``torch.fft.rfft is torch._C._fft.fft_rfft``), and capture records the public
+    name as the op's ``func_name``. The registry key keeps the private qualname, so
+    both spellings name the same callable. Every other key has exactly one spelling.
+
+    Parameters
+    ----------
+    key:
+        Persisted registry key of the resolved entry.
+
+    Returns
+    -------
+    tuple[str, ...]
+        The registry qualname, plus the public binding name for a private builtin key.
+    """
+
+    if key.namespace != "custom" or key.import_path is None:
+        return (key.qualname,)
+    module_name, separator, qualname = key.import_path.partition(":")
+    prefix = _PRIVATE_BUILTIN_PUBLIC_PREFIXES.get(module_name)
+    if (
+        separator != ":"
+        or prefix is None
+        or qualname != key.qualname
+        or not qualname.startswith(prefix)
+        or len(qualname) == len(prefix)
+    ):
+        return (key.qualname,)
+    return (key.qualname, qualname[len(prefix) :])
 
 
 class DescriptorStructuralBoundError(_ActionableErrorMixin, TorchLensError, ValueError):
@@ -2313,6 +2383,21 @@ def _resolve_registry_entry(
     """Resolve one unique registry entry through the locked torch ladder."""
 
     key = entry.key
+    synthetic = _TORCHLENS_SYNTHETIC_CALLABLES.get(key)
+    if synthetic is not None:
+        synthetic_qualname, synthetic_func = synthetic
+        return _resolved_callable(
+            entry,
+            synthetic_func,
+            resolved_qualname=synthetic_qualname,
+            provenance=f"torchlens_synthetic:{synthetic_qualname}",
+            status=ResolverStatus.RESOLVED_EXACT,
+            descriptor=descriptor,
+            affected_ops=affected_ops,
+            calls=calls,
+            moved=False,
+            recorded_func_names=recorded_func_names,
+        )
     stock_path = _stock_path_from_key(key)
     if key.namespace == "custom" and stock_path is None:
         diagnostic = _diagnostic(
@@ -2492,7 +2577,7 @@ def _resolved_callable(
     # this gate closes the whole class: only pure, side-effect-free forward/
     # tensor ops may resolve. Note torch.load IS in get_orig_torch_funcs(), so
     # gating on the wrapped-op inventory would NOT suffice.
-    if not is_pure_forward_callable(original):
+    if not is_pure_forward_callable(original) and not _is_torchlens_synthetic_callable(original):
         diagnostic = _diagnostic(
             RunnableErrorCode.UNTRUSTED_CUSTOM_IMPORT,
             "Resolved callable is not a pure forward/tensor op and is refused "
@@ -2535,7 +2620,7 @@ def _resolved_callable(
     # measured spellings that differ between the records.
     if recorded_func_names is not None:
         contradiction = _callable_registry_contradiction(
-            entry.key.qualname, affected_ops, recorded_func_names
+            entry.key, affected_ops, recorded_func_names
         )
         if contradiction is not None:
             recorded_name, op_label = contradiction
@@ -2581,6 +2666,24 @@ def _resolved_callable(
         ),
         func=original,
     )
+
+
+def _is_torchlens_synthetic_callable(func: Callable[..., Any]) -> bool:
+    """Return whether ``func`` is one of the vetted TorchLens synthetic-op callables.
+
+    Parameters
+    ----------
+    func:
+        Unwrapped resolved callable.
+
+    Returns
+    -------
+    bool
+        ``True`` only for the exact in-memory objects of
+        ``_TORCHLENS_SYNTHETIC_CALLABLES`` (object identity, never a name match).
+    """
+
+    return any(func is target for _name, target in _TORCHLENS_SYNTHETIC_CALLABLES.values())
 
 
 def _unavailable_resolution(
