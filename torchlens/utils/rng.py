@@ -1026,6 +1026,13 @@ _TORCH_RNG_UNIMPORTED_MODULE_EXTRAS: tuple[tuple[str, str], ...] = (
         "set_rng_state/cuda.set_rng_state mutation rows, same composition as "
         "torch.random.fork_rng above (behaviorally pinned)",
     ),
+    (
+        "torch.distributed.pipeline.sync.checkpoint.save_rng_states",
+        "the SAVE half of the same torchgpipe-derived pair above: calls "
+        "torch.get_rng_state/torch.cuda.get_rng_state and returns the state "
+        "tensor(s) -- structurally covered the same way those module-patched "
+        "get_rng_state rows already are (r39 tensor->host escape belt)",
+    ),
 )
 
 
