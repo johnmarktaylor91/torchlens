@@ -216,17 +216,29 @@ class TestJaxToleranceDerivation:
 
     @pytest.mark.backend_jax
     def test_live_jax_fp64_corruption_fails(self) -> None:
-        """With jax installed, the full oracle refuses fp64 corruption."""
+        """With jax installed, the full oracle refuses fp64 corruption.
+
+        ``jax.config`` is process-global: an unscoped ``update("jax_enable_x64",
+        True)`` stuck enabled for the rest of the test session (order-dependent
+        under pytest-randomly), promoting every later jax trace's float32
+        arrays to float64 and cascading into unrelated capture/validation
+        failures across the whole jax suite. Restore the prior value so this
+        test's x64 probe never escapes its own scope.
+        """
 
         jax = pytest.importorskip("jax")
+        previous_x64 = jax.config.jax_enable_x64
         jax.config.update("jax_enable_x64", True)
-        import jax.numpy as jnp
+        try:
+            import jax.numpy as jnp
 
-        from torchlens.backends.jax.backend import _values_close
+            from torchlens.backends.jax.backend import _values_close
 
-        saved = jnp.ones((8,), dtype=jnp.float64)
-        assert not _values_close(saved * (1.0 + 1e-6), saved)
-        assert _values_close(saved + 0.0, saved)
+            saved = jnp.ones((8,), dtype=jnp.float64)
+            assert not _values_close(saved * (1.0 + 1e-6), saved)
+            assert _values_close(saved + 0.0, saved)
+        finally:
+            jax.config.update("jax_enable_x64", previous_x64)
 
 
 class TestJaxFiniteDifferenceStep:
