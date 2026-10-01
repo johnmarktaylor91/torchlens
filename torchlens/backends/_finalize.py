@@ -637,34 +637,56 @@ def _apply_recurrence_relabel_epilogue(
     lists, backend sidecars) must be relabeled unconditionally -- this runs
     whether or not recurrence grouping ran (``assignments`` may be ``None``).
     Raw labels stay resolvable through ``lookup_keys`` either way.
+
+    TORCH PARITY: the torch backend (``postprocess/labeling.py``) relabels
+    graph-edge fields (``parents``, ``children``, the lineage sets) through
+    the CONDITIONAL mapping -- a referenced op's bare ``layer_label`` when
+    its layer has a single pass, its pass-qualified ``label`` only when the
+    layer is multi-pass (``_raw_to_final_layer_labels`` /
+    ``final_lookup_label``) -- never the unconditionally-qualified op label.
+    ``input_layers``/``output_layers``/``buffer_layers`` instead always use
+    the bare ``layer_label`` (``_rename_model_history_layer_names``), while
+    ``internal_source_ops`` and the equivalence/recurrence groups always use
+    the fully pass-qualified op label. Previews must match this exactly so
+    backend-neutral code (and relation accessors) see the same convention
+    regardless of backend.
     """
 
     raw_dict = trace._raw_graph_ws.raw_layer_dict
-    raw_to_final = {label: raw_dict[label].label for label in raw_dict}
-    changed = {label: final for label, final in raw_to_final.items() if final != label}
-    if changed:
-        for op_log in raw_dict.values():
-            relabel_edge_metadata(op_log, changed)
+    raw_to_final_op = {label: raw_dict[label].label for label in raw_dict}
+    raw_to_final_layer = {
+        label: (op_log.layer_label if op_log.num_passes == 1 else op_log.label)
+        for label, op_log in raw_dict.items()
+    }
+    raw_to_final_bare = {label: op_log.layer_label for label, op_log in raw_dict.items()}
+    changed_op = {label: final for label, final in raw_to_final_op.items() if final != label}
+    changed_layer = {label: final for label, final in raw_to_final_layer.items() if final != label}
+    changed_bare = {label: final for label, final in raw_to_final_bare.items() if final != label}
+    if changed_op or changed_layer or changed_bare:
+        if changed_layer:
+            for op_log in raw_dict.values():
+                relabel_edge_metadata(op_log, changed_layer)
         # Trace-side input/output/source lists speak OP space: each entry must
         # resolve to the specific pass that produced the value (``output_ops``
-        # reads them through ``trace[label]``). Inputs and internal sources are
-        # pseudo-ops and never group; only lists naming grouped computational
-        # ops (an output produced by a later pass) are rewritten, to the
-        # pass-qualified final label. The module-log builders map these to
-        # layer space at their own boundary.
-        for attr_name in (
-            "input_layers",
-            "output_layers",
-            "internal_source_layers",
-            "internal_source_ops",
-            "buffer_layers",
+        # reads them through ``trace[label]``). ``internal_source_ops`` names
+        # grouped computational ops and is rewritten to the pass-qualified
+        # final label; ``input_layers``/``output_layers``/``buffer_layers``
+        # name pseudo-ops (never grouped) and always resolve to the bare
+        # layer label, matching the torch backend exactly. The module-log
+        # builders map these to layer space at their own boundary.
+        for attr_name, mapping in (
+            ("input_layers", changed_bare),
+            ("output_layers", changed_bare),
+            ("internal_source_layers", changed_bare),
+            ("internal_source_ops", changed_op),
+            ("buffer_layers", changed_bare),
         ):
             labels = getattr(trace, attr_name, None)
             if isinstance(labels, list):
                 setattr(
                     trace,
                     attr_name,
-                    [changed.get(item, item) if isinstance(item, str) else item for item in labels],
+                    [mapping.get(item, item) if isinstance(item, str) else item for item in labels],
                 )
 
     equivalent_labels_by_key: dict[str, set[str]] = {}
@@ -676,13 +698,13 @@ def _apply_recurrence_relabel_epilogue(
             assignments[label].recurrent_labels if assignments is not None else (label,)
         )
         op_log.recurrent_ops = [
-            raw_to_final[member] for member in recurrent_labels if member in raw_to_final
+            raw_to_final_op[member] for member in recurrent_labels if member in raw_to_final_op
         ]
     trace.op_equivalence_classes.clear()
     trace.op_equivalence_classes.update(equivalent_labels_by_key)
 
     if relabel_sidecar_labels is not None:
-        relabel_sidecar_labels(dict(raw_to_final))
+        relabel_sidecar_labels(dict(raw_to_final_op))
 
 
 def _attach_param_usage(
