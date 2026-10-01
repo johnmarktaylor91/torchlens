@@ -3955,9 +3955,21 @@ def _projection_has_boundary_parent(projection_op: Any, boundary_op: Any) -> boo
         True when the projection records a control edge from the boundary.
     """
 
+    # TORCH PARITY: ``projection_op``'s control-parent edge resolves through
+    # the CONDITIONAL label map -- the boundary's bare ``layer_label`` when
+    # it is single-pass (the common case; a region boundary is never
+    # recurrence-grouped), its pass-qualified ``label`` only if multi-pass --
+    # so matching only raw/always-qualified labels here permanently missed
+    # every single-pass boundary and reported no control parent at all.
     boundary_labels = {
         label
-        for label in (getattr(boundary_op, "_label_raw", None), getattr(boundary_op, "label", None))
+        for label in (
+            getattr(boundary_op, "_label_raw", None),
+            getattr(boundary_op, "label", None),
+            getattr(boundary_op, "layer_label", None)
+            if getattr(boundary_op, "num_passes", 1) == 1
+            else None,
+        )
         if isinstance(label, str)
     }
     control_parents = _control_parent_labels(projection_op)
