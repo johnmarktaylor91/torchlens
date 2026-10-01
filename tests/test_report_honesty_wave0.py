@@ -318,16 +318,26 @@ def test_capability_dump_moved_to_detail_accessor() -> None:
     # (sumfam wave-0 item 2, ~1,900 chars for ALL ~70 flags with their
     # values): a fixed byte budget doesn't scale across the declared
     # torch>=2.1 matrix, where an old-floor build genuinely has far more
-    # absent (healthy-old-install) flags than current dev torch. Bound the
-    # cell relative to what it MUST contain (every absent name, comma-joined)
-    # plus a small fixed prefix, so the check still catches a regression to
-    # the verbose per-flag "name=value" dump (roughly double the length,
-    # since it repeats for every flag, present or absent) on any torch.
-    absent_names = [name for name, available in snapshot.items() if not available]
-    minimum_len = len("capabilities present; absent: ") + sum(
-        len(name) + 2 for name in absent_names
-    )
-    assert minimum_len <= len(row.details) < minimum_len + 200
+    # absent (healthy-old-install) flags than current dev torch. Rebuild the
+    # cell's exact expected length from the same building blocks
+    # _torch_capabilities_row() uses (format_capability_summary plus the
+    # missing=/optional_absent= groupings), so the check tracks any honest
+    # absence count instead of a magic number -- it still catches a
+    # regression to the legacy verbose per-flag dump, which does not share
+    # this structure.
+    from torchlens.utils import format_capability_summary
+    from torchlens.utils._torch_compat import OPTIONAL_CAPABILITY_FLAGS
+
+    absent = [name for name, available in snapshot.items() if not available]
+    missing = [name for name in absent if name not in OPTIONAL_CAPABILITY_FLAGS]
+    optional_absent = [name for name in absent if name in OPTIONAL_CAPABILITY_FLAGS]
+    expected = "Runtime capabilities: " + format_capability_summary(snapshot)
+    if missing:
+        expected += "; missing=" + ", ".join(missing)
+    if optional_absent:
+        expected += "; optional_absent=" + ", ".join(optional_absent)
+    expected += "; full dump: report.capability_snapshot()"
+    assert len(row.details) == len(expected)
     # Absent flags stay NAMED in the cell (absences-first doctrine).
     for name, available in snapshot.items():
         if not available:
