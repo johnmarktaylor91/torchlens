@@ -328,13 +328,21 @@ def _setitem_inside(x: Any) -> Any:
     return x * 2.0
 
 
+_CAPTURE_OPTIONS_FIELD_NAMES = frozenset(tl.options.CaptureOptions().as_dict())
+
+
 def _trace(**kwargs: Any) -> Any:
     """Trace the shared tinygrad scalar block.
 
     Parameters
     ----------
     **kwargs
-        Public trace keyword overrides.
+        Public trace keyword overrides. Any name that is a ``CaptureOptions``
+        field (``layers_to_save``, ``save_grads``, ...) is routed through
+        ``capture=CaptureOptions(...)`` -- the sprint removed every such flat
+        kwarg from ``trace()``'s own signature, so passing one directly lands
+        in ``**forward_kwargs`` and raises an unrelated "keyword(s) it does
+        not route" error instead of exercising the backend option it names.
 
     Returns
     -------
@@ -342,6 +350,12 @@ def _trace(**kwargs: Any) -> Any:
         Captured tinygrad trace.
     """
 
+    capture_kwargs = {
+        name: kwargs.pop(name) for name in list(kwargs) if name in _CAPTURE_OPTIONS_FIELD_NAMES
+    }
+    if capture_kwargs:
+        assert "capture" not in kwargs, "combine capture= and flat capture kwargs by hand"
+        kwargs["capture"] = tl.options.CaptureOptions(**capture_kwargs)
     return tl.trace(_tiny_block, Tensor([1.0, -2.0, 3.0]), backend="tinygrad", **kwargs)
 
 
@@ -884,3 +898,18 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
         _ = trace.backward_passes
     with pytest.raises(ValueError, match="trace\\.derived_grads"):
         _ = trace[0].grads
+
+
+def test_tinygrad_capture_options_does_not_reject_the_whole_object() -> None:
+    """N5: ``capture=CaptureOptions(...)`` must not raise "does not support: capture".
+
+    ``TinygradBackend.capture_trace`` had no ``capture`` parameter, so the
+    grouped object fell into its ``**kwargs`` catch-all and tripped the
+    generic extra-kwarg rejection naming the whole option, regardless of
+    which (if any) field was actually unsupported.
+    """
+
+    trace = _trace(capture=tl.options.CaptureOptions(keep_orphans=True))
+
+    assert trace.backend == "tinygrad"
+    assert trace.num_ops > 0
