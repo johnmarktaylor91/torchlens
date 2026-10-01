@@ -75,9 +75,40 @@ def _check_site_key_totality(ops: list, name: str) -> None:
 
 
 def _check_site_key_uniqueness(ops: list, name: str) -> None:
-    """I-S2: (site_key, pass-qualified innermost call instance) unique."""
+    """I-S2: (site_key, pass-qualified innermost call instance) unique.
+
+    Without a module stack (a bare ``function_root`` capture, e.g. JAX's
+    source-path-based scan/while recurrence), there is no call-stack frame to
+    tell passes apart. Site keys are INTENTIONALLY shared across recurring
+    passes of one site (the whole point of ``site_key_v1``), and neither
+    ``equivalence_class`` alone (shared by every structurally-interchangeable
+    occurrence, so it alone collapses distinct passes back together) nor
+    ``pass_index`` alone (restarts at 1 per Layer, so a site split across more
+    than one Layer by a pre-existing grouping boundary -- e.g. a JAX while
+    loop's pre-loop condition check, which shares its "lt" equivalence_class
+    with every in-loop repeat but lands in its own singleton Layer because of
+    the N+1-cond-vs-N-body arity mismatch -- collides on pass_index too)
+    reliably reconstructs "which occurrence is this" across that boundary.
+
+    The NARROW carve-out: only ops whose ``equivalence_class`` is genuinely
+    shared by more than one retained op (a real multi-occurrence group --
+    the one case site keys are designed to repeat across) get the
+    per-occurrence raw-label differentiator, so siblings in that group never
+    collide. Every op with a SINGLETON equivalence_class (the overwhelming
+    majority, including pseudo input/output nodes) stays on the coarse,
+    strict ``ROOT_CALL_INSTANCE`` identity, so two singleton ops forged to
+    share one site_key still collide and still raise -- the check never goes
+    fully blind for backends without a module stack.
+    """
 
     from .invariants import MetadataInvariantError
+
+    equivalence_counts: dict[object, int] = {}
+    for op in ops:
+        if not tuple(getattr(op, "module_call_stack", ()) or ()):
+            equivalence_counts[getattr(op, "equivalence_class", None)] = (
+                equivalence_counts.get(getattr(op, "equivalence_class", None), 0) + 1
+            )
 
     seen: dict[tuple[str, object], str] = {}
     for op in ops:
@@ -85,26 +116,17 @@ def _check_site_key_uniqueness(ops: list, name: str) -> None:
         if stack:
             call_instance: object = stack[-1]
         else:
-            # No torch/object-module call stack to tell passes apart (a bare
-            # function_root capture, e.g. JAX's source-path-based scan/while
-            # recurrence, never populates one). Site keys are INTENTIONALLY
-            # shared across recurring passes of one site (the whole point of
-            # site_key_v1), and neither ``equivalence_class`` (shared by
-            # every structurally-interchangeable occurrence, so it alone
-            # collapses distinct passes back together) nor ``pass_index``
-            # (restarts at 1 per Layer, so a site split across more than one
-            # Layer by a pre-existing grouping boundary -- e.g. a JAX while
-            # loop's pre-loop condition check, which shares its "lt"
-            # equivalence_class with every in-loop repeat but lands in its
-            # own singleton Layer because of the N+1-cond-vs-N-body arity
-            # mismatch -- collides on pass_index too) reliably reconstructs
-            # "which occurrence is this" across that boundary. The raw
-            # capture-time label is the one signal guaranteed unique per
-            # occurrence regardless of how grouping resolved; falling back to
-            # it makes I-S2 a true no-op for backends without a module stack
-            # (never a false positive) while leaving the check exactly as
-            # strict as before for every backend that populates one.
-            call_instance = (ROOT_CALL_INSTANCE, getattr(op, "_label_raw", op.label))
+            equivalence_class = getattr(op, "equivalence_class", None)
+            if equivalence_counts.get(equivalence_class, 0) > 1:
+                # A genuine multi-occurrence group (recurring passes of one
+                # site): differentiate siblings by their unique raw label so
+                # the designed sharing never falsely collides.
+                call_instance = (ROOT_CALL_INSTANCE, getattr(op, "_label_raw", op.label))
+            else:
+                # A singleton occurrence: no legitimate reason to share a
+                # site_key with anything else, so keep the strict coarse
+                # identity that catches a forged collision.
+                call_instance = ROOT_CALL_INSTANCE
         identity = (str(op.site_key), call_instance)
         if identity in seen:
             raise MetadataInvariantError(
