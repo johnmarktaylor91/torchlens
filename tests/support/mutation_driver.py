@@ -296,6 +296,10 @@ SUITE = [
     # un-sharded family) survivor list -- one duck-typed-fake test per raise
     # arm, each proving every earlier arm on the same checker stays silent.
     "tests/validation_goldens/test_arm_campaign_killers_mutants2.py",
+    # mutants3 lane (2026-10-01): direct per-arm killers for the arm-shard
+    # 1/4, 2/4, and 3/4 survivor list measured against the mutants2 branch
+    # point (shard 4's own survivors are covered by the mutants2 file above).
+    "tests/validation_goldens/test_arm_campaign_killers_mutants3.py",
 ]
 
 #: Known baseline reds, deselected so a mutant verdict is never confounded.
