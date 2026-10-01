@@ -360,19 +360,39 @@ class TestCollectiveRecognizer:
         assert "allreduce_" in mismatches["c10d"]["added"]
 
     def test_layer2_c10d_typed_schema_outside_five_refuses_typed(self, monkeypatch):
-        # This test is about the layer-2 scan, not the layer-1 census: force
-        # layer 1 to match by vetting the REAL runtime's own namespace sets,
-        # so the test exercises layer 2 on every torch build, vetted or not
-        # (never depend on the running torch matching VETTED_NAMESPACE_SNAPSHOTS).
-        runtime_sets = recognizer_mod._runtime_namespace_sets()
+        # This test is about the layer-2 scan mechanism, not the layer-1
+        # census or the real torch dispatcher's actual SymmetricMemory ops
+        # (which this torch build may or may not even have): synthesize a
+        # tiny closed dispatcher schema list so the test is independent of
+        # both VETTED_NAMESPACE_SNAPSHOTS and the running torch version.
+        fake_schemas = [
+            SimpleNamespace(name="c10d::allreduce_", arguments=[], returns=[]),
+            SimpleNamespace(
+                name="symm_mem::fake_op",
+                arguments=[SimpleNamespace(type="__torch__.torch.classes.c10d.SymmetricMemory")],
+                returns=[],
+            ),
+        ]
+        monkeypatch.setattr(recognizer_mod, "_all_dispatcher_schemas", lambda: fake_schemas)
         monkeypatch.setattr(
             recognizer_mod,
             "VETTED_NAMESPACE_SNAPSHOTS",
-            (("runtime", {ns: frozenset(ops) for ns, ops in runtime_sets.items()}),),
+            (
+                (
+                    "fake",
+                    {
+                        "c10d": frozenset({"allreduce_"}),
+                        "_c10d_functional": frozenset(),
+                        "_c10d_functional_autograd": frozenset(),
+                        "c10d_functional": frozenset(),
+                        "_dtensor": frozenset(),
+                    },
+                ),
+            ),
         )
         # SymmetricMemory is deliberately OUTSIDE the three-type rule; widening
-        # the marker list to include it proves the layer-2 scan fires on real
-        # dispatcher contents rather than on a synthetic fixture.
+        # the marker list to include it proves the layer-2 scan fires on
+        # dispatcher contents outside the five namespaces.
         monkeypatch.setattr(
             recognizer_mod,
             "_LAYER2_TYPE_MARKERS",
