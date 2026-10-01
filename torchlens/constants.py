@@ -1140,12 +1140,18 @@ IGNORED_FUNCS = [
             "nuttall",
         )
     ),
-    # The public FP8/MoE entry points. Each delegates to a wrapped ``torch._VF``
-    # interior, so capture stayed COMPLETE, but the op recorded under the private v2
-    # name rather than what the user called (mislabel only).
-    ("torch.nn.functional", "scaled_mm"),
-    ("torch.nn.functional", "grouped_mm"),
-    ("torch.nn.functional", "scaled_grouped_mm"),
+    # The public FP8/MoE entry points (torch 2.13+; absent on 2.8 and earlier,
+    # incl. the 2.1 floor and 2.8 canonical CI rows). Each delegates to a wrapped
+    # ``torch._VF`` interior, so capture stayed COMPLETE, but the op recorded
+    # under the private v2 name rather than what the user called (mislabel
+    # only). Feature-detected (never a bare row) so the curated-roster liveness
+    # gate never needs a ``_KNOWN_DEAD_ROSTER_ROWS`` entry for a not-yet-
+    # introduced spelling: absent means not listed, not "dead".
+    *(
+        ("torch.nn.functional", _fp8_moe_name)
+        for _fp8_moe_name in ("scaled_mm", "grouped_mm", "scaled_grouped_mm")
+        if hasattr(torch.nn.functional, _fp8_moe_name)
+    ),
     ("torch", "tril_indices"),
     ("torch", "triu_indices"),
     ("torch", "vander"),
