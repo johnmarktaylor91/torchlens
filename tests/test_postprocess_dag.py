@@ -10,6 +10,7 @@ pin both halves of the coordinated-reversal counterexample.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import pytest
 import torch
@@ -1157,5 +1158,31 @@ def test_step17_5_drops_capture_phase_workspaces() -> None:
             assert field_name not in trace.__dict__, (
                 f"{field_name} survived step 17.5's terminal consume"
             )
+    finally:
+        trace.cleanup()
+
+
+def test_step19_and_gate_evict_streamed_outs_from_memory(tmp_path: Path) -> None:
+    """Step 19 (and its gate) must drop in-memory ``out`` once streamed.
+
+    Mutation-margin arming (W2): ``_run_step_19`` return-None and
+    ``_should_run_step_19`` forced-False both leave every streamed op's
+    ``out`` resident in memory despite ``out_ref`` already pointing at the
+    on-disk blob -- the exact observable effect this test pins. Neither
+    mutant is visible to the phase-timing bucket golden above (step 19 is
+    conditional and absent from that axis's expected set either way).
+    """
+
+    trace = tl.trace(
+        _TinyModel().eval(),
+        torch.randn(2, 3),
+        storage=tl.to_disk(tmp_path / "step19.tlspec"),
+    )
+    try:
+        streamed = [op for op in trace.layer_list if getattr(op, "out_ref", None) is not None]
+        assert streamed, "no op streamed an out_ref; the axis setup is not exercising step 19"
+        assert all(op.out is None for op in streamed), (
+            "a streamed op's out survived step 19's eviction"
+        )
     finally:
         trace.cleanup()
