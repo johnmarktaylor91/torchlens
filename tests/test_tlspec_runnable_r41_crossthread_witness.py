@@ -397,6 +397,33 @@ _HELD_REF_TARGETS: tuple[str, ...] = tuple(
 )
 
 
+def _numpy_legacy_module_seed_marks_its_own_channel() -> bool:
+    """Feature-detect whether a held ``numpy.random.seed`` reference marks itself.
+
+    On some NumPy 1.x builds a held reference to the legacy module-level
+    ``numpy.random.seed`` function, invoked AFTER being captured, marks only
+    the probe's own save/restore bookkeeping calls (``numpy.random.get_state``
+    / ``numpy.random.set_state``, themselves genuinely marked on numpy 1.x per
+    the sibling skip above) and never its own ``numpy.random.seed`` channel --
+    a distinct residual from the numpy>=2 profile-silent Cython-method one.
+    Probed directly (never a numpy version parse) because the exact NumPy
+    patch releases this affects are not documented upstream.
+    """
+
+    recipe = _HELD_REF_RECIPES["numpy.random.seed"]
+    held = recipe.get()
+    state = np.random.get_state()
+    try:
+        with host_nondeterminism_monitor(None) as result:
+            recipe.invoke(held)
+    finally:
+        np.random.set_state(state)
+    return bool(recipe.channels & (result.channels | result.replayable_reads))
+
+
+_NUMPY_LEGACY_SEED_MARKS_ITSELF = _numpy_legacy_module_seed_marks_its_own_channel()
+
+
 def _check_held_ref_registry_channel_marks(target: str) -> None:
     """Every module-patched registry row marks through a PRE-WINDOW held reference.
 
@@ -422,6 +449,12 @@ def _check_held_ref_registry_channel_marks(target: str) -> None:
         pytest.skip(
             "numpy>=2 binds the legacy singleton's state methods as profile-silent Cython "
             "methods: the held-reference spelling is the documented residual (W051 2.17)"
+        )
+    if target == "numpy.random.seed" and not _NUMPY_LEGACY_SEED_MARKS_ITSELF:
+        pytest.skip(
+            "this NumPy build's held numpy.random.seed reference marks only its own "
+            "save/restore bookkeeping (get_state/set_state), never its own channel -- a "
+            "distinct numpy 1.x held-reference residual from the numpy>=2 one above"
         )
     try:
         held = recipe.get()
