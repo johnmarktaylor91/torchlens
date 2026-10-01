@@ -1132,3 +1132,30 @@ def test_phase_timing_bucket_names_default_capture() -> None:
         }
     finally:
         trace.cleanup()
+
+
+def test_step17_5_drops_capture_phase_workspaces() -> None:
+    """Step 17.5 is the contracted terminal consume of the per-phase workspaces.
+
+    Mutation-margin arming (W2): a whole-function ``return None`` disarm of
+    ``_run_step_17_5`` survived because nothing asserted its effect directly
+    (its contract declares no op-store writes, so the write-audit matrix
+    test cannot see it). ``_raw_graph_ws`` and ``_wrapper_runtime_ws`` are
+    set unconditionally at capture start (``data_classes/trace.py``), so
+    their absence here proves the terminal consume ran.
+    """
+
+    trace = tl.trace(_TinyModel().eval(), torch.randn(2, 3))
+    try:
+        for field_name in (
+            "_raw_graph_ws",
+            "_module_capture_ws",
+            "_wrapper_runtime_ws",
+            "capture_events",
+            "_output_container_specs_by_raw_label",
+        ):
+            assert field_name not in trace.__dict__, (
+                f"{field_name} survived step 17.5's terminal consume"
+            )
+    finally:
+        trace.cleanup()
