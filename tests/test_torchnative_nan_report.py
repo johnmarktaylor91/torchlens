@@ -16,7 +16,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens.debug import nan_report
-from torchlens.utils._torch_compat import HAS_CPU_HALF_KERNELS
+from torchlens.utils._torch_compat import get_cpu_half_kernels_support
 
 pytestmark = pytest.mark.smoke
 
@@ -76,7 +76,7 @@ def test_live_tripwire_form() -> None:
 
 
 @pytest.mark.skipif(
-    not HAS_CPU_HALF_KERNELS,
+    not get_cpu_half_kernels_support(),
     reason="CPU addmm for float16 postdates the torch 2.1 floor",
 )
 def test_amp_disclosure_on_low_precision() -> None:

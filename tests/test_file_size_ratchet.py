@@ -321,7 +321,13 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # one-time engine-init cost -- lands on the first real one-backward read,
     # never on a plain import torchlens (measured 4357); next 50-line step.
     # Debloat target unchanged: 3450.
-    "torchlens/utils/_torch_compat.py": 4400,
+    # 4400 -> 4450 (2026-10-01 L8 floor fix cont'd): the three remaining
+    # real-tensor-op probes (tuple-dim any(), CPU Half kernels, CPU Float8
+    # deterministic-fill) moved onto the same lazy pattern -- their combined
+    # eager cost was still measurably over the import-hygiene budget even
+    # after GradientEdge alone went lazy (measured 4443); next 50-line step.
+    # Debloat target unchanged: 3450.
+    "torchlens/utils/_torch_compat.py": 4450,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     # 3300 -> 3320 (F24 observe): the device-memory bracket at the one

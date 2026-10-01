@@ -41,12 +41,12 @@ from torchlens.semantic._norm_reconstruction import (
     reconstruct_norm,
 )
 from torchlens.semantic.tolerances import within_reconstruction_tolerance
-from torchlens.utils._torch_compat import HAS_CPU_HALF_KERNELS, HAS_RMSNORM_MODULE
+from torchlens.utils._torch_compat import HAS_RMSNORM_MODULE, get_cpu_half_kernels_support
 
 pytestmark = pytest.mark.smoke
 
 _requires_cpu_half_kernels = pytest.mark.skipif(
-    not HAS_CPU_HALF_KERNELS,
+    not get_cpu_half_kernels_support(),
     reason="CPU addmm/layer_norm for float16 postdates the torch 2.1 floor",
 )
 
