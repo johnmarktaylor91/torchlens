@@ -386,16 +386,6 @@ class TestSubclassCtorUnderWitness:
 
         torch.manual_seed(0)
         x = torch.randn(2, 3)
-        if not _flag("HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE"):
-            # Floor-torch capability gap (torch 2.1/2.2): see
-            # SubclassConstructionUnderDispatchModeError.
-            from torchlens.backends.torch._modes import (
-                SubclassConstructionUnderDispatchModeError,
-            )
-
-            with pytest.raises(SubclassConstructionUnderDispatchModeError):
-                tl.validation.validate_forward_pass(SubclassCtorModel(), x)
-            return
         assert tl.validation.validate_forward_pass(SubclassCtorModel(), x)
 
     @pytest.mark.skipif(

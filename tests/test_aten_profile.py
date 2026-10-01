@@ -263,31 +263,7 @@ def test_recording_off_never_constructs_primitive_retention(
 
 
 def test_mode_paused_interior_is_one_lower_bound_gap_not_a_synthetic_row() -> None:
-    """Strict subclass construction records one typed gap with exact parentage.
-
-    Floor-torch capability gap (torch 2.1/2.2, ``not HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE``):
-    the LOGGED path's ``__new__`` pause (unconditional on every torch version, and
-    sufficient there) does not prevent torch's "already associated to a python
-    object" crash when this forward is ALSO observed by the private aten-profile
-    recorder armed below -- confirmed by direct instrumentation that the dispatch
-    mode stack is genuinely empty at the point of the crash, so this is a torch
-    limitation TorchLens cannot safely work around here (a from-scratch retry of
-    the mode-pause machinery previously segfaulted the interpreter; see
-    ``torchlens.backends.torch._modes.SubclassConstructionUnderDispatchModeError``).
-    The typed, disclosed refusal is asserted instead of the gap-accounting
-    success path this test otherwise pins.
-    """
-
-    from torchlens.backends.torch._modes import SubclassConstructionUnderDispatchModeError
-    from torchlens.utils._torch_compat import HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE
-
-    if not HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE:
-        with (
-            _activate_aten_recording_for_tests(),
-            pytest.raises(SubclassConstructionUnderDispatchModeError),
-        ):
-            tl.trace(_SubclassCtorModel(), torch.ones(2, 3))
-        return
+    """Strict subclass construction records one typed gap with exact parentage."""
 
     with _activate_aten_recording_for_tests():
         trace = tl.trace(_SubclassCtorModel(), torch.ones(2, 3))
