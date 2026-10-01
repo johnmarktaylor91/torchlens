@@ -15,17 +15,19 @@ from __future__ import annotations
 import pytest
 import torch
 
-from torchlens.utils._torch_compat import HAS_GRADIENT_EDGE, HAS_NODE_PREHOOK
+from torchlens.utils._torch_compat import HAS_NODE_PREHOOK, get_gradient_edge_support
 
-if HAS_GRADIENT_EDGE:
+_HAS_GRADIENT_EDGE = get_gradient_edge_support()
+
+if _HAS_GRADIENT_EDGE:
     from torch.autograd.graph import GradientEdge
-else:  # torch 2.1: GradientEdge postdates the floor (see HAS_GRADIENT_EDGE).
+else:  # torch < 2.4: GradientEdge absent or non-functional (see get_gradient_edge_support).
     GradientEdge = None  # type: ignore[assignment,misc]
 
 pytestmark = [
     pytest.mark.smoke,
     pytest.mark.skipif(
-        not (HAS_GRADIENT_EDGE and HAS_NODE_PREHOOK),
+        not (_HAS_GRADIENT_EDGE and HAS_NODE_PREHOOK),
         reason="GradientEdge / Node.register_prehook postdate the torch 2.1 floor",
     ),
 ]
@@ -43,7 +45,7 @@ def _one_node_graph() -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 def test_band_flags_are_true_on_the_supported_band() -> None:
     """The two capability flags hold on every torch this suite runs under."""
 
-    assert HAS_GRADIENT_EDGE, "GradientEdge disappeared from torch.autograd.graph"
+    assert _HAS_GRADIENT_EDGE, "GradientEdge disappeared from torch.autograd.graph"
     assert HAS_NODE_PREHOOK, "Node.register_prehook disappeared"
 
 

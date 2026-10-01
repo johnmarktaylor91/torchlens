@@ -315,7 +315,13 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # GradientEdge output; fixed by 2.4, matching the read's documented
     # "2.4+" remedy) at the same chokepoint (measured 4315); next 50-line
     # step. Debloat target unchanged: 3450.
-    "torchlens/utils/_torch_compat.py": 4350,
+    # 4350 -> 4400 (2026-10-01 L8 floor fix cont'd): HAS_GRADIENT_EDGE moved
+    # onto the lazy-probe pattern (get_gradient_edge_support(), registered in
+    # _LAZY_PROBE_FAMILIES) so the real autograd.grad call -- which pays a
+    # one-time engine-init cost -- lands on the first real one-backward read,
+    # never on a plain import torchlens (measured 4357); next 50-line step.
+    # Debloat target unchanged: 3450.
+    "torchlens/utils/_torch_compat.py": 4400,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     # 3300 -> 3320 (F24 observe): the device-memory bracket at the one
