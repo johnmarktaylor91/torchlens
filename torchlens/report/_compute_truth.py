@@ -210,6 +210,18 @@ class ComputeRow:
     evidence: str
     applicability: str
     reason: str | None
+    #: Pass-qualified op label (``label:pass``) -- unique per row even on
+    #: recurrent models, where ``label`` (the layer label) collides across
+    #: passes. F09 consumers key per-op maps on THIS field.
+    op_label: str | None = None
+    #: RESERVED device-attribution slots (costreport D22 / item 17): the
+    #: correlation-ID Kineto join fills COLUMNS, never schemas. They stay
+    #: ``None`` until that join lands its real-GPU acceptance gate; the
+    #: name-substring bridge is a labeled approximate diagnostic and is
+    #: FORBIDDEN as a source for these fields (never a rate denominator).
+    device_time: float | None = None
+    kernel_time: float | None = None
+    attribution_status: str | None = None
 
 
 @dataclass(frozen=True)
@@ -248,6 +260,15 @@ class ComputeAggregation:
     by_dtype: tuple[tuple[str, int], ...]
     execution_modes: tuple[tuple[str, int], ...]
 
+    def __repr__(self) -> str:
+        """Bounded identity card (F10/D31): rows point, never dump."""
+
+        return (
+            f"ComputeAggregation({len(self.rows)} rows, "
+            f"total={self.partition_total}, macs={self.macs_total}, "
+            f"convention={self.convention!r}, scope={self.scope!r}; read .rows)"
+        )
+
     def ratio(self, numerator_row_id: str, denominator: str = "partition_total") -> RatioFact:
         """Return a ratio fact against the partition total (or a named row)."""
 
@@ -282,6 +303,10 @@ def compute_aggregation(trace: Trace) -> ComputeAggregation:
     rows: list[ComputeRow] = []
     by_dtype: dict[str, int] = {}
     execution_modes: dict[str, int] = {}
+    # F27 (torchnative W2.3): the session-time Kineto join fills the reserved
+    # D22 device slots as COLUMNS, never schemas. Absent join -> all None
+    # (missing is None, never zero); the name-substring bridge stays banned.
+    _join = _joined_result_or_none(trace)
     for index, op in enumerate(trace.layer_list):
         row_class = classify_row(op)
         if getattr(op, "is_buffer", False):
@@ -305,7 +330,17 @@ def compute_aggregation(trace: Trace) -> ComputeAggregation:
             evidence, applicability = "formula_exact", "applicable"
             reason = "zero by named rule"
         else:
-            evidence, applicability = "formula_exact", "applicable"
+            # Per-cell evidence (costreport D2): read the two-term compute
+            # record's own evidence -- SDPA and per-element-cost rules carry
+            # "estimated", and a mixed surface must label the two cells
+            # differently (the T-HONESTY failing-first gate).
+            record_evidence = None if record is None else getattr(record, "evidence", None)
+            evidence = (
+                record_evidence
+                if record_evidence in ("formula_exact", "estimated")
+                else ("formula_exact")
+            )
+            applicability = "applicable"
             reason = None
         dtype = getattr(op, "dtype", None)
         dtype_token = str(dtype).replace("torch.", "") if dtype is not None else None
@@ -330,6 +365,12 @@ def compute_aggregation(trace: Trace) -> ComputeAggregation:
                 evidence=evidence,
                 applicability=applicability,
                 reason=reason,
+                op_label=str(getattr(op, "label", None) or label),
+                device_time=(None if _join is None else _op_joined_device_time(_join, op)),
+                kernel_time=(
+                    None if _join is None else _op_joined_device_time(_join, op, kinds=("kernel",))
+                ),
+                attribution_status=(None if _join is None else _op_attribution_status(_join, op)),
             )
         )
     totals = aggregate_forward_compute(trace)
@@ -343,6 +384,62 @@ def compute_aggregation(trace: Trace) -> ComputeAggregation:
         by_dtype=tuple(sorted(by_dtype.items())),
         execution_modes=tuple(sorted(execution_modes.items())),
     )
+
+
+def _joined_result_or_none(trace: Trace) -> Any | None:
+    """Return the trace's session-time join result iff it reached joined."""
+
+    try:
+        from ..observability._native_profile import join_result_for
+    except ImportError:  # pragma: no cover - torn install without the substrate
+        return None
+    result = join_result_for(trace)
+    if result is None or result.availability != "joined":
+        return None
+    return result
+
+
+def _op_pass_labels(op: Any) -> tuple[str, ...]:
+    """Pass-qualified labels behind one aggregation row's layer record."""
+
+    ops = getattr(op, "ops", None)
+    if isinstance(ops, dict):
+        return tuple(str(getattr(o, "label", "")) for o in ops.values())
+    label = getattr(op, "label", None)
+    return (str(label),) if label is not None else ()
+
+
+def _op_joined_device_time(
+    join: Any, op: Any, kinds: tuple[str, ...] | None = None
+) -> float | None:
+    """Exact-attribution device seconds for one row, or None (never zero)."""
+
+    labels = set(_op_pass_labels(op))
+    if not labels:
+        return None
+    if kinds is None:
+        total = sum(join.op_device_ns.get(label, 0) for label in labels)
+        found = any(label in join.op_device_ns for label in labels)
+        return (total / 1e9) if found else None
+    total = 0
+    found = False
+    for row in join.launches:
+        if row.kind in kinds and row.status == "attributed" and set(row.owner_labels) & labels:
+            total += row.end_ns - row.start_ns
+            found = True
+    return (total / 1e9) if found else None
+
+
+def _op_attribution_status(join: Any, op: Any) -> str | None:
+    """Per-row attribution status from the joined launch table."""
+
+    labels = set(_op_pass_labels(op))
+    statuses = {row.status for row in join.launches if set(row.owner_labels) & labels}
+    if not statuses:
+        return None
+    if statuses == {"attributed"}:
+        return "attributed"
+    return "ambiguous" if "ambiguous" in statuses else next(iter(statuses))
 
 
 def forward_flops_total(trace: Trace, *, fma: int = 2) -> Flops:

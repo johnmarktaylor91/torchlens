@@ -198,6 +198,34 @@ class StructureOnlyOptionConflictError(ArgumentConflictError):
     """
 
 
+class SubstrateMismatchError(CaptureError, RuntimeError):
+    """Raised when a weights-free capture mixes meta and real substrates.
+
+    Admission (weightsfree memo D2/D11) requires substrate UNIFORMITY: every
+    input tensor leaf meta AND every registered parameter/buffer meta. Mixed
+    cells refuse typed in BOTH directions at entry, and a real tensor
+    discovered mid-forward on an admitted meta capture (a stale pre-wrap
+    factory reference, a `device="cpu"` literal) refuses through the same
+    family at the user's source line (W1-CLS). ``fields["code"]`` is always
+    ``structure_only_substrate_mismatch``; ``fields["meta_side"]`` /
+    ``fields["real_side"]`` name which side is which. DOCUMENTED-UNSTABLE,
+    S2-gated.
+    """
+
+
+class WeightsfreeIntegrityError(CaptureError, RuntimeError):
+    """Raised when weights-free admission or settlement cannot self-certify.
+
+    Two codes (weightsfree memo D20/D22, both S2-gated,
+    DOCUMENTED-UNSTABLE): ``structure_only_meta_identity_unavailable`` (no
+    trustworthy storage-identity primitive on this torch build — admission
+    refuses rather than guessing identity where ``data_ptr()`` reads 0) and
+    ``structure_only_settlement_incoherent`` (an admitted meta capture tried
+    to settle with incoherent structural accounting — the D22 net; a
+    TorchLens bug, never a user error).
+    """
+
+
 class KeywordConflictError(_ActionableErrorMixin, ConfigurationError, TypeError):
     """Raised when conflicting keyword/call-surface spellings are supplied together.
 

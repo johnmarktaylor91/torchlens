@@ -1,0 +1,317 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="900" height="532" viewBox="0 0 900 532">
+<rect x="0" y="0" width="900" height="532" fill="white"/>
+<text x="12.00" y="16.00" font-family="monospace" font-size="12" fill="#222222" text-anchor="start">watch contact sheet -- run 1e845a99b887 [activation]</text>
+<rect x="12.00" y="28.00" width="292.00" height="110.00" fill="white" fill-opacity="1.00" stroke="#dddddd"/>
+<text x="16.00" y="40.00" font-family="monospace" font-size="9" fill="#222222" text-anchor="start">transformer.h.1.attn.c_proj</text>
+<line x1="16.00" y1="121.81" x2="16.00" y2="77.24" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="29.52" y1="110.72" x2="29.52" y2="73.50" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="43.05" y1="113.21" x2="43.05" y2="73.99" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="56.57" y1="112.69" x2="56.57" y2="77.82" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="70.10" y1="110.01" x2="70.10" y2="72.97" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="83.62" y1="110.86" x2="83.62" y2="73.08" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="97.14" y1="113.26" x2="97.14" y2="73.56" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="110.67" y1="114.32" x2="110.67" y2="74.40" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="124.19" y1="112.01" x2="124.19" y2="73.07" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="137.71" y1="113.61" x2="137.71" y2="75.07" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="151.24" y1="109.90" x2="151.24" y2="71.53" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="164.76" y1="109.71" x2="164.76" y2="46.00" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="178.29" y1="114.85" x2="178.29" y2="73.46" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="191.81" y1="118.82" x2="191.81" y2="93.59" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="205.33" y1="109.88" x2="205.33" y2="74.22" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="218.86" y1="112.89" x2="218.86" y2="70.71" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="232.38" y1="114.79" x2="232.38" y2="92.68" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="245.90" y1="114.35" x2="245.90" y2="73.56" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="259.43" y1="121.57" x2="259.43" y2="88.03" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="272.95" y1="115.09" x2="272.95" y2="74.83" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="286.48" y1="108.90" x2="286.48" y2="71.61" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="300.00" y1="122.00" x2="300.00" y2="94.82" stroke="#8ecae6" stroke-width="1.00"/>
+<polyline points="16.00,105.14 29.52,105.12 43.05,105.13 56.57,105.11 70.10,105.13 83.62,105.13 97.14,105.13 110.67,105.13 124.19,105.12 137.71,105.12 151.24,105.13 164.76,105.12 178.29,105.13 191.81,105.11 205.33,105.13 218.86,105.14 232.38,105.13 245.90,105.12 259.43,105.12 272.95,105.12 286.48,105.12 300.00,105.13" fill="none" stroke="#0072b2" stroke-width="1.20"/>
+<text x="16.00" y="134.00" font-family="monospace" font-size="7" fill="#222222" text-anchor="start">mean drift 20.6</text>
+<rect x="308.00" y="28.00" width="292.00" height="110.00" fill="white" fill-opacity="1.00" stroke="#dddddd"/>
+<text x="312.00" y="40.00" font-family="monospace" font-size="9" fill="#222222" text-anchor="start">transformer.h.2.attn.c_proj</text>
+<line x1="312.00" y1="110.27" x2="312.00" y2="66.73" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="325.52" y1="112.67" x2="325.52" y2="52.66" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="339.05" y1="116.98" x2="339.05" y2="52.17" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="352.57" y1="113.05" x2="352.57" y2="66.77" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="366.10" y1="112.86" x2="366.10" y2="56.69" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="379.62" y1="116.43" x2="379.62" y2="62.80" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="393.14" y1="119.53" x2="393.14" y2="60.86" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="406.67" y1="109.72" x2="406.67" y2="52.87" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="420.19" y1="117.44" x2="420.19" y2="46.00" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="433.71" y1="113.28" x2="433.71" y2="66.53" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="447.24" y1="113.22" x2="447.24" y2="54.58" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="460.76" y1="108.22" x2="460.76" y2="64.28" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="474.29" y1="113.31" x2="474.29" y2="53.56" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="487.81" y1="115.32" x2="487.81" y2="69.28" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="501.33" y1="112.32" x2="501.33" y2="63.56" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="514.86" y1="116.30" x2="514.86" y2="57.50" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="528.38" y1="122.00" x2="528.38" y2="56.02" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="541.90" y1="114.58" x2="541.90" y2="62.88" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="555.43" y1="110.98" x2="555.43" y2="71.31" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="568.95" y1="112.02" x2="568.95" y2="72.39" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="582.48" y1="113.04" x2="582.48" y2="57.42" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="596.00" y1="112.38" x2="596.00" y2="66.37" stroke="#8ecae6" stroke-width="1.00"/>
+<polyline points="312.00,99.17 325.52,99.17 339.05,99.22 352.57,99.17 366.10,99.18 379.62,99.18 393.14,99.17 406.67,99.17 420.19,99.18 433.71,99.20 447.24,99.20 460.76,99.17 474.29,99.21 487.81,99.20 501.33,99.16 514.86,99.16 528.38,99.19 541.90,99.19 555.43,99.15 568.95,99.18 582.48,99.18 596.00,99.19" fill="none" stroke="#0072b2" stroke-width="1.20"/>
+<text x="312.00" y="134.00" font-family="monospace" font-size="7" fill="#222222" text-anchor="start">mean drift 11.7</text>
+<rect x="604.00" y="28.00" width="292.00" height="110.00" fill="white" fill-opacity="1.00" stroke="#dddddd"/>
+<text x="608.00" y="40.00" font-family="monospace" font-size="9" fill="#222222" text-anchor="start">transformer.h.2.attn.resid_...</text>
+<line x1="608.00" y1="112.43" x2="608.00" y2="67.42" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="621.52" y1="114.92" x2="621.52" y2="52.89" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="635.05" y1="119.36" x2="635.05" y2="52.38" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="648.57" y1="115.31" x2="648.57" y2="67.47" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="662.10" y1="115.11" x2="662.10" y2="57.05" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="675.62" y1="118.80" x2="675.62" y2="63.37" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="689.14" y1="122.00" x2="689.14" y2="61.36" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="702.67" y1="111.86" x2="702.67" y2="53.10" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="716.19" y1="119.85" x2="716.19" y2="46.00" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="729.71" y1="115.55" x2="729.71" y2="67.22" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="743.24" y1="115.49" x2="743.24" y2="54.87" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="756.76" y1="110.32" x2="756.76" y2="64.90" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="770.29" y1="113.48" x2="770.29" y2="53.82" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="783.81" y1="117.65" x2="783.81" y2="70.06" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="797.33" y1="114.55" x2="797.33" y2="64.16" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="810.86" y1="118.67" x2="810.86" y2="57.89" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="824.38" y1="112.59" x2="824.38" y2="56.35" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="837.90" y1="116.89" x2="837.90" y2="63.45" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="851.43" y1="113.16" x2="851.43" y2="72.16" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="864.95" y1="114.24" x2="864.95" y2="73.28" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="878.48" y1="115.30" x2="878.48" y2="57.80" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="892.00" y1="114.62" x2="892.00" y2="67.05" stroke="#8ecae6" stroke-width="1.00"/>
+<polyline points="608.00,100.96 621.52,100.97 635.05,101.00 648.57,100.96 662.10,100.97 675.62,100.97 689.14,100.96 702.67,100.96 716.19,100.97 729.71,100.97 743.24,100.97 756.76,100.96 770.29,100.99 783.81,100.98 797.33,100.96 810.86,100.95 824.38,100.96 837.90,100.98 851.43,100.93 864.95,100.97 878.48,100.97 892.00,100.98" fill="none" stroke="#0072b2" stroke-width="1.20"/>
+<text x="608.00" y="134.00" font-family="monospace" font-size="7" fill="#222222" text-anchor="start">mean drift 9.25</text>
+<rect x="12.00" y="146.00" width="292.00" height="110.00" fill="white" fill-opacity="1.00" stroke="#dddddd"/>
+<text x="16.00" y="158.00" font-family="monospace" font-size="9" fill="#222222" text-anchor="start">transformer.h.11.mlp.c_proj</text>
+<line x1="16.00" y1="178.75" x2="16.00" y2="168.80" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="29.52" y1="179.96" x2="29.52" y2="169.66" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="43.05" y1="177.30" x2="43.05" y2="170.42" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="56.57" y1="177.58" x2="56.57" y2="170.70" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="70.10" y1="180.30" x2="70.10" y2="168.22" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="83.62" y1="180.35" x2="83.62" y2="168.49" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="97.14" y1="179.59" x2="97.14" y2="169.25" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="110.67" y1="189.71" x2="110.67" y2="167.37" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="124.19" y1="181.73" x2="124.19" y2="168.00" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="137.71" y1="239.26" x2="137.71" y2="168.72" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="151.24" y1="179.04" x2="151.24" y2="169.01" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="164.76" y1="179.35" x2="164.76" y2="169.31" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="178.29" y1="239.23" x2="178.29" y2="168.87" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="191.81" y1="183.10" x2="191.81" y2="167.43" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="205.33" y1="181.28" x2="205.33" y2="167.57" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="218.86" y1="237.93" x2="218.86" y2="170.31" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="232.38" y1="181.86" x2="232.38" y2="167.35" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="245.90" y1="238.80" x2="245.90" y2="164.00" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="259.43" y1="240.00" x2="259.43" y2="164.62" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="272.95" y1="181.53" x2="272.95" y2="167.65" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="286.48" y1="181.51" x2="286.48" y2="168.00" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="300.00" y1="183.00" x2="300.00" y2="167.48" stroke="#8ecae6" stroke-width="1.00"/>
+<polyline points="16.00,173.86 29.52,173.86 43.05,173.86 56.57,173.86 70.10,173.86 83.62,173.87 97.14,173.87 110.67,173.87 124.19,173.86 137.71,173.87 151.24,173.86 164.76,173.87 178.29,173.87 191.81,173.87 205.33,173.87 218.86,173.87 232.38,173.87 245.90,173.87 259.43,173.87 272.95,173.87 286.48,173.87 300.00,173.87" fill="none" stroke="#0072b2" stroke-width="1.20"/>
+<text x="16.00" y="252.00" font-family="monospace" font-size="7" fill="#222222" text-anchor="start">mean drift 5.3</text>
+<rect x="308.00" y="146.00" width="292.00" height="110.00" fill="white" fill-opacity="1.00" stroke="#dddddd"/>
+<text x="312.00" y="158.00" font-family="monospace" font-size="9" fill="#222222" text-anchor="start">transformer.h.6.attn.resid_...</text>
+<line x1="312.00" y1="235.59" x2="312.00" y2="189.62" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="325.52" y1="229.25" x2="325.52" y2="187.34" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="339.05" y1="229.90" x2="339.05" y2="191.46" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="352.57" y1="232.58" x2="352.57" y2="174.11" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="366.10" y1="228.71" x2="366.10" y2="193.63" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="379.62" y1="231.19" x2="379.62" y2="174.38" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="393.14" y1="230.58" x2="393.14" y2="174.00" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="406.67" y1="230.59" x2="406.67" y2="173.84" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="420.19" y1="236.48" x2="420.19" y2="180.48" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="433.71" y1="232.35" x2="433.71" y2="176.63" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="447.24" y1="233.07" x2="447.24" y2="169.68" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="460.76" y1="231.28" x2="460.76" y2="170.24" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="474.29" y1="231.82" x2="474.29" y2="181.26" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="487.81" y1="235.30" x2="487.81" y2="166.83" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="501.33" y1="233.08" x2="501.33" y2="180.06" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="514.86" y1="231.11" x2="514.86" y2="164.00" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="528.38" y1="229.97" x2="528.38" y2="179.70" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="541.90" y1="231.35" x2="541.90" y2="189.51" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="555.43" y1="240.00" x2="555.43" y2="165.88" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="568.95" y1="234.06" x2="568.95" y2="173.79" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="582.48" y1="230.52" x2="582.48" y2="180.49" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="596.00" y1="229.66" x2="596.00" y2="182.73" stroke="#8ecae6" stroke-width="1.00"/>
+<polyline points="312.00,219.67 325.52,219.67 339.05,219.66 352.57,219.67 366.10,219.66 379.62,219.66 393.14,219.67 406.67,219.65 420.19,219.67 433.71,219.67 447.24,219.66 460.76,219.66 474.29,219.68 487.81,219.66 501.33,219.66 514.86,219.66 528.38,219.67 541.90,219.66 555.43,219.66 568.95,219.68 582.48,219.68 596.00,219.68" fill="none" stroke="#0072b2" stroke-width="1.20"/>
+<text x="312.00" y="252.00" font-family="monospace" font-size="7" fill="#222222" text-anchor="start">mean drift 2.19</text>
+<rect x="604.00" y="146.00" width="292.00" height="110.00" fill="white" fill-opacity="1.00" stroke="#dddddd"/>
+<text x="608.00" y="158.00" font-family="monospace" font-size="9" fill="#222222" text-anchor="start">transformer.h.1.attn.resid_...</text>
+<line x1="608.00" y1="239.81" x2="608.00" y2="195.24" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="621.52" y1="228.72" x2="621.52" y2="191.50" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="635.05" y1="231.21" x2="635.05" y2="191.99" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="648.57" y1="230.69" x2="648.57" y2="195.82" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="662.10" y1="228.01" x2="662.10" y2="190.97" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="675.62" y1="228.86" x2="675.62" y2="191.08" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="689.14" y1="231.26" x2="689.14" y2="191.56" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="702.67" y1="232.32" x2="702.67" y2="192.40" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="716.19" y1="230.01" x2="716.19" y2="191.07" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="729.71" y1="231.61" x2="729.71" y2="193.07" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="743.24" y1="227.90" x2="743.24" y2="189.53" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="756.76" y1="227.71" x2="756.76" y2="164.00" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="770.29" y1="232.85" x2="770.29" y2="191.46" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="783.81" y1="236.82" x2="783.81" y2="211.59" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="797.33" y1="227.83" x2="797.33" y2="192.22" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="810.86" y1="230.89" x2="810.86" y2="188.71" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="824.38" y1="232.79" x2="824.38" y2="210.68" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="837.90" y1="232.35" x2="837.90" y2="191.56" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="851.43" y1="239.57" x2="851.43" y2="206.03" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="864.95" y1="233.09" x2="864.95" y2="208.31" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="878.48" y1="226.90" x2="878.48" y2="189.61" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="892.00" y1="240.00" x2="892.00" y2="212.82" stroke="#8ecae6" stroke-width="1.00"/>
+<polyline points="608.00,223.13 621.52,223.12 635.05,223.13 648.57,223.11 662.10,223.13 675.62,223.13 689.14,223.13 702.67,223.13 716.19,223.12 729.71,223.12 743.24,223.13 756.76,223.12 770.29,223.13 783.81,223.11 797.33,223.13 810.86,223.14 824.38,223.13 837.90,223.12 851.43,223.12 864.95,223.12 878.48,223.12 892.00,223.13" fill="none" stroke="#0072b2" stroke-width="1.20"/>
+<text x="608.00" y="252.00" font-family="monospace" font-size="7" fill="#222222" text-anchor="start">mean drift 1.81</text>
+<rect x="12.00" y="264.00" width="292.00" height="110.00" fill="white" fill-opacity="1.00" stroke="#dddddd"/>
+<text x="16.00" y="276.00" font-family="monospace" font-size="9" fill="#222222" text-anchor="start">transformer.h.11.mlp</text>
+<line x1="16.00" y1="296.75" x2="16.00" y2="288.24" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="29.52" y1="297.96" x2="29.52" y2="287.66" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="43.05" y1="295.30" x2="43.05" y2="288.42" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="56.57" y1="295.58" x2="56.57" y2="288.70" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="70.10" y1="298.30" x2="70.10" y2="286.22" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="83.62" y1="298.35" x2="83.62" y2="286.49" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="97.14" y1="297.59" x2="97.14" y2="287.25" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="110.67" y1="307.71" x2="110.67" y2="285.37" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="124.19" y1="299.73" x2="124.19" y2="286.00" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="137.71" y1="357.26" x2="137.71" y2="286.72" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="151.24" y1="297.04" x2="151.24" y2="287.01" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="164.76" y1="297.35" x2="164.76" y2="287.31" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="178.29" y1="357.23" x2="178.29" y2="286.87" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="191.81" y1="301.10" x2="191.81" y2="285.43" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="205.33" y1="299.28" x2="205.33" y2="285.57" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="218.86" y1="355.93" x2="218.86" y2="288.31" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="232.38" y1="299.86" x2="232.38" y2="285.35" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="245.90" y1="356.80" x2="245.90" y2="282.00" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="259.43" y1="358.00" x2="259.43" y2="282.62" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="272.95" y1="299.53" x2="272.95" y2="285.65" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="286.48" y1="299.51" x2="286.48" y2="286.00" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="300.00" y1="301.00" x2="300.00" y2="285.48" stroke="#8ecae6" stroke-width="1.00"/>
+<polyline points="16.00,291.86 29.52,291.86 43.05,291.86 56.57,291.86 70.10,291.86 83.62,291.87 97.14,291.86 110.67,291.87 124.19,291.86 137.71,291.87 151.24,291.86 164.76,291.87 178.29,291.87 191.81,291.87 205.33,291.87 218.86,291.87 232.38,291.87 245.90,291.87 259.43,291.87 272.95,291.87 286.48,291.87 300.00,291.87" fill="none" stroke="#0072b2" stroke-width="1.20"/>
+<text x="16.00" y="370.00" font-family="monospace" font-size="7" fill="#222222" text-anchor="start">mean drift 1.76</text>
+<rect x="308.00" y="264.00" width="292.00" height="110.00" fill="white" fill-opacity="1.00" stroke="#dddddd"/>
+<text x="312.00" y="276.00" font-family="monospace" font-size="9" fill="#222222" text-anchor="start">transformer.h.11.mlp.dropout</text>
+<line x1="312.00" y1="296.75" x2="312.00" y2="288.24" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="325.52" y1="297.96" x2="325.52" y2="287.66" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="339.05" y1="295.30" x2="339.05" y2="288.42" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="352.57" y1="295.58" x2="352.57" y2="288.70" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="366.10" y1="298.30" x2="366.10" y2="286.22" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="379.62" y1="298.35" x2="379.62" y2="286.49" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="393.14" y1="297.59" x2="393.14" y2="287.25" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="406.67" y1="307.71" x2="406.67" y2="285.37" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="420.19" y1="299.73" x2="420.19" y2="286.00" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="433.71" y1="357.26" x2="433.71" y2="286.72" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="447.24" y1="297.04" x2="447.24" y2="287.01" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="460.76" y1="297.35" x2="460.76" y2="287.31" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="474.29" y1="357.23" x2="474.29" y2="286.87" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="487.81" y1="301.10" x2="487.81" y2="285.43" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="501.33" y1="299.28" x2="501.33" y2="285.57" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="514.86" y1="355.93" x2="514.86" y2="288.31" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="528.38" y1="299.86" x2="528.38" y2="285.35" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="541.90" y1="356.80" x2="541.90" y2="282.00" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="555.43" y1="358.00" x2="555.43" y2="282.62" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="568.95" y1="299.53" x2="568.95" y2="285.65" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="582.48" y1="299.51" x2="582.48" y2="286.00" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="596.00" y1="301.00" x2="596.00" y2="285.48" stroke="#8ecae6" stroke-width="1.00"/>
+<polyline points="312.00,291.86 325.52,291.86 339.05,291.86 352.57,291.86 366.10,291.86 379.62,291.87 393.14,291.86 406.67,291.87 420.19,291.86 433.71,291.87 447.24,291.86 460.76,291.87 474.29,291.87 487.81,291.87 501.33,291.87 514.86,291.87 528.38,291.87 541.90,291.87 555.43,291.87 568.95,291.87 582.48,291.87 596.00,291.87" fill="none" stroke="#0072b2" stroke-width="1.20"/>
+<text x="312.00" y="370.00" font-family="monospace" font-size="7" fill="#222222" text-anchor="start">mean drift 1.76</text>
+<rect x="604.00" y="264.00" width="292.00" height="110.00" fill="white" fill-opacity="1.00" stroke="#dddddd"/>
+<text x="608.00" y="276.00" font-family="monospace" font-size="9" fill="#222222" text-anchor="start">transformer.h.5.attn.c_attn</text>
+<line x1="608.00" y1="354.21" x2="608.00" y2="285.78" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="621.52" y1="355.71" x2="621.52" y2="285.59" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="635.05" y1="354.85" x2="635.05" y2="285.64" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="648.57" y1="354.39" x2="648.57" y2="286.88" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="662.10" y1="356.37" x2="662.10" y2="283.64" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="675.62" y1="354.86" x2="675.62" y2="288.05" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="689.14" y1="354.25" x2="689.14" y2="286.51" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="702.67" y1="357.21" x2="702.67" y2="283.24" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="716.19" y1="354.23" x2="716.19" y2="286.56" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="729.71" y1="358.00" x2="729.71" y2="282.52" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="743.24" y1="355.16" x2="743.24" y2="284.42" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="756.76" y1="358.00" x2="756.76" y2="282.00" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="770.29" y1="354.13" x2="770.29" y2="286.97" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="783.81" y1="356.75" x2="783.81" y2="285.39" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="797.33" y1="355.03" x2="797.33" y2="285.87" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="810.86" y1="353.38" x2="810.86" y2="288.47" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="824.38" y1="355.64" x2="824.38" y2="285.88" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="837.90" y1="356.98" x2="837.90" y2="285.33" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="851.43" y1="356.19" x2="851.43" y2="284.39" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="864.95" y1="355.61" x2="864.95" y2="285.97" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="878.48" y1="354.96" x2="878.48" y2="285.78" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="892.00" y1="355.69" x2="892.00" y2="284.56" stroke="#8ecae6" stroke-width="1.00"/>
+<polyline points="608.00,322.29 621.52,322.28 635.05,322.29 648.57,322.29 662.10,322.30 675.62,322.30 689.14,322.29 702.67,322.31 716.19,322.29 729.71,322.30 743.24,322.30 756.76,322.29 770.29,322.30 783.81,322.30 797.33,322.30 810.86,322.31 824.38,322.30 837.90,322.31 851.43,322.31 864.95,322.29 878.48,322.31 892.00,322.29" fill="none" stroke="#0072b2" stroke-width="1.20"/>
+<text x="608.00" y="370.00" font-family="monospace" font-size="7" fill="#222222" text-anchor="start">mean drift 1.07</text>
+<rect x="12.00" y="382.00" width="292.00" height="110.00" fill="white" fill-opacity="1.00" stroke="#dddddd"/>
+<text x="16.00" y="394.00" font-family="monospace" font-size="9" fill="#222222" text-anchor="start">transformer.h.9.attn.resid_...</text>
+<line x1="16.00" y1="475.43" x2="16.00" y2="401.63" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="29.52" y1="469.01" x2="29.52" y2="405.23" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="43.05" y1="459.55" x2="43.05" y2="416.74" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="56.57" y1="462.63" x2="56.57" y2="412.67" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="70.10" y1="462.68" x2="70.10" y2="413.05" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="83.62" y1="470.49" x2="83.62" y2="405.27" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="97.14" y1="468.60" x2="97.14" y2="405.23" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="110.67" y1="470.53" x2="110.67" y2="404.70" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="124.19" y1="467.04" x2="124.19" y2="407.15" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="137.71" y1="461.90" x2="137.71" y2="410.32" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="151.24" y1="468.80" x2="151.24" y2="409.17" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="164.76" y1="476.00" x2="164.76" y2="400.00" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="178.29" y1="467.87" x2="178.29" y2="408.53" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="191.81" y1="468.44" x2="191.81" y2="407.85" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="205.33" y1="466.92" x2="205.33" y2="409.42" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="218.86" y1="468.77" x2="218.86" y2="408.08" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="232.38" y1="463.40" x2="232.38" y2="414.78" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="245.90" y1="467.61" x2="245.90" y2="409.73" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="259.43" y1="466.45" x2="259.43" y2="409.09" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="272.95" y1="462.07" x2="272.95" y2="413.66" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="286.48" y1="467.46" x2="286.48" y2="408.49" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="300.00" y1="474.75" x2="300.00" y2="405.90" stroke="#8ecae6" stroke-width="1.00"/>
+<polyline points="16.00,438.94 29.52,438.93 43.05,438.94 56.57,438.93 70.10,438.93 83.62,438.93 97.14,438.94 110.67,438.94 124.19,438.94 137.71,438.94 151.24,438.93 164.76,438.93 178.29,438.94 191.81,438.94 205.33,438.94 218.86,438.93 232.38,438.93 245.90,438.93 259.43,438.94 272.95,438.93 286.48,438.94 300.00,438.93" fill="none" stroke="#0072b2" stroke-width="1.20"/>
+<text x="16.00" y="488.00" font-family="monospace" font-size="7" fill="#222222" text-anchor="start">mean drift 1.01</text>
+<rect x="308.00" y="382.00" width="292.00" height="110.00" fill="white" fill-opacity="1.00" stroke="#dddddd"/>
+<text x="312.00" y="394.00" font-family="monospace" font-size="9" fill="#222222" text-anchor="start">transformer.h.0.mlp</text>
+<line x1="312.00" y1="457.82" x2="312.00" y2="426.99" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="325.52" y1="471.49" x2="325.52" y2="406.77" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="339.05" y1="468.84" x2="339.05" y2="411.19" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="352.57" y1="473.62" x2="352.57" y2="403.45" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="366.10" y1="466.88" x2="366.10" y2="413.81" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="379.62" y1="469.18" x2="379.62" y2="410.33" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="393.14" y1="471.58" x2="393.14" y2="406.59" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="406.67" y1="471.20" x2="406.67" y2="407.37" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="420.19" y1="468.54" x2="420.19" y2="411.31" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="433.71" y1="462.90" x2="433.71" y2="419.41" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="447.24" y1="465.20" x2="447.24" y2="416.44" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="460.76" y1="467.63" x2="460.76" y2="433.18" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="474.29" y1="466.48" x2="474.29" y2="414.55" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="487.81" y1="455.41" x2="487.81" y2="409.56" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="501.33" y1="469.32" x2="501.33" y2="409.93" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="514.86" y1="463.58" x2="514.86" y2="418.32" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="528.38" y1="463.63" x2="528.38" y2="418.92" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="541.90" y1="468.87" x2="541.90" y2="410.92" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="555.43" y1="453.48" x2="555.43" y2="412.22" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="568.95" y1="476.00" x2="568.95" y2="400.00" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="582.48" y1="469.53" x2="582.48" y2="409.34" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="596.00" y1="453.78" x2="596.00" y2="409.87" stroke="#8ecae6" stroke-width="1.00"/>
+<polyline points="312.00,445.53 325.52,445.53 339.05,445.53 352.57,445.54 366.10,445.54 379.62,445.53 393.14,445.53 406.67,445.54 420.19,445.53 433.71,445.53 447.24,445.53 460.76,445.53 474.29,445.54 487.81,445.53 501.33,445.53 514.86,445.53 528.38,445.53 541.90,445.53 555.43,445.53 568.95,445.53 582.48,445.54 596.00,445.53" fill="none" stroke="#0072b2" stroke-width="1.20"/>
+<text x="312.00" y="488.00" font-family="monospace" font-size="7" fill="#222222" text-anchor="start">mean drift 0.915</text>
+<rect x="604.00" y="382.00" width="292.00" height="110.00" fill="white" fill-opacity="1.00" stroke="#dddddd"/>
+<text x="608.00" y="394.00" font-family="monospace" font-size="9" fill="#222222" text-anchor="start">transformer.h.0.mlp.dropout</text>
+<line x1="608.00" y1="457.82" x2="608.00" y2="426.99" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="621.52" y1="471.49" x2="621.52" y2="406.77" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="635.05" y1="468.84" x2="635.05" y2="411.19" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="648.57" y1="473.62" x2="648.57" y2="403.45" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="662.10" y1="466.88" x2="662.10" y2="413.81" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="675.62" y1="469.18" x2="675.62" y2="410.33" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="689.14" y1="471.58" x2="689.14" y2="406.59" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="702.67" y1="471.20" x2="702.67" y2="407.37" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="716.19" y1="468.54" x2="716.19" y2="411.31" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="729.71" y1="462.90" x2="729.71" y2="419.41" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="743.24" y1="465.20" x2="743.24" y2="416.44" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="756.76" y1="467.63" x2="756.76" y2="433.18" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="770.29" y1="466.48" x2="770.29" y2="414.55" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="783.81" y1="455.41" x2="783.81" y2="409.56" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="797.33" y1="469.32" x2="797.33" y2="409.93" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="810.86" y1="463.58" x2="810.86" y2="418.32" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="824.38" y1="463.63" x2="824.38" y2="418.92" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="837.90" y1="468.87" x2="837.90" y2="410.92" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="851.43" y1="453.48" x2="851.43" y2="412.22" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="864.95" y1="476.00" x2="864.95" y2="400.00" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="878.48" y1="469.53" x2="878.48" y2="409.34" stroke="#8ecae6" stroke-width="1.00"/>
+<line x1="892.00" y1="453.78" x2="892.00" y2="409.87" stroke="#8ecae6" stroke-width="1.00"/>
+<polyline points="608.00,445.53 621.52,445.53 635.05,445.53 648.57,445.54 662.10,445.54 675.62,445.53 689.14,445.53 702.67,445.54 716.19,445.53 729.71,445.53 743.24,445.53 756.76,445.53 770.29,445.54 783.81,445.53 797.33,445.53 810.86,445.53 824.38,445.53 837.90,445.53 851.43,445.53 864.95,445.53 878.48,445.54 892.00,445.53" fill="none" stroke="#0072b2" stroke-width="1.20"/>
+<text x="608.00" y="488.00" font-family="monospace" font-size="7" fill="#222222" text-anchor="start">mean drift 0.915</text>
+<text x="12.00" y="522.00" font-family="monospace" font-size="9" fill="#222222" text-anchor="start">showing sites 1-12 of 132 -- page 1 of 11 (rank: nonfinite_first_drift_v1; nonfinite first)</text>
+</svg>

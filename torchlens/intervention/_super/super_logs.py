@@ -80,11 +80,26 @@ class SuperBuffer(Super["Buffer"], _TensorBearing):
 
 
 class SuperParam(Super["Param"], _TensorBearing):
-    """Aligned view of a parameter address across bundle members."""
+    """Aligned view of a parameter address across bundle members.
+
+    Parameter members carry live handles, never capture-time bytes, so every
+    cross-member tensor read on this view (two or more members) refuses with
+    the stable code ``checkpoint_series_live_params`` unless every member has
+    immutable capture-time parameter evidence (R8(b) snapshots, future). The
+    guard lives at the one ``_tensor_dict`` funnel (A-CKPT; foldB D7);
+    single-member views keep the documented live-handle read, disclosed by
+    ``Param.value_basis``.
+    """
+
+    _cross_member_param_claim = True
 
     @property
     def weight_norm_diff(self) -> dict[str, float]:
         """Return L2 norm of parameter differences from the first member.
+
+        Refuses ``checkpoint_series_live_params`` on cross-member views
+        without immutable parameter evidence: live handles would report a
+        false zero for every member of a checkpoint series.
 
         Returns
         -------

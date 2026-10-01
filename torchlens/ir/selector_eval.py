@@ -1030,6 +1030,8 @@ def _evaluate_subject(selector: BaseSelector, subject: Any, lifecycle: str) -> b
                     f"{getattr(subject, '_layer_label_raw', '<unknown>')}"
                 ) from exc
         return bool(predicate(subject))
+    if kind == "episode_step":
+        return _episode_step_matches(value, subject, lifecycle)
     if kind == "preceded_by":
         if lifecycle != "capture" or not isinstance(selector, PrecededBySelector):
             raise _capability_error(kind, lifecycle)
@@ -1065,6 +1067,55 @@ def _evaluate_subject(selector: BaseSelector, subject: Any, lifecycle: str) -> b
             return False
         raise _capability_error(kind, lifecycle)
     raise _capability_error(kind, lifecycle)
+
+
+def _episode_step_matches(value: Any, subject: Any, lifecycle: str) -> bool:
+    """Evaluate one episode-step selector (lane F42's step qualifier).
+
+    Capture/live lifecycles read the LIVE step position from the armed join
+    session (the stepped-module boundary hooks); ops between steps carry no
+    step and never match. Evaluating outside an episode capture refuses
+    typed at the first evaluation -- a step qualifier on a plain capture is
+    a category error, and matching-nothing silently would be the inverse of
+    the fires-at-every-step wrongness the selector exists to close. The
+    post-hoc site lifecycle reads the persisted ``Op.episode_step`` stamps
+    (unstamped/plain products are door-guarded at resolution entry).
+
+    Parameters
+    ----------
+    value:
+        The selector's ordered step tuple.
+    subject:
+        Capture context, live proxy, or finalized site record.
+    lifecycle:
+        Active lifecycle key.
+
+    Returns
+    -------
+    bool
+        Whether the subject executes inside one of the named steps.
+    """
+
+    steps = tuple(value) if isinstance(value, (list, tuple)) else (value,)
+    if lifecycle in ("capture", "live"):
+        from torchlens.capture._episode_join import active_join_session
+
+        session = active_join_session()
+        if session is None:
+            from torchlens.intervention.errors import SelectorCapabilityError
+
+            raise SelectorCapabilityError(
+                "at_step(...) names an episode step, but this capture carries "
+                "no episode declaration: there are no steps to qualify. "
+                "Declare the episode -- tl.trace(model, x, "
+                "episode=tl.options.EpisodeSpec(stepped_module=..., ...), "
+                "...) -- or drop the step qualifier.",
+                code="episode_step_selector_without_episode",
+                remedy="declare episode= on the capture, or drop at_step()",
+            )
+        return session.in_step is not None and session.in_step in steps
+    stamp = getattr(subject, "episode_step", None)
+    return stamp is not None and stamp in steps
 
 
 def _preceded_by_matches(selector: PrecededBySelector, ctx: Any) -> bool:
@@ -1373,6 +1424,16 @@ def selector_from_spec(
         if not isinstance(value, int):
             raise SiteResolutionError("backward_pass target specs require an integer pass index.")
         return in_backward_pass(value)
+    if kind == "episode_step":
+        from ..intervention.selectors import at_step
+
+        if isinstance(value, Sequence) and not isinstance(value, str):
+            return at_step(*(int(step) for step in value))
+        raise SiteResolutionError(
+            "episode_step target specs require a sequence of 0-based step indices.",
+            code="episode_step_selector_invalid",
+            remedy="rebuild the selector with at_step(<step indices>)",
+        )
     if kind == "not":
         return ~normalize_selector_like(value, lifecycle=lifecycle)
     if kind in {"and", "or"}:
@@ -1409,6 +1470,28 @@ def _site_key_matches(selector: Any, rendered_key: Any) -> bool:
     if not isinstance(selector, SiteSelector):
         selector = selector_from_spec("site", selector.selector_value, None)
     return bool(selector.matches_key(rendered_key if isinstance(rendered_key, str) else None))
+
+
+def _selector_from_site_table(site_table: Any) -> BaseSelector:
+    """Lower a ``find_sites()`` SiteTable into a label-union selector."""
+
+    from ..intervention.selectors import label
+
+    site_labels: list[str] = []
+    for site in site_table:
+        site_label = getattr(site, "layer_label", None)
+        if isinstance(site_label, str) and site_label not in site_labels:
+            site_labels.append(site_label)
+    if not site_labels:
+        raise SiteResolutionError(
+            "This SiteTable resolved 0 sites, so there is nothing to "
+            "address; re-run find_sites(...) with a matching query.",
+            code="site_table_empty",
+        )
+    selector: BaseSelector = label(site_labels[0])
+    for site_label in site_labels[1:]:
+        selector = selector | label(site_label)
+    return selector
 
 
 def normalize_selector_like(selector_like: Any, *, lifecycle: Lifecycle) -> BaseSelector:
@@ -1457,6 +1540,11 @@ def normalize_selector_like(selector_like: Any, *, lifecycle: Lifecycle) -> Base
         if lifecycle == "live":
             return label(selector_like)
         return contains(selector_like)
+    if type(selector_like).__name__ == "SiteTable":
+        # find_sites() output is accepted directly (leverage B3/NEW-4): the
+        # zero-match refusal RECOMMENDS log.find_sites(...), so its result
+        # must be a valid address, not a dead end.
+        return _selector_from_site_table(selector_like)
     if lifecycle == "capture" and callable(selector_like):
         from ..intervention.selectors import where
 

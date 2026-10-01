@@ -220,12 +220,50 @@ def _memory_scopes(log: Any) -> dict[str, Any]:
     }
 
 
+def _factcore_counts(log: Any, *, module_row_count: int) -> dict[str, Any]:
+    """The counts block from the ONE numbers core (F09; sumfam D3/D17).
+
+    Both grains print under their names -- ``operations`` counts every
+    tracked tensor row (the historical meaning) while ``compute_ops`` and
+    ``alias_rows`` name the identity-partition split.
+    """
+
+    try:
+        from ._factcore import factcore
+
+        core = factcore(log)
+    except Exception:  # noqa: BLE001 -- foreign/partial logs keep the raw fallback
+        return {
+            "layers": _safe_len(getattr(log, "layer_labels", None)),
+            "operations": int(getattr(log, "num_ops", 0) or 0),
+            "tensors_total": int(getattr(log, "num_tensors", 0) or 0),
+            "tensors_saved": int(getattr(log, "num_saved_ops", 0) or 0),
+            "parameters": int(getattr(log, "num_params", 0) or 0),
+            "modules": module_row_count,
+        }
+    return {
+        "layers": core.counts.layers,
+        "operations": core.counts.tracked_tensor_rows,
+        "compute_ops": core.counts.compute_ops,
+        "alias_rows": core.counts.alias_rows,
+        "tensors_total": int(getattr(log, "num_tensors", 0) or 0),
+        "tensors_saved": core.memory.at_capture_saved_ops,
+        "parameters": core.params.total or 0,
+        "modules": module_row_count,
+    }
+
+
 def _health_summary(log: Any) -> dict[str, Any]:
-    """The three-state health verdict + coverage (C02; sumfam D5/D9)."""
+    """The three-state health verdict + coverage (C02; sumfam D5/D9).
+
+    D4 (F09 item 13): a machine dump never implicitly pays for a payload
+    scan -- this serves the basis in hand and reads NOT-CHECKED otherwise
+    (the explicit scan spelling is ``tl.report.health_facts(trace)``).
+    """
 
     from ._health import health_facts
 
-    facts = health_facts(log)
+    facts = health_facts(log, allow_scan=False)
     return {
         "verdict": facts.verdict,
         "basis": facts.basis,
@@ -308,6 +346,13 @@ def _op_entry(op: Any) -> dict[str, Any]:
 
     device_ref = getattr(op, "device_ref", None)
     dtype = getattr(op, "dtype", None)
+    call_stack = [str(m) for m in getattr(op, "module_call_stack", ()) or ()]
+    # FF1 (agent memo 3.5): `module_address` is the ATOMIC-module address and
+    # is null on 90-91% of real-transformer rows, so every module-grain
+    # rollup collapsed into one None bucket. `module_containment` is the
+    # call-stack-derived innermost containing module -- populated on every
+    # op that ran inside any module.
+    containment = call_stack[-1].rsplit(":", 1)[0] if call_stack else None
     return {
         "payload_state": _payload_state(op),
         "label": str(getattr(op, "label", getattr(op, "layer_label", "unknown"))),
@@ -320,8 +365,9 @@ def _op_entry(op: Any) -> dict[str, Any]:
         "device": str(getattr(device_ref, "name", device_ref)) if device_ref else None,
         "parents": [str(p) for p in getattr(op, "parents", ()) or ()],
         "children": [str(c) for c in getattr(op, "children", ()) or ()],
-        "module_call_stack": [str(m) for m in getattr(op, "module_call_stack", ()) or ()],
+        "module_call_stack": call_stack,
         "module_address": getattr(op, "atomic_module_address", None),
+        "module_containment": containment,
         "saved": bool(getattr(op, "has_saved_activation", False)),
         "site_key": _site_key_or_none(op),
         "num_params": int(getattr(op, "num_params", 0) or 0),
@@ -471,14 +517,10 @@ def build_agent_json(log: Any, *, max_ops: int | None = None) -> dict[str, Any]:
         "guide": guide,
         "capture": capture,
         "logged_values": logged_values,
-        "counts": {
-            "layers": _safe_len(getattr(log, "layer_labels", None)),
-            "operations": int(getattr(log, "num_ops", 0) or 0),
-            "tensors_total": int(getattr(log, "num_tensors", 0) or 0),
-            "tensors_saved": int(getattr(log, "num_saved_ops", 0) or 0),
-            "parameters": int(getattr(log, "num_params", 0) or 0),
-            "modules": len(module_rows),
-        },
+        # ONE machine core (sumfam D17/item 14): counts read the same
+        # FactCore sections explain-json reads; the parity gate pins every
+        # overlapping field so the two vocabularies cannot drift apart.
+        "counts": _factcore_counts(log, module_row_count=len(module_rows)),
         # Payload-scope law (C02; sumfam D8): every byte figure names its
         # scope -- at_capture (immutable capture fact) vs retained_now
         # (what THIS object holds; zero on a payload-stripped artifact).

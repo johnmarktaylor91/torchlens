@@ -55,12 +55,12 @@
             "_edge_uses[0].edge_use": "populated",
             "_edge_uses[0].parent_func_call_id": "unknown",
             "_edge_uses[0].parent_label": "populated",
-            "_edge_uses[0].view_or_copy": "sentinel_unknown",
+            "_edge_uses[0].view_or_copy": "populated",
             "backend_semantics.aliased_output_inputs": "defaulted_empty",
             "backend_semantics.autograd_memory": "unknown",
             "backend_semantics.backend_grad_handle": "unknown",
-            "backend_semantics.bytes_delta_at_call": "defaulted_zero",
-            "backend_semantics.bytes_peak_at_call": "defaulted_zero",
+            "backend_semantics.bytes_delta_at_call": "unknown",
+            "backend_semantics.bytes_peak_at_call": "unknown",
             "backend_semantics.grad_fn_class_name": "unknown",
             "backend_semantics.mutated_input_positions": "defaulted_empty",
             "backend_semantics.num_autograd_tensors": "unknown",
@@ -203,8 +203,8 @@
             "backend_semantics.aliased_output_inputs": "defaulted_empty",
             "backend_semantics.autograd_memory": "unknown",
             "backend_semantics.backend_grad_handle": "unknown",
-            "backend_semantics.bytes_delta_at_call": "defaulted_zero",
-            "backend_semantics.bytes_peak_at_call": "defaulted_zero",
+            "backend_semantics.bytes_delta_at_call": "unknown",
+            "backend_semantics.bytes_peak_at_call": "unknown",
             "backend_semantics.grad_fn_class_name": "unknown",
             "backend_semantics.mutated_input_positions": "defaulted_empty",
             "backend_semantics.num_autograd_tensors": "unknown",
@@ -347,8 +347,8 @@
             "backend_semantics.aliased_output_inputs": "defaulted_empty",
             "backend_semantics.autograd_memory": "unknown",
             "backend_semantics.backend_grad_handle": "unknown",
-            "backend_semantics.bytes_delta_at_call": "defaulted_zero",
-            "backend_semantics.bytes_peak_at_call": "defaulted_zero",
+            "backend_semantics.bytes_delta_at_call": "unknown",
+            "backend_semantics.bytes_peak_at_call": "unknown",
             "backend_semantics.grad_fn_class_name": "unknown",
             "backend_semantics.mutated_input_positions": "defaulted_empty",
             "backend_semantics.num_autograd_tensors": "unknown",
@@ -740,20 +740,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 483739,
+      "python_peak_memory_median_bytes": 484666,
       "sample_count": 3,
       "torch_version": "2.13.0+cu130",
-      "wall_time_median_ms": 39.37410190701485
+      "wall_time_median_ms": 52.75029502809048
     }
   },
   "sha256_chunks": [
-    "6d32ca4c",
-    "c0c82fc1",
-    "ccc48012",
-    "68d6f144",
-    "7286f1cf",
-    "8c5e591e",
-    "c56bc1d3",
-    "3e30aae6"
+    "2b04aae5",
+    "2bad9970",
+    "1857e5f2",
+    "435eb5ba",
+    "befbe8c2",
+    "02ab0afa",
+    "9c43830e",
+    "c74f2159"
   ]
 }

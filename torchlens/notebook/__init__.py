@@ -28,11 +28,17 @@ from typing import TYPE_CHECKING as _TYPE_CHECKING
 if _TYPE_CHECKING:
     from typing import Any
 
-__all__: list[str] = []
+__all__: list[str] = ["cards", "cardtree", "frontier"]
 
-#: Real active names: none yet. Adapters land here with per-name
-#: ``DependencyGate`` rows in ``_DEPENDENCIES``.
+#: Real active names. Card generation is stdlib + torch only (treescope
+#: memo decision 3): NO row here carries a ``DependencyGate`` -- the
+#: notebook extra gates integration helpers, never whether ``_repr_html_``
+#: can return safe HTML.
 _LAZY_ATTRS: dict[str, tuple[str, str | None]] = {}
+
+#: Real active child modules (the ``torchlens.bridge`` idiom): the CardTree
+#: IR (B1), the four cards (B2), and the diagnostic frontier query (B6).
+_SUBMODULES: set[str] = {"cards", "cardtree", "frontier"}
 
 #: Redirect/refusal teaching tables (five-step steps 2-3).
 _REDIRECTS: dict[str, str] = {}
@@ -72,6 +78,7 @@ def __getattr__(name: str) -> Any:
         name=name,
         module_globals=globals(),
         lazy_attrs=_LAZY_ATTRS,
+        submodules=_SUBMODULES,
         redirects=_REDIRECTS,
         refusals=_REFUSALS,
         dependencies=_DEPENDENCIES,
@@ -90,7 +97,7 @@ def __dir__() -> list[str]:
 
     from ..utils.facade import facade_dir
 
-    return facade_dir(globals(), _LAZY_ATTRS)
+    return facade_dir(globals(), _LAZY_ATTRS, _SUBMODULES)
 
 
 # ``from __future__ import annotations`` binds ``annotations`` as a reachable

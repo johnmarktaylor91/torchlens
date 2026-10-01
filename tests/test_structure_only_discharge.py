@@ -27,12 +27,32 @@ smoke = pytest.mark.smoke
 
 
 class TwoLayer(nn.Module):
-    def __init__(self) -> None:
+    def __init__(self, width: int = 4) -> None:
         super().__init__()
-        self.fc = nn.Linear(4, 4)
+        self.fc = nn.Linear(4, width)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return torch.relu(self.fc(x))
+
+
+class Branchy(nn.Module):
+    """Same class, config-controlled extra op: the graph-refuted fixture.
+
+    The D10 comparable-twins preflight (weightsfree memo) refuses CROSS-CLASS
+    discharges typed, so the graph-mismatch REFUTED verdict is exercised with
+    same-class twins whose executed graphs differ.
+    """
+
+    def __init__(self, extra: bool = False) -> None:
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+        self.extra = extra
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        h = self.fc(x)
+        if self.extra:
+            h = torch.relu(h)
+        return h
 
 
 class RepeatedIdenticalOps(nn.Module):
@@ -86,15 +106,14 @@ def test_positional_join_covers_repeated_ops_and_recurrent_passes() -> None:
 
 @smoke
 def test_refute_on_planted_shape_divergence() -> None:
-    """A real capture at a different batch size shares the graph but
-    contradicts the shape hypotheses: refuted, first contradiction named."""
+    """The doctored-config row (weightsfree memo sec 6): same class, same
+    input, drifted width — the graph digests agree but the shape hypotheses
+    contradict; refuted with the first contradicting site named."""
 
-    model = TwoLayer()
-    structure = _structure(model, torch.randn(2, 4))
-    real = tl.trace(model, torch.randn(3, 4))
+    structure = _structure(TwoLayer(width=4), torch.randn(2, 4))
+    real = tl.trace(TwoLayer(width=5), torch.randn(2, 4))
     discharge = structure.discharge_against(real)
     assert discharge.verdict is StructureClaimStatus.REFUTED
-    assert discharge.graph_matched is True
     assert discharge.first_contradiction is not None
     assert "shape" in discharge.first_contradiction
     assert claim_status_for(structure) is StructureClaimStatus.REFUTED
@@ -102,13 +121,44 @@ def test_refute_on_planted_shape_divergence() -> None:
 
 @smoke
 def test_graph_mismatch_refutes_at_structure_without_row_comparison() -> None:
-    structure = _structure(TwoLayer(), torch.randn(2, 4))
-    other = tl.trace(RepeatedIdenticalOps(), torch.randn(2, 4))
+    structure = _structure(Branchy(extra=False), torch.randn(2, 4))
+    other = tl.trace(Branchy(extra=True), torch.randn(2, 4))
     discharge = structure.discharge_against(other)
     assert discharge.verdict is StructureClaimStatus.REFUTED
     assert discharge.graph_matched is False
     assert discharge.claims == ()
-    assert "graph structure" in discharge.first_contradiction
+    # W1-RPT: the count/position delta is named STRUCTURALLY before any
+    # bare "digests differ" fallback.
+    assert "structural alignment" in discharge.first_contradiction
+
+
+@smoke
+def test_cross_class_discharge_refuses_incomparable() -> None:
+    """D10: refuse is not refute — a cross-class pair is a user error, not a
+    refuted hypothesis; the registry stays untouched."""
+
+    structure = _structure(TwoLayer(), torch.randn(2, 4))
+    other = tl.trace(RepeatedIdenticalOps(), torch.randn(2, 4))
+    with pytest.raises(StructureOnlyCapabilityError) as excinfo:
+        structure.discharge_against(other)
+    assert excinfo.value.fields["code"] == "structure_only_discharge_incomparable"
+    assert excinfo.value.fields["reason"] == "model_class"
+    assert registered_discharge(structure) is None
+    assert claim_status_for(structure) is StructureClaimStatus.HYPOTHESIS
+
+
+@smoke
+def test_input_geometry_mismatch_refuses_incomparable() -> None:
+    """D10: differing input plans refuse typed (a batch-size mismatch is a
+    comparability error, never evidence against the hypotheses)."""
+
+    structure = _structure(TwoLayer(), torch.randn(2, 4))
+    real = tl.trace(TwoLayer(), torch.randn(3, 4))
+    with pytest.raises(StructureOnlyCapabilityError) as excinfo:
+        structure.discharge_against(real)
+    assert excinfo.value.fields["code"] == "structure_only_discharge_incomparable"
+    assert excinfo.value.fields["reason"] == "input_geometry"
+    assert registered_discharge(structure) is None
 
 
 @smoke
@@ -137,8 +187,9 @@ def test_never_promote_g4_and_refuted_flips_accessors_g5() -> None:
     # Hypothesis rows pass the chokepoint pre-discharge.
     row = require_structure_only_capability(structure, "shapes_dtypes")
     assert row is not None and row.status_v1 == "supported_hypothesis"
-    # G5: a REFUTED discharge flips hypothesis consumers to typed refusals.
-    real = tl.trace(model, torch.randn(5, 4))
+    # G5: a REFUTED discharge flips hypothesis consumers to typed refusals
+    # (doctored-width twin: same class and input, drifted interior shapes).
+    real = tl.trace(TwoLayer(width=6), torch.randn(2, 4))
     discharge = structure.discharge_against(real)
     assert discharge.verdict is StructureClaimStatus.REFUTED
     with pytest.raises(StructureOnlyCapabilityError) as excinfo:

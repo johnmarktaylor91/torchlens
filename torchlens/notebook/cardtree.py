@@ -45,6 +45,7 @@ __all__ = [
     "CARD_CSS_VERSION",
     "Card",
     "CardCollection",
+    "CardHtml",
     "CardKey",
     "CardSection",
     "CardText",
@@ -89,6 +90,25 @@ class CardKey:
     """
 
     expression: str
+
+
+@dataclass(frozen=True)
+class CardHtml:
+    """One TRUSTED pre-rendered fragment from a TorchLens emitter (F16).
+
+    The escaping contract moves, never weakens: the producing emitter
+    (e.g. the native array grid) escapes its own data at ITS leaf
+    boundary, and the fragment passes through here verbatim. User data
+    may NEVER ride this node directly -- that is what :class:`CardText`
+    is for.
+
+    Attributes
+    ----------
+    fragment:
+        Already-safe HTML produced by a TorchLens renderer.
+    """
+
+    fragment: str
 
 
 @dataclass(frozen=True)
@@ -151,7 +171,7 @@ class Card:
     kind: str = "card"
 
 
-CardNode = Card | CardCollection | CardKey | CardSection | CardText
+CardNode = Card | CardCollection | CardHtml | CardKey | CardSection | CardText
 
 
 @dataclass(frozen=True)
@@ -207,6 +227,19 @@ def card_css(theme: str = "torchlens") -> str:
         "padding:0 4px}"
         f"{scope} details{{margin:4px 0}}"
         f"{scope} summary{{cursor:pointer;font-weight:600}}"
+        # Native array grid + six-state motif styles (F16): motifs are
+        # PATTERN glyphs, so these classes only set weight/color contrast.
+        f"{scope} .tl-grid-table{{border-collapse:collapse;margin:4px 0}}"
+        f"{scope} .tl-grid-cell{{width:10px;height:10px;font-size:7px;"
+        "text-align:center;padding:0;line-height:10px}"
+        f"{scope} .tl-grid-axes{{font-family:ui-monospace,monospace;"
+        f"color:{tokens.muted};font-size:11px}}"
+        f"{scope} .tl-grid-disclosure{{color:{tokens.muted};font-size:11px}}"
+        f"{scope} .tl-motif-nan,{scope} .tl-motif-posinf,{scope} .tl-motif-neginf"
+        f"{{font-weight:700;color:{tokens.font}}}"
+        f"{scope} .tl-motif-masked,{scope} .tl-motif-unknown{{color:{tokens.muted}}}"
+        f"{scope} .tl-motif-oor{{font-weight:700;color:{tokens.notice}}}"
+        f"{scope} .tl-card-sentinel{{color:{tokens.muted};font-size:12px}}"
         "</style>"
     )
 
@@ -243,6 +276,9 @@ def _render_node(node: CardNode) -> str:
     if isinstance(node, CardText):
         role_class = f"tl-card-{node.role}" if node.role else "tl-card-fact"
         return f'<div class="{escape(role_class, quote=True)}">{escape(node.text)}</div>'
+    if isinstance(node, CardHtml):
+        # Trusted TorchLens-emitter fragment: escaped at ITS leaf boundary.
+        return node.fragment
     if isinstance(node, CardKey):
         expression = escape(node.expression, quote=True)
         return (

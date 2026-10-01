@@ -8,11 +8,14 @@ kill the false-positive and false-negative detection classes flagged in round 18
 
 from __future__ import annotations
 
+import textwrap
+
 import pytest
 import torch
 from torch import nn
 
 from torchlens.compat import report
+from torchlens.compat._report import _SHOW_CELL_WIDTH_CAP
 
 # ---------------------------------------------------------------------------
 # A3-08 — HF Transformers detection must key on real transformers namespace,
@@ -508,13 +511,18 @@ def test_offload_row_detection_is_independent_of_device_id_truthiness() -> None:
 
 
 def test_offload_row_detects_real_weight_offload() -> None:
-    """A hook with offload=True stays detected even on device index 0."""
+    """A hook with offload=True stays detected even on device index 0.
+
+    Lane F37: offloaded capture is SUPPORTED (hook internals under
+    pause_logging, materialized weights re-attributed), so detection now
+    reads pass/info rather than the historical known_broken/error.
+    """
 
     row = _offload_row_for(_StubAlignDevicesHook(offload=True, execution_device=0))
 
     assert row.detected is True
-    assert row.status == "known_broken"
-    assert row.severity == "error"
+    assert row.status == "pass"
+    assert row.severity == "info"
 
 
 def test_offload_row_detects_buffer_offload() -> None:
@@ -687,8 +695,12 @@ def test_show_includes_suggestion_column_like_markdown() -> None:
     assert "Suggestion" in header_line
     assert "Suggestion" in markdown_table
 
-    # The concrete suggestion text present in markdown is also present in show().
+    # The concrete suggestion text present in markdown is also present in
+    # show(). show() wraps long cells inside the designed width cap (bounded
+    # designed reprs), so presence is asserted per wrapped fragment: every
+    # fragment of the suggestion must appear on some table line.
     dp_suggestion = compat_report.row("data_parallel").suggestion
     assert dp_suggestion
-    assert dp_suggestion in text_table
+    for fragment in textwrap.wrap(dp_suggestion, width=_SHOW_CELL_WIDTH_CAP):
+        assert fragment in text_table
     assert dp_suggestion in markdown_table

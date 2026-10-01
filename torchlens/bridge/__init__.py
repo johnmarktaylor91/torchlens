@@ -35,6 +35,8 @@ _BRIDGE_MODULES = {
     "sae_lens",
     "shap",
     "steering_vectors",
+    "treescope",
+    "xarray",
 }
 
 
@@ -102,6 +104,8 @@ __all__ = [
     "sae_lens",
     "shap",
     "steering_vectors",
+    "treescope",
+    "xarray",
 ]
 
 # ``from __future__ import annotations`` binds ``annotations`` as a reachable

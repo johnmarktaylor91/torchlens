@@ -39,6 +39,14 @@ from ..observability._kernels import (  # noqa: E402
     Spine,
     SpineResult,
 )
+from ._fitted import (  # noqa: E402
+    FittedArtifactError,
+    FittedPCA,
+    load_fitted,
+    save_fitted,
+)
+from ._glance import glance  # noqa: E402
+from ._seams import EchoObserver, echo, summary_cell, treescope_card_fields  # noqa: E402
 from ._stats_render import (  # noqa: E402
     GLYPH_RAMP_ASCII,
     GLYPH_RAMP_UNICODE,
@@ -53,12 +61,20 @@ from ._tensor_stats import (  # noqa: E402
     tensor_stats,
 )
 
+# F10 lovely surfaces (items 10-11): glance (FORK-C function form; submodule
+# spelling, root budget frozen), the summary-cell/treescope seam adapters,
+# and the echo observer for the shipped hooks=/tap surface. Spellings
+# DOCUMENTED-UNSTABLE pending naming-session ratification.
+
 __all__ = [
     "Aggregator",
     "CKA",
     "Covariance",
     "CrossCovariance",
+    "EchoObserver",
     "FamilyEvidence",
+    "FittedArtifactError",
+    "FittedPCA",
     "GLYPH_RAMP_ASCII",
     "GLYPH_RAMP_UNICODE",
     "Histogram",
@@ -77,7 +93,13 @@ __all__ = [
     "aggregate",
     "cka",
     "degrade",
+    "echo",
     "format_sig",
+    "glance",
+    "load_fitted",
     "render_core_line",
+    "save_fitted",
+    "summary_cell",
     "tensor_stats",
+    "treescope_card_fields",
 ]

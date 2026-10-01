@@ -22,9 +22,12 @@ from typing import Any
 
 from .._capture_honesty import capture_honesty_facts, honesty_preamble_lines
 from .._io._json import loads_bounded
+from ..capture.structure_only import (
+    require_structure_only_capability as _require_structure_only_capability,
+)
 from ..utils.display import atomic_write_text
 from ._common import _iter_layers, _scalarize_cell, _static_graph_data
-from ._graphs import NETRON_DISCLAIMER, model_explorer, netron
+from ._graphs import NETRON_DISCLAIMER, netron
 from ._registry import (
     export_target_info,
     export_targets,
@@ -35,6 +38,111 @@ from ._registry import (
 from ._trackers import aim, mlflow, tensorboard, wandb
 
 __tl_layer__ = "L7"
+
+#: Bridge-tier Model Explorer names served lazily (PEP 562): this package is
+#: L7 and ``._model_explorer`` is an L8 bridge, so the implementation loads on
+#: first attribute access or first exporter call, never at package import.
+_MODEL_EXPLORER_LAZY_NAMES = frozenset(
+    {"to_model_explorer_dict", "validate_model_explorer_payload"}
+)
+
+
+def __getattr__(name: str) -> Any:
+    """Lazily resolve re-exported Model Explorer names from the L8 bridge."""
+
+    if name in _MODEL_EXPLORER_LAZY_NAMES:
+        from . import _model_explorer as _me
+
+        value = getattr(_me, name)
+        globals()[name] = value
+        return value
+    if name == "ReportOptions":
+        # The offline-report worker stays lazy like the html() door itself.
+        from ._report import ReportOptions
+
+        globals()[name] = ReportOptions
+        return ReportOptions
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def model_explorer(log: Any, path: str | Path, **kwargs: Any) -> Path:
+    """Export one log as a Model Explorer JSON graph collection.
+
+    Thin deferred door: the L8 bridge implementation
+    (:func:`torchlens.export._model_explorer.model_explorer`) loads on first
+    call, keeping this L7 package free of eager upward imports.
+
+    Parameters
+    ----------
+    log:
+        TorchLens ``Trace`` to export.
+    path:
+        Destination JSON path.
+    **kwargs:
+        Options forwarded verbatim to the bridge implementation
+        (``overlays=``, ``privacy_profile=``, ``per_step=``, ...).
+
+    Returns
+    -------
+    Path
+        Written JSON path.
+    """
+
+    from ._model_explorer import model_explorer as _impl
+
+    return _impl(log, path, **kwargs)
+
+
+def model_explorer_diff(members: Any, out_dir: str | Path, **kwargs: Any) -> Path:
+    """Export a Model Explorer side-by-side diff collection for N members.
+
+    Thin deferred door over
+    :func:`torchlens.export._model_explorer.model_explorer_diff` (L8 bridge,
+    loaded on first call).
+
+    Parameters
+    ----------
+    members:
+        Bundle or sequence of logs to compare.
+    out_dir:
+        Destination directory.
+    **kwargs:
+        Options forwarded verbatim (``label=``, ``privacy_profile=``).
+
+    Returns
+    -------
+    Path
+        Written collection path.
+    """
+
+    from ._model_explorer import model_explorer_diff as _impl
+
+    return _impl(members, out_dir, **kwargs)
+
+
+def model_explorer_serve(source: Any, **kwargs: Any) -> Path:
+    """Serve one exported payload in a local Model Explorer instance.
+
+    Thin deferred door over
+    :func:`torchlens.export._model_explorer.model_explorer_serve` (L8 bridge,
+    loaded on first call; requires the ``ai-edge-model-explorer`` extra).
+
+    Parameters
+    ----------
+    source:
+        Log or exported payload path to serve.
+    **kwargs:
+        Options forwarded verbatim (``path=`` plus viewer kwargs).
+
+    Returns
+    -------
+    Path
+        Path of the payload handed to the viewer.
+    """
+
+    from ._model_explorer import model_explorer_serve as _impl
+
+    return _impl(source, **kwargs)
 
 
 def _honesty_comment_block(log: Any, prefix: str) -> str:
@@ -127,18 +235,40 @@ def svg(log: Any, path: str | Path, *, editable: bool = True) -> Path:
     return destination
 
 
-def html(log: Any, path: str | Path) -> Path:
-    """Export a minimal self-contained HTML graph viewer.
+def html(
+    log: Any,
+    path: str | Path,
+    *,
+    arrays: Any = "frontier",
+    graph: str = "collapsed",
+    options: Any = None,
+) -> Path:
+    """Export the single-file offline HTML trace report (F16, memo s6).
 
-    The output supports pan, zoom, and node hover without importing TorchLens'
-    viewer or notebook extras and without loading network resources.
+    Upgraded IN PLACE from the minimal canvas viewer: one file, no
+    network, metadata for every op, the real module-collapsed graph with
+    pan/zoom (the historical canvas survives as a labeled fallback), the
+    summary lane's typed table, capture-honesty disclosures, and -- by
+    default -- truncated thumbnails only for the diagnostic FRONTIER of a
+    failure. Healthy captures embed zero array bytes by default.
 
     Parameters
     ----------
     log:
-        TorchLens ``Trace`` to export.
+        TorchLens ``Trace`` or ``PartialTrace`` to export.
     path:
         Destination HTML path.
+    arrays:
+        ``"frontier"`` (default) / ``"flagged"`` (hard-capped debugging
+        preset) / ``"none"`` / a ``tl.Selection`` (the general form).
+    graph:
+        ``"collapsed"`` (default) / ``"flat"`` / ``"none"``.
+    options:
+        ``tl.export.ReportOptions`` emission plumbing: ``share_safe``
+        (strip every embedded value including the frontier),
+        ``deterministic`` (suppress the manifest timestamp for byte-exact
+        regeneration), ``vis_call_depth`` (graph-depth knob, forwarded
+        and disclosed), and the thumbnail budgets.
 
     Returns
     -------
@@ -146,16 +276,29 @@ def html(log: Any, path: str | Path) -> Path:
         Written HTML path.
     """
 
-    destination = Path(path)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    data = _static_graph_data(log)
-    payload = _json.dumps(data, separators=(",", ":"))
-    atomic_write_text(destination, _honesty_xml_comment(log) + _render_html(payload))
-    return destination
+    from ._report import write_report
+
+    return write_report(log, path, arrays=arrays, graph=graph, options=options)
+
+
+#: The clock-basis disclosure every TorchLens host-clock export carries
+#: (torchnative W0.1). These artifacts time WRAPPED CALLS on the host wall
+#: clock under instrumentation; they are not device kernel time and share no
+#: clock basis with a torch.profiler/Kineto trace, so values must never be
+#: subtracted across the two.
+CLOCK_BASIS_DISCLOSURE = (
+    "host wall time around wrapped calls, under TorchLens instrumentation; "
+    "not device kernel time -- shares no clock basis with torch.profiler/"
+    "Kineto traces"
+)
 
 
 def chrome_trace(log: Any, path: str | Path) -> Path:
     """Export a Chrome tracing JSON timeline for one TorchLens log.
+
+    Timestamps are ``CLOCK_BASIS_DISCLOSURE``: host wall time around wrapped
+    calls under instrumentation, never device kernel time; the disclosure
+    rides the artifact metadata.
 
     Parameters
     ----------
@@ -169,6 +312,11 @@ def chrome_trace(log: Any, path: str | Path) -> Path:
     Path
         Written JSON path.
     """
+    # D15 (weightsfree memo): measurement-shaped output refuses on a
+    # structure-only capture -- timings/allocator peaks are measurements a
+    # value-free capture never made; rendering meta-dispatch cost as
+    # 'measured' inverts real cost rankings. One chokepoint, typed code.
+    _require_structure_only_capability(log, "measurement_exports")
 
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -177,6 +325,7 @@ def chrome_trace(log: Any, path: str | Path) -> Path:
         "displayTimeUnit": "ms",
         "metadata": {
             "schema": "torchlens.chrome_trace.v1",
+            "clock_basis": CLOCK_BASIS_DISCLOSURE,
             "torchlens_capture_honesty": capture_honesty_facts(log),
         },
     }
@@ -218,6 +367,9 @@ def chrome_trace_diff(bundle: Any, path: str | Path) -> Path:
 def speedscope(log: Any, path: str | Path) -> Path:
     """Export a speedscope evented profile for one TorchLens log.
 
+    Timestamps are host wall time around wrapped calls under TorchLens
+    instrumentation (``CLOCK_BASIS_DISCLOSURE``), never device kernel time.
+
     Parameters
     ----------
     log:
@@ -230,6 +382,11 @@ def speedscope(log: Any, path: str | Path) -> Path:
     Path
         Written JSON path.
     """
+    # D15 (weightsfree memo): measurement-shaped output refuses on a
+    # structure-only capture -- timings/allocator peaks are measurements a
+    # value-free capture never made; rendering meta-dispatch cost as
+    # 'measured' inverts real cost rankings. One chokepoint, typed code.
+    _require_structure_only_capability(log, "measurement_exports")
 
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -244,6 +401,7 @@ def speedscope(log: Any, path: str | Path) -> Path:
 
     payload = {
         "$schema": "https://www.speedscope.app/file-format-schema.json",
+        "clock_basis": CLOCK_BASIS_DISCLOSURE,
         "torchlens_capture_honesty": capture_honesty_facts(log),
         "shared": {"frames": frames},
         "profiles": [
@@ -265,6 +423,11 @@ def speedscope(log: Any, path: str | Path) -> Path:
 def flamegraph(log: Any, path: str | Path) -> Path:
     """Export a folded-stack flamegraph text file for one TorchLens log.
 
+    Frame weights are host wall time around wrapped calls under TorchLens
+    instrumentation (``CLOCK_BASIS_DISCLOSURE``), never device kernel time;
+    the folded format has no metadata slot, so the disclosure rides a
+    zero-weight synthetic frame beside the honesty facts.
+
     Parameters
     ----------
     log:
@@ -277,6 +440,11 @@ def flamegraph(log: Any, path: str | Path) -> Path:
     Path
         Written text path.
     """
+    # D15 (weightsfree memo): measurement-shaped output refuses on a
+    # structure-only capture -- timings/allocator peaks are measurements a
+    # value-free capture never made; rendering meta-dispatch cost as
+    # 'measured' inverts real cost rankings. One chokepoint, typed code.
+    _require_structure_only_capability(log, "measurement_exports")
 
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -292,6 +460,9 @@ def flamegraph(log: Any, path: str | Path) -> Path:
         for key in ("capture_status", "capture_verified", "structure_only", "poisoned")
     )
     lines.append(f"torchlens_capture_honesty;{honesty_stack} 0")
+    lines.append(
+        f"torchlens_clock_basis;{_sanitize_flamegraph_frame(CLOCK_BASIS_DISCLOSURE.replace(' ', '_'))} 0"
+    )
     for layer in _iter_layers(log):
         stack = [model_class_name]
         stack.extend(str(module) for module in (getattr(layer, "modules", None) or []))
@@ -321,6 +492,11 @@ def memory_timeline(log: Any, path: str | Path) -> Path:
     Path
         Written JSON path.
     """
+    # D15 (weightsfree memo): measurement-shaped output refuses on a
+    # structure-only capture -- timings/allocator peaks are measurements a
+    # value-free capture never made; rendering meta-dispatch cost as
+    # 'measured' inverts real cost rankings. One chokepoint, typed code.
+    _require_structure_only_capability(log, "measurement_exports")
 
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -341,10 +517,49 @@ def memory_timeline(log: Any, path: str | Path) -> Path:
         "schema": "torchlens.memory_timeline.v1",
         "scope": "tensor",
         "disclaimer": "Tensor scope only; not an allocator trace.",
+        # One-release compatibility exporter (observe item 11): the
+        # cumulative_tensor_bytes meaning is UNCHANGED and its maximum is
+        # structurally its last point -- it cannot answer "when is the peak".
+        # The categorized v2 artifact is the replacement.
+        "deprecation": (
+            "torchlens.memory_timeline.v1 is superseded by the categorized "
+            "memory_timeline_v2 export; v1 ships for one more release"
+        ),
         "torchlens_capture_honesty": capture_honesty_facts(log),
         "events": events,
     }
     atomic_write_text(destination, _json.dumps(payload, indent=2))
+    return destination
+
+
+def memory_timeline_v2(log: Any, path: str | Path) -> Path:
+    """Export the categorized module-contained memory timeline v2 artifact.
+
+    The typed replacement for :func:`memory_timeline` (observe item 11):
+    closed categories, named-absent facts, per-event module containment, the
+    saved-for-backward band decomposed beside the gross figure, and the three
+    products kept apart (per-event logical bytes / persistent baseline /
+    cumulative produced bytes, never called live memory).
+
+    Parameters
+    ----------
+    log:
+        TorchLens ``Trace`` to export.
+    path:
+        Destination JSON path.
+
+    Returns
+    -------
+    Path
+        Written JSON path.
+    """
+
+    from torchlens.observe import memory_timeline_v2 as _build_v2
+
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    artifact = _build_v2(log)
+    atomic_write_text(destination, _json.dumps(artifact, indent=2))
     return destination
 
 
@@ -369,6 +584,9 @@ def xarray(log: Any) -> Any:
     ValueError
         If no saved tensor outs are available or presentation counts differ.
     """
+    # D15: xarray's product IS saved tensor values -- it refuses through the
+    # EXISTING value-payload capability (a marked empty array would be synthetic).
+    _require_structure_only_capability(log, "value_payloads")
 
     try:
         import numpy as np
@@ -845,26 +1063,6 @@ def _safe_id(value: str) -> str:
     return "".join(char if char.isalnum() else "-" for char in value).strip("-")
 
 
-__all__ = [
-    "aim",
-    "chrome_trace",
-    "chrome_trace_diff",
-    "csv",
-    "flamegraph",
-    "html",
-    "json",
-    "memory_timeline",
-    "mlflow",
-    "model_explorer",
-    "netron",
-    "parquet",
-    "speedscope",
-    "svg",
-    "tensorboard",
-    "wandb",
-    "xarray",
-]
-
 # ---------------------------------------------------------------------------
 # Builtin registrations: through the SAME public door out-of-tree exporters
 # use (registry law 6.1 -- builtins never take a kernel side channel). The
@@ -884,12 +1082,30 @@ _BUILTIN_EXPORT_TARGETS: tuple[tuple[str, Any, str, dict[str, Any]], ...] = (
     ("speedscope", speedscope, "present", {"output": "file", "requires_extra": "none"}),
     ("flamegraph", flamegraph, "present", {"output": "file", "requires_extra": "none"}),
     ("memory_timeline", memory_timeline, "present", {"output": "file", "requires_extra": "none"}),
+    (
+        "memory_timeline_v2",
+        memory_timeline_v2,
+        "present",
+        {"output": "file", "requires_extra": "none"},
+    ),
     ("csv", csv, "present", {"output": "file", "requires_extra": "pandas"}),
     ("parquet", parquet, "present", {"output": "file", "requires_extra": "pandas"}),
     ("json", json, "present", {"output": "file", "requires_extra": "pandas"}),
     ("xarray", xarray, "present", {"output": "object", "requires_extra": "xarray"}),
     ("netron", netron, "bridge", {"output": "file", "requires_extra": "none"}),
     ("model_explorer", model_explorer, "bridge", {"output": "file", "requires_extra": "none"}),
+    (
+        "model_explorer_diff",
+        model_explorer_diff,
+        "bridge",
+        {"output": "file", "requires_extra": "none"},
+    ),
+    (
+        "model_explorer_serve",
+        model_explorer_serve,
+        "bridge",
+        {"output": "server", "requires_extra": "ai-edge-model-explorer"},
+    ),
     ("tensorboard", tensorboard, "bridge", {"output": "tracker", "requires_extra": "none"}),
     ("wandb", wandb, "bridge", {"output": "tracker", "requires_extra": "wandb"}),
     ("mlflow", mlflow, "bridge", {"output": "tracker", "requires_extra": "none"}),
@@ -902,6 +1118,7 @@ del _name, _fn, _tier, _caps
 
 __all__ = [
     "NETRON_DISCLAIMER",
+    "ReportOptions",
     "aim",
     "chrome_trace",
     "chrome_trace_diff",
@@ -912,8 +1129,11 @@ __all__ = [
     "html",
     "json",
     "memory_timeline",
+    "memory_timeline_v2",
     "mlflow",
     "model_explorer",
+    "model_explorer_diff",
+    "model_explorer_serve",
     "netron",
     "parquet",
     "register_export_target",
@@ -921,7 +1141,9 @@ __all__ = [
     "speedscope",
     "svg",
     "tensorboard",
+    "to_model_explorer_dict",
     "unregister_export_target",
+    "validate_model_explorer_payload",
     "wandb",
     "xarray",
 ]

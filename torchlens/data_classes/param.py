@@ -21,6 +21,7 @@ The check is one-shot: once ``_has_grad`` is True, no further checks are made.
 
 import weakref
 from collections.abc import Iterator
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -37,7 +38,6 @@ from ..constants import PARAM_LOG_FIELD_ORDER
 from ..ir.refs import DeviceRef, DtypeRef
 from ..quantities import Bytes
 from ._accessor_base import Accessor
-from ._repr import format_summary_lines
 from ._runtime_handles import source_model_from_trace
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 from .op import GradientRecord, GradientRecordAccessor
@@ -83,6 +83,79 @@ _PARAM_CONTAINER_DEFAULTS: dict[str, Any] = {
     "used_by_layers": [],
     "co_parent_params": [],
 }
+
+
+#: Closed vocabulary for the derived parameter value basis. ``snapshot`` is
+#: declared but unreachable until capture-time parameter snapshots (R8(b))
+#: land and own their carriage; only ``snapshot`` counts as immutable
+#: capture-time parameter evidence.
+_PARAM_VALUE_BASES = frozenset({"live_ref", "absent", "snapshot"})
+
+
+@dataclass(frozen=True)
+class ParamValueBasis:
+    """Derived, read-time disclosure of where a parameter value comes from.
+
+    TorchLens records WHICH parameter a run used, not its bytes:
+    ``Param.value`` resolves through a live handle to the source model and
+    returns TODAY'S value, which may have moved since capture. This basis is
+    computed at read time and persisted NOWHERE -- it is a disclosure beside
+    the documented live read, never a change to it.
+
+    Values (closed vocabulary; spellings DOCUMENTED-UNSTABLE pending the
+    naming session):
+
+    - ``live_ref``: the live-model handle resolves; the value may have moved
+      since capture.
+    - ``absent`` with reason ``not_persisted``: the trace was deserialized
+      and parameter bytes were never persisted, so there is no value to
+      serve (this replaces the historical untyped bare ``None``).
+    - ``snapshot``: reserved for capture-time parameter snapshots (R8(b));
+      unreachable today.
+    """
+
+    basis: str
+    reason: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate the closed basis vocabulary."""
+
+        if self.basis not in _PARAM_VALUE_BASES:
+            raise ValueError(
+                f"parameter value basis must be one of {sorted(_PARAM_VALUE_BASES)}, "
+                f"got {self.basis!r}"
+            )
+
+    @property
+    def is_immutable(self) -> bool:
+        """Return whether this basis is immutable capture-time evidence.
+
+        Only ``snapshot`` (R8(b), future) qualifies; a live handle or an
+        absent value never proves what the bytes were at capture time.
+        """
+
+        return self.basis == "snapshot"
+
+    @property
+    def description(self) -> str:
+        """Return the one-sentence teaching gloss for this basis."""
+
+        if self.basis == "live_ref":
+            return (
+                "The value is read through a live handle to the source model; "
+                "it may have moved since capture."
+            )
+        if self.basis == "snapshot":
+            return "The value is an immutable capture-time parameter snapshot."
+        return (
+            "The trace was deserialized and parameter bytes were never "
+            "persisted; there is no value to serve."
+        )
+
+    def __str__(self) -> str:
+        """Return the compact ``basis`` or ``basis(reason)`` spelling."""
+
+        return self.basis if self.reason is None else f"{self.basis}({self.reason})"
 
 
 class Param:
@@ -389,6 +462,34 @@ class Param:
         return self._resolve_live_param()
 
     @property
+    def value_basis(self) -> "ParamValueBasis":
+        """Return the derived, read-time basis for this parameter's value.
+
+        Computed at read time and persisted nowhere (no schema act): the
+        basis is a disclosure BESIDE the documented live-handle read
+        (``value``/``handle``), never a change to it. ``live_ref`` means the
+        live-model handle resolves and the value may have moved since
+        capture; ``absent(not_persisted)`` means the trace was deserialized
+        and parameter bytes were never persisted (replacing the historical
+        untyped bare ``None``); ``snapshot`` arrives only with capture-time
+        parameter snapshots (R8(b)). Spelling DOCUMENTED-UNSTABLE pending the
+        naming session.
+
+        Returns
+        -------
+        ParamValueBasis
+            The derived value basis, never ``None``.
+        """
+
+        try:
+            param = self._peek_live_param(cache=False)
+        except PostTraceParamUnavailable:
+            return ParamValueBasis("absent", "not_persisted")
+        if param is None:
+            return ParamValueBasis("absent", "not_persisted")
+        return ParamValueBasis("live_ref")
+
+    @property
     def handle(self) -> torch.nn.Parameter | None:
         """Return the live model parameter when reachable without caching it.
 
@@ -652,25 +753,33 @@ class Param:
         self._grad_memory = Bytes(value)
 
     def __repr__(self) -> str:
-        """Multi-line summary showing address, shape, dtype, trainability, and usage."""
-        status = "trainable" if self.is_trainable else "frozen"
-        lines = [
-            f"  shape: {self.shape}",
-            f"  dtype: {self.dtype}",
-            f"  size: {self.param_memory}",
-            f"  {status}",
-            f"  has_grad: {self.has_grad}",
-            f"  module: {self.module_address} ({self._module_display_name()})",
-        ]
-        if self.used_by_layers:
-            lines.append(f"  used by: {', '.join(self.used_by_layers)}")
-        if self.co_parent_params:
-            lines.append(f"  linked: {', '.join(self.co_parent_params)}")
-        if self.has_optimizer is not None:
-            lines.append(f"  has_optimizer: {self.has_optimizer}")
-        if self.num_calls > 1:
-            lines.append(f"  num_calls: {self.num_calls}")
-        return format_summary_lines(f"Param: {self.address}", lines)
+        """One live/versioned envelope+core line (F10; lovely D30).
+
+        Params are live records: the core is computed from the live
+        ``nn.Parameter`` and version-checked per render; a released ref
+        degrades to metadata with the explicit basis. Never raises.
+        """
+
+        from ..utils.fail_open import fail_open
+        from ._value_repr import param_repr_line
+
+        return fail_open(
+            lambda: param_repr_line(self),
+            lambda _error: f"<Param {getattr(self, 'address', '<unbound>')}: repr degraded>",
+        )
+
+    def __str__(self) -> str:
+        """Bounded Param card with tie disclosure (F10; lovely matrix).
+
+        Line 1 is the repr; the body adds module home, consuming sites
+        (tied params NAMED -- real gpt2's ``wte.weight`` feeds two sites),
+        grad/optimizer facts. Never raises.
+        """
+
+        from ..utils.fail_open import fail_open
+        from ._value_repr import param_card
+
+        return fail_open(lambda: param_card(self), lambda _error: self.__repr__())
 
     def release_param_ref(self) -> None:
         """Cache grad info, then null _param_ref to allow param GC."""
@@ -897,16 +1006,14 @@ class ParamAccessor(Accessor["Param"]):
             return False
         return True
 
-    def __repr__(self) -> str:
-        """Format as a dict-like string of parameter addresses with shapes and status."""
-        if len(self) == 0:
-            return "{}"
-        items = []
-        for pl in self._list:
-            status = "trainable" if pl.is_trainable else "frozen"
-            items.append(f"'{pl.address}': Param {pl.shape} {pl.dtype} {status}")
-        inner = ",\n ".join(items)
-        return "{" + inner + "}"
+    def _composition_note(self) -> str | None:
+        """Composition breakdown for the one-line card (F10; never a dump)."""
+
+        trainable = sum(1 for pl in self._list if pl.is_trainable)
+        frozen = len(self._list) - trainable
+        if frozen == 0:
+            return None
+        return f"{trainable} trainable, {frozen} frozen"
 
     def to_pandas(self) -> "pd.DataFrame":
         """Export parameter metadata as a pandas DataFrame.

@@ -12,8 +12,9 @@ from ..data_classes._compaction import compact_op_metadata
 from ..data_classes._site_key import SiteKeyMinter
 from ..data_classes.layer import Layer
 from ..data_classes.module import ModuleAccessor
-from ..data_classes.trace import Trace, _init_module_hierarchy_data
+from ..data_classes.trace import Trace
 from ..ir.op_record import amend_preview_output_parent_mark
+from ..ir.workspaces import _init_module_hierarchy_data
 from ..postprocess._grouping_stamp import build_grouping_policy_stamp
 from ..postprocess._recurrence import compute_preview_recurrence_assignments, relabel_edge_metadata
 from ..postprocess.finalization import _build_module_logs, _build_root_module_log
@@ -1172,6 +1173,10 @@ def new_preview_function_trace(
     trace.param_source = cast("Literal['native-module', 'pytree-derived', 'none']", param_source)
     trace.model_label = trace.model_class_name
     trace.model_class_qualname = getattr(model, "__qualname__", trace.model_class_name)
+    # Root entry-point identity fact (C07X item (iv)): preview backends
+    # capture a function/module-like root under module_identity_mode
+    # "function_root", so the honest closed-kind token is function_call.
+    trace.root_entry_point = f"function_call:{trace.model_class_qualname}"
     trace._pre_forward_rng_states = None
     return trace
 

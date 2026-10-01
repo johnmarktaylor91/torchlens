@@ -71,10 +71,41 @@ class DependencyGate:
     install: str
 
 
-def _plain_missing(owner: str, name: str) -> AttributeError:
-    """Return the plain step-1/step-5 AttributeError."""
+def _plain_missing(
+    owner: str,
+    name: str,
+    known: Collection[str] | None = None,
+) -> AttributeError:
+    """Return the plain step-1/step-5 AttributeError.
 
-    return AttributeError(f"module {owner!r} has no attribute {name!r}")
+    Step 5 stays a PLAIN ``AttributeError`` by contract (the five-step type
+    promise), but the MESSAGE may teach: when ``known`` names are supplied,
+    close matches ride a did-you-mean suffix (agent memo 3.10 item 3 -- the
+    package's one bare-AttributeError hole).
+
+    Parameters
+    ----------
+    owner:
+        Owning module name.
+    name:
+        Missing attribute.
+    known:
+        Active names to fuzzy-match against (step 5 only).
+
+    Returns
+    -------
+    AttributeError
+        The step-1/step-5 error.
+    """
+
+    message = f"module {owner!r} has no attribute {name!r}"
+    if known:
+        from difflib import get_close_matches
+
+        matches = get_close_matches(name, list(known), n=3, cutoff=0.6)
+        if matches:
+            message += ". Did you mean: " + ", ".join(matches) + "?"
+    return AttributeError(message)
 
 
 def resolve_facade_attr(
@@ -193,8 +224,10 @@ def resolve_facade_attr(
         module_globals[name] = value
         return value
 
-    # Step 5: everything else -> plain AttributeError.
-    raise _plain_missing(owner, name)
+    # Step 5: everything else -> plain AttributeError (message may teach a
+    # did-you-mean over the active-name tables; the TYPE stays plain).
+    known_names: set[str] = set(lazy_attrs or ()) | set(submodules or ())
+    raise _plain_missing(owner, name, known_names)
 
 
 def facade_dir(

@@ -37,7 +37,6 @@ Field categories (matching the LAYER_PASS_LOG_FIELD_ORDER in constants.py):
 """
 
 import copy
-import hashlib
 import warnings
 import weakref
 from collections import defaultdict
@@ -69,7 +68,6 @@ from .._io import (
     read_tlspec_version,
 )
 from .._save_budget import SaveBudgetExceededError
-from .._state import pause_logging
 from .._trace_core.fact_blocks import OP_FACT_FIELDS
 from .._trace_core.groups import GroupRef
 from .._trace_core.op_store import (
@@ -89,7 +87,6 @@ from .._trace_core.relation_views import (
     materialize_dataflow_view,
 )
 from .._trace_state import TraceState
-from .._transport import digest_byte_view
 from ..backends.torch._tl import mark_detached_saved_activation
 from ..constants import ARG_EXPRESSIONS_FIELD, LAYER_PASS_LOG_FIELD_ORDER, RAW_LABEL_SUFFIX
 from ..intervention.errors import DirectActivationWriteWarning
@@ -112,26 +109,26 @@ from ..quantities import (
 from ..selection import _SelectionOperand
 from ..utils._torch_compat import tensor_version_or_none
 from ..utils.arg_handling import copy_arg_tree
-from ..utils.display import tensor_stats_summary
 from ..utils.tensor_utils import (
     SaveMode,
     concatenate_batch_tensors,
     copy_tensor_payload,
     get_memory_amount,
     get_memory_amount_from_metadata,
-    is_functorch_wrapped_tensor,
     print_override,
     safe_to,
 )
 from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture
+from ._op_dedup import _dedup_cached_identity_out, _dedup_saved_activation_out
 from ._op_transforms import (
     apply_transform,
+    train_mode_tripwire_armed,
     transform_error_message,
     validate_streaming_transform_output,
     validate_train_mode_transform_output,
 )
-from ._repr import format_config_items, format_shape_list
+from ._repr import OpCardHtmlMixin
 from ._state_adapter import state_items, state_restore
 from .field_policy import (
     build_record_field_policy_table,
@@ -1362,202 +1359,6 @@ def _validate_reference_out_not_mutated(state: dict[str, Any]) -> None:
         )
 
 
-def _tensor_content_hash(value: torch.Tensor) -> str:
-    """Return a CPU content hash for a tensor.
-
-    Parameters
-    ----------
-    value:
-        Tensor to hash.
-
-    Returns
-    -------
-    str
-        SHA-256 digest.
-
-    Notes
-    -----
-    The digest frames the LOGICAL dtype so a bfloat16 tensor can never
-    collide with the float32 tensor of the same values (content-mode dedup
-    aliasing across dtypes). The payload is hashed through the buffer
-    protocol (no whole-payload ``tobytes`` copy), the transport is the
-    shared zero-copy-when-possible ``to_cpu_contiguous`` (r7 b5 R35-1: the
-    old ``safe_copy(...).cpu().contiguous()`` paid one unconditional full
-    clone for an already-contiguous CPU tensor and materialized twice for a
-    CUDA/permuted source), and bf16 hashes its OWN bytes -- the uint8
-    reinterpret view needs no numpy-transport upcast (R35 fable: the
-    bf16->f32 copy was pointless once the logical dtype was framed; this
-    digest is process-local, so the byte change is invisible).
-    """
-
-    if is_functorch_wrapped_tensor(value):
-        return f"functorch_wrapped_tensor:{id(value)}"
-
-    with pause_logging():
-        # r8 R35: conj/neg resolution + the uint8 reinterpret live in the
-        # ONE transport authority (``_transport.digest_byte_view``); the
-        # local resolve guard this site pioneered moved there so the other
-        # digest sites cannot drift from it.
-        logical_dtype = str(value.dtype)
-        shape = tuple(value.shape)
-        payload = digest_byte_view(value)
-        hasher = hashlib.sha256()
-        hasher.update(repr((shape, logical_dtype)).encode("utf-8"))
-        hasher.update(payload)
-    return hasher.hexdigest()
-
-
-def _dedup_cached_identity_out(
-    trace: "Trace | None",
-    source_tensor: torch.Tensor,
-    annotations: dict[str, Any],
-    save_arg_values: bool,
-) -> torch.Tensor | None:
-    """Return the already-saved payload for this live source, or ``None``.
-
-    Parameters
-    ----------
-    trace:
-        Trace that owns the per-pass dedup caches.
-    source_tensor:
-        Live output tensor about to be copied for retention.
-    annotations:
-        Mutable annotation dictionary for the saved output.
-    save_arg_values:
-        Whether argument values are being saved (disables activation dedup).
-
-    Notes
-    -----
-    Pre-copy identity probe: the historical order CLONED the payload first
-    and only consulted the identity cache afterwards, discarding the fresh
-    clone on every hit — a full wasted payload copy per repeated-source save
-    (dedup-after-copy ordering). Hit semantics, annotations, and the miss
-    path (which still inserts post-copy via
-    :func:`_dedup_saved_activation_out`) are unchanged.
-    """
-
-    if trace is None or save_arg_values or source_tensor.is_meta:
-        return None
-    if getattr(trace, "_out_dedup_mode", "identity") != "identity":
-        return None
-    identity_cache = getattr(trace, "_out_identity_cache", None)
-    if identity_cache is None:
-        return None
-    source_key = id(source_tensor)
-    from ..backends.torch.completeness_witness import internal_scalar_read
-
-    with internal_scalar_read():
-        source_version = tensor_version_or_none(source_tensor)
-    cached = identity_cache.get(source_key)
-    if cached is None:
-        return None
-    cached_source, cached_label, cached_out, cached_version, cached_ordinal = cached
-    if cached_source is source_tensor and cached_version == source_version:
-        # B3R4-R21-1: the annotation carries the trace-local dense dedup
-        # ordinal, never the raw ``id()`` bookkeeping key -- a memory address
-        # in a persisted field made same-program artifacts byte-differ per
-        # process and exposed a meaningless public value.
-        annotations["dedup_source_id"] = cached_ordinal
-        annotations["dedup_source_version"] = source_version
-        annotations["dedup_reference_label"] = cached_label
-        return cast(torch.Tensor, cached_out)
-    return None
-
-
-def _dedup_saved_activation_out(
-    trace: "Trace | None",
-    source_tensor: torch.Tensor,
-    raw_out: torch.Tensor,
-    label: str,
-    annotations: dict[str, Any],
-    save_arg_values: bool,
-) -> torch.Tensor:
-    """Return a deduplicated saved activation payload when configured.
-
-    Parameters
-    ----------
-    trace:
-        Trace that owns the per-pass dedup caches.
-    source_tensor:
-        Live output tensor before ``safe_copy`` created ``raw_out``.
-    raw_out:
-        Copied activation payload.
-    label:
-        Raw layer label for the saved output.
-    annotations:
-        Mutable annotation dictionary for the saved output.
-    save_arg_values:
-        Whether argument values are being saved. Argument snapshots consume
-        independent payloads, so activation dedup is disabled in that mode.
-
-    Returns
-    -------
-    torch.Tensor
-        Either ``raw_out`` or a previously saved payload for the same live
-        source tensor.
-    """
-
-    if trace is None or save_arg_values or raw_out.is_meta:
-        return raw_out
-
-    mode = getattr(trace, "_out_dedup_mode", "identity")
-    if mode == "none":
-        return raw_out
-
-    if mode == "content":
-        hash_cache = getattr(trace, "_out_hash_cache", None)
-        if hash_cache is None:
-            hash_cache = {}
-            setattr(trace, "_out_hash_cache", hash_cache)
-        # R36: the content digest is a host-side byte read; a cpu_async
-        # payload may still be an in-flight pinned buffer. No-op unless
-        # async fence events are pending.
-        from ..utils.tensor_utils import synchronize_pending_cpu_async_copies
-
-        synchronize_pending_cpu_async_copies()
-        out_hash = _tensor_content_hash(raw_out)
-        if out_hash in hash_cache:
-            annotations["dedup_out_hash"] = out_hash
-            annotations["dedup_reference_label"] = hash_cache[out_hash][0]
-            return hash_cache[out_hash][1]
-        hash_cache[out_hash] = (label, raw_out)
-        return raw_out
-
-    identity_cache = getattr(trace, "_out_identity_cache", None)
-    if identity_cache is None:
-        identity_cache = {}
-        setattr(trace, "_out_identity_cache", identity_cache)
-
-    source_key = id(source_tensor)
-    # r65: TorchLens's OWN dedup-bookkeeping ``_version`` read runs under the explicit
-    # internal-read marker so the r65 state-metadata property observer never mistakes it
-    # for a user ``._version`` read on a registered buffer/param receiver (unmarked it
-    # fires for every saved state source and would spuriously refuse any model whose
-    # consumed buffer was ever mutated in place before capture). Imported lazily:
-    # ``data_classes`` sits below the torch backend in the layering.
-    from ..backends.torch.completeness_witness import internal_scalar_read
-
-    with internal_scalar_read():
-        source_version = tensor_version_or_none(source_tensor)
-    cached = identity_cache.get(source_key)
-    if cached is not None:
-        cached_source, cached_label, cached_out, cached_version, cached_ordinal = cached
-        if cached_source is source_tensor and cached_version == source_version:
-            # B3R4-R21-1: dense trace-local ordinal, never the raw ``id()``.
-            annotations["dedup_source_id"] = cached_ordinal
-            annotations["dedup_source_version"] = source_version
-            annotations["dedup_reference_label"] = cached_label
-            return cached_out
-
-    # Dense ordinal in cache-insertion (execution) order: deterministic across
-    # processes for the same captured program, unlike the ``id()`` slot key. A
-    # replaced slot (id reuse after a mismatch) keeps its original ordinal so
-    # ordinals stay unique within the cache.
-    ordinal = cached[4] if cached is not None else len(identity_cache) + 1
-    identity_cache[source_key] = (source_tensor, label, raw_out, source_version, ordinal)
-    return raw_out
-
-
 if TYPE_CHECKING:
     import pandas as pd
 
@@ -1570,7 +1371,7 @@ if TYPE_CHECKING:
     from .trace import Trace
 
 
-class Op(_SelectionOperand):
+class Op(OpCardHtmlMixin, _SelectionOperand):
     """Metadata for a single tensor operation (one pass of one layer).
 
     Constructed from a dict whose keys must exactly match
@@ -1722,6 +1523,8 @@ class Op(_SelectionOperand):
         recurrent_ops: Any
         site_key: str | None
         injection_provenance: dict[str, Any] | None
+        episode_step: int | None
+        tl_authored_root: bool | None
         parents: Any
         parent_arg_positions: Any
         _edge_uses: Any
@@ -1919,6 +1722,11 @@ class Op(_SelectionOperand):
         # None on every model op until the F01 log_injections writer lands;
         # fail-closed shape validation at load (_io/forgery_validation.py).
         "injection_provenance": FieldPolicy.KEEP,
+        # tlspec v9 entry-dark slots (C07X): the episode-step stamp
+        # (F-EPISODE writes) and the TL-authored-root marker (F41 writes);
+        # None on every op today, fail-closed load validation from day one.
+        "episode_step": FieldPolicy.KEEP,
+        "tl_authored_root": FieldPolicy.KEEP,
         "parents": FieldPolicy.KEEP,
         "parent_arg_positions": FieldPolicy.KEEP,
         "_edge_uses": FieldPolicy.KEEP,
@@ -4005,17 +3813,23 @@ class Op(_SelectionOperand):
                 target_device = torch.device("cpu")
             elif self.output_device not in ("same", str(t.device)):
                 target_device = torch.device(self.output_device)
+            save_raw_activations = getattr(trace, "save_raw_activations", True)
+            store_raw = save_raw_activations or activation_transform is None
+            # Explorer P2 (same gate as the exhaustive hot path): a declared
+            # summary reducer with raw retention off skips the transient
+            # clone; the reducer sees a detached view of the live output.
+            from ..ir.summary_role import is_summary_transform
+
+            reduce_only = not store_raw and is_summary_transform(activation_transform)
             budget_reservation = (
                 None
-                if budget is None
+                if budget is None or reduce_only
                 else budget.admit(
                     self._layer_label_raw,
                     target_device,
                     get_memory_amount_from_metadata(t, tuple(t.shape), t.dtype),
                 )
             )
-            save_raw_activations = getattr(trace, "save_raw_activations", True)
-            store_raw = save_raw_activations or activation_transform is None
             # Pre-copy identity probe (dedup-after-copy ordering): a hit
             # reuses the already-saved payload and skips the clone entirely.
             # Restricted to plain "copy" mode -- reference/view copies are
@@ -4025,7 +3839,9 @@ class Op(_SelectionOperand):
                 if store_raw and save_mode == "copy"
                 else None
             )
-            if dedup_cached_out is not None:
+            if reduce_only:
+                raw_out = t
+            elif dedup_cached_out is not None:
                 raw_out = dedup_cached_out
             else:
                 # Clone the tensor, optionally detaching from autograd graph.
@@ -4064,19 +3880,22 @@ class Op(_SelectionOperand):
             self.transformed_out_dtype = None
             self.transformed_activation_memory = None
             if activation_transform is not None:
-                self._internal_set(
-                    "transformed_out",
-                    self._apply_transform(
-                        raw_out,
-                        activation_transform,
-                        transform_kind="activation",
-                        streaming_active=writer is not None,
-                    ),
+                transformed_out = self._apply_transform(
+                    raw_out,
+                    activation_transform,
+                    transform_kind="activation",
+                    streaming_active=writer is not None,
                 )
+                if reduce_only:
+                    from ..ir.summary_role import ensure_summary_output_owns_storage
+
+                    transformed_out = ensure_summary_output_owns_storage(transformed_out, t)
+                self._internal_set("transformed_out", transformed_out)
                 self._validate_train_mode_transform_output(
                     raw_out,
                     self.transformed_out,
                     transform_kind="activation",
+                    transform=activation_transform,
                 )
                 self._validate_streaming_transform_output(
                     self.transformed_out,
@@ -4087,7 +3906,12 @@ class Op(_SelectionOperand):
                 self.transformed_out_dtype = _dtype_or_none(self.transformed_out)
                 self.transformed_activation_memory = _memory_or_none(self.transformed_out)
             if budget is not None:
-                budget.commit(budget_reservation, (self.out, self.transformed_out))
+                if reduce_only:
+                    # No source-sized admission happened (no clone allocated);
+                    # charge the retained summary output directly.
+                    budget.charge_retained(str(self._layer_label_raw), (self.transformed_out,))
+                else:
+                    budget.commit(budget_reservation, (self.out, self.transformed_out))
         except Exception as exc:
             if writer is not None:
                 writer.abort(f"Failed while saving out for {self._streaming_label}: {exc}")
@@ -4214,6 +4038,7 @@ class Op(_SelectionOperand):
                 raw_grad,
                 self.transformed_grad,
                 transform_kind="grad",
+                transform=grad_transform,
             )
             self._validate_streaming_transform_output(
                 self.transformed_grad,
@@ -4300,6 +4125,7 @@ class Op(_SelectionOperand):
         output: Any,
         *,
         transform_kind: str,
+        transform: Any = None,
     ) -> None:
         """Validate differentiability requirements for train-mode transform outputs."""
 
@@ -4308,7 +4134,10 @@ class Op(_SelectionOperand):
             raw_tensor=raw_tensor,
             transformed_tensor=output,
             transform_kind=transform_kind,
-            backward_ready=getattr(trace, "backward_ready", False),
+            tripwire_armed=train_mode_tripwire_armed(
+                backward_ready=getattr(trace, "backward_ready", False),
+                transform=transform,
+            ),
             label=self._streaming_label,
         )
 
@@ -4525,21 +4354,28 @@ class Op(_SelectionOperand):
     # ********************************************
 
     def __str__(self) -> str:
-        """Return a human-readable operation summary.
+        """Return the bounded Op card (F10; lovely D15: line 1 IS the repr).
 
         Data-model contract: never raises. An Op detached from its Trace
         (collected, standalone-pickled, or husked by cleanup) degrades to a
         one-line placeholder instead of silently printing an unknown
         denominator (``operation 1/?``) or propagating the typed relation
         refusal out of ``repr()``/``print()`` (r5 b7-opus R52-B, matching
-        the Layer degradation).
+        the Layer degradation). The historical 21-line dump is gone: the
+        preview, relation lists, and lookup keys live behind the card's
+        ``More:`` exits.
         """
 
         trace = self._source_trace_or_none()
         trace_finished = trace is not None and trace._tracing_finished
         if self._tracing_finished or trace_finished:
+            if trace is None:
+                label = self.layer_label or self._label_raw or "<unbound>"
+                return f"<Op {label}: detached from its Trace>"
+            from ._value_repr import op_card
+
             try:
-                return self._str_after_pass()
+                return op_card(self)
             except RecordBindingError:
                 label = self.layer_label or self._label_raw or "<unbound>"
                 return f"<Op {label}: detached from its Trace>"
@@ -4576,138 +4412,27 @@ class Op(_SelectionOperand):
             s += f"\n\tTensor contents: \n{print_override(self.out, '__str__')}"
         return s
 
-    def _str_after_pass(self) -> str:
-        """Return a human-readable summary of this tensor entry after the forward pass has completed."""
-        if self.num_passes > 1:
-            pass_str = f" (pass {self.pass_index}/{self.num_passes}), "
-        else:
-            pass_str = ", "
-        # Raises RecordBindingError when detached; __str__ degrades it to the
-        # explicit placeholder instead of printing an unknown denominator.
-        num_ops = self.source_trace.num_ops
-        s = f"Layer {self.layer_label}{pass_str}operation {self.step_index}/{num_ops}:"
-        s += f"\n\tOutput tensor: shape={self.shape}, dtype={self.dtype}, size={self.activation_memory}"
-        if not self.has_saved_activation:
-            s += " (not saved)"
-        s += self._tensor_contents_str_helper()
-        s += self._tensor_family_str_helper()
-        if len(self.param_shapes) > 0:
-            params_shapes_str = format_shape_list(self.param_shapes)
-            s += (
-                f"\n\tParams: Computed from params with shape {params_shapes_str}; "
-                f"{self.num_params} params total ({self.param_memory})"
-            )
-        else:
-            s += "\n\tParams: no params used"
-        if self.module is None:
-            module_str = "\n\tComputed inside module: not computed inside a module"
-        else:
-            module_str = f"\n\tComputed inside module: {self.module}"
-        if not self.is_input:
-            s += f"\n\tFunction: {self.func_name} (grad_fn_handle: {self.grad_fn_class_name}) {module_str}"
-            if self.func_config:
-                config_str = format_config_items(self.func_config)
-                s += f"\n\tConfig: {config_str}"
-            # Units come from the quantity, never the caller: a manual
-            # trailing "s" doubled Duration's unit into "mss" (lovely bug 2).
-            s += f"\n\tTime elapsed: {self.func_duration}"
-        if len(self.output_of_modules) > 0:
-            output_of_modules_str = ", ".join(self.output_of_modules)
-            s += f"\n\tOutput of modules: {output_of_modules_str}"
-        else:
-            s += "\n\tOutput of modules: none"
-        if self.is_atomic_module:
-            s += f"\n\tOutput of bottom-level module: {self.atomic_module_call}"
-        lookup_keys_str = ", ".join([str(key) for key in self.lookup_keys])
-        s += f"\n\tLookup keys: {lookup_keys_str}"
-
-        return s
-
-    def _tensor_contents_str_helper(self) -> str:
-        """Returns short, readable string for the tensor contents."""
-        try:
-            out = self.out
-        except PayloadUnavailableError:
-            # A predicate save refuses payload reads for unselected ops; the
-            # repr must degrade (the "(not saved)" marker already prints),
-            # never propagate the refusal out of __repr__/__str__ (b1 R01).
-            return ""
-        if out is None:
-            return ""
-        else:
-            s = ""
-            s += f"\n\t\t{tensor_stats_summary(out)}"
-            if not isinstance(out, torch.Tensor):
-                # Preview-backend (non-torch) saved activation, e.g. MLX/tinygrad/
-                # TF/JAX/Paddle. The slice-then-clone preview below relies on
-                # torch-only methods (.detach(), .requires_grad, .clone()); the
-                # stats-summary line above already reports shape/dtype safely, so
-                # skip the raw-content preview rather than duck-typing torch-only
-                # calls across every preview backend's array type.
-                return s
-            tensor_size_shown = 8
-            # Use logged shape, not live tensor shape (#45)
-            saved_shape = self.shape if self.shape is not None else out.shape
-            # Slice first, then clone only the small slice (#73)
-            if len(saved_shape) == 0:
-                tensor_slice = out.detach().clone()
-            elif len(saved_shape) == 1:
-                num_dims = min(tensor_size_shown, saved_shape[0])
-                tensor_slice = out[0:num_dims].detach().clone()
-            elif len(saved_shape) == 2:
-                num_dims = min(tensor_size_shown, saved_shape[-2], saved_shape[-1])
-                tensor_slice = out[0:num_dims, 0:num_dims].detach().clone()
-            else:
-                num_dims = min(tensor_size_shown, saved_shape[-2], saved_shape[-1])
-                tensor_slice = out.data
-                for _ in range(len(saved_shape) - 2):
-                    tensor_slice = tensor_slice[0]
-                tensor_slice = tensor_slice[0:num_dims, 0:num_dims].detach().clone()
-            tensor_slice.requires_grad = False
-            s += f"\n\t\t{str(tensor_slice)}"
-            if (len(saved_shape) > 0) and (max(saved_shape) > tensor_size_shown):
-                s += "..."
-        return s
-
-    def _tensor_family_str_helper(self) -> str:
-        """Return a formatted string summarising parent, child, sibling, spouse, and ancestor relationships."""
-        s = "\n\tRelated Layers:"
-        if len(self.parents) > 0:
-            s += "\n\t\t- parent layers: " + ", ".join(self.parents)
-        else:
-            s += "\n\t\t- no parent layers"
-
-        if len(self.children) > 0:
-            s += "\n\t\t- child layers: " + ", ".join(self.children)
-        else:
-            s += "\n\t\t- no child layers"
-
-        if len(self.siblings) > 0:
-            s += "\n\t\t- shares parents with layers: " + ", ".join(self.siblings)
-        else:
-            s += "\n\t\t- shares parents with no other layers"
-
-        if len(self.co_parents) > 0:
-            s += "\n\t\t- shares children with layers: " + ", ".join(self.co_parents)
-        else:
-            s += "\n\t\t- shares children with no other layers"
-
-        if self.has_input_ancestor:
-            s += "\n\t\t- descendent of input layers: " + ", ".join(self.input_ancestors)
-        else:
-            s += "\n\t\t- tensor was created de novo inside the model (not computed from input)"
-
-        if self.has_output_descendant:
-            s += "\n\t\t- ancestor of output layers: " + ", ".join(self.output_descendants)
-        else:
-            s += "\n\t\t- tensor is not an ancestor of the model output; it terminates within the model"
-
-        return s
-
     def __repr__(self) -> str:
-        """Return the developer representation for this operation."""
+        """Return ONE nestable envelope+core line (F10; lovely D15).
 
-        return self.__str__()
+        Never raises: a detached Op degrades to the same placeholder as
+        ``__str__``, and a mid-capture Op keeps the during-pass form.
+        """
+
+        trace = self._source_trace_or_none()
+        trace_finished = trace is not None and trace._tracing_finished
+        if self._tracing_finished or trace_finished:
+            if trace is None:
+                label = self.layer_label or self._label_raw or "<unbound>"
+                return f"<Op {label}: detached from its Trace>"
+            from ._value_repr import op_repr_line
+
+            try:
+                return op_repr_line(self)
+            except RecordBindingError:
+                label = self.layer_label or self._label_raw or "<unbound>"
+                return f"<Op {label}: detached from its Trace>"
+        return self._str_during_pass()
 
 
 # ---------------------------------------------------------------------------

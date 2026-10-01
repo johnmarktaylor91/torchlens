@@ -54,10 +54,10 @@ data_classes.derived_grad	1
 data_classes.func_call_location	1
 data_classes.interface	5
 data_classes.layer	2
-data_classes.op	13
+data_classes.op	11
 data_classes.param	2
 data_classes.trace	15
-export	7
+export	6
 facets	1
 fastlog._record_one_shot	1
 fastlog._recorder	3

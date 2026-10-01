@@ -119,12 +119,44 @@ def transform_error_message(
     )
 
 
+def train_mode_tripwire_armed(*, backward_ready: bool, transform: Any = None) -> bool:
+    """Whether the train-mode differentiability tripwire applies at all.
+
+    Parameters
+    ----------
+    backward_ready:
+        Whether TorchLens is preserving autograd graph connectivity.
+    transform:
+        The transform callable itself, when the caller has it. A transform
+        DECLARING the non-differentiable summary role (explorer P1;
+        ``torchlens.ir.summary_role``) is contractually outside the autograd
+        graph -- it reduces a detached view after the save point -- so the
+        differentiability tripwire does not apply to its output. Undeclared
+        transforms keep the full validation: the carve-out is the declared
+        role, never the output's shape or dtype.
+
+    Returns
+    -------
+    bool
+        ``True`` when transformed outputs must stay on the autograd graph.
+    """
+
+    if not backward_ready:
+        return False
+    if transform is not None:
+        from ..ir.summary_role import is_summary_transform
+
+        if is_summary_transform(transform):
+            return False
+    return True
+
+
 def validate_train_mode_transform_output(
     *,
     raw_tensor: torch.Tensor,
     transformed_tensor: Any,
     transform_kind: str,
-    backward_ready: bool,
+    tripwire_armed: bool,
     label: str | None = None,
 ) -> None:
     """Validate differentiability requirements for train-mode transform outputs.
@@ -137,8 +169,11 @@ def validate_train_mode_transform_output(
         Value returned by the transform.
     transform_kind:
         Transform kind, either ``"out"`` or ``"grad"``.
-    backward_ready:
-        Whether TorchLens is preserving autograd graph connectivity.
+    tripwire_armed:
+        Whether the differentiability tripwire applies; compute with
+        :func:`train_mode_tripwire_armed` (folds ``backward_ready`` and the
+        declared summary-role carve-out at the caller, where the transform
+        callable lives).
     label:
         Raw layer label for error context, or ``None`` when unavailable.
 
@@ -150,20 +185,23 @@ def validate_train_mode_transform_output(
 
     from .._training_validation import _NON_GRAD_DTYPES, TrainingModeConfigError
 
-    if not backward_ready or not raw_tensor.requires_grad:
+    if not tripwire_armed or not raw_tensor.requires_grad:
         return
     if not isinstance(transformed_tensor, torch.Tensor):
         raise TrainingModeConfigError(
             f"{transform_kind}_transform must return a torch.Tensor while backward_ready=True "
             f"for layer {label}. "
-            "Remedy: return a differentiable torch.Tensor from the transform.",
+            "Remedy: return a differentiable torch.Tensor from the transform, or "
+            "declare a non-differentiable reducer with "
+            "torchlens.observability.summary(fn).",
             code="transform_not_differentiable",
         )
     if transformed_tensor.dtype in _NON_GRAD_DTYPES:
         raise TrainingModeConfigError(
             f"backward_ready=True with non-grad dtype {transformed_tensor.dtype} on layer "
             f"{label}. Integer and bool dtypes cannot propagate grads. "
-            "Remedy: return a floating-dtype tensor from the transform.",
+            "Remedy: return a floating-dtype tensor from the transform, or declare a "
+            "non-differentiable reducer with torchlens.observability.summary(fn).",
             code="transform_not_differentiable",
         )
     if not transformed_tensor.requires_grad or (
@@ -173,7 +211,9 @@ def validate_train_mode_transform_output(
             f"{transform_kind}_transform returned a tensor disconnected from the autograd "
             "graph (grad_fn is None) while backward_ready=True. The transformed out "
             "must remain differentiable. "
-            "Remedy: keep the transform on the autograd graph (no detach/no_grad).",
+            "Remedy: keep the transform on the autograd graph (no detach/no_grad), or "
+            "declare a non-differentiable reducer with "
+            "torchlens.observability.summary(fn).",
             code="transform_not_differentiable",
         )
 

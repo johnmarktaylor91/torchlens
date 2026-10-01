@@ -11,6 +11,7 @@ from ._edge_multiplicity import (
 from ._render_common import *
 from ._render_leaf import *
 from ._render_utils import html_escape
+from ._typography import DEFAULT_TYPOGRAPHY
 from .collapse_plan import OpSegment
 
 
@@ -123,70 +124,6 @@ def _is_buffer_visible(node: GraphNode, show_buffer_layers: BufferVisibilityLite
     if show_buffer_layers == "never":
         return False
     return not _is_noise_buffer(node)
-
-
-def _add_legend_to_graphviz(dot: graphviz.Digraph, theme: VisualizationTheme) -> None:
-    """Add a compact color legend subgraph to a Graphviz graph.
-
-    Parameters
-    ----------
-    dot:
-        Graphviz graph being rendered.
-    theme:
-        Resolved visualization theme.
-    """
-
-    with dot.subgraph(name="cluster_torchlens_legend") as legend:
-        legend.attr(
-            label="TorchLens legend",
-            labelloc="t",
-            color=theme.default_border,
-            fontcolor=theme.default_font,
-            style="rounded",
-        )
-        legend_specs = (
-            NodeSpec(
-                ["input"], shape="oval", fillcolor=INPUT_COLOR, fontcolor="black", color="black"
-            ),
-            NodeSpec(
-                ["output"], shape="oval", fillcolor=OUTPUT_COLOR, fontcolor="black", color="black"
-            ),
-            NodeSpec(
-                ["parameterized"],
-                shape="oval",
-                fillcolor=TRAINABLE_PARAMS_BG_COLOR,
-                fontcolor="black",
-                color="black",
-            ),
-            NodeSpec(
-                ["buffer"],
-                shape="cylinder",
-                fillcolor=DEFAULT_BG_COLOR,
-                fontcolor="black",
-                color="black",
-            ),
-            NodeSpec(
-                ["boolean"],
-                shape="oval",
-                fillcolor=BOOL_NODE_COLOR,
-                fontcolor="black",
-                color="black",
-            ),
-            NodeSpec(
-                ["intervention/cone"],
-                shape="oval",
-                fillcolor=INTERVENTION_CONE_COLOR,
-                fontcolor="black",
-                color=INTERVENTION_SITE_COLOR,
-                penwidth=2.0,
-            ),
-        )
-        for index, spec in enumerate(legend_specs):
-            node_args = _node_spec_to_graphviz_args(apply_theme_to_spec(spec, theme))
-            node_args["name"] = f"tl_legend_{index}"
-            legend.node(
-                **node_args,
-            )
 
 
 def _render_node_label(node: GraphNode, vis_mode: str) -> str:
@@ -1202,7 +1139,7 @@ def _add_edges_for_node(
                     fontcolor=node_color,
                     style=edge_style,
                     arrowsize=".7",
-                    labelfontsize="8",
+                    labelfontsize=DEFAULT_TYPOGRAPHY.annotation_pt,
                 )
             tail_name = hook_name
 
@@ -1324,8 +1261,16 @@ def _add_edges_for_node(
             "fontcolor": node_color,
             "style": edge_style,
             "arrowsize": ".7",
-            "labelfontsize": "8",
+            "labelfontsize": DEFAULT_TYPOGRAPHY.annotation_pt,
         }
+        if occurrence_key and occurrence_key[0] == "skipped":
+            # Bridged-edge disclosure (N9): dashed, with the midpoint
+            # ``label=`` spelling -- measured zero node penetrations at 100%
+            # density, where xlabel penetrates 3.7% and headlabel 50%.
+            edge_dict["style"] = "dashed"
+            hidden_count = render_edge.bridged_hidden_count
+            if hidden_count:
+                edge_dict["label"] = f"via {hidden_count} hidden"
         if (tail_name, head_name) in antiparallel_projected_edges:
             edge_dict.update(_projected_antiparallel_edge_attrs())
         metadata_base = (
@@ -2352,7 +2297,6 @@ __all__ = [
     "_SegmentLookup",
     "_add_edges_for_node",
     "_add_intervention_hook_nodes",
-    "_add_legend_to_graphviz",
     "_buffer_name_segment",
     "_build_segment_lookup",
     "_collapsed_module_owner_key",

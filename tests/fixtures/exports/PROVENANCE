@@ -45,3 +45,67 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 4d882edccdaf826afcb0e989bd3fcfcec1c0670e (dirty)
 recorded: 2026-08-26T19:49:14.435721+00:00
+---
+generator: tests/test_exports.py (model_explorer.json)
+flag: TORCHLENS_REGEN_EXPORT_GOLDENS=1
+reason: netron schema v2 (lane F14, memo M-netron B1/D-03..D-06): irVersion 10, graph I/O promotion, per-value typing, module default per ruling N2; independent oracles = strict onnx parse + check_model(full_check=True) + executed netron 9.2.2 harness
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: ca622a772dd6139e4135cdf5fc35e8e9cc5c41cc (dirty)
+recorded: 2026-08-28T00:52:27.331073+00:00
+---
+generator: tests/test_exports.py (netron.json)
+flag: TORCHLENS_REGEN_EXPORT_GOLDENS=1
+reason: netron schema v2 (lane F14, memo M-netron B1/D-03..D-06): irVersion 10, graph I/O promotion, per-value typing, module default per ruling N2; independent oracles = strict onnx parse + check_model(full_check=True) + executed netron 9.2.2 harness
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: ca622a772dd6139e4135cdf5fc35e8e9cc5c41cc (dirty)
+recorded: 2026-08-28T00:52:27.354159+00:00
+---
+generator: tests/test_exports.py (model_explorer.json)
+flag: TORCHLENS_REGEN_EXPORT_GOLDENS=1
+reason: netron schema v2 (lane F14, memo M-netron B1/D-03..D-06): irVersion 10, graph I/O promotion, per-value typing, module default per ruling N2; run-varying duration attrs + honesty JSON normalized; independent oracles = strict onnx parse + check_model(full_check=True) + executed netron 9.2.2 harness
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: ca622a772dd6139e4135cdf5fc35e8e9cc5c41cc (dirty)
+recorded: 2026-08-28T00:53:11.456446+00:00
+---
+generator: tests/test_exports.py (netron.json)
+flag: TORCHLENS_REGEN_EXPORT_GOLDENS=1
+reason: netron schema v2 (lane F14, memo M-netron B1/D-03..D-06): irVersion 10, graph I/O promotion, per-value typing, module default per ruling N2; run-varying duration attrs + honesty JSON normalized; independent oracles = strict onnx parse + check_model(full_check=True) + executed netron 9.2.2 harness
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: ca622a772dd6139e4135cdf5fc35e8e9cc5c41cc (dirty)
+recorded: 2026-08-28T00:53:11.484155+00:00
+---
+generator: tests/test_exports.py (model_explorer.json)
+flag: TORCHLENS_REGEN_EXPORT_GOLDENS=1
+reason: F15 Model Explorer schema v3: namespaces from module_call_stack, site_key+ordinal ids, ported edges, curated attrs, '' provenance group row (modelexplorer memo D1-D19); independent oracle tests/test_modelexplorer_contract.py (vendor dataclass parse + executed worker oracle)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 2b60a6a0456c43d1312b64bdbaa3418c624bfe64 (dirty)
+recorded: 2026-08-28T00:56:25.817976+00:00
+---
+generator: tests/test_exports.py (netron.json)
+flag: TORCHLENS_REGEN_EXPORT_GOLDENS=1
+reason: F15 Model Explorer schema v3: namespaces from module_call_stack, site_key+ordinal ids, ported edges, curated attrs, '' provenance group row (modelexplorer memo D1-D19); independent oracle tests/test_modelexplorer_contract.py (vendor dataclass parse + executed worker oracle)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 2b60a6a0456c43d1312b64bdbaa3418c624bfe64 (dirty)
+recorded: 2026-08-28T00:56:25.840949+00:00
+---
+generator: tests/test_exports.py (model_explorer.json)
+flag: TORCHLENS_REGEN_EXPORT_GOLDENS=1
+reason: F15 Model Explorer schema v3: namespaces from module_call_stack, site_key+ordinal ids, ported edges, curated attrs, '' provenance group row (modelexplorer memo D1-D19); independent oracle tests/test_modelexplorer_contract.py (vendor dataclass parse + executed worker oracle); volatile time rows normalized out
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 2b60a6a0456c43d1312b64bdbaa3418c624bfe64 (dirty)
+recorded: 2026-08-28T00:57:25.718933+00:00
+---
+generator: tests/test_exports.py (netron.json)
+flag: TORCHLENS_REGEN_EXPORT_GOLDENS=1
+reason: F15 Model Explorer schema v3: namespaces from module_call_stack, site_key+ordinal ids, ported edges, curated attrs, '' provenance group row (modelexplorer memo D1-D19); independent oracle tests/test_modelexplorer_contract.py (vendor dataclass parse + executed worker oracle); volatile time rows normalized out
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 2b60a6a0456c43d1312b64bdbaa3418c624bfe64 (dirty)
+recorded: 2026-08-28T00:57:25.739847+00:00

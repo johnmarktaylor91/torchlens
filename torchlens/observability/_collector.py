@@ -495,6 +495,12 @@ class HistoryCollector:
         )
 
     @property
+    def site_catalog(self) -> dict[str, SiteRecord]:
+        """Public read of the discovered site records, keyed by site_id."""
+
+        return dict(self._sites_by_id)
+
+    @property
     def plan(self) -> WatchPlan:
         """The resolved plan table; refuses before discovery."""
 

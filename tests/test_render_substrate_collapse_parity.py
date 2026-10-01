@@ -207,7 +207,10 @@ def test_floor_fallback_is_disclosed_typed() -> None:
     model = torch.nn.Sequential(torch.nn.Linear(4, 4), torch.nn.ReLU())
     log = tl.trace(model, torch.randn(2, 4))
     result = select_collapse_plan(log, RenderContext(), mode="auto")
-    assert result.planner in {"frontier", "floor_fallback"}
+    # F11 memo D8: auto now reads the typed event ladder, so an in-band
+    # first step stamps planner="ladder"; the fallback tiers keep their
+    # typed disclosures.
+    assert result.planner in {"frontier", "floor_fallback", "ladder", "linear_fallback"}
     if result.planner == "floor_fallback":
         assert result.reason is not None and "floor_fallback" in result.reason
     else:

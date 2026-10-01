@@ -95,6 +95,22 @@ class TensorStats:
     role: str | None = None
     relations: tuple[str, ...] = field(default_factory=tuple)
 
+    def __repr__(self) -> str:
+        """The record reprs as its own core line (F10; records show).
+
+        The dataclass auto-repr printed every field including histogram
+        tuples -- a wall; the designed repr IS the grammar this record
+        exists to serve. Never raises (the line renderer is pure).
+        """
+
+        from ..utils.fail_open import fail_open
+        from ._stats_render import render_core_line
+
+        return fail_open(
+            lambda: f"TensorStats({render_core_line(self)})",
+            lambda _error: f"TensorStats({self.dtype}[{','.join(str(d) for d in self.shape)}])",
+        )
+
     @property
     def nonfinite_count(self) -> int:
         """Total nonfinite elements."""

@@ -22,28 +22,35 @@ public surface, ``__all__``, and static types unchanged.
 from typing import TYPE_CHECKING, Any
 
 from ._metrics import (
-    METRIC_REGISTRY,
+    METRIC_REGISTRY as METRIC_REGISTRY,
     cosine_distance,
-    pearson_correlation_distance,
+    pearson_correlation_distance as pearson_correlation_distance,
     relative_l1_scalar,
     relative_l2,
-    resolve_metric,
+    resolve_metric as resolve_metric,
 )
 from ._super.super_op import (
     SuperAtenOp,
-    SuperLayer,
-    SuperLayerAccessor,
+    SuperLayer as SuperLayer,
+    SuperLayerAccessor as SuperLayerAccessor,
     SuperOp,
-    SuperOpAccessor,
-    TraceAccessor,
+    SuperOpAccessor as SuperOpAccessor,
+    TraceAccessor as TraceAccessor,
 )
 from ._topology.topology import (
-    Supergraph,
-    SupergraphNode,
-    TopologyDiff,
-    build_supergraph,
+    Supergraph as Supergraph,
+    SupergraphNode as SupergraphNode,
+    TopologyDiff as TopologyDiff,
+    build_supergraph as build_supergraph,
     compare_topology,
 )
+
+# F01 surgery live lanes: the capture-free bound executor, the bind-side
+# steer wrapper (module named ``steering`` -- the ``steer`` attribute is the
+# historical helper from .helpers), and the region noun (derived
+# admissibility on the existing verbs).
+from .binding import BindReport, BoundInterventionExecutor
+from .compose import compose
 from .errors import (
     AppendBatchDependenceError,
     AppendMismatchError,
@@ -74,6 +81,7 @@ from .errors import (
     NoParentError,
     OpaqueCallableInExecutableSaveError,
     RecursiveTracingError,
+    RegionError,
     ReplayPreconditionError,
     SelectionError,
     SelectorCompositionError,
@@ -112,10 +120,12 @@ from .hooks import (
     HookContext,
     NormalizedHookEntry,
     make_hook_context,
-    normalize_hook,
+    normalize_hook as normalize_hook,
     normalize_hook_plan,
 )
+from .population import OneDatum, PerRowDatums, Reference, reference
 from .predicates import add, replace_with
+from .regions import RegionBoundary, RegionEdge, RegionInstance, RegionTarget, region
 from .replay import push, push_from
 from .resolver import SiteTable, resolve_sites
 from .runtime import do
@@ -128,6 +138,7 @@ from .save import (
     save_intervention,
 )
 from .selectors import (
+    at_step,
     contains,
     facet,
     followed_by,
@@ -151,7 +162,7 @@ from .selectors import (
     where,
     without_op,
 )
-from .sites import SiteCollection, SiteSpec, sites
+from .sites import SiteCollection, SiteSpec as SiteSpec, sites
 
 # The PUBLIC immutable multi-clause spec (C03 substrate; surgery memo 3.1)
 # claims the package-level ``InterventionSpec`` name. The historical mutable
@@ -164,8 +175,19 @@ from .spec import (
     refuse_unreplayable_rules,
     when,
 )
+from .steering import SteerResult, steer_generate
+from .stochastic import (
+    SamplingPlan,
+    mean_fill,
+    mean_from,
+    permute_batch,
+    resample_rows_from,
+    sample_from,
+    sampling_records,
+    set_direction_mean,
+)
 from .types import (
-    ArgComponent,
+    ArgComponent as ArgComponent,
     CapturedArgTemplate,
     ContainerSpec,
     DataclassField,
@@ -174,7 +196,7 @@ from .types import (
     Edit,
     FireRecord,
     ForkFieldPolicy,
-    FrozenInterventionSpec,
+    FrozenInterventionSpec as FrozenInterventionSpec,
     FrozenTargetSpec,
     FunctionRegistryKey,
     HelperSpec,
@@ -202,10 +224,12 @@ __all__ = [
     "AppendStateValidationWarning",
     "AppendStreamingNotSupportedError",
     "add",
-    "ArgComponent",
+    "at_step",
     "AxisAmbiguityError",
     "BaselineUndeterminedError",
     "BatchNormTrainModeWarning",
+    "BindReport",
+    "BoundInterventionExecutor",
     "Bundle",
     "BundleMemberError",
     "BundleRelationshipError",
@@ -222,7 +246,6 @@ __all__ = [
     "EngineDispatchError",
     "FireRecord",
     "ForkFieldPolicy",
-    "FrozenInterventionSpec",
     "FrozenTargetSpec",
     "FunctionRegistryKey",
     "GraphShapeMismatchError",
@@ -242,7 +265,6 @@ __all__ = [
     "LiveModeLabelError",
     "LiteralTensor",
     "LiteralValue",
-    "METRIC_REGISTRY",
     "ModelMismatchError",
     "MultiMatchWarning",
     "MultiOutputModuleError",
@@ -250,6 +272,11 @@ __all__ = [
     "NamedField",
     "NoParentError",
     "OpaqueCallableInExecutableSaveError",
+    "RegionBoundary",
+    "RegionEdge",
+    "RegionError",
+    "RegionInstance",
+    "RegionTarget",
     "Relationship",
     "RecursiveTracingError",
     "ReplayPreconditionError",
@@ -259,7 +286,6 @@ __all__ = [
     "SiteCollection",
     "SelectionError",
     "SiteResolutionError",
-    "SiteSpec",
     "SelectorCompositionError",
     "SpecCompat",
     "SpecMutationError",
@@ -268,25 +294,18 @@ __all__ = [
     "SiteTable",
     "SpliceModuleDeviceError",
     "SpliceModuleDtypeError",
-    "SuperLayer",
-    "SuperLayerAccessor",
     "SuperOp",
-    "SuperOpAccessor",
-    "Supergraph",
-    "SupergraphNode",
     "TargetManifestDiff",
     "TargetSpec",
     "TensorSliceSpec",
-    "TopologyDiff",
-    "TraceAccessor",
     "TupleIndex",
     "Unsupported",
     "bwd_hook",
-    "build_supergraph",
     "clamp",
     "check_spec_compat",
     "classify_where",
     "compare_topology",
+    "compose",
     "contains",
     "cosine_distance",
     "do",
@@ -308,31 +327,40 @@ __all__ = [
     "input_at",
     "in_backward_pass",
     "in_module",
-    "label",
     "regex",
     "load_intervention_spec",
     "make_hook_context",
     "mean_ablate",
+    "mean_fill",
+    "mean_from",
+    "OneDatum",
+    "PerRowDatums",
+    "permute_batch",
+    "Reference",
+    "reference",
+    "SamplingPlan",
     "module",
     "noise",
-    "normalize_hook",
     "normalize_hook_plan",
     "NormalizedHookEntry",
     "output",
     "output_at",
     "preceded_by",
-    "pearson_correlation_distance",
     "project_off",
     "project_onto",
     "refuse_unreplayable_rules",
+    "region",
     "replace_with",
     "push",
     "push_from",
     "run",
     "resample_ablate",
+    "resample_rows_from",
+    "sample_from",
+    "sampling_records",
+    "set_direction_mean",
     "relative_l1_scalar",
     "relative_l2",
-    "resolve_metric",
     "resolve_sites",
     "save_intervention",
     "scramble_elements",
@@ -341,6 +369,8 @@ __all__ = [
     "splice_module",
     "sites",
     "steer",
+    "steer_generate",
+    "SteerResult",
     "swap_with",
     "where",
     "when",

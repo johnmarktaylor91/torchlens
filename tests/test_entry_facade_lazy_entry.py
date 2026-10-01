@@ -1,16 +1,16 @@
-"""Lazy-module entry teaching refusals (quickstart memo B13 / B14, reconciled).
+"""Lazy-module entry tolerance and residual refusals (quickstart B13/B14).
 
 The wave-1a all-verbs entry refusal flipped off on the memo's own signal
-(4.4) when the numbers-truth lane landed the completion unit: executed lazy
-modules materialize during the ONE captured forward and never-run lazy
-PARAMETERS stay at zero geometry in the inventory (pinned by
-``tests/test_numbers_truth_execution.py`` -- not re-pinned here). The typed
-``lazy_uninitialized`` teach now fires exactly where the request is
-genuinely unanswerable: pending lazy BUFFERS (the capture-boundary
-buffer-write tracker cannot index storage that does not exist yet), and the
-armed-lane state baseline refuses typed (``state_baseline_unavailable``)
-because a pending slot has no bytes to witness. The refusals leave the
-model untouched, and the measured self-prime remedy actually works.
+(4.4) when the numbers-truth lane landed the parameter completion unit, and
+the BUFFER-side refusal flipped off with the F20 lazy-buffer completion
+(A10-fix2 remainder): the buffer-write tracker skips storage-less pending
+buffers at index time, torch's lazy pre-hook materialization plumbing
+passes through the wrapper unlogged, and buffers materialized during the
+captured forward register at the module-entry gate. The typed
+``lazy_uninitialized`` teach survives only where the request is genuinely
+unanswerable: zero-input shape inference, plus the armed-lane state
+baseline's ``state_baseline_unavailable`` (a pending slot has no bytes to
+witness).
 """
 
 from __future__ import annotations
@@ -20,9 +20,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._robustness import check_lazy_state
 from torchlens._runnable_state import snapshot_capture_state
-from torchlens.errors import CaptureContextError, LazyStateUnsupportedError
+from torchlens.errors import CaptureContextError
 from torchlens.utils.lazy_state import has_uninitialized_lazy_state, pending_lazy_state
 
 pytestmark = pytest.mark.smoke
@@ -48,12 +47,6 @@ def _pending(model: nn.Module) -> bool:
     return has_uninitialized_lazy_state(model)
 
 
-def test_entry_gate_tolerates_pending_lazy_params() -> None:
-    """Pending lazy PARAMETERS alone never refuse at entry (completion landed)."""
-
-    assert check_lazy_state(_lazy_mlp()) is None
-
-
 def test_record_tolerates_pending_lazy_params() -> None:
     """tl.record on a pending-param model captures; the module materializes."""
 
@@ -63,31 +56,34 @@ def test_record_tolerates_pending_lazy_params() -> None:
     assert not _pending(model), "the captured forward materializes the lazy head"
 
 
-def test_trace_refuses_lazy_buffer_model_typed_and_untouched() -> None:
-    """Pending lazy BUFFERS refuse at entry: no storage to index pre-forward."""
+def test_trace_tolerates_lazy_buffer_model() -> None:
+    """Pending lazy BUFFERS capture directly (F20 buffer-side completion).
+
+    Torch's lazy pre-hook materializes the running stats before the module's
+    forward body runs; capture completes with the module's ops recorded and
+    the model materialized in place.
+    """
 
     model = _lazy_bn()
-    with pytest.raises(LazyStateUnsupportedError) as excinfo:
-        tl.trace(model, torch.randn(3, 4))
-    err = excinfo.value
-    assert err.fields["code"] == "lazy_uninitialized"
-    assert "BUFFERS" in str(err)
-    assert "LazyBatchNorm1d" in str(err)
-    assert "with torch.no_grad(): model(x)" in str(err)
-    assert err.fields["pending_buffers"], "lazy running stats must be enumerated"
-    buffer_names = {name for name, _ in err.fields["pending_buffers"]}
-    assert {"1.running_mean", "1.running_var"} <= buffer_names
-    assert _pending(model), "the refusal must leave the model untouched"
+    log = tl.trace(model, torch.randn(3, 4))
+    assert log.num_ops >= 2
+    assert not _pending(model), "the captured forward materializes the buffers"
+    labels = " ".join(op.label for op in log.ops)
+    assert "batchnorm" in labels
+    # The materialized running stats registered as first-class buffer
+    # sources (the late-index path), so the pre-hook init ops carry real
+    # provenance instead of the unattributed-args escape.
+    assert "buffer" in labels
+    log.cleanup()
 
 
-def test_record_refuses_lazy_buffer_model_typed() -> None:
-    """tl.record rides the same buffer-scoped entry gate."""
+def test_record_tolerates_lazy_buffer_model() -> None:
+    """tl.record rides the same buffer-completion path."""
 
     model = _lazy_bn()
-    with pytest.raises(LazyStateUnsupportedError) as excinfo:
-        tl.record(model, torch.randn(3, 4), save=tl.func("linear"))
-    assert excinfo.value.fields["code"] == "lazy_uninitialized"
-    assert _pending(model)
+    recording = tl.record(model, torch.randn(3, 4), save=tl.func("linear"))
+    assert recording.status == "complete"
+    assert not _pending(model)
 
 
 def test_self_prime_remedy_unlocks_capture() -> None:

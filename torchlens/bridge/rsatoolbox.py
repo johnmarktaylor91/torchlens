@@ -1,83 +1,69 @@
-"""rsatoolbox bridge helpers."""
+"""rsatoolbox bridge: the single-Dataset special case (neuro memo D2).
+
+The full per-site handoff lives at :func:`torchlens.neuro.datasets`; this
+legacy spelling survives as a DELEGATION to the same flattening and
+descriptor code path (``torchlens.neuro._datasets.single_dataset``), so one
+implementation owns the identity story. What changed with the delegation:
+the historical silent flatten is now the disclosed ``pool="flatten"``
+descriptor; the ``"neuroid"`` channel label is retired for a neutral
+``feature_index`` (an artificial unit is not a biological one); descriptors
+carry the full identity story (site, site_key, versions, dtype, casts)
+instead of ``{'source': 'torchlens'}``; and the always-written
+``tl_presentation_index`` observation descriptor makes rsatoolbox's sorted
+``calc_rdm(descriptor=...)`` outputs recoverable. The accidental integer
+``presentation`` column is still written for existing readers.
+
+``site=None`` keeps the historical final-output behavior for existing
+callers (Trace route only).
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
-import numpy as np
-import torch
+__tl_layer__ = "L8"
 
 
-def dataset(log: Any) -> Any:
-    """Convert a TorchLens log into an ``rsatoolbox`` Dataset.
-
-    The LAUNCH bridge uses the final tensor output as the measurement matrix:
-    batch items become observations and flattened output units become channels.
+def dataset(source: Any, site: str | None = None) -> Any:
+    """Convert one TorchLens site into an ``rsatoolbox`` Dataset.
 
     Parameters
     ----------
-    log:
-        TorchLens ``Trace`` containing saved output outs.
+    source:
+        A TorchLens ``Trace`` with saved activations (in-memory route), a
+        ``LoadedExtraction``, or an extraction-artifact directory path
+        (file route).
+    site:
+        Site selector: Trace lookup (qualified module address,
+        pass-qualified label) or extraction output key. ``None`` selects
+        the final tensor output (the historical behavior; Trace route
+        only).
 
     Returns
     -------
     Any
-        ``rsatoolbox.data.Dataset`` with presentation and neuroid descriptors.
+        ``rsatoolbox.data.Dataset``: batch items/stimuli as observations,
+        flattened units as channels (``feature_index``); ``obs_descriptors``
+        carry recorded stimulus ids when the artifact has them plus the
+        always-written ``tl_presentation_index``; ``descriptors`` carry the
+        full identity story including the disclosed ``pool="flatten"``.
 
     Raises
     ------
     ImportError
         If rsatoolbox is unavailable.
     ValueError
-        If the log does not contain a tensor output out.
+        If ``site=None`` and the log holds no tensor output activation, or
+        an explicitly requested site is not stimulus-indexed (the core
+        eligibility gate; a buffer overwrite must never masquerade as a
+        stimulus response).
+    torchlens.features.FeatureShapingError
+        When the site holds no payload or row/id cardinality disagrees.
     """
 
-    try:
-        import rsatoolbox as rsa
-    except ImportError as exc:
-        raise ImportError(
-            "rsatoolbox bridge requires the `neuro` extra: install torchlens[neuro]."
-        ) from exc
+    from torchlens.neuro._datasets import single_dataset
 
-    out = _final_output_out(log)
-    measurements = out.detach().cpu().reshape(out.shape[0], -1).numpy()
-    return rsa.data.Dataset(
-        measurements=measurements,
-        obs_descriptors={"presentation": np.arange(measurements.shape[0])},
-        channel_descriptors={"neuroid": np.arange(measurements.shape[1])},
-        descriptors={"source": "torchlens"},
-    )
-
-
-def _final_output_out(log: Any) -> torch.Tensor:
-    """Return the first final output tensor out.
-
-    Parameters
-    ----------
-    log:
-        TorchLens ``Trace``.
-
-    Returns
-    -------
-    torch.Tensor
-        Final output out.
-
-    Raises
-    ------
-    ValueError
-        If no tensor output out is available.
-    """
-
-    for label in getattr(log, "output_layers", []) or []:
-        layer = log[label]
-        out = getattr(layer, "out", None)
-        if isinstance(out, torch.Tensor):
-            return out
-    for layer in reversed(getattr(log, "layer_list", [])):
-        out = getattr(layer, "out", None)
-        if getattr(layer, "is_output", False) and isinstance(out, torch.Tensor):
-            return out
-    raise ValueError("Could not find a tensor output out for rsatoolbox export.")
+    return single_dataset(source, site)
 
 
 __all__ = ["dataset"]

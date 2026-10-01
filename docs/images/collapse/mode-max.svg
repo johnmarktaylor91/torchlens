@@ -9,26 +9,26 @@
 <g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 1324.9)">
 <title>ResNet</title>
 <polygon fill="white" stroke="transparent" points="-4,4 -4,-1324.9 487,-1324.9 487,4 -4,4"/>
-<text text-anchor="start" x="8" y="-1306.7" font-family="Times,serif" font-weight="bold" font-size="14.00">ResNet</text>
-<text text-anchor="start" x="8" y="-1292.7" font-family="Times,serif" font-size="14.00">151 tensors total (2.7 MB)</text>
-<text text-anchor="start" x="8" y="-1278.7" font-family="Times,serif" font-size="14.00">11689512 params (all trainable, 44.6 MB)</text>
+<text text-anchor="start" x="8" y="-1306.7" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">ResNet</text>
+<text text-anchor="start" x="8" y="-1292.7" font-family="Helvetica,sans-Serif" font-size="14.00">151 tensors total (2.7 MB)</text>
+<text text-anchor="start" x="8" y="-1278.7" font-family="Helvetica,sans-Serif" font-size="14.00">11689512 params (all trainable, 44.6 MB)</text>
 <!-- input_1pass1 -->
 <g id="node1" class="node">
 <title>input_1pass1</title>
-<ellipse fill="#98fb98" stroke="black" cx="241.5" cy="-45.96" rx="125.73" ry="45.92"/>
-<text text-anchor="start" x="211.5" y="-61.76" font-family="Times,serif" font-weight="bold" font-size="14.00">input_1</text>
-<text text-anchor="start" x="162.5" y="-41.76" font-family="Times,serif" font-size="14.00">(1, 3, 64, 64), 48.0 KB</text>
-<text text-anchor="start" x="209" y="-22.76" font-family="Times,serif" font-size="14.00">@input.x</text>
+<ellipse fill="#98fb98" stroke="black" cx="241.5" cy="-45.96" rx="124.4" ry="45.92"/>
+<text text-anchor="start" x="212.5" y="-61.76" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">input_1</text>
+<text text-anchor="start" x="163.5" y="-41.76" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 3, 64, 64), 48.0 KB</text>
+<text text-anchor="start" x="209.5" y="-22.76" font-family="Helvetica,sans-Serif" font-size="14.00">@input.x</text>
 </g>
 <!-- conv2d_1_1pass1 -->
 <g id="node2" class="node">
 <title>conv2d_1_1pass1</title>
-<polygon fill="#d9d9d9" stroke="black" points="424.5,-230.92 58.5,-230.92 58.5,-127.92 424.5,-127.92 424.5,-230.92"/>
-<text text-anchor="start" x="197" y="-214.22" font-family="Times,serif" font-weight="bold" font-size="14.00">conv2d_1_1</text>
-<text text-anchor="start" x="153.5" y="-194.22" font-family="Times,serif" font-size="14.00">(1, 64, 32, 32), 256.0 KB</text>
-<text text-anchor="start" x="68.5" y="-175.22" font-family="Times,serif" font-size="14.00">kernel_size=(7, 7), stride=(2, 2), padding=(3, 3)</text>
-<text text-anchor="start" x="142" y="-156.22" font-family="Times,serif" font-size="14.00">params: weight (64, 3, 7, 7)</text>
-<text text-anchor="start" x="213" y="-137.22" font-family="Times,serif" font-size="14.00">@conv1</text>
+<polygon fill="#d9d9d9" stroke="black" points="421.5,-230.92 61.5,-230.92 61.5,-127.92 421.5,-127.92 421.5,-230.92"/>
+<text text-anchor="start" x="196.5" y="-214.22" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_1_1</text>
+<text text-anchor="start" x="154.5" y="-194.22" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 64, 32, 32), 256.0 KB</text>
+<text text-anchor="start" x="71.5" y="-175.22" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=(7, 7), stride=(2, 2), padding=(3, 3)</text>
+<text text-anchor="start" x="143.5" y="-156.22" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (64, 3, 7, 7)</text>
+<text text-anchor="start" x="213" y="-137.22" font-family="Helvetica,sans-Serif" font-size="14.00">@conv1</text>
 </g>
 <!-- input_1pass1&#45;&gt;conv2d_1_1pass1 -->
 <g id="edge1" class="edge">
@@ -39,15 +39,15 @@
 <!-- bn1pass1 -->
 <g id="node3" class="node">
 <title>bn1pass1</title>
-<polygon fill="#d9d9d9" stroke="black" points="345,-369.92 142,-369.92 138,-365.92 138,-266.92 341,-266.92 345,-270.92 345,-369.92"/>
-<polyline fill="none" stroke="black" points="341,-365.92 138,-365.92 "/>
-<polyline fill="none" stroke="black" points="341,-365.92 341,-266.92 "/>
-<polyline fill="none" stroke="black" points="341,-365.92 345,-369.92 "/>
-<text text-anchor="start" x="219.5" y="-353.22" font-family="Times,serif" font-weight="bold" font-size="14.00">@bn1</text>
-<text text-anchor="start" x="192" y="-333.22" font-family="Times,serif" font-size="14.00">BatchNorm2d</text>
-<text text-anchor="start" x="154" y="-314.22" font-family="Times,serif" font-size="14.00">(1, 64, 32, 32), 256.0 KB</text>
-<text text-anchor="start" x="184" y="-295.22" font-family="Times,serif" font-size="14.00">1 op + 4 buffers</text>
-<text text-anchor="start" x="148.5" y="-276.22" font-family="Times,serif" font-size="14.00">128 params (all trainable)</text>
+<polygon fill="#d9d9d9" stroke="black" points="342,-369.92 145,-369.92 141,-365.92 141,-266.92 338,-266.92 342,-270.92 342,-369.92"/>
+<polyline fill="none" stroke="black" points="338,-365.92 141,-365.92 "/>
+<polyline fill="none" stroke="black" points="338,-365.92 338,-266.92 "/>
+<polyline fill="none" stroke="black" points="338,-365.92 342,-369.92 "/>
+<text text-anchor="start" x="220" y="-353.22" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">@bn1</text>
+<text text-anchor="start" x="194" y="-333.22" font-family="Helvetica,sans-Serif" font-size="14.00">BatchNorm2d</text>
+<text text-anchor="start" x="155" y="-314.22" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 64, 32, 32), 256.0 KB</text>
+<text text-anchor="start" x="184.5" y="-295.22" font-family="Helvetica,sans-Serif" font-size="14.00">1 op + 4 buffers</text>
+<text text-anchor="start" x="151.5" y="-276.22" font-family="Helvetica,sans-Serif" font-size="14.00">128 params (all trainable)</text>
 </g>
 <!-- conv2d_1_1pass1&#45;&gt;bn1pass1 -->
 <g id="edge2" class="edge">
@@ -58,10 +58,10 @@
 <!-- relu_1_3pass1 -->
 <g id="node4" class="node">
 <title>relu_1_3pass1</title>
-<polygon fill="white" stroke="black" points="339.5,-470.92 143.5,-470.92 143.5,-405.92 339.5,-405.92 339.5,-470.92"/>
-<text text-anchor="start" x="208.5" y="-454.22" font-family="Times,serif" font-weight="bold" font-size="14.00">relu_1_3</text>
-<text text-anchor="start" x="153.5" y="-434.22" font-family="Times,serif" font-size="14.00">(1, 64, 32, 32), 256.0 KB</text>
-<text text-anchor="start" x="220" y="-415.22" font-family="Times,serif" font-size="14.00">@relu</text>
+<polygon fill="white" stroke="black" points="338.5,-470.92 144.5,-470.92 144.5,-405.92 338.5,-405.92 338.5,-470.92"/>
+<text text-anchor="start" x="209.5" y="-454.22" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">relu_1_3</text>
+<text text-anchor="start" x="154.5" y="-434.22" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 64, 32, 32), 256.0 KB</text>
+<text text-anchor="start" x="221" y="-415.22" font-family="Helvetica,sans-Serif" font-size="14.00">@relu</text>
 </g>
 <!-- bn1pass1&#45;&gt;relu_1_3pass1 -->
 <g id="edge3" class="edge">
@@ -72,11 +72,11 @@
 <!-- maxpool2d_1_4pass1 -->
 <g id="node5" class="node">
 <title>maxpool2d_1_4pass1</title>
-<polygon fill="white" stroke="black" points="382,-590.92 101,-590.92 101,-506.92 382,-506.92 382,-590.92"/>
-<text text-anchor="start" x="183" y="-574.72" font-family="Times,serif" font-weight="bold" font-size="14.00">maxpool2d_1_4</text>
-<text text-anchor="start" x="158.5" y="-554.72" font-family="Times,serif" font-size="14.00">(1, 64, 16, 16), 64.0 KB</text>
-<text text-anchor="start" x="111.5" y="-535.72" font-family="Times,serif" font-size="14.00">kernel_size=3, stride=2, padding=1</text>
-<text text-anchor="start" x="204.5" y="-516.72" font-family="Times,serif" font-size="14.00">@maxpool</text>
+<polygon fill="white" stroke="black" points="378.5,-590.92 104.5,-590.92 104.5,-506.92 378.5,-506.92 378.5,-590.92"/>
+<text text-anchor="start" x="181.5" y="-574.72" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">maxpool2d_1_4</text>
+<text text-anchor="start" x="159" y="-554.72" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 64, 16, 16), 64.0 KB</text>
+<text text-anchor="start" x="114.5" y="-535.72" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=3, stride=2, padding=1</text>
+<text text-anchor="start" x="204.5" y="-516.72" font-family="Helvetica,sans-Serif" font-size="14.00">@maxpool</text>
 </g>
 <!-- relu_1_3pass1&#45;&gt;maxpool2d_1_4pass1 -->
 <g id="edge4" class="edge">
@@ -88,7 +88,7 @@
 <g id="node6" class="node">
 <title>layer1__segment__layer3pass1</title>
 <path fill="#f7f7f7" stroke="#666666" stroke-dasharray="5,2" d="M471,-662.92C471,-662.92 12,-662.92 12,-662.92 6,-662.92 0,-656.92 0,-650.92 0,-650.92 0,-638.92 0,-638.92 0,-632.92 6,-626.92 12,-626.92 12,-626.92 471,-626.92 471,-626.92 477,-626.92 483,-632.92 483,-638.92 483,-638.92 483,-650.92 483,-650.92 483,-656.92 477,-662.92 471,-662.92"/>
-<text text-anchor="start" x="10.5" y="-641.72" font-family="Times,serif" font-weight="bold" font-size="14.00" fill="#222222">layer1&#45;layer3 &#45;&#45; 3 blocks, 46 ops + 56 buffers, 2.8M params</text>
+<text text-anchor="start" x="10.5" y="-641.72" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00" fill="#222222">layer1&#45;layer3 &#45;&#45; 3 blocks, 46 ops + 56 buffers, 2.8M params</text>
 </g>
 <!-- maxpool2d_1_4pass1&#45;&gt;layer1__segment__layer3pass1 -->
 <g id="edge5" class="edge">
@@ -99,15 +99,15 @@
 <!-- layer4pass1 -->
 <g id="node7" class="node">
 <title>layer4pass1</title>
-<polygon fill="#d9d9d9" stroke="black" points="363,-801.92 124,-801.92 120,-797.92 120,-698.92 359,-698.92 363,-702.92 363,-801.92"/>
-<polyline fill="none" stroke="black" points="359,-797.92 120,-797.92 "/>
-<polyline fill="none" stroke="black" points="359,-797.92 359,-698.92 "/>
-<polyline fill="none" stroke="black" points="359,-797.92 363,-801.92 "/>
-<text text-anchor="start" x="210" y="-785.22" font-family="Times,serif" font-weight="bold" font-size="14.00">@layer4</text>
-<text text-anchor="start" x="203.5" y="-765.22" font-family="Times,serif" font-size="14.00">Sequential</text>
-<text text-anchor="start" x="167.5" y="-746.22" font-family="Times,serif" font-size="14.00">(1, 512, 2, 2), 8.0 KB</text>
-<text text-anchor="start" x="171" y="-727.22" font-family="Times,serif" font-size="14.00">16 ops + 20 buffers</text>
-<text text-anchor="start" x="130.5" y="-708.22" font-family="Times,serif" font-size="14.00">8393728 params (all trainable)</text>
+<polygon fill="#d9d9d9" stroke="black" points="360,-801.92 127,-801.92 123,-797.92 123,-698.92 356,-698.92 360,-702.92 360,-801.92"/>
+<polyline fill="none" stroke="black" points="356,-797.92 123,-797.92 "/>
+<polyline fill="none" stroke="black" points="356,-797.92 356,-698.92 "/>
+<polyline fill="none" stroke="black" points="356,-797.92 360,-801.92 "/>
+<text text-anchor="start" x="210" y="-785.22" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">@layer4</text>
+<text text-anchor="start" x="205" y="-765.22" font-family="Helvetica,sans-Serif" font-size="14.00">Sequential</text>
+<text text-anchor="start" x="168.5" y="-746.22" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 512, 2, 2), 8.0 KB</text>
+<text text-anchor="start" x="171.5" y="-727.22" font-family="Helvetica,sans-Serif" font-size="14.00">16 ops + 20 buffers</text>
+<text text-anchor="start" x="133.5" y="-708.22" font-family="Helvetica,sans-Serif" font-size="14.00">8393728 params (all trainable)</text>
 </g>
 <!-- layer1__segment__layer3pass1&#45;&gt;layer4pass1 -->
 <g id="edge6" class="edge">
@@ -118,11 +118,11 @@
 <!-- adaptiveavgpool2d_1_67pass1 -->
 <g id="node8" class="node">
 <title>adaptiveavgpool2d_1_67pass1</title>
-<polygon fill="white" stroke="black" points="346.5,-921.92 136.5,-921.92 136.5,-837.92 346.5,-837.92 346.5,-921.92"/>
-<text text-anchor="start" x="146.5" y="-905.72" font-family="Times,serif" font-weight="bold" font-size="14.00">adaptiveavgpool2d_1_67</text>
-<text text-anchor="start" x="167" y="-885.72" font-family="Times,serif" font-size="14.00">(1, 512, 1, 1), 2.0 KB</text>
-<text text-anchor="start" x="175.5" y="-866.72" font-family="Times,serif" font-size="14.00">output_size=(1, 1)</text>
-<text text-anchor="start" x="206.5" y="-847.72" font-family="Times,serif" font-size="14.00">@avgpool</text>
+<polygon fill="white" stroke="black" points="348.5,-921.92 134.5,-921.92 134.5,-837.92 348.5,-837.92 348.5,-921.92"/>
+<text text-anchor="start" x="144.5" y="-905.72" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">adaptiveavgpool2d_1_67</text>
+<text text-anchor="start" x="168" y="-885.72" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 512, 1, 1), 2.0 KB</text>
+<text text-anchor="start" x="176.5" y="-866.72" font-family="Helvetica,sans-Serif" font-size="14.00">output_size=(1, 1)</text>
+<text text-anchor="start" x="206.5" y="-847.72" font-family="Helvetica,sans-Serif" font-size="14.00">@avgpool</text>
 </g>
 <!-- layer4pass1&#45;&gt;adaptiveavgpool2d_1_67pass1 -->
 <g id="edge7" class="edge">
@@ -133,9 +133,9 @@
 <!-- flatten_1_68pass1 -->
 <g id="node9" class="node">
 <title>flatten_1_68pass1</title>
-<ellipse fill="white" stroke="black" cx="241.5" cy="-990.45" rx="94.09" ry="32.55"/>
-<text text-anchor="start" x="194" y="-997.25" font-family="Times,serif" font-weight="bold" font-size="14.00">flatten_1_68</text>
-<text text-anchor="start" x="185.5" y="-977.25" font-family="Times,serif" font-size="14.00">(1, 512), 2.0 KB</text>
+<ellipse fill="white" stroke="black" cx="241.5" cy="-990.45" rx="92.76" ry="32.55"/>
+<text text-anchor="start" x="193.5" y="-997.25" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">flatten_1_68</text>
+<text text-anchor="start" x="186.5" y="-977.25" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 512), 2.0 KB</text>
 </g>
 <!-- adaptiveavgpool2d_1_67pass1&#45;&gt;flatten_1_68pass1 -->
 <g id="edge8" class="edge">
@@ -146,11 +146,11 @@
 <!-- linear_1_69pass1 -->
 <g id="node10" class="node">
 <title>linear_1_69pass1</title>
-<polygon fill="#d9d9d9" stroke="black" points="400,-1142.98 83,-1142.98 83,-1058.98 400,-1058.98 400,-1142.98"/>
-<text text-anchor="start" x="197" y="-1126.78" font-family="Times,serif" font-weight="bold" font-size="14.00">linear_1_69</text>
-<text text-anchor="start" x="181" y="-1106.78" font-family="Times,serif" font-size="14.00">(1, 1000), 3.9 KB</text>
-<text text-anchor="start" x="93.5" y="-1087.78" font-family="Times,serif" font-size="14.00">params: weight (1000, 512) · bias (1000,)</text>
-<text text-anchor="start" x="228" y="-1068.78" font-family="Times,serif" font-size="14.00">@fc</text>
+<polygon fill="#d9d9d9" stroke="black" points="398,-1142.98 85,-1142.98 85,-1058.98 398,-1058.98 398,-1142.98"/>
+<text text-anchor="start" x="198" y="-1126.78" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">linear_1_69</text>
+<text text-anchor="start" x="182" y="-1106.78" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 1000), 3.9 KB</text>
+<text text-anchor="start" x="95.5" y="-1087.78" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (1000, 512) · bias (1000,)</text>
+<text text-anchor="start" x="228" y="-1068.78" font-family="Helvetica,sans-Serif" font-size="14.00">@fc</text>
 </g>
 <!-- flatten_1_68pass1&#45;&gt;linear_1_69pass1 -->
 <g id="edge9" class="edge">
@@ -161,10 +161,10 @@
 <!-- output_1pass1 -->
 <g id="node11" class="node">
 <title>output_1pass1</title>
-<ellipse fill="#ff9999" stroke="black" cx="241.5" cy="-1224.94" rx="100.32" ry="45.92"/>
-<text text-anchor="start" x="206.5" y="-1240.74" font-family="Times,serif" font-weight="bold" font-size="14.00">output_1</text>
-<text text-anchor="start" x="180.5" y="-1220.74" font-family="Times,serif" font-size="14.00">(1, 1000), 3.9 KB</text>
-<text text-anchor="start" x="210.5" y="-1201.74" font-family="Times,serif" font-size="14.00">@output</text>
+<ellipse fill="#ff9999" stroke="black" cx="241.5" cy="-1224.94" rx="98.99" ry="45.92"/>
+<text text-anchor="start" x="206.5" y="-1240.74" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">output_1</text>
+<text text-anchor="start" x="181.5" y="-1220.74" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 1000), 3.9 KB</text>
+<text text-anchor="start" x="211" y="-1201.74" font-family="Helvetica,sans-Serif" font-size="14.00">@output</text>
 </g>
 <!-- linear_1_69pass1&#45;&gt;output_1pass1 -->
 <g id="edge10" class="edge">

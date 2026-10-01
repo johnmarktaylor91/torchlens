@@ -82,6 +82,7 @@ from ._render_utils import (
     make_module_cluster_attrs,
     relativize_visualizer_image,
 )
+from ._typography import DEFAULT_TYPOGRAPHY
 from .code_panel import (
     CodePanelOption,
     compose_graph_with_code_panel,
@@ -424,6 +425,11 @@ class RenderEdge:
     metadata_child: GraphNode | None
     occurrence_key: tuple[Any, ...]
     argument_label: str | None = None
+    # N9 display-filter disclosure: minimum number of hidden ops a bridged
+    # ("skipped") edge crosses; None on direct edges. Rendered as the
+    # midpoint "via N hidden" label with a dashed style -- a bridged edge is
+    # reachability through omitted operations, never direct adjacency.
+    bridged_hidden_count: int | None = None
 
 
 @dataclass(frozen=True)
@@ -708,7 +714,9 @@ _SVG_ROOT_RE = re.compile(r"<svg\b(?P<attrs>[^>]*)>", re.IGNORECASE | re.DOTALL)
 _SVG_VIEWBOX_RE = re.compile(r"""viewBox=(?P<quote>["'])(?P<value>[^"']+)(?P=quote)""")
 
 
-_EDGE_LABEL_FONT_SIZE = 8
+# Sourced from the one typography record (vizmech D29): the historical
+# literal 8 is now the record's annotation role.
+_EDGE_LABEL_FONT_SIZE = int(DEFAULT_TYPOGRAPHY.annotation_size)
 _EDGE_LABEL_PAD = 4  # points of transparent margin on every side of a head/tail label
 _SELF_LOOP_LABEL_HGAP = 8  # points of blank spacer left/right of a self-loop label
 

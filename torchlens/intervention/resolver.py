@@ -997,6 +997,7 @@ def resolve_sites(
         )
 
     selector = _normalize_query(query)
+    _guard_episode_step_query(log, selector)
     direction = _selector_resolution_direction(selector)
     sites = tuple(_iter_sites(log, direction))
     matched = _resolve_unchecked(sites, selector, strict=strict)
@@ -1056,6 +1057,7 @@ def find_sites(
         )
 
     selector = _normalize_query(query)
+    _guard_episode_step_query(log, selector)
     direction = _selector_resolution_direction(selector)
     sites = tuple(_iter_sites(log, direction))
     matched = _resolve_unchecked(sites, selector, strict=strict)
@@ -1065,6 +1067,57 @@ def find_sites(
             "Pass a larger max_fanout explicitly or use a narrower selector."
         )
     return SiteTable(matched, query=query)
+
+
+def _guard_episode_step_query(log: Trace, selector: Any) -> None:
+    """Door guard for post-hoc episode-step queries (lane F42).
+
+    A step-qualified selector resolving against a product with no step axis
+    would match NOTHING silently -- the inverse of the fires-at-every-step
+    wrongness the qualifier exists to close -- so the door refuses typed at
+    the point of failure instead: plain captures have no steps to qualify,
+    and pre-F42 episode artifacts carry no ``Op.episode_step`` stamps.
+
+    Parameters
+    ----------
+    log:
+        Model log the query resolves against.
+    selector:
+        Normalized query selector.
+
+    Raises
+    ------
+    SiteResolutionError
+        ``episode_step_selector_without_episode`` on plain captures;
+        ``episode_step_unstamped`` on stamp-less episode artifacts.
+    """
+
+    from ..ir.selector_eval import selector_contains_kind
+
+    if not isinstance(selector, BaseSelector) or not selector_contains_kind(
+        selector, "episode_step", unwrap=True
+    ):
+        return
+    from ..capture._episode_ledger import capture_kind_for
+
+    if capture_kind_for(log) != "episode":
+        raise SiteResolutionError(
+            "at_step(...) names an episode step, but this product carries no "
+            "episode declaration: there are no steps to qualify. Re-capture "
+            "with tl.trace(model, x, episode=tl.options.EpisodeSpec(...)), or "
+            "drop the step qualifier.",
+            code="episode_step_selector_without_episode",
+            remedy="re-capture with episode=, or drop at_step()",
+        )
+    if not any(getattr(op, "episode_step", None) is not None for op in log.layer_list):
+        raise SiteResolutionError(
+            "at_step(...) needs the per-op episode-step stamps "
+            "(Op.episode_step), but no op on this episode product carries "
+            "one -- a pre-stamping artifact. Re-capture (or re-save from a "
+            "fresh capture) with this TorchLens version to mint the stamps.",
+            code="episode_step_unstamped",
+            remedy="re-capture the episode with a stamping TorchLens version",
+        )
 
 
 def _iter_layer_ops(log: Trace) -> Sequence[Op]:

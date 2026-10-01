@@ -96,6 +96,15 @@ class IdentityIndex:
     module_addresses: tuple[str, ...]
     module_call_labels: tuple[str, ...]
 
+    def __repr__(self) -> str:
+        """Bounded identity card (F10/D31): the spine points, never dumps."""
+
+        return (
+            f"IdentityIndex({len(self.op_labels)} ops, "
+            f"{len(self.layer_labels)} layers, "
+            f"{len(self.module_addresses)} modules; read .op_labels ...)"
+        )
+
     def ops_of_layer(self, layer_label: str) -> tuple[str, ...]:
         """All pass-qualified op labels of one layer (never a silent pick)."""
 
@@ -195,6 +204,19 @@ class FactCore:
     params: ParamFacts
     compute: ComputeAggregation
     memory: MemoryFacts
+
+    def __repr__(self) -> str:
+        """Bounded identity card (F10/D31): sections point, never dump.
+
+        The generated repr chained per-op compute rows -- 9.4k chars on a
+        ten-layer toy and unbounded on real models.
+        """
+
+        return (
+            f"FactCore(v{self.schema_version} {self.capture_fingerprint}, "
+            f"sections={'/'.join(self.section_ids)}; read .counts .params "
+            f".compute .memory .identity)"
+        )
 
     @property
     def section_ids(self) -> tuple[str, ...]:

@@ -24,6 +24,7 @@ from ._capture_state_helpers import (
     _unwrap_data_parallel,
     unwrap_compiled_model,
 )
+from ._deploy_env import restore_state_dict_resilient
 from ._deprecations import MISSING, MissingType
 from ._input_coerce import _coerce_input_args
 from ._literals import (
@@ -138,31 +139,47 @@ def log_model_metadata(
     return model_trace
 
 
-def summary(
+def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input rungs plus the two execution dials ARE the spec'd surface (F17 B11)
     model: nn.Module,
-    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
+    input_args: torch.Tensor | list[Any] | tuple[Any, ...] | None = None,
     input_kwargs: dict[Any, Any] | None = None,
     *,
+    input_size: Any | None = None,
     execution_mode: Literal["eval", "train", "same"] = "eval",
     grad_mode: Literal["off", "same"] = "off",
     **summary_kwargs: Any,
 ) -> str:
-    """Run a metadata-only forward pass and return a rendered summary string.
+    """Run a metadata-only forward pass and return a rendered summary report.
 
     The one-call door is SAFE by default (A4): the captured forward runs in
     eval mode under ``torch.no_grad()``, and every module training flag plus
     the host/device RNG state is restored bit-identically afterwards -- a
     summary call never mutates the model (BatchNorm running stats included)
-    or advances the caller's RNG streams.
+    or advances the caller's RNG streams. The function RETURNS the result
+    and never auto-prints (the repr self-displays).
+
+    Input precedence follows the quickstart ladder (F17, memo D2): real
+    ``input_args`` XOR ``input_size=`` XOR nothing. ``input_size=``
+    synthesizes seeded tensors per the quickstart grammar and the synthesis
+    is disclosed in the render; a zero-input call infers a verified input
+    and REUSES its verification trace (no second capture). Mixing the
+    spellings refuses typed (``input_rung_conflict``).
 
     Parameters
     ----------
     model:
         PyTorch model to inspect.
     input_args:
-        Positional args for ``model.forward()``.
+        Positional args for ``model.forward()``. The quickstart input ladder
+        applies (F17): a real input is the gold rung; omit it and pass
+        ``input_size=`` for a declared shape with synthesized values; omit
+        both for an inferred shape. Non-gold rungs are disclosed in the
+        trace's persistent provenance record and in the summary text.
     input_kwargs:
         Keyword args for ``model.forward()``.
+    input_size:
+        Declared input shape(s) per the quickstart grammar (one flat tuple,
+        a sequence of tuples, or a forward-keyword-to-shape mapping).
     execution_mode:
         ``"eval"`` (default) runs the captured forward in eval mode and
         restores every module training flag afterwards. ``"train"`` opts into
@@ -173,41 +190,59 @@ def summary(
         ``"off"`` (default) runs the captured forward under
         ``torch.no_grad()``. ``"same"`` keeps the caller's grad context.
     **summary_kwargs:
-        Forwarded to ``Trace.summary``.
+        Forwarded to ``Trace.summary`` (rebuilt grammar or legacy presets).
 
     Returns
     -------
     str
-        Rendered summary text, ending with an execution disclosure line.
+        A ``SummaryReport`` (``str`` subclass): canonical ASCII payload
+        plus the typed result API.
     """
-    from ._errors import InvalidArgumentError
     from .utils.rng import log_current_rng_states, set_rng_from_saved_states
 
-    if execution_mode not in ("eval", "train", "same"):
-        raise InvalidArgumentError(
-            f"execution_mode must be 'eval', 'train', or 'same'; got {execution_mode!r}.",
-            code="summary_execution_mode_invalid",
-            remedy=(
-                "Use 'eval' (the default, safe reporting mode -- modes restored after the "
-                "one captured forward), 'train' (explicit opt-in; stateful layers update), "
-                "or 'same' (keep the caller's module modes)."
-            ),
-        )
-    if grad_mode not in ("off", "same"):
-        raise InvalidArgumentError(
-            f"grad_mode must be 'off' or 'same'; got {grad_mode!r}.",
-            code="summary_grad_mode_invalid",
-            remedy=(
-                "Use 'off' (the default; the captured forward runs under torch.no_grad()) "
-                "or 'same' (keep the caller's grad context)."
-            ),
-        )
-
+    _validate_summary_modes(execution_mode, grad_mode)
     _reject_opaque_wrappers(model)
     model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
     if input_kwargs is None:
         input_kwargs = {}
+
+    # Quickstart input ladder (F17 B11): the summary verb conjugates exactly
+    # like trace and render. Non-gold rungs synthesize concrete tensors here
+    # (disclosed via the provenance record attached after capture AND the
+    # rebuilt renderer's synthetic-input banner line); the inferred rung
+    # reuses the inference search's exact verified trace when the default
+    # eval/no-grad policy is requested (memo D9 in-call reuse).
+    ladder_provenance = None
+    input_synthesis: str | None = None
+    facade_report = _maybe_weightsfree_summary(
+        model, input_args, input_kwargs, input_size, summary_kwargs
+    )
+    if facade_report is not None:
+        return facade_report
+    if input_size is not None or (input_args is None and not input_kwargs):
+        from .quickstart._resolve import attach_provenance, resolve_inputs
+
+        resolved = resolve_inputs(model, input_args, input_kwargs, input_size, verb="summary")
+        ladder_provenance = resolved.provenance
+        input_synthesis = _ladder_synthesis_note(input_size, resolved)
+        if (
+            resolved.plan.verified_trace is not None
+            and execution_mode == "eval"
+            and grad_mode == "off"
+        ):
+            reused = resolved.plan.verified_trace
+            attach_provenance(reused, ladder_provenance)
+            return _summary_report_from_trace(
+                reused,
+                summary_kwargs,
+                execution_mode="eval",
+                grad_mode="off",
+                input_synthesis=input_synthesis,
+            )
+        input_args = list(resolved.plan.input_args)
+        input_kwargs = dict(resolved.plan.input_kwargs)
+
     input_args = _coerce_input_args(model, input_args)
     check_model_and_input_variants(model, input_args, input_kwargs)
 
@@ -233,13 +268,250 @@ def summary(
             module.training = was_training
         set_rng_from_saved_states(rng_snapshot)
 
+    if ladder_provenance is not None:
+        from .quickstart._resolve import attach_provenance
+
+        attach_provenance(trace, ladder_provenance)
+    return _summary_report_from_trace(
+        trace,
+        summary_kwargs,
+        execution_mode=execution_mode,
+        grad_mode=grad_mode,
+        input_synthesis=input_synthesis,
+    )
+
+
+def _format_input_size(input_size: Any) -> str:
+    """Render the caller's ``input_size=`` spelling compactly for disclosure."""
+
     try:
+        if isinstance(input_size, dict):
+            inner = ", ".join(
+                f"{key!r}: {_format_input_size(value)}" for key, value in input_size.items()
+            )
+            return "{" + inner + "}"
+        items = list(input_size)
+        if items and all(isinstance(dim, int) and not isinstance(dim, bool) for dim in items):
+            return repr(tuple(items))
+        return "(" + ", ".join(_format_input_size(item) for item in items) + ")"
+    except TypeError:
+        return repr(input_size)
+
+
+def _ladder_synthesis_note(input_size: Any, resolved: Any) -> str | None:
+    """Derive the one-line synthesis disclosure from ladder provenance.
+
+    Non-gold rungs feed the rebuilt renderer's ``synthetic input:`` banner
+    line (F08) from the ONE quickstart provenance record (F17); the gold
+    rung returns ``None`` (real values, nothing to disclose).
+    """
+
+    provenance = resolved.provenance
+    if provenance.values_semantic:
+        return None
+    recipes = provenance.recipes or ()
+    recipe_names = sorted({str(row["recipe"]) for row in recipes if row.get("recipe")})
+    dtypes = sorted({str(row["dtype"]) for row in recipes if row.get("dtype")})
+    recipe_part = "/".join(recipe_names) if recipe_names else "synthesized"
+    if dtypes:
+        recipe_part += " " + "/".join(dtype.removeprefix("torch.") for dtype in dtypes)
+    if provenance.origin == "declared":
+        seeds = sorted({row["seed"] for row in recipes if row.get("seed") is not None})
+        seed_part = f", seed {seeds[0]}" if len(seeds) == 1 else ""
+        return f"input_size={_format_input_size(input_size)}, {recipe_part}{seed_part}"
+    shapes = ", ".join(str(tuple(facts.shape)) for facts in provenance.tensors)
+    note = f"inferred shape {shapes or 'unknown'}, {recipe_part}"
+    if provenance.strategy:
+        note += f", strategy {provenance.strategy}"
+    if provenance.flexible_dims:
+        note += f", flexible dims {tuple(provenance.flexible_dims)}"
+    return note
+
+
+def _summary_report_from_trace(
+    trace: Any,
+    summary_kwargs: dict[str, Any],
+    *,
+    execution_mode: str,
+    grad_mode: str,
+    input_synthesis: str | None,
+) -> str:
+    """Route one captured trace through the summary grammars and clean up."""
+
+    from ._errors import InvalidArgumentError
+    from .report._summary_config import route_summary_call
+
+    route_kwargs = dict(summary_kwargs)
+    level = route_kwargs.pop("level", None)
+    route = route_summary_call(level, route_kwargs)
+    if input_synthesis is not None and isinstance(level, str) and level == "output":
+        raise InvalidArgumentError(
+            "decoded-output views refuse synthetic inputs: a label table computed "
+            "from noise is the most misleading thing this surface could print.",
+            code="summary_synthetic_output_refused",
+            remedy="pass a real input for output views, or drop level='output'",
+        )
+    try:
+        if route == "rebuilt":
+            return trace.summary(
+                **summary_kwargs,
+                _execution_note=_summary_execution_note(execution_mode, grad_mode, short=True),
+                _input_synthesis=input_synthesis,
+            )
         report = trace.summary(**summary_kwargs)
     finally:
         trace.cleanup()
-    # Keep the typed detached report (C02, summary item 10) around the
-    # disclosure-suffixed text: the report survives the cleanup above by
-    # construction (it retains neither the model nor the Trace).
+    finalized = _finalize_summary_report(report, execution_mode, grad_mode)
+    if input_synthesis is None:
+        return finalized
+    from .report._summary_report import SummaryReport
+
+    full_text = str(finalized) + f"\nSynthetic input: {input_synthesis}."
+    if isinstance(finalized, SummaryReport):
+        return SummaryReport(
+            full_text, rows=finalized.rows, totals=finalized.totals, capture=finalized.capture
+        )
+    return full_text
+
+
+def _validate_summary_modes(execution_mode: str, grad_mode: str) -> None:
+    """Refuse unknown one-call summary execution/grad mode tokens typed."""
+
+    from ._errors import InvalidArgumentError
+
+    if execution_mode not in ("eval", "train", "same"):
+        raise InvalidArgumentError(
+            f"execution_mode must be 'eval', 'train', or 'same'; got {execution_mode!r}.",
+            code="summary_execution_mode_invalid",
+            remedy=(
+                "Use 'eval' (the default, safe reporting mode -- modes restored after the "
+                "one captured forward), 'train' (explicit opt-in; stateful layers update), "
+                "or 'same' (keep the caller's module modes)."
+            ),
+        )
+    if grad_mode not in ("off", "same"):
+        raise InvalidArgumentError(
+            f"grad_mode must be 'off' or 'same'; got {grad_mode!r}.",
+            code="summary_grad_mode_invalid",
+            remedy=(
+                "Use 'off' (the default; the captured forward runs under torch.no_grad()) "
+                "or 'same' (keep the caller's grad context)."
+            ),
+        )
+
+
+def _maybe_weightsfree_summary(
+    model: nn.Module,
+    input_args: Any,
+    input_kwargs: dict[str, Any] | None,
+    input_size: Any,
+    summary_kwargs: dict[str, Any],
+) -> str | None:
+    """Rung-4 gate (weightsfree memo D12/face 2): auto-select or refuse.
+
+    ``None`` on every non-meta model (the ordinary summary path proceeds).
+    For an ALL-meta model: with input evidence (declared ``input_size`` or
+    explicit inputs) the facade auto-selects the exact structure-only option
+    state — same marker, admission record, and evidence envelope as the
+    explicit power path, auto-set recorded in provenance; a bare call with
+    NO input evidence refuses rather than guessing (the inference rung runs
+    real probing forwards a weights-free model cannot serve).
+    """
+
+    if not _all_meta_model(model):
+        return None
+    if input_args is None and not input_kwargs and input_size is None:
+        from ._errors import InvalidArgumentError
+
+        raise InvalidArgumentError(
+            "summary() on a meta-built model needs input evidence: the "
+            "zero-argument inference rung runs real probing forwards, which "
+            "a weights-free model cannot serve.",
+            code="weightsfree_facade_input_evidence_required",
+            remedy=(
+                "pass input_size= (declared shapes; e.g. input_size=(1, 8)) "
+                "or explicit meta inputs (torch.zeros(..., device='meta'))"
+            ),
+            argument="input_size",
+        )
+    return _weightsfree_summary_facade(model, input_args, input_kwargs, input_size, summary_kwargs)
+
+
+def _all_meta_model(model: nn.Module) -> bool:
+    """Whether every registered parameter/buffer sits on the meta device.
+
+    The rung-4 facade trigger (weightsfree memo D12): only an ALL-meta model
+    may auto-select structure-only; a mixed or parameterless-real model takes
+    the ordinary path (and mixed substrates refuse at the entry gate).
+    """
+
+    saw_state = False
+    for tensor in list(model.parameters()) + list(model.buffers()):
+        saw_state = True
+        if not tensor.is_meta:
+            return False
+    return saw_state
+
+
+def _weightsfree_summary_facade(
+    model: nn.Module,
+    input_args: Any,
+    input_kwargs: dict[str, Any] | None,
+    input_size: Any,
+    summary_kwargs: dict[str, Any],
+) -> str:
+    """Rung 4: the zero-payload-storage summary of a meta-built model.
+
+    Resolves the input plan (declared ``input_size`` synthesizes shapes and
+    converts the leaves to meta empties — shape/dtype without values; user
+    inputs pass through unchanged), captures ONE structure-only trace via the
+    same primitive as the explicit power path, records the auto-selection in
+    the evidence envelope's input plan, and renders the summary under the
+    hypothesis banner.
+    """
+
+    from .options import CaptureOptions as _CaptureOptions
+
+    if input_size is not None:
+        from .quickstart._resolve import resolve_inputs
+
+        resolved = resolve_inputs(model, None, None, input_size, verb="summary")
+        input_args = [
+            torch.empty_like(leaf, device="meta") if isinstance(leaf, torch.Tensor) else leaf
+            for leaf in resolved.plan.input_args
+        ]
+        input_kwargs = {
+            key: (
+                torch.empty_like(value, device="meta") if isinstance(value, torch.Tensor) else value
+            )
+            for key, value in dict(resolved.plan.input_kwargs).items()
+        }
+    trace = _user_funcs.trace(
+        model,
+        input_args,
+        input_kwargs=input_kwargs or None,
+        capture=_CaptureOptions(structure_only=True),
+    )
+    try:
+        envelope = trace.structure_evidence
+        if isinstance(envelope, dict) and isinstance(envelope.get("input_plan"), dict):
+            envelope["input_plan"]["selection_source"] = "summary_facade_auto"
+            if input_size is not None:
+                envelope["input_plan"]["source"] = "declared_input_size"
+                envelope["input_plan"]["synthesized"] = ["meta_input_leaves"]
+        report = trace.summary(**summary_kwargs)
+    finally:
+        trace.cleanup()
+    return _finalize_summary_report(report, "eval", "off")
+
+
+def _finalize_summary_report(report: Any, execution_mode: str, grad_mode: str) -> str:
+    """Suffix the execution disclosure, keeping the typed detached report.
+
+    The report survives its Trace's cleanup by construction (C02, summary
+    item 10: it retains neither the model nor the Trace).
+    """
+
     from .report._summary_report import SummaryReport
 
     full_text = str(report) + "\n" + _summary_execution_note(execution_mode, grad_mode)
@@ -250,8 +522,12 @@ def summary(
     return full_text
 
 
-def _summary_execution_note(execution_mode: str, grad_mode: str) -> str:
-    """Return the one-line execution disclosure appended to one-call summaries."""
+def _summary_execution_note(execution_mode: str, grad_mode: str, *, short: bool = False) -> str:
+    """Return the execution disclosure for one-call summaries.
+
+    ``short=True`` yields the compact header form the rebuilt renderer
+    hoists; the default is the historical trailing line, byte-stable.
+    """
 
     if execution_mode == "eval":
         mode_part = "eval mode"
@@ -260,6 +536,8 @@ def _summary_execution_note(execution_mode: str, grad_mode: str) -> str:
     else:
         mode_part = "caller's module modes"
     grad_part = "no_grad" if grad_mode == "off" else "caller's grad context"
+    if short:
+        return f"{mode_part}, {grad_part}, state restored"
     return (
         f"Execution: one-call capture ran in {mode_part} under {grad_part}; "
         "module training flags and RNG state restored."
@@ -898,7 +1176,10 @@ def _restore_validation_replay_state(
     with contextlib.ExitStack() as restores:
         if plain_attr_snapshot is not None:
             restores.callback(plain_attr_snapshot.restore_changed_attrs)
-        restores.callback(model.load_state_dict, state_dict)
+        # Wrapped-parameter modules (bitsandbytes) refuse their OWN state
+        # dict through load_state_dict on CPU; the resilient restore falls
+        # back to proven in-place restoration (lane F37).
+        restores.callback(restore_state_dict_resilient, model, state_dict)
 
 
 def _first_reproducibility_divergence(left: Trace, right: Trace) -> str | None:
@@ -1113,7 +1394,7 @@ def _downgrade_retrace_mismatch_to_unverified(trace: Trace) -> None:
 
 
 def _validate_forward_pass_torch(
-    model: nn.Module,
+    model: nn.Module | Callable[..., Any],
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
     random_seed: int | None = None,
@@ -1177,6 +1458,27 @@ def _validate_forward_pass_torch(
         True if all validation checks pass, False otherwise.
     """
     warn_parallel()
+    # F41 bound-method roots: validation captures through the same ruled root
+    # contract as tl.trace -- a bound method of an nn.Module wraps into the
+    # TL-authored synthetic root before the module-shaped preflights run;
+    # other callables refuse typed (previously a bare AttributeError leak).
+    from ._errors import InvalidArgumentError
+    from .backends.torch.bound_root import TLBoundMethodRoot, is_bound_method_of_module
+
+    if not isinstance(model, nn.Module):
+        if not is_bound_method_of_module(model):
+            raise InvalidArgumentError(
+                f"Unsupported model type for validation: received {type(model).__name__}, "
+                "not a torch.nn.Module or a bound method of one",
+                code="model_type_unsupported",
+                remedy=(
+                    "pass a torch.nn.Module, or a bound method of an nn.Module "
+                    "(owner resolved via method.__self__)"
+                ),
+                argument="model",
+                received_type=type(model).__name__,
+            )
+        model = TLBoundMethodRoot(model)
     _reject_opaque_wrappers(model)
     model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
@@ -1205,7 +1507,11 @@ def _validate_forward_pass_torch(
         )
         return False
 
-    model_device = next((p.device for p in model.parameters()), None)
+    # A META first parameter never pins the input device: offload-hooked
+    # models (accelerate device_map / cpu/disk offload, lane F37) hold meta
+    # params between forwards and their hooks place inputs themselves; the
+    # first NON-meta param still pins for mixed dispatch.
+    model_device = next((p.device for p in model.parameters() if p.device.type != "meta"), None)
     if model_device is not None:
         input_args_copy = _move_tensors_to_device(input_args_copy, model_device)
         input_kwargs_copy = _move_tensors_to_device(input_kwargs_copy, model_device)
@@ -1373,7 +1679,7 @@ def _validate_forward_pass_torch(
             # tripwire — it does NOT weaken any check.
             ground_truth_output_tensors.append(entry[0].detach().clone())
             addresses_used.append(entry[1])
-        model.load_state_dict(state_dict)
+        restore_state_dict_resilient(model, state_dict)
         if plain_attr_snapshot is not None:
             plain_attr_snapshot.restore_changed_attrs()
 
@@ -1520,7 +1826,7 @@ def _validate_forward_pass_torch(
                 teardown.callback(trace.cleanup)
             if "plain_attr_snapshot" in locals() and plain_attr_snapshot is not None:
                 teardown.callback(plain_attr_snapshot.restore_changed_attrs)
-            teardown.callback(model.load_state_dict, state_dict)
+            teardown.callback(restore_state_dict_resilient, model, state_dict)
             if num_threads is not None:
                 teardown.callback(torch.set_num_threads, prior_num_threads)
             teardown.callback(

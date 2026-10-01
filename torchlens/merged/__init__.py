@@ -24,7 +24,12 @@ doc-vs-enum gate.
 """
 
 from ._artifact import load_merged as load, save_merged, tree_hash
-from ._engine import JoinRecord, MergeDerivation, PerRankRef, derive_merge
+from ._engine import (
+    JoinRecord as JoinRecord,
+    MergeDerivation as MergeDerivation,
+    PerRankRef as PerRankRef,
+    derive_merge,
+)
 from ._enums import (
     MERGE_FINDING_KINDS,
     BoundaryConsistency,
@@ -40,16 +45,19 @@ from ._errors import (
     MergedTraceError,
     MergeInputError,
 )
-from ._presenter import CollectiveJoin, MergedTrace, MergeReport, merge_ranks, merge_report
+from ._presenter import (
+    CollectiveJoin as CollectiveJoin,
+    MergedTrace,
+    MergeReport,
+    merge_ranks,
+    merge_report,
+)
 
 __all__ = [
     "MERGE_FINDING_KINDS",
     "BoundaryConsistency",
-    "CollectiveJoin",
-    "JoinRecord",
     "MergeAlignment",
     "MergeConflictError",
-    "MergeDerivation",
     "MergeInputError",
     "MergeReport",
     "MergeValueStatus",
@@ -59,7 +67,6 @@ __all__ = [
     "MergedSurfaceUnsupportedError",
     "MergedTrace",
     "MergedTraceError",
-    "PerRankRef",
     "derive_merge",
     "load",
     "merge_ranks",

@@ -549,11 +549,20 @@ def test_repeated_resolve_identity_stability(log):
 
 
 def test_multi_site_value_type(log):
-    """Iteration order deterministic; per-site access by position."""
+    """Iteration follows GRAPH ORDER (F10); per-site access by position.
+
+    Re-pin: entries read in the trace's execution order, not lexicographic
+    site-key order (lovely bug 14 -- ``relu_1_10`` no longer sorts before
+    ``relu_1_2``).
+    """
 
     resolved = (tl.func("relu") | tl.func("conv2d")).__selection__().resolve(log)
     keys = [entry.site_key for entry in resolved]
-    assert keys == sorted(keys, key=lambda key: tuple(map(str, key)))
+    execution_order = {
+        (op.layer_label, op.pass_index): index for index, op in enumerate(log.layer_list)
+    }
+    steps = [execution_order[key] for key in keys]
+    assert steps == sorted(steps), "resolved ACT entries must read in execution order"
     assert resolved[0].site_key == keys[0]
     assert len(resolved) == len(keys)
     assert all(isinstance(entry, SiteEntry) for entry in resolved)

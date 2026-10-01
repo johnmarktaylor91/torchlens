@@ -121,6 +121,26 @@ _ALLOWED_PRIVATE_TOUCHES: dict[str, frozenset[str]] = {
             "torch.nn.modules.dropout._DropoutNd",
         }
     ),
+    # Same taxonomy-base class, F17 quickstart lineage (PROBEFIX microlane):
+    # the pinned-execution norm-buffer snapshot/restore and the train-mode
+    # running-stats disclosure classify modules against torch's own norm
+    # family bases (``_BatchNorm``, ``_InstanceNorm``) -- the identity basis
+    # torch uses for BatchNorm1d/2d/3d/Sync and InstanceNorm1d/2d/3d across
+    # the declared 2.1->2.12+ floor. From-import spellings, unguarded on
+    # purpose: if torch ever moves them the import fails LOUDLY -- there is
+    # no silent-degradation path for a capability flag to disclose.
+    "torchlens/quickstart/_primitive.py": frozenset(
+        {
+            "from torch.nn.modules.batchnorm import _BatchNorm",
+            "from torch.nn.modules.instancenorm import _InstanceNorm",
+        }
+    ),
+    "torchlens/user_funcs.py": frozenset(
+        {
+            "from torch.nn.modules.batchnorm import _BatchNorm",
+            "from torch.nn.modules.instancenorm import _InstanceNorm",
+        }
+    ),
     # TF graph-only static path (r-b4 R26 opus LM, now VISIBLE to the gate):
     # Const NodeDef decoding and ConcreteFunction freezing have no public TF
     # spelling. The decode failure is fail-neutral (constant omitted, region

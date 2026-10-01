@@ -70,7 +70,7 @@ def test_bundle_construction_shapes_and_member_indexing() -> None:
     assert from_dict["a"] is log_a
     assert list(from_dict.names) == ["a", "b"]
     assert repr(from_dict) == (
-        "Bundle(n_members=2, names=['a', 'b'], baseline='None', structurally_consistent=True)"
+        "Bundle(n_members=2, names=['a', 'b'], baseline=None, structurally_consistent=True)"
     )
 
     from_names = tl.bundle([log_a, log_b], names=["a", "b"])

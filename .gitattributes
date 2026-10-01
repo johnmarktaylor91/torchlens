@@ -13,3 +13,15 @@ docs/reference/error_refusal_contract.md merge=union
 docs/reference/warning_contract.md merge=union
 sprint/listA.tsv merge=union
 tests/composition_expectations/data/harvest_counts.tsv merge=union
+sprint/test_prefix_allocation.tsv merge=union
+tests/producer_parity/ledger/PROVENANCE merge=union
+tests/producer_parity/ledger/static_scan.json merge=union
+tests/oracles/data/surface_module_classification.tsv merge=union
+docs/reference/glossary.md merge=union
+CLAUDE.md merge=union
+AGENTS.md merge=union
+
+# Ratchet-ceiling dicts: union-merge both lanes' ceiling edits; the assembly
+# retruer collapses duplicate keys to the MIN (shrink-only doctrine).
+tests/test_file_size_ratchet.py merge=union
+tests/test_ruff_ratchet_governance.py merge=union

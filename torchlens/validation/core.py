@@ -2332,9 +2332,16 @@ def _matches_own_parameter(target_layer: Op, value: torch.Tensor) -> bool:
 
     for param_log in getattr(target_layer, "_param_logs", ()) or ():
         param_value = getattr(param_log, "value", None)
+        if not isinstance(param_value, torch.Tensor):
+            continue
+        if param_value.device.type == "meta":
+            # Offloaded model (accelerate hooks, lane F37): the live handle is
+            # meta between forwards and carries no value evidence, so it can
+            # never CONFIRM a match. Fail closed: the slot keeps whatever
+            # classification it already has.
+            continue
         if (
-            isinstance(param_value, torch.Tensor)
-            and param_value.shape == value.shape
+            param_value.shape == value.shape
             and param_value.dtype == value.dtype
             and torch.equal(param_value, value)
         ):

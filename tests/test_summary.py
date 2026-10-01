@@ -61,8 +61,17 @@ def tiny_summary_log() -> Generator[tl.Trace, None, None]:
 
 
 def test_small_model_default_output_golden(tiny_summary_log: tl.Trace) -> None:
-    """Default overview output should match the expected compact golden text."""
-    summary_text = tiny_summary_log.summary()
+    """Bare summary() renders the rebuilt auto ladder; the legacy preset
+    spelling keeps the historical compact golden text byte-stable."""
+    rebuilt = tiny_summary_log.summary()
+    # The rebuilt default (summary memo 3.4): hybrid view, disclosure line,
+    # hairline table, labeled footer; the preamble moved to provenance().
+    assert rebuilt.startswith("TinySummaryModel | input (1, 3, 8, 8) float32")
+    assert "view: hybrid, all 4 ops" in rebuilt
+    assert "conv (Conv2d)" in rebuilt
+    assert "Params   1,388 declared" in rebuilt
+    assert "TorchLens Discoverability Summary" in tiny_summary_log.provenance()
+    summary_text = tiny_summary_log.summary(level="overview")
     assert "TorchLens Discoverability Summary" in summary_text
     assert summary_text.endswith(
         "Model: TinySummaryModel\n"
@@ -102,12 +111,18 @@ def test_summary_discloses_unknown_flops_operations() -> None:
 
     log = tl.trace(_PadModel(), torch.randn(2, 3))
 
-    expected = (
+    legacy_expected = (
         "Unknown-FLOPs ops: 1 (pad x1; excluded from FLOP/MAC totals; "
         "remedy: torchlens.capture.flops.register_op_rule)"
     )
-    assert expected in log.summary()
-    assert expected in log.summary(level="compute")
+    # The rebuilt default footer names the unknown op, the lower-bound
+    # status, and the remedy (summary memo 3.5); the legacy preset keeps
+    # its historical wording byte-stable through the compatibility table.
+    rebuilt = log.summary()
+    assert "pad" in rebuilt
+    assert "lower bounds" in rebuilt
+    assert "remedy: torchlens.capture.flops.register_op_rule" in rebuilt
+    assert legacy_expected in log.summary(level="compute")
 
 
 @pytest.mark.parametrize("training", [True, False])
@@ -254,4 +269,6 @@ def test_torchlens_summary_wrapper() -> None:
     x = torch.randn(1, 3, 8, 8)
     summary_text = tl.visualization.summary(model, x)
     assert isinstance(summary_text, str)
-    assert "Model: TinySummaryModel" in summary_text
+    assert summary_text.startswith("TinySummaryModel | input (1, 3, 8, 8) float32")
+    legacy_text = tl.visualization.summary(model, x, level="overview")
+    assert "Model: TinySummaryModel" in legacy_text

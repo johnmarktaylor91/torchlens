@@ -317,7 +317,6 @@ def _active_stop_after_site() -> Any | None:
 
 
 __all__ = [
-    "AutoCaptureSession",
     "Session",
     "attribute_walk",
     "auto_capture",

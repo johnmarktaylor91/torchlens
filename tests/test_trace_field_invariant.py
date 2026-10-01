@@ -64,6 +64,10 @@ def test_trace_field_set_subset_of_user_facing() -> None:
         "_backward_projection_revision",
         "_backward_projection_fold_state",
         "_halt_returns_partial_trace",
+        # F20 brainpipe D-7: session-time (live, resident) peak pair
+        # (FieldPolicy.DROP; served by the forward_peak_memory_pair property;
+        # loaded artifacts never re-measure).
+        "_forward_peak_memory_pair",
         "_phase_timings",
         "_postprocessing_active",
         "_raw_event_shape_hash",
@@ -129,6 +133,15 @@ def test_trace_field_set_subset_of_user_facing() -> None:
         "_primitive_op_profile",
         "checkpoint_invocation_witness",
         "grad_fn_timing_provenance",
+        # T85 re-reconcile union: landed session-time FieldPolicy.DROP fields
+        # (RUNTIME storage bindings in _schema_bindings.py). The autograd
+        # saved-band pair and the device-memory knob are F27 torchnative
+        # session scratch; ``_tl_injection_state`` is the F01 log_injections
+        # session transient.
+        "_autograd_saved_bands",
+        "_autograd_seen_saved_storages",
+        "track_device_memory",
+        "_tl_injection_state",
     }
 
     actual = set(trace.__dict__.keys())

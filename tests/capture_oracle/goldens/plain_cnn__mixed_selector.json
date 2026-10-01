@@ -61,8 +61,8 @@
             "backend_semantics.aliased_output_inputs": "defaulted_empty",
             "backend_semantics.autograd_memory": "populated",
             "backend_semantics.backend_grad_handle": "populated",
-            "backend_semantics.bytes_delta_at_call": "defaulted_zero",
-            "backend_semantics.bytes_peak_at_call": "defaulted_zero",
+            "backend_semantics.bytes_delta_at_call": "unknown",
+            "backend_semantics.bytes_peak_at_call": "unknown",
             "backend_semantics.grad_fn_class_name": "populated",
             "backend_semantics.mutated_input_positions": "defaulted_empty",
             "backend_semantics.num_autograd_tensors": "populated",
@@ -223,8 +223,8 @@
             "backend_semantics.aliased_output_inputs": "defaulted_empty",
             "backend_semantics.autograd_memory": "populated",
             "backend_semantics.backend_grad_handle": "populated",
-            "backend_semantics.bytes_delta_at_call": "defaulted_zero",
-            "backend_semantics.bytes_peak_at_call": "defaulted_zero",
+            "backend_semantics.bytes_delta_at_call": "unknown",
+            "backend_semantics.bytes_peak_at_call": "unknown",
             "backend_semantics.grad_fn_class_name": "populated",
             "backend_semantics.mutated_input_positions": "defaulted_empty",
             "backend_semantics.num_autograd_tensors": "populated",
@@ -572,20 +572,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 477876,
+      "python_peak_memory_median_bytes": 479086,
       "sample_count": 3,
       "torch_version": "2.13.0+cu130",
-      "wall_time_median_ms": 46.50286491960287
+      "wall_time_median_ms": 89.25745892338455
     }
   },
   "sha256_chunks": [
-    "90ac9972",
-    "43ef130b",
-    "4cf1e1f8",
-    "3c24cdc2",
-    "4e953554",
-    "aa650f27",
-    "ef8b2a21",
-    "805ced88"
+    "457bd340",
+    "658010ef",
+    "de4225fe",
+    "9e728763",
+    "b65a5e25",
+    "cc9d0b6d",
+    "c85ce377",
+    "80bd0151"
   ]
 }

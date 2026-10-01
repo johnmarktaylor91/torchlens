@@ -368,7 +368,18 @@ def test_layer_integrated_gradients_completeness_and_shape() -> None:
     attribution_sum = result.values.sum()
 
     assert result.method == "layer_integrated_gradients"
-    assert result.extra == {"layer": "hidden", "n_steps": 512}
+    assert result.extra["layer"] == "hidden"
+    assert result.extra["n_steps"] == 512
+    # D21: layer path methods carry the completeness fields plus the
+    # bottleneck caveat and step-runner cost/audit disclosure.
+    torch.testing.assert_close(result.extra["attribution_sum"], attribution_sum)
+    torch.testing.assert_close(result.extra["target_delta"], target_delta, rtol=1e-6, atol=1e-9)
+    assert result.extra["residual_rel"] < 1e-2
+    assert result.extra["target_delta_abs"] == pytest.approx(abs(float(target_delta)))
+    assert "bottleneck" in result.extra["completeness_caveat"]
+    assert result.extra["step_batch_size"] == 1
+    assert result.extra["step_audit"]["mode"] == "off"
+    assert result.extra["path_evaluations_logical"] == 512
     assert result.values.shape == expected_shape
     assert torch.isfinite(result.values).all()
     torch.testing.assert_close(attribution_sum, target_delta, rtol=1e-3, atol=1e-4)
@@ -396,7 +407,12 @@ def test_layer_conductance_completeness_and_shape() -> None:
     attribution_sum = result.values.sum()
 
     assert result.method == "layer_conductance"
-    assert result.extra == {"layer": "hidden", "n_steps": 512}
+    assert result.extra["layer"] == "hidden"
+    assert result.extra["n_steps"] == 512
+    torch.testing.assert_close(result.extra["attribution_sum"], attribution_sum)
+    torch.testing.assert_close(result.extra["target_delta"], target_delta, rtol=1e-6, atol=1e-9)
+    assert result.extra["residual_rel"] < 1e-2
+    assert "bottleneck" in result.extra["completeness_caveat"]
     assert result.values.shape == expected_shape
     assert torch.isfinite(result.values).all()
     torch.testing.assert_close(attribution_sum, target_delta, rtol=1e-3, atol=1e-4)

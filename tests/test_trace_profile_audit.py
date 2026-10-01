@@ -166,10 +166,17 @@ def test_trace_profile_honesty_labels_missing_timing_as_unknown() -> None:
 
     assert row["time"] == "unknown"
     # Boundary pseudo-rows carry not_applicable, never a fabricated evidence
-    # label and never "unknown" (costreport D2).
-    assert set(honesty["time"]).issubset({"measured", "unknown", "not_applicable"})
-    assert set(honesty["activation_memory"]).issubset({"estimated", "unknown", "not_applicable"})
-    assert "estimated" in set(honesty["flops"])
+    # label and never "unknown" (costreport D2). F09 (D9): host time carries
+    # the instrumentation qualifier, never bare "measured"; FLOPs carry the
+    # compute-record evidence (formula_exact here); shape-derived memory is
+    # a formula fact, not an estimate.
+    assert set(honesty["time"]).issubset(
+        {"measured+instrumentation_inclusive", "unknown", "not_applicable"}
+    )
+    assert set(honesty["activation_memory"]).issubset(
+        {"formula_exact+shape_derived", "unknown", "not_applicable"}
+    )
+    assert "formula_exact" in set(honesty["flops"])
     assert "not_applicable" in set(honesty["flops"])
 
 

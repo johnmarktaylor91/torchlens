@@ -897,7 +897,11 @@ def _fix_buffer_layers(self: Trace) -> None:
             if layer_label not in self[layer.buffer_source].children:
                 self[layer.buffer_source].children.append(layer_label)
             self[layer.buffer_source].has_children = True
-            source_matches_buffer = _buffer_source_value_matches(self[layer.buffer_source], layer)
+            source_matches_buffer = _buffer_source_value_matches(
+                self[layer.buffer_source],
+                layer,
+                structure_only=bool(getattr(self, "structure_only", False)),
+            )
             if source_matches_buffer:
                 layer.func = identity
                 layer.func_name = "identity"
@@ -955,6 +959,14 @@ def _fix_buffer_layers(self: Trace) -> None:
             )
             for unique_buffer_label in candidate_labels:
                 unique_buffer = self[unique_buffer_label]
+                # W1-FAB guard: value-equality dedup is unobservable on meta
+                # payloads (no aten::equal meta kernel); unknown never merges.
+                if (
+                    buffer.out.is_meta
+                    or unique_buffer.out is not None
+                    and unique_buffer.out.is_meta
+                ):
+                    continue
                 if (unique_buffer.out is not None) and torch.equal(buffer.out, unique_buffer.out):
                     _merge_buffer_entries(
                         self,
@@ -1107,9 +1119,29 @@ def _repropagate_descendants_after_buffer_wiring(self: Trace, rewired: list[str]
         layer.has_output_descendant = bool(output_descendants)
 
 
-def _buffer_source_value_matches(source: Op, buffer_layer: Op) -> bool:
-    """Return whether a buffer-version source op output equals the full buffer value."""
+def _buffer_source_value_matches(
+    source: Op, buffer_layer: Op, *, structure_only: bool = False
+) -> bool:
+    """Return whether a buffer-version source op output equals the full buffer value.
 
+    Structure-only captures retain no payloads (W3), so the value comparison
+    cannot run; the verdict falls back to the DECLARED geometry (shape +
+    dtype agreement between the producer op and the buffer's write record) —
+    a hypothesis claim exactly like the shapes it rides on, corroborated or
+    refuted by discharge against a real capture (weightsfree memo D7: the
+    parity gate is the acceptance authority, the graph must not diverge from
+    the real capture's purely because values were unavailable).
+    """
+
+    if structure_only and (source.out is None or buffer_layer.out is None):
+        source_shape = getattr(source, "shape", None)
+        buffer_shape = getattr(buffer_layer, "shape", None)
+        return (
+            source_shape is not None
+            and buffer_shape is not None
+            and tuple(source_shape) == tuple(buffer_shape)
+            and str(getattr(source, "dtype", None)) == str(getattr(buffer_layer, "dtype", None))
+        )
     if source.out is None or buffer_layer.out is None:
         return False
     if not isinstance(source.out, torch.Tensor) or not isinstance(buffer_layer.out, torch.Tensor):

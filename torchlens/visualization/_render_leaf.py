@@ -8,7 +8,13 @@ from contextvars import ContextVar
 
 from .._errors import InvalidArgumentError
 from ..utils._multipass_access import get_multipass_attr, is_multipass_layer
+from ._backward_inventory import (
+    BackwardStyleInventory,
+    _backward_pass_row,
+    compute_backward_style_inventory,
+)
 from ._render_common import *
+from ._typography import DEFAULT_TYPOGRAPHY
 
 # Bound the forward walk that maps a branch-entry edge to its condition bool, so a
 # malformed/huge conditional subgraph can never turn edge labelling into a hot loop.
@@ -112,6 +118,7 @@ def _add_backward_node_to_graphviz(
     graphviz_graph: graphviz.Digraph,
     node_spec_fn: BackwardNodeSpecFn | None,
     pass_filter: BackwardPassFilter = None,
+    inventory: "BackwardStyleInventory | None" = None,
 ) -> None:
     """Add one backward grad_fn_handle node to a Graphviz graph.
 
@@ -125,12 +132,16 @@ def _add_backward_node_to_graphviz(
         Optional callback receiving ``(grad_fn_handle, default_spec)``.
     pass_filter:
         Normalized backward-pass filter.
+    inventory:
+        Per-render backward style inventory driving uniform-row suppression
+        (``None`` keeps every row).
     """
 
     node_args = _backward_node_graphviz_args(
         grad_fn_handle,
         node_spec_fn,
         pass_filter=pass_filter,
+        inventory=inventory,
     )
     graphviz_graph.node(**node_args)
 
@@ -140,6 +151,7 @@ def _backward_node_graphviz_args(
     node_spec_fn: BackwardNodeSpecFn | None,
     call: Any | None = None,
     pass_filter: BackwardPassFilter = None,
+    inventory: "BackwardStyleInventory | None" = None,
 ) -> dict[str, Any]:
     """Build Graphviz node arguments for one backward grad_fn_handle.
 
@@ -153,6 +165,9 @@ def _backward_node_graphviz_args(
         Optional GradFnCall when rendering in unrolled mode.
     pass_filter:
         Normalized backward-pass filter.
+    inventory:
+        Per-render backward style inventory driving uniform-row suppression
+        (``None`` keeps every row).
 
     Returns
     -------
@@ -165,6 +180,7 @@ def _backward_node_graphviz_args(
             grad_fn_handle,
             call=call,
             pass_filter=pass_filter,
+            inventory=inventory,
         ),
         shape="oval",
         fillcolor=_backward_node_fillcolor(grad_fn_handle),
@@ -208,7 +224,9 @@ def _backward_node_fillcolor(grad_fn_handle: "GradFn") -> str:
     return BACKWARD_NODE_COLOR
 
 
-def _backward_edge_attrs(tail: "GradFn", head: "GradFn") -> dict[str, str]:
+def _backward_edge_attrs(
+    tail: "GradFn", head: "GradFn", trace: "Trace | None" = None
+) -> dict[str, str]:
     """Return Graphviz attributes for a backward GradFn edge.
 
     Parameters
@@ -217,6 +235,11 @@ def _backward_edge_attrs(tail: "GradFn", head: "GradFn") -> dict[str, str]:
         Edge tail GradFn.
     head:
         Edge head GradFn.
+    trace:
+        Optional trace for accumulation-target resolution (accum-identity
+        groundwork, vizmech item 17/D30: the WGAN-GP render carried twelve
+        IDENTICAL bare ``accum`` labels; each edge now carries its target's
+        identity in SVG metadata until the annotation plan can place it).
 
     Returns
     -------
@@ -228,7 +251,12 @@ def _backward_edge_attrs(tail: "GradFn", head: "GradFn") -> dict[str, str]:
     if tail.type == "accumulategrad" or head.type == "accumulategrad":
         edge_attrs["style"] = BACKWARD_ACCUMULATION_EDGE_STYLE
         edge_attrs["label"] = "accum"
-        edge_attrs["labelfontsize"] = "8"
+        edge_attrs["labelfontsize"] = DEFAULT_TYPOGRAPHY.annotation_pt
+        accum_node = tail if tail.type == "accumulategrad" else head
+        target: str | None = None
+        if trace is not None:
+            target = _param_module_for_accumulate_grad(trace, accum_node)
+        edge_attrs["tooltip"] = f"accum -> {target}" if target else f"accum -> {accum_node.label}"
     return edge_attrs
 
 
@@ -258,6 +286,7 @@ def _add_combined_backward_nodes(
         Normalized backward-pass filter.
     """
 
+    inventory = compute_backward_style_inventory(trace, pass_filter)
     for grad_fn_handle in trace.grad_fns:
         if not _grad_fn_matches_backward_filter(grad_fn_handle, pass_filter):
             continue
@@ -265,6 +294,7 @@ def _add_combined_backward_nodes(
             grad_fn_handle,
             node_spec_fn,
             pass_filter=pass_filter,
+            inventory=inventory,
         )
         module_key = _module_key_for_grad_fn(trace, grad_fn_handle, intervening_cluster)
         if module_key is None:
@@ -307,7 +337,9 @@ def _add_combined_backward_edges(
             graphviz_graph.edge(
                 tail_name,
                 head_name,
-                **_backward_edge_attrs(grad_fn_handle, trace.grad_fn_logs[next_grad_fn_id]),
+                **_backward_edge_attrs(
+                    grad_fn_handle, trace.grad_fn_logs[next_grad_fn_id], trace=trace
+                ),
             )
 
 
@@ -638,6 +670,7 @@ def _compute_backward_node_lines(
     grad_fn_handle: "GradFn",
     call: Any | None = None,
     pass_filter: BackwardPassFilter = None,
+    inventory: "BackwardStyleInventory | None" = None,
 ) -> list[str]:
     """Build default label rows for a backward grad_fn_handle node.
 
@@ -649,6 +682,9 @@ def _compute_backward_node_lines(
         Optional GradFnCall when rendering an unrolled backward graph.
     pass_filter:
         Normalized backward-pass filter.
+    inventory:
+        Per-render backward style inventory driving uniform-row suppression
+        (``None`` keeps every row).
 
     Returns
     -------
@@ -657,7 +693,7 @@ def _compute_backward_node_lines(
     """
 
     title = grad_fn_handle.label
-    if call is not None:
+    if call is not None and len(getattr(grad_fn_handle, "calls", {})) > 1:
         call_index = getattr(call, "call_index", getattr(call, "ordinal", 0))
         title = getattr(call, "call_label", f"{grad_fn_handle.label}:{call_index}")
     if not grad_fn_handle.has_op:
@@ -667,30 +703,17 @@ def _compute_backward_node_lines(
 
     lines = [title]
     order = getattr(grad_fn_handle, "order", None)
-    if order is not None:
+    if order is not None and not (inventory is not None and inventory.suppress_order_row):
+        # "order 1" on EVERY node of an ordinary backward is a uniform
+        # constant row (vizmech item 17): suppressed when no node exceeds 1.
         lines.append(f"order {order}")
-    if call is None:
-        pass_indices = sorted(
-            {
-                int(pass_index)
-                for pass_index in (
-                    getattr(grad_fn_call, "backward_pass_index", None)
-                    for grad_fn_call in grad_fn_handle.calls.values()
-                )
-                if pass_index is not None
-            }
-        )
-        if pass_filter is not None:
-            pass_indices = [pass_index for pass_index in pass_indices if pass_index in pass_filter]
-        if pass_indices:
-            lines.append(f"bwd {int_list_to_compact_str(pass_indices)}")
-    else:
-        pass_index = getattr(call, "backward_pass_index", None)
-        if pass_index is not None:
-            lines.append(f"bwd {pass_index}")
+    lines.extend(_backward_pass_row(grad_fn_handle, call, pass_filter, inventory))
     if grad_fn_handle.op is not None:
         lines.append(f"@{grad_fn_handle.op.layer_label}")
-    lines.append(f"grad {_format_backward_output_shape(grad_fn_handle)}")
+    if not (inventory is not None and inventory.suppress_grad_row):
+        # Suppressed only when EVERY visible node would print "grad N/A"
+        # (the memo's x36 uniform row); a mixed render keeps its N/A rows.
+        lines.append(f"grad {_format_backward_output_shape(grad_fn_handle)}")
     return lines
 
 
@@ -2107,7 +2130,9 @@ def _format_branch_edge_label_html(label_text: str) -> str:
     str
         Graphviz HTML edge-label string.
     """
-    return f'<<FONT POINT-SIZE="18"><b><u>{label_text}</u></b></FONT>>'
+    return (
+        f'<<FONT POINT-SIZE="{DEFAULT_TYPOGRAPHY.emphasis_pt}"><b><u>{label_text}</u></b></FONT>>'
+    )
 
 
 def _container_component_role(component: OutputPathComponent) -> str:
@@ -2193,7 +2218,7 @@ def _add_grad_edge(
             "fontcolor": GRADIENT_ARROW_COLOR,
             "style": edge_style,
             "arrowsize": ".7",
-            "labelfontsize": "8",
+            "labelfontsize": DEFAULT_TYPOGRAPHY.annotation_pt,
         }
         if (
             grad_passes
@@ -2300,6 +2325,7 @@ def _grad_node_name(layer: Any) -> str:
 
 
 __all__ = [
+    "BackwardStyleInventory",
     "_add_backward_node_to_graphviz",
     "_add_collapsed_container_node",
     "_add_combined_backward_edges",
@@ -2312,6 +2338,7 @@ __all__ = [
     "_backward_edge_attrs",
     "_backward_node_fillcolor",
     "_backward_node_graphviz_args",
+    "compute_backward_style_inventory",
     "_base_node_for_metadata",
     "_branch_kind_sort_key",
     "_call_groups_for_layer",

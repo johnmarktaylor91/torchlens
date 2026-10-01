@@ -70,7 +70,11 @@ from ._errors import (
     KeywordConflictError,
     TorchLensPostfuncError,
 )
-from ._input_coerce import _coerce_input_args
+from ._input_coerce import (
+    _coerce_input_args,
+    _reject_extra_positional_input,
+    _reject_unrouted_forward_kwargs,
+)
 from ._io import TorchLensIOError
 from ._io.streaming import BundleStreamWriter
 from ._literals import (
@@ -108,10 +112,15 @@ from .backends._options import (
     reject_extra_trace_kwargs,
 )
 from .backends.torch._tl import get_tensor_label
+from .backends.torch.bound_root import (
+    TLBoundMethodRoot,
+    _reject_non_module_ladder_root,
+    is_bound_method_of_module,
+)
 from .bridge import hf as _hf_bridge
+from .capture._episode_failed import attach_failed_episode_ledger
 from .capture._episode_ledger import (
     attach_episode_header,
-    attach_failed_episode_ledger,
     resolve_episode_declaration,
     write_episode_ledger,
 )
@@ -120,12 +129,14 @@ from .capture._structure_only_entry import (
     _StructureOnlyEntryFacts,
 )
 from .capture.stop import StopDirective
+from .data_classes._preprocessing_provenance import stamp_user_transform_provenance
 from .data_classes.trace import (
     Trace,
 )
 from .fastlog.exceptions import PredicateError
 from .fastlog.options import HaltPredicateFn, PredicateFn, RecordingOptions
 from .fastlog.types import CaptureSpec
+from .intervention import injection as _injection, model_door as _model_door
 from .intervention.errors import ChunkedForwardConfigError
 from .intervention.hooks import normalize_hook_plan
 from .intervention.predicates import InterventionPredicate
@@ -1102,6 +1113,7 @@ CAPTURE_CACHE_KEY_CURATED: frozenset[str] = frozenset(
         "recurrence_detection",
         "intervention_ready",
         "capture_container_structure",
+        "track_device_memory",
         "hooks",
         "backward_ready",
         "inference_only",
@@ -1637,7 +1649,9 @@ def _run_model_and_save_specified_outs(
     save_budget: SaveBudgetOption = "auto",
     raise_on_nan: bool = False,
     track_nonfinite: bool = False,
+    track_device_memory: bool = False,
     structure_only: bool = False,
+    log_injections: bool = False,
     transform: Callable[[Any], Any] | None = None,
     raw_input: Any | None = None,
     save_raw_input: str | bool = "small",
@@ -1659,6 +1673,7 @@ def _run_model_and_save_specified_outs(
     lookback_payload_policy: str = "metadata_only",
     retain_output_parents_for_layers_to_save: bool = False,
     episode_resolved: Any | None = None,
+    echo_options: Any | None = None,
     _selective_layers_to_save_request: object | None = None,
     _resolved_layer_nums_to_save: tuple[int, ...] | None = None,
     _resolved_grad_layer_nums_to_save: tuple[int, ...] | str | None = None,
@@ -1776,6 +1791,7 @@ def _run_model_and_save_specified_outs(
         track_nonfinite: If True, record a per-op finiteness verdict for every
             committed op output, served by ``Trace.nonfinite_ops`` (session-time
             knob; never changes control flow).
+        log_injections: Record intervention-hook torch calls as injected-op records.
         transform: Optional callable used to produce model-ready inputs from raw user input.
         raw_input: Original user input before ``transform`` was applied.
         save_raw_input: Portable save policy for the original raw input.
@@ -1815,16 +1831,31 @@ def _run_model_and_save_specified_outs(
     """
     # Auto-detect model device from its first parameter and move inputs to match.
     # This prevents silent device-mismatch errors when the model is on CUDA but
-    # the user ops CPU tensors (a common mistake).
+    # the user ops CPU tensors (a common mistake). A META first parameter is
+    # never a destination: offload-hooked models (accelerate device_map /
+    # cpu/disk offload, lane F37) hold meta params between forwards and their
+    # hooks place inputs on the real execution device themselves — moving
+    # inputs to meta would poison the forward ("Cannot copy out of meta
+    # tensor") that runs fine unlogged.
     model_device = next((p.device for p in model.parameters()), None)
-    if model_device is not None:
+    if model_device is not None and model_device.type != "meta":
         input_args = _move_tensors_to_device(input_args, model_device)
         if input_kwargs is not None:
             input_kwargs = _move_tensors_to_device(input_kwargs, model_device)
 
-    model_class_name = str(type(model).__name__)
+    if isinstance(model, TLBoundMethodRoot):
+        # F41 bound-method root: the synthetic root's identity reads the
+        # OWNER (type(owner).__name__ / its qualified class name), never the
+        # TL-authored wrapper class or the string "method"; the entry-point
+        # fact below discloses the bound_method invocation kind.
+        model_class_name = model.tl_owner_class_name
+        model_class_qualname = model.tl_owner_class_qualname
+        root_entry_point = model.tl_root_entry_point
+    else:
+        model_class_name = str(type(model).__name__)
+        model_class_qualname = _qualname_for_model(model)
+        root_entry_point = f"module_call:{model_class_qualname}.forward"
     model_object_id = id(model)
-    model_class_qualname = _qualname_for_model(model)
     weight_fingerprint = _fingerprint_model_weights(model)
     input_object_id = _input_id_for_relationship_evidence(input_args)
     input_signature_hash = _hash_input_signatures(input_args, input_kwargs)
@@ -2000,6 +2031,10 @@ def _run_model_and_save_specified_outs(
         trace.model_class_qualname = model_class_qualname
         trace.param_hash_quick = weight_fingerprint
         trace.param_hash_full = weight_fingerprint
+        # C07X (iv)/D10: unconditional write; F41's fail-closed gate reads it.
+        # module_call for plain module roots, bound_method for the F41
+        # TL-authored wrapper root (derived beside the identity fields above).
+        trace.root_entry_point = root_entry_point
         trace.input_object_id = input_object_id
         trace.input_signature_hash = input_signature_hash
         trace._source_code_blob = capture_model_source_code(model)
@@ -2011,6 +2046,8 @@ def _run_model_and_save_specified_outs(
         trace._wrapper_runtime_ws.in_exhaustive_pass = True
         trace.raise_on_nan = raise_on_nan
         trace.track_nonfinite = track_nonfinite
+        trace.track_device_memory = track_device_memory
+        _injection.arm_injection_logging(trace, armed=log_injections)
         # L7a mode-marker prep (S2 SEAM, labeled): the flag DECLARES the mode
         # (memo sec 1.5) and stamps the mirror field here at entry. At S2
         # ratification the settlement-side stamp moves to the
@@ -2094,6 +2131,10 @@ def _run_model_and_save_specified_outs(
         _state.reset_capture_runtime_context()
         _release_capture_slot()
         raise
+    from .snoop._entry import echo_forward_failure, finish_echo, open_echo_session
+
+    # Echo narrator (snoop D1): one read-only observer per capture (runtime-only state).
+    echo_session = open_echo_session(trace, echo_options)
     try:
         # C03 live site-key minting (surgery Build 0c): when a configured
         # predicate addresses by structural site (tl.site), arm one streaming
@@ -2123,6 +2164,8 @@ def _run_model_and_save_specified_outs(
                 reservation_resume=_reservation_token,
             )
     except BaseException as exc:
+        # Crash tail (snoop D5 tail 2): synchronous flush; note rides PEP 678.
+        echo_forward_failure(echo_session, exc)
         # F5: postprocess pops ``_out_writer`` at its transient-state seam, so
         # a post-seam failure (teardown, streaming tail) reaches this handler
         # on a trace WITHOUT the attribute; the unguarded read used to mask
@@ -2142,6 +2185,16 @@ def _run_model_and_save_specified_outs(
         _release_capture_slot()
         if hasattr(trace, "_capture_container_structure"):
             delattr(trace, "_capture_container_structure")
+    if isinstance(model, TLBoundMethodRoot):
+        # F41 TL-authored-root disclosure (tlspec v9 entry-dark slot, C07X
+        # item (iv)): the marker lands on the root op record -- the
+        # output-boundary op records, the terminal records of the wrapper's
+        # DAG -- coherent only beside the bound_method entry-point fact
+        # (fail-closed load validation in _io/_forgery_identity_facts.py).
+        for output_label in trace.output_layers:
+            for output_op in trace[output_label].ops:
+                output_op.tl_authored_root = True
+    finish_echo(echo_session, trace)
     warning_intervene_decision = (
         candidate_intervene_decision
         if isinstance(candidate_intervene_decision, InterventionDecision)
@@ -2458,9 +2511,24 @@ def _reject_unsupported_torch_trace_option_values(capture_options: CaptureOption
             )
 
 
+def render(*args: Any, **kwargs: Any) -> Any:
+    """One-call model picture over the quickstart input ladder (F17 B15).
+
+    ONE metadata-only eval/no-grad capture (training flags, RNG, and norm
+    buffers restored), rendered with the facade default ``collapse="auto"``
+    (``Trace.draw`` keeps ``"none"``). Detached
+    :class:`torchlens.quickstart.RenderResult`; never auto-opens a viewer.
+    See :func:`torchlens.quickstart.render` for the parameters.
+    """
+
+    from .quickstart._render import render as _render_impl
+
+    return _render_impl(*args, **kwargs)
+
+
 def trace(
-    model: nn.Module,
-    input_args: str | torch.Tensor | list[Any] | tuple[Any, ...],
+    model: nn.Module | Callable[..., Any],
+    input_args: str | torch.Tensor | list[Any] | tuple[Any, ...] | None = None,
     input_kwargs: dict[Any, Any] | None = None,
     grad_transform: GradientPostfunc | None | MissingType = MISSING,
     save_mode: SaveMode | MissingType = MISSING,
@@ -2482,12 +2550,15 @@ def trace(
     ) = MISSING,
     *,
     grouping: str | MissingType = MISSING,
+    echo: Any | None = None,
     jax_static_argnums: int | Sequence[int] | MissingType = MISSING,
     grad_options: Any | None | MissingType = MISSING,
     episode: EpisodeSpec | None = None,
     chunk_size: int | None | MissingType = MISSING,
     chunk_paths: Iterable[Any] | None | MissingType = MISSING,
     backend: BackendName | None = None,
+    input_size: Any | None = None,
+    **forward_kwargs: Any,
 ) -> Trace:
     """Run a forward pass through *model*, log every operation, and return a Trace.
 
@@ -2521,11 +2592,24 @@ def trace(
     Parameters
     ----------
     model:
-        PyTorch model.
+        PyTorch model, or a bound method of one (the ruled root contract,
+        F41): ``tl.trace(model.generate, ids, ...)`` resolves the owner via
+        ``method.__self__``, wraps it in a TL-authored synthetic root, and
+        calls the method exactly once.
     input_args:
         Positional args for ``model.forward()``; a single tensor or list.
+        The input ladder (memo D2): a real input is the gold rung; omit
+        it and pass ``input_size=``, or omit both to infer -- synthesized
+        values, disclosed, or a teach; mixing refuses ``input_rung_conflict``.
     input_kwargs:
         Keyword args for ``model.forward()``.
+    input_size:
+        Declared input shape(s) (torch backend only): one flat positive-int
+        tuple, a sequence of shape tuples, or a mapping of forward keyword
+        names to shapes (batch included exactly as written). Dtype/value
+        recipes are fail-closed static facts (override:
+        ``torchlens.quickstart.InputSpec``); local seed-0 synthesis,
+        disclosed in the trace's persistent provenance record.
     save:
         Which layers to save outs for; the canonical selection kwarg (see
         **Layer selection** above). Accepts ``'all'``, ``'none'``/``None``/``[]``,
@@ -2593,6 +2677,13 @@ def trace(
         policy that actually ran on ``trace.grouping_policy``. Distinct
         from the display-only ``fold_repeats`` viz knob, which folds
         repeated module runs at RENDER time and never changes grouping.
+    echo:
+        Live narration (DOCUMENTED-UNSTABLE, lane F28): ``True`` narrates
+        every completed tensor-output event plus module structure lines;
+        ``"modules"`` narrates structure only; a live selector scopes the
+        stream; ``tl.options.EchoOptions`` groups the full surface (stats
+        rungs, sink, crash tail). Narration is a display of capture
+        events -- independent of ``save=`` retention. Torch-only.
     jax_static_argnums:
         JAX-only positional argument indexes passed to
         ``jax.make_jaxpr(..., static_argnums=...)`` when
@@ -2606,6 +2697,9 @@ def trace(
         Torch-only episode capture declaration (``EpisodeSpec``).
     backend:
         Explicit backend name. ``None`` preserves legacy auto-resolution.
+    **forward_kwargs:
+        Never accepted -- unknown keywords refuse typed with
+        ``trace_forward_kwargs_unrouted`` naming the ``input_kwargs=`` routing.
 
     Postfunc behavior:
         ``save.activation_transform`` and ``grad_transform`` both take a tensor, should return a
@@ -2625,6 +2719,19 @@ def trace(
     Trace
         A ``Trace`` containing layer outs (if requested) and full metadata.
     """
+    _reject_unrouted_forward_kwargs(forward_kwargs)
+    del forward_kwargs  # must never ride the ladder's locals() snapshot below
+    model, intervene = _model_door.resolve_trace_operands(model, intervene)
+    if input_size is not None or input_args is None:
+        model = _reject_non_module_ladder_root(model)
+        # Quickstart input ladder (F17, memo D2/D4): declared/inferred rungs
+        # resolve BEFORE any capture machinery, then re-enter trace() as gold.
+        ladder_kwargs = locals().copy()
+        for consumed in ("model", "input_args", "input_kwargs", "input_size"):
+            ladder_kwargs.pop(consumed)
+        from .quickstart._ladder import _trace_via_ladder
+
+        return _trace_via_ladder(model, input_args, input_kwargs, input_size, ladder_kwargs)
     if not isinstance(model, nn.Module) and is_dynamo_compiled_callable(model):
         raise InvalidArgumentError(
             "TorchLens cannot capture a torch.compile-produced plain callable because it is "
@@ -2633,17 +2740,10 @@ def trace(
             remedy="pass the original eager nn.Module instead of the compiled callable",
             argument="model",
         )
-    if isinstance(grad_transform, torch.Tensor):
-        raise ArgumentTypeError(
-            "grad_transform (the fourth positional slot) received a "
-            "torch.Tensor -- this is almost always an extra positional model "
-            "input. Bundle model inputs as one tuple, e.g. "
-            "tl.trace(model, (input_a, input_b, input_c)).",
-            code="extra_positional_input_invalid",
-            remedy="bundle positional inputs into one tuple",
-        )
+    _reject_extra_positional_input(grad_transform)
     public_trace_kwargs = locals().copy()
     public_trace_kwargs.pop("backend")
+    public_trace_kwargs.pop("input_size")  # ladder-consumed; always None here
     # grouping= (UNSTABLE, keyword-only; L1 wave 0): closed-vocabulary knob.
     # Only "structural" (today's grouping, the default) is entry-legal;
     # "strict_shapes" waits on its own reviewed design and "fold_sites" on
@@ -2653,6 +2753,12 @@ def trace(
         from .postprocess._grouping_stamp import validate_grouping_knob
 
         validate_grouping_knob(grouping)
+    if echo is not None and echo is not False:
+        # Entry-time echo refusals (bad spellings, finalized-label selectors)
+        # fire BEFORE any capture work on every backend path.
+        from .snoop import normalize_echo
+
+        normalize_echo(echo)
     if chunk_paths is not MISSING and chunk_paths is not None and chunk_size in (MISSING, None):
         raise ChunkedForwardConfigError("chunk_paths requires chunk_size.")
     if backend is None and (jax_static_argnums is not MISSING or grad_options is not MISSING):
@@ -2693,6 +2799,7 @@ def trace(
             "recipes": recipes,
             "episode": episode,
             "grouping": grouping,
+            "echo": echo,
         }
         for detector in autoroute.input.iter_by_priority():
             result = detector(model, input_args, **autoroute_kwargs)
@@ -2708,6 +2815,10 @@ def trace(
     resolved_spec = explicit_backend_spec or resolve_backend_spec(
         backend, model, input_args, input_kwargs
     )
+    from .snoop._entry import refuse_echo_non_torch
+
+    # Never a silent no-op: echo= is torch-only in wave 1 (typed refusal).
+    refuse_echo_non_torch(echo, resolved_spec)
     _filter_trace_kwargs_for_backend(public_trace_kwargs, resolved_spec)
     _enforce_capability_option_gates(public_trace_kwargs, resolved_spec)
     _refuse_non_torch_episode(public_trace_kwargs, resolved_spec)
@@ -2728,7 +2839,7 @@ def _refuse_non_torch_episode(public_trace_kwargs: dict[str, Any], resolved_spec
 
 
 def _trace_torch_model(
-    model: nn.Module,
+    model: nn.Module | Callable[..., Any],
     input_args: str | torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
     layers_to_save: str | list[Any] | None | MissingType = MISSING,
@@ -2801,6 +2912,7 @@ def _trace_torch_model(
     capture_output_structure: bool | MissingType = MISSING,
     chunk_size: int | None | MissingType = MISSING,
     chunk_paths: Iterable[Any] | None | MissingType = MISSING,
+    echo: Any | None = None,
     retain_output_parents_for_layers_to_save: bool = False,
     _selective_layers_to_save_request: object | None = None,
 ) -> Trace:
@@ -2828,15 +2940,28 @@ def _trace_torch_model(
     # `model.named_modules()` (FSDP/ScriptModule checks), which only makes sense on a real
     # nn.Module. A non-Module input previously leaked an AttributeError from that call
     # instead of the documented "Unsupported model type" ValueError.
+    # The ruled root contract (foldA MEMO s5 item 9, a direct JMT ruling) is
+    # nn.Module OR a bound method of one (owner resolved via ``__self__``):
+    # a bound method wraps into the TL-authored synthetic root (owner
+    # registered as a submodule; method called exactly once); anything else
+    # refuses teaching that spelling at the point of failure.
     if not isinstance(model, nn.Module):
-        raise InvalidArgumentError(
-            f"Unsupported model type for capture: received {type(model).__name__}, "
-            "not torch.nn.Module",
-            code="model_type_unsupported",
-            remedy="pass a torch.nn.Module or select the backend that owns the supplied model",
-            argument="model",
-            received_type=type(model).__name__,
-        )
+        if is_bound_method_of_module(model):
+            model = TLBoundMethodRoot(model)
+        else:
+            raise InvalidArgumentError(
+                f"Unsupported model type for capture: received {type(model).__name__}, "
+                "not a torch.nn.Module or a bound method of one",
+                code="model_type_unsupported",
+                remedy=(
+                    "pass a torch.nn.Module, or a bound method of an nn.Module "
+                    "(owner resolved via method.__self__, e.g. "
+                    "tl.trace(model.generate, input_ids)), or select the backend "
+                    "that owns the supplied model"
+                ),
+                argument="model",
+                received_type=type(model).__name__,
+            )
     _reject_opaque_wrappers(model)
     # grind-r5 b7 R55 (fable MED, survived from round 1 -- it misdirected two
     # hostile review lanes): the natural multi-input spelling
@@ -2918,6 +3043,17 @@ def _trace_torch_model(
             remedy="bundle positional inputs into one tuple; use save= for selection",
         )
     _reject_unsupported_torch_trace_option_values(capture_options)
+    # Echo teaching refusals fire whether or not echo= is armed: EchoOptions
+    # routed into save=/hooks= refuses with the measured receipts, and
+    # echo x cache/chunked/structure_only composition refuses typed (snoop D1).
+    from .snoop._entry import resolve_echo_capture_options
+
+    echo_options = resolve_echo_capture_options(
+        echo,
+        save=save,
+        capture_options=capture_options,
+        chunked=chunk_size is not MISSING and chunk_size is not None,
+    )
     profile_enabled = False if isinstance(profile, MissingType) else bool(profile)
     raw_input = None
     input_transform = capture_options.transform
@@ -2936,7 +3072,16 @@ def _trace_torch_model(
         if _should_store_auto_coerced_raw_input(original_input_args, input_args):
             raw_input = original_input_args
 
-    check_model_and_input_variants(model, input_args, input_kwargs)
+    # W2 (weightsfree memo D2): admit_meta derives ONCE from the resolved
+    # structure-only option state at this CAPTURE entry; the returned
+    # admission record (None on ordinary/real captures) is armed around the
+    # capture driver below and consumed by the forward scope + settlement.
+    meta_admission = check_model_and_input_variants(
+        model,
+        input_args,
+        input_kwargs,
+        admit_meta=bool(capture_options.structure_only),
+    )
     grouped_save_options, save_predicate = _split_save_options_and_predicate(save)
     if intervene is not None and not callable(intervene):
         raise ArgumentTypeError(
@@ -3009,17 +3154,39 @@ def _trace_torch_model(
                 "typed per the ratified marker-combination table.",
                 code=STRUCTURE_ONLY_EPISODE_UNSUPPORTED,
             )
-        if capture_options.layers_to_save in (None, "none", "None", "NONE") or (
-            isinstance(capture_options.layers_to_save, list) and not capture_options.layers_to_save
+        if getattr(episode, "step_output_kind", "tokens") != "none" and (
+            capture_options.layers_to_save in (None, "none", "None", "NONE")
+            or (
+                isinstance(capture_options.layers_to_save, list)
+                and not capture_options.layers_to_save
+            )
         ):
+            # Kind-conditional save rule (foldA D8, lane F40b): tokens/digest
+            # evidence derives from the retained root output, so a value-free
+            # save policy refuses; a declared status-only episode
+            # (step_output_kind='none') derives no evidence and is admitted.
             raise EpisodeDeclarationError(
-                "episode= is value-mode and derives its per-step token column "
-                "from the retained root output; save='none' retains no output "
-                "payload. Remedy: keep the default save policy or include the "
-                "output in the save= selection.",
+                "episode= with step_output_kind='tokens'/'digest' derives its "
+                "per-step evidence column from the retained root output; "
+                "save='none' retains no output payload. Remedy: keep the "
+                "default save policy, include the output in the save= "
+                "selection, or declare step_output_kind='none' for a "
+                "status-only ledger.",
                 code="episode_declaration_invalid",
             )
         episode_resolved = resolve_episode_declaration(episode, model)
+        if intervene is not None:
+            # ATTESTED COUPLING (lane F42, the foldA D5 flip): the session
+            # armed here feeds the settlement writers (fire counts,
+            # intervention digest, perturbed fidelity) -- the D5 evidence bar.
+            from dataclasses import replace as _dataclass_replace
+
+            from .capture._episode_coupling import CouplingSession, rule_identity_of
+
+            episode_resolved = _dataclass_replace(
+                episode_resolved,
+                coupling_session=CouplingSession(rule_identity=rule_identity_of(intervene)),
+            )
     save_options = merge_save_options(
         save=grouped_save_options,
         activation_transform=activation_transform,
@@ -3082,14 +3249,8 @@ def _trace_torch_model(
     hooks = capture_options.hooks
     unwrap_when_done = capture_options.unwrap_when_done
     verbose = capture_options.verbose
-    inference_only_value = capture_options.inference_only
     name = capture_options.name
     cache_enabled = capture_options.cache
-    cache_dir_value = capture_options.cache_dir
-    module_filter_value = capture_options.module_filter
-    raise_on_nan_value = capture_options.raise_on_nan
-    track_nonfinite_value = capture_options.track_nonfinite
-    structure_only_value = capture_options.structure_only
     facet_recipes = None if isinstance(recipes, MissingType) else recipes
     if capture_options.stop_after is not None and halt is not None:
         raise ArgumentConflictError(
@@ -3190,7 +3351,7 @@ def _trace_torch_model(
             ),
             arguments=("bundle_path", "out_callback"),
         )
-    if structure_only_value:
+    if capture_options.structure_only:
         layers_to_save = _enforce_structure_only_entry_contract(
             capture_options,
             _StructureOnlyEntryFacts(
@@ -3199,8 +3360,8 @@ def _trace_torch_model(
                 halt=halt,
                 streaming_options=streaming_options,
                 lookback_payload_policy=lookback_payload_policy,
-                raise_on_nan_value=raise_on_nan_value,
-                track_nonfinite_value=track_nonfinite_value,
+                raise_on_nan_value=capture_options.raise_on_nan,
+                track_nonfinite_value=capture_options.track_nonfinite,
                 intervention_ready=intervention_ready,
                 should_save_grads=should_save_grads,
             ),
@@ -3247,7 +3408,7 @@ def _trace_torch_model(
         streaming=streaming_options,
         detach_saved_activations=detach_saved_activations,
         inference_mode_active=torch.is_inference_mode_enabled(),
-        inference_only=inference_only_value,
+        inference_only=capture_options.inference_only,
         inference_only_conflicts=tuple(inference_only_conflicts),
     )
     chunk_plan = None
@@ -3339,7 +3500,7 @@ def _trace_torch_model(
             "save_mode": save_mode_value,
             "recurrence_detection": recurrence_detection,
             "backward_ready": train_mode_value,
-            "inference_only": inference_only_value,
+            "inference_only": capture_options.inference_only,
             "chunk_size": normalized_chunk_size,
             "chunk_paths": normalize_chunk_paths(chunk_paths_value),
             "capture_container_structure": capture_container_structure,
@@ -3368,7 +3529,9 @@ def _trace_torch_model(
             # callables are repr-keyed (conservative -- a distinct object misses rather
             # than risking a false hit), matching how output_transform is keyed above.
             "intervention_ready": intervention_ready,
-            "structure_only": structure_only_value,
+            "structure_only": capture_options.structure_only,
+            "track_device_memory": capture_options.track_device_memory,
+            "log_injections": capture_options.log_injections,
             "save_raw_input": repr(save_raw_input_policy),
             "save_raw_output": repr(save_raw_output_policy),
             "save_raw_activations": save_raw_activations,
@@ -3376,7 +3539,7 @@ def _trace_torch_model(
             "activation_transform": _stable_cache_fragment(activation_transform),
             "grad_transform": _stable_cache_fragment(grad_transform),
             "random_seed": random_seed,
-            "module_filter": _stable_cache_fragment(module_filter_value),
+            "module_filter": _stable_cache_fragment(capture_options.module_filter),
             "layer_visualizers": _stable_cache_fragment(layer_visualizers_value),
             "save_visualizations": _stable_cache_fragment(save_visualizations_value),
             "optimizer": repr(optimizer),
@@ -3409,7 +3572,7 @@ def _trace_torch_model(
             prefix="streaming_option",
         )
         cache_key = _capture_cache_key(model, input_args, input_kwargs, cache_config)
-        cache_root, cache_secret = _prepare_capture_cache_dir(cache_dir_value)
+        cache_root, cache_secret = _prepare_capture_cache_dir(capture_options.cache_dir)
         cache_path = cache_root / f"{cache_key}.pkl"
         if cache_path.exists():
             cached_log = cast(
@@ -3432,7 +3595,7 @@ def _trace_torch_model(
     # forward, no mutation) and structure-only captures retain no values, so
     # neither path reaches this warn. The chunked fan-out recurses back into
     # this function, but the outer call warns first and latches the flag.
-    if not _BATCHNORM_TRAIN_STATS_WARNED and not structure_only_value:
+    if not _BATCHNORM_TRAIN_STATS_WARNED and not capture_options.structure_only:
         _warn_once_train_mode_running_stats(model)
     if (
         chunk_plan is not None
@@ -3480,11 +3643,11 @@ def _trace_torch_model(
             unwrap_when_done=False,
             verbose=verbose,
             backward_ready=train_mode_value,
-            inference_only=inference_only_value,
+            inference_only=capture_options.inference_only,
             name=log_name,
             cache=False,
-            cache_dir=cache_dir_value,
-            module_filter=module_filter_value,
+            cache_dir=capture_options.cache_dir,
+            module_filter=capture_options.module_filter,
             stop_after=MISSING,
             jax_control_flow=recursive_jax_control_flow,
             jax_max_control_flow_unroll=recursive_jax_max_control_flow_unroll,
@@ -3502,9 +3665,11 @@ def _trace_torch_model(
             measure_python_peak_memory=capture_options.measure_python_peak_memory,
             distributed_witness=capture_options.distributed_witness,
             save_budget=capture_options.save_budget,
-            raise_on_nan=raise_on_nan_value,
-            track_nonfinite=track_nonfinite_value,
-            structure_only=structure_only_value,
+            raise_on_nan=capture_options.raise_on_nan,
+            track_nonfinite=capture_options.track_nonfinite,
+            track_device_memory=capture_options.track_device_memory,
+            structure_only=capture_options.structure_only,
+            log_injections=capture_options.log_injections,
         )
         recursive_save_options = SaveOptions(
             activation_transform=activation_transform,
@@ -3753,6 +3918,7 @@ def _trace_torch_model(
         random_seed=random_seed,
         num_context_lines=source_context_lines,
         optimizer=optimizer,
+        echo_options=echo_options,
         save_code_context=save_code_context,
         save_rng_states=save_rng_states,
         recurrence_detection=recurrence_detection,
@@ -3772,16 +3938,18 @@ def _trace_torch_model(
         normalized_hook_plan=None,
         verbose=verbose,
         backward_ready=train_mode_value,
-        inference_only=inference_only_value,
+        inference_only=capture_options.inference_only,
         name=log_name,
-        module_filter=module_filter_value,
+        module_filter=capture_options.module_filter,
         emit_nvtx=capture_options.emit_nvtx,
         measure_python_peak_memory=capture_options.measure_python_peak_memory,
         distributed_witness=capture_options.distributed_witness,
         save_budget=capture_options.save_budget,
-        raise_on_nan=raise_on_nan_value,
-        track_nonfinite=track_nonfinite_value,
-        structure_only=structure_only_value,
+        raise_on_nan=capture_options.raise_on_nan,
+        track_nonfinite=capture_options.track_nonfinite,
+        track_device_memory=capture_options.track_device_memory,
+        structure_only=capture_options.structure_only,
+        log_injections=capture_options.log_injections,
         transform=input_transform,
         raw_input=raw_input,
         save_raw_input=save_raw_input_policy,
@@ -3848,8 +4016,15 @@ def _trace_torch_model(
         and grad_transform is None
         and output_transform_value is None
     )
+    from .capture._episode_join import armed_capture
+    from .capture._weightsfree_admission import pending_admission
+
     try:
-        trace = capture_with_rescue(run_capture, eligible=rescue_eligible, model=model)
+        with (
+            armed_capture(episode_resolved, run_capture) as capture_callable,
+            pending_admission(meta_admission),
+        ):
+            trace = capture_with_rescue(capture_callable, eligible=rescue_eligible, model=model)
     except Exception as capture_exc:
         if episode_resolved is not None:
             # Best-effort: the FAILED partial product carries the episode
@@ -3903,7 +4078,7 @@ def _trace_torch_model(
         )
     module_filter_suppressed = int(trace.__dict__.pop("_tl_module_filter_suppressed", 0))
     if (
-        module_filter_value is not None
+        capture_options.module_filter is not None
         and module_filter_suppressed > 0
         and int(getattr(trace, "num_saved_ops", 0) or 0) == 0
     ):
@@ -3923,6 +4098,8 @@ def _trace_torch_model(
             ),
             stacklevel=2,
         )
+    if input_transform is not None:
+        stamp_user_transform_provenance(trace, input_transform)
     trace.profile_enabled = profile_enabled
     trace.save_grads = save_grads_policy
     if uses_selective_layers_to_save:
@@ -3962,6 +4139,13 @@ def _trace_torch_model(
         # Settlement-time episode ledger (S7): written ONCE, after postprocess
         # and outcome settlement, from the settled record + module-call truth.
         write_episode_ledger(trace, episode_resolved)
+
+    # Weightsfree settlement (F33): wrap-generation stamp on every capture
+    # (W1-ORD preflight input), D22 invariant net + persisted evidence
+    # envelope on structure-only captures.
+    from .capture._structure_evidence import settle_weightsfree_capture
+
+    settle_weightsfree_capture(trace, meta_admission)
 
     return trace
 
@@ -4032,6 +4216,7 @@ def release_model(model: nn.Module) -> None:
     :mod:`pickle`. Saving ``model.state_dict()`` is unaffected by preparation
     and does not require release.
     """
+    model = _model_door.resolve_released_model(model)
     _public_impls_module().release_model(model)
 
 

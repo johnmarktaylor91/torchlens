@@ -48,19 +48,46 @@ __tl_layer__ = "L1"
 # structure-only evidence envelope (Trace.structure_evidence) are declared
 # with fail-closed load validation so their Phase-3 writers (F01/F30/F33)
 # need no further version bump.
+# The C07X amendment rides the SAME v9 window (TLSPEC_VERSION stays 9;
+# every slot optional/entry-dark): bundle relation grammar v2 (required/
+# optional split, successor_of evidence envelope + carry_mode/state_source,
+# the graded-claim vocabulary, the 1 MiB per-row evidence budget) with the
+# three-leg preserve-and-disclose loader doctrine and Bundle
+# preserved-sections carriage; episode ledger grammar v2 (family version 2:
+# declared step_output_kind/step_output_from/step_axis, generic step_output
+# rows, arithmetic cache_len DELETED for the measured carried-state witness
+# slots entry_state_digest/exit_state_digest, capture_digest +
+# perturbed/intervention_digest/fire_count coupling slots, optional
+# step_join); the Trace.root_entry_point identity fact (written
+# unconditionally) with the Op.tl_authored_root marker and Op.episode_step
+# stamp -- all with fail-closed load validation so the F40b/F40c/F41/F42/
+# F-EPISODE/F-WITNESS writers need no further version bump.
 TLSPEC_VERSION = 9
 
-# Rehydration floor: artifacts older than tlspec_version 6 (first shipped in
-# torchlens 2.33) refuse to load instead of being resurrected through legacy
-# field-alias ladders. ``MIN_TORCHLENS_VERSION_TEXT`` is the release named in
-# refusal messages and matched against parsed manifest ``torchlens_version``.
+# Rehydration floor: artifacts older than tlspec_version 6 refuse to load
+# instead of being resurrected through legacy field-alias ladders. The FIRST
+# tlspec-6 writer was released v2.31.0 (measured on genuine wheels, ecosystem
+# panel r3 -- the historical "first shipped in torchlens 2.33" comment here
+# was false and backed the producer inequality that orphaned lawful
+# v2.31.0/v2.32.4 artifacts; producer pair-consistency now lives in the
+# governed ledger, ``torchlens._io.compat_ledger``, gate G5).
+# ``MIN_TORCHLENS_VERSION_TEXT`` remains the release-family text stamped into
+# the writer contract; its VALUE is frozen with the committed v9 contract
+# golden (C07 territory) and is no longer matched against any manifest.
 MIN_TLSPEC_VERSION = 6
 MIN_TORCHLENS_VERSION_TEXT = "2.33"
 
 
+# Ledger-derived honesty (gate G6): a below-floor remedy must never NAME a
+# release without verified read evidence -- the shipped ">= 2.33" remedy told
+# genuine v2.16 ModelLog holders to use releases proven unable to read their
+# artifacts. Callers with ledger context pass a derived ``remedy=``; this
+# default stays honest for unknown pre-floor eras by pointing at the ledger
+# instead of asserting a reader.
 _BELOW_FLOOR_REMEDY = (
-    "Load and re-save the artifact with a torchlens release "
-    f">= {MIN_TORCHLENS_VERSION_TEXT} that still reads it."
+    "Re-save the artifact with a torchlens release verified to read it; "
+    "torchlens.ecosystem.compat_window() lists the governed rows and their "
+    "verified readers."
 )
 
 
@@ -69,6 +96,8 @@ def below_floor_error(
     observed: str,
     subject: str = "Artifact",
     path: str | None = None,
+    remedy: str | None = None,
+    code: str = "artifact_version_below_floor",
 ) -> ArtifactVersionBelowFloorError:
     """Build the typed rehydration-floor refusal with structured fields.
 
@@ -87,6 +116,15 @@ def below_floor_error(
         Human-readable subject named in the message (e.g. ``"Bundle manifest"``).
     path:
         Artifact path, when the caller has it in scope.
+    remedy:
+        Ledger-derived remedy override (gate G6). Callers that can classify
+        the artifact pass the verified-reader remedy from
+        ``torchlens._io.compat_ledger.bridge_reader_remedy``; the default
+        stays honest by pointing at the ledger instead of naming a reader.
+    code:
+        Always ``"artifact_version_below_floor"``; raise sites pass it
+        explicitly so the S-17 census sees the code where the raise happens,
+        not buried in this factory (registry-kernel precedent).
 
     Returns
     -------
@@ -94,20 +132,51 @@ def below_floor_error(
         The typed refusal, ready to raise.
     """
 
+    effective_remedy = _BELOW_FLOOR_REMEDY if remedy is None else remedy
     message = (
         f"{subject} has {observed}, below the supported rehydration floor "
         f"tlspec_version={MIN_TLSPEC_VERSION} (torchlens "
-        f"{MIN_TORCHLENS_VERSION_TEXT}). {_BELOW_FLOOR_REMEDY}"
+        f"{MIN_TORCHLENS_VERSION_TEXT}). Remedy: {effective_remedy}"
     )
     return ArtifactVersionBelowFloorError(
         message,
-        code="artifact_version_below_floor",
+        code=code,
         observed=observed,
         floor_tlspec_version=MIN_TLSPEC_VERSION,
         floor_torchlens_version=MIN_TORCHLENS_VERSION_TEXT,
         path=path,
-        remedy=_BELOW_FLOOR_REMEDY,
+        remedy=effective_remedy,
     )
+
+
+def raise_if_manifest_below_floor(raw_version: Any, path: str) -> None:
+    """Refuse an integer manifest stamp below the rehydration floor.
+
+    The shared preflight guard: a below-floor artifact also fails the current
+    schema, so this runs BEFORE schema validation to refuse with the floor
+    named instead of a missing-field error. Non-integer stamps return
+    untouched (their own typed checks own that case).
+
+    Parameters
+    ----------
+    raw_version:
+        The manifest's raw ``tlspec_version`` value.
+    path:
+        Artifact path for the structured fields.
+
+    Raises
+    ------
+    ArtifactVersionBelowFloorError
+        When ``raw_version`` is an int below ``MIN_TLSPEC_VERSION``.
+    """
+
+    if isinstance(raw_version, int) and raw_version < MIN_TLSPEC_VERSION:
+        raise below_floor_error(
+            observed=f"tlspec_version={raw_version}",
+            subject="Bundle manifest",
+            path=path,
+            code="artifact_version_below_floor",
+        )
 
 
 _ABOVE_CEILING_REMEDY = "Upgrade torchlens to the release that wrote this artifact (or newer)."
@@ -118,6 +187,7 @@ def above_ceiling_error(
     observed: int,
     subject: str = "Artifact",
     path: str | None = None,
+    code: str = "artifact_version_above_runtime",
 ) -> ArtifactVersionAboveRuntimeError:
     """Build the typed above-runtime-ceiling refusal with structured fields.
 
@@ -135,6 +205,10 @@ def above_ceiling_error(
         Human-readable subject named in the message (e.g. ``"Bundle"``).
     path:
         Artifact path, when the caller has one.
+    code:
+        Always ``"artifact_version_above_runtime"``; raise sites pass it
+        explicitly so the S-17 census sees the code where the raise happens,
+        not buried in this factory (registry-kernel precedent).
 
     Returns
     -------
@@ -148,7 +222,7 @@ def above_ceiling_error(
     )
     return ArtifactVersionAboveRuntimeError(
         message,
-        code="artifact_version_above_runtime",
+        code=code,
         observed=observed,
         ceiling_tlspec_version=TLSPEC_VERSION,
         path=path,
@@ -168,7 +242,11 @@ def _raise_below_floor(cls_name: str, version_text: str) -> None:
         an unversioned state).
     """
 
-    raise below_floor_error(observed=version_text, subject=f"{cls_name} state")
+    raise below_floor_error(
+        observed=version_text,
+        subject=f"{cls_name} state",
+        code="artifact_version_below_floor",
+    )
 
 
 @dataclass(frozen=True)
@@ -289,7 +367,11 @@ def read_tlspec_version(state: dict[str, Any], *, cls_name: str, cls: type | Non
     if not isinstance(version, int):
         raise TorchLensIOError(f"{cls_name} pickle state has invalid tlspec_version={version!r}.")
     if version > TLSPEC_VERSION:
-        raise above_ceiling_error(observed=version, subject=f"{cls_name} pickle state")
+        raise above_ceiling_error(
+            observed=version,
+            subject=f"{cls_name} pickle state",
+            code="artifact_version_above_runtime",
+        )
     if version < MIN_TLSPEC_VERSION:
         _raise_below_floor(cls_name, f"tlspec_version={version}")
     if cls is not None:

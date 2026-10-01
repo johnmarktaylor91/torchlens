@@ -65,6 +65,21 @@ FULL_TEST_EXTRA_SENTINEL = "timm"
 # Keep sorted; the inventory test enforces exact set equality.
 IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
     "IPython": (OPTIONAL_PREVIEW, "notebook extra"),
+    "treescope": (
+        OPTIONAL_PREVIEW,
+        "treescope bridge extra (F16); absent-treescope is itself a supported "
+        "environment cell, so the bridge tests importorskip while the "
+        "cards/report tests run everywhere",
+    ),
+    "treescope._internal.arrayviz_impl": (
+        OPTIONAL_PREVIEW,
+        "port-equivalence leg (F16): compares the truncation port against the "
+        "installed upstream implementation cell-for-cell",
+    ),
+    "treescope.external.torch_support": (
+        OPTIONAL_PREVIEW,
+        "port-equivalence leg (F16): the slice-then-convert adapter comparison",
+    ),
     "PIL": (TEST_EXTRA, "pillow (also a core torchlens dependency)"),
     "brainscore_core": (OPTIONAL_PREVIEW, "neuro extra (brain-score dist)"),
     "brainscore_vision": (
@@ -73,6 +88,14 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         "requires Python >= 3.11 and this venv is 3.10, so the interface is pinned "
         "against the real 2.3.22 wheel SOURCE and the live-install test is "
         "importorskip-gated until a 3.11 env exists (2026-08-19)",
+    ),
+    "bitsandbytes": (
+        OPTIONAL_PREVIEW,
+        "deploy extra (requested in sprint/packaging_requests.tsv, F37 "
+        "2026-08-31): 8/4-bit quantization dep for the deployment-envelope "
+        "suite (test_deploy_env_quantized.py); executes on the D02 "
+        "GPU-cluster C-DEPLOY leg (MEMO section 9), where the quantization "
+        "deps are provisioned",
     ),
     "cairosvg": (
         UNAVAILABLE_OK,
@@ -93,6 +116,11 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         "research-model dependency for real-world coverage, deliberately undeclared",
     ),
     "equinox": (OPTIONAL_PREVIEW, "jax extra"),
+    "scipy": (
+        OPTIONAL_PREVIEW,
+        "extraction-export extra (MAT exporter); requested in "
+        "sprint/packaging_requests.tsv (F18, extract memo D15)",
+    ),
     "fvcore.nn": (
         UNAVAILABLE_OK,
         "supplementary external FLOP-counter cross-oracle (A07 numbers truth); "
@@ -122,8 +150,19 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
     "jax.numpy": (OPTIONAL_PREVIEW, "jax extra"),
     "jax.random": (OPTIONAL_PREVIEW, "jax extra"),
     "jupyter_client": (OPTIONAL_PREVIEW, "notebook extra"),
+    "jsonschema": (
+        UNAVAILABLE_OK,
+        "dev-tooling dependency (pre-commit config validation); the agent schema "
+        "lockstep's full Draft-2020-12 validation leg runs where it is installed, "
+        "the dep-free structural checks run everywhere (F29)",
+    ),
     "keras": (OPTIONAL_PREVIEW, "tf extra (ships with tensorflow>=2.16)"),
     "lightning": (TEST_EXTRA, "lightning"),
+    "lit_nlp.api.model": (
+        OPTIONAL_PREVIEW,
+        "lit extra (lit-nlp>=1.3,<1.4); gates the real-dependency LIT bridge suite "
+        "run by the nightly real-LIT leg (F31 packaging request)",
+    ),
     "matplotlib": (
         UNAVAILABLE_OK,
         "undeclared viz-test dependency; extras-gap candidate reported 2026-08-15",
@@ -141,14 +180,37 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         UNAVAILABLE_OK,
         "export-bridge target with no declared extra; extras-gap candidate reported 2026-08-15",
     ),
+    "netron": (
+        UNAVAILABLE_OK,
+        "netron viewer package: the serve/widget one-liner and the "
+        "vendor-execution parser harness (tests/test_netron_export_vendor.py); "
+        "user extra netron>=9.2,<10 + CI pin netron==9.2.2 requested via "
+        "sprint/packaging_requests.tsv (F14 2026-08-28)",
+    ),
     "onnx": (
         UNAVAILABLE_OK,
         "netron-export acceptance-contract dependency (strict ModelProto JSON "
-        "parse), deliberately undeclared",
+        "parse + check_model); test-extra declaration requested via "
+        "sprint/packaging_requests.tsv (F14 2026-08-28)",
     ),
     "paddle": (OPTIONAL_PREVIEW, "paddle extra (paddlepaddle dist)"),
+    "playwright.sync_api": (
+        UNAVAILABLE_OK,
+        "headless-Chromium driver for the netron T4 browser smoke "
+        "(tests/test_netron_export_browser.py); CI installs it only in the "
+        "path-filtered export job requested via sprint/packaging_requests.tsv "
+        "(F14 2026-08-28)",
+    ),
     "pandas": (OPTIONAL_PREVIEW, "tabular extra"),
     "pandas.api.types": (OPTIONAL_PREVIEW, "tabular extra"),
+    "peft": (
+        OPTIONAL_PREVIEW,
+        "deploy extra (requested in sprint/packaging_requests.tsv, F37 "
+        "2026-08-31): LoRA/adapter dep for the deployment-envelope suite "
+        "(test_deploy_env_peft.py); executes on the D02 GPU-cluster "
+        "C-DEPLOY leg (MEMO section 9), where the adapter deps are "
+        "provisioned",
+    ),
     "pennylane": (
         UNAVAILABLE_OK,
         "quantum-ML research-model dependency, deliberately undeclared",
@@ -166,6 +228,11 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         "python-semantic-release, deliberately in no dev extra; release-environment-"
         "only (installed from the hash-locked release-requirements.txt by the lint "
         "release-defenses job, which executes tests/test_no_major_parser.py)",
+    ),
+    "clearml": (
+        UNAVAILABLE_OK,
+        "T-RELAY-C fidelity-pin target; relay-test extra requested in "
+        "sprint/packaging_requests.tsv (F26 2026-08-28)",
     ),
     "sentence_transformers": (OPTIONAL_PREVIEW, "compat-shims extra"),
     "tensorboard": (
@@ -225,6 +292,18 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
     ),
     "transformers": (TEST_EXTRA, "transformers"),
     "transformers.modeling_outputs": (TEST_EXTRA, "transformers"),
+    "transformers.models.qwen3_moe": (
+        TEST_EXTRA,
+        "transformers; submodule gate because Qwen3-MoE ships only in newer "
+        "transformers releases, so an older pinned install skips honestly",
+    ),
+    # F33 weightsfree: the accelerate on-ramp row (init_empty_weights) runs
+    # where accelerate is installed; the [test]-extra request is filed in
+    # sprint/packaging_requests.tsv and flips this to TEST_EXTRA when merged.
+    "accelerate": (
+        UNAVAILABLE_OK,
+        "weightsfree on-ramp target; [test]-extra request filed (F33)",
+    ),
     "visualpriors": (TEST_EXTRA, "visualpriors"),
     "wandb": (OPTIONAL_PREVIEW, "wandb extra"),
     "xarray": (
@@ -940,6 +1019,14 @@ DEVICE_GATED_SKIPIF_LEDGER: dict[str, str] = {
         "model's CUDA inputs silently computed on CPU); dark on CPU-only CI, "
         "executed on the Fellows-cluster CUDA leg"
     ),
+    "test_explorer_watch_gates.py::test_module_tier_overhead_gates": (
+        "[2026-08-29] F25 explorer D25 overhead gate: the measured per-step "
+        "watch-overhead A/B rows need two gpt2 replicas training on CUDA (a "
+        "CPU run measures a different regime and would publish a false "
+        "ratio); dark on CPU-only CI and this box's cu-wheel/driver "
+        "mismatch, executed on the Fellows-cluster CUDA leg -- the pinned "
+        "docs/_watch_perf_numbers.md rows are its recorded evidence"
+    ),
     "test_hash_determinism.py::test_graph_shape_hash_matches_between_cpu_and_cuda": _CUDA_DARK,
     "test_kernel_telemetry.py::test_real_cuda_cupti_correlation_matrix": (
         "[2026-08-17] L3 telemetry OPTIONAL_INTEGRATION: the exact Kineto CUDA/CUPTI "
@@ -949,6 +1036,11 @@ DEVICE_GATED_SKIPIF_LEDGER: dict[str, str] = {
     "test_param_as_input.py::test_cross_device_parameter_input_matches_plain_tensor_path_if_cuda_available": _CUDA_DARK,
     "test_perf_bundle.py::test_cuda_path_still_runs_when_available": _CUDA_DARK,
     "test_robustness_pr2.py::test_cuda_channels_last_safe_copy": _CUDA_DARK,
+    "test_snoop_real_model.py::test_cuda_metadata_echo_is_zero_sync": (
+        "[2026-08-28] lane F28 snoop memo test 4: metadata echo under "
+        "torch.cuda.set_sync_debug_mode('error') proves the zero-device-sync "
+        "claim; dark on CPU-only CI, executed on the Fellows-cluster CUDA leg"
+    ),
     "test_robustness_pr2.py::test_cuda_forward_pass_still_logs": _CUDA_DARK,
     "test_runnable_r36_regressions.py::TestCudaStagingAndReadiness": _CUDA_DARK,
     "test_tlspec_runnable_r35_attestation_lattice.py::test_r35_device_diverged_run_is_never_attested": _CUDA_DARK,
@@ -1106,18 +1198,40 @@ TRIPWIRE_GUARD_TARGETS: dict[str, str] = {
     ),
     "onnx": (
         "tests/test_exports.py::test_netron_export_is_valid_onnx_modelproto_json "
-        "(the netron-export external acceptance contract; without it the "
+        "plus the whole tests/test_netron_export_contract.py / _rolled.py T1 tier "
+        "(strict parse + check_model(full_check=True); without it the "
         "'artifact opens in Netron' claim reverts to unverified)"
     ),
     "google.protobuf.json_format": (
         "strict protobuf JSON parse inside the netron-export acceptance gate "
-        "(same test as the onnx target)"
+        "(same tests as the onnx target)"
+    ),
+    "netron": (
+        "tests/test_netron_export_vendor.py (the executed netron 9.2.2 parser "
+        "harness -- what netron WOULD draw) and the serve round-trip in "
+        "tests/test_netron_export_serve.py; absence reverts both to the "
+        "transcribed-sniffer canary"
+    ),
+    "playwright.sync_api": (
+        "tests/test_netron_export_browser.py (T4 semantic smoke -- the ONLY "
+        "layer catching the silent-hang class: the function-cycle crash shows "
+        "a dialog, renders nothing, and logs no console error)"
     ),
 }
 
 #: unavailable-ok target -> why its absence is breadth loss, not gate loss.
 OPTIONAL_INTEGRATION_TARGETS: dict[str, str] = {
+    "clearml": (
+        "T-RELAY-C relay-fidelity pin (F26); absence costs the vendor pin "
+        "only -- the dep-free relay-law halves (detection + the G6 histogram "
+        "refusal) run unconditionally in test_trackers_sinks_delivery.py"
+    ),
     "cornet": "research-model real-world coverage; GitHub-only distribution",
+    "jsonschema": (
+        "the agent schema lockstep's full Draft-2020-12 validation leg (F29); "
+        "the dep-free structural checks (index/id/title, registry parity) run "
+        "everywhere, so absence costs validation breadth only"
+    ),
     "dacite": "model-explorer export-bridge demo dependency",
     "dagua": "unreleased in-development layout engine",
     "e3nn.o3": "research-model real-world coverage, deliberately undeclared",
@@ -1132,6 +1246,7 @@ OPTIONAL_INTEGRATION_TARGETS: dict[str, str] = {
     "tensorboard": "export-bridge integration target with no declared extra",
     "tomli": "py<3.11 tomllib backport, only conditionally needed",
     "transformer_lens": "bridge integration without a declared extra",
+    "accelerate": "weightsfree on-ramp target; [test]-extra request filed (F33)",
     "xarray": "export-bridge integration target with no declared extra",
     "torch._dynamo.trace_rules": "torch build/version capability probe",
     "torch._subclasses.fake_tensor": "torch build/version capability probe",

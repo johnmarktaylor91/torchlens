@@ -120,10 +120,13 @@ def test_graphviz_renderer_declares_encodings_capability() -> None:
 
 
 def test_explicit_max_above_ceiling_warns_every_call(monkeypatch) -> None:
-    # N15 (themes item 1): explicit collapse="max" above the compute ceiling
+    # N15 (themes item 1): explicit collapse="max" above the compute gate
     # was a SILENT byte-identical no-op on every call after the first
     # (once-per-trace warning dedupe). An explicit compaction request now
-    # re-warns on every call.
+    # re-warns on every call. F11 (collapse memo D5): the over-constant
+    # outcome is the deterministic compact fallback plan (coded
+    # collapse_budget_fallback), never a decline -- the re-warn contract is
+    # unchanged, including on cache hits.
     import torchlens.visualization.collapse_optimizer as co
     from torchlens.errors._base import TorchLensWarning
     from torchlens.visualization.collapse_plan import RenderContext
@@ -131,10 +134,12 @@ def test_explicit_max_above_ceiling_warns_every_call(monkeypatch) -> None:
     model = torch.nn.Sequential(torch.nn.Linear(4, 4), torch.nn.ReLU())
     log = tl.trace(model, torch.randn(2, 4))
     monkeypatch.setattr(co, "COLLAPSE_OPTIMIZER_MAX_OPS", 1)
-    with pytest.warns(TorchLensWarning, match="compute ceiling"):
+    with pytest.warns(TorchLensWarning, match="compact fallback plan"):
         first = co.select_collapse_plan(log, RenderContext(), mode="max")
-    assert first.declined
-    # The second explicit request must warn AGAIN, never silently no-op.
-    with pytest.warns(TorchLensWarning, match="compute ceiling"):
+    assert not first.declined
+    assert first.planner == "linear_fallback"
+    # The second explicit request must warn AGAIN, never silently no-op --
+    # this one is a result-cache hit, which must still disclose for max.
+    with pytest.warns(TorchLensWarning, match="compact fallback plan"):
         second = co.select_collapse_plan(log, RenderContext(), mode="max")
-    assert second.declined
+    assert second.planner == "linear_fallback"

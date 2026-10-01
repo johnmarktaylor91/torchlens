@@ -254,13 +254,29 @@ def test_package_percentage_aggregation_is_red_capable() -> None:
 #: substring token) lost its pragma and gained a covering test. The one
 #: surviving wave-0 addition is the _encoding.py import-time two-row
 #: classification guard, unreachable while the completeness pin holds.
+#: 51 -> 57 (2026-08-28 F27): six uncoverable-on-CPU-CI seams -- the two
+#: native_profile CUDA legs (device activities + synchronize), the wrappers/
+#: backward observability-import failure belts (the substrate always imports
+#: in CI; the belt exists for torn installs), and the no-loadavg platform
+#: branch in the overhead harness, plus the compute-truth join lookup's
+#: torn-install ImportError belt. Each is a disclosure/degradation path,
+#: never a semantics branch.
 #: 50 -> 51 (2026-08-19 post-tour sprint): debug/_params.py's both-entries-None
 #: guard in the param-diff walk. UNREACHABLE by construction -- ``names`` is the
 #: UNION of both state keysets, so a name cannot be absent from both -- which is
 #: also why it cannot gain a covering test the way the wave-0 reachable raise did.
 #: Raised rather than deleted: it is another module's defensive guard, and trading
 #: a guard for a lint point is the worse side of that bargain.
-_PRAGMA_NO_COVER_CEILING = 51
+#: 57 -> 60 (2026-08-28 F29 agent surface, re-tiered on the T80 merged tree):
+#: (a) agent/_envelope.py's PackageNotFoundError fallback fires only when the
+#: torchlens distribution metadata is absent (a non-installed source tree; no
+#: test environment can honestly provoke it without uninstalling itself);
+#: (b) bridge/mcp.py's resource-registration AttributeError guard fires only
+#: on an older mcp package surface than the pinned extra installs; (c)
+#: agent/_artifacts.py's spec_from_file_location None guard fires only on a
+#: corrupted install (missing _io/_json.py file). All three are environment
+#: guards, not logic branches.
+_PRAGMA_NO_COVER_CEILING = 60
 
 
 def test_pragma_no_cover_census_never_grows() -> None:

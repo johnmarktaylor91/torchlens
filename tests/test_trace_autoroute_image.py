@@ -148,7 +148,12 @@ def test_transform_override_skips_image_autoroute() -> None:
         ),
     )
 
-    assert log.input_preprocessor is None
+    # The explicit transform bypasses the image autoroute entirely: no
+    # resolver tier ran, so the provenance is the honest user_transform
+    # record (tvscope B1), NEVER the autoroute's imagenet_default.
+    assert log.input_preprocessor is not None
+    assert log.input_preprocessor.source == "user_transform"
+    assert log.input_preprocessor.verified is False
 
 
 def test_pil_raw_input_svg_embeds_montage_data_uri(tmp_path: Path) -> None:

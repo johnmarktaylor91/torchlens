@@ -147,9 +147,19 @@ def test_floor_fallback_plan_discloses_typed_warning(two_block_trace: tl.Trace) 
     assert "frontier empty under K_CAP (provocation)" in disclosed
 
 
-def test_near_uncollapsed_plan_discloses_typed_warning(two_block_trace: tl.Trace) -> None:
-    """A nearly-uncollapsed frontier plan warns ``collapse_near_uncollapsed``."""
+def test_near_uncollapsed_plan_discloses_typed_warning(
+    two_block_trace: tl.Trace, monkeypatch
+) -> None:
+    """A nearly-uncollapsed frontier plan warns ``collapse_near_uncollapsed``.
 
+    F11 (memo D8): the disclosure fires only under band pressure -- an
+    in-band full graph is auto's CORRECT answer -- so the provocation pins
+    the band below this toy's universe.
+    """
+
+    from torchlens.visualization import auto_collapse
+
+    monkeypatch.setattr(auto_collapse, "_readable_band_high", lambda trace: 1)
     context = RenderContext(vis_mode="unrolled")
     total_units = _optimizer_total_units(two_block_trace, context)
     assert total_units > 0

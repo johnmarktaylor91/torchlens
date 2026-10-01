@@ -13,6 +13,7 @@ from ._deprecations import (
     MISSING,
     MissingType,
 )
+from ._episode_spec import EpisodeSpec
 from ._errors import (
     ArgumentConflictError,
     ArgumentTypeError,
@@ -31,9 +32,12 @@ from ._literals import (
     VisRendererLiteral,
 )
 from ._option_receipt import (
+    EchoOptions,
     OptionReceiptEntry,
     _explicit_fields,
     _field_is_explicit,
+    _resolve_option_value,
+    _set_frozen_fields,
     option_receipt,
 )
 from ._options_validation import (
@@ -105,7 +109,9 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "distributed_witness",
     "raise_on_nan",
     "track_nonfinite",
+    "track_device_memory",
     "structure_only",
+    "log_injections",
 )
 _SAVE_FIELDS: Final[tuple[str, ...]] = (
     "activation_transform",
@@ -172,7 +178,6 @@ _STREAMING_FIELDS: Final[tuple[str, ...]] = (
     "async_writes",
     "max_pending_bytes",
 )
-
 _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "layers_to_save": "layers_to_save",
     "transform": "transform",
@@ -327,56 +332,6 @@ class _MutateWarningSuppression:
 
 
 suppress_mutate_warnings = _MutateWarningSuppression()
-
-
-def _resolve_option_value(
-    field_name: str,
-    supplied_value: Any,
-    default_value: Any,
-    specified_fields: set[str],
-) -> Any:
-    """Resolve an option field while tracking explicit caller presence.
-
-    Parameters
-    ----------
-    field_name:
-        Dataclass field name being resolved.
-    supplied_value:
-        Value supplied by the caller, or ``MISSING``.
-    default_value:
-        Public default for the field.
-    specified_fields:
-        Mutable set populated with fields explicitly supplied by the caller.
-
-    Returns
-    -------
-    Any
-        Resolved field value.
-    """
-
-    if supplied_value is MISSING:
-        return default_value
-    specified_fields.add(field_name)
-    return supplied_value
-
-
-def _set_frozen_fields(
-    instance: object, field_names: tuple[str, ...], values: Mapping[str, Any]
-) -> None:
-    """Set dataclass fields while constructing a frozen options object.
-
-    Parameters
-    ----------
-    instance:
-        Instance under construction.
-    field_names:
-        Ordered dataclass field names to populate.
-    values:
-        Resolved field values.
-    """
-
-    for field_name in field_names:
-        object.__setattr__(instance, field_name, values[field_name])
 
 
 def _merge_grouped_options(
@@ -604,8 +559,11 @@ class CaptureOptions:
         semantics; the shipped torch ``save=`` kwarg is independent of it.
     emit_nvtx:
         Whether torch capture emits NVIDIA Tools Extension (NVTX) CUDA profiling
-        ranges around each logged operation. NVTX markers are visible in NVIDIA
-        Nsight Systems and Nsight Compute timelines. The default is ``False``;
+        ranges around each logged operation. Range names carry call identity
+        (``torchlens::<op>#<call_id>``) and TorchLens's own bookkeeping calls
+        are separated under ``torchlens::internal::`` so the Nsight timeline
+        shows model work, not capture plumbing. NVTX markers are visible in
+        NVIDIA Nsight Systems and Nsight Compute timelines. The default is ``False``;
         enabling it can add small per-op overhead. The option applies to full
         ``tl.trace`` capture and is preserved through ``tl.record``-style
         options, although sparse recording may only expose ranges for operations
@@ -658,6 +616,11 @@ class CaptureOptions:
         ``Trace.nonfinite_coverage``; covers unsaved ops, never changes
         control flow, reads device flags in one post-forward batch. A
         session-time knob. Doc: ``docs/reference/capture_outcomes.md``.
+    track_device_memory:
+        Whether torch capture samples device allocator counters around each op call, served by
+        ``torchlens.observe.device_memory_samples`` (DOCUMENTED-UNSTABLE; a session-time knob):
+        opt-in, never resetting; allocated/reserved before/after, signed deltas, high-water ADVANCE
+        per initialized CUDA device; unsupported devices (CPU/MPS) get typed absence, never zeros.
     structure_only:
         Whether this capture runs under the structure-only contract
         (DOCUMENTED-UNSTABLE surface, pending naming-session/S2 ratification;
@@ -667,6 +630,10 @@ class CaptureOptions:
         typed or gated; value-dependent branches refuse with the user's
         source line. Torch-only; the capability contract lives in
         ``docs/reference/structure_only_capabilities.md``.
+    log_injections:
+        Whether computation inside intervention hooks is recorded as anchored
+        injected-op records served by ``Trace.injected_ops`` / ``Trace.model_ops``
+        (F01 stage 0-1, DOCUMENTED-UNSTABLE; stage-1 saves refuse typed -- F44).
 
     Examples
     --------
@@ -721,7 +688,9 @@ class CaptureOptions:
     distributed_witness: str = "none"
     raise_on_nan: bool = False
     track_nonfinite: bool = False
+    track_device_memory: bool = False
     structure_only: bool = False
+    log_injections: bool = False
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     def __init__(
@@ -773,7 +742,9 @@ class CaptureOptions:
         raise_on_nan: bool | MissingType = MISSING,
         *,
         track_nonfinite: bool | MissingType = MISSING,
+        track_device_memory: bool | MissingType = MISSING,
         structure_only: bool | MissingType = MISSING,
+        log_injections: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen capture option bundle."""
 
@@ -918,8 +889,14 @@ class CaptureOptions:
             "track_nonfinite": _resolve_option_value(
                 "track_nonfinite", track_nonfinite, False, specified_fields
             ),
+            "track_device_memory": _resolve_option_value(
+                "track_device_memory", track_device_memory, False, specified_fields
+            ),
             "structure_only": _resolve_option_value(
                 "structure_only", structure_only, False, specified_fields
+            ),
+            "log_injections": _resolve_option_value(
+                "log_injections", log_injections, False, specified_fields
             ),
         }
         _validate_capture_values(values)
@@ -1873,90 +1850,9 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
     return kwargs
 
 
-@dataclass(frozen=True)
-class EpisodeSpec:
-    """Episode declaration for ``tl.trace(..., episode=EpisodeSpec(...))``.
-
-    Declaring an episode makes ONE wrapped session capture the episode
-    product (``capture_kind=episode``): the episode root's ``forward`` steps
-    ``stepped_module`` N times, and the per-step status ledger lands ON the
-    product at ``trace.annotations["episode"]``.
-
-    Every spelling here is DOCUMENTED-UNSTABLE pending the rolling naming
-    session (no deprecation shim owed); semantics are pinned by the ratified
-    S2/S6/S7 contracts.
-
-    DIAGNOSTIC-TIER COST WARNING: the wrapped episode tier is the
-    verification oracle / deep-dive product for TENS of steps, not hundreds.
-    Measured on gpt2-124M (CPU): N=20 costs 79 s / 146 MB artifact / 1.9 GB
-    peak RSS; N=100 costs 657 s (323x native) / 947 MB / 5.4 GB. Cost is
-    SUPERLINEAR in step count. The guarded-fast tier remains the default
-    engine for episode-scale work.
-
-    Parameters
-    ----------
-    stepped_module:
-        The stepped model: the ``nn.Module`` whose successive top-level calls
-        define step boundaries (call 1 is the prefill, ledger row 0). Must be
-        a submodule of the traced episode root; refused typed
-        (``episode_declaration_invalid``) otherwise. Step tallying is FLAT:
-        each top-level call of this module is one step regardless of any
-        loop nesting inside the episode root's ``forward``.
-    n_steps:
-        Optional declared step count, recorded on the ledger header and
-        validated against the observed call count on COMPLETE captures.
-    token_axis:
-        Axis of the episode root's output tensor along which per-step
-        emitted tokens lie (row ``k``'s token is ``output[..., k]`` along
-        this axis). Value-mode episodes read the ledger token column from
-        the product's own retained output payload.
-    forced_tokens:
-        Optional teacher-forced feed declaration: the token sequence the
-        driver feeds instead of model emissions. Declaring it stamps
-        ``token_feed="forced"`` and ``fidelity_basis="forced"`` on the
-        ledger header — an explicitly NON-VERIFYING disclosed mode; token
-        fidelity obligations (E-A3) never verify a forced episode.
-    state:
-        Declared episode-carried state items beyond the built-in scope
-        (token prefix, KV cache, RNG streams). EVERY declared item is
-        preflighted at DECLARATION time, unconditionally: an item without
-        snapshot/restore support refuses typed
-        (``episode_state_unsnapshotable``) before execution (E-A4).
-    rng:
-        Seeding discipline. Only ``"managed"`` ships: the capture's
-        effective ``random_seed`` is drawn-or-passed as today and recorded
-        as the ledger header's ``entry_seed``.
-    escalated_from:
-        Producer digest of the cheap-tier product this capture escalates
-        (present iff escalation; travels with ``reason`` — E-A2). Build the
-        whole escalation declaration with
-        ``torchlens.capture._episode_ledger.escalation_spec(producer, ...)``.
-    reason:
-        Escalation reason, closed vocabulary
-        ``{"step_failed", "divergence", "requested"}``.
-    expected_tokens:
-        The cheap-tier product's per-step token column (one tuple per step),
-        carried so the escalated capture can discharge the E-A3 fidelity
-        obligation at write time: prefix-equal columns record
-        ``fidelity_basis="tokens"``; a mismatch records ``"diverged"`` — the
-        escalated product is still a valid capture of what it ran, it just
-        is not an escalation of the original episode, and says so. Never a
-        settlement input.
-    """
-
-    stepped_module: Any
-    n_steps: int | None = None
-    token_axis: int = -1
-    forced_tokens: tuple[int, ...] | None = None
-    state: tuple[Any, ...] = ()
-    rng: Literal["managed"] = "managed"
-    escalated_from: str | None = None
-    reason: str | None = None
-    expected_tokens: tuple[tuple[int, ...], ...] | None = None
-
-
 __all__ = [
     "CaptureOptions",
+    "EchoOptions",
     "EpisodeSpec",
     "InterventionOptions",
     "OptionReceiptEntry",
@@ -1966,12 +1862,5 @@ __all__ = [
     "option_receipt",
     "to_disk",
     "VisualizationOptions",
-    "merge_capture_options",
-    "merge_intervention_options",
-    "merge_replay_options",
-    "merge_save_options",
-    "merge_streaming_options",
-    "merge_visualization_options",
     "suppress_mutate_warnings",
-    "visualization_to_render_kwargs",
 ]

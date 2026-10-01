@@ -59,7 +59,16 @@ def test_component_sizes_respect_the_design_bound() -> None:
         # 61: fixwave-5 added the _tl_cleaned_up idempotent-cleanup sentinel
         # (b6-opus R25) to the session component; the ~60 design pressure
         # stands -- the next session field should evict or consolidate one.
-        assert size <= 61, f"component {component} holds {size} fields (> 61)"
+        # 62: F01 added _tl_injection_state, itself the consolidation of
+        # FIVE injection transients into one dict field (the pressure
+        # honored); the next session field should evict or consolidate one.
+        # 63: the F01 fix cycle ENROLLED _tl_intervene_selector_fire_count
+        # (not new state -- the previously-undeclared exemptions-ledger
+        # sibling of _tl_save_selector_fire_count, whose missing DROP row
+        # refused streamed to_disk + intervene saves at the scrub). Named
+        # consolidation target: fold the two fire counters into one dict
+        # field the way _tl_injection_state folded five.
+        assert size <= 63, f"component {component} holds {size} fields (> 63)"
 
 
 @pytest.mark.smoke

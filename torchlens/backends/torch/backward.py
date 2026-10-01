@@ -49,6 +49,18 @@ from ...utils._torch_compat import (
 from ...utils._torch_symbols import torch_attr
 from ...utils.introspection import _get_code_qualname, _get_col_offset
 from ...utils.tensor_utils import synchronize_pending_cpu_async_copies
+from ._fire_timing import (
+    _clear_fire_timing_stamps,
+    _fire_timing_stamp_list,
+    _pop_matching_fire_start,
+    _register_fire_timing_prehook,
+)
+from ._gradfn_markers import (
+    _drain_gradfn_markers,
+    _enter_internal_gradfn_bracket,
+    _exit_gradfn_marker,
+    _gradfn_marker_list,
+)
 from ._tl import detached_saved_activation_label, get_tensor_label
 from .escape_detection import expected_original_call
 from .tensor_tracking import (
@@ -243,19 +255,6 @@ _BACKWARD_TRACE_SLOTS = weakref.WeakKeyDictionary()
 Values hold the trace only WEAKLY, so this table never pins its own keys.
 """
 
-_FIRE_TIMING_STAMPS: weakref.WeakKeyDictionary[Any, dict[int, list[tuple[int, float]]]]
-_FIRE_TIMING_STAMPS = weakref.WeakKeyDictionary()
-"""Per-trace ``grad_fn_object_id -> keyed start-stamp LIFO`` for per-fire timing.
-
-Each list is the per-node keyed LIFO (L9 memo 1.3) shared by that node's
-timing prehook and its posthook: the prehook appends ``(call_index,
-time.perf_counter())`` and the posthook pops entries until it finds a
-``call_index`` match, discarding stale entries above the match. Per-node
-sequential firing on one engine worker thread is the same assumption the
-shipped aten-marker LIFO already makes. The registry exists so pass
-boundaries can clear retry debris; hooks close over their own list.
-"""
-
 _PENDING_BACKWARD_FINALIZE: weakref.WeakKeyDictionary[Any, bool] = weakref.WeakKeyDictionary()
 """Traces whose implicit-close FINALIZE step (D2H fence + projection) is owed.
 
@@ -263,47 +262,6 @@ Set by the journal step of :func:`_close_implicit_backward_pass_if_open` and
 cleared only after BOTH finalize sub-steps complete outside any engine
 invocation (L9 memo 1.2). Weak-keyed so it never pins a trace.
 """
-
-
-def _fire_timing_stamp_list(trace: Any, grad_fn_object_id: int) -> list[tuple[int, float]]:
-    """Return (and lazily build) one node's keyed start-stamp LIFO."""
-
-    by_node = _FIRE_TIMING_STAMPS.get(trace)
-    if by_node is None:
-        by_node = {}
-        _FIRE_TIMING_STAMPS[trace] = by_node
-    return by_node.setdefault(grad_fn_object_id, [])
-
-
-def _clear_fire_timing_stamps(trace: Any) -> None:
-    """Clear every per-node start-stamp LIFO at a pass boundary.
-
-    Stale entries (a prehook fired but its node raised; a caught-and-retried
-    backward) must not survive into a later pass, where the restarting
-    ``call_index`` sequence could otherwise collide with retry debris.
-    """
-
-    by_node = _FIRE_TIMING_STAMPS.get(trace)
-    if not by_node:
-        return
-    for stamps in by_node.values():
-        stamps.clear()
-
-
-def _pop_matching_fire_start(stamps: list[tuple[int, float]], call_index: int) -> float | None:
-    """Pop the keyed LIFO until a ``call_index`` match; return its stamp.
-
-    Stale entries above the match are DISCARDED, never paired; no match or an
-    empty LIFO returns ``None`` (an untimed fire), so a posthook that runs
-    without its prehook can never inherit a stale stamp as a wrong positive
-    span.
-    """
-
-    while stamps:
-        key, stamp = stamps.pop()
-        if key == call_index:
-            return stamp
-    return None
 
 
 def _backward_registry_slot(trace: Any) -> tuple[weakref.ReferenceType[Any], set[int]]:
@@ -491,6 +449,7 @@ def _close_implicit_backward_pass_if_open(trace: Any, *, _close_path: str = "syn
             # (S) SCAVENGE on every journaled close, on any thread.
             _clear_pending_accumulate_grad_records(trace)
             _clear_fire_timing_stamps(trace)
+            _drain_gradfn_markers(trace)
     # (F) FINALIZE-if-pending, guarded in-routine so no caller can bypass it.
     if _PENDING_BACKWARD_FINALIZE.get(trace) and _current_backward_graph_task_id() is None:
         # Fence in-flight cpu_async D2H grad copies before projections make
@@ -2094,13 +2053,14 @@ def _resolve_live_grad_fn(trace_ref: Any, grad_fn_object_id: int) -> tuple[Any, 
     return live_trace, grad_fn_handle
 
 
-def _make_grad_fn_hook(
+def _make_grad_fn_hook(  # noqa: PLR0913 -- one keyword per carrier the ONE registration path threads (aten LIFO, timing LIFO, FLIP-2 marker LIFO); packing them would hide which hook owns which stack
     trace: Any,
     grad_fn_object_id: int,
     *,
     is_accumulate_grad: bool = False,
     aten_marker_tokens: list[Any] | None = None,
     fire_start_stamps: list[tuple[int, float]] | None = None,
+    gradfn_marker_tokens: list[Any] | None = None,
 ) -> Callable[..., tuple[torch.Tensor | None, ...] | None]:
     """Build a runtime hook for one autograd grad_fn_handle.
 
@@ -2117,6 +2077,10 @@ def _make_grad_fn_hook(
     fire_start_stamps:
         Keyed per-node start-stamp LIFO fed by the timing prehook. ``None``
         when timing registration failed for this node (untimed fires).
+    gradfn_marker_tokens:
+        Per-node open ``record_function`` marker LIFO fed by the timing
+        prehook's FLIP-2 sink; the posthook pops it at the finish-stamp line
+        so the marker span equals the recorded host span by construction.
 
     Returns
     -------
@@ -2132,6 +2096,22 @@ def _make_grad_fn_hook(
         # stays outside the measured span (L9 memo 1.3). Same clock as the
         # prehook stamp -- perf_counter, never the wall `timestamp`.
         fire_finished_monotonic = time.perf_counter()
+        # FLIP-2 (F27): the node marker closes AT the finish stamp, and
+        # TorchLens's OWN logging below runs inside a TYPED internal bracket
+        # (TN-D18) so the complement bucket can never publish our
+        # gradient-saving work under torch's name.
+        if gradfn_marker_tokens:
+            _exit_gradfn_marker(gradfn_marker_tokens.pop())
+        internal_bracket = _enter_internal_gradfn_bracket(grad_fn_object_id)
+        try:
+            return _hook_body(fire_finished_monotonic, *hook_args)
+        finally:
+            _exit_gradfn_marker(internal_bracket)
+
+    def _hook_body(
+        fire_finished_monotonic: float, *hook_args: Any
+    ) -> tuple[torch.Tensor | None, ...] | None:
+        """The posthook logging body (runs inside the typed internal bracket)."""
         if aten_marker_tokens:
             from ._aten_capture import _end_backward_grad_fn
 
@@ -2271,61 +2251,6 @@ def _make_grad_fn_hook(
         return result
 
     return hook
-
-
-def _make_timing_grad_fn_prehook(
-    trace: Any,
-    grad_fn_object_id: int,
-    fire_start_stamps: list[tuple[int, float]],
-) -> Callable[..., None]:
-    """Build the lightweight per-fire timing prehook (L9 memo 1.3).
-
-    The prehook dispatches no tensor ops -- one ``perf_counter`` call and one
-    list append -- so its registration order can never sweep a foreign aten
-    dispatch into the marker bracket; it is registered BEFORE the aten marker
-    prehook only so the measured span covers the whole fire.
-    """
-
-    trace_ref = weakref.ref(trace)
-
-    def timing_prehook(*hook_args: Any) -> None:
-        """Push a keyed ``(call_index, perf_counter)`` start stamp."""
-
-        del hook_args
-        live_trace = trace_ref()
-        if live_trace is None:
-            return None
-        grad_fn_record = getattr(live_trace, "grad_fn_logs", {}).get(grad_fn_object_id)
-        if grad_fn_record is None:
-            return None
-        fire_start_stamps.append((len(grad_fn_record.calls) + 1, time.perf_counter()))
-        return None
-
-    return timing_prehook
-
-
-def _register_fire_timing_prehook(
-    trace: Any,
-    grad_fn_handle: Any,
-    grad_fn_object_id: int,
-    fire_start_stamps: list[tuple[int, float]],
-) -> Any | None:
-    """Register the timing prehook on one node; failure degrades to untimed.
-
-    The timing registration gets ITS OWN try/except, separate from the
-    shipped registration block whose ``except RuntimeError`` converts a node
-    into a fail-closed ``BackwardCoverageGap``: an optional measurement must
-    never turn a complete-coverage node into a coverage gap (L9 memo 1.3,
-    opus m2-r2). Failure returns ``None`` and the node's fires stay untimed
-    (the posthook's keyed LIFO simply never matches).
-    """
-
-    try:
-        return grad_fn_handle.register_prehook(
-            _make_timing_grad_fn_prehook(trace, grad_fn_object_id, fire_start_stamps)
-        )
-    except RuntimeError:
-        return None
 
 
 def _make_aten_grad_fn_prehook(
@@ -2877,6 +2802,7 @@ def _walk_and_hook_backward_graph(
         try:
             aten_marker_tokens: list[Any] = []
             fire_start_stamps = _fire_timing_stamp_list(trace, grad_fn_object_id)
+            gradfn_marker_tokens = _gradfn_marker_list(trace, grad_fn_object_id)
             with pause_logging():
                 handles.append(
                     grad_fn_handle.register_hook(
@@ -2886,6 +2812,7 @@ def _walk_and_hook_backward_graph(
                             is_accumulate_grad=is_accumulate_grad,
                             aten_marker_tokens=aten_marker_tokens,
                             fire_start_stamps=fire_start_stamps,
+                            gradfn_marker_tokens=gradfn_marker_tokens,
                         )
                     )
                 )
@@ -2898,7 +2825,7 @@ def _walk_and_hook_backward_graph(
             # dispatches; a registration failure degrades this node to
             # untimed fires only (own try/except inside the helper).
             timing_handle = _register_fire_timing_prehook(
-                trace, grad_fn_handle, grad_fn_object_id, fire_start_stamps
+                trace, grad_fn_handle, grad_fn_object_id, fire_start_stamps, gradfn_marker_tokens
             )
             if timing_handle is not None:
                 handles.append(timing_handle)
@@ -3491,6 +3418,8 @@ def _run_backward_with_capture(
                 _clear_pending_accumulate_grad_records(trace)
             with contextlib.suppress(BaseException):
                 _clear_fire_timing_stamps(trace)
+            with contextlib.suppress(BaseException):
+                _drain_gradfn_markers(trace)
             for handle in handles:
                 with contextlib.suppress(BaseException):
                     handle.remove()
@@ -3515,6 +3444,10 @@ def _run_backward_with_capture(
         try:
             _clear_fire_timing_stamps(trace)
         # Cleanup must preserve the first failure, including cancellation.
+        except BaseException as exc:  # noqa: BLE001
+            cleanup_error = cleanup_error if cleanup_error is not None else exc
+        try:
+            _drain_gradfn_markers(trace)
         except BaseException as exc:  # noqa: BLE001
             cleanup_error = cleanup_error if cleanup_error is not None else exc
         # SUCCESS path: there is no primary exception whose precedence would

@@ -1,0 +1,5 @@
+# HF_4_CURRENT leg: latest 4.x in REVIEWED constraints -- never let the
+# resolver choose silently. Refresh is a reviewed weekly commit.
+transformers==4.57.6
+timm==1.0.28
+numpy==1.26.4

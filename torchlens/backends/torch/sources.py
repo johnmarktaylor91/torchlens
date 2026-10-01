@@ -98,6 +98,18 @@ def log_source_tensor(
         log_source_tensor_predicate(self, t, source, extra_address)
 
 
+def _emit_source_echo(trace: "Trace", ctx: Any) -> None:
+    """Feed one committed input/buffer event to the echo narrator, if armed.
+
+    Duck-typed runtime-only session read (snoop D1): the hot path imports
+    nothing and pays one dict read when echo is off.
+    """
+
+    echo_session = trace.__dict__.get("_echo_session")
+    if echo_session is not None:
+        echo_session.emit_source(ctx)
+
+
 def log_source_tensor_predicate(
     self: "Trace",
     t: torch.Tensor,
@@ -116,10 +128,7 @@ def log_source_tensor_predicate(
     type_index = self._raw_graph_ws.raw_layer_type_counter[source]
     tensor_label = f"{source}_{type_index}_raw"
     set_tensor_label(t, tensor_label)
-    if source == "input":
-        self.input_layers.append(tensor_label)
-    else:
-        self.buffer_layers.append(tensor_label)
+    (self.input_layers if source == "input" else self.buffer_layers).append(tensor_label)
     module_frame = state.module_stack[-1] if state.module_stack else None
     ctx = _build_record_context(
         kind="input" if source == "input" else "buffer",
@@ -194,6 +203,9 @@ def log_source_tensor_predicate(
             transformed_ram_payload=transformed_ram_payload,
             predicate_matched=spec.save_out or spec.save_metadata,
         )
+        # Echo narrator slot (snoop D1, source seam): once per committed
+        # input/buffer event, after the append.
+        _emit_source_echo(self, ctx)
         _evaluate_halt(ctx, state.options, frontier_output=t)
     except HaltSignal:
         raise
@@ -345,8 +357,8 @@ def log_source_tensor_exhaustive(
         "visualizer_path": None,
         "autograd_memory": None,
         "num_autograd_tensors": None,
-        "bytes_delta_at_call": 0,
-        "bytes_peak_at_call": 0,
+        "bytes_delta_at_call": None,
+        "bytes_peak_at_call": None,
         # Child tensor variation tracking
         "has_out_variations": False,
         "out_versions_by_child": {},
@@ -499,7 +511,12 @@ def log_source_tensor_exhaustive(
     _add_tensor_backward_hook(self, t, tensor_label)
 
     options = getattr(self, "_predicate_save_options", None)
-    if options is not None and options.halt is not None:
+    # Echo narrator slot (snoop D1, source seam, exhaustive tier): the halt
+    # path below already builds this context shape on demand; echo shares the
+    # build so the source line renders from the same record. Duck-typed
+    # session read: the hot path imports nothing.
+    echo_session = self.__dict__.get("_echo_session")
+    if echo_session is not None or (options is not None and options.halt is not None):
         halt_ctx = _build_record_context(
             kind="input" if source == "input" else "buffer",
             op_log_or_op_data={
@@ -523,4 +540,7 @@ def log_source_tensor_exhaustive(
             include_source_events=True,
             sample_id=None,
         )
-        _evaluate_halt(halt_ctx, options, frontier_output=t)
+        if echo_session is not None:
+            _emit_source_echo(self, halt_ctx)
+        if options is not None and options.halt is not None:
+            _evaluate_halt(halt_ctx, options, frontier_output=t)

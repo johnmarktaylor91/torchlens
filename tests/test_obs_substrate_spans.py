@@ -27,14 +27,12 @@ from torchlens.observability._spans import MAX_LABEL_LENGTH, escape_label
 
 _PACKAGE_ROOT = Path(torchlens.__file__).resolve().parent
 
-#: The ONE sanctioned profiler construction site, plus the reason-ledgered
-#: legacy seam: kernel_telemetry's private ATen test activation still builds
-#: its own profile + chrome-file join; F27 W2.1 deletes the chrome-file path
-#: unconditionally and re-routes it through the session engine. Adding ANY
-#: other row here requires a lane-report-visible justification.
+#: The ONE sanctioned profiler construction site. F27 W2.1 burned down the
+#: kernel_telemetry legacy seam: its private ATen activation now routes
+#: through the session engine and the chrome-file join path is deleted.
+#: Adding ANY row here requires a lane-report-visible justification.
 _PROFILER_DOOR_ALLOWLIST = {
     "observability/_session.py": 1,
-    "kernel_telemetry.py": 1,  # legacy ATen seam; burn-down owner F27 (W2.1)
 }
 
 

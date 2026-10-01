@@ -216,14 +216,22 @@ def test_op_repr_degrades_under_predicate_save() -> None:
 
 
 def test_layer_repr_on_live_trace_unchanged() -> None:
-    """A Layer bound to a live Trace keeps the full informative repr."""
+    """A Layer bound to a live Trace renders the one-line envelope+core repr.
+
+    F10 re-pin: the numberless five-line summary became the lovely line
+    (envelope + core stats); the card (with graph context) is ``str()``.
+    """
 
     trace = tl.trace(_TwoStage(), torch.randn(2, 4))
     layer = trace["relu_1_2"]
     text = repr(layer)
-    assert "Layer relu_1_2" in text
-    assert "parents" in text
+    assert "relu_1_2" in text
+    assert "\n" not in text
+    assert "mean=" in text  # the core carries numbers now
     assert "detached" not in text
+    card = str(layer)
+    assert card.splitlines()[0] == text
+    assert "graph" in card
 
 
 def test_op_repr_after_trace_collection_degrades_not_raises() -> None:

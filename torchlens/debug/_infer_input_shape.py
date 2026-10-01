@@ -7,12 +7,13 @@ import math
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import torch
 from torch import nn
 
 from torchlens._errors import ShapeInferenceError
+from torchlens.debug._infer_failure_classify import classify_nongeometric_failure
 
 if TYPE_CHECKING:
     from torchlens.data_classes.trace import Trace
@@ -20,6 +21,7 @@ if TYPE_CHECKING:
 FailureReason = Literal[
     "non_shape_blocker",
     "exact_size_unreachable",
+    "multi_input_required",
     "multi_input_unsupported",
     "budget_exhausted",
     "unknown_entry",
@@ -2035,6 +2037,11 @@ def _run_search(
             attempts,
             f"Shape inference was blocked by an unsupported forward error: {delayed_blockers[-1]}",
         )
+    # Evidence-led classification (quickstart memo D10, the CLIP fix):
+    # see torchlens/debug/_infer_failure_classify.py.
+    classified = classify_nongeometric_failure(attempts, _is_skippable_shape_error)
+    if classified is not None:
+        return _failure_result(cast("FailureReason", classified[0]), attempts, classified[1])
     return _failure_result(
         "exact_size_unreachable",
         attempts,

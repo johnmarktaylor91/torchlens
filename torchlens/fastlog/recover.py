@@ -584,7 +584,7 @@ def _validate_fastlog_layout(bundle_path: Path, manifest: Manifest) -> None:
     decision.
     """
 
-    enforce_version_policy(manifest)
+    enforce_version_policy(manifest, bundle_path=bundle_path)
     if manifest.bundle_format != "fastlog-directory":
         raise TorchLensIOError("Expected fastlog-directory bundle format.")
     required = (

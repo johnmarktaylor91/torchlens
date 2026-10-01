@@ -1,0 +1,117 @@
+{
+  "$id": "https://torchlens.dev/schemas/torchlens.agent.overview_manifest.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "artifact": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "data": {
+      "additionalProperties": true,
+      "properties": {
+        "declared_payload_bytes": {
+          "type": "integer"
+        },
+        "declared_payload_count": {
+          "type": "integer"
+        },
+        "gradient_blob_count": {
+          "type": "integer"
+        },
+        "has_backward_pass": {
+          "type": "boolean"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "manifest_readable": {
+          "type": "boolean"
+        },
+        "model_signature": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "n_layers": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "n_sites": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "provenance": {
+          "type": "object"
+        },
+        "save_level": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tlspec_version": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "manifest_readable"
+      ],
+      "type": "object"
+    },
+    "limits": {
+      "type": "object"
+    },
+    "request": {
+      "type": "object"
+    },
+    "schema": {
+      "const": "torchlens.agent.overview_manifest.v1"
+    },
+    "schema_stability": {
+      "const": "documented-unstable"
+    },
+    "status": {
+      "type": "string"
+    },
+    "torchlens_version": {
+      "type": "string"
+    },
+    "truncation": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "artifact",
+    "data",
+    "limits",
+    "request",
+    "schema",
+    "schema_stability",
+    "status",
+    "torchlens_version",
+    "truncation",
+    "warnings"
+  ],
+  "title": "Torch-free manifest digest (never unpickles)",
+  "type": "object"
+}

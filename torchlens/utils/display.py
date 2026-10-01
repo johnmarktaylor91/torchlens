@@ -385,7 +385,6 @@ def tensor_stats_summary(tensor: Any) -> str:
     # synced eight times per line. Field layout is preserved; the numbers
     # now come from ``torchlens.stats``.
     try:
-        from ..stats._stats_kernel import WIDEN_CHUNK
         from ..stats._tensor_stats import tensor_stats
 
         stats = tensor_stats(tensor)
@@ -396,30 +395,23 @@ def tensor_stats_summary(tensor: Any) -> str:
         nan_percent = 100.0 * stats.nan_count / numel
         inf_percent = 100.0 * (stats.posinf_count + stats.neginf_count) / numel
         zero_percent = 100.0 * (stats.zero_count or 0) / numel
-        if tensor.is_complex():
-            negative_percent = None
-        else:
-            work = tensor.detach().reshape(-1)
-            negative_count = 0
-            for start in range(0, numel, WIDEN_CHUNK):
-                chunk = work[start : start + WIDEN_CHUNK]
-                negative_count += int((chunk < 0).sum())
-            negative_percent = 100.0 * negative_count / numel
         mean_value, std_value = stats.mean, stats.sd
         min_value, max_value = stats.finite_min, stats.finite_max
     except (RuntimeError, TypeError, ValueError):
         return prefix
 
-    # Complex moments are magnitude statistics and say so (lovely bug 3);
-    # the sign field is meaningless for magnitudes and is omitted.
+    # Complex moments are magnitude statistics and say so (lovely bug 3).
+    # The neg% field is RETIRED from the default line (F10 executes the D9
+    # ruling C02 carried as a residual): ~50% on 60% of real float lines,
+    # and the exact count cost a full extra traversal for a fact the
+    # sparkline already shows on the core grammar surfaces.
     mean_label, std_label = ("|mean|", "|std|") if stats.magnitude_basis else ("mean", "std")
-    neg_field = "" if negative_percent is None else f"neg={_format_percent(negative_percent)} "
     summary = (
         f"{prefix} {mean_label}={_format_number(mean_value)} "
         f"{std_label}={_format_number(std_value)} "
         f"min={_format_number(min_value)} max={_format_number(max_value)} "
         f"nan={_format_percent(nan_percent)} inf={_format_percent(inf_percent)} "
-        f"{neg_field}zero={_format_percent(zero_percent)}"
+        f"zero={_format_percent(zero_percent)}"
     )
     # Hazard marker is ASCII '!' in both encodings (lovely D4/bug 10).
     if nan_percent > 0:

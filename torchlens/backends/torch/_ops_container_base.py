@@ -154,6 +154,7 @@ def _op_record_from_log(
                     fields_dict["parent_arg_positions"],
                     fields_dict["_label_raw"],
                     fields_dict["func_call_id"],
+                    func_name=fields_dict.get("func_name"),
                 )
             ),
             unattributed_tensor_args=tuple(fields_dict.get("unattributed_tensor_args") or ()),

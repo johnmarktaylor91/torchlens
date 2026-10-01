@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 from ..quantities import Bytes
 from ._common import _ordered_ops, _require_pandas, _source_line
 
-CostMetric = Literal["flops", "memory", "duration"]
+CostMetric = Literal["flops", "memory", "duration", "device_time"]
 
 _NO_COPY_OPS = frozenset(
     {
@@ -206,8 +206,44 @@ def _metric_field(by: CostMetric) -> str:
         "flops": "flops_forward",
         "memory": "activation_memory",
         "duration": "func_duration",
+        # device_time reads the session-time Kineto join, not an Op field;
+        # _op_metric_reader owns that branch.
+        "device_time": "func_duration",
     }
     return fields[by]
+
+
+def _device_time_lookup(trace: Trace) -> dict[str, int]:
+    """Return the per-op joined device-time table, refusing typed when absent.
+
+    The Kineto join is session-time (torchnative W2.2): it exists only on a
+    trace captured under ``torchlens.observability.native_profile`` (or an
+    owned session joined via ``join_session``) whose join reached
+    ``joined``. Asking for ``by="device_time"`` anywhere else raises the
+    typed ladder refusal (``device_time_unavailable``) instead of returning
+    silent zeros.
+    """
+
+    from ..observability._join import require_availability
+    from ..observability._native_profile import join_result_for
+
+    result = join_result_for(trace)
+    if result is None:
+        from ..observability._errors import ProfilerSessionError
+
+        raise ProfilerSessionError(
+            "device_time is unavailable: this trace carries no Kineto join. "
+            "Device time exists only for captures run under an owned "
+            "profiler session.",
+            code="device_time_unavailable",
+            remedy=(
+                "Capture through torchlens.observability.native_profile "
+                "(one execution, save-nothing tier) on a CUDA host, then "
+                "rank with by='device_time'."
+            ),
+        )
+    require_availability(result)
+    return result.op_device_ns
 
 
 def hot_path_rows(
@@ -220,7 +256,9 @@ def hot_path_rows(
     trace:
         Completed TorchLens trace.
     by:
-        Cost metric: ``"flops"``, ``"memory"``, or ``"duration"``.
+        Cost metric: ``"flops"``, ``"memory"``, ``"duration"``, or
+        ``"device_time"`` (joined Kineto device nanoseconds; refuses typed
+        without a joined session -- see torchnative W2.2/W2.3).
 
     Returns
     -------
@@ -230,12 +268,16 @@ def hot_path_rows(
     """
 
     field_name = _metric_field(by)
+    device_times = _device_time_lookup(trace) if by == "device_time" else None
     rows: dict[str, dict[str, float | int | str]] = {}
     excluded = 0
     for op in _ordered_ops(trace):
         if int(getattr(op, "step_index", 0) or 0) <= 0:
             continue
-        value = getattr(op, field_name, None)
+        if device_times is not None:
+            value = device_times.get(str(getattr(op, "label", "")), None)
+        else:
+            value = getattr(op, field_name, None)
         if value is None:
             excluded += 1
             continue

@@ -12,14 +12,87 @@ file-size ratchet; semantics unchanged.
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 from typing import Any
 
 import torch
 
+from .._errors import InvalidArgumentError
 from ..selection import SiteEntry, _apply_invalid, _Mask
 from .types import HelperSpec
 
 __all__ = ["_derive_masked_edit", "_masked_factory", "_validate_edited"]
+
+
+def _row_equivariance_facts(
+    edit: HelperSpec, entry: SiteEntry, site_label: str
+) -> tuple[tuple[str, Any], ...]:
+    """Apply the D23 mask-equivariance law to a row-coherent element-masked edit.
+
+    The v1 check is DRAW-INDEPENDENT (adjudicated over SOL's per-permutation
+    rule, which would make legality depend on the realized seed and
+    intermittently fail a seed sweep): every batch row must share the same
+    non-batch mask. A shared token span across rows is a legitimate positional
+    resampling ablation and passes; per-row-differing masks refuse typed,
+    teaching the equal-mask-group remedy. The returned facts (mask digest +
+    row-equivalence summary) ride the derived spec's persisted metadata NOW so
+    the deferred mask-visible draw grouping needs no schema change.
+
+    Parameters
+    ----------
+    edit:
+        The row-coherent helper spec (metadata ``row_coherent`` +
+        ``batch_axis``).
+    entry:
+        Resolved site entry carrying the element mask.
+    site_label:
+        Site label for refusal messages.
+
+    Returns
+    -------
+    tuple[tuple[str, Any], ...]
+        Metadata disclosure pairs for the derived spec.
+    """
+
+    metadata = dict(edit.metadata)
+    axis = metadata.get("batch_axis")
+    dense = entry._mask._dense_ro()
+    if not isinstance(axis, int) or not -dense.ndim <= axis < dense.ndim:
+        raise InvalidArgumentError(
+            f"row-coherent edit {edit.helper_name!r} declares batch axis "
+            f"{axis!r}, which is out of range for site {site_label!r}'s mask "
+            f"of rank {dense.ndim} (shape {tuple(dense.shape)!r})",
+            code="sampling_geometry_mismatch",
+            remedy="pass the batch axis that exists on this site's geometry",
+            argument="axis",
+        )
+    normalized_axis = axis % dense.ndim
+    first = dense.select(normalized_axis, 0)
+    rows_equal = all(
+        torch.equal(dense.select(normalized_axis, index), first)
+        for index in range(1, dense.shape[normalized_axis])
+    )
+    digest = hashlib.sha256(
+        dense.detach().to("cpu", torch.uint8).contiguous().numpy().tobytes()
+    ).hexdigest()[:16]
+    if not rows_equal:
+        raise InvalidArgumentError(
+            f"row-coherent edit {edit.helper_name!r} at {site_label!r} received "
+            "a partial mask whose selected elements DIFFER across batch rows: a "
+            "whole-row exchange under a per-row mask would silently mix donor "
+            "and subject values row by row. The v1 legality check is "
+            "draw-independent (all rows must share one non-batch mask), so a "
+            "seed sweep can never flip it",
+            code="mask_not_row_equivariant",
+            remedy="select the same positions in every row (an all-rows span "
+            "such as tl.units masks broadcast over the batch axis), or split "
+            "the batch into equal-mask groups and apply the edit per group",
+            argument="selection",
+        )
+    return (
+        ("selection_mask_digest", digest),
+        ("selection_mask_rows_equal", True),
+    )
 
 
 def _validate_edited(edited: Any, out: torch.Tensor, site_label: str) -> torch.Tensor:
@@ -134,6 +207,8 @@ def _derive_masked_edit(edit: Any, entry: SiteEntry, digest: str, site_label: st
                 f"edit {edit.helper_name!r} has no runtime factory to mask.",
                 site=site_label,
             )
+        if dict(edit.metadata).get("row_coherent"):
+            disclosure = disclosure + _row_equivariance_facts(edit, entry, site_label)
         return dataclasses.replace(
             edit,
             factory=_masked_factory(edit.factory, entry._mask, site_label),

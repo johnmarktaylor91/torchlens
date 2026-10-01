@@ -394,6 +394,27 @@ def _trace_intervene_options(trace: "Trace") -> Any | None:
     return options
 
 
+def _predicate_hook_metadata(entry: Any, decision: InterventionDecision) -> dict[str, Any]:
+    """Build one predicate-door hook's persisted metadata dict.
+
+    Leverage B7: a spec-rule decision carries its rule's provenance, so the
+    persisted hook records the USER'S EXPRESSION beside the lowered label
+    target. The rider is provenance only: the save still stamps
+    spec_derived=True for every predicate-door hook (the ADDRESSING is
+    derived labels; the disclosure keys the door, never this rider).
+    """
+
+    metadata = {
+        **dict(entry.metadata),
+        "created_by": "intervene_predicate",
+        "direction": entry.metadata.get("direction", decision.direction),
+    }
+    if decision.where_repr is not None:
+        metadata["spec_where_repr"] = decision.where_repr
+        metadata["spec_rule_id"] = decision.rule_id
+    return metadata
+
+
 def _record_predicate_intervention_spec(
     trace: "Trace",
     ctx: RecordContext,
@@ -471,16 +492,11 @@ def _record_predicate_intervention_spec(
             target_keys[2].add(frozen_target)
             target_keys[1] = len(spec.targets)
     for entry in entries:
-        metadata = {
-            **dict(entry.metadata),
-            "created_by": "intervene_predicate",
-            "direction": entry.metadata.get("direction", decision.direction),
-        }
         spec.add_hook(
             target,
             entry.helper_spec if entry.helper_spec is not None else entry.normalized_callable,
             helper=entry.helper_spec,
-            metadata=metadata,
+            metadata=_predicate_hook_metadata(entry, decision),
         )
     trace.__dict__.pop("intervention_spec", None)
     trace.__dict__.pop("_frozen_intervention_spec", None)
@@ -532,6 +548,22 @@ def _apply_predicate_intervention(
     decision = _evaluate_intervene_op(ctx, options)
     if decision is None:
         return out, ()
+    injection_state = getattr(trace, "_tl_injection_state", None)
+    if injection_state is not None and injection_state.get("armed", False):
+        # F01 injections: anchor this firing's injected ops to the PERSISTED
+        # rule id when the intervene= operand is the public immutable spec
+        # (consolidated session-transient state, read by _execute_hook's
+        # recorder).
+        from ...intervention.spec import InterventionSpec as _PublicSpec
+
+        predicate = getattr(options, "intervene", None)
+        if isinstance(predicate, _PublicSpec):
+            matched_rule = predicate.match(ctx)
+            injection_state["current_rule"] = (
+                matched_rule.rule_id if matched_rule is not None else None
+            )
+        else:
+            injection_state["current_rule"] = None
     _record_predicate_intervention_spec(trace, ctx, decision)
     hook_entries = normalize_hook_plan(
         decision.hook,

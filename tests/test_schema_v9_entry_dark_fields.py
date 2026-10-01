@@ -92,11 +92,22 @@ def test_defaults_round_trip_on_ordinary_captures(tmp_path):
     assert loaded.structure_evidence is None
 
 
-def test_injection_provenance_round_trips_and_validates(tmp_path):
+def test_injection_provenance_on_a_model_op_refuses_at_load(tmp_path):
+    """A grammatical slot hand-stamped on a MODEL op refuses (F44 stage 2).
+
+    The entry-dark era pinned pure grammar round-trip; with the F44 writer
+    shipped, rows carrying ``injection_provenance`` ARE the injected family
+    and must satisfy the full codec contract (envelope, host anchoring, no
+    graph entanglement) -- a stamped model op is a forged row, never a
+    silent pass-through. The genuine round-trip is pinned in
+    ``tests/test_log_injections_s2_persistence.py``.
+    """
+
     trace = _traced()
     trace.ops[-1].injection_provenance = _injection_record()
-    loaded = _roundtrip(trace, tmp_path, "injection_ok")
-    assert loaded.ops[-1].injection_provenance == _injection_record()
+    with pytest.raises(TorchLensIOError) as excinfo:
+        _roundtrip(trace, tmp_path, "injection_stamped")
+    assert getattr(excinfo.value, "fields", {}).get("code") == "artifact_injection_codec_invalid"
 
 
 @pytest.mark.parametrize(

@@ -24,15 +24,26 @@ buffers, gradients, and the model itself.
 ```python
 import torch, torchvision.models as models, torchlens as tl
 
-model = models.alexnet(weights=None)
-x = torch.randn(1, 3, 224, 224)
+model = models.resnet18(weights="IMAGENET1K_V1").eval()  # .eval(): pretrained models arrive
+# in train mode, and a train-mode forward silently updates BatchNorm running statistics
+x = torch.rand(1, 3, 224, 224, generator=torch.Generator().manual_seed(0))
 
-log = tl.trace(model, x)     # one call -- full graph + all activations
+log = tl.trace(model, x)      # one call -- full graph + all activations
 print(log.summary())          # module table, op count, FLOPs
-print(log['relu_1_2'].out.shape)   # grab any activation by name ...
-print(log['features.6'].out.shape) # ... or by module path
-print(log[7].func_name)            # ... or by ordinal
+print(log["conv2d_1_1"].out.shape)  # grab any activation by name ...
+print(log["layer1.0"].out.shape)    # ... or by module path
+print(log[7].func_name)             # ... or by ordinal
 log.draw()                    # PDF of the computational graph
+```
+
+Every verb climbs the same three-rung **input ladder** ([full guide](docs/quickstart.md)):
+
+```python
+# API sketch; `model` is your model and `lm` any HuggingFace language model.
+log = tl.trace(model, x)                             # best: your real input
+log = tl.trace(model, input_size=(1, 3, 224, 224))   # your shape, random values; disclosed
+log = tl.trace(model)                                # inferred shape + random values; disclosed, or a teach
+log = tl.trace(lm, "The quick brown fox")            # HF models: a string is a real input
 ```
 
 <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/swin_v2_b_demo.jpg" width="70%" height="70%">
@@ -235,6 +246,12 @@ outgoing = target.projective_field.at((3, 3), target=log['features.8'])
 
 <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/receptive_projective_fields.svg" width="70%" alt="Receptive and projective field directions through a neural-network graph">
 
+Every geometric claim is verification-backed, not asserted: `rf.check(unit)` cross-checks
+one unit against an empirical gradient support mask, and
+`tl.validate(model, x, scope="receptive_field")` runs the armed gradient tripwire over a
+whole model with a PASS / FAIL / INDETERMINATE verdict. No other extraction tool ships a
+receptive-field subsystem with this verification loop.
+
 See the [receptive and projective fields guide](docs/receptive_projective_fields.md) for the
 status contract, visual overlays, validation, and layer-to-layer queries.
 
@@ -314,6 +331,17 @@ print(recurrent_log['linear_1:2'].out)     # second pass of the linear layer
 recurrent_log.draw(vis_mode='rolled')
 ```
 
+And the HTML export is already **interactive** -- one self-contained file with
+pan, zoom, and node-hover metadata, no server and no extra dependency:
+
+```python
+from pathlib import Path
+viewer = tl.export.html(recurrent_log, Path('trace.html'))   # open in any browser
+```
+
+See [docs/reference/export.md](docs/reference/export.md) for the SVG, Netron,
+Model Explorer, and profiler export family.
+
 ### 5. Interventions
 
 Ablate, steer, scale, or replace activations during the forward pass:
@@ -343,8 +371,10 @@ for the full reference.
 Compare multiple runs side by side with `tl.bundle`:
 
 ```python
-clean_log = tl.trace(model, x, save=tl.func('relu'))
-patched_log = tl.trace(model, x, save=tl.func('relu'),
+# Default save policy retains inputs, so the bundle can PROVE the two runs
+# saw identical inputs before comparing (comparisons never assume it).
+clean_log = tl.trace(model, x)
+patched_log = tl.trace(model, x,
                        intervene=tl.when(tl.func('relu'), tl.zero_ablate()))
 bundle = tl.bundle({'clean': clean_log, 'patched': patched_log}, baseline='clean')
 bundle.compare_at('relu_1_2')   # one site; a multi-site selector must resolve uniquely
@@ -424,6 +454,67 @@ log = tl.trace(tf_model,    x,      backend='tf')
 
 PyTorch remains the full-feature backend. Preview backends are pinned and
 documented in [`docs/`](docs/).
+
+### 7. Profile it, and stream statistics over whole datasets
+
+Every trace already carries per-op timings, FLOPs, and memory; `profile()`
+presents them per op, module, or call, sorted and truncated how you like, and
+`honesty()` names the clock and instrumentation state behind every number
+instead of just saying "measured":
+
+```python
+prof_log = tl.trace(model, torch.randn(1, 3, 64, 64))
+print(prof_log.profile(level='module', sort_by='flops', top_k=8))
+print(prof_log.profile().honesty())
+
+# Nsight-ready: wrap each captured op in an identity-carrying NVTX range
+nvtx_log = tl.trace(model, torch.randn(1, 3, 64, 64),
+                    capture=tl.options.CaptureOptions(emit_nvtx=True))
+```
+
+Dataset-level statistics stream in constant memory -- including *exact*
+full-data linear CKA, not a minibatch approximation:
+
+```python
+stats = tl.aggregate(
+    model,
+    [torch.rand(1, 3, 64, 64) for _ in range(2)],   # any iterable of inputs
+    metrics={'relu_1_2': tl.stats.Aggregator(tl.stats.Mean(), tl.stats.Norm()),
+             'output': tl.stats.Quantile()},
+)
+print(stats['relu_1_2']['Mean'], sorted(stats['output']))
+```
+
+For training loops, build the sparse recorder once and log whichever steps
+you like; discovery helpers list what there is to ask for:
+
+```python
+from torchlens.fastlog import Recorder
+from torchlens.utils import list_modules, list_ops
+
+with Recorder(model, save=tl.func('relu')) as rec:
+    for step in range(2):                    # your optimizer loop
+        rec.log(torch.rand(1, 3, 64, 64))    # sparse capture of this step
+
+print(list_modules(model)[:3])               # every module address + class
+print(list_ops(model, torch.randn(1, 3, 64, 64))[:3])   # op counts per forward
+```
+
+FLOP totals follow a declared convention (fma=2 by default; `count_fma_as_two=False`
+recounts under fma=1 where a MAC split is derivable, and refuses typed where it is
+not), and custom ops get first-class cost rules:
+
+```python
+# API sketch; register in your application before tracing (process-global registry).
+from torchlens.capture.flops import register_op_rule
+register_op_rule('my_custom_op', lambda output_shape, param_shapes, args, kwargs: 0)
+```
+
+See [docs/reference/stats.md](docs/reference/stats.md) for the full streaming-stats
+surface, [docs/native-torch.md](docs/native-torch.md) for what native torch tooling is
+authoritative for (and the exact recipes we point at), and
+[docs/migration/from_hooks.md](docs/migration/from_hooks.md) for an honest two-way
+comparison with forward hooks.
 
 
 ## Gallery
@@ -546,7 +637,10 @@ activations are unaffected either way.
 | [docs/facets.md](docs/facets.md) | Facets, patching, and SDPA reconstruction |
 | [docs/performance.md](docs/performance.md) | Speed knobs and benchmark numbers |
 | [docs/reference/debug.md](docs/reference/debug.md) | Trace diagnostics: lineage, non-finites, costs, and gradients |
-| [docs/reference/export.md](docs/reference/export.md) | Static, profiling, tabular, and tracker exports |
+| [docs/reference/export.md](docs/reference/export.md) | Static, profiling, tabular, and tracker exports (incl. the interactive HTML viewer) |
+| [docs/reference/stats.md](docs/reference/stats.md) | Streaming dataset statistics: `tl.stats` accumulators and `tl.aggregate` |
+| [docs/native-torch.md](docs/native-torch.md) | What native torch tooling is authoritative for, with recipes |
+| [docs/migration/from_hooks.md](docs/migration/from_hooks.md) | Honest two-way comparison with forward hooks |
 | [docs/reference/hash.md](docs/reference/hash.md) | Provisional structural hashes and CI architecture pins |
 | [docs/reference/attribution.md](docs/reference/attribution.md) | Native input and layer attribution methods |
 | [docs/reference/collapse.md](docs/reference/collapse.md) | Smart-collapse visual reference and label contract |

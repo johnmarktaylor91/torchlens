@@ -1,9 +1,15 @@
 """TorchLens - extract outs and metadata from PyTorch models.
 
-Importing torchlens has **no side effects** on the torch namespace. Torch
-functions are wrapped lazily on the first call to ``trace()`` and
-stay wrapped afterward. TorchLens 2.0 keeps the top-level namespace
-intentionally small; historical spellings live in their owning submodules.
+Importing torchlens has **no side effects** on the torch namespace -- and no
+torch import at all until first use (agent memo 3.11: tier-0 CLI verbs and
+manifest preflights stay torch-free). Torch functions are wrapped lazily on
+the first call to ``trace()`` and stay wrapped afterward. TorchLens 2.0 keeps
+the top-level namespace intentionally small; historical spellings live in
+their owning submodules.
+
+For AI agents: ``trace.to_agent_json()``, ``tl.report.explain(trace,
+max_tokens=N)``, ``torchlens.agent.guide()``, and the CLI
+(``python -m torchlens --help``) are the machine-facing doors.
 """
 
 from __future__ import annotations
@@ -13,8 +19,9 @@ import types as _types
 from collections.abc import Iterable as _Iterable, Mapping as _Mapping
 from typing import TYPE_CHECKING as _TYPE_CHECKING, Any as _Any
 
-import torch as _torch
-from torch import nn as _nn
+if _TYPE_CHECKING:
+    import torch as _torch
+    from torch import nn as _nn
 
 __version__ = "2.34.1"
 
@@ -36,12 +43,19 @@ _LAZY_ATTRS = {
     "Macs": ("torchlens.quantities", "Macs"),
     "Quantity": ("torchlens.quantities", "Quantity"),
     "ReentrantTraceError": ("torchlens._state", "ReentrantTraceError"),
+    # Agent surface (F29): the read-only inspection core. Deliberately NOT in
+    # __all__ (frozen root budget); reachable as tl.agent per the docs.
+    "agent": ("torchlens.agent", None),
+    # The docs teach tl.utils.doctor(); the row was missing so the taught
+    # spelling raised AttributeError on a cold import (agent memo 3.10).
+    "utils": ("torchlens.utils", None),
     "captured_run": ("torchlens.captured_run", None),
     "errors": ("torchlens.errors", None),
     "ir": ("torchlens.ir", None),
     "observers": ("torchlens.observers", None),
     "options": ("torchlens.options", None),
     "quantities": ("torchlens.quantities", None),
+    "brainpipe": ("torchlens.brainpipe", None),
     "register_container": ("torchlens.ir.container", "register_container"),
     "span": ("torchlens.observers", "span"),
     "tap": ("torchlens.observers", "tap"),
@@ -335,10 +349,12 @@ def _out_from_log(trace: Trace, layer: str) -> _torch.Tensor:
         suggestions = trace.find_layers(layer) if hasattr(trace, "find_layers") else []
         raise ValueError(_did_you_mean_message(layer, suggestions)) from exc
 
+    import torch
+
     out = getattr(layer_log, "out", None)
     if out is None:
         raise ValueError(f"Layer {layer!r} resolved but has no saved out.")
-    if not isinstance(out, _torch.Tensor):
+    if not isinstance(out, torch.Tensor):
         raise TypeError(f"Layer {layer!r} out is not a torch.Tensor.")
     return out
 
@@ -680,6 +696,11 @@ __all__ = [
     "stable_across_passes",
     "pass_variance",
     "subspace",
+    # F39 unhide (conflict-ledger row 8: the promotion claimed by five memos):
+    # the streaming-statistics namespace and its dataloader aggregation door
+    # were shipped, documented-unstable, and root-reachable but undeclared.
+    "stats",
+    "aggregate",
 ]
 
 # ``from __future__ import annotations`` binds ``annotations`` as a reachable

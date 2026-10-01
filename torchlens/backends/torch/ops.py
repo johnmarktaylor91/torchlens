@@ -6,6 +6,7 @@ interventions, and saves or streams activation payloads for torch captures.
 
 # ruff: noqa: E402, F401
 
+import contextlib
 import copy
 import dataclasses
 import time
@@ -68,6 +69,7 @@ from ...data_classes.op import (
     _stamp_reference_out,
     apply_transform,
     register_relation_cell_encoding,
+    train_mode_tripwire_armed,
     validate_streaming_transform_output,
     validate_train_mode_transform_output,
 )
@@ -550,6 +552,10 @@ class _OutputTensorEntry:
     container_path: tuple[OutputPathComponent, ...]
     container_spec: ContainerSpec | None
     autograd_stats: tuple[int | None, int | None]
+    #: Saved-band decomposition (observe items 7-8): saved_parameter /
+    #: saved_buffer / saved_activation / newly_saved_bytes sub-counters
+    #: beside the gross band, or None when no grad_fn walk ran.
+    autograd_band: dict[str, int] | None = None
 
 
 #: FunctionCallRef fields the per-output logging path genuinely rewrites
@@ -735,6 +741,7 @@ _apply_predicate_mode_interventions_to_outputs = _rebind_function(
     _ops_interventions._apply_predicate_mode_interventions_to_outputs, globals()
 )
 _trace_intervene_options = _rebind_function(_ops_interventions._trace_intervene_options, globals())
+_predicate_hook_metadata = _rebind_function(_ops_interventions._predicate_hook_metadata, globals())
 _record_predicate_intervention_spec = _rebind_function(
     _ops_interventions._record_predicate_intervention_spec, globals()
 )
@@ -809,6 +816,7 @@ _iter_autograd_saved_candidates = _rebind_function(
 )
 _collect_tensor_values = _rebind_function(_ops_exhaustive._collect_tensor_values, globals())
 _add_autograd_saved_tensor = _rebind_function(_ops_autograd._add_autograd_saved_tensor, globals())
+_classify_saved_storage = _rebind_function(_ops_autograd._classify_saved_storage, globals())
 _get_autograd_saved_stats_by_output = _rebind_function(
     _ops_autograd._get_autograd_saved_stats_by_output, globals()
 )
@@ -880,6 +888,7 @@ _note_module_filter_suppression = _rebind_function(
     _ops_finalize._note_module_filter_suppression, globals()
 )
 _make_layer_log_entry = _rebind_function(_ops_finalize._make_layer_log_entry, globals())
+_emit_op_echo = _rebind_function(_ops_finalize._emit_op_echo, globals())
 _raise_if_nonfinite_requested = _rebind_function(
     _ops_finalize._raise_if_nonfinite_requested, globals()
 )

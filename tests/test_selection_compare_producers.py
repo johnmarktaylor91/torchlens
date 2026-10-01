@@ -300,14 +300,19 @@ def test_self_comparison_refuses_typed(log):
 
 
 def test_reference_missing_site_refuses_named(log):
-    """A reference lacking a population site refuses site_not_in_trace, named."""
+    """A reference lacking a population site refuses as a one-sided join key.
+
+    Since leverage B4 the pairing authority is the guarded site join: a site
+    the reference never executed is a DECLARED subject-only addition
+    (``site_join_refused`` / ``one_sided_subject``), never a guess.
+    """
 
     other = tl.trace(nn.Linear(4, 2), torch.randn(1, 4))
     try:
         with pytest.raises(SelectionError) as excinfo:
             tl.changed(other, _RELU).resolve(log)
-        assert excinfo.value.fields["reason"] == "site_not_in_trace"
-        assert excinfo.value.fields["sample"] == "reference"
+        assert excinfo.value.fields["reason"] == "site_join_refused"
+        assert excinfo.value.fields["join_verdict"] == "one_sided_subject"
     finally:
         other.cleanup()
 
@@ -363,8 +368,10 @@ def test_structural_site_key_mismatch_refuses():
         assert subject["linear_1_1"].site_key != reference["linear_1_1"].site_key
         with pytest.raises(SelectionError) as excinfo:
             tl.changed(reference, "linear_1_1").resolve(subject)
-        assert excinfo.value.fields["reason"] == "site_not_in_trace"
-        assert "structurally DIFFERENT site" in str(excinfo.value)
+        # Since leverage B4 the guarded join is the pairing authority: the
+        # coincident label's structural key exists on the subject only.
+        assert excinfo.value.fields["reason"] == "site_join_refused"
+        assert excinfo.value.fields["join_verdict"] == "one_sided_subject"
     finally:
         subject.cleanup()
         reference.cleanup()

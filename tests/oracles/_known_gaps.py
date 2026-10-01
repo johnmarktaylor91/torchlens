@@ -31,6 +31,9 @@ KNOWN_PREDICATES = frozenset(
         "default_truth",
         "numeral_census",
         "census_delta",
+        # 6b (F36): licenses an EMPTY invariance-witness slot on a declared
+        # cache-key dont-care row; burned down by funding the witness.
+        "invariance_witness",
     }
 )
 

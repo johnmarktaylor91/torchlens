@@ -131,8 +131,8 @@
             "backend_semantics.aliased_output_inputs": "defaulted_empty",
             "backend_semantics.autograd_memory": "populated",
             "backend_semantics.backend_grad_handle": "populated",
-            "backend_semantics.bytes_delta_at_call": "defaulted_zero",
-            "backend_semantics.bytes_peak_at_call": "defaulted_zero",
+            "backend_semantics.bytes_delta_at_call": "unknown",
+            "backend_semantics.bytes_peak_at_call": "unknown",
             "backend_semantics.grad_fn_class_name": "populated",
             "backend_semantics.mutated_input_positions": "defaulted_empty",
             "backend_semantics.num_autograd_tensors": "populated",
@@ -293,8 +293,8 @@
             "backend_semantics.aliased_output_inputs": "defaulted_empty",
             "backend_semantics.autograd_memory": "populated",
             "backend_semantics.backend_grad_handle": "populated",
-            "backend_semantics.bytes_delta_at_call": "defaulted_zero",
-            "backend_semantics.bytes_peak_at_call": "defaulted_zero",
+            "backend_semantics.bytes_delta_at_call": "unknown",
+            "backend_semantics.bytes_peak_at_call": "unknown",
             "backend_semantics.grad_fn_class_name": "populated",
             "backend_semantics.mutated_input_positions": "defaulted_empty",
             "backend_semantics.num_autograd_tensors": "populated",
@@ -554,20 +554,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 476921,
+      "python_peak_memory_median_bytes": 477958,
       "sample_count": 3,
       "torch_version": "2.13.0+cu130",
-      "wall_time_median_ms": 48.24903607368469
+      "wall_time_median_ms": 143.799499142915
     }
   },
   "sha256_chunks": [
-    "f8b586df",
-    "3a64940d",
-    "e2703c1a",
-    "daf987f5",
-    "8cfac35d",
-    "2bcc7a14",
-    "0b020f76",
-    "fa614ec4"
+    "4f51d5f8",
+    "4078e480",
+    "1b303916",
+    "e96c9f3c",
+    "6b667f00",
+    "457ee928",
+    "79b39b93",
+    "8e7d1077"
   ]
 }

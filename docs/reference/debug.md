@@ -71,6 +71,34 @@ True
 1/2 capabilities present; absent: HAS_B
 ```
 
+## `audit_params`
+
+`tl.debug.audit_params(target, *, include_buffers=True, within=None,
+bounds=None, max_fraction=0.9, subnormal_fraction_threshold=0.1)` is the
+one-shot parameter/buffer-space scan (the checks-kit door; canonical home
+`torchlens.checks.audit_params`, spelling DOCUMENTED-UNSTABLE). `target` is an
+`nn.Module` or ANY name->tensor `Mapping` — a `state_dict`, flattened
+optimizer state, EMA shadow weights, a loaded checkpoint: same door, same
+batched scan kernel. Returns a `ParamAudit` (findings / rows / checks_run /
+skipped-with-reason / coverage) with signed nonfinite counts, declared-bounds,
+dtype-headroom, subnormal, and all-same/all-zero findings. See
+[the checks kit](checks_kit.md) for the recipes.
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+param_audit = tl.debug.audit_params(nn.Linear(2, 1))
+print(len(param_audit.rows), len(param_audit.findings))
+```
+
+Output:
+
+```text
+2 0
+```
+
 ## `audit_trace`
 
 `tl.debug.audit_trace(trace)` runs every trace-local health diagnostic one capture
@@ -317,8 +345,23 @@ Output:
 ## `gradient_flow_audit`
 
 `tl.debug.gradient_flow_audit(trace, *, bwd=None, vanishing_threshold=1e-7,
-exploding_threshold=1e4)` ranks saved gradients and flags zero, vanishing, and exploding
-norms. Capture with `save_grads=True`, then call `trace.log_backward(...)` first.
+exploding_threshold=1e4, grad_scale=None, grad_scales=None, basis="total_norm")`
+ranks saved gradients and flags zero, vanishing, and exploding norms. Capture
+with `save_grads=True`, then call `trace.log_backward(...)` first.
+
+The F23 fix pack added (all additive): `module` + `is_frontier` columns (a
+dead layer zeroes the gradient of everything upstream, so the frontier — a
+flagged op none of whose children share the flag — names the culprit),
+`grad_norm_raw` / `rms` / `numel` columns (`rms = norm/sqrt(numel)` kills the
+~128x per-element numel artifact of the absolute threshold), one batched host
+sync per device (replacing the historical per-op `.item()`), `stage` +
+`scale_provenance` on every row, and per-backward `grad_scales={bwd: scale}`
+stamps. Under AMP the saved gradients are SCALED: pass `grad_scale=` (one
+factor) or `grad_scales=` (per-backward mapping); unknown provenance yields
+`unknown` magnitude verdicts in the `verdict` column, never a silent
+pass-as-1.0. `basis="total_norm"` keeps the legacy classification for one
+deprecation cycle; the `basis="rms"` flip is announced in `report.attrs` and
+gated on the multi-model calibration runs.
 
 ```python
 import torch
@@ -335,13 +378,41 @@ print(report.shape, report.attrs["bwd"])
 Output:
 
 ```text
-(2, 7) 1
+(2, 15) 1
 ```
+
+## `nan_report`
+
+`tl.debug.nan_report(trace)` is the one-call NaN forensics door (torchnative
+6.5): it consumes the existing capture's queryable nonfinite record FIRST
+(free), names the ORIGIN op with module address and file:line, scopes clean
+results to CHECKED values, discloses AMP limits, and prints the
+`torch.autograd.set_detect_anomaly` recipe verbatim for the cases it does
+not cover (backward-born NaNs, custom-autograd exceptions). The live form
+`tl.debug.nan_report(model, x)` runs one memory-light tripwire forward. It
+NEVER auto-runs anomaly mode — a second execution can mutate state and
+follow another stochastic path.
+
+## `flops_vs_dispatch`
+
+`tl.debug.flops_vs_dispatch(model, x)` is the PyTorch dispatch-formula
+cross-check (never "measured FLOPs"): one detached TorchLens capture, a
+state/RNG restore, one raw run under
+`torch.utils.flop_counter.FlopCounterMode(display=False)`, an output
+witness that refuses on divergence
+(`flops_crosscheck_witness_failed`), and a side-by-side report — signed
+delta, per-overload native ledger, TorchLens unknown-op ledger. Two
+registries disagreeing loudly is the feature; native values never fill
+TorchLens unknown cells, and a native ZERO can be a registry-coverage fact
+(CPU-default fused attention) rather than a truth verdict.
 
 ## `hot_path`
 
 `tl.debug.hot_path(trace, by="flops")` aggregates forward FLOPs, activation memory, or
-duration by source line. `by` is one of `"flops"`, `"memory"`, or `"duration"`; use
+duration by source line. `by` is one of `"flops"`, `"memory"`, `"duration"`, or
+`"device_time"` (joined Kineto device nanoseconds; refuses typed
+`device_time_unavailable` without a joined `torchlens.observability`
+session); use
 [`recompute_candidates`](#recompute_candidates) when the question is activation-memory
 tradeoffs instead.
 
@@ -495,3 +566,80 @@ Output:
 True nan
 True nan
 ```
+
+## `bisect_nan_backward`
+
+`tl.debug.bisect_nan_backward(trace, *, bwd=None, grad_scale=None)` (DOCUMENTED-UNSTABLE
+spelling) walks one captured backward pass's grad-fn fires in MEASURED fire order and
+classifies every transition: `clean` / `birth` / `propagated` / `healed` / `root_seed`
+(plus `unchecked` for fires `save_grads` did not cover). Healing is measured fact -- a
+finite loss gradient does not prove a clean backward -- so the result carries the FULL
+transition ledger with the earliest provable birth headlined, joined to the paired
+forward op and source line. Multi-backward traces require `bwd=N` (passes never
+collapse); `clean` requires complete checkable coverage; an inf-kind first bad thing
+without a disclosed `grad_scale` carries the AMP/GradScaler hint. Requires
+`CaptureOptions(backward_ready=True, save_grads=...)` plus a logged backward; post-hoc,
+no rerun. `result.first_bad_thing` projects into the shared `FirstBadThing` vocabulary.
+
+## `check_determinism`
+
+`tl.debug.check_determinism(model, input_args, *, runs=2, seed=0, rtol=None, atol=None,
+seed_sensitivity=False)` (DOCUMENTED-UNSTABLE spelling) answers ONE controlled question:
+do N isolated same-seed runs agree? Every run executes on a fresh released deep copy
+with cloned inputs under preserved, identically-seeded RNG. The verdict is three-state
+(`repeatable_under_test` / `nondeterminism_observed` / `inconclusive`) and never
+generalizes to "deterministic". The report carries environment witnesses (deterministic
+algorithms, cuDNN, TF32, `CUBLAS_WORKSPACE_CONFIG`, thread counts), the first divergence
+in EXECUTION order, RNG-consuming ops attributed to the CONSUMING op, and host-entropy
+facts quoted from the capture. `seed_sensitivity=True` adds exactly ONE differently
+seeded run (total cost disclosed as runs+1) landing in a SECOND named verdict slot.
+Deepcopy-refusing models return `inconclusive` with a `model_factory` remedy.
+
+## `first_divergence`
+
+`tl.debug.first_divergence(trace_a, trace_b, *, rtol=1e-5, atol=1e-8)` returns the first
+EXECUTION-ORDER row where two traces separate (value, shape, or structural), or `None`.
+It is the direct spelling of the first-diverging-op recipe over `compare_rows`, whose
+rows follow execution order -- never alphabetical.
+
+## `isolated_capture` / `preserved_rng_state` / `clone_input_tree`
+
+The shared isolated-rerun harness (DOCUMENTED-UNSTABLE spellings) behind
+`bisect_precision` and `check_determinism`: `isolated_capture(model, input_args, *,
+seed, prepare=None, **trace_kwargs)` runs one seeded capture of a fresh deep copy
+that is RELEASED from inherited TorchLens preparation first (the deepcopy-after-trace
+`KeyError` repair), with cloned inputs, under `preserved_rng_state()` (Python, NumPy,
+torch CPU, initialized CUDA generators saved and restored). `clone_input_tree` is the
+input-cloning primitive. The caller's model, inputs, and RNG streams are untouched.
+
+## `walk_grad_fn` / `sketch_grad_fn`
+
+The post-hoc autograd-graph walker (DOCUMENTED-UNSTABLE spellings, lane F37): draw the
+`grad_fn` graph of a tensor you ALREADY HAVE — computed in an earlier notebook cell or
+inside someone else's training loop — with no re-execution and no capture context (the
+`make_dot(y)`-class torchviz capability). Both are explicitly STRUCTURE-ONLY: the walk
+reads `tensor.grad_fn` / `next_functions` only (no values, no timing, no verification)
+and every render carries that legend.
+
+`tl.debug.walk_grad_fn(outputs, *, params=None, model=None, max_nodes=...)` walks the
+graph into a frozen `GradFnSketch` (nodes, forward-direction edges, truncation flag).
+`outputs` is a tensor with a `grad_fn` or a sequence of them; `params` is the torchviz
+`name -> tensor` leaf-naming convention and `model` provides leaf names via
+`named_parameters()` (explicit `params` wins on collisions). The defensive
+`max_nodes` ceiling (20,000) sets `truncated` and is disclosed on renders; a tensor
+with no walkable graph raises the typed `GradFnWalkError`.
+
+`tl.debug.sketch_grad_fn(outputs, path=None, *, file_format="png", params=None,
+model=None, max_nodes=..., view=False)` renders the same sketch through the bounded
+TorchLens graphviz runner (a wedged `dot` cannot hang the caller; renders are
+time-bounded and atomically published) and returns the DOT source. `path` follows the
+torchviz/graphviz convention (`path.<file_format>` is written; `None` skips file
+rendering), and `view=True` opens the managed viewer, never a raw `Popen`.
+
+## `amp_scaled_gradients_hint`
+
+`tl.debug.amp_scaled_gradients_hint(all_nonfinite=False)` returns the ONE shared
+AMP/GradScaler disclosure text used by the backward diagnostics: gradients captured
+under `torch.amp.GradScaler` carry the loss scale (~2**16 at the default `init_scale`),
+so magnitude verdicts accept `grad_scale=scaler.get_scale()` and non-finite verdicts
+name fp16 scale overflow as a possibility instead of false-positive certainty.

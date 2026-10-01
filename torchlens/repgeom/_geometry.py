@@ -6,6 +6,7 @@ effective dimensionality, Procrustes. No Trace access, no rendering.
 
 from __future__ import annotations
 
+import math
 import warnings
 from collections import OrderedDict
 from typing import Any, Literal, TypeAlias, TypedDict
@@ -15,7 +16,7 @@ import torch
 
 __tl_layer__ = "L5"
 
-DistanceMetric: TypeAlias = Literal["euclidean", "cosine", "correlation"]
+DistanceMetric: TypeAlias = Literal["euclidean", "manhattan", "cosine", "correlation", "gaussian"]
 MDSInputKind: TypeAlias = Literal["auto", "distances", "features"]
 MDSInfo: TypeAlias = dict[str, int | float | bool | str]
 MDSEvolution: TypeAlias = "OrderedDict[str, np.ndarray]"
@@ -341,7 +342,7 @@ def activation_distance_matrix(
         Activation array or tensor with shape ``[N, ...]``.
     metric:
         Dissimilarity metric. Supported values are ``"euclidean"``,
-        ``"cosine"``, and ``"correlation"``.
+        ``"cosine"``, ``"correlation"``, and ``"gaussian"``.
 
     Returns
     -------
@@ -367,6 +368,13 @@ def activation_distance_matrix(
         distances = _angular_dissimilarity(features, center_rows=False)
     elif metric == "correlation":
         distances = _angular_dissimilarity(features, center_rows=True)
+    elif metric == "gaussian":
+        distances = _gaussian_dissimilarity(features)
+    elif metric in _TORCH_METRIC_KERNELS:
+        feature_tensor = torch.as_tensor(features, dtype=torch.float64)
+        distances = (
+            _TORCH_METRIC_KERNELS[metric](feature_tensor, feature_tensor, None).cpu().numpy()
+        )
     else:
         raise ValueError(f"Unsupported activation distance metric: {metric!r}.")
 
@@ -375,34 +383,333 @@ def activation_distance_matrix(
     return distances
 
 
-def rdm(activations: Any, metric: DistanceMetric = "euclidean") -> np.ndarray:
+def _kernel_minkowski(p: float) -> Any:
+    """Return a row-block cdist kernel for a Minkowski order ``p``."""
+
+    def kernel(rows: torch.Tensor, features: torch.Tensor, _chunk: int | None) -> torch.Tensor:
+        """Compute pairwise distances between ``rows`` and all ``features``."""
+
+        return torch.cdist(rows, features, p=p)
+
+    return kernel
+
+
+def _kernel_angular(*, center_rows: bool) -> Any:
+    """Return a row-block angular (cosine/correlation) dissimilarity kernel."""
+
+    def kernel(rows: torch.Tensor, features: torch.Tensor, _chunk: int | None) -> torch.Tensor:
+        """Compute ``1 - similarity`` between ``rows`` and all ``features``."""
+
+        def normalize(block: torch.Tensor) -> torch.Tensor:
+            """Row-normalize (optionally row-centered), refusing zero norms."""
+
+            working = block - block.mean(dim=1, keepdim=True) if center_rows else block
+            norms = torch.linalg.vector_norm(working, dim=1, keepdim=True)
+            tolerance = torch.finfo(working.dtype).eps * max(working.shape[1], 1) * 100
+            if bool((norms <= tolerance).any()):
+                metric_name = "correlation" if center_rows else "cosine"
+                raise ValueError(f"{metric_name} distance is undefined for zero-norm stimuli.")
+            return working / norms
+
+        similarities = torch.clamp(normalize(rows) @ normalize(features).T, -1.0, 1.0)
+        return 1.0 - similarities
+
+    return kernel
+
+
+# D-5 metric dispatch table: callable metrics and a streaming-Gram backend
+# land later as new rows here, without an API change.
+_TORCH_METRIC_KERNELS: dict[str, Any] = {
+    "euclidean": _kernel_minkowski(2.0),
+    "manhattan": _kernel_minkowski(1.0),
+    "cosine": _kernel_angular(center_rows=False),
+    "correlation": _kernel_angular(center_rows=True),
+}
+
+
+def _condensed_upper(distances: torch.Tensor) -> torch.Tensor:
+    """Return the strict upper triangle of a square matrix, row-major."""
+
+    n = distances.shape[0]
+    index = torch.triu_indices(n, n, offset=1, device=distances.device)
+    return distances[index[0], index[1]]
+
+
+def _rdm_torch_path(  # noqa: PLR0913 -- mirrors the D-5 public rdm() keyword set one-to-one
+    features: torch.Tensor,
+    metric: str,
+    *,
+    compute_device: Any,
+    row_chunk_size: int | None,
+    output_device: Any,
+    output: str,
+) -> Any:
+    """Blocked torch RDM path behind the D-5 keyword-only options.
+
+    Parameters
+    ----------
+    features:
+        ``[N, D]`` feature matrix (already dtype-resolved).
+    metric:
+        Key into the metric dispatch table.
+    compute_device:
+        Device the pairwise kernel runs on.
+    row_chunk_size:
+        Rows per block; ``None`` computes in one block.
+    output_device:
+        Device rows land on as they finish (``"cpu"`` streams GPU blocks
+        straight to host memory).
+    output:
+        ``"square"`` or ``"condensed"``.
+
+    Returns
+    -------
+    Any
+        ``np.ndarray`` for CPU outputs, ``torch.Tensor`` otherwise.
+    """
+
+    kernel = _TORCH_METRIC_KERNELS[metric]
+    n = features.shape[0]
+    work = features.to(compute_device) if compute_device is not None else features
+    out_device = torch.device(output_device) if output_device is not None else torch.device("cpu")
+    chunk = int(row_chunk_size) if row_chunk_size else n
+    if chunk <= 0:
+        raise ValueError("row_chunk_size must be a positive integer or None.")
+    result = torch.empty((n, n), dtype=work.dtype, device=out_device)
+    for start in range(0, n, chunk):
+        stop = min(start + chunk, n)
+        block = kernel(work[start:stop], work, row_chunk_size)
+        result[start:stop] = block.to(out_device)
+    result = (result + result.T) * 0.5
+    result.fill_diagonal_(0.0)
+    if output == "condensed":
+        result = _condensed_upper(result)
+    elif output != "square":
+        raise ValueError(f"Unsupported RDM output form: {output!r} (use 'square'/'condensed').")
+    if out_device.type == "cpu":
+        return result.numpy()
+    return result
+
+
+def rdm(  # noqa: PLR0913 -- the D-5-widened public signature (brainpipe memo): each keyword is a spec'd GPU-scale knob, documented verbatim
+    activations: Any,
+    metric: DistanceMetric = "euclidean",
+    *,
+    compute_device: Any = None,
+    row_chunk_size: int | None = None,
+    output_device: Any = None,
+    dtype: Any = None,
+    output: str = "square",
+    input_kind: str = "activations",
+) -> Any:
     """Return a representational dissimilarity matrix for activations.
 
-    This is a thin public alias for :func:`activation_distance_matrix` using
-    RDM terminology. The first activation dimension is treated as the stimulus
-    dimension and all remaining dimensions are flattened per stimulus.
+    The first activation dimension is treated as the stimulus dimension and
+    all remaining dimensions are flattened per stimulus. The keyword-only
+    options (F20, brainpipe memo D-5; spellings DOCUMENTED-UNSTABLE) widen
+    the existing name for GPU-scale work: the no-new-keyword call is
+    bit-identical to the historical behavior.
 
     Parameters
     ----------
     activations:
-        Activation array or tensor with shape ``[N, ...]``.
+        Activation array or tensor with shape ``[N, ...]`` -- or, with
+        ``input_kind="batched"``, ``[B, N, ...]`` for one RDM per batch
+        element (3-D input already MEANS one flattened stimulus set today,
+        so the batched reading is explicit, never guessed).
     metric:
-        RDM dissimilarity metric. Supported values are ``"euclidean"``,
-        ``"cosine"``, and ``"correlation"``.
+        ``"euclidean"``, ``"manhattan"``, ``"cosine"``, ``"correlation"``,
+        or ``"gaussian"`` (dispatch is table-driven; callable metrics are a
+        later table row). ``"gaussian"`` computes a data-derived bandwidth
+        over the full matrix and runs on the historical numpy path only.
+        The default deliberately differs from
+        :func:`torchlens.neuro.rdms`, whose source mode defaults to
+        ``"correlation"`` (field canon for the RSA audience); both
+        docstrings cross-reference the divergence.
+    compute_device:
+        Device for the pairwise kernel (e.g. ``"cuda"``). ``None`` keeps the
+        historical CPU compute.
+    row_chunk_size:
+        Row-block size for memory-bounded computation; each finished block
+        lands on ``output_device`` before the next is computed.
+    output_device:
+        Where the result lives. ``None``/CPU returns ``np.ndarray``
+        (historical); a non-CPU device returns a ``torch.Tensor`` there.
+    dtype:
+        Computation dtype (default ``float64``, the historical behavior).
+    output:
+        ``"square"`` (default) or ``"condensed"`` (strict upper triangle,
+        row-major -- the rsatoolbox/scipy vector form).
+    input_kind:
+        ``"activations"`` (default) or ``"batched"`` for ``[B, N, ...]``.
 
     Returns
     -------
-    np.ndarray
-        Square ``N x N`` representational dissimilarity matrix.
+    Any
+        Square ``N x N`` matrix (or condensed vector / batched stack).
 
     Raises
     ------
     ValueError
-        If activations are non-finite, empty, zero-norm for angular metrics, or
-        the metric is unsupported.
+        If activations are non-finite, empty, zero-norm for angular metrics,
+        or an option value is unsupported.
     """
 
-    return activation_distance_matrix(activations, metric=metric)
+    modern = (
+        compute_device is not None
+        or row_chunk_size is not None
+        or output_device is not None
+        or dtype is not None
+        or output != "square"
+        or input_kind != "activations"
+        or metric == "manhattan"
+    )
+    if not modern:
+        # Bit-identical legacy path (D-5: the no-new-keyword call must not
+        # move a single existing caller's numbers).
+        return activation_distance_matrix(activations, metric=metric)
+
+    if metric not in _TORCH_METRIC_KERNELS:
+        if metric == "gaussian":
+            raise ValueError(
+                "metric='gaussian' derives its bandwidth from the full pairwise "
+                "matrix and runs on the historical numpy path only; it does not "
+                "support the GPU-path keywords (compute_device / row_chunk_size / "
+                "output_device / dtype / output / input_kind). Call "
+                "rdm(activations, metric='gaussian') with no other options."
+            )
+        raise ValueError(f"Unsupported activation distance metric: {metric!r}.")
+    if input_kind not in {"activations", "batched"}:
+        raise ValueError(
+            f"Unsupported input_kind: {input_kind!r} (use 'activations' or 'batched')."
+        )
+    array = torch.as_tensor(_as_numpy_array(activations))
+    _validate_finite(
+        array.numpy() if array.device.type == "cpu" else array.cpu().numpy(), "activations"
+    )
+    resolved_dtype = dtype if dtype is not None else torch.float64
+    if input_kind == "batched":
+        if array.ndim < 3:
+            raise ValueError(
+                "input_kind='batched' requires [B, N, ...] input with at least 3 dimensions."
+            )
+        stacked = [
+            _rdm_torch_path(
+                array[b].reshape(array.shape[1], -1).to(resolved_dtype),
+                metric,
+                compute_device=compute_device,
+                row_chunk_size=row_chunk_size,
+                output_device=output_device,
+                output=output,
+            )
+            for b in range(array.shape[0])
+        ]
+        if isinstance(stacked[0], np.ndarray):
+            return np.stack(stacked)
+        return torch.stack(stacked)
+    if array.ndim < 1 or array.shape[0] == 0:
+        raise ValueError("activations must have a non-empty leading stimulus dimension.")
+    features = array.reshape(array.shape[0], -1).to(resolved_dtype)
+    return _rdm_torch_path(
+        features,
+        metric,
+        compute_device=compute_device,
+        row_chunk_size=row_chunk_size,
+        output_device=output_device,
+        output=output,
+    )
+
+
+def _kendall_tau_a(a: np.ndarray, b: np.ndarray) -> float:
+    """Return Kendall tau-a over paired vectors (O(n^2), ties count zero)."""
+
+    n = a.shape[0]
+    sign_a = np.sign(a[:, None] - a[None, :])
+    sign_b = np.sign(b[:, None] - b[None, :])
+    index = np.triu_indices(n, k=1)
+    concordance = float(np.sum(sign_a[index] * sign_b[index]))
+    n_pairs = n * (n - 1) / 2.0
+    return concordance / n_pairs if n_pairs else math.nan
+
+
+def rdm_compare(rdm_a: Any, rdm_b: Any, method: str = "spearman") -> float:
+    """Return a descriptive rank correlation between two model RDMs.
+
+    F20, brainpipe memo D-6 (spelling DOCUMENTED-UNSTABLE): the same class
+    of descriptive object as CKA. Both RDMs are aligned on their strict
+    upper triangles with the diagonal EXCLUDED -- the two silent hand-rolled
+    errors this function exists to prevent are including the diagonal and
+    correlating full symmetric matrices (which double-counts every pair).
+    Deliberately descriptive-only: no p-values, no noise ceilings, no
+    subject aggregation -- inferential RSA belongs to rsatoolbox or
+    Net2Brain's ``RSA.evaluate``.
+
+    Parameters
+    ----------
+    rdm_a:
+        Square RDM (``N x N``) or condensed upper-triangle vector.
+    rdm_b:
+        Square RDM or condensed vector over the SAME stimuli in the same
+        order.
+    method:
+        ``"spearman"`` (default), ``"pearson"``, or ``"kendall"`` (tau-a).
+
+    Returns
+    -------
+    float
+        The requested correlation over aligned upper triangles.
+
+    Raises
+    ------
+    ValueError
+        On shape mismatch, a non-square non-condensed input, or an unknown
+        method.
+    """
+
+    def triangle(value: Any, name: str) -> np.ndarray:
+        """Return the strict upper triangle of a square RDM or a condensed vector."""
+
+        array = _as_numpy_array(value).astype(np.float64)
+        _validate_finite(array, name)
+        if array.ndim == 1:
+            return array.copy()
+        if array.ndim != 2 or array.shape[0] != array.shape[1]:
+            raise ValueError(
+                f"{name} must be a square RDM or a condensed upper-triangle "
+                f"vector; got shape {array.shape}."
+            )
+        index = np.triu_indices(array.shape[0], k=1)
+        return array[index]
+
+    vector_a = triangle(rdm_a, "rdm_a")
+    vector_b = triangle(rdm_b, "rdm_b")
+    if vector_a.shape[0] != vector_b.shape[0]:
+        raise ValueError(
+            f"rdm_compare requires RDMs over the same stimuli: upper triangles "
+            f"have {vector_a.shape[0]} and {vector_b.shape[0]} entries."
+        )
+    if vector_a.shape[0] < 2:
+        raise ValueError("rdm_compare needs at least 2 upper-triangle entries (3+ stimuli).")
+
+    if method == "pearson":
+        pass
+    elif method == "spearman":
+        vector_a = _average_ranks(vector_a)
+        vector_b = _average_ranks(vector_b)
+    elif method == "kendall":
+        return _kendall_tau_a(vector_a, vector_b)
+    else:
+        raise ValueError(
+            f"Unknown rdm_compare method: {method!r} (use 'pearson', 'spearman', "
+            "or 'kendall'). For inferential RSA -- p-values, noise ceilings, "
+            "subject aggregation -- use rsatoolbox or Net2Brain's RSA.evaluate."
+        )
+    centered_a = vector_a - vector_a.mean()
+    centered_b = vector_b - vector_b.mean()
+    denominator = float(np.linalg.norm(centered_a) * np.linalg.norm(centered_b))
+    if denominator == 0.0:
+        return math.nan
+    return float(np.dot(centered_a, centered_b) / denominator)
 
 
 def _angular_dissimilarity(features: np.ndarray, *, center_rows: bool) -> np.ndarray:
@@ -438,6 +745,128 @@ def _angular_dissimilarity(features: np.ndarray, *, center_rows: bool) -> np.nda
     normalized = working / norms
     similarities = np.clip(normalized @ normalized.T, -1.0, 1.0)
     return 1.0 - similarities
+
+
+def _gaussian_dissimilarity(features: np.ndarray) -> np.ndarray:
+    """Return Gaussian/RBF-kernel dissimilarities for row-wise features.
+
+    Convention (thingsvision's, credited -- ``thingsvision.core.rsa``):
+    with squared euclidean pairwise distances ``D``, the bandwidth is
+    ``mean(D)`` over the FULL ``N x N`` matrix (diagonal zeros included),
+    the similarity kernel is ``exp(-D / (2 * mean(D)))``, and the
+    dissimilarity is ``1 - similarity``. The bandwidth choice is a
+    convention, not a law of nature; it is stated here so the number is
+    reproducible.
+
+    Parameters
+    ----------
+    features:
+        Two-dimensional row-wise feature matrix.
+
+    Returns
+    -------
+    np.ndarray
+        Square ``1 - exp(-D / (2 * mean(D)))`` dissimilarity matrix.
+
+    Raises
+    ------
+    ValueError
+        If all stimuli are identical: the data-derived bandwidth is zero
+        and the kernel is undefined (a typed refusal where the reference
+        convention would silently return NaN).
+    """
+
+    feature_tensor = torch.as_tensor(features, dtype=torch.float64)
+    squared = torch.cdist(feature_tensor, feature_tensor, p=2).cpu().numpy() ** 2
+    bandwidth = float(squared.mean())
+    if bandwidth <= 0.0:
+        raise ValueError(
+            "gaussian distance is undefined when all stimuli are identical: "
+            "the data-derived bandwidth (mean squared pairwise distance, "
+            "thingsvision's convention) is zero."
+        )
+    return 1.0 - np.exp(-squared / (2.0 * bandwidth))
+
+
+def rank_transform_rdm(
+    distances: Any,
+    *,
+    output: Literal["rank", "percentile"] = "percentile",
+) -> np.ndarray:
+    """Return a rank- or percentile-scaled copy of an RDM for display.
+
+    The standard RSA display convention (Nili et al. 2014's
+    percentile-ranked RDMs; thingsvision ships the same rank-scaled
+    display): each unordered off-diagonal stimulus pair is replaced by its
+    rank among all pairs (ties get their average rank, 1-based), or by
+    ``rank / n_pairs * 100`` for ``output="percentile"`` (the largest
+    dissimilarity maps to exactly 100). The transform is display-only:
+    it destroys metric information and its output must never re-enter
+    distance arithmetic.
+
+    Parameters
+    ----------
+    distances:
+        Square symmetric zero-diagonal dissimilarity matrix.
+    output:
+        ``"percentile"`` (default) or ``"rank"``.
+
+    Returns
+    -------
+    np.ndarray
+        Symmetric zero-diagonal matrix of ranks or percentiles.
+
+    Raises
+    ------
+    ValueError
+        If the matrix is not a valid finite symmetric distance matrix, is
+        smaller than 2 x 2, or ``output`` is not a supported token.
+    """
+
+    if output not in ("rank", "percentile"):
+        raise ValueError(
+            f"Unsupported rank_transform_rdm output: {output!r} (expected 'rank' or 'percentile')."
+        )
+    array = _as_numpy_array(distances)
+    _validate_finite(array, "distances")
+    _check_square_distances(array)
+    n_stimuli = array.shape[0]
+    if n_stimuli < 2:
+        raise ValueError("rank_transform_rdm requires at least 2 stimuli.")
+    rows, cols = np.triu_indices(n_stimuli, k=1)
+    ranks = _average_ranks(array[rows, cols])
+    values = ranks / ranks.size * 100.0 if output == "percentile" else ranks
+    result = np.zeros_like(array)
+    result[rows, cols] = values
+    result[cols, rows] = values
+    return result
+
+
+def _average_ranks(values: np.ndarray) -> np.ndarray:
+    """Return 1-based average ranks (ties share their mean rank).
+
+    Parameters
+    ----------
+    values:
+        One-dimensional array to rank.
+
+    Returns
+    -------
+    np.ndarray
+        Float64 ranks with tied values averaged.
+    """
+
+    order = np.argsort(values, kind="stable")
+    sorted_values = values[order]
+    ranks = np.empty(values.size, dtype=np.float64)
+    start = 0
+    while start < values.size:
+        stop = start
+        while stop + 1 < values.size and sorted_values[stop + 1] == sorted_values[start]:
+            stop += 1
+        ranks[order[start : stop + 1]] = (start + stop) / 2.0 + 1.0
+        start = stop + 1
+    return ranks
 
 
 def classical_mds(

@@ -15,8 +15,8 @@
             "label_raw": "conv2d_1_2_raw",
             "population": {
               "backend_semantics.autograd_memory": "unknown",
-              "backend_semantics.bytes_delta_at_call": "defaulted_zero",
-              "backend_semantics.bytes_peak_at_call": "defaulted_zero",
+              "backend_semantics.bytes_delta_at_call": "unknown",
+              "backend_semantics.bytes_peak_at_call": "unknown",
               "backend_semantics.num_autograd_tensors": "unknown",
               "function.arg_names": "defaulted_empty",
               "function.code_context": "defaulted_empty",
@@ -48,8 +48,8 @@
             "label_raw": "relu_1_3_raw",
             "population": {
               "backend_semantics.autograd_memory": "unknown",
-              "backend_semantics.bytes_delta_at_call": "defaulted_zero",
-              "backend_semantics.bytes_peak_at_call": "defaulted_zero",
+              "backend_semantics.bytes_delta_at_call": "unknown",
+              "backend_semantics.bytes_peak_at_call": "unknown",
               "backend_semantics.num_autograd_tensors": "unknown",
               "function.arg_names": "defaulted_empty",
               "function.code_context": "defaulted_empty",
@@ -235,8 +235,8 @@
             "policy_facet.backend_semantics.aliased_output_inputs": "defaulted_empty",
             "policy_facet.backend_semantics.autograd_memory": "unknown",
             "policy_facet.backend_semantics.backend_grad_handle": "populated",
-            "policy_facet.backend_semantics.bytes_delta_at_call": "defaulted_zero",
-            "policy_facet.backend_semantics.bytes_peak_at_call": "defaulted_zero",
+            "policy_facet.backend_semantics.bytes_delta_at_call": "unknown",
+            "policy_facet.backend_semantics.bytes_peak_at_call": "unknown",
             "policy_facet.backend_semantics.grad_fn_class_name": "populated",
             "policy_facet.backend_semantics.mutated_input_positions": "defaulted_empty",
             "policy_facet.backend_semantics.num_autograd_tensors": "unknown",
@@ -386,8 +386,8 @@
             "policy_facet.backend_semantics.aliased_output_inputs": "defaulted_empty",
             "policy_facet.backend_semantics.autograd_memory": "unknown",
             "policy_facet.backend_semantics.backend_grad_handle": "populated",
-            "policy_facet.backend_semantics.bytes_delta_at_call": "defaulted_zero",
-            "policy_facet.backend_semantics.bytes_peak_at_call": "defaulted_zero",
+            "policy_facet.backend_semantics.bytes_delta_at_call": "unknown",
+            "policy_facet.backend_semantics.bytes_peak_at_call": "unknown",
             "policy_facet.backend_semantics.grad_fn_class_name": "populated",
             "policy_facet.backend_semantics.mutated_input_positions": "defaulted_empty",
             "policy_facet.backend_semantics.num_autograd_tensors": "unknown",
@@ -545,20 +545,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 281862,
+      "python_peak_memory_median_bytes": 282372,
       "sample_count": 3,
       "torch_version": "2.13.0+cu130",
-      "wall_time_median_ms": 20.66104207187891
+      "wall_time_median_ms": 33.54534599930048
     }
   },
   "sha256_chunks": [
-    "99419348",
-    "76297209",
-    "59a1b236",
-    "7a7bf573",
-    "06ad1652",
-    "47aba7fd",
-    "f386fa0f",
-    "cce6ed8f"
+    "9222a5b7",
+    "f2534fdf",
+    "7d0638e6",
+    "33a8a066",
+    "e435fc8c",
+    "122c5d01",
+    "b2cdf176",
+    "3eb3f61c"
   ]
 }

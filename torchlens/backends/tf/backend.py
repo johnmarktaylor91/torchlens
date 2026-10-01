@@ -602,6 +602,9 @@ class TFBackend:
         trace.trace_label = name
         trace.backend = cast(BackendName, self.name)
         trace.model_class_qualname = f"{type(model).__module__}.{type(model).__qualname__}"
+        # Root entry-point identity fact (C07X item (iv)): the TF entry
+        # invokes the model object itself (Keras/tf.Module __call__).
+        trace.root_entry_point = f"module_call:{trace.model_class_qualname}.__call__"
         trace.backend_runtime_version = str(getattr(tf, "__version__", ""))
         trace.backend_runtime_config = {"version": trace.backend_runtime_version}
         trace.backend_runtime_device_summary = _tf_device_summary(tf)

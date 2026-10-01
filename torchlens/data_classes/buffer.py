@@ -10,7 +10,6 @@ from .._errors import AmbiguousOpLookupError
 from .._io import TLSPEC_VERSION, FieldPolicy, default_fill_state, read_tlspec_version
 from ..constants import BUFFER_LOG_FIELD_ORDER
 from ._accessor_base import Accessor
-from ._repr import format_summary_lines
 from ._runtime_handles import runtime_handle_from_trace
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 
@@ -357,16 +356,28 @@ class Buffer:
         return pd.DataFrame([_buffer_log_to_row(self)], columns=columns)
 
     def __repr__(self) -> str:
-        """Return a concise multi-line buffer summary."""
+        """One envelope+core line with the explicit value basis (F10).
 
-        lines = []
-        if self.shape is not None:
-            lines.append(f"  shape: {list(self.shape)}")
-        if self.dtype is not None:
-            lines.append(f"  dtype: {self.dtype}")
-        lines.append(f"  versions: {len(self.versions)}")
-        lines.append(f"  num_overwrites: {self.num_overwrites}")
-        return format_summary_lines(f"Buffer: {self.address}", lines)
+        The core is computed from the capture-time snapshot when one was
+        retained (basis ``snapshot at capture``); otherwise metadata only.
+        Never raises.
+        """
+
+        from ..utils.fail_open import fail_open
+        from ._value_repr import buffer_repr_line
+
+        return fail_open(
+            lambda: buffer_repr_line(self),
+            lambda _error: f"<Buffer {getattr(self, 'address', '<unbound>')}: repr degraded>",
+        )
+
+    def __str__(self) -> str:
+        """Bounded Buffer card: module path + version facts (F10)."""
+
+        from ..utils.fail_open import fail_open
+        from ._value_repr import buffer_card
+
+        return fail_open(lambda: buffer_card(self), lambda _error: self.__repr__())
 
 
 # The M8 facade: the five declared stored fields become row-cell
@@ -447,18 +458,13 @@ class BufferAccessor(Accessor["Buffer"]):
             return False
         return True
 
-    def __repr__(self) -> str:
-        """Format as a dict-like string of buffer addresses with shapes and dtypes."""
+    def _composition_note(self) -> str | None:
+        """Composition breakdown: overwritten vs read-only buffers (F10)."""
 
-        if len(self) == 0:
-            return "{}"
-        items = []
-        for bl in self._list:
-            shape_str = str(list(bl.shape)) if bl.shape is not None else "?"
-            dtype_str = str(bl.dtype) if bl.dtype is not None else "?"
-            items.append(f"'{bl.address}': Buffer {shape_str} {dtype_str}")
-        inner = ",\n ".join(items)
-        return "{" + inner + "}"
+        overwritten = sum(1 for bl in self._list if bl.is_overwritten)
+        if not overwritten:
+            return None
+        return f"{overwritten} overwritten"
 
     def to_pandas(self) -> pd.DataFrame:
         """Export buffer metadata as a pandas DataFrame.

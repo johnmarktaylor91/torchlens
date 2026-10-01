@@ -41,7 +41,7 @@ __all__ = [
 ]
 
 #: Ops that reproduce their single tensor parent's value bitwise.
-_IDENTITY_FUNCS = frozenset({"contiguous", "clone", "detach", "alias"})
+_IDENTITY_FUNCS = frozenset({"contiguous", "clone", "detach", "alias", "identity"})
 
 #: Ops that reproduce the parent's values when the recorded shape is unchanged.
 _SHAPE_GATED_IDENTITY_FUNCS = frozenset({"view", "reshape"})

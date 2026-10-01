@@ -201,8 +201,39 @@ def _execute_hook(
             f"hook {hook_context.name!r} could not be called at "
             f"{_site_name(hook_context)} with signature (out, *, hook)"
         ) from exc
-    with HOOK_REENTRANCY_GUARD, pause_logging():
-        result = hook_callable(out, hook=hook_context)
+    injection_trace = getattr(_state, "_active_trace", None)
+    _injection_armed = injection_trace is not None and (
+        getattr(injection_trace, "_tl_injection_state", None) or {}
+    ).get("armed", False)
+    if _injection_armed:
+        # F01 log_injections stage 0-1: record the torch calls THIS hook
+        # firing executes as anchored injected ops. The recorder installs
+        # INSIDE the paused window, so the main capture journal and the
+        # live site-key minter never see these calls -- injected ops
+        # consume no global label counter and no site-key cohort ordinal
+        # by construction (the misfire test pins both halves).
+        from .injection import InjectionAnchor, injection_recorder, next_firing_index
+
+        site = hook_context.layer_log
+        site_get = site.get if hasattr(site, "get") else lambda key, d=None: getattr(site, key, d)
+        rule_id = (getattr(injection_trace, "_tl_injection_state", None) or {}).get(
+            "current_rule"
+        ) or f"adhoc:{hook_context.name}"
+        recorder = injection_recorder(
+            injection_trace,
+            InjectionAnchor(
+                host_label=str(site_get("label") or site_get("raw_label") or "unknown"),
+                host_site_key=site_get("site_key"),
+                host_pass=int(site_get("pass_index") or 1),
+                spec_rule_id=rule_id,
+                firing_index=next_firing_index(injection_trace, rule_id),
+            ),
+        )
+        with HOOK_REENTRANCY_GUARD, pause_logging(), recorder:
+            result = hook_callable(out, hook=hook_context)
+    else:
+        with HOOK_REENTRANCY_GUARD, pause_logging():
+            result = hook_callable(out, hook=hook_context)
     return validate_hook_output(
         result,
         out,
@@ -1688,6 +1719,12 @@ def _live_run_ctx() -> dict[str, Any]:
     else:
         run_ctx.setdefault("engine", "live")
         run_ctx.setdefault("timestamp", time.monotonic())
+    # Seed law D5 (F02): the capture's recorded seed rides the run context so
+    # seed='auto' stochastic edits can canonicalize their base seed without
+    # ever touching ambient RNG.
+    trace_seed = getattr(trace, "random_seed", None)
+    if trace_seed is not None:
+        run_ctx.setdefault("trace_random_seed", trace_seed)
     return run_ctx
 
 
@@ -1887,6 +1924,15 @@ def _append_active_spec_records(records: list[FireRecord]) -> None:
 
     if not records:
         return
+    # Attested coupling (lane F42): this is the ONE funnel every live
+    # FireRecord passes through, so the armed coupling session of an
+    # intervened episode capture attributes fires here -- independent of
+    # whether a spec ledger is installed.
+    from ..capture._episode_coupling import active_coupling_session
+
+    coupling = active_coupling_session()
+    if coupling is not None:
+        coupling.note_fire_records(records)
     spec = _state._active_intervention_spec
     if spec is not None and hasattr(spec, "records"):
         spec.records.extend(records)

@@ -105,6 +105,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         collapse_fn: Callable[..., Any] | None = None,
         collapse: CollapseLiteral = "none",
         fold_repeats: FoldRepeatsLiteral = None,
+        fold_patterns: Any = None,
         skip_fn: Callable[..., Any] | None = None,
         vis_edge_overrides: dict[str, Any] | None = None,
         vis_grad_edge_overrides: dict[str, Any] | None = None,
@@ -172,6 +173,17 @@ class TraceVisualizationMixin(_TraceMixinBase):
             ``"auto"``/``"max"``. ``True`` folds every eligible repeated run,
             including standalone folding with ``collapse="none"``. ``False``
             disables run folding.
+        fold_patterns:
+            Declarative user-named pattern folding (DOCUMENTED-UNSTABLE
+            spelling; collapse memo D11). ``None`` = off; ``"idiomatic"``
+            selects the curated conv-bn-relu preset; a mapping declares named
+            linear paths (for example ``{"ConvBnRelu": "conv2d > batch_norm
+            > relu"}``; exact repetition ``atom{k}``; an atom naming an
+            earlier pattern inlines it). Matched instances render as dashed
+            ``PATTERN '<name>' -- N ops`` chips; honesty-refused sites are
+            counted and disclosed. v1 supports the pattern-only view
+            (``collapse="none"``); combining with automatic collapse refuses
+            typed (``pattern_collapse_combination_unsupported``).
         show_legend:
             Tri-state legend visibility. ``None`` (default) is AUTO: no
             legend unless an encoding channel is active, in which case a
@@ -283,6 +295,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             collapse_fn=collapse_fn,
             collapse=collapse,
             fold_repeats=fold_repeats,
+            fold_patterns=fold_patterns,
             skip_fn=skip_fn,
             vis_edge_overrides=vis_edge_overrides,
             vis_grad_edge_overrides=vis_grad_edge_overrides,
@@ -485,7 +498,10 @@ class TraceVisualizationMixin(_TraceMixinBase):
                 file_path = str(getattr(frame, "file", "unknown"))
                 line_number = getattr(frame, "line_number", "unknown")
                 if link_format == "terminal":
-                    location = terminal_file_line_link(file_path, line_number)
+                    # link_format="terminal" is the EXPLICIT escape opt-in
+                    # (pinned register contract); the tty auto-gate governs
+                    # only default/auto call sites.
+                    location = terminal_file_line_link(file_path, line_number, enable_links=True)
                 elif link_format == "html":
                     location = vscode_file_line_link(file_path, line_number)
                 elif link_format == "text":
@@ -530,6 +546,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         code_panel: "CodePanelOption" = False,
         vis_mode: VisModeLiteral = "rolled",
         bwd: int | Iterable[int] | None = None,
+        show_legend: bool | None = None,
     ) -> str:
         """Render the captured backward grad_fn_handle graph.
 
@@ -537,7 +554,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         ----------
         vis_outpath, vis_graph_overrides, node_spec_fn, collapsed_node_spec_fn, \
         vis_node_mode, vis_edge_overrides, vis_save_only, vis_fileformat, \
-        vis_direction, code_panel, vis_mode, bwd:
+        vis_direction, code_panel, vis_mode, bwd, show_legend:
             Forwarded unchanged to
             :func:`torchlens.visualization._render_entrypoints.render_backward_graph`.
             ``collapsed_node_spec_fn`` and ``vis_node_mode`` are accepted for
@@ -565,6 +582,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             code_panel=code_panel,
             vis_mode=vis_mode,
             bwd=bwd,
+            show_legend=show_legend,
         )
 
     def draw_combined(
@@ -581,6 +599,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
         show_buffer_layers: BufferVisibilityLiteral = "meaningful",
         bwd: int | Iterable[int] | None = None,
+        show_legend: bool | None = None,
     ) -> str:
         """Render forward ops and backward grad_fns in one graph.
 
@@ -588,7 +607,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         ----------
         vis_outpath, vis_graph_overrides, node_spec_fn, backward_node_spec_fn, \
         vis_edge_overrides, vis_save_only, vis_fileformat, vis_direction, \
-        vis_mode, intervening_cluster, show_buffer_layers, bwd:
+        vis_mode, intervening_cluster, show_buffer_layers, bwd, show_legend:
             Forwarded unchanged to
             :func:`torchlens.visualization._render_entrypoints.render_combined_graph`.
 
@@ -613,6 +632,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             intervening_cluster=intervening_cluster,
             show_buffer_layers=show_buffer_layers,
             bwd=bwd,
+            show_legend=show_legend,
         )
 
     def preview_fastlog(
@@ -678,76 +698,234 @@ class TraceVisualizationMixin(_TraceMixinBase):
                         records.append(record)
         return tuple(records)
 
-    def summary(
-        self: "Trace",
-        level: Literal[
-            "overview", "graph", "memory", "control_flow", "compute", "cost", "waterfall", "output"
-        ] = "overview",
-        *,
-        fields: list[str] | None = None,
-        mode: Literal["auto", "rolled", "unrolled"] = "auto",
-        show_ops: bool = False,
-        preset: Literal[
-            "overview", "graph", "memory", "control_flow", "compute", "cost", "waterfall", "output"
-        ]
-        | None = None,
-        columns: list[str] | None = None,
-        include_ops: bool | None = None,
-        max_rows: int | None = 200,
-        print_to: Callable[[str], None] | None = None,
-        count_fma_as_two: bool | None = None,
-        show_input_preprocessing_details: bool = False,
-    ) -> str:
-        """Render a concise text summary of the logged model.
-
-        Parameters
-        ----------
-        level:
-            Summary level to render.
-        fields:
-            Explicit column selection for the primary table.
-        mode:
-            Operation aggregation mode. ``"rolled"`` uses aggregate layer rows,
-            while ``"unrolled"`` uses per-pass operation rows.
-        show_ops:
-            Whether to append an operation table.
-        preset:
-            Alias for ``level`` retained for compatibility with the design spec.
-        columns:
-            Alias for ``fields``.
-        include_ops:
-            Alias for ``show_ops`` retained for compatibility with the design spec.
-        max_rows:
-            Maximum number of rows to render per table. ``None`` disables truncation.
-        print_to:
-            Optional callable that receives the rendered summary text.
-        count_fma_as_two:
-            FMA display convention (sentinel default: omitted != explicit).
-            ``None``/``True`` render the stored fma=2 convention (one
-            multiply-accumulate = 2 FLOPs). ``False`` renders fma=1 totals
-            recounted from each op's two-term compute record; a trace holding
-            ops with no derivable MAC split refuses typed
-            (``flop_convention_unavailable``) -- the request is NEVER
-            accepted-and-ignored.
-        show_input_preprocessing_details:
-            Whether to include verification/source detail for input
-            preprocessing records.
+    def _repr_html_(self: "Trace") -> str:
+        """Return the notebook HTML representation for this model log.
 
         Returns
         -------
         str
-            Rendered summary string.
+            HTML fragment for IPython/Jupyter display.
+
+        Document composition (F08 x C05 x F16): the Trace card (treescope
+        memo B1/B2 -- identity, honesty badge, NaN/Inf line, and the
+        budgeted lookup-key index, assembled through
+        ``torchlens.notebook.cards``) renders first, and on finished
+        traces the rebuilt summary table (F08; summary memo 3.11 -- the
+        bare ``trace`` cell is the most likely first touch in Jupyter)
+        follows as a sibling fragment. A summary failure degrades to the
+        card alone; any failure THERE degrades inside ``safe_card_html``
+        to a one-line ``card unavailable`` fragment (never-raise
+        boundary). The treescope-bridge suppression sentinel replaces the
+        WHOLE document exactly when the bridge just rendered this object
+        (memo 3.6) -- appending the summary there would duplicate the
+        render treescope owns.
         """
+        from ..notebook.cards import BRIDGE_SENTINEL_HTML, trace_repr_html
+
+        card = trace_repr_html(self)
+        if card == BRIDGE_SENTINEL_HTML:
+            return card
+        if not getattr(self, "_tracing_finished", False):
+            return card
+        try:
+            summary_html = self.summary()._repr_html_()
+        except Exception:  # noqa: BLE001 - a repr must never raise; the card still renders
+            summary_html = ""
+        return card + summary_html
+
+    def summary(  # noqa: PLR0913 - the ratified public grammar: every axis is a named keyword
+        self: "Trace",
+        level: str | None = None,
+        *,
+        # Rebuilt grammar (F08; summary memo 3.10). Spellings
+        # DOCUMENTED-UNSTABLE pending naming-session ratification.
+        view: str | None = None,
+        depth: Any = None,
+        columns: list[str] | None = None,
+        filter: Any = None,  # noqa: A002 - the memo-ratified axis name
+        buffers: str | None = None,
+        fold_repeats: Any = None,
+        max_rows: int | None = None,
+        flop_convention: str | None = None,
+        units: str | None = None,
+        style: str | None = None,
+        # Legacy spellings (routed through the ONE compatibility table;
+        # historical presentation preserved byte-stable).
+        fields: list[str] | None = None,
+        mode: Literal["auto", "rolled", "unrolled"] | None = None,
+        show_ops: bool | None = None,
+        preset: str | None = None,
+        include_ops: bool | None = None,
+        print_to: Callable[[str], None] | None = None,
+        count_fma_as_two: bool | None = None,
+        show_input_preprocessing_details: bool | None = None,
+        # One-call-only spellings (typed errors here, never no-ops).
+        input_size: Any = None,
+        execution_mode: str | None = None,
+        grad_mode: str | None = None,
+        # Internal plumbing from the one-call door (not public grammar).
+        _execution_note: str | None = None,
+        _input_synthesis: str | None = None,
+    ) -> str:
+        """Render a summary of this capture (the rebuilt view by default).
+
+        A bare ``trace.summary()`` resolves the automatic view ladder
+        (hybrid / folded module tree / elision) under a 48-body-row budget
+        and returns a detached typed report whose ``str`` payload is
+        canonical byte-stable ASCII. Legacy preset spellings (``level=
+        "graph"``, ``preset=``, ``fields=``, ``show_ops=``, ...) keep
+        their historical rendering through the one compatibility table;
+        mixing the two grammars raises ``summary_option_conflict``.
+
+        Parameters
+        ----------
+        level:
+            Rebuilt row grain: ``"auto"`` (default) | ``"module"`` |
+            ``"op"`` -- or a legacy preset name, which routes the whole
+            call to the historical renderer.
+        view:
+            Column/footer preset: ``"overview"`` (default) | ``"compute"``.
+        depth:
+            ``"auto"`` | ``"all"`` | int module-tree depth.
+        columns:
+            Bundle name, exact ordered list, or ``+name``/``-name`` deltas.
+        filter:
+            Regex string or ``row -> bool`` callable; presentation-only
+            (whole-model totals preserved and coverage disclosed).
+        buffers:
+            ``"summary"`` (footer totals; default) | ``"hide"``.
+        fold_repeats:
+            ``"auto"``/``True`` fold repeated sibling runs; ``False``
+            restores every member.
+        max_rows:
+            Body-row budget for the auto ladder (default 48).
+        flop_convention:
+            ``"fma2"`` (stored convention; default) | ``"fma1"``.
+        units:
+            ``"human"`` (K/M/G) | ``"raw"`` (full digits) in rendered text.
+        style:
+            ``"auto"`` | ``"ascii"`` | ``"unicode"`` for display helpers;
+            ``str(result)`` is ALWAYS the canonical ASCII payload.
+        fields, mode, show_ops, preset, include_ops, print_to, \
+        count_fma_as_two, show_input_preprocessing_details:
+            Legacy spellings, preserved byte-stable via the compatibility
+            table. ``count_fma_as_two=False`` renders fma=1 totals from
+            the two-term compute record and refuses typed
+            (``flop_convention_unavailable``) when the split is missing --
+            never accepted-and-ignored.
+        input_size, execution_mode, grad_mode:
+            ONE-CALL-ONLY spellings: valid on ``tl.summary(model, ...)``,
+            typed errors here (this method reports an existing capture).
+
+        Returns
+        -------
+        str
+            A ``SummaryReport`` (``str`` subclass) carrying typed rows,
+            totals, capture facts, and -- on the rebuilt path -- the
+            render/print/to_pandas/to_markdown/to_html result API.
+        """
+        from .._errors import InvalidArgumentError
+
+        one_call_only = {
+            "input_size": input_size,
+            "execution_mode": execution_mode,
+            "grad_mode": grad_mode,
+        }
+        offending = sorted(name for name, value in one_call_only.items() if value is not None)
+        if offending:
+            raise InvalidArgumentError(
+                f"trace.summary() reports an EXISTING capture; {', '.join(offending)} "
+                "only make sense on the one-call door that runs the forward.",
+                code="summary_one_call_only",
+                remedy="use tl.summary(model, x, ...) for one-call execution options",
+            )
+        from ..report._summary_config import route_summary_call
+
+        legacy_kwargs: dict[str, Any] = {
+            "preset": preset,
+            "fields": fields,
+            "show_ops": show_ops,
+            "include_ops": include_ops,
+            "mode": mode,
+            "print_to": print_to,
+            "count_fma_as_two": count_fma_as_two,
+            "show_input_preprocessing_details": show_input_preprocessing_details,
+        }
+        new_kwargs: dict[str, Any] = {}
+        for name, value in (
+            ("view", view),
+            ("depth", depth),
+            ("filter", filter),
+            ("buffers", buffers),
+            ("fold_repeats", fold_repeats),
+            ("flop_convention", flop_convention),
+            ("units", units),
+            ("style", style),
+        ):
+            if value is not None:
+                new_kwargs[name] = value
+        # columns= is shared by both grammars: the router decides from the
+        # other axes; on the legacy route it keeps its alias-of-fields meaning.
+        route = route_summary_call(level, {**legacy_kwargs, **new_kwargs})
+        if route == "legacy":
+            return self._summary_legacy(
+                level=level if isinstance(level, str) else (preset or "overview"),
+                preset=preset,
+                fields=fields,
+                columns=columns,
+                mode=mode if mode is not None else "auto",
+                show_ops=bool(show_ops) if show_ops is not None else False,
+                include_ops=include_ops,
+                max_rows=max_rows if max_rows is not None else 200,
+                print_to=print_to,
+                count_fma_as_two=count_fma_as_two,
+                show_input_preprocessing_details=bool(show_input_preprocessing_details)
+                if show_input_preprocessing_details is not None
+                else False,
+            )
+        from ..report._summary_config import resolve_config
+        from ..report._summary_result import build_rebuilt_summary
+
+        config = resolve_config(
+            level=level if level is not None else "auto",
+            columns=columns,
+            **new_kwargs,
+            **({"max_rows": max_rows} if max_rows is not None else {}),
+        )
+        return build_rebuilt_summary(
+            self,
+            config,
+            execution_note=_execution_note,
+            input_synthesis=_input_synthesis,
+        )
+
+    def _summary_legacy(
+        self: "Trace",
+        *,
+        level: str,
+        preset: str | None,
+        fields: list[str] | None,
+        columns: list[str] | None,
+        mode: str,
+        show_ops: bool,
+        include_ops: bool | None,
+        max_rows: int | None,
+        print_to: Callable[[str], None] | None,
+        count_fma_as_two: bool | None,
+        show_input_preprocessing_details: bool,
+    ) -> str:
+        """The historical renderer, byte-stable (the compat table's target)."""
+
         from ..report._summary_report import build_summary_report
         from ..visualization._summary_internal import render_model_summary
 
         text = render_model_summary(
             self,
-            level=level,
-            preset=preset,
+            level=cast(Any, level),
+            preset=cast(Any, preset),
             fields=fields,
             columns=columns,
-            mode=mode,
+            mode=cast(Any, mode),
             show_ops=show_ops,
             include_ops=include_ops,
             max_rows=max_rows,
@@ -758,6 +936,26 @@ class TraceVisualizationMixin(_TraceMixinBase):
         # C02 (summary item 10): the summary is a detached typed report --
         # a str subclass carrying rows/totals/capture, byte-identical text.
         return build_summary_report(self, text)
+
+    def provenance(self: "Trace") -> str:
+        """The capture-provenance block (the relocated summary preamble).
+
+        Returns the historical discoverability preamble BYTE-FOR-BYTE
+        (summary memo 3.6): agent/MCP consumers that parsed it out of the
+        old summary text keep an exact source after the preamble left the
+        default view.
+
+        Returns
+        -------
+        str
+            Multi-section capture/provenance text.
+        """
+
+        from ..visualization._summary_internal._discoverability import (
+            format_discoverability_summary,
+        )
+
+        return format_discoverability_summary(self)
 
     def render_dagua_graph(
         self: "Trace",

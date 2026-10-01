@@ -1,0 +1,89 @@
+{
+  "$id": "https://torchlens.dev/schemas/torchlens.agent.doctor.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "artifact": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "data": {
+      "additionalProperties": true,
+      "properties": {
+        "checks": {
+          "items": {
+            "additionalProperties": true,
+            "properties": {
+              "detail": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "detail",
+              "name",
+              "status"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "checks"
+      ],
+      "type": "object"
+    },
+    "limits": {
+      "type": "object"
+    },
+    "request": {
+      "type": "object"
+    },
+    "schema": {
+      "const": "torchlens.agent.doctor.v1"
+    },
+    "schema_stability": {
+      "const": "documented-unstable"
+    },
+    "status": {
+      "type": "string"
+    },
+    "torchlens_version": {
+      "type": "string"
+    },
+    "truncation": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "artifact",
+    "data",
+    "limits",
+    "request",
+    "schema",
+    "schema_stability",
+    "status",
+    "torchlens_version",
+    "truncation",
+    "warnings"
+  ],
+  "title": "Environment health report",
+  "type": "object"
+}

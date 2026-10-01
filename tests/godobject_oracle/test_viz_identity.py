@@ -268,6 +268,8 @@ def test_backward_dot_in_process_stable(tmp_path: Path) -> None:
 
     node_count = sum(1 for line in first.splitlines() if " [" in line and "->" not in line)
     edge_count = sum(1 for line in first.splitlines() if "->" in line)
-    assert (node_count, edge_count) == (16, 12), (
+    # 17 nodes: 16 graph nodes + the one in-frame backward-key table node
+    # (vizmech item 17; AUTO renders the key, one row per painted style).
+    assert (node_count, edge_count) == (17, 12), (
         f"backward graph structure changed: {node_count} nodes, {edge_count} edges"
     )

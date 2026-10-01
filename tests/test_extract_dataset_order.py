@@ -62,9 +62,11 @@ def test_extract_dataset_preserves_stimulus_order_in_memory_and_on_disk(
 
     assert torch.equal(in_memory["rows"], stimuli)
     assert [path.name for path in batch_paths] == [
-        "batch_00000.pt",
-        "batch_00001.pt",
-        "batch_00002.pt",
+        "batch_00000.safetensors",
+        "batch_00001.safetensors",
+        "batch_00002.safetensors",
     ]
-    disk_rows = torch.cat([torch.load(path, weights_only=True)["rows"] for path in batch_paths])
+    from safetensors.torch import load_file
+
+    disk_rows = torch.cat([load_file(str(path))["rows"] for path in batch_paths])
     assert torch.equal(disk_rows, stimuli)

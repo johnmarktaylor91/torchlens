@@ -955,3 +955,964 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 478016ab05c6f54bba3fbd9b96610729ea8dca89 (clean)
 recorded: 2026-08-27T19:48:23.487394+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F21 tvscope: new read-only op-record consumers (torchlens/inventory.py site rows; torchlens/features.py payload reads) -- inventory/shaping surfaces added by lane F21, no producer changes
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 637883db7a39f6e011b005775ef0540745b53b9c (clean)
+recorded: 2026-08-28T01:45:28.107410+00:00
+reason: vizmech F13: new _geometry_audit dataclasses enter the static field census; render docs regenerated for the pinned default-theme fontname (D29) and legend table (D28)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 8d46747ad3306cc7813e6579552fa3f00106234e (dirty)
+recorded: 2026-08-28T01:35:57.371148+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: vizmech F13 close-out: edges_with_competing_labels added two kind-field read sites to the audit module (9 -> 11)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: c308da2f38b954389bbb41470ac26f9f07b989a8 (clean)
+recorded: 2026-08-28T01:49:01.824198+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F24 observe lane: new capture-side sites (saved-band decomposition walk, device-memory sampling bracket, aborted-nonfinite prefix finalizer) reviewed in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: e23baa91ed555e95b61bdda5c5f3abd702f34295 (dirty)
+recorded: 2026-08-28T02:00:00.598414+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F24 observe lane: new capture-side sites (saved-band decomposition walk, device-memory sampling bracket, aborted-nonfinite prefix finalizer) reviewed in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: e23baa91ed555e95b61bdda5c5f3abd702f34295 (dirty)
+recorded: 2026-08-28T02:00:10.382739+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F24 observe follow-up: the complexity split relocated the bisector/timeline helper sites the static producer scan indexes
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 53c07f3836fc5d2e6401c157ec8cf90c6d22f5df (clean)
+recorded: 2026-08-28T03:30:03.534215+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F24 observe follow-up: the complexity split relocated the bisector/timeline helper sites the static producer scan indexes
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 53c07f3836fc5d2e6401c157ec8cf90c6d22f5df (clean)
+recorded: 2026-08-28T03:30:07.341782+00:00
+---
+reason: F04 one-backward reads: new attribution/onebackward package adds statically-scanned read sites; mechanical ledger refresh, no op-lane writer changes
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 8d944593599b6471b535c8b9ca407b086e1763c0 (dirty)
+recorded: 2026-08-28T01:22:14.886803+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F04 one-backward reads: new attribution/onebackward package adds statically-scanned read sites; mechanical ledger refresh, no op-lane writer changes
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 8d944593599b6471b535c8b9ca407b086e1763c0 (dirty)
+recorded: 2026-08-28T01:22:22.895252+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F10 lovely surfaces: op.py legacy string helpers deleted + edge-builder func_name arg + _value_repr getattr readers; static scan re-trued on the F10 tree
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4826c3478c12026f34a4541fc87258ce54c72684 (clean)
+recorded: 2026-08-28T01:45:00.556122+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F10 lovely surfaces: op.py legacy string helpers deleted + edge-builder func_name arg + _value_repr getattr readers; static scan re-trued on the F10 tree
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4826c3478c12026f34a4541fc87258ce54c72684 (clean)
+recorded: 2026-08-28T01:45:09.165107+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T46-final assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: da258fae4fe5c671da9b5e6ebba7858f5b20011e (clean)
+recorded: 2026-08-28T09:11:40.842451+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T46-final assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: da258fae4fe5c671da9b5e6ebba7858f5b20011e (clean)
+recorded: 2026-08-28T09:11:44.384623+00:00
+reason: F15 Model Explorer export family: new export-side consumers of op record fields (getattr-defensive reads in torchlens/export/_model_explorer/); no producer moved
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 1217265792de2d54394e72e4a990aa5ebbb95f61 (clean)
+recorded: 2026-08-28T01:30:40.464875+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F15 Model Explorer export family: new export-side consumers of op record fields (getattr-defensive reads in torchlens/export/_model_explorer/); no producer moved
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 1217265792de2d54394e72e4a990aa5ebbb95f61 (clean)
+recorded: 2026-08-28T01:30:49.667518+00:00
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A-GATE: two new row.kind reads in bundle/__init__.py _ordering_path (ordering-topology gate walk over the S6 relation table)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: a87bb2fdb370a1f86c6028b306f4860ecd596446 (dirty)
+recorded: 2026-08-28T02:14:13.661418+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A-GATE R43 split: the ordering-topology gate (and its two row.kind reads) moved from bundle/__init__.py to bundle/_compare_gate.py
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 7c85f62907f101b1fe3ebddb70f6b4d42f190f26 (dirty)
+recorded: 2026-08-28T02:51:25.460547+00:00
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F31 lit bridge is a new reviewed consumer: _sites reads op relation/module fields (output_of_modules, pass_index, site_key) for structural pinning
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 526fac687f3707f591356468bcbdc395ea305a6c (dirty)
+recorded: 2026-08-28T07:38:29.684812+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F31 lit bridge is a new reviewed consumer: _sites reads op relation/module fields (output_of_modules, pass_index, site_key) for structural pinning
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 526fac687f3707f591356468bcbdc395ea305a6c (dirty)
+recorded: 2026-08-28T07:38:33.301618+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T47 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 35f924f558d7e6628cbc544a5fc85dbd4068d1f0 (clean)
+recorded: 2026-08-28T09:37:00.332520+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T47 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 35f924f558d7e6628cbc544a5fc85dbd4068d1f0 (clean)
+recorded: 2026-08-28T09:37:03.803273+00:00
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F05 mechinterp: new consumer sites (facet/module/op field reads) in torchlens/mechinterp/* -- sanctioned reviewed refresh, same class as the A01 attention.py refresh
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 291027ade424984d607cf03412b392f0c7854083 (dirty)
+recorded: 2026-08-28T05:31:16.570469+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T48-final assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 490d87e6c58984e951d8fe0255577916ba67d25b (clean)
+recorded: 2026-08-28T11:20:12.552528+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T48-final assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 490d87e6c58984e951d8fe0255577916ba67d25b (clean)
+recorded: 2026-08-28T11:20:16.140019+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A-CKPT train rebase regen onto a859f7bc (T47 tip; F40a landed, episode error-family seam reconciled additively)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 2ccb93a36b63dec7ce8bb972f5bc5aa2ba99e5fb (clean)
+recorded: 2026-08-28T10:06:00.442159+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A-CKPT train rebase regen onto a859f7bc (T47 tip; F40a landed, episode error-family seam reconciled additively)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 2ccb93a36b63dec7ce8bb972f5bc5aa2ba99e5fb (clean)
+recorded: 2026-08-28T10:06:05.225638+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T49-final assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 368244fb1a09f86dca9203bfb272a2047d509347 (clean)
+recorded: 2026-08-28T12:58:47.712535+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T49-final assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 368244fb1a09f86dca9203bfb272a2047d509347 (clean)
+recorded: 2026-08-28T12:58:52.277175+00:00
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F17 quickstart package adds resolver/gate/render modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 737b35e06735524f55f5bb7fcf62e0a62cdd23ea (clean)
+recorded: 2026-08-28T04:45:55.502039+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F17 quickstart package adds resolver/gate/render modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 737b35e06735524f55f5bb7fcf62e0a62cdd23ea (clean)
+recorded: 2026-08-28T04:45:59.414696+00:00
+reason: lane F14: new torchlens/export/_netron* modules read record fields for the netron schema-v2 projection (reviewed; read-only consumers, no producer moves)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 8ad4d0b378a5f2ad42c0db5d5c87467b15db4fe2 (dirty)
+recorded: 2026-08-28T01:35:14.137356+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: lane F14: new torchlens/export/_netron* modules read record fields for the netron schema-v2 projection (reviewed; read-only consumers, no producer moves)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 8ad4d0b378a5f2ad42c0db5d5c87467b15db4fe2 (dirty)
+recorded: 2026-08-28T01:35:21.076864+00:00
+reason: F09 sumfam item 14: bill_of_materials re-based onto FactCore adds reviewed reads of counts/params sections in _trace_inventory.py
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 76a305e27006d239afd23242f1adfb92c3475577 (dirty)
+recorded: 2026-08-28T05:01:30.229908+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F09 fix cycle: MfuProvenance bundle + evidence= move to to_pandas + position_scaling_class returns fold shifted report-package sites after rebase onto the advanced train
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: d4c43793ed4345a48670253329b4deffec82d8c4 (dirty)
+recorded: 2026-08-28T10:30:34.361248+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T52-final assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 0964145d3ac95532c60b570475354c22e731d1b2 (clean)
+recorded: 2026-08-28T17:37:50.020944+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T52-final assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 0964145d3ac95532c60b570475354c22e731d1b2 (clean)
+recorded: 2026-08-28T17:37:53.747310+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T53 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 0613d674a4621950c93cee3a91b5d7c9d9102bbc (clean)
+recorded: 2026-08-28T18:06:04.842905+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T53 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 0613d674a4621950c93cee3a91b5d7c9d9102bbc (clean)
+recorded: 2026-08-28T18:06:09.491833+00:00
+reason: F06 attribution lane added package modules (_guided/_binder/_steps/...) whose attribute reads enter the static producer/consumer scan; reviewed refresh, no producer semantics changed
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 493621cf27c02a0d75a3506cda0794889608a181 (dirty)
+recorded: 2026-08-28T05:28:19.756709+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T54-final assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 0e113c09510af84371e9733e1d87eae289ed7d8f (clean)
+recorded: 2026-08-28T19:37:14.558201+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T54-final assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 0e113c09510af84371e9733e1d87eae289ed7d8f (clean)
+recorded: 2026-08-28T19:37:18.305050+00:00
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F12 rebase onto T52 tip: lenses modules add reviewed consumer sites (modules/layer_type/pass_index getattr reads); re-key follows code motion
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 6494e9e40ecfb0c5666a8d85cf9374f6e3764544 (dirty)
+recorded: 2026-08-28T18:14:14.645082+00:00
+reason: lane F23: the checks kit adds producer/consumer sites (audit/scan/session records) -- reviewed refresh for the new package
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 8944dc5a670051945e4d649f8086fd6176ba4c57 (dirty)
+recorded: 2026-08-28T02:03:53.976838+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: lane F23: the checks kit adds producer/consumer sites (audit/scan/session records) -- reviewed refresh for the new package
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 8944dc5a670051945e4d649f8086fd6176ba4c57 (dirty)
+recorded: 2026-08-28T02:04:38.198131+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: lane F23: the checks kit adds producer/consumer sites (audit/scan/session records) -- reviewed refresh for the new package
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 8944dc5a670051945e4d649f8086fd6176ba4c57 (dirty)
+recorded: 2026-08-28T02:04:46.739711+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: lane F23 T55-fix rebase regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 6e2724d42d59e587d0b033d43e279bc6868409ec (dirty)
+recorded: 2026-08-28T22:13:41.386074+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: lane F23 T55-fix rebase regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 6e2724d42d59e587d0b033d43e279bc6868409ec (dirty)
+recorded: 2026-08-28T22:13:45.165385+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F07 tviz package adds scanned files; ledger regen at the F07 tip
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 235ba03a72a5a2103bf26dd11bf7ff9313734546 (dirty)
+recorded: 2026-08-28T21:16:28.290069+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F07 tviz package adds scanned files; ledger regen at the F07 tip
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 235ba03a72a5a2103bf26dd11bf7ff9313734546 (dirty)
+recorded: 2026-08-28T21:16:31.967416+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T59 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: e896c9ce694537638eb027d8dfbfa894794dbffe (clean)
+recorded: 2026-08-29T04:27:43.836722+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T59 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: e896c9ce694537638eb027d8dfbfa894794dbffe (clean)
+recorded: 2026-08-29T04:27:48.660297+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T60-final assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: aa85d97be07613d971c73a2f82ab8c1cdd9cb5fd (clean)
+recorded: 2026-08-29T06:06:40.156663+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T60-final assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: aa85d97be07613d971c73a2f82ab8c1cdd9cb5fd (clean)
+recorded: 2026-08-29T06:06:43.982722+00:00
+reason: F26: new torchlens.trackers package enters the static producer/consumer scan (graph IR + emission-view readers)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 50d78df2ddd41dd7c75b5a32cbbe9360cbd3a1a6 (dirty)
+recorded: 2026-08-28T04:38:42.928312+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F26: new torchlens.trackers package enters the static producer/consumer scan (graph IR + emission-view readers)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 50d78df2ddd41dd7c75b5a32cbbe9360cbd3a1a6 (dirty)
+recorded: 2026-08-28T04:38:47.550046+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T61 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 2d2c8afc4a50fbd0622d4df1da91eab21d1e163d (clean)
+recorded: 2026-08-29T06:33:44.699602+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T61 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 2d2c8afc4a50fbd0622d4df1da91eab21d1e163d (clean)
+recorded: 2026-08-29T06:33:49.680326+00:00
+reason: F33 weightsfree: new module _weightsfree_transparency.py uses pathlib .parents (a stdlib attribute the static scan indexes); no producer/consumer semantics changed
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: a82eb7cab4e64f367d08f4266d2fde3b34b865df (dirty)
+recorded: 2026-08-28T19:32:07.140418+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T63 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 189331d7e466269034d1de4f9cd7535dd737979b (clean)
+recorded: 2026-08-29T07:35:37.581291+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T63 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 189331d7e466269034d1de4f9cd7535dd737979b (clean)
+recorded: 2026-08-29T07:35:42.408523+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C07X tlspec-v9 amendment: new entry-dark fields Op.episode_step, Op.tl_authored_root, Trace.root_entry_point add validator/read sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 7b72bd81e6e4f79e4e3b16c87485d6e9190aa3d9 (dirty)
+recorded: 2026-08-28T23:52:09.178921+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T65 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: b42b58431b784ff41063709b645f493e51da4682 (clean)
+recorded: 2026-08-29T08:13:38.975375+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T65 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: b42b58431b784ff41063709b645f493e51da4682 (clean)
+recorded: 2026-08-29T08:13:42.889311+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F29 reconcile onto 3b59303d: agent surface merge adds agent/_artifacts.py static read sites; trace() signature reconciled with the F17 ladder (input_args default None, forward_kwargs catch-all kept)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: c0a66143fea0f20f8ef3b11e4a9f032f4bda9a82 (dirty)
+recorded: 2026-08-29T09:31:21.814246+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F29 reconcile onto 3b59303d: agent surface merge adds agent/_artifacts.py static read sites; trace() signature reconciled with the F17 ladder (input_args default None, forward_kwargs catch-all kept)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: c0a66143fea0f20f8ef3b11e4a9f032f4bda9a82 (dirty)
+recorded: 2026-08-29T09:31:27.112026+00:00
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F21 reconcile merge of sprint/megasprint-2026-08-27 (tip 3b59303d): union of F21 inventory/features read sites and sprint-side stochastic/onebackward sites; regenerated from the merged tree
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 7886221207a838863dda28978b7bfd854e1b6b1b (dirty)
+recorded: 2026-08-29T08:51:07.101353+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F21 reconcile merge of sprint/megasprint-2026-08-27 (tip 3b59303d): union of F21 inventory/features read sites and sprint-side stochastic/onebackward sites; regenerated from the merged tree
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 7886221207a838863dda28978b7bfd854e1b6b1b (dirty)
+recorded: 2026-08-29T08:51:11.279804+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F22 neuro package: new reader sites (torchlens/neuro/_rdms.py, _handoff.py, _datasets.py) enter the static consumer scan; no producer change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: fdcb5fed8b6ef05abbf0f11a5cb93c257f007b26 (dirty)
+recorded: 2026-08-29T11:36:18.694871+00:00
+reason: F16 treescope cards: new notebook/bridge/report modules read record fields via getattr-with-default display paths; ledger rows regenerated for the new sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 16014b66d5cbbb9e1af0e8d63d7074f0aa1e95aa (dirty)
+recorded: 2026-08-28T01:32:09.887109+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F16 treescope cards: new notebook/bridge/report modules read record fields via getattr-with-default display paths; ledger rows regenerated for the new sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 16014b66d5cbbb9e1af0e8d63d7074f0aa1e95aa (dirty)
+recorded: 2026-08-28T01:32:20.174126+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: rebase onto T56 tip: sibling-lane _netron_records.py consumer sites interleave with F16 _report.py rows; reviewed refresh
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 31071de37d7575b45d332dd6a6af7a9d8a045f5d (clean)
+recorded: 2026-08-28T23:48:53.881024+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F16/T60 fix cycle: OpAccessor/LayerAccessor moved verbatim to data_classes/_layer_accessors.py under the R43 ratchet; consumer read-site rows re-key to the new file
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: dd4eaa5552db8652d1cd68dfd42889246722fea2 (dirty)
+recorded: 2026-08-29T07:04:27.044310+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F24 reconcile onto sprint tip 3b59303d: ledger regen on the merged read-site basis (F24 observe sites union the landed sprint sites)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 2891f77944bbb31be2adbcc451b708a9b23540f8 (dirty)
+recorded: 2026-08-29T09:28:37.699355+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F24 reconcile onto sprint tip 3b59303d: ledger regen on the merged read-site basis (F24 observe sites union the landed sprint sites)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 2891f77944bbb31be2adbcc451b708a9b23540f8 (dirty)
+recorded: 2026-08-29T09:28:41.746871+00:00
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F16/T60 fix cycle: OpAccessor/LayerAccessor moved verbatim to data_classes/_layer_accessors.py under the R43 ratchet; consumer read-site rows re-key to the new file
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: dd4eaa5552db8652d1cd68dfd42889246722fea2 (dirty)
+recorded: 2026-08-29T07:04:30.940533+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F21 reconcile merge of sprint/megasprint-2026-08-27 (tip 3b59303d): union of F21 inventory/features read sites and sprint-side stochastic/onebackward sites; regenerated from the merged tree
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 7886221207a838863dda28978b7bfd854e1b6b1b (dirty)
+recorded: 2026-08-29T08:51:07.101353+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F21 reconcile merge of sprint/megasprint-2026-08-27 (tip 3b59303d): union of F21 inventory/features read sites and sprint-side stochastic/onebackward sites; regenerated from the merged tree
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 7886221207a838863dda28978b7bfd854e1b6b1b (dirty)
+recorded: 2026-08-29T08:51:11.279804+00:00
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F10 reconcile: merge sprint tip 3b59303d into mega/F10 (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: a6a40cdf36975ecc932719a5c30a7e652dfaf0a1 (dirty)
+recorded: 2026-08-29T08:53:05.148906+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F10 reconcile: merge sprint tip 3b59303d into mega/F10 (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: a6a40cdf36975ecc932719a5c30a7e652dfaf0a1 (dirty)
+recorded: 2026-08-29T08:53:10.419359+00:00
+reason: train T67f assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4a7389187ab874ba70033cd4d70759488d356ded (clean)
+recorded: 2026-08-29T11:56:47.186550+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T67f assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4a7389187ab874ba70033cd4d70759488d356ded (clean)
+recorded: 2026-08-29T11:56:52.243904+00:00
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: T67b fix: the two total_transformed_* readers moved from data_classes/_trace_stats.py to observability/_memory_totals.py (legacy-surface fix); same reader sites, new home
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 830f51255aa2b72c9eeb5301b70f4ad63d08a2ff (clean)
+recorded: 2026-08-29T11:06:45.307914+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T68c assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 239a2e7cac74ef97375a4b38b1583002ebff58b3 (clean)
+recorded: 2026-08-29T13:06:05.457723+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T68c assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 239a2e7cac74ef97375a4b38b1583002ebff58b3 (clean)
+recorded: 2026-08-29T13:06:10.506847+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: mega/F20 re-reconcile with T68c (F13+F25): regenerate the parity ledger on the merged tree
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 6a35c916e3da02c9d7691662b7cf0dd5c08d29ec (dirty)
+recorded: 2026-08-29T14:12:40.468181+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: mega/F20 re-reconcile with T68c (F13+F25): regenerate the parity ledger on the merged tree
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 6a35c916e3da02c9d7691662b7cf0dd5c08d29ec (dirty)
+recorded: 2026-08-29T14:12:44.702722+00:00
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T71d assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 78b9582eb5b4f4dcf2e8f586b9038e55abc6963b (clean)
+recorded: 2026-08-29T15:27:37.069723+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T71d assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 78b9582eb5b4f4dcf2e8f586b9038e55abc6963b (clean)
+recorded: 2026-08-29T15:27:42.075528+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T73b assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: d0c648c9877e74232a6e13d65583e1c7d1b06961 (clean)
+recorded: 2026-08-29T16:36:35.463993+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T73b assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: d0c648c9877e74232a6e13d65583e1c7d1b06961 (clean)
+recorded: 2026-08-29T16:36:39.753071+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F22 re-reconcile merge union: F21/F22 provenance + neuro sites merged over the landed F18 extraction-v2 split; producer/consumer sites moved with the reviewed merge
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 3ccd0522e8746a596a0721209153154fb91f0b21 (dirty)
+recorded: 2026-08-29T17:38:09.112166+00:00
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T79 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: a901bb268ad7eae22dae6cd89dafebde027c5085 (clean)
+recorded: 2026-08-29T19:34:09.498372+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T79 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: a901bb268ad7eae22dae6cd89dafebde027c5085 (clean)
+recorded: 2026-08-29T19:34:14.690163+00:00
+reason: T68c re-reconcile: merge sprint tip 2402f3585 (F13+F25) into mega/F27; union tree moves producer/consumer sites from both lanes; regenerated on the merged tree per the reconcile law
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 09ad9b465a4bc4d728c3a0aa907c8ca82f20c19c (dirty)
+recorded: 2026-08-29T13:47:00.984768+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: T68c re-reconcile: merge sprint tip 2402f3585 (F13+F25) into mega/F27; union tree moves producer/consumer sites from both lanes; regenerated on the merged tree per the reconcile law
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 09ad9b465a4bc4d728c3a0aa907c8ca82f20c19c (dirty)
+recorded: 2026-08-29T13:47:06.306831+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T80 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: e5eee8e4789ab479393649a666f6f0df11ee13e0 (clean)
+recorded: 2026-08-29T20:05:28.489505+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T80 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: e5eee8e4789ab479393649a666f6f0df11ee13e0 (clean)
+recorded: 2026-08-29T20:05:33.927627+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: T80 re-reconcile into mega/F24: merge-derivable union of landed T80 scan with the F24 observe/debug sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 18c505d2fa1657227e15944c699b117d1206ae46 (dirty)
+recorded: 2026-08-29T20:57:19.650077+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: T80 re-reconcile into mega/F24: merge-derivable union of landed T80 scan with the F24 observe/debug sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 18c505d2fa1657227e15944c699b117d1206ae46 (dirty)
+recorded: 2026-08-29T20:57:25.280345+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T81c assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 2a6cfeb0abce258a7a8bf3aa009ea0f0e0bb2bf3 (clean)
+recorded: 2026-08-29T21:42:39.437863+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T81c assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 2a6cfeb0abce258a7a8bf3aa009ea0f0e0bb2bf3 (clean)
+recorded: 2026-08-29T21:42:43.662138+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T82d assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 46d63ba53691ecb4fddd6bc675c8ebd61179db6e (clean)
+recorded: 2026-08-29T23:52:57.390489+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T82d assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 46d63ba53691ecb4fddd6bc675c8ebd61179db6e (clean)
+recorded: 2026-08-29T23:53:01.733150+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F42 re-reconcile: regenerate the producer-parity ledger on the merged tree -- the T82d tip scan predates the F42 assembled-side sites (episode coupling _episode_failed.py, F01 intervention/binding.py + injection.py getattr readers)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 3e7657dc5a4a050ab6b5a823780ee9cc01b832ed (clean)
+recorded: 2026-08-30T00:38:21.086119+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F42 re-reconcile: regenerate the producer-parity ledger on the merged tree -- the T82d tip scan predates the F42 assembled-side sites (episode coupling _episode_failed.py, F01 intervention/binding.py + injection.py getattr readers)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 3e7657dc5a4a050ab6b5a823780ee9cc01b832ed (clean)
+recorded: 2026-08-30T00:38:26.841928+00:00
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T84b assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5baecbfe243bcf5ee64a748413d9388af0804183 (clean)
+recorded: 2026-08-30T01:35:13.426810+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T84b assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 5baecbfe243bcf5ee64a748413d9388af0804183 (clean)
+recorded: 2026-08-30T01:35:17.682654+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T85 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: dbc8dc54e0c78415b2f089618abadf16018a0ecb (clean)
+recorded: 2026-08-30T02:05:53.635551+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T85 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: dbc8dc54e0c78415b2f089618abadf16018a0ecb (clean)
+recorded: 2026-08-30T02:05:57.900563+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: F43 re-reconcile vs T85: union merge adds the F43 surgery-visuals read sites (surgery_diff.py/surgery_visuals.py field reads) on top of the T85 parity regen; additive only, reviewed against the merge diff
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 06969efc518e9c234d948e30cbdd5b4adf404f5c (dirty)
+recorded: 2026-08-30T02:51:24.869127+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T87b assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: e4d8a2a5ae1439e8a940b79f00ee15e7b6c348b4 (clean)
+recorded: 2026-08-30T03:43:07.003552+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T87b assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: e4d8a2a5ae1439e8a940b79f00ee15e7b6c348b4 (clean)
+recorded: 2026-08-30T03:43:11.469967+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T88d assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: caeb79bff4e906ca939074fa89c16a6947c842cb (clean)
+recorded: 2026-08-30T05:18:15.516747+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T88d assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: caeb79bff4e906ca939074fa89c16a6947c842cb (clean)
+recorded: 2026-08-30T05:18:19.891721+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T89b assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: c05a13c4deac8abe051671669382d82dd61e44ea (clean)
+recorded: 2026-08-30T06:26:26.937920+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T89b assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: c05a13c4deac8abe051671669382d82dd61e44ea (clean)
+recorded: 2026-08-30T06:26:31.454308+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T90b assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 57eb0a9f79e77b8a97f08b74cb7fb0422a25ee11 (clean)
+recorded: 2026-08-30T07:30:42.745473+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T90b assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 57eb0a9f79e77b8a97f08b74cb7fb0422a25ee11 (clean)
+recorded: 2026-08-30T07:30:47.312008+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T91b assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: df7942ed48f21680d81c293542ec7bc8aec60588 (clean)
+recorded: 2026-08-30T09:05:11.112004+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T91b assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: df7942ed48f21680d81c293542ec7bc8aec60588 (clean)
+recorded: 2026-08-30T09:05:16.605027+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T92 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: a934a9a93447a435e73e73da4c3d00d291780fac (clean)
+recorded: 2026-08-30T09:51:07.115014+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T92 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: a934a9a93447a435e73e73da4c3d00d291780fac (clean)
+recorded: 2026-08-30T09:51:12.892028+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T93b assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: adf3c2e1366ab6e4e778d49cef33eb2ad86049f2 (clean)
+recorded: 2026-08-31T02:29:44.134806+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T93b assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: adf3c2e1366ab6e4e778d49cef33eb2ad86049f2 (clean)
+recorded: 2026-08-31T02:29:48.451644+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T94c assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 2edca5d6777ca6b83ef510770575c5bd96792bae (clean)
+recorded: 2026-08-31T04:41:57.329011+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T94c assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 2edca5d6777ca6b83ef510770575c5bd96792bae (clean)
+recorded: 2026-08-31T04:42:03.048365+00:00

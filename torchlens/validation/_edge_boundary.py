@@ -98,6 +98,23 @@ def _splice_edge_substitution_args(
     kwargs = dict(input_args["kwargs"])
     for store_key, payload in entries.items():
         arg_kind, arg_path = store_key
+        is_region = isinstance(payload, dict) and payload.get("substitution_kind") == "region"
+        if is_region:
+            # Region exit substitutions (F01) may sit at nested container
+            # paths; the region splice rebuilds the container faithfully, so
+            # the SAME re-execute-and-compare check runs at the nested
+            # address -- a capability extension of this check, never a
+            # weakening (the depth-1 tripwire below still refuses foreign
+            # edge rows it cannot apply faithfully).
+            value = payload.get("value")
+            if isinstance(value, torch.Tensor):
+                from ..intervention.regions import _splice_occurrence
+
+                spliced_args, kwargs = _splice_occurrence(
+                    tuple(args), kwargs, (None, arg_kind, tuple(arg_path)), value
+                )
+                args = list(spliced_args)
+                continue
         if len(tuple(arg_path)) != 1:
             # TRIPWIRE (shared with the replay/edge splice sites): a nested
             # store key at this top-level splice would silently re-execute

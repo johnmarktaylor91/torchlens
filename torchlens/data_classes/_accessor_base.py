@@ -222,8 +222,59 @@ class Accessor(Generic[T]):
         """Return the display name used in generic ``KeyError`` messages."""
         return type(self).__name__.removesuffix("Accessor")
 
+    def _composition_note(self) -> str | None:
+        """Optional composition breakdown for the one-line card (override)."""
+
+        return None
+
     def __repr__(self) -> str:
-        """Return a compact accessor summary."""
-        keys = list(self._dict.keys())[:5]
-        suffix = "..." if len(self._dict) > 5 else ""
-        return f"{type(self).__name__} with {len(self)} items: {keys}{suffix}"
+        """One-line composition card (F10; containers point, never dump)."""
+
+        from ..stats._envelope import collection_line
+
+        noun = self._item_kind.lower() + ("s" if len(self) != 1 else "")
+        return collection_line(
+            type(self).__name__,
+            len(self),
+            noun,
+            composition=self._composition_note(),
+            exits=(".head()", ".find()", ".to_pandas()"),
+        )
+
+    def __str__(self) -> str:
+        """Bounded collection view: composition line + first members (F10)."""
+
+        from ..stats._envelope import COLLECTION_MAX_CHILDREN
+
+        children = [repr(item) for item in self._list[:COLLECTION_MAX_CHILDREN]]
+        if len(self._list) > COLLECTION_MAX_CHILDREN:
+            children.append(f"... {len(self._list) - COLLECTION_MAX_CHILDREN} more")
+        lines = [self.__repr__()] + [f"  {child}" for child in children]
+        return "\n".join(lines)
+
+    def head(self, n: int = 5) -> list[T]:
+        """Return the first ``n`` records in order (a collection exit)."""
+
+        return list(self._list[: max(int(n), 0)])
+
+    def find(self, needle: str) -> list[T]:
+        """Return records whose lookup key contains ``needle`` (substring).
+
+        Parameters
+        ----------
+        needle:
+            Substring matched against every string lookup key.
+
+        Returns
+        -------
+        list
+            Matching records in insertion order, deduplicated by identity.
+        """
+
+        matches: list[T] = []
+        seen: set[int] = set()
+        for key, value in self._dict.items():
+            if isinstance(key, str) and needle in key and id(value) not in seen:
+                matches.append(value)
+                seen.add(id(value))
+        return matches

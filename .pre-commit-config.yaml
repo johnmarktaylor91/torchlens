@@ -38,7 +38,9 @@ repos:
             menagerie/crawler/records/|
             menagerie/data/|
             docs/images/|
-            tests/real_model/vendored/
+            tests/real_model/vendored/|
+            tests/test_modelexplorer_assets/worker\.js|
+            tests/test_modelexplorer_assets/visualizer_custom_element\.d\.ts
           )
       - id: end-of-file-fixer
         exclude: *generated_artifacts
@@ -48,7 +50,10 @@ repos:
         # artifacts; the harvested release golden corpus is irreplaceable byte-pinned
         # test data (ecosystem MEMO 3.7 G1, digest-enforced by
         # tests/test_tlspec_envelope_goldens.py)
-        exclude: ^(benchmarks/perf_baselines/.*\.json|menagerie/data/master_catalog\.jsonl|menagerie/data/routing_manifest\.tsv|menagerie/data/stable_ids\.jsonl|menagerie/data/crawl_roster\.jsonl|tests/release_goldens/genuine_release_artifacts\.tar\.gz)$
+        # tests/test_modelexplorer_assets/worker.js is the byte-pinned Model
+        # Explorer worker oracle (F15 vendor contract harness; sha256-enforced
+        # by tests/test_modelexplorer_contract.py).
+        exclude: ^(benchmarks/perf_baselines/.*\.json|menagerie/data/master_catalog\.jsonl|menagerie/data/routing_manifest\.tsv|menagerie/data/stable_ids\.jsonl|menagerie/data/crawl_roster\.jsonl|tests/release_goldens/genuine_release_artifacts\.tar\.gz|tests/test_modelexplorer_assets/worker\.js)$
       - id: detect-private-key
   - repo: https://github.com/gitleaks/gitleaks
     # Repo-portable secret scanning: this is what makes .gitleaks.toml (the
@@ -105,10 +110,12 @@ repos:
             tests/perf_baselines/.*|
             tests/fixtures/tlspec_v7/.*|
             tests/release_goldens/.*|
+            tests/agent_surface_goldens/.*|
             torchlens/schemas/writer_contract_v[0-9]+\.json|
             tests/real_model/artifact_registry\.jsonl|
             tests/real_model/vendored/.*|
-            tests/real_model/r0/expectations_r0\.json
+            tests/real_model/r0/expectations_r0\.json|
+            tests/transforms_corpus/.*
           )$
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # PIN AUTHORITY: the `# vX.Y.Z` trailer MUST equal the `ruff==` pin in

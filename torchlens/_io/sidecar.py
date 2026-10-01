@@ -45,6 +45,23 @@ DEFAULT_SIDECAR_BUDGET_BYTES = 1_048_576
 #: families collision-free by construction.
 _FAMILY_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$")
 
+#: RESERVED TorchLens sidecar family ids (the C07X amendment, foldB s4.4
+#: items 6 + 11 per D17): id registrations, not schema slots. The owning
+#: lanes register the real families later (``torchlens.input_digest``'s
+#: writer is A-GATE/digest; ``torchlens.input_origin`` and
+#: ``torchlens.boundary_facts`` follow the D17 pattern for span geometry and
+#: boundary facts); until then the ids are squat-proof — the ``torchlens.``
+#: namespace refuses registration from any non-TorchLens provider — and an
+#: artifact carrying one written by a NEWER torchlens reads back here as the
+#: standard provider-absent ``AnalysisOnlySidecar`` degradation.
+RESERVED_SIDECAR_FAMILY_IDS = frozenset(
+    {
+        "torchlens.input_origin",
+        "torchlens.input_digest",
+        "torchlens.boundary_facts",
+    }
+)
+
 
 class SidecarError(ConfigurationError):
     """Raised for sidecar-family registration and payload refusals."""
@@ -150,6 +167,23 @@ def register_sidecar_family(
             code="sidecar_family_id_invalid",
             family_id=str(family.family_id),
             remedy="Use an id like 'myorg.saliency'.",
+        )
+    effective_provider = provider or TORCHLENS_PROVIDER
+    if (
+        family.family_id.startswith("torchlens.")
+        and effective_provider.provider_id != TORCHLENS_PROVIDER.provider_id
+    ):
+        # Squat prevention (C07X/D17): the ``torchlens.`` namespace — the
+        # reserved ids above included — belongs to the TorchLens provider;
+        # out-of-tree families register under their own namespace.
+        raise SidecarError(
+            f"Sidecar family id {family.family_id!r} sits in the reserved "
+            "'torchlens.' namespace, which only the TorchLens provider may "
+            "register.",
+            code="sidecar_family_namespace_reserved",
+            family_id=family.family_id,
+            provider_id=effective_provider.provider_id,
+            remedy="Register under your own namespace, e.g. 'myorg.input_origin'.",
         )
     if not family.schema_id or not isinstance(family.schema_id, str):
         raise SidecarError(

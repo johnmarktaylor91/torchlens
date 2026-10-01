@@ -60,6 +60,7 @@ from .outcome import (
     settle_failed,
     settle_halted,
 )
+from .peak_memory import peak_rss_bytes, process_rss_bytes, reset_peak_rss
 from .session import (
     CaptureSession,
     attach_capture_events_session,
@@ -117,25 +118,6 @@ def _cleanup_forward_memory_once(
     session.run_cleanup("forward_memory", lambda: backend.cleanup_forward_memory(trace))
 
 
-def _process_rss_bytes() -> int:
-    """Return the current process resident-set size in bytes, or 0 if unavailable.
-
-    Used as a coarse host-memory proxy for the CPU forward-pass peak. psutil is an
-    optional dependency; absence degrades to 0 rather than raising.
-
-    Returns
-    -------
-    int
-        Resident-set size in bytes, or 0 when psutil is unavailable.
-    """
-
-    try:
-        import psutil
-    except ImportError:
-        return 0
-    return int(psutil.Process().memory_info().rss)
-
-
 def _structure_only_forward_boundary(trace: "Trace") -> "contextlib.AbstractContextManager[None]":
     """LAYER-2 backstop for structure-only captures (L7a memo sec 2.2).
 
@@ -147,10 +129,26 @@ def _structure_only_forward_boundary(trace: "Trace") -> "contextlib.AbstractCont
     """
 
     if bool(getattr(trace, "structure_only", False)):
-        from ..backends.torch.structure_only_belt import structure_only_forward_boundary
-
-        return structure_only_forward_boundary(trace)
+        return _weightsfree_and_belt_boundary(trace)
     return contextlib.nullcontext()
+
+
+@contextlib.contextmanager
+def _weightsfree_and_belt_boundary(trace: "Trace") -> "Iterator[None]":
+    """Compose the admitted-meta scope around the structure-only belt.
+
+    The admitted-meta scope (W1-CTX factory slot, W1-AC autocast shim, D19
+    ambient-context absorption, W1 transparency activation) wraps OUTSIDE
+    the belt boundary so belt refusals still classify while the scope's
+    state restores on any exit path. No-op without a pending admission
+    (real-substrate structure-only captures).
+    """
+
+    from ..backends.torch.structure_only_belt import structure_only_forward_boundary
+    from ._weightsfree_admission import weightsfree_forward_scope
+
+    with weightsfree_forward_scope(trace), structure_only_forward_boundary(trace):
+        yield
 
 
 @contextlib.contextmanager
@@ -218,18 +216,36 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
         backend_label = "cuda"
         cuda_device = device
         peak_before = 0
+        reserved_before = 0
         with contextlib.suppress(Exception):
             peak_before = int(torch_module.cuda.max_memory_allocated(cuda_device))
+        with contextlib.suppress(Exception):
+            reserved_before = int(torch_module.cuda.max_memory_reserved(cuda_device))
         try:
             yield
         finally:
+            live_peak: int | None = None
+            resident_peak: int | None = None
             with contextlib.suppress(Exception):
                 peak_after = int(torch_module.cuda.max_memory_allocated(cuda_device))
                 # New device peak -> the forward's exact peak. No new peak ->
                 # the forward stayed under the pre-existing high-water mark
                 # and the figure honestly reads 0 (see docstring, R36-2).
-                trace.forward_peak_memory = Bytes(peak_after if peak_after > peak_before else 0)
+                live_peak = peak_after if peak_after > peak_before else 0
+                trace.forward_peak_memory = Bytes(live_peak)
+            with contextlib.suppress(Exception):
+                reserved_after = int(torch_module.cuda.max_memory_reserved(cuda_device))
+                resident_peak = reserved_after if reserved_after > reserved_before else 0
             trace.forward_memory_backend = backend_label
+            # F20 peak PAIR (brainpipe D-7): live allocation vs resident
+            # high-water are different physical quantities; a single number
+            # cannot be both correct and portable. Session-time only.
+            trace._forward_peak_memory_pair = {
+                "live": live_peak,
+                "resident": resident_peak,
+                "backend": "cuda:allocated+reserved",
+                "resident_basis": "prior_high_water_delta",
+            }
         return
 
     if device_type == "mps" and torch_module is not None and hasattr(torch_module, "mps"):
@@ -237,7 +253,14 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
         before = int(torch_module.mps.current_allocated_memory())
     else:
         backend_label = "cpu"
-        before = _process_rss_bytes()
+        before = process_rss_bytes()
+    # F20 peak PAIR (brainpipe D-7): scope the host resident high-water mark
+    # to THIS capture when the platform allows it. Without the reset, VmHWM
+    # is the process-lifetime maximum and legitimately reads 0 growth for
+    # every capture after the first -- the memo's sweep-scale instrument
+    # defect.
+    rss_peak_scoped = reset_peak_rss()
+    rss_before = before if backend_label == "cpu" else process_rss_bytes()
 
     # Opt-in only: the tracemalloc allocator hook is the single most expensive
     # thing in a default CPU capture, so the default path never touches
@@ -298,10 +321,26 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
             if backend_label == "mps" and torch_module is not None:
                 after = int(torch_module.mps.current_allocated_memory())
             else:
-                after = _process_rss_bytes()
+                after = process_rss_bytes()
         rss_delta = max(0, after - before)
         trace.forward_memory_backend = backend_label
         trace.forward_peak_memory = Bytes(max(rss_delta, int(traced_peak)))
+        # F20 peak PAIR (brainpipe D-7). ``live`` is a Python-allocation peak
+        # and exists only when the tracemalloc opt-in paid for it; ``None``
+        # means unmeasured, never zero. ``resident`` is the host high-water
+        # growth over this bracket, per-capture-scoped when the VmHWM reset
+        # succeeded (Linux) and a lifetime-max approximation otherwise.
+        resident_growth: int | None = None
+        with contextlib.suppress(Exception):
+            peak_rss_after = peak_rss_bytes()
+            if peak_rss_after > 0 and rss_before > 0:
+                resident_growth = max(0, peak_rss_after - rss_before)
+        trace._forward_peak_memory_pair = {
+            "live": int(traced_peak) if tracemalloc_module is not None else None,
+            "resident": resident_growth,
+            "backend": ("mps:allocated+rss" if backend_label == "mps" else "cpu:maxlive+rss"),
+            "resident_basis": ("per_capture" if rss_peak_scoped else "process_lifetime"),
+        }
 
 
 def _backend_name_for_trace(trace: "Trace") -> BackendName:
@@ -1310,6 +1349,10 @@ def _scrub_failed_capture_transients(self: "Trace") -> None:
     # before anything reads the partial's payloads.
     synchronize_pending_cpu_async_copies()
     self.__dict__.pop("_output_attribution_input_tensors", None)
+    # The aborted-nonfinite frontier stash is a live activation tensor; a
+    # failed capture that never ran the prefix finalization must not retain
+    # it past settlement (same R11/R32 class as the attribution inputs).
+    self.__dict__.pop("_nonfinite_frontier_out", None)
     events = self.__dict__.pop("capture_events", None)
     if events is None:
         return
@@ -2138,6 +2181,16 @@ def run_and_log_inputs_through_model(
         # the event stream (or double-fault on already-popped workspaces), and
         # the stamp in ``finally`` must still carry the committed-op count.
         committed_ops = count_committed_ops(self)
+        # Aborted-nonfinite label unification (observe item 1): postprocess
+        # the committed prefix with the offending tensor seeded as the output
+        # frontier, so every public surface reads FINAL labels through the
+        # step-8 identity map instead of leaking raw spellings. Failure-safe
+        # by contract: any finalization failure attaches as secondary
+        # evidence on ``e`` and this arm proceeds exactly as before.
+        if postprocess:
+            from ._nonfinite_prefix import maybe_finalize_nonfinite_prefix
+
+            maybe_finalize_nonfinite_prefix(self, backend, e, model, input_tensors)
         try:
             # The seal runs FIRST (it reads live capture state that cleanup
             # strips) but must not be able to SKIP cleanup: a raising seal used

@@ -9,6 +9,7 @@ from ._label_format import compute_selected_node_lines as _compute_selected_node
 from ._render_common import *
 from ._render_edges import *
 from ._render_leaf import *
+from ._typography import DEFAULT_TYPOGRAPHY
 from .modes import CollapsedModeScope
 
 # Home moved to node_spec (S5 territory) at the L5 wave-1 merge to keep this
@@ -141,6 +142,7 @@ def _add_unrolled_backward_pass_clusters(
     """
 
     calls_by_pass = _visible_backward_calls_by_pass(trace, pass_filter)
+    inventory = compute_backward_style_inventory(trace, pass_filter)
     for pass_index, grad_fn_calls in calls_by_pass.items():
         with graphviz_graph.subgraph(name=f"cluster_backward_pass_{pass_index}") as subgraph:
             subgraph.attr(
@@ -150,7 +152,9 @@ def _add_unrolled_backward_pass_clusters(
                 style="rounded,dashed",
             )
             for grad_fn_handle, call in grad_fn_calls:
-                node_args = _backward_node_graphviz_args(grad_fn_handle, node_spec_fn, call=call)
+                node_args = _backward_node_graphviz_args(
+                    grad_fn_handle, node_spec_fn, call=call, inventory=inventory
+                )
                 subgraph.node(**node_args)
 
     for pass_index, grad_fn_calls in calls_by_pass.items():
@@ -165,7 +169,7 @@ def _add_unrolled_backward_pass_clusters(
                     graphviz_graph.edge(
                         tail_name,
                         head_name,
-                        **_backward_edge_attrs(grad_fn_handle, head_grad_fn),
+                        **_backward_edge_attrs(grad_fn_handle, head_grad_fn, trace=trace),
                     )
 
 
@@ -254,7 +258,7 @@ def _container_boundary_edge_attrs(label: str | None) -> dict[str, str]:
         "fontcolor": "#555555",
         "style": "solid",
         "arrowsize": ".6",
-        "labelfontsize": "8",
+        "labelfontsize": DEFAULT_TYPOGRAPHY.annotation_pt,
         "constraint": "false",
     }
     if label is not None:
@@ -435,7 +439,7 @@ def _add_node_to_graphviz(
             module_edge_dict,
             emitted_segment_nodes,
             segment,
-            vis_mode,
+            (vis_mode, theme),
         )
     is_collapsed_module = collapse_address is not None
     is_hidden_run_member = (
@@ -701,7 +705,7 @@ def _queue_segment_node(
     module_edge_dict: Dict[str, Any],
     emitted_segment_nodes: set[str] | None,
     segment: SegmentDescriptor,
-    vis_mode: str = "unrolled",
+    presentation: "tuple[str, VisualizationTheme | None] | str" = "unrolled",
 ) -> None:
     """Queue one dashed segment node if it has not already been emitted.
 
@@ -721,8 +725,10 @@ def _queue_segment_node(
         Mutable set of emitted segment node names.
     segment:
         Segment descriptor to render.
-    vis_mode:
-        ``"unrolled"`` or ``"rolled"`` visualization mode.
+    presentation:
+        The ``(vis_mode, theme)`` pair, or a bare ``vis_mode`` string
+        (``"unrolled"`` / ``"rolled"``) keeping the historical theme-less
+        spelling; a ``None`` theme resolves to the torchlens preset.
     """
 
     if emitted_segment_nodes is None:
@@ -730,14 +736,22 @@ def _queue_segment_node(
     if segment.name in emitted_segment_nodes:
         return
     emitted_segment_nodes.add(segment.name)
+    # ``presentation`` is the (vis_mode, theme) pair (one arg: PLR0913);
+    # a bare string keeps the historical vis_mode-only spelling for tests.
+    vis_mode, theme = presentation if isinstance(presentation, tuple) else (presentation, None)
+    # K4 capsule colors derive from the active theme (F11 memo item 10:
+    # the hardcoded #f7f7f7 family ignored dark themes -- a live theme bug).
+    from .themes import THEME_PRESETS, collapse_tokens
+
+    tokens = collapse_tokens(theme if theme is not None else THEME_PRESETS["torchlens"])
     node_args = {
         "name": segment.name,
         "label": render_lines_to_html([segment.label]),
         "shape": "box",
         "style": "rounded,dashed,filled",
-        "fillcolor": "#f7f7f7",
-        "color": "#666666",
-        "fontcolor": "#222222",
+        "fillcolor": tokens.segment_fill,
+        "color": tokens.segment_border,
+        "fontcolor": tokens.segment_font,
         "ordering": "out",
     }
     owner = _segment_owner_for_mode(segment.owner, vis_mode)

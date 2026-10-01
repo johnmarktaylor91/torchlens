@@ -34,7 +34,7 @@ from ...data_classes.derived_grad import (
 )
 from ...data_classes.layer import Layer
 from ...data_classes.param import Param, ParamAccessor
-from ...data_classes.trace import Trace, _init_module_hierarchy_data
+from ...data_classes.trace import Trace
 from ...fastlog.types import CaptureSpec
 from ...ir.capture_events import CaptureEvents
 from ...ir.container import ContainerSpec, DictKey, OutputPathComponent, TupleIndex
@@ -51,6 +51,7 @@ from ...ir.op_record import amend_preview_output_parent_rebind
 from ...ir.predicate import RecordContext
 from ...ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
+from ...ir.workspaces import _init_module_hierarchy_data
 from ...postprocess._grouping_stamp import build_grouping_policy_stamp
 from ...postprocess._materialize import materialize_from_events
 from ...postprocess._selective_save import (
@@ -1221,8 +1222,8 @@ class JAXBackend:
                 mutated_input_positions=(),
                 aliased_output_inputs=(),
                 unknown_aliasing=False,
-                bytes_delta_at_call=0,
-                bytes_peak_at_call=0,
+                bytes_delta_at_call=None,
+                bytes_peak_at_call=None,
             ),
             policy=policy,
             predicate_matched=True,
@@ -2166,10 +2167,9 @@ class JAXBackend:
             ``trace.modules`` is populated by the shared module-log builder.
         """
 
-        trace._module_capture_ws.module_build_data = _init_module_hierarchy_data()
+        mbd = trace._module_capture_ws.module_build_data = _init_module_hierarchy_data()
         trace._module_capture_ws.module_forward_args = dict(tree.forward_args_by_call)
         trace._module_capture_ws.module_metadata = tree.metadata
-        mbd = trace._module_capture_ws.module_build_data
         for address, metadata in tree.metadata.items():
             if address not in mbd["addresses"]:
                 mbd["addresses"].append(address)

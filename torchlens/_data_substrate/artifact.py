@@ -70,25 +70,29 @@ LEDGER_FILENAME = "ledger.jsonl"
 STIMULUS_IDS_FILENAME = "stimulus_ids.json"
 
 
-def shard_filename(index: int) -> str:
+def shard_filename(index: int, extension: str = ".pt") -> str:
     """Return the canonical shard filename for a batch index.
 
     The artifact owns its layout: shard names are always derived from the
     shard index (resume validation refuses any drift between the two), so
-    commit takes only the index and derives the name here.
+    commit takes only the index and derives the name here. The extension
+    follows the artifact's recorded shard format (a MANIFEST field, so a
+    format change is a value change, never a layout break).
 
     Parameters
     ----------
     index:
         Zero-based shard index.
+    extension:
+        Shard filename extension (``".pt"`` or ``".safetensors"``).
 
     Returns
     -------
     str
-        Filename of the form ``batch_00042.pt``.
+        Filename of the form ``batch_00042.pt`` / ``batch_00042.safetensors``.
     """
 
-    return f"batch_{index:05d}.pt"
+    return f"batch_{index:05d}{extension}"
 
 
 #: Sidecar schema id.
@@ -113,6 +117,12 @@ SIGNATURE_SEMANTIC_FIELDS: tuple[str, ...] = (
     "dtype_policy",
     "ragged",
     "integrity",
+    # F18 extraction-runtime fields (extract D16's remaining KNOWN-FIELDS;
+    # absent on pre-F18 v2 artifacts, where a missing semantic field
+    # refuses — the fail-closed direction D16 mandates).
+    "collate",
+    "callable_identity",
+    "selector_plan",
 )
 
 #: Sentinel marking a field a completed-v1 migration could not prove.
@@ -442,11 +452,32 @@ class ArtifactWriter:
         terminal status only.
     """
 
-    def __init__(self, container: Path, manifest: dict[str, Any]) -> None:
-        """Bind the writer to its directory and manifest document."""
+    def __init__(
+        self,
+        container: Path,
+        manifest: dict[str, Any],
+        *,
+        shard_extension: str = ".pt",
+        checksums: str = "fast",
+    ) -> None:
+        """Bind the writer to its directory, manifest, and shard policies.
+
+        Parameters
+        ----------
+        container:
+            Artifact directory.
+        manifest:
+            The manifest document to own.
+        shard_extension:
+            Filename extension for the artifact's shard format.
+        checksums:
+            The D7 integrity level (``"fast"`` / ``"crypto"`` / ``"none"``).
+        """
 
         self.container = container
         self.manifest = manifest
+        self.shard_extension = shard_extension
+        self.checksums = checksums
         self._ledger_path = container / LEDGER_FILENAME
 
     def write_manifest(self) -> None:
@@ -528,7 +559,9 @@ class ArtifactWriter:
             Callback writing the payload to the TEMP path it is given.
         row_facts:
             Additional per-shard ledger facts (per-key shapes/dtypes, value
-            reductions, id-range digest, ...).
+            reductions, id-range digest, ...). The writer's construction-time
+            ``shard_extension`` and ``checksums`` policies govern the shard
+            filename and the D7 integrity facts.
 
         Returns
         -------
@@ -536,7 +569,7 @@ class ArtifactWriter:
             The appended ledger row.
         """
 
-        filename = shard_filename(index)
+        filename = shard_filename(index, self.shard_extension)
         final_path = self.container / filename
         tmp_path = self.container / (filename + ".tmp")
         save_payload(tmp_path)
@@ -549,9 +582,18 @@ class ArtifactWriter:
             "row_start": row_start,
             "n_rows": n_rows,
             "byte_size": final_path.stat().st_size,
-            "crc32": _crc32_file(final_path),
+            "crc32": _crc32_file(final_path) if self.checksums == "fast" else None,
             **row_facts,
         }
+        if self.checksums == "crypto":
+            file_hasher = hashlib.blake2b(digest_size=32)
+            with open(final_path, "rb") as shard_handle:
+                while True:
+                    chunk = shard_handle.read(1 << 20)
+                    if not chunk:
+                        break
+                    file_hasher.update(chunk)
+            row["file_digest"] = f"blake2b:{file_hasher.hexdigest()}"
         line = _canonical_dumps(row) + "\n"
         with open(self._ledger_path, "a", encoding="utf-8") as handle:
             handle.write(line)
@@ -580,7 +622,10 @@ class ArtifactWriter:
 
 
 def migrate_v1_artifact(
-    container: Path, manifest_v1: Mapping[str, Any]
+    container: Path,
+    manifest_v1: Mapping[str, Any],
+    *,
+    acknowledge_in_progress: bool = False,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Migrate a COMPLETED v1 artifact to v2 without a forward (extract D1).
 
@@ -595,6 +640,13 @@ def migrate_v1_artifact(
         Artifact directory.
     manifest_v1:
         The parsed v1 manifest.
+    acknowledge_in_progress:
+        The explicit acknowledgment for IN-PROGRESS v1 artifacts (extract
+        D16): the migrated artifact records the prefix as
+        asserted-not-measured and carries ``unknown_v1_prefix_semantics:
+        true`` PERMANENTLY, propagated by every exporter into the export
+        contract — an assertion that expires when the data is converted is
+        not an assertion.
 
     Returns
     -------
@@ -604,13 +656,14 @@ def migrate_v1_artifact(
     Raises
     ------
     ExtractionArtifactError
-        ``extraction_resume_v1_in_progress`` for in-progress v1 artifacts:
-        v1 recorded neither model mode nor grad state nor model identity, so
-        an unfinished prefix cannot be proven compatible with any resuming
-        run (the random-init T-MODELSWAP hazard lives exactly here).
+        ``extraction_resume_v1_in_progress`` for in-progress v1 artifacts
+        without the acknowledgment: v1 recorded neither model mode nor grad
+        state nor model identity, so an unfinished prefix cannot be proven
+        compatible with any resuming run (the random-init T-MODELSWAP
+        hazard lives exactly here).
     """
 
-    if manifest_v1.get("status") != "complete":
+    if manifest_v1.get("status") != "complete" and not acknowledge_in_progress:
         raise ExtractionArtifactError(
             "This artifact was written in progress by the v1 layout, which "
             "recorded neither model identity, model mode, grad state, nor "
@@ -630,6 +683,7 @@ def migrate_v1_artifact(
             ],
             status=manifest_v1.get("status"),
         )
+    in_progress_acknowledged = manifest_v1.get("status") != "complete"
     v1_signature = dict(manifest_v1.get("signature") or {})
     provenance = dict(manifest_v1.get("stimulus_provenance") or {})
     ids = provenance.get("stimulus_ids")
@@ -652,6 +706,12 @@ def migrate_v1_artifact(
         "dtype_policy": None,
         "ragged": "refuse",
         "integrity": UNRECORDED_V1,
+        # F18 runtime fields: v1 recorded none of them (disclosed, skipped
+        # by the compare); a resume through opaque callables still refuses
+        # through the D8 rules, which treat an unrecorded block as empty.
+        "collate": UNRECORDED_V1,
+        "callable_identity": UNRECORDED_V1,
+        "selector_plan": UNRECORDED_V1,
     }
     rows: list[dict[str, Any]] = []
     row_start = 0
@@ -674,7 +734,7 @@ def migrate_v1_artifact(
     manifest_v2: dict[str, Any] = {
         "schema": MANIFEST_SCHEMA_V2,
         "torchlens_version": manifest_v1.get("torchlens_version"),
-        "status": "complete",
+        "status": "in_progress" if in_progress_acknowledged else "complete",
         "signature": signature_v2,
         "stimulus_provenance": {
             "order": provenance.get("order"),
@@ -685,7 +745,11 @@ def migrate_v1_artifact(
         "storage": dict(manifest_v1.get("storage") or {}) | {"ledger": LEDGER_FILENAME},
         "layers": manifest_v1.get("layers"),
         "run": {},
-        "totals": {"n_shards": len(rows), "n_stimuli": row_start},
+        "totals": (
+            None
+            if manifest_v1.get("status") != "complete"
+            else {"n_shards": len(rows), "n_stimuli": row_start}
+        ),
         "ledger_digest": None,
         "migration": {
             "migrated_from": MANIFEST_SCHEMA_V1,
@@ -699,6 +763,11 @@ def migrate_v1_artifact(
             "legacy_signature": v1_signature,
         },
     }
+    if in_progress_acknowledged:
+        # The acknowledgment is PERMANENT: the prefix's semantics were
+        # asserted, never measured, and every exporter propagates the flag.
+        manifest_v2["unknown_v1_prefix_semantics"] = True
+        manifest_v2["migration"]["in_progress_acknowledged"] = "asserted_not_measured"
     writer = ArtifactWriter(container, manifest_v2)
     ledger_path = container / LEDGER_FILENAME
     if not ledger_path.exists():

@@ -21,8 +21,8 @@ def detect_torch_alias_contract(
     grad_fn_class_name: str | None = None,
     autograd_memory: int | None = None,
     num_autograd_tensors: int | None = None,
-    bytes_delta_at_call: int | None = 0,
-    bytes_peak_at_call: int | None = 0,
+    bytes_delta_at_call: int | None = None,
+    bytes_peak_at_call: int | None = None,
 ) -> BackendSemantics:
     """Detect torch input mutation and output aliasing semantics.
 
@@ -84,8 +84,8 @@ def detect_torch_output_alias_contract(
     grad_fn_class_name: str | None = None,
     autograd_memory: int | None = None,
     num_autograd_tensors: int | None = None,
-    bytes_delta_at_call: int | None = 0,
-    bytes_peak_at_call: int | None = 0,
+    bytes_delta_at_call: int | None = None,
+    bytes_peak_at_call: int | None = None,
 ) -> BackendSemantics:
     """Detect cheap output-to-input aliasing without mutation comparisons.
 

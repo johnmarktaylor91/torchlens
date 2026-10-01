@@ -29,6 +29,7 @@ runtime-only predicate (:func:`refuse_unreplayable_rules`).
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -266,6 +267,40 @@ class InterventionSpec:
             spelling).
         """
 
+        rule = self.match(ctx)
+        if rule is None:
+            return None
+        # Leverage B7: thread the matched rule's provenance through the
+        # decision so the capture-door staging site persists the USER'S
+        # EXPRESSION, never only the lowered per-site label targets.
+        decision = rule.decision
+        if decision is not None and decision.rule_id is None:
+            decision = dataclasses.replace(
+                decision,
+                rule_id=rule.rule_id,
+                where_repr=rule.where_repr,
+            )
+        return decision
+
+    def match(self, ctx: Any) -> InterventionRule | None:
+        """Return the single rule matching one op context, or ``None``.
+
+        The rule-attributing form of :meth:`__call__` (the capture door reads
+        the decision; the F01 bind engine needs the RULE for per-rule fire
+        counts and zero-fire settlement). Both spellings share this one
+        matcher, so the overlap law holds identically in every lane.
+
+        Parameters
+        ----------
+        ctx:
+            ``RecordContext`` (or context-shaped subject) for the candidate op.
+
+        Raises
+        ------
+        InvalidArgumentError
+            ``spec_rules_overlap`` when more than one rule matches one op.
+        """
+
         matched: list[InterventionRule] = []
         for rule in self.rules:
             if rule.where(ctx):
@@ -283,7 +318,7 @@ class InterventionSpec:
                 "or narrow the WHERE terms so at most one rule matches each op",
                 argument="rules",
             )
-        return matched[0].decision
+        return matched[0]
 
     # ------------------------------------------------------------------
     # single-rule sugar compatibility with the historical when() closure
@@ -350,6 +385,36 @@ class InterventionSpec:
         """Lower the spec to ``(site, action)`` pairs for the hook-plan doors."""
 
         return [(rule.where, rule.action) for rule in self.rules]
+
+    def bind(self, model: Any, *, on_zero_fire: str = "error") -> Any:
+        """Bind this spec to a model as a capture-free live executor (F01).
+
+        Surgery memo 3.3: the result is a bound intervention executor -- a
+        serial, non-reentrant, capture-free callable (never an ``nn.Module``)
+        that transparently returns the base model's own output, supports real
+        HF ``generate``, retains ``.last_report``, and atomically installs and
+        removes its runtime state on success or exception.
+
+        Parameters
+        ----------
+        model:
+            The base ``nn.Module`` (validated through the one audited
+            model-door funnel; bindings do not nest).
+        on_zero_fire:
+            Zero-fire settlement policy (JMT-FOLD-A3 default): ``"error"``
+            fails closed after the call when any rule never fired (the report
+            is retained on ``.last_report``); ``"disclose"`` records the
+            zero-fire rules in the report without raising.
+
+        Returns
+        -------
+        BoundInterventionExecutor
+            The bound executor (``torchlens.intervention.binding``).
+        """
+
+        from .binding import bind_spec_to_model
+
+        return bind_spec_to_model(self, model, on_zero_fire=on_zero_fire)
 
 
 def when(

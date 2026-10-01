@@ -23,12 +23,14 @@ from ._context import (
     ROLE_EVIDENCE,
     ContextTransform,
     RoleDeclaration,
+    SpecialTokenFacts,
     TransformContext,
     axis_for_role,
     wants_context,
     with_context,
 )
 from ._errors import TransformContractError
+from ._helpers import ProbeReport, SrpSizing, srp_dims_for, srp_fidelity_probe
 from ._kernels import cast, flatten, magnitude, reduce, take_index, unit_norm
 from ._pipeline import (
     PIPELINE_SCHEMA,
@@ -38,10 +40,22 @@ from ._pipeline import (
     pipeline_from_record,
     pipeline_record,
 )
-from ._registry import lookup_transform, register_transform, registered_transform_names
+from ._pooling import channel_mean, cls_token, pool_spatial, pool_tokens
+from ._projection import pca_apply, project
+from ._registry import (
+    _seal_builtins,
+    lookup_transform,
+    register_transform,
+    registered_transform_names,
+)
 from ._spec import PlannedStep, TensorSpec, TransformDefinition, TransformSpec, canonical_json
+from ._srp import srp, srp_realized_facts, srp_verify_matrix
 
 __tl_layer__ = "L4"
+
+# Every builtin module above has registered through the one door; the builtin
+# name set is a CLOSED SET from here on (memo s7).
+_seal_builtins()
 
 __all__ = [
     "BTD",
@@ -52,7 +66,10 @@ __all__ = [
     "ContextTransform",
     "OpaqueStep",
     "PlannedStep",
+    "ProbeReport",
     "RoleDeclaration",
+    "SpecialTokenFacts",
+    "SrpSizing",
     "TensorSpec",
     "TransformContext",
     "TransformContractError",
@@ -64,16 +81,27 @@ __all__ = [
     "canonical_json",
     "cast",
     "chain",
+    "channel_mean",
+    "cls_token",
     "coerce_transform",
     "coerce_transform_mapping",
     "flatten",
     "lookup_transform",
     "magnitude",
+    "pca_apply",
     "pipeline_from_record",
     "pipeline_record",
+    "pool_spatial",
+    "pool_tokens",
+    "project",
     "reduce",
     "register_transform",
     "registered_transform_names",
+    "srp",
+    "srp_dims_for",
+    "srp_fidelity_probe",
+    "srp_realized_facts",
+    "srp_verify_matrix",
     "take_index",
     "unit_norm",
     "wants_context",

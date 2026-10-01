@@ -93,6 +93,19 @@ def detect_tlspec_format(path: str | Path) -> str:
 
     if manifest is not None and "tlspec_version" in manifest:
         return "v2.16_modellog_portable"
+    if (
+        manifest is not None
+        and "io_format_version" in manifest
+        and "n_activation_blobs" in manifest
+    ):
+        # The GENUINE v2.16.0 ModelLog spellings (io_format_version /
+        # n_activation_blobs / n_gradient_blobs), measured on the only genuine
+        # v2.16 bundle in existence (tests/release_goldens, ecosystem panel
+        # r3). The checked-in "v2.16" fixtures elsewhere use the modern
+        # spellings above -- a format that never shipped -- so before this
+        # branch the real artifact classified "unknown" while the never-real
+        # shape classified v2.16 (MEMO 3.5, erratum FORK F2 detection half).
+        return "v2.16_modellog_portable"
     return "unknown"
 
 

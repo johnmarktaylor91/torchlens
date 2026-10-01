@@ -56,11 +56,14 @@ producers exclude them from the candidate population.
 from __future__ import annotations
 
 import math
+import warnings
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
 import torch
 
+from .errors._base import TorchLensWarning
 from .selection import (
     ResolvedSelection,
     Selection,
@@ -146,14 +149,123 @@ def _validate_passes(passes: Any, producer: str) -> tuple[int, ...] | None:
     return window
 
 
-def _delta_for_entry(node: _CompareTerm, trace: Any, entry: SiteEntry) -> torch.Tensor:
-    """Compute one entry's subject-minus-reference delta with typed refusals.
+#: Machinery layer types the intervention engine itself inserts. Excluded
+#: from delta populations by disclosure (leverage D-7: painting TorchLens's
+#: own replacement op as a changed model site misleads), never refused.
+_MACHINERY_LAYER_TYPES = frozenset({"interventionreplacement"})
 
-    Reads both sides through the shared evidence reader (missing site /
-    unsaved payload / shape drift refuse typed with the reference named) and
-    corroborates L1 structural site keys when both sides carry them.
+
+class _JoinGuard:
+    """Guarded cross-trace pairing authority for the differential producers.
+
+    Delegation to the shipped site join (leverage B4): when BOTH captures
+    carry L1 structural site keys, subject entries pair to reference ops by
+    SITE KEY under :func:`~torchlens.postprocess._site_join.join_site_profiles`
+    verdicts — labels leave the join key entirely, so a live edit's label
+    renumbering can no longer break comparison of structurally intact sites.
+    ``corroborated`` and ``positional`` verdicts admit comparison (D-2);
+    refused verdicts and one-sided keys refuse typed with the verdict
+    disclosed, never guessed. Either side keyless degrades to the historical
+    address+shape pairing (with its site-key-disagreement belt intact).
     """
 
+    __slots__ = ("rows", "reference_by_coord", "subject_coords")
+
+    def __init__(
+        self,
+        rows: dict[str, Any],
+        reference_by_coord: dict[tuple[str, str, int], str],
+        subject_coords: dict[str, tuple[str, str, int]],
+    ) -> None:
+        self.rows = rows
+        self.reference_by_coord = reference_by_coord
+        self.subject_coords = subject_coords
+
+    @classmethod
+    def build(cls, subject: Any, reference: Any) -> _JoinGuard | None:
+        """Build the guard, or ``None`` when either side is keyless."""
+
+        from .errors._base import TorchLensError
+        from .postprocess._site_join import (
+            join_site_profiles,
+            occurrence_coordinates,
+            site_profile,
+        )
+
+        try:
+            subject_profile = site_profile(subject)
+            reference_profile = site_profile(reference)
+        except TorchLensError:
+            # ``site_key_unavailable`` (legacy keyless artifact): the memo's
+            # keyless rule — proceed on address+shape, never refuse the whole
+            # comparison for a missing optional identity layer.
+            return None
+        rows = join_site_profiles(subject_profile, reference_profile)
+        reference_by_coord = {
+            coord: label
+            for label, coord in occurrence_coordinates(reference, reference_profile.keys).items()
+        }
+        return cls(
+            rows=dict(rows),
+            reference_by_coord=reference_by_coord,
+            subject_coords=occurrence_coordinates(subject, subject_profile.keys),
+        )
+
+    def reference_op(self, node: _CompareTerm, trace: Any, entry: SiteEntry) -> Any:
+        """Resolve one subject entry's reference op through the join verdict."""
+
+        key = entry.structural_site_key
+        row = self.rows.get(key)
+        if row is None:
+            raise _unresolvable(
+                "site_join_refused",
+                f"site {entry.site_key!r} (structural key {key!r}) is present "
+                "on the SUBJECT capture only: under the guarded site join it "
+                "is a DECLARED addition relative to the reference, and deltas "
+                "for one-sided sites are never guessed. Restrict `within=` to "
+                "shared structure, or read the addition from the differential "
+                "report.",
+                code="selection_unresolvable",
+                site=repr(entry.site_key),
+                join_verdict="one_sided_subject",
+            )
+        if not row.joined:
+            raise _unresolvable(
+                "site_join_refused",
+                f"the guarded site join REFUSED to pair site {entry.site_key!r} "
+                f"(structural key {key!r}) across these two captures "
+                f"(verdict: {row.verdict.value}): its structural cohort does "
+                "not correspond one-to-one between the runs (an insertion, "
+                "removal, or call-site change touched it), so any pairing "
+                "would silently compare different graph positions. Compare "
+                "the unaffected cohorts, or re-capture without the structural "
+                "change.",
+                code="selection_unresolvable",
+                site=repr(entry.site_key),
+                join_verdict=row.verdict.value,
+            )
+        subject_op = _op_for_entry(trace, entry)
+        coord = self.subject_coords.get(subject_op.label)
+        reference_label = None if coord is None else self.reference_by_coord.get(coord)
+        if reference_label is None:
+            raise _unresolvable(
+                "site_join_refused",
+                f"the joined structural key {key!r} has no occurrence at the "
+                f"subject's call-instance coordinate {coord!r} on the "
+                "reference; occurrence pairing is exact under the cardinality "
+                "guard and never guessed.",
+                code="selection_unresolvable",
+                site=repr(entry.site_key),
+                join_verdict="occurrence_absent_on_reference",
+            )
+        return node.reference.ops[reference_label]
+
+
+def _reference_op_for_entry(node: _CompareTerm, trace: Any, entry: SiteEntry, guard: Any) -> Any:
+    """Resolve the reference-side op: join-guarded where keyed, address belt otherwise."""
+
+    if guard is not None and entry.structural_site_key is not None:
+        return guard.reference_op(node, trace, entry)
     reference_op = _op_for_entry(node.reference, entry, sample_name="reference")
     subject_key = entry.structural_site_key
     reference_key = getattr(reference_op, "site_key", None)
@@ -169,13 +281,91 @@ def _delta_for_entry(node: _CompareTerm, trace: Any, entry: SiteEntry) -> torch.
             site=repr(entry.site_key),
             sample="reference",
         )
+    return reference_op
+
+
+def _delta_for_entry(
+    node: _CompareTerm, trace: Any, entry: SiteEntry, guard: Any = None
+) -> torch.Tensor:
+    """Compute one entry's subject-minus-reference delta with typed refusals.
+
+    Reference addressing is JOIN-GUARDED (leverage B4): when both captures
+    carry structural site keys the pairing authority is the shipped guarded
+    join's verdict (labels never enter the key); keyless captures keep the
+    historical pass-qualified address pairing with its site-key belt. Reads
+    both sides through the shared evidence reader (missing site / unsaved
+    payload / shape drift refuse typed with the reference named).
+    """
+
+    reference_op = _reference_op_for_entry(node, trace, entry, guard)
     subject_value = _read_saved_value(trace, entry)
-    reference_value = _read_saved_value(node.reference, entry, sample_name="reference")
+    reference_value = _read_reference_value(node, entry, reference_op)
     if subject_value.is_complex() or reference_value.is_complex():
         return subject_value.to(torch.complex128) - reference_value.to(torch.complex128)
     # float64 exactly represents every float32/16/bfloat16/int32 value; the
     # int64 tail beyond 2**53 is a documented precision residual.
     return subject_value.to(torch.float64) - reference_value.to(torch.float64)
+
+
+def _read_reference_value(node: _CompareTerm, entry: SiteEntry, reference_op: Any) -> torch.Tensor:
+    """Read the reference op's retained activation with the shared typed refusals."""
+
+    from .errors._base import TorchLensError
+
+    if not getattr(reference_op, "has_saved_activation", False):
+        raise _unresolvable(
+            "value_not_saved",
+            f"value criteria need the saved activation at {reference_op.label!r}, "
+            "which reference did not retain. Re-capture with a `save=` "
+            "predicate covering this site.",
+            code="selection_unresolvable",
+            site=reference_op.label,
+            sample="reference",
+        )
+    try:
+        value = reference_op.out
+    except TorchLensError as exc:
+        raise _unresolvable(
+            "value_not_saved",
+            f"value criteria need the saved activation at {reference_op.label!r}, "
+            f"which reference cannot serve: {exc}",
+            code="selection_unresolvable",
+            site=reference_op.label,
+            sample="reference",
+        ) from exc
+    if not isinstance(value, torch.Tensor):
+        raise _unresolvable(
+            "non_tensor_site",
+            f"site {reference_op.label!r} has a non-tensor output; value "
+            "criteria address single-tensor outputs only.",
+            code="selection_unresolvable",
+            site=reference_op.label,
+        )
+    if tuple(value.shape) != entry.shape:
+        raise _unresolvable(
+            "mask_shape_mismatch",
+            f"saved activation at {reference_op.label!r} on reference has shape "
+            f"{tuple(value.shape)!r}, which does not match the population's "
+            f"index space {entry.shape!r}.",
+            code="selection_unresolvable",
+            site=reference_op.label,
+            sample="reference",
+        )
+    return value.detach().cpu()
+
+
+def _machinery_entry(entry: SiteEntry, source: str) -> SiteEntry:
+    """Return one machinery site as a touched-but-unselected (zero-mask) entry."""
+
+    dense = torch.zeros(entry.shape, dtype=torch.bool)
+    return _entry_with_mask(entry, dense, "exact", source + " [machinery_excluded]")
+
+
+def _is_machinery_entry(trace: Any, entry: SiteEntry) -> bool:
+    """Whether one subject entry is an engine-inserted machinery op (D-7)."""
+
+    op = _op_for_entry(trace, entry)
+    return getattr(op, "layer_type", None) in _MACHINERY_LAYER_TYPES
 
 
 def _compared_delta(delta: torch.Tensor, by: str, producer: str, site: Any) -> torch.Tensor:
@@ -248,13 +438,17 @@ def _resolve_changed(node: _CompareTerm, trace: Any) -> ResolvedSelection:
 
     _refuse_self_comparison(node, trace)
     population = _resolve_population(node.within, trace)
+    guard = _JoinGuard.build(trace, node.reference)
     source = (
         f"changed(above={node.above}, below={node.below}, by={node.by!r}, "
         f"vs={_reference_display(node.reference)!r})"
     )
     entries: list[SiteEntry] = []
     for entry in population:
-        delta = _delta_for_entry(node, trace, entry)
+        if _is_machinery_entry(trace, entry):
+            entries.append(_machinery_entry(entry, source))
+            continue
+        delta = _delta_for_entry(node, trace, entry, guard)
         compared = _compared_delta(delta, node.by, "changed", entry.site_key)
         dense = torch.ones(entry.shape, dtype=torch.bool)
         if node.above is not None:
@@ -277,9 +471,15 @@ def _resolve_top_changed(node: _CompareTerm, trace: Any) -> ResolvedSelection:
 
     _refuse_self_comparison(node, trace)
     population = _resolve_population(node.within, trace)
+    guard = _JoinGuard.build(trace, node.reference)
     per_entry: list[tuple[SiteEntry, torch.Tensor, torch.Tensor]] = []
     for entry in population:
-        delta = _delta_for_entry(node, trace, entry)
+        if _is_machinery_entry(trace, entry):
+            span = math.prod(entry.shape)
+            zeros = torch.zeros(span, dtype=torch.float64)
+            per_entry.append((entry, zeros, torch.zeros(span, dtype=torch.bool)))
+            continue
+        delta = _delta_for_entry(node, trace, entry, guard)
         keys = _compared_delta(delta, node.by, "top_changed", entry.site_key)
         keys = keys.to(torch.float64)
         valid = entry._mask._dense_ro() & ~torch.isnan(keys)
@@ -536,18 +736,76 @@ def _pass_groups(
     return groups
 
 
+def _disclose_episode_pass_axis(trace: Any, producer: str, layer_labels: list[str]) -> None:
+    """Disclose the pass-vs-step axis when a pass window resolves on an episode.
+
+    Pass indices are per-site OCCURRENCE counters (pass k of a layer is the
+    k-th time THAT layer ran), never episode steps: a layer absent from a
+    step has no pass there, so on any model whose layer is not called at
+    every step (a routed mixture-of-experts expert) pass k need not lie at
+    episode step k (foldB D11). Both counts exist today — each layer's
+    ``num_passes`` and the episode ledger's step rows — so the read
+    discloses them at the point of use, without new arguments; the typed
+    refusal for an explicit step axis is a named future surface (F-EPISODE
+    ``axis=``), not this warning. Fires once per resolve, only on episode
+    captures with a settled ledger; the numbers are disclosures, never a
+    settlement input.
+    """
+
+    annotations = getattr(trace, "annotations", None)
+    if not isinstance(annotations, Mapping):
+        return
+    # Downward (L4 -> L2) import, deferred to keep this module's import-time
+    # footprint free of the capture package (the file-local Trace precedent).
+    from .capture._episode_ledger import EPISODE_ANNOTATIONS_KEY
+
+    payload = annotations.get(EPISODE_ANNOTATIONS_KEY)
+    if not isinstance(payload, Mapping):
+        return
+    rows = payload.get("rows")
+    if not isinstance(rows, (list, tuple)) or not rows:
+        # Declared-only marker (pre-settlement / partial product): no settled
+        # step rows exist, so there is nothing provable to disclose.
+        return
+    n_steps = len(rows)
+    site_passes = {label: int(trace[label].num_passes) for label in layer_labels}
+    ran = ", ".join(f"{label} ran {count}x" for label, count in site_passes.items())
+    warnings.warn(
+        TorchLensWarning(
+            f"{producer} resolved a pass window on an EPISODE capture: pass "
+            "indices are per-site occurrence counters (pass k of a layer is "
+            "the k-th time THAT layer ran), never episode steps. This episode "
+            f"ran {n_steps} steps; resolved layers: {ran}. A layer absent "
+            "from a step has no pass there, so pass k need not lie at episode "
+            "step k. Remedy: window by per-site occurrence deliberately, "
+            "mapping occurrences to steps through "
+            "trace.annotations['episode']['rows']; an explicit step axis is "
+            "a named future surface, not a selector argument today",
+            code="episode_pass_window_occurrence_axis",
+            producer=producer,
+            episode_steps=n_steps,
+            site_passes=site_passes,
+            affected_sites=sorted(site_passes),
+        ),
+        stacklevel=3,
+    )
+
+
 def _resolve_pass_term(node: _PassTerm, trace: Any) -> ResolvedSelection:
     """Resolve one cross-pass statistic against a capture's per-pass payloads.
 
     The element population per layer is the INTERSECTION of the window
     entries' masks (a cross-pass claim needs the element in evidence at EVERY
     window pass); the resulting mask lands on every window pass-site, since
-    the claim is about the unit across the whole window.
+    the claim is about the unit across the whole window. On episode captures
+    the resolve additionally discloses the pass-vs-step axis
+    (``episode_pass_window_occurrence_axis``).
     """
 
     producer = "stable_across_passes" if node.stat == "stable" else "pass_variance"
     population = _resolve_population(node.within, trace)
     entries: list[SiteEntry] = []
+    resolved_layers: list[str] = []
     for layer_label, window_entries in _pass_groups(node, population, producer):
         values = []
         for entry in window_entries:
@@ -581,6 +839,7 @@ def _resolve_pass_term(node: _PassTerm, trace: Any) -> ResolvedSelection:
                 dense &= variance < node.below
             source = f"pass_variance(n_passes={n_passes}, above={node.above}, below={node.below})"
         dense &= shared
+        resolved_layers.append(layer_label)
         for entry in window_entries:
             entries.append(
                 SiteEntry(
@@ -593,6 +852,8 @@ def _resolve_pass_term(node: _PassTerm, trace: Any) -> ResolvedSelection:
                     structural_site_key=entry.structural_site_key,
                 )
             )
+    if resolved_layers:
+        _disclose_episode_pass_axis(trace, producer, resolved_layers)
     return ResolvedSelection(trace, "ACT", entries)
 
 
@@ -602,14 +863,17 @@ def stable_across_passes(
     tol: float = 0.0,
     passes: Any = None,
 ) -> Selection:
-    """Select units stable across a recurrent layer's passes ("all timesteps").
+    """Select units stable across a recurrent layer's passes (its occurrences).
 
     Per element of each multi-pass layer in the population, computes the
     RANGE (max - min, in float64) of the retained activation across the pass
     window and selects elements whose range is ``<= tol``. ``passes=None``
     (default) uses every population pass of each layer; an explicit iterable
     of 1-based pass indices restricts the window (every named pass must be in
-    the population). Addressing is pass-qualified throughout; a bare layer
+    the population). Pass indices are per-site OCCURRENCE counters (pass
+    ``k`` = the k-th time THAT layer ran), not steps of an outer generation
+    loop; on episode captures the resolve discloses both counts
+    (``episode_pass_window_occurrence_axis``). Addressing is pass-qualified throughout; a bare layer
     label in ``within=`` is the all-passes Layer spelling, never one silent
     pass. A layer contributing fewer than two window passes refuses
     ``population_too_small`` (a single-pass "stability" claim is vacuous);
@@ -651,9 +915,16 @@ def pass_variance(
     retained activation across the pass window and applies strict bounds:
     ``below=`` selects low-variance (steady) units, ``above=`` high-variance
     (swinging) units, both together the open band; at least one bound is
-    required. "Variance explodes late in the sequence" is
-    ``pass_variance(above=t, passes=[8, 9, 10])``, optionally composed with
-    ``pass_variance(below=t, passes=[1, 2, 3])``. Window semantics, the
+    required. Pass indices are per-site OCCURRENCE counters — pass ``k`` of
+    a layer is the k-th time THAT layer ran, never step ``k`` of the model's
+    generation loop — so ``pass_variance(above=t, passes=[8, 9, 10])`` reads
+    "variance explodes across the layer's LATE OCCURRENCES". Only on a
+    layer that runs exactly once per step do occurrences and steps
+    coincide; on any model whose layer is not called at every step (a
+    routed mixture-of-experts expert, a conditional branch), occurrence 8
+    need not lie at episode step 8, and resolving a pass window on an
+    episode capture discloses both counts
+    (``episode_pass_window_occurrence_axis``). Window semantics, the
     two-pass honesty floor, shape-drift and complex refusals, NaN exclusion,
     mask placement (every window pass-site), and the ``exact`` provenance
     relation all follow :func:`stable_across_passes`. DOCUMENTED-UNSTABLE

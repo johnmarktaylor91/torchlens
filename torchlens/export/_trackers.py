@@ -20,7 +20,7 @@ from ._common import _scalarize_cell
 __tl_layer__ = "L8"
 
 
-def tensorboard(log: Any, writer: Any, step: int = 0, prefix: str = "torchlens") -> Any:
+def tensorboard(log: Any, writer: Any, *, step: int, prefix: str = "torchlens") -> Any:
     """Write TorchLens scalar/text summaries to an existing TensorBoard writer.
 
     Parameters
@@ -30,7 +30,9 @@ def tensorboard(log: Any, writer: Any, step: int = 0, prefix: str = "torchlens")
     writer:
         Existing writer object, for example ``SummaryWriter``.
     step:
-        Global step for emitted summaries.
+        Global step for emitted summaries. REQUIRED: the historical
+        ``step=0`` default was exactly the axis footgun the tracker design
+        bans (F26; every emission path carries a caller step).
     prefix:
         Metric name prefix.
 
@@ -41,12 +43,10 @@ def tensorboard(log: Any, writer: Any, step: int = 0, prefix: str = "torchlens")
     """
 
     _require_tracker_object(writer, method_name="tensorboard", required_method="add_scalar")
-    writer.add_scalar(f"{prefix}/num_layers", len(getattr(log, "layer_list", [])), step)
-    writer.add_scalar(
-        f"{prefix}/total_activation_memory",
-        int(getattr(log, "total_activation_memory", 0) or 0),
-        step,
-    )
+    # One converter for every tracker exporter (F26 unification): the four
+    # historical exporters had drifted onto three different summary sets.
+    for key, value in _summary_metrics(log).items():
+        writer.add_scalar(f"{prefix}/{key}", value, step)
     writer.add_text(f"{prefix}/model_class_name", str(getattr(log, "model_class_name", "")), step)
     add_text = getattr(writer, "add_text", None)
     if callable(add_text):
@@ -90,10 +90,18 @@ def wandb(log: Any, run: Any | None = None, name: str = "torchlens_trace") -> di
 
     dataframe = _tracker_dataframe(log)
     table = wandb_module.Table(dataframe=dataframe)
+    metrics = _summary_metrics(log)
     target_run = run if run is not None else getattr(wandb_module, "run", None)
     if target_run is not None:
-        target_run.log({name: table})
-    return {"table": table, "artifact": None, "capture_honesty": capture_honesty_facts(log)}
+        payload: dict[str, Any] = {name: table}
+        payload.update({f"{name}/{key}": value for key, value in metrics.items()})
+        target_run.log(payload)
+    return {
+        "table": table,
+        "artifact": None,
+        **metrics,
+        "capture_honesty": capture_honesty_facts(log),
+    }
 
 
 def mlflow(log: Any, client: Any | None = None, prefix: str = "torchlens") -> dict[str, Any]:

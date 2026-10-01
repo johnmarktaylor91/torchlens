@@ -320,7 +320,7 @@ def test_embedded_load_roundtrips_on_fixed_torch() -> None:
     assert torch.equal(result, torch.tensor([1.0, 2.0, 3.0]))
 
 
-@pytest.mark.smoke
+@pytest.mark.heavy  # doctor/snapshot walk crossed the 7s smoke budget at T55 (7.4s cpu)
 def test_weights_only_load_capability_in_snapshot() -> None:
     """The named capability flag surfaces in the torch capability snapshot / doctor report."""
 

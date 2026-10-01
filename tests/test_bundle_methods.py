@@ -130,7 +130,14 @@ def test_bundle_method_count_stays_within_phase_budget() -> None:
         if not name.startswith("_") and (inspect.isfunction(value) or isinstance(value, property))
     ]
 
-    assert len(members) <= 34
+    # 44 = the historical 34 cap + the F03 ledger-memo roster, raised
+    # deliberately per the lane brief: relate/derive_episode_status promoted
+    # to real methods (item 0), the lineage read surface (bundle_id,
+    # operations, member_construction; items 0b/3), the provenance join
+    # (why, provenance; item 4), vary (item 5), and the effect-table reads
+    # (effects, measure_members; item 8).
+    assert len(members) <= 44
+    assert "relate" in members
     assert "joint_metric" in members
     assert "set_capacity" in members
     assert "save" in members

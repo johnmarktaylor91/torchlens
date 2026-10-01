@@ -401,7 +401,10 @@ def test_explicit_rank_layout_refuses(lockstep_log: tl.Trace, tmp_path: Path) ->
 
 
 def test_stack_composes_with_color(lockstep_log: tl.Trace, tmp_path: Path) -> None:
-    _draw(lockstep_log, tmp_path, stack_by=True, color_by="bytes")
+    # A VARYING color source: the lockstep toy's bytes are uniform, and a
+    # degenerate (min == max) domain now honestly unencodes (themes memo
+    # item 11), which would vacuously pass the composition half.
+    _draw(lockstep_log, tmp_path, stack_by=True, color_by=lambda node: float(node.raw_index))
     state = _state(lockstep_log)
     assert state.stack_groups and state.colors
     assert state.active_channels() == ("color_by", "stack_by")

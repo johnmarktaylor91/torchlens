@@ -539,6 +539,31 @@ def session_labeled_tensors() -> list[Any]:
     return list(session.stamped.keys())
 
 
+def storage_alias_index_key(storage: Any) -> int | None:
+    """Return the alias-index key for one ``UntypedStorage`` (meta-safe, D20).
+
+    Every meta storage reports ``data_ptr() == 0``, so the pointer key would
+    alias-collapse ALL meta tensors into one bucket — measured to relabel an
+    unrelated op output with an in-place op's label on admitted weights-free
+    captures (the weightsfree memo's latent ``data_ptr`` hazard class). On the
+    meta substrate the key is the storage's ``_cdata`` object identity
+    (distinguishes sibling allocations, shared by views); everywhere else the
+    historical ``data_ptr()``. ``None`` = unreadable, callers fail closed.
+    """
+
+    try:
+        ptr = int(storage.data_ptr())
+        if (
+            ptr == 0
+            and getattr(storage, "device", None) is not None
+            and storage.device.type == "meta"
+        ):
+            return int(storage._cdata)
+        return ptr
+    except Exception:  # noqa: BLE001 — feature detection over a private primitive; None fails closed
+        return None
+
+
 def _register_storage_alias(session: _LabelSession, storage_ptr: int, t: Any) -> None:
     """Register one stamped tensor in the per-storage alias index.
 
@@ -988,7 +1013,7 @@ def set_tensor_label(t: Any, label: str) -> None:
 
         try:
             with _state.pause_logging(), internal_scalar_read():
-                storage_ptr = meta.label_storage.data_ptr()
+                storage_ptr = storage_alias_index_key(meta.label_storage)
         except Exception:
             storage_ptr = None
         if storage_ptr is not None:

@@ -327,6 +327,14 @@ def _fork_model_field(parent: Trace, field_name: str, value: Any, memo: dict[Any
         # default policy would share them); the fork rebuilds lazily.
         # ``build_fork`` pops these after restore.
         return None
+    if field_name == "annotations":
+        # A plain fork is NOT a fresh execution: its records still hold the
+        # capture's own values, so every annotations sub-key (episode ledger,
+        # observer values) travels here verbatim. The per-sub-key travel
+        # policy (capture/_annotations_travel.py, foldA D6) fires at the
+        # provider settlement finalizer the moment an engine RE-EXECUTES on
+        # a fork; the fork builder never decides per key.
+        return _copy_fork_value(value, memo)
     if field_name == "_annotation_blobs":
         # Render-time annotation payloads (feature maps / RDM / MDS / scree)
         # are derived from the CAPTURED activations of one specific run. A

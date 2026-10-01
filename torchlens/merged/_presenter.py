@@ -163,10 +163,19 @@ class CollectiveJoin:
         return self.record.per_rank[int(rank)].op_labels_raw
 
     def __repr__(self) -> str:
-        digest, ordinal, channel, delta = self.record.key
+        """Semantic join line (F10; lovely bug 19 + ASCII rule).
+
+        The membership digest is a correlation-key INTERNAL: the repr names
+        the join semantically (kind, ordinal, channel, seq delta, presence,
+        consistency) and leaves the digest to ``.record.key`` -- and the
+        line is pure ASCII (bug 10: no unconditional unicode in returned
+        strings).
+        """
+
+        _digest, ordinal, channel, delta = self.record.key
         return (
-            f"CollectiveJoin({self.record.kind} {digest[:12]}…/{ordinal}/"
-            f"{channel}/{delta}, presence={list(self.record.presence)}, "
+            f"CollectiveJoin({self.record.kind} group-ordinal {ordinal} "
+            f"channel {channel} seq+{delta}, presence={list(self.record.presence)}, "
             f"consistency={self.record.consistency.value})"
         )
 

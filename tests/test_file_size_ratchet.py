@@ -122,13 +122,21 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # validation helpers split to _op_transforms.py under R43 (the v9
     # injection_provenance rows nudged op.py over); re-keyed down to the
     # next 50-line step above the measured 5069.
-    "torchlens/data_classes/op.py": 5100,
+    # 5100 -> 5000 (2026-08-29 F10 reconcile): the F10 lovely-surfaces lane
+    # deleted op.py's legacy string helpers; re-keyed down to the next
+    # 50-line step above the merged measurement (4970). Ceilings follow
+    # files down (R43-F2).
+    # 5000 -> 4800 (2026-08-29 F20 re-reconcile): the F20 saved-activation
+    # dedup split to _op_dedup.py (T77) lands on the merged tree alongside
+    # the F10 deletions; re-keyed down to the next 50-line step above the
+    # merged measurement (4794).
+    "torchlens/data_classes/op.py": 4800,
     "torchlens/_io/runnable.py": 5000,
     "torchlens/utils/rng.py": 4950,
     # 4600 -> 4350 (2026-08-27 C05 fix cycle): the segment descriptor/label
     # family split to _segment_descriptors.py under R43; re-keyed down to the
     # next 50-line step above the post-split measurement (4326).
-    "torchlens/visualization/collapse_optimizer.py": 4350,
+    "torchlens/visualization/collapse_optimizer.py": 4250,
     # 4400 -> 4403 (2026-08-27 C01 item 5): the _selective_save relocation
     # re-sorted one import into a 4-line parenthesized block (+3 mechanical
     # lines, zero behavior); the god file itself did not grow.
@@ -138,6 +146,10 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # lines short, red on main since the merge. Reconciled to the next 50-line
     # step for the same reviewed mass (no new growth licensed; PRE-SPRINT
     # BASELINE 4450 unchanged, debloat target unchanged).
+    # 4660 -> 4650 (2026-08-29 F01-AMENDED reconcile): the F01 injections
+    # stage-1 save-entry refusal slot (+7: comment, lazy import, call) now
+    # rides the tip's debloated bundle (union measures 4600) -- the lane's
+    # 4660 raise is unnecessary and the ceiling burns back down.
     "torchlens/_io/bundle.py": 4650,
     "torchlens/_io/runnable_load.py": 3850,
     # 4200 -> 4050: the wave-0 governance sweep extracted the structure-only
@@ -160,47 +172,222 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # release. No new growth licensed; the Phase-2 move-class lane keeps
     # user_funcs as a split target (trace-entry resolution vs cache vs
     # chunking are its natural seams).
-    "torchlens/user_funcs.py": 4200,
+    # 4200 -> 4230 (2026-08-28 F33 weightsfree): the W2 admission threading
+    # (admit_meta derivation + pending-admission arm around the capture
+    # driver) and the settlement seam (wrap-generation stamp + envelope
+    # write) land at the trace entry by design; conscious raise, split
+    # target unchanged.
+    # 4230 -> 4235: C07X adds the unconditional Trace.root_entry_point
+    # identity-fact write (foldA D10) at the one-door capture site -- a
+    # 2-line addition with no extractable seam; a split here would be
+    # confetti (R43: never split code merely to satisfy the number).
+    # 2026-08-29 F01-AMENDED fix cycle (T76 bounce): the lane's 4235 -> 4265
+    # raise was reverted by moving the funnel/arming bodies to
+    # intervention/model_door.py and intervention/injection.py; the F42
+    # reconcile drops the lane-side 4235 duplicate row -- the union tree
+    # carries F41's reviewed mass under the 4290 row below.
+    # raise for the F01/OP2 model-door funnel + log_injections threading is
+    # REVERTED (ceilings never bump; C06/F09/F21 precedent) -- the funnel and
+    # arming bodies moved to intervention/model_door.py and
+    # intervention/injection.py, leaving one-line door/arm spellings plus the
+    # coverage-pinned CaptureOptions threading rows at the trace entry.
+    # 4235 -> 4250 (2026-08-29 T73b re-reconcile, F24): merge union -- each
+    # side fits 4235 alone; the F24-observe entries and the landed T73b
+    # train mass union to 4238 on the merged tree. Next 50-line step above
+    # the merged measurement, never a hand-derived subtotal.
+    # 4235 -> 4290 (2026-08-29 F41 bound-method roots): the ruled root
+    # contract lands at the one-door trace entry by design -- the
+    # bound-method wrapper swap + refusal teach, the owner-identity /
+    # bound_method root-fact derivation, the input-ladder module-root gate,
+    # and the tl_authored_root marker write; the wrapper CLASS itself lives
+    # in backends/torch/bound_root.py. Conscious raise; split target
+    # (trace-entry resolution vs cache vs chunking) unchanged.
+    # 4250/4290 -> 4290 (2026-08-29 T80 re-reconcile, F24): duplicate-key
+    # collapse -- the landed F41 root-contract mass unions with the
+    # F24-observe entries to 4284 on the merged tree; the landed 4290
+    # ceiling already clears the union and stays.
+    # 4235/4290 -> 4290 (2026-08-30 T82d re-reconcile, F44): duplicate-key
+    # collapse -- the F44 model-door/log_injections rows union with the
+    # landed F41+T82d mass to exactly 4290 on the merged tree (the landed
+    # *_value locals finish F44's ratchet-paydown direct-read style); the
+    # landed 4290 ceiling holds and stays.
+    # 4235/4290 -> 4290 (2026-08-30 F43 re-reconcile): duplicate-key
+    # collapse again -- the T82d landed track_device_memory threading unions
+    # with the F43-side log_injections threading to exactly 4290; the merge
+    # keeps the T76 inlined capture_options.X spellings (the landed value-
+    # extraction locals were dead after the paydown) so the ceiling holds
+    # without a raise.
+    # 4290 -> 4350 (2026-08-29 F28 re-reconcile): merge union -- the F41
+    # bound-method-root mass (4274) fits 4290 alone, and the F28 echo facade
+    # residual (+40: the echo= entry param, docstring, and the four thin
+    # snoop._entry seam calls; the lane already paid its extraction to
+    # torchlens/snoop/_entry.py at its own gate debt commit) rode the F28
+    # branch; the union measures 4314. Next 50-line step, conscious raise
+    # with both contributions named, not silent regrowth; split target
+    # (trace-entry resolution vs cache vs chunking) unchanged.
+    # 4350/4290 (2026-08-30 T82d re-reconcile, F28): duplicate-key collapse --
+    # the landed T82d train mass (F40c+F22, 4290 alone) unions with the F28
+    # echo residual to 4328 on the merged tree; the F28-side 4350 ceiling
+    # already clears the union and stays.
+    # 4290/4350 -> 4350 (2026-08-30 T85 re-reconcile, F44): duplicate-key
+    # collapse -- the landed T85 mass (F28 echo + F01-AMENDED, 4330 alone)
+    # already carries the F44 log_injections rows (F01-AMENDED landed the
+    # injections law), so the merged tree measures exactly 4330; the landed
+    # 4350 ceiling clears it and stays.
+    # 4290/4350 (2026-08-30 F43 re-reconcile vs T85): duplicate-key collapse --
+    # the landed T85 mass (F01-AMENDED log_injections + F28 echo, 4328 alone)
+    # unions with the F43-side threading to 4330 on the merged tree; the
+    # landed 4350 ceiling already clears the union and stays.
+    "torchlens/user_funcs.py": 4350,
     "torchlens/backends/torch/backward.py": 4450,
     # 3800 -> 3850: L1 adds the grouping knob mirror + grouping_policy stamp
     # settlement (~25 lines) on top of the re-stepped feature-sprint baseline.
     # 3850 -> 3900: L9 adds the two DROP-gated backward-residuals fields
     # (timing provenance, checkpoint witness) + init/load-fill/registration.
-    "torchlens/data_classes/trace.py": 3900,
+    # 3900 -> 3925 (F24 observe): session-time FieldPolicy.DROP rows +
+    # load-fill defaults for the observe stores (saved-band decomposition,
+    # device-memory samples, nonfinite-prefix facts); the machinery itself
+    # lives in torchlens/observe and torchlens/capture/_nonfinite_prefix.py.
+    # 3900 -> 3940 (2026-08-28 F33 weightsfree): Trace.check_plan (the D14
+    # audit-only plan-check verb) is a Trace method by contract (frozen root
+    # budget: no new tl.* name); conscious raise.
+    # 3925/3940 -> 3950 (2026-08-29 F24 reconcile): both lanes' rows coexist
+    # on the merged tree; re-keyed to the next 50-line step above the merged
+    # measurement (3927), never a hand-derived subtotal.
+    # 3940 -> 3950 (2026-08-29 F10 re-reconcile): merge union -- F10's
+    # lovely Trace surface (3935) and the T71d train (3923) each fit 3940
+    # alone; the union measures 3948. Next 50-line step, conscious raise
+    # with both contributions named, not silent regrowth.
+    # 3950 -> 3955 (2026-08-29 F42 reconcile): the union of two green
+    # parents (the T80 tip at its exact 3950 ceiling + the F01-AMENDED lane
+    # edits) measures 3951 -- same reviewed mass, no new growth licensed.
+    # 3950 -> 4000 (2026-08-29 T73b re-reconcile, F24): both sides' rows
+    # coexist and each reached 3950 independently, but the F24-observe DROP
+    # rows (3927 alone) and the F10 lovely surface + T71d train (3948 alone)
+    # UNION to 3965 on the merged tree -- next 50-line step above the merged
+    # measurement, never a hand-derived subtotal.
+    # 2026-08-30 F42 re-reconcile: the T82d landed rows (3965-measured union)
+    # + the F42 coupling/F01-AMENDED edits (3951 alone) UNION to 3968 on the
+    # merged tree -- the landed 4000 ceiling already covers it; no new step.
+    "torchlens/data_classes/trace.py": 4000,
     # 3550 -> 3800: fix/private-probe-routing moved the last 9 stray private
     # torch touches (funcol module/ACT/wait-redispatch, checkpoint hook class,
     # engine queue_callback) behind named HAS_* families IN this file -- the
     # LOCKED CLAUDE.md rule pins the chokepoint to this exact module, so the
     # routing mass lands here by design (measured 3756). PRE-SPRINT BASELINE
     # unchanged (3450-eve at 75439a67); the debloat pass keeps it as target.
-    "torchlens/utils/_torch_compat.py": 3800,
+    # 3800 -> 3850 (2026-08-28 F04 one-backward reads): the GradientEdge /
+    # Node-prehook capability probes (HAS_GRADIENT_EDGE, HAS_NODE_PREHOOK)
+    # land at the LOCKED chokepoint by design (measured 3814). PRE-SPRINT
+    # BASELINE unchanged; the debloat pass keeps 3450-eve as target.
+    # 3850 -> 3990 (2026-08-28 F27): the Kineto in-memory event contract, the
+    # scope probe, and the memory-profile parity accessor land at the ONE
+    # sanctioned private-probe chokepoint BY LAW (the private-probe gate
+    # forbids these touches anywhere else), so the chokepoint grows exactly
+    # when the probe inventory does. Debloat target unchanged: 3450.
+    # 3990 -> 4050 (2026-08-29 F27 reconcile): the merged tree carries BOTH
+    # the F04 GradientEdge/Node-prehook probes and the F27 Kineto/scope/
+    # memory-parity probes at the one sanctioned chokepoint (measured 4001);
+    # next 50-line step. Debloat target unchanged: 3450.
+    "torchlens/utils/_torch_compat.py": 4050,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
-    "torchlens/backends/torch/wrappers.py": 3300,
+    # 3300 -> 3320 (F24 observe): the device-memory bracket at the one
+    # wrapped-call site (before-read, OOM attempted-call row, settle); the
+    # sampler/provider live in torchlens/observe/_device_memory.py.
+    # 3300 -> 3330 (2026-08-28 F33 weightsfree): the W1-CTX slot consult in
+    # the factory-injection helper + the W1-BUF-2 snapshot-carrying-call
+    # fallback + the meta-safe alias-key reads; conscious raise, the 50-line
+    # step-down target resumes after the sprint.
+    # 3320/3330 -> 3350 (2026-08-29 F24 reconcile): both lanes' rows coexist
+    # on the merged tree; re-keyed to the next 50-line step above the merged
+    # measurement (3337). The post-sprint step-down target is unchanged.
+    # 3330 -> 3300 (2026-08-29 F27 reconcile): F27's marker split moved the
+    # _op_markers/_gradfn_markers mass out of wrappers (merged measurement
+    # 3284); re-keyed down to the min of the merge parents.
+    # 3350/3300 -> 3350 (2026-08-29 T80 re-reconcile, F24): duplicate-key
+    # collapse -- the landed F27 marker split (3284 on the T80 tree) unions
+    # with the F24 device-memory bracket to 3302 on the merged tree; next
+    # 50-line step above the merged measurement, never a hand-derived
+    # subtotal. The post-sprint step-down target is unchanged.
+    "torchlens/backends/torch/wrappers.py": 3350,
     # 3300 -> 3301 (2026-08-27 C01 item 5): same relocation import re-sort (+1).
     "torchlens/backends/tinygrad/backend.py": 3301,
     "torchlens/backends/mlx/backend.py": 3250,
     # A07 (2026-08-26): +9 lines -- the step-1 contract gains the
     # flops_forward/flops_backward boundary-reset writes and their pinned-pair
     # carrier rows (alias rows own no compute); conscious raise, not growth debt.
-    "torchlens/postprocess/_contracts.py": 3258,
-    "torchlens/backends/torch/model_prep.py": 3200,
-    "torchlens/data_classes/module.py": 2950,
-    "torchlens/visualization/auto_collapse.py": 2450,
+    # F20 (2026-08-28): +13 for the reviewed step-11 contract diff (the D-17
+    # byte model's declared payload reads + the (1,11) pinned-pair carriers).
+    # This file is the postprocess contract REGISTRY: it grows exactly when a
+    # reviewed contract diff lands, which is its design, not god-file rot.
+    # F20 T68c reconcile (2026-08-29): +30 to the measured 3301 -- the tlspec
+    # v9 entry-dark columns join step 18's hand-derived read set + probe rows
+    # (episode_step / injection_provenance / tl_authored_root), and step 11
+    # gains the out_ref lazy-materialization probe surfaced by the F20 refresh
+    # on lookback axes. Reviewed contract diffs; re-step to the next 50.
+    # 3350/3258 (2026-08-30 T85 re-reconcile, F20): duplicate-key collapse --
+    # the landed T85 train (3258 alone) unions with F20's reviewed contract
+    # additions to 3301 on the merged tree; the F20-side 3350 ceiling already
+    # clears the union and stays.
+    "torchlens/postprocess/_contracts.py": 3350,
+    # 3200 -> 3250 (2026-08-29 F28 re-reconcile): merge union -- the F41
+    # owner-identity source-metadata derivation (3184) fits 3200 alone, and
+    # the F28 echo module-seam emits (duck-typed _echo_session reads at the
+    # module enter/exit frames, 3200 exact on the F28 branch) rode the F28
+    # side; the union measures 3212. Next 50-line step, conscious raise with
+    # both contributions named, not silent regrowth.
+    # 3250/3200 (2026-08-30 T82d re-reconcile, F28): duplicate-key collapse --
+    # the landed T82d train (3200 alone) unions with the F28 echo module-seam
+    # emits to 3212 on the merged tree; the F28-side 3250 ceiling already
+    # clears the union and stays.
+    "torchlens/backends/torch/model_prep.py": 3250,
+    # 2950 -> 2800 (2026-08-29 F11 T74b fix): the call-tree display + call-scope
+    # resolution helper family split to data_classes/_call_tree.py after the
+    # merged tree crossed the frozen 2950 (F10's Module lovely seam +10 atop
+    # 2948); ceilings follow files down (R43-F2). Next 50-line step above the
+    # post-split measurement (2750; ~2760 with the F10 union). Supersedes the
+    # F10-side 2950 -> 3000 raise (dropped at the T74b reconcile merge) --
+    # the bounce froze this ceiling, so the split is the fix, not the raise.
+    "torchlens/data_classes/module.py": 2800,
+    # 2100 -> 2150 (2026-08-29 F11 T74b fix): +9 lines documenting the
+    # `fingerprints` parameter on the three run-fold assemblers (the D417
+    # lint-ratchet fix for this same bounce); doc mass, not code growth.
+    "torchlens/visualization/auto_collapse.py": 2150,
     "torchlens/validation/exemptions.py": 3000,
     "torchlens/backends/paddle/backend.py": 2700,
     "torchlens/_runnable_state.py": 2850,
     "torchlens/capture/arg_positions.py": 2650,
     "torchlens/backends/jax/jaxpr.py": 2550,
     "torchlens/_capture_state_helpers.py": 2350,
-    "torchlens/bundle/__init__.py": 2750,
+    # 2500 -> 2550 (2026-08-29 F10 re-reconcile): merge union -- the F03
+    # split base measured 2464 and the F10 lovely bundle card (outcome
+    # distribution repr + bounded __str__) adds +44; the union measures
+    # 2508. Next 50-line step, conscious raise with both contributions
+    # named, not silent regrowth.
+    "torchlens/bundle/__init__.py": 2550,
+    # Re-keyed 2400 -> 2100 at the F16/T60 fix cycle (2026-08-29): the file
+    # crossed its ceiling (2406), so OpAccessor/LayerAccessor split to
+    # _layer_accessors.py (the _layer_spec.py precedent); layer.py re-exports
+    # both names. 2097 measured, next 50-line step.
+    # 2100 -> 2150 (2026-08-29 F10 re-reconcile): merge union -- the F16
+    # accessor-split base measured 2097 and the F10 lovely Layer card
+    # (__str__/__repr__/_detached_from_trace; the accessor delta re-landed
+    # in _layer_accessors.py) adds +36; the union measures 2133. Next
+    # 50-line step, conscious raise, not silent regrowth.
+    "torchlens/data_classes/layer.py": 2150,
+    # Re-keyed 2750 -> 2500 at the F03 T69 fix microlane (2026-08-29): the
+    # module-level delta/compare helper seam (delta_map/norm_delta/
+    # output_delta/compare/aligned_pairs/show_diff + shared metric
+    # primitives) split out to bundle/_deltas.py; measured 2464.
     # 2350 -> 2400: C02 safety tranche lands the OpAccessor basis fix
     # (bug 27) with its coherent get/repr in-place -- the accessor lives
     # with its Layer owner; +11 measured lines, next 50-line step.
-    "torchlens/data_classes/layer.py": 2400,
     "torchlens/postprocess/loop_grouping_adapter.py": 2600,
     "torchlens/visualization/_render_leaf.py": 2400,
-    "torchlens/visualization/_render_edges.py": 2450,
+    # Re-keyed down 2450 -> 2350 (r7 R43-F2 slack rule) after the F13 legend
+    # rewrite deleted the six-node emitter from this module.
+    "torchlens/visualization/_render_edges.py": 2350,
     # Re-keyed 2400 -> 2300 at the C03 fix cycle (2026-08-27): the site-key-first
     # compat checker (check_spec_compat + SpecCompat/TargetManifestDiff and its
     # private helpers) moved to intervention/spec_compat.py, decomposed under
@@ -249,7 +436,11 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # their own bases; combined they measure 2315, so the ledger re-steps to
     # the next 50-line step above the merged measurement. No new growth
     # licensed; debloat target unchanged.
-    "torchlens/capture/trace.py": 2350,
+    # Raised 2350 -> 2400 at the F20 T68c reconcile (2026-08-29): the lane
+    # unions measure 2354 (each parent grew inside its own slack; the F20
+    # parent already carried 2354 from the T67f union). Re-step to the next
+    # 50-line step; no new growth licensed, debloat target unchanged.
+    "torchlens/capture/trace.py": 2400,
     "torchlens/backends/torch/completeness_witness.py": 2100,
 }
 

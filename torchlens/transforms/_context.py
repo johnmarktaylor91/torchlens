@@ -31,6 +31,7 @@ __all__ = [
     "ROLE_EVIDENCE",
     "ContextTransform",
     "RoleDeclaration",
+    "SpecialTokenFacts",
     "TransformContext",
     "axis_for_role",
     "wants_context",
@@ -134,6 +135,30 @@ def axis_for_role(roles: RoleDeclaration | None, rank: int, role: str) -> int:
 
 
 @dataclass(frozen=True)
+class SpecialTokenFacts:
+    """Recorded special-token evidence for semantic token addressing.
+
+    ``cls_token`` pooling is gated on these facts (transforms memo decision
+    12): a model family without a CLS token (gpt2) must REFUSE the request
+    rather than gather a fictional position. The facts are a recorded caller
+    assertion (typically derived from tokenizer attributes such as
+    ``tokenizer.cls_token_id is not None``), never guessed from tensor shape.
+
+    Attributes
+    ----------
+    has_cls:
+        Whether the tokenization that produced this batch actually prepends
+        a CLS token.
+    source:
+        Free-text evidence disclosure recorded alongside the assertion
+        (e.g. ``"declared"`` or ``"tokenizer:bert-base-uncased"``).
+    """
+
+    has_cls: bool
+    source: str = "declared"
+
+
+@dataclass(frozen=True)
 class TransformContext:
     """Frozen per-invocation context handed to context-capable transforms.
 
@@ -154,12 +179,23 @@ class TransformContext:
     workspace:
         Optional planner byte budget carried from v1 of this dataclass;
         ``None`` means no declared budget.
+    special_tokens:
+        Optional recorded special-token evidence consumed by ``cls_token``
+        (additive, default ``None``: absent facts REFUSE semantic CLS
+        addressing, never guess).
+    site_key:
+        Optional stable structural site key (L1) for the extracted site;
+        preferred over ``site_label`` as the ``share="by_site"`` seed
+        component when present (the output-key fallback is DISCLOSED as the
+        weaker source).
     """
 
     roles: RoleDeclaration | None = None
     mask: torch.Tensor | None = None
     site_label: str | None = None
     workspace: int | None = None
+    special_tokens: SpecialTokenFacts | None = None
+    site_key: str | None = None
 
 
 class ContextTransform:

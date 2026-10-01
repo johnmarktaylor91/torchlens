@@ -261,6 +261,7 @@ def report(model: nn.Module, input: Any) -> CompatReport:  # noqa: A002
         _accelerate_dispatch_row(model),
         _accelerate_offload_row(model),
         _bitsandbytes_row(model),
+        _peft_row(model),
         _tied_parameters_row(model),
         _multi_gpu_rng_row(),
         _data_parallel_row(model),
@@ -528,21 +529,53 @@ def _accelerate_dispatch_row(model: nn.Module) -> CompatRow:
 
     device_map = getattr(model, "hf_device_map", None)
     detected = bool(device_map)
-    status: Status = "known_broken" if detected else "pass"
-    details = (
-        "Accelerate device_map dispatch detected; parameters may materialize on different "
-        "devices during forward, so TorchLens cannot validate a single coherent eager trace."
-        if detected
-        else "No Accelerate device_map dispatch detected."
-    )
+    # Execution devices are map values other than the offload targets
+    # ("cpu"/"disk" backing stores) and "meta". ONE execution device (or none:
+    # a pure cpu/disk map executes on CPU) is the supported envelope: hook
+    # infrastructure runs under pause_logging and offloaded weights re-stamp
+    # (lane F37, verified CPU-side). Two or more real devices mean cross-device
+    # activation moves the capture path has not yet verified -- the C-DEPLOY
+    # GPU campaign is the acceptance authority there.
+    real_devices: set[str] = set()
+    if detected and device_map is not None:
+        real_devices = {
+            str(device)
+            for device in device_map.values()
+            if str(device) not in ("cpu", "disk", "meta")
+        }
+    multi_device = len(real_devices) > 1
+    if not detected:
+        status: Status = "pass"
+        severity: Severity = "ok"
+        details = "No Accelerate device_map dispatch detected."
+        suggestion = ""
+    elif multi_device:
+        status = "known_broken"
+        severity = "error"
+        details = (
+            "Accelerate device_map dispatch across multiple execution devices "
+            f"detected ({sorted(real_devices)}); cross-device activation moves are "
+            "not yet capture-verified."
+        )
+        suggestion = "Dispatch to a single execution device (cpu/disk offload is supported)."
+    else:
+        status = "pass"
+        severity = "info"
+        details = (
+            "Accelerate device_map dispatch on a single execution device detected; "
+            "eager capture is supported (hook infrastructure excluded from the op "
+            "graph, offloaded weights re-attributed). Verified at small scale on "
+            "CPU; see docs/reference/deployment_envelope.md for the scale ledger."
+        )
+        suggestion = ""
     return CompatRow(
         "accelerate_device_map_auto",
         "Accelerate device_map='auto'",
         status,
-        "error" if detected else "ok",
+        severity,
         detected,
         details,
-        "Run on a single materialized device before logging." if detected else "",
+        suggestion,
     )
 
 
@@ -561,6 +594,7 @@ def _accelerate_offload_row(model: nn.Module) -> CompatRow:
     """
 
     detected = False
+    buffers_offloaded = False
     for module in _iter_modules(model):
         hook = getattr(module, "_hf_hook", None)
         if hook is None:
@@ -569,24 +603,44 @@ def _accelerate_offload_row(model: nn.Module) -> CompatRow:
         # present for plain single-device dispatch too, and using its truthiness
         # both false-positives (offload=False + a device) and false-negatives
         # (device index 0 is falsy), so it is not an offload signal.
-        if bool(getattr(hook, "offload", False)) or bool(getattr(hook, "offload_buffers", False)):
+        if bool(getattr(hook, "offload", False)):
             detected = True
+        if bool(getattr(hook, "offload_buffers", False)):
+            detected = True
+            buffers_offloaded = True
+        if detected and buffers_offloaded:
             break
-    status: Status = "known_broken" if detected else "pass"
-    details = (
-        "Accelerate CPU/disk offload hooks detected; lazy parameter movement can bypass "
-        "TorchLens' assumptions about tensor identity and device placement."
-        if detected
-        else "No Accelerate CPU/disk offload hooks detected."
-    )
+    if not detected:
+        details = "No Accelerate CPU/disk offload hooks detected."
+        severity: Severity = "ok"
+        suggestion = ""
+    elif buffers_offloaded:
+        details = (
+            "Accelerate CPU/disk offload with BUFFER offload detected; parameter "
+            "capture is supported (hook internals excluded, weights re-attributed) "
+            "but offloaded-buffer reads may stay unattributed in the graph "
+            "(disclosed residual)."
+        )
+        severity = "warning"
+        suggestion = "Prefer offload_buffers=False when buffer attribution matters."
+    else:
+        details = (
+            "Accelerate CPU/disk offload hooks detected; eager capture is supported: "
+            "hook weight materialization runs outside the op graph and materialized "
+            "parameters re-attribute to their prep-time records. Verified at small "
+            "scale on CPU (op parity, logits parity, forward replay validation); see "
+            "docs/reference/deployment_envelope.md for the scale ledger."
+        )
+        severity = "info"
+        suggestion = ""
     return CompatRow(
         "accelerate_cpu_disk_offload",
         "Accelerate CPU/disk offload",
-        status,
-        "error" if detected else "ok",
+        "pass",
+        severity,
         detected,
         details,
-        "Disable offload or log a fully materialized copy." if detected else "",
+        suggestion,
     )
 
 
@@ -609,23 +663,65 @@ def _bitsandbytes_row(model: nn.Module) -> CompatRow:
     )
     if not detected:
         detected = any("bitsandbytes" in _class_identity(module) for module in _iter_modules(model))
-    status: Status = "known_broken" if detected else "pass"
     details = (
-        "bitsandbytes 8-bit/4-bit modules detected; custom parameter wrappers and kernels "
-        "are outside TorchLens' dense eager tensor contract."
+        "bitsandbytes 8-bit/4-bit modules detected; activation capture works with "
+        "value parity (verified at small scale on CPU) and is disclosed as degraded: "
+        "quantization-state reads (state.CB/SCB, packed payloads) may appear "
+        "unattributed, FLOPs are best-effort, and tl.validate's metadata invariants "
+        "may honestly flag those reads. See docs/reference/deployment_envelope.md."
         if detected
         else "No bitsandbytes 8-bit/4-bit modules detected."
     )
     return CompatRow(
         "bitsandbytes_8bit_4bit",
         "bitsandbytes 8-bit/4-bit",
-        status,
-        "error" if detected else "ok",
+        "pass",
+        "warning" if detected else "ok",
         detected,
         details,
         "Log an unquantized reference model when exact out metadata is required."
         if detected
         else "",
+    )
+
+
+def _peft_row(model: nn.Module) -> CompatRow:
+    """Build the PEFT/LoRA adapter row (lane F37).
+
+    Detection is structural: a ``peft``-namespaced wrapper class or any
+    ``peft``-namespaced submodule (LoRA/IA3/prefix layers), never an import
+    of ``peft`` itself.
+
+    Parameters
+    ----------
+    model:
+        Model to inspect.
+
+    Returns
+    -------
+    CompatRow
+        Report row.
+    """
+
+    detected = "peft." in _class_identity(model) or any(
+        "peft." in _class_identity(module) for module in _iter_modules(model)
+    )
+    details = (
+        "PEFT adapter wrapper detected (LoRA-style layers are ordinary eager "
+        "modules); capture is supported and verified: adapter modules appear in "
+        "the module hierarchy, adapter parameters attribute to their addresses, "
+        "outputs match the bare forward, and forward replay validation passes."
+        if detected
+        else "No PEFT adapter modules detected."
+    )
+    return CompatRow(
+        "peft_lora_adapters",
+        "PEFT/LoRA adapters",
+        "pass",
+        "info" if detected else "ok",
+        detected,
+        details,
+        "",
     )
 
 

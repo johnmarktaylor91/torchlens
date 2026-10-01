@@ -525,7 +525,7 @@ def _ensure_root_forward_binder(ledger: PreHookProvenanceLedger) -> None:
     def root_forward(*args: Any, **kwargs: Any) -> Any:
         """Bind the current root token before the real forward body starts."""
 
-        bind_invocation(ledger.trace, model, "self", 1, args, kwargs)
+        bind_invocation(ledger.trace, model, "self", 1, (args, kwargs))
         return prior_forward(*args, **kwargs)
 
     model.forward = root_forward
@@ -539,10 +539,13 @@ def bind_invocation(
     module: nn.Module,
     address: str,
     call_index: int,
-    args: tuple[Any, ...] | None = None,
-    kwargs: dict[str, Any] | None = None,
+    inputs: tuple[tuple[Any, ...], dict[str, Any]] | None = None,
 ) -> None:
-    """Bind the current invocation token to its actual ModuleCall identity."""
+    """Bind the current invocation token to its actual ModuleCall identity.
+
+    ``inputs`` is the ``(args, kwargs)`` pair of the invocation when the
+    caller holds it (needed only for the bypassed-module disclosure path).
+    """
 
     ledger = getattr(trace, "_prehook_provenance_ledger", None)
     if not isinstance(ledger, PreHookProvenanceLedger) or not ledger.active:
@@ -558,7 +561,8 @@ def bind_invocation(
             return
         refresh_registration_bypasses(trace, module)
         bypassed = ledger.global_bypass_seen or id(module) in ledger.bypassed_modules
-        if bypassed and args is not None and kwargs is not None:
+        if bypassed and inputs is not None:
+            args, kwargs = inputs
             with _paused_logging():
                 observation = _observe_state(args, kwargs)
                 snapshot = _snapshot_state(args, kwargs, observation)
@@ -765,29 +769,35 @@ def _paused_logging() -> Iterator[None]:
 def _observe_state(args: tuple[Any, ...], kwargs: dict[str, Any]) -> _StateObservation:
     """Capture structure, identity, version, and metadata without tensor copies."""
 
-    structure: list[Any] = []
-    tensors: list[_TensorState] = []
-    leaves: list[tuple[TypedInputPath, str, Any]] = []
-    reasons: set[str] = set()
-    _walk_value(args, ("args",), structure, tensors, leaves, reasons)
-    _walk_value(kwargs, ("kwargs",), structure, tensors, leaves, reasons)
+    acc = _WalkAccumulator()
+    _walk_value(args, ("args",), acc)
+    _walk_value(kwargs, ("kwargs",), acc)
     return _StateObservation(
-        structure=tuple(structure),
-        tensors=tuple(tensors),
-        leaves=tuple(leaves),
-        incomplete_reasons=tuple(sorted(reasons)),
+        structure=tuple(acc.structure),
+        tensors=tuple(acc.tensors),
+        leaves=tuple(acc.leaves),
+        incomplete_reasons=tuple(sorted(acc.reasons)),
     )
+
+
+@dataclass
+class _WalkAccumulator:
+    """Mutable accumulator for one deterministic typed-path input walk."""
+
+    structure: list[Any] = field(default_factory=list)
+    tensors: list[_TensorState] = field(default_factory=list)
+    leaves: list[tuple[TypedInputPath, str, Any]] = field(default_factory=list)
+    reasons: set[str] = field(default_factory=set)
 
 
 def _walk_value(
     value: Any,
     path: TypedInputPath,
-    structure: list[Any],
-    tensors: list[_TensorState],
-    leaves: list[tuple[TypedInputPath, str, Any]],
-    reasons: set[str],
+    acc: _WalkAccumulator,
 ) -> None:
     """Walk supported input containers in deterministic typed-path order."""
+
+    structure, tensors, leaves, reasons = acc.structure, acc.tensors, acc.leaves, acc.reasons
 
     if isinstance(value, torch.Tensor):
         try:
@@ -814,18 +824,18 @@ def _walk_value(
     if isinstance(value, tuple):
         structure.append((path, "tuple", len(value)))
         for index, item in enumerate(value):
-            _walk_value(item, (*path, index), structure, tensors, leaves, reasons)
+            _walk_value(item, (*path, index), acc)
         return
     if isinstance(value, list):
         structure.append((path, "list", len(value)))
         for index, item in enumerate(value):
-            _walk_value(item, (*path, index), structure, tensors, leaves, reasons)
+            _walk_value(item, (*path, index), acc)
         return
     if isinstance(value, Mapping):
         keys = tuple(value.keys())
         structure.append((path, "mapping", tuple((type(key).__name__, repr(key)) for key in keys)))
         for key in keys:
-            _walk_value(value[key], (*path, ("key", key)), structure, tensors, leaves, reasons)
+            _walk_value(value[key], (*path, ("key", key)), acc)
         return
     if isinstance(value, _IMMUTABLE_LEAF_TYPES):
         structure.append((path, "immutable", type(value).__name__))

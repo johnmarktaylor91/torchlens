@@ -21,6 +21,7 @@ touching ``torch._*`` or the ``_torch_compat`` chokepoint carries a row in
 from __future__ import annotations
 
 import ast
+import functools
 import os
 import re
 from pathlib import Path
@@ -48,7 +49,13 @@ _ROOT_FAMILY_LAYERS: tuple[tuple[str, str], ...] = (
 )
 
 
-def _iter_modules() -> list[tuple[str, Path]]:
+# Session-scoped caches: the tree is frozen for the duration of a test run,
+# and this file's tests each walk the same 650+ modules. Rescanning the
+# package root and re-reading every source per test (and per pass inside the
+# inversion audit) was the dominant avoidable cost that pushed the audit over
+# the smoke duration budget once the tree grew (T50 fix cycle).
+@functools.lru_cache(maxsize=1)
+def _iter_modules() -> tuple[tuple[str, Path], ...]:
     modules: list[tuple[str, Path]] = []
     for path in sorted(PACKAGE_ROOT.rglob("*.py")):
         if "__pycache__" in path.parts:
@@ -60,7 +67,14 @@ def _iter_modules() -> list[tuple[str, Path]]:
         else:
             parts[-1] = parts[-1][:-3]
         modules.append((".".join(parts), path))
-    return modules
+    return tuple(modules)
+
+
+@functools.lru_cache(maxsize=1)
+def _module_sources() -> dict[str, str]:
+    """Read every module's source exactly once per session."""
+
+    return {dotted: path.read_text() for dotted, path in _iter_modules()}
 
 
 _TL_LAYER_PATTERN = re.compile(r'^__tl_layer__\s*=\s*"([A-Z0-9]+)"', re.MULTILINE)
@@ -96,66 +110,88 @@ def _resolve_relative(dotted: str, path: Path, node: ast.ImportFrom) -> str | No
     return target
 
 
+@functools.lru_cache(maxsize=1)
+def _existing_targets() -> frozenset[str]:
+    """Every dotted name resolvable as a module or package under torchlens/.
+
+    ``_iter_modules`` yields exactly the dotted spelling of every ``.py`` file
+    (and, via ``__init__.py``, every package), so set membership is equivalent
+    to the former two-``stat()``-per-alias filesystem probe.
+    """
+
+    return frozenset(dotted for dotted, _ in _iter_modules())
+
+
 def _target_exists(target: str) -> bool:
-    candidate = PACKAGE_ROOT / Path(*target.split("."))
-    return candidate.with_suffix(".py").exists() or (candidate / "__init__.py").exists()
+    return target in _existing_targets()
 
 
-class _ImportWalker(ast.NodeVisitor):
-    """Collect eager torchlens-internal import targets (skip deferred/typing)."""
+#: Statement fields that can carry (transitively) eager import statements.
+_STMT_LIST_FIELDS = ("body", "orelse", "finalbody")
 
-    def __init__(self, dotted: str, path: Path) -> None:
-        self.dotted = dotted
-        self.path = path
-        self.eager_targets: list[str] = []
 
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # noqa: N802
-        return  # deferred
+def _eager_import_targets(tree: ast.Module, dotted: str, path: Path) -> list[str]:
+    """Collect eager torchlens-internal import targets (skip deferred/typing).
 
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:  # noqa: N802
-        return  # deferred
+    Imports are statements, so the walk stays on statement lists instead of
+    descending into every expression node (the former ``NodeVisitor`` visited
+    the full tree; on 650+ modules that traversal alone was a large share of
+    the audit's budget). Semantics are pinned identical: function bodies are
+    deferred, a ``TYPE_CHECKING`` conditional is skipped whole (both arms,
+    matching the visitor's early return), everything else recurses.
+    """
 
-    def visit_If(self, node: ast.If) -> None:  # noqa: N802
-        test = ast.unparse(node.test)
-        if "TYPE_CHECKING" in test:
-            return  # typing-only
-        self.generic_visit(node)
+    eager_targets: list[str] = []
 
-    def visit_Import(self, node: ast.Import) -> None:  # noqa: N802
-        for alias in node.names:
-            if alias.name.startswith("torchlens."):
-                self.eager_targets.append(alias.name[len("torchlens.") :])
+    def walk(stmts: list[ast.stmt]) -> None:
+        for node in stmts:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue  # deferred
+            if isinstance(node, ast.If) and "TYPE_CHECKING" in ast.unparse(node.test):
+                continue  # typing-only
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name.startswith("torchlens."):
+                        eager_targets.append(alias.name[len("torchlens.") :])
+                continue
+            if isinstance(node, ast.ImportFrom):
+                target = _resolve_relative(dotted, path, node)
+                if target is None:
+                    continue
+                for alias in node.names:
+                    candidate = f"{target}.{alias.name}" if target else alias.name
+                    if _target_exists(candidate):
+                        eager_targets.append(candidate)
+                    elif target and _target_exists(target):
+                        eager_targets.append(target)
+                continue
+            for field in _STMT_LIST_FIELDS:
+                children = getattr(node, field, None)
+                if children:
+                    walk(children)
+            for handler in getattr(node, "handlers", None) or ():
+                walk(handler.body)
+            for case in getattr(node, "cases", None) or ():
+                walk(case.body)
 
-    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:  # noqa: N802
-        target = _resolve_relative(self.dotted, self.path, node)
-        if target is None:
-            return
-        for alias in node.names:
-            candidate = f"{target}.{alias.name}" if target else alias.name
-            if _target_exists(candidate):
-                self.eager_targets.append(candidate)
-            elif target and _target_exists(target):
-                self.eager_targets.append(target)
+    walk(tree.body)
+    return eager_targets
 
 
 def _compute_inversions() -> dict[str, list[tuple[str, str, str, str]]]:
     """Return file -> [(source_layer, target, target_layer, kind)] inversions."""
 
-    sources: dict[str, str] = {}
-    layers: dict[str, str | None] = {}
-    for dotted, path in _iter_modules():
-        source = path.read_text()
-        sources[dotted] = source
-        layers[dotted] = _declared_layer(dotted, source)
+    sources = _module_sources()
+    layers: dict[str, str | None] = {
+        dotted: _declared_layer(dotted, sources[dotted]) for dotted, _ in _iter_modules()
+    }
 
     findings: dict[str, list[tuple[str, str, str, str]]] = {}
     for dotted, path in _iter_modules():
         source_layer = layers.get(dotted)
         if source_layer is None or source_layer not in LAYER_ORDER:
             continue  # FACADE-role and unmapped modules are outside the denominator
-        walker = _ImportWalker(dotted, path)
-        walker.visit(ast.parse(sources[dotted]))
-        for target in walker.eager_targets:
+        for target in _eager_import_targets(ast.parse(sources[dotted]), dotted, path):
             probe = target
             while probe and probe not in layers and "." in probe:
                 probe = probe.rsplit(".", 1)[0]
@@ -230,7 +266,7 @@ def test_layer_map_covers_every_package() -> None:
         for dotted, path in _iter_modules()
         if path.name == "__init__.py"
         and dotted
-        and _declared_layer(dotted, path.read_text()) is None
+        and _declared_layer(dotted, _module_sources()[dotted]) is None
     )
     assert unmapped == [], f"packages with no layer row: {unmapped}"
 
@@ -240,7 +276,7 @@ def test_declared_attributes_agree_with_the_table() -> None:
 
     conflicts = []
     for dotted, path in _iter_modules():
-        match = _TL_LAYER_PATTERN.search(path.read_text())
+        match = _TL_LAYER_PATTERN.search(_module_sources()[dotted])
         if not match:
             continue
         if match.group(1) == "FACADE" and path.name == "__init__.py":
@@ -260,10 +296,10 @@ def test_torch_privates_license_is_declared_and_shrink_only() -> None:
     """Item 12: packages touching torch privates carry a license row."""
 
     touching: set[str] = set()
-    for dotted, path in _iter_modules():
+    for dotted, source in _module_sources().items():
         if dotted == "_architecture":
             continue  # the license declaration module names the chokepoint
-        if _TORCH_PRIVATE_PATTERN.search(path.read_text()):
+        if _TORCH_PRIVATE_PATTERN.search(source):
             touching.add(dotted.split(".")[0] if dotted else "")
     touching.discard("")
     print(f"\nTORCH-PRIVATES LICENSE: {len(touching)} packages touch torch privates")

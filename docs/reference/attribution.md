@@ -289,3 +289,143 @@ Output:
 ```text
 AttributionResult(method='layer_activation_x_grad', values=Tensor(shape=(1, 2), dtype=torch.float32, device='cpu'), target_repr='index=0', extra_keys=['layer'])
 ```
+
+## One-backward reads (`read`, `seed`, `ReadTable`, `load_read_table`)
+
+`tl.attribution.read(trace, target=..., within=..., frozen=..., method=...,
+reduce=..., target_batch_size=..., result_byte_budget=...)` is the
+one-capture one-backward attribution read: one suppressed `autograd.grad`
+over every addressable site, returning an immutable
+`tl.attribution.ReadTable` with per-row honesty columns.
+`tl.attribution.seed(site, index=...)` / `seed(site, cotangent=...)` build
+the primary edge-seeded targets (no payload retention needed), and
+`tl.attribution.load_read_table(path)` loads a persisted scalar
+`read_table_v1` artifact back (fail-closed; loaded tables are
+`rescorable=False`). Every spelling is DOCUMENTED-UNSTABLE pending the
+naming sprint; the doc of record is
+[`onebackward_reads.md`](onebackward_reads.md).
+
+## The F06 attribution kit (DOCUMENTED-UNSTABLE)
+
+The nine-method completion of the kit (attrib panel memo, 2026-08-26). Every spelling below is
+documented-unstable pending the naming session; the inventory is locked in the
+[glossary index](glossary.md#documented-unstable-attribution-kit-index). Disclosure is the
+product: every path-method result carries `attribution_sum`, `target_delta`,
+`completeness_residual`, `residual_rel`, and `target_delta_abs` (a relative certificate over a
+near-zero output change certifies nothing, so the denominator always rides beside the ratio).
+
+### The wrapping contract: `noise_tunnel` and the two routes
+
+`tl.attribution.noise_tunnel(inputs, input_kwargs=None, *, ...)` runs ANY kit method on noised
+copies of the input and aggregates (`"mean"`, `"mean_square"`, population `"variance"`). Two
+routes, no registry: the PRIMITIVE `attribute=` (a closed callable
+`(inputs, input_kwargs) -> AttributionResult`; bind settings with `functools.partial`) and the
+SUGAR `method=` (any kit-contract callable, plus `model=`, `target=`, and ONE explicit
+`method_kwargs=dict(...)` mapping echoed verbatim into the result). The keyword splat is dead:
+a wrapper and its child can both own `n_samples` and `seed`, and only an explicit mapping can
+say which is which. `stdevs` is ABSOLUTE and required; integer ids, masks, booleans, and
+strings pass through unnoised; repeated tensor references share ONE noised object.
+`noise_tunnel(method=smoothgrad)` refuses (SmoothGrad IS the tunnel over `saliency` with
+per-sample absolute values -- `smoothgrad` itself is now the thin alias);
+`noise_tunnel(method=gradient_shap)` works with derived per-sample child seeds and both sample
+counts disclosed; trace-bound methods refuse (a static Trace leaves nothing to perturb).
+
+### `gradient_shap`
+
+`tl.attribution.gradient_shap(model, inputs, input_kwargs=None, *, target, baselines, ...)`
+estimates expected gradients against a REQUIRED baseline pool (leading pool axis; one pool
+index drawn per example per sample, shared across every attributed leaf). The estimator is
+pinned to the reference `InputBaselineXGradient` convention -- gradient at the interpolated
+point times (noised input minus drawn baseline) -- by a stored-draw oracle. The residual
+disclosure is labeled Monte-Carlo DIAGNOSTICS, never a completeness guarantee. Defaults:
+`n_samples=25`, `stdevs=0.0`; full draws stored only on request (`store_draws=True`).
+
+### `guided_backprop` and `deconvolution`
+
+Strict exact-ReLU only, at OP level: module-dispatched, functional, in-place, and reused
+firings are all rewritten (`sites="all"`, the default); `sites="module"` restricts to
+`nn.ReLU`-dispatched firings (the module-hook coverage class, reference-parity-pinned).
+Results are SIGNED by default (`absolute=False`). Zero matched sites refuse naming the
+model's observed activation kinds; GELU/SiLU/LeakyReLU/ReLU6/Hardtanh/softmax are excluded by
+definition. In-place ReLU spellings are served out-of-place with a bit-exact forward-fidelity
+tripwire. On torchvision's DenseNet-121, restricted coverage reproduces the module-hook
+reference exactly while op-level coverage differs -- the difference is the one functional
+`F.relu` in torchvision's own `forward` (the `site_census` in every result carries the
+counts). There is deliberately NO spelling that mounts these rules on `integrated_gradients`,
+`layer_integrated_gradients`, `layer_conductance`, or `gradient_shap`.
+
+### `occlusion_map`
+
+`tl.attribution.occlusion_map(model, inputs, input_kwargs=None, *, target, window, ...)` --
+the direct engine: eval/no-grad forwards, one per window, sweeping one attributed leaf
+(`occlude_leaf=`) with every other input held fixed. Clipped-edge full-coverage window
+enumeration (origins at `k * stride`, final window clips; reference-grid identical),
+`overlap="average"` (default) or `"sum"`, replacement policies `"zeros"`/`"mean"`/scalar/
+tensor. The pass budget is DETERMINISTIC (`max_passes=4096` direct tier; the trace-sweep tier
+is 512), never wall-clock: the refusal carries the computed pass count, one measured pass
+time, and the projected total. Int targets produce per-example maps; callable targets
+aggregate (disclosed).
+
+### `infidelity` and `sensitivity`
+
+`tl.attribution.infidelity(model, inputs, input_kwargs=None, *, target, attribution, ...)`
+measures `E[(sum(attr * dx) - (f(x) - f(x - dx)))^2]` with a USABLE named default
+(`perturb="gaussian"`, `noise_std=0.003`, `n_samples=10`), the named `"square_removal"`, and a
+fully compatible callable escape. Both unnormalized (primary) and normalized values return in
+one frozen `MetricResult`; out-of-range perturbations WARN (coded); layer-space/CAM-shaped
+values refuse with the input-space expansion recipe. Infidelity judges the perturbation as
+much as the attribution. "Lower is better" only under identical target / baseline /
+perturbation / radius / norm / normalization / sample bank -- the qualification rides in every
+result. `tl.attribution.sensitivity(...)` (max relative attribution change under uniform
+L-infinity input noise, `radius=0.02`) enforces the determinism ladder: a known-stochastic
+method without a seed refuses BEFORE work; an opaque callable disclosing unseeded stochastic
+provenance refuses; a fully opaque callable is probed twice on the unperturbed inputs
+(relative tolerance 1e-6 -- bit-equality is banned as the comparator) and equality records
+`determinism_probe="passed_not_proven"`.
+
+### `text` -- the token-attribution two-liner
+
+```python
+result = tl.attribution.text(model, tokenizer, "The Eiffel Tower is in", target=" Paris")
+result.show()
+```
+
+Input Integrated Gradients through HF `inputs_embeds` with every integer input held fixed;
+signed per-token scores sum-reduce the embedding width so completeness accounting survives.
+`baseline="auto"` is TASK-AWARE and always resolves to a printed concrete baseline: decoders
+zero all prompt-token embeddings; encoders with a reliable pad token and special-token mask
+pad content tokens while scaffolding specials at their true embeddings
+(`keep_special_tokens=True`); anything unreliable falls back to zeros-all with a NAMED
+disclosure (a missing pad token is never guessed). `n_steps=128` fixed default;
+`n_steps="auto"` runs the 64-128-256-512 ladder stopping ONLY on the dual criterion
+(residual AND max(L1, L2) successive-grid stability, both <= 1%; rank stability is banned as
+a signal). `converged=False` is a first-class outcome with a footer line the user cannot
+miss. A bare int target is the vocab id at the final non-padding position, warning in the one
+band where it is also a valid position index. `steps_per_batch=8` rides the randomized
+batching audit. Rendering: the typed `TokenAttributionPayload` (zero-centered diverging score
+domain, mandatory footer lines) feeds the future tviz renderer; until then `show()` returns
+the escaped-table fallback. `TokenAttributionResult` freezes text, ids, raw + display tokens
+(wordpieces are never silently merged), offsets, masks, scores, the full `(L, D)` values, the
+exact baseline, provenance, truncation (explicit only, warned), steps, audit evidence, cost,
+and the convergence record.
+
+### `SiteStash` and the epsilon-LRP litmus
+
+`tl.attribution.SiteStash` is the ENTIRE permanent LRP-adjacent surface: a forward/backward
+pairing store (`stash`/`fetch`, LIFO pairing proven on reused modules, leftovers disclosed).
+There is no rule registry, no composites, no canonizers -- the cleanroom epsilon-LRP recipe
+with its per-site conservation ledger lives in
+[`docs/recipes/lrp_epsilon_litmus.md`](../recipes/lrp_epsilon_litmus.md).
+
+### IG step batching (`step_batch_size`, `step_audit`)
+
+`integrated_gradients`, `layer_integrated_gradients`, and `layer_conductance` accept
+`step_batch_size=` (path points stacked on the ordinary batch axis -- a THROUGHPUT feature,
+not a memory feature; strictly opt-in, default sequential) guarded by the randomized, seeded,
+disclosed audit ladder `step_audit=` (`"per_call"` default under batching / `"per_chunk"` /
+explicit `"off"`). The audit is a sampled test, never a proof -- the only proof is sequential
+execution; a fixed-index audit is defeatable by construction, so the audited (chunk, row) is
+randomized (`step_audit_seed=` pins it). Every result disclosed the logical path-evaluation
+count, the physical forward-call count, and the audit record. Captum-comparison note: our
+path methods are midpoint Riemann; the reference default Gauss-Legendre differs (measured
+22.5% at n=16), so cross-tool comparisons must request `method="riemann_middle"` there.

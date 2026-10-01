@@ -83,6 +83,12 @@ _SCOPED_CAPTURE_STATE = frozenset(
         # by the hot paths to suppress capture side effects inside the window.
         ("torchlens/_state.py", "_rf_probe_depth"),
         ("torchlens/capture/projections.py", "_active_recording_state"),
+        # Episode join/coupling sessions (F40c/F42): published by
+        # armed_capture for exactly one capture and cleared in its finally --
+        # a survivor past the capture is exactly the leak class this ledger
+        # catches (captures are single-threaded by design).
+        ("torchlens/capture/_episode_join.py", "_ACTIVE_JOIN_SESSION"),
+        ("torchlens/capture/_episode_coupling.py", "_ACTIVE_COUPLING"),
         ("torchlens/capture/trace.py", "_ACTIVE_CAPTURE_BACKEND"),
         ("torchlens/experimental/__init__.py", "_STOP_AFTER_SITE"),
         # Live active_intervention_context publication stack (fixwave-5):
@@ -133,6 +139,11 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         ("torchlens/_io/prerelease.py", "_REGISTRY"),
         # Selection-AST term dispatch: import-time table, sibling producers register at import.
         ("torchlens/selection.py", "_TERM_RESOLVERS"),
+        # F40a annotations travel policy: DECLARATION table populated at import
+        # by register_travel_policy (closed drop_mode vocabulary; sub-key owners
+        # register at import of their owning modules, the _ANNOTATIONS_KEY_REGISTRY
+        # pattern) -- install-time fact, not a cache.
+        ("torchlens/capture/_annotations_travel.py", "_TRAVEL_REGISTRY"),
         # Transforms builtin seal (C04): one-way sentinel flipped by
         # _seal_builtins() when _kernels finishes import-time builtin
         # registration; from then on the builtin door refuses
@@ -247,6 +258,10 @@ not reset per capture.
 
 _WARN_ONCE_STATE = frozenset(
     {
+        # Post-T52 census sweep (F27): warn-once ledgers other merged lanes
+        # added without classifying -- one disclosure per key, append-only.
+        ("torchlens/attribution/onebackward/_frozen.py", "_DISCLOSURE_WARNED"),
+        ("torchlens/quickstart/_gate.py", "_WARNED_TRACE_IDS"),
         ("torchlens/_capture_state_helpers.py", "_COMPILED_FORCED_EAGER_WARNED"),
         ("torchlens/_capture_state_helpers.py", "_COMPILED_MODEL_UNWRAP_WARNED"),
         ("torchlens/_capture_state_helpers.py", "_VALIDATION_DEEPCOPY_WARNING_TYPES"),
@@ -283,11 +298,27 @@ happen.
 
 _CAPABILITY_PROBE_STATE = frozenset(
     {
+        # Post-T80 census sweep (F42 reconcile): the tl.func-matching wrap
+        # universe -- derived once from the installed wrapper layer on first
+        # use, never varies while wrapped (F21).
+        ("torchlens/intervention/binding.py", "_WRAP_UNIVERSE"),
         # Lazy glibc malloc_trim probe (R33): False = unprobed, None =
         # unavailable, else the resolved libc function. Probed once at the
         # first cleanup(); never varies afterwards.
         ("torchlens/data_classes/cleanup.py", "_MALLOC_TRIM"),
         ("torchlens/utils/_torch_compat.py", "HAS_C10D_ABORT_PG"),
+        # F27 Kineto/memory-profile capability flags: probed once at first
+        # extraction (a live profiler session is required to observe an
+        # event instance), never vary afterwards.
+        ("torchlens/utils/_torch_compat.py", "HAS_KINETO_INMEMORY_EVENTS"),
+        ("torchlens/utils/_torch_compat.py", "HAS_KINETO_EVENT_SCOPE"),
+        ("torchlens/utils/_torch_compat.py", "HAS_MEMORY_PROFILE"),
+        ("torchlens/utils/_torch_compat.py", "_KINETO_INMEMORY_EVENTS_PROBED"),
+        ("torchlens/utils/_torch_compat.py", "_KINETO_EVENT_SCOPE_PROBED"),
+        ("torchlens/utils/_torch_compat.py", "_MEMORY_PROFILE_PROBED"),
+        # F27 wrappers hot-path accessor cache: resolved once on the first
+        # wrapped call (import cost off the hot path), never varies after.
+        ("torchlens/backends/torch/_op_markers.py", "_active_session_fn"),
         ("torchlens/utils/_torch_compat.py", "HAS_DISABLE_TORCH_FUNCTION"),
         ("torchlens/utils/_torch_compat.py", "HAS_DISPATCH_MODE_STACK_QUERY"),
         ("torchlens/utils/_torch_compat.py", "HAS_DTENSOR_SHARD_GEOMETRY"),
@@ -396,6 +427,14 @@ _DIAGNOSTIC_AUDIT_STATE = frozenset(
         ("torchlens/postprocess/__init__.py", "RECORDED_STEP_EFFECTIVE_WRITES"),
         ("torchlens/postprocess/__init__.py", "RECORDED_STEP_READS"),
         ("torchlens/postprocess/__init__.py", "RECORDED_STEP_WRITES"),
+        # Monotone count of run-fold legality-grammar checks (F11 B2): a pure
+        # test instrument read via legality_check_count(); never reset by
+        # library code and never steers behavior.
+        ("torchlens/visualization/_collapse_runs.py", "_LEGALITY_CHECKS"),
+        # Theme lens preset registry-as-data (C05 N12): registered at import
+        # by torchlens code, mutated only through register_lens. Ledgered by
+        # F11 paying the missed C05 governance row (red at bare tip ca622a77).
+        ("torchlens/visualization/theme_registry.py", "_REGISTRY"),
         # Last-run validation readbacks (B8-42 / R33-2): the internal
         # validation trace never escapes tl.validate, so the first failure
         # and the peak observation mirror into these slots, cleared at each
@@ -421,8 +460,26 @@ _WEAK_SUBJECT_TABLES = frozenset(
         # that Trace and never become process-lifetime caches.
         ("torchlens/backends/torch/backward.py", "_BACKWARD_TRACE_SLOTS"),
         ("torchlens/backends/torch/backward.py", "_CHECKPOINT_TOKEN_STATE"),
-        ("torchlens/backends/torch/backward.py", "_FIRE_TIMING_STAMPS"),
+        ("torchlens/backends/torch/_fire_timing.py", "_FIRE_TIMING_STAMPS"),
+        # F27 FLIP-2 open-marker LIFO + session-time Kineto join results:
+        # keyed weakly by the owning trace, die with it; the marker LIFO is
+        # additionally drained at every pass boundary.
+        ("torchlens/backends/torch/_gradfn_markers.py", "_GRADFN_MARKER_TOKENS"),
+        ("torchlens/observability/_native_profile.py", "_JOIN_TRACES"),
+        # Post-T52 census sweep (F27): weak-keyed caches other merged lanes
+        # added without classifying -- keyed by the owning trace/bundle
+        # member, they die with their subject.
+        ("torchlens/attribution/onebackward/_accessor.py", "_INDEX_CACHE"),
+        ("torchlens/attribution/onebackward/_edge_plumbing.py", "_PASS_STAMPS"),
+        ("torchlens/bundle/_compare_gate.py", "_INPUT_VALUE_DIGEST_CACHE"),
         ("torchlens/backends/torch/backward.py", "_PENDING_BACKWARD_FINALIZE"),
+        # Weightsfree (F33) session registries: weak-keyed by the owning Trace
+        # (admission record, W1-ORD wrap-generation stamp, live admitted-meta
+        # membership) -- the ledger pattern of the completeness-witness tables;
+        # entries must vanish with their Trace, never outlive a capture.
+        ("torchlens/capture/_weightsfree_admission.py", "_ADMISSIONS"),
+        ("torchlens/capture/_weightsfree_admission.py", "_META_ACTIVE"),
+        ("torchlens/capture/_weightsfree_admission.py", "_WRAP_GENERATIONS"),
         ("torchlens/backends/torch/completeness_witness.py", "_ALIAS_MUTATION_CANDIDATE_LABELS"),
         ("torchlens/backends/torch/completeness_witness.py", "_DATA_ALIAS_MUTATION_TRACES"),
         (
@@ -477,6 +534,9 @@ _WEAK_SUBJECT_TABLES = frozenset(
         # declined results no longer enter the revision-keyed result cache,
         # so the one-warning-per-trace dedup rides its own weak set.
         ("torchlens/visualization/collapse_optimizer.py", "_CEILING_WARNED_TRACES"),
+        # Warn-once set for the F11 budget-degrade disclosure (memo D5(iv)):
+        # auto dedupes per trace; explicit max re-warns every call (N15).
+        ("torchlens/visualization/_collapse_disclosures.py", "_BUDGET_WARNED_TRACES"),
         ("torchlens/visualization/collapse_optimizer.py", "_RESULT_CACHE"),
         ("torchlens/visualization/collapse_optimizer.py", "_SCHEDULE_CACHE"),
     }
@@ -491,6 +551,18 @@ dict would otherwise keep its whole subject graph alive.
 
 _PUBLIC_REGISTRATION_STATE = frozenset(
     {
+        # Post-T80 census sweep (F42 reconcile): registries merged lanes added
+        # without heavy-census classification -- explicit register/list
+        # surfaces (extraction pure-module namespaces, ecosystem plugin
+        # activation ledger, preprocessing authority adapters).
+        ("torchlens/_extraction/callable_identity.py", "_REGISTERED_PURE_MODULES"),
+        ("torchlens/ecosystem/plugins.py", "_RECORDS"),
+        ("torchlens/preprocessing/_authorities.py", "_REGISTERED_ADAPTERS"),
+        # Post-T52 census sweep (F27): registries other merged lanes added
+        # without classifying -- explicit register/list surfaces.
+        ("torchlens/visualization/theme_registry.py", "_REGISTRY"),
+        ("torchlens/attribution/onebackward/_facet_bridge.py", "_FROZEN_POLICIES"),
+        ("torchlens/attribution/onebackward/_facet_bridge.py", "FROZEN_POLICY_NAMES"),
         ("torchlens/backends/registry.py", "_REGISTRY"),
         # The C01 registry-kernel inventory: domain doors enroll their one
         # Registry at import (create_registry refuses duplicates); public door
@@ -531,6 +603,18 @@ they carry an epoch/version counter where downstream caches must invalidate.
 
 _PROCESS_CACHES = frozenset(
     {
+        # Post-T80 census sweep (F42 reconcile): bounded LRU stores merged
+        # lanes added without heavy-census classification -- the projection
+        # basis byte-budgeted digest store (+ its size counter) and the SRP
+        # per-(instance, site) extent bindings with their test reset door.
+        ("torchlens/transforms/_projection.py", "_BASIS_STORE"),
+        ("torchlens/transforms/_projection.py", "_STORE_BYTES"),
+        ("torchlens/transforms/_srp.py", "_EXTENT_BINDINGS"),
+        # Weightsfree (F33) process-lifetime memos: the per-code-object
+        # decomposition-frame classification (bounded by loaded code) and the
+        # one-per-process D20 meta identity self-test verdict.
+        ("torchlens/backends/torch/_weightsfree_transparency.py", "_CODE_CLASSIFICATION"),
+        ("torchlens/capture/_weightsfree_admission.py", "_IDENTITY_SELF_TEST_RESULT"),
         # Write-once memo of the CPython tuplegetter descriptor type, probed
         # for the property-shadowed-namedtuple walkers (fix/walkers f399c63a);
         # holds only a builtin type, re-derivable at any time.
@@ -634,6 +718,12 @@ when its entries are session-scoped (see ``_module_class_metadata_cache``).
 _WEAKLY_HELD = frozenset(
     {
         ("torchlens/_capture_state_helpers.py", "_VALIDATION_DEEPCOPY_WARNING_TYPES"),
+        # Weightsfree (F33) session registries (storage fact: WeakKeyDictionary /
+        # WeakSet keyed by the owning Trace; lifecycle class is
+        # _WEAK_SUBJECT_TABLES).
+        ("torchlens/capture/_weightsfree_admission.py", "_ADMISSIONS"),
+        ("torchlens/capture/_weightsfree_admission.py", "_META_ACTIVE"),
+        ("torchlens/capture/_weightsfree_admission.py", "_WRAP_GENERATIONS"),
         # Kind memos re-keyed weakly by the value TYPE so dynamically created
         # classes stay collectable; lifecycle class stays _PROCESS_CACHES (the
         # ledger is orthogonal: weakness is a storage fact).
@@ -656,7 +746,15 @@ _WEAKLY_HELD = frozenset(
         ("torchlens/backends/torch/_held_refs.py", "_RELEASED_MODELS"),
         ("torchlens/backends/torch/backward.py", "_BACKWARD_TRACE_SLOTS"),
         ("torchlens/backends/torch/backward.py", "_CHECKPOINT_TOKEN_STATE"),
-        ("torchlens/backends/torch/backward.py", "_FIRE_TIMING_STAMPS"),
+        ("torchlens/backends/torch/_fire_timing.py", "_FIRE_TIMING_STAMPS"),
+        ("torchlens/backends/torch/_gradfn_markers.py", "_GRADFN_MARKER_TOKENS"),
+        ("torchlens/observability/_native_profile.py", "_JOIN_TRACES"),
+        # Post-T52 census sweep (F27): weak-keyed caches other merged lanes
+        # added without classifying -- keyed by the owning trace/bundle
+        # member, they die with their subject.
+        ("torchlens/attribution/onebackward/_accessor.py", "_INDEX_CACHE"),
+        ("torchlens/attribution/onebackward/_edge_plumbing.py", "_PASS_STAMPS"),
+        ("torchlens/bundle/_compare_gate.py", "_INPUT_VALUE_DIGEST_CACHE"),
         ("torchlens/backends/torch/backward.py", "_PENDING_BACKWARD_FINALIZE"),
         ("torchlens/backends/torch/buffer_writes.py", "_PARAM_BYTE_WITNESS_NOT_ARMED"),
         ("torchlens/backends/torch/completeness_witness.py", "_ALIAS_MUTATION_CANDIDATE_LABELS"),
@@ -706,6 +804,7 @@ _WEAKLY_HELD = frozenset(
         ("torchlens/visualization/code_panel.py", "_SOURCE_MEMO"),
         ("torchlens/visualization/collapse_optimizer.py", "_BOX_UNITS_CACHE"),
         ("torchlens/visualization/collapse_optimizer.py", "_CEILING_WARNED_TRACES"),
+        ("torchlens/visualization/_collapse_disclosures.py", "_BUDGET_WARNED_TRACES"),
         ("torchlens/visualization/collapse_optimizer.py", "_RESULT_CACHE"),
         ("torchlens/visualization/collapse_optimizer.py", "_SCHEDULE_CACHE"),
     }

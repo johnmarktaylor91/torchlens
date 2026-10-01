@@ -297,7 +297,15 @@ class CaptureSession:
             self._warn_for_extreme_gradient_retention()
 
     def _spill_activation_escrow_to_budget(self) -> None:
-        """Move oldest detached payloads to temporary files until RAM is within budget."""
+        """Move oldest detached payloads to temporary files until RAM is within budget.
+
+        Raises
+        ------
+        SaveBudgetExceededError
+            ``escrow_budget_exceeded`` when the DECLARED total spill bound
+            (leverage B9) would be crossed: an unbounded implicit disk write
+            is refused typed, never performed silently.
+        """
 
         profile = self.plan.retention_profile
         if not profile.spillable:
@@ -309,6 +317,29 @@ class CaptureSession:
             )
             if candidate is None:
                 return
+            budget = profile.escrow_spill_budget_bytes
+            if budget is not None and self.activation_escrow_spilled_bytes + candidate.nbytes > (
+                budget
+            ):
+                from .._save_budget import SaveBudgetExceededError, format_bytes
+
+                raise SaveBudgetExceededError(
+                    "Deferred-selector escrow spill crossed its declared bound: "
+                    f"{format_bytes(self.activation_escrow_spilled_bytes)} already "
+                    f"spilled to temporary disk plus {format_bytes(candidate.nbytes)} "
+                    f"pending exceeds the {format_bytes(budget)} budget. The "
+                    "selector needs FINAL graph numbering (a label, positive "
+                    "ordinal, or output spelling), so every candidate payload is "
+                    "escrowed until postprocess. Address the same sites with a "
+                    "live-resolvable spelling instead — a module path, bare type "
+                    "name, or `save=` predicate saves one site at near "
+                    "save-nothing cost (see torchlens.capture.preflight."
+                    "address_preflight for the equivalent spelling).",
+                    code="escrow_budget_exceeded",
+                    spilled_bytes=self.activation_escrow_spilled_bytes,
+                    pending_bytes=candidate.nbytes,
+                    budget_bytes=budget,
+                )
             if self._activation_spill_dir is None:
                 self._activation_spill_dir = tempfile.TemporaryDirectory(
                     prefix="torchlens-activation-escrow-"

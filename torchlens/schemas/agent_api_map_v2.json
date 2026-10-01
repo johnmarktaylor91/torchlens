@@ -1,0 +1,175 @@
+{
+  "$id": "https://torchlens.dev/schemas/torchlens.agent.api_map.v2.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "artifact": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "data": {
+      "additionalProperties": true,
+      "properties": {
+        "capabilities": {
+          "additionalProperties": true,
+          "properties": {
+            "budget_parameters": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "cli_verbs": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "executes_user_code": {
+              "const": false
+            },
+            "path_root_ceiling": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "schemas": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "token_estimator": {
+              "type": "string"
+            },
+            "tools": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "writes": {
+              "const": false
+            }
+          },
+          "required": [
+            "budget_parameters",
+            "cli_verbs",
+            "executes_user_code",
+            "schemas",
+            "tools",
+            "writes"
+          ],
+          "type": "object"
+        },
+        "detail": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "names": {
+          "items": {
+            "additionalProperties": true,
+            "properties": {
+              "deprecated": {
+                "type": "boolean"
+              },
+              "in_all": {
+                "type": "boolean"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "module": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "required_params": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "required_params_elided": {
+                "type": "boolean"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "deprecated",
+              "kind",
+              "module",
+              "name",
+              "required_params",
+              "required_params_elided",
+              "summary"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "submodules_not_in_all": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "capabilities",
+        "names",
+        "submodules_not_in_all"
+      ],
+      "type": "object"
+    },
+    "limits": {
+      "type": "object"
+    },
+    "request": {
+      "type": "object"
+    },
+    "schema": {
+      "const": "torchlens.agent.api_map.v2"
+    },
+    "schema_stability": {
+      "const": "documented-unstable"
+    },
+    "status": {
+      "type": "string"
+    },
+    "torchlens_version": {
+      "type": "string"
+    },
+    "truncation": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "artifact",
+    "data",
+    "limits",
+    "request",
+    "schema",
+    "schema_stability",
+    "status",
+    "torchlens_version",
+    "truncation",
+    "warnings"
+  ],
+  "title": "Public-surface index v2 with capabilities block",
+  "type": "object"
+}

@@ -17,6 +17,7 @@ from ...data_classes.op import (
     _memory_or_none,
     _shape_or_none,
     apply_transform,
+    train_mode_tripwire_armed,
     validate_train_mode_transform_output,
 )
 from ...fastlog._storage_resolver import _resolve_storage
@@ -565,8 +566,11 @@ def _copy_lookback_payload(
             raw_tensor=raw_out,
             transformed_tensor=transformed_out,
             transform_kind="activation",
-            backward_ready=fields_dict.get(
-                "backward_ready", getattr(trace, "backward_ready", False)
+            tripwire_armed=train_mode_tripwire_armed(
+                backward_ready=fields_dict.get(
+                    "backward_ready", getattr(trace, "backward_ready", False)
+                ),
+                transform=trace.activation_transform,
             ),
             label=fields_dict.get("_layer_label_raw"),
         )

@@ -20,9 +20,11 @@ from ._base import (
 )
 from .episode import (
     BundleRelationError,
+    CheckpointSeriesLiveParamsError,
     EpisodeCaptureError,
     EpisodeDeclarationError,
-    EpisodeErrorCode,
+    EpisodeErrorCode as EpisodeErrorCode,
+    EpisodeJoinError,
     EpisodeLedgerError,
 )
 from .runnable import (
@@ -333,12 +335,13 @@ __all__ = [
     "BufferSinkRoutingError",
     "BundleRelationError",
     "CaptureError",
+    "CheckpointSeriesLiveParamsError",
     "CompatibilityError",
     "ConfigurationError",
     "DiagnosticSeverityError",
     "EpisodeCaptureError",
     "EpisodeDeclarationError",
-    "EpisodeErrorCode",
+    "EpisodeJoinError",
     "EpisodeLedgerError",
     "InterventionError",
     "NumericAttestationError",

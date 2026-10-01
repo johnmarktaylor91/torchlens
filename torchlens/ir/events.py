@@ -532,7 +532,7 @@ class BufferWriteEvent:
     producer_label_raw: str | None
     version_label_raw: str | None
     value: Any
-    value_changed: bool
+    value_changed: bool | None
     object_id: int
     storage_key: tuple[Any, ...] | None
     buffer_version: int | None

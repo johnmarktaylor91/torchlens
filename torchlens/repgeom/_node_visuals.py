@@ -24,6 +24,7 @@ from ._geometry import (
     _effective_dimensionality_from_eigenvalues,
     _validate_finite,
     _validate_variance_threshold,
+    rank_transform_rdm,
 )
 
 __tl_layer__ = "L6"
@@ -137,13 +138,14 @@ def mds_scatter_node_spec(
     return node_spec_fn
 
 
-def rdm_node_spec(
+def rdm_node_spec(  # noqa: PLR0913 -- draw-time producer: six all-defaulted presentation dials ARE the spec'd surface
     *,
     max_stimuli: int = 8,
     thumbnail_size: int = 24,
     canvas_size: int = 360,
     cmap: str = "viridis",
     show_axis_thumbnails: bool = True,
+    display: str = "raw",
 ) -> Callable[[Any, Any], Any | None]:
     """Return a draw-time node callback for stored RDM heatmap annotations.
 
@@ -161,6 +163,14 @@ def rdm_node_spec(
     show_axis_thumbnails:
         Whether to use matching raw PIL image stimuli as symmetric axis
         thumbnails when available.
+    display:
+        Value transform applied before rendering: ``"raw"`` (default,
+        historical behavior), ``"rank"``, or ``"percentile"`` -- the
+        standard RSA display convention (Nili et al. 2014's
+        percentile-ranked RDMs; thingsvision ships the same rank-scaled
+        display) via :func:`torchlens.repgeom.rank_transform_rdm`.
+        Display-only: stored annotations are untouched and the tooltip
+        discloses the transform.
 
     Returns
     -------
@@ -170,7 +180,8 @@ def rdm_node_spec(
     Raises
     ------
     ValueError
-        If sizing or cap parameters are invalid.
+        If sizing or cap parameters are invalid, or ``display`` is not one
+        of ``"raw"``, ``"rank"``, ``"percentile"``.
     """
 
     if max_stimuli < 1:
@@ -179,6 +190,11 @@ def rdm_node_spec(
         raise ValueError("thumbnail_size must be at least 4.")
     if canvas_size <= thumbnail_size * 2:
         raise ValueError("canvas_size must be larger than twice thumbnail_size.")
+    if display not in ("raw", "rank", "percentile"):
+        raise ValueError(
+            f"Unsupported rdm_node_spec display: {display!r} "
+            "(expected 'raw', 'rank', or 'percentile')."
+        )
 
     def node_spec_fn(layer: Any, spec: Any) -> Any | None:
         """Apply an RDM heatmap image to a matching node spec.
@@ -203,12 +219,15 @@ def rdm_node_spec(
         if key is None or matrix is None:
             return None
 
+        shown_matrix = matrix
+        if display != "raw":
+            shown_matrix = rank_transform_rdm(matrix, output=display)  # type: ignore[arg-type]
         images = None
         if show_axis_thumbnails:
             images = _matching_pil_image_batch(getattr(trace, "raw_input", None), matrix.shape[0])
         labels = None if images is not None else [f"s{index}" for index in range(matrix.shape[0])]
         heatmap = render_heatmap(
-            matrix,
+            shown_matrix,
             width=canvas_size,
             height=canvas_size,
             cmap=cmap,
@@ -220,8 +239,10 @@ def rdm_node_spec(
         shown_count = min(max_stimuli, matrix.shape[0])
         more_count = max(0, matrix.shape[0] - shown_count)
         more_text = f"; +{more_count} more" if more_count > 0 else ""
+        display_text = "" if display == "raw" else f", display={display}"
         tooltip = (
-            f"RDM heatmap for {key}: metric=precomputed, N={matrix.shape[0]} stimuli{more_text}"
+            f"RDM heatmap for {key}: metric=precomputed{display_text}, "
+            f"N={matrix.shape[0]} stimuli{more_text}"
         )
         caption = str(getattr(layer, "layer_label", None) or getattr(layer, "label", key))
         return spec.replace(

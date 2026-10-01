@@ -17,7 +17,6 @@ from ..user_funcs import (
     validate_forward_pass,
 )
 from .consolidated import InterventionValidationReport, validate
-from .core import validate_saved_outs as validate_trace_saved_outs
 from .diagnostics import (
     ValidationDiagnostic,
     ValidationFailure,
@@ -27,7 +26,7 @@ from .diagnostics import (
     last_validation_peak_memory,
 )
 from .invariants import MetadataInvariantError, check_metadata_invariants
-from .status import ValidationReplayState, ValidationReplayStatus
+from .status import ValidationReplayState as ValidationReplayState, ValidationReplayStatus
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
@@ -91,20 +90,13 @@ def validate_tlspec(
         "v2.16_intervention",
     }:
         return
-    if tlspec_format == "v2.16_modellog_portable":
-        from .._io import (
-            MIN_TLSPEC_VERSION,
-            MIN_TORCHLENS_VERSION_TEXT,
-            ArtifactVersionBelowFloorError as _BelowFloor,
-        )
+    # Ledger-derived remedy (gates G6/G7): the ONE v2.16 construction lives in
+    # the compat ledger beside its bridge_reader evidence (ecosystem MEMO 3.5).
+    from .._io.compat_ledger import raise_if_modellog_portable
 
-        raise _BelowFloor(
-            f"Model-log bundle at {tlspec_path} uses the TorchLens 2.16 portable "
-            f"format, below the supported rehydration floor tlspec_version="
-            f"{MIN_TLSPEC_VERSION} (torchlens {MIN_TORCHLENS_VERSION_TEXT}). Load "
-            f"and re-save the artifact with a torchlens release >= "
-            f"{MIN_TORCHLENS_VERSION_TEXT} that still reads it."
-        )
+    raise_if_modellog_portable(
+        tlspec_format, f"Model-log bundle at {tlspec_path}", str(tlspec_path)
+    )
     if tlspec_format != "v2.0_unified":
         raise ValueError(f"Unrecognized TorchLens .tlspec format at {tlspec_path}.")
 
@@ -694,7 +686,11 @@ def _validate_tlspec_version_ceiling(tlspec_version: int) -> None:
     from .._io import TLSPEC_VERSION, above_ceiling_error
 
     if tlspec_version > TLSPEC_VERSION:
-        raise above_ceiling_error(observed=tlspec_version, subject="Bundle")
+        raise above_ceiling_error(
+            observed=tlspec_version,
+            subject="Bundle",
+            code="artifact_version_above_runtime",
+        )
 
 
 # JSON Schema keywords supported by ``_validate_schema_properties``. Annotation
@@ -1285,7 +1281,6 @@ __all__ = [
     "InterventionValidationReport",
     "ValidationFailure",
     "ValidationDiagnostic",
-    "ValidationReplayState",
     "ValidationReplayStatus",
     "get_validation_failure",
     "get_validation_diagnostics",
@@ -1295,7 +1290,6 @@ __all__ = [
     "validate_batch_of_models_and_inputs",
     "validate",
     "validate_forward_pass",
-    "validate_trace_saved_outs",
     "check_metadata_invariants",
     "check_spec_compat",
     "MetadataInvariantError",

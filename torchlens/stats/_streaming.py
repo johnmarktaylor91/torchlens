@@ -6,7 +6,7 @@ import heapq
 import math
 import random
 from collections.abc import Iterable
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 import torch
 
@@ -283,16 +283,27 @@ class TopK:
 class Covariance:
     """Running covariance matrix accumulator."""
 
-    def __init__(self, name: str | None = None) -> None:
+    def __init__(
+        self,
+        name: str | None = None,
+        *,
+        device: Any = None,
+        dtype: Any = None,
+    ) -> None:
         """Initialize the accumulator.
 
         Parameters
         ----------
         name:
             Optional metric name.
+        device:
+            Compute/state device (F20 D-25; default: historical CPU).
+        dtype:
+            Floating compute dtype (default: historical ``float64``).
         """
 
         self.name = name
+        self._device, self._dtype = _resolve_placement(device, dtype)
         self._count = 0
         self._mean: torch.Tensor | None = None
         self._m2: torch.Tensor | None = None
@@ -306,7 +317,7 @@ class Covariance:
             Tensor-like batch. One-dimensional inputs are treated as one row.
         """
 
-        tensor = torch.as_tensor(value).detach().to(device="cpu", dtype=torch.float64)
+        tensor = torch.as_tensor(value).detach().to(device=self._device, dtype=self._dtype)
         if tensor.ndim == 1:
             tensor = tensor.unsqueeze(0)
         tensor = tensor.reshape(tensor.shape[0], -1)
@@ -316,8 +327,10 @@ class Covariance:
         if rows == 0:
             return
         if self._mean is None:
-            self._mean = torch.zeros(tensor.shape[1], dtype=torch.float64)
-            self._m2 = torch.zeros((tensor.shape[1], tensor.shape[1]), dtype=torch.float64)
+            self._mean = torch.zeros(tensor.shape[1], dtype=self._dtype, device=self._device)
+            self._m2 = torch.zeros(
+                (tensor.shape[1], tensor.shape[1]), dtype=self._dtype, device=self._device
+            )
         assert self._m2 is not None
         # Chan et al. batch combine: one FxF update per BATCH with in-place
         # accumulation (the per-row Welford loop allocated a fresh FxF outer
@@ -341,19 +354,60 @@ class Covariance:
         """
 
         if self._m2 is None:
-            return torch.empty((0, 0), dtype=torch.float64)
+            return torch.empty((0, 0), dtype=self._dtype, device=self._device)
         if self._count < 2:
             return torch.zeros_like(self._m2)
         return self._m2 / (self._count - 1)
 
 
-def _as_feature_matrix(value: Any) -> torch.Tensor:
-    """Return ``value`` as a detached CPU float64 feature matrix.
+def _resolve_placement(device: Any, dtype: Any) -> tuple[torch.device, torch.dtype]:
+    """Resolve the accumulator compute placement (F20, brainpipe D-25).
+
+    The ONE policy seam for accumulator ``device=``/``dtype=`` keywords, so
+    later accumulators cannot fork conventions: ``None`` means the historical
+    CPU ``float64`` contract (bit-identical default), an explicit device
+    keeps state and computation there, and only floating dtypes are lawful.
+
+    Parameters
+    ----------
+    device:
+        Target device or ``None`` for the historical CPU placement.
+    dtype:
+        Target floating dtype or ``None`` for the historical ``float64``.
+
+    Returns
+    -------
+    tuple[torch.device, torch.dtype]
+        Resolved placement.
+
+    Raises
+    ------
+    ValueError
+        If ``dtype`` is not a floating dtype.
+    """
+
+    resolved_device = torch.device(device) if device is not None else torch.device("cpu")
+    resolved_dtype = dtype if dtype is not None else torch.float64
+    if not isinstance(resolved_dtype, torch.dtype) or not resolved_dtype.is_floating_point:
+        raise ValueError(f"Accumulator dtype must be a floating torch.dtype; got {dtype!r}.")
+    return resolved_device, resolved_dtype
+
+
+def _as_feature_matrix(
+    value: Any,
+    device: torch.device | None = None,
+    dtype: torch.dtype | None = None,
+) -> torch.Tensor:
+    """Return ``value`` as a detached feature matrix on the given placement.
 
     Parameters
     ----------
     value:
         Tensor-like batch. One-dimensional inputs are treated as one row.
+    device:
+        Target device (default: the historical CPU placement).
+    dtype:
+        Target dtype (default: the historical ``float64``).
 
     Returns
     -------
@@ -361,7 +415,9 @@ def _as_feature_matrix(value: Any) -> torch.Tensor:
         A two-dimensional ``(n_rows, n_features)`` tensor.
     """
 
-    tensor = torch.as_tensor(value).detach().to(device="cpu", dtype=torch.float64)
+    tensor = (
+        torch.as_tensor(value).detach().to(device=device or "cpu", dtype=dtype or torch.float64)
+    )
     if tensor.ndim == 0:
         raise ValueError("A feature batch must have at least one dimension.")
     if tensor.ndim == 1:
@@ -373,19 +429,31 @@ class CrossCovariance:
     """Running cross-covariance matrix accumulator.
 
     The accumulator retains only feature-sized running means and the cross
-    second moment. Inputs are converted to detached CPU ``float64`` tensors.
+    second moment. Inputs are converted to detached tensors on the resolved
+    placement (default: the historical CPU ``float64``).
     """
 
-    def __init__(self, name: str | None = None) -> None:
+    def __init__(
+        self,
+        name: str | None = None,
+        *,
+        device: Any = None,
+        dtype: Any = None,
+    ) -> None:
         """Initialize the accumulator.
 
         Parameters
         ----------
         name:
             Optional metric name.
+        device:
+            Compute/state device (F20 D-25; default: historical CPU).
+        dtype:
+            Floating compute dtype (default: historical ``float64``).
         """
 
         self.name = name
+        self._device, self._dtype = _resolve_placement(device, dtype)
         self._count = 0
         self._mean_a: torch.Tensor | None = None
         self._mean_b: torch.Tensor | None = None
@@ -408,8 +476,8 @@ class CrossCovariance:
             changes across updates.
         """
 
-        matrix_a = _as_feature_matrix(a)
-        matrix_b = _as_feature_matrix(b)
+        matrix_a = _as_feature_matrix(a, self._device, self._dtype)
+        matrix_b = _as_feature_matrix(b, self._device, self._dtype)
         if matrix_a.shape[0] != matrix_b.shape[0]:
             raise ValueError(
                 "CrossCovariance requires matched row counts; "
@@ -423,9 +491,11 @@ class CrossCovariance:
         if rows == 0:
             return
         if self._mean_a is None or self._mean_b is None:
-            self._mean_a = torch.zeros(matrix_a.shape[1], dtype=torch.float64)
-            self._mean_b = torch.zeros(matrix_b.shape[1], dtype=torch.float64)
-            self._m2 = torch.zeros((matrix_a.shape[1], matrix_b.shape[1]), dtype=torch.float64)
+            self._mean_a = torch.zeros(matrix_a.shape[1], dtype=self._dtype, device=self._device)
+            self._mean_b = torch.zeros(matrix_b.shape[1], dtype=self._dtype, device=self._device)
+            self._m2 = torch.zeros(
+                (matrix_a.shape[1], matrix_b.shape[1]), dtype=self._dtype, device=self._device
+            )
         assert self._m2 is not None
         # Same batch combine as Covariance.update: one (d_a, d_b) update per
         # BATCH instead of one fresh outer product per row.
@@ -453,7 +523,7 @@ class CrossCovariance:
         """
 
         if self._m2 is None:
-            return torch.empty((0, 0), dtype=torch.float64)
+            return torch.empty((0, 0), dtype=self._dtype, device=self._device)
         if self._count < 2:
             return torch.zeros_like(self._m2)
         return self._m2 / (self._count - 1)
@@ -475,19 +545,31 @@ class CKA:
     is zero. This follows the linear CKA formulation of Kornblith et al. (2019).
     """
 
-    def __init__(self, name: str | None = None) -> None:
+    def __init__(
+        self,
+        name: str | None = None,
+        *,
+        device: Any = None,
+        dtype: Any = None,
+    ) -> None:
         """Initialize the accumulator.
 
         Parameters
         ----------
         name:
             Optional metric name.
+        device:
+            Compute/state device (F20 brainpipe D-25; e.g. ``"cuda"``).
+            ``None`` keeps the historical CPU placement bit-identical.
+        dtype:
+            Floating compute dtype (default: historical ``float64``).
         """
 
         self.name = name
-        self._cross = CrossCovariance()
-        self._covariance_a = Covariance()
-        self._covariance_b = Covariance()
+        self._device, self._dtype = _resolve_placement(device, dtype)
+        self._cross = CrossCovariance(device=device, dtype=dtype)
+        self._covariance_a = Covariance(device=device, dtype=dtype)
+        self._covariance_b = Covariance(device=device, dtype=dtype)
 
     def update(self, a: Any, b: Any) -> None:
         """Update linear CKA from one paired batch.
@@ -527,7 +609,7 @@ class CKA:
         return float((numerator / denominator).item())
 
 
-def cka(a: Any, b: Any) -> float:
+def cka(a: Any, b: Any, *, device: Any = None, dtype: Any = None) -> float:
     r"""Compute one-shot linear centered kernel alignment.
 
     Linear CKA is
@@ -539,8 +621,9 @@ def cka(a: Any, b: Any) -> float:
         {\lVert C_{AA}\rVert_F\,\lVert C_{BB}\rVert_F}.
 
     This is the linear CKA measure described by Kornblith et al. (2019).
-    Inputs are treated as ``(n_observations, n_features)`` matrices and all
-    computation uses CPU ``float64``. A zero-variance input produces NaN.
+    Inputs are treated as ``(n_observations, n_features)`` matrices; the
+    default computes on CPU ``float64`` (bit-identical to the historical
+    behavior). A zero-variance input produces NaN.
 
     Parameters
     ----------
@@ -548,6 +631,11 @@ def cka(a: Any, b: Any) -> float:
         First tensor-like representation.
     b:
         Second tensor-like representation with the same row count.
+    device:
+        Compute device (F20 brainpipe D-25; e.g. ``"cuda"`` keeps the Gram
+        work on-device). ``None`` keeps the historical CPU placement.
+    dtype:
+        Floating compute dtype (default: historical ``float64``).
 
     Returns
     -------
@@ -555,8 +643,9 @@ def cka(a: Any, b: Any) -> float:
         Linear CKA value, or NaN for a degenerate zero-variance input.
     """
 
-    matrix_a = _as_feature_matrix(a)
-    matrix_b = _as_feature_matrix(b)
+    resolved_device, resolved_dtype = _resolve_placement(device, dtype)
+    matrix_a = _as_feature_matrix(a, resolved_device, resolved_dtype)
+    matrix_b = _as_feature_matrix(b, resolved_device, resolved_dtype)
     if matrix_a.shape[0] != matrix_b.shape[0]:
         raise ValueError(
             f"CKA requires matched row counts; got {matrix_a.shape[0]} and {matrix_b.shape[0]}."
@@ -604,21 +693,103 @@ class PCA:
 
         self._covariance.update(value)
 
-    def result(self) -> dict[str, torch.Tensor]:
-        """Return components and explained variances.
+    def _solve(self) -> tuple[torch.Tensor, torch.Tensor]:
+        """Eigensolve the running covariance with deterministic sign canonicalization.
+
+        Each component row is flipped so its largest-magnitude entry is
+        positive (first occurrence on exact ties, per ``torch.argmax``), so
+        two identical fits produce IDENTICAL arrays — an eigensolver's sign
+        choice is otherwise arbitrary (transforms memo P6).
 
         Returns
         -------
-        dict[str, torch.Tensor]
-            ``components`` and ``explained_variance`` tensors.
+        tuple[torch.Tensor, torch.Tensor]
+            ``(components, explained_variance)`` — ``(k, d)`` rows and the
+            descending eigenvalues.
         """
 
         cov = self._covariance.result()
         if cov.numel() == 0:
-            return {
-                "components": torch.empty((0, 0), dtype=torch.float64),
-                "explained_variance": torch.empty((0,), dtype=torch.float64),
-            }
+            return (
+                torch.empty((0, 0), dtype=torch.float64),
+                torch.empty((0,), dtype=torch.float64),
+            )
         values, vectors = torch.linalg.eigh(cov)
         order = torch.argsort(values, descending=True)[: self.n_components]
-        return {"components": vectors[:, order].T, "explained_variance": values[order]}
+        components = vectors[:, order].T.contiguous()
+        anchor = components.abs().argmax(dim=1, keepdim=True)
+        flip = torch.where(torch.gather(components, 1, anchor) < 0, -1.0, 1.0)
+        return components * flip, values[order]
+
+    def result(self) -> dict[str, Any]:
+        """Return components, variances, and the P6 additive fit facts.
+
+        Returns
+        -------
+        dict[str, Any]
+            ``components`` (sign-canonicalized) and ``explained_variance``
+            as before, plus ``mean`` (the feature mean the fit centered
+            on), ``n_samples``, ``n_features``, and ``digest`` (the
+            ``sha256:`` content digest of the fitted arrays — transforms
+            memo P6).
+        """
+
+        from ._fitted import fitted_digest
+
+        components, explained = self._solve()
+        mean = self._covariance._mean
+        mean = torch.empty((0,), dtype=torch.float64) if mean is None else mean.detach().clone()
+        return {
+            "components": components,
+            "explained_variance": explained,
+            "mean": mean,
+            "n_samples": self._covariance._count,
+            "n_features": int(mean.numel()),
+            "digest": fitted_digest(components, mean, explained),
+        }
+
+    def fitted(self, fit_scope: str = "unspecified") -> Any:
+        """Freeze the fit into a persistable :class:`~torchlens.stats.FittedPCA`.
+
+        Parameters
+        ----------
+        fit_scope:
+            Recorded disclosure of what the fit consumed (fitting across
+            held-out stimuli leaks analysis information; say so here).
+
+        Returns
+        -------
+        FittedPCA
+            The frozen payload ``tl.stats.save_fitted`` persists and
+            ``tl.transforms.pca_apply`` consumes.
+
+        Raises
+        ------
+        FittedArtifactError
+            ``pca_fitted_unavailable`` when fewer than two rows were seen —
+            there is no covariance to solve, and fabricating a basis would
+            be a silent wrong number.
+        """
+
+        from ._fitted import FittedArtifactError, FittedPCA, fitted_digest
+
+        if self._covariance._count < 2:
+            raise FittedArtifactError(
+                f"PCA saw {self._covariance._count} row(s); a fit needs at "
+                "least two rows before fitted() has anything to freeze.",
+                code="pca_fitted_unavailable",
+                remedy="update() the estimator with the fitting batches first",
+                n_samples=self._covariance._count,
+            )
+        components, explained = self._solve()
+        # count >= 2 (checked above) implies the running mean exists.
+        mean = cast(torch.Tensor, self._covariance._mean).detach().clone()
+        return FittedPCA(
+            components=components,
+            mean=mean,
+            explained_variance=explained,
+            n_samples=self._covariance._count,
+            n_features=int(mean.numel()),
+            fit_scope=str(fit_scope),
+            digest=fitted_digest(components, mean, explained),
+        )

@@ -8,6 +8,10 @@ from typing import Any
 
 from benchmarks.perf_gate import load_gate_json
 
+#: Rung names this generator dereferences by literal (D26.4): the render
+#: entry asserts each exists in the handed artifact before any prose renders.
+REFERENCED_RUNGS: frozenset[str] = frozenset({"raw_forward", "fastlog_halt_25"})
+
 
 def render_numbers_markdown(payload: dict[str, Any]) -> str:
     """Render a concise Markdown performance summary.
@@ -24,6 +28,22 @@ def render_numbers_markdown(payload: dict[str, Any]) -> str:
     """
 
     rows = payload["rows"]
+    # Costreport D26.4 (F09 item 22): every rung name this generator
+    # dereferences must exist in a CANONICAL artifact it was handed -- the
+    # measured regression was `rerun_no_save` silently becoming
+    # `rerun_metadata_only` between artifacts, leaving prose derived from a
+    # vanished rung. Partial/provisional payloads legitimately omit tiers,
+    # so the assertion gates on the payload's own completeness claim.
+    if payload.get("baseline_status") == "canonical":
+        present = {str(row.get("operation")) for row in rows}
+        missing = sorted(REFERENCED_RUNGS - present)
+        if missing:
+            raise ValueError(
+                f"generator references rung name(s) absent from the canonical artifact: "
+                f"{missing}; the artifact's operations are the identity authority (rename "
+                "the reference or regenerate the artifact -- never render prose for a "
+                "vanished rung)."
+            )
     env = payload.get("environment", {})
     source_sha = payload.get("source_sha") or env.get("torchlens_git_sha") or "unknown"
     date = payload.get("date", "unknown")

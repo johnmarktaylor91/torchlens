@@ -235,8 +235,16 @@ Common operations:
 | `bundle.do(...)`, `bundle.attach_hooks(...)`, `bundle.push()`, `bundle.run(model, x)` | Apply mutator/propagation calls to each member (the former `replay`/`rerun` aliases are removed). |
 | `bundle.fork(name=None)` | Fork all members into a new bundle. |
 
-Relationship gates are intentional. Operations that require shared topology or
-same-input evidence fail when TorchLens cannot prove enough compatibility.
+Relationship gates are intentional, and they check two predicates separately:
+a model-axis floor (`node` needs `same_param_shapes`; comparison reads need
+`shared_graph`) and, for comparison reads, VALUE-LEVEL input identity derived
+from retained input payloads. An identity relationship is never accepted as
+proof of input equality, unprovable input identity refuses fail-closed
+(`bundle_gate_input_identity_unproven`), and members joined by an ordering
+relation (`successor_of`/`forked_from`/`escalates`) are not comparison
+operands regardless of rank (`bundle_gate_ordering_topology`). Pair-scoped
+reads (`diff_pair(a, b)`, `most_changed` baseline pairs) gate only the
+operands they actually read.
 
 ## Cohort Migration
 

@@ -20,7 +20,7 @@ import torch
 
 from ._context import TransformContext
 from ._errors import TransformContractError
-from ._registry import _register_builtin, _seal_builtins
+from ._registry import _register_builtin
 from ._spec import PlannedStep, TensorSpec, TransformDefinition, TransformSpec, freeze_params
 
 __tl_layer__ = "L4"
@@ -943,4 +943,5 @@ _BUILTIN_DEFINITIONS: tuple[TransformDefinition, ...] = (
 
 for _definition in _BUILTIN_DEFINITIONS:
     _register_builtin(_definition)
-_seal_builtins()
+# The builtin set seals in the package __init__ AFTER every builtin module
+# (kernels, pooling, SRP, projection) has registered through this same door.

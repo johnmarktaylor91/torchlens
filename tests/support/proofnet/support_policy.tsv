@@ -1,0 +1,13 @@
+# ONE support-policy table (testing memo D3/B3; F36). Every claimed band is
+# a CLAIM: its floor and current release are installed and executed by a
+# named leg; an OPEN-ended band is legal only with a daily latest canary.
+# tests/test_proofnet_version_policy.py lockstep-checks this table against
+# pyproject's declared bands and the per-leg constraints files; drift in
+# either direction is red. Legs are constraints files under
+# tests/support/proofnet/constraints/ (CI wiring: packaging_requests.tsv).
+package	claimed_band	open_ended	floor_leg	current_leg	candidate_leg	canary
+torch	>=2.1	yes	lowest_direct	hf_4_current	-	latest_canary
+torchvision	>=0.18,<1	no	lowest_direct	hf_4_current	-	latest_canary
+transformers	>=4.45,<6	no	hf_floor	hf_4_current	hf_5_candidate	latest_canary
+timm	~=1.0	no	hf_floor	hf_4_current	-	latest_canary
+numpy	>=1.26.4	yes	lowest_direct	hf_4_current	-	latest_canary

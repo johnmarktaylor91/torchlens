@@ -392,6 +392,27 @@ LEDGER: tuple[CompositionRow, ...] = (
             "in-place writes through a fork poison the parent -- edit verbs only",
         ),
     ),
+    CompositionRow(
+        row_id="CELL-SUMMARY-CHARSET-PASSCOUNT",
+        family="report-surface",
+        generator_kind="hand",
+        operation_ids=("Trace.summary", "tl.summary"),
+        axis_values=("charset=ascii-vs-unicode", "layer=multi-pass", "view=ladder"),
+        expected_state="SUPPORTED",
+        risk_tags=("pass_resolution",),
+        oracle_kind="EXACT",
+        evidence_node=(
+            "F08: tests/test_summary_rebuild_charset.py::test_dual_charset_goldens + "
+            "tests/test_summary_rebuild_ladder.py::test_multipass_one_row_at_module_grain "
+            "(byte-exact dual-charset goldens; one row owns all pass events; "
+            "ascii == degrade(unicode))"
+        ),
+        source_gap="F08 summary rebuild (charset contract x multi-pass identity partition)",
+        notes=(
+            "the identity partition holds across charsets: a multi-pass layer is "
+            "ONE ladder row owning every pass event, byte-stable in both styles",
+        ),
+    ),
 )
 
 

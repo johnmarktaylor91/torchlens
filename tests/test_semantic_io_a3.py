@@ -164,7 +164,7 @@ def test_summary_surfaces_output_postprocessing_and_output_level() -> None:
     """Summary includes output provenance and an output table level."""
 
     trace = _trace_batch_classifier()
-    summary = trace.summary()
+    summary = trace.summary(level="overview")
     output_summary = trace.summary(level="output")
 
     assert "Output postprocessing:" in summary
@@ -180,7 +180,7 @@ def test_summary_surfaces_undetected_output_style_hint() -> None:
     trace = tl.trace(_Classifier(torch.zeros(1, 3)).eval(), torch.ones(1, 2))
 
     assert trace.decoded_output is None
-    assert "undetected; pass output_style= to decode." in trace.summary()
+    assert "undetected; pass output_style= to decode." in trace.summary(level="overview")
 
 
 def test_redecode_after_load_raises_clearly_when_logits_dropped(tmp_path: Path) -> None:

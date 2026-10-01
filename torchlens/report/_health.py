@@ -182,13 +182,25 @@ def _derive(trace: Any) -> HealthFacts:
     )
 
 
-def health_facts(trace: Any) -> HealthFacts:
+def health_facts(trace: Any, *, allow_scan: bool = True) -> HealthFacts:
     """Return the normalized HealthFacts for one finished trace.
 
     Order of authority: the persisted artifact record (validated
     fail-closed), then a live derivation over the strongest available
     basis -- which is also ATTACHED to the annotations channel so a later
     save carries it (D9).
+
+    Parameters
+    ----------
+    trace:
+        Finished trace-like object.
+    allow_scan:
+        ``True`` (the explicit door) may pay for a first saved-payload
+        scan. ``False`` is the D4 render-surface contract: serve only the
+        basis already in hand (capture-time record, prior scan memo, or
+        the persisted artifact record) and otherwise return the honest
+        NOT-CHECKED shape (basis ``"unscanned"``) -- a render never
+        implicitly triggers a payload scan.
     """
 
     annotations = getattr(trace, "annotations", None)
@@ -203,6 +215,18 @@ def health_facts(trace: Any) -> HealthFacts:
         # invalid payload falls through fail-closed -- never a false clean.
         if persisted.basis != "persisted_invalid" and persisted.capture_revision == revision:
             return persisted
+    if not allow_scan:
+        from ..data_classes._nonfinite import has_scan_evidence
+
+        if not has_scan_evidence(trace):
+            from ._factcore import capture_fingerprint
+
+            unexamined = sum(
+                1
+                for op in getattr(trace, "layer_list", ()) or ()
+                if getattr(op, "has_saved_activation", False)
+            )
+            return _not_checked("unscanned", capture_fingerprint(trace), unexamined=unexamined)
     return normalize_health_facts(trace)
 
 

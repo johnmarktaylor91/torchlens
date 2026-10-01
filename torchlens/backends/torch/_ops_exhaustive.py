@@ -120,7 +120,7 @@ def _emit_exhaustive_operation_events(
             func_call_id,
         )
 
-    output_entries = _partition_output_entries_with_autograd_stats(out_orig)
+    output_entries = _partition_output_entries_with_autograd_stats(self, out_orig)
     _register_call_output_container_snapshot(
         self,
         out_orig,
@@ -257,6 +257,22 @@ def _emit_exhaustive_operation_events(
             fields_dict_onetensor,
             output_entry.autograd_stats,
         )
+        if i == 0 and getattr(self, "track_device_memory", False):
+            # Re-key the call-level device-memory sample (observe item 15) to
+            # the committed raw label and project it onto the legacy flat
+            # fields: bytes_delta_at_call = the single-device allocated
+            # delta; bytes_peak_at_call = the absolute high-water after the
+            # call ONLY when this call observed an advance.
+            samples_store = self.__dict__.get("_device_memory_samples")
+            if isinstance(samples_store, dict):
+                call_samples = samples_store.pop(f"call:{func_call_id}", None)
+                if call_samples is not None:
+                    from ...observe._device_memory import flat_field_projection
+
+                    samples_store[fields_dict_onetensor["_label_raw"]] = call_samples
+                    delta_value, peak_value = flat_field_projection(call_samples)
+                    fields_dict_onetensor["bytes_delta_at_call"] = delta_value
+                    fields_dict_onetensor["bytes_peak_at_call"] = peak_value
         detect_backend_semantics = (
             detect_torch_alias_contract
             if _should_keep_alias_mutation_contract(self)
@@ -291,7 +307,16 @@ def _emit_exhaustive_operation_events(
                 fields_dict_onetensor["parent_arg_positions"],
                 fields_dict_onetensor["_label_raw"],
                 func_call_id,
+                func_name=func_name,
             )
+        if output_entry.autograd_band is not None:
+            # Observe items 7-8: the saved-band decomposition keyed by raw
+            # label (session-time bookkeeping, same class as
+            # ``_capture_parent_edge_truth``; never persisted). Consumers join
+            # to public labels through the step-8 identity map.
+            self.__dict__.setdefault("_autograd_saved_bands", {})[
+                fields_dict_onetensor["_label_raw"]
+            ] = output_entry.autograd_band
         new_layer_entry = cast(
             Op,
             _make_layer_log_entry(

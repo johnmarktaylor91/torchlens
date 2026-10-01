@@ -1,0 +1,14 @@
+{
+  "category_counts": {
+    "ACTIVATION": 10,
+    "AUTOGRAD_DETAIL": 4,
+    "GRADIENT": 8,
+    "INPUT": 5,
+    "OPTIMIZER_STATE": 8,
+    "PARAMETER": 8,
+    "TEMPORARY": 8
+  },
+  "scenario": "seed-0 two-step SGD-momentum training loop, MLP 16-16-8, batch 4 (pinned_parity_scenario)",
+  "schema": "torchlens.memory_parity_golden.v1",
+  "torch_version": "2.13.0"
+}

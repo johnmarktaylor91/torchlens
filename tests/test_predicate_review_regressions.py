@@ -396,6 +396,9 @@ _KIND_PAYLOADS: dict[str, Any] = {
     "followed_by": None,
     "preceded_by": None,
     "site": {"key": "x"},
+    # F42 step qualifier: post-hoc site evaluation reads Op.episode_step
+    # stamps (bool result, no capability refusal), matching upfront.
+    "episode_step": (0,),
 }
 
 

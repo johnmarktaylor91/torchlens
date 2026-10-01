@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import torch
 
+from .._errors import InvalidArgumentError
 from .._trace_state import TraceState
 from ..ir import CaptureEvents
 from ..ir.container import (
@@ -24,6 +25,7 @@ from ..options import ReplayOptions, merge_replay_options
 from ..quantities import Bytes
 from ..utils.display import progress_bar
 from ..utils.rng import execute_with_restored_rng_autocast
+from .audit import _hook_name, _replay_fire_record
 from .edge_substitution import require_depth1_arg_path
 from .errors import (
     BufferThreadGapWarning,
@@ -420,6 +422,31 @@ def _label_key_map(trace: Trace) -> dict[str, tuple[str, ...]]:
     return {spelling: tuple(keys) for spelling, keys in mapping.items()}
 
 
+def _validated_cone_origins(origins: Iterable[Op]) -> list[Op]:
+    """Refuse non-op cone origins typed (leverage B3), returning them listed."""
+
+    if isinstance(origins, str):
+        raise InvalidArgumentError(
+            f"cone_of_effect origins must be op records, not the string "
+            f"{origins!r}: iterating a string walks its CHARACTERS and would "
+            "silently return an empty cone. Resolve the label first — "
+            "trace[label].ops, or trace.find_sites(label).",
+            code="cone_origin_invalid",
+            remedy="pass op records (e.g. trace[label].ops)",
+        )
+    listed = list(origins)
+    for origin in listed:
+        if isinstance(origin, str) or not hasattr(origin, "layer_label"):
+            raise InvalidArgumentError(
+                f"cone_of_effect origin {origin!r} is not an op record; "
+                "resolve string addresses first (trace[label].ops, or "
+                "trace.find_sites(label)).",
+                code="cone_origin_invalid",
+                remedy="pass op records (e.g. trace[label].ops)",
+            )
+    return listed
+
+
 def cone_of_effect(trace: Trace, origins: Iterable[Op]) -> list[Op]:
     """Return downstream cone in topological order.
 
@@ -439,6 +466,7 @@ def cone_of_effect(trace: Trace, origins: Iterable[Op]) -> list[Op]:
         per-pass rather than silently dropped.
     """
 
+    origins = _validated_cone_origins(origins)
     all_keys = trace.layer_dict_all_keys
     label_keys = _label_key_map(trace)
     call_groups = _func_call_groups(trace)
@@ -1146,13 +1174,25 @@ def _apply_replay_hooks(
             args=(current,),
             kwargs={},
         )
+        # The disclosure-note lift needs the pre-fire watermark: notes the
+        # hook enqueues during THIS fire become its determinism_note (the ONE
+        # builder's uniform lift; the replay door historically dropped them).
+        previous_notes = tuple(run_ctx.get("ledger_notes", ()))
         current = _execute_hook(
             entry.normalized_callable,
             current,
             context,
             force_shape_change=bool(entry.metadata.get("force_shape_change", False)),
         )
-        records.append(_replay_fire_record(entry, site, replaced=current is not original))
+        records.append(
+            _replay_fire_record(
+                entry,
+                site,
+                replaced=current is not original,
+                run_ctx=run_ctx,
+                previous_notes=previous_notes,
+            )
+        )
     return current, records
 
 
@@ -1164,11 +1204,11 @@ def _splice_param_substitutions(
     """Re-splice param-kind tier-(ii) substitutions into reconstructed args.
 
     A parameter argument reconstructs from its template ``LiteralTensor`` as
-    the LIVE (unsubstituted) parameter, so cone recomputation of an op whose
-    parameter was substituted (``fork.do(tl.params(...), edit)``) must
-    re-apply the substituted value here — otherwise a push would silently
-    revert the "as if" edit at every recomputation. STRICTLY gated to
-    ``substitution_kind == "param"`` entries: edge-selection entries keep
+    the LIVE (unsubstituted) parameter, so cone recomputation must re-apply
+    the substituted value here — otherwise a push would silently revert the
+    "as if" edit. STRICTLY gated to ``substitution_kind`` in
+    ``("param", "region")`` — region exit entries (F01) re-splice like param
+    entries, nested container paths included; edge-selection entries keep
     their shipped no-re-splice semantics (parity-pinned).
 
     Parameters
@@ -1191,17 +1231,19 @@ def _splice_param_substitutions(
         for store_key, payload in entries.items():
             if not isinstance(payload, dict):
                 continue
-            if payload.get("substitution_kind") != "param":
+            if payload.get("substitution_kind") not in ("param", "region"):
                 continue
             value = payload.get("value")
             if not isinstance(value, torch.Tensor):
                 continue
             arg_kind, arg_path = store_key
-            require_depth1_arg_path(
-                arg_path,
-                where="param-substitution replay splice",
-                site=getattr(member, "label", None),
-            )
+            if payload.get("substitution_kind") == "region":
+                from .regions import resplice_region_entry
+
+                args, kwargs = resplice_region_entry(args, kwargs, arg_kind, arg_path, value)
+                continue
+            site = getattr(member, "label", None)
+            require_depth1_arg_path(arg_path, where="param-substitution replay splice", site=site)
             if arg_kind == "positional":
                 position = int(arg_path[0])
                 args = args[:position] + (value,) + args[position + 1 :]
@@ -1913,61 +1955,13 @@ def _ensure_replay_run_ctx(log: Trace) -> dict[str, Any]:
 
     if not isinstance(getattr(log, "last_run", None), dict):
         log.last_run = {}
-    return cast(dict[str, Any], log.last_run)
-
-
-def _hook_name(entry: NormalizedHookEntry) -> str:
-    """Return display name for a hook entry.
-
-    Parameters
-    ----------
-    entry:
-        Hook entry.
-
-    Returns
-    -------
-    str
-        Hook display name.
-    """
-
-    if entry.helper_spec is not None:
-        return entry.helper_spec.name
-    return getattr(entry.normalized_callable, "__qualname__", "user_hook")
-
-
-def _replay_fire_record(entry: NormalizedHookEntry, site: Op, *, replaced: bool) -> FireRecord:
-    """Build a replay fire record.
-
-    Parameters
-    ----------
-    entry:
-        Hook entry that fired.
-    site:
-        Target site.
-    replaced:
-        Whether the hook returned a different tensor object.
-
-    Returns
-    -------
-    FireRecord
-        Hook fire record.
-    """
-
-    from .audit import build_fire_record
-
-    return build_fire_record(
-        target_label=site.layer_label,
-        call_label=site.label,
-        func_call_id=site.func_call_id,
-        container_path=tuple(site.container_path or ()),
-        engine="replay",
-        helper=entry.helper_spec,
-        site_label=site.layer_label,
-        timing="post",
-        direction="forward",
-        helper_name=_hook_name(entry),
-        replaced=replaced,
-    )
+    run_ctx = cast(dict[str, Any], log.last_run)
+    # Seed law D5 (F02): thread the capture's recorded seed so seed='auto'
+    # stochastic edits canonicalize their base seed on the replay door too.
+    trace_seed = getattr(log, "random_seed", None)
+    if trace_seed is not None:
+        run_ctx.setdefault("trace_random_seed", trace_seed)
+    return run_ctx
 
 
 def _is_namedtuple_instance(value: Any) -> bool:

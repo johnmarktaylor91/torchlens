@@ -150,6 +150,27 @@ def rehydrate_trace(
             seen=seen,
         )
 
+    # F44 injections stage 2: the rows split out of layer_list during
+    # __setstate__ live in the session-transient injection state, which the
+    # policy-driven walk above never materializes (FieldPolicy.DROP), so
+    # their payload references materialize explicitly here -- eagerly even
+    # under lazy=True, the injected family is small by construction -- and
+    # the records finalize with attestation="unattested" (loading never
+    # attests; the replay door is attest_injected_ops).
+    from .injection_codec import finalize_loaded_injected_ops
+
+    finalize_loaded_injected_ops(
+        trace,
+        materialize=lambda blob_ref: _materialize_blob_ref(
+            blob_ref,
+            manifest_index,
+            bundle_root,
+            map_location,
+            payload_hints,
+            canonical_blobs_dir,
+        ),
+    )
+
     # rebuild_trace_accessors() MUST run AFTER _rehydrate_object(), not before.
     # accessor_rebuild.py bakes `trace._buffer_initial_values.get(address)`
     # into each Buffer's `_initial_value` at construction time (Buffer.__init__

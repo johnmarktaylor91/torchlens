@@ -1226,13 +1226,20 @@ def rebuild_builtin_helper(
     # portability="builtin" specs like every entry below, and their absence
     # here made a saved/pickled spec a dead artifact (R10-1: save succeeded,
     # load raised intervention_helper_unknown).
+    from .compose import compose
     from .predicates import add, replace_with
+    from .stochastic import mean_fill, permute_batch
     from .sweep import sweep_replace
 
     constructors: dict[str, Callable[..., HelperSpec]] = {
         "add": add,
         "replace_with": replace_with,
         "sweep_replace": sweep_replace,
+        # F02 stochastic/population family (builtin-portability members only:
+        # the population-carrying verbs are opaque_audit and never rebuild).
+        "compose": compose,
+        "mean_fill": mean_fill,
+        "permute_batch": permute_batch,
         "zero_ablate": zero_ablate,
         "mean_ablate": mean_ablate,
         "scramble_elements": scramble_elements,
@@ -1620,8 +1627,18 @@ def patch_from(source: Any) -> HelperSpec:
     record as the artifact carrier. Saving a patch-intervened trace persists
     an audit-only spec; no executable-save path exists for it in v1.
 
+    A :class:`~torchlens.intervention.stochastic.SamplingPlan` source lowers
+    onto the seeded donor-sampling substrate (edits memo D1: the plan is the
+    ONE stochastic primitive; ``patch_from(plan)`` applies it -- one coherent
+    donor per logical firing under the derived-seed law).
+
     DOCUMENTED-UNSTABLE spelling pending its naming-session ratification.
     """
+
+    from .stochastic import SamplingPlan, plan_patch_helper
+
+    if isinstance(source, SamplingPlan):
+        return plan_patch_helper(source)
 
     identity = {
         "source_trace_label": str(getattr(source, "trace_label", "") or ""),

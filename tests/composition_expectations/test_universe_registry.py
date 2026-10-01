@@ -297,7 +297,10 @@ def test_capture_options_private_filter_both_directions() -> None:
         _censuses.public_option_fields(PlantedOptions, frozenset({"_hidden", "_gone"}))
     assert _censuses.public_option_fields(PlantedOptions, frozenset({"_hidden"})) == ("visible",)
     # And the live class resolves under the declared filter.
-    assert len(_censuses.capture_option_fields()) == 47
+    # 48 -> 49 (T82d re-reconcile, F44): union of the landed
+    # track_device_memory and the F44 log_injections options. As of T85
+    # (F01-AMENDED landed) both parents carry log_injections; pins agree.
+    assert len(_censuses.capture_option_fields()) == 49
 
 
 def test_env_var_census_shapes() -> None:

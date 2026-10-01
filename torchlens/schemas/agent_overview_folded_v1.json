@@ -1,0 +1,217 @@
+{
+  "$id": "https://torchlens.dev/schemas/torchlens.agent.overview_folded.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "artifact": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "data": {
+      "additionalProperties": true,
+      "properties": {
+        "anomalies": {
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "audit": {
+          "type": "object"
+        },
+        "capture": {
+          "type": "object"
+        },
+        "classes": {
+          "items": {
+            "additionalProperties": true,
+            "properties": {
+              "child_classes": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "class_id": {
+                "type": "string"
+              },
+              "dtype": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "func": {
+                "type": "string"
+              },
+              "module_path": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "n_instances": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "num_params": {
+                "type": "integer"
+              },
+              "parent_classes": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "pass_index": {
+                "type": "integer"
+              },
+              "rank": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "representative": {
+                "type": "string"
+              },
+              "shape": {
+                "items": {
+                  "type": "integer"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "child_classes",
+              "class_id",
+              "dtype",
+              "func",
+              "module_path",
+              "n_instances",
+              "num_params",
+              "parent_classes",
+              "rank",
+              "representative",
+              "shape"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "counts": {
+          "type": "object"
+        },
+        "coverage": {
+          "additionalProperties": true,
+          "required": [
+            "grads_available",
+            "ops_total",
+            "payload_lazy",
+            "payload_present",
+            "payload_unsaved"
+          ],
+          "type": "object"
+        },
+        "fold_key": {
+          "const": "torchlens.agent_fold_key.v1"
+        },
+        "inputs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "interventions": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "load_plan": {
+          "type": "object"
+        },
+        "logged_values": {
+          "type": "object"
+        },
+        "memory": {
+          "type": "object"
+        },
+        "n_classes": {
+          "type": "integer"
+        },
+        "next_operations": {
+          "type": "object"
+        },
+        "outputs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "anomalies",
+        "audit",
+        "capture",
+        "classes",
+        "counts",
+        "coverage",
+        "fold_key",
+        "load_plan",
+        "n_classes",
+        "next_operations"
+      ],
+      "type": "object"
+    },
+    "limits": {
+      "type": "object"
+    },
+    "request": {
+      "type": "object"
+    },
+    "schema": {
+      "const": "torchlens.agent.overview_folded.v1"
+    },
+    "schema_stability": {
+      "const": "documented-unstable"
+    },
+    "status": {
+      "type": "string"
+    },
+    "torchlens_version": {
+      "type": "string"
+    },
+    "truncation": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "artifact",
+    "data",
+    "limits",
+    "request",
+    "schema",
+    "schema_stability",
+    "status",
+    "torchlens_version",
+    "truncation",
+    "warnings"
+  ],
+  "title": "Folded structural orientation view (the default overview)",
+  "type": "object"
+}

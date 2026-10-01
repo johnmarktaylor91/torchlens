@@ -53,10 +53,7 @@ from typing import TYPE_CHECKING, Any
 from .._errors import InvalidArgumentError
 
 if TYPE_CHECKING:
-    import graphviz
-
     from ..data_classes.trace import Trace
-    from .themes import VisualizationTheme
 
 # ---------------------------------------------------------------------------
 # Rolled-aggregate source allowlist rows (design memo 2.3b, r4 shape).
@@ -380,14 +377,35 @@ _BUILTIN_FIELD_SOURCES = {
     "time": "func_duration",
 }
 _BUILTIN_PAYLOAD_SOURCES = frozenset({"magnitude", "grad_norm"})
-SCALAR_BUILTIN_SOURCES = frozenset(_BUILTIN_FIELD_SOURCES) | _BUILTIN_PAYLOAD_SOURCES
+#: Session-time Kineto-join builtin (torchnative W2.3): resolves per-node
+#: joined device nanoseconds through the F27 weak trace registry. Requesting
+#: it on a trace with no joined session refuses typed
+#: (``device_time_unavailable``) -- an explicitly requested inapplicable
+#: column raises with cause and remedy, never silent zeros.
+_BUILTIN_JOIN_SOURCES = frozenset({"device_time"})
+SCALAR_BUILTIN_SOURCES = (
+    frozenset(_BUILTIN_FIELD_SOURCES) | _BUILTIN_PAYLOAD_SOURCES | _BUILTIN_JOIN_SOURCES
+)
 
 #: Legend notes (fixed wording pinned by tests).
 NOTE_NA_UNENCODED = "n/a = unencoded"
 NOTE_VARIES = "varies across passes -- unencoded"
 NOTE_FIRST_PASS_ONLY = "first-pass-only field -- unencoded on rolled nodes"
-NOTE_CONSTANT = "constant value -- midpoint encoding"
+# Degenerate-domain honesty (themes memo build item 11): min==max renders
+# UNENCODED with the note, never mid-ramp -- a uniform mid-ramp paint is a
+# claim ("these differ from an unencoded node") the data cannot support.
+NOTE_CONSTANT = "constant value -- unencoded (degenerate domain)"
 NOTE_CALLABLE = "value from user callable"
+NOTE_PER_PASS_ROLLED = "per-pass field -- unencoded on rolled nodes"
+NOTE_LOG_NONPOSITIVE = "values <= 0 -- unencoded under the log transform"
+
+#: Closed color-transform vocabulary (N5 slice shipped with the lens
+#: roster): ``linear`` min-max, ``rank`` (ordinal; the v1 perf default --
+#: the only measured candidate that cannot degenerate), and scale-invariant
+#: ``log`` (disclosed floor: non-positive values unencode). ``log1p`` is
+#: rejected from the vocabulary outright (measured no-op on seconds-valued
+#: fields; unit-dependent behavior).
+COLOR_TRANSFORM_VOCABULARY = ("linear", "rank", "log")
 
 #: Sequential colormap anchors (Okabe-Ito adjacent, colorblind-safe).
 LIGHT_RAMP = ("#FFFFFF", "#0072B2")
@@ -459,6 +477,20 @@ def interpolate_hex(start: str, end: str, fraction: float) -> str:
 
 
 @dataclass(frozen=True)
+class EncodingChannelRequest:
+    """A color source paired with an explicit transform (lens layer door).
+
+    The lens roster's performance rows pass this as ``color_by`` so the
+    view-resolved member arrives WITH its rank transform; a bare string or
+    callable ``color_by`` keeps the historical linear default.
+    """
+
+    source: Any
+    transform: str = "linear"
+    display_name: str | None = None
+
+
+@dataclass(frozen=True)
 class EncodingChannelSpec:
     """One resolved channel request (option-validation product).
 
@@ -472,12 +504,15 @@ class EncodingChannelSpec:
         The validated user source (token, field name, or callable).
     display_name:
         Human-readable source name for legend disclosure.
+    transform:
+        Value-to-fraction mapping from :data:`COLOR_TRANSFORM_VOCABULARY`.
     """
 
     channel: str
     source_kind: str
     source: Any
     display_name: str
+    transform: str = "linear"
 
 
 @dataclass
@@ -516,6 +551,9 @@ class EncodingState:
     stack_spec: EncodingChannelSpec | None = None
     stack_groups: tuple[tuple[str, tuple[str, ...]], ...] = ()
     stack_notes: list[str] = field(default_factory=list)
+    # Skin-supplied 3-anchor ramp (N4): low/mid/high. None keeps the
+    # historical 2-anchor module ramps.
+    ramp_anchors: tuple[str, str, str] | None = None
 
     def note(self, text: str) -> None:
         """Record a color-channel legend note once."""
@@ -559,9 +597,26 @@ class EncodingState:
 
     @property
     def ramp(self) -> tuple[str, str]:
-        """Return the theme-aware sequential ramp anchors."""
+        """Return the theme-aware sequential ramp endpoints."""
 
+        if self.ramp_anchors is not None:
+            return (self.ramp_anchors[0], self.ramp_anchors[2])
         return DARK_RAMP if self.dark_theme else LIGHT_RAMP
+
+    def ramp_color(self, fraction: float) -> str:
+        """Map a [0, 1] fraction through the (possibly 3-anchor) ramp.
+
+        With skin anchors the mapping is piecewise low->mid->high, so a
+        future diverging map is a mapping change, not a schema change.
+        """
+
+        if self.ramp_anchors is not None:
+            low, mid, high = self.ramp_anchors
+            if fraction <= 0.5:
+                return interpolate_hex(low, mid, fraction * 2.0)
+            return interpolate_hex(mid, high, (fraction - 0.5) * 2.0)
+        start, end = self.ramp
+        return interpolate_hex(start, end, fraction)
 
 
 def _require_channel_spec(state: EncodingState) -> EncodingChannelSpec:
@@ -611,6 +666,31 @@ def resolve_color_by(color_by: Any) -> EncodingChannelSpec | None:
 
     if color_by is None:
         return None
+    if isinstance(color_by, EncodingChannelRequest):
+        if color_by.transform not in COLOR_TRANSFORM_VOCABULARY:
+            raise _encoding_error(
+                f"unknown color transform {color_by.transform!r}; the closed "
+                f"vocabulary is {', '.join(COLOR_TRANSFORM_VOCABULARY)} "
+                "(log1p is rejected by design: unit-dependent, measured no-op)",
+                code="encoding_transform_invalid",
+                remedy="pass one of the closed transform tokens",
+                argument="color_by",
+            )
+        inner = resolve_color_by(color_by.source)
+        if inner is None:
+            raise _encoding_error(
+                "EncodingChannelRequest.source must name an active source",
+                code="encoding_source_invalid",
+                remedy="pass a field name, builtin token, or callable as the source",
+                argument="color_by",
+            )
+        return EncodingChannelSpec(
+            channel=inner.channel,
+            source_kind=inner.source_kind,
+            source=inner.source,
+            display_name=color_by.display_name or inner.display_name,
+            transform=color_by.transform,
+        )
     if callable(color_by) and not isinstance(color_by, str):
         name = getattr(color_by, "__name__", type(color_by).__name__)
         return EncodingChannelSpec(
@@ -689,6 +769,13 @@ def resolve_size_by(size_by: Any) -> EncodingChannelSpec | None:
         )
     if isinstance(size_by, str):
         normalized = size_by.strip().lower().replace("-", "_").replace(" ", "_")
+        if normalized in _BUILTIN_JOIN_SOURCES:
+            return EncodingChannelSpec(
+                channel="size",
+                source_kind="builtin",
+                source=normalized,
+                display_name=normalized,
+            )
         if normalized == SIZE_DIMS_TOKEN:
             return EncodingChannelSpec(
                 channel="size",
@@ -983,15 +1070,18 @@ def _rolled_structural(state: EncodingState, node: Any, field_name: str) -> floa
 
 
 def _rolled_per_pass(state: EncodingState, node: Any, field_name: str) -> float | None:
-    """Per-pass attribute: multipass-safe read degrades to honest n/a."""
+    """Per-pass attribute on a rolled multi-pass node: honest unencode.
 
-    from ..utils._multipass_access import get_multipass_attr
+    A per-pass field has one value PER PASS; a rolled node stands for every
+    pass at once, so any single value (the old pass-1 read) is a claim the
+    node cannot carry -- the measured min:1/max:1 uniform mid-ramp defect
+    (themes memo build item 11). Unencode with the note, never resolve to
+    pass 1.
+    """
 
-    value = get_multipass_attr(node, field_name, None, multipass=None)
-    if value is None:
-        state.note(NOTE_NA_UNENCODED)
-        return None
-    return _coerce_scalar(state, node, value)
+    del node, field_name
+    state.note(NOTE_PER_PASS_ROLLED)
+    return None
 
 
 def _rolled_wrong_type_read(state: EncodingState, node: Any, field_name: str) -> float | None:
@@ -1014,6 +1104,79 @@ _ROLLED_ROW_HANDLERS = {
 }
 
 
+def _node_pass_ops(node: Any) -> tuple[Any, ...]:
+    """Return the op records behind one render node (Layer or Op)."""
+
+    ops = getattr(node, "ops", None)
+    if isinstance(ops, dict):
+        return tuple(ops.values())
+    if isinstance(ops, (list, tuple)):
+        return tuple(ops)
+    return (node,)
+
+
+def _sum_node_device_ns(result: Any, node: Any) -> tuple[int, bool]:
+    """Sum a node's pass-qualified joined device ns; found=False reads n/a."""
+
+    total = 0
+    found = False
+    for op in _node_pass_ops(node):
+        label = getattr(op, "label", None)
+        if label is None:
+            continue
+        value = result.op_device_ns.get(str(label))
+        if value is not None:
+            total += int(value)
+            found = True
+    return total, found
+
+
+def _resolve_device_time(
+    state: EncodingState, trace: Any, node: Any, *, argument: str
+) -> float | None:
+    """Resolve one node's joined device time (torchnative W2.3).
+
+    The value is the sum of exact-attribution device nanoseconds over the
+    node's pass-qualified ops; on rolled multi-pass nodes that is an exact
+    cross-pass total and lands the mandatory aggregation legend line. A node
+    the join attributed no kernels to reads honest n/a, never zero.
+    """
+
+    from ..observability._join import require_availability
+    from ..observability._native_profile import join_result_for
+
+    result = join_result_for(trace)
+    if result is None:
+        from ..observability._errors import ProfilerSessionError
+
+        raise ProfilerSessionError(
+            f"{argument}='device_time' is unavailable: this trace carries no "
+            "Kineto join (device time exists only for captures run under an "
+            "owned profiler session).",
+            code="device_time_unavailable",
+            remedy=(
+                "capture through torchlens.observability.native_profile on a "
+                "CUDA host, then draw the returned result.trace"
+            ),
+        )
+    require_availability(result, needs=f"{argument}='device_time'")
+    total, found = _sum_node_device_ns(result, node)
+    if not found:
+        if argument == "size_by":
+            state.size_note(NOTE_NA_UNENCODED)
+        else:
+            state.note(NOTE_NA_UNENCODED)
+        return None
+    if _is_rolled_multipass(node):
+        line = "device_time: total across passes on rolled nodes"
+        if argument == "size_by":
+            if line not in state.size_aggregation_lines:
+                state.size_aggregation_lines.append(line)
+        elif line not in state.aggregation_lines:
+            state.aggregation_lines.append(line)
+    return float(total)
+
+
 def _resolve_field_on_rolled(state: EncodingState, node: Any, field_name: str) -> float | None:
     """Resolve a FIELD source on a rolled multi-pass Layer per the allowlist."""
 
@@ -1032,6 +1195,18 @@ def _resolve_field_on_rolled(state: EncodingState, node: Any, field_name: str) -
             argument="color_by",
         )
     return _ROLLED_ROW_HANDLERS[row](state, node, field_name)
+
+
+def _resolve_payload_builtin(state: EncodingState, node: Any, token: str) -> float | None:
+    """Resolve one payload-builtin (magnitude/grad_norm) color value."""
+
+    from .overlays import builtin_overlay_value
+
+    value = builtin_overlay_value(node, token)
+    if value is None:
+        state.note(NOTE_NA_UNENCODED)
+        return None
+    return _coerce_scalar(state, node, value)
 
 
 def _resolve_source_value(state: EncodingState, trace: Trace, node: Any) -> float | None:
@@ -1057,14 +1232,12 @@ def _resolve_source_value(state: EncodingState, trace: Trace, node: Any) -> floa
 
     if spec.source_kind == "builtin":
         token = spec.source
-        if token in _BUILTIN_PAYLOAD_SOURCES:
-            from .overlays import builtin_overlay_value
-
-            value = builtin_overlay_value(node, token)
-            if value is None:
-                state.note(NOTE_NA_UNENCODED)
-                return None
-            return _coerce_scalar(state, node, value)
+        if token in _BUILTIN_JOIN_SOURCES or token in _BUILTIN_PAYLOAD_SOURCES:
+            return (
+                _resolve_device_time(state, trace, node, argument="color_by")
+                if token in _BUILTIN_JOIN_SOURCES
+                else _resolve_payload_builtin(state, node, token)
+            )
         field_name = _BUILTIN_FIELD_SOURCES[token]
     else:
         field_name = spec.source
@@ -1290,11 +1463,13 @@ def _resolve_size_source_value(state: EncodingState, trace: Trace, node: Any) ->
         state.size_note(NOTE_CALLABLE)
         return _size_coerce(state)(node, value)
 
+    if spec.source_kind == "builtin":
+        value = _resolve_device_time(state, trace, node, argument="size_by")
+        return None if value is None else _size_coerce(state)(node, value)
+
     if spec.source_kind == "dims":
         shape = _resolve_node_shape(state, node)
-        if shape is None:
-            return None
-        return _non_batch_numel(shape)
+        return None if shape is None else _non_batch_numel(shape)
 
     field_name = spec.source
     if _is_rolled_multipass(node):
@@ -1375,25 +1550,64 @@ def _collect_encoding_values(state: EncodingState, trace: Trace, universe: Any) 
     return raw_values
 
 
+def _transform_fractions(state: EncodingState, raw_values: dict[str, float]) -> dict[str, float]:
+    """Map raw values to [0, 1] fractions under the active transform.
+
+    ``rank`` is ordinal over the DISTINCT sorted values (ties share a rank
+    fraction; invariant under any monotone unit change by construction).
+    ``log`` unencodes non-positive values with the disclosed floor note.
+    """
+
+    transform = state.spec.transform if state.spec is not None else "linear"
+    low = min(raw_values.values())
+    high = max(raw_values.values())
+    if transform == "rank":
+        distinct = sorted(set(raw_values.values()))
+        denominator = max(len(distinct) - 1, 1)
+        rank_of = {value: index / denominator for index, value in enumerate(distinct)}
+        return {key: rank_of[value] for key, value in raw_values.items()}
+    if transform == "log":
+        import math
+
+        positive = {key: value for key, value in raw_values.items() if value > 0}
+        if len(positive) < len(raw_values):
+            state.note(NOTE_LOG_NONPOSITIVE)
+        if not positive:
+            return {}
+        log_low = math.log(min(positive.values()))
+        log_high = math.log(max(positive.values()))
+        span = log_high - log_low
+        if span == 0:
+            return {}
+        return {key: (math.log(value) - log_low) / span for key, value in positive.items()}
+    span = high - low
+    if span == 0:
+        return {}
+    return {key: (value - low) / span for key, value in raw_values.items()}
+
+
 def _normalize_color_values(state: EncodingState, raw_values: dict[str, float]) -> None:
-    """Normalize collected color values into the configured sequential ramp."""
+    """Normalize collected color values into the configured sequential ramp.
+
+    Degenerate domains (min == max) render UNENCODED with the note, never
+    mid-ramp (themes memo build item 11: a measured shipped defect -- a
+    6-pass rolled trace reported min:1/max:1 and painted uniform mid-ramp).
+    """
 
     if not raw_values:
         state.note(NOTE_NA_UNENCODED)
         return
     low = min(raw_values.values())
     high = max(raw_values.values())
-    state.domain = (low, high)
     state.values = raw_values
-    start, end = state.ramp
     if low == high:
         state.note(NOTE_CONSTANT)
-        state.colors = {key: interpolate_hex(start, end, 0.5) for key in raw_values}
         return
-    span = high - low
-    state.colors = {
-        key: interpolate_hex(start, end, (value - low) / span) for key, value in raw_values.items()
-    }
+    state.domain = (low, high)
+    fractions = _transform_fractions(state, raw_values)
+    if not fractions:
+        return
+    state.colors = {key: state.ramp_color(fraction) for key, fraction in fractions.items()}
 
 
 def populate_encoding_state(state: EncodingState, trace: Trace, universe: Any) -> None:
@@ -1442,24 +1656,31 @@ def _color_legend_rows(state: EncodingState) -> list[Any]:
 
     if state.spec is None:
         return []
+    transform_wording = {
+        "linear": "linear min-max",
+        "rank": "rank mapping (ordinal, not ratio)",
+        "log": "log scale (scale-invariant; values <= 0 unencoded)",
+    }[state.spec.transform]
     title_lines = [
         f"color_by: {state.spec.display_name}",
-        "linear min-max",
+        transform_wording,
+        # The coverage line falls out of the same computation (N13 slice):
+        # a legend may never advertise a scale over zero encoded nodes.
+        f"encoded {len(state.colors)} of {state.eligible_count} eligible nodes",
         *state.aggregation_lines,
         *state.notes,
     ]
     rows = [NodeSpec(lines=title_lines, shape="box", style="filled,rounded")]
-    if state.domain is None:
+    if state.domain is None or not state.colors:
         return rows
     low, high = state.domain
-    start, end = state.ramp
     mid = (low + high) / 2.0
     for tag, fraction, value in (("min", 0.0, low), ("mid", 0.5, mid), ("max", 1.0, high)):
         rows.append(
             NodeSpec(
                 lines=[f"{tag}: {_format_domain_value(state, value)}"],
                 shape="box",
-                fillcolor=interpolate_hex(start, end, fraction),
+                fillcolor=state.ramp_color(fraction),
             )
         )
     return rows
@@ -1492,29 +1713,6 @@ def _non_color_legend_rows(state: EncodingState) -> list[Any]:
         ]
         rows.append(NodeSpec(lines=stack_lines, shape="box", style="filled,rounded"))
     return rows
-
-
-def add_channel_legend_to_graphviz(
-    dot: graphviz.Digraph, theme: VisualizationTheme, state: EncodingState
-) -> None:
-    """Emit the channel disclosure legend (memo 2.3 disclosure contract)."""
-
-    from ._render_leaf import _node_spec_to_graphviz_args
-    from .themes import apply_theme_to_spec
-
-    with dot.subgraph(name="cluster_torchlens_encoding_legend") as legend:
-        legend.attr(
-            label="TorchLens encoding",
-            labelloc="t",
-            color=theme.default_border,
-            fontcolor=theme.default_font,
-            style="rounded",
-        )
-        rows = [*_color_legend_rows(state), *_non_color_legend_rows(state)]
-        for index, spec in enumerate(rows):
-            node_args = _node_spec_to_graphviz_args(apply_theme_to_spec(spec, theme))
-            node_args["name"] = f"tl_encoding_legend_{index}"
-            legend.node(**node_args)
 
 
 def _format_size_domain_value(value: float) -> str:
@@ -1561,6 +1759,10 @@ def attach_encoding_state(
             size_spec=size_spec,
             size_scale=size_scale,
             stack_spec=stack_spec,
+            # The skin's 3-anchor ramp (N4). The low anchor is off-ground by
+            # construction: an encoded-lowest node is never invisible (the
+            # measured white-on-white absence defect).
+            ramp_anchors=tuple(theme.ramp) if getattr(theme, "ramp", None) else None,
         ),
     )
 
@@ -1656,15 +1858,3 @@ def raise_encoding_dagua_refusal(channels: tuple[str, ...] = ("color_by",)) -> N
         remedy=f"use the graphviz renderer, or drop {channel_names}",
         argument="vis_renderer",
     )
-
-
-def maybe_add_channel_legend(dot: Any, theme: Any, request: Any) -> None:
-    """Emit the channel disclosure legend per the tri-state visibility rule.
-
-    None (AUTO) or True with an active channel -> channel legend; explicit
-    False is honored (a deliberate act; the docs state the encoding is then
-    undisclosed).
-    """
-
-    if request.encoding is not None and request.show_legend is not False:
-        add_channel_legend_to_graphviz(dot, theme, request.encoding)

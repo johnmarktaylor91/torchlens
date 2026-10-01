@@ -599,6 +599,22 @@ class TraceValidationMixin(_TraceMixinBase):
             from ..capture.structure_only import require_structure_only_capability
 
             require_structure_only_capability(self, "live_replay")
+        # Episode join gate (lane F40c), AFTER the R06 outcome authority:
+        # whole-episode replay is an episode-dependent claim across every
+        # join, so a MEASURED broken join (exogenous or declared crossing)
+        # refuses typed. Narrow by design: unmeasured/legacy episode
+        # artifacts keep their shipped replay behavior.
+        from ..capture._episode_join import refuse_broken_join_claim
+
+        refuse_broken_join_claim(self)
+        # Coupled-episode replay gate (lane F42), beside the join gate: a
+        # COUPLED product's ledger attests one PERTURBED execution, and no
+        # run provider re-arms the capture-time intervention, so no engine
+        # can derive a fresh ledger -- the verdict's refusal arm. Uncoupled
+        # episode products keep their shipped replay behavior.
+        from ..capture._episode_coupling import refuse_coupled_replay
+
+        refuse_coupled_replay(self)
         if self.__dict__.get("_run_truncation_skipped_raw_labels") is not None:
             # L4 3.3.2: a truncated result cannot be re-run (any provider). The
             # poison bit alone does NOT refuse a re-run -- the transaction's

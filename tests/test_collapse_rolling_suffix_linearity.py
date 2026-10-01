@@ -228,6 +228,14 @@ def test_rolled_view_also_shares_one_rolled_layer_sweep(
         collapse=collapse,
     )
 
+    if collapse == "auto" and counts["suffix"] == 0:
+        # F11 (collapse memo D8 unfreeze): auto = the first in-band ladder
+        # point, so this small rolled toy legitimately renders in full --
+        # nothing collapses, so no suffix resolution runs at all. The
+        # one-shared-sweep property this test guards is exercised by the
+        # ``max`` parametrization, where clusters always form.
+        assert counts["map"] <= 1
+        return
     assert counts["suffix"] >= 1
     assert counts["map"] == 1
     assert counts["reachability"] <= rolled_layers

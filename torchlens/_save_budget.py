@@ -923,3 +923,54 @@ def _retained_storage_identity(tensor: torch.Tensor) -> tuple[tuple[Any, ...], i
         total_bytes,
     )
     return aggregate, total_bytes
+
+
+def retained_activation_bytes(ops: Any) -> int:
+    """Return alias-aware physical bytes of the activations actually retained.
+
+    The ONE byte model's aggregate read (F20, brainpipe memo D-17): a saved
+    op contributes the physical storage of what capture actually kept -- the
+    raw payload, the transformed payload, or both -- with each physical
+    storage counted ONCE across the whole trace (dedup-shared and aliased
+    payloads never double-charge). The historical aggregate summed the RAW
+    ``activation_memory`` field for every saved op, over-reporting by the
+    full reduction factor whenever a transform dropped the raw payload
+    (87-190x measured on real models in the sweep's configuration).
+
+    Runs on LIVE payload tensors only (the capture-time accounting seam);
+    a payload-absent saved op (disk-only routes) falls back to its recorded
+    transformed-else-raw metadata size, without alias awareness.
+
+    Parameters
+    ----------
+    ops:
+        Iterable of finished op records.
+
+    Returns
+    -------
+    int
+        Total retained activation bytes.
+    """
+
+    total = 0
+    seen: set[tuple[Any, ...]] = set()
+    for op in ops:
+        if not getattr(op, "has_saved_activation", False) or getattr(op, "is_orphan", False):
+            continue
+        counted_payload = False
+        for payload in (getattr(op, "out", None), getattr(op, "transformed_out", None)):
+            if not isinstance(payload, torch.Tensor) or payload.is_meta:
+                continue
+            counted_payload = True
+            for identity, num_bytes in _retained_storage_identities(payload):
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                total += int(num_bytes)
+        if not counted_payload:
+            transformed_bytes = getattr(op, "transformed_activation_memory", None)
+            if getattr(op, "out", None) is None and transformed_bytes:
+                total += int(transformed_bytes)
+            else:
+                total += int(getattr(op, "activation_memory", 0) or 0)
+    return total

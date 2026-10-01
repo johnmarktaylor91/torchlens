@@ -289,6 +289,17 @@ def _finalize_provider_run(
         divergence_policy,
         unregister_fork=unregister_fork_on_divergence,
     )
+    # Annotations TRAVEL POLICY (foldA D6, lane F40a): every settled product
+    # presents a re-executed forward, so capture-evidence sub-keys (episode
+    # ledger, observer values) are dropped here -- VERIFIED must never coexist
+    # with foreign step evidence. Runs after divergence enforcement so a
+    # raised-and-rolled-back run never scrubs the caller's live trace.
+    # Function-local import: _runnable_execution rebinds this function into
+    # its own globals (_rebind_function), so a module-level name is invisible
+    # at call time.
+    from .capture._annotations_travel import scrub_fresh_execution_annotations
+
+    scrub_fresh_execution_annotations(fork)
     report = _run_report(
         readiness,
         state_source=state_source,

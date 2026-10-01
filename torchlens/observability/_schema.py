@@ -170,9 +170,15 @@ class SiteRecord:
     ended_reason: str | None = None
 
     def __post_init__(self) -> None:
-        """Validate the closed site kinds."""
+        """Validate the closed site kinds.
 
-        _require_token("kind", self.kind, ("module", "param"))
+        ``op`` and ``facet`` are the Route-B tiers (F25): an op site is one
+        fastlog structural op position; a facet site is one declared slice
+        of an op site (e.g. an attention head), its parent recorded in
+        ``module_path`` alongside the facet spelling in ``display_label``.
+        """
+
+        _require_token("kind", self.kind, ("module", "param", "op", "facet"))
 
     def ended(self, step: int, reason: str) -> SiteRecord:
         """Return a copy marking this series ended at ``step`` (D5 drift).

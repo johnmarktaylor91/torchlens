@@ -150,8 +150,12 @@ def test_complete_episode_ledger_rows_and_tokens():
     out = log.output_ops[0].out
     for step, row in enumerate(ledger.rows):
         assert row.status == "complete"
-        assert row.tokens == tuple(int(v) for v in out[:, step].reshape(-1).tolist())
-        assert row.cache_len == 3 + step  # prompt length 3, arithmetic disclosure
+        assert row.step_output == tuple(int(v) for v in out[:, step].reshape(-1).tolist())
+        # Grammar v2 (C07X): the arithmetic cache_len guess is DELETED; the
+        # carried-state witness slots read None (NOT MEASURED) until a lane
+        # actually measures the step-boundary state.
+        assert row.entry_state_digest is None
+        assert row.exit_state_digest is None
         assert row.coord["member_call_index"] == step + 1
 
 
@@ -163,7 +167,9 @@ def test_episode_ledger_rows_are_write_once():
         episode_id="ep-test",
         address="model",
         n_steps=2,
-        token_axis=-1,
+        step_axis=-1,
+        step_output_kind="tokens",
+        step_output_from=None,
         forced_tokens=None,
         escalated_from=None,
         reason=None,
@@ -201,8 +207,8 @@ def test_entry_seed_recorded_and_sampled_episode_reproduces():
     ledger_second = episode_ledger_for(second)
     assert ledger_first is not None and ledger_second is not None
     assert ledger_first.header.entry_seed == 1234 == first.random_seed
-    tokens_first = [row.tokens for row in ledger_first.rows]
-    tokens_second = [row.tokens for row in ledger_second.rows]
+    tokens_first = [row.step_output for row in ledger_first.rows]
+    tokens_second = [row.step_output for row in ledger_second.rows]
     assert tokens_first == tokens_second  # managed recipe: bit-identical episode
 
 
@@ -346,7 +352,7 @@ def test_halted_episode_ledger_discloses_truncation():
     assert ledger.truncated_at_step is not None
     assert ledger.rows[-1].status == "absent"  # declared tail disclosed
     for row in ledger.rows:
-        assert row.tokens is None  # truncated episodes have no output to read
+        assert row.step_output is None  # truncated episodes have no output to read
 
 
 def test_failed_episode_attaches_partial_ledger():

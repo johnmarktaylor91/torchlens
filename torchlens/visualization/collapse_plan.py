@@ -224,6 +224,12 @@ class CollapseScheduleStep:
         plus pass-qualified op labels for ops hidden by operation segments.
     plan:
         Renderer-faithful collapse plan for this step.
+    events:
+        Typed condensation events this step applies on top of the previous
+        step (F11 ladder, collapse memo D8): coalesced no-op events ride the
+        next effective stop, so every event appears on exactly one step.
+        Session-time records (:class:`~.collapse_ladder.CollapseEvent`);
+        never persisted.
     """
 
     t: float
@@ -231,6 +237,7 @@ class CollapseScheduleStep:
     visible_count: int
     collapsed_addresses: frozenset[str]
     plan: CollapsePlan
+    events: tuple[Any, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -448,3 +455,169 @@ def collapse_plan_from_universe(
     if node_pool is not None:
         nodes = [node_pool.setdefault(node, node) for node in nodes]
     return CollapsePlan(nodes=tuple(nodes), context=universe.source_graph.request)
+
+
+# ---------------------------------------------------------------------------
+# Persistable collapse plans (leverage B13): session artifacts that reapply
+# under the guarded site join, refusing or reporting changed cohorts — never
+# label failure, ordinal guessing, or silent replanning.
+# ---------------------------------------------------------------------------
+
+COLLAPSE_PLAN_PAYLOAD_KEY = "tl_collapse_plan_v1"
+
+
+@dataclass(frozen=True)
+class CollapsePlanReapply:
+    """The settled reapply verdict for one persisted plan on one capture.
+
+    ``applicable`` means every structural cohort of the SOURCE capture joined
+    the target capture (corroborated or positional); ``changed_cohorts`` are
+    the refused / one-sided structural keys with their dispositions.
+    """
+
+    applicable: bool
+    changed_cohorts: tuple[tuple[str, str], ...]
+    collapsed_addresses: tuple[str, ...]
+    graph_shape_match: bool
+
+
+def export_collapse_plan(trace: Any, mode: str = "auto") -> dict[str, Any]:
+    """Export one capture's collapse plan as a JSON-safe persistable payload.
+
+    The payload carries the plan's collapsed/visible addresses AND the source
+    capture's full site profile (label->key map, per-call-instance cohort
+    cardinalities, source witnesses), so a later
+    :func:`reapply_collapse_plan` can run the guarded join against a NEW
+    capture without the source trace. Session artifact — its home is a plain
+    JSON file the caller owns, never the tlspec.
+    """
+
+    from ..postprocess._site_join import site_profile
+
+    plan = trace.collapse_plan(mode=mode)
+    profile = site_profile(trace)
+    per_call = [
+        {
+            "module_site": list(cohort[0]),
+            "layer_type": cohort[1],
+            "output_slot": cohort[2],
+            "counts": dict(counts),
+        }
+        for cohort, counts in profile.per_call_counts.items()
+    ]
+    witnesses = {
+        key: [list(witness) if witness is not None else None for witness in values]
+        for key, values in profile.witnesses.items()
+    }
+    addresses: list[str] = []
+    for node in plan.nodes:
+        if isinstance(node, ModuleBox):
+            addresses.append(node.call)
+        elif isinstance(node, RawOp):
+            addresses.append(node.op if isinstance(node.op, str) else str(node.op.label))
+        elif isinstance(node, RepeatFold):
+            addresses.extend(node.members)
+        elif isinstance(node, (OpSegment, ChildSegment)):
+            addresses.extend(node.ops if isinstance(node, OpSegment) else node.members)
+    return {
+        COLLAPSE_PLAN_PAYLOAD_KEY: {
+            "mode": mode,
+            "plan_addresses": addresses,
+            "graph_shape_hash": getattr(trace, "graph_shape_hash", None),
+            "profile": {
+                "keys": dict(profile.keys),
+                "per_call_counts": per_call,
+                "witnesses": witnesses,
+            },
+        }
+    }
+
+
+def _profile_from_payload(payload: dict[str, Any]) -> Any:
+    """Rebuild the persisted source SiteProfile, fail-closed."""
+
+    from ..postprocess._site_join import SiteProfile
+
+    try:
+        profile = payload["profile"]
+        keys = {str(label): str(key) for label, key in profile["keys"].items()}
+        per_call = {
+            (
+                tuple(entry["module_site"]),
+                str(entry["layer_type"]),
+                entry["output_slot"],
+            ): {str(instance): int(count) for instance, count in entry["counts"].items()}
+            for entry in profile["per_call_counts"]
+        }
+        witnesses = {
+            str(key): frozenset(
+                tuple(witness) if witness is not None else None for witness in values
+            )
+            for key, values in profile["witnesses"].items()
+        }
+    except (KeyError, TypeError, ValueError, AttributeError) as exc:
+        raise InvalidArgumentError(
+            "malformed tl_collapse_plan_v1 payload: the persisted site "
+            "profile did not parse, and a torn plan never half-applies.",
+            code="collapse_plan_payload_invalid",
+            remedy="re-export the plan with export_collapse_plan(trace)",
+        ) from exc
+    return SiteProfile(keys=keys, per_call_counts=per_call, witnesses=witnesses)
+
+
+def reapply_collapse_plan(
+    trace: Any, exported: dict[str, Any], *, strict: bool = True
+) -> CollapsePlanReapply:
+    """Reapply one persisted plan on a NEW capture under the guarded join.
+
+    Every structural cohort of the persisted source profile is joined against
+    ``trace``'s live profile. Refused and one-sided cohorts become the
+    CHANGED SET: with ``strict=True`` (default) any change refuses typed
+    (``collapse_plan_cohorts_changed``); ``strict=False`` returns the report
+    for the caller to adjudicate. Labels never enter the decision, ordinals
+    are never guessed, and the plan is never silently replanned.
+    """
+
+    payload = exported.get(COLLAPSE_PLAN_PAYLOAD_KEY)
+    if not isinstance(payload, dict):
+        raise InvalidArgumentError(
+            "not a tl_collapse_plan_v1 payload (missing the versioned key); "
+            "foreign or torn payloads never half-apply.",
+            code="collapse_plan_payload_invalid",
+            remedy="pass the dict returned by export_collapse_plan(trace)",
+        )
+    from ..postprocess._site_join import join_site_profiles, site_profile
+
+    source_profile = _profile_from_payload(payload)
+    target_profile = site_profile(trace)
+    rows = join_site_profiles(source_profile, target_profile)
+    changed: list[tuple[str, str]] = []
+    for key in sorted(set(source_profile.keys.values())):
+        row = rows.get(key)
+        if row is None:
+            changed.append((key, "removed_on_target"))
+        elif not row.joined:
+            changed.append((key, row.verdict.value))
+    for key in sorted(set(target_profile.keys.values()) - set(source_profile.keys.values())):
+        changed.append((key, "added_on_target"))
+    graph_shape_match = payload.get("graph_shape_hash") is not None and payload[
+        "graph_shape_hash"
+    ] == getattr(trace, "graph_shape_hash", None)
+    report = CollapsePlanReapply(
+        applicable=not changed,
+        changed_cohorts=tuple(changed),
+        collapsed_addresses=tuple(payload.get("plan_addresses", ())),
+        graph_shape_match=graph_shape_match,
+    )
+    if strict and changed:
+        raise InvalidArgumentError(
+            f"the persisted collapse plan does not reapply: {len(changed)} "
+            f"structural cohort(s) changed between the captures (first 5: "
+            f"{changed[:5]}). The guarded join refused or one-sided them; "
+            "reapplying anyway would silently fold different structure. "
+            "Re-export the plan on the new capture, or pass strict=False to "
+            "read the changed-set report.",
+            code="collapse_plan_cohorts_changed",
+            remedy="re-export on the new capture, or strict=False for the report",
+        )
+    return report

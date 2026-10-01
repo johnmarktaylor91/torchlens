@@ -1,0 +1,100 @@
+{
+  "$id": "https://torchlens.dev/schemas/torchlens.agent.query_sites.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "artifact": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "data": {
+      "additionalProperties": true,
+      "properties": {
+        "handoff": {
+          "type": "string"
+        },
+        "header": {
+          "additionalProperties": true,
+          "required": [
+            "matches_total",
+            "population_total",
+            "query_ast_version"
+          ],
+          "type": "object"
+        },
+        "load_plan": {
+          "type": "object"
+        },
+        "next": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "rows": {
+          "items": {
+            "additionalProperties": true,
+            "required": [
+              "label",
+              "matched"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "handoff",
+        "header",
+        "rows"
+      ],
+      "type": "object"
+    },
+    "limits": {
+      "type": "object"
+    },
+    "request": {
+      "type": "object"
+    },
+    "schema": {
+      "const": "torchlens.agent.query_sites.v1"
+    },
+    "schema_stability": {
+      "const": "documented-unstable"
+    },
+    "status": {
+      "type": "string"
+    },
+    "torchlens_version": {
+      "type": "string"
+    },
+    "truncation": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "artifact",
+    "data",
+    "limits",
+    "request",
+    "schema",
+    "schema_stability",
+    "status",
+    "torchlens_version",
+    "truncation",
+    "warnings"
+  ],
+  "title": "Structured site discovery over persisted facts",
+  "type": "object"
+}

@@ -207,6 +207,13 @@ MODEL_LOG_FIELD_ORDER = [
     "model_class_qualname",
     "param_hash_quick",
     "param_hash_full",
+    # tlspec v9 root entry-point identity fact (C07X item (iv), foldA D10):
+    # the closed root invocation descriptor "kind:qualified_identity" with
+    # kind in {module_call, bound_method, function_call}. Written
+    # UNCONDITIONALLY on every capture (fail-closed rerun identity gating
+    # can only come from unconditional writes plus refuse-on-absence; F41
+    # joins it to the gate); None only on legacy artifacts.
+    "root_entry_point",
     "input_object_id",
     "input_signature_hash",
     "mark_layer_depths",
@@ -456,6 +463,16 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     # every model op; the F01 log_injections writer lands later with no
     # further version bump. Fail-closed load validation from day one.
     "injection_provenance",
+    # tlspec v9 entry-dark episode-step stamp (C07X / foldB s4.4 item 5):
+    # propagation of the ledger-row episode_step meaning onto the op record.
+    # None on every op today; the F-EPISODE read-axis lane writes it with no
+    # further version bump.
+    "episode_step",
+    # tlspec v9 entry-dark TL-authored-root marker (C07X item (iv), foldA
+    # D11/F41): True only on the root op record of a TL-authored bound-method
+    # wrapper root, disclosing that TorchLens authored the synthetic root.
+    # None on every module-root op; F41 writes it on bound-method captures.
+    "tl_authored_root",
     # Graph info
     "parents",
     "parent_arg_positions",

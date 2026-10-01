@@ -95,7 +95,17 @@ def test_load_extraction_passes_mmap_and_weights_only(
     model = nn.Sequential(nn.Linear(3, 4), nn.ReLU()).eval()
     stimuli = torch.randn(6, 3)
     out_dir = tmp_path / "artifact"
-    extract_dataset(model, stimuli, ["relu"], batch_size=2, output_dir=out_dir, progress=False)
+    # shard_format="pt": the mmap + weights_only contract is the .pt codec's
+    # (v2 defaults to safetensors; .pt stays writable by explicit opt-out).
+    extract_dataset(
+        model,
+        stimuli,
+        ["relu"],
+        batch_size=2,
+        output_dir=out_dir,
+        progress=False,
+        shard_format="pt",
+    )
 
     seen_kwargs: list[dict[str, object]] = []
     real_torch_load = torch.load
@@ -368,7 +378,8 @@ def test_gpt2_class_mapping_batch_derivation_is_exact() -> None:
     """
 
     transformers = pytest.importorskip("transformers")
-    from torchlens.dataset_extraction import _correct_batch_positions
+    from torchlens._extraction.engine import _correct_envelope_positions
+    from torchlens.dataset_extraction import BatchEnvelope
 
     torch.manual_seed(0)
     config = transformers.GPT2Config(
@@ -383,10 +394,18 @@ def test_gpt2_class_mapping_batch_derivation_is_exact() -> None:
 
     ids = torch.tensor([[0, 0, 7, 8, 9], [0, 1, 2, 3, 4]])
     mask = torch.tensor([[0, 0, 1, 1, 1], [0, 1, 1, 1, 1]])
-    batch = {"input_ids": ids, "attention_mask": mask}
+    envelope = BatchEnvelope(
+        args=(),
+        kwargs={"input_ids": ids, "attention_mask": mask},
+        row_count=2,
+        mask=mask,
+        disclosure={"kind": "test"},
+    )
 
     with pytest.warns(TorchLensWarning, match="derived position_ids"):
-        corrected = _correct_batch_positions(model, batch, 0, {})
+        corrected_envelope, source = _correct_envelope_positions(model, envelope, 0, {})
+    assert source == "derived"
+    corrected = dict(corrected_envelope.kwargs)
     assert torch.equal(corrected["position_ids"], (mask.long().cumsum(-1) - 1).clamp(min=0))
 
     with torch.no_grad():

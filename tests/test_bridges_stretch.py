@@ -288,25 +288,11 @@ def test_dialz_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     assert payload["result"]["count"] == 2
 
 
-def test_lit_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
-    """LIT bridge returns a model wrapper with LIT-shaped custom_methods."""
-
-    class FakeLitModel:
-        """LIT base model fixture."""
-
-    _model, _x, log = _bridge_log()
-    lit_model_module = _module("lit_nlp.api.model", Model=FakeLitModel)
-    lit_api_module = _module("lit_nlp.api", model=lit_model_module)
-    monkeypatch.setitem(sys.modules, "lit_nlp", _module("lit_nlp", api=lit_api_module))
-    monkeypatch.setitem(sys.modules, "lit_nlp.api", lit_api_module)
-    monkeypatch.setitem(sys.modules, "lit_nlp.api.model", lit_model_module)
-
-    payload = tl.bridge.lit.model(log, name="fixture")
-
-    assert payload["schema"] == "torchlens.lit_model.v1"
-    assert payload["model"].input_spec()
-    assert payload["model"].output_spec()
-    assert payload["model"].predict([{}])[0]["num_layers"] == len(log.layer_list)
+# The former mock-based LIT contract test is deliberately GONE (lane F31,
+# M(lit) item 2 "stop lying"): it mocked the entire lit_nlp module tree, so it
+# passed green while real LIT 1.3.1 rejected the shipped wrapper at LitApp
+# construction (round-2 card VQ1). The replacement contract tests live in
+# tests/test_lit_bridge_*.py and run against REAL lit_nlp types.
 
 
 def test_compat_shims_contract(monkeypatch: pytest.MonkeyPatch) -> None:

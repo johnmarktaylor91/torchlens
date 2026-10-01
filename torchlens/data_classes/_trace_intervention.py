@@ -64,6 +64,34 @@ class _DoTransaction(NamedTuple):
 class TraceInterventionMixin(_TraceMixinBase):
     """``Trace`` intervention surface: spec save/load, fork, replay, and rerun."""
 
+    @property
+    def injected_ops(self: "Trace") -> tuple[Any, ...]:
+        """Injected-op records from ``log_injections=True`` hooks (F01 stage 1).
+
+        The injected half of the query split: computation performed INSIDE
+        intervention hooks, recorded as anchored ``InjectedOp`` records
+        clustering under their intervention (never inside the model's module
+        hierarchy). Empty tuple when the option was never armed or no hook
+        executed torch calls. Session-only at stage 1 (save refuses typed,
+        naming lane F44). Spelling DOCUMENTED-UNSTABLE.
+        """
+
+        from ..intervention.injection import injected_ops
+
+        return injected_ops(self)
+
+    @property
+    def model_ops(self: "Trace") -> tuple[Any, ...]:
+        """The MODEL half of the injections query split (F01 stage 1).
+
+        Exactly the trace's ordinary executed op records (``layer_list``);
+        injected ops never enter this family, the label counters, or the
+        site-key cohort ordinals, so this split is a disclosure, not a
+        filter. Spelling DOCUMENTED-UNSTABLE.
+        """
+
+        return tuple(self.layer_list)
+
     def save_intervention(
         self: "Trace",
         path: str | Path,
@@ -356,6 +384,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         from ..intervention.hooks import expand_facet_hook_entries
 
         entries = expand_facet_hook_entries(self, entries)
+        self._refuse_chunked_batch_coupling(entries)
         for entry in entries:
             self._validate_intervention_site(entry.site_target, strict=strict)
         spec = self._ensure_intervention_spec()
@@ -397,6 +426,42 @@ class TraceInterventionMixin(_TraceMixinBase):
         )
         self._last_hook_handle_ids = tuple(handle_ids)
         return HookHandle(self, tuple(handle_ids), confirm_mutation=confirm_mutation)
+
+    def _refuse_chunked_batch_coupling(self: "Trace", entries: list[Any]) -> None:
+        """Refuse batch-coherent edits on a chunked-forward capture (D34).
+
+        The capture door already refuses ``chunk_size`` with ``hooks=`` /
+        ``intervene=``; the surviving hole is a batch-coherent helper applied
+        in REPLAY to a trace whose capture ran in forward chunks: the hook
+        would see one CHUNK and permute or average it as if it were the whole
+        batch -- a silently wrong experiment. Whole-batch visibility is not
+        provable from the chunk metadata in v1, so the guard refuses typed.
+        An ordinary (unchunked) minibatch is a real batch and stays legal.
+
+        Parameters
+        ----------
+        entries:
+            Normalized hook entries about to attach.
+        """
+
+        if not getattr(self, "chunked_forward", False):
+            return
+        for entry in entries:
+            helper = getattr(entry, "helper_spec", None)
+            if helper is None:
+                continue
+            if dict(helper.metadata).get("batch_coherent"):
+                raise InvalidArgumentError(
+                    f"edit {helper.helper_name!r} reads or exchanges the WHOLE "
+                    "batch at fire time, but this trace was captured in forward "
+                    "chunks (chunked_forward=True): each fire would see one "
+                    "chunk and treat it as the full batch",
+                    code="chunked_replay_batch_coupling",
+                    remedy="re-capture without chunk_size for whole-batch "
+                    "edits, or apply a per-row edit (resample_rows_from) whose "
+                    "value never couples rows",
+                    argument="hooks_or_site",
+                )
 
     def remove(self: "Trace") -> None:
         """Remove the most recent legacy-returned hook attachment.
@@ -539,6 +604,29 @@ class TraceInterventionMixin(_TraceMixinBase):
 
         return _trace_edge_records(self)
 
+    def _settle_selection_do(
+        self: "Trace", txn: "_DoTransaction", selected_engine: str, mutation_kind: str
+    ) -> None:
+        """Record a leaf-site selection edit and quarantine episode evidence.
+
+        Selection edits propagate (or deliberately do not) inside the
+        mutation step; no hook targets exist to push. A non-staged edit
+        perturbed this product's values, so inherited episode step evidence
+        no longer describes it (lane F42).
+        """
+
+        staged_only = selected_engine == "set_only" and mutation_kind not in (
+            "selection_replayed",
+            "selection_set",
+        )
+        self._record_do_intervention_event(txn, status=None, staged_only=staged_only)
+        if not staged_only:
+            from ..capture._episode_coupling import (
+                quarantine_episode_after_perturbed_replay,
+            )
+
+            quarantine_episode_after_perturbed_replay(self)
+
     def do(
         self: "Trace",
         hooks_or_site: Any,
@@ -576,6 +664,13 @@ class TraceInterventionMixin(_TraceMixinBase):
 
         from ..intervention.errors import EngineDispatchError
 
+        if type(hooks_or_site).__name__ == "SiteTable":
+            # find_sites() output is a first-class address (leverage B3/NEW-4):
+            # the zero-match refusal recommends find_sites, so its result must
+            # be accepted here, lowered to the exact resolved site labels.
+            from ..ir.selector_eval import normalize_selector_like
+
+            hooks_or_site = normalize_selector_like(hooks_or_site, lifecycle="live")
         intervention_options = merge_intervention_options(intervention=intervention)
         engine_value = intervention_options.engine
         confirm_mutation_value = intervention_options.confirm_mutation
@@ -630,17 +725,10 @@ class TraceInterventionMixin(_TraceMixinBase):
         )
 
         if (
-            mutation_kind in ("selection_replayed", "selection_set")
+            mutation_kind in ("selection_replayed", "selection_set", "region_replayed")
             or selected_engine == "set_only"
         ):
-            # Leaf-site selection edits propagate (or deliberately do not)
-            # inside the mutation step; no hook targets exist to push.
-            self._record_do_intervention_event(
-                txn,
-                status=None,
-                staged_only=selected_engine == "set_only"
-                and mutation_kind not in ("selection_replayed", "selection_set"),
-            )
+            self._settle_selection_do(txn, selected_engine, mutation_kind)
             return self
         try:
             if selected_engine == "replay":
@@ -657,6 +745,11 @@ class TraceInterventionMixin(_TraceMixinBase):
             self._record_do_intervention_event(txn, status="error", error=repr(exc))
             raise
         self._record_do_intervention_event(txn, status=None)
+        # Lane F42: the push/rerun replayed a perturbed cone -- inherited
+        # episode step evidence no longer describes the edited product.
+        from ..capture._episode_coupling import quarantine_episode_after_perturbed_replay
+
+        quarantine_episode_after_perturbed_replay(result)
         return result
 
     def _record_do_intervention_event(
@@ -711,6 +804,23 @@ class TraceInterventionMixin(_TraceMixinBase):
                 for rule in rules
                 if str(rule["action"]) not in fired_action_reprs
             )
+        elif self._is_selection_batch(hooks_or_site):
+            # One transactional envelope for the whole batch (D33): per-pair
+            # edits named in order, plus the kind-specific staged-store slots
+            # disclosure so cross-kind completion needs no schema change.
+            rules = ()
+            edit_names = tuple(
+                str(
+                    getattr(
+                        pair_edit,
+                        "helper_name",
+                        getattr(pair_edit, "__name__", type(pair_edit).__name__),
+                    )
+                )
+                for _sel, pair_edit in hooks_or_site
+            )
+            selection_repr = " ; ".join(repr(sel) for sel, _pair_edit in hooks_or_site)
+            zero_fire_rule_ids = ()
         else:
             rules = ()
             edit_name = getattr(
@@ -730,6 +840,14 @@ class TraceInterventionMixin(_TraceMixinBase):
         extra: dict[str, Any] = {}
         if staged_only:
             extra["staged_only"] = True
+        if self._is_selection_batch(hooks_or_site):
+            extra["selection_batch"] = {
+                "pairs": len(hooks_or_site),
+                "kinds": ["ACT"] * len(hooks_or_site),
+                # Kind-specific staged-store slots (D33): carried NOW so the
+                # OPEN cross-kind completion item needs no schema change.
+                "staged_stores": {"act": len(hooks_or_site), "param": 0, "edge": 0},
+            }
         record_intervention_event(
             self,
             lane="set_only" if engine == "set_only" else engine,  # type: ignore[arg-type]
@@ -919,6 +1037,20 @@ class TraceInterventionMixin(_TraceMixinBase):
             )
             return "attach_hooks", tuple(handle.handle_ids)
 
+        # A RegionTarget (F01) is the region-as-a-unit door: the replay
+        # lowering substitutes the region's derived exit values without
+        # replaying the interior. Distinct from the TraceSlice lift below,
+        # which keeps its shipped member-site family semantics. sys.modules
+        # gate keeps ordinary do() free of the regions import.
+        regions_module = sys.modules.get("torchlens.intervention.regions")
+        if regions_module is not None and isinstance(hooks_or_site, regions_module.RegionTarget):
+            self._warn_if_root_mutation(confirm_mutation=confirm_mutation)
+            return (
+                regions_module.apply_region_do(
+                    self, hooks_or_site, value_or_hook, engine=engine, strict=strict
+                ),
+                (),
+            )
         # A TraceSlice targets its member family: lift it to the whole-site
         # QUERY (re-resolved on THIS trace by site name, so a slice built on
         # the source log addresses the same sites on a fork). sys.modules
@@ -926,6 +1058,20 @@ class TraceInterventionMixin(_TraceMixinBase):
         slice_module = sys.modules.get("torchlens.trace_slice")
         if slice_module is not None and isinstance(hooks_or_site, slice_module.TraceSlice):
             hooks_or_site = hooks_or_site.__selection__()
+        if self._is_selection_batch(hooks_or_site):
+            self._warn_if_root_mutation(confirm_mutation=confirm_mutation)
+            if value_or_hook is not None:
+                raise InvalidArgumentError(
+                    "do([(selection, edit), ...], edit) conflicts: the batch "
+                    "pairs already carry their edits, so a second edit "
+                    "argument has nothing to bind to",
+                    code="selection_batch_pair_invalid",
+                    remedy="pass only the (selection, edit) pair list",
+                    argument="value_or_hook",
+                )
+            return self._apply_selection_batch_do(
+                hooks_or_site, engine=engine, strict=strict, direction=direction
+            )
         if isinstance(hooks_or_site, (Selection, ResolvedSelection)):
             self._warn_if_root_mutation(confirm_mutation=confirm_mutation)
             return self._apply_selection_do(
@@ -935,16 +1081,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 strict=strict,
                 direction=direction,
             )
-        if engine == "set_only" and value_or_hook is not None:
-            self.set(
-                hooks_or_site,
-                value_or_hook,
-                direction=direction or "forward",
-                strict=strict,
-                confirm_mutation=confirm_mutation,
-            )
-            return "set", ()
-        if value_or_hook is not None and not callable(value_or_hook):
+        if value_or_hook is not None and (engine == "set_only" or not callable(value_or_hook)):
             self.set(
                 hooks_or_site,
                 value_or_hook,
@@ -961,6 +1098,129 @@ class TraceInterventionMixin(_TraceMixinBase):
             confirm_mutation=confirm_mutation,
         )
         return "attach_hooks", tuple(handle.handle_ids)
+
+    @staticmethod
+    def _is_selection_batch(value: Any) -> bool:
+        """Whether a ``do()`` input is a selection-batch pair list (D33).
+
+        A non-empty list/tuple of 2-item pairs with at least one explicit
+        ``Selection``/``ResolvedSelection``/``TraceSlice`` in a pair's first
+        slot. Legacy ``(site, hook)`` pair lists (selector sites) keep the
+        shipped door untouched.
+        """
+
+        if not isinstance(value, (list, tuple)) or not value:
+            return False
+        if not all(isinstance(item, (list, tuple)) and len(item) == 2 for item in value):
+            return False
+        from ..selection import ResolvedSelection, Selection
+
+        slice_module = sys.modules.get("torchlens.trace_slice")
+        slice_type = slice_module.TraceSlice if slice_module is not None else ()
+        return any(
+            isinstance(item[0], (Selection, ResolvedSelection, slice_type)) for item in value
+        )
+
+    def _apply_selection_batch_do(
+        self: "Trace",
+        pairs: Any,
+        *,
+        engine: str,
+        strict: bool,
+        direction: str | None,
+    ) -> tuple[str, tuple[str, ...]]:
+        """Apply a selection-batch ``do([(selection, edit), ...])`` (D33, v1).
+
+        ONE atomic transaction: every pair resolves and derives its masked
+        edit first, ALL hooks attach together (a refused site mid-plan
+        detaches everything already attached), the per-pair ACT audit rows
+        append only after every attachment succeeded, and the caller's single
+        engine pass propagates the whole batch in ONE replay. Donor sharing
+        across clauses is plan OBJECT identity (D8): one ``SamplingPlan``
+        reused in several pairs carries one content-digest ``donor_group_id``;
+        distinct equal-content plan objects are disambiguated here by the
+        batch normalizer (``assign_batch_donor_groups``, deterministic
+        clause-order suffixes) so kwargs coincidence never shares a group
+        while a rerun of the same declared batch still reproduces its draws.
+
+        v1 scope (capability-reported, never silently narrowed): ACT
+        selections on interior sites only. Cross-kind batches (PARAM/EDGE)
+        refuse typed -- edge substitution commits and pushes inside its
+        per-entry loop today, so cross-kind atomicity does not exist to be
+        reused; the completion item stays OPEN and is never relabeled
+        complete. Leaf sites (inputs/buffers) commit-then-propagate per site
+        and cannot join one hook transaction yet.
+
+        Returns
+        -------
+        tuple[str, tuple[str, ...]]
+            ``("selection_hooks", attached_handle_ids)``.
+        """
+
+        from ..selection import ResolvedSelection, Selection, _lift, build_selection_do_plan
+
+        slice_module = sys.modules.get("torchlens.trace_slice")
+        slice_type = slice_module.TraceSlice if slice_module is not None else ()
+        normalized: list[tuple[Any, Any]] = []
+        kinds: list[str] = []
+        for index, (selection, edit) in enumerate(pairs):
+            if isinstance(selection, slice_type):
+                selection = selection.__selection__()
+            if not isinstance(selection, (Selection, ResolvedSelection)):
+                raise InvalidArgumentError(
+                    f"selection-batch do() pair {index} carries a "
+                    f"{type(selection).__name__} target; a batch mixing "
+                    "Selections with legacy selector sites would run two "
+                    "different engines under one call",
+                    code="selection_batch_pair_invalid",
+                    remedy="make every pair's first slot a Selection (lift "
+                    "producers with .__selection__()), or use the legacy "
+                    "(site, hook) list without Selections",
+                    argument="hooks_or_site",
+                )
+            lifted = _lift(selection)
+            kind = getattr(lifted, "kind", "ACT")
+            kinds.append(kind)
+            normalized.append((selection, edit))
+        non_act = [f"pair {index}: {kind}" for index, kind in enumerate(kinds) if kind != "ACT"]
+        if non_act:
+            raise InvalidArgumentError(
+                "selection-batch do() v1 is ACT-only; this batch carries "
+                f"[{', '.join(non_act)}]. Capability report: ACT selections "
+                "attach as ONE transaction; PARAM and EDGE selections commit "
+                "and push inside their own doors today, so a cross-kind batch "
+                "cannot be made atomic yet (the completion item is OPEN, not "
+                "silently narrowed)",
+                code="selection_batch_cross_kind",
+                remedy="apply PARAM/EDGE selections in their own do() calls, one per kind",
+                argument="hooks_or_site",
+            )
+        from ..intervention.stochastic import assign_batch_donor_groups
+
+        normalized = assign_batch_donor_groups(normalized)
+        plans: list[tuple[Any, list[dict[str, Any]], dict[str, Any]]] = []
+        for index, (selection, edit) in enumerate(normalized):
+            resolved, plan, audit = build_selection_do_plan(self, selection, edit)
+            leaf_sites = [item["op"].label for item in plan if item["is_leaf"]]
+            if leaf_sites:
+                raise InvalidArgumentError(
+                    f"selection-batch do() pair {index} addresses leaf sites "
+                    f"{leaf_sites!r} (inputs/buffers): leaf edits commit and "
+                    "propagate per site and cannot join one hook transaction "
+                    "in v1",
+                    code="selection_batch_leaf_unsupported",
+                    remedy="apply leaf-site edits through single-selection "
+                    "do() calls; batch interior sites only",
+                    argument="hooks_or_site",
+                )
+            plans.append((resolved, plan, audit))
+        all_hook_items = [item for _resolved, plan, _audit in plans for item in plan]
+        attached = self._attach_selection_plan_hooks(
+            all_hook_items, strict=strict, direction=direction
+        )
+        for _resolved, _plan, audit in plans:
+            self.intervention_audit.append(audit)
+        return "selection_hooks", attached
 
     def _apply_selection_do(
         self: "Trace",
@@ -1272,11 +1532,63 @@ class TraceInterventionMixin(_TraceMixinBase):
         Raises
         ------
         ModelMismatchError
-            If available class or weight-fingerprint evidence differs.
+            Fail-closed on the root entry-point fact (absent fact or a
+            non-``module_call`` root, F41), then if available class or
+            weight-fingerprint evidence differs.
         """
 
         from ..intervention.errors import ModelMismatchError
         from ..user_funcs import _fingerprint_model_weights, _qualname_for_model
+
+        # F41 (foldA D10/D11): the root entry-point fact joins this gate
+        # FAIL-CLOSED -- it is written unconditionally on every capture, so
+        # absence (a legacy artifact) refuses rather than silently skipping,
+        # and a non-module_call root refuses rather than re-running
+        # ``forward`` under a capture of a different entry point (supplying
+        # ``owner`` for a capture of ``owner.generate`` would pass the
+        # class+weights checks and run ``__call__`` under a report that can
+        # say verified -- the silent-wrongness door the ruling closes).
+        # Interim posture: bound-method captures refuse rerun/append; never
+        # widened past the ruling.
+        root_fact = getattr(self, "root_entry_point", None)
+        if root_fact is None:
+            raise ModelMismatchError(
+                "rerun/append identity gate is fail-closed on the root "
+                "entry-point fact, and this trace carries none (a legacy "
+                "artifact saved before the fact was written unconditionally). "
+                "The gate cannot prove the supplied model is the captured "
+                "entry point. Remedy: re-capture with a current TorchLens "
+                "(every capture writes Trace.root_entry_point), or use the "
+                "replay engine, which re-executes recorded ops and needs no "
+                "live model",
+                code="root_entry_point_unavailable",
+            )
+        root_kind = str(root_fact).partition(":")[0]
+        if root_kind != "module_call":
+            bound_hint = (
+                "this capture's root is the bound method "
+                f"{str(root_fact).partition(':')[2]!r}, and re-running a "
+                "supplied module would execute forward/__call__ -- a "
+                "DIFFERENT entry point -- under a report that could claim "
+                "fidelity. Bound-method captures refuse rerun/append in this "
+                "release (interim posture, foldA D11). "
+                if root_kind == "bound_method"
+                else (
+                    f"this capture's root entry point is {root_fact!r}, which "
+                    "rerun cannot re-execute (rerun runs the supplied "
+                    "module's forward). "
+                )
+            )
+            raise ModelMismatchError(
+                "rerun/append cannot re-execute this capture's entry point: "
+                + bound_hint
+                + "Remedy: use the replay engine (re-executes recorded ops, "
+                "no live model), or re-capture from the plain module root "
+                "(tl.trace(model, ...)) if module-forward rerun is what you "
+                "want",
+                code="rerun_entry_point_unsupported",
+                root_entry_point=str(root_fact),
+            )
 
         expected_class = getattr(self, "model_class_qualname", None)
         actual_class = _qualname_for_model(model)

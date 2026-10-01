@@ -119,9 +119,42 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # 155 -> 156 (below): C02's sound stats kernel routes per dtype family
     # and per gate (_float_kernel/run_kernel/_distribution_zone) -- the
     # branching IS the per-family policy table; deliberate, reviewed.
-    "C901": 455,
-    "PLR0911": 196,
-    "PLR0912": 264,
+    # 455->464 / 196->198 / 264->267 (2026-08-28 megasprint F06 attribution):
+    # the attrib panel memo mandates SINGLE-owner method bodies whose branch
+    # structure IS the specified contract -- integrated_gradients (chunked
+    # step runner + audit + endpoints), text() (task-aware baseline ladder +
+    # dual-criterion stopping), _resolve_baseline/_resolve_target (closed
+    # per-spelling dispatch with per-branch disclosure), occlusion_map
+    # (geometry + budget + scatter), _layer_path_run (memo D16-D18 stacking
+    # over per-firing capture). Splitting these to satisfy the number is the
+    # named confetti-splitting defect (engineering rules); each body is a
+    # cohesive state machine with its decision anchor cited inline.
+    # 464->463 (2026-08-29 C07X fix cycle): the T58 red was C07X's own two
+    # new episode-ledger sites (__post_init__ 13, from_payload 12); fixed by
+    # table-driving the closed-vocabulary checks and deleting from_payload's
+    # literal duplicates of __post_init__ validation (same messages, still
+    # fail-closed). Net vs the pre-C07X 464: one pre-existing site had
+    # independently burned down, so the true count is 463.
+    "C901": 463,
+    # 198->199 (2026-08-28 T48 reconcile): the F06 lane measured 196->198 on
+    # its own baseline; the landed span added one PLR0911 site independently,
+    # so the union measured at merge is 199 (F06's three sites are
+    # _sampling.py + _text.py x2, covered by the F06 note above).
+    # 2026-08-29 F10 T67f re-reconcile: the T66 union raise (199->201) is
+    # PAID DOWN, not held -- payload_core merged its twin unsaved returns
+    # and distribution_relation folded its lookup-failure arms into the
+    # fail_open chokepoint reads; the F10 contribution stays at the landed
+    # train's 199.
+    # 199->200 (2026-08-28 megasprint F16, stated reason): cardtree's
+    # ``_render_node`` is the closed per-kind CardNode leaf serializer --
+    # one return per node kind by design (essential dispatch, the
+    # engineering-rules carve-out); F16's CardHtml kind adds the seventh.
+    # Splitting one branch out to dodge the count would be the named
+    # confetti-splitting defect. Union measured at merge atop F06's 199.
+    # 2026-08-29 F10 T71d re-reconcile: the union is F16's 200 (its stated
+    # site) with F10's paydown holding; measured at the merged tree.
+    "PLR0911": 200,
+    "PLR0912": 267,
     # 422->423 (same L8 settle): _build_funcol_payload carries the C0 payload
     # argument surface (mirrors the ledgered _build_payload in collectives).
     # 423->425 (2026-08-19 semantic-builds lane): the two new PUBLIC entry
@@ -152,10 +185,103 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # instead of ledgered -- plumbing knobs bundle into WatchSettings and the
     # per-step optimizer-truth disclosures into StepTruth (both frozen
     # dataclasses). Ceiling stays at the pre-lane 428.
-    "PLR0913": 428,
+    # 428 -> 430 (F24 observe): two PUBLIC multi-knob diagnostic entry points
+    # (check_determinism's 7 documented keyword options, isolated_capture's
+    # prepare/trace_kwargs seams) -- an argument object would be a worse API
+    # for documented keyword knobs; every internal F24 helper was refactored
+    # under the limit instead.
+    # 428->429 (2026-08-28 megasprint F31): the ONE new site is the public
+    # LIT factory `tl.bridge.lit.model()` -- 12 keyword construction knobs
+    # whose spellings the LIT-panel memo rules individually (D1-D11,
+    # D18-D19); bundling user-facing knobs into a config object is a UX
+    # regression the UI/naming sprint owns, not a lint fix. The lane's two
+    # INTERNAL offenders (both `_package_rows` assemblers) were refactored
+    # below the ceiling instead (redundant param dropped / products bundled
+    # into the frozen `_GenerationProducts`), per the C06 precedent.
+    # 2026-08-28 megasprint F09 (fix cycle): the lane's two public offenders
+    # were refactored below the ceiling instead of ledgered (C06 house
+    # pattern) -- tl.report.mfu's three D16/D17 disclosure knobs bundle into
+    # the frozen MfuProvenance dataclass (validation unchanged at the mfu()
+    # door, so the typed refusals still fire), and the D9 evidence= knob
+    # moved from build_profile to TraceProfile.to_pandas(evidence=) -- the
+    # export door -- so build_profile keeps its historical five-argument
+    # view surface. The lane's PRIVATE offenders (_remainder,
+    # _assemble_level_rows, _rollup_row) were refactored in-lane. F09 adds
+    # NO ledger raise; the ceiling stays at F31's granted 429.
+    # 429->440 (2026-08-28 megasprint F06 attribution): the kit's public
+    # keyword-only surfaces are the panel-specified API shapes (noise_tunnel's
+    # two-route binder args, gradient_shap's pool/draw-bank knobs, text()'s
+    # baseline/ladder knobs, occlusion_map's geometry, sensitivity's ladder) --
+    # the memo's D1 ruling KILLED the kwarg splat, so every setting is an
+    # explicit named parameter by design; internal helpers thread the same
+    # explicit state (B023 discipline binds loop state as keyword defaults).
+    # F06's +11 lands atop F31's granted 429 (T52-tip reconcile); the ceiling
+    # is the UNION measured at merge, never a hand-derived subtotal.
+    # 440->441 (2026-08-28 megasprint F26): torchlens.trackers.watch() is the
+    # ONE new ledgered site -- the flat keyword-only attach surface is the
+    # trackers panel's designed public shape (memo 3.13: to=/signals=/select=/
+    # optimizer=/step=/every=/...); packing user knobs into a sub-object to
+    # dodge the count would be a worse surface (the same reason as the
+    # options-factory rows above). The lane's session plumbing was refactored
+    # below the ceiling instead (_SessionConfig bundle; _settle_step reads
+    # entry state off the session). F26's +1 lands atop the landed 440
+    # (T59-tip reconcile); the value is the union measured at merge.
+    # 2026-08-28 megasprint F19: 428 -> 429 on the lane's own baseline for
+    # exactly ONE site -- tl.transforms.srp()'s six parameters are the
+    # transforms memo's PINNED placeholder surface (memo section 6 spells the
+    # signature verbatim); spec-drives-code beats the arg count. The lane's
+    # three other new offenders were refactored below the ceiling instead
+    # (range-typed column blocks; MatrixHeader for the digest facts).
+    # 441->442 (2026-08-29 T66 reconcile): the F19 lane's +1 (the srp() row
+    # above) lands atop the landed 441 (F31/F06/F26 rows); the value is the
+    # union measured at merge, never a hand-derived subtotal (measured 442,
+    # pinned ruff, isolated mode, torchlens/ scope). The F10-side T66
+    # reconcile reached the same 442 union independently (both sides fit
+    # 441 alone); re-verified exact on the T67f re-reconcile, no slack.
+    # 2026-08-29 T67f re-reconcile (F24): the landed 442 is the MIN of the
+    # two branch rows (F24's earlier 443 vs the landed 442) and ceilings only
+    # burn DOWN, so F24 pays its own diff down instead of raising: of the
+    # F24-observe pair ledgered above, isolated_capture's pass-through
+    # trace_kwargs= dict became **trace_kwargs (variadics are not parameters;
+    # the seam is a pure tl.trace pass-through, so the splat IS the natural
+    # spelling) -- only check_determinism's documented 9-knob public door
+    # stays ledgered. Measured 442 on the merged tree (pinned ruff, isolated
+    # mode, torchlens/ scope; sprint tip alone measured 441).
+    # 2026-08-29 megasprint F16 (T67f re-reconcile, MIN law): F16's prior +2
+    # stated-reason row (the offline-report doors tl.export.html and
+    # export._report.write_report at 443) is WITHDRAWN -- the conflicted row
+    # resolves to the MIN of both sides and F16 paid its own two sites down
+    # below the ceiling instead (C06 house pattern): the content doors
+    # arrays=/graph= stay flat keywords and the emission plumbing
+    # (share_safe/deterministic/vis_call_depth + thumbnail budgets) bundles
+    # into the frozen tl.export.ReportOptions dataclass. Measured 442 at the
+    # merged tree (pinned ruff, isolated mode, torchlens/ scope).
+    # 2026-08-29 F10 T71d re-reconcile: the union's +1 (envelope_line's
+    # 8-arg affix surface in stats/_envelope.py) is PAID DOWN, not held --
+    # the ``[kind position function]`` affix is ONE grammar object in the
+    # memo 4.2 line, so it travels as the single ``bracket=`` triple, and
+    # the dead ``max_width=`` parameter (documented a guard the body never
+    # implemented) is deleted; ceiling stays 442, measured at the merged
+    # tree.
+    # 442 -> 443 (2026-08-29 T73b re-reconcile, F24): both sides hold 442
+    # alone but their remaining ledgered sites are DISJOINT -- F24's one
+    # T67f-adjudicated site (check_determinism's documented 9-knob public
+    # door in debug/_determinism.py; its sibling isolated_capture site was
+    # already paid down to **trace_kwargs at T67f) plus the landed T73b
+    # train's own 442 union to 443 on the merged tree. Site-diffed against
+    # BOTH parents (the +1 vs the sprint tip is exactly that one door); the
+    # T66 house rule applies -- the value is the union measured at merge,
+    # never a hand-derived subtotal -- and a reconcile lane does not
+    # redesign a documented public door to dodge a +1. Measured 443 (pinned
+    # ruff, isolated mode, torchlens/ scope).
+    "PLR0913": 443,
     # 152->155 (same L8 settle): wrapped_funcol + the criterion-3 census body
     # + capture_completeness_witness gained reviewed statements with plane-P.
-    "PLR0915": 156,  # C02 stats kernel (see the C901 note above)
+    # +3 2026-08-28 F06 (see the C901 note above). 2026-08-29 F10 T67f
+    # re-reconcile: the T66 union raise (159->160) is PAID DOWN -- the
+    # _str_after_pass roster block extracted to _bounded_layer_roster (a
+    # cohesive F10 bounding unit, not confetti); ceiling stays 159.
+    "PLR0915": 159,
     # The broad-catch / silent-swallow family (grind-r5 b1 R22-1, 4th round,
     # + b7 fable/opus corroboration): the population grew 369 -> 463 AST
     # handlers across the sprint with zero tripwire while every neighbour
@@ -195,9 +321,23 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # function's contract is degrade-to-None for ANY state that cannot
     # provide a tensor-only clone map -- pending lazy state refuses TYPED
     # before this guard, so no capture verdict is swallowed.
+    # 2026-08-29 F10 T67f re-reconcile: the T66 union raise (541->568) is
+    # PAID DOWN, not held. F10's 27 lovely-surface fail-open guards (repr/
+    # card dunders, honesty-token probes, echo guard, degrade-to-None
+    # lookups) now route through the ONE audited blind-except chokepoint
+    # `torchlens.utils.fail_open` -- callers keep their exact degraded
+    # forms, enumerable interior failures still surface through the outer
+    # funnel, and the ratchet ledgers one site instead of 27. The helper's
+    # +1 is offset by folding the pre-existing _copy_rerun_value deepcopy
+    # fallback (data_classes/trace.py) into the same chokepoint. Ceiling
+    # stays the landed train's 541; BLE001 stays on the debt-burn list.
     "BLE001": 541,
     # 43->44 (same L8 settle): _record_plane_p's swallow-and-continue is the
     # observer fail-open contract stated above.
+    # 2026-08-29 F10 T67f re-reconcile: the T66 union raise (44->49) is
+    # PAID DOWN -- the five try/except/pass honesty probes became explicit
+    # fail_open reads with their degraded forms stated (see the BLE001
+    # note); ceiling stays the landed train's 44.
     "S110": 44,
     # 35->36 (fixwave-5 settle): one new guarded-iteration continue landed
     # with the wave's defensive sweeps; re-frozen at the post-wave tip.
@@ -228,6 +368,11 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # corrected counts: SIM118 54 (49 .py + 5 ipynb), SIM401 2 (1 .py +
     # 1 ipynb). Pre-existing sites made visible, not growth; relayed to the
     # docs lane as mechanically fixable. SHRINK-ONLY from here.
+    # 2026-08-29 F10 T67f re-reconcile: the T66 union raise (54->56) is
+    # PAID DOWN -- the two test-corpus `accessor[k] for k in .keys()`
+    # comprehensions became the equivalent `.values()` reads (accessor
+    # __iter__ yields VALUES, so the naive SIM118 rewrite would be wrong);
+    # ceiling stays the landed train's 54.
     "SIM118": 54,
     "SIM401": 2,
 }

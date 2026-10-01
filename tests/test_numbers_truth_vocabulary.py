@@ -91,9 +91,13 @@ def test_op_str_keeps_pass_vocabulary(three_pass_log: tl.Trace) -> None:
 def test_headings_follow_row_kind(three_pass_log: tl.Trace) -> None:
     """Module tables head "Module (type)"; op tables head "Op" (never "Layer")."""
 
-    overview = three_pass_log.summary()
+    overview = three_pass_log.summary(level="overview")
     assert "| Module (type)" in overview
     memory = three_pass_log.summary(level="memory")
     assert "| Op " in memory
     assert "| Layer " not in overview
     assert "| Layer " not in memory
+    # Rebuilt table: the merged name column heads "name (type)", never "Layer".
+    rebuilt = three_pass_log.summary()
+    assert "name (type)" in rebuilt
+    assert "Layer " not in rebuilt

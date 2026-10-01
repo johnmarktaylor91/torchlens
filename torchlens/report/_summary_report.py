@@ -13,9 +13,10 @@ Binding laws carried here:
   strings through a typed report.
 - DETACHED: the report retains neither the model nor the Trace and
   survives cleanup and GC (pin: build report; del trace; to_dict() works).
-- The rendered TEXT is byte-identical to the historical ``summary()``
-  output: ``SummaryReport`` subclasses ``str``, so every existing consumer
-  and golden holds; F08's ladder/result API re-renders from the same data.
+- ``SummaryReport`` subclasses ``str``. On the F08 rebuilt path the text
+  IS the canonical byte-stable ASCII contract (memo 3.9); legacy preset
+  spellings keep the historical renderer's text byte-identical through
+  the compatibility table.
 
 Spellings DOCUMENTED-UNSTABLE pending naming-session ratification.
 """
@@ -95,17 +96,22 @@ class CaptureFacts:
 
 
 class SummaryReport(str):
-    """The summary text WITH its typed, detached data (item 10).
+    """The summary text WITH its typed, detached data (items 10 + 12).
 
-    A ``str`` subclass: every historical consumer, golden, and equality
-    check holds byte-for-byte, while ``rows`` / ``totals`` / ``capture`` /
+    A ``str`` subclass: the string payload is the canonical byte-stable
+    ASCII contract (memo 3.9), while ``rows`` / ``totals`` / ``capture`` /
     ``to_dict()`` serve the numbers as data. ``__repr__`` is ``__str__``
-    (bare display renders the designed form, sumfam D7).
+    (bare display renders the designed form, sumfam D7). Rebuilt-grammar
+    results additionally carry the F08 render payload serving
+    ``render``/``print``/``to_pandas``/``to_markdown``/``to_html``/
+    ``details`` and the scalar conveniences; the report retains neither
+    the model nor the Trace and survives cleanup and GC.
     """
 
     _rows: tuple[SummaryRow, ...]
     _totals: SummaryTotals
     _capture: CaptureFacts
+    _rebuilt: Any
 
     def __new__(
         cls,
@@ -114,6 +120,7 @@ class SummaryReport(str):
         rows: tuple[SummaryRow, ...],
         totals: SummaryTotals,
         capture: CaptureFacts,
+        rebuilt: Any = None,
     ) -> SummaryReport:
         """Build the report around the rendered text."""
 
@@ -121,12 +128,158 @@ class SummaryReport(str):
         report._rows = rows
         report._totals = totals
         report._capture = capture
+        report._rebuilt = rebuilt
         return report
 
     def __repr__(self) -> str:
         """Bare display renders the designed table, never a str-repr quote."""
 
         return str(self)
+
+    # ------------------------------------------------------------------
+    # F08 result API (memo item 12). Heavy logic lives in _summary_result.
+
+    def _rebuilt_or_refuse(self, method: str) -> Any:
+        """The rebuilt payload, or a typed teaching refusal on legacy paths."""
+
+        if self._rebuilt is None:
+            from .._errors import InvalidArgumentError
+
+            raise InvalidArgumentError(
+                f"{method}() serves rebuilt-grammar summaries; this report was "
+                "rendered by a legacy preset spelling.",
+                code="summary_result_legacy",
+                remedy="call summary() with the rebuilt grammar (bare call, "
+                "level=, view=, depth=, ...)",
+            )
+        return self._rebuilt
+
+    def render(self, style: str = "ascii") -> str:
+        """Re-render from data: 'ascii' (canonical), 'unicode', or 'html'."""
+
+        if style == "ascii":
+            return str(self)
+        payload = self._rebuilt_or_refuse("render")
+        if style == "unicode":
+            return str(payload.unicode_text)
+        if style == "html":
+            from ._summary_result import render_result_html
+
+            return render_result_html(payload)
+        from .._errors import InvalidArgumentError
+
+        raise InvalidArgumentError(
+            f"render() style must be 'ascii', 'unicode', or 'html'; got {style!r}.",
+            code="summary_option_invalid",
+            remedy="pass style='ascii' (canonical), 'unicode', or 'html'",
+        )
+
+    def print(self, style: str = "auto", file: Any = None) -> None:
+        """Print with charset resolved at THIS display boundary (memo 3.9)."""
+
+        import sys
+
+        from ._summary_charset import detect_style
+
+        stream = file if file is not None else sys.stdout
+        resolved = detect_style(stream) if style == "auto" else style
+        if resolved not in ("ascii", "unicode"):
+            from .._errors import InvalidArgumentError
+
+            raise InvalidArgumentError(
+                f"print() style must be 'auto', 'ascii', or 'unicode'; got {style!r}.",
+                code="summary_option_invalid",
+                remedy="pass style='auto' (detected), 'ascii', or 'unicode'",
+            )
+        if resolved == "unicode" and self._rebuilt is None:
+            resolved = "ascii"
+        text = str(self) if resolved == "ascii" else str(self._rebuilt.unicode_text)
+        print(text, file=stream)
+
+    def details(self) -> str:
+        """Capture facts as text (the relocated preamble's result-side face)."""
+
+        from ._summary_result import result_details
+
+        return result_details(self)
+
+    def to_pandas(self, scope: str = "display") -> Any:
+        """Typed DataFrame projection ('display' rows or 'all' op grain)."""
+
+        from ._summary_result import result_to_pandas
+
+        return result_to_pandas(self, scope)
+
+    def to_markdown(self) -> str:
+        """GitHub-flavored markdown table of the rendered rows."""
+
+        from ._summary_result import result_to_markdown
+
+        return result_to_markdown(self)
+
+    def to_html(self) -> str:
+        """The dependency-free escaped HTML fragment."""
+
+        payload = self._rebuilt_or_refuse("to_html")
+        from ._summary_result import render_result_html
+
+        return render_result_html(payload)
+
+    # Scalar conveniences (raw ints or None; the raw-numbers pin).
+
+    @property
+    def total_params(self) -> int | None:
+        """Declared parameter total under torch's own identity rule."""
+
+        return self._totals.params_total
+
+    @property
+    def executed_params(self) -> int | None:
+        """Parameters that participated in the captured forward."""
+
+        return self._totals.params_executed
+
+    @property
+    def unexecuted_params(self) -> int | None:
+        """Declared-but-never-ran parameters (A3)."""
+
+        return self._totals.params_unexecuted
+
+    @property
+    def trainable_params(self) -> int | None:
+        """Trainable parameter total."""
+
+        return self._totals.params_trainable
+
+    @property
+    def frozen_params(self) -> int | None:
+        """Frozen parameter total."""
+
+        return self._totals.params_frozen
+
+    @property
+    def total_flops_forward(self) -> int:
+        """Forward FLOPs under the stored fma=2 convention."""
+
+        return self._totals.flops_forward_fma2
+
+    @property
+    def total_macs_forward(self) -> int:
+        """True multiply-accumulate count (never flops//2)."""
+
+        return self._totals.macs_forward
+
+    @property
+    def unknown_flop_ops(self) -> int:
+        """Ops whose compute is unknown (totals are lower bounds when > 0)."""
+
+        return int(self._totals.compute_coverage.get("unknown", 0))
+
+    @property
+    def capture_status(self) -> str | None:
+        """The capture outcome status this report was built from."""
+
+        return self._capture.outcome_status
 
     @property
     def rows(self) -> tuple[SummaryRow, ...]:
@@ -166,8 +319,12 @@ class SummaryReport(str):
         }
 
     def _repr_html_(self) -> str:
-        """Dependency-free escaped HTML table (F08 ships the full renderer)."""
+        """Dependency-free escaped HTML table (the F08 renderer when rebuilt)."""
 
+        if self._rebuilt is not None:
+            from ._summary_result import render_result_html
+
+            return render_result_html(self._rebuilt)
         import html
 
         head = (
@@ -245,6 +402,15 @@ def build_summary_report(trace: Trace, text: str) -> SummaryReport:
     renderer, byte-stable); this assembler never re-sums anything.
     """
 
+    rows, totals, capture = build_summary_data(trace)
+    return SummaryReport(text, rows=rows, totals=totals, capture=capture)
+
+
+def build_summary_data(
+    trace: Trace,
+) -> tuple[tuple[SummaryRow, ...], SummaryTotals, CaptureFacts]:
+    """The DATA stage alone: typed rows, totals, and capture facts."""
+
     from ._factcore import factcore
     from ._health import health_facts
 
@@ -281,4 +447,4 @@ def build_summary_report(trace: Trace, text: str) -> SummaryReport:
             (getattr(trace, "annotations", {}) or {}).get("capture_advisories", []) or []
         ),
     )
-    return SummaryReport(text, rows=_summary_rows(trace), totals=totals, capture=capture)
+    return _summary_rows(trace), totals, capture

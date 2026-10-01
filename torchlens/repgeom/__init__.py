@@ -19,7 +19,9 @@ from ._geometry import (  # noqa: F401 -- public type aliases re-exported
     classical_mds,
     effective_dimensionality,
     procrustes_align,
+    rank_transform_rdm,
     rdm,
+    rdm_compare,
     scree,
 )
 from ._node_visuals import (
@@ -42,7 +44,9 @@ __all__ = [
     "mds_evolution",
     "mds_scatter_node_spec",
     "procrustes_align",
+    "rank_transform_rdm",
     "rdm",
+    "rdm_compare",
     "rdm_evolution",
     "rdm_node_spec",
     "scree",

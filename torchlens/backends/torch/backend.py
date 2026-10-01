@@ -498,8 +498,15 @@ class TorchBackend:
         # forward there -- first observed on real H200 hardware when the
         # CUPTI correlation matrix came back empty because the "CUDA" capture
         # had launched zero kernels.
-        first_param = next(torch_model.parameters(), None)
-        first_buffer = next(torch_model.buffers(), None)
+        # Meta state never pins a device either: offload-hooked models
+        # (accelerate device_map / cpu/disk offload, lane F37) hold meta
+        # params between forwards, the hooks place inputs on the real
+        # execution device themselves, and moving inputs to meta poisons a
+        # forward that runs fine unlogged ("Cannot copy out of meta tensor").
+        # The first NON-meta param/buffer (mixed dispatch keeps some modules
+        # materialized) still pins; an all-meta model pins no device.
+        first_param = next((p for p in torch_model.parameters() if p.device.type != "meta"), None)
+        first_buffer = next((b for b in torch_model.buffers() if b.device.type != "meta"), None)
         if first_param is not None:
             model_device: object | None = first_param.device
         elif first_buffer is not None:
@@ -1047,8 +1054,8 @@ class TorchBackend:
             else None,
             autograd_memory=saved_memory,
             num_autograd_tensors=saved_count,
-            bytes_delta_at_call=0,
-            bytes_peak_at_call=0,
+            bytes_delta_at_call=None,
+            bytes_peak_at_call=None,
         )
 
     def tensor_ref(

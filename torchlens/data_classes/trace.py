@@ -28,6 +28,7 @@ Key design patterns:
 
 import copy
 import difflib
+import functools
 import inspect
 import json
 import pickle
@@ -56,6 +57,7 @@ if TYPE_CHECKING:
         ReadinessReport,
         SparseRunDescriptor,
     )
+    from ._op_dedup import IdentityCacheEntry
     from .func_call_location import FuncCallLocation
 
 from .. import _state
@@ -91,12 +93,14 @@ from ..ir.workspaces import (
 from ..quantities import Bytes, Duration
 from ..types import ActivationPostfunc, GradientPostfunc
 from ..utils.tensor_utils import SaveMode
+from ._preprocessing_provenance import status_of
 from ._state_adapter import state_items, state_restore
 from ._trace_accessors import (
     _invalidate_trace_module_call_accessor_cache,
     _invalidate_trace_op_layer_accessor_caches,
 )
 from ._trace_legacy_state import TRACE_PORTABLE_STATE_ALIASES, pop_retired_legacy_keys
+from ._trace_narrate import TraceNarrateMixin
 from .backward_pass import BackwardPass
 from .derived_grad import DerivedGradAccessor
 from .field_policy import (
@@ -214,6 +218,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "model_class_qualname": None,
     "param_hash_quick": None,
     "param_hash_full": None,
+    "root_entry_point": None,
     "input_object_id": None,
     "input_signature_hash": None,
     "graph_shape_hash": None,
@@ -224,6 +229,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "save_budget": "auto",
     "raise_on_nan": False,
     "track_nonfinite": False,
+    "track_device_memory": False,
     "structure_only": False,
     "intervention_audit": [],
     "keep_orphans": False,
@@ -269,6 +275,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "total_param_gradient_memory": 0,
     "forward_peak_memory": 0,
     "forward_memory_backend": "unknown",
+    "_forward_peak_memory_pair": None,
     "_phase_timings": {},
     "_replay_arg_version_data_complete": True,
     "_grad_fn_param_refs": {},
@@ -441,9 +448,6 @@ def _scrubbed_transform_repr(fn: Any) -> str | None:
     str | None
         Scrubbed repr, or ``None`` when ``fn`` is ``None``.
     """
-
-    import functools
-
     if fn is None:
         return None
     if isinstance(fn, functools.partial):
@@ -484,6 +488,7 @@ class ResolvedPreprocessing:
     verified: bool
     config: dict[str, Any]
     description: str
+    status = property(status_of)  # derived authority standing, never stored
 
 
 @dataclass
@@ -530,37 +535,6 @@ class ResolvedPostprocessing:
     confidence: float | None = None
     top_n_captured: int | None = None
     ambiguous: bool = False
-
-
-def _init_module_hierarchy_data() -> dict[str, Any]:
-    """Create the transient dict used to accumulate module hierarchy data during logging.
-
-    Consumed by ``_build_module_logs`` (step 16) and then cleared.
-    """
-    return {
-        "addresses": [],
-        "module_types": {},
-        "module_ops": [],
-        "module_num_calls": defaultdict(lambda: 1),
-        "top_level_modules": [],
-        "top_level_module_ops": [],
-        "module_children": defaultdict(list),
-        "module_pass_children": defaultdict(list),
-        "module_nparams": defaultdict(lambda: 0),
-        "module_nparams_trainable": defaultdict(lambda: 0),
-        "module_nparams_frozen": defaultdict(lambda: 0),
-        "module_num_tensors": defaultdict(lambda: 0),
-        "module_call_index_tensors": defaultdict(lambda: 0),
-        "module_layers": defaultdict(list),
-        "module_pass_layers": defaultdict(list),
-        "module_output_structures": {},
-        "module_layer_argnames": defaultdict(list),
-        "module_training_modes": {},
-        "module_forward_start_times": {},
-        "module_forward_durations": {},
-        "module_code_contexts": {},
-        "module_call_stacks": {},
-    }
 
 
 @dataclass
@@ -922,6 +896,7 @@ class Trace(
     TraceValidationMixin,
     TraceExportMixin,
     TraceVisualizationMixin,
+    TraceNarrateMixin,
     CapturedRun,
 ):
     """Top-level container for a logged forward pass.
@@ -1223,6 +1198,7 @@ class Trace(
         "_tf_op_captures": FieldPolicy.DROP,
         "_tf_validation_result": FieldPolicy.DROP,
         "_tl_save_selector_fire_count": FieldPolicy.DROP,
+        "_tl_intervene_selector_fire_count": FieldPolicy.DROP,
         "_module_call_accessor": FieldPolicy.DROP,
         "_op_accessor_cache": FieldPolicy.DROP,
         "_layer_accessor_cache": FieldPolicy.DROP,
@@ -1316,6 +1292,11 @@ class Trace(
         "model_object_id": FieldPolicy.KEEP,
         "model_class_qualname": FieldPolicy.KEEP,
         "param_hash_quick": FieldPolicy.KEEP,
+        # tlspec v9 root entry-point identity fact (C07X item (iv)): the
+        # closed "kind:qualified_identity" descriptor, written
+        # unconditionally at capture beside the two facts above; fail-closed
+        # grammar validation at load (_io/forgery_validation.py).
+        "root_entry_point": FieldPolicy.KEEP,
         "param_hash_full": FieldPolicy.KEEP,
         "input_object_id": FieldPolicy.KEEP,
         "input_signature_hash": FieldPolicy.KEEP,
@@ -1333,6 +1314,7 @@ class Trace(
         # restores the default ``False``, so it stays out of
         # ``MODEL_LOG_FIELD_ORDER`` and out of the portable schema.
         "measure_python_peak_memory": FieldPolicy.DROP,
+        "_forward_peak_memory_pair": FieldPolicy.DROP,  # F20 D-7 session pair
         # Session-time witness knob for collective boundary records: it selects
         # what capture PAID FOR (digests or nothing), not what a trace means;
         # the per-boundary witness.policy_resolved field is the portable
@@ -1349,6 +1331,10 @@ class Trace(
         # trace means. Portable load restores the default False, so it stays out
         # of MODEL_LOG_FIELD_ORDER and out of the portable schema.
         "track_nonfinite": FieldPolicy.DROP,
+        # F24 sampling knob + per-call sample store: allocator counters are
+        # process facts of the capturing run; load restores the default.
+        "track_device_memory": FieldPolicy.DROP,
+        "_device_memory_samples": FieldPolicy.DROP,
         "annotations": FieldPolicy.KEEP,
         "observer_spans": FieldPolicy.KEEP,
         "manual_tensor_connections": FieldPolicy.KEEP,
@@ -1556,6 +1542,14 @@ class Trace(
         # by the torch op-finalize hook; same runtime-bookkeeping class as
         # _capture_parent_edge_truth: never persisted, absent on loaded traces.
         "_nonfinite_capture": FieldPolicy.DROP,
+        # F24 session-time stores (saved-band decomposition, first-save set,
+        # aborted-nonfinite prefix facts): the _capture_parent_edge_truth
+        # class; loaded traces disclose honest absence (field_intent live-only).
+        "_autograd_saved_bands": FieldPolicy.DROP,
+        "_autograd_seen_saved_storages": FieldPolicy.DROP,
+        "_nonfinite_frontier_out": FieldPolicy.DROP,
+        "_nonfinite_prefix_finalized": FieldPolicy.DROP,
+        "_nonfinite_prefix_finalize_error": FieldPolicy.DROP,
         "_capture_events": FieldPolicy.DROP,
         "_capture_session": FieldPolicy.DROP,
         "_tl_backward_hooked_tensor_keys": FieldPolicy.DROP,
@@ -1605,11 +1599,11 @@ class Trace(
         # authority the policy table rather than the pre-spec allowance in
         # `_io/scrub.py`.
         #
-        # Predicate-intervention dedup caches (INTERVENED axis).
-        # `..._target_keys` pins the live intervention spec, so it is also
-        # dropped at the postprocess seam.
+        # Predicate-intervention dedup caches (INTERVENED axis). `..._target_keys` pins
+        # the live intervention spec, so it is also dropped at the postprocess seam.
         "_tl_predicate_intervention_spec_keys": FieldPolicy.DROP,
         "_tl_predicate_intervention_target_keys": FieldPolicy.DROP,
+        "_tl_injection_state": FieldPolicy.DROP,  # F01 session transient
         # Streaming-bundle provenance (STREAMING axes). Already popped and
         # restored around the scrub by `_io/bundle.py` and cleared by
         # `data_classes/cleanup.py`; a load rebinds them fresh, so DROP is the
@@ -1783,6 +1777,8 @@ class Trace(
         self._module_capture_ws = ModuleCaptureWorkspace()
         self._wrapper_runtime_ws = WrapperRuntimeWorkspace()
         self._primitive_op_profile = None
+        from ..ir.workspaces import _init_module_hierarchy_data
+
         self._module_capture_ws.module_build_data = _init_module_hierarchy_data()
         self.capture_mode: Literal["exhaustive", "predicate"] = "exhaustive"
         # L7a: True marks a structure-only capture (the flag declares the
@@ -1844,6 +1840,7 @@ class Trace(
         self.model_object_id: int | None = None
         self.model_class_qualname: str | None = None
         self.param_hash_quick: str | None = None
+        self.root_entry_point: str | None = None
         self.param_hash_full: str | None = None
         self.input_object_id: int | None = None
         self.input_signature_hash: str | None = None
@@ -1864,6 +1861,7 @@ class Trace(
         self.facet_registry_snapshot = facet_registry_snapshot
         self.raise_on_nan: bool = False
         self.track_nonfinite: bool = False
+        self.track_device_memory: bool = False
         self.annotations: dict[str, Any] = {}
         self.code_context: list[FuncCallLocation] = []
         self.manual_tensor_connections: list[tuple[str, str]] = []
@@ -1883,9 +1881,7 @@ class Trace(
         self.capture_cache_path: str | None = None
         self.recording_kept: bool = True
         self._out_dedup_mode: Literal["identity", "content", "none"] = "identity"
-        self._out_identity_cache: dict[
-            int, tuple[torch.Tensor, str, torch.Tensor, int | None, int]
-        ] = {}
+        self._out_identity_cache: dict[int, IdentityCacheEntry] = {}
         self._out_hash_cache: dict[str, tuple[str, torch.Tensor]] = {}
         self._code_context_cache: dict[Any, tuple[Any, ...]] = {}
         self._halt_returns_partial_trace = False
@@ -2022,6 +2018,7 @@ class Trace(
         self.total_param_gradient_memory: Bytes = Bytes(0)
         self.forward_peak_memory: Bytes = Bytes(0)
         self.forward_memory_backend: str = "unknown"
+        self._forward_peak_memory_pair: dict[str, Any] | None = None
 
         # Structured module info:
         self._module_logs: ModuleAccessor = ModuleAccessor({})
@@ -2129,6 +2126,36 @@ class Trace(
         from ..intervention.resolver import resolve_sites
 
         return resolve_sites(self, query, strict=strict, max_fanout=max_fanout)
+
+    def check_plan(self, plan: Any) -> Any:
+        """Audit-only plan check (weightsfree memo D14; nnsight-scan parity).
+
+        Resolves each plan entry's selector against this trace, checks
+        multiplicity, and compares declared replacement geometry (a meta
+        tensor or any shape/dtype-bearing spec) against the recorded
+        shape/dtype hypotheses. The report carries the source comparison
+        digest, the evidence status, every checked site, and
+        ``executable=False`` — checking a plan NEVER sets
+        ``intervention_ready``, arms, replays, or lifts the late-bind
+        refusal. Refuses typed on callables, value-derived selection, and
+        REFUTED sources. Spelling DOCUMENTED-UNSTABLE (the public verb name
+        belongs to the UI sprint).
+
+        Parameters
+        ----------
+        plan:
+            Iterable of selector entries or ``(selector, replacement)``
+            pairs.
+
+        Returns
+        -------
+        torchlens.capture._plan_check.PlanCheckReport
+            Frozen audit report.
+        """
+
+        from ..capture._plan_check import check_plan
+
+        return check_plan(self, plan)
 
     def annotate(
         self,
@@ -2753,35 +2780,48 @@ class Trace(
             return _str_during_pass(self)
 
     def __repr__(self) -> str:
-        """Short identity-card representation for REPL display."""
+        """Short identity-card representation for REPL display.
+
+        F10 (lovely matrix): the identity card gains the settled capture
+        outcome and the whole-trace health verdict -- ``no NaN/Inf (exact)``
+        is a per-trace PROOF served by the C02 three-state verdict, printed
+        only when the evidence supports it; NOT-CHECKED and FOUND states
+        print honestly instead. Never raises; the suffix degrades silently
+        when the facts are unavailable (mid-capture, legacy artifacts).
+        """
         from ..visualization._summary_internal import format_model_repr
 
-        return format_model_repr(self)
+        return f"{format_model_repr(self)}{self._repr_honesty_suffix()}"
 
-    def _repr_html_(self) -> str:
-        """Return the notebook HTML representation for this model log.
+    def _repr_honesty_suffix(self) -> str:
+        """Outcome + health suffix tokens for the identity repr (F10)."""
 
-        Returns
-        -------
-        str
-            HTML fragment for IPython/Jupyter display.
+        from ..utils.fail_open import fail_open
 
-        Generated through the CardTree presentation IR
-        (``torchlens.notebook.cardtree``; treescope memo B1): card
-        generation is stdlib-only, so there is no IPython gate -- the
-        historical gate returned a 94-byte plain repr whenever IPython was
-        not importable, which also let naive card tests pass against the
-        fallback. Any internal failure degrades to a one-line
-        ``card unavailable`` fragment (never-raise boundary).
+        tokens: list[str] = []
+        outcome = fail_open(lambda: self.outcome, lambda _error: None)
+        status = getattr(getattr(outcome, "status", None), "value", None)
+        if status and status != "complete":
+            tokens.append(f"outcome={status}")
+        verdict = fail_open(lambda: self.nonfinite_verdict, lambda _error: None)
+        if verdict == "checked_and_clean":
+            tokens.append("no NaN/Inf (exact)")
+        elif verdict == "found":
+            tokens.append("NaN/Inf FOUND (.nonfinite_ops)")
+        return f" [{'; '.join(tokens)}]" if tokens else ""
+
+    def __treescope_repr__(self, path: Any, subtree_renderer: Any) -> Any:
+        """Thin lazy treescope hook (memo 3.2): the dataclass-dump guard.
+
+        Delegates to the bridge; falls through to ``NotImplemented`` on the
+        ``disabled()`` scope or any fault -- never an exception in a cell.
         """
-        from ..notebook.cardtree import safe_card_html, trace_overview_card
+        try:
+            from ..bridge.treescope import treescope_repr
 
-        def build() -> Any:
-            """Assemble the Trace overview Card from session-safe reads."""
-
-            return trace_overview_card(self)
-
-        return safe_card_html(build)
+            return treescope_repr(self, path, subtree_renderer)
+        except Exception:  # noqa: BLE001 - degrade to treescope's default
+            return NotImplemented
 
     def __iter__(self) -> Iterator[Any]:
         """Loops through all tensors in the log."""
@@ -3109,6 +3149,7 @@ class Trace(
             "module_filter": None,
             "raise_on_nan": False,
             "track_nonfinite": False,
+            "track_device_memory": False,
             "structure_only": False,
             "intervention_audit": [],
             "keep_orphans": False,
@@ -3189,6 +3230,8 @@ class Trace(
         # queryable record falls back to the saved-payload basis.
         if state.get("track_nonfinite") is None:
             state["track_nonfinite"] = False
+        if state.get("track_device_memory") is None:
+            state["track_device_memory"] = False
         if state.get("distributed_witness") is None:
             state["distributed_witness"] = "none"
         # ``save_budget`` is FieldPolicy.DROP, so a portable artifact never
@@ -3299,6 +3342,14 @@ class Trace(
                 if op_passes is not None and hasattr(op_passes, "values"):
                     for layer_pass in op_passes.values():
                         layer_pass.grad_fn_handle = grad_fn_handle
+        # F44 injections stage 2: split persisted injected-op rows out of
+        # layer_list BEFORE the persisted-claim validators run (the site-key
+        # totality check would correctly refuse the partial family) and
+        # before any accessor can observe them; forged rows refuse typed
+        # inside the split.
+        from .._io.injection_codec import split_restored_injected_rows
+
+        split_restored_injected_rows(self)
         # Persisted DROP-gated claim families become hostile artifact input at
         # this boundary. Validate them before any consumer can observe or bind
         # the restored values; wholly absent legacy families remain legal.
@@ -3406,6 +3457,7 @@ class Trace(
             "model_class_qualname",
             "param_hash_quick",
             "param_hash_full",
+            "root_entry_point",
             "input_object_id",
             "input_signature_hash",
             "is_appended",
@@ -3689,10 +3741,9 @@ class Trace(
                 self._copy_rerun_value(key): self._copy_rerun_value(item)
                 for key, item in value.items()
             }
-        try:
-            return copy.deepcopy(value)
-        except Exception:
-            return value
+        from ..utils.fail_open import fail_open
+
+        return fail_open(lambda: copy.deepcopy(value), lambda _error: value)
 
     def append_state_from(self, new_log: "Trace") -> None:
         """Merge compatible chunk outs from ``new_log`` into this log.

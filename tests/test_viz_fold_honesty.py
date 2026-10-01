@@ -467,7 +467,10 @@ def test_run_fold_never_folds_unresolvable_wiring(monkeypatch) -> None:
     insufficient. Degradation must be a unique per-member sentinel.
     """
 
-    from torchlens.visualization import auto_collapse
+    # F11 (collapse memo item 6): the wiring walk moved to
+    # _collapse_signatures with the B1 fingerprint memo; the patch target
+    # follows the callee's defining module so the degrade arm still fires.
+    from torchlens.visualization import _collapse_signatures, auto_collapse
 
     trace = tl.trace(_WiringStack([False, False, False]), torch.randn(2, 8))
     assert _run_fold_members_uniform(trace, ("blocks.0", "blocks.1", "blocks.2"))
@@ -475,7 +478,7 @@ def test_run_fold_never_folds_unresolvable_wiring(monkeypatch) -> None:
     def _boom(module):  # noqa: ANN001, ANN202
         raise KeyError("orphan relation label")
 
-    monkeypatch.setattr(auto_collapse, "_module_wiring_walk", _boom)
+    monkeypatch.setattr(_collapse_signatures, "_module_wiring_walk", _boom)
     assert not _run_fold_members_uniform(trace, ("blocks.0", "blocks.1", "blocks.2"))
     sig_a = auto_collapse._module_structural_signature(cast_module(trace, "blocks.0"))
     sig_b = auto_collapse._module_structural_signature(cast_module(trace, "blocks.1"))

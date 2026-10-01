@@ -98,6 +98,41 @@ def _hash_tensor_content(tensor: torch.Tensor) -> str:
     return hasher.hexdigest()
 
 
+def _hash_input_tensor_value(tensor: torch.Tensor) -> str:
+    """Return a VALUE-LEVEL digest of one input tensor.
+
+    Frames the shape, the LOGICAL dtype (pre-transport, so a bfloat16 input
+    can never collide with the float32 tensor of the same values), and the
+    raw payload bytes. Unlike :func:`_hash_tensor_content` (a capture-cache
+    key), this digest deliberately EXCLUDES device placement and
+    ``requires_grad``: it backs the Bundle comparison gate's value-level
+    input-identity predicate (A-GATE), where "the same input values" must
+    compare equal across a save/load round trip or a device move. The
+    persisted ``input_digest`` carrier (A-GATE/digest, after C07-X) reuses
+    this exact derivation, so live-derived and persisted digests stay
+    comparable.
+
+    Parameters
+    ----------
+    tensor:
+        Input tensor to digest.
+
+    Returns
+    -------
+    str
+        SHA-256 hex digest over ``(shape, logical_dtype)`` plus payload bytes.
+    """
+
+    with _state.pause_logging():
+        shape = tuple(tensor.shape)
+        logical_dtype = str(tensor.dtype)
+        payload = digest_byte_view(tensor)
+    hasher = hashlib.sha256()
+    hasher.update(repr((shape, logical_dtype)).encode("utf-8"))
+    hasher.update(payload)
+    return hasher.hexdigest()
+
+
 _INPUT_FRAGMENT_DEPTH_CEILING = 64
 
 

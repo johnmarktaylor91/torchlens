@@ -23,7 +23,7 @@ from __future__ import annotations
 import enum
 import weakref
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field as dataclasses_field
 from typing import TYPE_CHECKING, Any, Final
 
 from ..errors._base import CaptureError
@@ -108,6 +108,7 @@ class StructureClaimStatus(str, enum.Enum):
 # S2-gated, DOCUMENTED-UNSTABLE.
 # ---------------------------------------------------------------------------
 
+STRUCTURE_ONLY_MEASUREMENTS_UNSUPPORTED = "structure_only_measurements_unsupported"
 STRUCTURE_ONLY_RUNNABLE_UNSUPPORTED = "structure_only_runnable_unsupported"
 STRUCTURE_ONLY_REPLAY_UNSUPPORTED = "structure_only_replay_unsupported"
 STRUCTURE_ONLY_VALIDATION_UNSUPPORTED = "structure_only_validation_unsupported"
@@ -218,14 +219,21 @@ _ROWS: Final[tuple[CapabilityRow, ...]] = (
     CapabilityRow(
         key="meta_admission",
         claim=(
-            "Meta-materialized models (form (a)) are admitted ONLY under D8; "
-            "until D8 is granted the entry gate refuses unchanged."
+            "Meta-materialized models (form (a)) are ADMITTED under the D8 "
+            "grant (JMT 2026-08-26), if and only if structure-only is in "
+            "force (scoped admission, W2): the graph, module nesting, "
+            "parameter geometry, and shape/dtype HYPOTHESES are recorded "
+            "with no tensor values. Without structure_only the entry gate "
+            "refuses meta unchanged."
         ),
-        status_v1="refuse:unsupported_tensor_variant",
-        flip_event="D8 granted",
-        evidence="tests/test_structure_only_honesty.py (baseline gate pins)",
+        status_v1="supported_structural",
+        flip_event="D8 granted 2026-08-26 (this row IS the flip; last merge)",
+        evidence=(
+            "tests/test_weightsfree_admission.py; parity gate: "
+            "tests/test_weightsfree_parity.py (real digest == meta digest "
+            "AND discharge CORROBORATED on every fixture)"
+        ),
         amend_owner="S2-amendment",
-        refusal_code="unsupported_tensor_variant",
     ),
     CapabilityRow(
         key="value_payloads",
@@ -278,17 +286,51 @@ _ROWS: Final[tuple[CapabilityRow, ...]] = (
     CapabilityRow(
         key="substrate_uniformity",
         claim=(
-            "Form (a) requires meta inputs with meta state; mixed real/meta "
-            "at entry refuses typed (memo sec 1.5 E-3/E-4); partially-meta "
-            "state is not pre-validated and dies typed mid-forward via the "
-            "backstop (E-5). Only reachable under D8; until then the entry "
-            "gate refuses every meta cell unchanged."
+            "Admission requires a UNIFORM substrate: every input tensor leaf "
+            "meta AND every registered parameter/buffer meta (tied objects "
+            "deduplicated by identity; parameterless models judged by "
+            "inputs). Mixed cells refuse typed in BOTH directions at entry "
+            "with structure_only_substrate_mismatch, naming which side is "
+            "which; a REAL tensor discovered mid-forward (stale pre-wrap "
+            "factory reference, device='cpu' literal) refuses through the "
+            "same family at the user's source line (W1-CLS)."
         ),
-        status_v1="refuse:unsupported_tensor_variant",
-        flip_event="D8 granted",
-        evidence="blocked on D8",
+        status_v1="supported_structural",
+        flip_event="D8 granted 2026-08-26",
+        evidence="tests/test_weightsfree_admission.py (mixed cells, tamper rows)",
         amend_owner="S2-amendment",
-        refusal_code="unsupported_tensor_variant",
+    ),
+    CapabilityRow(
+        key="plan_shape_check",
+        claim=(
+            "The audit-only plan checker (Trace.check_plan, D14) resolves "
+            "selectors, checks multiplicity, and compares declared "
+            "replacement geometry against hypothesis shapes/dtypes; the "
+            "report is executable=false ALWAYS and never arms, replays, or "
+            "lifts the late-bind refusal. REFUTED sources refuse through "
+            "this row (G5); callables and value-derived selection refuse "
+            "typed (plan_check_unsupported)."
+        ),
+        status_v1="supported_hypothesis",
+        flip_event="discharge",
+        evidence="tests/test_weightsfree_plan_check.py",
+        amend_owner="L7a",
+    ),
+    CapabilityRow(
+        key="measurement_exports",
+        claim=(
+            "Measurement-shaped exports (chrome_trace, speedscope, "
+            "flamegraph, memory_timeline) refuse typed: timings and "
+            "allocator peaks are MEASUREMENTS, not payload values, and a "
+            "value-free capture has none — meta-dispatch overhead rendered "
+            "as 'measured' inverts real cost rankings (weightsfree memo "
+            "D15; the existing values code must not silently widen)."
+        ),
+        status_v1="refuse:structure_only_measurements_unsupported",
+        flip_event="never",
+        evidence="tests/test_weightsfree_disclosure.py",
+        amend_owner="S2-amendment",
+        refusal_code=STRUCTURE_ONLY_MEASUREMENTS_UNSUPPORTED,
     ),
     CapabilityRow(
         key="viz_graph_render",
@@ -575,6 +617,19 @@ def claim_status_for(trace: Any) -> StructureClaimStatus:
 # ---------------------------------------------------------------------------
 
 
+def meta_admission_open() -> bool:
+    """Whether the ``meta_admission`` row is D8-flipped (weightsfree W2).
+
+    The capability table is the ONE code authority for the flip (memo build
+    item 16): the admission plumbing in ``torchlens._robustness`` reads the
+    row state through this accessor — never by subscripting the table — so
+    the flip stays a one-row status change here, mirrored in
+    ``docs/reference/structure_only_capabilities.md`` in the same commit.
+    """
+
+    return not STRUCTURE_ONLY_CAPABILITIES["meta_admission"].status_v1.startswith("refuse:")
+
+
 def require_structure_only_capability(
     trace: Any,
     capability: str,
@@ -656,12 +711,32 @@ class ClaimComparison:
     verdict: StructureClaimStatus
 
 
+#: The versioned comparison vocabulary (D5): IDENTITY in v1 — comparison
+#: digests equal the public digests and unknown spelling pairs fail closed as
+#: refutations. A populated vocabulary is the named fallback only if the
+#: owned-context/absorption mechanism fails feature detection somewhere.
+COMPARISON_VOCABULARY_V1: Final[str] = "identity-v0"
+
+#: Reserved comparison row kinds (D9): the one-sided-knowledge join rule is
+#: endorsed policy, guarded, and DEFERRED — nothing emits these in v1.
+RESERVED_COMPARISON_ROW_KINDS: Final[tuple[str, ...]] = ("op_identity_unverified",)
+
+
 @dataclass(frozen=True)
 class StructureDischarge:
     """Frozen result of discharging a structure-only trace against a real
     capture. ``verdict`` is CORROBORATED iff EVERY compared claim matched
     (first contradiction wins the overall floor); ``claims`` is the per-claim
-    table; the two digests witness which graphs were joined."""
+    table; the digest pairs witness which graphs were joined.
+
+    The comparison envelope (D5, identity-v0): ``structure_digest`` /
+    ``real_digest`` are the RAW PUBLIC digests (``tl.hash.trace``, untouched
+    byte-for-byte by this wave); the ``comparison_*`` digests are the
+    vocabulary-normalized pair — equal to the public pair at identity-v0.
+    ``claim_counts`` breaks the per-claim table down by kind;
+    ``unavailable_evidence`` counts claims neither side could make (empty at
+    identity-v0; the D9 row kinds are reserved, never emitted).
+    """
 
     verdict: StructureClaimStatus
     claims: tuple[ClaimComparison, ...]
@@ -669,6 +744,208 @@ class StructureDischarge:
     real_digest: str
     graph_matched: bool
     first_contradiction: str | None
+    comparison_vocabulary: str = COMPARISON_VOCABULARY_V1
+    comparison_structure_digest: str = ""
+    comparison_real_digest: str = ""
+    claim_counts: Mapping[str, int] = dataclasses_field(default_factory=dict)
+    unavailable_evidence: Mapping[str, int] = dataclasses_field(default_factory=dict)
+    reserved_row_kinds: tuple[str, ...] = RESERVED_COMPARISON_ROW_KINDS
+
+    def report(self) -> str:
+        """One-screen human projection (W1-RPT): verdict, vocabulary, both
+        digest pairs, claim counts by kind, unavailable-evidence counts, and
+        the first contradiction — measured to be the difference between a
+        20-minute diff hunt and a one-line answer (3 phantom records once
+        produced 300 apparent diffs and zero per-claim rows)."""
+
+        lines = [
+            f"discharge verdict: {self.verdict.value.upper()}",
+            f"comparison vocabulary: {self.comparison_vocabulary}",
+            f"public digests:     structure={self.structure_digest[:16]}... "
+            f"real={self.real_digest[:16]}... "
+            f"({'EQUAL' if self.structure_digest == self.real_digest else 'DIFFER'})",
+            f"comparison digests: structure={self.comparison_structure_digest[:16]}... "
+            f"real={self.comparison_real_digest[:16]}...",
+            "claims by kind: "
+            + (
+                ", ".join(f"{kind}={count}" for kind, count in sorted(self.claim_counts.items()))
+                or "none compared"
+            ),
+            "unavailable evidence: "
+            + (
+                ", ".join(
+                    f"{kind}={count}" for kind, count in sorted(self.unavailable_evidence.items())
+                )
+                or "none"
+            ),
+        ]
+        if self.first_contradiction is not None:
+            lines.append(f"first contradiction: {self.first_contradiction}")
+        return "\n".join(lines)
+
+
+def _refuse_incomparable(reason: str, detail: str) -> None:
+    """Raise the typed comparable-twins preflight refusal (D10).
+
+    REFUSE IS NOT REFUTE: the discharge registry is untouched, the structure
+    trace keeps its HYPOTHESIS status, and the remedy names the comparability
+    condition to fix rather than declaring the hypotheses wrong.
+    """
+
+    raise StructureOnlyCapabilityError(
+        f"discharge_against refuses: the twins are not comparable ({reason}). "
+        f"{detail} Refuse is not refute: no verdict was registered and the "
+        "structure trace's claims remain HYPOTHESES. Remedy: re-capture with "
+        "matched twins (same class/config, same versions, eval on both, both "
+        "constructed before the first capture) and discharge again.",
+        code="structure_only_discharge_incomparable",
+        capability="discharge",
+        reason=reason,
+    )
+
+
+def _input_geometry(trace: Any) -> tuple[tuple[tuple[int, ...] | None, str], ...]:
+    """The (shape, dtype) tuple of each input layer, for the preflight."""
+
+    facts: list[tuple[tuple[int, ...] | None, str]] = []
+    for label in getattr(trace, "input_layers", ()) or ():
+        layer = trace[label]
+        shape = getattr(layer, "shape", None)
+        facts.append((tuple(shape) if shape else None, str(getattr(layer, "dtype", None))))
+    return tuple(facts)
+
+
+def _discharge_preflight(structure_trace: Any, real_trace: Any) -> None:
+    """The comparable-twins preflight (D10/D8): refuses typed, never refutes.
+
+    Conditions checked against session and trace facts: same model class,
+    same input geometry, same backend runtime version, same wrap generation
+    (W1-ORD — both twins captured under the same torch patch state; honest
+    twins constructed on opposite sides of a wrap flip refute each other on
+    saved-reference bindings alone), no rescue-flag asymmetry, and a real
+    oracle carrying no opaque host-write completeness witness (an oracle
+    whose own value truth is UNVERIFIABLE cannot corroborate anything).
+    Training-mode asymmetry has no dedicated trace fact and is caught
+    structurally by the W1-RPT alignment (dropout/BN-stat records diverge).
+    """
+
+    structure_class = getattr(structure_trace, "model_class_name", None)
+    real_class = getattr(real_trace, "model_class_name", None)
+    if structure_class and real_class and structure_class != real_class:
+        _refuse_incomparable(
+            "model_class",
+            f"structure side captured {structure_class!r}, real side {real_class!r}.",
+        )
+    structure_inputs = _input_geometry(structure_trace)
+    real_inputs = _input_geometry(real_trace)
+    if structure_inputs != real_inputs:
+        _refuse_incomparable(
+            "input_geometry",
+            f"structure side inputs {structure_inputs!r} vs real side {real_inputs!r}.",
+        )
+    structure_rt = getattr(structure_trace, "backend_runtime_version", None)
+    real_rt = getattr(real_trace, "backend_runtime_version", None)
+    if structure_rt and real_rt and structure_rt != real_rt:
+        _refuse_incomparable(
+            "backend_runtime_version",
+            f"structure side ran {structure_rt!r}, real side {real_rt!r}.",
+        )
+    from ._weightsfree_admission import wrap_generation_of
+
+    structure_generation = wrap_generation_of(structure_trace)
+    real_generation = wrap_generation_of(real_trace)
+    if (
+        structure_generation is not None
+        and real_generation is not None
+        and structure_generation != real_generation
+    ):
+        _refuse_incomparable(
+            "wrap_generation",
+            f"the twins were captured under different torch wrap generations "
+            f"({structure_generation} vs {real_generation}); construct both "
+            "twins before the first capture, or both after (W1-ORD).",
+        )
+    structure_rescued = bool(getattr(structure_trace, "rescue_rerun", None))
+    real_rescued = bool(getattr(real_trace, "rescue_rerun", None))
+    if structure_rescued != real_rescued:
+        _refuse_incomparable(
+            "rescue_asymmetry",
+            "exactly one side was produced by a rescue re-run; the rescued "
+            "side's graph provenance is not comparable to the primary's.",
+        )
+    from ..backends.torch.completeness_witness import _HOST_ESCAPE_MUTABLE_WRITEBACK
+
+    if real_trace in _HOST_ESCAPE_MUTABLE_WRITEBACK:
+        _refuse_incomparable(
+            "real_oracle_opaque_witness",
+            "the real oracle carries an opaque host-write completeness "
+            "witness: its own captured values are UNVERIFIABLE, so it cannot "
+            "corroborate hypotheses.",
+        )
+
+
+_ADOPTION_MARKER: Final[str] = "internalsource"
+
+
+def _structural_alignment_contradiction(structure_trace: Any, real_trace: Any) -> str:
+    """W1-RPT: name the count/position delta structurally, never bare digests.
+
+    Also the D8 discriminant: when the first divergence pairs an ADOPTION
+    record against a NAMED op, the refutation is a construction-order
+    artifact (a saved pre-wrap function reference on exactly one twin) and
+    the preflight refusal fires instead of a verdict.
+    """
+
+    structure_funcs = [
+        str(getattr(layer, "func_name", "?")) for layer in structure_trace.layer_list
+    ]
+    real_funcs = [str(getattr(layer, "func_name", "?")) for layer in real_trace.layer_list]
+    for index, (structure_func, real_func) in enumerate(
+        zip(structure_funcs, real_funcs, strict=False)
+    ):
+        if structure_func != real_func:
+            adoption_pair = (_ADOPTION_MARKER in structure_func.lower()) != (
+                _ADOPTION_MARKER in real_func.lower()
+            )
+            if adoption_pair:
+                _refuse_incomparable(
+                    "construction_order",
+                    "an adoption record sits opposite a named op at position "
+                    f"{index} ({structure_func!r} vs {real_func!r}): whichever "
+                    "twin was constructed before TorchLens's first wrap holds "
+                    "pre-wrap function references. Construct both twins before "
+                    "the first capture, or both after (W1-ORD).",
+                )
+            return (
+                f"structural alignment: first divergence at record {index}: "
+                f"structure side has {structure_func!r}, real side has {real_func!r} "
+                f"(record counts: structure {len(structure_funcs)}, real {len(real_funcs)})"
+            )
+    if len(structure_funcs) != len(real_funcs):
+        return (
+            f"structural alignment: record count delta — structure side has "
+            f"{len(structure_funcs)} records, real side {len(real_funcs)}; the shorter "
+            "stream is a prefix of the longer (extra records start at position "
+            f"{min(len(structure_funcs), len(real_funcs))})"
+        )
+    # Same func stream and count: the digest difference lies in per-record
+    # facts (shapes/dtypes) or topology — name the first such divergence.
+    for index, (structure_layer, real_layer) in enumerate(
+        zip(structure_trace.layer_list, real_trace.layer_list, strict=False)
+    ):
+        for fact in ("shape", "dtype"):
+            structure_fact = getattr(structure_layer, fact, None)
+            real_fact = getattr(real_layer, fact, None)
+            if str(structure_fact) != str(real_fact):
+                return (
+                    f"structural alignment: record {index} "
+                    f"({structure_funcs[index]!r}) diverges on {fact}: "
+                    f"structure side {structure_fact!r} vs real side {real_fact!r}"
+                )
+    return (
+        "structural alignment: the (func, shape, dtype) streams agree; the "
+        "digest difference lies in graph topology (parent wiring)"
+    )
 
 
 def _require_discharge_preconditions(structure_trace: Any, real_trace: Any) -> None:
@@ -735,19 +1012,24 @@ def discharge_against(structure_trace: Any, real_trace: Any) -> StructureDischar
     from .. import hash as tl_hash
 
     _require_discharge_preconditions(structure_trace, real_trace)
+    _discharge_preflight(structure_trace, real_trace)
     structure_digest = tl_hash.trace(structure_trace)
     real_digest = tl_hash.trace(real_trace)
     if structure_digest != real_digest:
+        # W1-RPT: align the two record sequences structurally and name the
+        # count/position delta BEFORE any "digests differ" fallback. The
+        # construction-order discriminant inside may refuse typed instead
+        # (refuse is not refute — nothing registers below in that case).
+        first = _structural_alignment_contradiction(structure_trace, real_trace)
         discharge = StructureDischarge(
             verdict=StructureClaimStatus.REFUTED,
             claims=(),
             structure_digest=structure_digest,
             real_digest=real_digest,
             graph_matched=False,
-            first_contradiction=(
-                "graph structure: address-free graph-shape digests differ; "
-                "no per-claim rows were compared"
-            ),
+            first_contradiction=first,
+            comparison_structure_digest=structure_digest,
+            comparison_real_digest=real_digest,
         )
         _DISCHARGE_REGISTRY[structure_trace] = discharge
         return discharge
@@ -782,6 +1064,9 @@ def discharge_against(structure_trace: Any, real_trace: Any) -> StructureDischar
                 first_contradiction = (
                     f"{site}: {claim_kind} hypothesis {hyp_value!r} vs observed {observed!r}"
                 )
+    claim_counts: dict[str, int] = {}
+    for claim in claims:
+        claim_counts[claim.claim_kind] = claim_counts.get(claim.claim_kind, 0) + 1
     discharge = StructureDischarge(
         verdict=(
             StructureClaimStatus.REFUTED
@@ -793,6 +1078,9 @@ def discharge_against(structure_trace: Any, real_trace: Any) -> StructureDischar
         real_digest=real_digest,
         graph_matched=True,
         first_contradiction=first_contradiction,
+        comparison_structure_digest=structure_digest,
+        comparison_real_digest=real_digest,
+        claim_counts=claim_counts,
     )
     _DISCHARGE_REGISTRY[structure_trace] = discharge
     return discharge

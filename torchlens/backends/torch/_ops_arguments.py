@@ -1,7 +1,7 @@
 """Argument templates, edge uses, and tensor provenance."""
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
@@ -216,8 +216,14 @@ def _build_edge_use_records(
     parent_arg_positions: dict[str, dict[Any, str]],
     child_label: str,
     child_func_call_id: int,
+    func_name: str | None = None,
 ) -> list[EdgeUseRecord]:
     """Build edge provenance records from existing parent arg locations.
+
+    F10 (lovely item 8): ``view_or_copy`` populates from the closed
+    function-semantics table (``intervention.edge_semantics``) -- the
+    positional slot-0 edge of a documented always-view/always-copy call
+    gets its verdict, everything else stays the honest ``unknown``.
 
     Parameters
     ----------
@@ -229,6 +235,8 @@ def _build_edge_use_records(
         Raw label for the child tensor output.
     child_func_call_id
         Function call id for the child operation.
+    func_name
+        The child call's function name (drives the storage verdict).
 
     Returns
     -------
@@ -236,15 +244,20 @@ def _build_edge_use_records(
         Edge provenance records.
     """
 
+    from ...intervention.edge_semantics import classify_view_or_copy
+
     _edge_uses: list[EdgeUseRecord] = []
     for location, parent_label in parent_arg_positions["args"].items():
+        arg_path = _arg_location_to_path(location)
         _edge_uses.append(
             EdgeUseRecord(
                 parent_label=parent_label,
                 child_label=child_label,
                 arg_kind="positional",
-                arg_path=_arg_location_to_path(location),
-                view_or_copy="unknown",
+                arg_path=arg_path,
+                view_or_copy=cast(
+                    Any, classify_view_or_copy(func_name, cast(tuple[Any, ...], arg_path))
+                ),
                 parent_func_call_id=self.capture_events.live_index.require_event(
                     parent_label
                 ).func_call_id,
@@ -294,11 +307,22 @@ def _session_validated_parameter(trace: "Trace", value: torch.Tensor) -> bool:
         return False
     addr = param_meta.param_address
     param_logs = getattr(trace, "param_logs", None)
-    return (
-        param_logs is not None
-        and addr in param_logs
-        and getattr(param_logs[addr], "_param_ref", None) is value
-    )
+    if param_logs is None or addr not in param_logs:
+        return False
+    if getattr(param_logs[addr], "_param_ref", None) is value:
+        return True
+    # Offload rebind rung (lane F37): accelerate offload hooks REPLACE the
+    # prep-stamped meta parameter with a fresh real-valued object at every
+    # forward. The offload shim (backends/torch/offload_hooks.py) registers
+    # exactly that materialization -- the object it found in
+    # ``module._parameters`` at the prep-recorded address, during THIS
+    # session's forward -- in a session-scoped weak-valued registry. Exact
+    # object identity against that registry is the same per-object belt the
+    # r79 ``_param_ref`` rung provides; anything not rebound by the shim this
+    # session (foreign params, stale leaked stamps, fresh in-forward
+    # Parameters) still fails closed.
+    rebinds = getattr(trace, "_offload_param_rebinds", None)
+    return rebinds is not None and rebinds.get(addr) is value
 
 
 def _tensor_has_known_provenance(trace: "Trace", value: torch.Tensor) -> bool:

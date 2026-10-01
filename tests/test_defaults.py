@@ -295,7 +295,7 @@ def test_summary_uses_metadata_only_defaults(
     assert result == "summary output"
     assert captured_calls[-1]["layers_to_save"] is None
     assert captured_calls[-1]["recurrence_detection"] is True
-    assert dummy_logs[-1].summary_calls[-1] == {"depth": 2}
+    assert dummy_logs[-1].summary_calls[-1]["depth"] == 2
     assert dummy_logs[-1].cleanup_calls == 1
 
 

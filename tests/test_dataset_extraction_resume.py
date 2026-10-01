@@ -214,7 +214,7 @@ def test_resume_recomputes_only_missing_shards(tmp_path: Path) -> None:
         resume=True,
     )
     assert model.n_forward_calls == calls_before + 3
-    assert [path.name for path in paths] == [f"batch_0000{i}.pt" for i in range(5)]
+    assert [path.name for path in paths] == [f"batch_0000{i}.safetensors" for i in range(5)]
     loaded = load_extraction(tmp_path)
     clean = tl.extract_dataset(model, _stimuli(), _LAYERS, batch_size=2, progress=False)
     for key, tensor in clean.items():
@@ -234,7 +234,7 @@ def test_deleted_ledgered_shard_refuses_typed(tmp_path: Path) -> None:
     tl.extract_dataset(
         model, _stimuli(), _LAYERS, batch_size=2, output_dir=tmp_path, progress=False
     )
-    (tmp_path / "batch_00003.pt").unlink()
+    (tmp_path / "batch_00003.safetensors").unlink()
     with pytest.raises(ExtractionArtifactError) as excinfo:
         tl.extract_dataset(
             model,
@@ -275,7 +275,7 @@ def test_torn_final_ledger_line_is_dropped_not_fatal(tmp_path: Path) -> None:
         progress=False,
         resume=True,
     )
-    assert [path.name for path in paths] == [f"batch_0000{i}.pt" for i in range(5)]
+    assert [path.name for path in paths] == [f"batch_0000{i}.safetensors" for i in range(5)]
     assert load_extraction(tmp_path).manifest["status"] == "complete"
 
 
@@ -347,6 +347,7 @@ def test_hard_process_death_mid_shard_write_then_resume(tmp_path: Path) -> None:
             batch_size=2,
             output_dir=out_dir,
             progress=False,
+            shard_format="pt",
         )
         """
     )
@@ -474,9 +475,11 @@ def test_load_extraction_subset_and_refusals(tmp_path: Path) -> None:
     assert set(subset.activations) == {"relu"}
     assert subset.activations["relu"].shape == (6, 4)
 
-    with pytest.raises(DatasetExtractionResumeError) as excinfo:
+    from torchlens._errors import InvalidArgumentError
+
+    with pytest.raises(InvalidArgumentError) as key_excinfo:
         load_extraction(tmp_path, layers=["nope"])
-    assert excinfo.value.fields["code"] == "extraction_manifest_invalid"
+    assert key_excinfo.value.fields["code"] == "extraction_reader_key_unknown"
 
     manifest_path = tmp_path / MANIFEST_FILENAME
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))

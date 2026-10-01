@@ -51,6 +51,12 @@ _WARN_ONCE_SENTINELS: tuple[tuple[str, str, object], ...] = (
     ("torchlens.distributed._lifecycle", "_AUTO_ARM_DEGRADATION", None),
     ("torchlens.fastlog._storage_resolver", "_WARNED_REFERENCE_SAVE_MODE", False),
     ("torchlens.postprocess.ast_branches", "_source_drift_warned", set()),
+    # F17 quickstart nongold-value gate: once-per-trace raw-read warning keyed
+    # by id(trace) (plain int keys, so a plain set() reset pins nothing).
+    ("torchlens.quickstart._gate", "_WARNED_TRACE_IDS", set()),
+    # F04 one-backward reads: the once-per-process frozen-default disclosure
+    # (read_frozen_default_linearization) resets per test.
+    ("torchlens.attribution.onebackward._frozen", "_DISCLOSURE_WARNED", set()),
     ("torchlens.utils._torch_compat", "_warned_missing_capabilities", set()),
     # Capture-scoped CUDA RNG retry latch (grind p5, B2P3-16): re-armed per
     # capture in the package, and reset per test here so a test that trips it
@@ -68,6 +74,7 @@ _WARN_ONCE_SENTINELS: tuple[tuple[str, str, object], ...] = (
     # WeakSet of Traces that already got the collapse-ceiling decline warning;
     # a plain set() reset would strong-pin those Traces for the session.
     ("torchlens.visualization.collapse_optimizer", "_CEILING_WARNED_TRACES", weakref.WeakSet()),
+    ("torchlens.visualization._collapse_disclosures", "_BUDGET_WARNED_TRACES", weakref.WeakSet()),
 )
 
 

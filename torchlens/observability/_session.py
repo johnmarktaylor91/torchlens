@@ -47,7 +47,9 @@ _PROFILER_DOORS.register(
     capabilities={
         "owned": True,
         "borrowed": True,
-        "kineto_join": False,
+        # Flipped by lane F27: the correlation-ID join consumes this door's
+        # closed profiler through torchlens.observability.join_session.
+        "kineto_join": True,
         "activation_knob": "torchlens.observability.session",
     },
     provider=TORCHLENS_PROVIDER,
@@ -95,7 +97,7 @@ class SessionResult:
 class ProfilerSession:
     """One profiler session: owned or borrowed lifecycle, restore-on-error."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 -- the keyword-only session knobs ARE the one-door surface (mode, borrowed profiler, activities, coordinates, construction kwargs); packing them would hide the spec
         self,
         *,
         mode: str = "owned",
@@ -103,6 +105,7 @@ class ProfilerSession:
         activities: Any | None = None,
         device: str | None = None,
         rank: int | None = None,
+        profiler_kwargs: dict[str, Any] | None = None,
     ) -> None:
         if mode not in SESSION_MODES:
             raise ProfilerSessionError(
@@ -128,10 +131,20 @@ class ProfilerSession:
                 mode=mode,
                 remedy="Drop profiler=, or use mode='borrowed'.",
             )
+        if mode == "borrowed" and profiler_kwargs:
+            raise ProfilerSessionError(
+                "profiler_kwargs configure the OWNED profiler; borrowed mode "
+                "uses the caller's instance as-is.",
+                code="profiler_session_invalid",
+                mode=mode,
+                remedy="Drop profiler_kwargs=, or use mode='owned'.",
+            )
         self.mode = mode
         self._borrowed_profiler = profiler
         self._activities = activities
+        self._profiler_kwargs = dict(profiler_kwargs or {})
         self._owned_profiler: Any | None = None
+        self._closed_profiler: Any | None = None
         self._entered = False
         self.registry = SpanRegistry(device=device, rank=rank)
         self.result: SessionResult | None = None
@@ -158,7 +171,7 @@ class ProfilerSession:
             _ACTIVE_SESSION = self
         try:
             if self.mode == "owned":
-                kwargs: dict[str, Any] = {}
+                kwargs: dict[str, Any] = dict(self._profiler_kwargs)
                 if self._activities is not None:
                     kwargs["activities"] = self._activities
                 # The ONE sanctioned torch.profiler.profile construction site
@@ -182,6 +195,10 @@ class ProfilerSession:
                 try:
                     self._owned_profiler.__exit__(exc_type, exc, tb)
                 finally:
+                    # Retained session-time for the F27 join's post-exit
+                    # in-memory event extraction (events are complete only
+                    # after the profiler closes); never persisted.
+                    self._closed_profiler = self._owned_profiler
                     self._owned_profiler = None
             # Borrowed mode: never step, never close the caller's profiler.
             spans = self.registry.snapshot()
@@ -212,20 +229,35 @@ class ProfilerSession:
 
         return self._owned_profiler if self.mode == "owned" else self._borrowed_profiler
 
+    @property
+    def closed_profiler(self) -> Any | None:
+        """The CLOSED profiler for post-exit event extraction (F27 join).
 
-def session(
+        Owned mode returns the profiler retained at ``__exit__``; borrowed
+        mode returns the caller's instance (the caller is responsible for
+        having closed it before asking for a join).
+        """
+
+        return self._closed_profiler if self.mode == "owned" else self._borrowed_profiler
+
+
+def session(  # noqa: PLR0913 -- mirrors ProfilerSession.__init__ (the documented knob set)
     *,
     mode: str = "owned",
     profiler: Any | None = None,
     activities: Any | None = None,
     device: str | None = None,
     rank: int | None = None,
+    profiler_kwargs: dict[str, Any] | None = None,
 ) -> ProfilerSession:
     """The ONE profiler activation knob (torchnative W1.3).
 
     Returns a context manager. ``mode='owned'`` creates and closes
-    ``torch.profiler.profile``; ``mode='borrowed'`` adds TorchLens markers
-    inside the caller's profiler and never steps or closes it.
+    ``torch.profiler.profile`` (``profiler_kwargs`` forwards extra
+    construction options such as ``profile_memory=True`` -- every owned
+    profiler in the package is built HERE, pinned by the one-door dependency
+    test); ``mode='borrowed'`` adds TorchLens markers inside the caller's
+    profiler and never steps or closes it.
     """
 
     return ProfilerSession(
@@ -234,6 +266,7 @@ def session(
         activities=activities,
         device=device,
         rank=rank,
+        profiler_kwargs=profiler_kwargs,
     )
 
 

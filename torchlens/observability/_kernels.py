@@ -570,6 +570,71 @@ def spine_vector(value: torch.Tensor) -> torch.Tensor:
     return out
 
 
+def spine_vector_fused(value: torch.Tensor) -> torch.Tensor:
+    """Leaner-allocation spine vector: no finite-gather, no full upcast.
+
+    The rider candidate the explorer memo left UNSIZED: :func:`spine_vector`
+    materializes a boolean-gather copy of the finite values plus a full
+    float64 conversion; this variant keeps the input width, zero-fills
+    nonfinites with one ``where`` temp, and accumulates every sum in
+    float64 via ``sum(dtype=)`` without materializing the converted tensor.
+    Integer counts and finite extrema are EXACTLY equal to the naive
+    kernel's; floating sums/moments agree to reduction-order tolerance
+    (the artifact already documents floats as approximate, D8).
+
+    Adoption is gated by the D25 harness: the collector keeps the naive
+    kernel as canonical unless this variant measures OUTSIDE the box's
+    noise band (tests pin parity either way). No host sync happens here.
+    """
+
+    tensor, _ = _as_reduction_tensor("Spine", value)
+    device = tensor.device
+    out = torch.zeros(SPINE_SLOTS, dtype=torch.float64, device=device)
+    n = tensor.numel()
+    out[_SLOT_TOTAL] = float(n)
+    if n == 0:
+        out[_SLOT_MIN] = math.nan
+        out[_SLOT_MAX] = math.nan
+        out[_SLOT_ABSMAX] = math.nan
+        return out
+    finite_mask = torch.isfinite(tensor)
+    n_finite = finite_mask.sum()
+    out[_SLOT_FINITE] = n_finite
+    out[_SLOT_NAN] = torch.isnan(tensor).sum()
+    out[_SLOT_POSINF] = (tensor == math.inf).sum()
+    out[_SLOT_NEGINF] = (tensor == -math.inf).sum()
+    # All-nonfinite inputs resolve through the device-side ``where`` fix-ups
+    # below (never a host sync): extrema become NaN, moments become 0,
+    # matching the naive kernel's early exit exactly.
+    nan64 = torch.tensor(math.nan, dtype=torch.float64, device=device)
+    no_finite = n_finite == 0
+    zero = tensor.new_zeros(())
+    xf = torch.where(finite_mask, tensor, zero)
+    n_nonfinite = n - n_finite
+    out[_SLOT_ZERO] = (xf == 0).sum() - n_nonfinite
+    out[_SLOT_NEG] = (xf < 0).sum()
+    mn = torch.where(finite_mask, tensor, tensor.new_full((), math.inf)).amin().to(torch.float64)
+    mx = torch.where(finite_mask, tensor, tensor.new_full((), -math.inf)).amax().to(torch.float64)
+    out[_SLOT_MIN] = torch.where(no_finite, nan64, mn)
+    out[_SLOT_MAX] = torch.where(no_finite, nan64, mx)
+    out[_SLOT_ABSMAX] = torch.where(no_finite, nan64, torch.maximum(mn.abs(), mx.abs()))
+    # One float64 working copy (zero-filled at nonfinites) feeds every sum:
+    # products and moments must round in float64 to match the naive kernel,
+    # and summing the injected zeros is exact. The saving over the naive
+    # kernel is the boolean-gather copy and its second conversion.
+    xf64 = xf.to(torch.float64)
+    s = xf64.sum()
+    out[_SLOT_SUM] = s
+    out[_SLOT_SUMSQ] = (xf64 * xf64).sum()
+    out[_SLOT_SUMABS] = xf64.abs().sum()
+    safe_count = torch.where(no_finite, torch.ones_like(n_finite), n_finite)
+    mean = s / safe_count
+    out[_SLOT_MEAN] = torch.where(no_finite, torch.zeros_like(mean), mean)
+    m2 = ((xf64 - mean) ** 2).sum() - n_nonfinite.to(torch.float64) * mean * mean
+    out[_SLOT_M2] = torch.where(no_finite, torch.zeros_like(m2), m2)
+    return out
+
+
 def merge_spine_vectors(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     """Merge two spine vectors (CPU float64): counts exact, moments Chan."""
 

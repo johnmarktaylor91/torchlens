@@ -248,15 +248,16 @@ def save_intervention(
 
         # C03 / leverage B7: a spec whose every hook was staged by the
         # capture-time predicate door carries only DERIVED resolved-label
-        # targets, never the user's original WHERE expression (the predicate
-        # door lowers a fired selector into per-site label targets). Stamp
-        # the fact so a reload discloses "labels survive, the expression did
-        # not" instead of presenting derived labels as authored addressing.
-        # Spec-door hooks carry their rule expressions in hook metadata
-        # (spec_where_repr / spec_rule_id), so they are NOT derived.
+        # TARGETS (the predicate door lowers a fired selector into per-site
+        # label targets). Stamp the fact so a reload discloses "the persisted
+        # ADDRESSING is derived" instead of presenting derived labels as
+        # authored addressing. The stamp keys the DOOR, never the metadata
+        # riders: since B7 predicate-door hooks may ALSO carry the rule's
+        # expression provenance (spec_where_repr / spec_rule_id), but that
+        # rider never re-resolves — the addressing is still derived labels.
+        # attach_hooks/do spec-door entries are authored (NOT derived).
         spec_derived = bool(spec.hook_specs) and all(
             dict(hook_spec.metadata).get("created_by") == "intervene_predicate"
-            and "spec_where_repr" not in dict(hook_spec.metadata)
             for hook_spec in spec.hook_specs
         )
         spec_json = {
@@ -386,16 +387,17 @@ def load_intervention_spec(
             "function_registry_keys": data.get("function_registry_keys", []),
             "append_state": data.get("append_state", {}),
             "loaded_from_tlspec": str(spec_path),
-            # C03 / leverage B7: disclose reloads where only resolved labels
-            # survive (predicate-door lowering); legacy artifacts without the
-            # stamp settle by the same derivation over the loaded hooks.
+            # C03 / leverage B7: disclose reloads whose persisted ADDRESSING
+            # is derived per-site labels (predicate-door lowering); legacy
+            # artifacts without the stamp settle by the same door-keyed
+            # derivation over the loaded hooks (an expression-provenance
+            # rider never flips the stamp).
             "spec_derived": bool(
                 data.get(
                     "spec_derived",
                     bool(spec.hook_specs)
                     and all(
                         dict(hook_spec.metadata).get("created_by") == "intervene_predicate"
-                        and "spec_where_repr" not in dict(hook_spec.metadata)
                         for hook_spec in spec.hook_specs
                     ),
                 )

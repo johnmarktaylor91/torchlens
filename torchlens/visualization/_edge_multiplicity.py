@@ -11,6 +11,7 @@ import graphviz
 
 from ._render_common import _EDGE_LABEL_FONT_SIZE
 from ._render_utils import html_escape
+from ._typography import DEFAULT_TYPOGRAPHY
 
 __all__ = [
     "_bump_deduped_edge_multiplicity",
@@ -24,7 +25,8 @@ __all__ = [
 # the same one-cell-table idiom as the head/tail builders measured the gpt2
 # depth-1 audit entry 11 -> 0 violations at +0.0% width (vizmech D9).
 _MULTIPLICITY_LABEL_PAD = 2
-_MULTIPLICITY_LABEL_FONT_SIZE = 8
+# Sourced from the one typography record (vizmech D29).
+_MULTIPLICITY_LABEL_FONT_SIZE = int(DEFAULT_TYPOGRAPHY.annotation_size)
 
 
 def _html_multiplicity_edge_label(text: str) -> str:

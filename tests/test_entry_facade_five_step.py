@@ -12,6 +12,7 @@ foreign to answer a negative (pickle-safety).
 
 from __future__ import annotations
 
+import contextlib
 import pickle
 import sys
 
@@ -182,11 +183,18 @@ def test_appliance_probes_import_nothing_foreign() -> None:
     absolute cold-process assertion lives in the cold-import matrix).
     """
 
-    foreign = ("rsatoolbox", "brainscore_core", "IPython", "jupyter_client")
+    foreign = ("rsatoolbox", "brainscore_core", "brainscore_vision", "IPython", "jupyter_client")
     before = {name for name in foreign if name in sys.modules}
-    for name in ("anything", "rdms", "datasets", "__wrapped__"):
+    for name in ("anything", "not_a_neuro_name", "__wrapped__"):
         assert hasattr(tl.neuro, name) is False
         assert hasattr(tl.notebook, name) is False
+    # F22: "datasets"/"rdms" are REAL gated neuro names now. Probing them --
+    # and RESOLVING them where the extra is installed -- must still import
+    # none of the foreign packages (the neuro modules import them lazily
+    # inside call bodies, never at module import).
+    for name in ("datasets", "rdms", "activations_extractor", "get_activations_fn"):
+        with contextlib.suppress(AttributeError):
+            getattr(tl.neuro, name)
     after = {name for name in foreign if name in sys.modules}
     assert after == before, f"appliance probes imported foreign packages: {after - before}"
 

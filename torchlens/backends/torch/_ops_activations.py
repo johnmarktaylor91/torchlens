@@ -17,6 +17,7 @@ from ...data_classes.op import (
     _shape_or_none,
     _stamp_reference_out,
     apply_transform,
+    train_mode_tripwire_armed,
     validate_streaming_transform_output,
     validate_train_mode_transform_output,
 )
@@ -394,8 +395,10 @@ def _log_output_tensor_info(
     )
     fields_dict["transformed_activation_memory"] = None
     fields_dict["visualizer_path"] = None
-    fields_dict["bytes_delta_at_call"] = 0
-    fields_dict["bytes_peak_at_call"] = 0
+    # Not measured is None, never a fabricated 0 (observe item 15); the
+    # track_device_memory commit-site projection overwrites when sampled.
+    fields_dict["bytes_delta_at_call"] = None
+    fields_dict["bytes_peak_at_call"] = None
     (
         fields_dict["autograd_memory"],
         fields_dict["num_autograd_tensors"],
@@ -464,19 +467,33 @@ def _save_activation_fields(
             func_name=fields_dict.get("func_name"),
             is_inplace=bool(fields_dict.get("is_inplace", False)),
         )
-        budget_reservation = _admit_save_budget(
-            trace,
-            t,
-            fields_dict,
-            target_device=(
-                torch.device("cpu")
-                if save_mode == "cpu_async"
-                else _retention_device(t, fields_dict.get("output_device"))
-            ),
-            retain_in_ram=True,
-        )
         save_raw_activations = getattr(trace, "save_raw_activations", True)
         store_raw = save_raw_activations or activation_transform is None
+        # Explorer P2: when nothing raw is retained AND the transform declares
+        # the non-differentiable summary role, the transient safe_copy is
+        # skipped entirely -- the reducer sees a detached view of the live
+        # output at the save point (correct: no later in-place mutation has
+        # run yet). Function-local import: this function is rebound into
+        # backends.torch.ops globals (_split_rebind), so a new module-level
+        # name would not resolve there.
+        from ...ir.summary_role import is_summary_transform
+
+        reduce_only = not store_raw and is_summary_transform(activation_transform)
+        budget_reservation = (
+            None
+            if reduce_only
+            else _admit_save_budget(
+                trace,
+                t,
+                fields_dict,
+                target_device=(
+                    torch.device("cpu")
+                    if save_mode == "cpu_async"
+                    else _retention_device(t, fields_dict.get("output_device"))
+                ),
+                retain_in_ram=True,
+            )
+        )
         # Pre-copy identity probe (dedup-after-copy ordering): a hit reuses
         # the already-saved payload and skips the clone entirely. Restricted
         # to plain "copy" mode -- reference/view copies are free and
@@ -491,7 +508,9 @@ def _save_activation_fields(
             if store_raw and save_mode == "copy"
             else None
         )
-        if dedup_cached_out is not None:
+        if reduce_only:
+            raw_out = t
+        elif dedup_cached_out is not None:
             raw_out = dedup_cached_out
         else:
             # Single-transport retention (r8 b5 R35): ``"copy"`` mode
@@ -557,8 +576,11 @@ def _save_activation_fields(
                 raw_tensor=raw_out,
                 transformed_tensor=transformed_out,
                 transform_kind="activation",
-                backward_ready=fields_dict.get(
-                    "backward_ready", getattr(trace, "backward_ready", False)
+                tripwire_armed=train_mode_tripwire_armed(
+                    backward_ready=fields_dict.get(
+                        "backward_ready", getattr(trace, "backward_ready", False)
+                    ),
+                    transform=activation_transform,
                 ),
                 label=fields_dict.get("_layer_label_raw"),
             )
@@ -568,12 +590,27 @@ def _save_activation_fields(
                 streaming_active=writer is not None,
                 label=fields_dict.get("_layer_label_raw"),
             )
+            if reduce_only:
+                from ...ir.summary_role import ensure_summary_output_owns_storage
+
+                transformed_out = ensure_summary_output_owns_storage(transformed_out, t)
             fields_dict["transformed_out"] = transformed_out
             fields_dict["transformed_out_shape"] = _shape_or_none(transformed_out)
             fields_dict["transformed_out_dtype"] = _dtype_or_none(transformed_out)
             fields_dict["transformed_activation_memory"] = _memory_or_none(transformed_out)
         fields_dict["has_saved_activation"] = True
-        _commit_save_budget(trace, fields_dict, budget_reservation)
+        if reduce_only:
+            # No source-sized admission happened (no clone allocated); the
+            # retained summary output is charged directly so a reduce-only
+            # capture stays visible to a tight save_budget.
+            accountant = getattr(trace, "_save_budget_accountant", None)
+            if accountant is not None:
+                accountant.charge_retained(
+                    str(fields_dict.get("_layer_label_raw") or "<reduce_only>"),
+                    (fields_dict["transformed_out"],),
+                )
+        else:
+            _commit_save_budget(trace, fields_dict, budget_reservation)
 
         _stream_activation_fields(trace, fields_dict)
 

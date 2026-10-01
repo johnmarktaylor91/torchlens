@@ -654,7 +654,14 @@ def test_fold_ellipsis_discloses_hidden_calls():
 
 
 def test_weighted_result_cache_not_order_dependent():
-    """Weighted plan selection must not be poisoned by earlier weighted calls."""
+    """Weighted plan selection must not be poisoned by earlier weighted calls.
+
+    F11 (collapse memo D8): the public auto surface reads the weight-
+    independent event ladder, so the stale-cache guard exercises ``max``,
+    where optimizer weights still steer selection. The defect class is
+    unchanged: a weighted result must never be served for a differently
+    weighted call.
+    """
 
     model = nn.Sequential(*[ResidualBlock() for _ in range(6)]).eval()
     trace = tl.trace(model, torch.randn(2, 8))
@@ -665,20 +672,23 @@ def test_weighted_result_cache_not_order_dependent():
     def fingerprint(result):
         return (result.visible_count, tuple(sorted(result.selected)))
 
+    def weighted_max(weights):
+        return select_collapse_plan(trace, context, weights, mode="max")
+
     _RESULT_CACHE.pop(trace, None)
-    fresh_small = fingerprint(select_collapse_plan(trace, context, prefer_small))
+    fresh_small = fingerprint(weighted_max(prefer_small))
     _RESULT_CACHE.pop(trace, None)
-    fresh_large = fingerprint(select_collapse_plan(trace, context, prefer_large))
+    fresh_large = fingerprint(weighted_max(prefer_large))
     assert fresh_small != fresh_large
 
     _RESULT_CACHE.pop(trace, None)
-    first = fingerprint(select_collapse_plan(trace, context, prefer_small))
-    second = fingerprint(select_collapse_plan(trace, context, prefer_large))
+    first = fingerprint(weighted_max(prefer_small))
+    second = fingerprint(weighted_max(prefer_large))
     assert (first, second) == (fresh_small, fresh_large)
 
     _RESULT_CACHE.pop(trace, None)
-    first = fingerprint(select_collapse_plan(trace, context, prefer_large))
-    second = fingerprint(select_collapse_plan(trace, context, prefer_small))
+    first = fingerprint(weighted_max(prefer_large))
+    second = fingerprint(weighted_max(prefer_small))
     assert (first, second) == (fresh_large, fresh_small)
 
 

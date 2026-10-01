@@ -1,0 +1,6 @@
+# HF_FLOOR leg: the exact claimed HF-stack floors, executed (testing memo
+# D3). torch/torchvision/numpy floors are owned by the EXISTING
+# lowest-direct nightly leg (pyproject documents them); this leg owns the
+# transformers/timm floor edge.
+transformers==4.45.2
+timm==1.0.3

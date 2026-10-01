@@ -41,7 +41,6 @@ import torch
 from torch import nn
 
 from ._distributed import check_distributed_capture
-from ._errors import LazyStateUnsupportedError
 from ._input_walk import INPUT_TREE_MAX_DEPTH
 from .errors._base import CompatibilityError, TorchLensWarning
 from .utils._torch_compat import get_tracing_tensor_types
@@ -145,6 +144,11 @@ _QUANTIZED_MODULE_NAME_PREFIXES: tuple[str, ...] = (
     "torch.ao.nn.intrinsic.quantized",
     "torch.ao.nn.qat",
     "torch.nn.qat",
+    # bitsandbytes 8/4-bit modules (lane F37): same disclosed-degradation
+    # class -- capture works with value parity, but quantization-state reads
+    # (state.CB/SCB, packed uint8 payloads) sit outside the dense-tensor
+    # contract and FLOPs/out-dtype handling is best-effort.
+    "bitsandbytes.nn",
 )
 
 
@@ -409,84 +413,13 @@ def _first_user_frame() -> tuple[str | None, int | None]:
     return None, None
 
 
-def check_lazy_state(model: nn.Module) -> None:
-    """Refuse capture entry on a model carrying un-materialized lazy BUFFERS.
-
-    Pending lazy PARAMETERS are tolerated: the lazy completion unit
-    (quickstart memo wave 1c, landed by the numbers-truth lane) materializes
-    executed lazy modules during the ONE captured forward and keeps
-    never-run ones at zero geometry in the inventory. Pending lazy BUFFERS
-    (``LazyBatchNorm*`` running stats) remain a genuine blocker: the
-    capture-boundary buffer-write tracker must index every buffer's physical
-    storage BEFORE the forward runs, and a pending buffer has no storage yet
-    (measured: ``untyped_storage()`` on it raises torch's raw
-    ``load_state_dict``-flavored ``ValueError`` inside model preparation).
-    For that case the typed ``lazy_uninitialized`` teach names the first
-    pending module and enumerates the pending set by name and ``id()`` on
-    ``exc.fields`` (``pending_modules`` / ``pending_parameters`` /
-    ``pending_buffers``). The model is left untouched -- detection never
-    probes a lazy module.
-
-    Parameters
-    ----------
-    model:
-        The ``nn.Module`` about to be captured.
-
-    Raises
-    ------
-    torchlens._errors.LazyStateUnsupportedError
-        When any lazy BUFFER is still pending. Pending parameters alone
-        never refuse.
-    """
-
-    from .utils.lazy_state import has_uninitialized_lazy_state, pending_lazy_state
-
-    if not has_uninitialized_lazy_state(model):
-        return
-    pending = pending_lazy_state(model)
-    if not pending.buffers:
-        return
-    if pending.modules:
-        address, type_name, _ = pending.modules[0]
-        first = f"model.{address} ({type_name})" if address else f"the root module ({type_name})"
-    else:
-        first = f"buffer {pending.buffers[0][0]!r}"
-    caller_file, caller_line = _first_user_frame()
-    callsite_note = ""
-    if caller_file is not None and caller_line is not None:
-        from ._source_links import file_line_text
-
-        callsite_note = f" Capture was requested at {file_line_text(caller_file, caller_line)}."
-    raise LazyStateUnsupportedError(
-        f"The model contains un-materialized lazy BUFFERS whose storage does "
-        f"not exist until a real forward pass runs -- the first pending "
-        f"module is {first} ({len(pending.modules)} pending module(s), "
-        f"{len(pending.parameters)} pending parameter(s), "
-        f"{len(pending.buffers)} pending buffer(s); the full set rides "
-        f"exc.fields). Capture must index every buffer's physical storage "
-        f"before the forward runs, so this capture would fail inside model "
-        f"preparation with torch's raw uninitialized-parameter ValueError. "
-        f"(Un-materialized lazy PARAMETERS alone are fine: they materialize "
-        f"during the captured forward.) The model was left "
-        f"untouched.{callsite_note}",
-        code="lazy_uninitialized",
-        remedy=(
-            "materialize the lazy modules with one real forward pass outside "
-            "capture -- `with torch.no_grad(): model(x)` -- then retry the capture"
-        ),
-        file_path=caller_file,
-        line_no=caller_line,
-        pending_modules=pending.modules,
-        pending_parameters=pending.parameters,
-        pending_buffers=pending.buffers,
-    )
-
-
 def check_model_and_input_variants(
     model: nn.Module,
     input_args: Any = None,
     input_kwargs: dict[str, Any] | None = None,
-) -> None:
+    *,
+    admit_meta: bool = False,
+) -> Any:
     """Pre-flight check for ``trace``.
 
     Raises :class:`UnsupportedTensorVariantError` when a fundamentally
@@ -502,6 +435,22 @@ def check_model_and_input_variants(
         input_args: Positional arguments that will be passed to
             ``model.forward`` (may contain nested containers of tensors).
         input_kwargs: Keyword arguments to ``model.forward``.
+        admit_meta: Scoped weights-free admission (W2, weightsfree memo D2):
+            ``True`` exactly when resolved ``CaptureOptions.structure_only``
+            is in force at a CAPTURE entry. Meta tensors are then admitted
+            IFF the capability table's ``meta_admission`` row is flipped
+            (D8) AND the substrate is uniform (all-meta inputs and state;
+            mixed cells refuse typed with
+            ``structure_only_substrate_mismatch``). The rerun, backward, and
+            fastlog gate sites thread the default — a permanently closed
+            regime. Every other variant refusal (sparse, symbolic, fake,
+            distributed) is unchanged by admission.
+
+    Returns:
+        ``torchlens.capture._weightsfree_admission.MetaAdmissionRecord`` when
+        a meta substrate was admitted, else ``None``. The capture entry
+        registers the record against the Trace; settlement consumes it (an
+        admitted meta offense without the final marker fails closed).
     """
     if input_kwargs is None:
         input_kwargs = {}
@@ -514,20 +463,18 @@ def check_model_and_input_variants(
 
     check_model_wrapper(model)
 
-    # Un-materialized lazy PARAMETERS do not refuse capture entry: the lazy
-    # completion unit (quickstart memo wave 1c, landed by the numbers-truth
-    # lane) materializes executed lazy modules during the ONE captured
-    # forward and tolerates never-run ones at zero geometry, so the wave-1a
-    # entry teach flipped off for them on the memo's own signal (4.4: the
-    # refusal holds only until the metadata invariants pass on the lazy-head
-    # fixture). The typed ``lazy_uninitialized`` teach still fires exactly
-    # where the request is genuinely unanswerable today: pending lazy
-    # BUFFERS (the buffer-write tracker cannot index storage that does not
-    # exist yet -- checked here), the armed-lane state baseline
+    # Un-materialized lazy state does not refuse capture entry. Lazy
+    # PARAMETERS flipped off with the numbers-truth completion unit
+    # (quickstart memo wave 1c); lazy BUFFERS flipped off with the F20
+    # buffer-side completion (A10-fix2 remainder): the buffer-write tracker
+    # skips storage-less pending buffers at index time, torch's lazy
+    # pre-hook materialization plumbing passes through the wrapper unlogged,
+    # and the materialized buffer registers at the module-entry gate. The
+    # typed ``lazy_uninitialized`` teach still fires where the request is
+    # genuinely unanswerable: the armed-lane state baseline
     # (``state_baseline_unavailable`` in ``snapshot_capture_state`` -- a
-    # pending slot has no bytes to witness), and zero-input shape inference
+    # pending slot has no bytes to witness) and zero-input shape inference
     # (refuse before probing; a lazy module accepts any width).
-    check_lazy_state(model)
 
     # Distributed/sharded state is checked next: DTensor parameters otherwise
     # sail past every dense-tensor check below (a DTensor reports a real device
@@ -542,6 +489,8 @@ def check_model_and_input_variants(
 
     maybe_auto_arm()
 
+    meta_admission = _maybe_admit_meta(model, input_args, input_kwargs) if admit_meta else None
+
     offenses: list[dict[str, Any]] = []
 
     # Treat a bare tensor and a container of tensors identically — ``_iter_tensors``
@@ -555,7 +504,7 @@ def check_model_and_input_variants(
 
     # Input-side tensors.
     for path, t in _iter_tensors_with_paths(args_payload, root_path="args"):
-        if _is_meta_tensor(t):
+        if _is_meta_tensor(t) and meta_admission is None:
             offenses.append(
                 _offense_entry(
                     "meta tensor in input",
@@ -598,7 +547,7 @@ def check_model_and_input_variants(
                 )
             )
     for path, t in _iter_tensors_with_paths(dict(input_kwargs), root_path="kwargs"):
-        if _is_meta_tensor(t):
+        if _is_meta_tensor(t) and meta_admission is None:
             offenses.append(_offense_entry("meta tensor in keyword input", "", path, t))
         if _is_sparse_tensor(t):
             offenses.append(
@@ -611,23 +560,42 @@ def check_model_and_input_variants(
             offenses.append(_offense_entry(f"{tracing_kind} in keyword input", "", path, t))
 
     # Model params + buffers (dedupe across both generators).
+    # Accelerate-offload-backed meta state is admitted with evidence (lane
+    # F37 / R5 deployment envelope): the hook's weights_map materializes the
+    # real values onto the execution device for the duration of each module
+    # call, so the captured forward sees real tensors. The set is computed
+    # lazily on the FIRST meta tensor found -- zero cost on the default path.
+    offload_backed: frozenset[str] | None = None
     seen_ids: set[int] = set()
     for name, t in list(model.named_parameters()) + list(model.named_buffers()):
         if id(t) in seen_ids:
             continue
         seen_ids.add(id(t))
-        if _is_meta_tensor(t):
-            offenses.append(
-                _offense_entry(
-                    "meta tensor among model parameters/buffers",
-                    "Meta-init models (e.g. HuggingFace device_map='meta') must be "
-                    "materialized on a real device before logging.",
-                    f"model.{name}",
-                    t,
-                )
-            )
-            break  # one message is enough — don't list every param.
+        # Tracing kinds are checked BEFORE the meta cell: a FakeTensor may sit
+        # on the meta device, and admission must never launder a fake/functional
+        # variant through the meta carve-out (weightsfree memo sec 4.2).
         tracing_kind = _tracing_tensor_kind(t)
+        if _is_meta_tensor(t) and tracing_kind is None:
+            if meta_admission is None:
+                if offload_backed is None:
+                    from ._deploy_env import offload_backed_state_paths
+
+                    offload_backed = offload_backed_state_paths(model)
+                if name in offload_backed:
+                    # Offload-hook-backed meta state: real values arrive at
+                    # forward time from the hook's weights_map. Admitted.
+                    continue
+                offenses.append(
+                    _offense_entry(
+                        "meta tensor among model parameters/buffers",
+                        "Meta-init models (e.g. HuggingFace device_map='meta') must be "
+                        "materialized on a real device before logging.",
+                        f"model.{name}",
+                        t,
+                    )
+                )
+                break  # one message is enough — don't list every param.
+            continue  # admitted uniform-meta state; variant checks above still ran
         if tracing_kind is not None:
             offenses.append(
                 _offense_entry(
@@ -669,13 +637,24 @@ def check_model_and_input_variants(
             )
         meta_pointer = ""
         if any("meta tensor" in offense["name"] for offense in unique):
-            meta_pointer = (
-                "\nMeta-initialized models stay refused at this gate "
-                "(decision point D8); structure-only capture "
-                "(structure_only=True) records graph structure and shape "
-                "hypotheses for supported substrates -- see "
-                "docs/reference/structure_only_capabilities.md."
-            )
+            if _meta_admission_row_open():
+                meta_pointer = (
+                    "\nMeta-initialized models are admitted ONLY under the "
+                    "structure-only contract (decision point D8): pass "
+                    "capture=CaptureOptions(structure_only=True) with an "
+                    "all-meta model and all-meta inputs to record the op "
+                    "graph, module nesting, and shape/dtype HYPOTHESES with "
+                    "no tensor values -- see "
+                    "docs/reference/structure_only_capabilities.md."
+                )
+            else:
+                meta_pointer = (
+                    "\nMeta-initialized models stay refused at this gate "
+                    "(decision point D8); structure-only capture "
+                    "(structure_only=True) records graph structure and shape "
+                    "hypotheses for supported substrates -- see "
+                    "docs/reference/structure_only_capabilities.md."
+                )
         raise UnsupportedTensorVariantError(
             "torchlens.trace cannot run on this model/input "
             "combination. Detected unsupported tensor variant(s):\n"
@@ -702,3 +681,142 @@ def check_model_and_input_variants(
             UserWarning,
             stacklevel=3,
         )
+
+    return meta_admission
+
+
+def _meta_admission_row_open() -> bool:
+    """Whether the capability table's ``meta_admission`` row is D8-flipped.
+
+    The capability table is the ONE code authority for the flip (weightsfree
+    memo build item 16): admission plumbing lands first with the row still
+    refusing, and THE FLIP is the last merge — the row state is read through
+    the table module's own accessor, never duplicated.
+    """
+
+    from .capture.structure_only import meta_admission_open
+
+    return meta_admission_open()
+
+
+def _maybe_admit_meta(model: nn.Module, input_args: Any, input_kwargs: dict[str, Any]) -> Any:
+    """Classify substrates and admit a uniform meta capture entry (W2/D2).
+
+    Returns ``None`` when no meta tensor is present (the ordinary real-path
+    scan proceeds) or when the D8 flip has not landed (the historical meta
+    refusal proceeds unchanged). Raises typed on a mixed substrate. On
+    admission, runs the D20 identity self-test and returns the
+    ``MetaAdmissionRecord`` consumed at settlement.
+
+    Substrate uniformity is judged over the complete registered
+    parameter/buffer scan (tied objects deduplicated by identity) plus the
+    normalized input tensor leaves — never a walk of arbitrary Python object
+    graphs (memo D11). Tracing variants (fake/functional) are never
+    classified as meta; their own refusals run in the main scan.
+    """
+
+    meta_inputs, real_inputs = _classify_input_substrates(input_args, input_kwargs)
+    meta_state, real_state = _classify_state_substrates(model)
+
+    if not meta_inputs and not meta_state:
+        return None
+    if not _meta_admission_row_open():
+        return None  # pre-flip: the historical refusal in the main scan governs
+
+    if real_inputs or real_state:
+        from ._errors import SubstrateMismatchError
+
+        caller_file, caller_line = _first_user_frame()
+        meta_side = tuple(meta_inputs + meta_state)
+        real_side = tuple(real_inputs + real_state)
+        raise SubstrateMismatchError(
+            "Weights-free capture requires a UNIFORM meta substrate: every "
+            "input tensor leaf meta AND every registered parameter/buffer "
+            f"meta. This call mixes substrates — meta side: "
+            f"{', '.join(meta_side[:3])}{'...' if len(meta_side) > 3 else ''} "
+            f"({len(meta_side)} tensor(s)); real side: "
+            f"{', '.join(real_side[:3])}{'...' if len(real_side) > 3 else ''} "
+            f"({len(real_side)} tensor(s)). A mixed capture would record a "
+            "graph that is neither the real model's nor a coherent "
+            "hypothesis. Remedy: construct the WHOLE model under "
+            "torch.device('meta') and pass meta inputs "
+            "(torch.zeros(..., device='meta')), or materialize everything "
+            "on a real device.",
+            code="structure_only_substrate_mismatch",
+            file_path=caller_file,
+            line_no=caller_line,
+            meta_side=meta_side,
+            real_side=real_side,
+        )
+
+    from . import _state
+    from .capture._weightsfree_admission import MetaAdmissionRecord, self_test_meta_identity
+
+    self_test_meta_identity()
+
+    return MetaAdmissionRecord(
+        substrate="meta",
+        factory_device_policy="torchlens_owned",
+        ambient_mode_present=_ambient_device_context_present(),
+        wrap_generation=int(getattr(_state, "_wrap_epoch", 0)),
+        meta_input_paths=tuple(meta_inputs),
+        meta_state_names=tuple(meta_state),
+    )
+
+
+def _classify_input_substrates(
+    input_args: Any, input_kwargs: dict[str, Any]
+) -> tuple[list[str], list[str]]:
+    """Partition input tensor leaves into (meta paths, real paths).
+
+    Tracing variants (fake/functional) are never classified as meta; their
+    own refusals run in the main scan (weightsfree memo sec 4.2).
+    """
+
+    meta_inputs: list[str] = []
+    real_inputs: list[str] = []
+    args_payload = [] if input_args is None else input_args
+    for path, tensor in _iter_tensors_with_paths(args_payload, root_path="args"):
+        if _tracing_tensor_kind(tensor) is not None:
+            continue
+        (meta_inputs if _is_meta_tensor(tensor) else real_inputs).append(path)
+    for path, tensor in _iter_tensors_with_paths(dict(input_kwargs), root_path="kwargs"):
+        if _tracing_tensor_kind(tensor) is not None:
+            continue
+        (meta_inputs if _is_meta_tensor(tensor) else real_inputs).append(path)
+    return meta_inputs, real_inputs
+
+
+def _classify_state_substrates(model: nn.Module) -> tuple[list[str], list[str]]:
+    """Partition registered parameters/buffers into (meta names, real names).
+
+    The complete registered scan with tied objects deduplicated by identity
+    (weightsfree memo D11) — never a walk of arbitrary Python object graphs.
+    """
+
+    meta_state: list[str] = []
+    real_state: list[str] = []
+    seen_state_ids: set[int] = set()
+    for name, tensor in list(model.named_parameters()) + list(model.named_buffers()):
+        if id(tensor) in seen_state_ids:
+            continue
+        seen_state_ids.add(id(tensor))
+        if _tracing_tensor_kind(tensor) is not None:
+            continue
+        (meta_state if _is_meta_tensor(tensor) else real_state).append(f"model.{name}")
+    return meta_state, real_state
+
+
+def _ambient_device_context_present() -> bool:
+    """Whether a caller-active torch ``DeviceContext`` mode is on the stack.
+
+    Recorded as evidence-envelope provenance (D19). The admitted capture
+    scope absorbs or refuses the mode at forward time; entry only observes.
+    """
+
+    try:
+        from .backends.torch.wrappers import _get_active_device
+
+        return _get_active_device() is not None
+    except Exception:  # noqa: BLE001 — provenance observation, never authority
+        return False

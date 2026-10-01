@@ -50,6 +50,81 @@ def _coerce_input(model: Any, x: Any) -> Any:
     return x
 
 
+def _reject_unrouted_forward_kwargs(forward_kwargs: dict[str, Any]) -> None:
+    """Refuse unknown ``trace()`` keywords with a typed routing remedy.
+
+    Typed recovery on the natural HF spelling (agent memo 3.10 item 5):
+    ``tl.trace(model, input_ids=...)`` used to die with a bare CPython
+    TypeError. Unknown keywords are NEVER silently absorbed as forward
+    kwargs (a typo'd option must not become a model input); the refusal
+    names both working spellings instead.
+
+    Parameters
+    ----------
+    forward_kwargs:
+        The unknown keyword arguments ``trace()`` collected. Empty means
+        nothing to refuse and the function returns silently.
+
+    Raises
+    ------
+    ArgumentTypeError
+        With code ``trace_forward_kwargs_unrouted`` when any unknown
+        keyword is present.
+    """
+
+    if not forward_kwargs:
+        return
+    from ._errors import ArgumentTypeError
+
+    unknown = ", ".join(sorted(forward_kwargs))
+    raise ArgumentTypeError(
+        f"trace() got model-input keyword(s) it does not route: {unknown}. "
+        "Forward keyword arguments travel through input_kwargs=",
+        code="trace_forward_kwargs_unrouted",
+        remedy=(
+            "pass them as tl.trace(model, (), input_kwargs={"
+            + ", ".join(f"{key!r}: ..." for key in sorted(forward_kwargs))
+            + "}); for HuggingFace text models, "
+            "torchlens.bridge.hf.trace_text(model, 'prompt') builds the "
+            "inputs for you"
+        ),
+        unrouted_keywords=sorted(forward_kwargs),
+    )
+
+
+def _reject_extra_positional_input(grad_transform: Any) -> None:
+    """Refuse a tensor landing in ``trace()``'s fourth positional slot.
+
+    Parameters
+    ----------
+    grad_transform:
+        The value ``trace()`` received in its ``grad_transform`` slot. A
+        ``torch.Tensor`` here is almost always an extra positional model
+        input that overflowed past ``input_args``.
+
+    Raises
+    ------
+    ArgumentTypeError
+        With code ``extra_positional_input_invalid`` when the slot holds a
+        tensor.
+    """
+
+    import torch
+
+    if not isinstance(grad_transform, torch.Tensor):
+        return
+    from ._errors import ArgumentTypeError
+
+    raise ArgumentTypeError(
+        "grad_transform (the fourth positional slot) received a "
+        "torch.Tensor -- this is almost always an extra positional model "
+        "input. Bundle model inputs as one tuple, e.g. "
+        "tl.trace(model, (input_a, input_b, input_c)).",
+        code="extra_positional_input_invalid",
+        remedy="bundle positional inputs into one tuple",
+    )
+
+
 def _coerce_input_args(model: Any, input_args: Any) -> Any:
     """Coerce positional model inputs while preserving batched ergonomic inputs.
 

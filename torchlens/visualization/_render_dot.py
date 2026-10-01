@@ -42,6 +42,8 @@ from ._svg_compose import (
     _render_graph_only_svg,
     _write_composed_code_panel,
 )
+from ._typography import DEFAULT_TYPOGRAPHY
+from .overlays import resolve_overlay_request
 from .render_execution import (
     atomic_render_target,
     build_render_geometry_record,
@@ -242,6 +244,7 @@ def _resolve_draw_request(
         and node_overlay == getattr(trace, "_node_overlay_name", None)
     ):
         node_overlay = getattr(trace, "_node_overlay_scores", None)
+    node_overlay = resolve_overlay_request(trace, node_overlay)
     overrides = VisualizationOverrides(
         graph=graphviz_graph_overrides(cast(Optional[Dict[str, Any]], request.graph_overrides)),
         edge=cast(Optional[Dict[str, Any]], request.edge_overrides) or {},
@@ -317,6 +320,38 @@ def _resolve_collapse_request(
     segments: dict[str, SegmentDescriptor] = {}
     if collapse_fn is not None:
         segments = dict(getattr(collapse_fn, "_torchlens_v2_segments", {}) or {})
+    if request.fold_patterns:
+        # Declarative pattern folding (F11, collapse memo D11): matched on
+        # this trace, realized as K4-family chips through the segment
+        # channel. v1 supports the pattern-only view (collapse="none");
+        # chip atomicity across the automatic planner (band/score/ceiling/
+        # schedule) is the named follow-on, so the combination refuses
+        # typed rather than silently double-counting chip members.
+        if request.collapse != "none":
+            raise InvalidArgumentError(
+                "fold_patterns cannot combine with automatic collapse in v1; "
+                f"received collapse={request.collapse!r}",
+                code="pattern_collapse_combination_unsupported",
+                remedy=(
+                    "draw with collapse='none' for the pattern-only view, or drop fold_patterns"
+                ),
+            )
+        if request.engine == "rank":
+            # The rank backend cannot position segment-family nodes yet (the
+            # pre-existing __segment__ gap, owned by the typed-units item);
+            # chips fail closed rather than crash mid-layout (memo D12: no
+            # rank arm until the fix lands).
+            raise InvalidArgumentError(
+                "fold_patterns is not supported under vis_node_placement="
+                "'rank' in v1: the rank backend cannot position "
+                "segment-family chip nodes yet",
+                code="pattern_rank_layout_unsupported",
+                remedy="render with vis_node_placement='dot' (or 'auto')",
+            )
+        from .collapse_patterns import match_patterns
+
+        pattern_segments, _pattern_report = match_patterns(trace, request, request.fold_patterns)
+        segments.update(pattern_segments)
     segment_lookup = _build_segment_lookup(segments)
     if not trace._layers_logged:
         raise PayloadUnavailableError(
@@ -325,6 +360,16 @@ def _resolve_collapse_request(
             remedy="re-capture with tl.trace(model, x) (default exhaustive capture) before drawing",
         )
     return request, repeat_folds, segments, segment_lookup
+
+
+def _resolve_fold_patterns(fold_patterns: object) -> tuple:
+    """Resolve the raw ``fold_patterns=`` draw value to hashable specs."""
+
+    if not fold_patterns:
+        return ()
+    from .collapse_patterns import resolve_pattern_request
+
+    return resolve_pattern_request(fold_patterns)
 
 
 def _params_caption_detail(trace: "Trace") -> str:
@@ -781,6 +826,7 @@ def _finalize_forward_ir(
         container_regions=tuple(work.container_regions),
         captured_edges=tuple(work.captured_edges),
         overrides=overrides,
+        rankdir=context.rankdir,
     )
     _setup_subgraphs(
         trace,
@@ -880,11 +926,27 @@ def _emit_and_finish_forward(
         _add_orphan_island_nodes(trace, dot, request.vis_mode, context.theme)
     # Legend visibility rule (L5 channel core): show_legend is tri-state
     # (None = AUTO: channel-only disclosure legend iff a channel is active).
-    if request.show_legend is True:
-        _add_legend_to_graphviz(dot, context.theme)
-    from ._encoding import maybe_add_channel_legend
+    # Both legends render as SECTIONS of one compact HTML table in a
+    # dedicated rank (vizmech item 13, D28): the historical six disconnected
+    # nodes were packed BESIDE the model by dot and drove a 366-pt page to
+    # 1048 pt while the collision audit scored the render clean.
+    from ._legend import (
+        LegendSection,
+        add_legend_table_to_graphviz,
+        encoding_sections,
+        theme_role_sections,
+    )
 
-    maybe_add_channel_legend(dot, context.theme, request)
+    legend_sections: tuple[LegendSection, ...] = ()
+    if request.show_legend is True:
+        legend_sections += theme_role_sections(context.theme)
+    if request.encoding is not None and request.show_legend is not False:
+        # None (AUTO) or True with an active channel -> disclosure section;
+        # explicit False is honored (a deliberate act; the docs state the
+        # encoding is then undisclosed).
+        legend_sections += encoding_sections(request.encoding)
+    legend_anchor = forward_render_ir.nodes[-1].name if forward_render_ir.nodes else None
+    add_legend_table_to_graphviz(dot, context.theme, legend_sections, anchor=legend_anchor)
     compose_code_panel = context.source_text is not None and _code_panel_composition_available(
         target.fileformat, context.engine
     )
@@ -1049,6 +1111,7 @@ def draw(
     collapse_fn: CollapseFn | None = None,
     collapse: CollapseLiteral = "none",
     fold_repeats: FoldRepeatsLiteral = None,
+    fold_patterns: object = None,
     skip_fn: SkipFn | None = None,
     vis_edge_overrides: Optional[Dict[str, Any]] = None,
     vis_grad_edge_overrides: Optional[Dict[str, Any]] = None,
@@ -1132,6 +1195,7 @@ def draw(
         collapse_fn=collapse_fn,
         collapse=collapse,
         fold_repeats=fold_repeats,
+        fold_patterns=_resolve_fold_patterns(fold_patterns),
         graph_overrides=vis_graph_overrides,
         edge_overrides=vis_edge_overrides,
         grad_edge_overrides=vis_grad_edge_overrides,
@@ -1289,7 +1353,7 @@ def _add_orphan_island_nodes(
             style="dashed",
             color="gray70",
             fontcolor="gray50",
-            fontsize="10",
+            fontsize=DEFAULT_TYPOGRAPHY.secondary_pt,
         )
         for op in orphan_logs:
             base_label = str(getattr(op, "label", "") or getattr(op, "_label_raw", "")).split(

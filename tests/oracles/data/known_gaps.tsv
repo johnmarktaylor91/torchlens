@@ -2,7 +2,6 @@
 # red without a row here blocks (new delta); a row whose key is green also
 # blocks until deleted (stale). Rows are hand-curated; never regenerated.
 gap_id	predicate	key	dated	owner	note
-GAP-001	surface_classification	aggregate	2026-08-26	A10	undeclared public callable (tl.aggregate is torchlens.stats.aggregate; call-time probe: no warning, so the panel's fact-2 residual settles NOT-deprecated); enters __all__ consciously or moves -- root-facade decision owned by the A10->C01->F35 chain
 GAP-002	cache_key_coverage	CaptureOptions.batch_render	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
 GAP-003	cache_key_coverage	CaptureOptions.distributed_witness	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
 GAP-004	cache_key_coverage	CaptureOptions.emit_nvtx	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
@@ -73,3 +72,7 @@ GAP-070	cache_key_coverage	trace.reconstruction_ready	2026-08-26	A06	capture-sem
 GAP-071	cache_key_coverage	trace.storage	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
 GAP-072	cache_key_coverage	trace.streaming	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
 GAP-073	default_truth	trace.grouping	2026-08-26	A06	docstring default '"structural"' vs authority <no-authority>
+GAP-074	invariance_witness	trace.capture	2026-08-30	F36-remainder	dont-care witness slot empty: the grouped-options container needs a per-field decomposition witness (6b residue)
+GAP-075	invariance_witness	trace.input_args	2026-08-30	F36-remainder	dont-care witness slot empty: input identity is keyed through the input fingerprint, not this field; witness the fingerprint equivalence (6b residue)
+GAP-076	invariance_witness	trace.input_kwargs	2026-08-30	F36-remainder	dont-care witness slot empty: same fingerprint-equivalence witness as input_args (6b residue)
+GAP-077	invariance_witness	trace.model	2026-08-30	F36-remainder	dont-care witness slot empty: model identity is keyed through the state-dict hash, not this field; witness the hash equivalence (6b residue)

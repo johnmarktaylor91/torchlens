@@ -446,6 +446,15 @@ def _restore_changed_state(model: Any, snapshot: dict[str, Any]) -> tuple[str, .
                 changed.append(key)
                 continue
             try:
+                # W1-FAB (weightsfree memo D6, defect L5): on a storage-less
+                # substrate the byte comparison is not an observation — the
+                # historical except-means-changed reading claimed the forward
+                # wrote parameters it never touched, discarded every valid
+                # meta rescue, and kept the degraded primary
+                # (substrate-asymmetric). Weights-free the verdict is
+                # UNKNOWN: no state-change claim, no restore copy.
+                if current.is_meta or baseline.is_meta:
+                    continue
                 # NaN-aware oracle (r8 R16): ``torch.equal`` answers False for
                 # bitwise-identical NaNs, so a state slot legitimately holding
                 # NaN (a running stat poisoned upstream, a sentinel buffer)

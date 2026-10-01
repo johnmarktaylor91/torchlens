@@ -125,6 +125,10 @@ TARGET_ALL = [
     "stable_across_passes",
     "pass_variance",
     "subspace",
+    # F39 unhide (conflict-ledger row 8): tl.stats / tl.aggregate promoted
+    # from reachable-but-undeclared lazy names to declared surface = 116.
+    "stats",
+    "aggregate",
 ]
 
 CANONICAL_SUBMODULES = [
@@ -210,7 +214,9 @@ def test_all_matches_frozen_target_ledger() -> None:
     concurrent lanes each computed an increment from 111 without knowing about
     the others and every hand-derived subtotal was wrong. The subspace
     producer wave adds `subspace` (direction/subspace support selection with
-    mandatory basis provenance, DOCUMENTED-UNSTABLE) on top of that.
+    mandatory basis provenance, DOCUMENTED-UNSTABLE) on top of that. The
+    completeness-megasprint F39 unhide promotes the shipped streaming-stats
+    surface `stats` and `aggregate` (conflict-ledger row 8) = 116.
     Paper-era compatibility shims remain available through ``__getattr__`` but
     are not advertised in ``__all__``.
     """

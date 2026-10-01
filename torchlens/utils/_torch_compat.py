@@ -82,12 +82,17 @@ __all__ = [
     "HAS_ASYNC_COLLECTIVE_TENSOR",
     "HAS_CHECKPOINT_HOOK_CLASS",
     "HAS_AUTOGRAD_ENGINE_QUEUE_CALLBACK",
+    "HAS_KINETO_INMEMORY_EVENTS",
+    "HAS_KINETO_EVENT_SCOPE",
+    "HAS_MEMORY_PROFILE",
+    "KINETO_EVENT_FIELD_CONTRACT",
     "HAS_JIT_SCHEMA_ENUMERATION",
     "HAS_TENSORBASE_CLASS",
     "HAS_VARIABLE_FUNCTIONS_CLASS",
     "HAS_FP8_DTYPES",
     "HAS_PIPELINING",
     "HAS_SET_STANCE",
+    "HAS_TORCH_FUNCTION_STACK_SURGERY",
     "HAS_TRACING_TENSOR_TYPES",
     "HAS_FUNCTORCH_APIS",
     "HAS_FUNCTORCH_LEVEL_API",
@@ -153,8 +158,11 @@ __all__ = [
     "get_jit_overload_resolver_module",
     "get_optional_torch_namespace",
     "get_torch_capability_snapshot",
+    "kineto_events_from_profiler",
+    "memory_profile_from_profiler",
     "probe_c10d_capabilities",
     "get_torch_function_mode_stack_length",
+    "get_torch_function_stack_surgery",
     "get_torch_vf_namespace",
     "get_variable_function_names",
     "fix_tensor_sequence_slot",
@@ -1141,6 +1149,32 @@ def _probe_saved_tensors_hooks_patchable() -> bool:
     return init_params == ["self", "pack_hook", "unpack_hook"] and enter_params == ["self"]
 
 
+def _probe_torch_function_stack_surgery() -> bool:
+    """Return whether the torch-function mode stack supports pop/push surgery.
+
+    Returns
+    -------
+    bool
+        ``True`` when the private mode-stack primitives the weightsfree
+        ambient-context absorption (W1-ABSORB / D19) depends on all exist:
+        ``torch._C._len_torch_function_stack``, ``_get_function_stack_at``,
+        ``_pop_torch_function_stack``, and ``_push_on_torch_function_stack``.
+        The probe reads attributes only; where any is missing the absorption
+        degrades to the typed refusal / disclosure path, never a guess.
+    """
+
+    c_module = getattr(torch, "_C", None)
+    return all(
+        callable(getattr(c_module, name, None))
+        for name in (
+            "_len_torch_function_stack",
+            "_get_function_stack_at",
+            "_pop_torch_function_stack",
+            "_push_on_torch_function_stack",
+        )
+    )
+
+
 def _probe_set_stance() -> bool:
     """Return whether this torch exposes ``torch.compiler.set_stance``.
 
@@ -1246,6 +1280,40 @@ def _probe_expanded_weights_conv_picker() -> bool:
     )
 
 
+def _probe_gradient_edge() -> bool:
+    """Return whether the public autograd GradientEdge surface exists.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``torch.autograd.graph`` exposes both ``GradientEdge``
+        and ``get_gradient_edge`` -- the ``(node, output slot)`` addressing
+        pair the one-backward read engine seeds ``autograd.grad`` with.
+        Absent on older torch (the surface postdates the 2.1 floor), which is
+        a healthy old install, not a degradation: the read refuses typed.
+    """
+
+    return (
+        _import_module_attr_or_none("torch.autograd.graph", "GradientEdge") is not None
+        and _import_module_attr_or_none("torch.autograd.graph", "get_gradient_edge") is not None
+    )
+
+
+def _probe_node_prehook() -> bool:
+    """Return whether autograd graph nodes support ``register_prehook``.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``torch.autograd.graph.Node`` declares
+        ``register_prehook`` -- the slot-targeted freeze mechanism behind the
+        one-backward read's ``frozen=`` policy (M(reads) D6).
+    """
+
+    node_cls = _import_module_attr_or_none("torch.autograd.graph", "Node")
+    return node_cls is not None and hasattr(node_cls, "register_prehook")
+
+
 HAS_VARIABLE_FUNCTIONS: bool = _probe_variable_functions()
 HAS_TORCH_VF: bool = _probe_torch_vf()
 HAS_TORCH_FUNC: bool = _probe_torch_func()
@@ -1284,6 +1352,8 @@ HAS_CODE_QUALNAME: bool = _probe_code_qualname()
 HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG: bool = _probe_transformer_activation_fastpath_flag()
 HAS_ATTENTION_CAUSAL_BIAS: bool = _probe_attention_causal_bias()
 HAS_EXPANDED_WEIGHTS_CONV_PICKER: bool = _probe_expanded_weights_conv_picker()
+HAS_GRADIENT_EDGE: bool = _probe_gradient_edge()
+HAS_NODE_PREHOOK: bool = _probe_node_prehook()
 _DYNAMO_OPTIMIZED_MODULE_TYPE: type[Any] | None = None
 _DYNAMO_OPTIMIZED_MODULE_PROBED: bool = False
 _DYNAMO_ORIG_CALLABLE_MARKER_PROBED: bool = False
@@ -1303,6 +1373,7 @@ HAS_DYNAMO_IS_COMPILING: bool = False
 _DYNAMO_IS_COMPILING_FN: Callable[[], bool] | None = None
 _DYNAMO_IS_COMPILING_PROBED: bool = False
 HAS_SET_STANCE: bool = _probe_set_stance()
+HAS_TORCH_FUNCTION_STACK_SURGERY: bool = _probe_torch_function_stack_surgery()
 HAS_DYNAMO_COMPILE_COUNTERS: bool = False
 _DYNAMO_COMPILE_COUNTERS: Any | None = None
 _DYNAMO_COMPILE_COUNTERS_PROBED: bool = False
@@ -1358,6 +1429,36 @@ _CHECKPOINT_HOOK_CLASS_PROBED: bool = False
 HAS_AUTOGRAD_ENGINE_QUEUE_CALLBACK: bool = False
 _AUTOGRAD_ENGINE_QUEUE_CALLBACK: Callable[..., Any] | None = None
 _AUTOGRAD_ENGINE_QUEUE_CALLBACK_PROBED: bool = False
+# torchnative W0.12/W2.1: the in-memory Kineto event field contract behind the
+# device-time join's extraction adapter. Probed lazily at first extraction (a
+# live profiler session is required to observe an event instance).
+HAS_KINETO_INMEMORY_EVENTS: bool = False
+_KINETO_INMEMORY_EVENTS_PROBED: bool = False
+HAS_KINETO_EVENT_SCOPE: bool = False
+_KINETO_EVENT_SCOPE_PROBED: bool = False
+# torchnative W0.7 (test-oracle exception to E3): torch's still-alive private
+# categorized memory profiler, consumed ONLY by the memory-timeline parity
+# oracle while upstream keeps it. Probed lazily at first use.
+HAS_MEMORY_PROFILE: bool = False
+_MEMORY_PROFILE_PROBED: bool = False
+
+#: The exact per-event field contract (torchnative W0.12) the extraction
+#: adapter consumes: identity, integer-nanosecond interval, runtime
+#: correlation, thread id, device coordinates, the user-annotation flag, and
+#: the typed activity classification. ``scope`` is probed separately
+#: (HAS_KINETO_EVENT_SCOPE) because its absence degrades only the backward
+#: scope-1 body witness, never the join.
+KINETO_EVENT_FIELD_CONTRACT: tuple[str, ...] = (
+    "name",
+    "start_ns",
+    "duration_ns",
+    "correlation_id",
+    "start_thread_id",
+    "device_type",
+    "device_index",
+    "is_user_annotation",
+    "activity_type",
+)
 
 _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_VARIABLE_FUNCTIONS",
@@ -1399,8 +1500,12 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_ASYNC_COLLECTIVE_TENSOR",
     "HAS_CHECKPOINT_HOOK_CLASS",
     "HAS_AUTOGRAD_ENGINE_QUEUE_CALLBACK",
+    "HAS_KINETO_INMEMORY_EVENTS",
+    "HAS_KINETO_EVENT_SCOPE",
+    "HAS_MEMORY_PROFILE",
     "HAS_DYNAMO_IS_COMPILING",
     "HAS_SET_STANCE",
+    "HAS_TORCH_FUNCTION_STACK_SURGERY",
     "HAS_DYNAMO_COMPILE_COUNTERS",
     "HAS_TRACING_TENSOR_TYPES",
     "HAS_FP8_DTYPES",
@@ -1417,6 +1522,8 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG",
     "HAS_ATTENTION_CAUSAL_BIAS",
     "HAS_EXPANDED_WEIGHTS_CONV_PICKER",
+    "HAS_GRADIENT_EDGE",
+    "HAS_NODE_PREHOOK",
 )
 
 
@@ -1460,6 +1567,9 @@ _LAZY_PROBE_FAMILIES: dict[str, tuple[str, ...]] = {
         "HAS_AUTOGRAD_ENGINE_QUEUE_CALLBACK",
         "_AUTOGRAD_ENGINE_QUEUE_CALLBACK",
     ),
+    "_KINETO_INMEMORY_EVENTS_PROBED": ("HAS_KINETO_INMEMORY_EVENTS",),
+    "_KINETO_EVENT_SCOPE_PROBED": ("HAS_KINETO_EVENT_SCOPE",),
+    "_MEMORY_PROFILE_PROBED": ("HAS_MEMORY_PROFILE",),
     "_DTENSOR_SHARD_GEOMETRY_PROBED": (
         "HAS_DTENSOR_SHARD_GEOMETRY",
         "_DTENSOR_SHARD_GEOMETRY_FN",
@@ -1579,6 +1689,11 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         "HAS_GENERATOR_CLONE_STATE",
         "HAS_GENERATOR_GRAPHSAFE_GET_STATE",
         "HAS_GENERATOR_GRAPHSAFE_SET_STATE",
+        # GradientEdge / Node.register_prehook postdate the torch>=2.1 floor:
+        # their absence is a healthy old install with nothing to shim -- the
+        # one-backward read refuses typed instead of degrading.
+        "HAS_GRADIENT_EDGE",
+        "HAS_NODE_PREHOOK",
     }
 )
 """Capability flags whose ``False`` is an absent OPTIONAL feature, not a degradation.
@@ -2454,6 +2569,122 @@ def get_autograd_engine_queue_callback() -> Callable[..., Any] | None:
     return _AUTOGRAD_ENGINE_QUEUE_CALLBACK
 
 
+def kineto_events_from_profiler(profiler: Any) -> tuple[Any, ...] | None:
+    """Return one profiler's in-memory Kineto events, or ``None`` (W2.1).
+
+    The device-time join consumes in-memory ``_KinetoEvent`` objects --
+    integer-nanosecond intervals, runtime correlation IDs, thread IDs, the
+    user-annotation flag, and the typed per-event activity classification --
+    instead of writing and re-parsing a chrome-trace JSON temp file (the
+    deleted 12.4x-inflation path). The event objects ride an undocumented
+    torch seam, so extraction is feature-detected here, at the ONE sanctioned
+    private-probe boundary: the first successful extraction validates the
+    exact ``KINETO_EVENT_FIELD_CONTRACT`` on a live event and flips
+    ``HAS_KINETO_INMEMORY_EVENTS`` (plus ``HAS_KINETO_EVENT_SCOPE`` for the
+    separately-degradable ``scope`` field); any miss returns ``None`` and the
+    caller demotes to its bounded streaming chrome-event extractor -- the
+    adapter never guesses and records which path ran.
+
+    Parameters
+    ----------
+    profiler:
+        A CLOSED ``torch.profiler.profile`` instance (events are complete
+        only after ``__exit__``).
+
+    Returns
+    -------
+    tuple[Any, ...] | None
+        The raw Kineto events, or ``None`` when the in-memory seam or its
+        field contract is unavailable on this torch build.
+    """
+
+    global HAS_KINETO_INMEMORY_EVENTS, _KINETO_INMEMORY_EVENTS_PROBED
+    global HAS_KINETO_EVENT_SCOPE, _KINETO_EVENT_SCOPE_PROBED
+
+    try:
+        inner = getattr(profiler, "profiler", None)
+        results = getattr(inner, "kineto_results", None) if inner is not None else None
+        raw_events = results.events() if results is not None else None
+    except Exception:
+        raw_events = None
+    if raw_events is None:
+        if not _KINETO_INMEMORY_EVENTS_PROBED:
+            # Unprobed absence on THIS call is not proof about the build;
+            # leave the flags unprobed so a later well-formed profiler can
+            # still validate the contract.
+            return None
+        return None
+    events = tuple(raw_events)
+    if not _KINETO_INMEMORY_EVENTS_PROBED:
+        sample = events[0] if events else None
+        if sample is None:
+            # An empty stream proves the seam exists but not the field
+            # contract; extract nothing and stay unprobed.
+            return events
+        contract_ok = all(
+            callable(getattr(sample, field_name, None))
+            for field_name in KINETO_EVENT_FIELD_CONTRACT
+        )
+        HAS_KINETO_INMEMORY_EVENTS = contract_ok
+        _KINETO_INMEMORY_EVENTS_PROBED = True
+        HAS_KINETO_EVENT_SCOPE = contract_ok and callable(getattr(sample, "scope", None))
+        _KINETO_EVENT_SCOPE_PROBED = True
+    if not HAS_KINETO_INMEMORY_EVENTS:
+        mark_torch_capability_missing(
+            "HAS_KINETO_INMEMORY_EVENTS",
+            "the device-time join demotes to the bounded streaming "
+            "chrome-event extractor (in-memory Kineto event field contract "
+            "unavailable on this torch build)",
+        )
+        return None
+    return events
+
+
+def memory_profile_from_profiler(profiler: Any) -> Any | None:
+    """Return one closed profiler's private categorized memory profile.
+
+    torchnative W0.7 (the DEADLINE item): torch deprecated its only
+    categorized memory view, and the still-alive private categorizer
+    (``profiler._memory_profile()``) is the ONE oracle the rebuilt
+    categorized timeline can ever be checked against -- after upstream
+    deletes it, the parity oracle can never be built again. This accessor is
+    the test-oracle exception to the no-private-APIs rule: it
+    feature-detects, flips the named ``HAS_MEMORY_PROFILE`` flag, and
+    callers SKIP WITH A NAMED REASON on absence (the frozen torch-2.13
+    golden fixture then carries the preserved behavior).
+
+    Parameters
+    ----------
+    profiler:
+        A closed ``torch.profiler.profile`` instance created with
+        ``profile_memory=True, record_shapes=True, with_stack=True``.
+
+    Returns
+    -------
+    Any | None
+        The private memory-profile object, or ``None`` when the seam is
+        gone (flag flipped, capability marked missing).
+    """
+
+    global HAS_MEMORY_PROFILE, _MEMORY_PROFILE_PROBED
+
+    probe = getattr(profiler, "_memory_profile", None)
+    if not _MEMORY_PROFILE_PROBED:
+        HAS_MEMORY_PROFILE = callable(probe)
+        _MEMORY_PROFILE_PROBED = True
+    if not callable(probe):
+        mark_torch_capability_missing(
+            "HAS_MEMORY_PROFILE",
+            "the memory-timeline parity oracle can no longer run live; the "
+            "frozen torch-2.13 golden fixture is the remaining authority",
+        )
+        return None
+    try:
+        return probe()
+    except Exception:
+        return None
+
+
 def get_torch_function_mode_stack_length() -> int | None:
     """Return the TorchFunctionMode stack length when available.
 
@@ -2471,6 +2702,42 @@ def get_torch_function_mode_stack_length() -> int | None:
         )
         return None
     return int(stack_len())
+
+
+def get_torch_function_stack_surgery() -> (
+    tuple[Callable[[], int], Callable[[], Any], Callable[[Any], Any]] | None
+):
+    """Return the torch-function mode-stack surgery trio when available.
+
+    Returns
+    -------
+    tuple[Callable[[], int], Callable[[], Any], Callable[[Any], Any]] | None
+        ``(len_stack, pop_stack, push_stack)`` -- the private ``torch._C``
+        mode-stack primitives (``_len_torch_function_stack``,
+        ``_pop_torch_function_stack``, ``_push_on_torch_function_stack``)
+        the weightsfree ambient DeviceContext absorption (W1-ABSORB / D19)
+        pops and restores caller modes with -- or ``None`` when the
+        import-time ``HAS_TORCH_FUNCTION_STACK_SURGERY`` probe found any of
+        the four surgery primitives missing. ``None`` means an ambient
+        torch-function mode CANNOT be absorbed; the caller must refuse
+        typed, never guess.
+    """
+
+    len_stack = _nested_getattr_or_none(torch, ("_C", "_len_torch_function_stack"))
+    pop_stack = _nested_getattr_or_none(torch, ("_C", "_pop_torch_function_stack"))
+    push_stack = _nested_getattr_or_none(torch, ("_C", "_push_on_torch_function_stack"))
+    if not (
+        HAS_TORCH_FUNCTION_STACK_SURGERY
+        and callable(len_stack)
+        and callable(pop_stack)
+        and callable(push_stack)
+    ):
+        mark_torch_capability_missing(
+            "HAS_TORCH_FUNCTION_STACK_SURGERY",
+            "ambient torch-function modes cannot be absorbed for weights-free capture",
+        )
+        return None
+    return len_stack, pop_stack, push_stack
 
 
 def get_device_constructors() -> Any | None:

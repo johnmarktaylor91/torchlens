@@ -214,10 +214,19 @@ def format_model_repr(trace: Trace) -> str:
         )
 
     layer_logs = getattr(trace, "layer_logs", {}) or {}
+    # Weightsfree memo L7: the repr was an unmarked channel — a slice of a
+    # hypothesis is a hypothesis, and so is the identity card. The claim
+    # ladder rides the session discharge state (HYPOTHESIS / CORROBORATED /
+    # REFUTED), never a bare flag.
+    structure_note = ""
+    if bool(getattr(trace, "structure_only", False)):
+        from ...capture.structure_only import claim_status_for
+
+        structure_note = f", structure_only={claim_status_for(trace).value.upper()}"
     return (
         f"Trace(name={getattr(trace, 'trace_label', None)!r}, "
         f"model_class_qualname={model_class_name!r}, layers={len(layer_logs)}, "
-        f"state={state})"
+        f"state={state}{structure_note})"
     )
 
 
@@ -848,23 +857,15 @@ def _build_memory_rows(
 def _forward_peak_memory_line(trace: Trace) -> str:
     """Return the honest forward-peak-memory footer line.
 
-    Distinguishes a MEASURED zero (the forward fit inside already-resident
-    memory on the cheap host-delta basis) from a capture that never measured
-    the figure at all (no recorded backend, e.g. legacy artifacts or preview
-    backends).
+    Routed through the ONE pass-level-peak publication gate (observe item 4):
+    the basis is always named, cpu/mps render under their real meaning
+    (process RSS growth / allocator delta, never a bare "peak"), and a CUDA
+    ``0`` renders as a high-water fact instead of "used 0 bytes".
     """
 
-    backend = getattr(trace, "forward_memory_backend", None)
-    peak = getattr(trace, "forward_peak_memory", None)
-    if not backend or backend == "unknown" or peak is None:
-        return "Live forward-memory peak: unavailable (not measured on this capture)"
-    peak_bytes = int(peak)
-    if peak_bytes == 0:
-        return (
-            f"Live forward-memory peak: 0 B measured ({backend} basis; "
-            "0 can mean the forward fit in already-resident memory)"
-        )
-    return f"Live forward-memory peak: {human_readable_size(peak_bytes)} measured ({backend} basis)"
+    from torchlens.observe._peaks import format_pass_peak
+
+    return format_pass_peak(trace, "forward")
 
 
 def _build_control_flow_rows(trace: Trace) -> tuple[list[dict[str, str]], list[str]]:

@@ -69,6 +69,27 @@ class RawGraphWorkspace:
     input_tensor_addresses: list[str] = field(default_factory=list)
 
 
+@dataclass(frozen=True, slots=True)
+class ReleasedTensorStub:
+    """Payload-free surrogate for a released module-forward-arg tensor.
+
+    F20 W1a (capture-floor release-at-emission): the module-arg stash held a
+    strong reference to every module call's live input tensors for the whole
+    forward -- one of the two dominant capture-floor holders (brainpipe memo
+    section 3.3). At module exit the tensor leaves are replaced with these
+    stubs, which carry exactly what the two downstream consumers read: the
+    ``shape``/``dtype`` pair for ``format_call_arg`` summaries and the shape
+    for quantized-module FLOPs estimation. The payload itself is never
+    consumed after module exit on the torch trace path (GC-11 nulls
+    ``ModuleCall.forward_args`` before the trace is returned).
+    """
+
+    shape: tuple[int, ...]
+    dtype: str
+    device: str
+    label_raw: str | None
+
+
 @dataclass(slots=True)
 class ModuleCaptureWorkspace:
     """Module prep/stack capture state consumed by the step 16 module build."""
@@ -81,6 +102,37 @@ class ModuleCaptureWorkspace:
     module_build_data: dict[str, Any] = field(default_factory=dict)
     module_metadata: dict[Any, Any] = field(default_factory=dict)
     module_forward_args: dict[Any, Any] = field(default_factory=dict)
+
+
+def _init_module_hierarchy_data() -> dict[str, Any]:
+    """Create the transient ``module_build_data`` dict for ``ModuleCaptureWorkspace``.
+
+    Consumed by ``_build_module_logs`` (step 16) and then cleared.
+    """
+    return {
+        "addresses": [],
+        "module_types": {},
+        "module_ops": [],
+        "module_num_calls": defaultdict(lambda: 1),
+        "top_level_modules": [],
+        "top_level_module_ops": [],
+        "module_children": defaultdict(list),
+        "module_pass_children": defaultdict(list),
+        "module_nparams": defaultdict(lambda: 0),
+        "module_nparams_trainable": defaultdict(lambda: 0),
+        "module_nparams_frozen": defaultdict(lambda: 0),
+        "module_num_tensors": defaultdict(lambda: 0),
+        "module_call_index_tensors": defaultdict(lambda: 0),
+        "module_layers": defaultdict(list),
+        "module_pass_layers": defaultdict(list),
+        "module_output_structures": {},
+        "module_layer_argnames": defaultdict(list),
+        "module_training_modes": {},
+        "module_forward_start_times": {},
+        "module_forward_durations": {},
+        "module_code_contexts": {},
+        "module_call_stacks": {},
+    }
 
 
 @dataclass(slots=True)

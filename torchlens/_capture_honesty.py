@@ -129,6 +129,9 @@ def episode_facts(log: Any) -> dict[str, Any] | None:
         "capture_kind": str(header.get("capture_kind", "episode")),
         "n_steps_declared": header.get("n_steps_declared"),
         "token_feed": header.get("token_feed"),
+        "step_join": _step_join_fact(header),
+        "step_output_kind": header.get("step_output_kind"),
+        "step_output_from": header.get("step_output_from"),
         "fidelity_basis": header.get("fidelity_basis"),
         "escalated_from": header.get("escalated_from"),
         "escalation_reason": header.get("reason"),
@@ -137,6 +140,29 @@ def episode_facts(log: Any) -> dict[str, Any] | None:
     if isinstance(rows, list):
         facts["n_step_rows"] = len(rows)
     return facts
+
+
+def _step_join_fact(header: dict[str, Any]) -> str:
+    """Summarize THIS artifact's cross-step join evidence (lane F40c).
+
+    Per-artifact, never the build switch: an absent ``step_join`` envelope
+    (pre-measurement artifact, failed live measurement) reads
+    ``"unmeasured"`` -- an unmeasured join can never present as measured.
+    """
+
+    envelope = header.get("step_join")
+    if not isinstance(envelope, dict):
+        return "unmeasured"
+    break_step = envelope.get("break_step")
+    grades = envelope.get("grades")
+    if isinstance(break_step, int) and isinstance(grades, list):
+        grade = grades[break_step] if break_step < len(grades) else None
+        if grade == "declared":
+            return f"declared_crossing_at_step_{break_step}"
+        return f"broken_at_step_{break_step}"
+    if isinstance(grades, list) and any(grade == "unchecked" for grade in grades):
+        return "measured_with_unchecked_joins"
+    return "continuous"
 
 
 def capture_advisories(log: Any) -> list[dict[str, Any]]:
@@ -185,6 +211,8 @@ def capture_honesty_facts(log: Any) -> dict[str, Any]:
         "structure_only": bool(getattr(log, "structure_only", False)),
         **poison_facts(log),
     }
+    if facts["structure_only"]:
+        facts.update(_structure_evidence_facts(log))
     episode = episode_facts(log)
     if episode is not None:
         facts["episode"] = episode
@@ -192,6 +220,71 @@ def capture_honesty_facts(log: Any) -> dict[str, Any]:
     if advisories:
         facts["advisories"] = advisories
     return facts
+
+
+def _structure_evidence_facts(log: Any) -> dict[str, Any]:
+    """Evidence-envelope + session claim-status facts for a structure-only log.
+
+    ONE envelope, consumed by every surface (weightsfree memo sec 5): the
+    persisted envelope supplies substrate/values_available/factory-policy
+    facts; the SESSION discharge registry supplies the claim-status ladder
+    (HYPOTHESIS / CORROBORATED / REFUTED) and the discharge projection — an
+    agent that reads ``structure_only: true`` without ``claim_status`` cannot
+    learn that a discharge already REFUTED these shapes, precisely the fact
+    that should stop it.
+    """
+
+    from .capture.structure_only import claim_status_for, registered_discharge
+
+    facts: dict[str, Any] = {
+        "claim_status": claim_status_for(log).value,
+        "values_available": False,
+    }
+    envelope = getattr(log, "structure_evidence", None)
+    if isinstance(envelope, dict):
+        facts["substrate"] = envelope.get("substrate")
+        facts["structure_evidence"] = envelope
+    discharge = registered_discharge(log)
+    if discharge is not None:
+        facts["discharge"] = {
+            "verdict": discharge.verdict.value,
+            "comparison_vocabulary": discharge.comparison_vocabulary,
+            "structure_digest": discharge.structure_digest,
+            "real_digest": discharge.real_digest,
+            "claim_counts": dict(discharge.claim_counts),
+            "first_contradiction": discharge.first_contradiction,
+        }
+    return facts
+
+
+def _structure_only_status_lines(facts: dict[str, Any]) -> list[str]:
+    """The HYPOTHESIS / CORROBORATED / REFUTED strength ladder (memo sec 5).
+
+    HYPOTHESIS says shapes/dtypes and derived estimates are unproven;
+    CORROBORATED names the discharge and STILL says no payloads exist;
+    REFUTED is visually stronger (consumers refuse through the chokepoint).
+    """
+
+    status = facts.get("claim_status", "hypothesis")
+    substrate = facts.get("substrate")
+    substrate_note = f" ({substrate} substrate)" if substrate else ""
+    if status == "refuted":
+        discharge = facts.get("discharge") or {}
+        first = discharge.get("first_contradiction") or "unrecorded contradiction"
+        return [
+            f"!! REFUTED structure-only capture{substrate_note}: a registered real-run "
+            f"discharge contradicted these hypotheses -- {first}"
+        ]
+    if status == "corroborated":
+        discharge = facts.get("discharge") or {}
+        digest = str(discharge.get("real_digest") or "")[:16]
+        return [
+            f"structure-only capture{substrate_note}: hypotheses CORROBORATED by a real-run "
+            f"discharge (oracle digest {digest}...); no tensor payloads exist"
+        ]
+    return [
+        f"structure-only capture{substrate_note}: shapes/dtypes are hypotheses, not measurements"
+    ]
 
 
 def honesty_preamble_lines(log: Any) -> list[str]:
@@ -225,7 +318,7 @@ def honesty_preamble_lines(log: Any) -> list[str]:
     if facts["rescue_rerun"]:
         lines.append("result from disclosed rescue re-run (mode_rescue_rerun)")
     if facts["structure_only"]:
-        lines.append("structure-only capture: shapes/dtypes are hypotheses, not measurements")
+        lines.extend(_structure_only_status_lines(facts))
     if facts["poisoned"]:
         lines.append(
             "POISONED sparse run: path_faithfulness="
@@ -237,7 +330,8 @@ def honesty_preamble_lines(log: Any) -> list[str]:
         basis = episode.get("fidelity_basis")
         lines.append(
             f"episode capture: {episode.get('n_steps_declared')} declared step(s), "
-            f"token_feed={episode.get('token_feed')}, fidelity_basis={basis}"
+            f"token_feed={episode.get('token_feed')}, fidelity_basis={basis}, "
+            f"step_join={episode.get('step_join')}"
         )
         if basis == "forced":
             lines.append("forced-tokens episode: a disclosed NON-VERIFYING mode")
@@ -279,7 +373,7 @@ def honesty_banner_lines(log: Any) -> list[str]:
     if facts["rescue_rerun"]:
         lines.append("result from disclosed rescue re-run (mode_rescue_rerun)")
     if facts["structure_only"]:
-        lines.append("structure-only capture: shapes/dtypes are hypotheses")
+        lines.extend(_structure_only_status_lines(facts))
     if facts["poisoned"]:
         lines.append(
             "POISONED sparse run (path_faithfulness="
@@ -291,7 +385,7 @@ def honesty_banner_lines(log: Any) -> list[str]:
         suffix = "; forced-tokens NON-VERIFYING basis" if basis == "forced" else ""
         lines.append(
             f"episode capture ({episode.get('n_steps_declared')} declared step(s), "
-            f"fidelity_basis={basis}{suffix})"
+            f"fidelity_basis={basis}, step_join={episode.get('step_join')}{suffix})"
         )
     for advisory in facts.get("advisories", ()):
         lines.append(

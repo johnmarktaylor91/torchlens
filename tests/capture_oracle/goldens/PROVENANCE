@@ -501,3 +501,299 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 5324390684319c9a5e9dbc159f821c2ee661b7ee (dirty)
 recorded: 2026-08-27T08:04:17.107774+00:00
+---
+generator: tests/capture_oracle (in_place__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F10 lovely item 8: view_or_copy now POPULATES at the three construction sites from the closed function-semantics table (documented always-view/always-copy funcs at positional slot 0); affected goldens re-characterize sentinel_unknown -> populated on exactly those edges
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 2ec641fd474b1adb2d4ed731a58d0a45ee3882ee (dirty)
+recorded: 2026-08-28T01:07:42.279888+00:00
+---
+generator: tests/capture_oracle (tiny_transformer__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F10 lovely item 8: view_or_copy now POPULATES at the three construction sites from the closed function-semantics table (documented always-view/always-copy funcs at positional slot 0); affected goldens re-characterize sentinel_unknown -> populated on exactly those edges
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 2ec641fd474b1adb2d4ed731a58d0a45ee3882ee (dirty)
+recorded: 2026-08-28T01:07:50.832660+00:00
+---
+generator: tests/capture_oracle (in_place__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F10 lovely item 8: view_or_copy now POPULATES at the three construction sites from the closed function-semantics table (documented always-view/always-copy funcs at positional slot 0); affected goldens re-characterize sentinel_unknown -> populated on exactly those edges
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 2ec641fd474b1adb2d4ed731a58d0a45ee3882ee (dirty)
+recorded: 2026-08-28T01:07:57.935406+00:00
+---
+generator: tests/capture_oracle (recurrent__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:44:20.790921+00:00
+---
+generator: tests/capture_oracle (failing_conditional__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:44:29.065175+00:00
+---
+generator: tests/capture_oracle (plain_cnn__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:44:38.386392+00:00
+---
+generator: tests/capture_oracle (plain_cnn__halt_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:44:46.876902+00:00
+---
+generator: tests/capture_oracle (recurrent__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:44:56.517927+00:00
+---
+generator: tests/capture_oracle (in_place__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:45:06.837987+00:00
+---
+generator: tests/capture_oracle (mutating_pre_hook__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:45:16.879668+00:00
+---
+generator: tests/capture_oracle (mutating_pre_hook__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:45:27.253537+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:45:36.905250+00:00
+---
+generator: tests/capture_oracle (plain_cnn__halt_trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:45:46.157705+00:00
+---
+generator: tests/capture_oracle (plain_cnn__lookback)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:45:55.817411+00:00
+---
+generator: tests/capture_oracle (plain_cnn__intervene_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:46:04.607905+00:00
+---
+generator: tests/capture_oracle (plain_cnn__backward_trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:46:14.731076+00:00
+---
+generator: tests/capture_oracle (plain_cnn__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:46:23.805608+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:46:35.285065+00:00
+---
+generator: tests/capture_oracle (plain_cnn__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:46:43.944791+00:00
+---
+generator: tests/capture_oracle (tiny_transformer__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:46:55.014234+00:00
+---
+generator: tests/capture_oracle (plain_cnn__mixed_selector)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:47:05.605203+00:00
+---
+generator: tests/capture_oracle (train_batchnorm__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:47:16.130354+00:00
+---
+generator: tests/capture_oracle (train_batchnorm__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:47:27.777396+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_predicate)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:47:38.274978+00:00
+---
+generator: tests/capture_oracle (train_batchnorm__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:47:48.663379+00:00
+---
+generator: tests/capture_oracle (plain_cnn__backward_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:47:57.624315+00:00
+---
+generator: tests/capture_oracle (conditional__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:48:08.155051+00:00
+---
+generator: tests/capture_oracle (in_place__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:48:17.794769+00:00
+---
+generator: tests/capture_oracle (plain_cnn__intervene_trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:48:27.719063+00:00
+---
+generator: tests/capture_oracle (plain_cnn__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:48:39.569244+00:00
+---
+generator: tests/capture_oracle (tiny_transformer__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:48:53.368729+00:00
+---
+generator: tests/capture_oracle (recurrent__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:49:03.343274+00:00
+---
+generator: tests/capture_oracle (conditional__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:49:12.990369+00:00
+---
+generator: tests/capture_oracle (failing_conditional__trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: F24 observe item 15 zero-site sweep: bytes_delta_at_call/bytes_peak_at_call stop fabricating 0 B when unmeasured (population state defaulted_zero -> unknown); enumerated in the F24 lane report
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 726c01360b8aee68c521d088f4ee45719276b67a (dirty)
+recorded: 2026-08-28T01:49:22.198401+00:00
+---
+generator: tests/capture_oracle (tiny_transformer__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: T73b re-reconcile (F24): merged tree carries BOTH the F10 view_or_copy population (lovely item 8) and the F24 observe item 15 zero-site sweep (bytes_delta_at_call/bytes_peak_at_call defaulted_zero -> unknown); regenerated so the goldens characterize the union
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: e7f22529bd7bec6027947d15a3d6e1f0a1d33f50 (dirty)
+recorded: 2026-08-29T17:12:04.067079+00:00
+---
+generator: tests/capture_oracle (in_place__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: T73b re-reconcile (F24): merged tree carries BOTH the F10 view_or_copy population (lovely item 8) and the F24 observe item 15 zero-site sweep (bytes_delta_at_call/bytes_peak_at_call defaulted_zero -> unknown); regenerated so the goldens characterize the union
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: e7f22529bd7bec6027947d15a3d6e1f0a1d33f50 (dirty)
+recorded: 2026-08-29T17:12:10.419151+00:00
+---
+generator: tests/capture_oracle (in_place__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: T73b re-reconcile (F24): merged tree carries BOTH the F10 view_or_copy population (lovely item 8) and the F24 observe item 15 zero-site sweep (bytes_delta_at_call/bytes_peak_at_call defaulted_zero -> unknown); regenerated so the goldens characterize the union
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: e7f22529bd7bec6027947d15a3d6e1f0a1d33f50 (dirty)
+recorded: 2026-08-29T17:12:16.852176+00:00

@@ -65,8 +65,9 @@ _FORBIDDEN: dict[str, re.Pattern[str]] = {
     # Removed Trace/Bundle method spellings (canonical: push/push_from/run/
     # span/conditional_arm_entry_edges). ``validate_saved_outs`` is absent on
     # purpose: the INTERNAL ``validation.core.validate_saved_outs`` keeps the
-    # name (re-exported as ``validate_trace_saved_outs``); only the top-level
-    # spelling was removed, and the ``tl_moved`` row covers it.
+    # name (its zero-reference ``validate_trace_saved_outs`` rename re-export
+    # was deleted by the F38 punch list); only the top-level spelling was
+    # removed, and the ``tl_moved`` row covers it.
     "methods": re.compile(
         r"\.(?:replay|replay_from|rerun|record_span"
         r"|conditional_then_entry_edges|conditional_elif_entry_edges"

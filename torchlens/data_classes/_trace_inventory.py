@@ -154,21 +154,16 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
 
     from ..quantities import Bytes
 
-    ops = list(trace.ops)
-    saved_ops = [op for op in ops if getattr(op, "has_saved_activation", False)]
-    saved_bytes = Bytes(
-        sum(
-            int(memory)
-            for op in saved_ops
-            if (memory := getattr(op, "activation_memory", None)) is not None
-        )
-    )
     outcome = getattr(trace, "outcome", None)
     capture_duration = getattr(trace, "capture_duration", None)
     from .._capture_honesty import capture_advisories, poison_facts
-    from ..report._factcore import _memory
+    from ..report._factcore import factcore
 
-    memory_facts = _memory(trace)
+    # BOM is a THIN PROJECTION of FactCore (sumfam item 14 / D16): its
+    # counts and parameter facts read the one numbers substrate; its
+    # payload figures keep the D8 retained_now scope. It mints nothing.
+    core = factcore(trace)
+    memory_facts = core.memory
 
     logged_values = (getattr(trace, "annotations", {}) or {}).get("logged_values", {})
     return {
@@ -185,10 +180,14 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
             "advisories": capture_advisories(trace),
         },
         "graph": {
-            "num_ops": len(ops),
-            "num_layers": getattr(trace, "num_layers", None),
-            "num_modules": getattr(trace, "num_modules", None),
-            "num_module_calls": getattr(trace, "num_module_calls", None),
+            # The explicit counts vocabulary (sumfam D3): both grains print
+            # under their names, never a bare "operations".
+            "num_ops": core.counts.tracked_tensor_rows,
+            "num_compute_ops": core.counts.compute_ops,
+            "num_alias_rows": core.counts.alias_rows,
+            "num_layers": core.counts.layers,
+            "num_modules": core.counts.modules,
+            "num_module_calls": core.counts.module_calls,
             "num_inputs": len(getattr(trace, "input_ops", ()) or ()),
             "num_outputs": len(getattr(trace, "output_ops", ()) or ()),
             "is_recurrent": getattr(trace, "is_recurrent", False),
@@ -196,9 +195,10 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
             "num_conditionals": getattr(trace, "num_conditionals", 0),
         },
         "parameters": {
-            "num_params": getattr(trace, "num_params", None),
-            "num_params_trainable": getattr(trace, "num_params_trainable", None),
-            "num_params_frozen": getattr(trace, "num_params_frozen", None),
+            "num_params": core.params.total,
+            "num_params_trainable": core.params.trainable,
+            "num_params_frozen": core.params.frozen,
+            "tied_param_groups": core.params.tied_groups,
             "num_param_tensors": len(getattr(trace, "params", {}) or {}),
             "param_memory": getattr(trace, "total_param_memory", None),
         },
@@ -212,8 +212,8 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
         # not contain.)
         "activations": {
             "payload_scope": "retained_now",
-            "num_saved_at_capture": len(saved_ops),
-            "at_capture_memory": saved_bytes,
+            "num_saved_at_capture": memory_facts.at_capture_saved_ops,
+            "at_capture_memory": Bytes(memory_facts.at_capture_bytes),
             "retained_now_memory": Bytes(memory_facts.retained_now_bytes),
             "num_present_now": memory_facts.retained_now_present_ops,
             "num_lazy_now": memory_facts.retained_now_lazy_ops,

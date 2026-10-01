@@ -49,8 +49,12 @@ def _assert_model_explorer_structure(payload: dict[str, Any]) -> None:
         Parsed Model Explorer artifact.
     """
 
-    assert payload["schema"] == "torchlens.model_explorer.v2"
-    assert isinstance(payload["disclaimer"], str)
+    # Schema v3 (lane F15): the payload carries ONLY the vendor
+    # GraphCollection keys -- extra top-level keys (the v2 schema/disclaimer
+    # block) are measured to fail Model Explorer's strict parse; TorchLens
+    # provenance now rides the "" groupNodeAttributes row.
+    assert set(payload) == {"label", "graphs", "graphSorting"}
+    assert payload["graphSorting"] == "name_asc"
     assert isinstance(payload["label"], str) and payload["label"]
     assert isinstance(payload["graphs"], list) and payload["graphs"]
     for graph in payload["graphs"]:
@@ -69,17 +73,19 @@ def _assert_model_explorer_structure(payload: dict[str, Any]) -> None:
                 and isinstance(attr.get("value"), str)
                 for attr in node["attrs"]
             )
-            assert isinstance(node["incomingEdges"], list)
             assert all(
-                set(edge) == {"sourceNodeId"}
+                set(edge) <= {"sourceNodeId", "sourceNodeOutputId", "targetNodeInputId"}
                 and isinstance(edge["sourceNodeId"], str)
                 and edge["sourceNodeId"] in node_ids
-                for edge in node["incomingEdges"]
+                for edge in node.get("incomingEdges", [])
             )
+        # The "" group row is the visible TorchLens provenance/disclosure
+        # block (memo D7) and must be present on every emitted graph.
+        assert graph["groupNodeAttributes"][""]["produced_by"].startswith("torchlens ")
 
 
 def _assert_netron_structure(payload: dict[str, Any]) -> None:
-    """Validate required ONNX-JSON keys and graph referential integrity.
+    """Validate required ONNX-JSON keys and graph referential integrity (schema v2).
 
     Parameters
     ----------
@@ -87,36 +93,43 @@ def _assert_netron_structure(payload: dict[str, Any]) -> None:
         Parsed ONNX ``ModelProto`` JSON artifact.
     """
 
-    assert payload["irVersion"] == 8
+    assert payload["irVersion"] == 10
     assert payload["producerName"] == "torchlens"
-    assert payload["opsetImport"] == [{"domain": "ai.torchlens.lossy", "version": 1}]
+    domains = {row["domain"] for row in payload["opsetImport"]}
+    assert "ai.torchlens.lossy" in domains
+    assert domains <= {"ai.torchlens.lossy", "ai.torchlens.module"}
     assert "not a runnable ONNX model" in payload["docString"]
     props = {prop["key"]: prop["value"] for prop in payload["metadataProps"]}
-    honesty_value = props.pop("torchlens.capture_honesty")
+    honesty_value = props["torchlens.capture_honesty"]
     assert json.loads(honesty_value)["schema"] == "torchlens.capture_honesty.v1"
-    assert props == {
-        "torchlens.lossy_export": "true",
-        "torchlens.runnable": "false",
-    }
+    assert props["torchlens.lossy_export"] == "true"
+    assert props["torchlens.runnable"] == "false"
+    assert props["torchlens.netron_schema"] == "2"
+    assert props["torchlens.granularity"] in {"op", "module", "rolled"}
     graph = payload["graph"]
     assert isinstance(graph["name"], str)
     assert "not a runnable ONNX model" in graph["docString"]
     assert isinstance(graph["node"], list) and graph["node"]
     node_names = [node["name"] for node in graph["node"]]
     outputs = [output for node in graph["node"] for output in node["output"]]
+    graph_inputs = [row["name"] for row in graph.get("input", [])]
     assert len(node_names) == len(set(node_names))
     assert len(outputs) == len(set(outputs))
+    assert graph.get("output"), "graph outputs must be present (netron #71 promotion)"
+    known_values = set(outputs) | set(graph_inputs)
+    assert all(row["name"] in known_values for row in graph["output"])
     for node in graph["node"]:
         assert isinstance(node["opType"], str)
-        assert node["domain"] == "ai.torchlens.lossy"
+        assert node["domain"] in {"ai.torchlens.lossy", "ai.torchlens.module"}
         assert isinstance(node["input"], list)
-        assert all(isinstance(input_id, str) and input_id in outputs for input_id in node["input"])
+        assert all(
+            isinstance(input_id, str) and input_id in known_values for input_id in node["input"]
+        )
         assert isinstance(node["output"], list) and node["output"]
         assert all(
             isinstance(attribute, dict)
-            and attribute.get("name") == "shape"
-            and attribute.get("type") == "INTS"
-            and isinstance(attribute.get("ints"), list)
+            and isinstance(attribute.get("name"), str)
+            and isinstance(attribute.get("type"), str)
             for attribute in node.get("attribute", [])
         )
 
@@ -161,8 +174,14 @@ def _assert_or_regenerate_export_golden(name: str, payload: dict[str, Any]) -> b
     return False
 
 
+#: Netron schema-v2 node attributes that report per-run measurements
+#: (wall-clock durations); structurally real but never byte-stable, so the
+#: environment-independent golden replaces their values with a marker.
+_RUN_VARYING_ATTRS = frozenset({"observed_duration_us", "observed_duration_inclusive_us"})
+
+
 def _normalize_export_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    """Normalize process-global trace identifiers in an export payload.
+    """Normalize process-global identifiers and per-run measurements.
 
     Parameters
     ----------
@@ -172,7 +191,8 @@ def _normalize_export_payload(payload: dict[str, Any]) -> dict[str, Any]:
     Returns
     -------
     dict[str, Any]
-        A detached payload with its generated graph identifier normalized.
+        A detached payload with its generated graph identifier and any
+        run-varying measurement values normalized.
     """
 
     normalized = json.loads(json.dumps(payload))
@@ -180,8 +200,29 @@ def _normalize_export_payload(payload: dict[str, Any]) -> dict[str, Any]:
         normalized["graphs"][0]["id"] = "<trace-id>"
         if "label" in normalized:
             normalized["label"] = "<trace-id>"
-    else:
-        normalized["graph"]["name"] = "<trace-id>"
+        # Measured wall-clock rows are real per-run values, not structural
+        # contract: strip them so the golden stays environment-independent
+        # (the same doctrine that keeps floats out of these fixtures).
+        for graph in normalized["graphs"]:
+            for node in graph.get("nodes", []):
+                node["attrs"] = [
+                    attr for attr in node.get("attrs", []) if attr.get("key") != "time"
+                ]
+            for row in (graph.get("groupNodeAttributes") or {}).values():
+                row.pop("time", None)
+        return normalized
+    normalized["graph"]["name"] = "<trace-id>"
+    node_lists = [normalized["graph"].get("node", [])]
+    node_lists.extend(fn.get("node", []) for fn in normalized.get("functions", []))
+    for nodes in node_lists:
+        for node in nodes:
+            for attribute in node.get("attribute", []):
+                if attribute.get("name") in _RUN_VARYING_ATTRS:
+                    attribute["i"] = "<measured>"
+    props = normalized.get("metadataProps", [])
+    for row in props:
+        if row.get("key") == "torchlens.capture_honesty":
+            row["value"] = "<capture-honesty-json>"
     return normalized
 
 
@@ -379,7 +420,7 @@ def test_tracker_exports_reject_paths_with_clear_type_errors(
     """Tracker helpers need live tracker objects, not filesystem paths."""
 
     with pytest.raises(TypeError, match="tensorboard expects an existing tracker object"):
-        tl.export.tensorboard(export_log, str(tmp_path / "tb"))
+        tl.export.tensorboard(export_log, str(tmp_path / "tb"), step=0)
     with pytest.raises(TypeError, match="mlflow expects an existing tracker object"):
         tl.export.mlflow(export_log, client=tmp_path / "mlruns")
     with pytest.raises(TypeError, match="aim expects an existing tracker object"):
@@ -438,10 +479,6 @@ def test_static_graph_adapters_and_hub_dry_run(export_log: Any, tmp_path: Path) 
     explorer_path = tl.export.model_explorer(export_log, tmp_path / "explorer.json")
     explorer_payload = json.loads(explorer_path.read_text(encoding="utf-8"))
     _assert_model_explorer_structure(explorer_payload)
-    assert (
-        "acceptance by future external releases is not guaranteed"
-        in (explorer_payload["disclaimer"])
-    )
     regenerated = _assert_or_regenerate_export_golden(
         "model_explorer.json", _normalize_export_payload(explorer_payload)
     )
@@ -499,7 +536,7 @@ def test_recurrent_static_graph_exports_use_unique_pass_qualified_ids(tmp_path: 
     explorer_graph = json.loads(explorer_path.read_text(encoding="utf-8"))["graphs"][0]
     explorer_ids = [node["id"] for node in explorer_graph["nodes"]]
     assert len(explorer_ids) == len(set(explorer_ids)) == 8
-    assert sum(len(node["incomingEdges"]) for node in explorer_graph["nodes"]) == 7
+    assert sum(len(node.get("incomingEdges", [])) for node in explorer_graph["nodes"]) == 7
 
     _assert_model_explorer_structure(json.loads(explorer_path.read_text(encoding="utf-8")))
 
@@ -507,8 +544,14 @@ def test_recurrent_static_graph_exports_use_unique_pass_qualified_ids(tmp_path: 
     _assert_netron_structure(netron_payload)
     netron_nodes = netron_payload["graph"]["node"]
     netron_outputs = {output for node in netron_nodes for output in node["output"]}
-    assert len(netron_nodes) == len(netron_outputs) == 8
-    assert all(input_id in netron_outputs for node in netron_nodes for input_id in node["input"])
+    # Schema v2: input/output layers promote to graph I/O (memo D-04), so the
+    # six op passes remain as nodes, all pass-qualified and unique.
+    assert len(netron_nodes) == len(netron_outputs) == 6
+    assert {node["name"] for node in netron_nodes} == {
+        f"{base}:{index}" for base in ("linear_1_1", "relu_1_2") for index in (1, 2, 3)
+    }
+    known = netron_outputs | {row["name"] for row in netron_payload["graph"]["input"]}
+    assert all(input_id in known for node in netron_nodes for input_id in node["input"])
 
 
 def test_model_explorer_package_accepts_graph_schema(export_log: Any, tmp_path: Path) -> None:
@@ -618,10 +661,16 @@ def test_netron_export_is_valid_onnx_modelproto_json(export_log: Any, tmp_path: 
 
     netron_path = tl.export.netron(export_log, tmp_path / "netron.json")
     model = json_format.Parse(netron_path.read_text(encoding="utf-8"), onnx.ModelProto())
-    assert model.ir_version == 8
+    assert model.ir_version == 10
     assert model.producer_name == "torchlens"
     assert len(model.graph.node) > 0
-    assert all(node.domain == "ai.torchlens.lossy" for node in model.graph.node)
+    assert all(
+        node.domain in ("ai.torchlens.lossy", "ai.torchlens.module") for node in model.graph.node
+    )
+    # The official structural validator joins the gate (memo D-07): it caught
+    # SSA violations, unsorted bodies, and the killer function cycle that
+    # netron's permissive reader swallowed or died on.
+    onnx.checker.check_model(model, full_check=True)
 
 
 def test_netron_export_passes_netron_onnx_json_sniffer(export_log: Any, tmp_path: Path) -> None:
@@ -646,7 +695,9 @@ def test_netron_export_passes_netron_onnx_json_sniffer(export_log: Any, tmp_path
         or obj.get("producerName") is not None
         or isinstance(obj.get("opsetImport"), list)
         or isinstance(obj.get("metadataProps"), list)
-        or (isinstance(obj.get("graph"), list) and isinstance(obj["graph"].get("node"), list))
+        # dict guard: a list-valued graph crashed the transcription on .get()
+        # (netron memo B0's sniffer list-crash; the vendor checks objectness).
+        or (isinstance(obj.get("graph"), dict) and isinstance(obj["graph"].get("node"), list))
     )
     assert no_snake_markers and camel_markers
 

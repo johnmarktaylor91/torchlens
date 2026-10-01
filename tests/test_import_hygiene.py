@@ -351,32 +351,48 @@ for facade_name, module_path in facades.items():
 # failure class the oracles harness exists to catch.
 assert collisions == {
     "accessors": [],
-    "attribution": [], "autoroute": ["input", "output"],
+    # F29: the agent inspection surface -- children are cli plus
+    # underscore-private modules; __all__ never collides with a child.
+    "agent": [],
+    # T47/T48 (2026-08-28): attribution deliberately exports its onebackward
+    # child module (tl.attribution.onebackward is the documented door to the
+    # one-backward read surface), the fastlog/intervention pattern.
+    "attribution": ["onebackward"], "autoroute": ["input", "output"],
     "backends": [],
     # Entry/facade repair (megasprint A10): the integration and appliance
     # namespaces gained root reachability rows; bridge/callbacks export
-    # exactly their lazy child modules, neuro/notebook export nothing yet.
+    # exactly their lazy child modules.
+    # F16 (2026-08-29): treescope joins the bridge lazy-module roster, and
+    # notebook deliberately exports its three real child modules (the
+    # ``torchlens.bridge`` idiom: CardTree IR, the cards, the frontier query).
     "bridge": [
         "brain_score", "captum", "depyf", "dialz", "gradcam", "hf",
         "huggingface", "inseq", "lit", "mcp", "nnsight", "profiler",
         "repeng", "rsatoolbox", "sae", "sae_lens", "shap",
-        "steering_vectors",
+        "steering_vectors", "treescope",
+        # F21 tvscope B8: the per-site xarray/NeuroidAssembly adapter module.
+        "xarray",
     ],
+    "brainpipe": [],
     "callbacks": ["lightning"],
     "neuro": [],
-    "notebook": [],
+    "notebook": ["cards", "cardtree", "frontier"],
     "captured_run": [],
     "compat": ["lovely", "torchextractor", "torchshow"],
     "data_classes": [], "dataset_extraction": [], "debug": [], "distributed": [],
     "errors": [], "examples": [],
     "experimental": ["dagua", "node_styles"], "export": [],
-    "fastlog": ["dry_run", "recover"], "intervention": ["sites"],
+    # T48 reconcile: intervention's __all__ gained the compose child module
+    # (F02 stochastic-edit family) alongside sites.
+    "fastlog": ["dry_run", "recover"], "intervention": ["compose", "sites"],
     "hash": [], "io": [], "ir": [], "merged": [], "observers": [], "options": [],
     "partial": [], "quantities": [], "report": [], "repgeom": [],
     "receptive_field": ["rules"], "stats": [],
     # C04: the transforms facade's children are all underscore-private.
     "transforms": [],
     "types": [], "user_funcs": [],
+    # F29: tl.utils gained a root row (the docs teach tl.utils.doctor()).
+    "utils": [],
     "validation": [], "visualization": [], "viz": [],
 }
 

@@ -26,7 +26,7 @@ from collections.abc import Collection, Iterable, Mapping, Set
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, cast, overload
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast, overload
 
 import torch
 from safetensors import SafetensorError
@@ -40,18 +40,28 @@ from ..data_classes.trace import Trace
 from ..errors import TorchLensWarning
 from ..utils.display import user_stacklevel
 from . import (
-    MIN_TLSPEC_VERSION,
     TLSPEC_VERSION,
     BlobRef,
     FieldPolicy,
     PayloadLoadHints,
     TorchLensIOError,
     _json,
-    below_floor_error,
+    raise_if_manifest_below_floor,
 )
 from ._canonical_pickle import dump_canonical_metadata
 from ._durability import fsync_dir, fsync_tree
 from ._safe_unpickle import SafeBundleUnpickler
+from ._save_gates import (
+    _refuse_edge_intervened_save,
+    _refuse_shard_local_erasure,
+    _save_bundle_via_container_door,
+)
+from .bundle_metadata import (
+    _load_gated_member_relations,
+    _load_lineage_sections,
+    _partition_bundle_sections,
+)
+from .compat_ledger import raise_if_modellog_portable
 from .lazy import LazyActivationRef
 from .manifest import Manifest, Provenance, TensorEntry, enforce_version_policy, sha256_of_file
 from .paths import (
@@ -266,92 +276,6 @@ class _FastCopySpec:
     source_ref: LazyActivationRef
 
 
-def _refuse_edge_intervened_save(trace: Any) -> None:
-    """PERMANENT erasure-prevention invariant for edge substitutions (L6 4.3).
-
-    The tlspec v8 coordinated bump persists ``Op.edge_substitutions``
-    (BLOB_RECURSIVE) and ``Op.edge_replacement_stamps`` (KEEP), so ordinary
-    saves of edge-intervened traces now proceed. Like the shard-local guard
-    below, the predicate keys on the ACTIVE SCHEMA rather than being deleted:
-    it refuses typed IFF tier-(ii) entries are present AND the active policy
-    would drop them (a schema regression re-dropping the carrier, with the S3
-    switch inactive). Any such regression re-fires this refusal instead of
-    silently presenting post-edit values with zero edge provenance.
-    """
-
-    carriers = [
-        op.label
-        for op in getattr(trace, "layer_list", ()) or ()
-        if getattr(op, "edge_substitutions", None)
-    ]
-    if not carriers:
-        return
-    from ..data_classes.op import Op as _Op
-    from . import FieldPolicy
-    from .prerelease import prerelease_fields_active
-
-    policy_entry = _Op.FIELD_POLICY.get("edge_substitutions")
-    portable_policy = getattr(policy_entry, "portable_policy", policy_entry)
-    if portable_policy is not None and portable_policy is not FieldPolicy.DROP:
-        return
-    if prerelease_fields_active():
-        return
-    from .._errors import InvalidArgumentError
-
-    raise InvalidArgumentError(
-        "this trace carries edge-substitution interventions, and the active "
-        "schema has no occurrence-granular carrier at ANY save level: the "
-        "artifact would present post-edit values with zero edge provenance. "
-        "Edge-intervened traces are session-only under such a schema.",
-        code="edge_intervention_save_unsupported",
-        remedy="analyze in-session, or re-capture without the edge edit before saving",
-        carriers=tuple(carriers),
-    )
-
-
-def _refuse_shard_local_erasure(trace: Any) -> None:
-    """PERMANENT erasure-prevention invariant for the shard-local disclosure.
-
-    L8/F6 (census plan 3.2b): an ordinary bundle write must NEVER complete if
-    it would silently drop the shard-local disclosure -- a saved shard-local
-    trace reloading as a plain dense-looking trace is the marker-free-artifact
-    class this invariant keeps EMPTY BY CONSTRUCTION. Refuses typed IFF the
-    trace carries ``distributed_scope == "rank_local_shard"`` AND the marker
-    is not persisted by the active schema (still ``FieldPolicy.DROP`` with the
-    S3 pre-release switch inactive). The wave-3 coordinated bump changes the
-    ENVIRONMENT, not this predicate: once the policy persists, the second
-    conjunct goes false by construction and ordinary saves proceed; the code,
-    predicate, and forced-DROP tamper red all REMAIN so any schema regression
-    that would re-drop the disclosure re-fires the invariant. Never deleted,
-    never a narrowing, no D-ruling owed.
-    """
-
-    if getattr(trace, "distributed_scope", None) != "rank_local_shard":
-        return
-    from ..data_classes.trace import Trace as _Trace
-    from . import FieldPolicy
-    from .prerelease import prerelease_fields_active
-
-    policy_entry = _Trace.FIELD_POLICY.get("distributed_scope")
-    portable_policy = getattr(policy_entry, "portable_policy", policy_entry)
-    if portable_policy is not None and portable_policy is not FieldPolicy.DROP:
-        return
-    if prerelease_fields_active():
-        return
-    from .._errors import InvalidArgumentError
-
-    raise InvalidArgumentError(
-        "this trace is a shard-local capture (distributed_scope == "
-        "'rank_local_shard'), and the active schema does not persist the "
-        "shard-local disclosure: an ordinary save would reload as a plain "
-        "trace with silently mis-stated parameter geometry. Shard-local "
-        "traces are session-only until the coordinated schema bump persists "
-        "the marker and its dual-geometry evidence.",
-        code="shard_local_persistence_unsupported",
-        remedy="analyze in-session; persistence lands with the coordinated schema bump",
-    )
-
-
 def save(
     trace: Trace,
     path: str | Path,
@@ -374,7 +298,10 @@ def save(
     Parameters
     ----------
     trace:
-        Completed model log to save.
+        Completed model log to save. A ``Bundle`` delegates to the container
+        door (``Bundle.save``): members gate and persist individually, and
+        per-trace payload options refuse typed
+        (``bundle_save_option_unsupported``).
     path:
         Output bundle directory path.
     level:
@@ -514,6 +441,40 @@ def save(
             "and re-derive the view after loading.",
             code="slice_save_unsupported",
         )
+    # A Bundle is a CONTAINER product, never a Trace: applying the per-trace
+    # N1 gate below to it read the container's empty outcome sidecar as
+    # UNKNOWN and false-refused EVERY bundle tl.bundle() built (with the
+    # hand-built-object warning) while bundle.save() worked -- the third
+    # instance of the two-answers outcome-authority disease (foldB D9).
+    # tl.save delegates to the ONE container door before any per-trace gate;
+    # each member's own save applies the N1 gate PER MEMBER inside the
+    # container write (D8: a container-level status is a fold reported
+    # beside results, never a gate on a member it does not describe). Same
+    # sys.modules shape as the presenter refusals above: a Bundle can only
+    # exist after its module was imported. This DELEGATION precedes the
+    # pinned save-entry refusal order without reordering it -- the branches
+    # dispatch on disjoint types.
+    bundle_module = sys.modules.get("torchlens.bundle")
+    if bundle_module is not None and isinstance(trace, bundle_module.Bundle):
+        _save_bundle_via_container_door(
+            trace,
+            path,
+            level=level,
+            overwrite=overwrite,
+            trace_only_options={
+                "include_outs": include_outs,
+                "include_grads": include_grads,
+                "include_saved_args": include_saved_args,
+                "include_rng_states": include_rng_states,
+                "include_weights": include_weights,
+                "include_activations": include_activations,
+                "include_source": include_source,
+                "include_custom_attributes": include_custom_attributes,
+                "include_buffer_values": include_buffer_values,
+                "strict": strict,
+            },
+        )
+        return
     # N1: the settled capture outcome gates every export. FAILED, aborted, and
     # UNKNOWN captures never produce a portable artifact (the historical
     # ungated pass-through of failed partials was the hole this closes);
@@ -552,6 +513,17 @@ def save(
     # four-refusal order above (owners disjoint; nothing reordered). Same
     # two-conjunct key shape as the L6 edge boundary.
     _refuse_shard_local_erasure(trace)
+    # (6) F44 injections stage 2: the injected family persists at analysis
+    # level (synthesized op rows appended by injection_codec below); the
+    # RUNNABLE sparse core cannot carry it, so a runnable save of a logged
+    # trace refuses typed rather than silently dropping recorded
+    # computation. Appended after (5); owners disjoint, nothing reordered.
+    # The records-presence guard keeps level coercion at its historical
+    # raise site for every unlogged trace (refusal order unchanged there).
+    if (getattr(trace, "_tl_injection_state", None) or {}).get("records"):
+        from ..intervention.injection import refuse_injection_logged_runnable_save
+
+        refuse_injection_logged_runnable_save(trace, coerce_tlspec_save_level(level))
     # A PartialTrace is a failed-capture inspection wrapper, never a savable
     # product (its FIELD_POLICY declares both fields session-time DROP). Every
     # SHIPPED wrapper settles FAILED and refuses through the gate above; this
@@ -750,6 +722,20 @@ def save(
             include_outs=include_outs,
             include_grads=include_grads,
         )
+        # F44: append one synthesized op row per recorded injected op (the
+        # C07 injection_provenance slot verbatim) AFTER every 1:1
+        # live/scrubbed pairing consumer and BEFORE the blob-write loop, so
+        # injected payload specs write like any other blob.
+        if sparse_run_descriptor is None:
+            from .injection_codec import append_injected_op_rows
+
+            append_injected_op_rows(
+                trace,
+                scrubbed_state,
+                blob_specs,
+                include_outs=include_outs,
+                backend_name=backend_name,
+            )
         if not backend_spec.capabilities.payload_materialization and (
             blob_specs or fast_copy_specs
         ):
@@ -807,17 +793,19 @@ def save(
             tensor_entries=tensor_entries,
             unsupported_tensors=unsupported_tensors,
             include_source=include_source,
-            custom_attributes_disclosure=(
-                custom_attributes_disclosure := _custom_attributes_disclosure(
-                    trace,
-                    included=include_custom_attributes and sparse_run_descriptor is None,
-                )
-            ),
-            buffer_values_disclosure=(
-                buffer_values_disclosure := _buffer_values_disclosure(
-                    trace,
-                    included=include_buffer_values and sparse_run_descriptor is None,
-                )
+            disclosures=_SaveDisclosures(
+                custom_attributes=(
+                    custom_attributes_disclosure := _custom_attributes_disclosure(
+                        trace,
+                        included=include_custom_attributes and sparse_run_descriptor is None,
+                    )
+                ),
+                buffer_values=(
+                    buffer_values_disclosure := _buffer_values_disclosure(
+                        trace,
+                        included=include_buffer_values and sparse_run_descriptor is None,
+                    )
+                ),
             ),
         )
         _warn_custom_attribute_embedding(custom_attributes_disclosure)
@@ -1268,6 +1256,7 @@ def load(
     payload_hints: PayloadLoadHints | None = None,
     trust_custom_callables: bool = False,
     allowed_custom_callable_modules: Collection[str] | None = None,
+    unknown_relations: Literal["opaque", "refuse"] = "opaque",
     _bundle_visited: frozenset[Path] | None = None,
 ) -> Trace | Bundle | InterventionSpec:
     """Load a ``.tlspec`` object with eager tensor materialization.
@@ -1303,6 +1292,7 @@ def load(
     payload_hints: PayloadLoadHints | None = None,
     trust_custom_callables: bool = False,
     allowed_custom_callable_modules: Collection[str] | None = None,
+    unknown_relations: Literal["opaque", "refuse"] = "opaque",
     _bundle_visited: frozenset[Path] | None = None,
 ) -> Trace | Bundle | InterventionSpec:
     """Load a ``.tlspec`` object while leaving direct tensors lazy.
@@ -1337,6 +1327,7 @@ def load(
     payload_hints: PayloadLoadHints | None = None,
     trust_custom_callables: bool = False,
     allowed_custom_callable_modules: Collection[str] | None = None,
+    unknown_relations: Literal["opaque", "refuse"] = "opaque",
     _bundle_visited: frozenset[Path] | None = None,
 ) -> Trace | Bundle | InterventionSpec:
     """Load a TorchLens ``.tlspec`` object polymorphically.
@@ -1361,6 +1352,12 @@ def load(
     allowed_custom_callable_modules:
         Optional allowlist of custom callable module names. When supplied,
         custom imports must be listed even if ``trust_custom_callables=True``.
+    unknown_relations:
+        Bundle loader-doctrine policy for member-relation rows of unknown
+        NAMESPACED kinds (the C07X preserve-and-disclose amendment):
+        ``"opaque"`` (default) loads them preserved, disclosed, unchecked,
+        and never executed; ``"refuse"`` restores the strict typed refusal.
+        Bare unknown kinds refuse under both policies.
 
     Returns
     -------
@@ -1448,6 +1445,7 @@ def load(
                 trust_custom_callables=trust_custom_callables,
                 allowed_custom_callable_modules=allowed_custom_callable_modules,
             )
+        raise_if_modellog_portable(tlspec_format, "Bundle", str(bundle_path))
         if tlspec_format == "v2.0_unified":
             return _load_unified_tlspec(
                 bundle_path,
@@ -1458,6 +1456,7 @@ def load(
                 trust_custom_callables=trust_custom_callables,
                 allowed_custom_callable_modules=allowed_custom_callable_modules,
                 bundle_visited=_bundle_visited,
+                unknown_relations=unknown_relations,
             )
     if bundle_path.is_dir() and (bundle_path / "spec.json").exists():
         from ..intervention.save import load_intervention_spec
@@ -1538,7 +1537,7 @@ def _load_trace_payload(
     blobs_path = bundle_path / "blobs"
     python_major_mismatch = False
     try:
-        enforce_version_policy(manifest)
+        enforce_version_policy(manifest, bundle_path=bundle_path)
         resolved_blobs_dir = resolve_bundle_blobs_dir(bundle_path)
         _validate_manifest_blob_paths(manifest, bundle_path, resolved_blobs_dir)
         _check_unknown_blob_entries(manifest, blobs_path)
@@ -2057,6 +2056,7 @@ def _load_unified_tlspec(
     trust_custom_callables: bool,
     allowed_custom_callable_modules: Collection[str] | None,
     bundle_visited: frozenset[Path] | None = None,
+    unknown_relations: Literal["opaque", "refuse"] = "opaque",
 ) -> Trace | Bundle | InterventionSpec:
     """Load a unified ``.tlspec`` bundle by manifest kind.
 
@@ -2123,7 +2123,9 @@ def _load_unified_tlspec(
             setattr(loaded_trace, "_source_bundle_model_fingerprint", model_fingerprint)
         return loaded_trace
     if kind == "bundle":
-        return _load_unified_bundle(bundle_path, bundle_visited=bundle_visited)
+        return _load_unified_bundle(
+            bundle_path, bundle_visited=bundle_visited, unknown_relations=unknown_relations
+        )
     raise TorchLensIOError(f"Unsupported unified tlspec kind={kind!r}.")
 
 
@@ -2157,12 +2159,7 @@ def _preflight_unified_trace_manifest(
     from ..validation import validate_tlspec
 
     raw_version = manifest.get("tlspec_version")
-    if isinstance(raw_version, int) and raw_version < MIN_TLSPEC_VERSION:
-        raise below_floor_error(
-            observed=f"tlspec_version={raw_version}",
-            subject="Bundle manifest",
-            path=str(bundle_path),
-        )
+    raise_if_manifest_below_floor(raw_version, str(bundle_path))
 
     try:
         validate_tlspec(bundle_path, allow_unsupported_runnable_versions=True)
@@ -2520,6 +2517,7 @@ def _load_unified_bundle(
     bundle_path: Path,
     *,
     bundle_visited: frozenset[Path] | None = None,
+    unknown_relations: Literal["opaque", "refuse"] = "opaque",
 ) -> Bundle:
     """Load a unified ``Bundle`` payload.
 
@@ -2531,6 +2529,10 @@ def _load_unified_bundle(
         Internal set of already-in-progress bundle-root real paths, threaded to
         detect self-referential / mutually-recursive nested-bundle members
         (secF-2). ``None`` at the top level.
+    unknown_relations:
+        Loader-doctrine policy for unknown NAMESPACED member-relation kinds:
+        ``"opaque"`` (default) preserves them as opaque rows, ``"refuse"``
+        rejects the artifact typed. Bare unknown kinds always refuse.
 
     Returns
     -------
@@ -2547,7 +2549,10 @@ def _load_unified_bundle(
     _reject_symlink_path(metadata_path, context="bundle metadata")
     if metadata_path.exists():
         return _load_unified_bundle_directory(
-            bundle_path, metadata_path, bundle_visited=bundle_visited
+            bundle_path,
+            metadata_path,
+            bundle_visited=bundle_visited,
+            unknown_relations=unknown_relations,
         )
 
     legacy_pickle_path = bundle_path / "metadata.pkl"
@@ -2645,11 +2650,40 @@ def _resolve_bundle_member_path(bundle_path: Path, relative_path: str) -> Path:
     return candidate
 
 
+def _load_bundle_member_traces(
+    bundle_path: Path,
+    raw_members: list[Any],
+    next_visited: frozenset[Path],
+) -> dict[str, Trace]:
+    """Load each nested member spec as a Trace (cycle-checked per member)."""
+
+    members: dict[str, Trace] = {}
+    for index, entry in enumerate(raw_members):
+        if not isinstance(entry, dict):
+            raise TorchLensIOError(f"Unified bundle member {index} must be an object.")
+        name = entry.get("name")
+        relative_path = entry.get("path")
+        if not isinstance(name, str) or not isinstance(relative_path, str):
+            raise TorchLensIOError(f"Unified bundle member {index} has invalid name/path.")
+        member_path = _resolve_bundle_member_path(bundle_path, relative_path)
+        if member_path.resolve() in next_visited:
+            raise TorchLensIOError(
+                f"Unified bundle member {name!r} forms a load cycle: its path "
+                f"{relative_path!r} re-enters an in-progress bundle directory."
+            )
+        loaded = load(member_path, _bundle_visited=next_visited)
+        if not isinstance(loaded, Trace):
+            raise TorchLensIOError(f"Unified bundle member {name!r} did not load as a Trace.")
+        members[name] = loaded
+    return members
+
+
 def _load_unified_bundle_directory(
     bundle_path: Path,
     metadata_path: Path,
     *,
     bundle_visited: frozenset[Path] | None = None,
+    unknown_relations: Literal["opaque", "refuse"] = "opaque",
 ) -> Bundle:
     """Load a unified bundle container from nested member specs.
 
@@ -2664,6 +2698,10 @@ def _load_unified_bundle_directory(
         the recursive load chain to detect a member that re-enters this or an
         ancestor bundle (secF-2 self-reference / mutual recursion). ``None`` at the
         top level.
+    unknown_relations:
+        Loader-doctrine policy for unknown NAMESPACED member-relation kinds:
+        ``"opaque"`` (default) preserves them as opaque rows, ``"refuse"``
+        rejects the artifact typed. Bare unknown kinds always refuse.
 
     Returns
     -------
@@ -2701,77 +2739,33 @@ def _load_unified_bundle_directory(
     if not isinstance(raw_members, list):
         raise TorchLensIOError("Unified bundle metadata must include a members list.")
 
-    members: dict[str, Trace] = {}
-    for index, entry in enumerate(raw_members):
-        if not isinstance(entry, dict):
-            raise TorchLensIOError(f"Unified bundle member {index} must be an object.")
-        name = entry.get("name")
-        relative_path = entry.get("path")
-        if not isinstance(name, str) or not isinstance(relative_path, str):
-            raise TorchLensIOError(f"Unified bundle member {index} has invalid name/path.")
-        member_path = _resolve_bundle_member_path(bundle_path, relative_path)
-        if member_path.resolve() in next_visited:
-            raise TorchLensIOError(
-                f"Unified bundle member {name!r} forms a load cycle: its path "
-                f"{relative_path!r} re-enters an in-progress bundle directory."
-            )
-        loaded = load(member_path, _bundle_visited=next_visited)
-        if not isinstance(loaded, Trace):
-            raise TorchLensIOError(f"Unified bundle member {name!r} did not load as a Trace.")
-        members[name] = loaded
+    members = _load_bundle_member_traces(bundle_path, raw_members, next_visited)
 
     from ..bundle import Bundle
 
     baseline_name = metadata.get("baseline_name")
     if baseline_name is not None and not isinstance(baseline_name, str):
         raise TorchLensIOError("Unified bundle baseline_name must be a string or null.")
-    member_relations = _load_gated_member_relations(metadata)
-    return Bundle(members, baseline=baseline_name, member_relations=member_relations)
-
-
-def _load_gated_member_relations(metadata: dict[str, Any]) -> tuple[Any, ...] | None:
-    """Read the S6 ``member_relations`` key from bundle metadata.
-
-    The key persists plainly as of tlspec v8. Loads still route through the
-    one pre-release validation chokepoint
-    (:func:`torchlens._io.prerelease.validate_prerelease_state`) so a
-    switched-era artifact (marker present, switch inactive) keeps refusing
-    typed and a malformed marker refuses even under the switch; a marker-free
-    payload validates against the closed S6 row schema. An absent key is
-    simply a plain bundle (S6 R7).
-
-    Returns
-    -------
-    tuple | None
-        Parsed relation rows for the Bundle constructor (which re-checks R1
-        against the loaded member names), or ``None`` when the key is absent.
-
-    Raises
-    ------
-    PreReleaseArtifactError
-        Marker present while the switch is inactive, or a malformed marker.
-    BundleRelationError
-        ``bundle_relation_schema_invalid`` when the payload is outside the
-        closed S6 row schema.
-    """
-
-    from .prerelease import validate_prerelease_state
-
-    validate_prerelease_state(metadata, cls_name="Bundle")
-    relations_payload = metadata.get("member_relations")
-    if relations_payload is None:
-        return None
-    from ..bundle._relations import MemberRelationTable
-    from ..errors.episode import BundleRelationError
-
-    try:
-        table = MemberRelationTable.from_payload(relations_payload)
-    except (TypeError, ValueError) as exc:
-        raise BundleRelationError(
-            f"bundle.json 'member_relations' payload is outside the closed S6 schema: {exc}",
-            code="bundle_relation_schema_invalid",
-        ) from exc
-    return table.rows
+    preserved_sections = _partition_bundle_sections(metadata)
+    member_relations = _load_gated_member_relations(metadata, unknown_relations=unknown_relations)
+    lineage = _load_lineage_sections(metadata, member_names=list(members))
+    loaded_bundle = Bundle(
+        members,
+        baseline=baseline_name,
+        member_relations=member_relations,
+        preserved_sections=preserved_sections,
+        bundle_id=lineage["bundle_id"],
+    )
+    loaded_bundle._forked_from_bundle_id = lineage["forked_from_bundle_id"]
+    # Anchors restore verbatim when persisted; a pre-F03 artifact carries no
+    # construction evidence, which reads honestly as origin="loaded".
+    anchors = lineage["member_construction"]
+    if anchors is None:
+        anchors = {name: {"origin": "loaded"} for name in members}
+    loaded_bundle._member_construction = anchors
+    loaded_bundle._operations = list(lineage["operations"])
+    loaded_bundle._effect_tables = dict(lineage["member_effect_tables"])
+    return loaded_bundle
 
 
 def _read_manifest_object(path: Path) -> dict[str, Any]:
@@ -3664,14 +3658,20 @@ def _warn_buffer_value_embedding(disclosure: Mapping[str, Any]) -> None:
     )
 
 
+class _SaveDisclosures(NamedTuple):
+    """Save-time disclosure payloads for the two harvested channels."""
+
+    custom_attributes: dict[str, Any] | None
+    buffer_values: dict[str, Any] | None
+
+
 def _build_manifest(
     *,
     trace: Trace,
     tensor_entries: list[TensorEntry],
     unsupported_tensors: list[dict[str, str]],
     include_source: bool = True,
-    custom_attributes_disclosure: dict[str, Any] | None = None,
-    buffer_values_disclosure: dict[str, Any] | None = None,
+    disclosures: _SaveDisclosures | None = None,
 ) -> Manifest:
     """Create a manifest instance for a finished bundle save.
 
@@ -3686,10 +3686,9 @@ def _build_manifest(
     include_source:
         When ``False`` the environment-provenance git commit hash is omitted, so
         ``include_source=False`` also drops the cwd repo's HEAD commit (B8-19).
-    custom_attributes_disclosure:
-        Save-time disclosure of the harvested module-attribute channel.
-    buffer_values_disclosure:
-        Save-time disclosure of the captured pre-forward buffer-value channel.
+    disclosures:
+        Save-time disclosures of the harvested module-attribute channel and
+        the captured pre-forward buffer-value channel.
 
     Returns
     -------
@@ -3723,8 +3722,8 @@ def _build_manifest(
         tensors=tensor_entries,
         unsupported_tensors=unsupported_tensors,
         provenance=_collect_provenance(trace, include_source=include_source),
-        custom_attributes_disclosure=custom_attributes_disclosure,
-        buffer_values_disclosure=buffer_values_disclosure,
+        custom_attributes_disclosure=disclosures.custom_attributes if disclosures else None,
+        buffer_values_disclosure=disclosures.buffer_values if disclosures else None,
     )
 
 

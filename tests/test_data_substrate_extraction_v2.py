@@ -167,7 +167,7 @@ def test_resume_identity_same_state_resumes_and_completes(tmp_path: Path) -> Non
     paths = tl.extract_dataset(
         model, _stimuli(), _LAYERS, batch_size=4, output_dir=tmp_path, progress=False, resume=True
     )
-    assert [path.name for path in paths] == [f"batch_0000{i}.pt" for i in range(3)]
+    assert [path.name for path in paths] == [f"batch_0000{i}.safetensors" for i in range(3)]
     loaded = load_extraction(tmp_path)
     assert loaded.manifest["status"] == "complete"
     clean = tl.extract_dataset(model, _stimuli(), _LAYERS, batch_size=4, progress=False)
@@ -392,8 +392,13 @@ def test_in_progress_v1_resume_refuses_naming_unprovable_fields(tmp_path: Path) 
 # --- the strict opaque-resume rule ---------------------------------------------
 
 
-def test_opaque_transform_continuation_refuses_typed(tmp_path: Path) -> None:
-    """Decision 14: an interrupted resume through an opaque step refuses."""
+def test_opaque_complete_class_continuation_resumes_measured(tmp_path: Path) -> None:
+    """Extract D8: a COMPLETE-class digest match resumes without ceremony.
+
+    ``torch.abs`` is an opaque step to the static chain, but the callable
+    identity classifier measures it (allowlisted torch namespace), so the
+    historical blanket opaque refusal is superseded by a measured resume.
+    """
 
     model = _Model(seed=0).eval()
     tl.extract_dataset(
@@ -406,6 +411,52 @@ def test_opaque_transform_continuation_refuses_typed(tmp_path: Path) -> None:
         transform=torch.abs,
     )
     _interrupt_after(tmp_path, 1)
+    paths = tl.extract_dataset(
+        model,
+        _stimuli(),
+        _LAYERS,
+        batch_size=4,
+        output_dir=tmp_path,
+        progress=False,
+        resume=True,
+        transform=torch.abs,
+    )
+    assert len(paths) == 3
+    loaded = load_extraction(tmp_path)
+    assert loaded.manifest["status"] == "complete"
+    clean = tl.extract_dataset(
+        model, _stimuli(), _LAYERS, batch_size=4, progress=False, transform=torch.abs
+    )
+    for key, tensor in clean.items():
+        assert torch.equal(loaded.activations[key], tensor)
+
+
+def test_opaque_partial_continuation_refuses_typed(tmp_path: Path) -> None:
+    """Decision 14 + D8: a PARTIAL callable's continuation refuses typed.
+
+    A closure over a set is blind territory for the classifier (unordered),
+    so the callable classifies partial and resume refuses naming the
+    opaque reference and both remedies (register_transform / pipeline_id).
+    """
+
+    blind = {"a", "b"}
+
+    def opaque_step(tensor: torch.Tensor) -> torch.Tensor:
+        """Scale by the closure set's size (an unmeasurable dependence)."""
+
+        return tensor * float(len(blind))
+
+    model = _Model(seed=0).eval()
+    tl.extract_dataset(
+        model,
+        _stimuli(),
+        _LAYERS,
+        batch_size=4,
+        output_dir=tmp_path,
+        progress=False,
+        transform=opaque_step,
+    )
+    _interrupt_after(tmp_path, 1)
     with pytest.raises(DatasetExtractionResumeError) as excinfo:
         tl.extract_dataset(
             model,
@@ -415,12 +466,92 @@ def test_opaque_transform_continuation_refuses_typed(tmp_path: Path) -> None:
             output_dir=tmp_path,
             progress=False,
             resume=True,
-            transform=torch.abs,
+            transform=opaque_step,
         )
     assert excinfo.value.fields["code"] == "extraction_resume_opaque_transform"
-    assert excinfo.value.fields["opaque_keys"] == ["logits", "relu"]
+    assert any("set_unordered" in ref for ref in excinfo.value.fields["opaque_references"])
     message = str(excinfo.value)
     assert "register_transform" in message, "the one-line remedy is named"
+    assert "pipeline_id" in message, "the assertion door is named"
+
+
+def test_partial_continuation_with_recorded_pipeline_id_is_asserted(tmp_path: Path) -> None:
+    """D8 strict continuity: the RECORDED pipeline_id attests a partial slot.
+
+    An id invented at resume time refuses; the id set from the FIRST run
+    resumes with the override recorded as asserted, not measured.
+    """
+
+    blind = {"a", "b"}
+
+    def opaque_step(tensor: torch.Tensor) -> torch.Tensor:
+        """Scale by the closure set's size (an unmeasurable dependence)."""
+
+        return tensor * float(len(blind))
+
+    model = _Model(seed=0).eval()
+    tl.extract_dataset(
+        model,
+        _stimuli(),
+        _LAYERS,
+        batch_size=4,
+        output_dir=tmp_path,
+        progress=False,
+        transform=opaque_step,
+        pipeline_id="exp-7",
+    )
+    _interrupt_after(tmp_path, 1)
+    paths = tl.extract_dataset(
+        model,
+        _stimuli(),
+        _LAYERS,
+        batch_size=4,
+        output_dir=tmp_path,
+        progress=False,
+        resume=True,
+        transform=opaque_step,
+        pipeline_id="exp-7",
+    )
+    assert len(paths) == 3
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    audit = manifest["run"]["resume_audit"]
+    assert any(entry["kind"] == "callable_identity_asserted" for entry in audit)
+
+
+def test_resume_time_invented_pipeline_id_refuses(tmp_path: Path) -> None:
+    """T-CALLABLE-IDENTITY: a resume-time-invented pipeline id must refuse."""
+
+    blind = {"a", "b"}
+
+    def opaque_step(tensor: torch.Tensor) -> torch.Tensor:
+        """Scale by the closure set's size (an unmeasurable dependence)."""
+
+        return tensor * float(len(blind))
+
+    model = _Model(seed=0).eval()
+    tl.extract_dataset(
+        model,
+        _stimuli(),
+        _LAYERS,
+        batch_size=4,
+        output_dir=tmp_path,
+        progress=False,
+        transform=opaque_step,
+    )
+    _interrupt_after(tmp_path, 1)
+    with pytest.raises(DatasetExtractionResumeError) as excinfo:
+        tl.extract_dataset(
+            model,
+            _stimuli(),
+            _LAYERS,
+            batch_size=4,
+            output_dir=tmp_path,
+            progress=False,
+            resume=True,
+            transform=opaque_step,
+            pipeline_id="invented-later",
+        )
+    assert excinfo.value.fields["code"] == "extraction_resume_pipeline_id_invalid"
 
 
 def test_registered_spec_chain_continuation_resumes(tmp_path: Path) -> None:

@@ -1339,9 +1339,15 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     "torchlens.receptive_field._errors.ReceptiveFieldValidationError": (
         "public home is the lazy tl.receptive_field submodule"
     ),
-    "torchlens.attribution._core.AttributionError": (
-        "public home is torchlens.attribution.__all__; plain ValueError outside the "
-        "taxonomy — rebase/registration is that surface's own review decision"
+    "torchlens.attribution._result.AttributionError": (
+        "public home is torchlens.attribution.__all__; now based on "
+        "ConfigurationError + ValueError (F06 rebase for the S-17 coded-refusal "
+        "contract) but its registration home stays that surface's own review "
+        "decision"
+    ),
+    "torchlens.attribution._result.AttributionWarning": (
+        "public home is the torchlens.attribution surface; a TorchLensWarning "
+        "subclass carrying the S-18 coded metric/text disclosures (F06)"
     ),
     "torchlens.bundle.AmbiguousLabelError": (
         "public home is torchlens.bundle/torchlens.intervention.bundle __all__; plain "
@@ -1375,10 +1381,11 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "raised by to_disk(async_writes=True) when a background write fails; "
         "errors-namespace registration deferred to the UI/API naming slate"
     ),
-    "torchlens.dataset_extraction.DatasetExtractionResumeError": (
+    "torchlens._extraction.resume.DatasetExtractionResumeError": (
         "raised by extract_dataset(resume=True) on a signature/manifest mismatch "
-        "(extraction_resume_* / extraction_manifest_invalid); registration deferred "
-        "to the UI/API naming slate"
+        "(extraction_resume_* / extraction_manifest_invalid); defined in the F18 "
+        "resume module, re-exported by torchlens.dataset_extraction; registration "
+        "deferred to the UI/API naming slate"
     ),
     "torchlens.semantic.logit_lens.LogitLensError": (
         "logit_lens refusal (it refuses rather than mislabel a non-standard final "

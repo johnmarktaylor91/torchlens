@@ -307,3 +307,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 5bde32f0919538c641645bad9d75fee841d116f2 (dirty)
 recorded: 2026-08-20T01:11:48.449827+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: F42 attested coupling adds the Trace.episode_coupling read accessor (None on plain captures); every surface golden gains the one name
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 74f296c2d0d308c2d5c539451d70c853070dd576 (dirty)
+recorded: 2026-08-29T22:15:45.193603+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: F42 attested coupling adds the Trace.episode_coupling read accessor (None on plain captures); every surface golden gains the one name
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 74f296c2d0d308c2d5c539451d70c853070dd576 (dirty)
+recorded: 2026-08-29T22:15:45.226746+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: F42 attested coupling adds the Trace.episode_coupling read accessor (None on plain captures); every surface golden gains the one name
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 74f296c2d0d308c2d5c539451d70c853070dd576 (dirty)
+recorded: 2026-08-29T22:15:45.249047+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: F42 attested coupling adds the Trace.episode_coupling read accessor (None on plain captures); every surface golden gains the one name
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 74f296c2d0d308c2d5c539451d70c853070dd576 (dirty)
+recorded: 2026-08-29T22:15:51.149461+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: F42 attested coupling adds the Trace.episode_coupling read accessor (None on plain captures); every surface golden gains the one name
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 74f296c2d0d308c2d5c539451d70c853070dd576 (dirty)
+recorded: 2026-08-29T22:15:51.171005+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: F42 attested coupling adds the Trace.episode_coupling read accessor (None on plain captures); every surface golden gains the one name
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 74f296c2d0d308c2d5c539451d70c853070dd576 (dirty)
+recorded: 2026-08-29T22:15:51.192142+00:00

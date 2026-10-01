@@ -32,6 +32,9 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 from .._errors import InvalidArgumentError
 from ..errors._base import TorchLensWarning
 from ..utils.display import user_stacklevel
+from ._collapse_disclosures import _warn_budget_fallback
+from ._collapse_runs import longest_uniform_legal_run
+from ._collapse_signatures import fingerprints_for
 from ._segment_descriptors import (
     _child_segment_covered_ops,
     _crosses_module_call_boundary,
@@ -54,18 +57,31 @@ from .auto_collapse import (
     _paired_external_connector,
     _readable_band_high,
     _rendered_module_hidden_counts,
+    _revision_scoped,
     _run_fold_is_chain_interval,
-    _run_fold_is_legal,
-    _run_fold_members_uniform,
     _shape_channel_dim,
     _shape_spatial_dims,
     analyze_collapse,
 )
+from .collapse_estimator import (
+    ACTIVE_BUDGET,
+    PATHOLOGICAL_OP_MULTIPLIER,
+    QUALITY_PLANNER_BUDGET_MS,
+    WATCHDOG_FLOOR_MS,
+    WATCHDOG_SLACK,
+    EstimatorDiagnostics,
+    FallbackDegrade,
+    SelectionBudget,
+    charge_frontier_allocation,
+    predicted_select_ms,
+    watchdog_enabled,
+)
+from .collapse_fallback import _top_level_fallback_addresses, linear_fallback_plan
+from .collapse_ladder import collapse_schedule  # noqa: F401  (re-export; moved in F11)
 from .collapse_plan import (
     ChildSegment,
     CollapsePlan,
     CollapseSchedule,
-    CollapseScheduleStep,
     EllipsisNode,
     ModuleBox,
     OpSegment,
@@ -219,6 +235,17 @@ class OptimizerResult:
     #: gate pins ``scored_k == count(plan) == emitted render units`` -- the
     #: phantom-k class is exactly a divergence here.
     scored_k: int | None = None
+    #: Band-miss disclosure (memo D7): True when no ladder point reaches the
+    #: readable band; the served plan is the DISCLOSED strongest point and
+    #: ``strongest_plan_count`` carries its REALIZED count (never a scored
+    #: estimate, never the word "floor" -- the beam proves no bound).
+    band_missed: bool = False
+    strongest_plan_count: int | None = None
+    #: Estimator disclosure for field refits (memo item 14): the
+    #: ``(U, W, predicted_ms, actual_ms, tier, formula version)`` tuple, or
+    #: ``None`` on paths that never consulted the admission gate (declined
+    #: pathological entries, schedule-step projections).
+    estimator: EstimatorDiagnostics | None = None
 
     def __post_init__(self) -> None:
         """Refuse construction when segment descriptors were dropped.
@@ -374,6 +401,7 @@ _BOX_UNITS_CACHE: weakref.WeakKeyDictionary[
 ] = weakref.WeakKeyDictionary()
 
 
+@_revision_scoped
 def select_collapse_plan(
     trace: Trace,
     context: RenderContext,
@@ -403,42 +431,31 @@ def select_collapse_plan(
     """
 
     resolved_weights = OptimizerWeights() if weights is None else weights
-    # Ceiling check FIRST (r8 R60-13): ``_collapse_graph_revision`` is an
-    # uncached O(N) deep snapshot (per-op label/parents/children/module
-    # tuples), so computing it before the ceiling allocated ~100k nested
-    # tuples on a 100k-op trace only to decline ten lines later. Over-ceiling
-    # traces never reach the revision snapshot or the result cache; the
-    # decline warning dedupes per trace instead of per cached revision.
+    # Pathological pre-gate (collapse memo D5(i), r8 R60-13 preserved): the
+    # revision snapshot and even the universe build are pointless on a
+    # 100k-op artifact, so far-out-of-envelope traces decline outright --
+    # the ONE remaining uncollapsed decline. Everything below it degrades to
+    # the deterministic fallback planner, never to an uncollapsed wall.
     op_count = len(trace.ops)
-    if op_count > COLLAPSE_OPTIMIZER_MAX_OPS:
-        # Preflight compute ceiling (b8 R60): the frontier selection is
-        # measured superlinear (~n^1.75) in op count with no internal budget,
-        # so one draw(collapse="auto"|"max") on a several-thousand-op model
-        # burned CPU-hours before returning anything. Decline DISCLOSED:
-        # draw() renders uncollapsed, Trace.collapse_plan() refuses typed
-        # (collapse_plan_unavailable), and the schedule degrades to its
-        # single full-graph step.
+    if op_count > COLLAPSE_OPTIMIZER_MAX_OPS * PATHOLOGICAL_OP_MULTIPLIER:
         if source_graph is None:
             from .source_graph import build_source_graph
 
             source_graph = build_source_graph(trace, context)
         full_plan = collapse_plan_for_source_graph(source_graph, None, None)
-        # N15 (themes memo item 1): an EXPLICIT compaction request above the
-        # ceiling must never be a silent byte-identical no-op. ``max`` (and
-        # float levels, which route through max at t=1.0 and the schedule
-        # elsewhere) re-warns on EVERY call; only the default-path ``auto``
-        # keeps the once-per-trace dedupe. Compact-above-ceiling arrives with
-        # the F11 deterministic fallback planner.
         if mode == "max" or trace not in _CEILING_WARNED_TRACES:
             _CEILING_WARNED_TRACES.add(trace)
             warnings.warn(
-                f"TorchLens is skipping smart collapse: this trace has {op_count} "
-                f"ops, above the collapse optimizer's compute ceiling "
-                f"COLLAPSE_OPTIMIZER_MAX_OPS={COLLAPSE_OPTIMIZER_MAX_OPS} (its "
-                "selection cost grows superlinearly and would dominate the "
-                "render). The graph renders uncollapsed; reduce the rendered "
-                "graph first with module= focus, vis_call_depth, or rolled mode.",
-                TorchLensWarning,
+                TorchLensWarning(
+                    f"TorchLens is skipping smart collapse: this trace has "
+                    f"{op_count} ops, above the pathological-input pre-gate "
+                    f"({PATHOLOGICAL_OP_MULTIPLIER} x the defensive constant "
+                    f"COLLAPSE_OPTIMIZER_MAX_OPS={COLLAPSE_OPTIMIZER_MAX_OPS}). "
+                    "The graph renders uncollapsed; reduce the rendered "
+                    "graph first with module= focus, vis_call_depth, or "
+                    "rolled mode.",
+                    code="collapse_pathological_skip",
+                ),
                 # r7 R19 (opus b6 LOW): a fixed stacklevel resolved to TorchLens's
                 # own _trace_stats caller; blame the user's draw()/collapse_plan()
                 # line instead (the entry depth differs per public spelling).
@@ -455,6 +472,7 @@ def select_collapse_plan(
             declined=True,
             reason=(
                 f"collapse_ops_ceiling: {op_count} ops exceed "
+                f"{PATHOLOGICAL_OP_MULTIPLIER} x "
                 f"COLLAPSE_OPTIMIZER_MAX_OPS={COLLAPSE_OPTIMIZER_MAX_OPS}"
             ),
         )
@@ -470,21 +488,145 @@ def select_collapse_plan(
         cached_by_context = cache_entry[1]
     cached = cached_by_context.get(cache_key)
     if cached is not None:
+        if cached.planner == "linear_fallback":
+            # N15 (themes memo item 1): an explicit ``max`` compaction request
+            # that cannot get the quality planner re-warns on EVERY call,
+            # cache hit included; ``auto`` keeps the once-per-trace dedupe.
+            _warn_budget_fallback(trace, mode, cached)
         return cached
-    if mode == "max":
-        result = _select_max_plan(trace, context, weights, source_graph)
+    # Admission gate (collapse memo D5): the variable is U -- the rendered
+    # universe of the FULL plan (focus/depth/rolled reductions applied), so
+    # context reductions are real remedies -- tiered by the measured
+    # (U, W) work estimator. Over-budget requests degrade to the
+    # deterministic fallback planner, never to an uncollapsed wall.
+    if source_graph is None:
+        from .source_graph import build_source_graph
+
+        source_graph = build_source_graph(trace, context)
+    budget = _admission_budget(trace, context, source_graph)
+    if (
+        budget.universe_count > COLLAPSE_OPTIMIZER_MAX_OPS
+        or budget.predicted_ms > QUALITY_PLANNER_BUDGET_MS
+    ):
+        budget.fired = "admission"
+        result = _budget_fallback_result(trace, context, source_graph, mode, budget)
         cached_by_context[cache_key] = result
         return result
+    result = _run_admitted_selection(trace, context, source_graph, (mode, weights), budget)
+    cached_by_context[cache_key] = result
+    return result
+
+
+def _admission_budget(
+    trace: Trace,
+    context: RenderContext,
+    source_graph: SourceGraph | None,
+) -> SelectionBudget:
+    """Measure U and W and price the request (memo D5 admission inputs)."""
+
+    admission_plan = _collapse_plan_for_source_or_trace(trace, None, None, context, source_graph)
+    universe_count = count(admission_plan)
+    width = _max_sibling_group_width(trace, context)
+    return SelectionBudget(
+        predicted_ms=predicted_select_ms(universe_count, width),
+        universe_count=universe_count,
+        max_sibling_width=width,
+        started_at=time.perf_counter(),
+    )
+
+
+def _run_admitted_selection(
+    trace: Trace,
+    context: RenderContext,
+    source_graph: SourceGraph | None,
+    request: tuple[str, OptimizerWeights | None],
+    budget: SelectionBudget,
+) -> OptimizerResult:
+    """Run the admitted quality planner under the armed budget (memo D5).
+
+    ``request`` is the ``(mode, weights)`` pair (weights steer only the max
+    substrate). The watchdog deadline arms here (never in CI/deterministic
+    mode); a FallbackDegrade from the frontier chokepoints lands on the
+    deterministic fallback planner; every result is stamped with
+    EstimatorDiagnostics.
+    """
+
+    mode, weights = request
+    if watchdog_enabled():
+        budget.deadline = (
+            time.perf_counter()
+            + max(WATCHDOG_FLOOR_MS, WATCHDOG_SLACK * budget.predicted_ms) / 1000.0
+        )
+    budget_token = ACTIVE_BUDGET.set(budget)
+    try:
+        if mode == "max":
+            result = _select_max_plan(trace, context, weights, source_graph)
+        else:
+            from .collapse_ladder import auto_from_ladder
+
+            result = auto_from_ladder(trace, context, source_graph)
+    except FallbackDegrade:
+        return _budget_fallback_result(trace, context, source_graph, mode, budget)
+    finally:
+        ACTIVE_BUDGET.reset(budget_token)
+    return replace(
+        result,
+        estimator=EstimatorDiagnostics(
+            universe_count=budget.universe_count,
+            max_sibling_width=budget.max_sibling_width,
+            predicted_ms=budget.predicted_ms,
+            actual_ms=(time.perf_counter() - budget.started_at) * 1000.0,
+            tier=result.planner,
+            peak_frontier_records=budget.peak_allocated,
+            budget_fired=budget.fired,
+        ),
+    )
+
+
+# The PUBLIC auto surface reads the typed event ladder (memo D8 unfreeze);
+# the historical frontier auto survives below as _frontier_auto_result, the
+# max path's internal substrate.
+
+
+@dataclass(frozen=True)
+class _PlanMemos:
+    """Plan-local pricing memos shared across one selection's passes."""
+
+    expanded_cache: dict[
+        str, tuple[ChildCondensedFlowGraph | None, tuple[str, ...], tuple[str, ...]]
+    ]
+    output_shape_cache: dict[tuple[str, str], tuple[int, ...] | None]
+
+
+def _frontier_auto_result(
+    trace: Trace,
+    context: RenderContext,
+    resolved_weights: OptimizerWeights,
+    source_graph: SourceGraph | None,
+    memos: _PlanMemos | None = None,
+) -> OptimizerResult:
+    """Run the historical band-targeted auto frontier selection (internal).
+
+    The PUBLIC auto surface reads the typed event ladder (memo D8 unfreeze,
+    collapse_ladder.auto_from_ladder). This internal selector survives as
+    the max path's substrate: _select_max_plan seeds its interval
+    condensation from a band-targeted frontier cut and falls back to it
+    when max's [3,20] legal-plan band produces nothing (memo D4(d) --
+    documented, disclosed). Results never enter the public result cache.
+    ``memos`` lets the max caller share its plan-local pricing caches so one
+    selection prices each module once (the once-per-address shape-lookup
+    pin); ``None`` builds call-local dicts.
+    """
+
     analysis = analyze_collapse(trace)
     start = time.perf_counter()
     hidden_counts = _rendered_module_hidden_counts(trace, context)
     child_addresses = _child_address_map(trace)
     structural_digests = _structural_digest_map(trace, child_addresses, analysis)
-    expanded_cache: dict[
-        str,
-        tuple[ChildCondensedFlowGraph | None, tuple[str, ...], tuple[str, ...]],
-    ] = {}
-    output_shape_cache: dict[tuple[str, str], tuple[int, ...] | None] = {}
+    if memos is None:
+        memos = _PlanMemos(expanded_cache={}, output_shape_cache={})
+    expanded_cache = memos.expanded_cache
+    output_shape_cache = memos.output_shape_cache
     best = _select_best_decision(
         trace=trace,
         context=context,
@@ -528,11 +670,17 @@ def select_collapse_plan(
         first_pass_point = None
         first_pass_plan = None
     if best is None:
-        selected, plan = _floor_fallback_selection(trace, context, source_graph)
-        # No silent floor (collapse memo D4): the frontier emptied, so this
-        # plan is the conservative fallback -- possibly the ENTIRE
-        # uncollapsed graph. Say so typed: name the planner, whether K_CAP
-        # exhaustion caused it, the root own-unit count, and the remedy.
+        # No silent floor (collapse memo D4): the frontier emptied. The plan
+        # served is the deterministic significance-greedy fallback
+        # (memo D5(iv)), never a bare uncollapsed wall.
+        selected, repeat_folds, plan = linear_fallback_plan(
+            trace,
+            context,
+            source_graph,
+            _collapse_plan_for_source_or_trace,
+            COLLAPSE_OPTIMIZER_MAX_OPS,
+        )
+        _assert_visible_plan(count(plan), "collapse floor fallback")
         root_own_units = _root_own_unit_count(trace, context, analysis, child_addresses)
         k_cap_exhausted = root_own_units > K_CAP
         cause = (
@@ -541,9 +689,9 @@ def select_collapse_plan(
             if k_cap_exhausted
             else "no optimizer frontier was produced"
         )
-        result = OptimizerResult(
+        return OptimizerResult(
             selected=selected,
-            repeat_folds={},
+            repeat_folds=repeat_folds,
             plan=plan,
             visible_count=count(plan),
             analyze_ms=analysis.elapsed_ms,
@@ -557,8 +705,6 @@ def select_collapse_plan(
             k_cap_exhausted=k_cap_exhausted,
             root_own_units=root_own_units,
         )
-        cached_by_context[cache_key] = result
-        return result
     if first_pass_point is None or first_pass_plan is None:
         instantiated_point, plan = _instantiate_best_point(
             trace=trace,
@@ -619,7 +765,7 @@ def select_collapse_plan(
     else:
         segments = {}
     _assert_visible_plan(count(plan), "v2 collapse plan")
-    result = OptimizerResult(
+    return OptimizerResult(
         selected=instantiated_point.selected,
         repeat_folds=repeat_folds,
         plan=plan,
@@ -632,8 +778,6 @@ def select_collapse_plan(
         # the returned plan; the segment post-pass discloses via None.
         scored_k=instantiated_point.k if not segments else None,
     )
-    cached_by_context[cache_key] = result
-    return result
 
 
 def select_collapse_level(
@@ -697,286 +841,10 @@ def select_collapse_level(
     return result
 
 
-def collapse_schedule(
-    trace: Trace,
-    context: RenderContext,
-    weights: OptimizerWeights | None = None,
-) -> CollapseSchedule:
-    """Return the monotone public float collapse schedule.
-
-    Parameters
-    ----------
-    trace:
-        Trace being rendered.
-    context:
-        Rendering context.
-    weights:
-        Accepted for signature compatibility and ignored: the public float
-        schedule is weight-independent and always derives from the
-        default-weight max plan, so caching by context alone is sound.
-
-    Returns
-    -------
-    CollapseSchedule
-        Ordered nested schedule from the full graph to the current max plan.
-    """
-
-    _ = weights
-    if len(trace.ops) > COLLAPSE_OPTIMIZER_MAX_OPS:
-        # Ceiling check FIRST (r8 R60-13): the revision snapshot below is an
-        # uncached O(N) deep walk, pointless when the optimizer will decline.
-        # The degraded single full-graph step is built directly (the decline
-        # inside select_collapse_plan warns once per trace).
-        from .source_graph import build_source_graph
-
-        over_source_graph = build_source_graph(trace, context)
-        over_full_plan = collapse_plan_for_source_graph(over_source_graph, None, None)
-        over_full_count = count(over_full_plan)
-        select_collapse_plan(trace, context, mode="max", source_graph=over_source_graph)
-        return CollapseSchedule(
-            (
-                CollapseScheduleStep(
-                    t=0.0,
-                    target_count=over_full_count,
-                    visible_count=over_full_count,
-                    collapsed_addresses=frozenset(),
-                    plan=over_full_plan,
-                ),
-            )
-        )
-    revision = _collapse_graph_revision(trace)
-    cache_entry = _SCHEDULE_CACHE.get(trace)
-    if cache_entry is None or cache_entry[0] != revision:
-        cached_by_context: dict[RenderContext, CollapseSchedule] = {}
-        _SCHEDULE_CACHE[trace] = (revision, cached_by_context)
-    else:
-        cached_by_context = cache_entry[1]
-    cached = cached_by_context.get(context)
-    if cached is not None:
-        return cached
-    from .source_graph import build_source_graph
-
-    source_graph = build_source_graph(trace, context)
-    node_pool: dict[PlanNode, PlanNode] = {}
-    full_plan = collapse_plan_for_source_graph(
-        source_graph,
-        None,
-        None,
-        node_pool=node_pool,
-    )
-    full_count = count(full_plan)
-    max_result = select_collapse_plan(trace, context, mode="max", source_graph=source_graph)
-    max_plan = CollapsePlan(
-        nodes=tuple(node_pool.setdefault(node, node) for node in max_result.plan.nodes),
-        context=max_result.plan.context,
-    )
-    if max_result.declined:
-        step = CollapseScheduleStep(
-            t=0.0,
-            target_count=full_count,
-            visible_count=full_count,
-            collapsed_addresses=frozenset(),
-            plan=full_plan,
-        )
-        schedule = CollapseSchedule((step,))
-        cached_by_context[context] = schedule
-        return schedule
-    max_count = max_result.visible_count
-    if full_count <= max_count:
-        schedule = CollapseSchedule(
-            (
-                CollapseScheduleStep(0.0, full_count, full_count, frozenset(), full_plan),
-                CollapseScheduleStep(
-                    1.0,
-                    max_count,
-                    max_count,
-                    _reported_collapsed_addresses(max_result),
-                    max_plan,
-                ),
-            )
-        )
-        cached_by_context[context] = schedule
-        return schedule
-    ordered_addresses = _schedule_ordered_addresses(trace, context, max_result)
-    raw_steps: list[tuple[frozenset[str], CollapsePlan, int]] = [
-        (frozenset(), full_plan, full_count)
-    ]
-    selected: set[str] = set()
-    previous_count = full_count
-    for address in ordered_addresses:
-        selected.add(address)
-        collapse_fn = _collapse_fn_from_selected(frozenset(selected))
-        plan = collapse_plan_for_source_graph(
-            source_graph,
-            collapse_fn,
-            {},
-            node_pool=node_pool,
-        )
-        visible_count = count(plan)
-        if visible_count <= previous_count:
-            raw_steps.append((frozenset(selected), plan, visible_count))
-            previous_count = visible_count
-    max_addresses = _collapsed_addresses_for_result(max_result)
-    if raw_steps[-1][2] != max_count or raw_steps[-1][0] != max_addresses:
-        # The append decision keys on the narrow module-address set (frozen
-        # schedule behavior); the appended max step reports the honest wider
-        # set including op-segment-hidden op labels.
-        raw_steps.append((_reported_collapsed_addresses(max_result), max_plan, max_count))
-    denominator = max(full_count - max_count, 1)
-    steps = tuple(
-        CollapseScheduleStep(
-            t=0.0
-            if index == 0
-            else (
-                1.0
-                if index == len(raw_steps) - 1
-                else _schedule_t(
-                    full_count,
-                    visible_count,
-                    denominator,
-                )
-            ),
-            target_count=visible_count,
-            visible_count=visible_count,
-            collapsed_addresses=addresses,
-            plan=plan,
-        )
-        for index, (addresses, plan, visible_count) in enumerate(raw_steps)
-    )
-    schedule = CollapseSchedule(steps)
-    cached_by_context[context] = schedule
-    return schedule
-
-
-def _schedule_t(full_count: int, visible_count: int, denominator: int) -> float:
-    """Return the collapse level implied by a visible-node count.
-
-    Parameters
-    ----------
-    full_count:
-        Full graph visible-node count.
-    visible_count:
-        Step visible-node count.
-    denominator:
-        Positive count span from full to max.
-
-    Returns
-    -------
-    float
-        Rounded deterministic collapse level.
-    """
-
-    return round((full_count - visible_count) / denominator, 6)
-
-
-def _collapsed_addresses_for_result(result: OptimizerResult) -> frozenset[str]:
-    """Return module addresses hidden by an optimizer result.
-
-    Parameters
-    ----------
-    result:
-        Optimizer result to inspect.
-
-    Returns
-    -------
-    frozenset[str]
-        Collapsed module addresses represented by selected boxes, run folds,
-        and child segments.
-    """
-
-    addresses = set(result.selected)
-    addresses.update(result.repeat_folds)
-    for segment in (result.segments or {}).values():
-        addresses.update(segment.members)
-    return frozenset(addresses)
-
-
-def _reported_collapsed_addresses(result: OptimizerResult) -> frozenset[str]:
-    """Return the honest public hidden set for an optimizer result.
-
-    Extends :func:`_collapsed_addresses_for_result` with the concrete op
-    labels hidden by operation segments, which hide rendered nodes without
-    collapsing any module address. This wider set is used only for public
-    schedule-step reporting; schedule construction keys on the narrow
-    module-address set to preserve the frozen schedule behavior.
-
-    Parameters
-    ----------
-    result:
-        Optimizer result to inspect.
-
-    Returns
-    -------
-    frozenset[str]
-        Collapsed module addresses plus op labels hidden by op segments.
-    """
-
-    addresses = set(_collapsed_addresses_for_result(result))
-    for segment in (result.segments or {}).values():
-        if segment.kind == "op":
-            addresses.update(str(op) for op in segment.ops)
-    return frozenset(addresses)
-
-
-def _schedule_ordered_addresses(
-    trace: Trace,
-    context: RenderContext,
-    max_result: OptimizerResult,
-) -> tuple[str, ...]:
-    """Return max-result addresses ordered by DP box cost for the slider path.
-
-    Parameters
-    ----------
-    trace:
-        Trace being rendered.
-    context:
-        Rendering context.
-    max_result:
-        Existing max-mode result that defines the endpoint.
-
-    Returns
-    -------
-    tuple[str, ...]
-        Deterministically ordered candidate addresses.
-    """
-
-    addresses = _collapsed_addresses_for_result(max_result)
-    if not addresses:
-        return ()
-    analysis = analyze_collapse(trace)
-    hidden_counts = _rendered_module_hidden_counts(trace, context)
-    child_addresses = _child_address_map(trace)
-    structural_digests = _structural_digest_map(trace, child_addresses, analysis)
-    state = _OptimizerState(
-        trace=trace,
-        context=context,
-        analysis=analysis,
-        child_addresses=child_addresses,
-        hidden_counts=hidden_counts,
-        structural_digests=structural_digests,
-        expanded_cache={},
-        role_components_cache={},
-        child_segments_cache={},
-        single_member_expanded_cache={},
-        box_cost_cache={},
-        branch_salience_cache={},
-        output_shape_cache={},
-        weights=OptimizerWeights(),
-        g_star=max_result.g_star or 1.0,
-        total_ops=_optimizer_total_units(trace, context),
-        allow_folds=True,
-        allow_segments=True,
-        max_salience_floor=None,
-        rendered_own_units=_rendered_own_unit_map(trace, context),
-    )
-    costs: dict[str, float] = {}
-    for address in addresses:
-        signal = analysis.signals.get(address)
-        if signal is None:
-            costs[address] = math.inf
-        else:
-            costs[address] = _cached_box_cost(trace, signal, state)
-    return tuple(sorted(addresses, key=lambda address: (costs[address], address)))
+# The public float schedule family (collapse_schedule, _schedule_t,
+# _collapsed_addresses_for_result, _reported_collapsed_addresses,
+# _schedule_ordered_addresses) moved to .collapse_ladder with the F11
+# typed event ladder (collapse memo item 9).
 
 
 def _select_max_plan(
@@ -1004,24 +872,24 @@ def _select_max_plan(
         Max-mode result with segment descriptors, or an L3 auto fallback.
     """
 
-    auto = select_collapse_plan(
+    # One plan-local memo pair for the WHOLE max selection: the frontier
+    # substrate and the level loop below price the same modules, and separate
+    # dicts made one cold selection compute every module shape twice (the
+    # once-per-address shape-lookup pin in tests/test_auto_collapse_metrics).
+    memos = _PlanMemos(expanded_cache={}, output_shape_cache={})
+    expanded_cache = memos.expanded_cache
+    output_shape_cache = memos.output_shape_cache
+    auto = _frontier_auto_result(
         trace,
         context,
-        weights,
-        mode="auto",
-        source_graph=source_graph,
+        OptimizerWeights() if weights is None else weights,
+        source_graph,
+        memos=memos,
     )
-    if auto.declined:
-        return auto
     analysis = analyze_collapse(trace)
     hidden_counts = _rendered_module_hidden_counts(trace, context)
     child_addresses = _child_address_map(trace)
     structural_digests = _structural_digest_map(trace, child_addresses, analysis)
-    expanded_cache: dict[
-        str,
-        tuple[ChildCondensedFlowGraph | None, tuple[str, ...], tuple[str, ...]],
-    ] = {}
-    output_shape_cache: dict[tuple[str, str], tuple[int, ...] | None] = {}
     total_ops = _optimizer_total_units(trace, context)
     auto_count = count(auto.plan)
     levels = (
@@ -1145,7 +1013,11 @@ def _select_max_plan(
                 visible_count=plan_count,
                 segments=segments,
                 level=level,
-                reason=None,
+                # Protected reasons (memo D7): a fallback-tier substrate's
+                # diagnosed cause + remedy is a D4-mandated disclosure and
+                # survives the segment condensation; a healthy substrate's
+                # scored claim no longer binds, so its reason clears.
+                reason=auto.reason if auto.planner == "floor_fallback" else None,
                 # The plan was swapped: auto's scored claim no longer binds.
                 scored_k=None,
             )
@@ -1156,7 +1028,13 @@ def _select_max_plan(
     return replace(
         auto,
         level="L3",
-        reason=f"fallback_to_auto: no legal max plan in [3,{min(20, auto_count)}]",
+        # Protected reasons (memo D7): the auto substrate's own cause and
+        # remedy (K_CAP diagnosis, "module= focus" guidance) survive the
+        # max-band fallback note instead of being clobbered by it.
+        reason=(
+            f"fallback_to_auto: no legal max plan in [3,{min(20, auto_count)}]"
+            + (f"; {auto.reason}" if auto.reason else "")
+        ),
     )
 
 
@@ -2460,73 +2338,10 @@ def _role_components_for_children(
     return components
 
 
-def _floor_fallback_selection(
-    trace: Trace,
-    context: RenderContext,
-    source_graph: SourceGraph | None = None,
-) -> tuple[frozenset[str], CollapsePlan]:
-    """Return the conservative visible plan used when the DP frontier is empty.
-
-    Parameters
-    ----------
-    trace:
-        Trace being optimized.
-    context:
-        Rendering context.
-    source_graph:
-        Optional schedule-local normalized source graph.
-
-    Returns
-    -------
-    tuple[frozenset[str], CollapsePlan]
-        Selected top-level module boxes and their renderer-faithful plan. When
-        no useful top-level cut exists, the selected set is empty and the plan
-        is the full-op renderer plan.
-    """
-
-    full_plan = _collapse_plan_for_source_or_trace(trace, None, None, context, source_graph)
-    full_count = count(full_plan)
-    selected = frozenset(_top_level_fallback_addresses(trace))
-    if selected:
-        candidate_plan = _collapse_plan_for_source_or_trace(
-            trace,
-            _collapse_fn_from_selected(selected),
-            None,
-            context,
-            source_graph,
-        )
-        if 0 < count(candidate_plan) < full_count:
-            return selected, candidate_plan
-    _assert_visible_plan(full_count, "collapse floor fallback")
-    return frozenset(), full_plan
-
-
-def _top_level_fallback_addresses(trace: Trace) -> tuple[str, ...]:
-    """Return direct child module addresses suitable for floor fallback boxes.
-
-    Parameters
-    ----------
-    trace:
-        Trace being optimized.
-
-    Returns
-    -------
-    tuple[str, ...]
-        Direct children of ``self`` that hide at least one rendered operation.
-    """
-
-    addresses: list[str] = []
-    for module in trace.modules:
-        address = str(getattr(module, "address", ""))
-        if address in {"", "self"}:
-            continue
-        parent = getattr(module, "address_parent", None)
-        if parent not in {"", "self", None}:
-            continue
-        if int(getattr(module, "num_layers", 0) or 0) <= 1:
-            continue
-        addresses.append(address)
-    return tuple(sorted(dict.fromkeys(addresses)))
+# _floor_fallback_selection retired (memo D5(iv)): the frontier-empty path
+# now serves the deterministic significance-greedy fallback in
+# collapse_fallback.linear_fallback_plan; _top_level_fallback_addresses
+# moved there with it.
 
 
 def _frontier_for_module(
@@ -3079,10 +2894,17 @@ def _maximal_legal_runs(
 ) -> tuple[tuple[str, ...], ...]:
     """Partition component members into maximal legal fold repeats."""
 
+    # B2 (collapse memo item 7): grow the cheap prefix (flow adjacency,
+    # box eligibility, equal shapes -- O(1) amortized per extension), then
+    # resolve the longest legal member-uniform window with ONE signature
+    # pass over the component and a longest-first legality scan. Output is
+    # identical to the historical grow-every-window enumeration, which paid
+    # a full-window legality check plus full-window signature recomputation
+    # at EVERY width (24,165 legality calls measured on densenet201).
     runs: list[tuple[str, ...]] = []
+    fingerprints = fingerprints_for(state.trace, state.analysis)
     index = 0
     while index < len(members):
-        best: tuple[str, ...] = ()
         candidate: list[str] = []
         for address in members[index:]:
             if candidate and not _flow_adjacent(candidate[-1], address, graph):
@@ -3092,13 +2914,7 @@ def _maximal_legal_runs(
             if candidate and not _cached_module_output_shapes_equal(state, candidate[-1], address):
                 break
             candidate.append(address)
-            run = tuple(candidate)
-            if (
-                len(run) >= RUN_FOLD_MIN_LENGTH
-                and _run_fold_is_legal(run, graph)
-                and _run_fold_members_uniform(state.trace, run)
-            ):
-                best = run
+        best = longest_uniform_legal_run(tuple(candidate), graph, fingerprints)
         if best:
             runs.append(best)
             index += len(best)
@@ -3667,6 +3483,10 @@ def _merge_component_member_frontiers(
 def _prune_frontier(points: Sequence[Any]) -> tuple[Any, ...]:
     """Keep per-count best points under the deterministic beam cap."""
 
+    # Memo D5(iii)+(v): every frontier record passes this chokepoint, so it
+    # meters the allocation cap (memory defence) and the generous watchdog;
+    # either trips FallbackDegrade, caught at the selection entry.
+    charge_frontier_allocation(len(points))
     best_by_count: dict[int, tuple[Any, tuple[float, int, tuple[Any, ...], tuple[Any, ...]]]] = {}
     for point in points:
         if point.k > K_CAP:
@@ -4022,6 +3842,86 @@ def _root_own_unit_count(
     return sum(
         1 for op in trace.ops if op.label not in child_ops and not getattr(op, "is_buffer", False)
     )
+
+
+def _max_sibling_group_width(trace: Trace, context: RenderContext) -> int:
+    """Return W: the widest rendered sibling group of the full universe.
+
+    Definition (estimator v1, memo D5(ii)): for every parent (the root
+    ``self`` included), the group width is its direct child-module count
+    plus the rendered units the parent owns directly; W is the maximum.
+    Deterministic and cheap -- one analysis read plus the cached
+    own-unit/child maps -- and monotone in the fan width that drives the
+    measured cost (the KV-flood models' width lives in root own units).
+    """
+
+    analysis = analyze_collapse(trace)
+    child_addresses = _child_address_map(trace)
+    root_own = _root_own_unit_count(trace, context, analysis, child_addresses)
+    width = root_own + len(child_addresses.get("self", ()))
+    for address, children in child_addresses.items():
+        if address != "self":
+            width = max(width, len(children))
+    return max(width, 1)
+
+
+# _warn_budget_fallback + its warn-once set live in _collapse_disclosures
+# (the human-facing collapse disclosure home).
+
+
+def _budget_fallback_result(
+    trace: Trace,
+    context: RenderContext,
+    source_graph: SourceGraph | None,
+    mode: str,
+    budget: SelectionBudget,
+) -> OptimizerResult:
+    """Build, stamp, and disclose the deterministic fallback result.
+
+    ``budget.fired`` carries the cause: ``"admission"`` (estimator refusal)
+    or ``"watchdog"``/``"allocation"`` (mid-run abandon).
+    """
+
+    cause = budget.fired or "admission"
+    selected, repeat_folds, plan = linear_fallback_plan(
+        trace,
+        context,
+        source_graph,
+        _collapse_plan_for_source_or_trace,
+        COLLAPSE_OPTIMIZER_MAX_OPS,
+    )
+    _assert_visible_plan(count(plan), "collapse budget fallback")
+    analysis = analyze_collapse(trace)
+    child_addresses = _child_address_map(trace)
+    root_own_units = _root_own_unit_count(trace, context, analysis, child_addresses)
+    result = OptimizerResult(
+        selected=selected,
+        repeat_folds=repeat_folds,
+        plan=plan,
+        visible_count=count(plan),
+        analyze_ms=analysis.elapsed_ms,
+        select_ms=(time.perf_counter() - budget.started_at) * 1000.0,
+        g_star=None,
+        reason=(
+            f"linear_fallback ({cause}): estimator predicted "
+            f"{budget.predicted_ms:.0f} ms at U={budget.universe_count}, "
+            f"W={budget.max_sibling_width}; reduce the rendered graph with "
+            "module= focus, vis_call_depth, or rolled mode"
+        ),
+        planner="linear_fallback",
+        k_cap_exhausted=root_own_units > K_CAP,
+        root_own_units=root_own_units,
+        estimator=EstimatorDiagnostics(
+            universe_count=budget.universe_count,
+            max_sibling_width=budget.max_sibling_width,
+            predicted_ms=budget.predicted_ms,
+            actual_ms=(time.perf_counter() - budget.started_at) * 1000.0,
+            tier="linear_fallback",
+            budget_fired=budget.fired if cause != "admission" else None,
+        ),
+    )
+    _warn_budget_fallback(trace, mode, result)
+    return result
 
 
 def _child_address_map(trace: Trace) -> dict[str, tuple[str, ...]]:

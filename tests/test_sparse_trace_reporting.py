@@ -146,6 +146,13 @@ def test_disk_backed_reports_do_not_materialize_payloads(
 
     text = str(trace)
     html = trace._repr_html_()
+    # D14 (F09): explain never scans -- arm the evidence through the
+    # explicit door (it persists the record on the annotations channel;
+    # a disk-backed trace stores no tensor memo). The scan itself must
+    # skip disk-backed payloads without materializing (the monkeypatched
+    # materialize would raise).
+    assert trace.nonfinite_ops == ()
+    tl.report.health_facts(trace)
     report = tl.report.explain(trace, format="json")
     assert isinstance(text, str)
     assert "disk-backed" in html
@@ -161,6 +168,8 @@ def test_json_and_html_clean_answers_disclose_sparse_coverage(
     trace = tl.trace(_plain_model(), torch.randn(2, 4), save=tl.func("relu"))
     monkeypatch.setitem(sys.modules, "IPython", types.ModuleType("IPython"))
 
+    # D14 (F09): explain serves the basis in hand; arm it explicitly.
+    assert trace.nonfinite_ops == ()
     report = tl.report.explain(trace, format="json")
     assert isinstance(report, dict)
     assert "could not be examined" in report["first_nonfinite"]

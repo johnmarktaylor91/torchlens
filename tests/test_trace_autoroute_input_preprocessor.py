@@ -48,11 +48,14 @@ def test_summary_includes_input_preprocessing_when_present() -> None:
         description="ImageNet default (UNVERIFIED): resize 256",
     )
 
-    summary = log.summary()
+    # Preprocessing provenance lives on provenance()/the legacy preset after
+    # the rebuilt default relocated the preamble (summary memo 3.6).
+    summary = log.summary(level="overview")
 
     assert "Input preprocessing:" in summary
     assert "ImageNet default (UNVERIFIED): resize 256" in summary
     assert "WARNING: input preprocessing is UNVERIFIED" not in summary
+    assert "Input preprocessing:" in log.provenance()
 
 
 def test_summary_can_include_unverified_input_preprocessing_detail() -> None:

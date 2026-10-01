@@ -11,6 +11,7 @@ import torch
 from .._errors import TorchLensPostfuncError
 from .._state import pause_logging
 from .._training_validation import TrainingModeConfigError
+from ..ir.summary_role import ensure_summary_output_owns_storage, is_summary_transform
 from ..utils.tensor_utils import SaveMode, safe_copy
 from .exceptions import InvalidStorageError, PredicateError
 from .types import CaptureSpec, RecordContext, StorageIntent
@@ -62,6 +63,32 @@ def _save_mode_for_payload(spec: CaptureSpec, *, target: Literal["ram", "disk"])
     if target == "disk" and spec.save_mode in {"reference", "view"}:
         return "copy"
     return spec.save_mode
+
+
+def _raw_payload_source(
+    tensor: torch.Tensor,
+    spec: CaptureSpec,
+    *,
+    target: Literal["ram", "disk"],
+    reduce_only: bool,
+    detach: bool,
+) -> torch.Tensor:
+    """Raw payload for one target: the live view on the reduce-only path, else a safe copy.
+
+    Explorer P2 (fastlog leg): the reduce-only path hands the reducer the
+    live tensor at the save point (the transient safe_copy is the cost the
+    path exists to skip); every other path keeps the copy + payload
+    respellings.
+    """
+
+    if reduce_only:
+        return tensor
+    copied = safe_copy(
+        tensor,
+        detach_tensor=detach,
+        save_mode=_save_mode_for_payload(spec, target=target),
+    )
+    return _apply_payload_transforms(copied, spec)
 
 
 def _resolve_storage(
@@ -153,14 +180,22 @@ def _resolve_storage(
     transformed_disk: torch.Tensor | None = None
     transform = activation_transform
     keep_raw = save_raw_activations or transform is None
+    # Explorer P2 (fastlog leg): a declared summary reducer with raw
+    # retention off and no dtype/device respelling skips the transient
+    # safe_copy -- the reducer sees a detached view of the live tensor at
+    # the save point. The dtype/device respellings keep the copy path: they
+    # allocate anyway, so there is nothing to skip.
+    reduce_only = (
+        not keep_raw
+        and is_summary_transform(transform)
+        and spec.dtype is None
+        and spec.device is None
+    )
 
     if intent.in_ram:
-        raw_ram = safe_copy(
-            tensor,
-            detach_tensor=not spec.keep_grad,
-            save_mode=_save_mode_for_payload(spec, target="ram"),
+        raw_ram = _raw_payload_source(
+            tensor, spec, target="ram", reduce_only=reduce_only, detach=not spec.keep_grad
         )
-        raw_ram = _apply_payload_transforms(raw_ram, spec)
         if transform is not None:
             transformed_ram = _invoke_transform(
                 raw_ram,
@@ -170,12 +205,15 @@ def _resolve_storage(
                 intent=intent,
                 target="ram",
             )
+            if reduce_only:
+                transformed_ram = ensure_summary_output_owns_storage(transformed_ram, tensor)
             if spec.keep_grad:
                 _validate_train_mode_transformed(
                     raw_ram,
                     transformed_ram,
                     ctx=ctx,
                     spec=spec,
+                    transform=transform,
                 )
         if keep_raw:
             ram_payload = raw_ram
@@ -195,12 +233,9 @@ def _resolve_storage(
             if transformed_ram is not None:
                 transformed_disk = _detached_write_alias(transformed_ram)
         else:
-            raw_disk = safe_copy(
-                tensor,
-                detach_tensor=True,
-                save_mode=_save_mode_for_payload(spec, target="disk"),
+            raw_disk = _raw_payload_source(
+                tensor, spec, target="disk", reduce_only=reduce_only, detach=True
             )
-            raw_disk = _apply_payload_transforms(raw_disk, spec)
             if transform is not None:
                 transformed_disk = _invoke_transform(
                     raw_disk,
@@ -210,6 +245,8 @@ def _resolve_storage(
                     intent=intent,
                     target="disk",
                 )
+                if reduce_only:
+                    transformed_disk = ensure_summary_output_owns_storage(transformed_disk, tensor)
             if keep_raw:
                 disk_payload = raw_disk
     return ram_payload, disk_payload, transformed_ram, transformed_disk
@@ -245,10 +282,20 @@ def _invoke_transform(
     intent: StorageIntent,
     target: str,
 ) -> torch.Tensor:
-    """Apply a fastlog out transform with logging paused."""
+    """Apply a fastlog out transform with logging paused.
+
+    A transform declaring ``_tl_wants_ctx = True`` (duck-typed, F25 op
+    tier) additionally receives the frozen ``RecordContext`` as ``ctx=``
+    so a label-aware reducer (facet splitting) needs no side channel;
+    ordinary transforms keep the one-positional-tensor contract.
+    """
 
     try:
         with pause_logging():
+            if getattr(transform, "_tl_wants_ctx", False):
+                from typing import cast
+
+                return cast("Callable[..., torch.Tensor]", transform)(tensor, ctx=ctx)
             return transform(tensor)
     except Exception as exc:
         raise TorchLensPostfuncError(
@@ -303,28 +350,38 @@ def _validate_train_mode_transformed(
     *,
     ctx: RecordContext | None,
     spec: CaptureSpec,
+    transform: Any | None = None,
 ) -> None:
     """Validate differentiability requirements for a transformed RAM payload.
 
     The transformed payload must remain a grad-capable tensor that stays
     graph-connected when the raw RAM payload retained autograd history.
     Disk transformed payloads are detached inspection copies and are not
-    validated here.
+    validated here. A transform DECLARING the non-differentiable summary
+    role (explorer P1) is contractually outside the autograd graph and is
+    exempt; undeclared detached transforms keep refusing -- the carve-out is
+    the declared role, never the output's shape or dtype.
     """
 
+    if transform is not None and is_summary_transform(transform):
+        return
     label = ctx.label if ctx is not None else "<unknown>"
     if not isinstance(transformed, torch.Tensor):
         raise TrainingModeConfigError(
             "activation_transform must return a torch.Tensor while keep_grad=True "
             f"for fastlog event {label!r}. "
-            "Remedy: return a differentiable torch.Tensor from activation_transform.",
+            "Remedy: return a differentiable torch.Tensor from activation_transform, "
+            "or declare a non-differentiable reducer with "
+            "torchlens.observability.summary(fn).",
             code="transform_not_differentiable",
         )
     if transformed.dtype in _INTEGER_DTYPES:
         raise TrainingModeConfigError(
             f"backward_ready=True with non-grad dtype {transformed.dtype} on fastlog "
             f"event {label!r}. Integer and bool dtypes cannot propagate grads. "
-            "Remedy: adjust activation_transform to return a floating dtype.",
+            "Remedy: adjust activation_transform to return a floating dtype, or "
+            "declare a non-differentiable reducer with "
+            "torchlens.observability.summary(fn).",
             code="transform_not_differentiable",
         )
     if raw_tensor.requires_grad and transformed.grad_fn is None:
@@ -332,7 +389,9 @@ def _validate_train_mode_transformed(
             "activation_transform returned a tensor disconnected from the autograd "
             "graph (grad_fn is None) while keep_grad=True. The transformed out "
             f"for fastlog event {label!r} must remain differentiable. "
-            "Remedy: keep activation_transform on the autograd graph (no detach/no_grad).",
+            "Remedy: keep activation_transform on the autograd graph (no detach/no_grad), "
+            "or declare a non-differentiable reducer with "
+            "torchlens.observability.summary(fn).",
             code="transform_not_differentiable",
         )
     _ = spec

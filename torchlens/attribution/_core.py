@@ -11,71 +11,25 @@ import torch
 from torch import Tensor
 from torch.nn import Module
 
+from torchlens.attribution._result import (
+    AttributionError,
+    AttributionResult,
+    AttributionValueTree,
+    _summarize_attribution_tree,
+)
+
 # Kept private and deliberately distinct from the selector-serialization
 # ``torchlens.intervention.types.TargetSpec``.
 _AttributionTarget: TypeAlias = int | Callable[[Any], Tensor]
-AttributionValueTree: TypeAlias = Tensor | tuple[Any, ...] | list[Any] | dict[str, Any]
 InputKwargs: TypeAlias = dict[str, Any] | None
 
-
-class AttributionError(ValueError):
-    """Error raised for unsupported or invalid attribution requests."""
-
-
-@dataclass(frozen=True)
-class AttributionResult:
-    """Container for provisional input-attribution results.
-
-    Parameters
-    ----------
-    method
-        Name of the attribution method that produced this result.
-    values
-        Attribution values. Single attributed-leaf calls return a bare tensor for
-        v1 compatibility. Multi-leaf calls return a nested structure with
-        attribution tensors in attributed positions and ``None`` in non-attributed
-        leaf positions.
-    target_repr
-        Compact representation of the scalarization target.
-    extra
-        Method-specific metadata. This schema is intentionally minimal for v1.
-    """
-
-    method: str
-    values: AttributionValueTree
-    target_repr: str
-    extra: dict[str, Any]
-
-    def __repr__(self) -> str:
-        """Return a compact representation without dumping attribution tensors."""
-
-        return (
-            "AttributionResult("
-            f"method={self.method!r}, "
-            f"values={_summarize_attribution_tree(self.values)}, "
-            f"target_repr={self.target_repr!r}, "
-            f"extra_keys={sorted(self.extra.keys())!r})"
-        )
-
-
-def _summarize_attribution_tree(value: Any) -> str:
-    """Return shape/dtype summaries for attribution values."""
-
-    if isinstance(value, Tensor):
-        return (
-            f"Tensor(shape={tuple(value.shape)!r}, "
-            f"dtype={value.dtype}, device={value.device.type!r})"
-        )
-    if isinstance(value, tuple):
-        return "(" + ", ".join(_summarize_attribution_tree(item) for item in value) + ")"
-    if isinstance(value, list):
-        return "[" + ", ".join(_summarize_attribution_tree(item) for item in value) + "]"
-    if isinstance(value, dict):
-        items = ", ".join(
-            f"{key!r}: {_summarize_attribution_tree(item)}" for key, item in value.items()
-        )
-        return "{" + items + "}"
-    return repr(value)
+__all__ = [
+    "AttributionError",
+    "AttributionResult",
+    "AttributionValueTree",
+    "InputKwargs",
+    "_summarize_attribution_tree",
+]
 
 
 @dataclass(frozen=True)
@@ -415,10 +369,47 @@ def _substitute_inputs(
     return positional, kwargs
 
 
+def _tile_unattributed_leaves(tree: Any, n_rows: int) -> Any:
+    """Tile non-attributed tensor leaves along the batch axis for stacked calls.
+
+    Step batching stacks the ATTRIBUTED leaves on dim 0 (the documented batch
+    axis); every fixed tensor input that carries the batch axis (attention
+    masks, token type ids, position ids) must be replicated to match, or the
+    stacked forward sees inconsistent batch sizes. Attributed leaves are left
+    untouched (they are replaced by the stacked leaves downstream);
+    zero-dimensional tensors and non-tensor leaves pass through.
+
+    Parameters
+    ----------
+    tree
+        Pytree of model-call inputs.
+    n_rows
+        Number of stacked path points.
+
+    Returns
+    -------
+    Any
+        Tree with unattributed batch-carrying tensors tiled ``n_rows`` times.
+    """
+
+    if isinstance(tree, Tensor):
+        if _is_attributed_tensor(tree) or tree.ndim == 0:
+            return tree
+        return tree.repeat(n_rows, *([1] * (tree.ndim - 1)))
+    if isinstance(tree, tuple):
+        return tuple(_tile_unattributed_leaves(item, n_rows) for item in tree)
+    if isinstance(tree, list):
+        return [_tile_unattributed_leaves(item, n_rows) for item in tree]
+    if isinstance(tree, dict):
+        return {key: _tile_unattributed_leaves(value, n_rows) for key, value in tree.items()}
+    return tree
+
+
 def _call_model(
     model: Module,
     inputs: _PreparedInputs,
     attributed_replacements: tuple[Tensor, ...],
+    n_rows: int = 1,
 ) -> Any:
     """Call ``model`` with attributed leaves substituted into their original positions.
 
@@ -430,6 +421,9 @@ def _call_model(
         Normalized attribution inputs.
     attributed_replacements
         Replacement leaves in the same order as ``inputs.attributed_leaves``.
+    n_rows
+        Number of stacked path points; when above 1, fixed batch-carrying
+        tensor inputs are tiled to match the stacked batch axis.
 
     Returns
     -------
@@ -438,6 +432,9 @@ def _call_model(
     """
 
     positional, kwargs = _substitute_inputs(inputs, attributed_replacements)
+    if n_rows > 1:
+        positional = _tile_unattributed_leaves(positional, n_rows)
+        kwargs = _tile_unattributed_leaves(kwargs, n_rows)
     return model(*positional, **kwargs)
 
 
@@ -917,6 +914,147 @@ def input_x_grad(
     )
 
 
+def _completeness_extra(attribution_sum: Tensor, target_delta: Tensor) -> dict[str, Any]:
+    """Build the kit-wide completeness disclosure fields (attrib memo D27).
+
+    Every result carrying a completeness residual also carries the absolute
+    target delta: a relative certificate over a near-zero output change
+    certifies nothing, so the denominator is always disclosed beside the
+    ratio.
+
+    Parameters
+    ----------
+    attribution_sum
+        Detached scalar sum of all attribution values.
+    target_delta
+        Detached scalar ``target(input) - target(baseline)``.
+
+    Returns
+    -------
+    dict[str, Any]
+        ``attribution_sum``, ``target_delta``, ``completeness_residual``
+        tensors plus the float ``residual_rel`` and ``target_delta_abs``.
+    """
+
+    completeness_residual = attribution_sum - target_delta
+    target_delta_abs = float(target_delta.abs().item())
+    residual_abs = float(completeness_residual.abs().item())
+    if target_delta_abs > 0.0:
+        residual_rel = residual_abs / target_delta_abs
+    else:
+        residual_rel = 0.0 if residual_abs == 0.0 else float("inf")
+    return {
+        "attribution_sum": attribution_sum.detach(),
+        "target_delta": target_delta.detach(),
+        "completeness_residual": completeness_residual.detach(),
+        "residual_rel": residual_rel,
+        "target_delta_abs": target_delta_abs,
+    }
+
+
+def _stacked_path_leaves(
+    inputs: _PreparedInputs,
+    baseline_tensors: tuple[Tensor, ...],
+    deltas: tuple[Tensor, ...],
+    alphas: list[float],
+) -> tuple[Tensor, ...]:
+    """Create one differentiable leaf per slot stacking several path points.
+
+    The path points for every alpha in ``alphas`` are concatenated along the
+    ordinary batch axis (dim 0), preserving repeated-reference identity: two
+    slots holding the same original tensor share ONE stacked leaf.
+
+    Parameters
+    ----------
+    inputs
+        Normalized attribution inputs.
+    baseline_tensors
+        Baseline leaves in attributed-leaf traversal order.
+    deltas
+        Input-minus-baseline tensors in the same order.
+    alphas
+        Interpolation coefficients stacked into this chunk, in step order.
+
+    Returns
+    -------
+    tuple[Tensor, ...]
+        Detached differentiable stacked leaves, identity-interned.
+    """
+
+    def _make(slot: int) -> Tensor:
+        """Build one stacked path leaf for the slot's unique original."""
+
+        stacked = torch.cat(
+            [baseline_tensors[slot] + alpha * deltas[slot] for alpha in alphas],
+            dim=0,
+        )
+        return stacked.detach().clone().requires_grad_(True)
+
+    return _interned_by_identity(inputs.attributed_leaves, _make)
+
+
+def _stacked_gradients(
+    model: Module,
+    inputs: _PreparedInputs,
+    stacked_leaves: tuple[Tensor, ...],
+    target: _AttributionTarget,
+    n_rows: int,
+) -> list[tuple[Tensor, ...]]:
+    """Compute per-path-point gradients from one stacked forward/backward.
+
+    Parameters
+    ----------
+    model
+        Model to evaluate.
+    inputs
+        Normalized attribution inputs.
+    stacked_leaves
+        Identity-interned stacked leaves (dim 0 carries ``n_rows`` path points).
+    target
+        Integer class index or callable scalarizer.
+    n_rows
+        Number of stacked path points.
+
+    Returns
+    -------
+    list[tuple[Tensor, ...]]
+        Per-path-point per-leaf gradients, in stacking order.
+
+    Raises
+    ------
+    AttributionError
+        If the scalar target is not differentiable with respect to the inputs,
+        or a callable target's output tree does not split.
+    """
+
+    from torchlens.attribution._steps import _scalarize_stacked_output
+
+    output = _call_model(model, inputs, stacked_leaves, n_rows=n_rows)
+    scalar = _scalarize_stacked_output(output, target, n_rows, _scalarize_output)
+    unique_index_by_id: dict[int, int] = {}
+    unique_leaves: list[Tensor] = []
+    for leaf in stacked_leaves:
+        if id(leaf) not in unique_index_by_id:
+            unique_index_by_id[id(leaf)] = len(unique_leaves)
+            unique_leaves.append(leaf)
+    try:
+        raw_gradients = torch.autograd.grad(scalar, unique_leaves, allow_unused=True)
+    except RuntimeError as exc:
+        raise AttributionError(
+            "target scalar is not differentiable with respect to the attributed "
+            "inputs. Remedy: choose a target built from the model output.",
+            code="attribution_target_not_differentiable",
+        ) from exc
+    stacked_per_slot = tuple(
+        torch.zeros_like(stacked_leaf)
+        if raw_gradients[unique_index_by_id[id(stacked_leaf)]] is None
+        else raw_gradients[unique_index_by_id[id(stacked_leaf)]]
+        for stacked_leaf in stacked_leaves
+    )
+    per_slot_rows = [gradient.detach().chunk(n_rows, dim=0) for gradient in stacked_per_slot]
+    return [tuple(rows[row] for rows in per_slot_rows) for row in range(n_rows)]
+
+
 def integrated_gradients(
     model: Module,
     inputs: Any,
@@ -925,6 +1063,9 @@ def integrated_gradients(
     target: _AttributionTarget,
     n_steps: int = 50,
     baseline: Any | None = None,
+    step_batch_size: int | None = None,
+    step_audit: str | None = None,
+    step_audit_seed: int | None = None,
 ) -> AttributionResult:
     """Compute Integrated Gradients along a straight baseline-to-input path.
 
@@ -950,14 +1091,41 @@ def integrated_gradients(
     baseline
         Optional baseline tree matching attributed input leaves. A bare tensor is
         accepted when there is exactly one attributed leaf.
+    step_batch_size
+        Optional number of path points stacked on the ordinary batch axis per
+        forward/backward. ``None`` (the default) and ``1`` run sequentially --
+        batching is strictly opt-in and is a THROUGHPUT feature, not a memory
+        feature. Batched runs are guarded by the randomized audit.
+    step_audit
+        Audit-ladder rung when batching is on: ``"per_call"`` (default; one
+        randomized ``(chunk, row)`` recomputed sequentially), ``"per_chunk"``
+        (an independent random row per chunk), or ``"off"`` (explicit expert
+        choice, disclosed). The audit is a sampled test, never a proof.
+    step_audit_seed
+        Optional deterministic seed for the audit's own (chunk, row) draw;
+        ``None`` draws a fresh disclosed seed. The seed always rides
+        ``extra["step_audit"]["seed"]``.
 
     Returns
     -------
     AttributionResult
         Bare tensor for one attributed leaf, otherwise a mirrored value tree.
+        ``extra`` carries the completeness fields, ``|target_delta|``, the
+        logical path-evaluation count, the physical forward-call count, and
+        the audit disclosure.
     """
 
+    from torchlens.attribution._steps import (
+        _chunk_steps,
+        _midpoint_alphas,
+        _StepAuditor,
+        _validate_step_audit,
+        _validate_step_batch_size,
+    )
+
     _validate_positive_int("n_steps", n_steps)
+    chunk_size = _validate_step_batch_size(step_batch_size)
+    audit_mode = _validate_step_audit(step_audit, chunk_size)
     prepared_inputs = _normalize_model_inputs(inputs, input_kwargs)
     baseline_tensors = _validate_baselines(prepared_inputs, baseline)
     deltas = tuple(
@@ -966,7 +1134,13 @@ def integrated_gradients(
             prepared_inputs.attributed_leaves, baseline_tensors, strict=True
         )
     )
+    alphas = _midpoint_alphas(n_steps)
+    chunks = _chunk_steps(alphas, chunk_size)
+    auditor = _StepAuditor(
+        audit_mode, len(chunks), [len(chunk) for chunk in chunks], seed=step_audit_seed
+    )
     gradients_by_step: list[tuple[Tensor, ...]] = []
+    physical_calls = 2  # The two endpoint forwards below.
 
     with _temporarily_eval(model):
         baseline_leaves = _interned_path_leaves(prepared_inputs, baseline_tensors, deltas, 0.0)
@@ -977,16 +1151,42 @@ def integrated_gradients(
         input_scalar = _scalarize_output(
             _call_model(model, prepared_inputs, input_leaves), target
         ).detach()
-        for step in range(n_steps):
-            alpha = (step + 0.5) / n_steps
-            path_leaves = _interned_path_leaves(prepared_inputs, baseline_tensors, deltas, alpha)
-            gradients, _scalar = _gradient_for_inputs(
-                model,
-                prepared_inputs,
-                path_leaves,
-                target,
+        for chunk_index, chunk_alphas in enumerate(chunks):
+            if len(chunk_alphas) == 1:
+                path_leaves = _interned_path_leaves(
+                    prepared_inputs, baseline_tensors, deltas, chunk_alphas[0]
+                )
+                gradients, _scalar = _gradient_for_inputs(
+                    model, prepared_inputs, path_leaves, target
+                )
+                gradients_by_step.append(tuple(gradient.detach() for gradient in gradients))
+                physical_calls += 1
+                continue
+            stacked_leaves = _stacked_path_leaves(
+                prepared_inputs, baseline_tensors, deltas, chunk_alphas
             )
-            gradients_by_step.append(tuple(gradient.detach() for gradient in gradients))
+            chunk_gradients = _stacked_gradients(
+                model, prepared_inputs, stacked_leaves, target, len(chunk_alphas)
+            )
+            physical_calls += 1
+            # The audit runs BEFORE later chunks are computed, so a coupled
+            # first chunk fails early rather than after the full pass.
+            audit_row = auditor.row_for_chunk(chunk_index)
+            if audit_row is not None:
+                sequential_leaves = _interned_path_leaves(
+                    prepared_inputs, baseline_tensors, deltas, chunk_alphas[audit_row]
+                )
+                sequential_gradients, _scalar = _gradient_for_inputs(
+                    model, prepared_inputs, sequential_leaves, target
+                )
+                physical_calls += 1
+                auditor.check(
+                    chunk_index,
+                    audit_row,
+                    chunk_gradients[audit_row],
+                    tuple(gradient.detach() for gradient in sequential_gradients),
+                )
+            gradients_by_step.extend(chunk_gradients)
 
     mean_gradients = tuple(
         torch.stack([step_gradients[index] for step_gradients in gradients_by_step], dim=0).mean(
@@ -1000,7 +1200,6 @@ def integrated_gradients(
     )
     attribution_sum = sum((value.sum() for value in values), start=torch.zeros_like(input_scalar))
     target_delta = input_scalar - baseline_scalar
-    completeness_residual = attribution_sum - target_delta
     return AttributionResult(
         method="integrated_gradients",
         values=_value_tree_from_leaves(prepared_inputs, values),
@@ -1008,9 +1207,11 @@ def integrated_gradients(
         extra={
             "n_steps": n_steps,
             "baseline": _value_tree_from_leaves(prepared_inputs, baseline_tensors),
-            "attribution_sum": attribution_sum.detach(),
-            "target_delta": target_delta.detach(),
-            "completeness_residual": completeness_residual.detach(),
+            "path_evaluations_logical": n_steps,
+            "physical_forward_calls": physical_calls,
+            "step_batch_size": chunk_size,
+            "step_audit": auditor.record().to_extra(),
+            **_completeness_extra(attribution_sum, target_delta),
         },
     )
 
@@ -1057,74 +1258,28 @@ def smoothgrad(
     _validate_positive_int("n_samples", n_samples)
     if noise_level < 0:
         raise AttributionError("noise_level must be non-negative")
-    prepared_inputs = _normalize_model_inputs(inputs, input_kwargs)
-    generators: dict[torch.device, torch.Generator] = {}
+    # D7: SmoothGrad is the thin alias over the sampling substrate. The
+    # per-sample ABSOLUTE VALUE happens before the mean because the child is
+    # saliency, which absolute-values each sample's gradients itself; the
+    # noise draw order (one draw per unique leaf per sample, per-device
+    # generator seeded on first use) is bit-identical to the historical
+    # inline implementation.
+    from torchlens.attribution._noise_tunnel import noise_tunnel
 
-    saliency_samples: list[tuple[Tensor, ...]] = []
-    with _temporarily_eval(model):
-        for _sample_idx in range(n_samples):
-            noised_leaves = _interned_by_identity(
-                prepared_inputs.attributed_leaves,
-                lambda slot: _make_noised_leaf(
-                    prepared_inputs.attributed_leaves[slot], noise_level, seed, generators
-                ),
-            )
-            gradients, _scalar = _gradient_for_inputs(
-                model,
-                prepared_inputs,
-                noised_leaves,
-                target,
-            )
-            saliency_samples.append(tuple(gradient.detach().abs() for gradient in gradients))
-
-    values = tuple(
-        torch.stack([sample[index] for sample in saliency_samples], dim=0).mean(dim=0)
-        for index in range(len(prepared_inputs.attributed_leaves))
+    tunneled = noise_tunnel(
+        inputs,
+        input_kwargs,
+        method=saliency,
+        model=model,
+        target=target,
+        n_samples=n_samples,
+        stdevs=noise_level,
+        seed=seed,
+        aggregation="mean",
     )
     return AttributionResult(
         method="smoothgrad",
-        values=_value_tree_from_leaves(prepared_inputs, values),
-        target_repr=_target_repr(target),
+        values=tunneled.values,
+        target_repr=tunneled.target_repr,
         extra={"n_samples": n_samples, "noise_level": noise_level, "seed": seed},
     )
-
-
-def _make_noised_leaf(
-    input_leaf: Tensor,
-    noise_level: float,
-    seed: int | None,
-    generators: dict[torch.device, torch.Generator],
-) -> Tensor:
-    """Create one noised differentiable SmoothGrad leaf.
-
-    Parameters
-    ----------
-    input_leaf
-        Original attributed input tensor.
-    noise_level
-        Standard deviation of Gaussian noise.
-    seed
-        Optional deterministic seed.
-    generators
-        Per-device generator cache.
-
-    Returns
-    -------
-    Tensor
-        Noised detached clone with gradient tracking enabled.
-    """
-
-    generator = None
-    if seed is not None:
-        generator = generators.get(input_leaf.device)
-        if generator is None:
-            generator = torch.Generator(device=input_leaf.device)
-            generator.manual_seed(seed)
-            generators[input_leaf.device] = generator
-    noise = torch.randn(
-        input_leaf.shape,
-        dtype=input_leaf.dtype,
-        device=input_leaf.device,
-        generator=generator,
-    )
-    return (input_leaf.detach() + noise_level * noise).detach().clone().requires_grad_(True)

@@ -63,6 +63,7 @@ def record(
     grad_transform: GradientPostfunc | None = None,
     save_raw_gradients: bool = True,
     backward_ready: bool = False,
+    echo: Any | None = None,
     backend: BackendName | None = None,
 ) -> Recording | tuple[Any, Recording]:
     """Record one model forward pass with capture predicates.
@@ -102,6 +103,10 @@ def record(
         payloads are retained. Defaults to ``True`` to mirror the slow path.
     backward_ready:
         If True, omitted defaults are promoted to keep-grad capture specs.
+    echo:
+        Live narration scope: ``True``, ``"modules"``, a live selector, or a
+        grouped ``tl.options.EchoOptions``. Narration and retention are fully
+        independent ("narrate everything, keep nothing" is legal).
     backend:
         Optional backend selector. ``tl.record`` is torch-only in backend v1;
         non-torch backends raise a canonical unsupported error.
@@ -179,6 +184,7 @@ def record(
         grad_transform=grad_transform,
         save_raw_gradients=save_raw_gradients,
         backward_ready=backward_ready,
+        echo=echo,
     ) as recorder:
         output = recorder.log(input_args, input_kwargs)
     recording = recorder.recording

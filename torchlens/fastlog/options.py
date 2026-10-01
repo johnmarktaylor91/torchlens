@@ -58,6 +58,7 @@ _RECORDING_FIELDS: Final[tuple[str, ...]] = (
     "default_grad",
     "grad_transform",
     "save_raw_gradients",
+    "echo",
 )
 
 
@@ -99,6 +100,10 @@ class RecordingOptions:
     default_grad: bool | CaptureSpec
     grad_transform: GradientPostfunc | None
     save_raw_gradients: bool
+    #: Normalized live-narration options (``torchlens.options.EchoOptions``)
+    #: or ``None``; typed ``Any`` here because fastlog (L2) never imports
+    #: the narration engine -- seams read the armed session off the trace.
+    echo: Any | None
     _specified_fields: frozenset[str] = field(
         default_factory=frozenset,
         init=False,
@@ -128,6 +133,7 @@ class RecordingOptions:
         default_grad: bool | CaptureSpec | MissingType = MISSING,
         grad_transform: GradientPostfunc | None | MissingType = MISSING,
         save_raw_gradients: bool | MissingType = MISSING,
+        echo: Any | None | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen recording option bundle."""
 
@@ -186,6 +192,7 @@ class RecordingOptions:
             "save_raw_gradients": _resolve_recording_option(
                 "save_raw_gradients", save_raw_gradients, True, specified_fields
             ),
+            "echo": _resolve_recording_option("echo", echo, None, specified_fields),
         }
         _validate_recording_values(values)
         for field_name in _RECORDING_FIELDS:
@@ -374,6 +381,7 @@ def merge_recording_options(
     default_grad: bool | CaptureSpec | MissingType = MISSING,
     grad_transform: GradientPostfunc | None | MissingType = MISSING,
     save_raw_gradients: bool | MissingType = MISSING,
+    echo: Any | None | MissingType = MISSING,
 ) -> RecordingOptions:
     """Merge flat recording kwargs into a grouped options object."""
 
@@ -402,6 +410,7 @@ def merge_recording_options(
         "default_grad": default_grad,
         "grad_transform": grad_transform,
         "save_raw_gradients": save_raw_gradients,
+        "echo": echo,
     }
     for field_name, value in incoming.items():
         if value is MISSING:

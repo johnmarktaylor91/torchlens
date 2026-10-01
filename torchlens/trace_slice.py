@@ -53,8 +53,6 @@ from .selection_graph import (
 
 __all__ = [
     "TraceSlice",
-    "build_slice_between",
-    "build_slice_from_selection",
 ]
 
 
@@ -299,6 +297,30 @@ class TraceSlice(_SelectionOperand):
             f"boundary {len(self._boundary_in)} in / {len(self._boundary_out)} out; "
             f"{self._source})"
         )
+
+    # Region door (F01) --------------------------------------------------------
+
+    def as_region(self, *, exits: Any = None) -> Any:
+        """Derive an admissible region operated on as ONE unit (F01).
+
+        Runs the derived admissibility checks (complete exits, convexity,
+        pass-instance partition) and returns the typed
+        ``torchlens.intervention.regions.RegionTarget``, whose ``do()``
+        lowering substitutes the region's EXIT values on the replay engine
+        without replaying the interior. Contrast ``do(slice, edit)``, which
+        keeps the shipped member-site family semantics (each member value
+        edited in place).
+
+        Parameters
+        ----------
+        exits:
+            Optional user-declared exit list, checked for completeness
+            (a leaking list refuses, naming the leaked edges).
+        """
+
+        from .intervention.regions import region as _region
+
+        return _region(self, exits=exits)
 
     # Algebra lift ------------------------------------------------------------
 

@@ -115,7 +115,7 @@ def test_session_vs_floor_full_surface_differential():
     assert session.outcome.status.name == "COMPLETE"
     ledger = episode_ledger_for(session)
     assert ledger is not None
-    session_tokens = [row.tokens[0] for row in ledger.rows]
+    session_tokens = [row.step_output[0] for row in ledger.rows]
 
     # FLOOR product: observer discipline — the DRIVER owns the run; each
     # capture observes cloned step inputs; a capture product is never the
@@ -192,7 +192,7 @@ def test_gap9_guarded_fast_rerun_token_identity():
     )
     ledger = episode_ledger_for(session)
     assert ledger is not None
-    wrapped_tokens = [row.tokens[0] for row in ledger.rows]
+    wrapped_tokens = [row.step_output[0] for row in ledger.rows]
 
     result = session.run(inputs=_prompt(), fast=True)
     fast_tokens = [int(v) for v in result.output.reshape(-1).tolist()]
@@ -230,7 +230,9 @@ def test_escalation_reruns_whole_episode_and_verifies_tokens():
     # Same declaration + same recorded entry seed -> bit-identical episode,
     # so the E-A3 comparison discharges as verified token fidelity.
     assert ledger.header.fidelity_basis == "tokens"
-    assert [row.tokens for row in ledger.rows] == [row.tokens for row in producer_ledger.rows]
+    assert [row.step_output for row in ledger.rows] == [
+        row.step_output for row in producer_ledger.rows
+    ]
 
 
 def test_escalation_divergence_is_disclosed_never_settled():
@@ -256,10 +258,10 @@ def test_escalation_divergence_is_disclosed_never_settled():
     ledger = episode_ledger_for(escalated)
     assert ledger is not None
     producer_tokens = [
-        row.tokens
+        row.step_output
         for row in episode_ledger_for(producer).rows  # type: ignore[union-attr]
     ]
-    escalated_tokens = [row.tokens for row in ledger.rows]
+    escalated_tokens = [row.step_output for row in ledger.rows]
     if escalated_tokens == producer_tokens:
         pytest.skip("seeds coincided; divergence scenario did not materialize")
     assert ledger.header.fidelity_basis == "diverged"

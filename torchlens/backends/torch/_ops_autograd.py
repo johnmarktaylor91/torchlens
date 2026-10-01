@@ -140,11 +140,64 @@ def _get_autograd_saved_stats_by_output(
     return stats_by_index
 
 
-def _partition_output_entries_with_autograd_stats(output: Any) -> list[_OutputTensorEntry]:
-    """Collect output entries and autograd stats in one pass.
+def _classify_saved_storage(trace: Any, tensor: torch.Tensor) -> tuple[str, int | None, int]:
+    """Classify one autograd-saved tensor by its STORAGE identity.
+
+    Keyed on ``untyped_storage().data_ptr()`` on BOTH sides (the parameter and
+    buffer maps are already storage-keyed): keying on ``tensor.data_ptr()``
+    would misclassify an offset VIEW of a weight -- routine in attention -- as
+    an activation.
 
     Parameters
     ----------
+    trace
+        Active trace carrying the session storage-address maps.
+    tensor
+        Saved tensor accepted by the gross-band dedup.
+
+    Returns
+    -------
+    tuple[str, int | None, int]
+        ``(storage_class, storage_ptr, storage_nbytes)`` where the class is
+        ``"saved_parameter"`` / ``"saved_buffer"`` / ``"saved_activation"``;
+        an unreadable storage classifies as an activation with ``None`` ptr.
+    """
+
+    try:
+        with pause_logging():
+            storage = tensor.untyped_storage()
+            storage_ptr = storage.data_ptr()
+            storage_nbytes = int(storage.nbytes())
+    except (RuntimeError, TypeError, NotImplementedError):
+        return "saved_activation", None, 0
+    param_map = trace.__dict__.get("_param_storage_addresses") or {}
+    if storage_ptr in param_map:
+        return "saved_parameter", storage_ptr, storage_nbytes
+    buffer_map = trace.__dict__.get("_buffer_storage_addresses") or {}
+    if storage_ptr in buffer_map:
+        return "saved_buffer", storage_ptr, storage_nbytes
+    return "saved_activation", storage_ptr, storage_nbytes
+
+
+def _partition_output_entries_with_autograd_stats(
+    trace: Any, output: Any
+) -> list[_OutputTensorEntry]:
+    """Collect output entries, autograd stats, and the saved-band decomposition.
+
+    The gross per-op band (``autograd_memory``) keeps its exact historical
+    dedup (by ``tensor.data_ptr()`` within one call; views each count in
+    full -- the band is GROSS even within one op). The decomposition (observe
+    items 7-8) rides beside it: every accepted contribution is classified by
+    STORAGE identity into ``saved_parameter`` / ``saved_buffer`` /
+    ``saved_activation`` sub-counters, and a TRACE-GLOBAL first-save counter
+    (``newly_saved_bytes``) charges each unique storage's bytes exactly once
+    at the op that saved it first -- the timeline's one honestly stackable
+    saved band. Session-time bookkeeping, never persisted.
+
+    Parameters
+    ----------
+    trace
+        Active trace (session storage maps + the trace-global first-save set).
     output
         Raw function output from a decorated torch operation.
 
@@ -152,7 +205,7 @@ def _partition_output_entries_with_autograd_stats(output: Any) -> list[_OutputTe
     -------
     list[_OutputTensorEntry]
         Output entries in logging order, each paired with its autograd saved
-        tensor byte/count stats when available.
+        tensor byte/count stats and saved-band decomposition when available.
     """
 
     raw_entries: list[tuple[Any, tuple[OutputPathComponent, ...], ContainerSpec | None]] = list(
@@ -161,11 +214,15 @@ def _partition_output_entries_with_autograd_stats(output: Any) -> list[_OutputTe
     if not raw_entries:
         raw_entries = [(out, (), None) for out in ensure_iterable(output)]
 
+    seen_saved_storages: set[int] = trace.__dict__.setdefault(
+        "_autograd_seen_saved_storages", set()
+    )
     partitioned_entries: list[_OutputTensorEntry] = []
     seen_grad_fns: set[int] = set()
     seen_data_ptrs: set[int] = set()
     for maybe_tensor, container_path, container_spec in raw_entries:
         autograd_stats: tuple[int | None, int | None] = (None, None)
+        autograd_band: dict[str, int] | None = None
         # TorchLens's own bookkeeping read: an in-place op's output IS its
         # receiver, so an unmarked ``grad_fn`` read on a registered buffer
         # (BN ``num_batches_tracked.add_(1)``) would record a phantom
@@ -182,6 +239,15 @@ def _partition_output_entries_with_autograd_stats(output: Any) -> list[_OutputTe
                 seen_grad_fns.add(grad_fn_object_id)
                 total_bytes = 0
                 tensor_count = 0
+                band = {
+                    "saved_parameter": 0,
+                    "saved_buffer": 0,
+                    "saved_activation": 0,
+                    "newly_saved_bytes": 0,
+                    "newly_saved_parameter": 0,
+                    "newly_saved_buffer": 0,
+                    "newly_saved_activation": 0,
+                }
                 for saved_value in _iter_autograd_saved_candidates(grad_fn_handle):
                     for saved_tensor in _collect_tensor_values(saved_value):
                         bytes_added, count_added = _add_autograd_saved_tensor(
@@ -189,13 +255,24 @@ def _partition_output_entries_with_autograd_stats(output: Any) -> list[_OutputTe
                         )
                         total_bytes += bytes_added
                         tensor_count += count_added
+                        if count_added:
+                            storage_class, storage_ptr, storage_nbytes = _classify_saved_storage(
+                                trace, saved_tensor
+                            )
+                            band[storage_class] += bytes_added
+                            if storage_ptr is not None and storage_ptr not in seen_saved_storages:
+                                seen_saved_storages.add(storage_ptr)
+                                band["newly_saved_bytes"] += storage_nbytes
+                                band[f"newly_{storage_class}"] += storage_nbytes
                 autograd_stats = (total_bytes, tensor_count)
+                autograd_band = band
         partitioned_entries.append(
             _OutputTensorEntry(
                 value=maybe_tensor,
                 container_path=container_path,
                 container_spec=container_spec,
                 autograd_stats=autograd_stats,
+                autograd_band=autograd_band,
             )
         )
 

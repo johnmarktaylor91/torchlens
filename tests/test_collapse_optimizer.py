@@ -1195,24 +1195,9 @@ def test_rolled_v2_memo_separates_digest_identical_different_num_calls(
         trace.cleanup()
 
 
-def test_rolled_v2_gru_auto_is_non_noop(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Rolled v2 auto produces a non-empty recurrent cut."""
-
-    trace = _trace(GRUWrapper(), torch.randn(1, 6, 8))
-    try:
-        context = RenderContext(vis_mode="rolled")
-        none_count = count(collapse_plan_for_trace(trace, None, None, context))
-        collapse_fn = resolve_collapse_fn(trace, "auto", "rolled", context=context)
-        result = getattr(collapse_fn, "_torchlens_v2_result")
-
-        assert not result.declined
-        assert result.selected
-        assert 0 < result.visible_count < none_count
-        assert "rnn" in result.selected
-    finally:
-        trace.cleanup()
-
-
+# test_rolled_v2_gru_auto_is_non_noop moved to
+# tests/test_collapse_power_ladder.py (F11 memo D8 rewrote its contract;
+# the file sits at the 2000-line unledgered cap).
 def test_gpt2_small_config_auto_collapses_blocks_without_landmark_swallows() -> None:
     """GPT-2 small-config auto renders transformer blocks as honest boxes."""
 
@@ -1850,9 +1835,10 @@ def test_collapse_optimizer_ops_ceiling_declines_disclosed(
     # Sub-ceiling: the real ceiling admits this trace and produces a plan.
     assert trace.collapse_plan(mode="max") is not None
 
-    monkeypatch.setattr(optimizer_module, "COLLAPSE_OPTIMIZER_MAX_OPS", 2)
+    # Pathological arm (F11 memo D5(i)): above 20x the constant, smart
+    # collapse declines outright (constant 0 makes any trace qualify).
+    monkeypatch.setattr(optimizer_module, "COLLAPSE_OPTIMIZER_MAX_OPS", 0)
     fresh = tl.trace(model, torch.randn(2, 4))
-
     with pytest.warns(UserWarning, match="skipping smart collapse"):
         dot = fresh.draw(
             collapse="max",
@@ -1874,6 +1860,9 @@ def test_collapse_optimizer_ops_ceiling_declines_disclosed(
         schedule = fresh.collapse_schedule()
     assert len(schedule.steps) == 1
 
+    # The budget-degrade arm (non-pathological over-budget -> the fallback
+    # planner) is pinned in tests/test_collapse_power_ceiling.py.
+
 
 def test_collapse_ceiling_warning_category_and_attribution(
     monkeypatch: pytest.MonkeyPatch,
@@ -1891,7 +1880,8 @@ def test_collapse_ceiling_warning_category_and_attribution(
     from torchlens.errors import TorchLensWarning
 
     model = torch.nn.Sequential(torch.nn.Linear(4, 4), torch.nn.ReLU())
-    monkeypatch.setattr(collapse_optimizer, "COLLAPSE_OPTIMIZER_MAX_OPS", 2)
+    # F11 memo D5(i): the decline arm is the pathological pre-gate now.
+    monkeypatch.setattr(collapse_optimizer, "COLLAPSE_OPTIMIZER_MAX_OPS", 0)
     fresh = tl.trace(model, torch.randn(2, 4))
 
     with warnings_module.catch_warnings(record=True) as caught:

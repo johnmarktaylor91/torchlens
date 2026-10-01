@@ -1,0 +1,69 @@
+{
+  "$id": "https://torchlens.dev/schemas/torchlens.agent.error.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "error": {
+      "additionalProperties": true,
+      "properties": {
+        "class": {
+          "type": "string"
+        },
+        "code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fields": {
+          "type": "object"
+        },
+        "message": {
+          "type": "string"
+        },
+        "remedy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "severity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "class",
+        "code",
+        "fields",
+        "message",
+        "remedy",
+        "severity"
+      ],
+      "type": "object"
+    },
+    "schema": {
+      "const": "torchlens.agent.error.v1"
+    },
+    "schema_stability": {
+      "const": "documented-unstable"
+    },
+    "status": {
+      "const": "error"
+    },
+    "torchlens_version": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_stability",
+    "torchlens_version",
+    "status",
+    "error"
+  ],
+  "title": "Agent-surface error envelope",
+  "type": "object"
+}

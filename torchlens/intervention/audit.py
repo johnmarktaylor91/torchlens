@@ -26,9 +26,14 @@ from __future__ import annotations
 import hashlib
 import time
 import uuid
-from typing import Any, Literal
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any, Literal
 
 from .types import FireRecord, HelperSpec
+
+if TYPE_CHECKING:
+    from ..data_classes.op import Op
+    from .hooks import NormalizedHookEntry
 
 _UNSET: Any = object()
 
@@ -38,6 +43,27 @@ EventStatus = Literal["fired", "no_fire", "error"]
 #: Closed lane vocabulary for the envelope (surgery memo lanes; ``bind`` is
 #: reserved for F01).
 EventLane = Literal["replay", "rerun", "capture", "live_hook", "set_only", "bind"]
+
+#: The closed execution-effect vocabulary (surgery memo section 4, foldA D17):
+#: the ENGINE that fires an edit writes exactly one of these on every firing
+#: disclosure -- live/bound lanes run the original op and replace its value
+#: downstream (``values_replaced_after_execution``); replay substitutes exit
+#: values without re-executing the interior (``exits_substituted_interior_not_
+#: replayed``). No lane may ever write "skipped"/"deleted"/"removed": execution
+#: removal exists in no lane. A third value becomes claimable only if a genuine
+#: pre-call short-circuit is ever built.
+ExecutionEffect = Literal[
+    "values_replaced_after_execution",
+    "exits_substituted_interior_not_replayed",
+]
+
+#: Runtime set for engine-side validation of :data:`ExecutionEffect` writes.
+EXECUTION_EFFECTS: frozenset[str] = frozenset(
+    {
+        "values_replaced_after_execution",
+        "exits_substituted_interior_not_replayed",
+    }
+)
 
 
 def build_fire_record(
@@ -170,6 +196,8 @@ def record_intervention_event(
     error: str | None = None,
     extra: dict[str, Any] | None = None,
     append_audit_row: bool = True,
+    audit_event_row: bool = False,
+    execution_effect: str | None = None,
 ) -> dict[str, Any]:
     """Write ONE transaction envelope (the fire-evidence chokepoint).
 
@@ -213,6 +241,20 @@ def record_intervention_event(
         Doors that already appended their own canonical row THIS transaction
         (the Selection/EDGE/PARAM paths) pass ``False`` -- one transaction,
         one canonical row, never a duplicate.
+    audit_event_row:
+        Whether to ALSO append the ``kind="EVENT"`` transaction envelope to
+        the canonical persisted audit (the tlspec-v9 ``intervention_event_v2``
+        row kind with its hash-chain extension -- the F03 writer the v9
+        admission declared). Experiment-layer doors (vary / site sweeps / the
+        candidate engine) pass ``True``; the plain doors keep their shipped
+        audit shapes (``intervention_audit[-1]`` stays the door's own row).
+    execution_effect:
+        Engine-set closed :data:`ExecutionEffect` value disclosing what the
+        firing mechanism DID (foldA D17). Rides the free-form envelope stream
+        (never the closed EVENT row family); a value outside the closed
+        vocabulary refuses typed (``execution_effect_invalid``) -- the banned
+        verbs ("skipped"/"deleted"/"removed") are unrepresentable here by
+        construction.
 
     Returns
     -------
@@ -220,6 +262,18 @@ def record_intervention_event(
         The envelope row (also appended to ``state_history``).
     """
 
+    if execution_effect is not None and execution_effect not in EXECUTION_EFFECTS:
+        from .._errors import InvalidArgumentError
+
+        raise InvalidArgumentError(
+            f"execution_effect {execution_effect!r} is outside the closed "
+            f"vocabulary {sorted(EXECUTION_EFFECTS)}; the effect disclosure is "
+            "engine-set and execution removal exists in no lane",
+            code="execution_effect_invalid",
+            remedy="write 'values_replaced_after_execution' (live/bound) or "
+            "'exits_substituted_interior_not_replayed' (replay)",
+            argument="execution_effect",
+        )
     prior = _prior_event_rows(trace)
     lineage = _event_lineage(trace, prior)
     ordinal = len(prior) + 1
@@ -258,9 +312,13 @@ def record_intervention_event(
         "error": error,
         "event_digest": digest,
     }
+    if execution_effect is not None:
+        envelope["execution_effect"] = execution_effect
     if extra:
         envelope.update(extra)
     trace._record_operation("intervention_event", **envelope)
+    if audit_event_row:
+        append_event_audit_row(trace, envelope)
     if append_audit_row:
         trace.intervention_audit.append(
             {
@@ -275,6 +333,77 @@ def record_intervention_event(
             }
         )
     return envelope
+
+
+#: Exactly the persisted ``intervention_event_v2`` envelope fields (the v9
+#: EVENT audit-row contract in ``_io/forgery_validation.py``): the state
+#: -history envelope may carry door-specific ``extra`` disclosures, but the
+#: canonical audit row is CLOSED at load validation, so the writer projects.
+_EVENT_AUDIT_FIELDS = (
+    "schema",
+    "event_id",
+    "transaction_id",
+    "parent_event_id",
+    "lane",
+    "door",
+    "edit_names",
+    "selection_repr",
+    "status",
+    "fire_count",
+    "site_keys",
+    "rules",
+    "zero_fire_rule_ids",
+    "error",
+    "event_digest",
+)
+
+
+def append_event_audit_row(trace: Any, envelope: Mapping[str, Any]) -> dict[str, Any]:
+    """Append one ``kind="EVENT"`` row to the canonical persisted audit.
+
+    The tlspec-v9 ``intervention_event_v2`` audit-row kind with its
+    hash-chain extension: ``seq`` counts this trace's EVENT rows from 1 and
+    ``prev_event_digest`` carries the prior EVENT row's ``event_digest``
+    (``None`` on the first row), so the persisted transaction chronology is
+    tamper-evident -- dropping, reordering, or editing a row breaks the
+    chain. This is the F03 writer the v9 admission declared; it writes
+    exactly the contract field set (door-specific ``extra`` disclosures stay
+    on the free-form ``state_history`` envelope).
+
+    Parameters
+    ----------
+    trace:
+        Trace whose canonical ``intervention_audit`` receives the row.
+    envelope:
+        The transaction envelope :func:`record_intervention_event` minted.
+
+    Returns
+    -------
+    dict
+        The appended EVENT row.
+    """
+
+    prior_events = [
+        row
+        for row in trace.intervention_audit
+        if isinstance(row, Mapping) and row.get("kind") == "EVENT"
+    ]
+    row: dict[str, Any] = {key: envelope[key] for key in _EVENT_AUDIT_FIELDS}
+    row["kind"] = "EVENT"
+    row["seq"] = len(prior_events) + 1
+    row["prev_event_digest"] = prior_events[-1]["event_digest"] if prior_events else None
+    trace.intervention_audit.append(row)
+    return row
+
+
+def event_audit_rows(trace: Any) -> tuple[dict[str, Any], ...]:
+    """Return this trace's canonical EVENT rows, in chain order."""
+
+    return tuple(
+        dict(row)
+        for row in getattr(trace, "intervention_audit", ())
+        if isinstance(row, Mapping) and row.get("kind") == "EVENT"
+    )
 
 
 def rules_payload(spec: Any) -> tuple[dict[str, Any], ...]:
@@ -321,11 +450,81 @@ def site_keys_for_labels(trace: Any, labels: tuple[str, ...]) -> tuple[str, ...]
 
 
 __all__ = [
+    "EXECUTION_EFFECTS",
     "EventLane",
     "EventStatus",
+    "ExecutionEffect",
+    "append_event_audit_row",
     "build_fire_record",
+    "event_audit_rows",
     "fire_records_since",
     "record_intervention_event",
     "rules_payload",
     "site_keys_for_labels",
 ]
+
+
+def _hook_name(entry: NormalizedHookEntry) -> str:
+    """Return display name for a hook entry.
+
+    Parameters
+    ----------
+    entry:
+        Hook entry.
+
+    Returns
+    -------
+    str
+        Hook display name.
+    """
+
+    if entry.helper_spec is not None:
+        return entry.helper_spec.name
+    return getattr(entry.normalized_callable, "__qualname__", "user_hook")
+
+
+def _replay_fire_record(
+    entry: NormalizedHookEntry,
+    site: Op,
+    *,
+    replaced: bool,
+    run_ctx: dict[str, Any] | None = None,
+    previous_notes: tuple[Any, ...] = (),
+) -> FireRecord:
+    """Build a replay-door fire record through the ONE builder.
+
+    Parameters
+    ----------
+    entry:
+        Hook entry that fired.
+    site:
+        Target site.
+    replaced:
+        Whether the hook returned a different tensor object.
+    run_ctx:
+        Shared replay run context, for the ONE builder's disclosure-note lift
+        (notes enqueued during this fire become ``determinism_note``).
+    previous_notes:
+        Ledger-note watermark taken before the hook executed.
+
+    Returns
+    -------
+    FireRecord
+        Hook fire record.
+    """
+
+    return build_fire_record(
+        target_label=site.layer_label,
+        call_label=site.label,
+        func_call_id=site.func_call_id,
+        container_path=tuple(site.container_path or ()),
+        engine="replay",
+        helper=entry.helper_spec,
+        site_label=site.layer_label,
+        timing="post",
+        direction="forward",
+        helper_name=_hook_name(entry),
+        run_ctx=run_ctx,
+        previous_notes=previous_notes,
+        replaced=replaced,
+    )

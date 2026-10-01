@@ -56,9 +56,14 @@ _NORM_TENSOR_FACETS = ("final_norm_gamma", "final_norm_beta", "final_norm_input"
 #: Conventional direct-child names for the unembedding projection. A model
 #: whose head is named differently is covered by registering a user recipe
 #: producing the same facet names, never by widening this list speculatively.
-_HEAD_CHILD_NAMES = ("lm_head", "embed_out", "output_projection")
+# "unembed" is TransformerLens's HookedTransformer child -- the legacy plain
+# nn.Module our strongest same-object oracle traces (mikit G2a/G2b).
+_HEAD_CHILD_NAMES = ("lm_head", "embed_out", "output_projection", "unembed")
 
-_LAYER_NORM_CLASS_NAMES = frozenset({"LayerNorm"})
+# LayerNormPre is TransformerLens's affine-free fold (community gauge);
+# classification is safe here for the same reason as the broad RMSNorm
+# suffix: every consumer numerically validates before trusting the kind.
+_LAYER_NORM_CLASS_NAMES = frozenset({"LayerNorm", "LayerNormPre"})
 
 
 def _norm_kind_for_class(class_name: str) -> str | None:
@@ -85,7 +90,7 @@ def _norm_kind_for_class(class_name: str) -> str | None:
 
     if class_name in _LAYER_NORM_CLASS_NAMES:
         return "layer_norm"
-    if class_name == "RMSNorm" or class_name.endswith("RMSNorm"):
+    if class_name == "RMSNorm" or class_name.endswith(("RMSNorm", "RMSNormPre")):
         return "rms_norm"
     return None
 

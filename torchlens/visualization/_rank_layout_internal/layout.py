@@ -19,6 +19,7 @@ from ...utils.display import atomic_write_text, user_stacklevel
 from .. import _render_utils
 from .._render_common import GraphvizRenderError
 from .._render_utils import _open_file_quietly, compute_module_penwidth
+from .._typography import DEFAULT_TYPOGRAPHY
 from ..code_panel import _code_panel_label
 from ..render_execution import atomic_render_target, is_raster_format, surface_layout_stderr
 from ..render_ir import RenderIR, RenderIRDotStatement
@@ -458,78 +459,6 @@ def _rank_node_statement(
     return next((statement for statement in statements if statement.kind == "node"), None)
 
 
-def _rank_legend_lines(theme: Any, max_y: float) -> list[str]:
-    """Emit the compact color legend as a pinned-node cluster for the rank path.
-
-    Mirrors ``_render_edges._add_legend_to_graphviz`` (which builds the legend
-    through the ``graphviz.Digraph`` API and cannot be reused on the raw-DOT
-    rank path). Nodes carry the ``tl_legend_<i>`` ids and are pinned to the left
-    of the graph so ``neato -n`` places them deterministically.
-
-    Parameters
-    ----------
-    theme:
-        Resolved visualization theme (may be ``None``; sensible defaults apply).
-    max_y:
-        Maximum node y-coordinate, used to anchor the legend near the graph.
-
-    Returns
-    -------
-    list[str]
-        Raw DOT lines for the legend subgraph.
-    """
-    from .._render_common import (
-        BOOL_NODE_COLOR,
-        DEFAULT_BG_COLOR,
-        INPUT_COLOR,
-        OUTPUT_COLOR,
-        TRAINABLE_PARAMS_BG_COLOR,
-    )
-    from ..node_spec import INTERVENTION_CONE_COLOR, INTERVENTION_SITE_COLOR
-
-    border = getattr(theme, "default_border", "black")
-    font = getattr(theme, "default_font", "black")
-    specs = [
-        ("input", "oval", INPUT_COLOR, "black"),
-        ("output", "oval", OUTPUT_COLOR, "black"),
-        ("parameterized", "oval", TRAINABLE_PARAMS_BG_COLOR, "black"),
-        ("buffer", "cylinder", DEFAULT_BG_COLOR, "black"),
-        ("boolean", "oval", BOOL_NODE_COLOR, "black"),
-        ("intervention/cone", "oval", INTERVENTION_CONE_COLOR, INTERVENTION_SITE_COLOR),
-    ]
-    legend_x = -240.0
-    top_y = (len(specs) - 1) * 48.0
-    # neato -n does not auto-compute cluster boxes/labels from pinned nodes, so
-    # pin an explicit bounding box around the legend nodes (same technique the
-    # module clusters use above) for the box outline and "TorchLens legend" title.
-    bb_llx, bb_lly, bb_urx, bb_ury = legend_x - 120.0, -40.0, legend_x + 120.0, top_y + 56.0
-    lines = [
-        "  subgraph cluster_torchlens_legend {",
-        '    label="TorchLens legend"',
-        "    labelloc=t",
-        f"    color={_dot_quote(str(border))}",
-        f"    fontcolor={_dot_quote(str(font))}",
-        "    style=rounded",
-        f'    bb="{bb_llx:.1f},{bb_lly:.1f},{bb_urx:.1f},{bb_ury:.1f}"',
-    ]
-    for index, (text, shape, fill, node_border) in enumerate(specs):
-        y = index * 48.0
-        parts = [
-            f"label={_dot_quote(text)}",
-            f"shape={shape}",
-            "style=filled",
-            f"fillcolor={_dot_quote(fill)}",
-            "fontcolor=black",
-            f"color={_dot_quote(node_border)}",
-            f'pos="{legend_x:.1f},{y:.1f}!"',
-        ]
-        if node_border == INTERVENTION_SITE_COLOR:
-            parts.append("penwidth=2.0")
-        lines.append(f"    tl_legend_{index} [{' '.join(parts)}]")
-    lines.append("  }")
-    return lines
-
-
 def render_rank_layout(
     ir: RenderIR,
     vis_mode: str,
@@ -669,6 +598,16 @@ def render_rank_layout(
         "labeljust=left",
         "ordering=out",
     ]
+    # Typography parity with the dot path (vizmech D29): the dot path emits
+    # theme font attributes through ``theme_graph_attrs``/``theme_node_attrs``/
+    # ``theme_edge_attrs`` on the Digraph shell; this raw-DOT path historically
+    # emitted NONE of them, so every rank render fell back to the engine's
+    # serif default whatever the theme said. Emit the pinned family on all
+    # three scopes; per-node/per-edge attributes still override.
+    typography_family = getattr(
+        getattr(theme, "typography", None), "family", DEFAULT_TYPOGRAPHY.family
+    )
+    graph_attr_parts.append(f"fontname={_dot_quote(typography_family)}")
     if dpi is not None and is_raster_format(vis_fileformat):
         # Raster-only, matching the dot path (vizmech D23): on vector formats
         # graphviz's dpi attribute multiplies the coordinate space instead.
@@ -676,7 +615,8 @@ def render_rank_layout(
     for override_key, override_val in (graph_overrides or {}).items():
         graph_attr_parts.append(f"{override_key}={_dot_quote(str(override_val))}")
     lines.append(f"  graph [{' '.join(graph_attr_parts)}]")
-    lines.append("  node [ordering=out]")
+    lines.append(f"  node [ordering=out fontname={_dot_quote(typography_family)}]")
+    lines.append(f"  edge [fontname={_dot_quote(typography_family)}]")
 
     def _node_line(name: str, indent: int = 1) -> str:
         """Generate a DOT node declaration with position and size."""
@@ -712,6 +652,16 @@ def render_rank_layout(
     def _write_cluster(mod_key: str, depth: int, indent: int) -> None:
         """Recursively write a cluster subgraph with its nodes and children."""
         prefix = "  " * indent
+        # One-node LEAF module clusters are not emitted on the rank path
+        # (vizmech item 16, D18a): ``neato -n`` invents cluster boxes it was
+        # never designed to compute -- measured at 366 one-node clusters
+        # blown to a median 91% of graph width on stock densenet121, page-
+        # wide boxes claiming containment they do not have. The node itself
+        # stays, hoisted to the parent scope.
+        direct = [nn for nn in module_direct_nodes.get(mod_key, []) if nn in node_data]
+        if len(direct) == 1 and not module_child_map.get(mod_key):
+            lines.append(_node_line(direct[0], indent))
+            return
         safe = mod_key.replace(":", "_pass").replace(".", "_")
         # ``safe`` only substitutes ``:``/``.`` -- it still carries through
         # arbitrary module-address text (e.g. an ``nn.ModuleDict`` key like
@@ -818,11 +768,13 @@ def render_rank_layout(
         parts = [f"{k}={_dot_quote(str(v))}" for k, v in edge_data.items()]
         lines.append(f"  {tail} -> {head} [{' '.join(parts)}]")
 
-    # The legend was silently dropped on the rank path (the dot path adds it via
-    # _add_legend_to_graphviz after the rank branch has already returned). Emit
-    # an equivalent pinned-node legend cluster here so show_legend is honored.
+    # The legend was historically dropped on the rank path; it now emits the
+    # SAME one-table form as the dot path (vizmech item 13), pinned so
+    # ``neato -n`` places it deterministically.
     if show_legend:
-        lines.extend(_rank_legend_lines(theme, max_y))
+        from .._legend import legend_table_lines_for_rank_path
+
+        lines.extend(legend_table_lines_for_rank_path(theme, max_y))
 
     lines.append("}")
     dot_source = "\n".join(lines)

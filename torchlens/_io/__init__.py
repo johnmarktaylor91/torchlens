@@ -36,6 +36,7 @@ from .format_contract import (
     below_floor_error,
     coerce_container_typed_state,
     default_fill_state,
+    raise_if_manifest_below_floor,
     read_tlspec_version,
 )
 from .format_errors import (
@@ -72,6 +73,7 @@ __all__ = [
     "UnknownPersistedFieldError",
     "above_ceiling_error",
     "below_floor_error",
+    "raise_if_manifest_below_floor",
     "coerce_container_typed_state",
     "default_fill_state",
     "read_tlspec_version",

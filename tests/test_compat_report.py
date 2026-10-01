@@ -21,6 +21,7 @@ EXPECTED_COMPAT_ROW_KEYS = {
     "accelerate_cpu_disk_offload",
     "accelerate_device_map_auto",
     "bitsandbytes_8bit_4bit",
+    "peft_lora_adapters",
     "data_parallel",
     "deepspeed",
     "device_context_factory",

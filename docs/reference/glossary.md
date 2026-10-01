@@ -31,12 +31,45 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   `COMPLETE`, `HALTED`, `ABORTED_NONFINITE`, `FAILED`, `UNATTESTED`, or `UNKNOWN`; failed outcomes
   also identify the phase. See [Capture outcomes](capture_outcomes.md).
 
+**Bound-method root**
+: The ruled `tl.trace` root contract: an `nn.Module` OR a bound method of one, e.g.
+  `tl.trace(model.generate, ids, ...)` (also accepted by `tl.validate`). The owner resolves via
+  `method.__self__` and registers as the `owner` submodule of a TorchLens-authored wrapper root
+  whose forward calls the exact bound method exactly once; the capture's identity reads
+  `type(owner).__name__`, `Trace.root_entry_point` records
+  `"bound_method:<owner_qualname>.<method>"`, and the root op record (the output-boundary ops)
+  carries `tl_authored_root=True` — both persisted with fail-closed load validation. On
+  bound-method episode captures `EpisodeSpec.stepped_module` defaults to the owner. Bound-method
+  captures refuse rerun/append at the identity gate (`rerun_entry_point_unsupported`; an absent
+  fact on a legacy artifact refuses `root_entry_point_unavailable`); replay engines are
+  unaffected. Other callables (closures, bare functions) refuse `model_type_unsupported`. All
+  spellings are provisional.
+
 **Episode capture**
 : One wrapped multi-step generation run captured as a single product
   (`capture_kind=episode`): `tl.trace(episode_root, x, episode=EpisodeSpec(stepped_module=...))`
-  stamps the declaration and lands a per-step status ledger (header + rows with
-  `complete`/`interrupted`/`absent` statuses, emitted tokens, and the managed-RNG entry
-  seed) at `trace.annotations["episode"]`. A diagnostic-tier product for tens of steps
+  stamps the declaration and lands a per-step status ledger (grammar v2,
+  `episode_ledger_version=2`: header with the declared `step_output_kind`
+  (`tokens`/`digest`/`none`), the `step_output_from` source disclosure, the
+  tail-aligned `step_axis`, the minted `capture_digest` binding, the measured
+  `step_join` envelope grading every cross-step join —
+  continuous/transformed/declared/exogenous/unchecked, with episode-dependent
+  claims refused across a measured break — and, on intervened (COUPLED)
+  captures, the deterministic `intervention_digest`; rows with
+  `complete`/`interrupted`/`absent`
+  statuses, the generic `step_output`, the channel-keyed carried-state witness
+  slots `entry_state_digest`/`exit_state_digest` (`None` = not measured; the
+  arithmetic `cache_len` is deleted), the measured per-step `fire_count` on
+  coupled captures (zero and multiple fires are first-class), and the
+  managed-RNG entry
+  seed) at `trace.annotations["episode"]`. `episode=` x `intervene=` runs
+  COUPLED (attested coupling): `trace.episode_coupling` recomputes and
+  compares the capture digest (the positive ledger-to-product binding) and
+  serves fire counts plus per-segment facts that never span a measured break;
+  `torchlens.intervention.at_step(*steps)` is the step-qualified selector
+  (live and post hoc via the persisted `Op.episode_step` stamps); replay
+  derives a fresh ledger or refuses (`episode_coupled_replay_underivable` on
+  both `run()` engines; `do()` edits quarantine inherited episode evidence). A diagnostic-tier product for tens of steps
   (cost is superlinear in step count); the ledger is a disclosure, never a settlement
   authority, and it persists plainly as of the tlspec v8 coordinated bump (loads validate
   fail-closed). All episode
@@ -167,6 +200,17 @@ documented unstable and may be renamed or removed without a compatibility alias.
 | CAM resolution evidence | `native_map_resolution`, `rendered_map_resolution`, `upsampling`, `bilinear_display_only` | unstable -- no deprecation shim owed |
 | Graph overlay bridge and controls | `overlay`, `source`, `reduce`, `abs_sum`, `abs_mean`, `sum`, `max` | unstable -- no deprecation shim owed |
 
+| F06 wrapping contract | `noise_tunnel`, `attribute`, `method`, `method_kwargs` | unstable -- no deprecation shim owed |
+| F06 noise tunnel controls and evidence | `n_samples`, `stdevs`, `aggregation`, `noise_bank`, `mean_square`, `variance`, `stdevs_resolved`, `residual_of_means` | unstable -- no deprecation shim owed |
+| F06 GradientShap controls | `gradient_shap`, `baselines`, `draw_bank`, `store_draws` | unstable -- no deprecation shim owed |
+| F06 guided methods and evidence | `guided_backprop`, `deconvolution`, `sites`, `absolute`, `site_census` | unstable -- no deprecation shim owed |
+| F06 occlusion map controls | `occlusion_map`, `window`, `strides`, `baseline_value`, `occlude_leaf`, `max_passes`, `average` | unstable -- no deprecation shim owed |
+| F06 IG step runner controls and evidence | `step_batch_size`, `step_audit`, `step_audit_seed`, `per_call`, `per_chunk`, `path_evaluations_logical`, `physical_forward_calls` | unstable -- no deprecation shim owed |
+| F06 completeness disclosure | `residual_rel`, `target_delta_abs`, `completeness_caveat` | unstable -- no deprecation shim owed |
+| F06 metrics | `infidelity`, `sensitivity`, `MetricResult`, `perturb`, `noise_std`, `radius`, `gaussian`, `square_removal` | unstable -- no deprecation shim owed |
+| F06 token attribution | `text`, `TokenAttributionResult`, `TokenAttributionPayload`, `keep_special_tokens`, `steps_per_batch`, `max_length`, `pad_token`, `auto`, `converged`, `show` | unstable -- no deprecation shim owed |
+| F06 LRP mechanism | `SiteStash`, `stash`, `fetch`, `mark_firing`, `leftovers`, `register_site`, `label_of` | unstable -- no deprecation shim owed |
+
 <!-- ATTRIBUTION-KIT-UNSTABLE-INDEX:END -->
 
 Integrated Gradients always reports its signed completeness residual against the exact endpoint
@@ -219,6 +263,22 @@ attribution-target alias. See the [attribution reference](attribution.md).
 : A named collection of aligned Traces, constructed with `tl.bundle(...)` or `tl.Bundle(...)`, for
   cross-run comparison.
 
+**Parameter value basis** *(spelling documented-unstable)*
+: The derived, read-time, persisted-nowhere disclosure `Param.value_basis` of where a parameter
+  value comes from: `live_ref` (the live-model handle resolves; the value may have moved since
+  capture) or `absent(not_persisted)` (deserialized; parameter bytes were never persisted —
+  replacing the historical untyped bare `None`). `snapshot` arrives only with capture-time
+  parameter snapshots (R8(b)). `Param.value` keeps its documented live-handle meaning; the basis
+  is a disclosure beside the live read, never a change to it.
+
+**Checkpoint live-ref guard** *(spelling documented-unstable)*
+: TorchLens records which parameter a run used, not its bytes, so cross-member parameter
+  value/difference/trajectory reads on a Bundle (`weight_norm_diff`, `diff_pair`, `aggregate`,
+  `out`/`grad` on `SuperParam` views with two or more members) refuse BEFORE tensor lookup with
+  the stable code `checkpoint_series_live_params` unless every member carries immutable
+  capture-time parameter evidence. The guard is keyed on the claim, never on Python object
+  identity, and survives save/load; a version-axis relation row still orders members.
+
 **Runnable artifact**
 : A `.tlspec` saved at `level="runnable"` with a sparse taken-path descriptor. Its source capture
   must use `intervention_ready=True`; this flag supplies replay templates even when no intervention
@@ -250,11 +310,14 @@ attribution-target alias. See the [attribution reference](attribution.md).
 
 **Collapse**
 : A rendering-only condensation of module detail. `collapse="none"`, `"auto"`, `"max"`, or a
-  float in `[0, 1]` never changes the underlying Trace. Traces above the preflight compute
-  ceiling `COLLAPSE_OPTIMIZER_MAX_OPS` (2000 ops) decline smart collapse with a
-  `TorchLensWarning`: `draw()` renders uncollapsed, `Trace.collapse_plan()` refuses typed
-  (`collapse_plan_unavailable`), and `Trace.collapse_schedule()` degrades to its single
-  full-graph step.
+  float in `[0, 1]` never changes the underlying Trace. Admission gates on the rendered
+  universe U against the defensive constant `COLLAPSE_OPTIMIZER_MAX_OPS` (2000) plus a
+  measured (U, W) work estimator: over-budget requests degrade to a deterministic compact
+  fallback plan (coded `collapse_budget_fallback`), never an uncollapsed wall; only
+  pathological inputs (raw ops above 20x the constant) decline outright
+  (`collapse_pathological_skip`; `Trace.collapse_plan()` refuses typed
+  (`collapse_plan_unavailable`); `Trace.collapse_schedule()` degrades to its single
+  full-graph step).
 
 **Run folding**
 : `fold_repeats=True` replaces eligible runs of distinct same-class sibling modules with a
@@ -459,6 +522,18 @@ attribution-target alias. See the [attribution reference](attribution.md).
   `tl.facets` is the semantic facet namespace (canonical home `torchlens.semantic`);
   `tl.export` holds static export helpers; `tl.bundle(...)` / `tl.Bundle` build aligned
   Trace collections and `tl.show_bundle_graph` renders a bundle's graph.
+
+**Streaming statistics**
+: `tl.stats` is the streaming-statistics namespace: constant-memory accumulators
+  (`tl.stats.Mean`, `tl.stats.Norm`, `tl.stats.Covariance`, `tl.stats.CrossCovariance`,
+  `tl.stats.Quantile`, `tl.stats.TopK`, `tl.stats.PCA`, `tl.stats.CKA` -- exact
+  full-data linear CKA, never a minibatch approximation -- `tl.stats.Histogram`,
+  `tl.stats.Spine`) built on the `tl.stats.StreamingStat` protocol, plus fitted-PCA
+  persistence (`tl.stats.save_fitted` / `tl.stats.load_fitted`). `tl.aggregate(model,
+  dataloader, metrics)` streams activations (`target="out"`) or gradients
+  (`target="grad"`, with `loss_fn=`) through those accumulators across a whole
+  dataloader without retaining per-batch tensors. Doc of record:
+  [docs/reference/stats.md](stats.md).
 
 ## Quantities and typed errors
 

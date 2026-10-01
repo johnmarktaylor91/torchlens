@@ -1,0 +1,97 @@
+{
+  "$id": "https://torchlens.dev/schemas/torchlens.agent.payload_stats.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "artifact": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "data": {
+      "additionalProperties": true,
+      "properties": {
+        "handoff": {
+          "type": "string"
+        },
+        "header": {
+          "additionalProperties": true,
+          "required": [
+            "accumulation_dtype",
+            "population_total",
+            "ranking",
+            "rows_returned",
+            "std_correction",
+            "target"
+          ],
+          "type": "object"
+        },
+        "load_plan": {
+          "type": "object"
+        },
+        "rows": {
+          "items": {
+            "additionalProperties": true,
+            "required": [
+              "label",
+              "target"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "handoff",
+        "header",
+        "rows"
+      ],
+      "type": "object"
+    },
+    "limits": {
+      "type": "object"
+    },
+    "request": {
+      "type": "object"
+    },
+    "schema": {
+      "const": "torchlens.agent.payload_stats.v1"
+    },
+    "schema_stability": {
+      "const": "documented-unstable"
+    },
+    "status": {
+      "type": "string"
+    },
+    "torchlens_version": {
+      "type": "string"
+    },
+    "truncation": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "artifact",
+    "data",
+    "limits",
+    "request",
+    "schema",
+    "schema_stability",
+    "status",
+    "torchlens_version",
+    "truncation",
+    "warnings"
+  ],
+  "title": "Bounded numbers over saved tensors, never the tensors",
+  "type": "object"
+}

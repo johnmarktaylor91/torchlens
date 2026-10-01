@@ -18,6 +18,7 @@ CaptureOptions.jax_max_control_flow_unroll
 CaptureOptions.keep_orphans
 CaptureOptions.layer_visualizers
 CaptureOptions.layers_to_save
+CaptureOptions.log_injections
 CaptureOptions.measure_python_peak_memory
 CaptureOptions.module_filter
 CaptureOptions.module_identity_mode
@@ -43,6 +44,7 @@ CaptureOptions.save_visualizations
 CaptureOptions.source_context_lines
 CaptureOptions.stop_after
 CaptureOptions.structure_only
+CaptureOptions.track_device_memory
 CaptureOptions.track_nonfinite
 CaptureOptions.transform
 CaptureOptions.unwrap_when_done

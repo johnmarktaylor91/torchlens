@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable, Iterable, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 from torch import nn
@@ -11,10 +12,14 @@ from torch import nn
 from .._deprecations import MISSING, MissingType
 from .._errors import ArgumentTypeError, InvalidArgumentError
 from ..bundle import Bundle
+from ..errors import TorchLensWarning
 from .hooks import HookContext
 from .selectors import BaseSelector, func, label
 from .spec import InterventionSpec, when
 from .types import HelperSpec
+
+if TYPE_CHECKING:
+    from ..data_classes.trace import Trace
 
 SWEEP_NAME = "sweep"
 
@@ -27,6 +32,7 @@ def sweep(
     *,
     input_kwargs: dict[Any, Any] | None = None,
     names: Sequence[str] | None = None,
+    include_baseline: bool = False,
     **trace_kwargs: Any,
 ) -> Bundle:
     """Capture one intervened trace per swept replacement value.
@@ -47,19 +53,28 @@ def sweep(
     names:
         Optional Bundle member names. When omitted, names are derived from
         ``SWEEP_NAME`` and the value index.
+    include_baseline:
+        Whether to ALSO capture one PRISTINE (un-intervened) trace first,
+        named ``"baseline"`` and set as the Bundle baseline — without it a
+        sweep bundle has no comparison anchor and ``most_changed`` raises
+        ``BaselineUndeterminedError`` (F03 ledger memo item 2). The default
+        ``False`` keeps the legacy member cardinality and DISCLOSES the
+        missing baseline at construction with one coded warning.
     **trace_kwargs:
         Additional keyword arguments forwarded to ``tl.trace``.
 
     Returns
     -------
     Bundle
-        Bundle containing one trace per swept value.
+        Bundle containing one trace per swept value (plus the pristine
+        ``"baseline"`` member first, under ``include_baseline=True``).
 
     Raises
     ------
     ValueError
-        If no values are provided, names do not match values, or an explicit
-        ``intervene`` argument is supplied.
+        If no values are provided, names do not match values, a member name
+        collides with ``"baseline"``, or an explicit ``intervene`` argument
+        is supplied.
     TypeError
         If ``at`` cannot be used as a capture-time intervention predicate.
     """
@@ -119,6 +134,7 @@ def sweep(
             early_values,
             input_kwargs=input_kwargs,
             names=names,
+            include_baseline=include_baseline,
             **trace_kwargs,
         )
 
@@ -160,6 +176,14 @@ def sweep(
     traces = {}
     from ..user_funcs import trace as _trace
 
+    baseline = _mint_pristine_baseline(
+        model,
+        x,
+        member_names=member_names,
+        include_baseline=include_baseline,
+        input_kwargs=input_kwargs,
+        **trace_kwargs,
+    )
     for member_name, value in zip(member_names, swept_values, strict=True):
         # C03 (ledger memo item 1): the swept value rides a TYPED builtin
         # helper spec whose args carry the value, never an anonymous closure
@@ -172,7 +196,14 @@ def sweep(
             intervene=when(site, sweep_replace(value)),
             **trace_kwargs,
         )
-    return Bundle(traces)
+    return _assemble_sweep_bundle(
+        baseline,
+        traces,
+        params={
+            "values": [repr(value) for value in swept_values],
+            "include_baseline": include_baseline,
+        },
+    )
 
 
 def _sweep_over_specs(
@@ -180,11 +211,15 @@ def _sweep_over_specs(
     x: Any,
     specs: list[InterventionSpec],
     *,
-    input_kwargs: dict[Any, Any] | None,
     names: Sequence[str] | None,
+    include_baseline: bool = False,
     **trace_kwargs: Any,
 ) -> Bundle:
-    """Capture one intervened trace per swept InterventionSpec (C03 spec door)."""
+    """Capture one intervened trace per swept InterventionSpec (C03 spec door).
+
+    ``input_kwargs`` rides ``**trace_kwargs`` (it is forwarded verbatim to
+    every capture alongside the other trace kwargs).
+    """
 
     if not specs:
         raise InvalidArgumentError(
@@ -203,16 +238,100 @@ def _sweep_over_specs(
     member_names = list(names) if names is not None else _default_member_names(len(specs))
     from ..user_funcs import trace as _trace
 
+    baseline = _mint_pristine_baseline(
+        model,
+        x,
+        member_names=member_names,
+        include_baseline=include_baseline,
+        # One extra frame (sweep -> _sweep_over_specs) vs the at/values path:
+        # the absence disclosure must land on the USER's sweep() call site.
+        _warn_stacklevel=4,
+        **trace_kwargs,
+    )
     traces = {}
     for member_name, member_spec in zip(member_names, specs, strict=True):
         traces[member_name] = _trace(
             model,
             x,
-            input_kwargs=input_kwargs,
             intervene=member_spec,
             **trace_kwargs,
         )
-    return Bundle(traces)
+    return _assemble_sweep_bundle(
+        baseline,
+        traces,
+        params={
+            "spec_digests": [spec.spec_digest for spec in specs],
+            "include_baseline": include_baseline,
+        },
+    )
+
+
+def _mint_pristine_baseline(
+    model: nn.Module,
+    x: Any,
+    *,
+    member_names: Sequence[str],
+    include_baseline: bool,
+    _warn_stacklevel: int = 3,
+    **trace_kwargs: Any,
+) -> Trace | None:
+    """Capture the PRISTINE baseline member, or disclose its absence.
+
+    ``include_baseline=False`` (the legacy cardinality) emits ONE coded
+    construction-time warning: a sweep bundle without a pristine member has
+    no comparison anchor, so ``most_changed`` raises
+    ``BaselineUndeterminedError`` — the measured item-2 defect was that this
+    surprise arrived only at comparison time. ``_warn_stacklevel`` keeps the
+    disclosure attributed to the USER's ``sweep()`` call site on every door
+    (the spec door adds one interior frame).
+    """
+
+    if not include_baseline:
+        warnings.warn(
+            TorchLensWarning(
+                "sweep() built a bundle with NO pristine baseline member: "
+                "every member is intervened, so baseline-anchored reads "
+                "(most_changed, output_delta ...) will refuse. Pass "
+                "include_baseline=True to mint one un-intervened 'baseline' "
+                "capture first, or add one with bundle.add later.",
+                code="sweep_baseline_absent",
+            ),
+            stacklevel=_warn_stacklevel,
+        )
+        return None
+    if "baseline" in set(member_names):
+        raise InvalidArgumentError(
+            "sweep(include_baseline=True) reserves the member name 'baseline' "
+            "for the pristine capture, but names= also carries 'baseline'",
+            code="sweep_baseline_name_collision",
+            remedy="rename the swept member or drop include_baseline",
+            argument="names",
+        )
+    from ..user_funcs import trace as _trace
+
+    return _trace(model, x, **trace_kwargs)
+
+
+def _assemble_sweep_bundle(
+    baseline: Trace | None,
+    traces: dict[str, Trace],
+    *,
+    params: dict[str, Any],
+) -> Bundle:
+    """Assemble the sweep Bundle with lineage anchors and a chronology row."""
+
+    members: dict[str, Trace] = {}
+    if baseline is not None:
+        members["baseline"] = baseline
+    members.update(traces)
+    bundle = Bundle(members, baseline="baseline" if baseline is not None else None)
+    operation = bundle._record_bundle_operation("sweep", member_names=tuple(members), params=params)
+    for member_name in traces:
+        bundle._member_construction[member_name] = {
+            "origin": "swept",
+            "operation_id": operation.operation_id,
+        }
+    return bundle
 
 
 def sweep_replace(value: Any) -> HelperSpec:

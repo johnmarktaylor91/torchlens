@@ -118,6 +118,19 @@ class TraceStatsMixin(_TraceMixinBase):
         return any(v > 1 for v in self.layer_num_calls.values())
 
     @property
+    def forward_peak_memory_pair(self: "Trace") -> "dict[str, Any] | None":
+        """Session-time (live, resident) forward peak pair with backend named.
+
+        Full contract: :func:`torchlens.capture.peak_memory.read_peak_pair`
+        (F20 brainpipe D-7; spelling DOCUMENTED-UNSTABLE). ``None`` on loaded
+        artifacts, which never re-measure.
+        """
+
+        from ..capture.peak_memory import read_peak_pair
+
+        return read_peak_pair(self)
+
+    @property
     def recurrent_layers(self: "Trace") -> "LayerAccessor":
         """Access Layers with more than one captured pass.
 
@@ -232,6 +245,56 @@ class TraceStatsMixin(_TraceMixinBase):
         if not self.capture_start_time or not self.capture_end_time:
             return Duration(0)
         return Duration(self.capture_end_time - self.capture_start_time)
+
+    @property
+    def capture_kind(self: "Trace") -> str:
+        """Return this product's capture kind: ``"episode"`` or ``"plain"``.
+
+        Discoverability seam only (lane F40a; spelling DOCUMENTED-UNSTABLE
+        pending the naming session): delegates to
+        ``torchlens.capture._episode_ledger.capture_kind_for``. A fresh
+        re-execution product whose episode evidence the annotations travel
+        policy dropped reads ``"plain"``.
+        """
+
+        from ..capture._episode_ledger import capture_kind_for
+
+        return capture_kind_for(self)
+
+    @property
+    def episode(self: "Trace") -> Any | None:
+        """Return the parsed episode step ledger, or ``None``.
+
+        Public step access (lane F40a; spelling DOCUMENTED-UNSTABLE pending
+        the naming session): the returned ``EpisodeLedger`` exposes
+        ``header``, ordered per-step ``rows``, ``steps_completed``, and
+        ``truncated_at_step``. ``None`` for plain captures, pre-finalize
+        declarations, and quarantined/dropped payloads -- delegates to
+        ``torchlens.capture._episode_ledger.episode_ledger_for``.
+        """
+
+        from ..capture._episode_ledger import episode_ledger_for
+
+        return episode_ledger_for(self)
+
+    @property
+    def episode_coupling(self: "Trace") -> Any | None:
+        """Return the attested coupling verdict, or ``None`` (lane F42).
+
+        The coupling read door (spelling DOCUMENTED-UNSTABLE pending the
+        naming session): recomputes the capture digest from this product's
+        own persisted facts and compares it to the ledger's binding -- the
+        positive "this ledger belongs to this product" claim -- and serves
+        the intervention digest, per-step fire counts, fidelity basis, and
+        per-segment facts. ``None`` for plain captures and quarantined
+        payloads; a digest mismatch refuses typed
+        (``episode_coupling_unbound``) -- delegates to
+        ``torchlens.capture._episode_coupling.attest_coupling``.
+        """
+
+        from ..capture._episode_coupling import attest_coupling
+
+        return attest_coupling(self)
 
     # ********************************************
     # ************* FLOPs Properties *************
@@ -357,19 +420,34 @@ class TraceStatsMixin(_TraceMixinBase):
 
         return nonfinite_verdict(self)
 
-    def stats_table(self: "Trace") -> Any:
+    def stats_table(
+        self: "Trace",
+        *,
+        max_scan_elements: int | None = None,
+        mark_same_as_parent: bool = True,
+    ) -> Any:
         """Per-op payload observations of ONE captured batch (C02; sumfam D18).
 
         DOCUMENTED-UNSTABLE spelling. A FactCore projection through the
         sound stats kernel: typed row states for unsaved / disk-backed /
-        unsupported payloads (never a hollow zero row), per-family
-        exact/sampled evidence, and an explicit scan-cost policy.
-        Observations only -- audit owns judgments.
+        unsupported / unscanned payloads (never a hollow zero row),
+        per-family exact/sampled evidence, and an explicit scan-cost
+        policy. Observations only -- audit owns judgments.
+
+        F10 polish (lovely item 9): rows read in graph order; ``= parent``
+        marks derive ONLY from the corroborated distribution verdict (D28)
+        and never fold by default; ``max_scan_elements`` is the D29
+        total-budget request, echoed in the table header with typed
+        ``unscanned`` rows; ``sort_rows`` discloses sampled-column sorts.
         """
 
         from ..report._stats_table import build_stats_table
 
-        return build_stats_table(self)
+        return build_stats_table(
+            self,
+            max_scan_elements=max_scan_elements,
+            mark_same_as_parent=mark_same_as_parent,
+        )
 
     @property
     def unknown_flop_ops(self: "Trace") -> tuple[Any, ...]:
@@ -675,6 +753,25 @@ class TraceStatsMixin(_TraceMixinBase):
 
         return build_bill_of_materials(self)
 
+    def capability_card(self: "Trace") -> Any:
+        """Return the report-family capability card for THIS trace (F09/D24).
+
+        DOCUMENTED-UNSTABLE spelling (pending naming-session ratification).
+        The SurfaceRegistry filtered by the object in hand: which family
+        members work, which refuse and why, and what each costs here.
+        Metadata-only -- building the card never scans payloads, captures,
+        or runs a forward.
+
+        Returns
+        -------
+        Any
+            ``torchlens.report._registry.CapabilityCard``.
+        """
+
+        from ..report._registry import capability_card
+
+        return capability_card(self)
+
     def receptive_fields(
         self: "Trace",
         level: Literal["op", "layer", "call", "module"] = "op",
@@ -783,15 +880,15 @@ class TraceStatsMixin(_TraceMixinBase):
 
     def collapse_order(
         self: "Trace",
-        weights: Any | None = None,
         mode: Literal["auto", "max"] = "auto",
     ) -> list[tuple[str, float]]:
-        """Return smart-collapse ranking for a custom policy.
+        """Return smart-collapse ranking for a policy.
+
+        The documented-inert ``weights=`` parameter is REMOVED (collapse
+        memo D9; clean-v2 hard-rename posture, no warn shim; MIGRATIONS.md).
 
         Parameters
         ----------
-        weights:
-            Ignored legacy mapping retained for call compatibility.
         mode:
             ``"auto"`` or ``"max"`` landmark policy.
 
@@ -803,7 +900,7 @@ class TraceStatsMixin(_TraceMixinBase):
 
         from ..visualization.auto_collapse import collapse_order
 
-        return collapse_order(self, weights=weights, mode=mode)
+        return collapse_order(self, mode=mode)
 
     def collapse_plan(
         self: "Trace",
@@ -895,7 +992,7 @@ class TraceStatsMixin(_TraceMixinBase):
             collapsed module-address set.
         """
 
-        from ..visualization.collapse_optimizer import collapse_schedule
+        from ..visualization.collapse_ladder import collapse_schedule
         from ..visualization.collapse_plan import RenderContext
 
         resolved_context = RenderContext() if context is None else context

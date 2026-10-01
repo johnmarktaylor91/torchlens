@@ -345,6 +345,54 @@ def make_module_cluster_label(
     return f"<<B>@{title_str}</B><br align='left'/>>"
 
 
+def cluster_caption_attrs(
+    caption_end: str | None, rankdir: str | None, pierced: bool = False
+) -> dict[str, str]:
+    """Return ``labelloc``/``labeljust`` for a cluster caption.
+
+    Vizmech item 15 (memo D18b): captions were emitted ``labelloc=b`` and
+    INHERITED the graph-level ``labeljust=left``, pinning every caption to a
+    fixed corner of the cluster bounding box -- on wide clusters whose members
+    do not fill that corner, the caption floated up to 1121.9 pt from anything
+    it names (p90 732.6 pt over 1066 measured clusters). The fix: horizontal
+    centering always (no more corner pinning), and the vertical end chosen
+    from where the cluster's DIRECT members actually sit in the flow.
+
+    Parameters
+    ----------
+    caption_end:
+        ``"entry"`` when the direct members concentrate at the flow's entry
+        end of the cluster, ``"exit"`` for the exit end, ``None`` when member
+        geometry is unavailable (fallback callers keep the historical bottom).
+    rankdir:
+        Graphviz rank direction (``"TB"``/``"BT"``/``"LR"``/``"RL"``), which
+        maps flow entry/exit onto page top/bottom (or left/right).
+    pierced:
+        ``True`` when boundary-crossing splines pierce the caption-end border
+        near the flow spine, shifting the caption to the corner so it stays
+        clear of the spline channel (vertical flow only).
+    """
+
+    attrs = {"labelloc": "b", "labeljust": "c"}
+    if caption_end is None or rankdir is None:
+        return attrs
+    if rankdir in ("TB", "BT"):
+        entry_is_top = rankdir == "TB"
+        attrs["labelloc"] = "t" if (caption_end == "entry") == entry_is_top else "b"
+        if pierced:
+            # Boundary-crossing splines pierce the border near the flow
+            # spine (center); a centered caption on a pierced end gets
+            # struck through (the widened audit's first live catch). The
+            # corner keeps clear of the channel at a bounded findability
+            # cost (half the cluster width, vs the 732.6 pt p90 the
+            # end-choice already recovered).
+            attrs["labeljust"] = "l"
+    elif rankdir in ("LR", "RL"):
+        entry_is_left = rankdir == "LR"
+        attrs["labeljust"] = "l" if (caption_end == "entry") == entry_is_left else "r"
+    return attrs
+
+
 def make_module_cluster_attrs(
     *,
     title: str,
@@ -353,26 +401,36 @@ def make_module_cluster_attrs(
     penwidth: float,
     fillcolor: str = "white",
     title_already_escaped: bool = False,
+    caption_end: str | None = None,
+    rankdir: str | None = None,
+    caption_pierced: bool = False,
 ) -> dict[str, str]:
     """Return the standard cluster attribute dict used by both renderers.
 
     Centralises the Graphviz attrs that Trace and bundle clusters share:
-    HTML label, bottom labelloc, ``filled,<line_style>`` style, fill colour,
-    and depth-aware penwidth.  Module-type information is optional: bundle
-    clusters omit it because the supergraph doesn't preserve the module
-    class, while Trace clusters always pass it through.
+    HTML label, caption placement (member-geometry-aware when ``caption_end``
+    and ``rankdir`` are given -- vizmech item 15), ``filled,<line_style>``
+    style, fill colour, and depth-aware penwidth.  Module-type information is
+    optional: bundle clusters omit it because the supergraph doesn't preserve
+    the module class, while Trace clusters always pass it through.
     """
 
     return {
         "label": make_module_cluster_label(
             title, module_type, title_already_escaped=title_already_escaped
         ),
-        "labelloc": "b",
+        **cluster_caption_attrs(caption_end, rankdir, pierced=caption_pierced),
         "style": f"filled,{line_style}",
         "fillcolor": fillcolor,
         "penwidth": str(penwidth),
-        # Extra breathing room between the cluster border and the nodes/edge
-        # labels inside it (graphviz default is 8pt, which crowds the border).
+        # Border breathing room. The memo's fix ladder ends with margin
+        # 20 -> 8 (D18c: page area DOWN 6-22%, last five violations closed),
+        # but that measurement holds AFTER the wave-4 midpoint conversion of
+        # the argument channel: with head/tail labels still in use, margin 8
+        # regresses three clean toy-gate entries ('In 1' head labels
+        # penetrate the tighter border ~3 pt) and the whole-corpus
+        # monotonicity gate (D5) rejects it. The margin flip ships WITH the
+        # midpoint conversion (shed wave-4 tail), never before it.
         "margin": "20",
     }
 

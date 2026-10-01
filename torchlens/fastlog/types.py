@@ -1008,6 +1008,32 @@ class Recording(CapturedRun):
             f"n_grad_records={len(self.grad_records)})"
         )
 
+    def narrate(self, last: int | None = None, *, select: Any = None) -> str:
+        """Render this recording's events in the live-narration grammar.
+
+        One renderer, three carriers (snoop D5): failed partial recordings
+        (``on_forward_error="attach_partial"``/``"return_partial"``) render
+        their captured frontier under the failure header; the printed labels
+        are this recording's own lookup keys.
+
+        Parameters
+        ----------
+        last:
+            Keep only the last ``last`` rows.
+        select:
+            Optional filter: a substring, or a callable over
+            :class:`torchlens.snoop.NarrationEvent` rows.
+
+        Returns
+        -------
+        str
+            Rendered narration block (no trailing newline).
+        """
+
+        from ..snoop import narrate_recording
+
+        return narrate_recording(self, last=last, select=select)
+
     def enrich(self, steps: list[str] | str) -> Recording:
         """Return a new recording with requested incremental enrichments.
 

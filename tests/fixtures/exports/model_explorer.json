@@ -1,117 +1,470 @@
 {
-  "disclaimer": "TorchLens graph-collection JSON for Google Model Explorer; a data export of the captured graph, not a runnable model. The top-level label/graphs shape matches Model Explorer's file-ingest contract (pinned against ai-edge-model-explorer 0.1.32); acceptance by future external releases is not guaranteed.",
+  "graphSorting": "name_asc",
   "graphs": [
     {
+      "groupNodeAttributes": {
+        "": {
+          "backend": "torch",
+          "capture_status": "complete",
+          "capture_verification_reason": "None",
+          "capture_verified": "None",
+          "edges": "4",
+          "id_fidelity": "site_key",
+          "namespace_fidelity": "full",
+          "nodes": "5",
+          "poisoned": "False",
+          "privacy_profile": "local",
+          "produced_by": "torchlens 2.34.1",
+          "rescue_rerun": "False",
+          "structure_only": "False",
+          "view": "execution"
+        },
+        "0": {
+          "act_bytes": "32 B",
+          "address": "0",
+          "calls": "1",
+          "class": "Linear",
+          "direct_ops": "1",
+          "ops": "1",
+          "params": "16"
+        },
+        "1": {
+          "act_bytes": "32 B",
+          "address": "1",
+          "calls": "1",
+          "class": "ReLU",
+          "direct_ops": "1",
+          "ops": "1"
+        },
+        "2": {
+          "act_bytes": "16 B",
+          "address": "2",
+          "calls": "1",
+          "class": "Linear",
+          "direct_ops": "1",
+          "ops": "1",
+          "params": "10"
+        },
+        "Inputs": {
+          "ops": "1"
+        },
+        "Outputs": {
+          "ops": "1"
+        }
+      },
       "id": "<trace-id>",
       "nodes": [
         {
           "attrs": [
             {
+              "key": "kind",
+              "value": "input"
+            },
+            {
               "key": "shape",
               "value": "2x3"
             },
             {
-              "key": "memory",
+              "key": "dtype",
+              "value": "float32"
+            },
+            {
+              "key": "device",
+              "value": "same"
+            },
+            {
+              "key": "act_bytes",
               "value": "24 B"
+            },
+            {
+              "key": "saved",
+              "value": "yes"
+            },
+            {
+              "key": "nonfinite",
+              "value": "no"
+            },
+            {
+              "key": "torchlens_label",
+              "value": "input_1:1"
+            },
+            {
+              "key": "site_key",
+              "value": "s1||input||1"
             }
           ],
-          "id": "input_1",
-          "incomingEdges": [],
-          "label": "input_1",
-          "namespace": "input"
+          "config": {
+            "pinToGroupTop": true
+          },
+          "id": "s1||input||1|1",
+          "label": "input",
+          "namespace": "Inputs",
+          "outputsMetadata": [
+            {
+              "attrs": [
+                {
+                  "key": "shape",
+                  "value": "2x3"
+                },
+                {
+                  "key": "dtype",
+                  "value": "float32"
+                }
+              ],
+              "id": "0"
+            }
+          ]
         },
         {
           "attrs": [
+            {
+              "key": "kind",
+              "value": "parameterized"
+            },
+            {
+              "key": "op",
+              "value": "linear"
+            },
             {
               "key": "shape",
               "value": "2x4"
             },
             {
-              "key": "memory",
+              "key": "dtype",
+              "value": "float32"
+            },
+            {
+              "key": "device",
+              "value": "same"
+            },
+            {
+              "key": "module",
+              "value": "0:1"
+            },
+            {
+              "key": "act_bytes",
               "value": "32 B"
+            },
+            {
+              "key": "params",
+              "value": "16 (64 B)"
+            },
+            {
+              "key": "flops",
+              "value": "56.0 FLOPs"
+            },
+            {
+              "key": "saved",
+              "value": "yes"
+            },
+            {
+              "key": "nonfinite",
+              "value": "no"
+            },
+            {
+              "key": "torchlens_label",
+              "value": "linear_1_1:1"
+            },
+            {
+              "key": "site_key",
+              "value": "s1|0|linear||1"
             }
           ],
-          "id": "linear_1_1",
+          "id": "s1|0|linear||1|1",
           "incomingEdges": [
             {
-              "sourceNodeId": "input_1"
+              "sourceNodeId": "s1||input||1|1",
+              "sourceNodeOutputId": "0",
+              "targetNodeInputId": "0"
             }
           ],
-          "label": "linear_1_1",
-          "namespace": "parameterized"
+          "inputsMetadata": [
+            {
+              "attrs": [
+                {
+                  "key": "__tensor_tag",
+                  "value": "0"
+                }
+              ],
+              "id": "0"
+            }
+          ],
+          "label": "linear",
+          "namespace": "0",
+          "outputsMetadata": [
+            {
+              "attrs": [
+                {
+                  "key": "shape",
+                  "value": "2x4"
+                },
+                {
+                  "key": "dtype",
+                  "value": "float32"
+                }
+              ],
+              "id": "0"
+            }
+          ]
         },
         {
           "attrs": [
+            {
+              "key": "kind",
+              "value": "operation"
+            },
+            {
+              "key": "op",
+              "value": "relu"
+            },
             {
               "key": "shape",
               "value": "2x4"
             },
             {
-              "key": "memory",
+              "key": "dtype",
+              "value": "float32"
+            },
+            {
+              "key": "device",
+              "value": "same"
+            },
+            {
+              "key": "module",
+              "value": "1:1"
+            },
+            {
+              "key": "act_bytes",
               "value": "32 B"
+            },
+            {
+              "key": "flops",
+              "value": "8 FLOPs"
+            },
+            {
+              "key": "saved",
+              "value": "yes"
+            },
+            {
+              "key": "nonfinite",
+              "value": "no"
+            },
+            {
+              "key": "torchlens_label",
+              "value": "relu_1_2:1"
+            },
+            {
+              "key": "site_key",
+              "value": "s1|1|relu||1"
             }
           ],
-          "id": "relu_1_2",
+          "id": "s1|1|relu||1|1",
           "incomingEdges": [
             {
-              "sourceNodeId": "linear_1_1"
+              "sourceNodeId": "s1|0|linear||1|1",
+              "sourceNodeOutputId": "0",
+              "targetNodeInputId": "0"
             }
           ],
-          "label": "relu_1_2",
-          "namespace": "operation"
+          "inputsMetadata": [
+            {
+              "attrs": [
+                {
+                  "key": "__tensor_tag",
+                  "value": "0"
+                }
+              ],
+              "id": "0"
+            }
+          ],
+          "label": "relu",
+          "namespace": "1",
+          "outputsMetadata": [
+            {
+              "attrs": [
+                {
+                  "key": "shape",
+                  "value": "2x4"
+                },
+                {
+                  "key": "dtype",
+                  "value": "float32"
+                }
+              ],
+              "id": "0"
+            }
+          ]
         },
         {
           "attrs": [
+            {
+              "key": "kind",
+              "value": "parameterized"
+            },
+            {
+              "key": "op",
+              "value": "linear"
+            },
             {
               "key": "shape",
               "value": "2x2"
             },
             {
-              "key": "memory",
+              "key": "dtype",
+              "value": "float32"
+            },
+            {
+              "key": "device",
+              "value": "same"
+            },
+            {
+              "key": "module",
+              "value": "2:1"
+            },
+            {
+              "key": "act_bytes",
               "value": "16 B"
+            },
+            {
+              "key": "params",
+              "value": "10 (40 B)"
+            },
+            {
+              "key": "flops",
+              "value": "36.0 FLOPs"
+            },
+            {
+              "key": "saved",
+              "value": "yes"
+            },
+            {
+              "key": "nonfinite",
+              "value": "no"
+            },
+            {
+              "key": "torchlens_label",
+              "value": "linear_2_3:1"
+            },
+            {
+              "key": "site_key",
+              "value": "s1|2|linear||1"
             }
           ],
-          "id": "linear_2_3",
+          "id": "s1|2|linear||1|1",
           "incomingEdges": [
             {
-              "sourceNodeId": "relu_1_2"
+              "sourceNodeId": "s1|1|relu||1|1",
+              "sourceNodeOutputId": "0",
+              "targetNodeInputId": "0"
             }
           ],
-          "label": "linear_2_3",
-          "namespace": "parameterized"
+          "inputsMetadata": [
+            {
+              "attrs": [
+                {
+                  "key": "__tensor_tag",
+                  "value": "0"
+                }
+              ],
+              "id": "0"
+            }
+          ],
+          "label": "linear",
+          "namespace": "2",
+          "outputsMetadata": [
+            {
+              "attrs": [
+                {
+                  "key": "shape",
+                  "value": "2x2"
+                },
+                {
+                  "key": "dtype",
+                  "value": "float32"
+                }
+              ],
+              "id": "0"
+            }
+          ]
         },
         {
           "attrs": [
+            {
+              "key": "kind",
+              "value": "output"
+            },
             {
               "key": "shape",
               "value": "2x2"
             },
             {
-              "key": "memory",
+              "key": "dtype",
+              "value": "float32"
+            },
+            {
+              "key": "device",
+              "value": "same"
+            },
+            {
+              "key": "act_bytes",
               "value": "16 B"
+            },
+            {
+              "key": "saved",
+              "value": "yes"
+            },
+            {
+              "key": "nonfinite",
+              "value": "no"
+            },
+            {
+              "key": "torchlens_label",
+              "value": "output_1:1"
+            },
+            {
+              "key": "site_key",
+              "value": "s1||output||1"
             }
           ],
-          "id": "output_1",
+          "id": "s1||output||1|1",
           "incomingEdges": [
             {
-              "sourceNodeId": "linear_2_3"
+              "sourceNodeId": "s1|2|linear||1|1",
+              "sourceNodeOutputId": "0",
+              "targetNodeInputId": "0"
             }
           ],
-          "label": "output_1",
-          "namespace": "output"
+          "inputsMetadata": [
+            {
+              "attrs": [
+                {
+                  "key": "__tensor_tag",
+                  "value": "0"
+                }
+              ],
+              "id": "0"
+            }
+          ],
+          "label": "output",
+          "namespace": "Outputs",
+          "outputsMetadata": [
+            {
+              "attrs": [
+                {
+                  "key": "shape",
+                  "value": "2x2"
+                },
+                {
+                  "key": "dtype",
+                  "value": "float32"
+                }
+              ],
+              "id": "0"
+            }
+          ]
         }
       ]
     }
   ],
-  "label": "<trace-id>",
-  "schema": "torchlens.model_explorer.v2",
-  "torchlens_capture_honesty": {
-    "capture_status": "complete",
-    "capture_verification_reason": null,
-    "capture_verified": null,
-    "poisoned": false,
-    "rescue_rerun": false,
-    "schema": "torchlens.capture_honesty.v1",
-    "structure_only": false
-  }
+  "label": "<trace-id>"
 }

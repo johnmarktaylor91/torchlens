@@ -125,8 +125,26 @@ refuse `profiler_session_nested`; success, halt, and exception paths restore
 every marker and the active-session slot. The kernel-enrolled
 `profiler_doors` registry holds exactly one entry, and the dependency test
 (`tests/test_obs_substrate_spans.py::TestOneProfilerDoor`) forbids a second
-`torch.profiler.profile` construction site (the one legacy seam in
-`kernel_telemetry` is reason-ledgered; burn-down owner F27/W2.1) and any
-parallel grad_fn node-hook stack. Session results carry the five-state
-availability lattice (`not_requested | unavailable | empty | partial |
-joined`); `joined` is unreachable until the F27 Kineto join.
+`torch.profiler.profile` construction site (the kernel_telemetry legacy seam
+was burned down by F27/W2.1: its ATen activation now routes through this
+door) and any parallel grad_fn node-hook stack. Session results carry the
+five-state availability lattice (`not_requested | unavailable | empty |
+partial | joined`).
+
+## The Kineto join (F27, on this substrate)
+
+`torchlens.observability.native_profile(model, x)` runs ONE save-nothing
+capture under the owned session and joins device events to captured ops by
+runtime correlation IDs only (names are display metadata): in-memory
+`_KinetoEvent` extraction behind the feature-detected `_torch_compat`
+boundary (bounded chrome-stream fallback, path disclosed), same-thread
+innermost containment in one O(N log N) sweep, launches counted once (a
+multi-owner launch is an `ambiguous` group, never split or duplicated),
+interval-union device-busy time, typed TorchLens-internal work excluded
+from part (a) of the two-part accounting and owned in part (b), and a
+NAMED residual. Consumers: `hot_path(by="device_time")`,
+`draw(color_by=/size_by="device_time")`, the profile device columns, and
+the native chrome artifact + exact-ID mapping sidecar. An unjoined capture
+refuses explicit device-time requests typed (`device_time_unavailable`);
+the >= 95% real-GPU acceptance gates (C-KINETO) run on the cluster via
+`tools/gpu_gates/kineto_join_gate.py`.

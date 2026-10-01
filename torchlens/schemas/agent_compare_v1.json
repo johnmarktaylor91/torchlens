@@ -1,0 +1,126 @@
+{
+  "$id": "https://torchlens.dev/schemas/torchlens.agent.compare.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "artifact": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "data": {
+      "additionalProperties": true,
+      "properties": {
+        "atol": {
+          "type": "number"
+        },
+        "coverage": {
+          "additionalProperties": true,
+          "required": [
+            "note",
+            "sites_changed",
+            "sites_comparable",
+            "sites_matched",
+            "sites_reference",
+            "sites_subject",
+            "sites_value_compared"
+          ],
+          "type": "object"
+        },
+        "direction": {
+          "const": "subject_minus_reference"
+        },
+        "fingerprint_match": {
+          "type": "boolean"
+        },
+        "fingerprint_note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "handoff": {
+          "type": "string"
+        },
+        "match_basis": {
+          "enum": [
+            "site_key",
+            "legacy_address_shape"
+          ]
+        },
+        "rows": {
+          "items": {
+            "additionalProperties": true,
+            "required": [
+              "key",
+              "state"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "rows_total": {
+          "type": "integer"
+        },
+        "rtol": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "coverage",
+        "direction",
+        "fingerprint_match",
+        "handoff",
+        "match_basis",
+        "rows",
+        "rows_total"
+      ],
+      "type": "object"
+    },
+    "limits": {
+      "type": "object"
+    },
+    "request": {
+      "type": "object"
+    },
+    "schema": {
+      "const": "torchlens.agent.compare.v1"
+    },
+    "schema_stability": {
+      "const": "documented-unstable"
+    },
+    "status": {
+      "type": "string"
+    },
+    "torchlens_version": {
+      "type": "string"
+    },
+    "truncation": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "artifact",
+    "data",
+    "limits",
+    "request",
+    "schema",
+    "schema_stability",
+    "status",
+    "torchlens_version",
+    "truncation",
+    "warnings"
+  ],
+  "title": "Two-artifact structural + value diff with coverage honesty",
+  "type": "object"
+}

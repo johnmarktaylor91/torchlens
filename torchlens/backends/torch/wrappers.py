@@ -29,6 +29,7 @@ import torch
 from torch.overrides import handle_torch_function, has_torch_function_unary  # noqa: F401
 
 from ... import _state
+from ..._capture_state_helpers import _is_uninitialized_param
 from ..._errors import CaptureContextError
 from ...capture.arg_positions import _ensure_schema_tensor_position_corrections
 from ...constants import _get_torchvision_funcs, get_orig_torch_funcs
@@ -63,6 +64,7 @@ from ...utils.tensor_utils import (
     safe_copy,
 )
 from ._modes import pause_own_dispatch_modes
+from ._op_markers import _pop_op_markers, _push_op_markers
 from ._tl import (
     _DETACHED_ACTIVATION_PROPAGATION_FUNCS,
     get_param_meta,
@@ -75,11 +77,11 @@ from ._tl import (
     propagate_detached_saved_activation,
     set_tensor_label,
 )
+from ._weightsfree_ctx import active_factory_device as _active_factory_device
 from .aliasing import _tensors_alias
 from .buffer_writes import (
     record_op_buffer_writes,
-    resolve_registered_buffer_address,
-    session_validated_buffer_address,
+    resolve_or_late_index_buffer_address,
     snapshot_buffer_args,
 )
 from .completeness_witness import (
@@ -127,44 +129,6 @@ def _diagnostic_edge_armed() -> bool:
 # ---------------------------------------------------------------------------
 # CPython slot fixup for Tensor sequence protocol
 # ---------------------------------------------------------------------------
-
-
-def _nvtx_range_push(name: str) -> bool:
-    """Push an NVTX range if CUDA NVTX support is available.
-
-    Parameters
-    ----------
-    name:
-        Range label.
-
-    Returns
-    -------
-    bool
-        Whether a corresponding pop should be attempted.
-    """
-
-    try:
-        torch.cuda.nvtx.range_push(name)
-    except Exception:
-        return False
-    return True
-
-
-def _nvtx_range_pop(enabled: bool) -> None:
-    """Pop a previously pushed NVTX range.
-
-    Parameters
-    ----------
-    enabled:
-        Whether a push succeeded.
-    """
-
-    if not enabled:
-        return
-    try:
-        torch.cuda.nvtx.range_pop()
-    except Exception:
-        return
 
 
 def _fix_tensor_sequence_slot() -> None:
@@ -835,6 +799,15 @@ def _maybe_inject_device_kwarg(func_name: str, kwargs: dict[str, Any]) -> dict[s
     # injection, silently placing meta-context tensors on CPU.
     if kwargs.get("device") is not None:
         return kwargs
+    # W1-CTX (weightsfree memo D4): during an ADMITTED weights-free capture
+    # TorchLens owns the factory device through its thread-scoped slot — no
+    # torch DeviceContext mode is on the stack (its catch-all re-entry
+    # respells dunder ops, defect L3), so the slot supplies the placement a
+    # native device context would have injected. A caller-pinned non-None
+    # device above always wins.
+    slot_device = _active_factory_device()
+    if slot_device is not None:
+        return {**kwargs, "device": slot_device}
     stack_length = get_torch_function_mode_stack_length()
     if stack_length is not None and stack_length > 0:
         device = _get_active_device()
@@ -1411,7 +1384,7 @@ def _propagate_mutation_label_to_storage_aliases(
         The mutating op's freshly issued raw label.
     """
 
-    from ._tl import session_storage_alias_candidates
+    from ._tl import session_storage_alias_candidates, storage_alias_index_key
     from .ops import _record_label_version_snapshot
 
     # SCOPE (r26 reconcile): descriptor/grad-bound captures keep the HISTORICAL
@@ -1442,8 +1415,11 @@ def _propagate_mutation_label_to_storage_aliases(
     # pattern as ``completeness_witness``'s storage-site indexers.
     with _state.pause_logging(), internal_scalar_read():
         try:
-            storage_ptr = mutated.untyped_storage().data_ptr()
+            # Meta-safe key (D20): data_ptr() reads 0 for EVERY meta storage.
+            storage_ptr = storage_alias_index_key(mutated.untyped_storage())
         except Exception:
+            return
+        if storage_ptr is None:
             return
         candidates = session_storage_alias_candidates(storage_ptr)
         if not candidates or (len(candidates) == 1 and candidates[0] is mutated):
@@ -1465,7 +1441,7 @@ def _propagate_mutation_label_to_storage_aliases(
                 continue
             try:
                 if (
-                    alias.untyped_storage().data_ptr() != storage_ptr
+                    storage_alias_index_key(alias.untyped_storage()) != storage_ptr
                     or alias.device != mutated.device
                 ):
                     continue
@@ -1726,6 +1702,17 @@ def torch_func_decorator(
                     return func(*args, **kwargs)
             return func(*args, **kwargs)
 
+        # F20 lazy-buffer completion: torch's lazy pre-hook materializes
+        # pending UninitializedBuffer/Parameter slots through wrapped calls
+        # whose RECEIVER is the pending tensor (.data device read/setter,
+        # empty_like on the data alias). A pending tensor has no
+        # shape/storage to log and the plumbing is pre-forward
+        # materialization, not model dataflow (the materialized buffer
+        # registers at the module-entry gate); pass the call through
+        # unlogged, mirroring the functorch/dynamo region guards above.
+        if args and isinstance(args[0], torch.Tensor) and _is_uninitialized_param(args[0]):
+            return func(*args, **kwargs)
+
         # Usage stats: count every decorated function call during logging.
         if _state._collect_usage_stats:
             _state._function_call_counts[func_name] = (
@@ -1779,14 +1766,9 @@ def torch_func_decorator(
         for t in arg_tensorlike:
             if isinstance(t, torch.nn.Parameter):
                 continue
-            # r81: the first-encounter registration gate must not trust the raw
-            # static stamp (stale cross-capture stamps and input-rebound storage
-            # would be re-rooted as internal state); require current-session
-            # object + storage identity, with the storage-anchored tracker as
-            # the alias fallback.
-            address = session_validated_buffer_address(trace, t)
-            if address is None:
-                address = resolve_registered_buffer_address(trace, t)
+            # The r81 identity ladder + F20 lazy late-index live in
+            # buffer_writes.resolve_or_late_index_buffer_address.
+            address = resolve_or_late_index_buffer_address(trace, t)
             if address is not None and get_tensor_label(t) is None:
                 log_source_tensor(trace, t, "buffer", address)
 
@@ -1897,11 +1879,6 @@ def torch_func_decorator(
             trace=trace,
             func_call_id=func_call_id,
         )
-        nvtx_pushed = (
-            _nvtx_range_push(f"torchlens::{func_name}")
-            if getattr(trace, "emit_nvtx", False)
-            else False
-        )
         expected_token = None
         pauses_owned_modes = (
             constructs_tensor_subclass
@@ -1915,7 +1892,22 @@ def torch_func_decorator(
         # and container/intervention-site registration -- and stops right
         # after the call returns, so ``func_duration`` no longer
         # systematically overstates cheap ops in instrumented captures.
+        # Attempted-op marker (snoop D5): pushed BEFORE execution (one dict
+        # read when echo is off); semantics on EchoSession.attempted_push.
+        _echo = trace.__dict__.get("_echo_session")
+        _echo_depth = _echo.attempted_push(func_name, args, kwargs) if _echo is not None else 0
+        # W0.3 (TN-D12, hygiene -- not a misattribution fix): the markers
+        # open exactly where the op clock opens, so a range never encloses
+        # TorchLens's own pre-call bookkeeping (RNG/autocast snapshots,
+        # container registration).
+        op_marker_tokens = _push_op_markers(trace, func_name, func_call_id)
         func_exec_start = time.time()
+        device_memory_before = None
+        if getattr(trace, "track_device_memory", False):
+            # Observe item 15 (deferred import per the spine layer lint).
+            from ...observe._device_memory import read_before as _dm_read_before
+
+            device_memory_before = _dm_read_before(trace)
         mode_pause = pause_own_dispatch_modes() if pauses_owned_modes else nullcontext(())
         paused_modes: tuple[Any, ...] = ()
         try:
@@ -1931,13 +1923,29 @@ def torch_func_decorator(
                         out_orig = func(*args, **kwargs)
                 else:
                     out_orig = func(*args, **kwargs)
+        except torch.cuda.OutOfMemoryError:
+            # Observe item 15: the OOM raised BEFORE this op committed -- name
+            # the ATTEMPTED call, never the last committed op.
+            if getattr(trace, "track_device_memory", False):
+                from ...observe._device_memory import settle_op_bracket
+
+                settle_op_bracket(trace, func_name, func_call_id, device_memory_before, oom=True)
+            raise
         finally:
+            # Markers close FIRST so the range covers the user op, not the
+            # mode-paused interior bookkeeping recorded below.
+            _pop_op_markers(op_marker_tokens)
             if paused_modes:
                 from ._aten_capture import _record_mode_paused_interior
 
                 _record_mode_paused_interior(trace, owner_func_call_id=func_call_id)
-            _nvtx_range_pop(nvtx_pushed)
         func_exec_duration = time.time() - func_exec_start
+        if device_memory_before is not None or getattr(trace, "track_device_memory", False):
+            from ...observe._device_memory import settle_op_bracket
+
+            settle_op_bracket(trace, func_name, func_call_id, device_memory_before)
+        if _echo is not None:
+            _echo.attempted_pop(_echo_depth)
         if mutates_data_alias:
             record_data_alias_mutation(trace)
         return_value = out_orig
@@ -2210,7 +2218,19 @@ def torch_func_decorator(
             producer_label = get_tensor_label(out_orig)
         elif output_tensors:
             producer_label = get_tensor_label(output_tensors[0])
-        if is_bottom_level_func:
+        record_buffer_writes_here = is_bottom_level_func
+        if not record_buffer_writes_here and buffer_snapshots:
+            # W1-BUF-2 (weightsfree memo D7): on an ADMITTED meta capture the
+            # fused mutator's Python decomposition strips the USER call of its
+            # bottom-level status (the inner allocator calls claim it), so the
+            # declared buffer writes would silently vanish. The snapshot-holding
+            # call is the ONE that resolved the buffer args, so it records its
+            # own writes; the decomposition's inner calls never carry
+            # snapshots (their names are not mutator-classified).
+            from ...capture._weightsfree_admission import weightsfree_meta_active
+
+            record_buffer_writes_here = weightsfree_meta_active(trace)
+        if record_buffer_writes_here:
             record_op_buffer_writes(
                 trace,
                 capture_func_name,

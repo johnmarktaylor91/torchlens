@@ -1,0 +1,148 @@
+{
+  "admissibility": {
+    "admissible": true,
+    "corr_cov": 0.0599585472773411,
+    "eff_rank": 87.54986336155018,
+    "n_distinct": 32,
+    "thresholds": {
+      "max_corr_cov": 0.12,
+      "min_distinct": 16,
+      "min_eff_rank": 40.0
+    }
+  },
+  "cells": [
+    {
+      "algorithm_version": 1,
+      "construction": "very_sparse_fixed",
+      "corr_rdm_spearman": 0.47554638251030357,
+      "jl_eps": 0.4698821321681256,
+      "l2_rdm_spearman": 0.92754285246907,
+      "max_distortion": 0.17782593374273675,
+      "median_distortion": 0.03218836941301085,
+      "n_components": 256,
+      "p95_distortion": 0.09611407065457214,
+      "seed": 0,
+      "site": "layer4"
+    },
+    {
+      "algorithm_version": 1,
+      "construction": "very_sparse_fixed",
+      "corr_rdm_spearman": 0.42508619876028186,
+      "jl_eps": 0.4698821321681256,
+      "l2_rdm_spearman": 0.9268637646954995,
+      "max_distortion": 0.18066895803488867,
+      "median_distortion": 0.03426145343166001,
+      "n_components": 256,
+      "p95_distortion": 0.09971744821419655,
+      "seed": 1,
+      "site": "layer4"
+    },
+    {
+      "algorithm_version": 1,
+      "construction": "very_sparse_fixed",
+      "corr_rdm_spearman": 0.728465701478251,
+      "jl_eps": 0.2099411827312933,
+      "l2_rdm_spearman": 0.9778343584682462,
+      "max_distortion": 0.0938880718852059,
+      "median_distortion": 0.016915441103717906,
+      "n_components": 1024,
+      "p95_distortion": 0.04965940194146058,
+      "seed": 0,
+      "site": "layer4"
+    },
+    {
+      "algorithm_version": 1,
+      "construction": "very_sparse_fixed",
+      "corr_rdm_spearman": 0.6863296206778277,
+      "jl_eps": 0.2099411827312933,
+      "l2_rdm_spearman": 0.9742353932834797,
+      "max_distortion": 0.103745718451648,
+      "median_distortion": 0.018899158341796635,
+      "n_components": 1024,
+      "p95_distortion": 0.05489211444520518,
+      "seed": 1,
+      "site": "layer4"
+    },
+    {
+      "algorithm_version": 1,
+      "construction": "very_sparse_fixed",
+      "corr_rdm_spearman": 0.8705351410148577,
+      "jl_eps": 0.10079325117064658,
+      "l2_rdm_spearman": 0.9949147627024912,
+      "max_distortion": 0.052059538654418945,
+      "median_distortion": 0.008112544933150988,
+      "n_components": 4096,
+      "p95_distortion": 0.02364163259180063,
+      "seed": 0,
+      "site": "layer4"
+    }
+  ],
+  "environment_disclosure": {
+    "note": "pins carry headroom; regenerate ONLY via this script",
+    "torch": "2.13.0+cu130"
+  },
+  "feature_basis": "torchvision resnet50 IMAGENET1K_V2; bilinear+antialias 224; ImageNet normalization; layer4 flatten (O1e cells: avgpool)",
+  "fixture": {
+    "builder": "loader.build_fixture defaults",
+    "manifest_sha256": "86a85f1a07a00b1858acb3b1a6f105ba04ebcc46981d332bbde5620ed0df0eff",
+    "n_distinct": 32,
+    "rows": 128
+  },
+  "o1d": [
+    {
+      "margin": 0.39775310878940534,
+      "n_components": 1024,
+      "srp_corr_rdm_spearman": 0.728465701478251,
+      "subsample_corr_rdm_spearman": 0.3307125926888456,
+      "subsample_seed": 4242
+    },
+    {
+      "margin": 0.36301695916374455,
+      "n_components": 4096,
+      "srp_corr_rdm_spearman": 0.8705351410148577,
+      "subsample_corr_rdm_spearman": 0.5075181818511132,
+      "subsample_seed": 4242
+    }
+  ],
+  "o1e": {
+    "n_components": 256,
+    "runs": {
+      "iid_bernoulli": [
+        {
+          "median": 0.04032331771480663,
+          "p95": 0.13521678941988904,
+          "seed": 0
+        },
+        {
+          "median": 0.0471587046433595,
+          "p95": 0.12201428739700737,
+          "seed": 1
+        },
+        {
+          "median": 0.042026367637561894,
+          "p95": 0.1271165861557756,
+          "seed": 2
+        }
+      ],
+      "very_sparse_fixed": [
+        {
+          "median": 0.04029934706038351,
+          "p95": 0.1132379976303431,
+          "seed": 0
+        },
+        {
+          "median": 0.03854773057643997,
+          "p95": 0.11045575043549231,
+          "seed": 1
+        },
+        {
+          "median": 0.03629497824358649,
+          "p95": 0.10734207568076157,
+          "seed": 2
+        }
+      ]
+    },
+    "site": "avgpool"
+  },
+  "schema": "tl_transforms_fidelity_baselines_v1"
+}

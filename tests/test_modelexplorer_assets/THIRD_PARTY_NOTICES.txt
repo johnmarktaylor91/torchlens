@@ -1,0 +1,11 @@
+Third-party notices for tests/test_modelexplorer_assets/
+
+worker.js and visualizer_custom_element.d.ts are unmodified files from the
+npm package "ai-edge-model-explorer-visualizer" version 0.1.2,
+Copyright Google Inc., licensed under the Apache License, Version 2.0.
+https://github.com/google-ai-edge/model-explorer
+https://www.apache.org/licenses/LICENSE-2.0
+
+They are vendored here solely as pinned test fixtures for the TorchLens
+Model Explorer export contract harness and are not part of the TorchLens
+distribution wheel.

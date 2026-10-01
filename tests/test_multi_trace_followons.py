@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import math
 from pathlib import Path
 
 import torch
@@ -186,8 +185,20 @@ def test_supergraph_topological_order_respects_edges_after_reordered_bundle() ->
     assert all(positions[parent] < positions[child] for parent, child in supergraph.edges)
 
 
-def test_super_buffer_and_param_views_use_public_live_values() -> None:
-    """Bundle super views expose live buffer values and parameter diffs."""
+def test_super_buffer_views_use_public_live_values_and_param_reads_refuse() -> None:
+    """Buffer super views expose live values; cross-member param reads refuse.
+
+    The historical assertion here pinned the checkpoint live-ref defect
+    (A-CKPT): ``weight_norm_diff`` served live-handle bytes as per-member
+    capture values. Cross-member parameter value reads now refuse typed with
+    ``checkpoint_series_live_params`` -- the claim is unprovable from live
+    handles, regardless of whether the members come from distinct model
+    objects (claim-keyed, never identity-keyed).
+    """
+
+    import pytest
+
+    from torchlens.errors import CheckpointSeriesLiveParamsError
 
     x = torch.randn(2, 3)
     model_a = _BufferParamModel(scale=1.0, weight=1.0)
@@ -197,16 +208,11 @@ def test_super_buffer_and_param_views_use_public_live_values() -> None:
     bundle = tl.bundle({"a": trace_a, "b": trace_b})
 
     buffer_out = bundle.buffers["scale"].out
-    weight_diffs = bundle.params["linear.weight"].weight_norm_diff
-    expected_diff = float(
-        torch.linalg.vector_norm(
-            model_b.linear.weight.detach() - model_a.linear.weight.detach()
-        ).item()
-    )
-
     assert torch.equal(buffer_out, torch.cat([model_a.scale, model_b.scale], dim=0))
-    assert math.isclose(weight_diffs["a"], 0.0)
-    assert math.isclose(weight_diffs["b"], expected_diff)
+
+    with pytest.raises(CheckpointSeriesLiveParamsError) as excinfo:
+        _ = bundle.params["linear.weight"].weight_norm_diff
+    assert excinfo.value.fields["code"] == "checkpoint_series_live_params"
 
 
 def test_show_bundle_graph_rolled_and_backward_modes(tmp_path: Path) -> None:

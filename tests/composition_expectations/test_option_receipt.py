@@ -22,7 +22,11 @@ def test_receipt_covers_every_public_field_in_order() -> None:
 
     receipt = option_receipt(CaptureOptions())
     assert tuple(entry.name for entry in receipt) == capture_option_fields()
-    assert len(receipt) == 47
+    # 48 -> 49 (T82d re-reconcile, F44): each parent pinned 47+1 for its own
+    # new option (landed track_device_memory x F44 log_injections); the
+    # merged tree carries both. As of T85 (F01-AMENDED landed) both parents
+    # carry log_injections, so the pins agree at 49.
+    assert len(receipt) == 49
 
 
 def test_receipt_distinguishes_explicit_from_default() -> None:

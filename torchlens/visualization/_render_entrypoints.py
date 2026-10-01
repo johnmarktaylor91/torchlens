@@ -18,6 +18,36 @@ from .request import RenderContext, RenderTarget
 from .source_graph import build_source_graph
 
 
+def _emit_backward_key(
+    ir_builder: Any,
+    show_legend: bool | None,
+    inventory: "BackwardStyleInventory",
+) -> None:
+    """Emit the in-frame backward key (vizmech item 17) into a builder.
+
+    One table (item 13's form), one row per style the render actually
+    painted -- shared by the backward and combined entrypoints. Tri-state
+    ``show_legend``: only explicit ``False`` suppresses the key.
+    """
+
+    from ._legend import add_legend_table_to_graphviz, backward_key_sections
+    from .themes import THEME_PRESETS
+
+    if show_legend is False:
+        return
+    add_legend_table_to_graphviz(
+        cast(graphviz.Digraph, ir_builder),
+        THEME_PRESETS["torchlens"],
+        backward_key_sections(
+            has_higher_order=inventory.has_higher_order,
+            has_intervening=inventory.has_intervening,
+            has_accumulation=inventory.has_accumulation,
+            has_custom=inventory.has_custom,
+            num_backward_passes=inventory.num_backward_passes,
+        ),
+    )
+
+
 def render_backward_graph(
     self: "Trace",
     vis_outpath: str = "backward_modelgraph",
@@ -32,6 +62,7 @@ def render_backward_graph(
     code_panel: CodePanelOption = False,
     vis_mode: VisModeLiteral = "rolled",
     bwd: int | Iterable[int] | None = None,
+    show_legend: bool | None = None,
 ) -> str:
     """Render the captured backward grad_fn_handle DAG as a Graphviz graph.
 
@@ -69,6 +100,12 @@ def render_backward_graph(
         node per GradFnCall, grouped into backward-pass clusters.
     bwd:
         Optional one-based backward pass number or numbers to render.
+    show_legend:
+        Tri-state. ``None`` (AUTO) and ``True`` render the in-frame backward
+        key -- one row per style ACTUALLY painted (cream = order 2, ``[i]``,
+        ``accum``, ...; vizmech item 17/D30, the WGAN-GP acceptance
+        contract's "every active style has an automatic legend row").
+        ``False`` suppresses it.
 
     Returns
     -------
@@ -134,6 +171,7 @@ def render_backward_graph(
     ir_builder.attr("node", ordering="out")
     ir_builder.attr("edge", **edge_args)
 
+    inventory = compute_backward_style_inventory(self, pass_filter)
     if vis_mode == "rolled":
         visible_ids = {
             grad_fn_handle.grad_fn_object_id
@@ -147,6 +185,7 @@ def render_backward_graph(
                     cast(graphviz.Digraph, ir_builder),
                     node_spec_fn,
                     pass_filter=pass_filter,
+                    inventory=inventory,
                 )
 
         for grad_fn_handle in self.grad_fns:
@@ -160,12 +199,15 @@ def render_backward_graph(
                 ir_builder.edge(
                     tail_name,
                     head_name,
-                    **_backward_edge_attrs(grad_fn_handle, self.grad_fn_logs[next_grad_fn_id]),
+                    **_backward_edge_attrs(
+                        grad_fn_handle, self.grad_fn_logs[next_grad_fn_id], trace=self
+                    ),
                 )
     else:
         _add_unrolled_backward_pass_clusters(
             self, cast(graphviz.Digraph, ir_builder), node_spec_fn, pass_filter
         )
+    _emit_backward_key(ir_builder, show_legend, inventory)
 
     source_text = resolve_code_panel_source(
         code_panel,
@@ -261,6 +303,7 @@ def render_combined_graph(
     intervening_cluster: InterveningClusterMode = "upstream",
     show_buffer_layers: BufferVisibilityLiteral = "meaningful",
     bwd: int | Iterable[int] | None = None,
+    show_legend: bool | None = None,
 ) -> str:
     """Render one Graphviz graph containing forward ops and backward grad_fns.
 
@@ -292,6 +335,10 @@ def render_combined_graph(
         Buffer visibility mode for the forward side.
     bwd:
         Optional one-based backward pass number or numbers to render.
+    show_legend:
+        Tri-state. ``None`` (AUTO) and ``True`` render the in-frame backward
+        key for the styles actually painted (vizmech item 17); ``False``
+        suppresses it.
 
     Returns
     -------
@@ -428,6 +475,8 @@ def render_combined_graph(
     _add_combined_correspondence_edges(
         self, cast(graphviz.Digraph, ir_builder), intervening_cluster, pass_filter
     )
+    # The combined view carries the same style vocabulary (item 17).
+    _emit_backward_key(ir_builder, show_legend, compute_backward_style_inventory(self, pass_filter))
     forward_ir = finalize_forward_regions(
         forward_ir,
         self,
@@ -438,6 +487,7 @@ def render_combined_graph(
         container_regions=(),
         captured_edges=tuple(captured_forward_edges),
         overrides=overrides,
+        rankdir=rankdir,
     )
     _setup_subgraphs(
         self,

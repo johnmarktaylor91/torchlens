@@ -86,13 +86,17 @@ def test_profile_repr_carries_the_banner() -> None:
     # figure as "measured". Boundary pseudo-rows read not_applicable (A07:
     # they own no compute by the identity partition) -- also never "measured".
     honesty = profile.honesty()
-    assert set(honesty["flops"].unique()) <= {"estimated", "unknown", "not_applicable"}
+    # F09 (costreport D9): structure-only shape-derived cells are labeled
+    # HYPOTHESIS -- the exact banner-vs-labels mismatch fix. Still never
+    # "measured", never "estimated"-presented-as-fact.
+    assert set(honesty["flops"].unique()) <= {"hypothesis", "unknown", "not_applicable"}
     assert set(honesty["activation_memory"].unique()) <= {
-        "estimated",
+        "hypothesis",
         "unknown",
         "not_applicable",
     }
     assert "measured" not in set(honesty["flops"].unique())
+    assert "hypothesis" in set(honesty["flops"].unique())
 
 
 @smoke
@@ -132,28 +136,32 @@ def test_meta_init_model_still_refuses_at_the_gate_with_enriched_teaching() -> N
 
 
 @smoke
-def test_meta_init_model_refuses_under_the_flag_too_d8_default() -> None:
-    """Entry-matrix E-2 under the D8 default: structure_only=True does NOT
-    admit meta state; the gate refuses unchanged."""
+def test_meta_model_real_input_mixed_cell_refuses_post_flip() -> None:
+    """Entry-matrix E-3 under the D8 GRANT: structure_only=True admits meta
+    only with a UNIFORM substrate — a meta model with a REAL input is a mixed
+    cell and refuses typed with the substrate-mismatch code, naming sides."""
 
-    with pytest.raises(UnsupportedTensorVariantError) as excinfo:
+    with pytest.raises(Exception) as excinfo:
         tl.trace(
             _meta_model(),
             torch.randn(2, 4),
             capture=CaptureOptions(structure_only=True),
         )
-    assert excinfo.value.fields["code"] == "unsupported_tensor_variant"
+    assert excinfo.value.fields["code"] == "structure_only_substrate_mismatch"
+    assert excinfo.value.fields["meta_side"]
+    assert excinfo.value.fields["real_side"]
 
 
 @smoke
-def test_meta_input_refuses_under_the_flag_too_d8_default() -> None:
-    """Entry-matrix E-4 under the D8 default: meta INPUTS refuse at the gate
-    unchanged (the substrate-mismatch code is only reachable under D8)."""
+def test_real_model_meta_input_mixed_cell_refuses_post_flip() -> None:
+    """Entry-matrix E-4 under the D8 GRANT: meta INPUTS against real state
+    are the other mixed direction — the same typed substrate-mismatch code."""
 
     with torch.device("meta"):
         meta_input = torch.zeros(2, 4)
-    with pytest.raises(UnsupportedTensorVariantError):
+    with pytest.raises(Exception) as excinfo:
         tl.trace(TwoLayer(), meta_input, capture=CaptureOptions(structure_only=True))
+    assert excinfo.value.fields["code"] == "structure_only_substrate_mismatch"
 
 
 @smoke

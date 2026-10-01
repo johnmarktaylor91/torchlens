@@ -405,7 +405,11 @@ def _run_compiled_aggregate_batch(
     then falls back to the exact full-trace path).
     """
 
-    from .. import record
+    # Import from the real home, not the lazy root facade: the F10 deferred
+    # data_classes -> stats import edge puts this module inside an import
+    # SCC where mypy degrades facade names to implicit-Any and refuses the
+    # call ("_Any? not callable").
+    from ..fastlog import record
 
     wanted = frozenset(plan.sites.values())
     cursor = _RecordStreamCursor()
@@ -518,8 +522,10 @@ def aggregate(
         Finalized metric results.
     """
 
-    from .. import trace
+    # Real-home import (not the lazy root facade) for the same SCC/implicit-
+    # Any reason as the fastlog.record import above.
     from ..options import CaptureOptions
+    from ..user_funcs import trace
 
     if target not in {"out", "grad"}:
         raise ValueError("target must be 'out' or 'grad'")

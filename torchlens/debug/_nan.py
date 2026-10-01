@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ..constants import RAW_LABEL_SUFFIX
 from ..errors import CaptureError
 
 if TYPE_CHECKING:
@@ -43,6 +42,24 @@ class BisectNanResult:
     source_line: str | None
     kind: str
     message: str
+
+    @property
+    def first_bad_thing(self) -> Any:
+        """Project this result into the shared first-bad-thing vocabulary."""
+
+        from ._first_bad import FirstBadThing
+
+        return FirstBadThing(
+            found=self.found,
+            tool="bisect_nan",
+            kind=self.kind,
+            label=self.label,
+            label_status="final" if self.label else "none",
+            source_line=self.source_line,
+            coverage="complete" if "no saved activation" not in self.message else "partial",
+            detection_basis="saved_activations",
+            message=self.message,
+        )
 
 
 @dataclass(frozen=True)
@@ -94,6 +111,31 @@ class FindNanResult:
     scope: str
     uncertainty_zone: tuple[str, ...]
     message: str
+    label_status: str = "final"
+
+    @property
+    def first_bad_thing(self) -> Any:
+        """Project this result into the shared first-bad-thing vocabulary."""
+
+        from ._first_bad import FirstBadThing
+
+        return FirstBadThing(
+            found=self.found,
+            tool="find_nan",
+            kind=self.kind,
+            label=self.label,
+            label_status=self.label_status if self.found else "none",
+            module=self.module_address,
+            source_line=self.source_line,
+            coverage=(
+                "found_first_among_checked"
+                if self.found and self.uncertainty_zone
+                else ("complete" if self.found else "none")
+            ),
+            uncertainty_zone=self.uncertainty_zone,
+            detection_basis=("saved_activations" if "saved" in self.scope else "live_capture"),
+            message=self.message,
+        )
 
     def __repr__(self) -> str:
         """Return a compact notebook-oriented diagnostic representation.
@@ -167,15 +209,16 @@ def _op_by_any_label(trace: Trace) -> dict[str, Op]:
 
 
 def _op_label(op: Op) -> str:
-    """Return the best available public label for an op.
+    """Return the canonical public label for an op.
 
-    Completed traces expose a finalized public ``layer_label`` / ``label``. A
-    live partial capture (``find_nan``) has no finalized graph yet, only the
-    internal ``_label_raw`` (for example ``"log_1_4_raw"``). The trailing
-    ``RAW_LABEL_SUFFIX`` is an internal namespace marker and must not leak to
-    users, so it is stripped to a public-namespace label (``"log_1_4"``). The
-    live label is capture-ordered and may differ from the finalized label a
-    completed ``trace.find_nan()`` assigns.
+    Routes through the ONE resolver convention (observe item 1): the step-8
+    final LOOKUP spelling -- bare ``layer_label`` for single-pass layers,
+    pass-qualified ``label`` for multi-pass layers (an unqualified spelling on
+    a recurrent block would name every pass at once). A record with no
+    finalized label renders ``"unknown"``; a raw spelling is NEVER stripped
+    into a public one, because the raw-to-final ordinal offset is not a
+    constant and stripping fabricates a name that may belong to a different
+    op.
 
     Parameters
     ----------
@@ -185,18 +228,13 @@ def _op_label(op: Op) -> str:
     Returns
     -------
     str
-        Finalized public label for completed traces, otherwise the live label
-        with its internal raw-namespace suffix stripped.
+        Canonical public label, or ``"unknown"`` when none exists.
     """
 
-    for attribute in ("layer_label", "label"):
-        value = getattr(op, attribute, None)
-        if isinstance(value, str) and value:
-            return value
-    raw = getattr(op, "_label_raw", None)
-    if isinstance(raw, str) and raw:
-        return raw.removesuffix(RAW_LABEL_SUFFIX)
-    return "unknown"
+    from ..capture._nonfinite_prefix import canonical_public_label
+
+    label = canonical_public_label(op)
+    return label if label else "unknown"
 
 
 def _module_address(op: Op) -> str | None:
@@ -393,40 +431,62 @@ def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanResult:
         if "op" not in fields or "layer" not in fields:
             raise
         partial = getattr(exc, "partial_log", None)
-        raw_layers = getattr(partial, "raw_layers", ())
-        op = next(
+        partial_trace = getattr(partial, "trace", None)
+        finalized = bool(
+            partial_trace is not None
+            and partial_trace.__dict__.get("_nonfinite_prefix_finalized", False)
+        )
+        # The resolver contract (observe item 1): fields carry the FINAL
+        # public label (or None + status), plus the raw identity under the
+        # explicitly raw-named key. No spelling is ever derived by stripping.
+        raw_layer_field = fields.get("layer")
+        label: str | None = raw_layer_field if isinstance(raw_layer_field, str) else None
+        label_status = str(
+            fields.get("layer_status", "final" if label is not None else "unavailable")
+        )
+        raw_label = fields.get("layer_raw", fields.get("layer"))
+        op = None
+        if finalized and label is not None and partial_trace is not None:
+            try:
+                op = partial_trace[label]
+            except Exception:  # noqa: BLE001 - the structured fallback below still answers.
+                op = None
+        if op is not None:
+            try:
+                op_out = op.out
+            except ValueError:
+                op_out = None
+            kind = _nonfinite_kind(op_out) if isinstance(op_out, torch.Tensor) else "nan"
+            return _result_from_op(op, kind=kind, source_line=_exception_source_line(exc))
+        raw_op = next(
             (
                 entry
-                for entry in reversed(raw_layers)
-                if getattr(entry, "_label_raw", None) == fields["layer"]
+                for entry in reversed(getattr(partial, "raw_layers", ()))
+                if getattr(entry, "_label_raw", None) == raw_label
             ),
             None,
         )
-        if op is None:
-            shape = fields["shape"]
-            if not isinstance(shape, tuple) or not all(
-                isinstance(dimension, int) for dimension in shape
-            ):
-                raise ValueError("CaptureError non-finite payload has an invalid shape field.")
-            return FindNanResult(
-                True,
-                None,
-                # Strip the internal raw-namespace suffix; expose a public label.
-                str(fields["layer"]).removesuffix(RAW_LABEL_SUFFIX),
-                None,
-                str(fields["op"]),
-                str(fields["dtype"]),
-                tuple(int(dimension) for dimension in shape),
-                ("output",),
-                _exception_source_line(exc),
-                "nan",
-                "first non-finite tensor",
-                (),
-                str(exc),
-            )
-        op_out = getattr(op, "out", None)
-        kind = _nonfinite_kind(op_out) if isinstance(op_out, torch.Tensor) else "nan"
-        return _result_from_op(op, kind=kind, source_line=_exception_source_line(exc))
+        shape = fields["shape"]
+        if not isinstance(shape, tuple) or not all(
+            isinstance(dimension, int) for dimension in shape
+        ):
+            raise ValueError("CaptureError non-finite payload has an invalid shape field.")
+        return FindNanResult(
+            True,
+            raw_op,
+            label,
+            _module_address(raw_op) if raw_op is not None else None,
+            str(fields["op"]),
+            str(fields["dtype"]),
+            tuple(int(dimension) for dimension in shape),
+            ("output",),
+            _exception_source_line(exc),
+            "nan",
+            "first non-finite tensor",
+            (),
+            str(exc),
+            label_status,
+        )
     return _no_finding_result(scope="live operation outputs")
 
 
@@ -529,7 +589,7 @@ def bisect_nan(trace: Trace) -> BisectNanResult:
             continue
         kind = _nonfinite_kind(out)
         if kind != "none":
-            label = str(getattr(op, "layer_label", ""))
+            label = _op_label(op)
             source_line = _source_line(op)
             return BisectNanResult(
                 found=True,
@@ -560,4 +620,171 @@ def bisect_nan(trace: Trace) -> BisectNanResult:
         source_line=None,
         kind="none",
         message="No NaN/Inf found in saved activations.",
+    )
+
+
+_DETECT_ANOMALY_RECIPE = """\
+# torch.autograd.detect_anomaly: the AUTHORITY for backward-born NaNs and
+# arbitrary custom-autograd exceptions (cases outside this report's scope).
+# It re-executes nothing here -- run it yourself, deliberately:
+import torch
+with torch.autograd.set_detect_anomaly(True):
+    loss = model(x).sum()
+    loss.backward()   # raises AT the backward op that produced the NaN,
+                      # with the forward op that created it in the traceback
+# Cost: measured 1.17x median paired ratio on one CPU cell (resnet18 batch 4,
+# train, fwd+bwd, 4 threads) -- one model, one shape, one device class; a
+# regression seed until reproduced through the production overhead harness."""
+
+
+@dataclass(frozen=True)
+class NanReport:
+    """One-call NaN forensics report (torchnative 6.5 / W3.1).
+
+    The pitch is STRUCTURAL: the default capture names the ORIGIN op (not
+    where a NaN would surface in backward) with module address and
+    file:line, at zero added cost on the capture you already ran. Clean
+    results are scoped to CHECKED values only; the report defers by name
+    INSIDE its own output -- the ``detect_anomaly`` recipe is printed
+    verbatim for the cases this report does not cover (backward-born NaNs,
+    custom-autograd exceptions).
+    """
+
+    found: bool
+    phase: str
+    kind: str
+    origin_label: str | None
+    module_address: str | None
+    source_line: str | None
+    tensor_role: str | None
+    nonfinite_labels: tuple[str, ...]
+    coverage_basis: str
+    checked: int
+    unchecked: int
+    unexamined: int
+    capture_status: str
+    cost_tier: str
+    amp_disclosure: str | None
+    scope_note: str
+    uncertainty_zone: tuple[str, ...]
+    defer_recipe: str = _DETECT_ANOMALY_RECIPE
+
+    def summary(self) -> str:
+        """Return the human-readable report text."""
+
+        lines = [f"NaN forensics ({self.phase}; {self.cost_tier})"]
+        if self.found:
+            lines.append(
+                f"  origin: {self.origin_label} ({self.kind}) at "
+                f"{self.source_line or '<source unavailable>'}"
+                + (f", module {self.module_address}" if self.module_address else "")
+            )
+            if self.uncertainty_zone:
+                lines.append(
+                    f"  uncertainty zone (unsaved ancestors): {list(self.uncertainty_zone)}"
+                )
+        else:
+            lines.append(f"  no non-finite value among CHECKED outputs ({self.scope_note})")
+        lines.append(
+            f"  coverage: basis={self.coverage_basis}, checked={self.checked}, "
+            f"unchecked={self.unchecked}, unexamined={self.unexamined}"
+        )
+        lines.append(f"  capture outcome: {self.capture_status}")
+        if self.amp_disclosure:
+            lines.append(f"  AMP: {self.amp_disclosure}")
+        lines.append("  not covered here -> torch's authority, verbatim:")
+        lines.extend("    " + line for line in self.defer_recipe.splitlines())
+        return "\n".join(lines)
+
+
+def nan_report(subject: Any, x: Any = None, **trace_kwargs: Any) -> NanReport:
+    """One-call NaN forensics (torchnative 6.5; placeholder spelling).
+
+    Consumes an EXISTING trace's queryable nonfinite record first (free);
+    given a model + input instead, runs the memory-light live tripwire
+    (:func:`find_nan`, PartialTrace at first bad output). NEVER auto-runs
+    anomaly mode -- a second execution can mutate state and follow another
+    stochastic path; the ``detect_anomaly`` recipe is printed verbatim
+    inside the report for the cases this door does not cover.
+
+    Parameters
+    ----------
+    subject:
+        A completed ``Trace`` (post-hoc, free) or a model (live tripwire).
+    x:
+        Model input, required for the live form.
+    **trace_kwargs:
+        Extra ``tl.trace`` options for the live form.
+
+    Returns
+    -------
+    NanReport
+        Structured findings, coverage disclosure, capture outcome, cost
+        tier, AMP disclosure, and the deferred-authority recipe.
+    """
+
+    from ..data_classes._nonfinite import nonfinite_coverage
+
+    if hasattr(subject, "layer_dict_main_keys") or hasattr(subject, "ops"):
+        trace = subject
+        finding = find_nan_in_trace(trace)
+        cost_tier = "free (post-hoc on the capture you already ran)"
+    else:
+        finding = find_nan(subject, x, **trace_kwargs)
+        # The tripwire's evidence lives on the finding itself; there is no
+        # completed trace to read a memoized nonfinite record from.
+        trace = None
+        cost_tier = "diagnostic (one memory-light tripwire forward)"
+
+    coverage = nonfinite_coverage(trace) if trace is not None else None
+    nonfinite_labels: tuple[str, ...] = ()
+    if trace is not None:
+        try:
+            nonfinite_labels = tuple(str(label) for label in trace.nonfinite_ops)
+        except (CaptureError, RuntimeError, TypeError, AttributeError):
+            # A typed nonfinite-record refusal (structure_only, dropped
+            # payloads) degrades the LIST only; the finding itself stands.
+            nonfinite_labels = ()
+    outcome = getattr(trace, "outcome", None)
+    capture_status = str(getattr(outcome, "status", None) or "unknown").lower()
+
+    amp_disclosure: str | None = None
+    if trace is not None:
+        low_precision = {str(getattr(op, "dtype", "")) for op in getattr(trace, "ops", ())} & {
+            "torch.float16",
+            "torch.bfloat16",
+        }
+        if low_precision:
+            amp_disclosure = (
+                f"low-precision outputs present ({', '.join(sorted(low_precision))}); "
+                "under AMP+GradScaler, scaled gradients can overflow where "
+                "forward values look finite -- gradient-side claims need an "
+                "armed backward capture, and clean results here cover the "
+                "FORWARD checked values only"
+            )
+
+    return NanReport(
+        found=bool(finding.found),
+        phase="forward",
+        kind=str(finding.kind),
+        origin_label=finding.label,
+        module_address=getattr(finding, "module_address", None),
+        source_line=finding.source_line,
+        tensor_role=(
+            ", ".join(getattr(finding, "bad_tensors", ()) or ()) or None if finding.found else None
+        ),
+        nonfinite_labels=nonfinite_labels,
+        coverage_basis=(
+            str(getattr(coverage, "basis", "unavailable"))
+            if coverage is not None
+            else "live_tripwire_first_bad_output"
+        ),
+        checked=int(getattr(coverage, "checked", 0) or 0),
+        unchecked=int(getattr(coverage, "unchecked", 0) or 0),
+        unexamined=int(getattr(coverage, "unexamined", 0) or 0),
+        capture_status=capture_status,
+        cost_tier=cost_tier,
+        amp_disclosure=amp_disclosure,
+        scope_note=str(getattr(finding, "scope", "checked saved outputs")),
+        uncertainty_zone=tuple(getattr(finding, "uncertainty_zone", ()) or ()),
     )

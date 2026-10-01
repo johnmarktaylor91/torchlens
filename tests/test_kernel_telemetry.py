@@ -5,7 +5,6 @@ from __future__ import annotations
 import ast
 import importlib
 import re
-from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
@@ -18,6 +17,7 @@ from torchlens import kernel_telemetry as telemetry
 from torchlens._io import FieldPolicy
 from torchlens._io.prerelease import registered_prerelease_fields
 from torchlens.kernel_telemetry import KernelLaunch
+from torchlens.observability._kineto import NormalizedEvent
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _TELEMETRY_MODULE = "torchlens.kernel_telemetry"
@@ -70,7 +70,7 @@ def test_documented_unstable_kernel_surface_matches_glossary_index() -> None:
     assert all("unstable -- no deprecation shim owed" in row for row in surface_rows)
 
 
-def _event(
+def _event(  # noqa: PLR0913 -- fixture mirrors the six normalized event fields
     name: str,
     category: str,
     timestamp: float,
@@ -79,66 +79,69 @@ def _event(
     correlation: int | None = None,
     stream: int | None = None,
     device: int | None = None,
-    phase: str = "X",
-) -> dict[str, object]:
-    """Build one compact synthetic Chrome-trace event.
+) -> NormalizedEvent:
+    """Build one compact synthetic normalized profiler event (W2.1 shape).
 
     Parameters
     ----------
     name
         Event name.
     category
-        Exact Chrome category.
+        Normalized activity token (``user_annotation`` / ``cuda_runtime`` /
+        ``kernel`` / ``gpu_memcpy`` / ...).
     timestamp
-        Event start coordinate.
+        Event start in microseconds (converted to integer nanoseconds).
     duration
-        Event duration coordinate.
+        Event duration in microseconds.
     correlation
         Optional Kineto runtime correlation id.
     stream
         Optional CUDA stream id.
     device
         Optional CUDA device id.
-    phase
-        Chrome event phase.
 
     Returns
     -------
-    dict[str, object]
-        Synthetic event mapping.
+    NormalizedEvent
+        Synthetic normalized event.
     """
 
-    args: dict[str, object] = {}
-    if correlation is not None:
-        args["correlation"] = correlation
-    if stream is not None:
-        args["stream"] = stream
-    if device is not None:
-        args["device"] = device
-    return {
-        "name": name,
-        "cat": category,
-        "ph": phase,
-        "ts": timestamp,
-        "dur": duration,
-        "pid": 1,
-        "tid": 2,
-        "args": args,
-    }
+    kind = {
+        "user_annotation": "marker",
+        "cuda_runtime": "runtime",
+        "kernel": "kernel",
+        "gpu_memcpy": "memcpy",
+        "gpu_memset": "memset",
+    }.get(category, "other")
+    start_ns = int(timestamp * 1_000)
+    return NormalizedEvent(
+        name=name,
+        kind=kind,
+        activity=category,
+        start_ns=start_ns,
+        end_ns=start_ns + int(duration * 1_000),
+        tid=2,
+        device_type="cuda" if kind in ("kernel", "memcpy", "memset") else "cpu",
+        device_index=device,
+        correlation_id=correlation,
+        is_user_annotation=kind == "marker",
+        scope=None,
+        stream=stream,
+    )
 
 
-def _synthetic_matrix() -> tuple[list[Mapping[str, object]], dict[str, int]]:
+def _synthetic_matrix() -> tuple[list[NormalizedEvent], dict[str, int]]:
     """Return a synthetic event graph covering the required correlation shapes.
 
     Returns
     -------
-    tuple[list[Mapping[str, object]], dict[str, int]]
-        Chrome events and marker-to-primitive sequence mapping.
+    tuple[list[NormalizedEvent], dict[str, int]]
+        Normalized events and marker-to-primitive sequence mapping.
     """
 
     marker_a = "torchlens::aten::1"
     marker_b = "torchlens::aten::2"
-    events: list[Mapping[str, object]] = [
+    events: list[NormalizedEvent] = [
         _event(marker_a, "user_annotation", 10, 10),
         _event(marker_b, "user_annotation", 30, 10),
         # Correlation 101 occurs inside A and launches two asynchronous rows.
@@ -162,7 +165,7 @@ def test_synthetic_kineto_join_covers_required_async_and_many_to_many_shapes() -
     """Runtime correlation, not names or timestamps, owns device attribution."""
 
     events, markers = _synthetic_matrix()
-    payload = telemetry._payload_from_chrome_events(events, markers, telemetry_available=True)
+    payload = telemetry._payload_from_events(events, markers, telemetry_available=True)
 
     assert payload._available
     assert [launch.launch_name for launch in payload._launches] == [
@@ -180,15 +183,19 @@ def test_synthetic_kineto_join_covers_required_async_and_many_to_many_shapes() -
 
 @pytest.mark.smoke
 def test_marker_begin_end_and_capture_exception_shape_close_cleanly() -> None:
-    """A begin/end marker still correlates when capture exits exceptionally."""
+    """A boundary-closed marker still correlates after an exceptional exit.
+
+    A raising capture leaves markers the pass-boundary/session cleanup
+    closed (never dropped); the join sees one closed marker interval and the
+    correlation still lands.
+    """
 
     marker = "torchlens::aten::exception"
-    begin = _event(marker, "user_annotation", 5, 0, phase="B")
-    end = _event(marker, "user_annotation", 9, 0, phase="E")
+    span = _event(marker, "user_annotation", 5, 4)
     runtime = _event("cudaLaunchKernel", "cuda_runtime", 7, 1, correlation=44)
     kernel = _event("kernel", "kernel", 20, 1, correlation=44, stream=1, device=0)
-    payload = telemetry._payload_from_chrome_events(
-        [begin, runtime, end, kernel], {marker: 4}, telemetry_available=True
+    payload = telemetry._payload_from_events(
+        [span, runtime, kernel], {marker: 4}, telemetry_available=True
     )
     assert payload._relations == ((4, 0),)
     assert payload._launches[0].attribution_status == "attributed"
@@ -198,7 +205,7 @@ def test_marker_begin_end_and_capture_exception_shape_close_cleanly() -> None:
 def test_unavailable_session_is_typed_and_never_fabricates_a_launch() -> None:
     """Unavailable CUDA produces one fact-free disclosure, never a zero claim."""
 
-    payload = telemetry._payload_from_chrome_events(
+    payload = telemetry._payload_from_events(
         (), {"torchlens::aten::1": 3, "torchlens::aten::2": 5}, telemetry_available=False
     )
     assert not payload._available

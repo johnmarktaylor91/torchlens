@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import weakref
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -98,15 +99,16 @@ def test_content_hash_cache_hit_and_miss(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("kwargs", "saved_type"),
+    ("kwargs", "capture_kwargs", "saved_type"),
     [
-        ({"save": tl.func("relu")}, "relu"),
-        ({"layers_to_save": ["relu"]}, "relu"),
+        ({"save": tl.func("relu")}, {}, "relu"),
+        ({}, {"layers_to_save": ["relu"]}, "relu"),
     ],
 )
 def test_selective_capture_cache_preserves_unsaved_payload_contract(
     tmp_path: Path,
     kwargs: dict[str, Any],
+    capture_kwargs: dict[str, Any],
     saved_type: str,
 ) -> None:
     """Selective capture cache writes should not read unsaved public payloads."""
@@ -115,10 +117,16 @@ def test_selective_capture_cache_preserves_unsaved_payload_contract(
     x = torch.ones(1, 2)
 
     first = tl.trace(
-        model, x, **kwargs, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path)
+        model,
+        x,
+        **kwargs,
+        capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path, **capture_kwargs),
     )
     second = tl.trace(
-        model, x, **kwargs, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path)
+        model,
+        x,
+        **kwargs,
+        capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path, **capture_kwargs),
     )
 
     assert first.capture_cache_hit is False
@@ -210,8 +218,10 @@ def test_saved_activation_identity_dedup_reuses_same_source_live_fields() -> Non
     assert first_fields["out"] is second_fields["out"]
     assert first_fields["out"] is not source
     assert second_fields["annotations"]["dedup_reference_label"] == "manual_1"
-    cached_source = trace._out_identity_cache[id(source)][0]
-    assert cached_source is source
+    # F20 W1a: the cache's source slot is a WEAK reference -- bookkeeping
+    # must never pin a live forward intermediate (capture-floor holder).
+    cached_source_ref = trace._out_identity_cache[id(source)][0]
+    assert cached_source_ref() is source
 
 
 def test_trace_releases_identity_dedup_cache_after_pass() -> None:
@@ -246,7 +256,7 @@ def test_saved_activation_identity_dedup_rejects_key_collision() -> None:
     new_source = torch.ones(2, 2)
     stale_out = torch.full((2, 2), 9.0)
     trace._out_identity_cache[id(new_source)] = (
-        old_source,
+        weakref.ref(old_source),
         "old",
         stale_out,
         old_source._version,
@@ -258,8 +268,9 @@ def test_saved_activation_identity_dedup_rejects_key_collision() -> None:
 
     assert fields["out"] is not stale_out
     assert "dedup_reference_label" not in fields["annotations"]
-    cached_source = trace._out_identity_cache[id(new_source)][0]
-    assert cached_source is new_source
+    # F20 W1a: weak source slot -- dereference before the identity check.
+    cached_source_ref = trace._out_identity_cache[id(new_source)][0]
+    assert cached_source_ref() is new_source
 
 
 def test_op_save_activation_identity_dedup_reuses_same_source() -> None:

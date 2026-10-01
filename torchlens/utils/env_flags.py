@@ -130,6 +130,24 @@ ENV_FLAG_REGISTRY: dict[str, EnvFlagSpec] = {
             description="Arms the strict collapse-verification tripwire during rendering.",
         ),
         EnvFlagSpec(
+            name="TORCHLENS_COLLAPSE_WATCHDOG",
+            kind="bool",
+            reader="torchlens.visualization.collapse_estimator",
+            description=(
+                "Collapse quality-planner wall-clock watchdog master switch "
+                "(default TRUE; FALSE disables the watchdog everywhere)."
+            ),
+        ),
+        EnvFlagSpec(
+            name="TORCHLENS_DETERMINISTIC",
+            kind="bool",
+            reader="torchlens.visualization.collapse_estimator",
+            description=(
+                "Declares a determinism-sensitive run: TRUE disables the "
+                "collapse watchdog so wall-clock can never change results."
+            ),
+        ),
+        EnvFlagSpec(
             name="TORCHLENS_DEBUG_FORK_COPY",
             kind="bool",
             reader="torchlens.data_classes._trace_fork",
@@ -148,6 +166,17 @@ ENV_FLAG_REGISTRY: dict[str, EnvFlagSpec] = {
             description="Disables deferred payload clones (TRUE forces eager cloning).",
         ),
         EnvFlagSpec(
+            name="TORCHLENS_PLUGINS",
+            kind="enum",
+            reader="torchlens.ecosystem.plugins",
+            description=(
+                "Plugin activation kill switch: 'none' refuses every "
+                "activation path (beats explicit consent); unset = normal "
+                "explicit activation."
+            ),
+            values=("", "none"),
+        ),
+        EnvFlagSpec(
             name="TORCHLENS_POSTPROCESS_ASSERTIONS",
             kind="bool",
             reader="torchlens.postprocess",
@@ -163,6 +192,17 @@ ENV_FLAG_REGISTRY: dict[str, EnvFlagSpec] = {
             reader="torchlens.postprocess",
             description="Write-audit mode: unset = enforce, 'record' = record.",
             values=("", "record"),
+        ),
+        EnvFlagSpec(
+            name="TORCHLENS_SUMMARY_STYLE",
+            kind="enum",
+            reader="torchlens.report._summary_charset",
+            description=(
+                "Charset override for summary display boundaries (detection "
+                "ladder rung 2): 'ascii' or 'unicode'; unset/other = detect, "
+                "failing toward ASCII."
+            ),
+            values=("", "ascii", "unicode"),
         ),
         EnvFlagSpec(
             name="TORCHLENS_POSTPROCESS_READ_AUDIT",
@@ -185,6 +225,17 @@ ENV_FLAG_REGISTRY: dict[str, EnvFlagSpec] = {
             kind="bool",
             reader="torchlens.validation.consolidated",
             description="TRUE additionally measures peak memory during validation runs.",
+        ),
+        EnvFlagSpec(
+            name="TORCHLENS_WATCH_DISABLE",
+            kind="bool",
+            reader="torchlens.trackers._watch",
+            description=(
+                "Kill switch for tl watch sessions: TRUE disables collection "
+                "(off-only; can never activate instrumentation). A disabled "
+                "watcher still writes its torchlens/run rows saying it was "
+                "disabled and by what."
+            ),
         ),
     )
 }

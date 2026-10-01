@@ -28,10 +28,14 @@ CORPUS = _HERE / "release_goldens" / "genuine_release_artifacts.tar.gz"
 
 #: The EXACT persisted-field-name additions of the v9 write, per record
 #: contract. A change here is a schema-territory change (C07 fence) and must
-#: be a reviewed diff of this pin.
+#: be a reviewed diff of this pin. The C07X amendment (the ONE coordinated
+#: v9 amendment; TLSPEC_VERSION stays 9) adds its entry-dark slots to the
+#: same window: Op.episode_step + Op.tl_authored_root and
+#: Trace.root_entry_point (written unconditionally at capture; None only on
+#: legacy artifacts).
 V9_FIELD_ADDITIONS: dict[str, frozenset[str]] = {
-    "op": frozenset({"injection_provenance"}),
-    "trace": frozenset({"source_snapshots", "structure_evidence"}),
+    "op": frozenset({"injection_provenance", "episode_step", "tl_authored_root"}),
+    "trace": frozenset({"source_snapshots", "structure_evidence", "root_entry_point"}),
 }
 
 

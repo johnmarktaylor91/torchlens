@@ -197,3 +197,83 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 8fb56555d8cee755f7ed05cb41b5d934f2d871df (dirty)
 recorded: 2026-08-27T22:52:36.082664+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: vizmech F13: pinned default-theme fontname (D29), one-table legend (D28), member-geometry caption attrs (D18b), and the in-frame backward key (D30) change forward/backward DOT by design
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 75b86b1ea2e35723c08416a6dfd86f73eaf1fabd (dirty)
+recorded: 2026-08-28T02:28:42.362854+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: vizmech F13: pinned default-theme fontname (D29), one-table legend (D28), member-geometry caption attrs (D18b), and the in-frame backward key (D30) change forward/backward DOT by design
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 75b86b1ea2e35723c08416a6dfd86f73eaf1fabd (dirty)
+recorded: 2026-08-28T02:28:42.409211+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: vizmech F13: pinned default-theme fontname (D29), one-table legend (D28), member-geometry caption attrs (D18b), and the in-frame backward key (D30) change forward/backward DOT by design
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 75b86b1ea2e35723c08416a6dfd86f73eaf1fabd (dirty)
+recorded: 2026-08-28T02:28:42.437860+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: vizmech F13: pinned default-theme fontname (D29), one-table legend (D28), member-geometry caption attrs (D18b), and the in-frame backward key (D30) change forward/backward DOT by design
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 75b86b1ea2e35723c08416a6dfd86f73eaf1fabd (dirty)
+recorded: 2026-08-28T02:28:42.466555+00:00
+---
+generator: tests/godobject_oracle legacy
+flag: TORCHLENS_UPDATE_LEGACY_ARTIFACT_ORACLE=1
+reason: F40a episode discoverability: Trace gains deliberate capture_kind + episode surface rows (plain/null on legacy loads); root-caused as intentional public additions, only these 2 rows diverge
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: d486fe8127fb178062f346866060d92c3b72f59e (clean)
+recorded: 2026-08-28T04:32:30.784209+00:00
+---
+generator: tests/godobject_oracle legacy
+flag: TORCHLENS_UPDATE_LEGACY_ARTIFACT_ORACLE=1
+reason: A-CKPT checkpoint live-ref lane: Param gains the derived read-time value_basis disclosure property (live_ref / absent(not_persisted)); loaded-surface snapshot gains one key per Param record
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: b61606915bc7f7195dc17241c9c79d41b721e870 (dirty)
+recorded: 2026-08-28T02:40:52.607661+00:00
+---
+generator: tests/godobject_oracle legacy
+flag: TORCHLENS_UPDATE_LEGACY_ARTIFACT_ORACLE=1
+reason: C07X v9 entry-dark class-schema growth: episode_step/tl_authored_root on op dumps, root_entry_point on trace rows (None on legacy loads; frozen v6 bytes and every loaded VALUE unchanged -- the 9ad02cb4/C07-T43 precedent class)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 7b72bd81e6e4f79e4e3b16c87485d6e9190aa3d9 (dirty)
+recorded: 2026-08-28T23:54:30.067794+00:00
+---
+generator: tests/test_state_keyset_contract.py
+flag: TORCHLENS_UPDATE_STATE_KEYSET_ORACLE=1
+reason: C07X v9 entry-dark declared-field growth: root_entry_point (Trace) + episode_step/tl_authored_root (Op) enter the declared key sets across lifecycle stages
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 7b72bd81e6e4f79e4e3b16c87485d6e9190aa3d9 (dirty)
+recorded: 2026-08-28T23:55:02.256887+00:00
+---
+generator: tests/test_state_keyset_contract.py
+flag: TORCHLENS_UPDATE_STATE_KEYSET_ORACLE=1
+reason: F24 observe: track_device_memory session knob + the saved-band session stores join the live Trace keyset (FieldPolicy.DROP; never persisted)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 6d3d065a13591f5698df890a01891d75fb518667 (dirty)
+recorded: 2026-08-29T13:37:33.350045+00:00
+---
+generator: tests/godobject_oracle legacy
+flag: TORCHLENS_UPDATE_LEGACY_ARTIFACT_ORACLE=1
+reason: F42 attested coupling adds the Trace.episode_coupling read accessor (null on legacy/plain artifacts); the loaded-surface snapshot gains the one name
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 74f296c2d0d308c2d5c539451d70c853070dd576 (clean)
+recorded: 2026-08-29T22:13:05.040111+00:00

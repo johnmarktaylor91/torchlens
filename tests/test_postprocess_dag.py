@@ -181,6 +181,13 @@ PROBES_GOLDEN = {
         )
     ),
     "6": frozenset(("layer_label", "recurrent_ops")),
+    # Step 11 out_ref (F20 D-17 merge reconcile): the saved-summary refresh
+    # reads ``out`` per saved op, and the accessor's lazy-materialization
+    # guard checks ``out_ref`` whenever ``out`` is empty (lookback windows,
+    # disk-only routes); in-pipeline refs attach only at step 18, so the
+    # read always observes the placeholder and falls through — the same
+    # reviewed shape as step 12's undecorate probe.
+    "11": frozenset(("out_ref",)),
     "12": frozenset(("out_ref",)),
     # Step 16/18 grad-family rows (manifest-swap 2026-08-13): the provisional
     # baseline over-included the backward-phase grad channel; the projected
@@ -196,7 +203,10 @@ PROBES_GOLDEN = {
     # step-0 empty-dict seed (tier-(ii) entries are written only by
     # session-time fork.do() on a FINISHED trace, outside the pipeline),
     # no postprocess step writes either column, and the derived order is
-    # unchanged.
+    # unchanged. The tlspec v9 entry-dark trio (episode_step /
+    # injection_provenance / tl_authored_root) is the same reviewed shape:
+    # their Phase-3 writers (F-EPISODE / F01 / F41) run outside this
+    # pipeline, so the whole-row scrub always observes the step-0 None seed.
     "18": frozenset(
         (
             "_facets_cache",
@@ -207,12 +217,15 @@ PROBES_GOLDEN = {
             "_receptive_field_cache",
             "edge_replacement_stamps",
             "edge_substitutions",
+            "episode_step",
             "grad",
             "grad_dtype",
             "grad_fn",
             "grad_shape",
             "gradient_memory",
             "has_grad",
+            "injection_provenance",
+            "tl_authored_root",
             "transformed_grad",
             "transformed_grad_dtype",
             "transformed_grad_shape",

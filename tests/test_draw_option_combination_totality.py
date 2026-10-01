@@ -24,9 +24,10 @@ dedicated deprecation and advisory suites, so draws run with warnings
 visible-but-not-fatal.
 
 Tiering (the smoke family-aggregate budget rules the full sweep out of the
-5s tier): the signature tripwire, the pinned refusal rows, and the
-high-risk CORE pair family run at smoke on every commit; the exhaustive
-singles + all-pairs sweep is ``heavy`` and runs in the ``not slow`` tiers.
+5s tier): the signature tripwire and the pinned refusal rows run at smoke on
+every commit; the CORE pair family moved to ``heavy`` when the merged tree's
+per-cell draw cost outgrew the cell-scaled smoke budget (T67d), joining the
+exhaustive singles + all-pairs sweep in the ``not slow`` tiers.
 """
 
 from __future__ import annotations
@@ -125,6 +126,9 @@ DECLARED: dict[str, tuple[str, Any]] = {
     "collapse_fn": (PAIRED, _never_collapse),
     "collapse": (PAIRED, "max"),
     "fold_repeats": (PAIRED, True),
+    # F11 pattern folding (memo D11): pattern-only view is the v1 contract;
+    # the collapse pairing refuses typed (REFUSING_COMBOS row below).
+    "fold_patterns": (PAIRED, {"LinearOnly": "linear"}),
     "skip_fn": (PAIRED, _never_skip),
     "vis_edge_overrides": (PAIRED, {"color": "black"}),
     "vis_grad_edge_overrides": (PAIRED, {"color": "black"}),
@@ -169,6 +173,8 @@ PAIRED_OPTIONS: tuple[str, ...] = tuple(
 #: partner except ``size_by`` (its own documented dependency), so it is
 #: expressed as a rule in ``expected_refusal`` rather than 37 literal rows.
 REFUSING_COMBOS: dict[frozenset[str], str] = {
+    frozenset({"collapse", "fold_patterns"}): "pattern_collapse_combination_unsupported",
+    frozenset({"fold_patterns", "vis_node_placement"}): "pattern_rank_layout_unsupported",
     frozenset({"vis_node_placement", "color_by"}): "encoding_requires_dot_layout",
     frozenset({"vis_node_placement", "size_by"}): "encoding_requires_dot_layout",
     frozenset({"vis_node_placement", "stack_by"}): "encoding_requires_dot_layout",
@@ -315,7 +321,7 @@ def _exercise_combo(combo: tuple[str, ...], trace: Any, tmp_path: Path) -> None:
     assert excinfo.value.fields["code"] == code
 
 
-@pytest.mark.smoke
+@pytest.mark.heavy
 @pytest.mark.parametrize("combo", _CORE_PAIRS, ids=["+".join(c) for c in _CORE_PAIRS])
 def test_draw_core_option_pairs(combo: tuple[str, ...], sweep_trace: Any, tmp_path: Path) -> None:
     """High-risk structural option pairs stay legal (or refuse typed) at commit time."""

@@ -5,7 +5,10 @@ from .buffer import Buffer, BufferAccessor
 from .func_call_location import FuncCallLocation
 from .grad_fn import GradFn, GradFnAccessor
 from .grad_fn_call import GradFnCall
-from .internal_types import FuncExecutionContext, VisualizationOverrides
+from .internal_types import (
+    FuncExecutionContext as FuncExecutionContext,
+    VisualizationOverrides as VisualizationOverrides,
+)
 from .module import Module, ModuleAccessor, ModuleCall
 from .param import Param, ParamAccessor
 from .prehook import ModuleInputSnapshot, PreHookEffect, TensorInputObservation
@@ -16,7 +19,6 @@ __all__ = [
     "Buffer",
     "BufferAccessor",
     "FuncCallLocation",
-    "FuncExecutionContext",
     "GradFn",
     "GradFnAccessor",
     "GradFnCall",
@@ -28,7 +30,6 @@ __all__ = [
     "ParamAccessor",
     "PreHookEffect",
     "TensorInputObservation",
-    "VisualizationOverrides",
 ]
 
 # Trace, Layer, Op, and TensorLog are intentionally NOT

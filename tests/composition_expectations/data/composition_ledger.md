@@ -20,5 +20,6 @@ render TOGETHER so SUPPORTED cannot hide an unusable cell.
 | CELL-PARTIALTRACE-AGENT-VERBS | product-surface | KNOWN-GAP | CONTENT-FLOOR | container_shape | product=PartialTrace; verb=agent-doors | A09 (due PB1) |
 | CELL-MULTIPASS-BARE-LABEL-REFUSAL | intervention | REFUSES-TYPED-TEACHING | REFUSAL | pass_resolution | label=bare; layer=multi-pass | tests/test_replay_pass_qualified.py |
 | CELL-FORK-RAW-WRITE-SHARED-STORAGE | product-surface | SUPPORTED-WITH-DISCLOSURE | DISCLOSURE | shared_storage | write=raw-inplace; payload=shared-storage | tests/composition_expectations/test_galleries.py::test_raw_fork_writes_reach_the_shared_storage |
+| CELL-SUMMARY-CHARSET-PASSCOUNT | report-surface | SUPPORTED | EXACT | pass_resolution | charset=ascii-vs-unicode; layer=multi-pass; view=ladder | F08: tests/test_summary_rebuild_charset.py::test_dual_charset_goldens + tests/test_summary_rebuild_ladder.py::test_multipass_one_row_at_module_grain (byte-exact dual-charset goldens; one row owns all pass events; ascii == degrade(unicode)) |
 
-KNOWN-GAP rows: 11 of 13 (transitional; each carries owner, issue, deadline, reproducer, auto-probe).
+KNOWN-GAP rows: 11 of 14 (transitional; each carries owner, issue, deadline, reproducer, auto-probe).

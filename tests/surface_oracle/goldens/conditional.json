@@ -151,9 +151,9 @@
      "add_1_3",
      "add_1_3_raw"
     ],
-    "macs_backward": 2,
-    "macs_forward": 2,
-    "macs_total": 4,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -261,9 +261,9 @@
     "total_flops_total": 8,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 2,
-    "total_macs_forward": 2,
-    "total_macs_total": 4,
+    "total_macs_backward": null,
+    "total_macs_forward": 0,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -411,9 +411,9 @@
      "gt_1_5",
      "gt_1_5_raw"
     ],
-    "macs_backward": 0,
+    "macs_backward": null,
     "macs_forward": 0,
-    "macs_total": 1,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -504,9 +504,9 @@
     "total_flops_total": 2,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 0,
+    "total_macs_backward": null,
     "total_macs_forward": 0,
-    "total_macs_total": 1,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -663,9 +663,9 @@
      "input_1:1",
      "input_1_raw"
     ],
-    "macs_backward": 0,
-    "macs_forward": 0,
-    "macs_total": 0,
+    "macs_backward": null,
+    "macs_forward": null,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -755,9 +755,9 @@
     "total_flops_total": 0,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 0,
-    "total_macs_forward": 0,
-    "total_macs_total": 0,
+    "total_macs_backward": null,
+    "total_macs_forward": null,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -828,9 +828,9 @@
       "\"output_1:1\""
      ]
     },
-    "flops_backward": 24,
-    "flops_forward": 16,
-    "flops_total": 40,
+    "flops_backward": null,
+    "flops_forward": null,
+    "flops_total": 0,
     "func": "<callable identity>",
     "func_config": {},
     "func_duration": "<measured>",
@@ -897,9 +897,9 @@
      "output_1:1",
      "output_1_raw"
     ],
-    "macs_backward": 12,
-    "macs_forward": 8,
-    "macs_total": 20,
+    "macs_backward": null,
+    "macs_forward": null,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -1005,14 +1005,14 @@
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
-    "total_flops_backward": 24,
-    "total_flops_forward": 16,
-    "total_flops_total": 40,
+    "total_flops_backward": 0,
+    "total_flops_forward": 0,
+    "total_flops_total": 0,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 12,
-    "total_macs_forward": 8,
-    "total_macs_total": 20,
+    "total_macs_backward": null,
+    "total_macs_forward": null,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -1181,7 +1181,7 @@
     ],
     "macs_backward": null,
     "macs_forward": null,
-    "macs_total": 0,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -1262,9 +1262,9 @@
     "total_flops_total": 0,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 0,
-    "total_macs_forward": 0,
-    "total_macs_total": 0,
+    "total_macs_backward": null,
+    "total_macs_forward": null,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -1428,9 +1428,9 @@
      "sigmoid_1_6",
      "sigmoid_1_6_raw"
     ],
-    "macs_backward": 12,
-    "macs_forward": 8,
-    "macs_total": 20,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -1530,9 +1530,9 @@
     "total_flops_total": 40,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 12,
-    "total_macs_forward": 8,
-    "total_macs_total": 20,
+    "total_macs_backward": null,
+    "total_macs_forward": 0,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -1691,9 +1691,9 @@
      "sum_1_4",
      "sum_1_4_raw"
     ],
-    "macs_backward": 2,
-    "macs_forward": 2,
-    "macs_total": 4,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -1786,9 +1786,9 @@
     "total_flops_total": 8,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 2,
-    "total_macs_forward": 2,
-    "total_macs_total": 4,
+    "total_macs_backward": null,
+    "total_macs_forward": 0,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -2136,16 +2136,16 @@
     "recursive_params": "<torchlens.data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
-    "total_flops": 98,
-    "total_flops_backward": 57,
-    "total_flops_forward": 41,
+    "total_flops": 58,
+    "total_flops_backward": 33,
+    "total_flops_forward": 25,
     "total_forward_duration": "<measured>",
     "total_func_calls_duration": "<measured>",
     "total_internal_activation_memory": "<measured>",
     "total_internal_gradient_memory": "<measured>",
-    "total_macs": 49,
-    "total_macs_backward": 28,
-    "total_macs_forward": 20,
+    "total_macs": null,
+    "total_macs_backward": null,
+    "total_macs_forward": 0,
     "total_output_activation_memory": "<measured>",
     "total_output_gradient_memory": "<measured>",
     "total_param_memory": "<measured>",
@@ -2211,6 +2211,7 @@
       "label": null
      }
     ],
+    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {
      "0": {
       "\"then\"": [
@@ -2245,6 +2246,7 @@
      "<torchlens.intervention.types.EdgeUseRecord>",
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "episode_step": null,
     "equivalence_class": "add_82724eb7c2eda8ba",
     "equivalent_ops": {
      "__set__": [
@@ -2313,6 +2315,7 @@
     "in_conditionals": [],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [
      {
       "__tensor__": true,
@@ -2405,9 +2408,9 @@
      "add_1_3",
      "add_1_3_raw"
     ],
-    "macs_backward": 2,
-    "macs_forward": 2,
-    "macs_total": 4,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "max_distance_from_input": 1,
     "max_distance_to_output": 2,
     "min_distance_from_input": 1,
@@ -2524,6 +2527,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -2602,6 +2606,7 @@
       "label": null
      }
     ],
+    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -2627,6 +2632,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "episode_step": null,
     "equivalence_class": "gt_cae937b97278e81d",
     "equivalent_ops": {
      "__set__": [
@@ -2699,6 +2705,7 @@
     ],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [
      {
       "__tensor__": true,
@@ -2775,9 +2782,9 @@
      "gt_1_5",
      "gt_1_5_raw"
     ],
-    "macs_backward": 0,
+    "macs_backward": null,
     "macs_forward": 0,
-    "macs_total": 1,
+    "macs_total": null,
     "max_distance_from_input": 2,
     "max_distance_to_output": null,
     "min_distance_from_input": 2,
@@ -2883,6 +2890,7 @@
      0
     ],
     "terminal_conditional_id": 0,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -2955,6 +2963,7 @@
      "rand_1_1"
     ],
     "code_context": [],
+    "compute_record": null,
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -2980,6 +2989,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [],
+    "episode_step": null,
     "equivalence_class": "input_2_2_torch.float32",
     "equivalent_ops": {
      "__set__": [
@@ -3033,6 +3043,7 @@
     "in_conditionals": [],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [],
     "input_ancestors": {
      "__set__": [
@@ -3098,9 +3109,9 @@
      "input_1:1",
      "input_1_raw"
     ],
-    "macs_backward": 0,
-    "macs_forward": 0,
-    "macs_total": 0,
+    "macs_backward": null,
+    "macs_forward": null,
+    "macs_total": null,
     "max_distance_from_input": 0,
     "max_distance_to_output": 3,
     "min_distance_from_input": 0,
@@ -3208,6 +3219,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -3252,7 +3264,7 @@
     "arg_names": [],
     "args_summary": "Tensor(2x2, float32)",
     "args_template": null,
-    "arithmetic_intensity": "0.5",
+    "arithmetic_intensity": null,
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -3275,6 +3287,7 @@
     "children": [],
     "co_parents": [],
     "code_context": [],
+    "compute_record": null,
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -3298,6 +3311,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [],
+    "episode_step": null,
     "equivalence_class": "output_1_2_2_torch.float32",
     "equivalent_ops": {
      "__set__": [
@@ -3305,9 +3319,9 @@
      ]
     },
     "facets": "<torchlens.semantic.facets.FacetView>",
-    "flops_backward": 24,
-    "flops_forward": 16,
-    "flops_total": 40,
+    "flops_backward": null,
+    "flops_forward": null,
+    "flops_total": 0,
     "func": "<callable identity>",
     "func_autocast_state": {
      "\"__execution__\"": {
@@ -3366,6 +3380,7 @@
     "in_conditionals": [],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [
      {
       "__tensor__": true,
@@ -3450,9 +3465,9 @@
      "output_1:1",
      "output_1_raw"
     ],
-    "macs_backward": 12,
-    "macs_forward": 8,
-    "macs_total": 20,
+    "macs_backward": null,
+    "macs_forward": null,
+    "macs_total": null,
     "max_distance_from_input": 3,
     "max_distance_to_output": 0,
     "min_distance_from_input": 3,
@@ -3576,6 +3591,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -3666,6 +3682,7 @@
       "label": null
      }
     ],
+    "compute_record": null,
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -3689,6 +3706,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [],
+    "episode_step": null,
     "equivalence_class": "rand_0b411e5e9e470b38",
     "equivalent_ops": {
      "__set__": [
@@ -3760,6 +3778,7 @@
     "in_conditionals": [],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [],
     "input_ancestors": {
      "__set__": []
@@ -3826,7 +3845,7 @@
     ],
     "macs_backward": null,
     "macs_forward": null,
-    "macs_total": 0,
+    "macs_total": null,
     "max_distance_from_input": null,
     "max_distance_to_output": 3,
     "min_distance_from_input": null,
@@ -3927,6 +3946,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -4012,6 +4032,7 @@
       "label": null
      }
     ],
+    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 1,
     "conditional_branch_stack": [
@@ -4042,6 +4063,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "episode_step": null,
     "equivalence_class": "sigmoid_c9333d80c9fa57d5",
     "equivalent_ops": {
      "__set__": [
@@ -4112,6 +4134,7 @@
     ],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [
      {
       "__tensor__": true,
@@ -4195,9 +4218,9 @@
      "sigmoid_1_6",
      "sigmoid_1_6_raw"
     ],
-    "macs_backward": 12,
-    "macs_forward": 8,
-    "macs_total": 20,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "max_distance_from_input": 2,
     "max_distance_to_output": 1,
     "min_distance_from_input": 2,
@@ -4310,6 +4333,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -4393,6 +4417,7 @@
       "label": null
      }
     ],
+    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -4418,6 +4443,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "episode_step": null,
     "equivalence_class": "sum_c9333d80c9fa57d5",
     "equivalent_ops": {
      "__set__": [
@@ -4486,6 +4512,7 @@
     "in_conditionals": [],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [
      {
       "__tensor__": true,
@@ -4565,9 +4592,9 @@
      "sum_1_4",
      "sum_1_4_raw"
     ],
-    "macs_backward": 2,
-    "macs_forward": 2,
-    "macs_total": 4,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "max_distance_from_input": 1,
     "max_distance_to_output": null,
     "min_distance_from_input": 1,
@@ -4670,6 +4697,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -4968,7 +4996,27 @@
     }
    },
    "activation_transform": null,
-   "annotations": {},
+   "annotations": {
+    "\"capture_advisories\"": [
+     {
+      "\"count\"": 1,
+      "\"first_location\"": "<repo>/tests/capture_oracle/_models.py:131",
+      "\"kind\"": "scalar_escape",
+      "\"message\"": "tensor-to-Python scalar escape(s) observed during capture; the dependence is not captured"
+     }
+    ],
+    "\"health_facts\"": {
+     "\"alias_nonfinite_labels\"": [],
+     "\"basis\"": "saved_payloads",
+     "\"capture_revision\"": "fc1-224a8b4f247cd852",
+     "\"checked\"": 7,
+     "\"nonfinite_labels\"": [],
+     "\"schema_version\"": 1,
+     "\"unchecked\"": 0,
+     "\"unexamined\"": 0,
+     "\"unmapped\"": 0
+    }
+   },
    "append_history": [],
    "archived_activations": {},
    "backend": "torch",
@@ -5017,6 +5065,7 @@
      "\"owner_thread_id\"": "<measured>"
     }
    ],
+   "capture_kind": "plain",
    "capture_mode": "exhaustive",
    "capture_owner_thread_id": "<measured>",
    "capture_owner_thread_qualified": true,
@@ -5043,6 +5092,12 @@
    "completeness_witness_mode": "off",
    "completeness_witness_unaccounted_count": 0,
    "completeness_witness_verified": null,
+   "compute_coverage": {
+    "\"known\"": 4,
+    "\"not_applicable\"": 2,
+    "\"unknown\"": 1,
+    "\"zero_by_rule\"": 0
+   },
    "compute_layers": "<torchlens.data_classes.layer.LayerAccessor>",
    "compute_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
    "conditional_arm_entry_edges": {
@@ -5074,6 +5129,8 @@
    "distributed_scope": null,
    "edges": "<raises SelectionError>",
    "emit_nvtx": false,
+   "episode": null,
+   "episode_coupling": null,
    "escape_detector_backward_coverage": "not_armed",
    "escape_detector_callback_ns": 0,
    "escape_detector_event_count": 0,
@@ -5082,6 +5139,7 @@
    "escape_diagnostics": [],
    "event_stream": "<torchlens.ir.capture_events.CaptureEvents>",
    "facet_registry_snapshot": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
+   "factcore": "<torchlens.report._factcore.FactCore>",
    "flops_by_op_type": {
     "\"add\"": {
      "\"backward\"": 4,
@@ -5099,9 +5157,9 @@
      "\"forward\"": 0
     },
     "\"output\"": {
-     "\"backward\"": 24,
+     "\"backward\"": 0,
      "\"count\"": 1,
-     "\"forward\"": 16
+     "\"forward\"": 0
     },
     "\"rand\"": {
      "\"backward\"": 0,
@@ -5157,12 +5215,14 @@
    "has_frozen_params": false,
    "has_gradients": false,
    "has_trainable_params": false,
+   "health_facts": "<torchlens.report._health.HealthFacts>",
    "inference_only": false,
    "init_docstring": "Initialize side-effect counters.",
    "init_signature": "(self) -> 'None'",
    "init_source_file": "<repo>/tests/capture_oracle/_models.py",
    "init_source_line": 105,
    "init_source_location": "<repo>/tests/capture_oracle/_models.py:105",
+   "injected_ops": [],
    "input_annotations": {},
    "input_layers": [
     "input_1"
@@ -5517,43 +5577,45 @@
    "layers": "<torchlens.data_classes.layer.LayerAccessor>",
    "layers_to_save": "all",
    "layers_with_params": {},
+   "logged_values": {},
    "macs_by_op_type": {
     "\"add\"": {
-     "\"backward\"": 2,
+     "\"backward\"": null,
      "\"count\"": 1,
-     "\"forward\"": 2
+     "\"forward\"": 0
     },
     "\"gt\"": {
-     "\"backward\"": 0,
+     "\"backward\"": null,
      "\"count\"": 1,
      "\"forward\"": 0
     },
     "\"input\"": {
-     "\"backward\"": 0,
+     "\"backward\"": null,
      "\"count\"": 1,
      "\"forward\"": 0
     },
     "\"output\"": {
-     "\"backward\"": 12,
+     "\"backward\"": null,
      "\"count\"": 1,
-     "\"forward\"": 8
+     "\"forward\"": 0
     },
     "\"rand\"": {
-     "\"backward\"": 0,
+     "\"backward\"": null,
      "\"count\"": 1,
      "\"forward\"": 0
     },
     "\"sigmoid\"": {
-     "\"backward\"": 12,
+     "\"backward\"": null,
      "\"count\"": 1,
-     "\"forward\"": 8
+     "\"forward\"": 0
     },
     "\"sum\"": {
-     "\"backward\"": 2,
+     "\"backward\"": null,
      "\"count\"": 1,
-     "\"forward\"": 2
+     "\"forward\"": 0
     }
    },
+   "macs_unknown_split_ops": [],
    "manual_tensor_connections": [],
    "mark_layer_depths": true,
    "max_in_degree": 2,
@@ -5564,6 +5626,36 @@
    "model_cls": "<callable ConditionalModel>",
    "model_label": "ConditionalModel",
    "model_object_id": "<measured>",
+   "model_ops": [
+    {
+     "__ref__": "Op",
+     "label": "input_1:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "rand_1_1:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "add_1_2:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "sum_1_3:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "gt_1_4:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "sigmoid_1_5:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "output_1:1"
+    }
+   ],
    "model_profile": "<torchlens.data_classes._trace_profile.ModelProfile>",
    "module_calls": "<torchlens.data_classes._trace_accessors.TraceModuleCallAccessor>",
    "module_collapse_order": [
@@ -5577,6 +5669,7 @@
    "modules": "<torchlens.data_classes.module.ModuleAccessor>",
    "nonfinite_coverage": "<torchlens.data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
+   "nonfinite_verdict": "checked_and_clean",
    "num_backward_edges": null,
    "num_backward_passes": 0,
    "num_buffer_edges": 0,
@@ -5614,8 +5707,11 @@
    "num_param_tensors_frozen": 0,
    "num_param_tensors_trainable": 0,
    "num_params": 0,
+   "num_params_by_path": 0,
+   "num_params_executed": 0,
    "num_params_frozen": 0,
    "num_params_trainable": 0,
+   "num_params_unexecuted": 0,
    "num_saved_grad_fn_calls": 0,
    "num_saved_grad_fns": 0,
    "num_saved_grad_layers": 0,
@@ -5717,6 +5813,7 @@
    },
    "replay_frontier": {},
    "rescue_rerun": null,
+   "root_entry_point": "module_call:capture_oracle._models.ConditionalModel.forward",
    "root_module": {
     "__ref__": "Module",
     "label": "self"
@@ -5751,27 +5848,34 @@
    "saved_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
    "setup_duration": "<measured>",
    "sibling_events": [],
+   "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [],
+   "structure_evidence": null,
    "structure_only": false,
-   "tlspec_version": 8,
+   "tied_param_groups": [],
+   "tlspec_version": 9,
    "total_activation_memory": "<measured>",
    "total_autograd_memory": "<measured>",
    "total_backward_duration": "<measured>",
    "total_backward_memory": "<measured>",
-   "total_flops": 98,
-   "total_flops_backward": 57,
-   "total_flops_forward": 41,
+   "total_flops": 58,
+   "total_flops_backward": 33,
+   "total_flops_forward": 25,
    "total_gradient_memory": "<measured>",
-   "total_macs": 49,
-   "total_macs_backward": 28,
-   "total_macs_forward": 20,
+   "total_macs": null,
+   "total_macs_backward": null,
+   "total_macs_forward": 0,
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
    "trace_label": "conditional_N_fork_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
+   "unexecuted_param_names": [],
+   "unknown_flop_ops": [
+    "<torchlens.report._compute_truth.UnknownOpGroup>"
+   ],
    "validation_replay_status": "<torchlens.validation.status.ValidationReplayStatus>",
    "verbose": false
   }
@@ -5928,9 +6032,9 @@
      "add_1_3",
      "add_1_3_raw"
     ],
-    "macs_backward": 2,
-    "macs_forward": 2,
-    "macs_total": 4,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -6038,9 +6142,9 @@
     "total_flops_total": 8,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 2,
-    "total_macs_forward": 2,
-    "total_macs_total": 4,
+    "total_macs_backward": null,
+    "total_macs_forward": 0,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -6188,9 +6292,9 @@
      "gt_1_5",
      "gt_1_5_raw"
     ],
-    "macs_backward": 0,
+    "macs_backward": null,
     "macs_forward": 0,
-    "macs_total": 1,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -6281,9 +6385,9 @@
     "total_flops_total": 2,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 0,
+    "total_macs_backward": null,
     "total_macs_forward": 0,
-    "total_macs_total": 1,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -6440,9 +6544,9 @@
      "input_1:1",
      "input_1_raw"
     ],
-    "macs_backward": 0,
-    "macs_forward": 0,
-    "macs_total": 0,
+    "macs_backward": null,
+    "macs_forward": null,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -6532,9 +6636,9 @@
     "total_flops_total": 0,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 0,
-    "total_macs_forward": 0,
-    "total_macs_total": 0,
+    "total_macs_backward": null,
+    "total_macs_forward": null,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -6605,9 +6709,9 @@
       "\"output_1:1\""
      ]
     },
-    "flops_backward": 24,
-    "flops_forward": 16,
-    "flops_total": 40,
+    "flops_backward": null,
+    "flops_forward": null,
+    "flops_total": 0,
     "func": "<callable identity>",
     "func_config": {},
     "func_duration": "<measured>",
@@ -6674,9 +6778,9 @@
      "output_1:1",
      "output_1_raw"
     ],
-    "macs_backward": 12,
-    "macs_forward": 8,
-    "macs_total": 20,
+    "macs_backward": null,
+    "macs_forward": null,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -6782,14 +6886,14 @@
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
-    "total_flops_backward": 24,
-    "total_flops_forward": 16,
-    "total_flops_total": 40,
+    "total_flops_backward": 0,
+    "total_flops_forward": 0,
+    "total_flops_total": 0,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 12,
-    "total_macs_forward": 8,
-    "total_macs_total": 20,
+    "total_macs_backward": null,
+    "total_macs_forward": null,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -6958,7 +7062,7 @@
     ],
     "macs_backward": null,
     "macs_forward": null,
-    "macs_total": 0,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -7039,9 +7143,9 @@
     "total_flops_total": 0,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 0,
-    "total_macs_forward": 0,
-    "total_macs_total": 0,
+    "total_macs_backward": null,
+    "total_macs_forward": null,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -7205,9 +7309,9 @@
      "sigmoid_1_6",
      "sigmoid_1_6_raw"
     ],
-    "macs_backward": 12,
-    "macs_forward": 8,
-    "macs_total": 20,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -7307,9 +7411,9 @@
     "total_flops_total": 40,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 12,
-    "total_macs_forward": 8,
-    "total_macs_total": 20,
+    "total_macs_backward": null,
+    "total_macs_forward": 0,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -7468,9 +7572,9 @@
      "sum_1_4",
      "sum_1_4_raw"
     ],
-    "macs_backward": 2,
-    "macs_forward": 2,
-    "macs_total": 4,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -7563,9 +7667,9 @@
     "total_flops_total": 8,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 2,
-    "total_macs_forward": 2,
-    "total_macs_total": 4,
+    "total_macs_backward": null,
+    "total_macs_forward": 0,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -7913,16 +8017,16 @@
     "recursive_params": "<torchlens.data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
-    "total_flops": 98,
-    "total_flops_backward": 57,
-    "total_flops_forward": 41,
+    "total_flops": 58,
+    "total_flops_backward": 33,
+    "total_flops_forward": 25,
     "total_forward_duration": "<measured>",
     "total_func_calls_duration": "<measured>",
     "total_internal_activation_memory": "<measured>",
     "total_internal_gradient_memory": "<measured>",
-    "total_macs": 49,
-    "total_macs_backward": 28,
-    "total_macs_forward": 20,
+    "total_macs": null,
+    "total_macs_backward": null,
+    "total_macs_forward": 0,
     "total_output_activation_memory": "<measured>",
     "total_output_gradient_memory": "<measured>",
     "total_param_memory": "<measured>",
@@ -7988,6 +8092,7 @@
       "label": null
      }
     ],
+    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {
      "0": {
       "\"then\"": [
@@ -8022,6 +8127,7 @@
      "<torchlens.intervention.types.EdgeUseRecord>",
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "episode_step": null,
     "equivalence_class": "add_82724eb7c2eda8ba",
     "equivalent_ops": {
      "__set__": [
@@ -8090,6 +8196,7 @@
     "in_conditionals": [],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [
      {
       "__tensor__": true,
@@ -8182,9 +8289,9 @@
      "add_1_3",
      "add_1_3_raw"
     ],
-    "macs_backward": 2,
-    "macs_forward": 2,
-    "macs_total": 4,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "max_distance_from_input": 1,
     "max_distance_to_output": 2,
     "min_distance_from_input": 1,
@@ -8301,6 +8408,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -8379,6 +8487,7 @@
       "label": null
      }
     ],
+    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -8404,6 +8513,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "episode_step": null,
     "equivalence_class": "gt_cae937b97278e81d",
     "equivalent_ops": {
      "__set__": [
@@ -8476,6 +8586,7 @@
     ],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [
      {
       "__tensor__": true,
@@ -8552,9 +8663,9 @@
      "gt_1_5",
      "gt_1_5_raw"
     ],
-    "macs_backward": 0,
+    "macs_backward": null,
     "macs_forward": 0,
-    "macs_total": 1,
+    "macs_total": null,
     "max_distance_from_input": 2,
     "max_distance_to_output": null,
     "min_distance_from_input": 2,
@@ -8660,6 +8771,7 @@
      0
     ],
     "terminal_conditional_id": 0,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -8732,6 +8844,7 @@
      "rand_1_1"
     ],
     "code_context": [],
+    "compute_record": null,
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -8757,6 +8870,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [],
+    "episode_step": null,
     "equivalence_class": "input_2_2_torch.float32",
     "equivalent_ops": {
      "__set__": [
@@ -8810,6 +8924,7 @@
     "in_conditionals": [],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [],
     "input_ancestors": {
      "__set__": [
@@ -8875,9 +8990,9 @@
      "input_1:1",
      "input_1_raw"
     ],
-    "macs_backward": 0,
-    "macs_forward": 0,
-    "macs_total": 0,
+    "macs_backward": null,
+    "macs_forward": null,
+    "macs_total": null,
     "max_distance_from_input": 0,
     "max_distance_to_output": 3,
     "min_distance_from_input": 0,
@@ -8985,6 +9100,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -9029,7 +9145,7 @@
     "arg_names": [],
     "args_summary": "Tensor(2x2, float32)",
     "args_template": null,
-    "arithmetic_intensity": "0.5",
+    "arithmetic_intensity": null,
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -9052,6 +9168,7 @@
     "children": [],
     "co_parents": [],
     "code_context": [],
+    "compute_record": null,
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -9075,6 +9192,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [],
+    "episode_step": null,
     "equivalence_class": "output_1_2_2_torch.float32",
     "equivalent_ops": {
      "__set__": [
@@ -9082,9 +9200,9 @@
      ]
     },
     "facets": "<torchlens.semantic.facets.FacetView>",
-    "flops_backward": 24,
-    "flops_forward": 16,
-    "flops_total": 40,
+    "flops_backward": null,
+    "flops_forward": null,
+    "flops_total": 0,
     "func": "<callable identity>",
     "func_autocast_state": {
      "\"__execution__\"": {
@@ -9143,6 +9261,7 @@
     "in_conditionals": [],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [
      {
       "__tensor__": true,
@@ -9227,9 +9346,9 @@
      "output_1:1",
      "output_1_raw"
     ],
-    "macs_backward": 12,
-    "macs_forward": 8,
-    "macs_total": 20,
+    "macs_backward": null,
+    "macs_forward": null,
+    "macs_total": null,
     "max_distance_from_input": 3,
     "max_distance_to_output": 0,
     "min_distance_from_input": 3,
@@ -9353,6 +9472,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -9443,6 +9563,7 @@
       "label": null
      }
     ],
+    "compute_record": null,
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -9466,6 +9587,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [],
+    "episode_step": null,
     "equivalence_class": "rand_0b411e5e9e470b38",
     "equivalent_ops": {
      "__set__": [
@@ -9537,6 +9659,7 @@
     "in_conditionals": [],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [],
     "input_ancestors": {
      "__set__": []
@@ -9603,7 +9726,7 @@
     ],
     "macs_backward": null,
     "macs_forward": null,
-    "macs_total": 0,
+    "macs_total": null,
     "max_distance_from_input": null,
     "max_distance_to_output": 3,
     "min_distance_from_input": null,
@@ -9704,6 +9827,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -9789,6 +9913,7 @@
       "label": null
      }
     ],
+    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 1,
     "conditional_branch_stack": [
@@ -9819,6 +9944,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "episode_step": null,
     "equivalence_class": "sigmoid_c9333d80c9fa57d5",
     "equivalent_ops": {
      "__set__": [
@@ -9889,6 +10015,7 @@
     ],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [
      {
       "__tensor__": true,
@@ -9972,9 +10099,9 @@
      "sigmoid_1_6",
      "sigmoid_1_6_raw"
     ],
-    "macs_backward": 12,
-    "macs_forward": 8,
-    "macs_total": 20,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "max_distance_from_input": 2,
     "max_distance_to_output": 1,
     "min_distance_from_input": 2,
@@ -10087,6 +10214,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -10170,6 +10298,7 @@
       "label": null
      }
     ],
+    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -10195,6 +10324,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "episode_step": null,
     "equivalence_class": "sum_c9333d80c9fa57d5",
     "equivalent_ops": {
      "__set__": [
@@ -10263,6 +10393,7 @@
     "in_conditionals": [],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [
      {
       "__tensor__": true,
@@ -10342,9 +10473,9 @@
      "sum_1_4",
      "sum_1_4_raw"
     ],
-    "macs_backward": 2,
-    "macs_forward": 2,
-    "macs_total": 4,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "max_distance_from_input": 1,
     "max_distance_to_output": null,
     "min_distance_from_input": 1,
@@ -10447,6 +10578,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -10745,7 +10877,16 @@
     }
    },
    "activation_transform": null,
-   "annotations": {},
+   "annotations": {
+    "\"capture_advisories\"": [
+     {
+      "\"count\"": 1,
+      "\"first_location\"": "<repo>/tests/capture_oracle/_models.py:131",
+      "\"kind\"": "scalar_escape",
+      "\"message\"": "tensor-to-Python scalar escape(s) observed during capture; the dependence is not captured"
+     }
+    ]
+   },
    "append_history": [],
    "archived_activations": {},
    "backend": "torch",
@@ -10794,6 +10935,7 @@
      "\"owner_thread_id\"": "<measured>"
     }
    ],
+   "capture_kind": "plain",
    "capture_mode": "exhaustive",
    "capture_owner_thread_id": "<measured>",
    "capture_owner_thread_qualified": true,
@@ -10820,6 +10962,12 @@
    "completeness_witness_mode": "off",
    "completeness_witness_unaccounted_count": 0,
    "completeness_witness_verified": null,
+   "compute_coverage": {
+    "\"known\"": 4,
+    "\"not_applicable\"": 2,
+    "\"unknown\"": 1,
+    "\"zero_by_rule\"": 0
+   },
    "compute_layers": "<torchlens.data_classes.layer.LayerAccessor>",
    "compute_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
    "conditional_arm_entry_edges": {
@@ -10851,6 +10999,8 @@
    "distributed_scope": null,
    "edges": "<raises SelectionError>",
    "emit_nvtx": false,
+   "episode": null,
+   "episode_coupling": null,
    "escape_detector_backward_coverage": "not_armed",
    "escape_detector_callback_ns": 0,
    "escape_detector_event_count": 0,
@@ -10859,6 +11009,7 @@
    "escape_diagnostics": [],
    "event_stream": "<torchlens.ir.capture_events.CaptureEvents>",
    "facet_registry_snapshot": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
+   "factcore": "<torchlens.report._factcore.FactCore>",
    "flops_by_op_type": {
     "\"add\"": {
      "\"backward\"": 4,
@@ -10876,9 +11027,9 @@
      "\"forward\"": 0
     },
     "\"output\"": {
-     "\"backward\"": 24,
+     "\"backward\"": 0,
      "\"count\"": 1,
-     "\"forward\"": 16
+     "\"forward\"": 0
     },
     "\"rand\"": {
      "\"backward\"": 0,
@@ -10934,12 +11085,14 @@
    "has_frozen_params": false,
    "has_gradients": false,
    "has_trainable_params": false,
+   "health_facts": "<torchlens.report._health.HealthFacts>",
    "inference_only": false,
    "init_docstring": "Initialize side-effect counters.",
    "init_signature": "(self) -> 'None'",
    "init_source_file": "<repo>/tests/capture_oracle/_models.py",
    "init_source_line": 105,
    "init_source_location": "<repo>/tests/capture_oracle/_models.py:105",
+   "injected_ops": [],
    "input_annotations": {},
    "input_layers": [
     "input_1"
@@ -11294,43 +11447,45 @@
    "layers": "<torchlens.data_classes.layer.LayerAccessor>",
    "layers_to_save": "all",
    "layers_with_params": {},
+   "logged_values": {},
    "macs_by_op_type": {
     "\"add\"": {
-     "\"backward\"": 2,
+     "\"backward\"": null,
      "\"count\"": 1,
-     "\"forward\"": 2
+     "\"forward\"": 0
     },
     "\"gt\"": {
-     "\"backward\"": 0,
+     "\"backward\"": null,
      "\"count\"": 1,
      "\"forward\"": 0
     },
     "\"input\"": {
-     "\"backward\"": 0,
+     "\"backward\"": null,
      "\"count\"": 1,
      "\"forward\"": 0
     },
     "\"output\"": {
-     "\"backward\"": 12,
+     "\"backward\"": null,
      "\"count\"": 1,
-     "\"forward\"": 8
+     "\"forward\"": 0
     },
     "\"rand\"": {
-     "\"backward\"": 0,
+     "\"backward\"": null,
      "\"count\"": 1,
      "\"forward\"": 0
     },
     "\"sigmoid\"": {
-     "\"backward\"": 12,
+     "\"backward\"": null,
      "\"count\"": 1,
-     "\"forward\"": 8
+     "\"forward\"": 0
     },
     "\"sum\"": {
-     "\"backward\"": 2,
+     "\"backward\"": null,
      "\"count\"": 1,
-     "\"forward\"": 2
+     "\"forward\"": 0
     }
    },
+   "macs_unknown_split_ops": [],
    "manual_tensor_connections": [],
    "mark_layer_depths": true,
    "max_in_degree": 2,
@@ -11341,6 +11496,36 @@
    "model_cls": "<callable ConditionalModel>",
    "model_label": "ConditionalModel",
    "model_object_id": "<measured>",
+   "model_ops": [
+    {
+     "__ref__": "Op",
+     "label": "input_1:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "rand_1_1:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "add_1_2:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "sum_1_3:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "gt_1_4:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "sigmoid_1_5:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "output_1:1"
+    }
+   ],
    "model_profile": "<torchlens.data_classes._trace_profile.ModelProfile>",
    "module_calls": "<torchlens.data_classes._trace_accessors.TraceModuleCallAccessor>",
    "module_collapse_order": [
@@ -11354,6 +11539,7 @@
    "modules": "<torchlens.data_classes.module.ModuleAccessor>",
    "nonfinite_coverage": "<torchlens.data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
+   "nonfinite_verdict": "checked_and_clean",
    "num_backward_edges": null,
    "num_backward_passes": 0,
    "num_buffer_edges": 0,
@@ -11391,8 +11577,11 @@
    "num_param_tensors_frozen": 0,
    "num_param_tensors_trainable": 0,
    "num_params": 0,
+   "num_params_by_path": 0,
+   "num_params_executed": 0,
    "num_params_frozen": 0,
    "num_params_trainable": 0,
+   "num_params_unexecuted": 0,
    "num_saved_grad_fn_calls": 0,
    "num_saved_grad_fns": 0,
    "num_saved_grad_layers": 0,
@@ -11498,6 +11687,7 @@
    },
    "replay_frontier": {},
    "rescue_rerun": null,
+   "root_entry_point": "module_call:capture_oracle._models.ConditionalModel.forward",
    "root_module": {
     "__ref__": "Module",
     "label": "self"
@@ -11531,27 +11721,34 @@
    "sibling_events": [
     "<torchlens.ir.events.ModulePrepEvent>"
    ],
+   "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [],
+   "structure_evidence": null,
    "structure_only": false,
-   "tlspec_version": 8,
+   "tied_param_groups": [],
+   "tlspec_version": 9,
    "total_activation_memory": "<measured>",
    "total_autograd_memory": "<measured>",
    "total_backward_duration": "<measured>",
    "total_backward_memory": "<measured>",
-   "total_flops": 98,
-   "total_flops_backward": 57,
-   "total_flops_forward": 41,
+   "total_flops": 58,
+   "total_flops_backward": 33,
+   "total_flops_forward": 25,
    "total_gradient_memory": "<measured>",
-   "total_macs": 49,
-   "total_macs_backward": 28,
-   "total_macs_forward": 20,
+   "total_macs": null,
+   "total_macs_backward": null,
+   "total_macs_forward": 0,
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
    "trace_label": "conditional_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
+   "unexecuted_param_names": [],
+   "unknown_flop_ops": [
+    "<torchlens.report._compute_truth.UnknownOpGroup>"
+   ],
    "validation_replay_status": "<torchlens.validation.status.ValidationReplayStatus>",
    "verbose": false
   }
@@ -11708,9 +11905,9 @@
      "add_1_3",
      "add_1_3_raw"
     ],
-    "macs_backward": 2,
-    "macs_forward": 2,
-    "macs_total": 4,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -11818,9 +12015,9 @@
     "total_flops_total": 8,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 2,
-    "total_macs_forward": 2,
-    "total_macs_total": 4,
+    "total_macs_backward": null,
+    "total_macs_forward": 0,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -11968,9 +12165,9 @@
      "gt_1_5",
      "gt_1_5_raw"
     ],
-    "macs_backward": 0,
+    "macs_backward": null,
     "macs_forward": 0,
-    "macs_total": 1,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -12061,9 +12258,9 @@
     "total_flops_total": 2,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 0,
+    "total_macs_backward": null,
     "total_macs_forward": 0,
-    "total_macs_total": 1,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -12220,9 +12417,9 @@
      "input_1:1",
      "input_1_raw"
     ],
-    "macs_backward": 0,
-    "macs_forward": 0,
-    "macs_total": 0,
+    "macs_backward": null,
+    "macs_forward": null,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -12312,9 +12509,9 @@
     "total_flops_total": 0,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 0,
-    "total_macs_forward": 0,
-    "total_macs_total": 0,
+    "total_macs_backward": null,
+    "total_macs_forward": null,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -12385,9 +12582,9 @@
       "\"output_1:1\""
      ]
     },
-    "flops_backward": 24,
-    "flops_forward": 16,
-    "flops_total": 40,
+    "flops_backward": null,
+    "flops_forward": null,
+    "flops_total": 0,
     "func": "<callable identity>",
     "func_config": {},
     "func_duration": "<measured>",
@@ -12454,9 +12651,9 @@
      "output_1:1",
      "output_1_raw"
     ],
-    "macs_backward": 12,
-    "macs_forward": 8,
-    "macs_total": 20,
+    "macs_backward": null,
+    "macs_forward": null,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -12562,14 +12759,14 @@
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
-    "total_flops_backward": 24,
-    "total_flops_forward": 16,
-    "total_flops_total": 40,
+    "total_flops_backward": 0,
+    "total_flops_forward": 0,
+    "total_flops_total": 0,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 12,
-    "total_macs_forward": 8,
-    "total_macs_total": 20,
+    "total_macs_backward": null,
+    "total_macs_forward": null,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -12738,7 +12935,7 @@
     ],
     "macs_backward": null,
     "macs_forward": null,
-    "macs_total": 0,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -12819,9 +13016,9 @@
     "total_flops_total": 0,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 0,
-    "total_macs_forward": 0,
-    "total_macs_total": 0,
+    "total_macs_backward": null,
+    "total_macs_forward": null,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -12985,9 +13182,9 @@
      "sigmoid_1_6",
      "sigmoid_1_6_raw"
     ],
-    "macs_backward": 12,
-    "macs_forward": 8,
-    "macs_total": 20,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -13087,9 +13284,9 @@
     "total_flops_total": 40,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 12,
-    "total_macs_forward": 8,
-    "total_macs_total": 20,
+    "total_macs_backward": null,
+    "total_macs_forward": 0,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -13248,9 +13445,9 @@
      "sum_1_4",
      "sum_1_4_raw"
     ],
-    "macs_backward": 2,
-    "macs_forward": 2,
-    "macs_total": 4,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -13343,9 +13540,9 @@
     "total_flops_total": 8,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 2,
-    "total_macs_forward": 2,
-    "total_macs_total": 4,
+    "total_macs_backward": null,
+    "total_macs_forward": 0,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -13693,16 +13890,16 @@
     "recursive_params": "<torchlens.data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
-    "total_flops": 98,
-    "total_flops_backward": 57,
-    "total_flops_forward": 41,
+    "total_flops": 58,
+    "total_flops_backward": 33,
+    "total_flops_forward": 25,
     "total_forward_duration": "<measured>",
     "total_func_calls_duration": "<measured>",
     "total_internal_activation_memory": "<measured>",
     "total_internal_gradient_memory": "<measured>",
-    "total_macs": 49,
-    "total_macs_backward": 28,
-    "total_macs_forward": 20,
+    "total_macs": null,
+    "total_macs_backward": null,
+    "total_macs_forward": 0,
     "total_output_activation_memory": "<measured>",
     "total_output_gradient_memory": "<measured>",
     "total_param_memory": "<measured>",
@@ -13768,6 +13965,7 @@
       "label": null
      }
     ],
+    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {
      "0": {
       "\"then\"": [
@@ -13802,6 +14000,7 @@
      "<torchlens.intervention.types.EdgeUseRecord>",
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "episode_step": null,
     "equivalence_class": "add_82724eb7c2eda8ba",
     "equivalent_ops": {
      "__set__": [
@@ -13870,6 +14069,7 @@
     "in_conditionals": [],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [
      {
       "__tensor__": true,
@@ -13962,9 +14162,9 @@
      "add_1_3",
      "add_1_3_raw"
     ],
-    "macs_backward": 2,
-    "macs_forward": 2,
-    "macs_total": 4,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "max_distance_from_input": 1,
     "max_distance_to_output": 2,
     "min_distance_from_input": 1,
@@ -14081,6 +14281,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -14159,6 +14360,7 @@
       "label": null
      }
     ],
+    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -14184,6 +14386,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "episode_step": null,
     "equivalence_class": "gt_cae937b97278e81d",
     "equivalent_ops": {
      "__set__": [
@@ -14256,6 +14459,7 @@
     ],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [
      {
       "__tensor__": true,
@@ -14332,9 +14536,9 @@
      "gt_1_5",
      "gt_1_5_raw"
     ],
-    "macs_backward": 0,
+    "macs_backward": null,
     "macs_forward": 0,
-    "macs_total": 1,
+    "macs_total": null,
     "max_distance_from_input": 2,
     "max_distance_to_output": null,
     "min_distance_from_input": 2,
@@ -14440,6 +14644,7 @@
      0
     ],
     "terminal_conditional_id": 0,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -14512,6 +14717,7 @@
      "rand_1_1"
     ],
     "code_context": [],
+    "compute_record": null,
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -14537,6 +14743,7 @@
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [],
+    "episode_step": null,
     "equivalence_class": "input_2_2_torch.float32",
     "equivalent_ops": {
      "__set__": [
@@ -14590,6 +14797,7 @@
     "in_conditionals": [],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [],
     "input_ancestors": {
      "__set__": [
@@ -14655,9 +14863,9 @@
      "input_1:1",
      "input_1_raw"
     ],
-    "macs_backward": 0,
-    "macs_forward": 0,
-    "macs_total": 0,
+    "macs_backward": null,
+    "macs_forward": null,
+    "macs_total": null,
     "max_distance_from_input": 0,
     "max_distance_to_output": 3,
     "min_distance_from_input": 0,
@@ -14765,6 +14973,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -14809,7 +15018,7 @@
     "arg_names": [],
     "args_summary": "Tensor(2x2, float32)",
     "args_template": null,
-    "arithmetic_intensity": "0.5",
+    "arithmetic_intensity": null,
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -14832,6 +15041,7 @@
     "children": [],
     "co_parents": [],
     "code_context": [],
+    "compute_record": null,
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -14855,6 +15065,7 @@
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [],
+    "episode_step": null,
     "equivalence_class": "output_1_2_2_torch.float32",
     "equivalent_ops": {
      "__set__": [
@@ -14862,9 +15073,9 @@
      ]
     },
     "facets": "<torchlens.semantic.facets.FacetView>",
-    "flops_backward": 24,
-    "flops_forward": 16,
-    "flops_total": 40,
+    "flops_backward": null,
+    "flops_forward": null,
+    "flops_total": 0,
     "func": null,
     "func_autocast_state": {
      "\"__execution__\"": {
@@ -14923,6 +15134,7 @@
     "in_conditionals": [],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [
      {
       "__tensor__": true,
@@ -15007,9 +15219,9 @@
      "output_1:1",
      "output_1_raw"
     ],
-    "macs_backward": 12,
-    "macs_forward": 8,
-    "macs_total": 20,
+    "macs_backward": null,
+    "macs_forward": null,
+    "macs_total": null,
     "max_distance_from_input": 3,
     "max_distance_to_output": 0,
     "min_distance_from_input": 3,
@@ -15133,6 +15345,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -15223,6 +15436,7 @@
       "label": null
      }
     ],
+    "compute_record": null,
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -15246,6 +15460,7 @@
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [],
+    "episode_step": null,
     "equivalence_class": "rand_0b411e5e9e470b38",
     "equivalent_ops": {
      "__set__": [
@@ -15317,6 +15532,7 @@
     "in_conditionals": [],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [],
     "input_ancestors": {
      "__set__": []
@@ -15383,7 +15599,7 @@
     ],
     "macs_backward": null,
     "macs_forward": null,
-    "macs_total": 0,
+    "macs_total": null,
     "max_distance_from_input": null,
     "max_distance_to_output": 3,
     "min_distance_from_input": null,
@@ -15484,6 +15700,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -15569,6 +15786,7 @@
       "label": null
      }
     ],
+    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 1,
     "conditional_branch_stack": [
@@ -15599,6 +15817,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "episode_step": null,
     "equivalence_class": "sigmoid_c9333d80c9fa57d5",
     "equivalent_ops": {
      "__set__": [
@@ -15669,6 +15888,7 @@
     ],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [
      {
       "__tensor__": true,
@@ -15752,9 +15972,9 @@
      "sigmoid_1_6",
      "sigmoid_1_6_raw"
     ],
-    "macs_backward": 12,
-    "macs_forward": 8,
-    "macs_total": 20,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "max_distance_from_input": 2,
     "max_distance_to_output": 1,
     "min_distance_from_input": 2,
@@ -15867,6 +16087,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -15950,6 +16171,7 @@
       "label": null
      }
     ],
+    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -15975,6 +16197,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "episode_step": null,
     "equivalence_class": "sum_c9333d80c9fa57d5",
     "equivalent_ops": {
      "__set__": [
@@ -16043,6 +16266,7 @@
     "in_conditionals": [],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [
      {
       "__tensor__": true,
@@ -16122,9 +16346,9 @@
      "sum_1_4",
      "sum_1_4_raw"
     ],
-    "macs_backward": 2,
-    "macs_forward": 2,
-    "macs_total": 4,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "max_distance_from_input": 1,
     "max_distance_to_output": null,
     "min_distance_from_input": 1,
@@ -16227,6 +16451,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -16525,7 +16750,27 @@
     }
    },
    "activation_transform": null,
-   "annotations": {},
+   "annotations": {
+    "\"capture_advisories\"": [
+     {
+      "\"count\"": 1,
+      "\"first_location\"": "<repo>/tests/capture_oracle/_models.py:131",
+      "\"kind\"": "scalar_escape",
+      "\"message\"": "tensor-to-Python scalar escape(s) observed during capture; the dependence is not captured"
+     }
+    ],
+    "\"health_facts\"": {
+     "\"alias_nonfinite_labels\"": [],
+     "\"basis\"": "saved_payloads",
+     "\"capture_revision\"": "fc1-224a8b4f247cd852",
+     "\"checked\"": 7,
+     "\"nonfinite_labels\"": [],
+     "\"schema_version\"": 1,
+     "\"unchecked\"": 0,
+     "\"unexamined\"": 0,
+     "\"unmapped\"": 0
+    }
+   },
    "append_history": [],
    "archived_activations": {},
    "backend": "torch",
@@ -16574,6 +16819,7 @@
      "\"owner_thread_id\"": "<measured>"
     }
    ],
+   "capture_kind": "plain",
    "capture_mode": "exhaustive",
    "capture_owner_thread_id": "<measured>",
    "capture_owner_thread_qualified": true,
@@ -16600,6 +16846,12 @@
    "completeness_witness_mode": "off",
    "completeness_witness_unaccounted_count": 0,
    "completeness_witness_verified": null,
+   "compute_coverage": {
+    "\"known\"": 4,
+    "\"not_applicable\"": 2,
+    "\"unknown\"": 1,
+    "\"zero_by_rule\"": 0
+   },
    "compute_layers": "<torchlens.data_classes.layer.LayerAccessor>",
    "compute_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
    "conditional_arm_entry_edges": {
@@ -16631,6 +16883,8 @@
    "distributed_scope": null,
    "edges": "<raises SelectionError>",
    "emit_nvtx": false,
+   "episode": null,
+   "episode_coupling": null,
    "escape_detector_backward_coverage": "not_armed",
    "escape_detector_callback_ns": 0,
    "escape_detector_event_count": 0,
@@ -16639,6 +16893,7 @@
    "escape_diagnostics": [],
    "event_stream": "<torchlens.ir.capture_events.CaptureEvents>",
    "facet_registry_snapshot": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
+   "factcore": "<torchlens.report._factcore.FactCore>",
    "flops_by_op_type": {
     "\"add\"": {
      "\"backward\"": 4,
@@ -16656,9 +16911,9 @@
      "\"forward\"": 0
     },
     "\"output\"": {
-     "\"backward\"": 24,
+     "\"backward\"": 0,
      "\"count\"": 1,
-     "\"forward\"": 16
+     "\"forward\"": 0
     },
     "\"rand\"": {
      "\"backward\"": 0,
@@ -16714,12 +16969,14 @@
    "has_frozen_params": false,
    "has_gradients": false,
    "has_trainable_params": false,
+   "health_facts": "<torchlens.report._health.HealthFacts>",
    "inference_only": false,
    "init_docstring": "Initialize side-effect counters.",
    "init_signature": "(self) -> 'None'",
    "init_source_file": "<repo>/tests/capture_oracle/_models.py",
    "init_source_line": 105,
    "init_source_location": "<repo>/tests/capture_oracle/_models.py:105",
+   "injected_ops": [],
    "input_annotations": {},
    "input_layers": [
     "input_1"
@@ -17074,43 +17331,45 @@
    "layers": "<torchlens.data_classes.layer.LayerAccessor>",
    "layers_to_save": "all",
    "layers_with_params": {},
+   "logged_values": {},
    "macs_by_op_type": {
     "\"add\"": {
-     "\"backward\"": 2,
+     "\"backward\"": null,
      "\"count\"": 1,
-     "\"forward\"": 2
+     "\"forward\"": 0
     },
     "\"gt\"": {
-     "\"backward\"": 0,
+     "\"backward\"": null,
      "\"count\"": 1,
      "\"forward\"": 0
     },
     "\"input\"": {
-     "\"backward\"": 0,
+     "\"backward\"": null,
      "\"count\"": 1,
      "\"forward\"": 0
     },
     "\"output\"": {
-     "\"backward\"": 12,
+     "\"backward\"": null,
      "\"count\"": 1,
-     "\"forward\"": 8
+     "\"forward\"": 0
     },
     "\"rand\"": {
-     "\"backward\"": 0,
+     "\"backward\"": null,
      "\"count\"": 1,
      "\"forward\"": 0
     },
     "\"sigmoid\"": {
-     "\"backward\"": 12,
+     "\"backward\"": null,
      "\"count\"": 1,
-     "\"forward\"": 8
+     "\"forward\"": 0
     },
     "\"sum\"": {
-     "\"backward\"": 2,
+     "\"backward\"": null,
      "\"count\"": 1,
-     "\"forward\"": 2
+     "\"forward\"": 0
     }
    },
+   "macs_unknown_split_ops": [],
    "manual_tensor_connections": [],
    "mark_layer_depths": true,
    "max_in_degree": 2,
@@ -17121,6 +17380,36 @@
    "model_cls": null,
    "model_label": "ConditionalModel",
    "model_object_id": "<measured>",
+   "model_ops": [
+    {
+     "__ref__": "Op",
+     "label": "input_1:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "rand_1_1:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "add_1_2:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "sum_1_3:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "gt_1_4:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "sigmoid_1_5:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "output_1:1"
+    }
+   ],
    "model_profile": "<torchlens.data_classes._trace_profile.ModelProfile>",
    "module_calls": "<torchlens.data_classes._trace_accessors.TraceModuleCallAccessor>",
    "module_collapse_order": [
@@ -17134,6 +17423,7 @@
    "modules": "<torchlens.data_classes.module.ModuleAccessor>",
    "nonfinite_coverage": "<torchlens.data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
+   "nonfinite_verdict": "checked_and_clean",
    "num_backward_edges": null,
    "num_backward_passes": 0,
    "num_buffer_edges": 0,
@@ -17171,8 +17461,11 @@
    "num_param_tensors_frozen": 0,
    "num_param_tensors_trainable": 0,
    "num_params": 0,
+   "num_params_by_path": 0,
+   "num_params_executed": 0,
    "num_params_frozen": 0,
    "num_params_trainable": 0,
+   "num_params_unexecuted": 0,
    "num_saved_grad_fn_calls": 0,
    "num_saved_grad_fns": 0,
    "num_saved_grad_layers": 0,
@@ -17271,6 +17564,7 @@
    },
    "replay_frontier": {},
    "rescue_rerun": null,
+   "root_entry_point": "module_call:capture_oracle._models.ConditionalModel.forward",
    "root_module": {
     "__ref__": "Module",
     "label": "self"
@@ -17302,27 +17596,34 @@
    "saved_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
    "setup_duration": "<measured>",
    "sibling_events": [],
+   "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [],
+   "structure_evidence": null,
    "structure_only": false,
-   "tlspec_version": 8,
+   "tied_param_groups": [],
+   "tlspec_version": 9,
    "total_activation_memory": "<measured>",
    "total_autograd_memory": "<measured>",
    "total_backward_duration": "<measured>",
    "total_backward_memory": "<measured>",
-   "total_flops": 98,
-   "total_flops_backward": 57,
-   "total_flops_forward": 41,
+   "total_flops": 58,
+   "total_flops_backward": 33,
+   "total_flops_forward": 25,
    "total_gradient_memory": "<measured>",
-   "total_macs": 49,
-   "total_macs_backward": 28,
-   "total_macs_forward": 20,
+   "total_macs": null,
+   "total_macs_backward": null,
+   "total_macs_forward": 0,
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
    "trace_label": "conditional_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
+   "unexecuted_param_names": [],
+   "unknown_flop_ops": [
+    "<torchlens.report._compute_truth.UnknownOpGroup>"
+   ],
    "validation_replay_status": "<torchlens.validation.status.ValidationReplayStatus>",
    "verbose": false
   }
@@ -17479,9 +17780,9 @@
      "add_1_3",
      "add_1_3_raw"
     ],
-    "macs_backward": 2,
-    "macs_forward": 2,
-    "macs_total": 4,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -17589,9 +17890,9 @@
     "total_flops_total": 8,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 2,
-    "total_macs_forward": 2,
-    "total_macs_total": 4,
+    "total_macs_backward": null,
+    "total_macs_forward": 0,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -17739,9 +18040,9 @@
      "gt_1_5",
      "gt_1_5_raw"
     ],
-    "macs_backward": 0,
+    "macs_backward": null,
     "macs_forward": 0,
-    "macs_total": 1,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -17832,9 +18133,9 @@
     "total_flops_total": 2,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 0,
+    "total_macs_backward": null,
     "total_macs_forward": 0,
-    "total_macs_total": 1,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -17991,9 +18292,9 @@
      "input_1:1",
      "input_1_raw"
     ],
-    "macs_backward": 0,
-    "macs_forward": 0,
-    "macs_total": 0,
+    "macs_backward": null,
+    "macs_forward": null,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -18083,9 +18384,9 @@
     "total_flops_total": 0,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 0,
-    "total_macs_forward": 0,
-    "total_macs_total": 0,
+    "total_macs_backward": null,
+    "total_macs_forward": null,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -18156,9 +18457,9 @@
       "\"output_1:1\""
      ]
     },
-    "flops_backward": 24,
-    "flops_forward": 16,
-    "flops_total": 40,
+    "flops_backward": null,
+    "flops_forward": null,
+    "flops_total": 0,
     "func": "<callable identity>",
     "func_config": {},
     "func_duration": "<measured>",
@@ -18225,9 +18526,9 @@
      "output_1:1",
      "output_1_raw"
     ],
-    "macs_backward": 12,
-    "macs_forward": 8,
-    "macs_total": 20,
+    "macs_backward": null,
+    "macs_forward": null,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -18333,14 +18634,14 @@
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
-    "total_flops_backward": 24,
-    "total_flops_forward": 16,
-    "total_flops_total": 40,
+    "total_flops_backward": 0,
+    "total_flops_forward": 0,
+    "total_flops_total": 0,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 12,
-    "total_macs_forward": 8,
-    "total_macs_total": 20,
+    "total_macs_backward": null,
+    "total_macs_forward": null,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -18509,7 +18810,7 @@
     ],
     "macs_backward": null,
     "macs_forward": null,
-    "macs_total": 0,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -18590,9 +18891,9 @@
     "total_flops_total": 0,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 0,
-    "total_macs_forward": 0,
-    "total_macs_total": 0,
+    "total_macs_backward": null,
+    "total_macs_forward": null,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -18756,9 +19057,9 @@
      "sigmoid_1_6",
      "sigmoid_1_6_raw"
     ],
-    "macs_backward": 12,
-    "macs_forward": 8,
-    "macs_total": 20,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -18858,9 +19159,9 @@
     "total_flops_total": 40,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 12,
-    "total_macs_forward": 8,
-    "total_macs_total": 20,
+    "total_macs_backward": null,
+    "total_macs_forward": 0,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -19019,9 +19320,9 @@
      "sum_1_4",
      "sum_1_4_raw"
     ],
-    "macs_backward": 2,
-    "macs_forward": 2,
-    "macs_total": 4,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -19114,9 +19415,9 @@
     "total_flops_total": 8,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 2,
-    "total_macs_forward": 2,
-    "total_macs_total": 4,
+    "total_macs_backward": null,
+    "total_macs_forward": 0,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -19464,16 +19765,16 @@
     "recursive_params": "<torchlens.data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
-    "total_flops": 98,
-    "total_flops_backward": 57,
-    "total_flops_forward": 41,
+    "total_flops": 58,
+    "total_flops_backward": 33,
+    "total_flops_forward": 25,
     "total_forward_duration": "<measured>",
     "total_func_calls_duration": "<measured>",
     "total_internal_activation_memory": "<measured>",
     "total_internal_gradient_memory": "<measured>",
-    "total_macs": 49,
-    "total_macs_backward": 28,
-    "total_macs_forward": 20,
+    "total_macs": null,
+    "total_macs_backward": null,
+    "total_macs_forward": 0,
     "total_output_activation_memory": "<measured>",
     "total_output_gradient_memory": "<measured>",
     "total_param_memory": "<measured>",
@@ -19539,6 +19840,7 @@
       "label": null
      }
     ],
+    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {
      "0": {
       "\"then\"": [
@@ -19573,6 +19875,7 @@
      "<torchlens.intervention.types.EdgeUseRecord>",
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "episode_step": null,
     "equivalence_class": "add_82724eb7c2eda8ba",
     "equivalent_ops": {
      "__set__": [
@@ -19641,6 +19944,7 @@
     "in_conditionals": [],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [
      {
       "__tensor__": true,
@@ -19733,9 +20037,9 @@
      "add_1_3",
      "add_1_3_raw"
     ],
-    "macs_backward": 2,
-    "macs_forward": 2,
-    "macs_total": 4,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "max_distance_from_input": 1,
     "max_distance_to_output": 2,
     "min_distance_from_input": 1,
@@ -19852,6 +20156,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -19930,6 +20235,7 @@
       "label": null
      }
     ],
+    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -19955,6 +20261,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "episode_step": null,
     "equivalence_class": "gt_cae937b97278e81d",
     "equivalent_ops": {
      "__set__": [
@@ -20027,6 +20334,7 @@
     ],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [
      {
       "__tensor__": true,
@@ -20103,9 +20411,9 @@
      "gt_1_5",
      "gt_1_5_raw"
     ],
-    "macs_backward": 0,
+    "macs_backward": null,
     "macs_forward": 0,
-    "macs_total": 1,
+    "macs_total": null,
     "max_distance_from_input": 2,
     "max_distance_to_output": null,
     "min_distance_from_input": 2,
@@ -20211,6 +20519,7 @@
      0
     ],
     "terminal_conditional_id": 0,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -20283,6 +20592,7 @@
      "rand_1_1"
     ],
     "code_context": [],
+    "compute_record": null,
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -20308,6 +20618,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [],
+    "episode_step": null,
     "equivalence_class": "input_2_2_torch.float32",
     "equivalent_ops": {
      "__set__": [
@@ -20361,6 +20672,7 @@
     "in_conditionals": [],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [],
     "input_ancestors": {
      "__set__": [
@@ -20426,9 +20738,9 @@
      "input_1:1",
      "input_1_raw"
     ],
-    "macs_backward": 0,
-    "macs_forward": 0,
-    "macs_total": 0,
+    "macs_backward": null,
+    "macs_forward": null,
+    "macs_total": null,
     "max_distance_from_input": 0,
     "max_distance_to_output": 3,
     "min_distance_from_input": 0,
@@ -20536,6 +20848,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -20580,7 +20893,7 @@
     "arg_names": [],
     "args_summary": "Tensor(2x2, float32)",
     "args_template": null,
-    "arithmetic_intensity": "0.5",
+    "arithmetic_intensity": null,
     "atomic_module": null,
     "atomic_module_address": null,
     "atomic_module_call": null,
@@ -20603,6 +20916,7 @@
     "children": [],
     "co_parents": [],
     "code_context": [],
+    "compute_record": null,
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -20626,6 +20940,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [],
+    "episode_step": null,
     "equivalence_class": "output_1_2_2_torch.float32",
     "equivalent_ops": {
      "__set__": [
@@ -20633,9 +20948,9 @@
      ]
     },
     "facets": "<torchlens.semantic.facets.FacetView>",
-    "flops_backward": 24,
-    "flops_forward": 16,
-    "flops_total": 40,
+    "flops_backward": null,
+    "flops_forward": null,
+    "flops_total": 0,
     "func": "<callable identity>",
     "func_autocast_state": {
      "\"__execution__\"": {
@@ -20694,6 +21009,7 @@
     "in_conditionals": [],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [
      {
       "__tensor__": true,
@@ -20778,9 +21094,9 @@
      "output_1:1",
      "output_1_raw"
     ],
-    "macs_backward": 12,
-    "macs_forward": 8,
-    "macs_total": 20,
+    "macs_backward": null,
+    "macs_forward": null,
+    "macs_total": null,
     "max_distance_from_input": 3,
     "max_distance_to_output": 0,
     "min_distance_from_input": 3,
@@ -20904,6 +21220,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -20994,6 +21311,7 @@
       "label": null
      }
     ],
+    "compute_record": null,
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -21017,6 +21335,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [],
+    "episode_step": null,
     "equivalence_class": "rand_0b411e5e9e470b38",
     "equivalent_ops": {
      "__set__": [
@@ -21088,6 +21407,7 @@
     "in_conditionals": [],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [],
     "input_ancestors": {
      "__set__": []
@@ -21154,7 +21474,7 @@
     ],
     "macs_backward": null,
     "macs_forward": null,
-    "macs_total": 0,
+    "macs_total": null,
     "max_distance_from_input": null,
     "max_distance_to_output": 3,
     "min_distance_from_input": null,
@@ -21255,6 +21575,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -21340,6 +21661,7 @@
       "label": null
      }
     ],
+    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 1,
     "conditional_branch_stack": [
@@ -21370,6 +21692,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "episode_step": null,
     "equivalence_class": "sigmoid_c9333d80c9fa57d5",
     "equivalent_ops": {
      "__set__": [
@@ -21440,6 +21763,7 @@
     ],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [
      {
       "__tensor__": true,
@@ -21523,9 +21847,9 @@
      "sigmoid_1_6",
      "sigmoid_1_6_raw"
     ],
-    "macs_backward": 12,
-    "macs_forward": 8,
-    "macs_total": 20,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "max_distance_from_input": 2,
     "max_distance_to_output": 1,
     "min_distance_from_input": 2,
@@ -21638,6 +21962,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -21721,6 +22046,7 @@
       "label": null
      }
     ],
+    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -21746,6 +22072,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "episode_step": null,
     "equivalence_class": "sum_c9333d80c9fa57d5",
     "equivalent_ops": {
      "__set__": [
@@ -21814,6 +22141,7 @@
     "in_conditionals": [],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": [
      {
       "__tensor__": true,
@@ -21893,9 +22221,9 @@
      "sum_1_4",
      "sum_1_4_raw"
     ],
-    "macs_backward": 2,
-    "macs_forward": 2,
-    "macs_total": 4,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "max_distance_from_input": 1,
     "max_distance_to_output": null,
     "min_distance_from_input": 1,
@@ -21998,6 +22326,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -22296,7 +22625,27 @@
     }
    },
    "activation_transform": null,
-   "annotations": {},
+   "annotations": {
+    "\"capture_advisories\"": [
+     {
+      "\"count\"": 1,
+      "\"first_location\"": "<repo>/tests/capture_oracle/_models.py:131",
+      "\"kind\"": "scalar_escape",
+      "\"message\"": "tensor-to-Python scalar escape(s) observed during capture; the dependence is not captured"
+     }
+    ],
+    "\"health_facts\"": {
+     "\"alias_nonfinite_labels\"": [],
+     "\"basis\"": "saved_payloads",
+     "\"capture_revision\"": "fc1-224a8b4f247cd852",
+     "\"checked\"": 7,
+     "\"nonfinite_labels\"": [],
+     "\"schema_version\"": 1,
+     "\"unchecked\"": 0,
+     "\"unexamined\"": 0,
+     "\"unmapped\"": 0
+    }
+   },
    "append_history": [],
    "archived_activations": {},
    "backend": "torch",
@@ -22345,6 +22694,7 @@
      "\"owner_thread_id\"": "<measured>"
     }
    ],
+   "capture_kind": "plain",
    "capture_mode": "exhaustive",
    "capture_owner_thread_id": "<measured>",
    "capture_owner_thread_qualified": true,
@@ -22371,6 +22721,12 @@
    "completeness_witness_mode": "off",
    "completeness_witness_unaccounted_count": 0,
    "completeness_witness_verified": null,
+   "compute_coverage": {
+    "\"known\"": 4,
+    "\"not_applicable\"": 2,
+    "\"unknown\"": 1,
+    "\"zero_by_rule\"": 0
+   },
    "compute_layers": "<torchlens.data_classes.layer.LayerAccessor>",
    "compute_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
    "conditional_arm_entry_edges": {
@@ -22402,6 +22758,8 @@
    "distributed_scope": null,
    "edges": "<raises SelectionError>",
    "emit_nvtx": false,
+   "episode": null,
+   "episode_coupling": null,
    "escape_detector_backward_coverage": "not_armed",
    "escape_detector_callback_ns": 0,
    "escape_detector_event_count": 0,
@@ -22410,6 +22768,7 @@
    "escape_diagnostics": [],
    "event_stream": "<torchlens.ir.capture_events.CaptureEvents>",
    "facet_registry_snapshot": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
+   "factcore": "<torchlens.report._factcore.FactCore>",
    "flops_by_op_type": {
     "\"add\"": {
      "\"backward\"": 4,
@@ -22427,9 +22786,9 @@
      "\"forward\"": 0
     },
     "\"output\"": {
-     "\"backward\"": 24,
+     "\"backward\"": 0,
      "\"count\"": 1,
-     "\"forward\"": 16
+     "\"forward\"": 0
     },
     "\"rand\"": {
      "\"backward\"": 0,
@@ -22485,12 +22844,14 @@
    "has_frozen_params": false,
    "has_gradients": false,
    "has_trainable_params": false,
+   "health_facts": "<torchlens.report._health.HealthFacts>",
    "inference_only": false,
    "init_docstring": "Initialize side-effect counters.",
    "init_signature": "(self) -> 'None'",
    "init_source_file": "<repo>/tests/capture_oracle/_models.py",
    "init_source_line": 105,
    "init_source_location": "<repo>/tests/capture_oracle/_models.py:105",
+   "injected_ops": [],
    "input_annotations": {},
    "input_layers": [
     "input_1"
@@ -22845,43 +23206,45 @@
    "layers": "<torchlens.data_classes.layer.LayerAccessor>",
    "layers_to_save": "all",
    "layers_with_params": {},
+   "logged_values": {},
    "macs_by_op_type": {
     "\"add\"": {
-     "\"backward\"": 2,
+     "\"backward\"": null,
      "\"count\"": 1,
-     "\"forward\"": 2
+     "\"forward\"": 0
     },
     "\"gt\"": {
-     "\"backward\"": 0,
+     "\"backward\"": null,
      "\"count\"": 1,
      "\"forward\"": 0
     },
     "\"input\"": {
-     "\"backward\"": 0,
+     "\"backward\"": null,
      "\"count\"": 1,
      "\"forward\"": 0
     },
     "\"output\"": {
-     "\"backward\"": 12,
+     "\"backward\"": null,
      "\"count\"": 1,
-     "\"forward\"": 8
+     "\"forward\"": 0
     },
     "\"rand\"": {
-     "\"backward\"": 0,
+     "\"backward\"": null,
      "\"count\"": 1,
      "\"forward\"": 0
     },
     "\"sigmoid\"": {
-     "\"backward\"": 12,
+     "\"backward\"": null,
      "\"count\"": 1,
-     "\"forward\"": 8
+     "\"forward\"": 0
     },
     "\"sum\"": {
-     "\"backward\"": 2,
+     "\"backward\"": null,
      "\"count\"": 1,
-     "\"forward\"": 2
+     "\"forward\"": 0
     }
    },
+   "macs_unknown_split_ops": [],
    "manual_tensor_connections": [],
    "mark_layer_depths": true,
    "max_in_degree": 2,
@@ -22892,6 +23255,36 @@
    "model_cls": "<callable ConditionalModel>",
    "model_label": "ConditionalModel",
    "model_object_id": "<measured>",
+   "model_ops": [
+    {
+     "__ref__": "Op",
+     "label": "input_1:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "rand_1_1:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "add_1_2:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "sum_1_3:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "gt_1_4:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "sigmoid_1_5:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "output_1:1"
+    }
+   ],
    "model_profile": "<torchlens.data_classes._trace_profile.ModelProfile>",
    "module_calls": "<torchlens.data_classes._trace_accessors.TraceModuleCallAccessor>",
    "module_collapse_order": [
@@ -22905,6 +23298,7 @@
    "modules": "<torchlens.data_classes.module.ModuleAccessor>",
    "nonfinite_coverage": "<torchlens.data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
+   "nonfinite_verdict": "checked_and_clean",
    "num_backward_edges": null,
    "num_backward_passes": 0,
    "num_buffer_edges": 0,
@@ -22942,8 +23336,11 @@
    "num_param_tensors_frozen": 0,
    "num_param_tensors_trainable": 0,
    "num_params": 0,
+   "num_params_by_path": 0,
+   "num_params_executed": 0,
    "num_params_frozen": 0,
    "num_params_trainable": 0,
+   "num_params_unexecuted": 0,
    "num_saved_grad_fn_calls": 0,
    "num_saved_grad_fns": 0,
    "num_saved_grad_layers": 0,
@@ -23045,6 +23442,7 @@
    },
    "replay_frontier": {},
    "rescue_rerun": null,
+   "root_entry_point": "module_call:capture_oracle._models.ConditionalModel.forward",
    "root_module": {
     "__ref__": "Module",
     "label": "self"
@@ -23079,6 +23477,7 @@
    "saved_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
    "setup_duration": "<measured>",
    "sibling_events": [],
+   "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [
     {
@@ -23089,25 +23488,31 @@
      "\"timestamp\"": "<measured>"
     }
    ],
+   "structure_evidence": null,
    "structure_only": false,
-   "tlspec_version": 8,
+   "tied_param_groups": [],
+   "tlspec_version": 9,
    "total_activation_memory": "<measured>",
    "total_autograd_memory": "<measured>",
    "total_backward_duration": "<measured>",
    "total_backward_memory": "<measured>",
-   "total_flops": 98,
-   "total_flops_backward": 57,
-   "total_flops_forward": 41,
+   "total_flops": 58,
+   "total_flops_backward": 33,
+   "total_flops_forward": 25,
    "total_gradient_memory": "<measured>",
-   "total_macs": 49,
-   "total_macs_backward": 28,
-   "total_macs_forward": 20,
+   "total_macs": null,
+   "total_macs_backward": null,
+   "total_macs_forward": 0,
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
    "trace_label": "conditional_N_fork_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
+   "unexecuted_param_names": [],
+   "unknown_flop_ops": [
+    "<torchlens.report._compute_truth.UnknownOpGroup>"
+   ],
    "validation_replay_status": "<torchlens.validation.status.ValidationReplayStatus>",
    "verbose": false
   }
@@ -23264,9 +23669,9 @@
      "add_1_3",
      "add_1_3_raw"
     ],
-    "macs_backward": 2,
-    "macs_forward": 2,
-    "macs_total": 4,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -23374,9 +23779,9 @@
     "total_flops_total": 8,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 2,
-    "total_macs_forward": 2,
-    "total_macs_total": 4,
+    "total_macs_backward": null,
+    "total_macs_forward": 0,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -23524,9 +23929,9 @@
      "gt_1_5",
      "gt_1_5_raw"
     ],
-    "macs_backward": 0,
+    "macs_backward": null,
     "macs_forward": 0,
-    "macs_total": 1,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -23617,9 +24022,9 @@
     "total_flops_total": 2,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 0,
+    "total_macs_backward": null,
     "total_macs_forward": 0,
-    "total_macs_total": 1,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -23776,9 +24181,9 @@
      "input_1:1",
      "input_1_raw"
     ],
-    "macs_backward": 0,
-    "macs_forward": 0,
-    "macs_total": 0,
+    "macs_backward": null,
+    "macs_forward": null,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -23868,9 +24273,9 @@
     "total_flops_total": 0,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 0,
-    "total_macs_forward": 0,
-    "total_macs_total": 0,
+    "total_macs_backward": null,
+    "total_macs_forward": null,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -23941,9 +24346,9 @@
       "\"output_1:1\""
      ]
     },
-    "flops_backward": 24,
-    "flops_forward": 16,
-    "flops_total": 40,
+    "flops_backward": null,
+    "flops_forward": null,
+    "flops_total": 0,
     "func": null,
     "func_config": {},
     "func_duration": "<measured>",
@@ -24010,9 +24415,9 @@
      "output_1:1",
      "output_1_raw"
     ],
-    "macs_backward": 12,
-    "macs_forward": 8,
-    "macs_total": 20,
+    "macs_backward": null,
+    "macs_forward": null,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -24107,14 +24512,14 @@
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
-    "total_flops_backward": 24,
-    "total_flops_forward": 16,
-    "total_flops_total": 40,
+    "total_flops_backward": 0,
+    "total_flops_forward": 0,
+    "total_flops_total": 0,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 12,
-    "total_macs_forward": 8,
-    "total_macs_total": 20,
+    "total_macs_backward": null,
+    "total_macs_forward": null,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -24283,7 +24688,7 @@
     ],
     "macs_backward": null,
     "macs_forward": null,
-    "macs_total": 0,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -24364,9 +24769,9 @@
     "total_flops_total": 0,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 0,
-    "total_macs_forward": 0,
-    "total_macs_total": 0,
+    "total_macs_backward": null,
+    "total_macs_forward": null,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -24530,9 +24935,9 @@
      "sigmoid_1_6",
      "sigmoid_1_6_raw"
     ],
-    "macs_backward": 12,
-    "macs_forward": 8,
-    "macs_total": 20,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -24632,9 +25037,9 @@
     "total_flops_total": 40,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 12,
-    "total_macs_forward": 8,
-    "total_macs_total": 20,
+    "total_macs_backward": null,
+    "total_macs_forward": 0,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -24793,9 +25198,9 @@
      "sum_1_4",
      "sum_1_4_raw"
     ],
-    "macs_backward": 2,
-    "macs_forward": 2,
-    "macs_total": 4,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "module": null,
     "module_call_depth": 0,
     "modules": [],
@@ -24888,9 +25293,9 @@
     "total_flops_total": 8,
     "total_func_duration": "<measured>",
     "total_gradient_memory": "<measured>",
-    "total_macs_backward": 2,
-    "total_macs_forward": 2,
-    "total_macs_total": 4,
+    "total_macs_backward": null,
+    "total_macs_forward": 0,
+    "total_macs_total": null,
     "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
@@ -25238,16 +25643,16 @@
     "recursive_params": "<torchlens.data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
-    "total_flops": 98,
-    "total_flops_backward": 57,
-    "total_flops_forward": 41,
+    "total_flops": 58,
+    "total_flops_backward": 33,
+    "total_flops_forward": 25,
     "total_forward_duration": "<measured>",
     "total_func_calls_duration": "<measured>",
     "total_internal_activation_memory": "<measured>",
     "total_internal_gradient_memory": "<measured>",
-    "total_macs": 49,
-    "total_macs_backward": 28,
-    "total_macs_forward": 20,
+    "total_macs": null,
+    "total_macs_backward": null,
+    "total_macs_forward": 0,
     "total_output_activation_memory": "<measured>",
     "total_output_gradient_memory": "<measured>",
     "total_param_memory": "<measured>",
@@ -25313,6 +25718,7 @@
       "label": null
      }
     ],
+    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {
      "0": {
       "\"then\"": [
@@ -25347,6 +25753,7 @@
      "<torchlens.intervention.types.EdgeUseRecord>",
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "episode_step": null,
     "equivalence_class": "add_82724eb7c2eda8ba",
     "equivalent_ops": {
      "__set__": [
@@ -25415,6 +25822,7 @@
     "in_conditionals": [],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": "<raises AttributeError>",
     "input_ancestors": {
      "__set__": [
@@ -25480,9 +25888,9 @@
      "add_1_3",
      "add_1_3_raw"
     ],
-    "macs_backward": 2,
-    "macs_forward": 2,
-    "macs_total": 4,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "max_distance_from_input": 1,
     "max_distance_to_output": 2,
     "min_distance_from_input": 1,
@@ -25599,6 +26007,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -25677,6 +26086,7 @@
       "label": null
      }
     ],
+    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -25702,6 +26112,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "episode_step": null,
     "equivalence_class": "gt_cae937b97278e81d",
     "equivalent_ops": {
      "__set__": [
@@ -25774,6 +26185,7 @@
     ],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": "<raises AttributeError>",
     "input_ancestors": {
      "__set__": [
@@ -25835,9 +26247,9 @@
      "gt_1_5",
      "gt_1_5_raw"
     ],
-    "macs_backward": 0,
+    "macs_backward": null,
     "macs_forward": 0,
-    "macs_total": 1,
+    "macs_total": null,
     "max_distance_from_input": 2,
     "max_distance_to_output": null,
     "min_distance_from_input": 2,
@@ -25943,6 +26355,7 @@
      0
     ],
     "terminal_conditional_id": 0,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -26015,6 +26428,7 @@
      "rand_1_1"
     ],
     "code_context": [],
+    "compute_record": null,
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -26040,6 +26454,7 @@
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [],
+    "episode_step": null,
     "equivalence_class": "input_2_2_torch.float32",
     "equivalent_ops": {
      "__set__": [
@@ -26093,6 +26508,7 @@
     "in_conditionals": [],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": "<raises AttributeError>",
     "input_ancestors": {
      "__set__": [
@@ -26155,9 +26571,9 @@
      "input_1:1",
      "input_1_raw"
     ],
-    "macs_backward": 0,
-    "macs_forward": 0,
-    "macs_total": 0,
+    "macs_backward": null,
+    "macs_forward": null,
+    "macs_total": null,
     "max_distance_from_input": 0,
     "max_distance_to_output": 3,
     "min_distance_from_input": 0,
@@ -26265,6 +26681,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -26332,6 +26749,7 @@
     "children": [],
     "co_parents": [],
     "code_context": [],
+    "compute_record": null,
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -26355,6 +26773,7 @@
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [],
+    "episode_step": null,
     "equivalence_class": "output_1_2_2_torch.float32",
     "equivalent_ops": {
      "__set__": [
@@ -26362,9 +26781,9 @@
      ]
     },
     "facets": "<torchlens.semantic.facets.FacetView>",
-    "flops_backward": 24,
-    "flops_forward": 16,
-    "flops_total": 40,
+    "flops_backward": null,
+    "flops_forward": null,
+    "flops_total": 0,
     "func": null,
     "func_autocast_state": {
      "\"__execution__\"": {
@@ -26423,6 +26842,7 @@
     "in_conditionals": [],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": "<raises AttributeError>",
     "input_ancestors": {
      "__set__": [
@@ -26489,9 +26909,9 @@
      "output_1:1",
      "output_1_raw"
     ],
-    "macs_backward": 12,
-    "macs_forward": 8,
-    "macs_total": 20,
+    "macs_backward": null,
+    "macs_forward": null,
+    "macs_total": null,
     "max_distance_from_input": 3,
     "max_distance_to_output": 0,
     "min_distance_from_input": 3,
@@ -26604,6 +27024,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -26691,6 +27112,7 @@
       "label": null
      }
     ],
+    "compute_record": null,
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -26714,6 +27136,7 @@
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [],
+    "episode_step": null,
     "equivalence_class": "rand_0b411e5e9e470b38",
     "equivalent_ops": {
      "__set__": [
@@ -26785,6 +27208,7 @@
     "in_conditionals": [],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": "<raises AttributeError>",
     "input_ancestors": {
      "__set__": []
@@ -26848,7 +27272,7 @@
     ],
     "macs_backward": null,
     "macs_forward": null,
-    "macs_total": 0,
+    "macs_total": null,
     "max_distance_from_input": null,
     "max_distance_to_output": 3,
     "min_distance_from_input": null,
@@ -26949,6 +27373,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -27032,6 +27457,7 @@
       "label": null
      }
     ],
+    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 1,
     "conditional_branch_stack": [
@@ -27062,6 +27488,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "episode_step": null,
     "equivalence_class": "sigmoid_c9333d80c9fa57d5",
     "equivalent_ops": {
      "__set__": [
@@ -27132,6 +27559,7 @@
     ],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": "<raises AttributeError>",
     "input_ancestors": {
      "__set__": [
@@ -27197,9 +27625,9 @@
      "sigmoid_1_6",
      "sigmoid_1_6_raw"
     ],
-    "macs_backward": 12,
-    "macs_forward": 8,
-    "macs_total": 20,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "max_distance_from_input": 2,
     "max_distance_to_output": 1,
     "min_distance_from_input": 2,
@@ -27312,6 +27740,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -27395,6 +27824,7 @@
       "label": null
      }
     ],
+    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -27420,6 +27850,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "episode_step": null,
     "equivalence_class": "sum_c9333d80c9fa57d5",
     "equivalent_ops": {
      "__set__": [
@@ -27488,6 +27919,7 @@
     "in_conditionals": [],
     "in_multi_output": false,
     "in_submodule": false,
+    "injection_provenance": null,
     "input_activations": "<raises AttributeError>",
     "input_ancestors": {
      "__set__": [
@@ -27549,9 +27981,9 @@
      "sum_1_4",
      "sum_1_4_raw"
     ],
-    "macs_backward": 2,
-    "macs_forward": 2,
-    "macs_total": 4,
+    "macs_backward": null,
+    "macs_forward": 0,
+    "macs_total": null,
     "max_distance_from_input": 1,
     "max_distance_to_output": null,
     "min_distance_from_input": 1,
@@ -27654,6 +28086,7 @@
     },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
+    "tl_authored_root": null,
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -27952,7 +28385,27 @@
     }
    },
    "activation_transform": null,
-   "annotations": {},
+   "annotations": {
+    "\"capture_advisories\"": [
+     {
+      "\"count\"": 1,
+      "\"first_location\"": "_models.py:131",
+      "\"kind\"": "scalar_escape",
+      "\"message\"": "tensor-to-Python scalar escape(s) observed during capture; the dependence is not captured"
+     }
+    ],
+    "\"health_facts\"": {
+     "\"alias_nonfinite_labels\"": [],
+     "\"basis\"": "saved_payloads",
+     "\"capture_revision\"": "fc1-224a8b4f247cd852",
+     "\"checked\"": 7,
+     "\"nonfinite_labels\"": [],
+     "\"schema_version\"": 1,
+     "\"unchecked\"": 0,
+     "\"unexamined\"": 0,
+     "\"unmapped\"": 0
+    }
+   },
    "append_history": [],
    "archived_activations": {},
    "backend": "torch",
@@ -27995,6 +28448,7 @@
    "capture_duration": "<measured>",
    "capture_end_time": "<measured>",
    "capture_guard_passes": [],
+   "capture_kind": "plain",
    "capture_mode": "exhaustive",
    "capture_owner_thread_id": "<measured>",
    "capture_owner_thread_qualified": null,
@@ -28021,6 +28475,12 @@
    "completeness_witness_mode": null,
    "completeness_witness_unaccounted_count": null,
    "completeness_witness_verified": null,
+   "compute_coverage": {
+    "\"known\"": 4,
+    "\"not_applicable\"": 2,
+    "\"unknown\"": 1,
+    "\"zero_by_rule\"": 0
+   },
    "compute_layers": "<torchlens.data_classes.layer.LayerAccessor>",
    "compute_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
    "conditional_arm_entry_edges": {
@@ -28052,6 +28512,8 @@
    "distributed_scope": null,
    "edges": "<raises SelectionError>",
    "emit_nvtx": false,
+   "episode": null,
+   "episode_coupling": null,
    "escape_detector_backward_coverage": null,
    "escape_detector_callback_ns": null,
    "escape_detector_event_count": null,
@@ -28060,6 +28522,7 @@
    "escape_diagnostics": [],
    "event_stream": "<torchlens.ir.capture_events.CaptureEvents>",
    "facet_registry_snapshot": null,
+   "factcore": "<torchlens.report._factcore.FactCore>",
    "flops_by_op_type": {
     "\"add\"": {
      "\"backward\"": 4,
@@ -28077,9 +28540,9 @@
      "\"forward\"": 0
     },
     "\"output\"": {
-     "\"backward\"": 24,
+     "\"backward\"": 0,
      "\"count\"": 1,
-     "\"forward\"": 16
+     "\"forward\"": 0
     },
     "\"rand\"": {
      "\"backward\"": 0,
@@ -28135,12 +28598,14 @@
    "has_frozen_params": false,
    "has_gradients": false,
    "has_trainable_params": false,
+   "health_facts": "<torchlens.report._health.HealthFacts>",
    "inference_only": false,
    "init_docstring": "Initialize side-effect counters.",
    "init_signature": "(self) -> 'None'",
    "init_source_file": "_models.py",
    "init_source_line": 105,
    "init_source_location": "_models.py:105",
+   "injected_ops": [],
    "input_annotations": {},
    "input_layers": [
     "input_1"
@@ -28495,43 +28960,45 @@
    "layers": "<torchlens.data_classes.layer.LayerAccessor>",
    "layers_to_save": "all",
    "layers_with_params": {},
+   "logged_values": {},
    "macs_by_op_type": {
     "\"add\"": {
-     "\"backward\"": 2,
+     "\"backward\"": null,
      "\"count\"": 1,
-     "\"forward\"": 2
+     "\"forward\"": 0
     },
     "\"gt\"": {
-     "\"backward\"": 0,
+     "\"backward\"": null,
      "\"count\"": 1,
      "\"forward\"": 0
     },
     "\"input\"": {
-     "\"backward\"": 0,
+     "\"backward\"": null,
      "\"count\"": 1,
      "\"forward\"": 0
     },
     "\"output\"": {
-     "\"backward\"": 12,
+     "\"backward\"": null,
      "\"count\"": 1,
-     "\"forward\"": 8
+     "\"forward\"": 0
     },
     "\"rand\"": {
-     "\"backward\"": 0,
+     "\"backward\"": null,
      "\"count\"": 1,
      "\"forward\"": 0
     },
     "\"sigmoid\"": {
-     "\"backward\"": 12,
+     "\"backward\"": null,
      "\"count\"": 1,
-     "\"forward\"": 8
+     "\"forward\"": 0
     },
     "\"sum\"": {
-     "\"backward\"": 2,
+     "\"backward\"": null,
      "\"count\"": 1,
-     "\"forward\"": 2
+     "\"forward\"": 0
     }
    },
+   "macs_unknown_split_ops": [],
    "manual_tensor_connections": [],
    "mark_layer_depths": true,
    "max_in_degree": 2,
@@ -28542,6 +29009,36 @@
    "model_cls": null,
    "model_label": "ConditionalModel",
    "model_object_id": "<measured>",
+   "model_ops": [
+    {
+     "__ref__": "Op",
+     "label": "input_1:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "rand_1_1:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "add_1_2:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "sum_1_3:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "gt_1_4:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "sigmoid_1_5:1"
+    },
+    {
+     "__ref__": "Op",
+     "label": "output_1:1"
+    }
+   ],
    "model_profile": "<torchlens.data_classes._trace_profile.ModelProfile>",
    "module_calls": "<torchlens.data_classes._trace_accessors.TraceModuleCallAccessor>",
    "module_collapse_order": [
@@ -28555,6 +29052,7 @@
    "modules": "<torchlens.data_classes.module.ModuleAccessor>",
    "nonfinite_coverage": "<torchlens.data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
+   "nonfinite_verdict": "checked_and_clean",
    "num_backward_edges": null,
    "num_backward_passes": 0,
    "num_buffer_edges": 0,
@@ -28592,8 +29090,11 @@
    "num_param_tensors_frozen": 0,
    "num_param_tensors_trainable": 0,
    "num_params": 0,
+   "num_params_by_path": 0,
+   "num_params_executed": 0,
    "num_params_frozen": 0,
    "num_params_trainable": 0,
+   "num_params_unexecuted": 0,
    "num_saved_grad_fn_calls": 0,
    "num_saved_grad_fns": 0,
    "num_saved_grad_layers": 0,
@@ -28692,6 +29193,7 @@
    },
    "replay_frontier": {},
    "rescue_rerun": null,
+   "root_entry_point": "module_call:capture_oracle._models.ConditionalModel.forward",
    "root_module": {
     "__ref__": "Module",
     "label": "self"
@@ -28723,27 +29225,34 @@
    "saved_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
    "setup_duration": "<measured>",
    "sibling_events": [],
+   "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [],
+   "structure_evidence": null,
    "structure_only": false,
-   "tlspec_version": 8,
+   "tied_param_groups": [],
+   "tlspec_version": 9,
    "total_activation_memory": "<measured>",
    "total_autograd_memory": "<measured>",
    "total_backward_duration": "<measured>",
    "total_backward_memory": "<measured>",
-   "total_flops": 98,
-   "total_flops_backward": 57,
-   "total_flops_forward": 41,
+   "total_flops": 58,
+   "total_flops_backward": 33,
+   "total_flops_forward": 25,
    "total_gradient_memory": "<measured>",
-   "total_macs": 49,
-   "total_macs_backward": 28,
-   "total_macs_forward": 20,
+   "total_macs": null,
+   "total_macs_backward": null,
+   "total_macs_forward": 0,
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
    "trace_label": "conditional_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
+   "unexecuted_param_names": [],
+   "unknown_flop_ops": [
+    "<torchlens.report._compute_truth.UnknownOpGroup>"
+   ],
    "validation_replay_status": "<torchlens.validation.status.ValidationReplayStatus>",
    "verbose": false
   }

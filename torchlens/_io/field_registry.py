@@ -72,6 +72,7 @@ RECORD_CONTRACT_CLASSES: dict[str, tuple[str, str]] = {
 #: not listed here fails that test, so the writer contract can never silently
 #: miss a component grammar.
 COMPONENT_SPEC_MODULES: tuple[str, ...] = (
+    "torchlens.data_classes._layer_accessors",
     "torchlens.data_classes.aten_op",
     "torchlens.data_classes.backward_pass",
     "torchlens.data_classes.buffer",

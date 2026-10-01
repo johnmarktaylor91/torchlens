@@ -182,8 +182,18 @@ def test_between_floor_advisory_is_a_visible_user_warning(tmp_path: Path) -> Non
 
 
 @pytest.mark.smoke
-def test_pre_floor_torchlens_version_refuses_typed(tmp_path: Path) -> None:
-    """A parseable pre-2.33 ``torchlens_version`` refuses even at tlspec 6."""
+def test_inconsistent_producer_pair_refuses_typed(tmp_path: Path) -> None:
+    """A (writer, stamp) pair no governed ledger window covers refuses typed.
+
+    Historically this forged pair (an old writer version stamped onto a
+    current-schema save) refused through the hand-typed ``< "2.33"``
+    inequality as a below-floor error -- a misclassification that ALSO
+    orphaned lawful released v2.31.0/v2.32.4 artifacts. Producer
+    pair-consistency (ecosystem MEMO 3.1, gate G5) keys the same
+    forgery-detection on the governed compatibility ledger: released 2.32.4
+    only ever wrote tlspec 6, so claiming tlspec 9 under that writer is an
+    inconsistent pair and refuses with the ledger's stable code.
+    """
 
     trace = _build_trace()
     path = tmp_path / "forged_release.tlspec"
@@ -194,8 +204,9 @@ def test_pre_floor_torchlens_version_refuses_typed(tmp_path: Path) -> None:
     manifest["torchlens_version"] = "2.32.4"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
-    with pytest.raises(ArtifactVersionBelowFloorError, match="torchlens_version=2.32.4"):
+    with pytest.raises(TorchLensIOError, match="torchlens_version=2.32.4") as excinfo:
         tl.load(path)
+    assert excinfo.value.fields["code"] == "artifact_producer_pair_ungoverned"
 
 
 @pytest.mark.smoke

@@ -27,8 +27,10 @@ def test_rdm_refuses_nonfinite_empty_and_unknown_metric_inputs() -> None:
         tl.repgeom.rdm(np.array([[1.0, np.nan], [0.0, 1.0]]))
     with pytest.raises(ValueError, match="non-empty leading stimulus"):
         tl.repgeom.rdm(np.empty((0, 4)))
+    # F20 D-5 made "manhattan" a real metric; the unknown-metric refusal is
+    # pinned with a genuinely unknown token.
     with pytest.raises(ValueError, match="Unsupported activation distance metric"):
-        tl.repgeom.rdm(np.ones((4, 2)), metric="manhattan")
+        tl.repgeom.rdm(np.ones((4, 2)), metric="mahalanobis")
 
 
 def test_rdm_metrics_produce_valid_distance_matrices() -> None:

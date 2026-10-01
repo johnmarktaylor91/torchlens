@@ -5,9 +5,12 @@
 # to stay empty past 6b. Structural rows only at wave 0 -- everything else
 # uncovered is a dated KNOWN-GAP row, fail-closed.
 field	reason	invariance_witness
-cache	the cache toggle itself cannot be part of the key it guards
-cache_dir	cache location selects the store, never the capture semantics
+cache	the cache toggle itself cannot be part of the key it guards	tests/oracles/test_proofnet_invariance.py::test_cache_toggle_is_capture_invariant
+cache_dir	cache location selects the store, never the capture semantics	tests/oracles/test_proofnet_invariance.py::test_cache_dir_is_capture_invariant
 trace.capture	grouped-form carrier; its FIELDS are keyed individually
+trace.echo	echo= narrates the LIVE forward and refuses cache=True typed (echo_cache_unsupported), so a cached product can never have been echo-armed	tests/test_snoop_refusals.py::test_cache_true_with_echo_refuses_before_execution
+trace.forward_kwargs	entry-refusal catch-all: any non-empty value raises trace_forward_kwargs_unrouted before capture begins (F29 typed HF recovery); no value ever reaches the cache	tests/test_agent_surface_discovery.py::test_hf_entry_recovery_is_typed_and_teaching
 trace.input_args	hashed directly by _capture_cache_key, outside cache_config
 trace.input_kwargs	hashed directly by _capture_cache_key, outside cache_config
+trace.input_size	consumed by the quickstart ladder BEFORE the capture machinery (popped from public_trace_kwargs); the ladder re-enters trace() with the synthesized concrete input_args, which ARE hashed directly	tests/test_quickstart_resolver_matrix.py::TestOneResolverOneRecord::test_resolver_is_deterministic_across_calls
 trace.model	hashed directly by _capture_cache_key, outside cache_config

@@ -94,20 +94,31 @@ or total that the hidden content does not support.*
 
 ## The compute ceiling
 
-Smart-collapse selection is measured superlinear (~n^1.75) in op count, so it carries a
-preflight compute ceiling: `COLLAPSE_OPTIMIZER_MAX_OPS` (2,000 ops). On a trace above the
-ceiling the optimizer **declines disclosed** instead of burning CPU-hours:
+Smart-collapse admission is now gated on the RENDERED UNIVERSE, not raw op count
+(collapse memo D5): the gate variable is `U` — the full plan's rendered node count after
+`module=` focus, `vis_call_depth`, and rolled reductions — tiered by a measured
+`(U, W)` work estimator (`0.0095 * U**1.43 * W**1.02` ms, W = widest rendered sibling
+group). `COLLAPSE_OPTIMIZER_MAX_OPS` (2000) survives as the defensive constant: the
+quality planner is admitted when `U <= 2000` AND the predicted cost fits the budget.
 
-- `draw(collapse="auto"|"max"|t)` emits a `TorchLensWarning` naming the op count and the
-  ceiling, then renders the graph **uncollapsed** — every mode above the ceiling produces the
-  same full graph.
-- `Trace.collapse_plan(mode=...)` refuses typed: `InvalidArgumentError` with
-  `code="collapse_plan_unavailable"` and a `collapse_ops_ceiling` reason.
-- `Trace.collapse_schedule()` degrades to its single full-graph step (`t=0.0` only).
+- Over-budget requests **degrade to a deterministic compact fallback plan**
+  (significance-greedy boxes plus standard fold discovery), disclosed with the coded
+  `collapse_budget_fallback` warning and `OptimizerResult.planner="linear_fallback"` —
+  never an uncollapsed wall.
+- Only PATHOLOGICAL inputs (raw ops above 20x the constant) still decline outright:
+  `draw` warns (`collapse_pathological_skip`) and renders uncollapsed,
+  `Trace.collapse_plan()` refuses typed (`collapse_plan_unavailable`, reason
+  `collapse_ops_ceiling`), and `Trace.collapse_schedule()` degrades to its single
+  full-graph step.
+- A generous wall-clock watchdog (off in CI and under `TORCHLENS_DETERMINISTIC`;
+  `TORCHLENS_COLLAPSE_WATCHDOG=0` disables) may abandon the quality planner mid-run to
+  the same fallback; every firing is disclosed as an estimator bug
+  (`collapse_watchdog_fallback`, with U, W, predicted, and actual).
 
-The remedy is to shrink the rendered graph before collapsing: focus with `module=`, bound the
-depth with `vis_call_depth`, or render the rolled graph. The ceiling is a compute guard on the
-selection optimizer, not a correctness limit — the trace itself is complete.
+Context reductions are therefore real remedies for the first time: focusing with
+`module=`, bounding `vis_call_depth`, or rendering rolled genuinely re-admits the
+quality planner. The gate is a compute guard, not a correctness limit — the trace
+itself is complete.
 
 ## `collapse_plan()` diagnostics
 
@@ -123,16 +134,31 @@ from pixels.
 
 ## The compute ceiling
 
-Smart collapse has a preflight compute ceiling: `COLLAPSE_OPTIMIZER_MAX_OPS` (2000 ops,
-importable from `torchlens.visualization.collapse_optimizer`). The frontier selection is
-measured superlinear (~n^1.75) in op count, so on a trace above the ceiling the optimizer
-**declines** instead of silently dominating the render:
+Smart-collapse admission is now gated on the RENDERED UNIVERSE, not raw op count
+(collapse memo D5): the gate variable is `U` — the full plan's rendered node count after
+`module=` focus, `vis_call_depth`, and rolled reductions — tiered by a measured
+`(U, W)` work estimator (`0.0095 * U**1.43 * W**1.02` ms, W = widest rendered sibling
+group). `COLLAPSE_OPTIMIZER_MAX_OPS` (2000) survives as the defensive constant: the
+quality planner is admitted when `U <= 2000` AND the predicted cost fits the budget.
 
-- `draw(collapse="auto"|"max")` warns with a `TorchLensWarning` naming the op count and the
-  ceiling, then renders the graph uncollapsed.
-- `Trace.collapse_plan(mode=...)` refuses typed with `InvalidArgumentError`
-  (`code="collapse_plan_unavailable"`, reason `collapse_ops_ceiling`).
-- `Trace.collapse_schedule()` degrades to its single full-graph step (`t=0.0` only).
+- Over-budget requests **degrade to a deterministic compact fallback plan**
+  (significance-greedy boxes plus standard fold discovery), disclosed with the coded
+  `collapse_budget_fallback` warning and `OptimizerResult.planner="linear_fallback"` —
+  never an uncollapsed wall.
+- Only PATHOLOGICAL inputs (raw ops above 20x the constant) still decline outright:
+  `draw` warns (`collapse_pathological_skip`) and renders uncollapsed,
+  `Trace.collapse_plan()` refuses typed (`collapse_plan_unavailable`, reason
+  `collapse_ops_ceiling`), and `Trace.collapse_schedule()` degrades to its single
+  full-graph step.
+- A generous wall-clock watchdog (off in CI and under `TORCHLENS_DETERMINISTIC`;
+  `TORCHLENS_COLLAPSE_WATCHDOG=0` disables) may abandon the quality planner mid-run to
+  the same fallback; every firing is disclosed as an estimator bug
+  (`collapse_watchdog_fallback`, with U, W, predicted, and actual).
+
+Context reductions are therefore real remedies for the first time: focusing with
+`module=`, bounding `vis_call_depth`, or rendering rolled genuinely re-admits the
+quality planner. The gate is a compute guard, not a correctness limit — the trace
+itself is complete.
 
 The decline is disclosed, never silent. To get a collapsed view of a very large trace, reduce
 the rendered graph first with `module=` focus, `vis_call_depth`, or rolled mode; `fold_repeats`

@@ -131,4 +131,9 @@ def test_dict_transform_override_skips_multimodal_autoroute(
         ),
     )
 
-    assert log.input_preprocessor is None
+    # The explicit transform bypasses the multimodal autoroute entirely: no
+    # bridge stamped provenance, so the record is the honest user_transform
+    # stamp (tvscope B1), never the multimodal bridge's richer record.
+    assert log.input_preprocessor is not None
+    assert log.input_preprocessor.source == "user_transform"
+    assert log.input_preprocessor.verified is False

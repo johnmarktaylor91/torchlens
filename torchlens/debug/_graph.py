@@ -192,8 +192,12 @@ def compare_rows(
     Returns
     -------
     tuple[list[dict[str, Any]], dict[str, Any]]
-        One row dict per pass-qualified op, and the summary attrs (counts,
-        tolerances, per-trace capture-honesty facts).
+        One row dict per pass-qualified op IN EXECUTION ORDER (trace_a's
+        order, with trace_b-only ops appended in trace_b's order), and the
+        summary attrs (counts, tolerances, per-trace capture-honesty facts).
+        The first row with ``allclose=False`` is therefore the first
+        divergence the forward actually executed; :func:`first_divergence`
+        returns it directly.
     """
 
     from torchlens.runnable import refuse_poisoned_trace
@@ -202,7 +206,12 @@ def compare_rows(
     refuse_poisoned_trace(trace_b, "faithful comparison")
     ops_a = {_op_label(op): op for op in _compute_ops(trace_a)}
     ops_b = {_op_label(op): op for op in _compute_ops(trace_b)}
-    labels = sorted(set(ops_a) | set(ops_b))
+    # EXECUTION order, never alphabetical (observe memo item 2): the published
+    # first-diverging-op recipe reads the first row, and a sorted() walk named
+    # whichever op sorts first (op 67 of 70 on resnet18). Rows follow trace_a's
+    # execution order; ops only present in trace_b append afterwards in
+    # trace_b's execution order (disclosed by their "only-b" status).
+    labels = list(ops_a) + [label for label in ops_b if label not in ops_a]
     rows: list[dict[str, Any]] = []
     summary = {
         "matched": 0,
@@ -333,6 +342,51 @@ def compare(
     )
     frame.attrs.update(attrs)
     return frame
+
+
+def first_divergence(
+    trace_a: Trace,
+    trace_b: Trace,
+    *,
+    rtol: float = 1e-5,
+    atol: float = 1e-8,
+) -> dict[str, Any] | None:
+    """Return the first EXECUTION-ORDER row where the two traces separate.
+
+    A divergence row is one whose compared payloads crossed tolerance
+    (``allclose=False``), mismatched shape, or exists in only one trace.
+    Rows whose payloads could not be compared (unsaved, non-tensor,
+    device-mismatch) are NOT divergences; they are disclosed under
+    ``attrs["activation_unavailable"]`` by :func:`compare_rows`, and a
+    divergence inside such a region cannot be excluded.
+
+    Parameters
+    ----------
+    trace_a:
+        First completed TorchLens trace.
+    trace_b:
+        Second completed TorchLens trace.
+    rtol:
+        Relative tolerance for ``torch.allclose``.
+    atol:
+        Absolute tolerance for ``torch.allclose``.
+
+    Returns
+    -------
+    dict[str, Any] | None
+        The first diverging row in execution order, or ``None`` when no
+        compared row diverged.
+    """
+
+    rows, _attrs = compare_rows(trace_a, trace_b, rtol=rtol, atol=atol)
+    for row in rows:
+        if row["status"] in ("only-a", "only-b"):
+            return row
+        if row["shape_match"] is False:
+            return row
+        if row["allclose"] is False:
+            return row
+    return None
 
 
 def dead_neurons_rows(

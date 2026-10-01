@@ -1,5 +1,6 @@
 """Predicate context evaluation and layer-entry finalization."""
 
+import contextlib
 import warnings
 from collections.abc import Callable
 from types import SimpleNamespace
@@ -321,6 +322,10 @@ def _make_layer_log_entry(
     if predicate_ctx is not None and not save_this_activation:
         _retain_lookback_candidate(self, predicate_ctx, fields_dict, t)
     _record_nonfinite_if_requested(self, t, new_entry)
+    # Echo narrator slot (snoop D1): exactly once per committed op, after the
+    # commit and the nonfinite recording, BEFORE the raise_on_nan settlement
+    # so the minting op is the last narrated line when the tripwire trips.
+    _emit_op_echo(self, fields_dict, t, predicate_ctx, fire_results)
     _raise_if_nonfinite_requested(self, t, new_entry)
 
     return new_entry
@@ -351,6 +356,33 @@ def _record_nonfinite_if_requested(self: Any, tensor: torch.Tensor, entry: Any) 
     if raw_label is None:
         return
     record_op_nonfinite(self, tensor, str(raw_label))
+
+
+def _emit_op_echo(
+    self: "Trace",
+    fields_dict: dict[str, Any],
+    t: torch.Tensor,
+    predicate_ctx: RecordContext | None,
+    fire_results: tuple[Any, ...],
+) -> None:
+    """Feed one committed exhaustive op to the echo narrator, if armed.
+
+    Save-scope and echo-scope are independent: without a save predicate no
+    context exists yet, so echo forces the context build (the named
+    build-context-when-echo change, snoop build row 1). Source tensors also
+    route through this commit path on the exhaustive tier; their narration
+    seam (with the right event kind and io address) lives in ``sources.py``
+    -- exactly once per event. Duck-typed runtime-only session read: the hot
+    path imports nothing and pays one dict read when echo is off.
+    """
+
+    echo_session = self.__dict__.get("_echo_session")
+    if echo_session is None or fields_dict.get("type") in ("input", "buffer", "output"):
+        return
+    echo_ctx = predicate_ctx
+    if echo_ctx is None:
+        echo_ctx = _build_trace_predicate_context(self, fields_dict, t)
+    echo_session.emit_op(echo_ctx, tensor=t, trace=self, intervened=bool(fire_results))
 
 
 def _raise_if_nonfinite_requested(self: Any, tensor: torch.Tensor, entry: Any) -> None:
@@ -388,11 +420,24 @@ def _raise_if_nonfinite_requested(self: Any, tensor: torch.Tensor, entry: Any) -
             # ``RuntimeError`` subclass -- so without the exact float32 widening this
             # tripwire SILENTLY declined to check every fp8 activation. Widening keeps
             # the verdict identical (see fp8_widen_for_numeric_ops).
-            has_nonfinite = bool(
-                (~torch.isfinite(fp8_widen_for_numeric_ops(safe_copy(tensor, detach_tensor=True))))
-                .any()
-                .item()
-            )
+            #
+            # TWO-STAGE CHECK (snoop D4, shared-kernel consumer 4): stage 1 is
+            # a cheap fused screen -- one reduction, no full-size clone or
+            # inverted mask temporary (the shipped form full-cloned per op;
+            # measured 2.4x-35x dearer on the clean path). IEEE propagation
+            # makes the screen free of false negatives: any NaN/Inf in the
+            # elements yields a nonfinite accumulator (Inf + -Inf = NaN). A
+            # finite-overflow of the float32 accumulator can only ADD a screen
+            # trip, and stage 2 -- the exact localizing check, run only on a
+            # trip -- confirms or clears it, so the VERDICT is byte-identical
+            # to the historical whole-tensor scan.
+            # safe_copy reference mode = detached source, NO clone (both the
+            # bare-detach and the no-grad AST gates hold; the screen's
+            # reductions must not build autograd graph on a grad-bearing out).
+            probe = fp8_widen_for_numeric_ops(safe_copy(tensor, save_mode="reference"))
+            accumulate_dtype = torch.complex64 if probe.is_complex() else torch.float32
+            screen_tripped = not bool(torch.isfinite(probe.sum(dtype=accumulate_dtype)).item())
+            has_nonfinite = screen_tripped and bool((~torch.isfinite(probe)).any().item())
     except (RuntimeError, TypeError) as exc:
         # An unrunnable check is NOT a clean tensor. fp8 was the known real case and
         # is handled above, but any dtype/layout without an ``isfinite`` kernel lands
@@ -420,6 +465,38 @@ def _raise_if_nonfinite_requested(self: Any, tensor: torch.Tensor, entry: Any) -
     shape = tuple(tensor.shape)
     dtype = tensor.dtype
     parents = list(getattr(entry, "parents", []) or [])
+    # Reuse rung, tripwire arm (snoop D4): the tripwire HAS the tensor, so the
+    # crash line carries the full exact nonfinite census even in metadata
+    # mode -- reuse of an already-paid-for scan, never a second hidden one.
+    echo_session = self.__dict__.get("_echo_session")
+    if echo_session is not None:
+        # The tripwire's own raise below must win over any echo failure.
+        with contextlib.suppress(Exception):
+            with pause_logging():
+                widened = fp8_widen_for_numeric_ops(safe_copy(tensor, save_mode="reference"))
+                nan_count = int(torch.isnan(widened).sum().item())
+                if widened.is_complex():
+                    census = f"nan={nan_count} inf={int(torch.isinf(widened).sum().item())}"
+                else:
+                    census = (
+                        f"nan={nan_count} "
+                        f"+inf={int(torch.isposinf(widened).sum().item())} "
+                        f"-inf={int(torch.isneginf(widened).sum().item())}"
+                    )
+            echo_session.note_line(f"!! raise_on_nan tripped at {raw_label}: {census} (exact)")
+    # Stash the offending tensor as the prefix-finalization frontier (observe
+    # item 1): seeding it as an output means the OFFENDER can never be elided
+    # by the orphan flood, so its public label always exists. The abort fires
+    # BEFORE the caller's ordinary ``_tag_tensor_and_track_variations`` stamp,
+    # so stamp the exact committed raw label here (identical to the stamp the
+    # completed path would have written) or output attribution cannot resolve
+    # the frontier. Popped by the finalizer or, on paths that never finalize,
+    # by the failed-capture scrub.
+    if isinstance(raw_label, str) and raw_label:
+        from ._tl import set_tensor_label
+
+        set_tensor_label(tensor, raw_label)
+    self.__dict__["_nonfinite_frontier_out"] = tensor
     stop_directive_for_trace(self).raise_nonfinite(
         raw_label=raw_label,
         func_name=func_name,

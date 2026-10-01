@@ -133,6 +133,12 @@ class ResolvedRenderRequest:
     show_input_transform_summary: bool = False
     show_orphans: bool = False
     direction: VisDirectionLiteral = "bottomup"
+    # Declarative user-named pattern folding (F11, collapse memo D11 / K5;
+    # DOCUMENTED-UNSTABLE spelling): resolved PatternSpec records, () = off.
+    # Joins __hash__: pattern chips change what renders, so a pattern-bearing
+    # request must never share cached plans with a bare one (plan-cache
+    # identity is part of the D11 contract).
+    fold_patterns: tuple[Any, ...] = ()
 
     def with_resolved_collapse(
         self,
@@ -170,6 +176,7 @@ class ResolvedRenderRequest:
                 self.show_containers,
                 self.engine,
                 self.skip_fn,
+                self.fold_patterns,
             )
         )
 

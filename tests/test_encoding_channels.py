@@ -208,7 +208,7 @@ def test_plain_draw_untouched_by_channel_machinery(mlp_log: tl.Trace, tmp_path: 
     dot = _draw(mlp_log, tmp_path)
     assert _state(mlp_log) is None
     assert "cluster_torchlens_encoding_legend" not in dot
-    assert "cluster_torchlens_legend" not in dot  # AUTO + no channel = no legend
+    assert "tl_legend" not in dot  # AUTO + no channel = no legend
 
 
 def test_request_hash_ignores_channel_fields() -> None:
@@ -252,8 +252,12 @@ def test_non_scalar_tensor_refuses(mlp_log: tl.Trace, tmp_path: Path) -> None:
 def test_one_element_tensor_accepted(mlp_log: tl.Trace, tmp_path: Path) -> None:
     _draw(mlp_log, tmp_path, color_by=lambda node: torch.tensor([2.5]))
     state = _state(mlp_log)
-    assert state.colors
-    assert NOTE_CONSTANT in state.notes  # constant domain -> midpoint + note
+    # Degenerate domain (min == max) renders UNENCODED with the note, never
+    # mid-ramp (themes memo build item 11): a uniform paint would claim a
+    # difference from unencoded nodes the data cannot support.
+    assert not state.colors
+    assert state.values  # the scalar coercion itself succeeded
+    assert NOTE_CONSTANT in state.notes
 
 
 def test_callable_raise_chains_typed(mlp_log: tl.Trace, tmp_path: Path) -> None:
@@ -337,32 +341,35 @@ def test_auto_large_graph_forces_dot_with_notice(
 
 def test_legend_auto_with_channel_emits_channel_only(mlp_log: tl.Trace, tmp_path: Path) -> None:
     dot = _draw(mlp_log, tmp_path, color_by="bytes")
-    assert "cluster_torchlens_encoding_legend" in dot
-    assert "cluster_torchlens_legend" not in dot  # channel-only, not the role legend
+    assert "TorchLens encoding" in dot
+    assert "TorchLens legend" not in dot  # channel-only, not the role legend
     assert "linear min-max" in dot
     assert "color_by: bytes" in dot
 
 
 def test_legend_true_with_channel_emits_both(mlp_log: tl.Trace, tmp_path: Path) -> None:
     dot = _draw(mlp_log, tmp_path, color_by="bytes", show_legend=True)
-    assert "cluster_torchlens_legend" in dot
-    assert "cluster_torchlens_encoding_legend" in dot
+    assert "TorchLens legend" in dot
+    assert "TorchLens encoding" in dot
+    # One-table form (vizmech 13): both are SECTIONS of the one legend node,
+    # never two competing legend topologies.
+    assert dot.count("TorchLens legend") == 1
+    assert dot.count("TorchLens encoding") == 1
 
 
 def test_legend_false_honored_even_with_channel(mlp_log: tl.Trace, tmp_path: Path) -> None:
     """Explicit False is a deliberate act: no legend, encoding undisclosed."""
 
     dot = _draw(mlp_log, tmp_path, color_by="bytes", show_legend=False)
-    assert "cluster_torchlens_encoding_legend" not in dot
-    assert "cluster_torchlens_legend" not in dot
+    assert "tl_legend" not in dot
 
 
 def test_legend_true_without_channel_keeps_todays_meaning(
     mlp_log: tl.Trace, tmp_path: Path
 ) -> None:
     dot = _draw(mlp_log, tmp_path, show_legend=True)
-    assert "cluster_torchlens_legend" in dot
-    assert "cluster_torchlens_encoding_legend" not in dot
+    assert "TorchLens legend" in dot
+    assert "TorchLens encoding" not in dot
 
 
 def test_show_legend_rejects_non_tri_state(mlp_log: tl.Trace, tmp_path: Path) -> None:
@@ -473,7 +480,11 @@ def test_per_pass_builtin_degrades_on_rolled(varying_log: tl.Trace, tmp_path: Pa
     _draw(varying_log, tmp_path, color_by="time", vis_mode="rolled")
     state = _state(varying_log)
     assert layer.layer_label not in state.colors
-    assert NOTE_NA_UNENCODED in state.notes
+    # The per-pass row carries its OWN note now (themes memo item 11): the
+    # old pass-1 read painted a uniform mid-ramp from a min:1/max:1 domain.
+    from torchlens.visualization._encoding import NOTE_PER_PASS_ROLLED
+
+    assert NOTE_PER_PASS_ROLLED in state.notes
 
 
 def test_single_pass_layers_unaffected_by_allowlist(varying_log: tl.Trace, tmp_path: Path) -> None:
@@ -709,11 +720,22 @@ def test_bundle_diff_consumes_shared_interpolation() -> None:
 
 
 def test_dark_theme_uses_dark_ramp(mlp_log: tl.Trace, tmp_path: Path) -> None:
+    """Ramps resolve through the SKIN's 3-anchor record (N4); the dark low
+    anchor is deliberately off-ground (never equal to the default fill --
+    the white-on-white absence defect's dark analog)."""
+
+    from torchlens.visualization.themes import resolve_theme
+
     _draw(mlp_log, tmp_path, color_by="bytes", vis_theme="dark")
     state = _state(mlp_log)
-    assert state.ramp == DARK_RAMP
+    dark = resolve_theme("dark")
+    assert state.ramp == (dark.ramp[0], dark.ramp[2])
+    assert state.ramp[1] == DARK_RAMP[1]  # the high anchor is unchanged
+    assert state.ramp[0] != dark.default_fill
     _draw(mlp_log, tmp_path, color_by="bytes")
-    assert _state(mlp_log).ramp == LIGHT_RAMP
+    light = resolve_theme("torchlens")
+    assert _state(mlp_log).ramp == (light.ramp[0], light.ramp[2])
+    assert LIGHT_RAMP[1] == light.ramp[2]  # endpoint continuity with the module ramp
 
 
 if __name__ == "__main__":  # pragma: no cover

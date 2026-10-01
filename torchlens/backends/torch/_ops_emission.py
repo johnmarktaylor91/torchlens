@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from ... import _state as _st
+from ..._capture_state_helpers import _is_uninitialized_param
 from ...data_classes.internal_types import FuncExecutionContext
 from ._tl import (
     get_tensor_label,
@@ -281,6 +282,30 @@ def log_function_output_tensors(
     bool
         Whether the selected capture producer logged at least one output op.
     """
+    # F20 lazy-buffer completion: torch's lazy pre-hook plumbing can emit a
+    # still-pending UninitializedBuffer as a wrapped call's OUTPUT (the
+    # ``__torch_function__`` ``_convert``/``as_subclass`` step). It has no
+    # geometry to log and is pre-forward materialization, not model
+    # dataflow -- the materialized buffer registers at the module-entry
+    # gate. Mirrors the receiver passthrough in ``wrapped_func``.
+    if isinstance(out_orig, torch.Tensor) and _is_uninitialized_param(out_orig):
+        return False
+    # W1 decomposition transparency (weightsfree memo D3, defect L1): on an
+    # ADMITTED meta structure-only capture, a wrapped call issued BY torch's
+    # own Python decomposition machinery (torch/_refs, _prims,
+    # _meta_registrations, ...) is not recorded — the enclosing USER op stays
+    # the record. Execution and exception flow are untouched. The default
+    # path pays one attribute read; imports stay INSIDE the branch because
+    # ops.py rebinds this function under its own globals (the split-module
+    # pattern), so module-level helpers here are not visible at runtime.
+    if getattr(self, "structure_only", False):
+        from ...capture._weightsfree_admission import weightsfree_meta_active
+
+        if weightsfree_meta_active(self):
+            from ._weightsfree_transparency import caller_is_torch_decomposition
+
+            if caller_is_torch_decomposition():
+                return False
     policy = getattr(self, "_capture_producer_policy", None)
     if policy is None:
         policy = get_capture_producer_policy(cast(CaptureProducerMode, self.capture_mode))

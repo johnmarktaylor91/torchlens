@@ -65,6 +65,10 @@ def join(log: Any, kineto_trace: str | Path | dict[str, Any]) -> dict[str, Any]:
         Merged per-operation timing view.
     """
 
+    # D22 (F09): this bridge matches events by NAME SUBSTRING -- a
+    # collision-prone approximate diagnostic. It fills labeled diagnostic
+    # columns only and is FORBIDDEN as a rate denominator; device time
+    # enters report schemas only via the correlation-ID join.
     trace = _load_trace(kineto_trace)
     events = _trace_events(trace)
     rows = []
@@ -87,7 +91,12 @@ def join(log: Any, kineto_trace: str | Path | dict[str, Any]) -> dict[str, Any]:
                 "kineto_events": matched_events,
             }
         )
-    return {"schema": "torchlens.profiler_join.v1", "ops": rows, "trace_metadata": _metadata(trace)}
+    return {
+        "schema": "torchlens.profiler_join.v1",
+        "attribution": "name-matched (approximate; not for rates)",
+        "ops": rows,
+        "trace_metadata": _metadata(trace),
+    }
 
 
 def _load_trace(kineto_trace: str | Path | dict[str, Any]) -> dict[str, Any]:

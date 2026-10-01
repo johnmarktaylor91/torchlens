@@ -490,6 +490,63 @@ def _wrapper_op_name(exc: BaseException) -> str | None:
     return candidate
 
 
+def _substrate_mismatch_kind(exc: BaseException) -> str | None:
+    """Classify a RuntimeError as a substrate mismatch, or ``None`` (W1-CLS).
+
+    Two provenance-based mechanisms, never message text: (a) the innermost
+    TorchLens wrapper frame's failing call OBSERVABLY mixed meta and real
+    tensor operands; (b) the raising frame sits inside ``torch/amp`` (the
+    autocast device-validation family — measured: torch validates the device
+    string even for ``enabled=True`` on meta and dies there).
+    """
+
+    tb = exc.__traceback__
+    amp_root = _TORCH_ROOT / "amp"
+    saw_meta = False
+    saw_real = False
+    while tb is not None:
+        path, _ = _frame_location(tb)
+        try:
+            path.relative_to(amp_root)
+            return "torch.amp device validation (autocast family)"
+        except ValueError:
+            pass
+        try:
+            path.relative_to(_TORCHLENS_ROOT)
+        except ValueError:
+            tb = tb.tb_next
+            continue
+        frame_meta, frame_real = _frame_operand_substrates(tb.tb_frame)
+        saw_meta = saw_meta or frame_meta
+        saw_real = saw_real or frame_real
+        tb = tb.tb_next
+    if saw_meta and saw_real:
+        return "mixed meta/real operands in the failing wrapped call"
+    return None
+
+
+def _frame_operand_substrates(frame: types.FrameType) -> tuple[bool, bool]:
+    """Whether one TorchLens wrapper frame holds (meta, real) tensor operands."""
+
+    saw_meta = False
+    saw_real = False
+    for variable in ("args", "call_args", "kwargs", "call_kwargs"):
+        value = frame.f_locals.get(variable)
+        if isinstance(value, dict):
+            values: tuple[Any, ...] = tuple(value.values())
+        elif isinstance(value, (list, tuple)):
+            values = tuple(value)
+        else:
+            continue
+        for item in values:
+            if isinstance(item, torch.Tensor):
+                if item.is_meta:
+                    saw_meta = True
+                else:
+                    saw_real = True
+    return saw_meta, saw_real
+
+
 @contextmanager
 def structure_only_forward_boundary(trace: Any) -> Iterator[None]:
     """LAYER 2: classify exceptions escaping the user forward (memo 2.2/2.4).
@@ -547,6 +604,40 @@ def structure_only_forward_boundary(trace: Any) -> Iterator[None]:
                     "run a real capture (tl.trace without structure_only) or "
                     "upgrade torch for broader meta-kernel coverage"
                 ),
+            ) from exc
+        mismatch_kind = (
+            _substrate_mismatch_kind(exc)
+            if isinstance(exc, RuntimeError) and not user_raised
+            else None
+        )
+        if mismatch_kind is not None:
+            # W1-CLS (weightsfree memo D11): device-mismatch RuntimeErrors and
+            # the autocast/unsupported-scalarType family classify into the
+            # SUBSTRATE family BEFORE the value-escape fallback — both were
+            # measured to mis-teach the user to hunt a value branch that does
+            # not exist. Classification is by observed wrapper operands
+            # (mixed meta/real tensors in the failing wrapped call) or
+            # raising-frame provenance (torch/amp), never message text.
+            from ..._errors import SubstrateMismatchError
+
+            kind = mismatch_kind
+            location = f"{failing_file}:{failing_line}" if failing_file else "<unknown>"
+            raise SubstrateMismatchError(
+                "Structure-only capture refused: a REAL tensor met the meta "
+                f"substrate mid-forward at {location} ({kind}). A stale "
+                "pre-wrap factory reference or a device='cpu' literal mints "
+                "real tensors inside an admitted weights-free forward; the "
+                "recorded graph would be neither the real model's nor a "
+                "coherent hypothesis. Remedy: pass device= through the "
+                "module's factory kwargs (or drop the pinned device so the "
+                "owned factory scope places it), and construct every tensor "
+                "the forward mints on the model's substrate. Original error "
+                f"annotates, never decides: {exc}",
+                code="structure_only_substrate_mismatch",
+                file_path=failing_file,
+                line_no=failing_line,
+                mismatch_kind=kind,
+                entry_frame=entry_frame,
             ) from exc
         if isinstance(exc, RuntimeError) and not user_raised:
             # Memo 2.2 Layer 2: a RuntimeError that was NOT raised by a user

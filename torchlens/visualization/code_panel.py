@@ -344,7 +344,10 @@ def render_code_panel_svg(source_text: str) -> str:
     """
 
     panel = graphviz.Digraph()
-    panel.attr("graph", bgcolor="transparent", margin="0")
+    # "#FFFFFF00" (alpha 0), not "transparent": dot 2.43 does not know the
+    # keyword and warns on every code-panel render -- a warning the D24
+    # stderr-surfacing seam now correctly refuses to hide (vizmech).
+    panel.attr("graph", bgcolor="#FFFFFF00", margin="0")
     with panel.subgraph(name="cluster_torchlens_code_panel") as cluster:
         cluster.attr(
             label="",

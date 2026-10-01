@@ -219,10 +219,24 @@ def test_explain_reports_nonfinite_out() -> None:
 
     log = _captured_log()
     log["linear_1_1"].out[0, 0] = torch.nan
+    # D14 (F09 item 11): bare explain renders the basis IN HAND and never
+    # scans -- the explicit spelling arms the evidence first.
+    assert log.nonfinite_ops
     text = tl.report.explain(log)
     assert "NaN or Inf" in text
     assert "linear_1_1" in text
     assert "vscode://file/" in log.first_nonfinite(link_format="html")
+
+
+def test_explain_never_scans_unarmed_health() -> None:
+    """D14/D4: bare explain says NOT-CHECKED with the scan spelling instead
+    of paying for a first payload scan."""
+
+    log = _captured_log()
+    log["linear_1_1"].out[0, 0] = torch.nan
+    text = tl.report.explain(log)
+    assert "NOT-CHECKED" in text
+    assert "health_facts" in text
 
 
 def test_source_locations_keep_repr_plain_and_expose_html_links() -> None:

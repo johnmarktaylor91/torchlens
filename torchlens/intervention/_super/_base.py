@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from typing import Any, Generic, Literal, TypeVar, cast
+from typing import Any, ClassVar, Generic, Literal, TypeVar, cast
 
 import torch
 
 from ..._errors import InvalidArgumentError, PayloadUnavailableError
+from ...errors.episode import CheckpointSeriesLiveParamsError
 from .._metrics import is_scalar_like, relative_l1_scalar, resolve_metric
 
 T = TypeVar("T")
@@ -297,6 +298,13 @@ class _TensorBearing:
     _members: dict[str, Any]
     _label: str
 
+    #: Claim class of this view's per-member tensors. ``True`` (SuperParam)
+    #: means a cross-member read asserts capture-time PARAMETER values -- a
+    #: historical claim TorchLens cannot prove from live handles -- so the
+    #: ``_tensor_dict`` funnel refuses before tensor lookup unless every
+    #: member carries immutable parameter evidence (A-CKPT; foldB D7).
+    _cross_member_param_claim: ClassVar[bool] = False
+
     @property
     def op_type(self) -> str:
         """Return the representative operation type.
@@ -480,6 +488,12 @@ class _TensorBearing:
     def _tensor_dict(self, field: _TENSOR_FIELD_LITERAL) -> dict[str, torch.Tensor | None]:
         """Return a tensor field keyed by member name.
 
+        This is the ONE funnel every cross-member tensor read passes through
+        (``diff_pair``, ``aggregate``, ``out``/``grad`` via ``_stacked``, and
+        the SuperParam ``weight_norm_diff``), so the checkpoint live-ref
+        guard lives here: for parameter-claim views with two or more members
+        it refuses BEFORE any member tensor is resolved.
+
         Parameters
         ----------
         field:
@@ -491,11 +505,78 @@ class _TensorBearing:
             Per-member tensor values.
         """
 
+        if self._cross_member_param_claim and len(self._members) >= 2:
+            self._require_immutable_param_evidence(field)
         output: dict[str, torch.Tensor | None] = {}
         for name, member in self._members.items():
             value = self._get_tensor(member, field)
             output[name] = value if isinstance(value, torch.Tensor) else None
         return output
+
+    def _require_immutable_param_evidence(self, field: _TENSOR_FIELD_LITERAL) -> None:
+        """Refuse a cross-member parameter read without immutable evidence.
+
+        The guard is keyed on the CLAIM (a cross-member, cross-time parameter
+        value), never on Python object identity: save/load manufactures
+        relationship-rank upgrades, and a reloaded artifact has no model ref
+        to detect. Every member's derived value basis must be immutable
+        capture-time evidence (``snapshot``, R8(b)) for the read to proceed;
+        ``live_ref`` and ``absent`` bases refuse typed.
+
+        Parameters
+        ----------
+        field:
+            Tensor field the caller asked for (``out`` or ``grad``).
+
+        Raises
+        ------
+        CheckpointSeriesLiveParamsError
+            With stable code ``checkpoint_series_live_params`` when any
+            member lacks immutable parameter evidence.
+        """
+
+        bases: dict[str, Any] = {
+            name: getattr(member, "value_basis", None) for name, member in self._members.items()
+        }
+        if all(basis is not None and basis.is_immutable for basis in bases.values()):
+            return
+        member_names = list(self._members)
+        first = next(iter(self._members.values()))
+        param_address = str(getattr(first, "address", None) or self._label)
+        quoted = [f"'{name}'" for name in member_names]
+        named = " and ".join(quoted) if len(quoted) == 2 else ", ".join(quoted)
+        any_live = any(basis is not None and basis.basis == "live_ref" for basis in bases.values())
+        if any_live:
+            mechanism = (
+                "TorchLens records which parameter a run used, not its bytes, so a "
+                "parameter read resolves through the live model and returns TODAY'S "
+                "weights, not the weights at capture. Two members of a checkpoint "
+                "series will therefore report identical weights."
+            )
+        else:
+            mechanism = (
+                "TorchLens records which parameter a run used, not its bytes, and "
+                "this artifact was saved without parameter snapshots, so the "
+                "per-member values are gone. Reads would degrade to NaN or empty "
+                "results that look like 'nothing to compare'."
+            )
+        remedy = (
+            "snapshot parameters at capture, or bind each member to an immutable "
+            "checkpoint -- the ordering is still valid; only the weight claim is refused"
+        )
+        raise CheckpointSeriesLiveParamsError(
+            f"Members {named} have no immutable capture-time parameter evidence "
+            f"for parameter '{param_address}'. {mechanism} "
+            f"To read a weight trajectory: {remedy}.",
+            code="checkpoint_series_live_params",
+            members=member_names,
+            param_address=param_address,
+            field=str(field),
+            bases={
+                name: str(basis) if basis is not None else None for name, basis in bases.items()
+            },
+            remedy=remedy,
+        )
 
     def _get_tensor(self, member: Any, field: _TENSOR_FIELD_LITERAL) -> torch.Tensor | None:
         """Return one tensor-bearing field from ``member``.

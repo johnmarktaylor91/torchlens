@@ -63,8 +63,8 @@
             "backend_semantics.aliased_output_inputs": "defaulted_empty",
             "backend_semantics.autograd_memory": "populated",
             "backend_semantics.backend_grad_handle": "populated",
-            "backend_semantics.bytes_delta_at_call": "defaulted_zero",
-            "backend_semantics.bytes_peak_at_call": "defaulted_zero",
+            "backend_semantics.bytes_delta_at_call": "unknown",
+            "backend_semantics.bytes_peak_at_call": "unknown",
             "backend_semantics.grad_fn_class_name": "populated",
             "backend_semantics.mutated_input_positions": "defaulted_empty",
             "backend_semantics.num_autograd_tensors": "populated",
@@ -225,8 +225,8 @@
             "backend_semantics.aliased_output_inputs": "defaulted_empty",
             "backend_semantics.autograd_memory": "defaulted_zero",
             "backend_semantics.backend_grad_handle": "populated",
-            "backend_semantics.bytes_delta_at_call": "defaulted_zero",
-            "backend_semantics.bytes_peak_at_call": "defaulted_zero",
+            "backend_semantics.bytes_delta_at_call": "unknown",
+            "backend_semantics.bytes_peak_at_call": "unknown",
             "backend_semantics.grad_fn_class_name": "populated",
             "backend_semantics.mutated_input_positions": "defaulted_empty",
             "backend_semantics.num_autograd_tensors": "defaulted_zero",
@@ -623,20 +623,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 478398,
+      "python_peak_memory_median_bytes": 480560,
       "sample_count": 3,
       "torch_version": "2.13.0+cu130",
-      "wall_time_median_ms": 51.64448800496757
+      "wall_time_median_ms": 130.15414797700942
     }
   },
   "sha256_chunks": [
-    "3a9bfc4d",
-    "ee24cebe",
-    "3009fed7",
-    "0e7d79ee",
-    "d397889b",
-    "7bed8027",
-    "4c2e99ff",
-    "749adc6a"
+    "c808057d",
+    "f0e8a48c",
+    "2b1ffe5c",
+    "9987117e",
+    "35e8220c",
+    "2c0fc744",
+    "4ba6568a",
+    "01436e7d"
   ]
 }

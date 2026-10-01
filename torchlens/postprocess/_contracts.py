@@ -974,6 +974,11 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
         reads=frozenset(
             (
                 "_label_raw",
+                # F20 D-17: the saved-summary refresh derives
+                # saved_activation_memory from PHYSICAL retained payloads
+                # (out/transformed_out + the facade's resolution guards).
+                "_source_trace_ref",
+                "_tracing_finished",
                 "activation_memory",
                 "address",
                 "buffer_pass",
@@ -994,8 +999,16 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
                 "module_call_stack",
                 "modules",
                 "num_passes",
+                "out",
+                # F20 D-17: reading ``out`` on a payload-absent op (lookback
+                # windows, disk-only routes) probes the ``out_ref`` slot via
+                # the accessor's lazy-materialization guard, so the refresh's
+                # byte-model read carries this companion column.
+                "out_ref",
                 "output_of_module_calls",
                 "raw_index",
+                "transformed_activation_memory",
+                "transformed_out",
                 "type",
                 "unattributed_tensor_args",
             )
@@ -1009,6 +1022,13 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
             "w:saved_summary",
             "w:warnings",
         ),
+        # Probe (reviewed, F20 D-17): the saved-summary refresh reads ``out``
+        # per saved op, and the accessor's lazy-materialization guard checks
+        # ``out_ref`` whenever ``out`` is empty (lookback windows, disk-only
+        # routes) — in-pipeline it always observes the not-yet-attached
+        # placeholder (refs attach at step 18) and falls through, the same
+        # reviewed shape as step 12's undecorate probe.
+        placeholder_probes=frozenset(("out_ref",)),
     ),
     # Step 11.5 previously declared an EMPTY write set, silently wrong under
     # save_code_context=True where it assigns op.var_names on every op
@@ -1063,7 +1083,10 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
                 "_layer_label_raw",
                 "_source_trace_ref",
                 "_tracing_finished",
-                "activation_memory",
+                # F20 D-17: ``activation_memory`` left this read set — the
+                # refresh here reads live payloads (every op saved by deferred
+                # resolution holds its payload until step-19 eviction), so the
+                # byte model's raw-field fallback is unreachable at this step.
                 "annotations",
                 "detach_saved_activations",
                 "dtype",
@@ -1384,6 +1407,12 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
                 "dropped_edge_tensor_args",
                 "dtype",
                 "dtype_ref",
+                # tlspec v9 entry-dark KEEP columns (episode_step,
+                # injection_provenance, tl_authored_root): the streamed-bundle
+                # writer reads every declared portable field to apply its
+                # policy, so the v9 additions join the hand-derived set as a
+                # reviewed contract diff.
+                "episode_step",
                 "equivalence_class",
                 "equivalent_ops",
                 "flops_backward",
@@ -1420,6 +1449,7 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
                 "has_saved_args",
                 "in_conditionals",
                 "in_multi_output",
+                "injection_provenance",
                 "input_ancestors",
                 "input_to_module_calls",
                 "input_was_parameter",
@@ -1499,6 +1529,7 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
                 "step_index",
                 "terminal_bool_for",
                 "terminal_conditional_id",
+                "tl_authored_root",
                 "transform_chain",
                 "transform_config",
                 "transform_fn_name",
@@ -1531,7 +1562,11 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
         # observe-placeholder-and-fall-through. The L6 tier-(ii) pair
         # (persisted since the v8 bump; written only by session-time
         # fork.do() on a FINISHED trace, so the scrub always observes the
-        # step-0 empty-dict seed) is reviewed in PROBES_GOLDEN.
+        # step-0 empty-dict seed) is reviewed in PROBES_GOLDEN. The tlspec
+        # v9 entry-dark trio (episode_step / injection_provenance /
+        # tl_authored_root) is the same reviewed shape: their Phase-3
+        # writers (F-EPISODE / F01 / F41) run outside this pipeline, so
+        # in-pipeline the scrub always observes the step-0 None seed.
         placeholder_probes=frozenset(
             (
                 "_facets_cache",
@@ -1542,12 +1577,15 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
                 "_receptive_field_cache",
                 "edge_replacement_stamps",
                 "edge_substitutions",
+                "episode_step",
                 "grad",
                 "grad_dtype",
                 "grad_fn",
                 "grad_shape",
                 "gradient_memory",
                 "has_grad",
+                "injection_provenance",
+                "tl_authored_root",
                 "transformed_grad",
                 "transformed_grad_dtype",
                 "transformed_grad_shape",
@@ -1965,6 +2003,11 @@ PINNED_ORDER_PAIRS: Mapping[tuple[str, str], PinnedPair] = MappingProxyType(
                 (
                     "_label_raw",
                     "activation_memory",
+                    # F20 D-17: step 11 derives saved_activation_memory from
+                    # the physical payloads step 1 ingests (byte model).
+                    "out",
+                    "transformed_activation_memory",
+                    "transformed_out",
                     "input_to_module_calls",
                     "io_role",
                     "is_buffer",

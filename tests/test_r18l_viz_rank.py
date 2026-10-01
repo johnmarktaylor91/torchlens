@@ -245,7 +245,9 @@ def test_m7_rank_engine_emits_legend(tmp_path):
         vis_node_placement="rank",
         show_legend=True,
     )
-    assert src.count("tl_legend_") == 6
+    # One-table legend (vizmech 13): a single pinned plaintext node.
+    assert "tl_legend" in src
+    assert "TorchLens legend" in src
     svg = (tmp_path / "m7rank.svg").read_text()
     assert "TorchLens legend" in svg
     assert ">input<" in svg and ">output<" in svg
@@ -260,7 +262,7 @@ def test_m7_rank_engine_no_legend_by_default(tmp_path):
         vis_node_placement="rank",
         show_legend=False,
     )
-    assert "tl_legend_" not in src
+    assert "tl_legend" not in src
 
 
 # ---------------------------------------------------------------------------
@@ -270,11 +272,21 @@ def test_m10_rank_engine_applies_dpi_and_overrides(tmp_path):
     trace = tl.trace(_rank_model(), torch.ones(1, 2))
     src = trace.draw(
         vis_outpath=str(tmp_path / "m10rank"),
-        vis_fileformat="svg",
+        vis_fileformat="png",
         vis_save_only=True,
         vis_node_placement="rank",
         dpi=123,
         vis_graph_overrides={"bgcolor": "lightyellow"},
     )
+    # dpi applies on the raster target (png)...
     assert "dpi=123" in src
     assert "bgcolor=" in src and "lightyellow" in src
+    # ...and is DROPPED on a vector target (svg): raster-only, vizmech D23.
+    src_svg = trace.draw(
+        vis_outpath=str(tmp_path / "m10rank_svg"),
+        vis_fileformat="svg",
+        vis_save_only=True,
+        vis_node_placement="rank",
+        dpi=123,
+    )
+    assert "dpi=123" not in src_svg

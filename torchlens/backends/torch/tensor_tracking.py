@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from ... import _state
+from ..._capture_state_helpers import _is_uninitialized_param
 from ..._state import pause_logging
 from ...data_classes.op import Op
 from ...fastlog.types import CaptureSpec
@@ -466,6 +467,7 @@ def _build_grad_payloads(
         grad,
         transformed_payload,
         transform_kind="grad",
+        transform=grad_transform,
     )
     op._validate_streaming_transform_output(
         transformed_payload,
@@ -1147,6 +1149,22 @@ def _get_hash_from_args(args: tuple[Any, ...], kwargs: dict[str, Any]) -> str:
     return make_short_barcode_from_input(args_to_hash)
 
 
+def _tensor_hash_token(prefix: str, arg: torch.Tensor) -> str:
+    """Return the barcode hash token for one tensor argument.
+
+    Uses shape/dtype only — formatting a tensor can trigger wrapped methods
+    (item, __format__) which re-enter logging and cause infinite recursion.
+    F20 lazy-buffer completion: a pending UninitializedBuffer is a plain
+    Tensor subclass (unlike UninitializedParameter, which rides the
+    Parameter carve-out at the caller) and raises on any shape read until
+    torch's lazy pre-hook materializes it, so it hashes as a fixed token.
+    """
+
+    if _is_uninitialized_param(arg):
+        return f"{prefix}_tensor_uninitialized"
+    return f"{prefix}_tensor{arg.shape}"
+
+
 def _append_arg_hash(arg: Any, prefix: str, args_to_hash: list[Any], _depth: int = 0) -> None:
     """Append structural fingerprint tokens for a single argument to the accumulator list.
 
@@ -1169,10 +1187,7 @@ def _append_arg_hash(arg: Any, prefix: str, args_to_hash: list[Any], _depth: int
     if isinstance(arg, torch.nn.Parameter):
         pass  # exclude parameters from hash — must check before Tensor (Parameter is a subclass)
     elif isinstance(arg, torch.Tensor):
-        # Use shape/dtype only — formatting a tensor can trigger wrapped
-        # custom_methods (item, __format__) which re-enter logging and cause
-        # infinite recursion.
-        args_to_hash.append(f"{prefix}_tensor{arg.shape}")
+        args_to_hash.append(_tensor_hash_token(prefix, arg))
     elif isinstance(arg, (torch.TypedStorage, torch.UntypedStorage)):
         # Same hazard as torch.Tensor above: str()/repr() on a Storage walks
         # every element via wrapped __getitem__ (and even constructs a fresh

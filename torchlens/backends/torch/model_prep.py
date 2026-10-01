@@ -58,6 +58,7 @@ from ...utils.tensor_utils import (
 )
 from . import module_stack as _mstack
 from ._held_refs import normalize_held_torch_function_refs, register_released_model
+from ._module_arg_stubs import first_stub_shape, stub_module_arg_payloads
 from ._tl import (
     begin_label_session,
     clear_meta,
@@ -225,9 +226,11 @@ def _first_tensor_shape(value: Any) -> tuple[int, ...] | None:
     """
 
     tensors = get_vars_of_type_from_obj(value, torch.Tensor, search_depth=5)
-    if not tensors:
-        return None
-    return tuple(tensors[0].shape)
+    if tensors:
+        return tuple(tensors[0].shape)
+    # F20 W1a: module-arg stashes carry payload-free stubs; their recorded
+    # shape serves the same estimation read.
+    return first_stub_shape(value)
 
 
 def _quantized_module_bias_present(module: nn.Module) -> bool:
@@ -602,10 +605,22 @@ def _prepare_model_session(
     begin_label_session()
     _state._dir_cache.clear()
     trace._module_capture_ws.exhaustive_module_stack = []
-    trace.model_class_name = str(type(model).__name__)
-    trace.class_docstring = type(model).__doc__
-    init_method = getattr(type(model), "__init__", None)
-    forward_method = getattr(type(model), "forward", None)
+    # F41 bound-method roots: the synthetic TL-authored root's identity reads
+    # the OWNER (type(owner).__name__, the owner's class/source metadata) and
+    # the bound METHOD as the entry callable -- never the wrapper class name
+    # or the string "method".
+    from .bound_root import TLBoundMethodRoot
+
+    if isinstance(model, TLBoundMethodRoot):
+        identity_cls = type(model.tl_owner)
+        entry_callable = getattr(identity_cls, model.tl_method_name, None)
+    else:
+        identity_cls = type(model)
+        entry_callable = getattr(identity_cls, "forward", None)
+    trace.model_class_name = str(identity_cls.__name__)
+    trace.class_docstring = identity_cls.__doc__
+    init_method = getattr(identity_cls, "__init__", None)
+    forward_method = entry_callable
     try:
         trace.init_signature = str(inspect.signature(init_method)) if init_method else None
     except (TypeError, ValueError):
@@ -617,17 +632,17 @@ def _prepare_model_session(
         trace.forward_signature = None
     trace.forward_docstring = getattr(forward_method, "__doc__", None)
     try:
-        trace.class_source_file = inspect.getfile(type(model))
-        trace.class_source_line = _source_start_line(type(model))
-        trace.init_source_file = inspect.getfile(type(model).__init__)
-        trace.init_source_line = _source_start_line(type(model).__init__)
+        trace.class_source_file = inspect.getfile(identity_cls)
+        trace.class_source_line = _source_start_line(identity_cls)
+        trace.init_source_file = inspect.getfile(identity_cls.__init__)
+        trace.init_source_line = _source_start_line(identity_cls.__init__)
     except (OSError, TypeError):
         trace.class_source_file = None
         trace.class_source_line = None
         trace.init_source_file = None
         trace.init_source_line = None
     try:
-        forward_func = model.forward
+        forward_func = model.forward if entry_callable is None else entry_callable
         trace.forward_source_file = inspect.getsourcefile(forward_func) or inspect.getfile(
             forward_func
         )
@@ -720,6 +735,12 @@ def _prepare_model_session(
         model,
         forward_hook_wrapper_factory=_make_user_forward_hook_wrapper,
     )
+    # Accelerate offload/dispatch hooks (lane F37): run hook internals under
+    # pause_logging and re-stamp hook-materialized params so offloaded models
+    # capture with clean graphs and attributed weights.
+    from .offload_hooks import install_offload_hook_shims
+
+    install_offload_hook_shims(trace, model)
 
 
 def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any = None) -> None:
@@ -1352,6 +1373,18 @@ def _record_module_entry_metadata(
 
     # Catch buffers created dynamically (e.g. in forward()) after initial scan.
     _tag_untagged_buffers(trace, module)
+    # F20 W1a (release-at-emission): neither the workspace stash nor the
+    # enter event may pin live payloads for the rest of the forward. Every
+    # consumer on the torch trace path reads shape/dtype facts only, and
+    # GC-11 nulls ``ModuleCall.forward_args`` before the trace is returned.
+    # Stubbing waits until here so the input-adoption loop above has stamped
+    # labels the stubs can carry.
+    stub_args = stub_module_arg_payloads(args)
+    stub_kwargs = stub_module_arg_payloads(kwargs)
+    trace._module_capture_ws.module_forward_args[(module_address, module_call_index)] = (
+        stub_args,
+        stub_kwargs,
+    )
     trace.capture_events.append_module_enter(
         ModuleEnterEvent(
             address=module_address,
@@ -1361,8 +1394,8 @@ def _record_module_entry_metadata(
             code_context=tuple(code_context),
             call_stack=tuple(call_stack),
             forward_start_time=forward_start_time,
-            forward_args=args,
-            forward_kwargs=kwargs,
+            forward_args=stub_args,
+            forward_kwargs=stub_kwargs,
             forward_args_template=forward_args_template,
             forward_kwargs_template=forward_kwargs_template,
             layer_argnames=tuple(
@@ -1767,8 +1800,8 @@ def _ensure_module_output_tensor_logged(
             ),
             "transformed_activation_memory": None,
             "visualizer_path": None,
-            "bytes_delta_at_call": 0,
-            "bytes_peak_at_call": 0,
+            "bytes_delta_at_call": None,
+            "bytes_peak_at_call": None,
             "autograd_memory": None,
             "num_autograd_tensors": None,
             "has_out_variations": False,
@@ -2403,7 +2436,7 @@ def module_forward_decorator(
             frame = _mstack.push_frame(trace, state.module_stack, module)
             from .prehook_provenance import bind_invocation
 
-            bind_invocation(trace, module, frame.address, frame.pass_index, args, kwargs)
+            bind_invocation(trace, module, frame.address, frame.pass_index, (args, kwargs))
             state.event_index += 1
             enter_ctx = _build_record_context(
                 kind="module_enter",
@@ -2458,6 +2491,12 @@ def module_forward_decorator(
                             predicate_matched=False,
                         )
                     state.append_context(enter_ctx)
+                    # Echo narrator slot (snoop D1, module seam): structure
+                    # lines ride the events already in the stream. Duck-typed
+                    # session read: the hot path imports nothing.
+                    echo_session = trace.__dict__.get("_echo_session")
+                    if echo_session is not None:
+                        echo_session.emit_module_enter(frame.address, frame.module_type)
             out = None
             try:
                 if (
@@ -2543,17 +2582,32 @@ def module_forward_decorator(
                                 predicate_matched=False,
                             )
                         state.append_context(exit_ctx)
+                        # Echo module-exit line: only a COMPLETED module call
+                        # claims completion; a raising module abandons its
+                        # frame silently (the enter line without an exit is
+                        # the honest crash shape).
+                        echo_session = trace.__dict__.get("_echo_session")
+                        if echo_session is not None:
+                            if active_model_exc is None:
+                                echo_session.emit_module_exit(frame.address)
+                            else:
+                                echo_session.abandon_module_frame()
                     _mstack.pop_frame(state.module_stack, frame)
 
         # ---- Exhaustive mode: full entry -> forward -> exit ----
         frame = _mstack.push_frame(trace, trace._module_capture_ws.exhaustive_module_stack, module)
         from .prehook_provenance import bind_invocation
 
-        bind_invocation(trace, module, frame.address, frame.pass_index, args, kwargs)
+        bind_invocation(trace, module, frame.address, frame.pass_index, (args, kwargs))
         try:
             input_tensor_labels, input_tensor_labels_at_entry = _record_module_entry_metadata(
                 trace, module, args, kwargs
             )
+            # Echo narrator slot (snoop D1, module seam, exhaustive tier).
+            # Duck-typed session read: the hot path imports nothing.
+            echo_session = trace.__dict__.get("_echo_session")
+            if echo_session is not None:
+                echo_session.emit_module_enter(frame.address, _module_type(module))
             expected_token = None
             try:
                 if (
@@ -2583,10 +2637,17 @@ def module_forward_decorator(
                 call_labels = trace._module_capture_ws.mod_call_labels.get(mod_id)
                 if call_labels:
                     call_labels.pop()
+                # A raising module never completed: abandon the echo frame
+                # without an exit line (the enter without exit is the honest
+                # crash shape; depth stays consistent if user code catches).
+                if echo_session is not None:
+                    echo_session.abandon_module_frame()
                 raise
             untraceable_output_boundaries = _record_module_exit_metadata(
                 trace, module, out, input_tensor_labels, input_tensor_labels_at_entry
             )
+            if echo_session is not None:
+                echo_session.emit_module_exit(frame.address)
             mark_expected_original_accounted(
                 expected_token,
                 captured=bool(untraceable_output_boundaries),
@@ -2743,9 +2804,11 @@ def _cleanup_model_session(
     **Does NOT** remove permanent module metadata or unwrap ``module.forward`` — those persist for
     the lifetime of the model instance.
     """
+    from .offload_hooks import uninstall_offload_hook_shims
     from .prehook_provenance import rollback_prehook_provenance
 
     try:
+        uninstall_offload_hook_shims(trace)
         rollback_prehook_provenance(trace)
     finally:
         # Restore requires_grad and remove session-scoped param attributes

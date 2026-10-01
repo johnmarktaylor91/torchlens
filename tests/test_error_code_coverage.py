@@ -78,6 +78,16 @@ ENV_GATED_ALLOWLIST: dict[str, str] = {
 # for a red gate.
 UNPROVOKED_BASELINE: frozenset[str] = frozenset(
     {
+        # F05 mechinterp rows needing a BROKEN substrate to provoke (each is a
+        # fail-closed guard on evidence no healthy capture can lack): a spine
+        # whose execution-order accumulation misses bitwise (mi_spine_open), an
+        # undecidable additive join (mi_spine_ambiguous), a fused QKV weight
+        # with no split evidence (mi_qkv_slicing_unprovable), and a derived
+        # head view failing payload verification (mi_weight_view_unverified).
+        "mi_qkv_slicing_unprovable",
+        "mi_spine_ambiguous",
+        "mi_spine_open",
+        "mi_weight_view_unverified",
         "annotation_backend_unsupported",
         "annotation_namespace_invalid",
         "annotation_tensor_not_portable",
@@ -127,7 +137,6 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "metric_shape_mismatch",
         "metric_tensor_type_invalid",
         "metric_type_invalid",
-        "model_type_unsupported",
         "module_call_ambiguous",
         "module_focus_empty",
         "op_lookup_pass_out_of_range",
@@ -148,13 +157,13 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         # now provoke them.
         "run_input_missing",
         "selector_function_pattern_type_invalid",
-        "skip_fn_boundary_invalid",
+        # skip_fn_boundary_invalid: row DELETED (shrink-only lock-in) -- the
+        # F12 display-filter boundary test now provokes it.
         "stack_ordinals_duplicate",
         "stack_ordinals_unavailable",
         "stack_output_not_tensor",
         "storage_argument_conflict",
         "summary_fields_invalid",
-        "summary_option_conflict",
         "sweep_intervention_conflict",
         "sweep_names_length_mismatch",
         "sweep_site_missing",

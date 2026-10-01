@@ -75,7 +75,7 @@ def test_tracker_exports_reject_objects_without_required_method() -> None:
     log = _small_trace()
 
     with pytest.raises(TypeError, match="add_scalar"):
-        tl.export.tensorboard(log, object())
+        tl.export.tensorboard(log, object(), step=0)
     with pytest.raises(TypeError, match="log_metric"):
         tl.export.mlflow(log, client=object())
     with pytest.raises(TypeError, match="track"):

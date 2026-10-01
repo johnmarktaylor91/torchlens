@@ -168,6 +168,11 @@ class PlannedStep:
         alone (T-C11).
     context_capable:
         Whether the step declared context capability (T-C1).
+    disclosures:
+        Plan-time cost/behavior disclosures surfaced to the caller (e.g.
+        the O(D*k) ``iid_bernoulli`` generation cost, so a multi-second
+        generation inside a harvest cannot surprise anyone). Additive field;
+        empty for most steps.
     """
 
     name: str
@@ -176,6 +181,7 @@ class PlannedStep:
     stream_safe: bool
     may_alias: bool
     context_capable: bool
+    disclosures: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

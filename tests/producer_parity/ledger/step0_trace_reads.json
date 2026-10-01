@@ -6,5 +6,6 @@
  "capture_events",
  "input_layers",
  "op_equivalence_classes",
- "param_logs"
+ "param_logs",
+ "structure_only"
 ]

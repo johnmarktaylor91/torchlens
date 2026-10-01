@@ -37,6 +37,7 @@ SelectorKind: TypeAlias = Literal[
     "followed_by",
     "preceded_by",
     "site",
+    "episode_step",
 ]
 
 
@@ -1050,6 +1051,63 @@ class BackwardPassSelector(BaseSelector):
 
 
 @dataclass(frozen=True, repr=False)
+class EpisodeStepSelector(BaseSelector):
+    """Episode-step selector: match ops recorded inside declared step(s).
+
+    Lane F42 (attested coupling; spelling DOCUMENTED-UNSTABLE pending the
+    naming session): steps are the 0-based episode ledger rows -- stepped-
+    module call ``k`` is step ``k``, matching ``trace.episode.rows``. At
+    capture time the selector reads the LIVE step position (the armed join
+    session's boundary hooks); post hoc it reads the persisted
+    ``Op.episode_step`` stamps. Ops between steps (root-loop sampling,
+    pre/post work) belong to no step and never match. Compose with the
+    existing pass-qualified addressing (``"attn_1_1:2"`` labels) for the
+    step-x-pass cross-product.
+
+    Parameters
+    ----------
+    steps:
+        The declared 0-based step indices (at least one; non-negative ints).
+    """
+
+    steps: tuple[int, ...] = ()
+
+    def __init__(self, *steps: int) -> None:
+        """Create an episode-step selector.
+
+        Parameters
+        ----------
+        steps:
+            The declared 0-based step indices (at least one).
+        """
+
+        if not steps:
+            raise ArgumentTypeError(
+                "at_step() needs at least one 0-based episode step index "
+                "(step 0 is the prefill row).",
+                code="episode_step_selector_invalid",
+                remedy="pass the 0-based step indices to match, e.g. at_step(0, 2)",
+                argument="steps",
+            )
+        normalized: list[int] = []
+        for step in steps:
+            if isinstance(step, bool) or not isinstance(step, int) or step < 0:
+                raise ArgumentTypeError(
+                    f"at_step() steps must be non-negative ints (0-based episode "
+                    f"ledger rows); got {step!r}.",
+                    code="episode_step_selector_invalid",
+                    remedy="pass non-negative 0-based step indices, e.g. at_step(0, 2)",
+                    argument="steps",
+                    received_type=type(step).__name__,
+                )
+            normalized.append(int(step))
+        ordered = tuple(sorted(set(normalized)))
+        object.__setattr__(self, "selector_kind", "episode_step")
+        object.__setattr__(self, "selector_value", ordered)
+        object.__setattr__(self, "steps", ordered)
+
+
+@dataclass(frozen=True, repr=False)
 class CompositeSelector(BaseSelector):
     """Selector composed with ``&`` or ``|``.
 
@@ -1527,6 +1585,32 @@ def in_backward_pass(pass_index: int) -> BackwardPassSelector:
     return BackwardPassSelector(pass_index)
 
 
+def at_step(*steps: int) -> EpisodeStepSelector:
+    """Create an episode-step selector (lane F42's step qualifier).
+
+    Matches ops recorded inside the named 0-based episode step(s) -- the
+    stepped-module calls declared by ``tl.trace(..., episode=...)``, aligned
+    with ``trace.episode.rows``. Compose with any selector for step-qualified
+    capture-time intervention or save predicates
+    (``tl.when(tl.func("softmax") & at_step(2), tl.zero_ablate())``), and
+    with pass-qualified labels for the step-x-pass cross-product. Refuses
+    typed outside an episode capture (``episode_step_selector_without_episode``).
+
+    Parameters
+    ----------
+    steps:
+        The declared 0-based step indices (at least one; step 0 is the
+        prefill row).
+
+    Returns
+    -------
+    EpisodeStepSelector
+        Immutable selector.
+    """
+
+    return EpisodeStepSelector(*steps)
+
+
 @overload
 def in_module(address_or_layer: str) -> InModuleSelector:
     """Create a module-containment selector.
@@ -1671,6 +1755,10 @@ def _classify_selector_direction(
             PrecededBySelector,
             CompositeSelector,
             NotSelector,
+            # Step qualification is a position fact, not a graph direction
+            # (lane F42): it narrows forward subjects by episode step and
+            # composes direction-neutrally like the other position selectors.
+            EpisodeStepSelector,
         ),
     ):
         return None
@@ -1752,6 +1840,7 @@ __all__ = [
     "BackwardPassSelector",
     "CompositeSelector",
     "ContainsSelector",
+    "EpisodeStepSelector",
     "FuncSelector",
     "FuncTransformSelector",
     "FollowedBySelector",
@@ -1772,6 +1861,7 @@ __all__ = [
     "SelectorLike",
     "SiteSelector",
     "WhereSelector",
+    "at_step",
     "contains",
     "facet",
     "func",

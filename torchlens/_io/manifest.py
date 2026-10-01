@@ -26,7 +26,6 @@ from .. import __version__ as TORCHLENS_VERSION
 from ..errors._base import TorchLensWarning
 from . import (
     MIN_TLSPEC_VERSION,
-    MIN_TORCHLENS_VERSION_TEXT,
     TLSPEC_VERSION,
     ArtifactRuntimeIncompatibleError,
     ArtifactSchemaAgeWarning,
@@ -34,6 +33,7 @@ from . import (
     _json,
     above_ceiling_error,
     below_floor_error,
+    compat_ledger,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -535,17 +535,24 @@ class Manifest:
             raise below_floor_error(
                 observed="no tlspec_version (predates portable I/O versioning)",
                 subject="Bundle manifest",
+                code="artifact_version_below_floor",
             )
         if isinstance(raw_version, int) and raw_version < MIN_TLSPEC_VERSION:
             raise below_floor_error(
-                observed=f"tlspec_version={raw_version}", subject="Bundle manifest"
+                observed=f"tlspec_version={raw_version}",
+                subject="Bundle manifest",
+                code="artifact_version_below_floor",
             )
         if isinstance(raw_version, int) and raw_version > TLSPEC_VERSION:
             # Symmetric with the below-floor check above (G3): a FUTURE
             # manifest may carry renamed/extra fields, and without this gate
             # it refuses with a misleading missing-required-field error
             # instead of the above-ceiling refusal that names the remedy.
-            raise above_ceiling_error(observed=raw_version, subject="Bundle manifest")
+            raise above_ceiling_error(
+                observed=raw_version,
+                subject="Bundle manifest",
+                code="artifact_version_above_runtime",
+            )
 
         required_int_fields = (
             "tlspec_version",
@@ -916,13 +923,18 @@ def _optional_sha256(data: dict[str, Any], field_name: str) -> str | None:
     return value
 
 
-def enforce_version_policy(manifest: Manifest) -> None:
+def enforce_version_policy(manifest: Manifest, *, bundle_path: Path | None = None) -> None:
     """Apply the bundle version and integrity compatibility policy for a loaded manifest.
 
     Parameters
     ----------
     manifest:
         Parsed manifest to validate against the current runtime.
+    bundle_path:
+        Artifact directory, when the caller has it in scope. Enables the
+        migration-witness door for producer pair-consistency: a migrated
+        artifact keeps its original writer identity and proves its
+        (writer, stamp) lineage through ``tl_migration_provenance.json``.
 
     Raises
     ------
@@ -941,10 +953,16 @@ def enforce_version_policy(manifest: Manifest) -> None:
     """
 
     if manifest.tlspec_version > TLSPEC_VERSION:
-        raise above_ceiling_error(observed=manifest.tlspec_version, subject="Bundle")
+        raise above_ceiling_error(
+            observed=manifest.tlspec_version,
+            subject="Bundle",
+            code="artifact_version_above_runtime",
+        )
     if manifest.tlspec_version < MIN_TLSPEC_VERSION:
         raise below_floor_error(
-            observed=f"tlspec_version={manifest.tlspec_version}", subject="Bundle"
+            observed=f"tlspec_version={manifest.tlspec_version}",
+            subject="Bundle",
+            code="artifact_version_below_floor",
         )
     if manifest.tlspec_version < TLSPEC_VERSION:
         # Honest between-floor-and-current advisory (r6 L7): the artifact loads
@@ -1007,14 +1025,32 @@ def enforce_version_policy(manifest: Manifest) -> None:
             code="bundle_producer_unverifiable",
             remedy="re-save the artifact with a released torchlens",
         )
-    # A parseable torchlens_version below the floor refuses even when the
-    # manifest claims a current tlspec_version: a real 2.33+ save can never
-    # carry a pre-2.33 torchlens_version, so the pair is inconsistent.
-    if manifest_torchlens is not None and manifest_torchlens < Version(MIN_TORCHLENS_VERSION_TEXT):
-        raise below_floor_error(
-            observed=f"torchlens_version={manifest.torchlens_version}",
-            subject="Bundle",
+    # Producer PAIR-CONSISTENCY against the governed compatibility ledger
+    # (ecosystem MEMO 3.1, gate G5). This replaced the hand-typed
+    # ``< "2.33"`` inequality that orphaned lawful released v2.31.0/v2.32.4
+    # artifacts: the first tlspec-6 writer was v2.31.0 (measured on genuine
+    # wheels), so a (writer, stamp) pair refuses only when NO governed ledger
+    # window says that writer emitted that stamp. A migrated artifact keeps
+    # its original writer identity and proves its lineage through the
+    # migration witness sidecar instead; an invalid witness refuses typed.
+    if manifest_torchlens is not None and not compat_ledger.pair_is_governed(
+        manifest.torchlens_version, manifest.tlspec_version
+    ):
+        witness = (
+            compat_ledger.read_migration_witness(bundle_path) if bundle_path is not None else None
         )
+        if witness is None or not compat_ledger.migrated_pair_is_governed(
+            manifest.torchlens_version,
+            manifest.tlspec_version,
+            witness,
+            bundle_path=bundle_path,
+        ):
+            raise compat_ledger.ungoverned_pair_error(
+                manifest.torchlens_version,
+                manifest.tlspec_version,
+                subject="Bundle",
+                code="artifact_producer_pair_ungoverned",
+            )
     if runtime_torchlens is not None and manifest_torchlens is not None:
         if manifest_torchlens > runtime_torchlens:
             warnings.warn(

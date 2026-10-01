@@ -1,0 +1,5 @@
+# HF_LATEST_CANARY leg: deliberately UNPINNED (daily latest torch +
+# torchvision + transformers + timm). This file documents the leg's resolve
+# policy; the canary installs "torch torchvision transformers timm" with no
+# constraints and attests its PASSED count.
+# (no pins by design)

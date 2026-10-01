@@ -438,6 +438,6 @@ def _alias_free_backend_semantics(grad_fn_handle: Any) -> BackendSemantics:
         mutated_input_positions=(),
         aliased_output_inputs=(),
         unknown_aliasing=False,
-        bytes_delta_at_call=0,
-        bytes_peak_at_call=0,
+        bytes_delta_at_call=None,
+        bytes_peak_at_call=None,
     )

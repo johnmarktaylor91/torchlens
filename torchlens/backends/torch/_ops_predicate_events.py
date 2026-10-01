@@ -247,6 +247,24 @@ def _emit_predicate_operation_events(
                         tensor=out,
                         predicate_matched=False,
                     )
+                # Echo narrator slot (snoop D1): exactly once per committed
+                # event, after the append, outside the predicate-failure
+                # pipeline (a narrator failure warns-and-disables inside the
+                # session; only the typed stats-budget refusal propagates).
+                # Duck-typed session read: the hot path imports nothing.
+                echo_session = self.__dict__.get("_echo_session")
+                if echo_session is not None:
+                    committed_event = (
+                        capture_events.op_event_by_label_raw.get(_label_raw)
+                        if capture_events is not None
+                        else None
+                    )
+                    echo_session.emit_op(
+                        ctx,
+                        tensor=out,
+                        trace=self,
+                        intervened=bool(getattr(committed_event, "intervention_replaced", False)),
+                    )
                 state.append_context(ctx)
 
 
@@ -435,7 +453,16 @@ def _build_param_fields(
         if addr is not None and addr in self.param_logs:
             param_log = self.param_logs[addr]
             if getattr(param_log, "_param_ref", None) is not param:
-                continue
+                # Offload rebind rung (lane F37): accelerate offload hooks
+                # replace the prep-stamped meta parameter with a fresh
+                # real-valued object each forward; the offload shim registers
+                # exactly that materialization in the session-scoped
+                # weak-valued registry. Exact identity against it carries the
+                # same per-object belt as the ``_param_ref`` check; anything
+                # else still falls through unprovenanced (the honest path).
+                rebinds = getattr(self, "_offload_param_rebinds", None)
+                if rebinds is None or rebinds.get(addr) is not param:
+                    continue
             _param_logs.append(param_log)
             resolved_parameters.append(param)
 

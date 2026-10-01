@@ -380,6 +380,26 @@ def _store(log: Any, kind: str, memo: _ScanMemo) -> None:
     memos[kind] = memo
 
 
+def has_scan_evidence(log: Any, kind: str = "saved") -> bool:
+    """Whether a nonfinite evidence basis exists WITHOUT running a new scan.
+
+    True when the capture-time record exists (``track_nonfinite=True`` --
+    zero read cost) or a prior saved-payload scan left its memo on this
+    log. Render surfaces bound by the D4 cost-attribution law (no
+    implicit payload scans) branch on THIS before reading health facts;
+    the explicit ``tl.report.health_facts(trace)`` door stays the one
+    spelling that may pay for a first scan.
+    """
+
+    if _capture_store(log) is not None:
+        return True
+    try:
+        memos = _MEMOS.get(log)
+    except TypeError:
+        memos = None
+    return bool(memos and kind in memos)
+
+
 def _resolve_memo(log: Any, kind: str, stop_at_first: bool) -> tuple[list[Any], _ScanMemo]:
     """Return the examined layers plus the memo, scanning only when needed."""
 

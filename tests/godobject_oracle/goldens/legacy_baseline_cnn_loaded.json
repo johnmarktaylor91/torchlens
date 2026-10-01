@@ -2854,6 +2854,7 @@
    "edge_uses": [
     "<torchlens.intervention.types.EdgeUseRecord>"
    ],
+   "episode_step": null,
    "equivalence_class": "conv2d_NKMFo9VQ_bBE1pjGkconv",
    "equivalent_ops": {
     "__set__": [
@@ -3176,6 +3177,7 @@
    },
    "terminal_bool_for": null,
    "terminal_conditional_id": null,
+   "tl_authored_root": null,
    "trace": {
     "__ref__": "Trace",
     "label": null
@@ -3269,6 +3271,7 @@
    "edge_replacement_stamps": {},
    "edge_substitutions": {},
    "edge_uses": [],
+   "episode_step": null,
    "equivalence_class": "input_1_1_4_4_torch.float32",
    "equivalent_ops": {
     "__set__": [
@@ -3514,6 +3517,7 @@
    },
    "terminal_bool_for": null,
    "terminal_conditional_id": null,
+   "tl_authored_root": null,
    "trace": {
     "__ref__": "Trace",
     "label": null
@@ -3643,6 +3647,7 @@
    "edge_uses": [
     "<torchlens.intervention.types.EdgeUseRecord>"
    ],
+   "episode_step": null,
    "equivalence_class": "linear_B5Ah2aKC_UvuJV9zxhead",
    "equivalent_ops": {
     "__set__": [
@@ -3921,6 +3926,7 @@
    },
    "terminal_bool_for": null,
    "terminal_conditional_id": null,
+   "tl_authored_root": null,
    "trace": {
     "__ref__": "Trace",
     "label": null
@@ -4030,6 +4036,7 @@
    "edge_uses": [
     "<torchlens.intervention.types.EdgeUseRecord>"
    ],
+   "episode_step": null,
    "equivalence_class": "mean_51d57cc28d6e70a2",
    "equivalent_ops": {
     "__set__": [
@@ -4302,6 +4309,7 @@
    },
    "terminal_bool_for": null,
    "terminal_conditional_id": null,
+   "tl_authored_root": null,
    "trace": {
     "__ref__": "Trace",
     "label": null
@@ -4393,6 +4401,7 @@
    "edge_replacement_stamps": {},
    "edge_substitutions": {},
    "edge_uses": [],
+   "episode_step": null,
    "equivalence_class": "output_1_1_3_torch.float32",
    "equivalent_ops": {
     "__set__": [
@@ -4647,6 +4656,7 @@
    },
    "terminal_bool_for": null,
    "terminal_conditional_id": null,
+   "tl_authored_root": null,
    "trace": {
     "__ref__": "Trace",
     "label": null
@@ -4754,6 +4764,7 @@
    "edge_uses": [
     "<torchlens.intervention.types.EdgeUseRecord>"
    ],
+   "episode_step": null,
    "equivalence_class": "relu_43c01414e3d13308",
    "equivalent_ops": {
     "__set__": [
@@ -5007,6 +5018,7 @@
    },
    "terminal_bool_for": null,
    "terminal_conditional_id": null,
+   "tl_authored_root": null,
    "trace": {
     "__ref__": "Trace",
     "label": null
@@ -5088,7 +5100,8 @@
    "used_by_ops": [
     "conv2d_1_1:1"
    ],
-   "value": null
+   "value": null,
+   "value_basis": "<torchlens.data_classes.param.ParamValueBasis>"
   },
   "conv.weight": {
    "_derived_grad_record_path": null,
@@ -5145,7 +5158,8 @@
    "used_by_ops": [
     "conv2d_1_1:1"
    ],
-   "value": null
+   "value": null,
+   "value_basis": "<torchlens.data_classes.param.ParamValueBasis>"
   },
   "head.bias": {
    "_derived_grad_record_path": null,
@@ -5199,7 +5213,8 @@
    "used_by_ops": [
     "linear_1_4:1"
    ],
-   "value": null
+   "value": null,
+   "value_basis": "<torchlens.data_classes.param.ParamValueBasis>"
   },
   "head.weight": {
    "_derived_grad_record_path": null,
@@ -5254,7 +5269,8 @@
    "used_by_ops": [
     "linear_1_4:1"
    ],
-   "value": null
+   "value": null,
+   "value_basis": "<torchlens.data_classes.param.ParamValueBasis>"
   }
  },
  "trace": {
@@ -5574,6 +5590,7 @@
   "capture_duration": "<measured>",
   "capture_end_time": "<measured>",
   "capture_guard_passes": [],
+  "capture_kind": "plain",
   "capture_mode": "exhaustive",
   "capture_owner_thread_id": "<measured>",
   "capture_owner_thread_qualified": null,
@@ -5619,6 +5636,8 @@
   "distributed_scope": null,
   "edges": "<raises SelectionError>",
   "emit_nvtx": false,
+  "episode": null,
+  "episode_coupling": null,
   "escape_detector_backward_coverage": null,
   "escape_detector_callback_ns": null,
   "escape_detector_event_count": null,
@@ -5664,6 +5683,7 @@
   "forward_duration": "<measured>",
   "forward_memory_backend": "<measured>",
   "forward_peak_memory": "<measured>",
+  "forward_peak_memory_pair": "<measured>",
   "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
   "forward_source_file": "test_aliases.py",
   "forward_source_line": 36,
@@ -5705,6 +5725,7 @@
   "init_source_file": "test_aliases.py",
   "init_source_line": 29,
   "init_source_location": "test_aliases.py:29",
+  "injected_ops": [],
   "input_annotations": {},
   "input_layers": [
    "input_1"
@@ -6082,6 +6103,32 @@
   "model_cls": null,
   "model_label": "_AliasCNN",
   "model_object_id": "<measured>",
+  "model_ops": [
+   {
+    "__ref__": "Op",
+    "label": "input_1:1"
+   },
+   {
+    "__ref__": "Op",
+    "label": "conv2d_1_1:1"
+   },
+   {
+    "__ref__": "Op",
+    "label": "relu_1_2:1"
+   },
+   {
+    "__ref__": "Op",
+    "label": "mean_1_3:1"
+   },
+   {
+    "__ref__": "Op",
+    "label": "linear_1_4:1"
+   },
+   {
+    "__ref__": "Op",
+    "label": "output_1:1"
+   }
+  ],
   "model_profile": "<torchlens.data_classes._trace_profile.ModelProfile>",
   "module_calls": "<torchlens.data_classes._trace_accessors.TraceModuleCallAccessor>",
   "module_collapse_order": [
@@ -6238,6 +6285,7 @@
   },
   "replay_frontier": {},
   "rescue_rerun": null,
+  "root_entry_point": null,
   "root_module": {
    "__ref__": "Module",
    "label": "self"

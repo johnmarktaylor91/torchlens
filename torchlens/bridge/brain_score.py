@@ -17,11 +17,17 @@ The wiring matches brainscore-vision 2.3.22's ``PytorchWrapper`` source
 preprocessed numpy arrays or tensors, are stacked, moved to the model's
 device, dtype-matched to the model parameters, and run under ``eval()`` +
 ``no_grad()``; the special layer name ``"logits"`` resolves to the model
-output. brainscore-vision requires Python >= 3.11 and could not be installed
-in this environment, so :func:`activations_extractor` is UNVERIFIED against a
-running Brain-Score installation — the constructor contract is verified
-against the real source and covered by a stub-wiring test. Adapter spellings
-are DOCUMENTED-UNSTABLE pending the naming/UI sprint.
+output. VERIFIED END TO END (the neuro-memo 4.3 live gate, 2026-08-29): a
+real resnet18 IMAGENET1K_V1 checkpoint ran through a real
+``ActivationsExtractorHelper`` and ``StimulusSet`` against a live
+brainscore-vision 2.3.22 install on Python 3.12 -- values, presentation
+order, layer coordinates, logits, dotted module paths, a functional-op
+mapping, a short final batch, and CPU behavior all matched direct torchlens
+extraction, and ``per_layer`` default sites ran on a PARTIALLY saved trace.
+CUDA is not claimed (no covered runner). brainscore-vision requires
+Python >= 3.11; the verified adapters are also exposed as
+``torchlens.neuro.activations_extractor`` / ``get_activations_fn``. Adapter
+spellings are DOCUMENTED-UNSTABLE pending the naming/UI sprint.
 """
 
 from __future__ import annotations
@@ -58,8 +64,13 @@ def per_layer(
     benchmark:
         Callable benchmark accepting ``(out, layer=..., **kwargs)``.
     sites:
-        Optional iterable of layer labels/selectors to score. Defaults to all
-        saved tensor layers except input placeholders.
+        Optional iterable of sites to score: layer labels, selectors, or
+        module dotted paths (the spelling Brain-Score users already write).
+        Defaults to every STIMULUS-INDEXED saved tensor layer except input
+        placeholders, through the core eligibility gate -- a partially
+        saved trace scores its saved sites instead of crashing, and buffer
+        overwrites are skipped with one summarized disclosure instead of
+        being scored as stimulus responses.
     **kwargs:
         Additional benchmark keyword arguments.
 
@@ -72,13 +83,16 @@ def per_layer(
     ------
     TypeError
         If ``benchmark`` is not callable.
+    ValueError
+        If an explicitly requested site has no saved tensor out or is not
+        stimulus-indexed.
     """
 
     if not callable(benchmark):
         raise TypeError("Brain-Score bridge currently requires a callable offline benchmark.")
 
     scores: dict[str, Any] = {}
-    for layer in tensor_layers(log, sites):
+    for layer in tensor_layers(log, sites, verb="bridge.brain_score.per_layer"):
         out = getattr(layer, "out")
         label = str(getattr(layer, "layer_label", "layer"))
         # TODO: connect the real Brain-Score Benchmark API once the offline

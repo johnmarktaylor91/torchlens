@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import bisect
+import functools
 import hashlib
 import math
-import re
 import time
 import warnings
 import weakref
 from collections import defaultdict
 from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -24,6 +25,27 @@ from ..errors._base import TorchLensWarning
 # through the module attribute so the patch seam has one home.
 from . import _condensed_flow
 from ._collapse_disclosures import _warn_undisclosed_floor
+from ._collapse_runs import (  # noqa: F401
+    RUN_FOLD_MIN_LENGTH,
+    _chain_connector_nodes,
+    _paired_external_connector,
+    _run_fold_is_chain_interval,
+    _run_fold_is_legal,
+    _run_fold_is_parallel_fan,
+    _run_is_flow_consecutive,
+)
+from ._collapse_signatures import (  # noqa: F401
+    _MEMORY_ADDRESS_PATTERN,
+    MemberFingerprintCache,
+    _exterior_bindings_consistent,
+    _func_config_digest,
+    _module_exterior_bindings,
+    _module_structural_signature,
+    _module_wiring_digest,
+    _module_wiring_walk,
+    _non_tensor_args_digest,
+    fingerprints_for,
+)
 from ._condensed_flow import (  # noqa: F401
     JUNCTION_FUNC_NAMES,
     ChildCondensedFlowGraph,
@@ -99,7 +121,7 @@ def _indexed_child_stem(name: str) -> str | None:
     return name[: min(suffix_starts)]
 
 
-RUN_FOLD_MIN_LENGTH = 3
+# RUN_FOLD_MIN_LENGTH moved to ._collapse_runs (re-exported above).
 
 
 @dataclass(frozen=True)
@@ -184,8 +206,58 @@ _OP_ADJACENCY_INDEX_CACHE: weakref.WeakKeyDictionary[
 ] = weakref.WeakKeyDictionary()
 
 
+#: Active revision scope: ``(trace, cell)`` for the public collapse call
+#: currently on the stack, or ``None``; ``cell`` holds the lazily-computed
+#: snapshot (empty until the first interior read). B1 hot-path fix (collapse
+#: memo item 6): the honest M2a box pricing revalidates the box-units cache
+#: through ``_collapse_graph_revision`` once per priced box, which alone cost
+#: ~95% of a 1x150 max selection (3,786 O(ops) snapshots). One public entry
+#: serves ONE snapshot by identity to every interior revalidation; selection
+#: never mutates collapse-relevant trace state, so the served snapshot cannot
+#: go stale inside the scope.
+_ACTIVE_REVISION_SCOPE: ContextVar[tuple[Any, list[tuple[object, ...]]] | None] = ContextVar(
+    "torchlens_collapse_revision_scope", default=None
+)
+
+
+def _revision_scoped(fn: Callable[..., Any]) -> Callable[..., Any]:
+    """Serve one shared revision snapshot for a public collapse entry point.
+
+    Wraps a function whose first positional argument is the trace. The scope
+    is LAZY: the first interior ``_collapse_graph_revision`` read computes
+    the snapshot and every later read is served by identity, so decline
+    paths that never fingerprint pay nothing (r8 R60-13, strengthened -- the
+    historical eager guard skipped the scope whenever raw ops exceeded
+    ``COLLAPSE_OPTIMIZER_MAX_OPS``, a stale mirror of the pre-U-gate
+    admission rule: an ADMITTED over-raw-ceiling trace ran the whole quality
+    planner unscoped, recomputing the O(ops) snapshot per priced box.
+    Train-mode densenet201, 2,120 raw ops at U=713, measured 119x slower
+    than eval mode this way and tripped the selection watchdog). Nested
+    scoped entries on the same trace reuse the outer scope.
+    """
+
+    @functools.wraps(fn)
+    def wrapper(trace: Trace, *args: Any, **kwargs: Any) -> Any:
+        """Open (or reuse) the lazy revision scope around one public entry."""
+
+        active = _ACTIVE_REVISION_SCOPE.get()
+        if active is not None and active[0] is trace:
+            return fn(trace, *args, **kwargs)
+        token = _ACTIVE_REVISION_SCOPE.set((trace, []))
+        try:
+            return fn(trace, *args, **kwargs)
+        finally:
+            _ACTIVE_REVISION_SCOPE.reset(token)
+
+    return wrapper
+
+
 def _collapse_graph_revision(trace: Trace) -> tuple[object, ...]:
     """Return a by-value graph fingerprint for visualization cache invalidation.
+
+    Inside an active :func:`_revision_scoped` entry the one shared snapshot
+    is served by identity (computed here on the scope's first read);
+    otherwise the fingerprint is recomputed.
 
     Parameters
     ----------
@@ -197,6 +269,18 @@ def _collapse_graph_revision(trace: Trace) -> tuple[object, ...]:
     tuple[object, ...]
         Stable snapshot of collapse-relevant operation and module metadata.
     """
+
+    active = _ACTIVE_REVISION_SCOPE.get()
+    if active is not None and active[0] is trace:
+        cell = active[1]
+        if not cell:
+            cell.append(_compute_collapse_graph_revision(trace))
+        return cell[0]
+    return _compute_collapse_graph_revision(trace)
+
+
+def _compute_collapse_graph_revision(trace: Trace) -> tuple[object, ...]:
+    """Compute the uncached collapse-relevant graph fingerprint."""
 
     op_revision = tuple(
         (
@@ -388,17 +472,18 @@ def _child_condensed_flow_graphs(trace: Trace) -> Mapping[str, ChildCondensedFlo
 
 def collapse_order(
     trace: Trace,
-    weights: Mapping[str, float] | None = None,
     mode: Literal["auto", "max"] = "auto",
 ) -> list[tuple[str, float]]:
     """Return v2 collapse diagnostics sorted by score for a policy.
+
+    The documented-inert ``weights=`` parameter is REMOVED (collapse memo
+    D9; clean-v2 hard-rename posture: no warn shim). Scores were never
+    weight-sensitive on this surface; see MIGRATIONS.md.
 
     Parameters
     ----------
     trace:
         Trace to rank.
-    weights:
-        Ignored legacy parameter retained for call compatibility.
     mode:
         ``"auto"`` or ``"max"`` landmark policy.
 
@@ -408,7 +493,6 @@ def collapse_order(
         ``(module_address, rounded_score)`` sorted by ``(-score, address)``.
     """
 
-    _ = weights
     if mode not in {"auto", "max"}:
         raise InvalidArgumentError(
             f"mode must be 'auto' or 'max'; received {mode!r}",
@@ -557,6 +641,7 @@ def resolve_collapse_fn(
     return None
 
 
+@_revision_scoped
 def resolve_repeat_folds(
     trace: Trace,
     collapse_fn: Callable[[Module], bool] | None,
@@ -618,6 +703,16 @@ def resolve_repeat_folds(
     eligibility_collapse_fn = collapse_fn if collapse_fn is not None else _always_collapse_module
     render_collapse_fn = collapse_fn
     v2_repeat_folds = getattr(collapse_fn, "_torchlens_v2_repeat_folds", None)
+    if fold_repeats is True and v2_repeat_folds is not None:
+        # Explicit ``fold_repeats=True`` folds eligible repeated runs even
+        # inside the readable band (the documented "even with
+        # collapse='none'" contract). A MODE-resolved selection (v2-marked
+        # fn) is a presentation choice, not a fold scope: the D8 ladder can
+        # legally choose a near-full auto point whose selection would
+        # otherwise silently veto the explicit fold request. An explicit
+        # user collapse_fn (no marker) keeps scoping discovery to the
+        # user's modules.
+        eligibility_collapse_fn = _always_collapse_module
     if fold_repeats is None and v2_repeat_folds is not None:
         return dict(v2_repeat_folds)
     projected_count = count(
@@ -638,6 +733,9 @@ def resolve_repeat_folds(
         resolved_context,
     )
     analysis = analyze_collapse(trace)
+    # B1 (collapse memo item 6): one fingerprint memo per analysis revision,
+    # shared by every uniformity check in this sweep.
+    fingerprints = fingerprints_for(trace, analysis)
     candidate_folds: list[ModuleRepeatFold] = []
     candidate_addresses: set[str] = set()
     # One selected-module index per discovery sweep (r8 R29): the per-group
@@ -653,10 +751,12 @@ def resolve_repeat_folds(
             analysis,
         )
         flow_addresses = _flow_ordered_child_addresses(child_addresses, graph)
-        for run in _iter_collapsible_runs(trace, flow_addresses, eligibility_collapse_fn):
+        for run in _iter_collapsible_runs(
+            trace, flow_addresses, eligibility_collapse_fn, fingerprints=fingerprints
+        ):
             if not _run_fold_is_legal(run, graph):
                 continue
-            if not _run_fold_members_uniform(trace, run):
+            if not _run_fold_members_uniform(trace, run, fingerprints):
                 continue
             fold = _make_run_fold(trace, run)
             candidate_folds.append(fold)
@@ -666,6 +766,7 @@ def resolve_repeat_folds(
             flow_addresses,
             eligibility_collapse_fn,
             selected_index=sweep_selected_index,
+            fingerprints=fingerprints,
         ):
             if any(address in candidate_addresses for address in run):
                 continue
@@ -678,7 +779,7 @@ def resolve_repeat_folds(
             )
             if not _run_fold_is_legal(run, run_graph):
                 continue
-            if not _run_fold_members_uniform(trace, run):
+            if not _run_fold_members_uniform(trace, run, fingerprints):
                 continue
             fold = _make_run_fold(trace, run)
             candidate_folds.append(fold)
@@ -689,12 +790,13 @@ def resolve_repeat_folds(
             eligibility_collapse_fn,
             allow_selected_descendant=True,
             selected_index=sweep_selected_index,
+            fingerprints=fingerprints,
         ):
             if any(address in candidate_addresses for address in run):
                 continue
             if not _run_fold_is_legal(run, graph):
                 continue
-            if not _run_fold_members_uniform(trace, run):
+            if not _run_fold_members_uniform(trace, run, fingerprints):
                 continue
             fold = _make_run_fold(trace, run)
             candidate_folds.append(fold)
@@ -937,226 +1039,16 @@ def module_collapse_score(module: Module) -> float:
     return dict(collapse_order(trace)).get(module.address, 0.0)
 
 
-def _module_structural_signature(
-    module: Module,
-) -> tuple[int, int, int, int, tuple[tuple[str, str, str], ...], object]:
-    """Return a per-module structural fingerprint for fold-honesty checks.
-
-    Two modules are only considered structurally interchangeable for the
-    "+N more" repeat-fold ellipsis when this fingerprint matches exactly. It
-    is used to require that EVERY member of a fold — the visible
-    representative included — shares one structure, so a same-class,
-    same-output-shape sibling with genuinely different internals (extra
-    layers/params) can never be silently hidden inside a ``+N more`` box that
-    claims uniformity.
-
-    r-b6 R19-1: counts alone were not enough — a kwargs-different conv
-    (dilation 2) and a tanh-for-relu block both matched the historical 4-int
-    fingerprint, so two DIFFERENT models rendered byte-identical DOT under
-    the homogeneity claim. The fingerprint therefore also carries the ordered
-    per-layer op-type sequence and a canonical ``func_config`` digest.
-
-    r3 b6-opus R19-1: op types and kwargs are still not enough — a residual
-    ``x + y`` block and a self-add ``y + y`` block share the same ordered op
-    list and params but are DIFFERENT DAGs. The fingerprint therefore also
-    carries :func:`_module_wiring_digest`, a canonical intra-module dataflow
-    component.
-
-    r4 b6-opus R19-1: ``func_config`` is the MODULE configuration, so a
-    functional/dunder op's scalar operand never entered the fingerprint —
-    ``* 1.0`` and ``* 3.0`` blocks folded behind one ``+N more``. Each row
-    therefore also carries a canonical digest of the op's captured
-    non-tensor arguments (:func:`_non_tensor_args_digest`).
-
-    Parameters
-    ----------
-    module:
-        Module to fingerprint.
-
-    Returns
-    -------
-    tuple
-        ``(num_layers, num_params, num_params_trainable, num_params_frozen,
-        ops_signature, wiring_digest)`` where ``ops_signature`` is a tuple of
-        ``(op_type, func_config_digest, non_tensor_args_digest)`` rows in
-        layer order and ``wiring_digest`` canonicalizes the member's
-        interior edges plus boundary crossings.
-    """
-
-    ops_signature = tuple(
-        (
-            str(getattr(layer, "func_name", None) or getattr(layer, "layer_type", "")),
-            _func_config_digest(getattr(layer, "func_config", None)),
-            _non_tensor_args_digest(layer),
-        )
-        for layer in module.layers
-    )
-    return (
-        int(module.num_layers),
-        int(module.num_params),
-        int(module.num_params_trainable),
-        int(module.num_params_frozen),
-        ops_signature,
-        _module_wiring_digest(module),
-    )
+# The structural-fingerprint family moved to ._collapse_signatures with
+# the B1 fingerprint memo cache (collapse memo item 6); the names
+# re-export from this module's imports for existing readers.
 
 
-def _module_wiring_walk(module: Module) -> tuple[object, tuple[tuple[str, int], ...]]:
-    """Walk one member's wiring; return ``(digest_rows, exterior_bindings)``.
-
-    ``digest_rows`` encodes, per interior op in execution order, the ordered
-    parent slots as either ``("i", position)`` — an edge from the interior op
-    at that execution position — or ``("x", k)`` — a boundary crossing from
-    the ``k``-th distinct exterior source first seen while walking this
-    member. ``exterior_bindings`` is the sorted ``(exterior_label, k)``
-    correspondence those crossings used, for the cross-member consistency
-    check (:func:`_exterior_bindings_consistent`).
-
-    Raises on unresolvable wiring; callers own the degrade policy.
-    """
-
-    trace = module.trace
-    if trace is None:
-        return "", ()
-    canonical: list[str] = []
-    seen: set[str] = set()
-    for label in module._op_labels():
-        resolved = trace.ops[label].label
-        if resolved not in seen:
-            seen.add(resolved)
-            canonical.append(resolved)
-    position = {label: index for index, label in enumerate(canonical)}
-    exterior: dict[str, int] = {}
-    rows: list[tuple[tuple[str, int], ...]] = []
-    for label in canonical:
-        slots: list[tuple[str, int]] = []
-        for parent_label in trace.ops[label].parents:
-            parent = trace.ops[parent_label].label
-            if parent in position:
-                slots.append(("i", position[parent]))
-            else:
-                slots.append(("x", exterior.setdefault(parent, len(exterior))))
-        rows.append(tuple(slots))
-    return tuple(rows), tuple(sorted(exterior.items()))
-
-
-def _module_wiring_digest(module: Module) -> object:
-    """Return a canonical intra-module dataflow digest for one fold member.
-
-    Exterior sources are numbered per member (never by label), so two run
-    members fed by different upstream blocks still compare equal when their
-    interior wiring matches, while a residual skip (``x + y``) can never
-    match a self-add (``y + y``): the former's add row reads
-    ``(("x", 0), ("i", j))`` and the latter's ``(("i", j), ("i", j))``.
-
-    A member whose wiring cannot be resolved degrades to a UNIQUE
-    per-member sentinel, so it can never fold (r4 b6-fable R19): degrading
-    every failing member to a shared exception type name made two members
-    with genuinely different-but-unresolvable wiring compare equal, silently
-    falling back to the op-signature-only comparison the r3 HIGH proved
-    insufficient.
-    """
-
-    try:
-        rows, _ = _module_wiring_walk(module)
-        return rows
-    except Exception as error:
-        return (
-            "__torchlens_wiring_unresolved__",
-            str(getattr(module, "address", "") or id(module)),
-            type(error).__name__,
-        )
-
-
-def _module_exterior_bindings(module: Module) -> tuple[tuple[str, int], ...] | None:
-    """Return one member's exterior-source binding, or ``None`` if unresolvable."""
-
-    try:
-        _, bindings = _module_wiring_walk(module)
-        return bindings
-    except Exception:
-        return None
-
-
-def _exterior_bindings_consistent(
-    merged: dict[str, int],
-    bindings: tuple[tuple[str, int], ...] | None,
+def _run_fold_members_uniform(
+    trace: Trace,
+    addresses: Sequence[str],
+    fingerprints: MemberFingerprintCache | None = None,
 ) -> bool:
-    """Merge one member's exterior binding into the fold's shared frame.
-
-    r4 b6-sol R19-1: per-member first-seen numbering alone erases the
-    cross-member source correspondence — ``sub(a, b)`` and ``sub(b, a)``
-    both canonicalize to ``(("x", 0), ("x", 1))``. When fold members SHARE
-    an exterior source, that source must occupy the SAME operand slot in
-    every member; members with disjoint exterior sets (consecutive chain
-    blocks fed by different upstream blocks) impose no constraint and keep
-    folding. Returns whether the member is consistent, updating ``merged``
-    in place on success.
-    """
-
-    if bindings is None:
-        return False
-    return all(merged.setdefault(label, index) == index for label, index in bindings)
-
-
-def _func_config_digest(func_config: Any) -> str:
-    """Return a canonical, order-independent digest of one ``func_config``.
-
-    ``func_config`` values are capture-recorded primitives (ints, tuples,
-    strings), so ``repr`` over key-sorted items is deterministic. An exotic
-    unsortable/unreprable config degrades to its type name — coarser matching,
-    never a crash.
-    """
-
-    if not func_config:
-        return ""
-    try:
-        return repr(sorted(func_config.items(), key=lambda item: str(item[0])))
-    except Exception:
-        return type(func_config).__name__
-
-
-_MEMORY_ADDRESS_PATTERN = re.compile(r"0x[0-9a-fA-F]+")
-
-
-def _non_tensor_args_digest(layer: Any) -> str:
-    """Return a canonical digest of one op's captured non-tensor arguments.
-
-    r4 b6-opus R19-1: ``func_config`` is empty for functional/dunder ops, so
-    a scalar operand (``* 3.0`` vs ``* 1.0``) never entered the fold
-    fingerprint and two models computing DIFFERENT functions folded behind
-    one ``+N more`` ellipsis. The captured positional and keyword non-tensor
-    argument values are already recorded per op; digest them canonically.
-
-    Default-object reprs embed memory addresses, which are nondeterministic
-    per process; they are masked so equal-valued members keep comparing
-    equal (coarser matching for address-only-distinct objects, matching the
-    ``_func_config_digest`` degrade discipline). An unreprable value
-    degrades to its type name — coarser matching, never a crash.
-    """
-
-    try:
-        # Multi-pass layers refuse per-pass reads at the aggregate (typed
-        # layer_pass_ambiguous, not AttributeError), so read each pass's op
-        # directly; the operand values of EVERY pass are fingerprint-relevant.
-        ops = getattr(layer, "ops", None)
-        sources = list(ops.values()) if ops is not None else [layer]
-        parts = tuple(
-            (
-                getattr(source, "non_tensor_pos_args", None),
-                getattr(source, "non_tensor_kwargs", None),
-            )
-            for source in (sources or [layer])
-        )
-        if not any(pos or kw for pos, kw in parts):
-            return ""
-        text = repr(parts)
-    except Exception as error:
-        return type(error).__name__
-    return _MEMORY_ADDRESS_PATTERN.sub("0xADDR", text)
-
-
-def _run_fold_members_uniform(trace: Trace, addresses: Sequence[str]) -> bool:
     """Return whether every run member shares one structural signature.
 
     A run fold renders the first member (``addresses[0]``) as a visible
@@ -1184,6 +1076,10 @@ def _run_fold_members_uniform(trace: Trace, addresses: Sequence[str]) -> bool:
         Trace owning the modules.
     addresses:
         Folded run addresses, representative first.
+    fingerprints:
+        Optional shared B1 fingerprint memo (collapse memo item 6). ``None``
+        builds a call-local cache, which still shares one wiring walk per
+        member between the signature and bindings reads.
 
     Returns
     -------
@@ -1193,10 +1089,8 @@ def _run_fold_members_uniform(trace: Trace, addresses: Sequence[str]) -> bool:
 
     if len(addresses) <= 1:
         return True
-    signatures = {
-        _module_structural_signature(cast("Module", trace.modules[address]))
-        for address in addresses
-    }
+    cache = MemberFingerprintCache(trace) if fingerprints is None else fingerprints
+    signatures = {cache.signature(address) for address in addresses}
     if len(signatures) != 1:
         return False
     # r4 b6-sol R19-1: equal per-member signatures are not enough when the
@@ -1204,16 +1098,14 @@ def _run_fold_members_uniform(trace: Trace, addresses: Sequence[str]) -> bool:
     # same operand slot in every member (a - b vs b - a must never fold).
     merged: dict[str, int] = {}
     return all(
-        _exterior_bindings_consistent(
-            merged, _module_exterior_bindings(cast("Module", trace.modules[address]))
-        )
-        for address in addresses
+        _exterior_bindings_consistent(merged, cache.bindings(address)) for address in addresses
     )
 
 
 def _split_run_by_member_uniformity(
     trace: Trace,
     run: tuple[str, ...],
+    fingerprints: MemberFingerprintCache | None = None,
 ) -> Iterator[tuple[str, ...]]:
     """Split one grouped run into its maximal member-uniform sub-runs.
 
@@ -1241,6 +1133,9 @@ def _split_run_by_member_uniformity(
     run:
         One flow-consecutive, same-class/stem/shape run as assembled by
         :func:`_iter_collapsible_runs`.
+    fingerprints:
+        Optional shared B1 fingerprint memo (collapse memo item 6). ``None``
+        builds a call-local cache for this run's signature/bindings reads.
 
     Yields
     ------
@@ -1259,12 +1154,9 @@ def _split_run_by_member_uniformity(
     total = len(run)
     if total < RUN_FOLD_MIN_LENGTH:
         return
-    signatures = [
-        _module_structural_signature(cast("Module", trace.modules[address])) for address in run
-    ]
-    bindings = [
-        _module_exterior_bindings(cast("Module", trace.modules[address])) for address in run
-    ]
+    cache = MemberFingerprintCache(trace) if fingerprints is None else fingerprints
+    signatures = [cache.signature(address) for address in run]
+    bindings = [cache.bindings(address) for address in run]
     index = 0
     while index < total:
         end = index + 1
@@ -1299,6 +1191,7 @@ def _iter_collapsible_runs(
     run_stem: str | None = None,
     allow_selected_descendant: bool = False,
     selected_index: tuple[str, ...] | None = None,
+    fingerprints: MemberFingerprintCache | None = None,
 ) -> Iterator[tuple[str, ...]]:
     """Yield flow-consecutive same-class runs with equal adjacent output shapes.
 
@@ -1327,6 +1220,10 @@ def _iter_collapsible_runs(
     selected_index:
         Optional precomputed selected-address index shared across sibling
         groups (r8 R29); ``None`` rebuilds it for this group.
+    fingerprints:
+        Optional shared B1 fingerprint memo (collapse memo item 6), threaded
+        through to :func:`_split_run_by_member_uniformity` so one discovery
+        sweep prices each member once; ``None`` builds a cache per split.
 
     Yields
     ------
@@ -1359,7 +1256,7 @@ def _iter_collapsible_runs(
         if not selected:
             if allow_selected_descendant:
                 continue
-            yield from _split_run_by_member_uniformity(trace, tuple(current_run))
+            yield from _split_run_by_member_uniformity(trace, tuple(current_run), fingerprints)
             current_key = None
             current_descendant_only_num_layers = None
             current_has_direct_selection = False
@@ -1387,12 +1284,12 @@ def _iter_collapsible_runs(
             if not current_has_direct_selection:
                 current_descendant_only_num_layers = num_layers
             continue
-        yield from _split_run_by_member_uniformity(trace, tuple(current_run))
+        yield from _split_run_by_member_uniformity(trace, tuple(current_run), fingerprints)
         current_key = key
         current_descendant_only_num_layers = None if directly_selected else num_layers
         current_has_direct_selection = directly_selected
         current_run = [address]
-    yield from _split_run_by_member_uniformity(trace, tuple(current_run))
+    yield from _split_run_by_member_uniformity(trace, tuple(current_run), fingerprints)
 
 
 def _iter_collapsible_child_path_runs(
@@ -1400,6 +1297,7 @@ def _iter_collapsible_child_path_runs(
     sibling_addresses: list[str],
     collapse_fn: Callable[[Module], bool],
     selected_index: tuple[str, ...] | None = None,
+    fingerprints: MemberFingerprintCache | None = None,
 ) -> Iterator[tuple[str, ...]]:
     """Yield repeated selected child paths under consecutive sibling parents.
 
@@ -1414,6 +1312,10 @@ def _iter_collapsible_child_path_runs(
     selected_index:
         Optional precomputed selected-address index shared across sibling
         groups (r8 R29); ``None`` rebuilds it for this group.
+    fingerprints:
+        Optional shared B1 fingerprint memo (collapse memo item 6), forwarded
+        to the per-stem :func:`_iter_collapsible_runs` sweeps; ``None`` builds
+        a cache per split.
 
     Yields
     ------
@@ -1456,6 +1358,7 @@ def _iter_collapsible_child_path_runs(
                     current_candidates,
                     collapse_fn,
                     current_stem,
+                    fingerprints=fingerprints,
                 )
             current_stem = stem
             current_candidates = [candidate_address] if candidate_address else []
@@ -1465,6 +1368,7 @@ def _iter_collapsible_child_path_runs(
                 current_candidates,
                 collapse_fn,
                 current_stem,
+                fingerprints=fingerprints,
             )
 
 
@@ -1538,227 +1442,10 @@ def _module_output_shapes_equal(trace: Trace, left: str, right: str) -> bool:
     return left_shape is not None and left_shape == right_shape
 
 
-def _run_fold_is_legal(
-    addresses: tuple[str, ...],
-    graph: ChildCondensedFlowGraph | None,
-) -> bool:
-    """Return whether a candidate run satisfies the v2 legality grammar.
-
-    Parameters
-    ----------
-    addresses:
-        Candidate run addresses in flow order.
-    graph:
-        Child-condensed flow graph for the run's parent.
-
-    Returns
-    -------
-    bool
-        True for legal chain intervals or legal parallel-fan bundles.
-    """
-
-    if len(addresses) < RUN_FOLD_MIN_LENGTH or graph is None:
-        return False
-    if not _run_is_flow_consecutive(addresses, graph):
-        return False
-    return _run_fold_is_chain_interval(addresses, graph) or _run_fold_is_parallel_fan(
-        addresses,
-        graph,
-    )
-
-
-def _run_is_flow_consecutive(
-    addresses: tuple[str, ...],
-    graph: ChildCondensedFlowGraph,
-) -> bool:
-    """Return whether ``addresses`` are adjacent in graph flow-child order.
-
-    Parameters
-    ----------
-    addresses:
-        Candidate run addresses.
-    graph:
-        Child-condensed flow graph for the parent.
-
-    Returns
-    -------
-    bool
-        True when the candidate is a contiguous interval in flow order.
-    """
-
-    flow_index = {address: index for index, address in enumerate(graph.flow_children)}
-    indexes = [flow_index.get(address) for address in addresses]
-    if any(index is None for index in indexes):
-        return False
-    first = cast(int, indexes[0])
-    return indexes == list(range(first, first + len(addresses)))
-
-
-def _run_fold_is_chain_interval(
-    addresses: tuple[str, ...],
-    graph: ChildCondensedFlowGraph,
-) -> bool:
-    """Return whether a run satisfies the chain-interval legality contract.
-
-    Parameters
-    ----------
-    addresses:
-        Candidate run addresses in flow order.
-    graph:
-        Child-condensed flow graph for the parent.
-
-    Returns
-    -------
-    bool
-        True when members form one path with one external entry, one external
-        exit, and no flagged interior boundary crossing.
-    """
-
-    member_set = set(addresses)
-    edges = set(graph.edges)
-    internal_edges = {
-        (source, target)
-        for source, target in edges
-        if source in member_set and target in member_set and source != target
-    }
-    expected_edges = set(zip(addresses[:-1], addresses[1:], strict=True))
-    connector_nodes = _chain_connector_nodes(addresses, edges)
-    if connector_nodes is None:
-        return False
-    direct_expected_edges = expected_edges & internal_edges
-    if internal_edges - direct_expected_edges:
-        return False
-    entries = [
-        (source, target)
-        for source, target in edges
-        if target in member_set and source not in member_set and source not in connector_nodes
-    ]
-    exits = [
-        (source, target)
-        for source, target in edges
-        if source in member_set and target not in member_set and target not in connector_nodes
-    ]
-    if len(entries) != 1 or entries[0][1] != addresses[0]:
-        return False
-    return not (len(exits) != 1 or exits[0][0] != addresses[-1])
-
-
-def _chain_connector_nodes(
-    addresses: tuple[str, ...],
-    edges: set[tuple[str, str]],
-) -> set[str] | None:
-    """Return external one-hop connectors for a chain run if it forms a path.
-
-    Parameters
-    ----------
-    addresses:
-        Candidate run addresses in flow order.
-    edges:
-        Condensed graph edges.
-
-    Returns
-    -------
-    set[str] | None
-        External connector nodes used between members, or ``None`` if any
-        consecutive pair is not connected by exactly one path step.
-    """
-
-    member_set = set(addresses)
-    connectors: set[str] = set()
-    for left, right in zip(addresses[:-1], addresses[1:], strict=True):
-        if (left, right) in edges:
-            continue
-        pair_connectors = {
-            target
-            for source, target in edges
-            if source == left and target not in member_set and (target, right) in edges
-        }
-        paired_connectors = {
-            (target, paired)
-            for source, target in edges
-            for paired in (_paired_external_connector(target),)
-            if source == left
-            and target not in member_set
-            and paired is not None
-            and (paired, right) in edges
-        }
-        if paired_connectors:
-            pair_connectors.update(connector for pair in paired_connectors for connector in pair)
-        if len(pair_connectors) != 1:
-            if len(pair_connectors) != 2 or not any(
-                _paired_external_connector(connector) in pair_connectors
-                for connector in pair_connectors
-            ):
-                return None
-        connectors.update(pair_connectors)
-    return connectors
-
-
-def _paired_external_connector(node: str) -> str | None:
-    """Return the source/sink counterpart for an external connector node.
-
-    Parameters
-    ----------
-    node:
-        Condensed external connector node name.
-
-    Returns
-    -------
-    str | None
-        Paired connector name, or ``None`` when ``node`` is not an external
-        source/sink sentinel.
-    """
-
-    if node.startswith("external_sink:"):
-        return f"external_source:{node.removeprefix('external_sink:')}"
-    if node.startswith("external_source:"):
-        return f"external_sink:{node.removeprefix('external_source:')}"
-    return None
-
-
-def _run_fold_is_parallel_fan(
-    addresses: tuple[str, ...],
-    graph: ChildCondensedFlowGraph,
-) -> bool:
-    """Return whether a run satisfies the parallel-fan legality contract.
-
-    Parameters
-    ----------
-    addresses:
-        Candidate run addresses in flow order.
-    graph:
-        Child-condensed flow graph for the parent.
-
-    Returns
-    -------
-    bool
-        True when members have no mutual edges and identical external source
-        and sink sets.
-    """
-
-    member_set = set(addresses)
-    source_sets: list[frozenset[str]] = []
-    sink_sets: list[frozenset[str]] = []
-    for address in addresses:
-        sources: set[str] = set()
-        sinks: set[str] = set()
-        for source, target in graph.edges:
-            if source == address and target in member_set:
-                return False
-            if target == address and source in member_set:
-                return False
-            if target == address and source not in member_set:
-                sources.add(source)
-            if source == address and target not in member_set:
-                sinks.add(target)
-        source_sets.append(frozenset(sources))
-        sink_sets.append(frozenset(sinks))
-    return (
-        bool(source_sets[0])
-        and bool(sink_sets[0])
-        and all(sources == source_sets[0] for sources in source_sets[1:])
-        and all(sinks == sink_sets[0] for sinks in sink_sets[1:])
-    )
+# The run-fold legality grammar (_run_fold_is_legal and friends) moved to
+# ._collapse_runs with the B2 indexed-adjacency rewrite (collapse memo
+# item 7); the names re-export from this module's imports for existing
+# readers.
 
 
 def _selected_address_index(

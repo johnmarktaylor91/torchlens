@@ -1,0 +1,4 @@
+# F29 agent surface: "approx_chars_div_4" is the token-count ESTIMATOR NAME, not a key.
+tests/agent_surface_goldens/overview_folded.golden.json:generic-api-key:1
+tests/agent_surface_goldens/payload_stats.golden.json:generic-api-key:1
+tests/agent_surface_goldens/query_sites.golden.json:generic-api-key:1

@@ -220,13 +220,70 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
     raise KeyError(ix)
 
 
+#: Elision rungs for the bounded execution log (F10; lovely matrix row):
+#: the module hierarchy keeps its first rung of lines, the layer roster
+#: keeps a head+tail window; every elision prints an EXACT remainder and
+#: the accessor that serves the full view (never a silent truncation).
+_STR_HIERARCHY_MAX_LINES = 24
+_STR_ROSTER_HEAD = 30
+_STR_ROSTER_TAIL = 5
+
+
+def _honesty_header_lines(self: "Trace") -> list[str]:
+    """Build the honesty header for ``print(trace)`` (F10).
+
+    State precedes detail (voice rule 7): a non-complete outcome and the
+    three-state health verdict print BEFORE structure and tensor counts.
+    Silent when the capture is complete and checked-and-clean -- silence
+    encodes only the package-level boolean defaults (D6).
+    """
+
+    from ..utils.fail_open import fail_open
+
+    lines: list[str] = []
+    outcome = fail_open(lambda: self.outcome, lambda _error: None)
+    status = getattr(getattr(outcome, "status", None), "value", None)
+    if status and status != "complete":
+        lines.append(f"\tCapture outcome: {status.upper()}")
+    verdict = fail_open(lambda: self.nonfinite_verdict, lambda _error: None)
+    if verdict == "found":
+        lines.append("\tHealth: NaN/Inf FOUND (see .nonfinite_ops)")
+    elif verdict == "not_checked":
+        lines.append("\tHealth: NOT-CHECKED (payloads unexamined)")
+    if getattr(self, "capture_verified", True) is False:
+        reason = getattr(self, "capture_verification_reason", None)
+        lines.append(f"\tCapture verified: NO ({reason})")
+    return lines
+
+
+def _bounded_hierarchy_str(self: "Trace") -> str:
+    """Module hierarchy bounded by the elision rung with exact remainder."""
+
+    text = _module_hierarchy_str(self)
+    lines = text.split("\n")
+    if len(lines) <= _STR_HIERARCHY_MAX_LINES:
+        return text
+    kept = lines[:_STR_HIERARCHY_MAX_LINES]
+    remainder = len(lines) - _STR_HIERARCHY_MAX_LINES
+    kept.append(f"\t\t... {remainder} more hierarchy lines (see .modules)")
+    return "\n".join(kept)
+
+
 def _str_after_pass(self: "Trace") -> str:
     """Readable summary of the model history after the pass is finished.
+
+    F10 bounding (lovely matrix): the execution-log intent stays, but the
+    output is bounded -- honesty header first, buffer rows folded to one
+    line, the module hierarchy and layer roster elided past their rungs
+    with exact remainders. ``print(gpt2_trace)`` stops being 668 lines.
 
     Returns:
         String summarizing the model.
     """
     s = f"Log of {self.model_class_name} forward pass:"
+
+    for header_line in _honesty_header_lines(self):
+        s += f"\n{header_line}"
 
     # General info
 
@@ -276,11 +333,12 @@ def _str_after_pass(self: "Trace") -> str:
     )
     s += "\n\tFLOP convention: MACs are reported as FLOPs // 2."
 
-    # Print the module hierarchy.
+    # Print the module hierarchy (bounded, exact remainder).
     s += "\n\tModule Hierarchy:"
-    s += _module_hierarchy_str(self)
+    s += _bounded_hierarchy_str(self)
 
-    # Now print all layers.
+    # Now print the layer roster: buffer rows fold to one line, and the
+    # roster elides past its rung with a head+tail window (F10).
     s += "\n\tLayers"
     if self._layers_saved:
         s += " (all have saved outs):"
@@ -288,7 +346,22 @@ def _str_after_pass(self: "Trace") -> str:
         s += " (no layer outs are saved):"
     else:
         s += " (* means layer has saved outs):"
+
+    for row in _bounded_layer_roster(self):
+        s += f"\n{row}"
+
+    return s
+
+
+def _bounded_layer_roster(self: "Trace") -> list[str]:
+    """Layer roster rows: buffer rows fold to one line, elision past the rung."""
+
+    roster: list[str] = []
+    num_buffer_rows = 0
     for layer_ind, layer_entry in enumerate(self.layer_list):
+        if getattr(layer_entry, "is_buffer", False):
+            num_buffer_rows += 1
+            continue
         layer_barcode = layer_entry.layer_label
         pass_index = layer_entry.pass_index
         num_passes = layer_entry.num_passes
@@ -299,14 +372,22 @@ def _str_after_pass(self: "Trace") -> str:
             pass_str = f" (pass {pass_index}/{num_passes})"
         else:
             pass_str = ""
-
         if layer_entry.has_saved_activation and (not self._layers_saved):
-            s += "\n\t\t* "
+            marker = "* "
         else:
-            s += "\n\t\t  "
-        s += f"({layer_ind}) {layer_barcode} {pass_str}"
+            marker = "  "
+        roster.append(f"\t\t{marker}({layer_ind}) {layer_barcode} {pass_str}")
 
-    return s
+    if num_buffer_rows:
+        roster.insert(0, f"\t\t  [{num_buffer_rows} buffer rows folded; see .buffers]")
+    if len(roster) > _STR_ROSTER_HEAD + _STR_ROSTER_TAIL + 1:
+        elided = len(roster) - _STR_ROSTER_HEAD - _STR_ROSTER_TAIL
+        roster = (
+            roster[:_STR_ROSTER_HEAD]
+            + [f"\t\t  ... {elided} more layers (see .layer_list)"]
+            + roster[-_STR_ROSTER_TAIL:]
+        )
+    return roster
 
 
 def _str_during_pass(self: "Trace") -> str:

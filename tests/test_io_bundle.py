@@ -636,16 +636,25 @@ def test_bundle_save_complex64_still_round_trips(tmp_path: Path) -> None:
             "999.0.0",
         ),
         (
-            "torchlens_pre_floor",
+            # Gate G5 (compat ledger): a pre-floor writer claiming a
+            # current-schema stamp is an ungoverned (writer, stamp) pair, so
+            # the pair-consistency refusal fires, not the old torchlens
+            # version-floor text (that hand-typed inequality was replaced by
+            # the governed ledger windows).
+            "torchlens_pair_ungoverned",
             lambda manifest: manifest.__setitem__("torchlens_version", "0.0.1"),
             "raise",
-            "below the supported rehydration floor",
+            "no governed ledger window covers that writer",
         ),
         (
+            # Older-but-governed writer: the current runtime is the FIRST
+            # writer of the current stamp, so the test simulates a future
+            # runtime (see the scenario-specific monkeypatch in the body) to
+            # keep the older-writer info-log branch reachable under G5.
             "torchlens_older_supported",
-            lambda manifest: manifest.__setitem__("torchlens_version", "2.33.0"),
+            lambda manifest: manifest.__setitem__("torchlens_version", "2.34.1"),
             "info_log",
-            "2.33.0",
+            "2.34.1",
         ),
         (
             "python_major_mismatch",
@@ -677,6 +686,13 @@ def test_bundle_version_policy_rows(
     mutate_manifest(manifest)
     _write_manifest(bundle_path, manifest)
     resolved_expected_text = expected_text() if callable(expected_text) else expected_text
+
+    if scenario == "torchlens_older_supported":
+        # The manifest writer (2.34.1) is a governed stamp-9 producer; pretend
+        # the runtime moved past it so the older-writer info-log branch runs
+        # (with the real runtime AT the first stamp-9 writer, every strictly
+        # older writer forms an ungoverned pair and refuses instead).
+        monkeypatch.setattr("torchlens._io.manifest.TORCHLENS_VERSION", "2.99.0")
 
     if expectation == "python_major_mismatch":
         (bundle_path / "metadata.pkl").write_bytes(b"not a pickle")

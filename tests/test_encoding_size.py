@@ -469,7 +469,7 @@ def test_legend_states_scale_transform(mlp_log: tl.Trace, tmp_path: Path) -> Non
     """Disclosure contract: every legend drawn states the size transform."""
 
     dot = _draw(mlp_log, tmp_path, size_by="dims")
-    assert "cluster_torchlens_encoding_legend" in dot
+    assert "TorchLens encoding" in dot
     assert "sqrt(dims)" in dot
     dot_linear = _draw(mlp_log, tmp_path, size_by="dims", scale="linear")
     assert "linear(dims)" in dot_linear
@@ -601,7 +601,9 @@ def test_size_attr_writer_sites_are_the_declared_allowlist() -> None:
         "visualization/_render_leaf.py": 3,
         # PUBLIC user-slot node_spec_fn factories (C2(b) allowlist).
         "viz/feature_maps.py": 1,
-        "repgeom/__init__.py": 3,
+        # C01 architecture move: the three node-visual writer sites left
+        # __init__.py for the dedicated submodule; same sites, same count.
+        "repgeom/_node_visuals.py": 3,
     }
     assert found == expected, (
         "width/height/fixedsize node-arg writer sites changed; a new internal "

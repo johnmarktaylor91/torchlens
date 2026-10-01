@@ -68,7 +68,7 @@ def test_fma_convention_honored_never_discarded() -> None:
 
     log = _capture(nn.Linear(8, 16, bias=True), torch.randn(2, 8))
     try:
-        default_text = log.summary()
+        default_text = log.summary(level="overview")
         assert "Forward FLOPs: 544 FLOPs" in default_text
         assert "fma=2 (one multiply-accumulate = 2 FLOPs)" in default_text
         assert "FLOPs // 2" not in default_text  # the old footer sentence is dead
@@ -79,6 +79,10 @@ def test_fma_convention_honored_never_discarded() -> None:
 
         explicit_text = log.summary(count_fma_as_two=True)
         assert "fma=2 (explicit)" in explicit_text
+
+        # The rebuilt grammar honors the same convention axis (A6).
+        assert "544 FLOPs fwd (fma=2)" in log.summary()
+        assert "288 FLOPs fwd (fma=1)" in log.summary(flop_convention="fma1")
     finally:
         log.cleanup()
 
@@ -103,9 +107,14 @@ def test_fma1_refuses_typed_on_underivable_split() -> None:
             with pytest.raises(InvalidArgumentError, match="MAC split") as excinfo:
                 log.summary(count_fma_as_two=False)
             assert excinfo.value.fields["code"] == "flop_convention_unavailable"
+            # The rebuilt grammar refuses the same request with the same code.
+            with pytest.raises(InvalidArgumentError, match="MAC split") as rebuilt_excinfo:
+                log.summary(flop_convention="fma1")
+            assert rebuilt_excinfo.value.fields["code"] == "flop_convention_unavailable"
             # The default convention still renders (the refusal is scoped to
-            # the explicit non-native request).
-            assert "Forward FLOPs" in log.summary()
+            # the explicit non-native request) -- on BOTH routes.
+            assert "Forward FLOPs" in log.summary(level="overview")
+            assert "FLOPs fwd (fma=2)" in log.summary()
         finally:
             log.cleanup()
     finally:
@@ -147,11 +156,15 @@ def test_macs_format_in_mac_units_never_flops() -> None:
 
     log = _capture(nn.Linear(8, 16, bias=True), torch.randn(2, 8))
     try:
-        text = log.summary()
+        text = log.summary(level="overview")
         assert "MACs: 256 MACs" in text
         # The disease string: a MAC count wearing FLOP units.
         assert "MACs: 256 FLOPs" not in text
         assert "MACs: 512" not in text
+        # Rebuilt footer: the same MAC truth in MAC units.
+        rebuilt = log.summary()
+        assert "256 MACs" in rebuilt
+        assert "512 MACs" not in rebuilt
     finally:
         log.cleanup()
 

@@ -135,7 +135,11 @@ def test_collapse_order_declines_cheaply_above_ceiling(monkeypatch) -> None:
     from torchlens.visualization import auto_collapse, collapse_optimizer
 
     log = tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 4)), torch.randn(1, 4))
-    monkeypatch.setattr(collapse_optimizer, "COLLAPSE_OPTIMIZER_MAX_OPS", 1)
+    # F11 (collapse memo D5(i)): the analysis-free decline arm is the
+    # PATHOLOGICAL pre-gate (20x the constant); merely over-budget traces now
+    # degrade to the fallback planner, which legitimately analyzes. The
+    # constant is pinned to 0 so any trace crosses the pathological gate.
+    monkeypatch.setattr(collapse_optimizer, "COLLAPSE_OPTIMIZER_MAX_OPS", 0)
 
     def _analyze_should_not_run(trace):  # noqa: ANN001 - test shim
         raise AssertionError("analyze_collapse must not run above the ceiling")

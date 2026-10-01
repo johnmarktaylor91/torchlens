@@ -187,6 +187,30 @@ def join_site_profiles(
     return rows
 
 
+def occurrence_coordinates(trace: Any, keys: dict[str, str]) -> dict[str, tuple[str, str, int]]:
+    """Map op label -> (site key, pass-qualified call instance, within-instance position).
+
+    This is exactly the coordinate the per-call-instance cardinality guard
+    verifies equal on both sides of a join, so occurrence pairing on it is
+    what a ``joined`` verdict licenses — never the label, never a bare
+    graph-global ordinal (the leverage panel's measured wrong-row join).
+    ``keys`` is a profile's label->key map; keyless ops are absent.
+    """
+
+    position: dict[tuple[str, str], int] = {}
+    coords: dict[str, tuple[str, str, int]] = {}
+    for label in trace.op_labels:
+        key = keys.get(label)
+        if key is None:
+            continue
+        stack = tuple(getattr(trace.ops[label], "module_call_stack", ()) or ())
+        call_instance = stack[-1] if stack else ROOT_CALL_INSTANCE
+        index = position.get((key, call_instance), 0)
+        position[(key, call_instance)] = index + 1
+        coords[label] = (key, call_instance, index)
+    return coords
+
+
 @dataclass(frozen=True)
 class FoldRow:
     """One op's inputs to the tier-(a) closure (policy outputs + facts)."""

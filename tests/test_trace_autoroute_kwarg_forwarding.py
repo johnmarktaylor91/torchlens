@@ -51,6 +51,11 @@ AUTOROUTE_EXEMPT_PARAMS = {
     # None
     "jax_static_argnums",
     "grad_options",
+    # quickstart input ladder (F17): any non-None input_size returns via
+    # _trace_via_ladder before the autoroute branch, so autoroute only ever
+    # runs with input_size=None (the ladder re-enters trace() with a real
+    # input, which forwards normally)
+    "input_size",
 }
 
 

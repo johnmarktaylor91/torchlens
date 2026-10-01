@@ -313,6 +313,10 @@ def test_collapse_reference_gallery_exists_and_is_regenerable() -> None:
 #: coverage; a NEW page must either join DOC_FILES or take a reasoned row
 #: here in the same change.
 DOC_FENCE_EXEMPT: dict[str, str] = {
+    "reference/stats.md": (
+        "executed end-to-end by tests/test_unhide_surfaces.py::"
+        "test_stats_doc_python_fences_execute (needs the ambient demo model)"
+    ),
     "backends.md": "preview-backend snippets need tf/jax/mlx/tinygrad/paddle runtimes",
     "backward.md": "pending execution coverage (queued: backward capture snippets)",
     "buffers.md": "pending execution coverage",
@@ -326,11 +330,42 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "migration/from_nnsight.md": "needs nnsight (heavyweight, deliberately dark)",
     "migration/from_pyvene.md": "needs pyvene (not a declared extra)",
     "migration/from_thingsvision.md": "needs thingsvision (not a declared extra)",
+    "reference/neuro.md": (
+        "needs rsatoolbox (the neuro extra); every snippet's behavior is "
+        "executed by tests/test_neuro_pkg_* at BOTH rsatoolbox versions"
+    ),
     "migration/from_torchextractor.md": "needs torchextractor (bridge shim demo)",
     "migration/from_transformerlens.md": "needs transformer_lens (heavyweight)",
     "migration/v2.0_api_changes.md": "contains deliberate 'Before:' v1 blocks that must NOT run",
+    "neuroai/byo_alignment.md": (
+        "the file-round-trip blocks assume a completed real-checkpoint extraction and a "
+        "user-owned learned transform; the offline mechanics (extract -> manifest -> "
+        "torchlens-free reload) execute in tests/test_tvscope_export_acceptance.py"
+    ),
+    "neuroai/journey.md": (
+        "journey cells name real checkpoints (ResNet50 V2 weights, CORnet-S via torch.hub) "
+        "for the docs/nightly execution tier; the same mechanics execute offline against "
+        "config-built fixtures in tests/test_tvscope_*.py"
+    ),
+    "neuroai/loaders.md": (
+        "loader rows fetch real checkpoints (HF, timm pretrained, open_clip) by design; "
+        "the resolver/adapter mechanics execute offline in "
+        "tests/test_tvscope_preprocessing.py"
+    ),
     "rank_layout.md": "pending execution coverage (graphviz layout demo)",
+    "reference/checks_kit.md": (
+        "executed top-to-bottom in one shared namespace by "
+        "tests/test_checks_kit_docs.py (the fences build on each other, so the "
+        "per-block gate's fresh-namespace model does not fit)"
+    ),
     "receptive_projective_fields.md": "pending execution coverage",
+    "skeleton_change_recipe.md": (
+        "the fences are ONE sequential program (build models -> author/save recipe -> "
+        "edit skeleton -> re-align), not independently runnable blocks; "
+        "tests/test_skeleton_recipe_docs.py executes them top to bottom in one "
+        "namespace on the real transformers GPT-2 classes and asserts the printed "
+        "verdicts and diffs"
+    ),
     "reference/hash.md": "pending execution coverage",
     "reference/episode_capture.md": (
         "the fence is a real usage example but is not self-contained (it references an "

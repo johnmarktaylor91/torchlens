@@ -387,6 +387,12 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_DYNAMO_OPTIMIZED_MODULE": True,
         "HAS_DYNAMO_ORIG_CALLABLE_MARKER": tc.HAS_DYNAMO_ORIG_CALLABLE_MARKER,
         "HAS_DYNAMO_EXPLAIN": tc.HAS_DYNAMO_EXPLAIN,
+        # F04 one-backward reads: GradientEdge addressing and Node prehooks
+        # postdate the torch>=2.1 floor (OPTIONAL flags -- absence is a
+        # healthy old install; the read refuses typed). Mirror the live
+        # values so floor legs stay green.
+        "HAS_GRADIENT_EDGE": tc.HAS_GRADIENT_EDGE,
+        "HAS_NODE_PREHOOK": tc.HAS_NODE_PREHOOK,
         # W21 cold-start: FSDP wrapper detection is lazily probed (never imports
         # torch.distributed.fsdp on plain captures); distributed availability is
         # build-dependent, so mirror the live post-snapshot capability.
@@ -398,6 +404,11 @@ def test_torch_capability_snapshot_contract() -> None:
         # structural namespace matching. Build-dependent, so mirror the live
         # post-snapshot capability.
         "HAS_DTENSOR": tc.HAS_DTENSOR,
+        # F27: lazily probed at first Kineto extraction / memory-profile
+        # read; the snapshot reads whatever the probe state is.
+        "HAS_KINETO_INMEMORY_EVENTS": tc.HAS_KINETO_INMEMORY_EVENTS,
+        "HAS_KINETO_EVENT_SCOPE": tc.HAS_KINETO_EVENT_SCOPE,
+        "HAS_MEMORY_PROFILE": tc.HAS_MEMORY_PROFILE,
         "HAS_DEVICE_MESH": tc.HAS_DEVICE_MESH,
         "HAS_PIPELINING": tc.HAS_PIPELINING,
         # Dynamo/fake-mode boundary probes. Without them a compiled region reached
@@ -445,6 +456,7 @@ def test_torch_capability_snapshot_contract() -> None:
         # compile counters back tl.debug.count_compiles. Build-dependent, so
         # mirror the live values.
         "HAS_SET_STANCE": tc.HAS_SET_STANCE,
+        "HAS_TORCH_FUNCTION_STACK_SURGERY": tc.HAS_TORCH_FUNCTION_STACK_SURGERY,
         "HAS_DYNAMO_COMPILE_COUNTERS": tc.HAS_DYNAMO_COMPILE_COUNTERS,
         # fp8 dtypes exist on every torch build we support, but the set grew across
         # 2.x, so mirror the live value rather than hardcoding True.

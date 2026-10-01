@@ -144,14 +144,20 @@ class TestParamLogFields:
         assert isinstance(pl.co_parent_params, list)
 
     def test_repr_contains_key_info(self):
-        mh = trace_fn(_make_simple_model(), _simple_input())
+        """F10 re-pin: repr is one envelope+core line; grad/module facts
+        moved to the str() card (D15)."""
+        model = _make_simple_model()
+        mh = trace_fn(model, _simple_input())
+        mh._keepalive_model = model  # live-param cores need the source model
         pl = mh.params[0]
         r = repr(pl)
         assert pl.address in r
-        assert "shape" in r
-        assert "dtype" in r
+        assert "\n" not in r
+        assert "[param]" in r
         assert "trainable" in r or "frozen" in r
-        assert "has_grad" in r
+        card = str(pl)
+        assert card.splitlines()[0] == r
+        assert "has_grad" in card
 
     def test_len_equals_num_params(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
@@ -200,10 +206,12 @@ class TestParamAccessorMH:
             mh.params["weight"]  # Both 0.weight and 2.weight
 
     def test_repr_dict_like(self):
+        """F10 re-pin: collections point (one-line card); members show in str()."""
         mh = trace_fn(_make_simple_model(), _simple_input())
         r = repr(mh.params)
-        assert "0.weight" in r
-        assert "Param" in r
+        assert "\n" not in r
+        assert "ParamAccessor(" in r and "params" in r
+        assert "0.weight" in str(mh.params)
 
     def test_params_property_same_as_param_logs(self):
         mh = trace_fn(_make_simple_model(), _simple_input())

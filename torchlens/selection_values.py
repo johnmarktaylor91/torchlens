@@ -425,7 +425,7 @@ def top_k(
     within: Any = None,
     k: int = 1,
     *,
-    by: str = "value",
+    by: str | Any = "value",
     largest: bool = True,
 ) -> Selection:
     """Select the k globally highest-valued elements of a population.
@@ -444,6 +444,10 @@ def top_k(
 
     if isinstance(k, bool) or not isinstance(k, int) or k < 0:
         raise ValueError(f"top_k `k` must be a non-negative int; got {k!r}.")
+    if not isinstance(by, str) and _is_read_table(by):
+        if not isinstance(largest, bool):
+            raise ValueError(f"top_k `largest` must be a bool; got {largest!r}.")
+        return _table_scored_selection("top_k", by, within=within, k=k, largest=largest)
     _validate_rank_common(by, largest, "top_k")
     return Selection(
         _ValueTerm(
@@ -457,7 +461,7 @@ def top_fraction(
     within: Any = None,
     fraction: float = 0.01,
     *,
-    by: str = "value",
+    by: str | Any = "value",
     largest: bool = True,
 ) -> Selection:
     """Select the top ``fraction`` of a population by value.
@@ -471,6 +475,12 @@ def top_fraction(
     fraction = _validate_real_number(fraction, "fraction", "top_fraction")
     if not 0.0 <= fraction <= 1.0:
         raise ValueError(f"top_fraction `fraction` must be in [0, 1]; got {fraction!r}.")
+    if not isinstance(by, str) and _is_read_table(by):
+        if not isinstance(largest, bool):
+            raise ValueError(f"top_fraction `largest` must be a bool; got {largest!r}.")
+        return _table_scored_selection(
+            "top_fraction", by, within=within, fraction=fraction, largest=largest
+        )
     _validate_rank_common(by, largest, "top_fraction")
     return Selection(
         _ValueTerm(
@@ -489,7 +499,7 @@ def threshold(
     *,
     above: float | None = None,
     below: float | None = None,
-    by: str = "value",
+    by: str | Any = "value",
 ) -> Selection:
     """Select elements by strict value comparison ("everything above 0.5").
 
@@ -506,6 +516,8 @@ def threshold(
         above = _validate_real_number(above, "above", "threshold")
     if below is not None:
         below = _validate_real_number(below, "below", "threshold")
+    if not isinstance(by, str) and _is_read_table(by):
+        return _table_scored_selection("threshold", by, within=within, above=above, below=below)
     if by not in ("value", "abs"):
         raise ValueError(f"threshold `by` must be 'value' or 'abs'; got {by!r}.")
     return Selection(
@@ -777,5 +789,394 @@ def low_variance(
     )
 
 
+# ---------------------------------------------------------------------------
+# ReadTable-scored ranking: the M(reads) `by=` door (item 5, D9).
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class _TableScoreTerm:
+    """AST leaf for ReadTable-scored rank/threshold criteria.
+
+    The AST holds the table object; resolution enforces trace binding
+    (foreign or stale tables refuse), single-target discipline, and the D9
+    contract/filter law for the population.
+    """
+
+    criterion: str
+    table: Any
+    within: Any
+    k: int | None = None
+    fraction: float | None = None
+    largest: bool = True
+    above: float | None = None
+    below: float | None = None
+
+    def __repr__(self) -> str:
+        """Return the compact constructor-shaped disclosure."""
+
+        population = "table_rows" if self.within is None else repr(self.within)
+        if self.criterion == "top_k":
+            head = f"top_k(k={self.k}, by=<ReadTable>, largest={self.largest}"
+        elif self.criterion == "top_fraction":
+            head = f"top_fraction(fraction={self.fraction}, by=<ReadTable>, largest={self.largest}"
+        else:
+            head = f"threshold(above={self.above}, below={self.below}, by=<ReadTable>"
+        return f"{head}, within={population})"
+
+
+def _is_read_table(candidate: Any) -> bool:
+    """Return whether a ``by=`` operand is a one-backward ReadTable."""
+
+    from .attribution.onebackward._table import ReadTable
+
+    return isinstance(candidate, ReadTable)
+
+
+def _table_rows_by_label(node: _TableScoreTerm, trace: Any) -> tuple[dict[str, Any], str]:
+    """Validate the term's table against the trace; return rows and grain.
+
+    Enforces: table bound to THIS trace and not stale (the trace's autograd
+    registry token must match the read-time token), single-target only
+    (multi-target tables teach ``for_target``/``aggregate_targets``), one
+    uniform grain, ACT rows only.
+    """
+
+    table = node.table
+    bound = table.trace
+    if bound is None or bound is not trace:
+        raise _unresolvable(
+            "by_table_foreign",
+            "the `by=` ReadTable is not bound to this trace (foreign table, "
+            "loaded table, or the source trace was collected). Re-run the "
+            "read against this trace.",
+            code="by_score_invalid",
+        )
+    from .attribution.onebackward._accessor import _validity_token
+
+    if table.trace_token is not None and table.trace_token != _validity_token(trace):
+        raise _unresolvable(
+            "by_table_stale",
+            "the `by=` ReadTable was produced before this trace's autograd "
+            "state changed (a backward or cleanup ran since). Re-run the "
+            "read.",
+            code="by_score_invalid",
+        )
+    target_ids = table.target_ids()
+    if len(target_ids) > 1:
+        raise _unresolvable(
+            "by_table_multi_target",
+            f"the `by=` ReadTable carries {len(target_ids)} targets; ranking "
+            "needs one. Narrow with table.for_target(id) or fold explicitly "
+            "with table.aggregate_targets(reducer) -- there is no implicit "
+            "mean/max/sum.",
+            code="by_score_invalid",
+        )
+    rows: dict[str, Any] = {}
+    grains: set[str] = set()
+    for row in table.rows():
+        if row.kind != "ACT":
+            raise _unresolvable(
+                "by_table_kind",
+                f"the `by=` ReadTable carries a {row.kind} row; ranking "
+                "addresses ACT rows only in v1.",
+                code="by_score_invalid",
+            )
+        rows[f"{row.address[0]}:{row.address[1]}"] = row
+        grains.add(row.grain)
+    if not rows:
+        raise _unresolvable(
+            "by_table_empty",
+            "the `by=` ReadTable has no rows to rank.",
+            code="by_score_invalid",
+        )
+    if len(grains) > 1:
+        raise _unresolvable(
+            "by_table_grain_mixed",
+            "the `by=` ReadTable mixes site-grain and element-grain rows; "
+            "rank one grain at a time.",
+            code="by_score_invalid",
+        )
+    return rows, next(iter(grains))
+
+
+def _table_provenance_source(node: _TableScoreTerm, excluded: dict[str, int]) -> str:
+    """Build the Selection provenance source string (schema, metric, counts)."""
+
+    table = node.table
+    provenance = table.provenance
+    sample = next(iter(table.rows()))
+    target_ids = table.target_ids()
+    return (
+        f"{node.criterion}(by=ReadTable[{provenance.schema_version}, "
+        f"method={sample.method!r}, reduction={sample.reduction!r}, "
+        f"target={target_ids[0] if target_ids else None!r}, "
+        f"frozen={provenance.frozen_digest!r}, rows={len(table)}, "
+        f"excluded={dict(sorted(excluded.items()))!r}])"
+    )
+
+
+def _row_unrankable_reason(row: Any) -> str | None:
+    """Return the closed reason a scored row cannot rank, or ``None``."""
+
+    if row.status != "ok":
+        return str(row.status)
+    if row.grain == "site" and (
+        row.score is None or (isinstance(row.score, float) and math.isnan(row.score))
+    ):
+        return "score_unrankable"
+    return None
+
+
+def _table_population_explicit(
+    node: _TableScoreTerm,
+    trace: Any,
+    rows: dict[str, Any],
+) -> list[tuple[SiteEntry, Any]]:
+    """Apply the explicit-population CONTRACT arm of the D9 law."""
+
+    population = _resolve_population(node.within, trace)
+    pairs: list[tuple[SiteEntry, Any]] = []
+    uncovered: list[tuple[str, str]] = []
+    for entry in population:
+        label = f"{entry.site_key[0]}:{entry.site_key[1]}"
+        row = rows.get(label)
+        reason = "no_row" if row is None else _row_unrankable_reason(row)
+        if reason is not None:
+            uncovered.append((label, reason))
+            continue
+        pairs.append((entry, row))
+    if uncovered:
+        raise SelectionError(
+            "the explicit `by=` population names sites the ReadTable "
+            f"cannot rank (first: {uncovered[:5]}). Explicit enumeration "
+            "is a contract. Re-read with a population covering these "
+            "sites, or drop them from `within=`.",
+            code="population_not_covered",
+            uncovered=uncovered[:20],
+        )
+    return pairs
+
+
+def _table_population(
+    node: _TableScoreTerm,
+    trace: Any,
+    rows: dict[str, Any],
+) -> tuple[list[tuple[SiteEntry, Any]], dict[str, int]]:
+    """Apply the D9 contract/filter law to the ranking population.
+
+    Explicit ``within=``: every population site must be covered by an ``ok``
+    scored row -- anything else refuses ``population_not_covered`` naming the
+    first offenders. Implicit: the table's ``ok`` rows are the population and
+    non-ok rows are excluded WITH COUNTS.
+    """
+
+    excluded: dict[str, int] = {}
+    pairs: list[tuple[SiteEntry, Any]] = []
+    if node.within is not None:
+        return _table_population_explicit(node, trace, rows), excluded
+    for label, row in rows.items():
+        reason = _row_unrankable_reason(row)
+        if reason is not None:
+            excluded[reason] = excluded.get(reason, 0) + 1
+            continue
+        ops = _find_act_ops(trace, label.rsplit(":", 1)[0])
+        op = next(
+            (
+                candidate
+                for candidate in ops
+                if (getattr(candidate, "pass_index", 1) or 1) == int(label.rsplit(":", 1)[1])
+            ),
+            None,
+        )
+        if op is None:
+            excluded["site_not_in_trace"] = excluded.get("site_not_in_trace", 0) + 1
+            continue
+        shape = row.shape if row.shape is not None else getattr(op, "shape", ())
+        entry = _act_entry(op, _mask_whole(tuple(shape)), "exact", "read_table")
+        pairs.append((entry, row))
+    return pairs, excluded
+
+
+def _resolve_table_score_term(node: _TableScoreTerm, trace: Any) -> ResolvedSelection:
+    """Resolve a ReadTable-scored criterion (rank or threshold) exactly.
+
+    Site-grain tables rank SITES (``k`` counts sites; a winning site selects
+    its complete existing population mask). Element-grain tables rank
+    elements globally over the tables' dense values, which must exactly
+    match each site's index space. NaN is unrankable. Ties break canonical
+    site order then flat index (stable sort).
+    """
+
+    rows, grain = _table_rows_by_label(node, trace)
+    pairs, excluded = _table_population(node, trace, rows)
+    source = _table_provenance_source(node, excluded)
+    if grain == "site":
+        return _resolve_table_site_grain(node, trace, pairs, source)
+    return _resolve_table_element_grain(node, trace, pairs, source)
+
+
+def _resolve_table_site_grain(
+    node: _TableScoreTerm,
+    trace: Any,
+    pairs: list[tuple[SiteEntry, Any]],
+    source: str,
+) -> ResolvedSelection:
+    """Rank/threshold whole sites by their scalar scores."""
+
+    if node.criterion == "threshold":
+        entries = []
+        for entry, row in pairs:
+            passes = True
+            if node.above is not None:
+                passes = passes and row.score > node.above
+            if node.below is not None:
+                passes = passes and row.score < node.below
+            if passes:
+                entries.append(_entry_with_mask(entry, entry.mask, "exact", source))
+        return ResolvedSelection(trace, "ACT", entries)
+    if node.criterion == "top_fraction":
+        if node.fraction is None:
+            raise RuntimeError("top_fraction node lost its fraction")
+        k = math.ceil(node.fraction * len(pairs))
+    else:
+        if node.k is None:
+            raise RuntimeError("top_k node lost its k")
+        k = node.k
+        if k > len(pairs):
+            raise _unresolvable(
+                "population_too_small",
+                f"top_k needs {k} sites but the scored population has only "
+                f"{len(pairs)} rankable sites.",
+                code="selection_unresolvable",
+                requested=k,
+                available=len(pairs),
+            )
+    scores = torch.tensor([float(row.score) for _, row in pairs], dtype=torch.float64)
+    order = torch.argsort(scores, descending=node.largest, stable=True)[:k]
+    winners = {int(position) for position in order}
+    entries = [
+        _entry_with_mask(entry, entry.mask, "exact", source)
+        for position, (entry, _) in enumerate(pairs)
+        if position in winners
+    ]
+    return ResolvedSelection(trace, "ACT", entries)
+
+
+def _resolve_table_element_grain(
+    node: _TableScoreTerm,
+    trace: Any,
+    pairs: list[tuple[SiteEntry, Any]],
+    source: str,
+) -> ResolvedSelection:
+    """Rank/threshold elements by the table's dense per-element values."""
+
+    per_entry: list[tuple[SiteEntry, torch.Tensor, torch.Tensor]] = []
+    for entry, row in pairs:
+        value = row.value
+        if not isinstance(value, torch.Tensor) or tuple(value.shape) != entry.shape:
+            raise _unresolvable(
+                "by_table_index_space_mismatch",
+                f"the element-grain score for site {entry.site_key!r} has "
+                f"shape {tuple(value.shape) if isinstance(value, torch.Tensor) else None!r}, "
+                f"which does not exactly match the selected index space "
+                f"{entry.shape!r}.",
+                code="by_score_invalid",
+            )
+        keys = value.detach().to(torch.float64).cpu()
+        valid = entry._mask._dense_ro() & ~torch.isnan(keys)
+        per_entry.append((entry, keys.reshape(-1), valid.reshape(-1)))
+    if node.criterion == "threshold":
+        return _table_element_threshold(node, trace, per_entry, source)
+    total_valid = int(sum(valid.sum().item() for _, _, valid in per_entry))
+    if node.criterion == "top_fraction":
+        if node.fraction is None:
+            raise RuntimeError("top_fraction node lost its fraction")
+        k = math.ceil(node.fraction * total_valid)
+    else:
+        if node.k is None:
+            raise RuntimeError("top_k node lost its k")
+        k = node.k
+        if k > total_valid:
+            raise _unresolvable(
+                "population_too_small",
+                f"top_k needs {k} elements but the scored population has "
+                f"only {total_valid} rankable (non-NaN) elements.",
+                code="selection_unresolvable",
+                requested=k,
+                available=total_valid,
+            )
+    sentinel = float("-inf") if node.largest else float("inf")
+    flat_keys = (
+        torch.cat(
+            [
+                torch.where(valid, keys, torch.tensor(sentinel, dtype=torch.float64))
+                for _, keys, valid in per_entry
+            ]
+        )
+        if per_entry
+        else torch.zeros(0, dtype=torch.float64)
+    )
+    order = torch.argsort(flat_keys, descending=node.largest, stable=True)[:k]
+    selected_flat = torch.zeros(flat_keys.shape[0], dtype=torch.bool)
+    selected_flat[order] = True
+    entries = []
+    offset = 0
+    for entry, keys, _ in per_entry:
+        span = keys.shape[0]
+        dense = selected_flat[offset : offset + span].reshape(entry.shape)
+        offset += span
+        entries.append(_entry_with_mask(entry, dense, "exact", source))
+    return ResolvedSelection(trace, "ACT", entries)
+
+
+def _table_element_threshold(
+    node: _TableScoreTerm,
+    trace: Any,
+    per_entry: list[tuple[SiteEntry, torch.Tensor, torch.Tensor]],
+    source: str,
+) -> ResolvedSelection:
+    """Elementwise threshold over the table's dense per-element values."""
+
+    entries = []
+    for entry, keys, valid in per_entry:
+        dense = valid.clone()
+        if node.above is not None:
+            dense &= keys > node.above
+        if node.below is not None:
+            dense &= keys < node.below
+        entries.append(_entry_with_mask(entry, dense.reshape(entry.shape), "exact", source))
+    return ResolvedSelection(trace, "ACT", entries)
+
+
+def _table_scored_selection(  # noqa: PLR0913 -- mirrors the three public producer signatures it serves
+    criterion: str,
+    table: Any,
+    *,
+    within: Any,
+    k: int | None = None,
+    fraction: float | None = None,
+    largest: bool = True,
+    above: float | None = None,
+    below: float | None = None,
+) -> Selection:
+    """Build the Selection for a ReadTable-scored criterion (the by= door)."""
+
+    return Selection(
+        _TableScoreTerm(
+            criterion=criterion,
+            table=table,
+            within=_lift_within(within, criterion),
+            k=k,
+            fraction=fraction,
+            largest=largest,
+            above=above,
+            below=below,
+        ),
+        kind="ACT",
+    )
+
+
 register_term_resolver(_ValueTerm, _resolve_value_term)
 register_term_resolver(_StatTerm, _resolve_stat_term)
+register_term_resolver(_TableScoreTerm, _resolve_table_score_term)

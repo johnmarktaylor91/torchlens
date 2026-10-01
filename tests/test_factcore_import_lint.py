@@ -42,6 +42,21 @@ LICENSED_COMPUTE_READERS = {
         "(service-row/report-field name-collisions with the raw op fields; "
         "all numbers arrive through compute_aggregation/factcore)"
     ),
+    # The F08 summary split moved the same licensed reads into siblings
+    # (ladder/render/result carved out of _summary_report.py); identical
+    # name-collision class, same factcore-served numbers.
+    "report/_summary_ladder.py": (
+        "reads ComputeRow.fma_macs from the aggregation service's own rows "
+        "(name-collision with the raw op field)"
+    ),
+    "report/_summary_render.py": (
+        "reads its OWN SummaryTotals.macs_forward report field "
+        "(name-collision with the raw op field)"
+    ),
+    "report/_summary_result.py": (
+        "reads ComputeRow.fma_macs from the aggregation service's own rows "
+        "(name-collision with the raw op field)"
+    ),
 }
 
 #: Builder/report modules where ``nonfinite_ops`` reads are banned outright

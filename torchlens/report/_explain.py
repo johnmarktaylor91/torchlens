@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import traceback
 from collections import Counter
+from collections.abc import Mapping
 from typing import Any, Literal
 
 import torch
@@ -14,11 +15,6 @@ from .._capture_honesty import (
     episode_facts,
     poison_facts,
     refuse_presenter_subject,
-)
-from ..data_classes._nonfinite import (
-    coverage_gap_note,
-    first_nonfinite_layer,
-    nonfinite_layers,
 )
 
 Audience = Literal["researcher", "practitioner", "auto"]
@@ -416,6 +412,59 @@ def _capture_verification(log: Any) -> dict[str, Any]:
     return capture_verification(log)
 
 
+def _episode_status_lines(episode: Mapping[str, Any]) -> list[str]:
+    """Return the episode-capture disclosure bullets (F40b/F40c families).
+
+    Parameters
+    ----------
+    episode:
+        The ``episode_facts`` mapping (non-``None``).
+
+    Returns
+    -------
+    list[str]
+        Bullet lines for the episode declaration, step-join claim, and
+        forced-tokens disclosure.
+    """
+
+    basis = episode.get("fidelity_basis")
+    lines = [
+        "- Episode capture: "
+        f"{episode.get('n_steps_declared')} declared step(s), "
+        f"token_feed={episode.get('token_feed')}, "
+        f"fidelity_basis={basis}; per-step ledger at "
+        "trace.annotations['episode']."
+    ]
+    step_join = str(episode.get("step_join"))
+    if step_join == "unmeasured":
+        lines.append(
+            "- Cross-step continuity is DECLARED, not measured: "
+            "token_feed reflects the declaration only; this artifact "
+            "carries no step_join envelope."
+        )
+    elif step_join.startswith("broken_at_step_") or step_join.startswith(
+        "declared_crossing_at_step_"
+    ):
+        lines.append(
+            f"- Cross-step join BREAK measured ({step_join}): the trace "
+            "is intact but chain-shaped at that join; step-series reads, "
+            "whole-episode replay, and the blessing fold refuse across "
+            "it, per-segment reads are unaffected."
+        )
+    elif step_join == "measured_with_unchecked_joins":
+        lines.append(
+            "- Cross-step joins measured with UNCHECKED gaps (reasons in "
+            "the step_join envelope): series claims refuse across the "
+            "unchecked joins."
+        )
+    if basis == "forced":
+        lines.append(
+            "- Forced-tokens episode: a disclosed NON-VERIFYING mode; "
+            "emitted tokens were supplied, not generated."
+        )
+    return lines
+
+
 def _capture_status_lines(log: Any) -> list[str]:
     """Return capture outcome/verification lines for the text report.
 
@@ -464,19 +513,7 @@ def _capture_status_lines(log: Any) -> list[str]:
         )
     episode = episode_facts(log)
     if episode is not None:
-        basis = episode.get("fidelity_basis")
-        lines.append(
-            "- Episode capture: "
-            f"{episode.get('n_steps_declared')} declared step(s), "
-            f"token_feed={episode.get('token_feed')}, "
-            f"fidelity_basis={basis}; per-step ledger at "
-            "trace.annotations['episode']."
-        )
-        if basis == "forced":
-            lines.append(
-                "- Forced-tokens episode: a disclosed NON-VERIFYING mode; "
-                "emitted tokens were supplied, not generated."
-            )
+        lines.extend(_episode_status_lines(episode))
     for advisory in capture_advisories(log):
         lines.append(
             f"- Capture advisory: {advisory.get('kind')} "
@@ -502,14 +539,29 @@ def _base_json(log: Any, audience: Audience) -> dict[str, Any]:
         Common stable-schema fields.
     """
 
+    # ONE machine core (sumfam D17/item 14): the count fields below read
+    # the same FactCore sections agent_json reads, so the two projections
+    # cannot drift apart; the parity gate pins every overlapping field.
+    try:
+        from ._factcore import factcore
+
+        core = factcore(log)
+        layer_count = core.counts.layers
+        operation_count = core.counts.tracked_tensor_rows
+        saved_count = core.memory.at_capture_saved_ops
+    except Exception:  # noqa: BLE001 -- partial/foreign logs keep the raw fallback
+        core = None
+        layer_count = _safe_len(getattr(log, "layer_list", None))
+        operation_count = int(getattr(log, "num_ops", 0) or 0)
+        saved_count = int(getattr(log, "num_saved_ops", 0) or 0)
     return {
         "schema": "torchlens.explain.v1",
         "audience": audience,
         **_capture_verification(log),
         "model_class": getattr(log, "model_class_name", type(log).__name__),
-        "layer_count": _safe_len(getattr(log, "layer_list", None)),
-        "operation_count": int(getattr(log, "num_ops", 0) or 0),
-        "saved_tensor_count": int(getattr(log, "num_saved_ops", 0) or 0),
+        "layer_count": layer_count,
+        "operation_count": operation_count,
+        "saved_tensor_count": saved_count,
         "total_tensor_count": int(getattr(log, "num_tensors", 0) or 0),
         "has_backward_pass": bool(getattr(log, "has_backward_pass", False)),
         "exception_type": "unknown",
@@ -595,10 +647,37 @@ def _first_nonfinite_summary(log: Any) -> str:
         First recorded non-finite detail, or a scoped clean statement.
     """
 
-    layer = first_nonfinite_layer(log, kind="saved")
-    if layer is None:
-        return f"No non-finite values found in saved outputs{coverage_gap_note(log, kind='saved')}."
-    return _first_nonfinite_detail(log, str(getattr(layer, "layer_label", "unknown")))
+    from ._health import health_facts
+
+    # D4/D14 (F09): explain never scans -- this summary serves the basis in
+    # hand (capture record, prior scan memo, persisted artifact record) and
+    # says NOT-CHECKED otherwise, with the spelling that would scan.
+    facts = health_facts(log, allow_scan=False)
+    if facts.verdict == "found":
+        labels = facts.nonfinite_labels or facts.alias_nonfinite_labels
+        return _first_nonfinite_detail(log, str(labels[0]).rsplit(":", 1)[0])
+    if facts.verdict == "checked_and_clean":
+        return (
+            f"No non-finite values found ({facts.checked} output(s) examined; basis: "
+            f"{facts.source_basis or facts.basis})."
+        )
+    if (facts.source_basis or facts.basis) not in ("unscanned", "underivable"):
+        # A basis exists but coverage has gaps: disclose exactly what the
+        # scan could not or did not examine (disk-backed payloads,
+        # unsaved outputs) instead of a bare NOT-CHECKED. The shared
+        # gap-note wording (one source, never drifting) is safe here: a
+        # basis is in hand, so no new scan runs.
+        from ..data_classes._nonfinite import coverage_gap_note
+
+        return (
+            "No non-finite values found in the examined outputs"
+            f"{coverage_gap_note(log, kind='saved')} -- NOT-CHECKED overall "
+            f"(basis: {facts.source_basis or facts.basis})."
+        )
+    return (
+        "Non-finite health NOT-CHECKED on this object; scan retained payloads with "
+        "tl.report.health_facts(trace) or trace.nonfinite_ops."
+    )
 
 
 def _first_nonfinite_detail(log: Any, saved_label: str) -> str:
@@ -650,21 +729,45 @@ def _model_summary_lines(log: Any) -> list[str]:
         Bullet lines for the model section.
     """
 
+    from ._factcore import factcore
+
     model_class_name = getattr(log, "model_class_name", type(log).__name__)
-    num_params = int(getattr(log, "num_params", 0) or 0)
-    trainable_params = int(getattr(log, "num_params_trainable", 0) or 0)
-    frozen_params = int(getattr(log, "num_params_frozen", 0) or 0)
-    total_flops = int(getattr(log, "total_flops_forward", getattr(log, "total_flops", 0)) or 0)
-    module_count = _safe_len(getattr(log, "modules", None))
-    return [
+    # Single-source law (sumfam D1/item 11): headline facts come from
+    # FactCore, never raw trace attributes. A husked/foreign log that cannot
+    # serve the substrate degrades to the legacy zero-shape (explain is the
+    # one member that never refuses).
+    try:
+        core = factcore(log)
+    except Exception:  # noqa: BLE001 -- cleaned/foreign logs keep the degraded report
+        num_params = int(getattr(log, "num_params", 0) or 0)
+        return [
+            f"- Architecture: {model_class_name}.",
+            f"- Parameters: {_format_count(num_params)} unique.",
+            "- Forward FLOPs: unavailable on this object.",
+            f"- Modules represented: {_safe_len(getattr(log, 'modules', None))}.",
+        ]
+    num_params = core.params.total or 0
+    trainable_params = core.params.trainable or 0
+    frozen_params = core.params.frozen or 0
+    total_flops = int(core.compute.partition_total)
+    lines = [
         f"- Architecture: {model_class_name}.",
         (
-            f"- Parameters: {_format_count(num_params)} total "
+            f"- Parameters: {_format_count(num_params)} unique "
             f"({_format_count(trainable_params)} trainable, {_format_count(frozen_params)} frozen)."
         ),
-        f"- Forward FLOPs: {_format_count(total_flops)}.",
-        f"- Modules represented: {_format_count(module_count)}.",
     ]
+    for group in core.params.tied_groups:
+        lines.append(f"- Tied parameters: {' == '.join(group)}.")
+    flops_line = f"- Forward FLOPs (actual-path analytic): {_format_count(total_flops)}."
+    if core.compute.coverage.unknown:
+        flops_line += (
+            f" LOWER BOUND: {core.compute.coverage.unknown} op(s) carry no cost rule "
+            "(see trace.unknown_flop_ops)."
+        )
+    lines.append(flops_line)
+    lines.append(f"- Modules represented: {_format_count(core.counts.modules)}.")
+    return lines
 
 
 def _capture_summary_lines(log: Any) -> list[str]:
@@ -681,10 +784,19 @@ def _capture_summary_lines(log: Any) -> list[str]:
         Bullet lines for the capture section.
     """
 
-    layer_count = _safe_len(getattr(log, "layer_list", None))
-    operation_count = int(getattr(log, "num_ops", 0) or 0)
-    tensor_total = int(getattr(log, "num_tensors", 0) or 0)
-    tensor_saved = int(getattr(log, "num_saved_ops", 0) or 0)
+    from ._factcore import factcore
+
+    # Counts come from the explicit grain vocabulary (sumfam D3): the bare
+    # word "operations" cannot denote both the compute ops and the tracked
+    # tensor rows, so both grains print under their names. Husked/foreign
+    # logs degrade to the legacy zero-shape.
+    try:
+        core = factcore(log)
+    except Exception:  # noqa: BLE001 -- cleaned/foreign logs keep the degraded report
+        return [
+            f"- Layers logged: {_safe_len(getattr(log, 'layer_list', None))}.",
+            f"- Operations logged: {int(getattr(log, 'num_ops', 0) or 0)}.",
+        ]
     pass_counts = [
         int(value)
         for value in (getattr(log, "layer_num_calls", {}) or {}).values()
@@ -692,9 +804,16 @@ def _capture_summary_lines(log: Any) -> list[str]:
     ]
     max_ops = max(pass_counts, default=1)
     return [
-        f"- Layers logged: {_format_count(layer_count)}.",
-        f"- Operations logged: {_format_count(operation_count)}.",
-        f"- Tensors saved: {_format_count(tensor_saved)} of {_format_count(tensor_total)}.",
+        f"- Layers logged: {_format_count(core.counts.layers)}.",
+        (
+            f"- Compute ops logged: {_format_count(core.counts.compute_ops)} "
+            f"({_format_count(core.counts.tracked_tensor_rows)} tracked tensor rows incl. "
+            f"{_format_count(core.counts.alias_rows)} boundary/buffer rows)."
+        ),
+        (
+            f"- Tensors saved at capture: {_format_count(core.memory.at_capture_saved_ops)} "
+            f"of {_format_count(core.counts.tracked_tensor_rows)}."
+        ),
         f"- Maximum observed ops for one layer: {_format_count(max_ops)}.",
     ]
 
@@ -750,21 +869,63 @@ def _anomaly_lines(log: Any) -> list[str]:
         Bullet lines describing non-finite outs.
     """
 
-    nonfinite_labels = [
-        str(getattr(layer, "layer_label", "unknown"))
-        for layer in nonfinite_layers(log, kind="saved")
-    ]
-    if not nonfinite_labels:
-        # This bullet stands alone in the report -- the hedged ``first_nonfinite``
-        # evidence line only appears in the failure diagnosis -- so the scan's
-        # coverage gaps have to be disclosed right here or a selective-save (or
-        # quantized-payload) capture reads as an audited clean bill of health.
-        return [f"- No NaN or Inf values were found in saved outs{coverage_gap_note(log)}."]
-    first = nonfinite_labels[0]
+    from ._health import health_facts
+
+    # D14 (sumfam item 11): bare explain renders the THREE health states
+    # from whatever basis is in hand and NEVER scans -- and it says "not
+    # audited" with the spelling. The false negative this kills: a
+    # payload-stripped all-NaN artifact reading as clean.
+    facts = health_facts(log, allow_scan=False)
+    verdict = facts.verdict
+    basis = facts.source_basis or facts.basis
+    if verdict == "found":
+        labels = facts.nonfinite_labels or facts.alias_nonfinite_labels
+        first = labels[0]
+        lines = [
+            (
+                f"- FOUND: {len(facts.nonfinite_labels)} op output(s) contain NaN or Inf "
+                f"values (basis: {basis})."
+            ),
+            f"- First affected op: {first}.",
+        ]
+        if facts.alias_nonfinite_labels:
+            lines.append(
+                f"- Alias-view hits (boundary/buffer rows): {len(facts.alias_nonfinite_labels)}."
+            )
+        detail = _first_nonfinite_detail(log, str(first).rsplit(":", 1)[0])
+        lines.append(f"- Detail: {detail}")
+        lines.append("- Not audited: judgments (severity, follow-ups) come from tl.audit(trace).")
+        return lines
+    if verdict == "checked_and_clean":
+        return [
+            (
+                f"- CHECKED-AND-CLEAN: {facts.checked} op output(s) examined, none "
+                f"non-finite (basis: {basis})."
+            ),
+            "- Not audited: judgments (severity, follow-ups) come from tl.audit(trace).",
+        ]
+    if basis not in ("unscanned", "underivable"):
+        # A basis exists but coverage has gaps (disk-backed, inference-mode,
+        # uncheckable dtypes, unsaved outputs): disclose the exact gaps
+        # through the shared wording -- safe, no new scan runs.
+        from ..data_classes._nonfinite import coverage_gap_note
+
+        return [
+            (
+                "- NOT-CHECKED overall: no non-finite values in the examined outputs"
+                f"{coverage_gap_note(log, kind='saved')} (basis: {basis})."
+            ),
+            "- Not audited: judgments (severity, follow-ups) come from tl.audit(trace).",
+        ]
     return [
-        f"- {len(nonfinite_labels)} saved out(s) contain NaN or Inf values.",
-        f"- First affected layer: {first}.",
-        f"- Detail: {_first_nonfinite_detail(log, first)}",
+        (
+            f"- NOT-CHECKED: non-finite health has not been established on this object "
+            f"({facts.unexamined} saved output(s) unexamined; basis: {basis})."
+        ),
+        (
+            "- To scan retained payloads (payload_scan cost): "
+            "tl.report.health_facts(trace) or trace.nonfinite_ops."
+        ),
     ]
 
 

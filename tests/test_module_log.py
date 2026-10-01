@@ -262,10 +262,12 @@ class TestModuleLogFields:
             assert ml.has_backward_hooks is False
 
     def test_repr(self):
+        """F10 re-pin: one line, address + class + counts + mode."""
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
         r = repr(ml)
-        assert "Module" in r
+        assert "\n" not in r
+        assert "[module]" in r
         assert ml.address in r
         assert ml.class_name in r
 
@@ -299,12 +301,13 @@ class TestModuleCallLog:
         assert isinstance(mpl.call_children, list)
 
     def test_repr(self):
+        """F10 re-pin: address:pass line with the [module_call] kind token."""
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
         mpl = ml.ops[0]
         r = repr(mpl)
-        assert "ModuleCall" in r
-        assert len(r) > 0
+        assert "[module_call]" in r
+        assert "\n" not in r
 
 
 # ---------------------------------------------------------------------------

@@ -116,7 +116,7 @@ def feature_map_evolution(
     maps_by_key: FeatureMapEvolution = OrderedDict()
     staged: OrderedDict[str, torch.Tensor] = OrderedDict()
     non_spatial_shapes: list[str] = []
-    for key, _site, activations in selected:
+    for key, _site, activations, _payload_kind in selected:
         tensor = _as_cpu_float_tensor(activations)
         if tensor.ndim != 4:
             non_spatial_shapes.append(f"{key}: {tuple(tensor.shape)}")

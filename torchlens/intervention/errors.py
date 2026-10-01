@@ -290,6 +290,37 @@ class SpecMutationError(ConfigurationError, ValueError):
     """Raised when an intervention spec mutator cannot apply a requested change."""
 
 
+class BindingPreflightError(ConfigurationError, ValueError):
+    """Raised when ``spec.bind(model)`` refuses before constructing a binding.
+
+    Bind-time refusals fire before ANY forward runs (surgery memo 3.3 item
+    8): unresolved static anchors, rule classes the capture-free lane cannot
+    execute, and invalid spec/model operands. Branch on
+    ``exc.fields["code"]``, never message text.
+    """
+
+
+class BindingRuntimeError(InterventionError, RuntimeError):
+    """Raised by a bound intervention executor at or after call time.
+
+    Covers the serial/non-reentrancy refusal, the JMT-FOLD-A3 zero-fire
+    fail-closed default (raised AFTER the call with ``.last_report``
+    retained), the missing-``generate`` capability refusal, serialization
+    refusal, and training-surface teaching refusals. Branch on
+    ``exc.fields["code"]``, never message text.
+    """
+
+
+class RegionError(ConfigurationError, ValueError):
+    """Raised by the region admissibility derivation or the region lowering.
+
+    Regions (F01, surgery memo 3.4) derive admissibility -- complete exits,
+    convexity, pass closure, replay-lane effect closure -- rather than trust
+    user assertions; every refusal here names the derived violation. Branch
+    on ``exc.fields["code"]``, never message text.
+    """
+
+
 class SiteResolutionError(ConfigurationError, ValueError):
     """Raised when future selector resolution cannot identify requested sites."""
 
@@ -365,7 +396,12 @@ class BundleMemberError(ConfigurationError, ValueError):
 
 
 class BundleRelationshipError(ValidationError, ValueError):
-    """Raised when bundle members lack the relationship required for an operation."""
+    """Raised when bundle members fail a gated operation's comparison gate.
+
+    ``fields["code"]`` carries ``bundle_gate_ordering_topology``,
+    ``bundle_gate_model_axis_unmet``, ``bundle_gate_input_values_differ``,
+    or ``bundle_gate_input_identity_unproven``.
+    """
 
     severity = "fatal"
 
@@ -389,6 +425,8 @@ __all__ = [
     "BaselineUndeterminedError",
     "BatchChunkInputAmbiguityError",
     "BatchNormTrainModeWarning",
+    "BindingPreflightError",
+    "BindingRuntimeError",
     "BundleMemberError",
     "BundleRelationshipError",
     "ChunkedForwardConfigError",
@@ -420,6 +458,7 @@ __all__ = [
     "Severity",
     "SiteAmbiguityError",
     "SelectionError",
+    "RegionError",
     "SiteResolutionError",
     "SelectorCapabilityError",
     "SelectorCompositionError",

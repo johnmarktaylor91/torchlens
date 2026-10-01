@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import warnings
 from collections.abc import Callable
 from typing import Any, cast
@@ -110,17 +111,17 @@ def _can_resolve_hf_tokenizer(model: Any) -> bool:
         non-empty string.
     """
 
-    try:
+    # hostile __getattr__ hooks on foreign model objects must never crash the
+    # probe; any attribute-read failure simply declines the auto-route
+    direct = None
+    with contextlib.suppress(Exception):
         direct = getattr(model, "name_or_path", None)
-    except Exception:
-        return False
     if isinstance(direct, str) and direct:
         return True
-    try:
+    via_config = None
+    with contextlib.suppress(Exception):
         config = getattr(model, "config", None)
         via_config = getattr(config, "name_or_path", None) if config is not None else None
-    except Exception:
-        return False
     return isinstance(via_config, str) and bool(via_config)
 
 
@@ -553,146 +554,6 @@ def _tokenizer_preprocessing_record(
     )
 
 
-def _try_hf_image_processor(
-    model: Any,
-) -> tuple[Callable[[Any], Any], ResolvedPreprocessing] | None:
-    """Resolve a Hugging Face image processor for ``model`` if possible.
-
-    Parameters
-    ----------
-    model:
-        Candidate Hugging Face image model.
-
-    Returns
-    -------
-    tuple[Callable[[Any], Any], ResolvedPreprocessing] | None
-        Processor transform and provenance, or None when unavailable.
-    """
-
-    name_or_path = _model_name_or_path(model)
-    if name_or_path is None:
-        return None
-    try:
-        from transformers import AutoImageProcessor
-
-        processor = AutoImageProcessor.from_pretrained(name_or_path)
-    except Exception:
-        try:
-            from transformers import AutoProcessor
-
-            processor = AutoProcessor.from_pretrained(name_or_path)
-            if not hasattr(processor, "image_processor"):
-                return None
-        except Exception:
-            return None
-
-    def transform(image: Any) -> Any:
-        """Apply the resolved image processor.
-
-        Parameters
-        ----------
-        image:
-            PIL image or batch of PIL images.
-
-        Returns
-        -------
-        Any
-            Processor output, usually a mapping with ``pixel_values``.
-        """
-
-        return processor(images=image, return_tensors="pt")
-
-    # HF image processors batch a list of images internally in a single call.
-    transform._tl_batch_input = True  # type: ignore[attr-defined]
-
-    return (
-        transform,
-        ResolvedPreprocessing(
-            source="hf_auto_image_processor",
-            identifier=name_or_path,
-            verified=True,
-            config=_extract_hf_processor_config(processor),
-            description=f"AutoImageProcessor: {name_or_path}",
-        ),
-    )
-
-
-def _try_torchvision_transforms(
-    model: Any,
-) -> tuple[Callable[[Any], Any], ResolvedPreprocessing] | None:
-    """Resolve torchvision weights preprocessing if attached to ``model``.
-
-    Parameters
-    ----------
-    model:
-        Candidate torchvision model.
-
-    Returns
-    -------
-    tuple[Callable[[Any], Any], ResolvedPreprocessing] | None
-        Transform and provenance, or None when unavailable.
-    """
-
-    if not model.__class__.__module__.startswith("torchvision.models"):
-        return None
-    weights = getattr(model, "_torchlens_weights", None)
-    if weights is None:
-        return None
-    try:
-        transform = weights.transforms()
-    except Exception:
-        return None
-    return (
-        transform,
-        ResolvedPreprocessing(
-            source="torchvision_weights",
-            identifier=str(weights),
-            verified=True,
-            config=_extract_torchvision_transform_config(transform),
-            description=f"torchvision: {weights}",
-        ),
-    )
-
-
-def _try_timm_transforms(model: Any) -> tuple[Callable[[Any], Any], ResolvedPreprocessing] | None:
-    """Resolve timm preprocessing for models exposing ``default_cfg``.
-
-    Parameters
-    ----------
-    model:
-        Candidate timm model.
-
-    Returns
-    -------
-    tuple[Callable[[Any], Any], ResolvedPreprocessing] | None
-        Transform and provenance, or None when unavailable.
-    """
-
-    default_cfg = getattr(model, "default_cfg", None)
-    if not isinstance(default_cfg, dict):
-        return None
-    try:
-        import timm
-
-        data_config = timm.data.resolve_data_config({}, model=model)
-        transform = timm.data.create_transform(**data_config)
-    except Exception:
-        return None
-    return (
-        transform,
-        ResolvedPreprocessing(
-            source="timm",
-            identifier=str(default_cfg.get("architecture", model.__class__.__name__)),
-            verified=True,
-            config=dict(data_config),
-            description=(
-                f"timm: input_size={data_config.get('input_size')} "
-                f"crop_pct={data_config.get('crop_pct')}"
-            ),
-        ),
-    )
-
-
 def _imagenet_default_transform() -> tuple[Callable[[Any], Any], ResolvedPreprocessing]:
     """Return the ImageNet default preprocessing fallback.
 
@@ -745,7 +606,17 @@ def _imagenet_default_transform() -> tuple[Callable[[Any], Any], ResolvedPreproc
 
 
 def _resolve_image_preprocessing(model: Any) -> tuple[Callable[[Any], Any], ResolvedPreprocessing]:
-    """Resolve image preprocessing through the configured cascade.
+    """Resolve image preprocessing through the neutral authority resolver.
+
+    Delegates to :func:`torchlens.preprocessing.resolve` (tvscope B2), which
+    tries the model-attached no-network tiers first (a planted torchvision
+    weights handle, a timm ``default_cfg``) and the network-gated HF
+    processor fetch last, with the attempt disclosed on the record; a fetch
+    failure yields ``unknown``, never a silently substituted lower tier
+    (memo D8). Only when NOTHING resolves does the demoted TorchLens-authored
+    ImageNet default apply -- loudly, ``verified=False``, with any failed
+    resolution attempt disclosed in its config (memo D9; the default-flip
+    fork is FORK-1, unchanged here).
 
     Parameters
     ----------
@@ -758,11 +629,23 @@ def _resolve_image_preprocessing(model: Any) -> tuple[Callable[[Any], Any], Reso
         Transform and provenance record.
     """
 
-    for tier in (_try_hf_image_processor, _try_torchvision_transforms, _try_timm_transforms):
-        result = tier(model)
-        if result is not None:
-            return result
-    return _imagenet_default_transform()
+    from torchlens import preprocessing as _preprocessing
+
+    resolution = _preprocessing.resolve(model=model)
+    record = resolution.record
+    if resolution.transform is not None and record.source != "unknown":
+        if record.source == "hf_image_processor":
+            # Legacy source token for the model-discovered HF tier (pinned by
+            # the autoroute contract tests since before the neutral resolver).
+            record.source = "hf_auto_image_processor"
+            record.description = f"AutoImageProcessor: {record.identifier}"
+        return resolution.transform, record
+    transform, fallback_record = _imagenet_default_transform()
+    if record.source == "unknown":
+        # The failed resolution (incl. any fetch disclosure) rides the
+        # fallback record so the failure is inspectable, never swallowed.
+        fallback_record.config["resolution_attempt"] = dict(record.config)
+    return transform, fallback_record
 
 
 def _make_image_transform(transform: Callable[[Any], Any]) -> Callable[[Any], Any]:
@@ -851,28 +734,6 @@ def _extract_hf_processor_config(processor: Any) -> dict[str, Any]:
     if image_processor is not None and image_processor is not processor:
         nested = _extract_hf_processor_config(image_processor)
         config.update({f"image_processor.{key}": value for key, value in nested.items()})
-    return config
-
-
-def _extract_torchvision_transform_config(transform: Any) -> dict[str, Any]:
-    """Extract a best-effort torchvision transform config.
-
-    Parameters
-    ----------
-    transform:
-        Torchvision weights transform object.
-
-    Returns
-    -------
-    dict[str, Any]
-        Public scalar/list/tuple/dict fields where available.
-    """
-
-    config: dict[str, Any] = {}
-    for attr in ("crop_size", "resize_size", "mean", "std", "interpolation", "antialias"):
-        value = getattr(transform, attr, None)
-        if isinstance(value, (str, int, float, bool, list, tuple, dict)) or value is None:
-            config[attr] = value
     return config
 
 

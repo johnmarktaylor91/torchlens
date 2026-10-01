@@ -225,6 +225,7 @@ class Recorder:
         grad_transform: GradientPostfunc | None | MissingType = MISSING,
         save_raw_gradients: bool | MissingType = MISSING,
         backward_ready: bool = False,
+        echo: Any | None | MissingType = MISSING,
     ) -> None:
         """Initialize a recorder and perform construction-time validation.
 
@@ -280,6 +281,14 @@ class Recorder:
             backward_ready=backward_ready,
         )
         self.model = unwrapped_model
+        # echo= normalization runs at construction so the typed refusals
+        # (bad spellings, finalized-label selectors) fire BEFORE any forward.
+        if echo is MISSING or echo is None or echo is False:
+            echo_normalized = None
+        else:
+            from ..snoop import normalize_echo
+
+            echo_normalized = normalize_echo(echo)
         self.options = merge_recording_options(
             recording=None,
             keep_op=save,
@@ -302,6 +311,7 @@ class Recorder:
             default_grad=default_grad,
             grad_transform=grad_transform,
             save_raw_gradients=save_raw_gradients,
+            echo=echo_normalized if echo_normalized is not None else MISSING,
         )
         validate_recording_options(self.options)
         validate_followed_by_capability(
@@ -319,6 +329,13 @@ class Recorder:
         self._exited = False
         self._failed = False
         self._next_pass_index = 1
+        self._echo_session: Any | None = None
+        if self.options.echo is not None:
+            from ..snoop import EchoSession
+
+            # One narrator per Recorder: per-forward state resets each pass,
+            # the configured scope/sink/stats persist (snoop D1).
+            self._echo_session = EchoSession(self.options.echo, tier="record")
 
     def __enter__(self) -> Recorder:
         """Enter the recorder resource scope."""
@@ -381,8 +398,15 @@ class Recorder:
         self._entered = False
         self._exited = True
         if exc_value is None:
+            if self._echo_session is not None:
+                recording = self._state.recording
+                self._echo_session.finish("halted" if recording.halted else "complete")
             _warn_zero_match_capture_selectors(self._state)
             self._state.raise_accumulated_predicate_error()
+        elif self._echo_session is not None:
+            # Interrupts and with-body failures get a best-effort flush; the
+            # in-log() crash tail (if any) already fired.
+            self._echo_session.on_interrupt()
 
     def log(
         self,
@@ -434,6 +458,13 @@ class Recorder:
             model_class_name=str(type(self.model).__name__),
             activation_transform=self.options.activation_transform,
             save_raw_activations=self.options.save_raw_activations,
+            # The backward hook leg reads grad policy from the TRACE
+            # (tensor_tracking._build_fastlog_grad_payloads), not from
+            # RecordingOptions; omitting these silently ignored
+            # grad_transform and save_raw_gradients on every Recorder /
+            # record() backward (explorer rider: Recorder backward coverage).
+            grad_transform=self.options.grad_transform,
+            save_raw_gradients=self.options.save_raw_gradients,
             detach_saved_activations=False,
             backward_ready=True,
         )
@@ -455,6 +486,9 @@ class Recorder:
             stop=trace._stop_directive,
         )
         self._reset_state_for_pass(sample_id=sample_id)
+        if self._echo_session is not None:
+            self._echo_session.reset_pass(self._next_pass_index)
+            self._echo_session.bind_trace(trace)
         self._state.recording.start_times.append(time.time())
         try:
             # The reservation must wrap the recording-state install: a refused
@@ -487,6 +521,9 @@ class Recorder:
                 max(self._state.recording.n_ops, self._next_pass_index),
             )
             self._mark_halted_pass(self._next_pass_index, halt_exc)
+            if self._echo_session is not None:
+                # Halted is not failed: no crash tail, one typed disclosure.
+                self._echo_session.note_line("-- echo: capture halted (not failed) --")
             output = None
             return output
         except Exception as exc:
@@ -494,6 +531,14 @@ class Recorder:
             if captured_run_core is not None:
                 self._captured_run_cores.append(captured_run_core)
             forward_disposition = stop_directive_for_trace(trace).forward_disposition(exc)
+            if self._echo_session is not None:
+                # Crash tail (snoop D5 tail 2): flush synchronously, extend the
+                # exception's note when it propagates. Original exception wins.
+                echo_note = self._echo_session.on_forward_failure(exc)
+                if echo_note is not None and forward_disposition != "return_partial":
+                    add_note = getattr(exc, "add_note", None)
+                    if add_note is not None:
+                        add_note(echo_note)
             if forward_disposition == "raise":
                 self._state.abort_storage(safe_exception_str(exc))
                 raise

@@ -728,16 +728,15 @@ class TestNestedTupleArgs:
 
 class TestDisplayLargeTensor:
     def test_display_no_oom(self):
-        """Displaying a large captured tensor must not clone the whole tensor (#73).
+        """Displaying a large captured tensor must never clone it (#73 -> F10).
 
-        ``Op._tensor_contents_str_helper`` is documented ("Slice first, then
-        clone only the small slice (#73)") to slice down to at most an 8x8
-        preview *before* calling ``.clone()``. This test tracks every
-        ``torch.Tensor.clone()`` call made while formatting a real captured
-        entry with ``str(op)`` and asserts none of them ever clones more than
-        the 8x8=64-element preview -- i.e. it can never clone the full
-        (50, 2000) = 100,000-element activation. A regression that clones
-        the whole tensor before slicing would make this fail.
+        The historical guard allowed one <=8x8=64-element preview clone
+        (slice-then-clone, #73). The F10 card renders through the C02
+        allocation-free stats kernel and carries NO raw preview (it lives
+        behind the ``More: .out`` exit), so the pin strengthens: formatting
+        ``str(op)`` performs ZERO ``torch.Tensor.clone()`` calls of any
+        size. A regression that reintroduces a full-tensor (or any) copy on
+        the repr path fails here.
         """
         model = nn.Linear(100, 2000)
         x = torch.randn(50, 100)
@@ -761,13 +760,10 @@ class TestDisplayLargeTensor:
         finally:
             torch.Tensor.clone = orig_clone
 
-        assert clone_call_sizes, "expected str(op) to clone at least one tensor slice"
-        max_cloned_elements = max(clone_call_sizes)
-        full_tensor_elements = 50 * 2000
-        assert max_cloned_elements <= 64, (
-            f"str(op) cloned a tensor with {max_cloned_elements} elements "
-            f"(full activation has {full_tensor_elements}); expected the display path to "
-            f"slice down to <= 8x8=64 elements before cloning"
+        assert clone_call_sizes == [], (
+            f"str(op) cloned tensors of sizes {clone_call_sizes[:5]}; the F10 "
+            "card path must not copy payloads at all (the preview moved "
+            "behind the More: .out exit)"
         )
 
 

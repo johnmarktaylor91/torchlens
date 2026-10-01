@@ -315,6 +315,14 @@ class InterventionDecision:
     keep_grad: bool = False
     isolate: bool = False
     direction: HelperDirection = "forward"
+    #: Provenance of the SPEC rule that produced this decision (leverage B7):
+    #: the user's WHERE expression must survive into the persisted spec, so
+    #: the spec threads it through the decision to the staging site. It is
+    #: a provenance rider only — predicate-door persistence still stamps
+    #: spec_derived=True (the addressing is lowered per-site labels either
+    #: way). Bare-predicate decisions carry None.
+    rule_id: str | None = None
+    where_repr: str | None = None
 
 
 @dataclass(frozen=True)
@@ -465,6 +473,20 @@ class EdgeUseRecord(_SelectionOperand):
         from ..selection import _selection_from_edge
 
         return _selection_from_edge(self)
+
+    def __repr__(self) -> str:
+        """Designed per-edge line (F10): source -> target (arg k) + relations.
+
+        The storage relation prints only when POPULATED (``view``/``copy``);
+        the honest sentinel ``unknown`` stays silent rather than reading as
+        a fact (lovely bug 24's sentinel discipline).
+        """
+
+        path = ".".join(str(component) for component in self.arg_path) or "?"
+        line = f"edge {self.parent_label} -> {self.child_label} ({self.arg_kind} {path})"
+        if self.view_or_copy in ("view", "copy"):
+            line += f" [{self.view_or_copy}]"
+        return line
 
 
 @dataclass

@@ -200,6 +200,30 @@ def _log_final_info_for_layers(self: "Trace") -> None:
     _build_module_hierarchy_dicts(self)
 
 
+def _effective_param_geometry(pl: Any) -> tuple[int, Any]:
+    """Return a param record's (numel, memory), lazy-materialization-aware.
+
+    The tally runs BEFORE step 15's lazy-geometry finalize
+    (``_finalize_lazy_param_geometry``), so a parameter that was
+    UninitializedParameter at prep and materialized IN PLACE during the one
+    captured forward still holds zero geometry on its record here. Reading
+    the live reference keeps the trace/module totals truthful (quickstart
+    memo 4.4 item 6: finalize before aggregation, on BOTH readers -- a
+    plausible report whose totals silently miss the lazy head is worse than
+    a crash). Never-materialized rows honestly keep zero.
+    """
+
+    if getattr(pl, "_lazy_at_prep", False):
+        from .._capture_state_helpers import _is_uninitialized_param
+
+        live = getattr(pl, "_param_ref", None)
+        if live is not None and not _is_uninitialized_param(live):
+            from ..utils.tensor_utils import get_memory_amount as _get_memory_amount
+
+            return int(live.numel()), Bytes(_get_memory_amount(live))
+    return int(pl.num_params), pl.param_memory
+
+
 def _tally_params_by_identity(self: "Trace", mbd: dict[str, Any]) -> None:
     """Tally trace- and module-level parameter totals by PARAMETER IDENTITY.
 
@@ -222,14 +246,14 @@ def _tally_params_by_identity(self: "Trace", mbd: dict[str, Any]) -> None:
     self.num_param_tensors = 0
     self.total_param_memory = Bytes(0)
     for pl in self.param_logs:
-        count = int(pl.num_params)
+        count, memory = _effective_param_geometry(pl)
         self.num_params += count
         if pl.is_trainable:
             self.num_params_trainable += count
         else:
             self.num_params_frozen += count
         self.num_param_tensors += 1
-        self.total_param_memory += pl.param_memory
+        self.total_param_memory += memory
 
         containing_modules: set[str] = set()
         owner_addresses = set(getattr(pl, "all_module_addresses", None) or [])
@@ -773,8 +797,11 @@ def _build_lookup_keys_and_finalize_retained_layers(self: "Trace") -> None:
             self.layer_labels.append(layer_entry.layer_label)
         self.op_labels.append(layer_entry.label)
         self.layer_num_calls[layer_entry.layer_label] = layer_entry.num_passes
-        if layer_entry.has_saved_activation:
-            self.saved_activation_memory += layer_entry.activation_memory
+        # F20 (brainpipe D-17): no per-layer byte increment here -- the
+        # saved-summary refresh later in this same step writes the aggregate
+        # from the ONE alias-aware byte model (retained_activation_bytes),
+        # which also serves the explorer P4 memory truth (reduce-only
+        # captures count the retained TRANSFORMED bytes).
         i += 1
 
     self._layers_logged = True

@@ -1,0 +1,26 @@
+{
+  "schema": "mikit_translation_v1",
+  "comment": "TransformerLens name -> torchlens facet translation table (mikit D16). Keyed by (tlens pattern, tlens GENERATION): the 3.x bridge cache has a different vocabulary than the 2.x names ARENA teaches (measured: blocks.0.attn.hook_out and hook_attn_out are different keys in one cache). {L} is the executed-order layer index. Consumed by the alias resolver, alias_report, the migration page, and the CI row asserting every row resolves.",
+  "rows": [
+    {"tlens": "hook_embed", "generation": "2.x", "facet": "lookup", "scope": "embedding", "notes": "token-embedding lookup facet; the decomposition embedding ROW is the graph-proven writer"},
+    {"tlens": "hook_pos_embed", "generation": "2.x", "facet": "lookup", "scope": "embedding", "notes": "position-embedding lookup where the architecture has one (rotary models: absent, one embedding row)"},
+    {"tlens": "blocks.{L}.hook_resid_pre", "generation": "2.x", "facet": "resid_pre", "scope": "block"},
+    {"tlens": "blocks.{L}.hook_resid_mid", "generation": "2.x", "facet": "resid_mid", "scope": "block"},
+    {"tlens": "blocks.{L}.hook_resid_post", "generation": "2.x", "facet": "resid_post", "scope": "block"},
+    {"tlens": "blocks.{L}.attn.hook_q", "generation": "2.x", "facet": "q", "scope": "attention"},
+    {"tlens": "blocks.{L}.attn.hook_k", "generation": "2.x", "facet": "k", "scope": "attention"},
+    {"tlens": "blocks.{L}.attn.hook_v", "generation": "2.x", "facet": "v", "scope": "attention"},
+    {"tlens": "blocks.{L}.attn.hook_attn_scores", "generation": "2.x", "facet": "scores", "scope": "attention"},
+    {"tlens": "blocks.{L}.attn.hook_pattern", "generation": "2.x", "facet": "pattern", "scope": "attention"},
+    {"tlens": "blocks.{L}.attn.hook_z", "generation": "2.x", "facet": "z", "scope": "attention"},
+    {"tlens": "blocks.{L}.attn.hook_result", "generation": "2.x", "facet": "result", "scope": "attention"},
+    {"tlens": "blocks.{L}.hook_attn_out", "generation": "2.x", "facet": "attn_out", "scope": "attention"},
+    {"tlens": "blocks.{L}.hook_mlp_out", "generation": "2.x", "facet": "output", "scope": "mlp", "notes": "the MLP module output facet; the decomposition MLP ROW is the literal writer operand"},
+    {"tlens": "ln_final.hook_scale", "generation": "2.x", "facet": "final_norm_input", "scope": "lm_head", "notes": "the frozen scale derives from final_norm_input via the validated NormReconstruction (bit-exact vs TLens hook_scale on real gpt2)"},
+    {"tlens": "ln_final.hook_normalized", "generation": "2.x", "facet": "final_norm_input", "scope": "lm_head", "notes": "normalized view via NormReconstruction.apply_frozen"},
+    {"tlens": "blocks.{L}.attn.hook_out", "generation": "3.x-bridge", "facet": "attn_out", "scope": "attention", "notes": "bridge-cache vocabulary; different key than 2.x hook_attn_out"},
+    {"tlens": "blocks.{L}.mlp.hook_out", "generation": "3.x-bridge", "facet": "output", "scope": "mlp"},
+    {"tlens": "blocks.{L}.hook_in", "generation": "3.x-bridge", "facet": "resid_pre", "scope": "block"},
+    {"tlens": "blocks.{L}.hook_out", "generation": "3.x-bridge", "facet": "resid_post", "scope": "block"}
+  ]
+}

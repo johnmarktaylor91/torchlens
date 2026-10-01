@@ -68,9 +68,14 @@ def test_profile_honesty_labels_align_with_rows_and_vocabulary(profiled_trace) -
     profile = build_profile(profiled_trace, level="op", top_k=3)
     honesty = profile.honesty()
     assert list(honesty["name"]) == list(profile.frame["name"])
-    allowed = {"measured", "estimated", "unknown"}
+    # F09 (costreport D2/D9): per-cell evidence with mandatory qualifiers --
+    # host time is never bare "measured", parameter counts are a declared
+    # inventory (formula_exact), FLOPs carry their compute-record evidence.
+    from torchlens.report._profile import HONESTY_LABELS
+
     for column in ("time", "flops", "activation_memory", "param_count"):
-        assert set(honesty[column]) <= allowed
+        assert set(honesty[column]) <= set(HONESTY_LABELS)
+    assert "measured" not in set(honesty["time"])
     # Cached honesty frames are returned as copies, not aliases.
     assert honesty is not profile.honesty()
 

@@ -51,6 +51,9 @@ _LAYER_LOG_CONTEXT_FIELDS = (
     # hook WHICH pass it is firing at.
     "label",
     "pass_index",
+    # L1 structural site key (where minted): the derived-seed law's logical
+    # firing coordinate prefers it over the display label (F02, edits memo D6).
+    "site_key",
     "layer_type",
     "shape",
     "dtype",

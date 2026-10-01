@@ -54,6 +54,7 @@ from typing import Any, NamedTuple
 import pytest
 import torch
 from _oracle_env import (  # noqa: E402 - tests/ is on sys.path under pytest
+    GOLDEN_FLAG_PREFIXES,
     flag_armed,
     guard_wrap_state_for_golden_update,
     require_update_reason,
@@ -695,6 +696,29 @@ def _matrix() -> dict[str, Any]:
     return _compute_matrix()
 
 
+def warm_scan_caches() -> None:
+    """Pre-pay the one-time matrix build at collection time (uncharged).
+
+    The conftest warm seam (``pytest_collection_modifyitems``) calls this for
+    every collected module that exposes it. The 278-cell characterization
+    matrix is ONE lru-cached build (~5-8s of genuine capture CPU); computed
+    lazily it lands in whichever cell pytest-randomly happens to run first
+    and sits ON the smoke duration-budget boundary (T45: two sessions tripped
+    two DIFFERENT first-payer cells). Skipped whenever any golden
+    update/regen flag is armed: golden generation guards that it starts on
+    UNWRAPPED torch (SF-53), and this warm captures during collection --
+    the same carve-out the conftest session-setup warmup capture takes.
+    """
+
+    if any(
+        key.startswith(GOLDEN_FLAG_PREFIXES) and value == "1" for key, value in os.environ.items()
+    ):
+        return
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        _matrix()
+
+
 _REGEN_WRITTEN = False
 
 
@@ -752,8 +776,21 @@ def test_matrix_covers_golden_exactly() -> None:
     assert set(_matrix()) == set(_golden())
 
 
-@pytest.mark.parametrize("cell_key", _CELL_KEYS)
-@pytest.mark.smoke
+# Cells that outgrew the 7s smoke budget on the merged tree (measured at
+# T46's landing gate: live/split/split_contains_mul 7.8s wall / 18.6s cpu)
+# carry a heavy param-mark; the rest stay smoke.
+_HEAVY_CELLS = {"live/split/split_contains_mul"}
+
+
+@pytest.mark.parametrize(
+    "cell_key",
+    [
+        pytest.param(k, marks=pytest.mark.heavy)
+        if k in _HEAVY_CELLS
+        else pytest.param(k, marks=pytest.mark.smoke)
+        for k in _CELL_KEYS
+    ],
+)
 def test_selector_semantics_cell(cell_key: str) -> None:
     """One selector x lifecycle cell matches its committed characterization."""
 

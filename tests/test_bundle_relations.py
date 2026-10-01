@@ -92,8 +92,7 @@ def _episode_ledger(n_declared: int, n_rows: int) -> EpisodeLedger:
             role="prefill" if step == 0 else "decode",
             status="complete",
             coord={"member": f"m{step}"},
-            cache_len=step + 1,
-            tokens=(step,),
+            step_output=(step,),
         )
         for step in range(n_rows)
     ]

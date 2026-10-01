@@ -91,7 +91,10 @@ def test_to_agent_json_graph_matches_the_live_trace() -> None:
     log = _captured_log()
     dump = log.to_agent_json()
 
-    assert dump["counts"]["operations"] == log.num_ops
+    # F09 numbers core: "operations" counts every tracked tensor row; the
+    # identity-partition split names compute rows separately.
+    assert dump["counts"]["operations"] == len(log.layer_labels)
+    assert dump["counts"]["compute_ops"] == log.num_ops
     assert dump["counts"]["tensors_saved"] == log.num_saved_ops
     assert dump["layer_labels"] == list(log.layer_labels)
     assert dump["truncation"] is None
@@ -141,7 +144,8 @@ def test_to_agent_json_max_ops_truncation_is_disclosed_never_silent() -> None:
     assert truncation["ops_included"] == 2
     assert truncation["ops_omitted"] == 3
     # Full-capture counts stay the truth even when rows are dropped.
-    assert dump["counts"]["operations"] == log.num_ops
+    assert dump["counts"]["operations"] == len(log.layer_labels)
+    assert dump["counts"]["compute_ops"] == log.num_ops
 
     with pytest.raises(ValueError, match="positive integer"):
         log.to_agent_json(max_ops=0)

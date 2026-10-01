@@ -343,8 +343,7 @@ def test_compat_wrapper_preserves_field_layout() -> None:
 
     line = tensor_stats_summary(torch.tensor([[1.0, 2.0], [3.0, 4.0]]))
     assert line == (
-        "Tensor[2, 2] float32 cpu mean=2.500 std=1.118 min=1.000 max=4.000 "
-        "nan=0% inf=0% neg=0% zero=0%"
+        "Tensor[2, 2] float32 cpu mean=2.500 std=1.118 min=1.000 max=4.000 nan=0% inf=0% zero=0%"
     )
     assert "⚠" not in tensor_stats_summary(
         torch.tensor([1.0, float("nan")])

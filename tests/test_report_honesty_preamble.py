@@ -167,8 +167,15 @@ def test_vendor_graph_exports_carry_facts(export_trace: tl.Trace, tmp_path: Path
     explorer = json_module.loads(
         tl.export.model_explorer(export_trace, tmp_path / "me.json").read_text(encoding="utf-8")
     )
-    assert explorer["torchlens_capture_honesty"]["capture_status"] == "complete"
+    # Schema v3: the honesty facts ride the "" groupNodeAttributes row (the
+    # side-panel provenance block) -- extra top-level keys fail Model
+    # Explorer's strict GraphCollection parse, so the v2 top-level block is
+    # deliberately gone (modelexplorer memo D7).
     assert set(explorer) >= {"label", "graphs"}  # ingest contract intact
+    for graph in explorer["graphs"]:
+        root_row = graph["groupNodeAttributes"][""]
+        assert root_row["capture_status"] == "complete"
+        assert root_row["poisoned"] == "False"
     netron = json_module.loads(
         tl.export.netron(export_trace, tmp_path / "n.json").read_text(encoding="utf-8")
     )
@@ -223,7 +230,7 @@ def test_tensorboard_export_writes_honesty_text(export_trace: tl.Trace) -> None:
             self.texts.append((tag, text, step))
 
     writer = _Writer()
-    tl.export.tensorboard(export_trace, writer)
+    tl.export.tensorboard(export_trace, writer, step=0)
     honesty_texts = [text for tag, text, _ in writer.texts if tag.endswith("capture_honesty")]
     assert len(honesty_texts) == 1
     assert "status=complete" in honesty_texts[0]

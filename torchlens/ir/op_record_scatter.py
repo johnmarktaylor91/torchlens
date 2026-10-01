@@ -170,6 +170,11 @@ CELL_SOURCES: dict[str, str] = {
     # tlspec v9 entry-dark injected-op identity (C07): default None on every
     # model op; the F01 log_injections writer stamps injected ops post-hoc.
     "injection_provenance": "DEFAULT",
+    # tlspec v9 entry-dark slots (C07X): both default None on every op; the
+    # F-EPISODE read-axis lane stamps episode_step and lane F41 stamps the
+    # TL-authored-root marker post-hoc.
+    "episode_step": "DEFAULT",
+    "tl_authored_root": "DEFAULT",
     # ---- ancestry --------------------------------------------------------------
     "root_ancestors": "FACET:ancestry",
     "children": "JOIN:children",

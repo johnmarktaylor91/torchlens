@@ -351,6 +351,13 @@ def audit_trace(trace: Trace | PartialTrace) -> TraceAudit:
                     "tl.debug.gradient_flow_audit(trace, bwd=...)",
                 )
             )
+            skipped.append(
+                (
+                    "bisect_nan_backward",
+                    f"{num_backward} backward passes captured; select one with "
+                    "tl.debug.bisect_nan_backward(trace, bwd=...)",
+                )
+            )
         else:
             frame = gradient_flow_audit(trace)
             checks_run.append("gradient_flow_audit")
@@ -363,6 +370,26 @@ def audit_trace(trace: Trace | PartialTrace) -> TraceAudit:
                         ops=(str(row["op"]),),
                         modules=(),
                         follow_up="tl.debug.gradient_flow_audit(trace)",
+                    )
+                )
+            # The backward NaN bisector runs automatically exactly here: ONE
+            # captured backward with saved gradient payloads is unambiguous
+            # (observe item 10). Its birth headline supersedes the carrier
+            # observations the flow audit reports for the same pass.
+            from ._nan_backward import bisect_nan_backward
+
+            backward_bisect = bisect_nan_backward(trace)
+            checks_run.append("bisect_nan_backward")
+            if backward_bisect.found:
+                headline = backward_bisect.first_bad_thing
+                findings.append(
+                    AuditFinding(
+                        severity="critical",
+                        check="bisect_nan_backward",
+                        message=backward_bisect.message,
+                        ops=(headline.label,) if headline.label else (),
+                        modules=(headline.module,) if headline.module else (),
+                        follow_up="tl.debug.bisect_nan_backward(trace)",
                     )
                 )
 

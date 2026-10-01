@@ -321,8 +321,10 @@ def _add_output_layers(
         new_output_node.grad_fn_class_name = None
         new_output_node.autograd_memory = None
         new_output_node.num_autograd_tensors = None
-        new_output_node.bytes_delta_at_call = Bytes(0)
-        new_output_node.bytes_peak_at_call = Bytes(0)
+        # An output pseudo-node runs no kernel: "not measured" is None, never
+        # a fabricated 0 B (observe item 15 zero-site sweep).
+        new_output_node.bytes_delta_at_call = None
+        new_output_node.bytes_peak_at_call = None
         new_output_node._internal_set("saved_args", [output_tensor])
         new_output_node._internal_set("saved_kwargs", {})
 

@@ -284,6 +284,8 @@ class _TlSpecWriter:
                 "baseline_name": getattr(bundle, "baseline_name", None),
             }
             cls._add_gated_member_relations(bundle, bundle_metadata)
+            cls._add_lineage_sections(bundle, bundle_metadata)
+            cls._add_preserved_sections(bundle, bundle_metadata)
             cls.write_json(tmp_path / "bundle.json", bundle_metadata)
 
             manifest = cls.build_manifest(
@@ -373,6 +375,59 @@ class _TlSpecWriter:
         if relation_table is None or len(relation_table.rows) == 0:
             return
         bundle_metadata["member_relations"] = relation_table.to_payload()
+
+    @staticmethod
+    def _add_lineage_sections(bundle: Any, bundle_metadata: dict[str, Any]) -> None:
+        """Write the F03 lineage sections into ``bundle.json``.
+
+        The C07X split-off join shapes (foldB s4.4 item 12): container
+        identity (``bundle_id`` / ``forked_from_bundle_id``), per-member
+        ``member_construction`` origin anchors, the hash-chained
+        ``operations`` chronology, and the ``member_effect_tables`` registry.
+        Empty surfaces write nothing (entry-dark on plain bundles; a pre-F03
+        reader in the same unreleased window sees only known keys).
+        """
+
+        bundle_id = getattr(bundle, "_bundle_id", None)
+        if bundle_id:
+            bundle_metadata["bundle_id"] = bundle_id
+        forked_from = getattr(bundle, "_forked_from_bundle_id", None)
+        if forked_from:
+            bundle_metadata["forked_from_bundle_id"] = forked_from
+        anchors = getattr(bundle, "_member_construction", None)
+        if anchors:
+            bundle_metadata["member_construction"] = {
+                name: dict(anchor) for name, anchor in anchors.items()
+            }
+        operations = getattr(bundle, "_operations", None)
+        if operations:
+            bundle_metadata["operations"] = [row.to_payload() for row in operations]
+        effect_tables = getattr(bundle, "_effect_tables", None)
+        if effect_tables:
+            bundle_metadata["member_effect_tables"] = {
+                operation_id: table.to_payload() for operation_id, table in effect_tables.items()
+            }
+
+    @staticmethod
+    def _add_preserved_sections(bundle: Any, bundle_metadata: dict[str, Any]) -> None:
+        """Re-emit preserved unknown namespaced ``bundle.json`` sections.
+
+        Loader doctrine leg (c) (the C07X amendment): sections a load
+        preserved opaque write back verbatim so re-save never silently
+        destroys another provider's well-formed data. A preserved key can
+        never collide with a writer-owned key — the loader only preserves
+        NAMESPACED (dotted) keys and the writer's own keys are bare.
+        """
+
+        preserved = getattr(bundle, "preserved_sections", None)
+        if not preserved:
+            return
+        for key, value in preserved.items():
+            if key in bundle_metadata:
+                # Defensive: never let carried data shadow a writer-owned
+                # section (unreachable while writer keys stay bare).
+                continue
+            bundle_metadata[key] = value
 
     @classmethod
     def _write_bundle_members(

@@ -6,7 +6,7 @@ import re
 from collections import Counter, OrderedDict
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import torch
 
@@ -31,37 +31,45 @@ from ..intervention._topology.topology import Supergraph, build_supergraph
 from ..intervention.errors import (
     BaselineUndeterminedError,
     BundleMemberError,
-    BundleRelationshipError,
 )
 from ..intervention.resolver import resolve_sites
 from ..intervention.types import Relationship
-from ._relations import MemberRelationRow, MemberRelationTable
+from ._compare_gate import require_comparable
+
+# Re-exports (redundant aliases): _distance_value is imported from
+# torchlens.bundle by the cert7/cert8 hardening suites and _bundle_delta_map
+# by ._comparisons; the rest are the historical module-level surface of the
+# pre-split file.
+from ._deltas import (
+    _bundle_aligned_pairs,
+    _bundle_compare,
+    _bundle_delta_map,
+    _bundle_norm_delta,
+    _bundle_output_delta,
+    _bundle_show_diff,
+    _distance_value as _distance_value,
+    _metric_label as _metric_label,
+    _resolve_member_name as _resolve_member_name,
+    _tensor_field as _tensor_field,
+)
+from ._lineage import BundleOperation, MemberEffectTable, mint_bundle_id
+from ._outcome_fold import _fold_member_outcomes
+from ._provenance import (
+    WhyReport as WhyReport,  # re-export: torchlens.bundle.WhyReport
+    bundle_provenance as _bundle_provenance,
+    bundle_why as _bundle_why,
+)
+from ._relation_carriage import _bundle_derive_episode_status, _bundle_relate
+from ._relations import MemberRelationRow, MemberRelationTable, OpaqueRelationRow
+from ._vary import bundle_vary as _bundle_vary
 
 if TYPE_CHECKING:
     from torch import nn
 
-    from ..capture._episode_ledger import EpisodeFoldResult, EpisodeLedger
+    from ..capture.outcome import CaptureOutcome
     from ..data_classes.op import Op
     from ..data_classes.trace import Trace
 
-
-_RELATIONSHIP_RANK: dict[Relationship, int] = {
-    Relationship.UNKNOWN: 0,
-    Relationship.DIFF_MODEL: 0,
-    Relationship.SAME_PARAM_SHAPES: 1,
-    Relationship.SHARED_ARCHITECTURE: 1,
-    Relationship.SHARED_GRAPH_DIFFERENT_INPUT: 2,
-    Relationship.SHARED_GRAPH_SAME_INPUT: 3,
-    Relationship.SAME_MODEL_OBJECT_AT_CAPTURE: 4,
-    Relationship.SAME_OBJECT: 5,
-}
-
-_REQUIRED_RELATIONSHIPS: dict[str, Relationship] = {
-    "node": Relationship.SAME_PARAM_SHAPES,
-    "compare_at": Relationship.SHARED_GRAPH_SAME_INPUT,
-    "most_changed": Relationship.SHARED_GRAPH_SAME_INPUT,
-    "diff": Relationship.SHARED_GRAPH_SAME_INPUT,
-}
 
 _OP_LABEL_RE = re.compile(r"^.+_\d+_\d+$")
 _BARE_LAYER_LABEL_RE = re.compile(r"^.+_\d+$")
@@ -78,6 +86,15 @@ _BUNDLE_ACCESSOR_NAMES = (
     "module_calls",
     "grad_fn_calls",
 )
+
+
+def _member_outcome_token(member: Any) -> str:
+    """One member's settled outcome-status token, degrading to ``unknown``."""
+
+    from ..utils.fail_open import fail_open
+
+    outcome = fail_open(lambda: getattr(member, "outcome", None), lambda _error: None)
+    return getattr(getattr(outcome, "status", None), "value", None) or "unknown"
 
 
 class AmbiguousLabelError(KeyError):
@@ -167,6 +184,18 @@ class _BundleStructuralProperty:
 class Bundle:
     """Flat container of Traces with relationship-gated operations.
 
+    CROSS-MEMBER PARAMETER READS ARE CLAIM-GATED (A-CKPT; foldB D7): a
+    parameter value/difference/trajectory read across two or more members
+    asserts capture-time parameter values, but parameter members carry live
+    model handles (or nothing after deserialization), never capture-time
+    bytes. Absent immutable parameter evidence on every member (capture-time
+    snapshots, R8(b), future), such reads refuse BEFORE tensor lookup with
+    the stable code ``checkpoint_series_live_params`` -- keyed on the claim,
+    never on Python object identity or the relationship lattice below, which
+    never licenses a parameter value claim. A relation row asserting a
+    version axis (``successor_of``/``forked_from``/``escalates``) still
+    ORDERS members; only the weight claim is refused.
+
     Parameters
     ----------
     members:
@@ -178,10 +207,28 @@ class Bundle:
         Optional baseline member name or ``Trace`` reference.
     member_relations:
         Optional S6 member-relation rows (``MemberRelationRow`` instances or
-        payload mappings). Rows are schema-validated and checked against the
-        initial members (R1: no dangling edges). ``None`` means an empty
-        table with unchanged plain-Bundle semantics.
+        payload mappings; the artifact loader may additionally pass
+        ``OpaqueRelationRow`` instances for preserved unknown namespaced
+        kinds). Rows are schema-validated and checked against the initial
+        members (R1: no dangling edges). ``None`` means an empty table with
+        unchanged plain-Bundle semantics.
+    preserved_sections:
+        Load-side carriage for unknown NAMESPACED top-level ``bundle.json``
+        sections (loader doctrine leg (c), the C07X amendment): preserved
+        verbatim, disclosed through :attr:`preserved_sections`, never
+        executed, and re-emitted on save. User construction normally leaves
+        this ``None``.
+    bundle_id:
+        Load-side carriage for the persisted container identity (F03
+        lineage). ``None`` (the user door) mints a fresh random id; the
+        artifact loader passes the saved id verbatim.
     """
+
+    # Bundle outcome authority (foldB D9, instance three of the two-answers
+    # disease): the container speaks for itself through the DERIVED
+    # worst-of-members fold below, so ``outcome_for(bundle)`` never falls back
+    # to a false UNKNOWN with the hand-built-object warning.
+    _OUTCOME_SELF_AUTHORITY: ClassVar[bool] = True
 
     def __init__(
         self,
@@ -189,7 +236,11 @@ class Bundle:
         *,
         names: Sequence[str] | None = None,
         baseline: str | Trace | None = None,
-        member_relations: Sequence[MemberRelationRow | Mapping[str, Any]] | None = None,
+        member_relations: (
+            Sequence[MemberRelationRow | OpaqueRelationRow | Mapping[str, Any]] | None
+        ) = None,
+        preserved_sections: Mapping[str, Any] | None = None,
+        bundle_id: str | None = None,
     ) -> None:
         """Initialize a flat bundle without eagerly building a supergraph."""
 
@@ -201,6 +252,18 @@ class Bundle:
         self._member_relations: MemberRelationTable = self._build_relation_table(
             (), member_relations or ()
         )
+        self._preserved_sections: dict[str, Any] = dict(preserved_sections or {})
+        # F03 lineage (ledger memo 0b): one random container identity, minted
+        # here, restored verbatim by the artifact loader — NEVER a content
+        # hash (the D1a id law). Anchors record how each member entered THIS
+        # container; the operation list is the container-side chronology.
+        self._bundle_id: str = bundle_id if bundle_id else mint_bundle_id()
+        self._forked_from_bundle_id: str | None = None
+        self._member_construction: dict[str, dict[str, Any]] = {
+            name: {"origin": "constructed"} for name in self._members
+        }
+        self._operations: list[BundleOperation] = []
+        self._effect_tables: dict[str, MemberEffectTable] = {}
 
     def __len__(self) -> int:
         """Return the number of bundle members.
@@ -240,16 +303,68 @@ class Bundle:
 
         return name in self._members
 
-    def __repr__(self) -> str:
-        """Return an informative one-line bundle representation."""
+    def _outcome_distribution(self) -> dict[str, int]:
+        """Count member capture outcomes by settled status (F10)."""
 
-        # A missing baseline renders as unquoted None, never the string
-        # 'None' masquerading as a member name (lovely bug 17).
-        return (
+        counts: dict[str, int] = {}
+        for member in self._members.values():
+            token = _member_outcome_token(member)
+            counts[token] = counts.get(token, 0) + 1
+        return counts
+
+    def __repr__(self) -> str:
+        """One-line bundle card: members, baseline, outcome distribution.
+
+        Poison/divergence facts sit ABOVE the fold (lovely matrix): any
+        non-complete member outcome prints in the distribution, never
+        behind a member lookup. A missing baseline renders as unquoted
+        None, never the string 'None' masquerading as a member name
+        (lovely bug 17).
+        """
+
+        distribution = self._outcome_distribution()
+        outcome_note = ""
+        if any(token != "complete" for token in distribution):
+            pairs = ", ".join(f"{token}={count}" for token, count in sorted(distribution.items()))
+            outcome_note = f", outcomes=({pairs})"
+        base = (
             f"Bundle(n_members={len(self)}, names={self.names!r}, "
             f"baseline={self._baseline_name!r}, "
-            f"structurally_consistent={self.is_structurally_consistent})"
+            f"structurally_consistent={self.is_structurally_consistent}"
+            f"{outcome_note})"
         )
+        if not self._effect_tables:
+            return base
+        # D3c: silent truncation reading as "covered everything" is the
+        # failure mode this sprint keeps finding — an engine-built bundle
+        # states its candidate accounting and policy in its own repr.
+        table = next(reversed(self._effect_tables.values()))
+        counts: dict[str, int] = {}
+        for row in table.rows:
+            if row.candidate_id == "__baseline__":
+                continue
+            counts[row.status] = counts.get(row.status, 0) + 1
+        attempted = sum(counts.values())
+        summary = ", ".join(f"{status}={count}" for status, count in sorted(counts.items()))
+        return (
+            f"{base[:-1]}, effects=[attempted={attempted}, {summary}, "
+            f"retain={table.retain_policy}, lane={table.lane}])"
+        )
+
+    def __str__(self) -> str:
+        """Bounded bundle view: repr line + per-member one-liners (F10)."""
+
+        from ..stats._envelope import COLLECTION_MAX_CHILDREN
+
+        lines = [self.__repr__()]
+        names = list(self.names)
+        for name in names[:COLLECTION_MAX_CHILDREN]:
+            member = self._members[name]
+            marker = " (baseline)" if name == self._baseline_name else ""
+            lines.append(f"  {name}{marker}: {member!r}")
+        if len(names) > COLLECTION_MAX_CHILDREN:
+            lines.append(f"  ... {len(names) - COLLECTION_MAX_CHILDREN} more members")
+        return "\n".join(lines)
 
     def __getitem__(self, name: str) -> Trace:
         """Return a member by name.
@@ -268,6 +383,32 @@ class Bundle:
         if not isinstance(name, str):
             raise TypeError(f"Bundle indices must be member names, got {type(name).__name__}.")
         return self._members[name]
+
+    @property
+    def outcome(self) -> CaptureOutcome:
+        """Return the derived worst-of-members capture-outcome fold.
+
+        A Bundle has no settlement of its own -- members remain the
+        settlement authority. This property is the declared container
+        DERIVATION (foldB D9): a frozen ``CaptureOutcome`` with
+        ``derived=True`` whose status is the most severe member status
+        (COMPLETE never blessed above the weakest member; an unsettled
+        member folds as UNKNOWN fail-closed) and whose ``settlement_note``
+        names the driving member. It is a disclosure reported beside
+        results, NEVER a per-member gate: capability gating applies at the
+        member whose facts a read cites (D8).
+
+        Returns
+        -------
+        CaptureOutcome
+            Derived worst-of-members fold over the current members.
+        """
+
+        from ..capture.outcome import outcome_for
+
+        return _fold_member_outcomes(
+            [(name, outcome_for(member)) for name, member in self._members.items()]
+        )
 
     def save(
         self,
@@ -323,10 +464,8 @@ class Bundle:
             "aligned_pairs": _bundle_aligned_pairs,
             "compare": _bundle_compare,
             "delta_map": _bundle_delta_map,
-            "derive_episode_status": _bundle_derive_episode_status,
             "norm_delta": _bundle_norm_delta,
             "output_delta": _bundle_output_delta,
-            "relate": _bundle_relate,
             "show_diff": _bundle_show_diff,
         }
         _register_comparison_helpers(dynamic_custom_methods)
@@ -560,6 +699,68 @@ class Bundle:
         return self._divergent(lambda trace: trace.grad_fns.keys())
 
     @property
+    def bundle_id(self) -> str:
+        """This container's persisted random identity (F03 lineage, D1a law).
+
+        Minted at construction (never a content hash), restored verbatim on
+        load, and re-minted on :meth:`fork` — the forked container anchors
+        its source id in its ``member_construction`` anchors and its
+        ``fork`` operation row instead of sharing the identity.
+        """
+
+        return self._bundle_id
+
+    @property
+    def operations(self) -> tuple[BundleOperation, ...]:
+        """The container-side chronology: hash-chained BundleOperation rows.
+
+        One row per top-level bundle action (fork / sweep / vary / ...),
+        append-only, persisted in ``bundle.json``. DISCLOSURE, never
+        settlement authority; the trace-side canonical audit remains the
+        construction truth the provenance join walks.
+        """
+
+        return tuple(self._operations)
+
+    @property
+    def member_construction(self) -> dict[str, dict[str, Any]]:
+        """Per-member origin anchors (how each member entered THIS container).
+
+        Copies: mutating the returned mapping never edits the record.
+        ``origin`` is closed vocabulary; a pre-F03 artifact restores as
+        ``{"origin": "loaded"}`` (no recorded construction evidence).
+        """
+
+        return {name: dict(anchor) for name, anchor in self._member_construction.items()}
+
+    def _record_bundle_operation(
+        self,
+        kind: str,
+        *,
+        member_names: Sequence[str] = (),
+        params: Mapping[str, Any] | None = None,
+    ) -> BundleOperation:
+        """Append one chronology row to the container-side operation ledger.
+
+        The ledger is append-only and hash-chained (seq + previous-row
+        digest, the same spelling as the v9 EVENT audit rows), so fork
+        lineage and semantic chronology can never grow as two orderings on
+        one container (foldB F03 brief-delta).
+        """
+
+        previous = self._operations[-1] if self._operations else None
+        row = BundleOperation(
+            operation_id=mint_bundle_id(),
+            seq=(previous.seq + 1) if previous is not None else 1,
+            kind=kind,
+            member_names=tuple(member_names),
+            params=dict(params or {}),
+            prev_operation_digest=(previous.operation_digest if previous is not None else None),
+        )
+        self._operations.append(row)
+        return row
+
+    @property
     def baseline_name(self) -> str | None:
         """Return the configured baseline member name, if any.
 
@@ -572,42 +773,116 @@ class Bundle:
         return self._baseline_name
 
     @_BundleStructuralProperty
-    def member_relations(self) -> tuple[MemberRelationRow, ...]:
+    def member_relations(self) -> tuple[MemberRelationRow | OpaqueRelationRow, ...]:
         """Return the immutable S6 member-relation view (R4).
 
         Returns
         -------
-        tuple[MemberRelationRow, ...]
+        tuple[MemberRelationRow | OpaqueRelationRow, ...]
             Identity-stable frozen-row tuple: repeated reads return THE SAME
             object until ``relate`` (or an R5 cascade) installs a new table
-            version. In-place mutation is impossible.
+            version. In-place mutation is impossible. ``OpaqueRelationRow``
+            entries are preserved unknown namespaced kinds (loader doctrine
+            leg (a)): disclosed, never executed, re-saved verbatim.
         """
 
         return self._member_relations.rows
 
+    # Real class methods (ledger memo item 0: reachable by hasattr/IDE
+    # completion, no longer __getattr__-only dynamic lookups).
+    relate = _bundle_relate
+    derive_episode_status = _bundle_derive_episode_status
+    # The provenance join (F03 item 4): pure derived views, never stored.
+    why = _bundle_why
+    provenance = _bundle_provenance
+    # One explicit edit or identity per member (F03 item 5); broadcast do()
+    # is untouched forever.
+    vary = _bundle_vary
+
+    def effects(self, operation_id: str | None = None) -> Any:
+        """Serve the stored per-candidate effect table (F03 item 8).
+
+        The table is DATA the engine wrote once (released/refused/failed
+        candidates included), persisted in the artifact keyed by operation
+        id; this read never recomputes it.
+        """
+
+        from ..experiment._engine import bundle_effects
+
+        return bundle_effects(self, operation_id)
+
+    def measure_members(
+        self, *, metric: Callable[[Trace], Any], order: str = "member"
+    ) -> dict[str, Any]:
+        """Recompute a NEW metric over members that still exist — and say so.
+
+        Released candidates are reported ``unmeasured``, never silently
+        re-scored; ``order`` stays per-member until the chain reader lands
+        (an explicit chain request refuses typed — insertion order is never
+        guessed as chronology).
+        """
+
+        from ..experiment._engine import bundle_measure_members
+
+        return bundle_measure_members(self, metric=metric, order=order)
+
+    @property
+    def preserved_sections(self) -> dict[str, Any]:
+        """Unknown namespaced ``bundle.json`` sections preserved at load.
+
+        Loader doctrine leg (c) (the C07X amendment): a well-formed unknown
+        TOP-LEVEL ``bundle.json`` section under a NAMESPACED key
+        (``"<ns>.<name>"``) loads opaque and disclosed here, is never
+        executed, and re-emits verbatim on :meth:`save` — a bare-unknown
+        section refuses at load instead (the historical silent
+        load-then-destroy is banned in both directions).
+
+        Returns
+        -------
+        dict[str, Any]
+            Fresh copy of the preserved sections (empty for bundles built
+            in-session).
+        """
+
+        # ``__dict__`` read: a legacy-pickled Bundle predating the slot
+        # simply has no preserved sections (and the private-getattr census
+        # stays clean).
+        return dict(self.__dict__.get("_preserved_sections") or {})
+
     def _build_relation_table(
         self,
-        existing_rows: Sequence[MemberRelationRow],
-        new_rows: Sequence[MemberRelationRow | Mapping[str, Any]],
+        existing_rows: Sequence[MemberRelationRow | OpaqueRelationRow],
+        new_rows: Sequence[MemberRelationRow | OpaqueRelationRow | Mapping[str, Any]],
     ) -> MemberRelationTable:
         """Return a NEW validated relation table (existing + coerced new rows).
+
+        ``OpaqueRelationRow`` instances pass through unchanged (loader-side
+        carriage for preserved unknown namespaced kinds); mapping payloads
+        always coerce through the CLOSED grammar — new rows of unknown kinds
+        refuse at construction, opaque rows enter from artifacts only.
 
         Raises
         ------
         BundleRelationError
             ``bundle_relation_schema_invalid`` when a new row is off-schema
             (unknown kind, wrong shape for its kind, undeclared or missing
-            param keys, ill-typed values); R1/R3 refusals ride through from
+            param keys, ill-typed values);
+            ``bundle_relation_evidence_over_budget`` rides through with its
+            own code; R1/R3 refusals ride through from
             ``validate_against_members``.
         """
 
-        rows: list[MemberRelationRow] = list(existing_rows)
+        rows: list[MemberRelationRow | OpaqueRelationRow] = list(existing_rows)
         for row in new_rows:
-            if isinstance(row, MemberRelationRow):
+            if isinstance(row, (MemberRelationRow, OpaqueRelationRow)):
                 rows.append(row)
                 continue
             try:
                 rows.append(MemberRelationRow.from_payload(row))
+            except BundleRelationError:
+                # Distinct-code refusals (evidence over budget) keep their
+                # own code; re-wrapping would flatten them to schema_invalid.
+                raise
             except (TypeError, ValueError) as exc:
                 raise BundleRelationError(
                     f"Bundle member-relation row is outside the closed S6 schema: {exc}",
@@ -690,7 +965,7 @@ class Bundle:
             Dict-keyed view over matching layer pass records.
         """
 
-        self._require_relationship("node", _REQUIRED_RELATIONSHIPS["node"])
+        self._require_comparable("node")
         self._ensure_supergraph()
         layer_members: dict[str, Op] = {}
         failures: dict[str, str] = {}
@@ -1033,6 +1308,7 @@ class Bundle:
             if member_name in self._members:
                 raise ValueError(f"Bundle member names must be unique; duplicate {member_name!r}.")
             self._members[member_name] = log
+            self._member_construction[member_name] = {"origin": "added"}
         self._supergraph = None
         self._enforce_capacity()
         return self
@@ -1078,6 +1354,7 @@ class Bundle:
         for name in names:
             log = self._members.pop(name)
             removed.append(log)
+            self._member_construction.pop(name, None)
             if self._baseline_name == name:
                 self._baseline_name = None
         if new_table is not None:
@@ -1214,6 +1491,8 @@ class Bundle:
         else:
             self._members.clear()
             self._baseline_name = None
+        for removed_name in removed_names:
+            self._member_construction.pop(removed_name, None)
         if new_table is not None:
             self._member_relations = new_table
         self._supergraph = None
@@ -1234,6 +1513,14 @@ class Bundle:
     def fork(self, name: str | None = None) -> Bundle:
         """Fork all member logs into a new bundle.
 
+        Lineage survives the fork (ledger memo item 0b): the relation table
+        and preserved sections carry over, the child mints a NEW
+        ``bundle_id``, every member's construction anchor records the source
+        container/member, and both containers append a ``fork`` chronology
+        row — the historical behavior (relation table dropped, no
+        ``forked_from`` evidence anywhere) made live-only lineage that could
+        not back an artifact-level join.
+
         Parameters
         ----------
         name:
@@ -1249,7 +1536,33 @@ class Bundle:
         for member_name, member in self._members.items():
             fork_name = f"{name}_{member_name}" if name is not None else None
             forked[member_name] = member.fork(name=fork_name)
-        return Bundle(forked, baseline=self._baseline_name)
+        child = Bundle(
+            forked,
+            baseline=self._baseline_name,
+            member_relations=self._member_relations.rows,
+            preserved_sections=self._preserved_sections,
+        )
+        child._forked_from_bundle_id = self._bundle_id
+        self._record_bundle_operation(
+            "fork",
+            member_names=tuple(forked),
+            params={"child_bundle_id": child._bundle_id},
+        )
+        child_row = child._record_bundle_operation(
+            "fork",
+            member_names=tuple(forked),
+            params={"source_bundle_id": self._bundle_id},
+        )
+        child._member_construction = {
+            member_name: {
+                "origin": "forked",
+                "source_bundle_id": self._bundle_id,
+                "source_member": member_name,
+                "operation_id": child_row.operation_id,
+            }
+            for member_name in forked
+        }
+        return child
 
     def attach_hooks(self, *args: Any, **kwargs: Any) -> Bundle:
         """Apply ``Trace.attach_hooks`` to every member.
@@ -1297,13 +1610,17 @@ class Bundle:
             member.run(model, x, **kwargs)
         return self
 
-    def apply(self, fn: Callable[[Trace], Any]) -> dict[str, Any]:
+    def apply(self, fn: Callable[..., Any]) -> dict[str, Any]:
         """Apply a function independently to each member.
 
         Parameters
         ----------
         fn:
-            Callable receiving one member log.
+            Callable receiving one member log. A callable that accepts a
+            second positional parameter additionally receives the member's
+            NAME (the per-member idiom the ledger memo item 0 unblocks:
+            ``bundle.apply(lambda log, name: ...)``); single-parameter
+            callables keep the historical contract unchanged.
 
         Returns
         -------
@@ -1311,7 +1628,38 @@ class Bundle:
             Results keyed by member name.
         """
 
-        return {name: fn(member) for name, member in self._members.items()}
+        pass_name = self._accepts_member_name(fn)
+        return {
+            name: (fn(member, name) if pass_name else fn(member))
+            for name, member in self._members.items()
+        }
+
+    @staticmethod
+    def _accepts_member_name(fn: Callable[..., Any]) -> bool:
+        """Whether ``fn`` can take (member, name) rather than (member,) only.
+
+        Signature inspection failures (builtins, C callables) fall back to
+        the historical single-argument call, never a guessed two-argument
+        call that would raise mid-iteration.
+        """
+
+        import inspect
+
+        try:
+            signature = inspect.signature(fn)
+        except (TypeError, ValueError):
+            return False
+        positional_kinds = (
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        )
+        count = 0
+        for parameter in signature.parameters.values():
+            if parameter.kind is inspect.Parameter.VAR_POSITIONAL:
+                return True
+            if parameter.kind in positional_kinds:
+                count += 1
+        return count >= 2
 
     def joint_metric(self, fn: Callable[[Bundle], Any]) -> Any:
         """Apply a function to the bundle as a whole.
@@ -1380,7 +1728,7 @@ class Bundle:
             Pairwise distance matrix.
         """
 
-        self._require_relationship("compare_at", _REQUIRED_RELATIONSHIPS["compare_at"])
+        self._require_comparable("compare_at")
         return self.node(site).diff_pair()
 
     def most_changed(
@@ -1390,14 +1738,20 @@ class Bundle:
         top_k: int = 10,
         metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "cosine",
     ) -> list[tuple[str, float]]:
-        """Rank sites by out distance from a baseline.
+        """Rank sites by out distance from a baseline (the SITE axis).
+
+        Each site's score is the ``metric`` distance from the baseline's
+        activation to every other member's, AVERAGED across those members —
+        the answer to "where did the bundle diverge", never "which member
+        mattered" (the member axis lives on the effect table).
 
         Parameters
         ----------
         baseline:
             Optional baseline override.
         top_k:
-            Maximum rows to return.
+            Maximum rows to RETURN. Every site is scored first; this is a
+            display cap on the sorted result, not a compute bound.
         metric:
             Pairwise tensor metric.
 
@@ -1407,8 +1761,21 @@ class Bundle:
             ``(site_label, score)`` rows sorted descending.
         """
 
-        self._require_relationship("most_changed", _REQUIRED_RELATIONSHIPS["most_changed"])
         baseline_name = self._baseline_or_raise(baseline)
+        # SITE AXIS (ledger memo D3f): most_changed answers "WHERE did the
+        # bundle diverge" — per site it AVERAGES the metric from the baseline
+        # to every other member. The member axis ("WHICH candidate mattered")
+        # lives on the effect table, where most_changed is unambiguous.
+        # top_k caps the RETURNED rows after every site is scored (a display
+        # cap, never a compute bound or a coverage claim).
+        # Operand scoping (A-GATE item 3): most_changed compares baseline
+        # against every other member, never other members against each other,
+        # so only baseline pairs must pass the comparison gate. Site reads
+        # across all members still run node()'s own model-floor gate.
+        self._require_comparable(
+            "most_changed",
+            pairs=[(baseline_name, name) for name in self._members if name != baseline_name],
+        )
         baseline_log = self._members[baseline_name]
         metric_fn = resolve_metric(metric)
         scored: list[tuple[str, float]] = []
@@ -1456,9 +1823,13 @@ class Bundle:
             Site-score rows for member pairs, or a SuperOp diff matrix.
         """
 
-        self._require_relationship("diff", _REQUIRED_RELATIONSHIPS["diff"])
         if isinstance(a, str) and a in self._members and isinstance(b, str) and b in self._members:
+            # Operand scoping (A-GATE item 3): the two-member form reads
+            # exactly one pair, so a foreign or ordered third member never
+            # disables it.
+            self._require_comparable("diff", pairs=[(a, b)])
             return self._diff_members(a, b)
+        self._require_comparable("diff")
         view = self.node(a)
         return view.diff_pair(other=b if isinstance(b, str) else None)
 
@@ -1619,6 +1990,8 @@ class Bundle:
                 )
         if not pairs:
             raise ValueError("Bundle requires at least one Trace.")
+        for member_name, log in pairs:
+            cls._require_trace(log, arg_name=f"member {member_name!r}")
         # O(n) duplicate detection (r8 R52): the prior per-member full
         # name-list rebuild + count was quadratic (measured 4.1s at 8k
         # members on the all-valid path).
@@ -1664,9 +2037,37 @@ class Bundle:
 
         values = list(value) if cls._is_list_like(value) else [cast("Trace", value)]
         for item in values:
-            if isinstance(item, str):
-                raise TypeError(f"{arg_name} must contain Trace objects, not strings.")
+            cls._require_trace(item, arg_name=arg_name)
         return cast(list["Trace"], values)
+
+    @staticmethod
+    def _require_trace(value: Any, *, arg_name: str) -> None:
+        """Refuse a non-Trace membership candidate, typed (ledger memo item 0).
+
+        An experiment container with unvalidated membership cannot carry a
+        provenance join (the measured defect: a dict silently became
+        ``member_3``). Legitimate members are capture products: ``Trace``
+        (live or loaded) and ``PartialTrace`` (failed-capture recovery — the
+        episode status fold reads failed partial members).
+
+        Raises
+        ------
+        BundleMemberError
+            ``bundle_member_type_invalid`` for any other value.
+        """
+
+        from ..data_classes.trace import Trace as _Trace
+        from ..partial import PartialTrace as _PartialTrace
+
+        if not isinstance(value, (_Trace, _PartialTrace)):
+            raise BundleMemberError(
+                f"Bundle {arg_name} must be a Trace or PartialTrace, got "
+                f"{type(value).__name__!r}. Bundle members are capture products "
+                "(live, loaded, or failed-partial); wrap other values in a "
+                "capture or keep them outside the bundle.",
+                code="bundle_member_type_invalid",
+                received_type=type(value).__name__,
+            )
 
     @classmethod
     def _coerce_optional_name_list(
@@ -1977,69 +2378,54 @@ class Bundle:
                     related_members=[evictable],
                 )
             self._members.pop(evictable)
+            self._member_construction.pop(evictable, None)
             self._supergraph = None
 
-    def _require_relationship(self, operation: str, required: Relationship) -> None:
-        """Raise if any member pair lacks the required relationship.
+    def _require_comparable(
+        self,
+        operation: str,
+        pairs: Sequence[tuple[str, str]] | None = None,
+    ) -> None:
+        """Run the two-predicate comparison gate over the operand pairs.
+
+        Thin delegation to :func:`torchlens.bundle._compare_gate.require_comparable`
+        (topology -> model-axis floor -> value-level input identity, per
+        operand pair; A-GATE, foldB D6/D18).
 
         Parameters
         ----------
         operation:
-            Operation name for diagnostics.
-        required:
-            Minimum relationship.
+            Gated operation name (a ``_GATE_REQUIREMENTS`` key).
+        pairs:
+            Operand pairs the operation actually reads; ``None`` means every
+            i<j member pair.
 
-        Returns
-        -------
-        None
-            Returns only when compatible.
+        Raises
+        ------
+        BundleRelationshipError
+            With the stable gate code on ``fields["code"]``.
         """
 
-        incompatible: list[tuple[str, str, Relationship]] = []
-        names = list(self._members)
-        for index, left_name in enumerate(names):
-            for right_name in names[index + 1 :]:
-                relationship = self.relationship(left_name, right_name)
-                if not self._relationship_satisfies(relationship, required):
-                    incompatible.append((left_name, right_name, relationship))
-        if incompatible:
-            pairs = ", ".join(
-                f"{left}/{right}={relationship.value}" for left, right, relationship in incompatible
-            )
-            raise BundleRelationshipError(
-                f"Bundle operation {operation!r} requires {required.value}; "
-                f"incompatible member pairs: {pairs}"
-            )
-
-    @staticmethod
-    def _relationship_satisfies(actual: Relationship, required: Relationship) -> bool:
-        """Return whether an actual relationship satisfies an operation gate.
-
-        Returns
-        -------
-        bool
-            Whether the gate should pass.
-        """
-
-        if required is Relationship.SAME_PARAM_SHAPES:
-            return actual in {
-                Relationship.SAME_OBJECT,
-                Relationship.SAME_MODEL_OBJECT_AT_CAPTURE,
-                Relationship.SHARED_GRAPH_SAME_INPUT,
-                Relationship.SHARED_GRAPH_DIFFERENT_INPUT,
-                Relationship.SAME_PARAM_SHAPES,
-            }
-        if required is Relationship.SHARED_GRAPH_SAME_INPUT:
-            return actual in {
-                Relationship.SAME_OBJECT,
-                Relationship.SAME_MODEL_OBJECT_AT_CAPTURE,
-                Relationship.SHARED_GRAPH_SAME_INPUT,
-            }
-        return _RELATIONSHIP_RANK[actual] >= _RELATIONSHIP_RANK[required]
+        require_comparable(
+            self._members,
+            self._member_relations,
+            operation,
+            pairs,
+            self._relationship_between,
+        )
 
     @classmethod
     def _relationship_between(cls, left: Trace, right: Trace) -> Relationship:
         """Derive relationship evidence for two model logs.
+
+        Identity ranks require LIVE evidence: two distinct Trace objects
+        derive ``same_object`` / ``same_model_at_capture`` only through a
+        shared live weak model reference. The persisted ``model_object_id``
+        is deliberately never sufficient — object ids do not survive (or
+        stay unique across) a save/load boundary, so trusting them
+        manufactured identity-rank upgrades between loaded artifacts (the
+        A-GATE rank-upgrade audit pins this: loaded pairs settle to the
+        graph/weight evidence that actually round-trips).
 
         Returns
         -------
@@ -2054,17 +2440,6 @@ class Bundle:
         right_class = getattr(right, "model_class_qualname", None)
         left_weight = cls._weight_fingerprint(left)
         right_weight = cls._weight_fingerprint(right)
-        left_id = getattr(left, "model_object_id", None)
-        right_id = getattr(right, "model_object_id", None)
-        if (
-            left_id is not None
-            and left_id == right_id
-            and left_class is not None
-            and left_class == right_class
-            and left_weight is not None
-            and left_weight == right_weight
-        ):
-            return Relationship.SAME_OBJECT
 
         left_model = cls._weak_model(left)
         right_model = cls._weak_model(right)
@@ -2074,6 +2449,8 @@ class Bundle:
             and left_class is not None
             and left_class == right_class
         ):
+            if left_weight is not None and left_weight == right_weight:
+                return Relationship.SAME_OBJECT
             return Relationship.SAME_MODEL_OBJECT_AT_CAPTURE
 
         left_graph = getattr(left, "graph_shape_hash", None)
@@ -2126,564 +2503,6 @@ class Bundle:
             return ref()
         except TypeError:
             return None
-
-
-def _bundle_relate(self: Bundle, *rows: MemberRelationRow | Mapping[str, Any]) -> Bundle:
-    """Append S6 relation rows, installing a NEW validated table (R4).
-
-    Exposed as the budget-preserving dynamic method ``Bundle.relate``.
-
-    Parameters
-    ----------
-    self:
-        Bundle receiving the rows.
-    *rows:
-        ``MemberRelationRow`` instances or payload mappings.
-
-    Returns
-    -------
-    Bundle
-        This bundle.
-
-    Raises
-    ------
-    BundleRelationError
-        ``bundle_relation_schema_invalid`` for an off-schema row,
-        ``bundle_relation_member_missing`` for a row naming a non-member
-        (R1). On refusal the existing table is unchanged.
-    """
-
-    self._member_relations = self._build_relation_table(self._member_relations.rows, rows)
-    return self
-
-
-def _bundle_derive_episode_status(
-    self: Bundle,
-    episode_id: str,
-    *,
-    ledger: EpisodeLedger | None = None,
-) -> EpisodeFoldResult:
-    """Fold a bundle's episode members into a derived episode status.
-
-    Exposed as the budget-preserving dynamic method
-    ``Bundle.derive_episode_status``. This is a DERIVATION, never a settled
-    outcome: the fold recomputes from member outcomes plus optional ledger
-    geometry, writes nothing, and there is no Bundle-level settlement
-    (Bundle has no outcome field by design; members remain the settlement
-    authority).
-
-    Parameters
-    ----------
-    self:
-        Bundle whose episode members are folded.
-    episode_id:
-        Episode entity named by ``episode_member`` relation rows.
-    ledger:
-        Optional episode ledger; supplies ``n_steps_declared`` and the
-        driver-halt geometry (fold arms 2 and 4 are ledger-only facts and
-        degrade fail-closed to ``episode_unknown`` without it).
-
-    Returns
-    -------
-    EpisodeFoldResult
-        The derived status with its qualifying disclosures. An
-        ``episode_id`` with no relation rows folds over an empty domain and
-        lands on the fail-closed ``episode_unknown`` default arm.
-    """
-
-    from ..capture._episode_ledger import derive_episode_status as _fold_episode_status
-
-    episode_rows = sorted(
-        (
-            row
-            for row in self._member_relations.rows
-            if row.kind == "episode_member" and row.params["episode_id"] == episode_id
-        ),
-        key=lambda row: int(row.params["at_step"]),
-    )
-    escalation_sources = {
-        row.from_member for row in self._member_relations.rows if row.kind == "escalates"
-    }
-    member_outcomes: list[tuple[str, str | None]] = []
-    excluded: set[int] = set()
-    for index, row in enumerate(episode_rows):
-        member = self._members[cast("str", row.member)]
-        # Public settled-outcome accessor; None (unsettled live trace)
-        # folds as UNKNOWN — the fold's most restrictive input.
-        outcome = getattr(member, "outcome", None)
-        if outcome is None:
-            member_outcomes.append(("unknown", None))
-        else:
-            phase = outcome.phase.value if outcome.phase is not None else None
-            member_outcomes.append((outcome.status.value, phase))
-        # E-B5: escalation members annotate the episode; they are not part
-        # of the prefix law and leave the fold domain here.
-        if row.member in escalation_sources:
-            excluded.add(index)
-    n_declared = ledger.header.n_steps_declared if ledger is not None else None
-    return _fold_episode_status(
-        member_outcomes,
-        n_declared=n_declared,
-        ledger=ledger,
-        escalation_members=frozenset(excluded),
-    )
-
-
-def _metric_label(metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor]) -> str:
-    """Return a stable label for a metric specifier.
-
-    Parameters
-    ----------
-    metric:
-        Metric name or callable.
-
-    Returns
-    -------
-    str
-        Human-readable metric label.
-    """
-
-    return metric if isinstance(metric, str) else getattr(metric, "__name__", "callable")
-
-
-def _tensor_field(layer: Any, field: Literal["out", "grad"]) -> torch.Tensor | None:
-    """Return a tensor field from a layer-like object.
-
-    Parameters
-    ----------
-    layer:
-        Layer or Op-like object.
-    field:
-        Tensor field to read.
-
-    Returns
-    -------
-    torch.Tensor | None
-        Tensor value when available.
-    """
-
-    value = getattr(layer, field, None)
-    return value if isinstance(value, torch.Tensor) else None
-
-
-def _distance_value(
-    reference: torch.Tensor,
-    candidate: torch.Tensor,
-    metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-) -> float:
-    """Return a Python float distance between two tensors.
-
-    Parameters
-    ----------
-    reference:
-        Reference tensor.
-    candidate:
-        Compared tensor.
-    metric:
-        Metric name or callable.
-
-    Returns
-    -------
-    float
-        Scalar distance.
-    """
-
-    metric_fn = resolve_metric(metric)
-    value = (
-        relative_l1_scalar(reference, candidate)
-        if is_scalar_like(reference) and is_scalar_like(candidate)
-        else metric_fn(reference, candidate)
-    )
-    return float(value.detach().item())
-
-
-def _resolve_member_name(bundle: Bundle, member: str | Trace | None) -> str:
-    """Resolve a member name or Trace reference within a bundle.
-
-    Parameters
-    ----------
-    bundle:
-        Bundle being queried.
-    member:
-        Member name, Trace reference, or ``None``.
-
-    Returns
-    -------
-    str
-        Resolved member name.
-    """
-
-    if member is None:
-        return next(iter(bundle.names))
-    if isinstance(member, str):
-        if member not in bundle:
-            raise KeyError(f"Unknown bundle member {member!r}.")
-        return member
-    for name, log in bundle.members.items():
-        if log is member:
-            return name
-    raise KeyError("Trace is not a member of this Bundle.")
-
-
-def _bundle_delta_map(
-    self: Bundle,
-    metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "relative_l2",
-    *,
-    baseline: str | Trace | None = None,
-    on: Literal["out", "grad"] = "out",
-) -> dict[str, dict[str, float]]:
-    """Return per-node tensor deltas from a baseline trace.
-
-    Parameters
-    ----------
-    metric:
-        Metric name from ``torchlens.intervention._metrics`` or a callable.
-    baseline:
-        Baseline member name or log. Defaults to the configured baseline, then
-        the first member.
-    on:
-        Tensor field to compare.
-
-    Returns
-    -------
-    dict[str, dict[str, float]]
-        Mapping of supergraph node name to member-name distance values. Members
-        without a tensor at a node are omitted for that node.
-    """
-
-    baseline_name = (
-        self._baseline_or_raise(baseline)
-        if baseline is not None or self.baseline_name is not None
-        else next(iter(self.names))
-    )
-    result: dict[str, dict[str, float]] = {}
-    supergraph = self.supergraph
-    for graph_node_label in supergraph.topological_order:
-        node = supergraph.nodes[graph_node_label]
-        reference_layer = node.layer_refs.get(baseline_name)
-        if reference_layer is None:
-            continue
-        reference = _tensor_field(reference_layer, on)
-        if reference is None:
-            continue
-        values: dict[str, float] = {}
-        for member_name in self.names:
-            layer = node.layer_refs.get(member_name)
-            candidate = _tensor_field(layer, on) if layer is not None else None
-            if candidate is None:
-                continue
-            values[member_name] = (
-                0.0
-                if member_name == baseline_name
-                else _distance_value(
-                    reference,
-                    candidate,
-                    metric,
-                )
-            )
-        if values:
-            result[graph_node_label] = values
-    return result
-
-
-def _bundle_norm_delta(
-    self: Bundle,
-    *,
-    baseline: str | Trace | None = None,
-    on: Literal["out", "grad"] = "out",
-) -> dict[str, dict[str, float]]:
-    """Return relative L2 deltas for every comparable bundle node.
-
-    Parameters
-    ----------
-    baseline:
-        Baseline member name or log.
-    on:
-        Tensor field to compare.
-
-    Returns
-    -------
-    dict[str, dict[str, float]]
-        Per-node relative L2 distances keyed by member name.
-    """
-
-    return _bundle_delta_map(self, "relative_l2", baseline=baseline, on=on)
-
-
-def _output_layer_pairs(
-    target_log: Trace,
-    candidate_log: Trace,
-) -> list[tuple[Any, Any]]:
-    """Return paired output layers by output index.
-
-    Parameters
-    ----------
-    target_log:
-        Reference model log.
-    candidate_log:
-        Compared model log.
-
-    Returns
-    -------
-    list[tuple[Any, Any]]
-        Paired output layer-like objects.
-    """
-
-    target_labels = list(getattr(target_log, "output_layers", []) or [])
-    candidate_labels = list(getattr(candidate_log, "output_layers", []) or [])
-    if target_labels and candidate_labels:
-        # grind-r5 b7 R23 (sol HIGH): a silent shortest-prefix zip reported
-        # only the surviving outputs' deltas, so a member that LOST an output
-        # compared clean. Arity mismatch is a structural divergence and must
-        # refuse, never truncate.
-        if len(target_labels) != len(candidate_labels):
-            raise BundleMemberError(
-                f"output comparison refused: the target trace has "
-                f"{len(target_labels)} output layers but the member has "
-                f"{len(candidate_labels)} ({target_labels!r} vs {candidate_labels!r}); "
-                "the graphs are structurally divergent, so a per-output delta "
-                "would silently ignore the missing/extra outputs."
-            )
-        pairs: list[tuple[Any, Any]] = []
-        for target_label, candidate_label in zip(target_labels, candidate_labels, strict=True):
-            try:
-                pairs.append((target_log[target_label], candidate_log[candidate_label]))
-            except (KeyError, IndexError):
-                continue
-        return pairs
-    target_layers = list(getattr(target_log, "layer_list", []))
-    candidate_layers = list(getattr(candidate_log, "layer_list", []))
-    return [(target_layers[-1], candidate_layers[-1])] if target_layers and candidate_layers else []
-
-
-def _bundle_output_delta(
-    self: Bundle,
-    target: str | Trace,
-    *,
-    metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "relative_l2",
-    on: Literal["out", "grad"] = "out",
-) -> dict[str, dict[str, float]]:
-    """Return output divergence for every member versus a target trace.
-
-    Parameters
-    ----------
-    target:
-        Target member name or ``Trace`` reference.
-    metric:
-        Metric name or callable.
-    on:
-        Tensor field to compare.
-
-    Returns
-    -------
-    dict[str, dict[str, float]]
-        Member-keyed output distance mapping.
-    """
-
-    target_name = _resolve_member_name(self, target)
-    target_log = self[target_name]
-    result: dict[str, dict[str, float]] = {}
-    for member_name, member_log in self.members.items():
-        output_values: dict[str, float] = {}
-        for output_index, (target_layer, member_layer) in enumerate(
-            _output_layer_pairs(target_log, member_log)
-        ):
-            reference = _tensor_field(target_layer, on)
-            candidate = _tensor_field(member_layer, on)
-            if reference is None or candidate is None:
-                continue
-            label = str(getattr(target_layer, "layer_label", f"output_{output_index}"))
-            output_values[label] = (
-                0.0 if member_name == target_name else _distance_value(reference, candidate, metric)
-            )
-        result[member_name] = output_values
-    return result
-
-
-def _bundle_motif_occurrences(self: Bundle) -> dict[str, list[tuple[str, str]]]:
-    """Return repeated operation-equivalence motifs across bundle traces.
-
-    Parameters
-    ----------
-    self:
-        Bundle being inspected.
-
-    Returns
-    -------
-    dict[str, list[tuple[str, str]]]
-        Operation-equivalence key to ``(member_name, layer_label)`` occurrences.
-    """
-
-    motifs: dict[str, list[tuple[str, str]]] = {}
-    for member_name, member in self.members.items():
-        for layer in getattr(member, "layer_list", []):
-            key = getattr(layer, "equivalence_class", None)
-            if not key:
-                continue
-            motifs.setdefault(str(key), []).append((member_name, str(layer.layer_label)))
-    return {key: rows for key, rows in motifs.items() if len(rows) > 1}
-
-
-def _bundle_compare(
-    self: Bundle,
-    metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "relative_l2",
-    *,
-    baseline: str | Trace | None = None,
-    on: Literal["out", "grad"] = "out",
-) -> dict[str, Any]:
-    """Return a unified bundle comparison payload.
-
-    Parameters
-    ----------
-    metric:
-        Metric name or callable.
-    baseline:
-        Baseline member name or log. Defaults like :meth:`delta_map`.
-    on:
-        Tensor field to compare.
-
-    Returns
-    -------
-    dict[str, Any]
-        Uniform payload with metric metadata, node deltas, output deltas, and
-        repeated motif occurrences.
-    """
-
-    baseline_name = (
-        self._baseline_or_raise(baseline)
-        if baseline is not None or self.baseline_name is not None
-        else next(iter(self.names))
-    )
-    return {
-        "baseline": baseline_name,
-        "metric": _metric_label(metric),
-        "on": on,
-        "nodes": _bundle_delta_map(self, metric, baseline=baseline_name, on=on),
-        "outputs": _bundle_output_delta(self, baseline_name, metric=metric, on=on),
-        "motifs": _bundle_motif_occurrences(self),
-    }
-
-
-def _alignment_score(left: Any, right: Any, left_index: int, right_index: int) -> float:
-    """Return a conservative cross-architecture alignment score.
-
-    Parameters
-    ----------
-    left:
-        Left layer-like object.
-    right:
-        Right layer-like object.
-    left_index:
-        Topological index of ``left``.
-    right_index:
-        Topological index of ``right``.
-
-    Returns
-    -------
-    float
-        Heuristic score in ``[0, 1]``.
-    """
-
-    score = 0.0
-    if getattr(left, "module", None) == getattr(right, "module", None):
-        score += 0.35
-    if getattr(left, "func_name", None) == getattr(right, "func_name", None):
-        score += 0.35
-    if getattr(left, "shape", None) == getattr(right, "shape", None):
-        score += 0.2
-    distance = abs(left_index - right_index)
-    score += max(0.0, 0.1 - (distance * 0.01))
-    return min(score, 1.0)
-
-
-def _bundle_aligned_pairs(
-    self: Bundle,
-    left: str | Trace | None = None,
-    right: str | Trace | None = None,
-    *,
-    min_score: float = 0.45,
-) -> list[tuple[Any, Any]]:
-    """Return best-match layer pairs across two bundle members.
-
-    Alignment rules are intentionally conservative:
-
-    1. Prefer exact module path and operation name matches.
-    2. Use tensor shape and topological proximity to break ties.
-    3. Pair each right-side layer at most once.
-
-    Parameters
-    ----------
-    left:
-        Left member name or log. Defaults to the first bundle member.
-    right:
-        Right member name or log. Defaults to the second bundle member.
-    min_score:
-        Minimum heuristic score required to emit a pair.
-
-    Returns
-    -------
-    list[tuple[Any, Any]]
-        Paired layer-like objects, ordered by the left trace.
-    """
-
-    names = self.names
-    if len(names) < 2 and (left is None or right is None):
-        raise ValueError("aligned_pairs requires at least two bundle members.")
-    left_name = _resolve_member_name(self, left if left is not None else names[0])
-    right_name = _resolve_member_name(self, right if right is not None else names[1])
-    left_layers = list(getattr(self[left_name], "layer_list", []))
-    right_layers = list(getattr(self[right_name], "layer_list", []))
-    available_right = set(range(len(right_layers)))
-    pairs: list[tuple[Any, Any]] = []
-    for left_index, left_layer in enumerate(left_layers):
-        best_index: int | None = None
-        best_score = 0.0
-        for right_index in available_right:
-            score = _alignment_score(left_layer, right_layers[right_index], left_index, right_index)
-            if score > best_score:
-                best_index = right_index
-                best_score = score
-        if best_index is not None and best_score >= min_score:
-            available_right.remove(best_index)
-            pairs.append((left_layer, right_layers[best_index]))
-    return pairs
-
-
-def _bundle_show_diff(
-    self: Bundle,
-    *,
-    metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "relative_l2",
-    layout: Literal["paired"] = "paired",
-    **kwargs: Any,
-) -> str:
-    """Render a two-column bundle diff for a clean/intervention pair.
-
-    Examples
-    --------
-    >>> trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    >>> ablated = trace.fork("ablated")
-    >>> ablated.do(tl.module("layer1.0.relu"), tl.zero_ablate())
-    >>> bundle = tl.bundle({"clean": trace, "ablated": ablated}, baseline="clean")
-    >>> bundle.show_diff(vis_outpath="bundle_diff_clean_vs_zero_relu")
-
-    Parameters
-    ----------
-    metric:
-        Metric forwarded to ``tl.viz.bundle_diff``.
-    layout:
-        Layout strategy forwarded to ``tl.viz.bundle_diff``.
-    **kwargs:
-        Additional renderer options forwarded unchanged.
-
-    Returns
-    -------
-    str
-        Graphviz DOT source for the rendered diff.
-    """
-
-    from ..visualization.bundle_diff import bundle_diff
-
-    return bundle_diff(self, metric=metric, layout=layout, **kwargs)
 
 
 __all__ = ["AmbiguousLabelError", "Bundle"]

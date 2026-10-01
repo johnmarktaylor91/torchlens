@@ -385,6 +385,16 @@ def outcome_for(trace: object) -> CaptureOutcome | None:
     every settled Recording with a false hand-built-object warning while
     ``recording.outcome`` reported the real status -- the same two-answers
     disease, WT1 A-IV item 21 (lane A08).
+
+    A CONTAINER product declares the same self-authority flag over a DERIVED
+    fold (``Bundle``: the worst-of-members fold, COMPLETE never blessed above
+    the weakest member, ``derived=True``, disclosure-only). Without it the
+    gate treated every ``tl.bundle()``-built product as UNKNOWN and
+    ``tl.save`` false-refused every bundle with the same false hand-built
+    warning while ``bundle.save()`` worked -- the same two-answers disease,
+    instance three (foldB D9). The fold is reported beside results and never
+    gates a read on a member it does not describe: capability gating stays
+    PER MEMBER at the member whose facts a read cites (foldB D8).
     """
 
     outcome = getattr(trace, "__dict__", {}).get("_capture_outcome")
@@ -1366,8 +1376,6 @@ __all__ = [
     "StopSignalSwallowedError",
     "attestation_coherent",
     "classify_failure_origin",
-    "count_committed_ops",
-    "current_capture_phase",
     "demote_outcome",
     "derive_outcome_from_structural_state",
     "outcome_for",
@@ -1376,12 +1384,10 @@ __all__ = [
     "resolve_loaded_outcome",
     "safe_exception_repr",
     "safe_exception_str",
-    "set_capture_phase",
     "settle_completed",
     "settle_failed",
     "settle_halted",
     "stamp_backend_finalized",
     "stamp_cooked",
     "stamp_forked",
-    "stamp_recording_outcome",
 ]

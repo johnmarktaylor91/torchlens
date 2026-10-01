@@ -63,21 +63,6 @@
  ],
  "regions": [
   {
-   "name": "cluster_heads_a\\\"b_0_pass1",
-   "penwidth": "3.5",
-   "style": "filled,solid"
-  },
-  {
-   "name": "cluster_heads_a\\\"b_1_pass1",
-   "penwidth": "3.5",
-   "style": "filled,solid"
-  },
-  {
-   "name": "cluster_heads_a\\\"b_2_pass1",
-   "penwidth": "3.5",
-   "style": "filled,solid"
-  },
-  {
    "name": "cluster_heads_a\\\"b_pass1",
    "penwidth": "5.0",
    "style": "filled,solid"

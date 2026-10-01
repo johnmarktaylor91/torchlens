@@ -298,9 +298,19 @@ def _build_skip_filtered_edge_map(
                 continue
             if layer_log.is_input or layer_log.is_output:
                 raise InvalidArgumentError(
-                    f"skip_fn cannot skip input or output layer '{layer_log.layer_label}'",
+                    f"skip_fn cannot skip input or output layer '{layer_log.layer_label}'. "
+                    "Boundary checks use the REAL attributes `is_input` and "
+                    "`is_final_output` (the obvious spellings do not exist; a model "
+                    "can have MANY output-typed layers besides the one "
+                    "is_final_output layer). The declarative display-filter tokens "
+                    "(torchlens.visualization.lenses.DisplayFilter) exempt "
+                    "boundaries automatically",
                     code="skip_fn_boundary_invalid",
-                    remedy="return False from skip_fn for input and output layers",
+                    remedy=(
+                        "guard the predicate with `layer.is_input or "
+                        "layer.is_final_output`, or use the display-filter token "
+                        "spelling which auto-exempts boundaries"
+                    ),
                     label=layer_log.layer_label,
                 )
             skipped_labels.add(_render_node_label(node, vis_mode))
@@ -1618,7 +1628,7 @@ def _expand_edges_through_skipped(
         parent_label = _render_node_label(parent_node, vis_mode)
         child_render_label = _render_node_label(child_node, vis_mode)
         if child_render_label == parent_label and child_render_label not in skipped_labels:
-            reached = [child_node]
+            reached = [(child_node, 0)]
         else:
             reached = _walk_skipped_successors(
                 trace,
@@ -1629,13 +1639,15 @@ def _expand_edges_through_skipped(
                 vis_mode,
                 seen={parent_label},
             )
-        for target_node in reached:
+        for target_node, hidden_count in reached:
             first_child = child_node
             target_label = _render_node_label(target_node, vis_mode)
             if target_node is first_child:
                 occurrences = _render_edge_occurrences(parent_node, first_child, vis_mode)
+                bridged_count: int | None = None
             else:
                 occurrences = ((("skipped", parent_label, target_label), None),)
+                bridged_count = hidden_count or None
             for occurrence_key, argument_label in occurrences:
                 map_key = (target_label, occurrence_key)
                 existing = by_target.get(map_key)
@@ -1645,9 +1657,21 @@ def _expand_edges_through_skipped(
                         first_child,
                         occurrence_key,
                         argument_label,
+                        bridged_hidden_count=bridged_count,
                     )
                 elif existing.metadata_child is not first_child:
-                    by_target[map_key] = RenderEdge(target_node, None, occurrence_key, None)
+                    # Disagreeing skipped paths: least hidden-count claim wins,
+                    # optional labels drop.
+                    counts = [
+                        c for c in (existing.bridged_hidden_count, bridged_count) if c is not None
+                    ]
+                    by_target[map_key] = RenderEdge(
+                        target_node,
+                        None,
+                        occurrence_key,
+                        None,
+                        bridged_hidden_count=min(counts) if counts else None,
+                    )
     return list(by_target.values())
 
 
@@ -1659,7 +1683,7 @@ def _walk_skipped_successors(
     skipped_labels: set[str],
     vis_mode: str,
     seen: set[str],
-) -> list[GraphNode]:
+) -> list[tuple[GraphNode, int]]:
     """Return non-skipped descendants reached through skipped chains.
 
     Parameters
@@ -1681,8 +1705,9 @@ def _walk_skipped_successors(
 
     Returns
     -------
-    list[GraphNode]
-        Non-skipped reachable nodes.
+    list[tuple[GraphNode, int]]
+        Non-skipped reachable nodes, each with the number of skipped ops on
+        the path that reached it (the "via N hidden" disclosure count).
     """
 
     node_label = _render_node_label(node, vis_mode)
@@ -1690,25 +1715,24 @@ def _walk_skipped_successors(
         return []
     seen.add(node_label)
     if node_label not in skipped_labels:
-        return [node]
-    reached: list[GraphNode] = []
+        return [(node, 0)]
+    reached: list[tuple[GraphNode, int]] = []
     for child_label in node.children:
         child_node = visible_entries.get(child_label) or visible_entries_by_layer.get(child_label)
         if child_node is None and vis_mode == "unrolled":
             child_node = trace.layer_dict_all_keys.get(child_label)
         if child_node is None:
             continue
-        reached.extend(
-            _walk_skipped_successors(
-                trace,
-                child_node,
-                visible_entries,
-                visible_entries_by_layer,
-                skipped_labels,
-                vis_mode,
-                seen=set(seen),
-            )
+        walked = _walk_skipped_successors(
+            trace,
+            child_node,
+            visible_entries,
+            visible_entries_by_layer,
+            skipped_labels,
+            vis_mode,
+            seen=set(seen),
         )
+        reached.extend((target_node, hidden_count + 1) for target_node, hidden_count in walked)
     return reached
 
 

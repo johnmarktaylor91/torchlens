@@ -29,7 +29,7 @@ from ..data_classes._module_role_hints import (
     multi_output_role_from_path,
     role_hints_for_module_class,
 )
-from ..data_classes.trace import _init_module_hierarchy_data
+from ..ir.workspaces import _init_module_hierarchy_data
 from ..utils import get_vars_of_type_from_obj, safe_copy
 from ..utils._torch_symbols import torch_attr
 from ..utils.display import _record_phase_timing
@@ -193,6 +193,10 @@ def build_ingest_inputs(trace: Trace, events: CaptureEvents) -> IngestInputs:
         trace_core=core,
         input_layers_initial=tuple(trace.input_layers),
         timing_sink=timing_sink,
+        # Orchestrator-side option read (contract I7: ingest itself never
+        # touches the trace): structure-only captures strip buffer-write
+        # payloads to declared geometry (W3, weightsfree memo defect L6).
+        scatter_options={"structure_only": bool(getattr(trace, "structure_only", False))},
     )
 
 
@@ -291,9 +295,17 @@ def ingest_op_records(inputs: IngestInputs, manifest: Mapping[str, str]) -> Step
     equivalence_class_map, equivalent_ops_by_label = _equivalent_ops_by_label(
         journal.buffer_write_events, op_events, buffer_addresses_by_label
     )
-    buffer_alias_snapshots = _buffer_alias_snapshots_by_address(
-        journal.buffer_write_events, inputs.source_model_ref
-    )
+    # W3 (weightsfree memo defect L6): the aliased-buffer payload backfill
+    # hydrates every unwritten registered buffer's value into its source
+    # node — a VALUE payload a structure-only capture must never retain
+    # (declared geometry only; the leak made every buffer-holding
+    # structure-only artifact fail its own load at M-C2).
+    if inputs.scatter_options.get("structure_only", False):
+        buffer_alias_snapshots: dict[str, torch.Tensor] = {}
+    else:
+        buffer_alias_snapshots = _buffer_alias_snapshots_by_address(
+            journal.buffer_write_events, inputs.source_model_ref
+        )
     module_input_fields = _module_input_fields(
         list(journal.module_enter_events),
         module_enter_addresses,
@@ -315,7 +327,11 @@ def ingest_op_records(inputs: IngestInputs, manifest: Mapping[str, str]) -> Step
         _module_role_hints_by_address(list(journal.module_prep_events)),
         innermost_module_op_counts,
     )
-    buffer_write_fields = _buffer_write_fields(journal.buffer_write_events, op_event_labels)
+    buffer_write_fields = _buffer_write_fields(
+        journal.buffer_write_events,
+        op_event_labels,
+        structure_only=bool(inputs.scatter_options.get("structure_only", False)),
+    )
     output_versions = _output_versions_by_parent(output_version_lane)
     registered_buffer_names = set(inputs.buffer_initial_values or {})
 
@@ -740,12 +756,23 @@ def _normalize_edge_use_record(
     if not isinstance(parent_label, str) or not isinstance(edge_use, str):
         return None
     parent_event = op_events_by_label.get(parent_label)
+    # F10 (lovely item 8): the storage verdict populates from the closed
+    # function-semantics table when this event carries a function name;
+    # keyword edges and unknown functions stay the honest "unknown".
+    from ..intervention.edge_semantics import classify_view_or_copy
+
+    arg_path = _edge_arg_position_to_path(arg_position)
+    event_func_name = getattr(getattr(event, "function", None), "func_name", None)
+    if edge_use == "kwarg":
+        storage_relation = "unknown"
+    else:
+        storage_relation = classify_view_or_copy(event_func_name, arg_path)
     return EdgeUseRecord(
         parent_label=parent_label,
         child_label=event.label_raw,
         arg_kind="keyword" if edge_use == "kwarg" else "positional",
-        arg_path=cast(Any, _edge_arg_position_to_path(arg_position)),
-        view_or_copy="unknown",
+        arg_path=cast(Any, arg_path),
+        view_or_copy=cast(Any, storage_relation),
         parent_func_call_id=None if parent_event is None else parent_event.func_call_id,
         child_func_call_id=event.func_call_id or 0,
         edge_use=edge_use,
@@ -1198,6 +1225,11 @@ def _tensor_values_match(left: object, right: object) -> bool:
 
     if not isinstance(left, torch.Tensor) or not isinstance(right, torch.Tensor):
         return False
+    if left.is_meta or right.is_meta:
+        # W1-FAB (weightsfree memo D6): value equality is unobservable on the
+        # meta substrate (aten::equal has no meta kernel); an UNKNOWN verdict
+        # never claims a match — the address ladder simply does not fill.
+        return False
     return bool(
         left.shape == right.shape and left.dtype == right.dtype and torch.equal(left, right)
     )
@@ -1613,6 +1645,8 @@ def _module_output_fields(
 def _buffer_write_fields(
     buffer_write_events: tuple[Any, ...],
     op_event_labels: set[str],
+    *,
+    structure_only: bool = False,
 ) -> dict[str, dict[str, object]]:
     """Fold buffer write events into per-op sibling fields.
 
@@ -1622,6 +1656,14 @@ def _buffer_write_fields(
         The journal's buffer-write lane.
     op_event_labels
         Raw labels present in the materialized event stream.
+    structure_only
+        W3 (weightsfree memo defect L6): under the structure-only contract a
+        buffer version node keeps its DECLARED geometry (shape / dtype /
+        byte estimate) but never a value payload — retaining the write
+        journal's copied value made every buffer-holding structure-only
+        artifact save-then-fail-to-load at the M-C2 coherence gate, and BN
+        running stats are training-derived state a weights-free artifact
+        must not carry.
 
     Returns
     -------
@@ -1644,15 +1686,14 @@ def _buffer_write_fields(
         }
         value = getattr(event, "value", None)
         if isinstance(value, torch.Tensor):
-            fields.update(
-                {
-                    "out": value,
-                    "has_saved_activation": True,
-                    "shape": tuple(value.shape),
-                    "dtype": value.dtype,
-                    "activation_memory": value.nelement() * value.element_size(),
-                }
-            )
+            geometry: dict[str, object] = {
+                "shape": tuple(value.shape),
+                "dtype": value.dtype,
+                "activation_memory": value.nelement() * value.element_size(),
+            }
+            if not structure_only:
+                geometry.update({"out": value, "has_saved_activation": True})
+            fields.update(geometry)
         if producer_label_raw in op_event_labels:
             fields["parents"] = [producer_label_raw]
             fields["parent_arg_positions"] = {"args": {0: producer_label_raw}, "kwargs": {}}

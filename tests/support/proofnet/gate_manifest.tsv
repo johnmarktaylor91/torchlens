@@ -1,0 +1,12 @@
+# Gate-witness manifest (testing memo D4/C1; F36). Every named execution
+# gate (env gate, venue gate, import guard) that can make a whole suite not
+# run carries a row here with a REQUIRED executing_leg -- a gate no leg
+# claims is EXECUTES-NOWHERE and is red at PR time. The weekly union
+# witness job (packaging_requests.tsv, F36) proves each row got a PASSING
+# witness within its cadence. Census + closure: tests/test_proofnet_gate_witness.py.
+gate_id	kind	source	condition	executing_leg	cadence	owner	expiry
+R1_OFFLINE_VENUE	env-gate	tests/real_model/r1/conftest.py	HF_HUB_OFFLINE=1 and TRANSFORMERS_OFFLINE=1	r1-train-gate; nightly-rg-gallery (requested)	per-train	F36	none
+RG_OFFLINE_VENUE	env-gate	tests/workflow_gallery/conftest.py	HF_HUB_OFFLINE=1 and TRANSFORMERS_OFFLINE=1	r1-train-gate; nightly-rg-gallery (requested)	per-train	F36	none
+GOLDEN_UPDATE_ARMED	env-gate	tests/conftest.py	TORCHLENS_UPDATE_*_GOLDENS=1	golden-regen sessions (manual, ledgered)	on-demand	P01	none
+PYTHON_O_ASSERTIONS	interp-gate	tests/test_skip_audit.py	requires_assertions marker under python -O	in-suite subprocess self-verification	per-run	P00	none
+R0_TRANSFORMERS_RUNTIME	import-gate	tests/real_model/r0/conftest.py	transformers importable (test-extra class)	U smoke (r0 rides -m 'smoke or real_model'); r0-train-gate	per-train	P04	none

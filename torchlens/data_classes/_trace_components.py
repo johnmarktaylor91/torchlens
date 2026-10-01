@@ -70,6 +70,9 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "_retain_layers_to_save_output_parents": "session",
     "_tl_predicate_intervention_spec_keys": "session",
     "_tl_predicate_intervention_target_keys": "session",
+    # F01 log_injections stage 0-1: one consolidated session transient
+    # (five loose transients consolidated per the size pressure).
+    "_tl_injection_state": "session",
     "_source_bundle_manifest_sha256": "source_metadata",
     "_source_bundle_path": "source_metadata",
     "capture_mode": "header",
@@ -146,6 +149,16 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "emit_nvtx": "capture_config",
     "raise_on_nan": "capture_config",
     "track_nonfinite": "capture_config",
+    "track_device_memory": "capture_config",
+    "_device_memory_samples": "capture_config",
+    "_autograd_saved_bands": "capture_config",
+    "_autograd_seen_saved_storages": "capture_config",
+    "_nonfinite_frontier_out": "capture_config",
+    "_nonfinite_prefix_finalized": "capture_config",
+    "_nonfinite_prefix_finalize_error": "capture_config",
+    # Whole-field classification only: per-SUB-KEY travel across fresh
+    # executions is governed by capture/_annotations_travel.py (foldA D6);
+    # the provider settlement finalizer applies it to every run product.
     "annotations": "graph",
     "observer_spans": "graph",
     "manual_tensor_connections": "graph",
@@ -210,6 +223,7 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "model_object_id": "source_metadata",
     "model_class_qualname": "source_metadata",
     "param_hash_quick": "source_metadata",
+    "root_entry_point": "source_metadata",
     "param_hash_full": "source_metadata",
     "input_object_id": "source_metadata",
     "input_signature_hash": "source_metadata",
@@ -317,6 +331,7 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "_tf_op_captures": "session",
     "_tf_validation_result": "session",
     "_tl_save_selector_fire_count": "session",
+    "_tl_intervene_selector_fire_count": "session",
     "_module_call_accessor": "graph",
     "_op_accessor_cache": "graph",
     "_layer_accessor_cache": "graph",
@@ -324,6 +339,7 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "_rf_directional_solutions": "session",
     "_optimizer": "session",
     "measure_python_peak_memory": "capture_config",
+    "_forward_peak_memory_pair": "totals",
     "distributed_witness": "capture_config",
     "save_budget": "capture_config",
     "_warned_once": "session",
@@ -450,14 +466,16 @@ TRACE_EXTERNAL_WRITE_EXEMPTIONS: dict[str, str] = {
     "_tl_materializing_backward_projection": (
         "torch: re-entrancy flag while a backward projection materializes"
     ),
-    "_tl_intervene_selector_fire_count": (
-        "torch/intervention: intervention fire counter (5 write sites)"
-    ),
     "_installing_deferred_gradient_hooks": (
         "capture session: re-entrancy flag while deferred grad hooks install"
     ),
     "_prehook_provenance_ledger": "torch: forward-pre-hook provenance ledger for one capture",
     "_fastlog_recording": "fastlog: live Recording handle bound to the trace for the capture",
+    "_echo_session": (
+        "snoop (lane F28): the read-only echo narration observer bound at "
+        "capture entry; runtime-only by design, never a declared field, "
+        "never persisted"
+    ),
     # --- Refresh-projection plumbing (user_funcs + capture/projectors) -----
     # A refresh capture carries its resolution decisions on the trace so the
     # projector can rebind them; strictly session-lifetime.

@@ -1,4 +1,8 @@
-"""Layer and LayerAccessor: aggregate per-layer metadata and dict-like accessor.
+"""Layer: aggregate per-layer metadata (accessors live in ``_layer_accessors.py``).
+
+``OpAccessor``/``LayerAccessor`` were split to ``_layer_accessors.py`` under
+the R43 file-size ratchet; both are re-exported here for historical import
+sites.
 
 Layer groups one or more Op entries that represent the same
 logical layer across recurrent ops.  For non-recurrent models (the
@@ -33,9 +37,9 @@ All other 78+ fields use the first pass's values only.
 import copy
 import weakref
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
 
-from .._errors import AmbiguousOpLookupError, InvalidArgumentError, RecordBindingError
+from .._errors import InvalidArgumentError, RecordBindingError
 from .._io import (
     TLSPEC_VERSION,
     FieldPolicy,
@@ -47,7 +51,10 @@ from ..constants import LAYER_LOG_FIELD_ORDER, LAYER_PASS_LOG_FIELD_ORDER
 from ..ir.refs import DtypeRef
 from ..quantities import Bytes, Duration, Flops, Macs
 from ..selection import _SelectionOperand
-from ._accessor_base import Accessor, attach_source_honesty
+
+# LayerAccessor is re-exported (not used here) so every historical
+# ``from .layer import ...`` site and pickle qualname keeps resolving.
+from ._layer_accessors import LayerAccessor, OpAccessor  # noqa: F401
 from ._repr import format_config_items, format_shape_list
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 
@@ -360,116 +367,6 @@ def _layer_log_to_row(layer_log: "Layer") -> dict[str, Any]:
             continue
         row[field_name] = getattr(layer_log, field_name)
     return row
-
-
-class OpAccessor(Accessor["Op"]):
-    """Scoped dict-like accessor for the Op entries owned by one Layer."""
-
-    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
-        "_dict": FieldPolicy.KEEP,
-        "_list": FieldPolicy.KEEP,
-        "_source_ref": FieldPolicy.WEAKREF_STRIP,
-    }
-
-    def __init__(self, ops: dict[int, "Op"] | None = None) -> None:
-        """Initialize the accessor.
-
-        Parameters
-        ----------
-        ops:
-            Mapping from 1-based pass index to Op.
-        """
-
-        ops = ops or {}
-        super().__init__(ops, item_list=[op for _, op in sorted(ops.items())])
-
-    def __getitem__(self, key: int | str) -> "Op":
-        """Return an Op by 0-based position or pass-qualified label."""
-
-        if isinstance(key, int):
-            return self._list[key]
-        resolved = self._resolve_substring(key)
-        if resolved is not None:
-            return resolved
-        raise KeyError(f"Op '{key}' not found in scoped Layer ops.")
-
-    def __setitem__(self, key: int, value: "Op") -> None:
-        """Set an Op by 1-based pass index."""
-
-        self._dict[key] = value
-        self._list = [op for _, op in sorted(self._dict.items())]
-
-    def __contains__(self, key: object) -> bool:
-        """Return whether key resolves to an Op."""
-
-        if isinstance(key, int):
-            return -len(self._list) <= key < len(self._list)
-        if isinstance(key, str):
-            try:
-                self[key]
-            except (KeyError, ValueError):
-                return False
-            return True
-        return False
-
-    # BREAKING (lovely bug 27, C02; MIGRATIONS entry owed): iteration now
-    # inherits the base value semantics (yields Ops), where the deleted
-    # override yielded 1-BASED call-index ints while ``[]`` indexed 0-based
-    # Ops -- a silent off-by-one on multi-pass layers. ``get`` and ``repr``
-    # share the one 0-based/pass-qualified basis ``__getitem__`` uses.
-    def get(self, key: int | str, default: "Op | None" = None) -> "Op | None":
-        """Return an Op by 0-based position or label, or ``default``."""
-
-        try:
-            return self[key]
-        except (KeyError, IndexError, ValueError):
-            return default
-
-    def __repr__(self) -> str:
-        """Return a bounded summary teaching the REAL index basis."""
-
-        labels = [str(getattr(op, "label", getattr(op, "layer_label", "?"))) for op in self._list]
-        shown = ", ".join(repr(label) for label in labels[:5])
-        suffix = ", ..." if len(labels) > 5 else ""
-        return (
-            f"OpAccessor with {len(self._list)} ops "
-            f"(0-based positions or pass-qualified labels): [{shown}{suffix}]"
-        )
-
-    def _resolve_substring(self, key: str) -> "Op | None":
-        """Resolve Op by any scoped layer-label variant."""
-        if len(self._dict) == 1:
-            only_op = next(iter(self._dict.values()))
-            if key in {
-                only_op.layer_label,
-                only_op.layer_label_short,
-                only_op._label_raw,
-                only_op.raw_label,
-            }:
-                return only_op
-        parent_matches = [
-            op_log
-            for op_log in self._dict.values()
-            if key in {op_log.layer_label, op_log.layer_label_short}
-        ]
-        if len(parent_matches) > 1:
-            parent_label = parent_matches[0].layer_label
-            qualified = ", ".join(op_log.label for op_log in parent_matches[:10])
-            suffix = "..." if len(parent_matches) > 10 else ""
-            raise AmbiguousOpLookupError(
-                f"Layer '{parent_label}' has {len(parent_matches)} ops. Use a 0-based "
-                "integer position or a pass-qualified label like "
-                f"'{parent_label}:1'. Available Op labels: {qualified}{suffix}."
-            )
-        for op_log in self._dict.values():
-            if key in {
-                op_log.label,
-                op_log.label_short,
-                op_log._label_raw,
-                op_log.raw_label,
-            }:
-                return op_log
-        return None
 
 
 class Layer(_SelectionOperand):
@@ -1284,6 +1181,34 @@ class Layer(_SelectionOperand):
 
         return layer_shape_summary(self)
 
+    def _warn_synthesized_read(self, site: str) -> None:
+        """Fire the once-per-trace synthesized-value read warning when due.
+
+        Quickstart memo D7 (F17): the FIRST raw value read on a trace whose
+        input values were synthesized warns once per Trace -- the handoff
+        case a persisted provenance record alone cannot reach. The inline
+        precheck keeps the gold/legacy fast path to two attribute reads;
+        only genuinely synthesized traces import the gate machinery.
+        """
+
+        ops = getattr(self, "ops", None)
+        if not ops:
+            return
+        try:
+            trace = ops[0].trace
+        except Exception:  # noqa: BLE001 - detached/cleaned records have no trace
+            return
+        record = getattr(trace, "input_preprocessor", None)
+        if (
+            record is None
+            or getattr(record, "verified", True)
+            or getattr(record, "source", "") != "torchlens.quickstart.input_resolver"
+        ):
+            return
+        from ..quickstart._gate import warn_on_raw_read
+
+        warn_on_raw_read(trace, site=site)
+
     @property
     def out(self) -> Any:
         """Return the saved out for a single-pass layer.
@@ -1293,12 +1218,14 @@ class Layer(_SelectionOperand):
         Any
             Saved out from the only pass.
         """
+        self._warn_synthesized_read("Layer.out")
         return self._single_pass_or_error("out")
 
     @property
     def tensor(self) -> Any:
         """Alias for the raw saved out on single-pass layers."""
 
+        self._warn_synthesized_read("Layer.tensor")
         return self._single_pass_or_error("tensor")
 
     @property
@@ -2020,19 +1947,27 @@ class Layer(_SelectionOperand):
     # ********************************************
 
     def __str__(self) -> str:
-        """Return a human-readable layer summary.
+        """Return the bounded Layer card (F10; lovely D15/4.3).
 
         Data-model contract: never raises. A Layer detached from its Trace
         (collected, standalone-pickled, or husked by cleanup) degrades to a
         one-line placeholder instead of propagating the typed relation
         refusal out of ``repr()``/``print()``/f-string interpolation
-        (r4 b7-opus R52-A).
+        (r4 b7-opus R52-A). The historical numberless five-line summary is
+        replaced by the card: line 1 is the envelope+core repr, multi-pass
+        layers show per-pass cores (never a pooled statistic, D32), and
+        exits are named on the ``More:`` line.
         """
 
         if not self._tracing_finished:
             return f"Layer({self.layer_label}) (pass not finished)"
+        if self._detached_from_trace():
+            label = getattr(self, "layer_label", None) or "<unbound>"
+            return f"<Layer {label}: detached from its Trace>"
+        from ._value_repr import layer_card
+
         try:
-            return self._describe_bound()
+            return layer_card(self)
         except RecordBindingError:
             label = getattr(self, "layer_label", None) or "<unbound>"
             return f"<Layer {label}: detached from its Trace>"
@@ -2067,9 +2002,51 @@ class Layer(_SelectionOperand):
         return s
 
     def __repr__(self) -> str:
-        """Return the developer representation for this layer."""
+        """Return ONE nestable envelope+core line (F10; lovely D15).
 
-        return self.__str__()
+        The lovely demo moment: ``log['label']`` at a REPL answers with
+        dtype/shape/device, distribution, and health in one line. Never
+        raises; detached layers keep the placeholder contract.
+        """
+
+        if not self._tracing_finished:
+            return f"Layer({self.layer_label}) (pass not finished)"
+        if self._detached_from_trace():
+            label = getattr(self, "layer_label", None) or "<unbound>"
+            return f"<Layer {label}: detached from its Trace>"
+        from ._value_repr import layer_repr_line
+
+        try:
+            return layer_repr_line(self)
+        except RecordBindingError:
+            label = getattr(self, "layer_label", None) or "<unbound>"
+            return f"<Layer {label}: detached from its Trace>"
+
+    def _detached_from_trace(self) -> bool:
+        """Whether this Layer lost its owning Trace (R52-A placeholder gate).
+
+        A collected or standalone-pickled Layer keeps readable shadow
+        fields, but its graph context is gone -- the repr contract renders
+        the explicit placeholder rather than a context-free stats line.
+        """
+
+        ref = self.__dict__.get("_source_trace_ref")
+        return ref is None or ref() is None
+
+    def _repr_html_(self) -> str:
+        """Return the pass-aware notebook Layer card (treescope memo B2).
+
+        Per-pass fields render via ``ops[k]`` rows (pass rows are the
+        card's SHAPE); a single-pass layer degenerates to the Op card
+        through the one shared code path. Never raises: any internal
+        failure degrades to a one-line ``card unavailable`` fragment, and
+        the treescope-bridge suppression sentinel replaces the card
+        exactly when the bridge just rendered this object (memo 3.6).
+        """
+
+        from ..notebook.cards import layer_repr_html
+
+        return layer_repr_html(self)
 
     def __len__(self) -> int:
         """Return the number of operation passes aggregated into this layer."""
@@ -2154,208 +2131,3 @@ def _install_layer_view_descriptors() -> None:
 
 _install_layer_mirror_descriptors()
 _install_layer_view_descriptors()
-
-
-class LayerAccessor(Accessor["Layer"]):
-    """Dict-like accessor for Layer objects.
-
-    Supports indexing by:
-    * **layer label** (str) -- exact match against no-pass label.
-    * **ordinal index** (int) -- position in execution order.
-    * **pass notation** (str ``"conv2d_1_1:2"``) -- strips the pass
-      suffix and returns the parent Layer.
-
-    Available as ``trace.layers``.
-    """
-
-    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
-        "_dict": FieldPolicy.KEEP,
-        "_list": FieldPolicy.KEEP,
-        "_source_ref": FieldPolicy.WEAKREF_STRIP,
-    }
-
-    def __init__(
-        self,
-        layer_logs: dict[str, "Layer"],
-        source_trace: Optional["Trace"] = None,
-    ) -> None:
-        """Initialize an accessor over aggregate layer logs.
-
-        Parameters
-        ----------
-        layer_logs:
-            Mapping from layer labels to aggregate ``Layer`` objects.
-        source_trace:
-            Trace that owns the layer logs, if still reachable.
-        """
-
-        source_ref = weakref.ref(source_trace) if source_trace is not None else None
-        super().__init__(layer_logs, source_ref=source_ref)
-
-    def _resolve_pass_qualified(self, key: str) -> "Layer | None":
-        """Resolve ``layer_label:pass`` notation to the parent Layer."""
-        base, _, pass_str = key.rpartition(":")
-        try:
-            int(pass_str)
-        except ValueError:
-            return None
-        return self._resolve_substring(base)
-
-    def _resolve_substring(self, key: str) -> "Layer | None":
-        """Resolve exact long or short Layer labels."""
-        if key in self._dict:
-            return self._dict[key]
-        matches = [
-            layer
-            for layer in self._list
-            if key in {layer.layer_label, layer.layer_label, layer.layer_label_short}
-        ]
-        if len(matches) == 1:
-            return matches[0]
-        if len(matches) > 1:
-            raise AmbiguousOpLookupError(
-                f"Layer lookup '{key}' is ambiguous across {len(matches)} Layers. "
-                "Use the full Layer label."
-            )
-        return None
-
-    def _suggest(self, key: str) -> list[str]:
-        """Return similar layer labels from the source Trace."""
-        source_ref = getattr(self, "_source_ref", None)
-        source = source_ref() if source_ref is not None else None
-        if source is not None and hasattr(source, "find_layers"):
-            return source.find_layers(str(key))
-        return []
-
-    def by_operator(self, operator: str | None = None) -> dict[str, int] | list[str]:
-        """Group layers by Torch operator name.
-
-        Parameters
-        ----------
-        operator:
-            Optional operator name. When supplied, matching layer labels are returned.
-
-        Returns
-        -------
-        Dict[str, int] | List[str]
-            Counts by operator, or labels for one operator.
-        """
-
-        if operator is not None:
-            return [
-                layer.layer_label
-                for layer in self._list
-                if (layer.func_name or layer.layer_type) == operator
-            ]
-        counts: dict[str, int] = {}
-        for layer in self._list:
-            key = str(layer.func_name or layer.layer_type)
-            counts[key] = counts.get(key, 0) + 1
-        return counts
-
-    def by_module(self, module: str | None = None) -> dict[str, int] | list[str]:
-        """Group layers by containing module address.
-
-        Parameters
-        ----------
-        module:
-            Optional module address. When supplied, matching layer labels are returned.
-
-        Returns
-        -------
-        Dict[str, int] | List[str]
-            Counts by module, or labels for one module.
-        """
-
-        if module is not None:
-            return [
-                layer.layer_label
-                for layer in self._list
-                if layer.module == module or module in getattr(layer, "modules", [])
-            ]
-        counts: dict[str, int] = {}
-        for layer in self._list:
-            key = str(layer.module or "self")
-            counts[key] = counts.get(key, 0) + 1
-        return counts
-
-    def by_module_and_operator(
-        self,
-        module: str | None = None,
-        operator: str | None = None,
-    ) -> dict[tuple[str, str], int] | list[str]:
-        """Group layers by module and operator.
-
-        Parameters
-        ----------
-        module:
-            Optional module address filter.
-        operator:
-            Optional operator-name filter.
-
-        Returns
-        -------
-        Dict[Tuple[str, str], int] | List[str]
-            Counts by ``(module, operator)`` or labels matching both filters.
-        """
-
-        if module is not None and operator is not None:
-            return [
-                layer.layer_label
-                for layer in self._list
-                if (layer.module == module or module in getattr(layer, "modules", []))
-                and (layer.func_name or layer.layer_type) == operator
-            ]
-        counts: dict[tuple[str, str], int] = {}
-        for layer in self._list:
-            key = (str(layer.module or "self"), str(layer.func_name or layer.layer_type))
-            counts[key] = counts.get(key, 0) + 1
-        return counts
-
-    def total(self) -> int:
-        """Return the number of aggregate layers.
-
-        Returns
-        -------
-        int
-            Number of layer logs.
-        """
-
-        return len(self)
-
-    def __repr__(self) -> str:
-        """Return a compact multi-line accessor summary."""
-
-        if len(self) == 0:
-            return "LayerAccessor({})"
-        items = []
-        for ll in self._list:
-            items.append(
-                f"  '{ll.layer_label}': {ll.func_name or 'input'} "
-                f"(shape={list(ll.shape) if ll.shape else '?'}, "
-                f"ops={ll.num_passes})"
-            )
-        inner = "\n".join(items)
-        return f"LayerAccessor({len(self)} layers):\n{inner}"
-
-    def to_pandas(self) -> "pd.DataFrame":
-        """One row per unique layer (aggregate view), ordered by ``LAYER_LOG_FIELD_ORDER``.
-
-        Builds each row the same way as ``Layer.to_pandas()`` so every field
-        in ``LAYER_LOG_FIELD_ORDER`` is exported -- this used to hand-roll a
-        12-field subset that silently dropped most populated Layer fields.
-        Per-pass fields (``_MULTI_PASS_PER_CALL_LAYER_FIELDS``) are reported
-        as ``None`` for multi-pass (recurrent) layers instead of raising.
-        """
-        try:
-            import pandas as pd
-        except ImportError as e:
-            raise ImportError(
-                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
-            ) from e
-
-        if not self._list:
-            return pd.DataFrame(columns=LAYER_LOG_FIELD_ORDER)
-        rows = [_layer_log_to_row(ll) for ll in self._list]
-        frame = pd.DataFrame(rows, columns=LAYER_LOG_FIELD_ORDER)
-        return attach_source_honesty(frame, self._list)

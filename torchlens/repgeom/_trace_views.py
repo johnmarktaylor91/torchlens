@@ -39,6 +39,21 @@ from ._geometry import (
 __tl_layer__ = "L6"
 
 
+class _PayloadBasisDict(OrderedDict):
+    """Ordered result mapping with a payload-provenance side table.
+
+    F20 D-19 disclosure: geometry computed from a TRANSFORMED payload is a
+    different scientific object than raw-payload geometry, so every
+    evolution result records which payload fed each key on
+    ``result.payload_basis`` (``key -> "raw" | "transformed"``). Plain
+    ``OrderedDict`` semantics are unchanged; session-time only.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.payload_basis: dict[str, str] = {}
+
+
 def mds_evolution(
     trace: Any,
     save: Any | None = None,
@@ -78,10 +93,11 @@ def mds_evolution(
     """
 
     selected = _selected_mds_sites(trace, save, verb="mds_evolution")
-    coords_by_key: MDSEvolution = OrderedDict()
+    coords_by_key: _PayloadBasisDict = _PayloadBasisDict()
     staged: OrderedDict[str, torch.Tensor] = OrderedDict()
     previous_coords: np.ndarray | None = None
-    for key, _site, activations in selected:
+    for key, _site, activations, payload_kind in selected:
+        coords_by_key.payload_basis[key] = payload_kind
         try:
             distances = activation_distance_matrix(activations, metric=metric)
             coords, _info = classical_mds(
@@ -139,9 +155,10 @@ def rdm_evolution(
         raise ValueError("min_n must be at least 2 for rdm_evolution.")
 
     selected = _selected_activation_sites(trace, save, verb="rdm_evolution")
-    matrices_by_key: RDMEvolution = OrderedDict()
+    matrices_by_key: _PayloadBasisDict = _PayloadBasisDict()
     staged: OrderedDict[str, torch.Tensor] = OrderedDict()
-    for key, _site, activations in selected:
+    for key, _site, activations, payload_kind in selected:
+        matrices_by_key.payload_basis[key] = payload_kind
         try:
             matrix = activation_distance_matrix(activations, metric=metric)
         except ValueError as exc:
@@ -200,9 +217,10 @@ def scree_evolution(
 
     _validate_variance_threshold(variance_threshold)
     selected = _selected_activation_sites(trace, save, verb="scree_evolution")
-    eigenvalues_by_key: ScreeEvolution = OrderedDict()
+    eigenvalues_by_key: _PayloadBasisDict = _PayloadBasisDict()
     staged: OrderedDict[str, torch.Tensor] = OrderedDict()
-    for key, _site, activations in selected:
+    for key, _site, activations, payload_kind in selected:
+        eigenvalues_by_key.payload_basis[key] = payload_kind
         try:
             eigenvalues = scree(activations, metric=metric, min_n=min_n)
         except ValueError as exc:
@@ -217,7 +235,7 @@ def scree_evolution(
 
 def _selected_mds_sites(
     trace: Any, save: Any | None, *, verb: str = "mds_evolution"
-) -> list[tuple[str, Any, Any]]:
+) -> list[tuple[str, Any, Any, str]]:
     """Resolve the layer or op payloads that should receive annotations.
 
     Only stimulus-indexed sites qualify: a default sweep SKIPS ineligible
@@ -254,7 +272,7 @@ def _selected_mds_sites(
     for site in sites:
         selected_by_layer.setdefault(str(getattr(site, "layer_label")), []).append(site)
 
-    selected: list[tuple[str, Any, Any]] = []
+    selected: list[tuple[str, Any, Any, str]] = []
     for layer_label, layer_sites in selected_by_layer.items():
         layer = trace.layer_logs[layer_label]
         if int(getattr(layer, "num_passes", 1)) > 1:
@@ -280,7 +298,7 @@ _selected_activation_sites = _selected_mds_sites
 
 def _default_saved_mds_sites(
     trace: Any, *, verb: str = "mds_evolution"
-) -> list[tuple[str, Any, Any]]:
+) -> list[tuple[str, Any, Any, str]]:
     """Return saved, stimulus-indexed single-pass layer payloads.
 
     Parameters
@@ -297,7 +315,7 @@ def _default_saved_mds_sites(
     """
 
     expected_counts = _expected_stimulus_counts(trace)
-    selected: list[tuple[str, Any, Any]] = []
+    selected: list[tuple[str, Any, Any, str]] = []
     skipped: OrderedDict[str, str] = OrderedDict()
     for layer in trace.layers:
         layer_label = str(getattr(layer, "layer_label"))
@@ -330,7 +348,56 @@ def _default_saved_mds_sites(
     return selected
 
 
-def _single_pass_layer_mds_site(layer: Any, *, verb: str = "mds_evolution") -> tuple[str, Any, Any]:
+def _saved_payload_with_kind(record: Any, label: str, *, verb: str) -> tuple[Any, str]:
+    """Return a site's retained payload plus its provenance kind (F20 D-19).
+
+    Geometry collectors historically read ``.out`` only, so the composition
+    reduce-then-geometry was broken on exactly the traces the sweep
+    produces. When the raw payload was dropped in favor of a transform, the
+    TRANSFORMED payload feeds the geometry -- with the kind recorded, since
+    a raw RDM and a post-reduction RDM are different scientific objects --
+    guarded by a stimulus-axis check: a transform that consumed the
+    stimulus axis (batch pooling) cannot feed stimulus-indexed geometry and
+    refuses with the remedy named.
+
+    Parameters
+    ----------
+    record:
+        Layer or op record carrying payload fields.
+    label:
+        Display label for diagnostics.
+    verb:
+        Public verb name used in diagnostics.
+
+    Returns
+    -------
+    tuple[Any, str]
+        ``(payload, kind)`` with kind ``"raw"`` or ``"transformed"``.
+    """
+
+    out = getattr(record, "out", None)
+    if out is not None:
+        return out, "raw"
+    transformed = getattr(record, "transformed_out", None)
+    if transformed is None:
+        _raise_unsaved_activation(label, verb=verb)
+    raw_shape = getattr(record, "shape", None)
+    transformed_shape = tuple(getattr(transformed, "shape", ()) or ())
+    if raw_shape and transformed_shape and transformed_shape[0] != raw_shape[0]:
+        raise ValueError(
+            f"{verb} cannot use the transformed payload for {label!r}: the "
+            f"transform changed the stimulus axis (raw batch {raw_shape[0]}, "
+            f"transformed leading dim {transformed_shape[0]}), so rows no "
+            "longer index stimuli. Remedy: keep the raw payload for this "
+            "site (save_raw_activations=True) or use a transform that "
+            "preserves the batch axis."
+        )
+    return transformed, "transformed"
+
+
+def _single_pass_layer_mds_site(
+    layer: Any, *, verb: str = "mds_evolution"
+) -> tuple[str, Any, Any, str]:
     """Return the annotation payload tuple for a single-pass layer.
 
     Parameters
@@ -342,20 +409,19 @@ def _single_pass_layer_mds_site(layer: Any, *, verb: str = "mds_evolution") -> t
 
     Returns
     -------
-    tuple[str, Any, Any]
-        Annotation key, annotation site, and activation payload.
+    tuple[str, Any, Any, str]
+        Annotation key, annotation site, activation payload, and payload
+        provenance kind (``"raw"`` / ``"transformed"``).
     """
 
     layer_label = str(getattr(layer, "layer_label"))
     if not bool(getattr(layer, "has_saved_activation", False)):
         _raise_unsaved_activation(layer_label, verb=verb)
-    out = getattr(layer, "out", None)
-    if out is None:
-        _raise_unsaved_activation(layer_label, verb=verb)
-    return f"layer:{layer_label}", layer.ops[0], out
+    payload, kind = _saved_payload_with_kind(layer, layer_label, verb=verb)
+    return f"layer:{layer_label}", layer.ops[0], payload, kind
 
 
-def _op_mds_site(op: Any, *, verb: str = "mds_evolution") -> tuple[str, Any, Any]:
+def _op_mds_site(op: Any, *, verb: str = "mds_evolution") -> tuple[str, Any, Any, str]:
     """Return the annotation payload tuple for a pass-qualified op.
 
     Parameters
@@ -367,17 +433,16 @@ def _op_mds_site(op: Any, *, verb: str = "mds_evolution") -> tuple[str, Any, Any
 
     Returns
     -------
-    tuple[str, Any, Any]
-        Annotation key, annotation site, and activation payload.
+    tuple[str, Any, Any, str]
+        Annotation key, annotation site, activation payload, and payload
+        provenance kind (``"raw"`` / ``"transformed"``).
     """
 
     op_label = str(getattr(op, "label"))
     if not bool(getattr(op, "has_saved_activation", False)):
         _raise_unsaved_activation(op_label, verb=verb)
-    out = getattr(op, "out", None)
-    if out is None:
-        _raise_unsaved_activation(op_label, verb=verb)
-    return f"op:{op_label}", op, out
+    payload, kind = _saved_payload_with_kind(op, op_label, verb=verb)
+    return f"op:{op_label}", op, payload, kind
 
 
 def _site_label_is_pass_qualified(site: Any) -> bool:

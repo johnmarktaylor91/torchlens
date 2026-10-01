@@ -874,6 +874,12 @@ _SAFE_TORCHLENS_TYPES: frozenset[tuple[str, str]] = frozenset(
         ("torchlens.data_classes.grad_fn", "GradFnCallAccessor"),
         ("torchlens.data_classes.grad_fn_call", "GradFnCall"),  # locked rename target
         ("torchlens.data_classes.layer", "Layer"),
+        # Accessor classes moved to _layer_accessors.py (R43 ratchet split,
+        # F16 2026-08-29). New artifacts pickle the new qualnames; the
+        # layer-module rows stay so legacy artifacts keep loading through
+        # the re-exports.
+        ("torchlens.data_classes._layer_accessors", "LayerAccessor"),
+        ("torchlens.data_classes._layer_accessors", "OpAccessor"),
         ("torchlens.data_classes.layer", "LayerAccessor"),
         ("torchlens.data_classes.layer", "OpAccessor"),
         ("torchlens.data_classes.module", "HookInfo"),

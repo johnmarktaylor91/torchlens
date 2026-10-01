@@ -412,6 +412,13 @@ class TraceExportMixin(_TraceMixinBase):
             the capture-time bound.
         """
 
+        # Capability gate (quickstart memo D7, F17): decoded labels on
+        # synthesized input values would be a statement about random numbers
+        # presented as a statement about data. One chokepoint for every
+        # decode door (output_table, to_pandas decoded summary, direct calls).
+        from ..quickstart._gate import require_gold
+
+        require_gold(self, "decoded output labels")
         if self.decoded_output is None:
             recomputed = self._recompute_decoded_output(top_n=top_n)
             if recomputed is None:

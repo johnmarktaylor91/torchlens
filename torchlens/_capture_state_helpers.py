@@ -43,6 +43,7 @@ from ._capture_fingerprint import (  # noqa: F401  isort: skip
     _fingerprint_model_content,
     _forward_input_fragment,
     _hash_code_object_into,
+    _hash_input_tensor_value,
     _hash_tensor_content,
     _never_matching_fragment,
 )
@@ -1491,6 +1492,15 @@ def _hash_input_signatures(input_args: Any, input_kwargs: Any) -> str:
     -------
     str
         SHA-256 hex digest over tensor shapes, dtypes, and devices.
+
+    Notes
+    -----
+    This digest is SHAPE-LEVEL by design (it backs the reported
+    ``shared_graph_same_input`` / ``shared_graph_diff_input`` relationship
+    vocabulary). It is deliberately NOT accepted as proof of input equality
+    by the Bundle comparison gate, which requires the value-level
+    :func:`_hash_input_tensor_value` evidence instead (A-GATE, foldB D6
+    path 2: a shape/dtype/device hash is value-blind).
     """
 
     tensors = _iter_tensor_inputs((input_args, input_kwargs))

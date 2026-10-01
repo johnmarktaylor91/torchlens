@@ -405,6 +405,7 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
     out.mkdir(exist_ok=True)
     return {
         "summary": lambda t: t.summary(),
+        "provenance": lambda t: t.provenance(),
         "profile": lambda t: t.profile(),
         "to_pandas": lambda t: t.to_pandas(),
         # Plain draw AND an encoding-channel draw: the channel path is the
@@ -425,6 +426,8 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
         "check_metadata_invariants": lambda t: t.check_metadata_invariants(),
         "find_nan": lambda t: t.find_nan(),
         "first_nonfinite": lambda t: t.first_nonfinite(),
+        # Lane F28: post-hoc narration is a pure render over captured events.
+        "narrate": lambda t: t.narrate(),
         "last_run_records": lambda t: t.last_run_records(),
         "decode_output": lambda t: t.decode_output(),
         "output_table": lambda t: t.output_table(),
@@ -446,11 +449,18 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
         # persistence side effects) -- swept for the same reason as
         # sites_table/bill_of_materials.
         "stats_table": lambda t: t.stats_table(),
+        # F09 (sumfam D24): the capability card is a metadata-only read of
+        # the SurfaceRegistry filtered by this object -- swept like the
+        # other pure report reads.
+        "capability_card": lambda t: t.capability_card(),
         "to_agent_json": lambda t: t.to_agent_json(),
         "between": lambda t: t.between(t.input_ops[0].label, t.output_ops[0].label),
         "subgraph": lambda t: t.subgraph(tl.func("relu")),
         "find_sites": lambda t: t.find_sites("relu"),
         "resolve_sites": lambda t: t.resolve_sites("relu"),
+        # F33 (weightsfree D14): the audit-only plan checker is a pure read
+        # over resolve_sites + recorded geometry; executable=False always.
+        "check_plan": lambda t: t.check_plan(["relu"]),
         "stack": lambda t: t.stack(tl.func("relu")),
         "show": lambda t: t.show(method="graph", vis_outpath=str(out / "shown")),
         "draw_backward": lambda t: t.draw_backward(vis_outpath=str(out / "bwd")),

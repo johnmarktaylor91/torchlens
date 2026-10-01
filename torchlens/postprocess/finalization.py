@@ -1036,7 +1036,7 @@ def _build_module_logs(self: "Trace") -> None:
     # needed during construction and are not part of the user-facing API.
     self._module_capture_ws.module_metadata = {}
     self._module_capture_ws.module_forward_args = {}
-    from ..data_classes.trace import _init_module_hierarchy_data
+    from ..ir.workspaces import _init_module_hierarchy_data
 
     self._module_capture_ws.module_build_data = _init_module_hierarchy_data()
 
@@ -1661,7 +1661,12 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
 
     from .._io.scrub import scrub_for_save
     from ..capture.outcome import outcome_for
+    from ..intervention.injection import refuse_injection_logged_stream_finalize
 
+    # F44: the streamed writer stages its own bundle and never passes the
+    # analysis save door that appends the injected family; refusing here
+    # keeps a streamed artifact from silently dropping recorded computation.
+    refuse_injection_logged_stream_finalize(self)
     try:
         scrubbed_state, blob_specs, unsupported_tensor_records = scrub_for_save(
             self,

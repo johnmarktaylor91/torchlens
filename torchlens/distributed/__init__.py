@@ -23,14 +23,14 @@ required.
 
 from ._audit import (
     GROUP_LIFETIME_EVIDENCE_CONFLICT,
-    MembershipLineageVerdict,
+    MembershipLineageVerdict as MembershipLineageVerdict,
     audit_membership_lineages,
 )
 from ._ledger import (
     GroupLifecycleEvent,
     GroupLifecycleLedger,
-    LineageEntry,
-    LineageVector,
+    LineageEntry as LineageEntry,
+    LineageVector as LineageVector,
     membership_digest_for_ranks,
 )
 from ._lifecycle import (
@@ -46,7 +46,7 @@ from ._lifecycle import (
 from ._recognizer import (
     COLLECTIVE_NAMESPACES,
     UNCAPTURED_COLLECTIVE_OP,
-    CollectiveRecognizer,
+    CollectiveRecognizer as CollectiveRecognizer,
     UncapturedCollectiveOpError,
     derive_collective_recognizer,
 )
@@ -58,13 +58,9 @@ __all__ = [
     "UNCAPTURED_COLLECTIVE_OP",
     "AmbiguousGroupLifetimeError",
     "ArmingRecord",
-    "CollectiveRecognizer",
     "GroupIdentity",
     "GroupLifecycleEvent",
     "GroupLifecycleLedger",
-    "LineageEntry",
-    "LineageVector",
-    "MembershipLineageVerdict",
     "UncapturedCollectiveOpError",
     "arm",
     "audit_membership_lineages",

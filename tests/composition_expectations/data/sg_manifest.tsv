@@ -1,0 +1,58 @@
+# SG-regression manifest (compo memo stratum 3: "a manifest test proves no SG
+# number lacks a node"; F36 waves A-D). One row per DIGEST-AUDIT section-1
+# silent gap. disposition=regression-node rows name an existing test file (or
+# file::test) that goes red on recurrence; disposition=ledgered-open rows are
+# the enumerated burn-down queue -- node (optional) is an auto-probe pinning
+# the CURRENT gap behavior. Open-count only burns DOWN (frozen ceiling in
+# test_proofnet_sg_manifest.py). Rows are hand-curated; never regenerated.
+sg_id	disposition	node	owner	title
+SG#1	regression-node	tests/test_persist_honesty_runnable_random.py	A08	runnable no-weights load runs random-init silently
+SG#2	regression-node	tests/test_capopts_truth_save_grads.py	A06	save_grads discards selector predicates
+SG#3	regression-node	tests/test_capopts_truth_module_filter.py	A06	module_filter doc-invisible third save gate
+SG#4	ledgered-open		A06	silent .out None on legacy selective capture
+SG#5	regression-node	tests/composition_expectations/test_proofnet_m1_product_verb.py	A09	presenters served hollow explain/agent_json answers
+SG#6	ledgered-open		A09	poisoned/diverged traces render clean
+SG#7	regression-node	tests/test_capopts_truth_cache_key.py	A06	cache hit serves foreign capture semantics
+SG#8	regression-node	tests/test_capopts_truth_chunk_options.py	A06	chunk_size drops save_budget per chunk
+SG#9	ledgered-open		D01	no capture-honesty facts on tabular/file exports
+SG#10	ledgered-open		A06	layers_to_save callable false zero-match warning
+SG#11	ledgered-open		C05	show(selection) silently renders the full graph
+SG#12	ledgered-open	tests/composition_expectations/test_proofnet_sweep_bundles.py::test_container_contains_disagreement_is_pinned_sg12	C01	label in trace silently False while getitem resolves
+SG#13	ledgered-open		F32	loaded tf traces validate FAILED not unavailable
+SG#14	ledgered-open		F32	foreign GradOptions silently accepted cross-backend
+SG#15	regression-node	tests/test_interv_honesty_over_failclosed.py	A04	mean_ablate over= unvalidated no-op fails open
+SG#16	regression-node	tests/test_interv_honesty_selection_do_validation.py	A04	Selection do() scalar silently no-ops
+SG#17	regression-node	tests/test_persist_honesty_streamed_settlement.py	A08	streamed bundles written pre-settlement bypass N1
+SG#18	regression-node	tests/test_persist_honesty_save_options.py	A08	executable_with_callables overrides explicit include=False
+SG#19	regression-node	tests/test_persist_honesty_save_options.py	A08	runnable silently forces include flags False
+SG#20	regression-node	tests/test_persist_honesty_intervention_spec.py	A08	intervention-spec door escapes save-entry invariants
+SG#21	ledgered-open		A08	drop-policy present-None defeats loaded defaults
+SG#22	ledgered-open		A08	merged-directory load->save launders refused members
+SG#23	regression-node	tests/test_persist_honesty_structure_only.py	A08	structure_only save writes a poison artifact
+SG#24	regression-node	tests/test_persist_honesty_outcome_recording.py	A08	outcome gate structurally blind to Recording
+SG#25	ledgered-open		F15	recover() launders failed-partial evidence
+SG#26	ledgered-open		F04	log_backward on loaded trace crashes and half-mutates
+SG#27	ledgered-open		A08	halted streamed manifest carries no outcome field
+SG#28	ledgered-open		A08	activation digests leak weight-identity oracle
+SG#29	ledgered-open		A09	TraceSlice.summary launders honesty banners
+SG#30	ledgered-open		A09	episode capture invisible on report surfaces
+SG#31	regression-node	tests/test_capopts_truth_stop_after.py	A06	stop_after= universal silent no-op
+SG#32	ledgered-open		A06	dataclasses.replace marks all 49 fields explicit
+SG#33	ledgered-open	tests/composition_expectations/test_proofnet_sweep_bundles.py::test_post_trace_pickle_gap_is_pinned_and_the_remedy_works	D01	post-trace model unpicklable with no fingerprint
+SG#34	regression-node	tests/test_capopts_truth_batchnorm_warn.py	A06	train-mode BN stats mutate silently
+SG#35	ledgered-open		F32	preview draw color_by silently unencodes all nodes
+SG#36	ledgered-open		F32	legacy entry layer backend-blind (aggregate/xarray/tap)
+SG#37	ledgered-open		F32	paddle halt zero-match silent
+SG#38	ledgered-open		F15	dagua renderer silently drops render kwargs
+SG#39	ledgered-open		F10	payload show() undisclosed slice/truncate/clip
+SG#40	ledgered-open		A06	preceded_by invisible 8-op window, dead window_miss
+SG#41	ledgered-open		A06	find_nan duplicate-kwarg crash on restated default
+SG#42	ledgered-open		A03	semantic patching helpers skip own required defaults
+SG#43	ledgered-open	tests/composition_expectations/test_proofnet_sweep_bundles.py::test_text_sinks_carry_no_terminal_escapes	A09	explain embeds OSC-8 + cwd paths in nonfinite detail
+SG#44	ledgered-open		A09	MCP load materializes every blob unbounded
+SG#45	regression-node	tests/test_entry_facade_env_flags.py	A10	env flags parsed outside closed_bool_env doctrine
+SG#46	regression-node	tests/test_interv_honesty_dense_subspace_disclosure.py	A04	dense-subspace do() silent full-axis ablation
+SG#47	ledgered-open		F13	between & ~H boolean surrogate over-selects
+SG#48	ledgered-open		C02	stored has_children contradicts derived children
+SG#49	ledgered-open		C02	accessor properties leak internal mutable state
+SG#50	ledgered-open		A09	PartialTrace.draw accepts kwargs, writes nothing

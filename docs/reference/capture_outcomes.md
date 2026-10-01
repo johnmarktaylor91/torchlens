@@ -41,6 +41,20 @@ absent phase; no gate consults it.
   conservatively from the construction status for legacy/recovered
   recordings.
 - `PartialTrace.outcome` — forwards the inner trace's sidecar.
+- `Bundle.outcome` — the DERIVED worst-of-members fold (declared container
+  authority, foldB D9: instance three of the two-answers disease after
+  PartialTrace and Recording). The status is the most severe member status
+  under the fold's total severity order (`complete < unattested < halted <
+  aborted_nonfinite < failed < unknown` — capability-table restrictiveness,
+  ties broken by epistemic weakness), so COMPLETE is never blessed above the
+  weakest member; a member with no settled outcome folds as UNKNOWN
+  fail-closed, `derived=True` always, and the settlement note names the
+  driving member. The fold is a DISCLOSURE reported beside results, never a
+  settlement and never a per-member gate: capability gating applies at the
+  member whose facts a read cites (foldB D8). Both public save doors agree
+  by construction — `tl.save(bundle, ...)` delegates to the container door
+  (`Bundle.save`), whose member writes run the N1 gate per member; per-trace
+  payload options refuse typed (`bundle_save_option_unsupported`).
 - `Trace.fork().outcome` — a DERIVED record settled by `stamp_forked`, never
   the parent's attestation by identity: a fork is the sanctioned mutation
   surface, so it settles through the structural lattice (UNATTESTED for a

@@ -35,6 +35,14 @@ class RetentionKind(str, Enum):
     GRADIENT_REFERENCE = "gradient_reference"
 
 
+DEFAULT_ESCROW_SPILL_BUDGET_BYTES = 16 * 1024**3
+"""Default declared bound on escrow disk spill per capture (16 GiB).
+
+Generous enough that no measured real workload reaches it accidentally
+(the leverage panel's resnet18 b8 crash spilled ~190 MB), small enough
+that a runaway whole-graph escrow cannot silently fill a disk."""
+
+
 @dataclass(frozen=True, slots=True)
 class RetentionProfile:
     """Precompiled deferred-retention bounds for a capture request.
@@ -55,6 +63,13 @@ class RetentionProfile:
         Maximum detached activation bytes retained in memory before temp spill.
     gradient_warning_threshold_bytes
         Logical tensor-byte threshold for warning about unwindowable live references.
+    escrow_spill_budget_bytes
+        DECLARED total bound on escrow bytes spilled to temporary disk for one
+        capture (leverage B9: a deferred non-windowed selector escrow used to
+        have no bound at all — an unbounded implicit disk write is a defect,
+        not a capability). Crossing it refuses typed, naming the committed
+        bytes and the cheap live-resolvable remedy; ``None`` disables the
+        bound explicitly.
     """
 
     activation_kind: RetentionKind = RetentionKind.NONE
@@ -64,6 +79,7 @@ class RetentionProfile:
     spillable: bool = False
     activation_ram_budget_bytes: int = 64 * 1024 * 1024
     gradient_warning_threshold_bytes: int = 512 * 1024 * 1024
+    escrow_spill_budget_bytes: int | None = DEFAULT_ESCROW_SPILL_BUDGET_BYTES
 
 
 def _freeze_intent(value: Any) -> Any:

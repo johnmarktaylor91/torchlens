@@ -324,10 +324,16 @@ def _container_kind(value: Any) -> str:
     # generic-type exclusion (Mapping/list/tuple) is exactly what hid hybrids.
     if not isinstance(value, type) and get_registered_container(type(value)) is not None:
         return "registered"
-    if dataclasses.is_dataclass(value) and not isinstance(value, type):
-        return "dataclass"
+    # HF ModelOutput subclasses ARE dataclasses, so the HF check must run
+    # FIRST, exactly as the capture-side spec builder dispatches (F32 rider:
+    # the inverted order classified a real GPT-2 CausalLMOutput as
+    # "dataclass" against its recorded "hf_model_output" witness, so every
+    # honest identical run false-DIVERGED with OUTPUT_STRUCTURE_MISMATCH --
+    # the same bug class as the r67 C2 registered-branch fix above).
     if _is_hf_model_output(value):
         return "hf_model_output"
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return "dataclass"
     if _container_field_names(value):
         return "namedtuple"
     if isinstance(value, tuple):

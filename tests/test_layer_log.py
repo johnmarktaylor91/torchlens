@@ -292,21 +292,28 @@ class TestMultiPassLayerLog:
 
 class TestLayerLogDisplay:
     def test_str_single_pass(self, simple_log):
+        """The card's first line IS the repr (F10; lovely D15)."""
         for layer_log in simple_log.layer_logs.values():
             s = str(layer_log)
-            assert "Layer " in s
             assert layer_log.layer_label in s
+            assert s.splitlines()[0] == repr(layer_log)
+            assert len(s.splitlines()) <= 8
 
     def test_str_multi_pass(self, recurrent_log):
+        """A multi-pass layer says 'passes', never a pooled statistic (D32)."""
         for layer_log in recurrent_log.layer_logs.values():
             if layer_log.num_passes > 1:
                 s = str(layer_log)
-                assert "ops" in s.lower()
+                assert f"x{layer_log.num_passes} passes" in s
+                assert "pass 1/" in s  # per-pass cores, never pooled
                 break
 
-    def test_repr_eq_str(self, simple_log):
+    def test_repr_is_one_line(self, simple_log):
+        """repr is ONE nestable line under the 120-column bound (D15)."""
         for layer_log in simple_log.layer_logs.values():
-            assert repr(layer_log) == str(layer_log)
+            line = repr(layer_log)
+            assert "\n" not in line
+            assert layer_log.layer_label in line
 
 
 # ---------------------------------------------------------------------------

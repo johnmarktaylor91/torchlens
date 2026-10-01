@@ -47,6 +47,11 @@ PACKAGE_LAYERS: dict[str, str] = {
     "io": "FACADE",
     "user_funcs": "FACADE",
     "experimental": "FACADE",
+    # quickstart is a FACADE-role package (lane F17): its verbs sit over the
+    # capture engine, the inference search, and the renderer, with upward
+    # imports deferred per Rule F; its interior modules declare their own
+    # __tl_layer__ (plan/grammar L2, resolver/gate L3).
+    "quickstart": "FACADE",
     # -- L0 BASIS ---------------------------------------------------------
     "_errors": "L0",
     "errors": "L0",
@@ -137,7 +142,9 @@ PACKAGE_LAYERS: dict[str, str] = {
     "repgeom._trace_views": "L6",
     "repgeom._node_visuals": "L6",
     "dataset_extraction": "L5",
+    "_extraction": "L5",
     "debug": "L5",
+    "checks": "L5",
     # -- L6 APPLIANCES ---------------------------------------------------------
     "semantic": "L6",
     "notebook": "L6",
@@ -152,6 +159,7 @@ PACKAGE_LAYERS: dict[str, str] = {
     # -- L8 BRIDGES ----------------------------------------------------------------
     "bridge": "L8",
     "callbacks": "L8",
+    "trackers": "L8",
     # -- L9 RECIPES -------------------------------------------------------------------
     "examples": "L9",
 }
@@ -166,6 +174,17 @@ PACKAGE_LAYERS: dict[str, str] = {
 #: item 12).
 TORCH_PRIVATE_LICENSED_PACKAGES: frozenset[str] = frozenset(
     {
+        # F04 one-backward reads: attribution/onebackward gates on the
+        # HAS_GRADIENT_EDGE / HAS_NODE_PREHOOK capability flags, which live
+        # at the ONE sanctioned probe chokepoint (utils/_torch_compat); the
+        # package holds no direct torch._ touches of its own.
+        "attribution",
+        # F27 Kineto join + memory-parity oracle: observability consumes the
+        # HAS_KINETO_INMEMORY_EVENTS / HAS_KINETO_EVENT_SCOPE /
+        # HAS_MEMORY_PROFILE capability flags and their accessors, all living
+        # at the ONE sanctioned probe chokepoint (utils/_torch_compat); the
+        # package holds no direct torch._ touches of its own.
+        "observability",
         "backends",
         "capture",
         "compat",

@@ -201,7 +201,7 @@ class TestTensorStatsSummaryTorchControl:
         # lovely D7) + ASCII '!' hazard marker (lovely D4/bug 10).
         expected = (
             "Tensor[2, 4] float32 cpu mean=0.7500 std=1.677 "
-            "min=-2.000 max=3.000 nan=12.5% inf=12.5% neg=12.5% zero=25% "
+            "min=-2.000 max=3.000 nan=12.5% inf=12.5% zero=25% "
             "[! 12.5% NaN] [! 12.5% Inf]"
         )
         assert result == expected
@@ -221,5 +221,5 @@ class TestTensorStatsSummaryTorchControl:
         # C02 re-pin: precision law keeps trailing zeros (lovely D7).
         assert result == (
             "Tensor[2, 2] float32 cpu mean=2.500 std=1.118 min=1.000 max=4.000 "
-            "nan=0% inf=0% neg=0% zero=0%"
+            "nan=0% inf=0% zero=0%"
         )

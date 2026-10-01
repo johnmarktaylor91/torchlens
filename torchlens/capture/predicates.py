@@ -234,9 +234,10 @@ def _is_halt_only_capture(options: RecordingOptions) -> bool:
     """Return whether capture can evaluate only the halt predicate per event.
 
     The fast path is deliberately narrow: no save predicate, no default
-    retention, no intervention, and no gradient capture. That preserves
-    the save-then-halt ordering for every configuration that can retain payloads
-    or metadata.
+    retention, no intervention, no gradient capture, and no armed echo
+    narrator (narration needs the full per-event context build and the
+    committed-event ordering, snoop D1). That preserves the save-then-halt
+    ordering for every configuration that can retain payloads or metadata.
     """
 
     return (
@@ -247,6 +248,7 @@ def _is_halt_only_capture(options: RecordingOptions) -> bool:
         and options.intervene is None
         and options.save_grads in (None, False)
         and options.default_grad is False
+        and getattr(options, "echo", None) is None
     )
 
 

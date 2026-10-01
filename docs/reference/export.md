@@ -76,12 +76,16 @@ graph.json True
 
 ### `netron`
 
-`tl.export.netron(log, path)` writes a lossy ONNX `ModelProto` JSON graph that Netron opens
-through its ONNX JSON reader (the artifact parses into `onnx.ModelProto` via strict protobuf
-JSON — that acceptance contract plus Netron 9.2.2's format sniffer are pinned in
-`tests/test_exports.py`). It deliberately is not a runnable ONNX model: ops keep their
-captured TorchLens names under the custom `ai.torchlens.lossy` domain; use it only for graph
-inspection.
+`tl.export.netron(log, path)` writes an enriched, lossy ONNX `ModelProto` JSON graph
+(schema v2, irVersion 10) that Netron opens fully lit: typed shapes on every edge, native
+graph inputs/outputs, the module hierarchy as drill-down FunctionProtos (the default
+`granularity="module"` view), curated panel facts, and an optional `netron:attachment`
+metrics companion. The acceptance contract — strict protobuf-JSON parse into
+`onnx.ModelProto` plus `onnx.checker.check_model(full_check=True)` — is pinned in
+`tests/test_netron_export_contract.py`, and Netron 9.2.2's own parser is executed over the
+artifact in `tests/test_netron_export_vendor.py`. It deliberately is not a runnable ONNX
+model: ops keep their captured TorchLens names under the custom `ai.torchlens.lossy`
+domain; use it only for graph inspection. Full guide: `docs/reference/netron_export.md`.
 
 ```python
 from pathlib import Path
@@ -299,8 +303,11 @@ Output:
 
 ### `tensorboard`
 
-`tl.export.tensorboard(log, writer, step=0, prefix="torchlens")` writes scalar and text summaries
-to an existing object with TensorBoard's `add_scalar` interface, then returns that writer.
+`tl.export.tensorboard(log, writer, step=<int>, prefix="torchlens")` writes scalar and text
+summaries to an existing object with TensorBoard's `add_scalar` interface, then returns that
+writer. `step` is required and keyword-only: every emission path carries the caller's own
+global step (the historical `step=0` default silently piled every export onto one x-axis
+coordinate and was removed).
 
 ```python
 import torch
@@ -314,14 +321,14 @@ class Writer:
     def flush(self): pass
 
 writer = Writer()
-tl.export.tensorboard(tl.trace(nn.ReLU(), torch.ones(1, 2)), writer)
+tl.export.tensorboard(tl.trace(nn.ReLU(), torch.ones(1, 2)), writer, step=0)
 print(len(writer.calls))
 ```
 
 Output:
 
 ```text
-3
+5
 ```
 
 ### `wandb`

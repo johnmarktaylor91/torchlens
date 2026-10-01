@@ -934,8 +934,8 @@ class MLXBackend:
             mutated_input_positions=(),
             aliased_output_inputs=(),
             unknown_aliasing=False,
-            bytes_delta_at_call=0,
-            bytes_peak_at_call=0,
+            bytes_delta_at_call=None,
+            bytes_peak_at_call=None,
         )
 
     def tensor_ref(

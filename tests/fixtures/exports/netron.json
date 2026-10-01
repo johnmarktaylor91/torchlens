@@ -2,41 +2,80 @@
   "docString": "TorchLens lossy graph export: not a runnable ONNX model; graph inspection only. Ops keep their captured TorchLens names under the ai.torchlens.lossy domain and carry no standard-ONNX execution semantics.",
   "graph": {
     "docString": "TorchLens lossy graph export: not a runnable ONNX model; graph inspection only. Ops keep their captured TorchLens names under the ai.torchlens.lossy domain and carry no standard-ONNX execution semantics.",
+    "input": [
+      {
+        "docString": "input output",
+        "name": "input_1",
+        "type": {
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": "2"
+                },
+                {
+                  "dimValue": "3"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
     "name": "<trace-id>",
     "node": [
       {
         "attribute": [
           {
-            "ints": [
-              2,
-              3
-            ],
-            "name": "shape",
-            "type": "INTS"
-          }
-        ],
-        "domain": "ai.torchlens.lossy",
-        "input": [],
-        "name": "input_1",
-        "opType": "input",
-        "output": [
-          "input_1"
-        ]
-      },
-      {
-        "attribute": [
+            "name": "dtype",
+            "s": "ZmxvYXQzMg==",
+            "type": "STRING"
+          },
+          {
+            "i": "56",
+            "name": "flops_estimated",
+            "type": "INT"
+          },
+          {
+            "name": "module_path",
+            "s": "MA==",
+            "type": "STRING"
+          },
+          {
+            "i": "<measured>",
+            "name": "observed_duration_us",
+            "type": "INT"
+          },
+          {
+            "i": "32",
+            "name": "output_tensor_bytes",
+            "type": "INT"
+          },
+          {
+            "i": "16",
+            "name": "params",
+            "type": "INT"
+          },
           {
             "ints": [
-              2,
-              4
+              "2",
+              "4"
             ],
             "name": "shape",
             "type": "INTS"
           }
         ],
+        "docString": "linear called at test_exports.py",
         "domain": "ai.torchlens.lossy",
         "input": [
           "input_1"
+        ],
+        "metadataProps": [
+          {
+            "key": "input_names",
+            "value": "['input']"
+          }
         ],
         "name": "linear_1_1",
         "opType": "linear",
@@ -47,17 +86,49 @@
       {
         "attribute": [
           {
+            "name": "dtype",
+            "s": "ZmxvYXQzMg==",
+            "type": "STRING"
+          },
+          {
+            "i": "8",
+            "name": "flops_estimated",
+            "type": "INT"
+          },
+          {
+            "name": "module_path",
+            "s": "MQ==",
+            "type": "STRING"
+          },
+          {
+            "i": "<measured>",
+            "name": "observed_duration_us",
+            "type": "INT"
+          },
+          {
+            "i": "32",
+            "name": "output_tensor_bytes",
+            "type": "INT"
+          },
+          {
             "ints": [
-              2,
-              4
+              "2",
+              "4"
             ],
             "name": "shape",
             "type": "INTS"
           }
         ],
+        "docString": "relu called at test_exports.py",
         "domain": "ai.torchlens.lossy",
         "input": [
           "linear_1_1"
+        ],
+        "metadataProps": [
+          {
+            "key": "input_names",
+            "value": "['input']"
+          }
         ],
         "name": "relu_1_2",
         "opType": "relu",
@@ -68,48 +139,125 @@
       {
         "attribute": [
           {
+            "name": "dtype",
+            "s": "ZmxvYXQzMg==",
+            "type": "STRING"
+          },
+          {
+            "i": "36",
+            "name": "flops_estimated",
+            "type": "INT"
+          },
+          {
+            "name": "module_path",
+            "s": "Mg==",
+            "type": "STRING"
+          },
+          {
+            "i": "<measured>",
+            "name": "observed_duration_us",
+            "type": "INT"
+          },
+          {
+            "i": "16",
+            "name": "output_tensor_bytes",
+            "type": "INT"
+          },
+          {
+            "i": "10",
+            "name": "params",
+            "type": "INT"
+          },
+          {
             "ints": [
-              2,
-              2
+              "2",
+              "2"
             ],
             "name": "shape",
             "type": "INTS"
           }
         ],
+        "docString": "linear called at test_exports.py",
         "domain": "ai.torchlens.lossy",
         "input": [
           "relu_1_2"
+        ],
+        "metadataProps": [
+          {
+            "key": "input_names",
+            "value": "['input']"
+          }
         ],
         "name": "linear_2_3",
         "opType": "linear",
         "output": [
           "linear_2_3"
         ]
+      }
+    ],
+    "output": [
+      {
+        "docString": "linear output",
+        "name": "linear_2_3",
+        "type": {
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": "2"
+                },
+                {
+                  "dimValue": "2"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "valueInfo": [
+      {
+        "docString": "linear output",
+        "name": "linear_1_1",
+        "type": {
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": "2"
+                },
+                {
+                  "dimValue": "4"
+                }
+              ]
+            }
+          }
+        }
       },
       {
-        "attribute": [
-          {
-            "ints": [
-              2,
-              2
-            ],
-            "name": "shape",
-            "type": "INTS"
+        "docString": "relu output",
+        "name": "relu_1_2",
+        "type": {
+          "tensorType": {
+            "elemType": 1,
+            "shape": {
+              "dim": [
+                {
+                  "dimValue": "2"
+                },
+                {
+                  "dimValue": "4"
+                }
+              ]
+            }
           }
-        ],
-        "domain": "ai.torchlens.lossy",
-        "input": [
-          "linear_2_3"
-        ],
-        "name": "output_1",
-        "opType": "output",
-        "output": [
-          "output_1"
-        ]
+        }
       }
     ]
   },
-  "irVersion": 8,
+  "irVersion": 10,
   "metadataProps": [
     {
       "key": "torchlens.lossy_export",
@@ -120,8 +268,56 @@
       "value": "false"
     },
     {
+      "key": "torchlens.netron_schema",
+      "value": "2"
+    },
+    {
       "key": "torchlens.capture_honesty",
-      "value": "{\"schema\": \"torchlens.capture_honesty.v1\", \"capture_status\": \"complete\", \"capture_verified\": null, \"capture_verification_reason\": null, \"rescue_rerun\": false, \"structure_only\": false, \"poisoned\": false}"
+      "value": "<capture-honesty-json>"
+    },
+    {
+      "key": "torchlens.capture_outcome",
+      "value": "complete"
+    },
+    {
+      "key": "torchlens.model_class",
+      "value": "Sequential"
+    },
+    {
+      "key": "torchlens.granularity",
+      "value": "module"
+    },
+    {
+      "key": "torchlens.module_depth",
+      "value": "1"
+    },
+    {
+      "key": "torchlens.buffer_policy",
+      "value": "meaningful"
+    },
+    {
+      "key": "torchlens.node_count",
+      "value": "3"
+    },
+    {
+      "key": "torchlens.edge_count",
+      "value": "3"
+    },
+    {
+      "key": "torchlens.function_count",
+      "value": "0"
+    },
+    {
+      "key": "torchlens.omitted_value_count",
+      "value": "0"
+    },
+    {
+      "key": "torchlens.hidden_buffer_count",
+      "value": "0"
+    },
+    {
+      "key": "torchlens.hidden_op_count",
+      "value": "0"
     }
   ],
   "opsetImport": [
@@ -130,5 +326,6 @@
       "version": 1
     }
   ],
-  "producerName": "torchlens"
+  "producerName": "torchlens",
+  "producerVersion": "2.34.1"
 }

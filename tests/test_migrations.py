@@ -21,6 +21,7 @@ MIGRATION_FILES = (
     "from_pyvene.md",
     "from_torchextractor.md",
     "from_fx.md",
+    "coming_from_torchsnooper.md",
 )
 
 OPTIONAL_IMPORTS = {
@@ -31,6 +32,7 @@ OPTIONAL_IMPORTS = {
     "thingsvision": "thingsvision",
     "torchextractor": "torchextractor",
     "torchlens": "torchlens",
+    "torchsnooper": "torchsnooper",
     "transformer_lens": "transformer_lens",
 }
 
