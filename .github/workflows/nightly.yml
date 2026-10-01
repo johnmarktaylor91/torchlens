@@ -133,14 +133,34 @@ jobs:
 
       - name: Install torch and TorchLens
         run: |
+          # torch AND torchvision are pinned as a +cpu pair from the CPU index
+          # in ONE resolve: installing torch from the CPU index and then the
+          # extras from PyPI alone pulled PyPI's CUDA torchvision build, whose
+          # compiled ops do not load against the CPU torch
+          # ("operator torchvision::nms does not exist").
           cat > "${{ runner.temp }}/torch-2.7-constraints.txt" <<'EOF'
-          torch==2.7.*
+          torch==2.7.1+cpu
+          torchvision==0.22.1+cpu
           EOF
-          uv pip install --system -c "${{ runner.temp }}/torch-2.7-constraints.txt" "torch==2.7.*" \
-            --index-url https://download.pytorch.org/whl/cpu
-          uv pip install --system -c "${{ runner.temp }}/torch-2.7-constraints.txt" -e ".[dev,test,tabular]"
+          # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          uv pip install --system -c "${{ runner.temp }}/torch-2.7-constraints.txt" \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,test,tabular]" \
+            "torch==2.7.1+cpu" \
+            "torchvision==0.22.1+cpu"
           uv pip check
-          python -c 'import torch; assert torch.__version__.startswith("2.7."), torch.__version__; print(torch.__version__)'
+          python - <<'PY'
+          import torch
+          import torchvision
+          from torchvision.ops import nms
+
+          assert torch.__version__ == "2.7.1+cpu", torch.__version__
+          assert torchvision.__version__ == "0.22.1+cpu", torchvision.__version__
+          assert nms(torch.tensor([[0.0, 0.0, 1.0, 1.0]]), torch.tensor([1.0]), 0.5).tolist() == [0]
+          print(torch.__version__, torchvision.__version__)
+          PY
 
       - name: Run fast tests
         run: |
@@ -254,7 +274,7 @@ jobs:
         # the old single --deselect here named a test that had been RENAMED,
         # so it silently excluded nothing while claiming the carve-out).
         run: |
-          pytest tests/ -m smoke --ignore-glob="*menagerie*" --ignore=tests/crawler \
+          pytest tests/ -m smoke \
             --cov=torchlens --cov-branch \
             --cov-report=term --cov-report=xml:"${{ runner.temp }}/coverage.xml" \
             --cov-report=json:"${{ runner.temp }}/coverage.json" \
@@ -385,6 +405,13 @@ jobs:
 
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
 
+      - name: Install Graphviz
+        # draw() paths in this job need the dot binary (GraphvizUnavailableError
+        # otherwise); every other rendering job installs it the same way.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+
       - name: Install TorchLens and the ${{ matrix.backend }} preview backend
         run: |
           uv pip install --system -e ".[dev,test,tabular]"
@@ -430,6 +457,13 @@ jobs:
           python-version: "3.11"
 
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+
+      - name: Install Graphviz
+        # draw() paths in this job need the dot binary (GraphvizUnavailableError
+        # otherwise); every other rendering job installs it the same way.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
 
       - name: Every declared extra resolves on every advertised interpreter
         # First leg that resolves ANY extra beyond dev/test/tabular (grind r4,
@@ -815,7 +849,7 @@ jobs:
           for offset in 1 2 3; do
             seed="$(( ${{ github.run_id }} % 1000000000 + offset ))"
             echo "== shuffle seed $seed =="
-            pytest tests/ -m smoke --ignore-glob="*menagerie*" --ignore=tests/crawler \
+            pytest tests/ -m smoke \
               -p randomly --randomly-seed="$seed" --tb=short -q
           done
 

@@ -38,14 +38,35 @@ jobs:
 
       - name: Install torch and TorchLens
         run: |
+          # torch AND torchvision are pinned as a +cpu pair and resolved in ONE
+          # install against the CPU index plus PyPI: the former two-step install
+          # (torch from the CPU index, then the extras from PyPI only) pulled
+          # PyPI's CUDA torchvision build, whose compiled ops do not load
+          # against the CPU torch (lightning -> torchmetrics -> torchvision
+          # import failures in the bridge gate).
           cat > "${{ runner.temp }}/torch-2.7-constraints.txt" <<'EOF'
-          torch==2.7.*
+          torch==2.7.1+cpu
+          torchvision==0.22.1+cpu
           EOF
-          uv pip install --system -c "${{ runner.temp }}/torch-2.7-constraints.txt" "torch==2.7.*" \
-            --index-url https://download.pytorch.org/whl/cpu
-          uv pip install --system -c "${{ runner.temp }}/torch-2.7-constraints.txt" -e ".[dev,test,tabular]"
+          # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          uv pip install --system -c "${{ runner.temp }}/torch-2.7-constraints.txt" \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,test,tabular]" \
+            "torch==2.7.1+cpu" \
+            "torchvision==0.22.1+cpu"
           uv pip check
-          python -c 'import torch; assert torch.__version__.startswith("2.7."), torch.__version__; print(torch.__version__)'
+          python - <<'PY'
+          import torch
+          import torchvision
+          from torchvision.ops import nms
+
+          assert torch.__version__ == "2.7.1+cpu", torch.__version__
+          assert torchvision.__version__ == "0.22.1+cpu", torchvision.__version__
+          assert nms(torch.tensor([[0.0, 0.0, 1.0, 1.0]]), torch.tensor([1.0]), 0.5).tolist() == [0]
+          print(torch.__version__, torchvision.__version__)
+          PY
 
       - name: Install bridge adapters and cairosvg
         # r7 R79 (fable MED, wave-introduced): this gate's comment claimed
@@ -56,8 +77,12 @@ jobs:
         # families it names.
         run: |
           uv pip install --system -c "${{ runner.temp }}/torch-2.7-constraints.txt" \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
             captum sae-lens rsatoolbox cairosvg
           uv pip check
+          python -c 'import lightning, timm, torchvision.ops; print("bridge env imports OK")'
 
       - name: Bridge adapters and cairosvg collision gate (executed floor)
         # The whole point is that these STOP skipping here. Floors are
@@ -264,14 +289,21 @@ jobs:
 
       - name: Install torch and TorchLens
         run: |
+          # Same +cpu torch/torchvision pair recipe as extended-tests above.
           cat > "${{ runner.temp }}/torch-2.7-constraints.txt" <<'EOF2'
-          torch==2.7.*
+          torch==2.7.1+cpu
+          torchvision==0.22.1+cpu
           EOF2
-          uv pip install --system -c "${{ runner.temp }}/torch-2.7-constraints.txt" "torch==2.7.*" \
-            --index-url https://download.pytorch.org/whl/cpu
-          uv pip install --system -c "${{ runner.temp }}/torch-2.7-constraints.txt" -e ".[dev,test,tabular]" netron
+          # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          uv pip install --system -c "${{ runner.temp }}/torch-2.7-constraints.txt" \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,test,tabular]" netron \
+            "torch==2.7.1+cpu" \
+            "torchvision==0.22.1+cpu"
           uv pip check
-          python -c 'import torch; assert torch.__version__.startswith("2.7."), torch.__version__; print(torch.__version__)'
+          python -c 'import torch, torchvision.ops; assert torch.__version__ == "2.7.1+cpu", torch.__version__; print(torch.__version__)'
 
       - name: Vendor-parser suite against latest netron (drift canary)
         continue-on-error: true

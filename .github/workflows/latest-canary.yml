@@ -44,13 +44,19 @@ jobs:
       - name: Install latest CPU test environment
         run: |
           # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          # torchvision is floored so torch and torchvision resolve as a PAIR: on
+          # a day the CPU index has a new torch before its matching torchvision,
+          # an unfloored request backtracks torchvision to the ancient 0.2.0
+          # (no torch pin, no torchvision.ops) instead of picking the newest
+          # torch that has a matching torchvision. The validate step prints the
+          # resolved pair.
           uv pip install --system \
             --index-url https://download.pytorch.org/whl/cpu \
             --extra-index-url https://pypi.org/simple \
             --index-strategy unsafe-best-match \
-            -e ".[dev,tabular]" \
+            -e ".[dev,tabular,viz]" \
             torch \
-            torchvision \
+            "torchvision>=0.18" \
             transformers \
             timm \
             "pydot==4.0.1" \
@@ -79,15 +85,7 @@ jobs:
 
       - name: Run smoke tests and compatibility coverage
         run: |
-          # Exclude the menagerie build subsystem from smoke, matching tests.yml:
-          # tests/test_menagerie_*.py hard-imports pydantic (via
-          # menagerie/schema.py) and tests/crawler/ is the crawler corpus -- both
-          # absent from this .[dev,tabular] env (pydantic is only in .[test]).
-          # This is a py3.11 leg, so it is past the tests/conftest.py < 3.11
-          # auto-skip and needs these explicit --ignore flags to avoid a
-          # collection ModuleNotFoundError. No smoke coverage is lost (no
-          # menagerie or crawler test is smoke-marked).
-          pytest tests/ -m smoke --ignore-glob="*menagerie*" --ignore=tests/crawler --tb=short -q \
+          pytest tests/ -m smoke --tb=short -q \
             --junitxml="${{ runner.temp }}/canary-smoke.junit.xml"
           pytest tests/test_torch_compat.py --tb=short -q
 
