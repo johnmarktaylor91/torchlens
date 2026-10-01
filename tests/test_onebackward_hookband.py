@@ -14,11 +14,21 @@ from __future__ import annotations
 
 import pytest
 import torch
-from torch.autograd.graph import GradientEdge
 
 from torchlens.utils._torch_compat import HAS_GRADIENT_EDGE, HAS_NODE_PREHOOK
 
-pytestmark = pytest.mark.smoke
+if HAS_GRADIENT_EDGE:
+    from torch.autograd.graph import GradientEdge
+else:  # torch 2.1: GradientEdge postdates the floor (see HAS_GRADIENT_EDGE).
+    GradientEdge = None  # type: ignore[assignment,misc]
+
+pytestmark = [
+    pytest.mark.smoke,
+    pytest.mark.skipif(
+        not (HAS_GRADIENT_EDGE and HAS_NODE_PREHOOK),
+        reason="GradientEdge / Node.register_prehook postdate the torch 2.1 floor",
+    ),
+]
 
 
 def _one_node_graph() -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:

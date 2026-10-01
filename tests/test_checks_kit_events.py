@@ -16,12 +16,23 @@ import warnings
 import pytest
 import torch
 import torch.nn as nn
-from torch.amp import GradScaler
 
 import torchlens.checks as tc
 from torchlens.observability import EventStream, ObserverEvent
+from torchlens.utils._torch_compat import HAS_AMP_GRADSCALER
 
-pytestmark = pytest.mark.smoke
+if HAS_AMP_GRADSCALER:
+    from torch.amp import GradScaler
+else:  # torch 2.1-2.2: the device-agnostic GradScaler postdates the floor.
+    GradScaler = None  # type: ignore[assignment,misc]
+
+pytestmark = [
+    pytest.mark.smoke,
+    pytest.mark.skipif(
+        not HAS_AMP_GRADSCALER,
+        reason="torch.amp.GradScaler (device-agnostic) postdates the torch 2.1 floor",
+    ),
+]
 
 
 def _run_scaled_loop(session: tc.ChecksSession, model: nn.Module, optimizer, scaler) -> None:  # noqa: ANN001
