@@ -2482,15 +2482,25 @@ def _paddle_trace_intermediate_signatures(
     groups: dict[PaddleIntermediateSignature, list[Any]] = defaultdict(list)
     # Replay-side signatures speak RAW label space (the tap observer labels
     # values with ``_label_raw``). Recurrence grouping rewrites ``op.parents``
-    # to final pass-qualified labels, so parents are resolved back to raw
-    # space before signature construction; an unresolvable parent keeps its
-    # literal label and simply never matches.
-    final_to_raw = {
-        str(getattr(op, "label", "")): str(getattr(op, "_label_raw", ""))
-        for op in getattr(trace, "layer_list", ())
-        if isinstance(getattr(op, "label", None), str)
-        and isinstance(getattr(op, "_label_raw", None), str)
-    }
+    # to final labels -- pass-qualified for a multi-pass referenced layer,
+    # but the BARE layer label (torch parity) for a single-pass one -- so
+    # parents are resolved back to raw space before signature construction.
+    # Both final spellings must resolve: the pass-qualified ``op.label`` key
+    # always, and the bare ``op.layer_label`` key too for single-pass ops
+    # (unambiguous there; omitted for multi-pass ops, where the bare label
+    # would collide across passes and ``op.parents`` never uses it anyway).
+    # An unresolvable parent keeps its literal label and simply never matches.
+    final_to_raw: dict[str, str] = {}
+    for op in getattr(trace, "layer_list", ()):
+        raw_label = getattr(op, "_label_raw", None)
+        if not isinstance(raw_label, str):
+            continue
+        label = getattr(op, "label", None)
+        if isinstance(label, str):
+            final_to_raw[label] = raw_label
+        layer_label = getattr(op, "layer_label", None)
+        if isinstance(layer_label, str) and int(getattr(op, "num_passes", 1)) == 1:
+            final_to_raw[layer_label] = raw_label
     for op in getattr(trace, "layer_list", ()):
         if bool(getattr(op, "is_input", False)) or not bool(
             getattr(op, "has_saved_activation", False)

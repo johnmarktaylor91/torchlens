@@ -202,13 +202,24 @@ def _assert_named_sharding(value: Any, *, axis_name: str, device_count: int) -> 
     assert tuple(sharding.spec) == (axis_name,)
 
 
+_CAPTURE_OPTIONS_FIELD_NAMES = frozenset(tl.options.CaptureOptions().as_dict())
+
+
 def _trace(**kwargs: Any) -> Any:
     """Trace the shared tiny JAX model.
 
     Parameters
     ----------
     **kwargs
-        Public trace keyword overrides.
+        Public trace keyword overrides. Any name that is a ``CaptureOptions``
+        field (``layers_to_save``, ``save_grads``, ...) is routed through
+        ``capture=CaptureOptions(...)`` -- matching ``_trace_jax`` in
+        ``test_jax_backend_capture.py`` and ``_trace`` in
+        ``test_tinygrad_backend_capture.py``. The sprint removed every such
+        flat kwarg from ``trace()``'s own signature, so passing one directly
+        lands in ``**forward_kwargs`` and raises an unrelated "keyword(s) it
+        does not route" error instead of exercising the backend option it
+        names.
 
     Returns
     -------
@@ -216,6 +227,12 @@ def _trace(**kwargs: Any) -> Any:
         Captured JAX trace.
     """
 
+    capture_kwargs = {
+        name: kwargs.pop(name) for name in list(kwargs) if name in _CAPTURE_OPTIONS_FIELD_NAMES
+    }
+    if capture_kwargs:
+        assert "capture" not in kwargs, "combine capture= and flat capture kwargs by hand"
+        kwargs["capture"] = tl.options.CaptureOptions(**capture_kwargs)
     return tl.trace(
         cast(Any, _model),
         (_params(), jnp.ones((2, 3), dtype=jnp.float32)),
@@ -520,9 +537,11 @@ def test_jax_old_style_prng_key_tlspec_round_trips_as_uint32_array(tmp_path: Pat
     manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
     loaded = tl.load(path)
     loaded_key = _first_saved_op(loaded).out
-    input_entries = [
-        entry for entry in manifest["tensors"] if entry.get("label") == "input_1_1_raw:1"
-    ]
+    # The internal ``_raw`` capture sentinel is stripped from every preview
+    # layer label before it reaches a public surface like the portable
+    # manifest (see "strip the internal _raw sentinel from preview layer
+    # labels"); the real final label is bare of it.
+    input_entries = [entry for entry in manifest["tensors"] if entry.get("label") == "input_1_1:1"]
 
     assert str(loaded_key.dtype) == "uint32"
     assert loaded_key.shape == (2,)
@@ -821,12 +840,24 @@ def test_jax_rejects_nested_jaxpr_primitives(
 ) -> None:
     """Nested jaxpr control-flow primitives should name the unsupported primitive."""
 
+    # ``jax_control_flow`` is a ``CaptureOptions`` field, not a ``trace()``
+    # top-level parameter; a bare flat kwarg lands in ``**forward_kwargs`` and
+    # raises an unrelated "keyword(s) it does not route" error instead of
+    # exercising the control-flow rejection (see ``_trace``'s docstring above
+    # and ``_trace_jax`` in ``test_jax_backend_capture.py`` for the same
+    # established routing).
+    capture_kwargs = {
+        name: value for name, value in kwargs.items() if name in _CAPTURE_OPTIONS_FIELD_NAMES
+    }
+    trace_kwargs = {name: value for name, value in kwargs.items() if name not in capture_kwargs}
+    if capture_kwargs:
+        trace_kwargs["capture"] = tl.options.CaptureOptions(**capture_kwargs)
     with pytest.raises(ValueError, match=pattern):
         tl.trace(
             cast(Any, fn),
             (_params(), jnp.ones((2, 3), dtype=jnp.float32)),
             backend="jax",
-            **kwargs,
+            **trace_kwargs,
         )
 
 

@@ -2774,9 +2774,14 @@ def _mlx_trace_intermediate_signatures(
     -----
     Replay-side signatures speak RAW label space (the tap observer labels
     values with ``_label_raw``), so recurrence-grouped parents (rewritten to
-    final pass-qualified labels at finalize) are resolved back to raw space
-    here; without that, every grouped intermediate would silently fail to
-    match its replay candidate.
+    final labels at finalize -- the pass-qualified ``op.label`` for a
+    multi-pass referenced layer, but the BARE ``op.layer_label`` (torch
+    parity) for a single-pass one) are resolved back to raw space here. Both
+    final spellings must resolve: the pass-qualified key always, and the
+    bare key too for single-pass ops (unambiguous there; omitted for
+    multi-pass ops, where the bare label would collide across passes and
+    ``parents`` never uses it anyway). Without this, every grouped
+    intermediate would silently fail to match its replay candidate.
     """
 
     final_to_raw: dict[str, str] = {}
@@ -2785,10 +2790,15 @@ def _mlx_trace_intermediate_signatures(
         if source_trace is None:
             continue
         for trace_op in getattr(source_trace, "layer_list", ()):
-            label = getattr(trace_op, "label", None)
             label_raw = getattr(trace_op, "_label_raw", None)
-            if isinstance(label, str) and isinstance(label_raw, str):
+            if not isinstance(label_raw, str):
+                continue
+            label = getattr(trace_op, "label", None)
+            if isinstance(label, str):
                 final_to_raw[label] = label_raw
+            layer_label = getattr(trace_op, "layer_label", None)
+            if isinstance(layer_label, str) and int(getattr(trace_op, "num_passes", 1)) == 1:
+                final_to_raw[layer_label] = label_raw
         break
     grouped: dict[_MLXIntermediateSignature, list[Any]] = defaultdict(list)
     for op in ops:

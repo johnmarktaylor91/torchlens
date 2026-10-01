@@ -282,9 +282,9 @@ def relabel_edge_metadata(
     -------
     None
         ``parents``, ``children``, ``parent_arg_positions``, ``_edge_uses``,
-        and the raw-label-bearing lineage sets (``input_ancestors``,
-        ``output_descendants``, ``root_ancestors``, ``internal_source_ancestors``)
-        are updated in place.
+        and the raw-label-bearing lineage fields (``input_ancestors``,
+        ``output_descendants``, ``root_ancestors``, ``internal_source_ancestors``,
+        ``internal_source_parents``) are updated in place.
     """
 
     op_log.parents = [
@@ -301,12 +301,17 @@ def relabel_edge_metadata(
     # add the still-raw ``trace.input_layers``/``output_layers`` seeds) --
     # both must follow every other raw-label-bearing field through this
     # same raw-to-final substitution, or they survive postprocessing and
-    # trip the ``graph_ordering`` invariant.
+    # trip the ``graph_ordering`` invariant. ``internal_source_parents``
+    # carries the same raw-label-bearing shape (torch relabels it through
+    # the identical conditional mapping, see ``labeling._LIST_FIELDS_TO_RENAME``)
+    # and was missing here, letting a raw label like ``const_1_2_raw`` survive
+    # postprocessing uncaught.
     for lineage_field in (
         "input_ancestors",
         "output_descendants",
         "root_ancestors",
         "internal_source_ancestors",
+        "internal_source_parents",
     ):
         lineage = getattr(op_log, lineage_field, None)
         if lineage:
