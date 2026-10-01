@@ -269,7 +269,18 @@ def _retention_session(profile: RetentionProfile) -> CaptureSession:
 
 
 def test_activation_escrow_spills_to_temp_and_materializes_exact_value() -> None:
-    """Detached activation escrow crosses its RAM budget via measured temp spill."""
+    """Detached activation escrow crosses its RAM budget via measured temp spill.
+
+    The escrowed tensor MUST carry the capture-time TorchLens sidecar (a
+    ``set_tensor_label`` stamp pins the payload's own ``UntypedStorage`` on
+    ``TensorMeta.label_storage``): a bare-constructor tensor exercises the
+    spill line but can never fail it, because the historical crash ("Cannot
+    save multiple tensors or storages that view the same data as different
+    types") was the sidecar riding ``torch.save``. This is B2's negative
+    control -- without the sidecar-stripping spill fix, this test fails.
+    """
+
+    from torchlens.backends.torch._tl import set_tensor_label
 
     session = _retention_session(
         RetentionProfile(
@@ -280,6 +291,7 @@ def test_activation_escrow_spills_to_temp_and_materializes_exact_value() -> None
         )
     )
     tensor = torch.arange(8, dtype=torch.float32)
+    set_tensor_label(tensor, "arange_1_1")
     session.escrow_candidate(1, tensor)
 
     payload = session.activation_escrow[1]

@@ -120,7 +120,9 @@ _TL_MOVED_NEEDLE_NAMES = (
     "intervening",
     "replay",  # prefix also covers replay_from
     "rerun",
-    "summary",
+    # "summary" left this needle list 2026-08-26 (megasprint lane A07, summary
+    # memo A8): tl.summary is UN-removed as the first-class one-call front
+    # door, so the spelling is canonical again.
     "show_model_graph",
     "draw_backward",
     "draw_combined",
@@ -241,11 +243,6 @@ _ALLOWED: dict[str, tuple[frozenset[str], str]] = {
         frozenset({"tl_moved"}),
         "audit checklist/prose records the former record_span spelling as removed",
     ),
-    "sprint/briefs/A07.md": (
-        frozenset({"tl_moved"}),
-        "lane brief quotes the megaplan A07 mission verbatim; that lane's "
-        "mandate IS the tl.summary un-deprecation, so the brief must name it",
-    ),
     "tests/release_goldens/generators/write216.py": (
         frozenset({"paper_era"}),
         "harvest-time provenance script committed AS RUN: it executes under the "
@@ -299,6 +296,11 @@ _ALLOWED: dict[str, tuple[frozenset[str], str]] = {
     "tests/test_removed_spelling_lint.py": (
         frozenset({"ALL"}),
         "this lint's own ledger",
+    ),
+    "tests/test_packaging_docs_a12.py": (
+        frozenset({"tl_moved"}),
+        "sibling removed-spelling scanner over docs/examples cells; naming "
+        "old spellings (tl.StreamingOptions needle) is its job",
     ),
 }
 

@@ -233,9 +233,13 @@ def test_ci_workflows_pin_torch_and_scope_lint_to_owned_paths() -> None:
     # a ruff rewrite would make that gate permanently red. That half is pinned to
     # the self-declaring generated set by
     # test_schema_lockstep.py::test_ruff_excludes_every_generated_artifact.
+    # tests/release_goldens is the harvested-corpus provenance dir (P05 request,
+    # landed by the A12 packaging batch): same generated-data doctrine as the
+    # menagerie/ rows -- the harvest is the authority, not ruff.
     assert excluded == {
         "menagerie",
         "tests/crawler",
+        "tests/release_goldens",
         "tests/test_menagerie_*.py",
         "torchlens/data_classes/_schema_bindings.py",
         "torchlens/ir/op_record_manifest.py",

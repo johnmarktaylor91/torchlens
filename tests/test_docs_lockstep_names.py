@@ -15,7 +15,7 @@ pytestmark = pytest.mark.smoke
 # DECLARED-surface constant (cited by the reachable-surface gate in
 # tests/oracles/test_oracle_w0_surface.py and the denominator 3-root lint in
 # tests/oracles/test_oracle_w0_lints.py -- one cites the other, never forks).
-PUBLIC_SURFACE_SIZE = 112
+PUBLIC_SURFACE_SIZE = 114
 PUBLIC_SURFACE_DOCS = (
     "CLAUDE.md",
     "torchlens/AGENTS.md",

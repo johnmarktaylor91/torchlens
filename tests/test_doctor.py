@@ -38,14 +38,29 @@ def test_doctor_returns_sane_report() -> None:
 
 
 def test_doctor_surfaces_every_runtime_capability() -> None:
-    """Doctor capability row stays in lockstep with defined capability flags."""
+    """Doctor capability surface stays in lockstep with defined capability flags.
+
+    The row cell carries the grouped absences-first summary (bounded-reprs
+    doctrine, sumfam wave-0 item 2); the full ``name=value`` dump is served by
+    the detail accessor the row points at. Lockstep means: the accessor covers
+    every defined flag, and the row itself names every absent flag plus the
+    accessor spelling, so no capability can go silently invisible.
+    """
 
     report = tl.utils.doctor()
     row = next(check for check in report.checks if check.name == "runtime capabilities")
     expected = set(get_torch_capability_snapshot()) | set(get_tf_capability_snapshot())
-    surfaced = {part.split("=", 1)[0] for part in row.detail.split(";")[0].split(", ")}
 
-    assert surfaced == expected
+    snapshot = tl.utils.capability_snapshot()
+    assert set(snapshot) == expected
+    assert report.capability_snapshot() == snapshot
+
+    absent = sorted(name for name, available in snapshot.items() if not available)
+    present = len(snapshot) - len(absent)
+    assert row.detail.split(";")[0] == f"{present}/{len(snapshot)} capabilities present"
+    for name in absent:
+        assert name in row.detail
+    assert "tl.utils.capability_snapshot()" in row.detail
 
 
 def test_doctor_warns_on_stale_torch_wrapper_binding(monkeypatch: pytest.MonkeyPatch) -> None:

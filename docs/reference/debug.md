@@ -22,6 +22,8 @@ The report is a tuple of `DoctorCheck(name, status, detail)` rows, one per probe
 - `pytorch` — the installed torch version.
 - `runtime capabilities` — the feature-detected capability snapshot (the same named
   `HAS_*` flags surfaced by `tl.compat.report()`; graceful degradations flip these).
+  The row shows the grouped absences-first summary; the full `flag -> available`
+  mapping lives on the detail accessors below.
 - `torch wrapper bindings` — warning-only detector for stale torch namespace
   attributes after wrap/unwrap cycles (cannot see closure-bound local aliases).
 - `cuda` — device availability and count (`SKIP` on CPU-only hosts).
@@ -41,6 +43,33 @@ A `FAIL` row names the missing dependency or broken probe in `detail`; `WARN` ro
 degraded-but-usable states. For per-model compatibility questions (unsupported tensor
 variants, distributed state, wrapper coverage), use `tl.compat.report(model, x)`
 instead — `doctor()` checks the environment, `compat.report()` checks one model.
+
+### Capability snapshot accessors
+
+`tl.utils.capability_snapshot()` (DOCUMENTED-UNSTABLE spelling) returns the full
+runtime capability snapshot as a `flag -> available` mapping — every feature-detected
+`HAS_*` flag, torch plus the optional preview backends. The same mapping is served as
+a detail accessor on both report objects: `DoctorReport.capability_snapshot()` and
+`CompatReport.capability_snapshot()`. Report rows and reprs deliberately show only the
+grouped summary (absences are the signal; the full `name=value` dump was a
+~1,900-character line), rendered by the one shared formatter
+`tl.utils.format_capability_summary(snapshot)` (DOCUMENTED-UNSTABLE spelling), which
+returns `present/total capabilities present` plus the sorted absent flag names.
+
+```python
+import torchlens as tl
+
+snapshot = tl.utils.capability_snapshot()
+print(all(isinstance(v, bool) for v in snapshot.values()))
+print(tl.utils.format_capability_summary({"HAS_A": True, "HAS_B": False}))
+```
+
+Output:
+
+```text
+True
+1/2 capabilities present; absent: HAS_B
+```
 
 ## `audit_trace`
 
@@ -330,6 +359,39 @@ Output:
 
 ```text
 ['source_file:line', 'op_count', 'total_cost', 'pct_total'] flops
+```
+
+## Pandas-free row cores (`*_rows`)
+
+`tl.debug.compare_rows(trace_a, trace_b, *, rtol=1e-5, atol=1e-8)`,
+`tl.debug.dead_neurons_rows(trace, *, dim=1, threshold=0.0)`,
+`tl.debug.gradient_flow_audit_rows(trace, *, bwd=None, vanishing_threshold=1e-7,
+exploding_threshold=1e4)`, and `tl.debug.hot_path_rows(trace, by="flops")`
+(DOCUMENTED-UNSTABLE spellings) are the pandas-free cores of
+[`compare`](#compare), [`dead_neurons`](#dead_neurons),
+[`gradient_flow_audit`](#gradient_flow_audit), and [`hot_path`](#hot_path).
+Each returns `(rows, attrs)` — a list of plain per-row dicts plus the same
+`attrs` mapping the DataFrame view carries (aggregate counts, parameters,
+capture-honesty facts) — importable and runnable without pandas. The
+DataFrame helpers are thin views over these cores, so both spellings always
+report identical facts; agent/MCP consumers use the row cores directly.
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+model = nn.ReLU()
+left = tl.trace(model, torch.tensor([[-1.0, 2.0]]))
+right = tl.trace(model, torch.tensor([[-1.0, 3.0]]))
+rows, attrs = tl.debug.compare_rows(left, right)
+print(len(rows), attrs["value_diverged"])
+```
+
+Output:
+
+```text
+2 2
 ```
 
 ## `infer_input_shape`

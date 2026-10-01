@@ -873,17 +873,43 @@ def test_combination_plain_structure_only_absent_legal() -> None:
 
 @pytest.mark.smoke
 def test_tamper_structure_only_with_payload_refuses_typed(tmp_path) -> None:
-    """M-C2: a marked trace carrying a retained value payload refuses."""
+    """M-C2: a marked trace carrying a retained value payload refuses.
+
+    BOTH layers are provoked since the A08 persistence-honesty lane: the
+    write-side mirror refuses to SAVE a forged-marker-over-payloads trace at
+    all (never writes what its own load would refuse), and the load-side
+    M-C2 gate -- provoked here by tampering the marker into an already-written
+    artifact's metadata -- stays strict and unchanged.
+    """
 
     assert FORGERY_SURFACE_LEDGER["Trace.structure_only"] == "validated_refuse_typed"
     trace = _tiny_trace()  # an ordinary VALUE capture with retained payloads
     trace.structure_only = True  # forged marker over real payloads
-    refusal = _tampered_refuses(
-        trace,
-        tmp_path,
-        "structure_only_payload",
-        field="Trace.structure_only",
-    )
+    # Layer 1 (save-side mirror, WT1 A-IV item 22/W3): the forged save refuses
+    # typed BEFORE any bytes land.
+    save_path = tmp_path / "forged_marker.tlspec"
+    with pytest.raises(TorchLensIOError, match="structure-only"):
+        tl.save(trace, str(save_path))
+    assert not save_path.exists()
+
+    # Layer 2 (load-side M-C2, unchanged): write the SAME capture honestly,
+    # then tamper the marker into the persisted metadata on disk.
+    import pickle as _pickle
+
+    trace.structure_only = False
+    honest_path = tmp_path / "structure_only_payload_tampered.tlspec"
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        tl.save(trace, str(honest_path))
+    metadata_path = honest_path / "metadata.pkl"
+    state = _pickle.loads(metadata_path.read_bytes())
+    state["structure_only"] = True
+    metadata_path.write_bytes(_pickle.dumps(state))
+    with pytest.raises(TorchLensIOError) as excinfo:
+        tl.load(str(honest_path))
+    refusal = excinfo.value
+    assert refusal.fields["field"] == "Trace.structure_only"
+    assert "Remedy:" in str(refusal)
     assert refusal.fields["code"] == "artifact_structure_only_incoherent"
     assert refusal.fields["reason"] == "value_payload_present"
 

@@ -41,7 +41,6 @@ import contextlib
 import ctypes
 import importlib
 import inspect
-import os
 import sys
 import types
 import warnings
@@ -1596,9 +1595,13 @@ def mark_torch_capability_missing(capability_name: str, detail: str) -> None:
     """Mark a torch capability absent and emit at most one opt-out warning.
 
     Setting the ``TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS`` environment
-    variable to any non-empty value suppresses the warning (the flag still
-    flips, and the degradation stays visible through
-    ``tl.compat.report()`` / ``tl.utils.doctor()``). This is the knob's only
+    variable to a closed-vocabulary true spelling (``1``/``true``/``yes``/
+    ``on``) suppresses the warning (the flag still flips, and the degradation
+    stays visible through ``tl.compat.report()`` / ``tl.utils.doctor()``);
+    false spellings and unset keep the warning, and unrecognized values
+    refuse (``env_flag_invalid``) -- the historical any-non-empty-value
+    truthiness meant ``=false`` SUPPRESSED, the exact silent-inversion class
+    the closed_bool_env doctrine exists to kill. This is the knob's only
     documentation-of-record (grind b7 R47-7); keep it in sync with the
     ``_CAPABILITY_WARNING_ENV`` constant above.
 
@@ -1618,7 +1621,9 @@ def mark_torch_capability_missing(capability_name: str, detail: str) -> None:
     if capability_name not in _CAPABILITY_ATTR_SET:
         raise ValueError(f"unknown torch capability flag: {capability_name}")
     globals()[capability_name] = False
-    if os.environ.get(_CAPABILITY_WARNING_ENV):
+    from .env_flags import closed_bool_env
+
+    if closed_bool_env(_CAPABILITY_WARNING_ENV):
         return
     if capability_name in _warned_missing_capabilities:
         return

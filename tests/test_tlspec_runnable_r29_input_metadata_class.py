@@ -166,6 +166,12 @@ def test_r29_derived_view_layout_read_is_unverifiable(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
+@pytest.mark.filterwarnings(
+    # A08 random-role-init disclosure (runnable_random_init_run): this test
+    # exercises a weight-free runnable run DELIBERATELY; the warning is the
+    # feature under test elsewhere (tests/test_persist_honesty_runnable_random.py).
+    "default:This runnable artifact carries no model weights"
+)
 def test_r29_metadata_oblivious_model_does_not_over_trigger(tmp_path: Path) -> None:
     """A model that never reads the new accessors stays VERIFIED even for exotic inputs."""
 

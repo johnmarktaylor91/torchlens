@@ -16,7 +16,7 @@ from torchlens import trace as trace_fn
 from torchlens._io import TorchLensIOError, streaming as streaming_module
 from torchlens._io.manifest import Manifest
 from torchlens.data_classes.trace import Trace
-from torchlens.errors import TorchLensPostfuncError
+from torchlens.errors import ArgumentConflictError, TorchLensPostfuncError
 from torchlens.io import cleanup_tmp, detect_tlspec_format
 from torchlens.validation import validate_tlspec
 
@@ -421,10 +421,8 @@ def test_out_sink_receives_saved_tensors_and_is_mutually_exclusive(
     assert all(isinstance(label, str) and label for label, _ in received)
     assert all(isinstance(tensor, torch.Tensor) for _, tensor in received)
 
-    with pytest.raises(
-        ValueError, match="choose either bundle_path/save_outs_to or out_callback/out_sink"
-    ):
-        model2, inputs2 = _make_streaming_model()
+    model2, inputs2 = _make_streaming_model()
+    with pytest.raises(ArgumentConflictError) as exc_info:
         trace_fn(
             model2,
             inputs2,
@@ -432,6 +430,7 @@ def test_out_sink_receives_saved_tensors_and_is_mutually_exclusive(
                 bundle_path=tmp_path / "stream_bundle.tl", out_callback=_sink
             ),
         )
+    assert exc_info.value.fields["code"] == "output_sink_conflict"
 
 
 def test_selective_streaming_save_writes_selected_payloads(tmp_path: Path) -> None:

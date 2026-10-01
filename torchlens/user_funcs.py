@@ -25,8 +25,8 @@ import stat
 import tempfile
 import time
 import warnings
-from collections.abc import Callable, Iterable, Sequence
-from dataclasses import replace
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import fields as dataclass_fields, replace
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -146,6 +146,7 @@ from .options import (
 from .types import ActivationPostfunc, GradientPostfunc
 from .utils._torch_compat import is_dynamo_compiled_callable
 from .utils.display import _vprint, ensure_trace_visualizer_dir, warn_parallel
+from .utils.env_flags import closed_bool_env
 from .utils.introspection import _get_code_context
 from .utils.tensor_utils import SaveMode
 from .visualization.code_panel import (
@@ -1119,6 +1120,232 @@ def _intervention_spec_from_hook_plan(hook_plan: Any) -> InterventionSpec | None
     return spec
 
 
+# Capture-cache key INVERSION (M(oracles) item 6; listA row 26). The key was a
+# hand-enumerated include-list, so semantic knobs added later (raise_on_nan,
+# track_nonfinite, save_budget, ...) silently fell outside it and a warm cache
+# served captures that never armed them -- fail-open on safety options. The
+# key now covers EVERY CaptureOptions field by default: fields below in
+# CAPTURE_CACHE_KEY_CURATED are represented by hand-built entries in the
+# config dict (richer fragments than a bare value); fields in
+# CAPTURE_CACHE_KEY_NEUTRAL are declared session-neutral WITH A REASON; every
+# other field -- including any field added in the future -- is auto-included
+# by the sweep at key-assembly time. A new field defaults INTO the key: a
+# spurious miss is the safe direction, a false hit is the failure mode this
+# inversion exists to kill.
+CAPTURE_CACHE_KEY_CURATED: frozenset[str] = frozenset(
+    {
+        "layers_to_save",
+        "save_raw_input",
+        "output_transform",
+        "output_style",
+        "output_head",
+        "save_raw_output",
+        "layer_visualizers",
+        "save_visualizations",
+        "keep_orphans",
+        "output_device",
+        "save_arg_values",
+        "save_grads",
+        "capture_tensor_grad_hooks",
+        "save_code_context",
+        "save_rng_states",
+        "random_seed",
+        "source_context_lines",
+        "optimizer",
+        "compute_input_output_distances",
+        "detach_saved_activations",
+        "recurrence_detection",
+        "intervention_ready",
+        "capture_container_structure",
+        "hooks",
+        "backward_ready",
+        "inference_only",
+        "module_filter",
+        "stop_after",
+        "jax_control_flow",
+        "jax_max_control_flow_unroll",
+        "module_identity_mode",
+        "payload_policy",
+        "save_preview",
+        "structure_only",
+    }
+)
+
+CAPTURE_CACHE_KEY_NEUTRAL: dict[str, str] = {
+    "batch_render": "presentation-only; re-stamped on every cache hit",
+    "cache": "the cache machinery itself, not capture content",
+    "cache_dir": "cache location, not capture content",
+    "unwrap_when_done": "post-capture global wrapper lifecycle; trace content identical",
+    "verbose": "console progress printing only",
+}
+
+
+def _sweep_option_fields_into_cache_config(
+    cache_config: dict[str, Any],
+    options_obj: Any,
+    *,
+    prefix: str,
+    curated: frozenset[str] = frozenset(),
+    neutral: Mapping[str, str] | None = None,
+) -> None:
+    """Auto-include every undeclared dataclass option field into the cache key.
+
+    Parameters
+    ----------
+    cache_config:
+        Mutable cache-key config being assembled.
+    options_obj:
+        Options dataclass instance to sweep.
+    prefix:
+        Namespace prefix for swept entries.
+    curated:
+        Field names already represented by hand-built config entries.
+    neutral:
+        Field-name -> reason ledger of declared session-neutral fields.
+    """
+
+    neutral_names = set(neutral or ())
+    for option_field in dataclass_fields(options_obj):
+        field_name = option_field.name
+        if field_name.startswith("_") or field_name in curated or field_name in neutral_names:
+            continue
+        field_value = getattr(options_obj, field_name)
+        if isinstance(field_value, Path):
+            field_value = str(field_value)
+        cache_config[f"{prefix}:{field_name}"] = _stable_cache_fragment(field_value)
+
+
+# list-A row 30 latch: once-per-process disclosure that train-mode tracing
+# advances norm running statistics. Process-global by design ("warn once");
+# tests that assert the warning must save and restore this flag.
+_BATCHNORM_TRAIN_STATS_WARNED = False
+
+
+def _warn_once_train_mode_running_stats(model: nn.Module) -> None:
+    """Disclose (once per process) that this capture mutates running stats.
+
+    Parameters
+    ----------
+    model:
+        Model about to run its real forward under capture.
+
+    Returns
+    -------
+    None
+        Warns with code ``batchnorm_train_stats_mutated`` and latches the
+        process-global flag when a train-mode norm layer tracking running
+        statistics is found; otherwise a no-op that leaves the flag unset
+        (a later capture of a mutating model still discloses).
+    """
+
+    global _BATCHNORM_TRAIN_STATS_WARNED
+    from torch.nn.modules.batchnorm import _BatchNorm
+    from torch.nn.modules.instancenorm import _InstanceNorm
+
+    mutating = [
+        module
+        for module in model.modules()
+        if isinstance(module, (_BatchNorm, _InstanceNorm))
+        and module.training
+        and getattr(module, "track_running_stats", False)
+        and getattr(module, "running_mean", None) is not None
+    ]
+    if not mutating:
+        return
+    _BATCHNORM_TRAIN_STATS_WARNED = True
+    from .errors import TorchLensWarning as _TorchLensWarning
+
+    warnings.warn(
+        _TorchLensWarning(
+            f"tracing runs the model's REAL forward: {len(mutating)} norm "
+            "layer(s) in train mode with track_running_stats=True updated "
+            "their running statistics in place during this capture "
+            "(running_mean/running_var advance under momentum, even inside "
+            "torch.no_grad or inference_only=True). This disclosure fires "
+            "once per process. "
+            "Remedy: call model.eval() before tracing for observational "
+            "captures (model.train() restores the mode), or snapshot "
+            "model.state_dict() beforehand to roll the statistics back; "
+            "training-through-trace users can ignore this",
+            code="batchnorm_train_stats_mutated",
+        ),
+        stacklevel=2,
+    )
+
+
+def _release_preparation_after_failed_capture(model: nn.Module) -> None:
+    """Strip TorchLens preparation from a model whose capture failed.
+
+    A FAILED capture must leave the model clean (pollution-free instance
+    forwards, picklable) regardless of the success-path lifecycle: the
+    persistent forward decorations exist to make the NEXT capture cheap, and
+    after a failure the honest baseline is "as if never traced". State the
+    partial forward already mutated (e.g. norm running statistics) is NOT
+    rolled back; that boundary is documented at the failure warning.
+
+    Parameters
+    ----------
+    model:
+        Model whose capture attempt raised. Releasing an unprepared model is
+        a no-op, so chunked fan-outs that already released on an inner
+        failure are safe.
+
+    Returns
+    -------
+    None
+        The model is released in place; a secondary release failure warns
+        coded (``failed_capture_release_incomplete``) and never masks the
+        capture exception.
+    """
+
+    from .backends.torch.model_prep import release_model
+
+    try:
+        release_model(model)
+    except CaptureContextError as refusal:
+        if refusal.fields.get("code") == "release_during_active_capture":
+            # A NESTED capture failed while an outer capture still owns the
+            # model's instrumentation (e.g. tl.trace called from a forward
+            # hook): releasing here would strip the module metadata the live
+            # capture is reading. The refusal is the guard working; the outer
+            # capture's own failure/teardown path owns the release, so
+            # nothing leaks by skipping.
+            return
+        _warn_failed_capture_release_incomplete(refusal)
+    except Exception as release_exc:
+        _warn_failed_capture_release_incomplete(release_exc)
+
+
+def _warn_failed_capture_release_incomplete(release_exc: BaseException) -> None:
+    """Disclose a secondary failure while releasing after a failed capture.
+
+    Parameters
+    ----------
+    release_exc:
+        The exception the release raised.
+
+    Returns
+    -------
+    None
+        Warns coded; never raises (the capture exception must propagate).
+    """
+
+    from .errors import TorchLensWarning as _TorchLensWarning
+
+    warnings.warn(
+        _TorchLensWarning(
+            "TorchLens could not fully remove its instrumentation from "
+            f"the model after the failed capture "
+            f"({type(release_exc).__name__}: {release_exc}); the model may "
+            "keep instance-level forward wrappers and fail to pickle. "
+            "Remedy: call tl.release_model(model) once the underlying "
+            "condition is resolved",
+            code="failed_capture_release_incomplete",
+        ),
+        stacklevel=4,
+    )
+
+
 def _warn_zero_match_capture_selectors(
     trace: Trace,
     *,
@@ -1176,7 +1403,7 @@ def _warn_zero_match_capture_selectors(
         annotations = getattr(trace, "annotations", None)
         if not isinstance(annotations, dict):
             return
-        from ._io.scrub import _relativize_path_literals
+        from ._io._source_privacy import _relativize_path_literals
 
         # R62: this ledger persists at every save level, so a selector repr
         # embedding an absolute host path (e.g. a file-payload predicate) must
@@ -1482,6 +1709,7 @@ def _run_model_and_save_specified_outs(
     save_predicate: PredicateFn | None = None,
     intervene_predicate: InterventionPredicate | None = None,
     halt_predicate: HaltPredicateFn | None = None,
+    _halt_from_stop_after: bool = False,
     lookback: int = 0,
     lookback_payload_policy: str = "metadata_only",
     retain_output_parents_for_layers_to_save: bool = False,
@@ -1963,7 +2191,10 @@ def _run_model_and_save_specified_outs(
             module_intervene_selector or getattr(intervene_predicate, "selector", None)
         ),
         intervene_direction=getattr(warning_intervene_decision, "direction", None),
-        halt_selector=halt_predicate,
+        # stop_after-compiled halts carry their OWN provenance-split never-fired
+        # policy at the trace entry (typed refusal / coded warning); the generic
+        # halt zero-match warning would double-disclose ahead of that refusal.
+        halt_selector=None if _halt_from_stop_after else halt_predicate,
         layers_to_save_request=_selective_layers_to_save_request,
     )
     return trace
@@ -2501,9 +2732,9 @@ def trace(
             result = detector(model, input_args, **autoroute_kwargs)
             if result is not None:
                 return cast("Trace", result)
-    if os.environ.get("TORCHLENS_AUTO") == "1":
+    if closed_bool_env("TORCHLENS_AUTO"):
         raise CaptureContextError(
-            "TORCHLENS_AUTO=1 requested an unsupported implicit capture mode",
+            "TORCHLENS_AUTO requested an unsupported implicit capture mode",
             code="auto_environment_unsupported",
             remedy="unset TORCHLENS_AUTO and call auto_capture() explicitly",
             environment_variable="TORCHLENS_AUTO",
@@ -2894,16 +3125,83 @@ def _trace_torch_model(
     track_nonfinite_value = capture_options.track_nonfinite
     structure_only_value = capture_options.structure_only
     facet_recipes = None if isinstance(recipes, MissingType) else recipes
-    if capture_options.stop_after is not None:
-        raise NotImplementedError("stop_after is only supported by torchlens.pluck.")
+    if capture_options.stop_after is not None and halt is not None:
+        raise ArgumentConflictError(
+            "Both stop_after= and halt= were configured; they compile into the same "
+            "stop-directive slot and cannot combine",
+            code="stop_after_halt_conflict",
+            remedy=(
+                "pass one stop directive: keep halt= (compose predicates with & |) "
+                "or keep stop_after="
+            ),
+            arguments=("stop_after", "halt"),
+        )
+    stop_after_site = capture_options.stop_after
+    stop_after_ambient = False
+    if stop_after_site is None and halt is None:
+        from .experimental import _active_stop_after_site
+
+        stop_after_site = _active_stop_after_site()
+        stop_after_ambient = stop_after_site is not None
+    stop_after_selector_shaped = False
+    if stop_after_site is not None:
+        if normalized_chunk_size is not None:
+            raise ChunkedForwardConfigError(
+                "chunk_size cannot be combined with stop_after: the chunk fan-out runs "
+                "several captures and a single stop frontier is ambiguous across them. "
+                "Remedy: drop chunk_size or drop stop_after.",
+                code="stop_after_chunked_conflict",
+            )
+        if isinstance(stop_after_site, BaseSelector):
+            halt = stop_after_site
+            stop_after_selector_shaped = True
+        elif isinstance(stop_after_site, str):
+            from .ir.selector_eval import looks_like_finalized_label
+
+            if looks_like_finalized_label(stop_after_site):
+                raise InvalidArgumentError(
+                    f"stop_after={stop_after_site!r} looks like a finalized postprocess "
+                    "label, but stop_after runs live during capture, before finalized "
+                    "labels exist",
+                    code="stop_after_site_not_live",
+                    remedy=(
+                        "pass a module address string (e.g. 'encoder.layer.4'), a live "
+                        "selector such as tl.func('relu') or tl.module('encoder.layer.4'), "
+                        "or a callable predicate"
+                    ),
+                    argument="stop_after",
+                )
+            from .intervention.selectors import FuncSelector, ModuleSelector
+
+            # A bare string is the pluck-vocabulary spelling: halt at the first
+            # emission whose module address OR function name matches, whichever
+            # fires first ("encoder.layer.4" never names a func; "relu" never
+            # names a module address in practice, so collisions are benign).
+            halt = ModuleSelector(stop_after_site) | FuncSelector(stop_after_site)
+            stop_after_selector_shaped = True
+        elif callable(stop_after_site):
+            halt = stop_after_site
+        else:
+            raise ArgumentTypeError(
+                f"stop_after received unsupported type {type(stop_after_site).__name__}",
+                code="stop_after_type_invalid",
+                remedy=("pass a module address string, a tl.* selector, or a callable predicate"),
+                argument="stop_after",
+                received_type=type(stop_after_site).__name__,
+            )
     save_grads_policy = capture_options.save_grads
     should_save_grads = save_grads_policy not in (None, False)
     if save_grads_policy is True:
-        grads_to_save_resolved: str | list[Any] | None = "all"
+        grads_to_save_resolved: Any = "all"
     elif save_grads_policy in (None, False):
         grads_to_save_resolved = None
     elif callable(save_grads_policy):
-        grads_to_save_resolved = "all"
+        # Selector/callable retention predicates are HONORED, never collapsed
+        # to "all": they ride the deferred-gradient path and are resolved
+        # against the finalized ops post-postprocess, so only matching ops
+        # get gradient hooks (listA row 10 first clause: the collapse saved
+        # ALL grads and silently discarded the predicate).
+        grads_to_save_resolved = save_grads_policy
     else:
         grads_to_save_resolved = cast("str | list[Any] | None", save_grads_policy)
     grad_storage_path_value = streaming_options.bundle_path if should_save_grads else None
@@ -3091,6 +3389,11 @@ def _trace_torch_model(
             "save_predicate": _predicate_cache_key(save_predicate),
             "intervene": _predicate_cache_key(intervene),
             "halt": _predicate_cache_key(halt),
+            # stop_after compiles INTO the halt slot, but its never-fired policy
+            # differs by provenance, so the two spellings must not share a key:
+            # a completed halt= capture could otherwise satisfy a stop_after=
+            # request whose cold run would have refused stop_after_never_fired.
+            "stop_after": _stable_cache_fragment(stop_after_site),
             # Capability / payload-policy options that change WHAT is captured or
             # stored in the returned trace. Omitting any of these let a second
             # trace() with a different capability silently return an earlier cached
@@ -3119,7 +3422,26 @@ def _trace_torch_model(
             "module_identity_mode": capture_options.module_identity_mode,
             "payload_policy": capture_options.payload_policy,
             "save_preview": capture_options.save_preview,
+            "profile": profile_enabled,
         }
+        # The inversion sweep: every CaptureOptions field not hand-curated
+        # above and not declared session-neutral enters the key here --
+        # raise_on_nan, track_nonfinite, save_budget, distributed_witness,
+        # measure_python_peak_memory, emit_nvtx, transform, name, and any
+        # future field. Streaming options change what the returned trace
+        # retains (and where), so they sweep in full as well.
+        _sweep_option_fields_into_cache_config(
+            cache_config,
+            capture_options,
+            prefix="capture_option",
+            curated=CAPTURE_CACHE_KEY_CURATED,
+            neutral=CAPTURE_CACHE_KEY_NEUTRAL,
+        )
+        _sweep_option_fields_into_cache_config(
+            cache_config,
+            streaming_options,
+            prefix="streaming_option",
+        )
         cache_key = _capture_cache_key(model, input_args, input_kwargs, cache_config)
         cache_root, cache_secret = _prepare_capture_cache_dir(cache_dir_value)
         cache_path = cache_root / f"{cache_key}.pkl"
@@ -3137,6 +3459,15 @@ def _trace_torch_model(
                 cached_log.capture_cache_path = str(cache_path)
                 cached_log.batch_render = batch_render_policy
                 return cached_log
+    # list-A row 30: tracing runs the model's REAL forward, so train-mode norm
+    # layers with running statistics advance them in place (momentum applies
+    # even inside torch.no_grad / inference_only). Disclose once per process at
+    # the point the mutation is about to happen. Cache hits return above (no
+    # forward, no mutation) and structure-only captures retain no values, so
+    # neither path reaches this warn. The chunked fan-out recurses back into
+    # this function, but the outer call warns first and latches the flag.
+    if not _BATCHNORM_TRAIN_STATS_WARNED and not structure_only_value:
+        _warn_once_train_mode_running_stats(model)
     if (
         chunk_plan is not None
         and normalized_chunk_size is not None
@@ -3194,6 +3525,17 @@ def _trace_torch_model(
             module_identity_mode=capture_options.module_identity_mode,
             payload_policy=capture_options.payload_policy,
             save_preview=capture_options.save_preview,
+            # Session knobs the chunk path historically DROPPED (list-A row 26,
+            # second clause): the recursive options object was rebuilt from a
+            # hand-enumerated field list, so a chunked capture silently reset
+            # save_budget (and the other session-time knobs) to defaults. The
+            # recursive constructor must cover EVERY CaptureOptions field;
+            # tests/test_capopts_truth_cache_key.py pins the full-coverage
+            # set difference so a future field cannot silently drop here.
+            emit_nvtx=capture_options.emit_nvtx,
+            measure_python_peak_memory=capture_options.measure_python_peak_memory,
+            distributed_witness=capture_options.distributed_witness,
+            save_budget=capture_options.save_budget,
             raise_on_nan=raise_on_nan_value,
             track_nonfinite=track_nonfinite_value,
             structure_only=structure_only_value,
@@ -3488,6 +3830,7 @@ def _trace_torch_model(
         save_predicate=save_predicate,
         intervene_predicate=intervene,
         halt_predicate=halt,
+        _halt_from_stop_after=stop_after_site is not None,
         lookback=lookback,
         lookback_payload_policy=lookback_payload_policy,
         retain_output_parents_for_layers_to_save=(
@@ -3547,7 +3890,73 @@ def _trace_torch_model(
             # declaration; attach the derived ledger disclosure without ever
             # masking the user's exception.
             attach_failed_episode_ledger(capture_exc, episode_resolved)
+        # M(oracles) item 8 (FORK-A 3/3-agreed cell): every FAILED call is
+        # PURE of TorchLens instrumentation. The capture slot was released as
+        # the exception unwound the inner finally, so the public release door
+        # is legal here; exc.partial_log keeps its already-materialized
+        # records and stays recoverable after the release.
+        _release_preparation_after_failed_capture(model)
         raise
+    if stop_after_site is not None and not bool(getattr(trace, "halted", False)):
+        # Never-fired policy split by provenance (brainpipe D-16): a
+        # selector-shaped site that never fired is a typo-shaped wrong result
+        # (the full forward ran; the caller asked for a frontier) and refuses
+        # typed; an exploratory callable or ambient context-manager site
+        # legitimately may never fire and warns with a durable ledger entry.
+        site_repr = repr(stop_after_site)
+        if stop_after_selector_shaped and not stop_after_ambient:
+            raise InvalidArgumentError(
+                f"stop_after={site_repr} never fired: the capture ran the full "
+                "forward and completed without halting, so the result is not the "
+                "requested frontier",
+                code="stop_after_never_fired",
+                remedy=(
+                    "check the site against the model's module addresses "
+                    "(model.named_modules()) or use tl.func(...)/tl.module(...); "
+                    "an exploratory predicate that may legitimately never fire "
+                    "belongs in a callable"
+                ),
+                argument="stop_after",
+            )
+        stop_annotations = getattr(trace, "annotations", None)
+        if isinstance(stop_annotations, dict):
+            stop_annotations.setdefault("unmatched_capture_selectors", []).append(
+                {"slot": "stop_after", "selector": site_repr}
+            )
+        from .errors import TorchLensWarning
+
+        warnings.warn(
+            TorchLensWarning(
+                f"stop_after={site_repr} never fired; the capture ran the full "
+                "forward and the outputs are the model's real outputs, not a "
+                "frontier. Remedy: check the stop_after site against the executed "
+                "model, or drop stop_after",
+                code="stop_after_never_fired_callable",
+            ),
+            stacklevel=2,
+        )
+    module_filter_suppressed = int(trace.__dict__.pop("_tl_module_filter_suppressed", 0))
+    if (
+        module_filter_value is not None
+        and module_filter_suppressed > 0
+        and int(getattr(trace, "num_saved_ops", 0) or 0) == 0
+    ):
+        from .errors import TorchLensWarning as _TorchLensWarning
+
+        warnings.warn(
+            _TorchLensWarning(
+                f"module_filter suppressed every selected payload "
+                f"({module_filter_suppressed} ops): the returned trace has full "
+                "metadata but ZERO saved activations. module_filter is a third "
+                "save gate composed with save=/layers_to_save, and its argument "
+                "is an op-record namespace (fields such as func_name, "
+                "layer_label, modules), NEVER an nn.Module. "
+                "Remedy: write the filter against op-record fields (e.g. lambda "
+                "op: op.func_name == 'linear'), or drop module_filter",
+                code="module_filter_zero_saved",
+            ),
+            stacklevel=2,
+        )
     trace.profile_enabled = profile_enabled
     trace.save_grads = save_grads_policy
     if uses_selective_layers_to_save:
@@ -3660,10 +4069,15 @@ def release_model(model: nn.Module) -> None:
     _public_impls_module().release_model(model)
 
 
-def summary(*args: Any, **kwargs: Any) -> None:
-    """Forward to the summary-printing implementation."""
+def summary(*args: Any, **kwargs: Any) -> str:
+    """Run a one-call capture and return the rendered summary string.
 
-    return cast(None, _public_impls_module().summary(*args, **kwargs))
+    ``tl.summary(model, x)`` is the first-class one-call front door: it runs a
+    metadata-only capture and RETURNS the rendered summary text (it never
+    auto-prints). ``trace.summary()`` reports an existing capture instead.
+    """
+
+    return cast(str, _public_impls_module().summary(*args, **kwargs))
 
 
 def show_model_graph(*args: Any, **kwargs: Any) -> None:

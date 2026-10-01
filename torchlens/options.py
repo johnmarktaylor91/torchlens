@@ -498,7 +498,12 @@ class CaptureOptions:
         Whether non-tensor function arguments are captured.
     save_grads:
         Backward gradient-retention policy. ``True`` captures all gradients,
-        ``False``/``None`` disables capture, and selectors restrict retention.
+        ``False``/``None`` disables capture, and selectors restrict retention:
+        label strings/ordinal lists, ``tl.*`` selectors, and bare callables
+        are all honored (never collapsed to "all"). A bare callable is
+        evaluated once per FINALIZED op (a layer-like ctx, post-postprocess,
+        before any backward) and must return a strict ``bool``; only matching
+        ops receive gradient hooks.
     save_code_context:
         Whether source-text context is captured in addition to source identity.
     save_rng_states:
@@ -559,10 +564,32 @@ class CaptureOptions:
     cache_dir:
         Optional directory for content-hash cache entries.
     module_filter:
-        Optional predicate receiving a ``Op`` after construction.
-        Returning ``False`` keeps metadata but skips out saving.
+        Optional THIRD save gate composed (AND) with ``save=`` /
+        ``layers_to_save``: an op's payload is retained only when the
+        save selection picks it AND this predicate returns truthy. The
+        predicate receives an op-record namespace (the legacy-shaped
+        ``SimpleNamespace`` of captured op fields such as ``func_name``,
+        ``layer_label``, and ``modules``), NEVER an
+        ``nn.Module`` instance — a filter written against modules (e.g.
+        ``lambda m: isinstance(m, nn.Linear)``) matches nothing and saves
+        ZERO payloads. Returning ``False`` keeps metadata but skips payload
+        saving; a capture whose every selected payload was suppressed by
+        this gate emits a ``module_filter_zero_saved`` warning.
     stop_after:
-        Experimental stop-early site. Only supported by ``torchlens.pluck``.
+        Inclusive stop-early site for torch captures (DOCUMENTED-UNSTABLE
+        spelling): capture halts immediately AFTER the named site is
+        captured, returning a partial halted trace that includes it. The
+        site compiles into the halt engine on emission identity: a string
+        halts at the first emission whose module address
+        (``"encoder.layer.4"``, at that module's exit boundary) or function
+        name (``"relu"``) matches, a live selector (``tl.func("relu")``,
+        ``tl.module(...)``) halts at its first match, and a callable
+        predicate halts when it returns True. Finalized postprocess labels
+        (``"relu_1_2"``) do not exist during capture and refuse typed
+        (``stop_after_site_not_live``). A selector-shaped site that never
+        fires refuses typed (``stop_after_never_fired``); a callable that
+        never fires warns. Cannot combine with ``halt=``
+        (``stop_after_halt_conflict``) or ``chunk_size``. Torch-only.
     jax_control_flow:
         Declared JAX control-flow policy. Backends other than torch reject
         explicit use until their implementation phase supports it.

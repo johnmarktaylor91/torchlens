@@ -42,8 +42,9 @@ TOOL_SPECS: tuple[dict[str, Any], ...] = (
         "name": "torchlens_load_overview",
         "description": (
             "Load a saved .tlspec Trace artifact (analysis-only, no code "
-            "execution) and return its text summary plus capture-honesty "
-            "facts."
+            "execution) and return a bounded text summary plus "
+            "capture-honesty facts and the disclosed load_plan (manifest-"
+            "first eager/lazy/refuse decision)."
         ),
         "input_schema": {
             "type": "object",
@@ -59,7 +60,9 @@ TOOL_SPECS: tuple[dict[str, Any], ...] = (
         "description": (
             "Return the torchlens.agent_trace.v1 machine-readable dump of a "
             "saved .tlspec Trace: capture facts, counts, pass-qualified op "
-            "rows with graph edges, module hierarchy, and a navigation guide."
+            "rows with graph edges, module hierarchy, and a navigation guide. "
+            "Bounded by default (op rows cap at 2,000 when max_ops is "
+            "omitted; the truncation block discloses omissions)."
         ),
         "input_schema": {
             "type": "object",
@@ -68,7 +71,11 @@ TOOL_SPECS: tuple[dict[str, Any], ...] = (
                 "max_ops": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "Optional cap on op rows; omission is disclosed.",
+                    "maximum": 10_000,
+                    "description": (
+                        "Cap on op rows (default 2,000; served ceiling "
+                        "10,000); omissions are disclosed."
+                    ),
                 },
             },
             "required": ["path"],
@@ -103,13 +110,176 @@ TOOL_SPECS: tuple[dict[str, Any], ...] = (
     },
 )
 
-#: Small mtime-keyed cache so repeated tool calls do not reload the artifact.
-_TRACE_CACHE: dict[str, tuple[float, Any]] = {}
+#: Manifest-declared payload bytes above which the server loads LAZILY
+#: (payload blobs stay on disk; reads sha-verify one blob at a time).
+EAGER_LOAD_MAX_BYTES = 256 * 1024 * 1024
+
+#: Declared payload-entry count above which the load is REFUSED: even the
+#: metadata materialization of such an artifact is not a safe single tool
+#: call. The bound is disclosed in the refusal.
+LOAD_MAX_PAYLOAD_ENTRIES = 100_000
+
+#: Server-side default cap on agent-dump op rows when the caller passes no
+#: ``max_ops`` (the dump then carries an explicit ``truncation`` block).
+DUMP_DEFAULT_MAX_OPS = 2_000
+
+#: Hard ceiling on caller-requested ``max_ops``; larger requests refuse with
+#: the bound named rather than materializing an unbounded response.
+DUMP_MAX_OPS_CEILING = 10_000
+
+#: Content-digest-keyed cache of loaded artifacts (AG stage-0 item 3): the
+#: artifact's identity is the sha256 of its manifest bytes, never the path.
+_TRACE_CACHE: dict[str, tuple[Any, dict[str, Any]]] = {}
 _TRACE_CACHE_MAX = 4
 
+#: (path, dev, ino, size, mtime_ns) -> digest. A VERIFIED cache hint only:
+#: the full stat identity must match to skip re-hashing (rename-replace
+#: changes st_ino, an in-place rewrite changes size/mtime_ns -- the same
+#: identity contract the lazy blob reader trusts); the digest stays the one
+#: true cache key.
+_DIGEST_HINTS: dict[tuple[str, int, int, int, int], str] = {}
+_DIGEST_HINTS_MAX = 16
 
-def _load_trace(path_arg: str) -> Any:
+
+def _artifact_digest(path: Path) -> tuple[str, bytes | None]:
+    """Return the artifact's content digest plus raw manifest bytes.
+
+    Parameters
+    ----------
+    path:
+        Artifact path (a ``.tlspec`` directory or a single file).
+
+    Returns
+    -------
+    tuple[str, bytes | None]
+        Hex digest identifying the artifact content, and the manifest bytes
+        when the artifact has a readable ``manifest.json`` (``None`` for
+        single-file artifacts, which are stream-hashed).
+    """
+
+    from hashlib import sha256
+
+    manifest_path = path / "manifest.json" if path.is_dir() else None
+    if manifest_path is not None and manifest_path.is_file():
+        manifest_bytes = manifest_path.read_bytes()
+        return sha256(manifest_bytes).hexdigest(), manifest_bytes
+    from torchlens._io.manifest import sha256_of_file
+
+    return sha256_of_file(path), None
+
+
+def _stat_identity(path: Path) -> tuple[str, int, int, int, int] | None:
+    """Return the (path, dev, ino, size, mtime_ns) identity for the hint map."""
+
+    probe = path / "manifest.json" if path.is_dir() else path
+    try:
+        stat_result = probe.stat()
+    except OSError:
+        return None
+    return (
+        str(path),
+        stat_result.st_dev,
+        stat_result.st_ino,
+        stat_result.st_size,
+        stat_result.st_mtime_ns,
+    )
+
+
+def _build_load_plan(manifest_bytes: bytes | None) -> dict[str, Any]:
+    """Choose eager/lazy/refuse from manifest-DECLARED numbers, torch-free.
+
+    Parameters
+    ----------
+    manifest_bytes:
+        Raw ``manifest.json`` bytes, or ``None`` when the artifact has none.
+
+    Returns
+    -------
+    dict[str, Any]
+        The disclosed ``load_plan``: mode, declared payload bytes/count, the
+        thresholds applied, and the reason.
+    """
+
+    import json as json_module
+
+    declared_bytes = 0
+    declared_count = 0
+    if manifest_bytes is not None:
+        from torchlens._io.payload_reader import declared_payload_bytes
+
+        try:
+            manifest = json_module.loads(manifest_bytes)
+        except (ValueError, UnicodeDecodeError):
+            manifest = {}
+        if isinstance(manifest, dict):
+            declared_bytes = declared_payload_bytes(manifest)
+            body_index = manifest.get("body_index")
+            declared_count = len(body_index) if isinstance(body_index, list) else 0
+    if declared_count > LOAD_MAX_PAYLOAD_ENTRIES:
+        mode = "refuse"
+        reason = (
+            f"declared payload entries ({declared_count:,}) exceed the "
+            f"single-tool-call bound ({LOAD_MAX_PAYLOAD_ENTRIES:,})"
+        )
+    elif declared_bytes > EAGER_LOAD_MAX_BYTES:
+        mode = "lazy"
+        reason = (
+            f"declared payload bytes ({declared_bytes:,}) exceed the eager "
+            f"threshold ({EAGER_LOAD_MAX_BYTES:,}); payloads stay on disk"
+        )
+    else:
+        mode = "eager"
+        reason = "declared payload bytes fit the eager threshold"
+    return {
+        "mode": mode,
+        "declared_payload_bytes": declared_bytes,
+        "declared_payload_count": declared_count,
+        "eager_threshold_bytes": EAGER_LOAD_MAX_BYTES,
+        "max_payload_entries": LOAD_MAX_PAYLOAD_ENTRIES,
+        "reason": reason,
+    }
+
+
+def _resolve_digest(path: Path) -> tuple[str, bytes | None]:
+    """Resolve the artifact content digest through the stat-identity hint map.
+
+    ``(path, dev, ino, size, mtime_ns)`` survives only as a hint that skips
+    re-hashing when the full file identity matches; the digest itself is the
+    cache authority. A hint hit returns ``None`` manifest bytes (nothing was
+    read); a fresh hash returns whatever ``_artifact_digest`` read.
+
+    Parameters
+    ----------
+    path:
+        Artifact path (a ``.tlspec`` directory or a single file).
+
+    Returns
+    -------
+    tuple[str, bytes | None]
+        Content digest, and the manifest bytes when hashing read them.
+    """
+
+    identity = _stat_identity(path)
+    if identity is not None:
+        hinted = _DIGEST_HINTS.get(identity)
+        if hinted is not None:
+            return hinted, None
+    digest, manifest_bytes = _artifact_digest(path)
+    if identity is not None:
+        if len(_DIGEST_HINTS) >= _DIGEST_HINTS_MAX:
+            _DIGEST_HINTS.pop(next(iter(_DIGEST_HINTS)))
+        _DIGEST_HINTS[identity] = digest
+    return digest, manifest_bytes
+
+
+def _load_trace(path_arg: str) -> tuple[Any, dict[str, Any]]:
     """Load a saved Trace artifact for read-only inspection, with caching.
+
+    The load is MANIFEST-FIRST (AG stage-0 item 2): declared payload bytes
+    decide eager/lazy/refuse BEFORE any blob is opened, so one tool call can
+    never materialize an unbounded artifact. The cache key is the artifact's
+    content digest (AG stage-0 item 3), resolved through ``_resolve_digest``'s
+    stat-identity hint map.
 
     Parameters
     ----------
@@ -118,14 +288,15 @@ def _load_trace(path_arg: str) -> Any:
 
     Returns
     -------
-    Any
-        Loaded ``Trace``.
+    tuple[Any, dict[str, Any]]
+        Loaded ``Trace`` and the disclosed ``load_plan``.
 
     Raises
     ------
     ValueError
-        If the path does not exist or the artifact is not a single Trace
-        (bundles and intervention specs are out of the v1 tool contract).
+        If the path does not exist, the artifact exceeds the load bound, or
+        it is not a single Trace (bundles and intervention specs are out of
+        the v1 tool contract).
     """
 
     import torchlens as tl
@@ -136,12 +307,22 @@ def _load_trace(path_arg: str) -> Any:
             f"No file at {str(path)!r}. Pass the path of an artifact saved "
             "with tl.save(trace, path)."
         )
-    key = str(path.resolve())
-    mtime = path.stat().st_mtime
-    cached = _TRACE_CACHE.get(key)
-    if cached is not None and cached[0] == mtime:
-        return cached[1]
-    loaded = tl.load(path)
+    digest, manifest_bytes = _resolve_digest(path)
+    cached = _TRACE_CACHE.get(digest)
+    if cached is not None:
+        return cached
+    if manifest_bytes is None and path.is_dir():
+        manifest_path = path / "manifest.json"
+        if manifest_path.is_file():
+            manifest_bytes = manifest_path.read_bytes()
+    plan = _build_load_plan(manifest_bytes)
+    if plan["mode"] == "refuse":
+        raise ValueError(
+            f"Refusing to load {str(path)!r}: {plan['reason']}. Load it in "
+            "Python via tl.load(path, lazy=True) where you control the "
+            "process budget."
+        )
+    loaded = tl.load(path, lazy=plan["mode"] == "lazy")
     if not isinstance(loaded, tl.Trace):
         raise ValueError(
             f"{str(path)!r} loaded as {type(loaded).__name__}, not a Trace. "
@@ -150,8 +331,9 @@ def _load_trace(path_arg: str) -> Any:
         )
     if len(_TRACE_CACHE) >= _TRACE_CACHE_MAX:
         _TRACE_CACHE.pop(next(iter(_TRACE_CACHE)))
-    _TRACE_CACHE[key] = (mtime, loaded)
-    return loaded
+    result = (loaded, plan)
+    _TRACE_CACHE[digest] = result
+    return result
 
 
 def _tool_doctor() -> dict[str, Any]:
@@ -242,12 +424,25 @@ def _tool_load_overview(path: str) -> dict[str, Any]:
         Text summary plus the capture block of the agent dump.
     """
 
-    trace = _load_trace(path)
+    trace, load_plan = _load_trace(path)
     dump = trace.to_agent_json(max_ops=1)
+    if int(getattr(trace, "num_ops", 0) or 0) > DUMP_DEFAULT_MAX_OPS:
+        # summary() emits one line per layer, so a huge trace would make this
+        # "overview" tool the unbounded response; the budgeted explain report
+        # is the bounded stand-in and disclosed as such.
+        from torchlens.report import explain
+
+        summary_text = str(explain(trace, max_tokens=2000))
+        summary_form = "budgeted_explain"
+    else:
+        summary_text = trace.summary()
+        summary_form = "full_summary"
     return {
-        "summary": trace.summary(),
+        "summary": summary_text,
+        "summary_form": summary_form,
         "capture": dump["capture"],
         "counts": dump["counts"],
+        "load_plan": load_plan,
     }
 
 
@@ -267,8 +462,20 @@ def _tool_agent_dump(path: str, max_ops: int | None = None) -> dict[str, Any]:
         ``torchlens.agent_trace.v1`` dump.
     """
 
-    result = _load_trace(path).to_agent_json(max_ops=max_ops)
-    return dict(result)
+    if max_ops is not None and max_ops > DUMP_MAX_OPS_CEILING:
+        raise ValueError(
+            f"max_ops={max_ops:,} exceeds the served ceiling "
+            f"({DUMP_MAX_OPS_CEILING:,}): one tool call must stay bounded. "
+            "Page through the graph with smaller dumps, or load the artifact "
+            "in Python via tl.load(...).to_agent_json()."
+        )
+    trace, load_plan = _load_trace(path)
+    # Bounded by DEFAULT (WT1 A-V row 25): an omitted max_ops used to dump
+    # every op row; the default cap keeps one call bounded and the dump's
+    # truncation block discloses exactly what was omitted.
+    result = dict(trace.to_agent_json(max_ops=max_ops or DUMP_DEFAULT_MAX_OPS))
+    result["load_plan"] = load_plan
+    return result
 
 
 def _tool_explain(
@@ -295,9 +502,9 @@ def _tool_explain(
 
     from ..report import explain
 
-    trace = _load_trace(path)
+    trace, load_plan = _load_trace(path)
     report = explain(trace, audience=audience, max_tokens=max_tokens)  # type: ignore[arg-type]
-    return {"report": report}
+    return {"report": report, "load_plan": load_plan}
 
 
 def call_tool(name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -339,6 +546,20 @@ def call_tool(name: str, arguments: dict[str, Any] | None = None) -> dict[str, A
         )
     known = ", ".join(spec["name"] for spec in TOOL_SPECS)
     raise ValueError(f"Unknown tool {name!r}. Known tools: {known}.")
+
+
+#: Served-schema parity registry (AG stage-0 item 5): tool name -> the pure
+#: handler whose signature the declared input_schema must match field-for-
+#: field. tests/test_report_honesty_mcp.py enforces the parity in both
+#: directions, so a schema/handler drift is a red test, not a runtime
+#: surprise for the agent reading the served schema.
+TOOL_HANDLERS: dict[str, Any] = {
+    "torchlens_doctor": _tool_doctor,
+    "torchlens_api_map": _tool_api_map,
+    "torchlens_load_overview": _tool_load_overview,
+    "torchlens_agent_dump": _tool_agent_dump,
+    "torchlens_explain": _tool_explain,
+}
 
 
 def _required_path(args: dict[str, Any]) -> str:

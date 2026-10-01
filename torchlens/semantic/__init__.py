@@ -27,8 +27,11 @@ from .facets import (
 from .logit_lens import (
     LogitLensEntry,
     LogitLensError,
+    LogitLensPrediction,
+    LogitLensPredictions,
     LogitLensResult,
     logit_lens,
+    logit_lens_predictions,
 )
 
 __all__ = [
@@ -43,8 +46,11 @@ __all__ = [
     "FacetView",
     "LogitLensEntry",
     "LogitLensError",
+    "LogitLensPrediction",
+    "LogitLensPredictions",
     "LogitLensResult",
     "logit_lens",
+    "logit_lens_predictions",
     "MissingFacetError",
     "MissingFacet",
     "ModuleCoverageRow",

@@ -93,6 +93,12 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         "research-model dependency for real-world coverage, deliberately undeclared",
     ),
     "equinox": (OPTIONAL_PREVIEW, "jax extra"),
+    "fvcore.nn": (
+        UNAVAILABLE_OK,
+        "supplementary external FLOP-counter cross-oracle (A07 numbers truth); "
+        "in no extra -- the closed-form and gpt2/bert pins are the blocking "
+        "oracles, fvcore corroborates when present",
+    ),
     "fitz": (
         UNAVAILABLE_OK,
         "PyMuPDF PDF-render inspection helper, undeclared; extras-gap candidate reported 2026-08-15",
@@ -1115,6 +1121,10 @@ OPTIONAL_INTEGRATION_TARGETS: dict[str, str] = {
     "dacite": "model-explorer export-bridge demo dependency",
     "dagua": "unreleased in-development layout engine",
     "e3nn.o3": "research-model real-world coverage, deliberately undeclared",
+    "fvcore.nn": (
+        "supplementary FLOP-counter cross-oracle (A07); the closed-form and "
+        "gpt2/bert pins are the blocking oracles, so absence costs breadth only"
+    ),
     "git": "release-environment-only (hash-locked release-defenses job installs it)",
     "model_explorer": "export-bridge integration target with no declared extra",
     "pennylane": "quantum-ML research-model coverage, deliberately undeclared",

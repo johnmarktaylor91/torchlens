@@ -55,13 +55,25 @@ class TraceProfile:
     def to_pandas(self) -> pd.DataFrame:
         """Return a copy of the underlying profile dataframe.
 
+        The stamped capture-honesty facts ride ``DataFrame.attrs`` so the
+        exported table carries the same disclosure the repr banner shows.
+
         Returns
         -------
         pandas.DataFrame
             Resource profile rows.
         """
 
-        return self.frame.copy()
+        frame = self.frame.copy()
+        frame.attrs["torchlens_capture_honesty"] = {
+            "schema": "torchlens.capture_honesty.v1",
+            "capture_status": self.capture_status,
+            "capture_verified": self.capture_verified,
+            "capture_verification_reason": self.capture_verification_reason,
+            "rescue_rerun": self.rescue_rerun,
+            "structure_only": self.structure_only,
+        }
+        return frame
 
     def __repr__(self) -> str:
         """Render the profile as a compact notebook-friendly table.
@@ -333,6 +345,19 @@ def _honesty_row(row: Mapping[Hashable, Any]) -> dict[str, str]:
         estimated; absent values are unknown.
     """
 
+    if row.get("kind") == "boundary":
+        # A boundary pseudo-row executed nothing: its absent cells are NOT
+        # APPLICABLE, never "unknown" -- and never a fabricated evidence label
+        # (costreport D2).
+        return {
+            "name": str(row["name"]),
+            "time": "not_applicable",
+            "flops": "not_applicable",
+            "activation_memory": (
+                "estimated" if row["activation_memory"] is not None else "not_applicable"
+            ),
+            "param_count": "not_applicable",
+        }
     return {
         "name": str(row["name"]),
         "time": "measured" if row["time"] is not None else "unknown",
@@ -396,6 +421,33 @@ def _build_call_tree(trace: Trace) -> str:
     return "\n".join(lines)
 
 
+def _op_level_rows(trace: Trace) -> list[dict[str, Any]]:
+    """Build op-level profile rows; boundary pseudo-rows own nothing additive.
+
+    Identity partition (A1 / costreport D7): a non-null additive cell on a
+    boundary row is a CI failure, never a display choice. Input rows keep
+    their owned external-input bytes; output alias rows own no bytes either.
+    """
+
+    rows: list[dict[str, Any]] = []
+    for op in trace.layer_list:
+        is_boundary = bool(getattr(op, "is_input", False)) or bool(getattr(op, "is_output", False))
+        row = _row(
+            str(getattr(op, "label", None) or getattr(op, "layer_label", "")),
+            "boundary" if is_boundary else "op",
+            [op],
+            param_count=None if is_boundary else getattr(op, "num_params", None),
+        )
+        if is_boundary:
+            row["time"] = None
+            row["flops"] = None
+            if getattr(op, "is_output", False):
+                row["activation_memory"] = None
+                row["saved_activation"] = None
+        rows.append(row)
+    return rows
+
+
 def build_profile(
     trace: Trace,
     *,
@@ -441,15 +493,7 @@ def build_profile(
     pd = _require_pandas()
     rows: list[dict[str, Any]] = []
     if level == "op":
-        for op in trace.layer_list:
-            rows.append(
-                _row(
-                    str(getattr(op, "label", None) or getattr(op, "layer_label", "")),
-                    "op",
-                    [op],
-                    param_count=getattr(op, "num_params", None),
-                )
-            )
+        rows.extend(_op_level_rows(trace))
     elif level == "call":
         for call in trace.module_calls.values():
             ops = _ops_for_labels(trace, list(getattr(call, "ops", ())))

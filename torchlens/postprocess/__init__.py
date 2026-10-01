@@ -550,6 +550,12 @@ def _drop_transient_capture_state(self: "Trace") -> None:
         self.__dict__.get("_defer_streaming_bundle_finalization", False)
         and self.__dict__.get("_out_writer") is not None
     )
+    # WT1 A-IV item 18 (lane A08): a step-18 STAGED streamed bundle publishes
+    # at the settlement seam (capture/trace.py), which runs after this scrub;
+    # popping the writer here would strand the staged bundle in its temp dir.
+    keep_staged_publish = bool(
+        getattr(self.__dict__.get("_out_writer"), "staged_for_settlement", False)
+    )
     keep_selective_sink = self.__dict__.get("_out_sink") is not None
     wrapper_ws = self.__dict__.get("_wrapper_runtime_ws")
     if wrapper_ws is not None:
@@ -580,7 +586,8 @@ def _drop_transient_capture_state(self: "Trace") -> None:
         "_tl_predicate_intervention_spec_keys",
         "_tl_predicate_intervention_target_keys",
     ]
-    if not keep_deferred_streaming and not keep_selective_sink:
+    keep_writer = keep_deferred_streaming or keep_staged_publish
+    if not keep_writer and not keep_selective_sink:
         field_names.extend(
             [
                 "_out_writer",
@@ -591,7 +598,7 @@ def _drop_transient_capture_state(self: "Trace") -> None:
                 "_defer_streaming_bundle_finalization",
             ]
         )
-    elif not keep_deferred_streaming:
+    elif not keep_writer:
         field_names.extend(
             [
                 "_out_writer",

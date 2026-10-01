@@ -108,6 +108,10 @@ def _finalize_param_logs(self: "Trace") -> None:
     Op entries to reduce memory. Param._param_ref is released after the
     full finalization pipeline, once all finalization-time param reads finish.
     """
+    from ._lazy_param_geometry import _finalize_lazy_param_geometry
+
+    _finalize_lazy_param_geometry(self)
+
     # Lists remain authoritative and preserve first-seen order. Local sets avoid
     # repeatedly scanning those growing lists for high-arity parameterized ops.
     membership_by_param: dict[int, tuple[set[str], set[str], set[str]]] = {}
@@ -1629,6 +1633,19 @@ def _set_tracing_finished(self: "Trace") -> None:
 def _finalize_streamed_bundle(self: "Trace") -> None:
     """Step 18: Finalize any in-progress streamed tensor bundle.
 
+    Streamed bundles ENTER SETTLEMENT (WT1 A-IV item 18, lane A08): an
+    UNSETTLED trace (the ordinary step-18 call, which runs before
+    ``settle_completed``) only STAGES the bundle -- blobs and manifest land in
+    the temp directory and the writer stays on ``self._out_writer`` -- and the
+    tmp->final publish happens at the settlement seam in
+    ``capture/trace.py``, carrying the settled capture-outcome attestation.
+    A SETTLED trace (the deferred grad-streaming tail in
+    ``backends/torch/backward.py``) stages and publishes in one pass.
+    Historical behavior published here unconditionally, so a live COMPLETE
+    capture loaded UNATTESTED (no attestation existed yet to persist) and a
+    postprocess failure AFTER this step left a published artifact the N1
+    export gate would refuse.
+
     Parameters
     ----------
     self:
@@ -1637,7 +1654,7 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
     Raises
     ------
     TorchLensIOError
-        If portable scrubbing or bundle finalization fails.
+        If portable scrubbing or bundle staging fails.
     """
 
     writer = self._out_writer
@@ -1645,6 +1662,7 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
         return
 
     from .._io.scrub import scrub_for_save
+    from ..capture.outcome import outcome_for
 
     try:
         scrubbed_state, blob_specs, unsupported_tensor_records = scrub_for_save(
@@ -1662,12 +1680,15 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
             blob_specs=blob_specs,
             writer=writer,
         )
-        final_path = writer.finalize(
+        final_path = writer.stage_for_settlement(
             scrubbed_state=scrubbed_state,
             blob_specs=blob_specs,
             unsupported=unsupported_tensor_records,
             trace=self,
         )
+        settled = outcome_for(self)
+        if settled is not None:
+            writer.publish_staged(settled.to_payload())
     except BaseException as exc:
         if not getattr(writer, "_closed", False):
             writer.abort(str(exc))
@@ -1676,12 +1697,15 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
     setattr(
         self,
         "_source_bundle_manifest_sha256",
-        sha256_of_file(Path(final_path) / "manifest.json"),
+        sha256_of_file(
+            Path(writer.tmp_path if not writer._finalized else final_path) / "manifest.json"
+        ),
     )
     _attach_streamed_tensor_refs(
         self, scrubbed_state=scrubbed_state, writer=writer, final_path=final_path
     )
-    self._out_writer = None
+    if writer._finalized:
+        self._out_writer = None
     self._defer_streaming_bundle_finalization = False
 
 

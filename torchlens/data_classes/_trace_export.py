@@ -208,6 +208,27 @@ _TO_PANDAS_EXCLUDED_OP_FIELDS: frozenset[str] = frozenset(
 class TraceExportMixin(_TraceMixinBase):
     """``Trace`` export surface: dataframe, dict, and tabular projections."""
 
+    @property
+    def logged_values(self: "Trace") -> dict[str, Any]:
+        """Return values recorded via ``log_value`` during this capture.
+
+        DOCUMENTED-UNSTABLE spelling (naming ratification pending). This is
+        the read-back for ``torchlens.observers.log_value`` (compat alias
+        ``tl.report.log_value``), which was a writer nothing read back: values
+        land in ``annotations["logged_values"]`` and persist with the trace.
+        Returns a copy -- write through ``log_value`` during capture, never by
+        mutating this view.
+
+        Returns
+        -------
+        dict[str, Any]
+            Name-to-value mapping of capture-time logged values (empty when
+            none were recorded).
+        """
+
+        values = (getattr(self, "annotations", {}) or {}).get("logged_values", {})
+        return dict(values) if isinstance(values, dict) else {}
+
     def to_agent_json(self: "Trace", *, max_ops: int | None = None) -> dict[str, Any]:
         """Return a self-describing machine-readable dump of this trace.
 
@@ -367,7 +388,9 @@ class TraceExportMixin(_TraceMixinBase):
             model_df[column_name] = model_df[column_name].astype(fields_to_change_type[column_name])
         model_df["terminal_conditional_id"] = model_df["terminal_conditional_id"].astype("Int64")
 
-        return model_df
+        from .._capture_honesty import attach_dataframe_honesty
+
+        return attach_dataframe_honesty(model_df, self)
 
     def decode_output(self: "Trace", top_n: int | None = None) -> Any:
         """Return captured decoded output rows when available.

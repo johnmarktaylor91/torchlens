@@ -412,7 +412,7 @@ FAMILIES: tuple[FamilySpec, ...] = (
         build_llama,
         lambda: {"input_ids": _token_ids()},
         ("eager", "sdpa"),
-        {"hidden": 64, "heads": 4, "d_head": 16, "seq": SEQ, "vocab": VOCAB},
+        {"hidden": 64, "heads": 4, "kv_heads": 2, "d_head": 16, "seq": SEQ, "vocab": VOCAB},
     ),
     FamilySpec(
         "qwen2",
@@ -420,7 +420,7 @@ FAMILIES: tuple[FamilySpec, ...] = (
         build_qwen2,
         lambda: {"input_ids": _token_ids()},
         ("eager", "sdpa"),
-        {"hidden": 64, "heads": 4, "d_head": 16, "seq": SEQ, "vocab": VOCAB},
+        {"hidden": 64, "heads": 4, "kv_heads": 2, "d_head": 16, "seq": SEQ, "vocab": VOCAB},
     ),
     FamilySpec(
         "albert",

@@ -45,7 +45,7 @@ def test_format_flops_si_units() -> None:
 def test_format_flops_accepts_convention_marker() -> None:
     """The FMA convention flag is accepted by the public formatter."""
 
-    assert format_flops(2000, count_fma_as_two=True) == "2 KFLOPs"
+    assert format_flops(2000, decimal_places=1) == "2 KFLOPs"
 
 
 def test_format_flops_rejects_negative_values() -> None:

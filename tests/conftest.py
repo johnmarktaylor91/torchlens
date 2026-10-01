@@ -56,6 +56,7 @@ _WARN_ONCE_SENTINELS: tuple[tuple[str, str, object], ...] = (
     # capture in the package, and reset per test here so a test that trips it
     # via a direct log_current_rng_states() call cannot degrade later tests.
     ("torchlens.utils.rng", "_cuda_rng_unusable", False),
+    ("torchlens.user_funcs", "_BATCHNORM_TRAIN_STATS_WARNED", False),
     ("torchlens.utils.introspection", "_col_offset_cache_warned", False),
     ("torchlens.validation._stock_layer_grads", "_PASS_INDEX_PARSE_WARNED", False),
     ("torchlens.visualization._render_common", "_SIBLING_ORDER_WARNING_EMITTED", False),
@@ -135,6 +136,19 @@ def pytest_configure(config: pytest.Config) -> None:
     # documented regen recipe hard-failing at its own guard.
     golden_update_armed = any(
         key.startswith(GOLDEN_FLAG_PREFIXES) and value == "1" for key, value in os.environ.items()
+    )
+    # A06 interim (packaging_requests.tsv row filed 2026-08-26): the
+    # batchnorm_train_stats_mutated disclosure is once-per-process in the
+    # package but the autouse sentinel reset re-arms it per test, and
+    # train-mode BatchNorm fixtures are a commonly exercised idiom -- like the
+    # save_mode='reference' caveat it is visible-not-fatal and asserted
+    # locally (tests/test_capopts_truth_batchnorm_warn.py resets the flag
+    # first). DROP this line when the pyproject filterwarnings row lands
+    # (later entries win, so this appended default overrides the broad
+    # error::UserWarning promotion).
+    config.addinivalue_line(
+        "filterwarnings",
+        "default:tracing runs the model's REAL forward.*:UserWarning:torchlens(\\.|$)",
     )
     if not config.option.collectonly and not golden_update_armed:
         import warnings as _warnings

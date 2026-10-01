@@ -65,6 +65,7 @@ from .payload_codec import (
     numpy_to_transport_tensor,
 )
 from .rehydrate import rehydrate_trace
+from .save_policy import _refuse_incoherent_structure_only_write, _resolve_include_flags
 from .scrub import BlobSpec, scrub_for_save
 from .state_keys import invalidate_static_class_attr_cache
 from .tensor_policy import FailReason, Ok
@@ -356,15 +357,15 @@ def save(
     path: str | Path,
     *,
     level: str = "portable",
-    include_outs: bool = True,
-    include_grads: bool = True,
-    include_saved_args: bool = False,
-    include_rng_states: bool = False,
+    include_outs: bool | None = None,
+    include_grads: bool | None = None,
+    include_saved_args: bool | None = None,
+    include_rng_states: bool | None = None,
     include_weights: bool = False,
     include_activations: bool = False,
     include_source: bool = True,
     include_custom_attributes: bool = True,
-    include_buffer_values: bool = True,
+    include_buffer_values: bool | None = None,
     strict: bool = True,
     overwrite: bool = False,
 ) -> None:
@@ -380,13 +381,23 @@ def save(
         Public ``.tlspec`` save level: ``"audit"``,
         ``"executable_with_callables"``, ``"portable"``, or ``"runnable"``.
     include_outs:
-        Whether outs should be saved as blobs.
+        Whether outs should be saved as blobs. Omitted (``None``) resolves to
+        the level default (``True`` except at the payload-free ``audit`` /
+        ``runnable`` levels); an EXPLICIT value contradicting a level
+        requirement refuses typed (``save_payload_level_conflict``) instead
+        of being silently overridden.
     include_grads:
-        Whether grads should be saved as blobs.
+        Whether grads should be saved as blobs. Same omitted/explicit
+        resolution as ``include_outs``.
     include_saved_args:
-        Whether captured args/kwargs and related tensor payloads should be saved.
+        Whether captured args/kwargs and related tensor payloads should be
+        saved. Omitted resolves to ``False`` except at
+        ``level="executable_with_callables"``, which REQUIRES these payloads
+        to re-execute and refuses an explicit ``False`` (historically it
+        silently shipped raw input tensors against that explicit opt-out).
     include_rng_states:
-        Whether per-layer RNG state tensors should be saved.
+        Whether per-layer RNG state tensors should be saved. Same
+        omitted/explicit resolution as ``include_saved_args``.
     include_weights:
         Whether a runnable save should bundle the full capture-time
         ``state_dict``: all named parameters and persistent buffers. This
@@ -421,11 +432,11 @@ def save(
         (module count + top-level key names). Sparse runnable cores always drop
         the field regardless of this flag.
     include_buffer_values:
-        Whether captured pre-forward buffer values are persisted (default
-        ``True``, the historical behavior). When a forward pass overwrites a
-        registered buffer (BatchNorm running statistics, step counters,
-        caches), TorchLens records the value the buffer held BEFORE the
-        forward in ``Trace._buffer_initial_values``, and every save level —
+        Whether captured pre-forward buffer values are persisted (omitted
+        resolves to ``True``, the historical behavior). When a forward pass
+        overwrites a registered buffer (BatchNorm running statistics, step
+        counters, caches), TorchLens records the value the buffer held BEFORE
+        the forward in ``Trace._buffer_initial_values``, and every save level —
         audit included — shipped those tensors verbatim with no opt-out.
         Buffer values are training-data-derived state, so set ``False`` to
         drop the whole channel from the artifact; values are never rewritten
@@ -434,7 +445,9 @@ def save(
         buffer names). Sparse runnable cores always drop the field regardless
         of this flag (used non-persistent buffers ship separately there as the
         REQUIRED, independently disclosed ``runnable_nonpersistent_buffer_v1``
-        family).
+        family). Structure-only saves resolve the omitted default to
+        ``False`` (W3: a weights-free artifact must not carry
+        training-derived buffer values) and refuse an explicit ``True``.
     strict:
         Whether unsupported tensors should abort the save instead of being skipped.
     overwrite:
@@ -589,6 +602,21 @@ def save(
                     code=RunnableErrorCode.HALTED_CAPTURE_NOT_RUNNABLE.value,
                 ) from outcome_exc
             raise
+    (
+        include_outs,
+        include_grads,
+        include_saved_args,
+        include_rng_states,
+        include_buffer_values,
+    ) = _resolve_include_flags(
+        trace,
+        save_level=save_level,
+        include_outs=include_outs,
+        include_grads=include_grads,
+        include_saved_args=include_saved_args,
+        include_rng_states=include_rng_states,
+        include_buffer_values=include_buffer_values,
+    )
     sparse_run_descriptor = None
     sparse_run_json = None
     weight_blob_specs: list[BlobSpec] = []
@@ -647,18 +675,6 @@ def save(
                 input_fingerprints=input_fingerprints,
             )
         sparse_run_json = sparse_descriptor_to_json(sparse_run_descriptor)
-        include_outs = False
-        include_grads = False
-        include_saved_args = False
-        include_rng_states = False
-    if save_level == "audit":
-        include_outs = False
-        include_grads = False
-        include_saved_args = False
-        include_rng_states = False
-    elif save_level == "executable_with_callables":
-        include_saved_args = True
-        include_rng_states = True
     backend_name = str(getattr(trace, "backend", "torch"))
     backend_spec = get_backend_spec(backend_name)
     _reject_audit_only_materialized_payload_save(
@@ -716,6 +732,7 @@ def save(
             blob_specs.extend(nonpersistent_buffer_blob_specs)
             blob_specs.extend(weight_blob_specs)
             blob_specs.extend(activation_blob_specs)
+        _refuse_incoherent_structure_only_write(scrubbed_state)
         _apply_visualization_save_policy(
             trace,
             scrubbed_state=scrubbed_state,
@@ -1360,11 +1377,10 @@ def load(
     --------
     >>> import torchlens as tl
     >>> trace = tl.load("demo_trace.tlspec", lazy=True)
+    >>> trace.payload_load_status
+    'loaded_lazy'
     >>> layer = trace["linear_1_1"]
-    >>> layer.out is None
-    True
-    >>> out = layer.materialize_out()
-    >>> out.shape
+    >>> layer.out.shape  # saved rows materialize sha-verified, never None
     torch.Size([2, 3])
     >>> spec = tl.load("demo_intervention.tlspec")
     >>> bundle = tl.load("demo_bundle.tlspec")
@@ -4040,7 +4056,7 @@ def _raise_for_unmaterialized_nested_blob_refs(
     if _contains_nested_blob_refs(value, set(), allowed_blob_ids):
         raise TorchLensIOError(
             "Trace contains unmaterialized nested blob references. "
-            "Call torchlens.rehydrate_nested(trace) before saving."
+            "Call torchlens.io.rehydrate_nested(trace) before saving."
         )
 
 

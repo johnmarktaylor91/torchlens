@@ -117,3 +117,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: c2bf840731b388c451b208bfc05d7f52d3c0e7e1 (dirty)
 recorded: 2026-08-20T01:35:29.338112+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: A07 numbers truth: tracked-bytes caption stops double-counting the returned tensor (output alias rows own no bytes; identity partition A1)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: b73ce119249fee21204b45e64212d70216a65e44 (dirty)
+recorded: 2026-08-26T21:45:05.606673+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: A07 numbers truth: tracked-bytes caption stops double-counting the returned tensor (output alias rows own no bytes; identity partition A1)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: b73ce119249fee21204b45e64212d70216a65e44 (dirty)
+recorded: 2026-08-26T21:45:11.324514+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: A07 numbers truth: tracked-bytes caption stops double-counting the returned tensor (output alias rows own no bytes; identity partition A1)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: b73ce119249fee21204b45e64212d70216a65e44 (dirty)
+recorded: 2026-08-26T21:45:11.339591+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: A07 numbers truth: tracked-bytes caption stops double-counting the returned tensor (output alias rows own no bytes; identity partition A1)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: b73ce119249fee21204b45e64212d70216a65e44 (dirty)
+recorded: 2026-08-26T21:45:11.353881+00:00
+---
+generator: tests/godobject_oracle legacy
+flag: TORCHLENS_UPDATE_LEGACY_ARTIFACT_ORACLE=1
+reason: A07 numbers truth: loaded legacy surface reflects true-MAC semantics (backward/total MACs not derivable read None; MACs never flops//2)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: b73ce119249fee21204b45e64212d70216a65e44 (dirty)
+recorded: 2026-08-26T21:45:15.140023+00:00
+---
+generator: tests/godobject_oracle legacy
+flag: TORCHLENS_UPDATE_LEGACY_ARTIFACT_ORACLE=1
+reason: A09 wave-0 report honesty: Trace.logged_values read-back property (tl.report.log_value observer) is a deliberate public-surface addition; legacy loads expose the empty mapping
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 874c399e9ec852a4922c6d84f90f91ae0e5bae97 (dirty)
+recorded: 2026-08-26T21:51:13.358987+00:00

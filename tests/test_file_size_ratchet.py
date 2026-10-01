@@ -141,7 +141,16 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 4055 -> 3800 (2026-08-26 shim removal): the flat-kwarg warning ladders,
     # moved-name wrappers, and paper-era shims came out of trace()'s entry;
     # re-keyed down to the next 50-line step above the post-deletion measure.
-    "torchlens/user_funcs.py": 3800,
+    # 3800 -> 4200: 2026-08-26 A06 defect-lane settle (reviewed fix mass, next
+    # 50-line step above the 4150 measurement) -- stop_after halt-engine wiring
+    # + never-fired provenance split, save_grads predicate routing, the
+    # module_filter zero-save disclosure, the cache-key inversion (curated /
+    # neutral ledgers + sweep), chunk-path session-knob forwarding, the
+    # batchnorm train-stats warn-once, and the failed-capture preparation
+    # release. No new growth licensed; the Phase-2 move-class lane keeps
+    # user_funcs as a split target (trace-entry resolution vs cache vs
+    # chunking are its natural seams).
+    "torchlens/user_funcs.py": 4200,
     "torchlens/backends/torch/backward.py": 4450,
     # 3800 -> 3850: L1 adds the grouping knob mirror + grouping_policy stamp
     # settlement (~25 lines) on top of the re-stepped feature-sprint baseline.
@@ -160,7 +169,10 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     "torchlens/backends/torch/wrappers.py": 3300,
     "torchlens/backends/tinygrad/backend.py": 3300,
     "torchlens/backends/mlx/backend.py": 3250,
-    "torchlens/postprocess/_contracts.py": 3250,
+    # A07 (2026-08-26): +9 lines -- the step-1 contract gains the
+    # flops_forward/flops_backward boundary-reset writes and their pinned-pair
+    # carrier rows (alias rows own no compute); conscious raise, not growth debt.
+    "torchlens/postprocess/_contracts.py": 3258,
     "torchlens/backends/torch/model_prep.py": 3200,
     "torchlens/data_classes/module.py": 2950,
     "torchlens/visualization/auto_collapse.py": 2450,
@@ -175,7 +187,13 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     "torchlens/postprocess/loop_grouping_adapter.py": 2600,
     "torchlens/visualization/_render_leaf.py": 2400,
     "torchlens/visualization/_render_edges.py": 2450,
-    "torchlens/intervention/save.py": 2350,
+    # Raised 2350 -> 2400 at the A08 persistence-honesty lane (2026-08-26): the
+    # +38 lines are the intervention-spec door's settled-outcome gate, typed
+    # spec.json structural validation (was a bare KeyError), and the
+    # edge_address deserializer that stops the silent load-time discard (WT1
+    # A-IV item 20). Reviewed raise with a stated reason; save.py stays on the
+    # debloat-pass list.
+    "torchlens/intervention/save.py": 2400,
     # Raised 2400 -> 2425 at the facet-cache persistence fix (2026-08-17): the
     # +22 lines are the TEACHING half of the completeness refusal -- for an
     # undeclared `_<name>_cache` cell backed by a public property it now names
@@ -191,14 +209,34 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # states that a ledger row is documentation, not a scrub policy). Same
     # reviewed-raise class as the row above; scrub.py stays on the
     # debloat-pass list.
-    "torchlens/_io/scrub.py": 2445,
+    # Raised 2445 -> 2500 at the A08 persistence-honesty lane (2026-08-26): the
+    # +30 lines are the W3 weightsfree fix -- the structure-only buffer-payload
+    # strip (BN running stats are training-derived state a weights-free
+    # artifact must not carry; every structure-only save of a buffer-holding
+    # model was save-then-cannot-load at the M-C2 gate). Reviewed raise with a
+    # stated reason; scrub.py stays on the debloat-pass list.
+    # 2026-08-26 A09 fix cycle: source-embedding privacy policy family split
+    # out to _io/_source_privacy.py. Re-keyed ONCE at the T12 rebase for the
+    # final shape carrying both the A08 W3 raise and the A09 split (measured
+    # 2069; next 50-step). Shrink freely, raise consciously.
+    "torchlens/_io/scrub.py": 2100,
     "torchlens/debug/_infer_input_shape.py": 2250,
     "torchlens/postprocess/ast_branches.py": 2250,
-    "torchlens/visualization/_summary_internal/_builder.py": 2200,
     "torchlens/visualization/_render_nodes.py": 2150,
     "torchlens/_io/_safe_unpickle.py": 2100,
     "torchlens/visualization/_render_flow.py": 2100,
-    "torchlens/capture/trace.py": 2250,
+    # Raised 2250 -> 2300 at the A08 persistence-honesty lane (2026-08-26): the
+    # +16 lines are the streamed-bundle settlement seam (WT1 A-IV item 18) --
+    # the one publish hook that lands the settled capture-outcome attestation
+    # in the streamed artifact right after settle_completed/settle_halted.
+    # Reviewed raise with a stated reason; trace.py stays on the debloat list.
+    # Raised 2300 -> 2350 at the A06 pre-rebase reconcile (2026-08-27): A08's
+    # settlement seam (+16, above) and A06's save_grads bare-callable
+    # strict-bool retention helper each independently stepped 2250 -> 2300 on
+    # their own bases; combined they measure 2315, so the ledger re-steps to
+    # the next 50-line step above the merged measurement. No new growth
+    # licensed; debloat target unchanged.
+    "torchlens/capture/trace.py": 2350,
     "torchlens/backends/torch/completeness_witness.py": 2100,
 }
 
@@ -233,6 +271,18 @@ _MAX_LEDGER_SLACK = 100
 #: count, while the census machinery and the assertions are what must be read
 #: together. Every new global in the package lands here, so the growth is
 #: structural and will recur until the data moves out.
+#: 2026-08-26 megasprint fix cycle: SPLIT EXECUTED at exactly that seam, after
+#: the _GOVERNED_LOAD_DEPTH row landed 4 lines over the exact-stepped ceiling.
+#: The lifecycle-class frozensets, _WEAKLY_HELD, and the _LIFECYCLE_CLASSES
+#: tuple moved to tests/_global_state_rows.py (pure data, ~690 lines); the
+#: census machinery + assertions stay in test_global_state_inventory.py, which
+#: drops to ~1835 lines -- under the unledgered cap, so its row is DELETED per
+#: the two-way staleness rule. Future inventory rows land in the rows module,
+#: which holds ~1300 lines of headroom before the cap.
+#: 2026-08-26 A09 fix cycle (reconciled at the T12 rebase): the child-process
+#: / fork guard test family ALSO split out of the inventory module, to
+#: tests/test_global_state_child_process_guard.py -- both splits coexist, the
+#: inventory module drops to ~1538 lines, and its row stays DELETED.
 #: 2026-08-26 shim removal: test_validation 8600->8700, test_real_world_models
 #: 4850->5150, test_toy_models 4050->4500 -- the flat->grouped codemod spells
 #: every former one-line flat-kwarg trace() call as a wrapped grouped-options
@@ -247,7 +297,6 @@ _TEST_FILE_CEILINGS: dict[str, int] = {
     "tests/test_auto_collapse_metrics.py": 3200,
     "tests/test_backward.py": 2550,
     "tests/validation_goldens/test_validation_exemption_hardening.py": 2400,
-    "tests/test_global_state_inventory.py": 2509,
     "tests/test_conditional_branches.py": 2150,
     "tests/test_tlspec_runnable_r41_crossthread_witness.py": 2050,
 }

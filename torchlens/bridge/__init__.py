@@ -1,9 +1,20 @@
-"""External-tool bridge namespace."""
+"""External-tool bridge namespace.
+
+Every bridge module is import-inert without its foreign peer (the L8 rule):
+resolving ``tl.bridge.captum`` imports only TorchLens code, and the peer
+import is deferred into the functions that need it. Attribute access resolves
+through the shared five-step facade order (``torchlens.utils.facade``), so
+``hasattr`` probes and dunder lookups can never explode and a bridge module
+whose own import fails surfaces as a typed error that is BOTH an
+``ImportError`` and an ``AttributeError``.
+"""
 
 from __future__ import annotations
 
-import importlib
-from types import ModuleType
+from typing import TYPE_CHECKING as _TYPE_CHECKING
+
+if _TYPE_CHECKING:
+    from types import ModuleType
 
 _BRIDGE_MODULES = {
     "brain_score",
@@ -28,7 +39,7 @@ _BRIDGE_MODULES = {
 
 
 def __getattr__(name: str) -> ModuleType:
-    """Import bridge modules lazily.
+    """Import bridge modules lazily through the five-step facade order.
 
     Parameters
     ----------
@@ -43,14 +54,19 @@ def __getattr__(name: str) -> ModuleType:
     Raises
     ------
     AttributeError
-        If ``name`` is not a known bridge module.
+        Per the five-step contract; unknown names raise plain
+        ``AttributeError``.
     """
 
-    if name not in _BRIDGE_MODULES:
-        raise AttributeError(f"module 'torchlens.bridge' has no attribute {name!r}")
-    module = importlib.import_module(f"{__name__}.{name}")
-    globals()[name] = module
-    return module
+    from ..utils.facade import resolve_facade_attr
+
+    resolved: ModuleType = resolve_facade_attr(
+        owner=__name__,
+        name=name,
+        module_globals=globals(),
+        submodules=_BRIDGE_MODULES,
+    )
+    return resolved
 
 
 def __dir__() -> list[str]:
@@ -59,10 +75,12 @@ def __dir__() -> list[str]:
     Returns
     -------
     list[str]
-        Sorted bridge module names plus module globals.
+        Sorted bridge module names plus real public globals.
     """
 
-    return sorted([*globals(), *_BRIDGE_MODULES])
+    from ..utils.facade import facade_dir
+
+    return facade_dir(globals(), _BRIDGE_MODULES)
 
 
 __all__ = [
@@ -85,3 +103,8 @@ __all__ = [
     "shap",
     "steering_vectors",
 ]
+
+# ``from __future__ import annotations`` binds ``annotations`` as a reachable
+# module attribute; nothing reads the binding (the future feature is a
+# compile-time flag), so unbind it -- the root facade's own idiom.
+del annotations

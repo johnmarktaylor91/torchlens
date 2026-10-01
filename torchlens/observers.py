@@ -404,4 +404,36 @@ def active_span_records() -> list[dict[str, Any]]:
     return list(_state._active_record_spans.get())
 
 
-__all__ = ["TapObserver", "TapRecord", "active_span_records", "span", "tap"]
+def log_value(name: str, value: Any) -> None:
+    """Record an arbitrary scalar-like value on the active ``Trace``.
+
+    Canonical home of the capture-time value writer (moved from
+    ``torchlens.report``, which keeps a compatibility alias): observers own
+    capture-time annotation writers, reporting surfaces own the readers.
+    Values land under ``trace.annotations["logged_values"]`` and read back
+    through ``Trace.logged_values``; they render in ``tl.report.explain`` and
+    ``Trace.to_agent_json``.
+
+    Parameters
+    ----------
+    name:
+        Value name.
+    value:
+        Scalar or JSON-like value to record.
+
+    Raises
+    ------
+    RuntimeError
+        If no TorchLens capture is active.
+    """
+
+    trace = _state._active_trace
+    if trace is None:
+        raise RuntimeError(
+            "torchlens.observers.log_value() (compat alias "
+            "torchlens.report.log_value) must be called during trace."
+        )
+    trace.annotations.setdefault("logged_values", {})[str(name)] = value
+
+
+__all__ = ["TapObserver", "TapRecord", "active_span_records", "log_value", "span", "tap"]

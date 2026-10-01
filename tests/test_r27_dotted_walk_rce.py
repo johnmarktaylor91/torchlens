@@ -330,5 +330,11 @@ def test_weights_only_load_capability_in_snapshot() -> None:
     snapshot = get_torch_capability_snapshot()
     assert "HAS_SAFE_WEIGHTS_ONLY_LOAD" in snapshot
     assert isinstance(snapshot["HAS_SAFE_WEIGHTS_ONLY_LOAD"], bool)
-    # Surfaced in the model-free doctor diagnostic (tl.compat.report needs a model).
-    assert "HAS_SAFE_WEIGHTS_ONLY_LOAD" in str(tl_utils.doctor())
+    # Surfaced in the model-free doctor diagnostic (tl.compat.report needs a
+    # model). The doctor row is a bounded absences-first summary, so a present
+    # flag lives on the report's capability_snapshot() detail accessor, while
+    # an ABSENT flag (the degradation) must be named in the visible row text.
+    report = tl_utils.doctor()
+    assert "HAS_SAFE_WEIGHTS_ONLY_LOAD" in report.capability_snapshot()
+    if not snapshot["HAS_SAFE_WEIGHTS_ONLY_LOAD"]:
+        assert "HAS_SAFE_WEIGHTS_ONLY_LOAD" in str(report)

@@ -139,6 +139,10 @@ class CompatReport:
     def show(self) -> str:
         """Render this report as a fixed-width text table.
 
+        Long ``Details``/``Suggestion`` cells wrap inside a capped column
+        width instead of inflating every table line (a ~1,900-character data
+        cell used to yield 2,073-character lines on every renderer).
+
         Returns
         -------
         str
@@ -157,7 +161,9 @@ class CompatReport:
             )
             for row in self.rows
         ]
-        widths = _column_widths([headers, *body])
+        widths = tuple(
+            min(width, _SHOW_CELL_WIDTH_CAP) for width in _column_widths([headers, *body])
+        )
         lines = [
             f"TorchLens compatibility report for {self.model_type}",
             f"PyTorch: {self.torch_version}",
@@ -165,8 +171,72 @@ class CompatReport:
             _format_table_line(headers, widths),
             _format_table_line(tuple("-" * width for width in widths), widths),
         ]
-        lines.extend(_format_table_line(row, widths) for row in body)
+        for row_values in body:
+            lines.extend(_format_wrapped_table_lines(row_values, widths))
         return "\n".join(lines)
+
+    def __str__(self) -> str:
+        """Return the designed findings-first summary.
+
+        Returns
+        -------
+        str
+            Bounded multi-line report: findings ordered by severity, clean
+            rows rolled up, next-question pointers last.
+        """
+
+        severity_rank = {"error": 0, "warning": 1, "info": 2, "ok": 3}
+        findings = sorted(
+            (row for row in self.rows if row.detected or row.severity != "ok"),
+            key=lambda row: severity_rank.get(row.severity, 3),
+        )
+        clean = [row for row in self.rows if not (row.detected or row.severity != "ok")]
+        lines = [
+            f"TorchLens compatibility report for {self.model_type}",
+            (
+                f"PyTorch {self.torch_version}; {len(self.rows)} rows: "
+                f"{len(findings)} finding(s), {len(clean)} clean"
+            ),
+        ]
+        for row in findings:
+            lines.append(_cap_line(f"- [{row.severity}] {row.label} ({row.status}): {row.details}"))
+            if row.suggestion:
+                lines.append(_cap_line(f"    fix: {row.suggestion}"))
+        if clean:
+            lines.append(_cap_line("Clean rows: " + ", ".join(row.label for row in clean)))
+        lines.append("Full table: report.show() / report.to_markdown()")
+        lines.append(
+            "Rows: report.rows / report.row(key); capability dump: report.capability_snapshot()"
+        )
+        return "\n".join(lines)
+
+    def __repr__(self) -> str:
+        """Return the designed summary, never the dataclass wall.
+
+        The auto-generated dataclass repr was a 7,700-character one-line wall
+        (sumfam wave-0 item 2, LAUNCH BLOCKER class).
+
+        Returns
+        -------
+        str
+            The findings-first summary.
+        """
+
+        return self.__str__()
+
+    def capability_snapshot(self) -> dict[str, bool]:
+        """Return the full runtime capability snapshot (the detail accessor).
+
+        The ``torch_capabilities`` row shows the grouped absences-first
+        summary; this returns the complete ``flag -> available`` mapping.
+
+        Returns
+        -------
+        dict[str, bool]
+            Capability flag availability.
+        """
+
+        return _runtime_capability_snapshot()
 
 
 def report(model: nn.Module, input: Any) -> CompatReport:  # noqa: A002
@@ -214,6 +284,49 @@ def report(model: nn.Module, input: Any) -> CompatReport:  # noqa: A002
         torch_version=str(torch.__version__),
         rows=rows,
     )
+
+
+#: Width cap for one cell in the fixed-width ``show()`` table.
+_SHOW_CELL_WIDTH_CAP = 60
+
+#: Width cap for one designed-summary line (bounded-reprs doctrine).
+_REPR_LINE_CAP = 160
+
+
+def _cap_line(line: str) -> str:
+    """Return ``line`` truncated to the repr cap with a disclosed ellipsis."""
+
+    if len(line) <= _REPR_LINE_CAP:
+        return line
+    return line[: _REPR_LINE_CAP - 3] + "..."
+
+
+def _format_wrapped_table_lines(row: Sequence[str], widths: Sequence[int]) -> list[str]:
+    """Format one logical table row as one or more width-capped lines.
+
+    Parameters
+    ----------
+    row:
+        Cell values.
+    widths:
+        Capped column widths.
+
+    Returns
+    -------
+    list[str]
+        Physical lines; cells longer than their column wrap onto
+        continuation lines in their own column.
+    """
+
+    wrapped_cells = [
+        textwrap.wrap(value, width=widths[index]) or [""] for index, value in enumerate(row)
+    ]
+    line_count = max(len(cell) for cell in wrapped_cells)
+    lines = []
+    for line_index in range(line_count):
+        parts = tuple(cell[line_index] if line_index < len(cell) else "" for cell in wrapped_cells)
+        lines.append(_format_table_line(parts, widths).rstrip())
+    return lines
 
 
 def _escape_markdown(value: str) -> str:
@@ -1319,11 +1432,17 @@ def _torch_capabilities_row() -> CompatRow:
     optional_absent = [name for name in absent if name in OPTIONAL_CAPABILITY_FLAGS]
     status: Status = "not_tested" if missing else "pass"
     severity: Severity = "warning" if missing else "ok"
-    details = "Runtime capabilities: " + _format_capability_snapshot(snapshot)
+    # Grouped absences-first summary (ONE shared renderer with doctor); the
+    # full name=value dump lives on report.capability_snapshot(), so a ~1,900
+    # character data cell no longer inflates every renderer's line width.
+    from ..utils import format_capability_summary
+
+    details = "Runtime capabilities: " + format_capability_summary(snapshot)
     if missing:
         details += "; missing=" + ", ".join(missing)
     if optional_absent:
         details += "; optional_absent=" + ", ".join(optional_absent)
+    details += "; full dump: report.capability_snapshot()"
     suggestion = (
         "Run torchlens.utils.doctor() for the same snapshot; missing flags indicate graceful "
         "degradation of private runtime integration points."
@@ -1428,23 +1547,6 @@ def _runtime_capability_snapshot() -> dict[str, bool]:
         return snapshot
     snapshot.update(get_tf_capability_snapshot())
     return snapshot
-
-
-def _format_capability_snapshot(snapshot: dict[str, bool]) -> str:
-    """Format capability flags as a stable comma-separated list.
-
-    Parameters
-    ----------
-    snapshot:
-        Capability flags to format.
-
-    Returns
-    -------
-    str
-        Stable ``name=value`` list.
-    """
-
-    return ", ".join(f"{name}={available}" for name, available in sorted(snapshot.items()))
 
 
 def _single_thread_row() -> CompatRow:

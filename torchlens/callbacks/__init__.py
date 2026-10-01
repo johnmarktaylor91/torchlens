@@ -1,15 +1,22 @@
-"""Callback integration namespace with lazy Lightning support."""
+"""Callback integration namespace with lazy Lightning support.
+
+Attribute access resolves through the shared five-step facade order
+(``torchlens.utils.facade``); the ``lightning`` integration module itself is
+import-inert without the foreign peer.
+"""
 
 from __future__ import annotations
 
-import importlib
-from types import ModuleType
+from typing import TYPE_CHECKING as _TYPE_CHECKING
+
+if _TYPE_CHECKING:
+    from types import ModuleType
 
 _CALLBACK_MODULES = {"lightning"}
 
 
 def __getattr__(name: str) -> ModuleType:
-    """Import callback integrations lazily.
+    """Import callback integrations lazily through the five-step facade order.
 
     Parameters
     ----------
@@ -24,14 +31,19 @@ def __getattr__(name: str) -> ModuleType:
     Raises
     ------
     AttributeError
-        If ``name`` is not a known callback integration.
+        Per the five-step contract; unknown names raise plain
+        ``AttributeError``.
     """
 
-    if name not in _CALLBACK_MODULES:
-        raise AttributeError(f"module 'torchlens.callbacks' has no attribute {name!r}")
-    module = importlib.import_module(f"{__name__}.{name}")
-    globals()[name] = module
-    return module
+    from ..utils.facade import resolve_facade_attr
+
+    resolved: ModuleType = resolve_facade_attr(
+        owner=__name__,
+        name=name,
+        module_globals=globals(),
+        submodules=_CALLBACK_MODULES,
+    )
+    return resolved
 
 
 def __dir__() -> list[str]:
@@ -40,10 +52,17 @@ def __dir__() -> list[str]:
     Returns
     -------
     list[str]
-        Sorted callback module names plus module globals.
+        Sorted callback module names plus real public globals.
     """
 
-    return sorted([*globals(), *_CALLBACK_MODULES])
+    from ..utils.facade import facade_dir
+
+    return facade_dir(globals(), _CALLBACK_MODULES)
 
 
 __all__ = ["lightning"]
+
+# ``from __future__ import annotations`` binds ``annotations`` as a reachable
+# module attribute; nothing reads the binding (the future feature is a
+# compile-time flag), so unbind it -- the root facade's own idiom.
+del annotations

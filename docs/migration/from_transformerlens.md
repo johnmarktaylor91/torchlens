@@ -47,3 +47,20 @@ class Tiny(nn.Module):
 log = tl.trace(Tiny(), torch.tensor([[2.0, 3.0]]))
 RESULT = log["linear_1_1"].out.detach().tolist()
 ```
+
+## The 3.x TransformerBridge cannot be traced (and it mutates your HF model)
+
+TorchLens refuses to capture a `transformer_lens.TransformerBridge` with a typed
+`CompatibilityError` naming the remedy. The bridge redirects attribute assignment to the
+HF modules it wraps, so TorchLens's forward instrumentation can never land on it; without
+the refusal, capture died partway through with an internal `AttributeError`. Trace a
+pristine model instead:
+
+- reload the HF model fresh (`AutoModelForCausalLM.from_pretrained(...)`) and trace that, or
+- trace a `HookedTransformer` directly -- it captures fully and is the same-object
+  comparison subject TorchLens's own oracle suite uses.
+
+Separately, be aware that the bridge/boot machinery (`boot_transformers`, bridge
+construction) MUTATES the HF model it wraps in place. A model instance that has already
+passed through the bridge is no longer the pristine model you loaded; reload it fresh
+before tracing rather than reusing it.

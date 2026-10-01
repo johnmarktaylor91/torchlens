@@ -1301,7 +1301,7 @@
     }
   ],
   "trace_summary": {
-    "total_flops_forward": 2381824,
+    "total_flops_forward": 2159616,
     "uncalled_modules": [
       "decoders",
       "encoders"

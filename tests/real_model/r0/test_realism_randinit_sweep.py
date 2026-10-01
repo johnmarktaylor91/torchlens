@@ -25,7 +25,6 @@ from tests.real_model.r0.expectations import (
     FACET_SHAPE_SPECS,
     FALSE_CLAIM_OWNERS,
     GPT2_LN_INPUT_AVAILABLE_ADDRESSES,
-    KNOWN_RED_BY_ID,
     SHAPE_DIM_OVERRIDES,
     SHAPE_SPEC_OVERRIDES,
     WRONG_PAYLOAD_MANIFEST,
@@ -67,6 +66,7 @@ def _expected_shape(family, address, facet, dims):
         "s": dims["seq"],
         "h": dims["hidden"],
         "n": dims["heads"],
+        "g": dims.get("kv_heads", dims["heads"]),  # GQA KV heads; = heads for MHA
         "d": dims["d_head"],
         "v": dims["vocab"],
     }
@@ -278,27 +278,19 @@ def test_gpt2_payload_identity_independent_oracles(r0_capture):
         "lm_head logits facet != direct forward logits: the facet is anchored to"
         " the wrong op or the capture perturbed the computation"
     )
-    # Enumerated-red: block-0 resid_pre SHOULD equal wte+wpe computed by hand,
-    # but today it is served ids-shaped (WRONG_PAYLOAD_MANIFEST, owner A02).
-    # Pin the wrongness; when the anchor is fixed this goes stale loudly and
-    # A02 flips it to the true embedding oracle below.
+    # True embedding oracle (flipped by A02 when the resid_pre anchor was
+    # fixed): block-0 resid_pre equals wte+wpe computed by hand -- bitwise,
+    # since eval-mode embedding dropout is inert.
     ids = kwargs["input_ids"]
     with torch.no_grad():
         positions = torch.arange(ids.shape[1]).unsqueeze(0)
         embedded = model.transformer.wte(ids) + model.transformer.wpe(positions)
     block0 = _module_by_address(cap.trace, "transformer.h.0")
     resid_pre = _facet_value(block0.facets, "resid_pre")
-    if tuple(resid_pre.shape) == tuple(embedded.shape):
-        pytest.fail(
-            "STALE wrong-payload pin: gpt2 resid_pre(block 0) is now"
-            " residual-shaped. Delete its WRONG_PAYLOAD_MANIFEST rows"
-            f" ({WRONG_PAYLOAD_OWNER}) and assert torch.equal(resid_pre,"
-            " wte+wpe) here in the same change."
-        )
-    assert (
-        tuple(resid_pre.shape)
-        == WRONG_PAYLOAD_MANIFEST[("gpt2", "sdpa", "transformer.h.0", "resid_pre")]
-    ), "resid_pre wrongness moved without becoming correct; re-measure the manifest"
+    assert torch.equal(resid_pre, embedded), (
+        "gpt2 resid_pre(block 0) != wte+wpe computed by hand: the residual"
+        " anchor drifted off the embedding path"
+    )
     # Aliasing identity: unembed_weight is the LIVE tied parameter, not a copy.
     unembed = _facet_value(head.facets, "unembed_weight")
     assert unembed is model.lm_head.weight, (
@@ -354,26 +346,25 @@ def test_gpt2_ln_input_capture_dependency_pinned(r0_capture):
     )
 
 
-def test_logit_lens_flagship_failure_enumerated_red(r0_capture):
+def test_logit_lens_true_oracle_final_layer_equals_model_logits(r0_capture):
+    """logit_lens succeeds on the config-built GPT-2 (enumerated-red flipped).
+
+    The flagship logit-lens failure's root cause was the false final_norm_*
+    absence claims; A02's final-norm dataflow anchor (mikit F6) fixed it, so
+    this test now asserts the TRUE oracle: the final layer's lens projection
+    reproduces the model's own logits bitwise (same-process fp32 CPU).
+    """
+
     import torchlens as tl
 
-    red = KNOWN_RED_BY_ID["logit-lens-final-norm"]
     cap = r0_capture("gpt2", "sdpa")
-    try:
-        tl.semantic.logit_lens(cap.trace)
-    except red.exception_class() as exc:
-        # Enumerated-red: pin the exact current signature. A failure whose
-        # TYPE moves escapes this narrow catch and errors raw -- re-pin or
-        # fix per the owner named in the row.
-        assert red.message_substring in str(exc), (
-            f"logit_lens failure signature drifted from {red.message_substring!r}"
-        )
-        return
-    pytest.fail(
-        f"STALE enumerated-red row {red.red_id!r}: logit_lens now succeeds on the"
-        f" config-built GPT-2. {red.owner} fixed it -- delete the KNOWN_RED row"
-        " and flip this test to the true oracle (final-layer lens == the model's"
-        " own logits) in the same change."
+    result = tl.semantic.logit_lens(cap.trace)
+    assert result.entries, "logit_lens returned no per-layer projections"
+    with torch.no_grad():
+        direct = cap.model(**cap.input_kwargs).logits
+    assert torch.equal(result.entries[-1].logits, direct), (
+        "final-layer logit-lens projection != the model's own logits: the"
+        " reconstructed head (final norm + unembedding) drifted off the model"
     )
 
 

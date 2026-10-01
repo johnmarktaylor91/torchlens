@@ -1,0 +1,92 @@
+{
+  "schema": "torchlens.migration_ledger.v1",
+  "seeded": "2026-08-26",
+  "seeded_by": "megasprint lane A12 ('claims + migration ledgers seeded'). Rows transcribe the convert-panel memo section-2 receipts, RE-VERIFIED against this checkout on 2026-08-26 (rows the earlier fix waves already closed are recorded as fixed, not dropped). The prose truth sweep is lane D01's; doc consolidation and the executable harness are lane F30's; this ledger is the work queue both consume.",
+  "companion": "docs/migration/_claims.json (wording rules + lints for every comparative sentence)",
+  "rows": [
+    {
+      "id": "inseq-hf-wrapper-denied",
+      "doc": "docs/migration/inseq.md",
+      "kind": "undersell-falsehood",
+      "receipt": "Line 14 says HuggingFace convenience wrappers have 'No direct public wrapper ... Deferred to v2.x' while torchlens/bridge/hf.py ships trace_text.",
+      "status": "open",
+      "verified_at": "2026-08-26 (mega/A12 checkout; line 14 live)",
+      "owner_next": "D01 (prose truth sweep)"
+    },
+    {
+      "id": "saelens-utilities-undersold",
+      "doc": "docs/migration/saelens.md",
+      "kind": "undersell-falsehood",
+      "receipt": "The historical 'deferred' row is gone, but line 6 still says 'TorchLens does not ship SAE training/inference utilities' with no mention of the shipped bridge.sae splice experiment (bridge/sae.py: reconstruction fidelity + causal effect + latents_edit).",
+      "status": "open",
+      "verified_at": "2026-08-26 (mega/A12 checkout)",
+      "owner_next": "D01 (prose truth sweep)"
+    },
+    {
+      "id": "fused-attention-not-visible-rows",
+      "doc": "docs/migration/baukit.md:14; autocircuit.md:14; inseq.md:13; transformerlens.md:13",
+      "kind": "undersell-falsehood",
+      "receipt": "Four pages still say fused attention internals are 'not visible' while verified READ-ONLY SDPA facets ship (docs/facets.md). Correct wording must name eager-vs-fused and facet-vs-captured-op per the attention-picture-scope lint.",
+      "status": "open",
+      "verified_at": "2026-08-26 (mega/A12 checkout; all four lines live)",
+      "owner_next": "D01 (prose truth sweep); cross-ref claims lint attention-picture-scope",
+      "cross_refs": [
+        "attention-picture-scope"
+      ]
+    },
+    {
+      "id": "captum-ig-no-equivalent",
+      "doc": "docs/migration/captum.md",
+      "kind": "undersell-falsehood",
+      "receipt": "Historically said integrated gradients has 'no direct equivalent' while torchlens/attribution exports one.",
+      "status": "fixed",
+      "verified_at": "2026-08-26 (mega/A12 checkout; the line is gone)",
+      "owner_next": "none (closed by an earlier fix wave; D01 re-verifies in the sweep)"
+    },
+    {
+      "id": "transformerlens-aliases-denied",
+      "doc": "docs/migration/transformerlens.md",
+      "kind": "undersell-falsehood",
+      "receipt": "Historically denied component naming while enable_transformerlens_aliases ships (semantic/facets.py). The page still centers manual-eager workarounds; re-verify each row against the shipped alias/facet surface.",
+      "status": "open",
+      "verified_at": "2026-08-26 (mega/A12 checkout; page carries no alias mention)",
+      "owner_next": "D01 (prose truth sweep)"
+    },
+    {
+      "id": "baukit-runningstats-missing",
+      "doc": "docs/migration/baukit.md",
+      "kind": "missing-row",
+      "receipt": "No runningstats row while tl.stats / tl.aggregate ship.",
+      "status": "open",
+      "verified_at": "2026-08-26 (mega/A12 checkout; zero 'runningstats' hits)",
+      "owner_next": "D01 (prose truth sweep)"
+    },
+    {
+      "id": "two-doc-generations",
+      "doc": "docs/migration/ (19 files)",
+      "kind": "structural",
+      "receipt": "Ten short stub tables AND seven from_* executable guides coexist; TLens, nnsight, captum, pyvene each have both; the stubs rotted while the guides were maintained. No index.md. Root MIGRATIONS.md is about .tlspec format policy -- a name collision. Two directory files are not competitor pages (scoped_detached_patching.md, v2.0_api_changes.md -- both legitimately so).",
+      "status": "open",
+      "verified_at": "2026-08-26 (mega/A12 checkout; no index.md; MIGRATIONS.md collision live)",
+      "owner_next": "F30 (convert wave-0 item 7: consolidation, tombstones, index.md, MIGRATIONS.md cross-reference)"
+    },
+    {
+      "id": "migration-harness-compares-nothing",
+      "doc": "tests/test_migrations.py",
+      "kind": "harness",
+      "receipt": "Hardcoded 7-file tuple (renamed file silently drops out); all six competitor-side blocks skip (no peer installed anywhere); guard test asserts only that code blocks EXIST in the markdown; assertions are toy literals (both sides assert 2.5) so a wrong translation cannot fail.",
+      "status": "open",
+      "verified_at": "2026-08-26 (receipt carried from the convert panel; harness unchanged on this branch)",
+      "owner_next": "F30 (guide registry + oracle-pair contract + peer legs, convert items 11/15/17-21)"
+    },
+    {
+      "id": "v2-api-changes-old-spellings",
+      "doc": "docs/migration/v2.0_api_changes.md",
+      "kind": "current",
+      "receipt": "Deliberately teaches removed spellings as the OLD column of the rename map (e.g. vis_mode-on-trace at lines 142-148, flat do(confirm_mutation=)). Legitimate; never lint this file for removed spellings without the column context.",
+      "status": "current",
+      "verified_at": "2026-08-26",
+      "owner_next": "none"
+    }
+  ]
+}

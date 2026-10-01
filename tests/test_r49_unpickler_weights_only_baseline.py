@@ -340,6 +340,12 @@ class _ControlFlow(nn.Module):
 
 
 @pytest.mark.smoke
+@pytest.mark.filterwarnings(
+    # A08 random-role-init disclosure (runnable_random_init_run): this test
+    # exercises a weight-free runnable run DELIBERATELY; the warning is the
+    # feature under test elsewhere (tests/test_persist_honesty_runnable_random.py).
+    "default:This runnable artifact carries no model weights"
+)
 def test_legit_bundles_round_trip_under_the_gate(tmp_path: Path) -> None:
     """Portable + all runnable levels still load AND run (no over-trigger)."""
 

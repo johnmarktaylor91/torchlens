@@ -137,6 +137,12 @@ def test_runnable_save_normal_model_remains_tensor_payload_free(tmp_path: Path) 
 
 
 @pytest.mark.smoke
+@pytest.mark.filterwarnings(
+    # A08 random-role-init disclosure (runnable_random_init_run): this test
+    # exercises a weight-free runnable run DELIBERATELY; the warning is the
+    # feature under test elsewhere (tests/test_persist_honesty_runnable_random.py).
+    "default:This runnable artifact carries no model weights"
+)
 def test_used_nonpersistent_buffer_is_embedded_without_becoming_canonical_state(
     tmp_path: Path,
 ) -> None:

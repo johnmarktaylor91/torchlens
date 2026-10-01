@@ -8,10 +8,10 @@ from ._compile_counter import (
     CompileCountsUnavailableError,
     count_compiles,
 )
-from ._cost import hot_path
+from ._cost import hot_path, hot_path_rows
 from ._dtype_range import DTypeRangeAudit, dtype_range_audit
-from ._gradients import gradient_flow_audit
-from ._graph import LineageResult, compare, dead_neurons, lineage
+from ._gradients import gradient_flow_audit, gradient_flow_audit_rows
+from ._graph import LineageResult, compare, compare_rows, dead_neurons, dead_neurons_rows, lineage
 from ._graph_breaks import (
     GraphBreak,
     GraphBreakReport,
@@ -47,12 +47,16 @@ __all__ = [
     "find_nan",
     "compare",
     "compare_params",
+    "compare_rows",
     "count_compiles",
     "dead_neurons",
+    "dead_neurons_rows",
     "dtype_range_audit",
     "gradient_flow_audit",
+    "gradient_flow_audit_rows",
     "graph_breaks",
     "hot_path",
+    "hot_path_rows",
     "infer_input_shape",
     "lineage",
     "recompute_candidates",

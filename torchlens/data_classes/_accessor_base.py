@@ -9,6 +9,36 @@ from typing import Any, Generic, TypeVar
 T = TypeVar("T")
 
 
+def attach_source_honesty(frame: Any, records: list[Any]) -> Any:
+    """Attach capture-honesty facts from the records' source trace.
+
+    Walks ``records`` for the first one whose ``_source_trace_ref`` weakref
+    still resolves and attaches that trace's shared capture-honesty facts to
+    ``frame`` (WT1 A-V row 24: no tabular export without them).
+
+    Parameters
+    ----------
+    frame:
+        Pandas DataFrame to annotate in place.
+    records:
+        Record objects that may carry a ``_source_trace_ref`` weakref.
+
+    Returns
+    -------
+    Any
+        ``frame``, for call-site chaining.
+    """
+    for record in records:
+        source_ref = getattr(record, "_source_trace_ref", None)
+        source_trace = source_ref() if callable(source_ref) else None
+        if source_trace is not None:
+            from .._capture_honesty import attach_dataframe_honesty
+
+            attach_dataframe_honesty(frame, source_trace)
+            break
+    return frame
+
+
 class Accessor(Generic[T]):
     """Generic dict-like accessor for ordered TorchLens log objects."""
 
@@ -139,7 +169,8 @@ class Accessor(Generic[T]):
         frames = [item.to_pandas() for item in self._list if hasattr(item, "to_pandas")]
         if not frames:
             return pd.DataFrame()
-        return pd.concat(frames, ignore_index=True)
+        combined = pd.concat(frames, ignore_index=True)
+        return attach_source_honesty(combined, self._list)
 
     def _resolve_pass_qualified(self, key: str) -> T | None:
         """Resolve a pass-qualified key, if supported by the subclass.

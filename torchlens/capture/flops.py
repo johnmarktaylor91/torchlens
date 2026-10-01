@@ -54,6 +54,30 @@ ParamShapes = Sequence[Shape]
 CapturedArgs = tuple[object, ...]
 
 
+ZERO_ARITHMETIC_CONSTRUCTIONS = frozenset(
+    {
+        "tensor",
+        "as_tensor",
+        "scalar_tensor",
+        "arange",
+        "zeros",
+        "ones",
+        "empty",
+        "full",
+        "eye",
+        "zeros_like",
+        "ones_like",
+        "empty_like",
+        "full_like",
+        "new_zeros",
+        "new_ones",
+        "new_empty",
+        "new_full",
+        "empty_strided",
+    }
+)
+
+
 # ============================================================================
 # Helpers
 # ============================================================================
@@ -1637,8 +1661,8 @@ def compute_forward_flops(
         flops_fn, _mem_fn = _CUSTOM_OP_RULES[func_name]
         return flops_fn(output_shape, param_shapes, saved_args, saved_kwargs)
 
-    # Tier 1: zero-cost memory/layout ops
-    if func_name in ZERO_FLOPS_OPS:
+    # Tier 1: zero-cost memory/layout ops and zero-arithmetic constructions
+    if func_name in ZERO_FLOPS_OPS or func_name in ZERO_ARITHMETIC_CONSTRUCTIONS:
         return 0
 
     # Tier 2: element-wise ops with fixed per-element cost

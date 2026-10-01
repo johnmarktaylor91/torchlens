@@ -166,8 +166,9 @@ def test_xn_unrolled_rows_are_pass_qualified() -> None:
 def test_xn_rolled_row_keeps_aggregate_multiplicity() -> None:
     trace = _recurrent_trace()
     names = _memory_row_names(trace, "rolled", "relu_1_1")
-    # Rolled aggregate stays a single 'xN' row (SOL-M2 semantics untouched).
-    assert names == ["relu_1_1 x3"]
+    # Rolled aggregate stays a single row; the multiplicity is spelled in the
+    # one pass/op vocabulary (A10): "xN passes", never bare "xN" or "N ops".
+    assert names == ["relu_1_1 (x3 passes)"]
 
 
 # --------------------------------------------------------------------------- F8

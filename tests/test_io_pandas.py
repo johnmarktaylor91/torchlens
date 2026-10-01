@@ -1,6 +1,7 @@
 """Tests for IO-S2 pandas and file-export surfaces."""
 
 import importlib.util
+import json
 from pathlib import Path
 from typing import Any
 
@@ -280,13 +281,16 @@ def test_tabular_exports_round_trip(
 
     csv_path = tmp_path / f"{surface_name}.csv"
     tl.export.csv(surface, csv_path)
-    csv_df = pd.read_csv(csv_path)
+    # The capture-honesty preamble rides '#' comment lines (WT1 A-V row 24).
+    csv_df = pd.read_csv(csv_path, comment="#")
     assert list(csv_df.columns) == list(expected_df.columns)
     assert len(csv_df) == len(expected_df)
 
     json_path = tmp_path / f"{surface_name}.json"
     tl.export.json(surface, json_path)
-    json_df = pd.read_json(json_path, orient="records")
+    json_payload = json.loads(json_path.read_text(encoding="utf-8"))
+    assert "capture_honesty" in json_payload
+    json_df = pd.DataFrame(json_payload["rows"])
     assert list(json_df.columns) == list(expected_df.columns)
     assert len(json_df) == len(expected_df)
 

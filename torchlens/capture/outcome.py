@@ -376,11 +376,24 @@ def outcome_for(trace: object) -> CaptureOutcome | None:
     forwarded the inner trace's FAILED stamp -- two answers for one product
     (b1-opus-R06-1). The hop is single-level by construction: the delegate is
     read through its own ``__dict__`` only, never recursed.
+
+    A SLOTS-BACKED product whose validating ``outcome`` property is itself
+    the settlement-truth reader declares ``_OUTCOME_SELF_AUTHORITY = True``
+    (``Recording``: R10-5 re-parse of the stamped record plus the
+    conservative construction-status derivation, never blessing COMPLETE).
+    Without it the gate read the missing ``__dict__`` as UNKNOWN and refused
+    every settled Recording with a false hand-built-object warning while
+    ``recording.outcome`` reported the real status -- the same two-answers
+    disease, WT1 A-IV item 21 (lane A08).
     """
 
     outcome = getattr(trace, "__dict__", {}).get("_capture_outcome")
     if isinstance(outcome, CaptureOutcome):
         return outcome
+    if getattr(type(trace), "_OUTCOME_SELF_AUTHORITY", False):
+        candidate = getattr(trace, "outcome", None)
+        if isinstance(candidate, CaptureOutcome):
+            return candidate
     delegate_field = getattr(type(trace), "_OUTCOME_DELEGATE_FIELD", None)
     if isinstance(delegate_field, str):
         inner = getattr(trace, delegate_field, None)

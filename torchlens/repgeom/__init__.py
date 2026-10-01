@@ -20,6 +20,16 @@ from ..intervention.errors import MultiMatchWarning
 from ..utils._multipass_access import get_multipass_attr
 from ..utils.display import ensure_trace_visualizer_dir
 from ..viz.node_plots import render_heatmap, render_image_scatter, render_lineplot
+from ._annotation_gate import (
+    _VERB_VOCABULARY,
+    _commit_annotation_tensors,
+    _expected_stimulus_counts,
+    _raise_ineligible_site,
+    _raise_recurrent_layer_requires_pass,
+    _raise_unsaved_activation,
+    _site_ineligibility,
+    _warn_skipped_sites,
+)
 
 DistanceMetric: TypeAlias = Literal["euclidean", "cosine", "correlation"]
 MDSInputKind: TypeAlias = Literal["auto", "distances", "features"]
@@ -434,9 +444,13 @@ def _angular_dissimilarity(features: np.ndarray, *, center_rows: bool) -> np.nda
 
     working = features - features.mean(axis=1, keepdims=True) if center_rows else features.copy()
     norms = np.linalg.norm(working, axis=1, keepdims=True)
-    if np.any(norms <= _near_zero_tolerance(norms)):
+    zero_rows = np.flatnonzero(norms.ravel() <= _near_zero_tolerance(norms))
+    if zero_rows.size:
         metric_name = "correlation" if center_rows else "cosine"
-        raise ValueError(f"{metric_name} distance is undefined for zero-norm stimuli.")
+        raise ValueError(
+            f"{metric_name} distance is undefined for zero-norm stimuli "
+            f"(stimulus rows {zero_rows.tolist()})."
+        )
     normalized = working / norms
     similarities = np.clip(normalized @ normalized.T, -1.0, 1.0)
     return 1.0 - similarities
@@ -724,19 +738,26 @@ def mds_evolution(
         pass-qualified selection, or fails MDS preconditions.
     """
 
-    selected = _selected_mds_sites(trace, save)
+    selected = _selected_mds_sites(trace, save, verb="mds_evolution")
     coords_by_key: MDSEvolution = OrderedDict()
+    staged: OrderedDict[str, torch.Tensor] = OrderedDict()
     previous_coords: np.ndarray | None = None
     for key, _site, activations in selected:
-        distances = activation_distance_matrix(activations, metric=metric)
-        coords, _info = classical_mds(
-            distances, n_components=2, min_n=min_n, input_kind="distances"
-        )
+        try:
+            distances = activation_distance_matrix(activations, metric=metric)
+            coords, _info = classical_mds(
+                distances, n_components=2, min_n=min_n, input_kind="distances"
+            )
+        except ValueError as exc:
+            raise ValueError(f"mds_evolution failed for site {key!r}: {exc}") from exc
         if align and previous_coords is not None:
             coords = procrustes_align(coords, previous_coords)
-        _annotate_mds_coords(trace, key, coords)
+        staged[f"mds:{key}"] = torch.from_numpy(coords.copy())
         coords_by_key[key] = coords.copy()
         previous_coords = coords
+    # Annotations commit only after the WHOLE sweep succeeds; a failed site
+    # leaves zero blobs behind (gated ATOMIC write, neuro MEMO D4).
+    _commit_annotation_tensors(trace, staged)
     return coords_by_key
 
 
@@ -778,18 +799,24 @@ def rdm_evolution(
     if min_n < 2:
         raise ValueError("min_n must be at least 2 for rdm_evolution.")
 
-    selected = _selected_activation_sites(trace, save)
+    selected = _selected_activation_sites(trace, save, verb="rdm_evolution")
     matrices_by_key: RDMEvolution = OrderedDict()
+    staged: OrderedDict[str, torch.Tensor] = OrderedDict()
     for key, _site, activations in selected:
-        matrix = activation_distance_matrix(activations, metric=metric)
+        try:
+            matrix = activation_distance_matrix(activations, metric=metric)
+        except ValueError as exc:
+            raise ValueError(f"rdm_evolution failed for site {key!r}: {exc}") from exc
         if matrix.shape[0] < min_n:
             raise ValueError(
                 f"rdm_evolution has too few stimuli for {key!r}: "
                 f"got {matrix.shape[0]}, need at least {min_n}."
             )
-        stored_matrix = matrix.copy()
-        _store_annotation_tensor(trace, f"rdm:{key}", torch.from_numpy(stored_matrix))
+        staged[f"rdm:{key}"] = torch.from_numpy(matrix.copy())
         matrices_by_key[key] = matrix.copy()
+    # Annotations commit only after the WHOLE sweep succeeds; a failed site
+    # leaves zero blobs behind (gated ATOMIC write, neuro MEMO D4).
+    _commit_annotation_tensors(trace, staged)
     return matrices_by_key
 
 
@@ -833,12 +860,19 @@ def scree_evolution(
     """
 
     _validate_variance_threshold(variance_threshold)
-    selected = _selected_activation_sites(trace, save)
+    selected = _selected_activation_sites(trace, save, verb="scree_evolution")
     eigenvalues_by_key: ScreeEvolution = OrderedDict()
+    staged: OrderedDict[str, torch.Tensor] = OrderedDict()
     for key, _site, activations in selected:
-        eigenvalues = scree(activations, metric=metric, min_n=min_n)
-        _store_annotation_tensor(trace, f"scree:{key}", torch.from_numpy(eigenvalues))
+        try:
+            eigenvalues = scree(activations, metric=metric, min_n=min_n)
+        except ValueError as exc:
+            raise ValueError(f"scree_evolution failed for site {key!r}: {exc}") from exc
+        staged[f"scree:{key}"] = torch.from_numpy(eigenvalues)
         eigenvalues_by_key[key] = eigenvalues
+    # Annotations commit only after the WHOLE sweep succeeds; a failed site
+    # leaves zero blobs behind (gated ATOMIC write, neuro MEMO D4).
+    _commit_annotation_tensors(trace, staged)
     return eigenvalues_by_key
 
 
@@ -1491,8 +1525,17 @@ def _effective_dimensionality_from_eigenvalues(
     }
 
 
-def _selected_mds_sites(trace: Any, save: Any | None) -> list[tuple[str, Any, Any]]:
-    """Resolve the layer or op payloads that should receive MDS coordinates.
+def _selected_mds_sites(
+    trace: Any, save: Any | None, *, verb: str = "mds_evolution"
+) -> list[tuple[str, Any, Any]]:
+    """Resolve the layer or op payloads that should receive annotations.
+
+    Only stimulus-indexed sites qualify: a default sweep SKIPS ineligible
+    sites with one summarized disclosure, while an explicit ``save=``
+    selection REFUSES them actionably (neuro MEMO D4/D5 -- previously a
+    stock resnet18 sweep fabricated 78 buffer pseudo-RDMs). See
+    :func:`_site_ineligibility` for the evidence order and the named
+    coincidental-equality residual.
 
     Parameters
     ----------
@@ -1500,6 +1543,8 @@ def _selected_mds_sites(trace: Any, save: Any | None) -> list[tuple[str, Any, An
         Captured TorchLens trace.
     save:
         Optional selector passed by the user.
+    verb:
+        Public verb name used in diagnostics.
 
     Returns
     -------
@@ -1509,8 +1554,9 @@ def _selected_mds_sites(trace: Any, save: Any | None) -> list[tuple[str, Any, An
     """
 
     if save is None:
-        return _default_saved_mds_sites(trace)
+        return _default_saved_mds_sites(trace, verb=verb)
 
+    expected_counts = _expected_stimulus_counts(trace)
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=MultiMatchWarning)
         sites = list(trace.resolve_sites(save, max_fanout=1_000_000))
@@ -1523,26 +1569,36 @@ def _selected_mds_sites(trace: Any, save: Any | None) -> list[tuple[str, Any, An
         layer = trace.layer_logs[layer_label]
         if int(getattr(layer, "num_passes", 1)) > 1:
             if len(layer_sites) != 1:
-                _raise_recurrent_layer_requires_pass(layer)
+                _raise_recurrent_layer_requires_pass(layer, verb=verb)
             site = layer_sites[0]
             if not _site_label_is_pass_qualified(site):
-                _raise_recurrent_layer_requires_pass(layer)
-            selected.append(_op_mds_site(site))
+                _raise_recurrent_layer_requires_pass(layer, verb=verb)
+            reason = _site_ineligibility(site, expected_counts)
+            if reason is not None:
+                _raise_ineligible_site(verb, str(getattr(site, "label", layer_label)), reason)
+            selected.append(_op_mds_site(site, verb=verb))
         else:
-            selected.append(_single_pass_layer_mds_site(layer))
+            reason = _site_ineligibility(layer, expected_counts)
+            if reason is not None:
+                _raise_ineligible_site(verb, layer_label, reason)
+            selected.append(_single_pass_layer_mds_site(layer, verb=verb))
     return selected
 
 
 _selected_activation_sites = _selected_mds_sites
 
 
-def _default_saved_mds_sites(trace: Any) -> list[tuple[str, Any, Any]]:
-    """Return saved single-pass layer payloads for default MDS evolution.
+def _default_saved_mds_sites(
+    trace: Any, *, verb: str = "mds_evolution"
+) -> list[tuple[str, Any, Any]]:
+    """Return saved, stimulus-indexed single-pass layer payloads.
 
     Parameters
     ----------
     trace:
         Captured TorchLens trace.
+    verb:
+        Public verb name used in diagnostics.
 
     Returns
     -------
@@ -1550,32 +1606,49 @@ def _default_saved_mds_sites(trace: Any) -> list[tuple[str, Any, Any]]:
         Tuples of annotation key, resolved site, and activation payload.
     """
 
+    expected_counts = _expected_stimulus_counts(trace)
     selected: list[tuple[str, Any, Any]] = []
+    skipped: OrderedDict[str, str] = OrderedDict()
     for layer in trace.layers:
-        if int(getattr(layer, "num_passes", 1)) > 1:
-            saved_ops = [
-                op for op in layer.ops.values() if bool(getattr(op, "has_saved_activation", False))
-            ]
+        layer_label = str(getattr(layer, "layer_label"))
+        saved_ops = [
+            op for op in layer.ops.values() if bool(getattr(op, "has_saved_activation", False))
+        ]
+        reason = _site_ineligibility(layer, expected_counts)
+        if reason is not None:
             if saved_ops:
-                _raise_recurrent_layer_requires_pass(layer)
+                skipped[layer_label] = reason
+            continue
+        if int(getattr(layer, "num_passes", 1)) > 1:
+            if saved_ops:
+                _raise_recurrent_layer_requires_pass(layer, verb=verb)
             continue
         if bool(getattr(layer, "has_saved_activation", False)):
-            selected.append(_single_pass_layer_mds_site(layer))
+            selected.append(_single_pass_layer_mds_site(layer, verb=verb))
+    _warn_skipped_sites(verb, skipped)
     if not selected:
+        vocabulary = _VERB_VOCABULARY.get(verb, _VERB_VOCABULARY["mds_evolution"])
+        skip_note = (
+            f" ({len(skipped)} saved site(s) were excluded as not stimulus-indexed)"
+            if skipped
+            else ""
+        )
         raise ValueError(
-            "mds_evolution requires saved activations; capture with save= covering "
-            "the MDS layers before calling mds_evolution."
+            f"{verb} requires saved activations{skip_note}; capture with save= "
+            f"covering the {vocabulary['layers']} layers before calling {verb}."
         )
     return selected
 
 
-def _single_pass_layer_mds_site(layer: Any) -> tuple[str, Any, Any]:
-    """Return the MDS payload tuple for a single-pass layer.
+def _single_pass_layer_mds_site(layer: Any, *, verb: str = "mds_evolution") -> tuple[str, Any, Any]:
+    """Return the annotation payload tuple for a single-pass layer.
 
     Parameters
     ----------
     layer:
         Aggregate single-pass layer.
+    verb:
+        Public verb name used in diagnostics.
 
     Returns
     -------
@@ -1585,20 +1658,22 @@ def _single_pass_layer_mds_site(layer: Any) -> tuple[str, Any, Any]:
 
     layer_label = str(getattr(layer, "layer_label"))
     if not bool(getattr(layer, "has_saved_activation", False)):
-        _raise_unsaved_activation(layer_label)
+        _raise_unsaved_activation(layer_label, verb=verb)
     out = getattr(layer, "out", None)
     if out is None:
-        _raise_unsaved_activation(layer_label)
+        _raise_unsaved_activation(layer_label, verb=verb)
     return f"layer:{layer_label}", layer.ops[0], out
 
 
-def _op_mds_site(op: Any) -> tuple[str, Any, Any]:
-    """Return the MDS payload tuple for a pass-qualified op.
+def _op_mds_site(op: Any, *, verb: str = "mds_evolution") -> tuple[str, Any, Any]:
+    """Return the annotation payload tuple for a pass-qualified op.
 
     Parameters
     ----------
     op:
         Pass-qualified op selected by the caller.
+    verb:
+        Public verb name used in diagnostics.
 
     Returns
     -------
@@ -1608,10 +1683,10 @@ def _op_mds_site(op: Any) -> tuple[str, Any, Any]:
 
     op_label = str(getattr(op, "label"))
     if not bool(getattr(op, "has_saved_activation", False)):
-        _raise_unsaved_activation(op_label)
+        _raise_unsaved_activation(op_label, verb=verb)
     out = getattr(op, "out", None)
     if out is None:
-        _raise_unsaved_activation(op_label)
+        _raise_unsaved_activation(op_label, verb=verb)
     return f"op:{op_label}", op, out
 
 
@@ -1704,49 +1779,6 @@ def _store_annotation_tensor(trace: Any, key: str, tensor: torch.Tensor) -> None
     mark_mutated = getattr(trace, "_mark_annotations_mutated", None)
     if callable(mark_mutated):
         mark_mutated()
-
-
-def _raise_recurrent_layer_requires_pass(layer: Any) -> None:
-    """Raise the public recurrent-layer selector error for MDS evolution.
-
-    Parameters
-    ----------
-    layer:
-        Aggregate recurrent layer.
-
-    Raises
-    ------
-    ValueError
-        Always raised with a pass-selection diagnostic.
-    """
-
-    layer_label = str(getattr(layer, "layer_label"))
-    num_passes = int(getattr(layer, "num_passes", 0))
-    raise ValueError(
-        f"mds_evolution cannot compute aggregate MDS for recurrent layer "
-        f"{layer_label!r} with {num_passes} passes; select a pass "
-        f"(layer is recurrent), for example tl.label('{layer_label}:1')."
-    )
-
-
-def _raise_unsaved_activation(label: str) -> None:
-    """Raise the public unsaved-activation error for MDS evolution.
-
-    Parameters
-    ----------
-    label:
-        Layer or op label selected for MDS.
-
-    Raises
-    ------
-    ValueError
-        Always raised with capture guidance.
-    """
-
-    raise ValueError(
-        f"mds_evolution requires saved activations for {label!r}; capture with "
-        "save= covering the MDS layers before calling mds_evolution."
-    )
 
 
 def _validate_procrustes_points(points: np.ndarray, name: str) -> None:

@@ -178,6 +178,12 @@ def test_h2_requires_grad_flip_diverges_and_is_not_attested(tmp_path: Path) -> N
 
 
 @pytest.mark.smoke
+@pytest.mark.filterwarnings(
+    # A08 random-role-init disclosure (runnable_random_init_run): this test
+    # exercises a weight-free runnable run DELIBERATELY; the warning is the
+    # feature under test elsewhere (tests/test_persist_honesty_runnable_random.py).
+    "default:This runnable artifact carries no model weights"
+)
 def test_h2_layout_oblivious_model_does_not_over_trigger(tmp_path: Path) -> None:
     """A model that never reads input metadata records no facts and never diverges on them."""
 

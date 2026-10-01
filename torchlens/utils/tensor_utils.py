@@ -1811,6 +1811,11 @@ def copy_tensor_payload(
     """
 
     if isinstance(x, (torch.Tensor, torch.nn.Parameter)):
+        if _is_uninitialized_lazy_tensor(x):
+            # Lazy (uninitialized) parameters/buffers have no payload to copy
+            # -- every tensor accessor raises until the first forward
+            # materializes them in place. Retain the object reference itself.
+            return x
         return _clone_tensor_payload(
             x,
             detach_tensor=detach_tensor,
@@ -1821,6 +1826,18 @@ def copy_tensor_payload(
         # Non-tensor: shallow copy is sufficient and avoids deepcopy's
         # circular-reference pitfalls.
         return copy.copy(x)
+
+
+def _is_uninitialized_lazy_tensor(value: Any) -> bool:
+    """Return whether ``value`` is a lazy uninitialized parameter or buffer."""
+
+    is_lazy = getattr(torch.nn.parameter, "is_lazy", None)
+    if is_lazy is not None:
+        try:
+            return bool(is_lazy(value))
+        except (TypeError, ValueError, RuntimeError):
+            return False
+    return isinstance(value, torch.nn.parameter.UninitializedParameter)
 
 
 def safe_copy(

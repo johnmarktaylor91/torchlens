@@ -64,27 +64,28 @@ def _check_trace_self_consistency(ml: Trace) -> None:
             f"num_ops={ml.num_ops} != expected computational layers={expected_ops}",
         )
 
-    # Param counts must be deduplicated by layer_label because
-    # multi-pass layers share the same params -- counting each pass would
-    # double-count.  This matches the summation logic in labeling.py:116-122.
-    seen_no_pass: set[str] = set()
-    expected_param_sum = 0
-    expected_num_params = 0
-    for lpl in ml.layer_list:
-        if lpl.layer_label not in seen_no_pass:
-            expected_param_sum += lpl.num_param_tensors
-            expected_num_params += lpl.num_params
-            seen_no_pass.add(lpl.layer_label)
+    # Param counts follow PARAMETER OBJECT IDENTITY (A07 numbers truth,
+    # summary memo 3.3): param_logs is object-deduplicated at the pre-forward
+    # scan, so trace totals must equal its sums exactly. The historical
+    # per-unique-layer summation double-counted a parameter consumed by more
+    # than one layer (tied embeddings, weight-reused layers) and silently
+    # dropped declared-but-never-executed parameters; the tripwire now checks
+    # the identity partition it once contradicted. This matches the summation
+    # logic in labeling.py (_tally_params_by_identity).
+    param_logs = list(getattr(ml, "param_logs", []) or [])
+    expected_param_sum = len(param_logs)
+    expected_num_params = sum(int(pl.num_params) for pl in param_logs)
     if ml.num_param_tensors != expected_param_sum:
         raise MetadataInvariantError(
             name,
             f"num_param_tensors={ml.num_param_tensors} != "
-            f"sum(unique num_param_tensors)={expected_param_sum}",
+            f"len(param_logs)={expected_param_sum} (parameter-identity basis)",
         )
     if ml.num_params != expected_num_params:
         raise MetadataInvariantError(
             name,
-            f"num_params={ml.num_params} != sum(unique num_params)={expected_num_params}",
+            f"num_params={ml.num_params} != sum(param_logs num_params)="
+            f"{expected_num_params} (parameter-identity basis)",
         )
 
     if ml.num_params_trainable + ml.num_params_frozen != ml.num_params:

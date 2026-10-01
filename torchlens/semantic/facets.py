@@ -968,6 +968,20 @@ class Facet:
         return func(*_unwrap_facets(args), **(_unwrap_facets(kwargs or {})))
 
 
+#: Head dimension of each head-indexed facet in its SERVED layout. ``q``/``k``/
+#: ``v``/``result`` are position-major (heads at dim 2); ``scores``/``pattern``/
+#: ``z`` are head-major (heads at dim 1) on every implementation.
+_HEAD_DIM_BY_FACET: dict[str, int] = {
+    "q": 2,
+    "k": 2,
+    "v": 2,
+    "result": 2,
+    "scores": 1,
+    "pattern": 1,
+    "z": 1,
+}
+
+
 class AttentionHeadView:
     """Scoped accessor for one attention head within a parent facet view."""
 
@@ -996,10 +1010,20 @@ class AttentionHeadView:
         return self._slice(name)
 
     def _slice(self, name: str) -> Any:
-        """Return the named tensor sliced to this head when applicable."""
+        """Return the named tensor sliced to this head when applicable.
+
+        Head dimensions follow the served facet layouts: ``q``/``k``/``v``
+        (``[batch, pos, head, d_head]``) and ``result``
+        (``[batch, pos, head, d_model]``) carry heads at dim 2, while
+        ``scores``/``pattern`` (``[batch, head, dst, src]``) and ``z``
+        (``[batch, head, pos, d_head]``) carry heads at dim 1 on every
+        implementation (eager real ops and fused reconstructions alike).
+        ``k``/``v`` map query-head indices onto their GQA KV group.
+        """
 
         value = self._parent[name]
-        if name not in {"q", "k", "v", "result"} or not hasattr(value, "__getitem__"):
+        dim = _HEAD_DIM_BY_FACET.get(name)
+        if dim is None or not hasattr(value, "__getitem__"):
             return value
         head_index = self._head_index
         is_aliasing = False
@@ -1011,8 +1035,9 @@ class AttentionHeadView:
                 head_index = head_index // group_size
                 is_aliasing = n_q_heads != n_kv_heads
         if isinstance(value, Facet):
-            return Facet(value.spec.select(2, head_index, aliasing=is_aliasing))
-        return value[:, :, head_index, :]
+            return Facet(value.spec.select(dim, head_index, aliasing=is_aliasing))
+        index: tuple[Any, ...] = (*(slice(None) for _ in range(dim)), head_index)
+        return value[index]
 
 
 class FacetView(Mapping[FacetKey, Any]):
@@ -1550,7 +1575,11 @@ def _merge_missing(
     """Merge one missing facet with the same tier policy as produced values."""
 
     previous_tier = facet_tiers.get(name)
-    if name in values and previous_tier is not None and previous_tier > tier:
+    if name in values and previous_tier is not None and previous_tier >= tier:
+        # A produced value beats an equal-tier absence (F2): a facet a recipe
+        # actually computed must never be popped by a sibling absence claim of
+        # the same or weaker priority -- only a strictly higher-tier absence
+        # may displace a value.
         return
     if name in values:
         values.pop(name, None)

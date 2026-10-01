@@ -399,20 +399,22 @@ def test_save_drops_unmaterialized_nested_blob_refs_when_fields_are_excluded(
 
 
 @pytest.mark.parametrize("lazy", [False, True])
-@pytest.mark.parametrize("method_name", ["validate_forward_pass", "validate_saved_outs"])
 def test_portable_loaded_logs_reject_validation_entry_points(
     tmp_path: Path,
     lazy: bool,
-    method_name: str,
 ) -> None:
-    """Fork L: portable-loaded logs should reject both validation entry points."""
+    """Fork L: portable-loaded logs should reject the validation entry point.
+
+    The legacy ``validate_saved_outs`` Trace spelling was deleted with the
+    renamed-callable deprecation aliases (728a0952); ``validate_forward_pass``
+    is the sole canonical validation entry point on a user-held Trace.
+    """
 
     bundle_path, _ = _save_bundle(tmp_path)
     restored = load(bundle_path, lazy=lazy)
-    validate_fn = getattr(restored, method_name)
 
     with pytest.raises(TorchLensIOError, match="portable bundles drop them"):
-        validate_fn([])
+        restored.validate_forward_pass([])
 
 
 def test_lazy_materialize_does_not_leak_file_descriptors(tmp_path: Path) -> None:

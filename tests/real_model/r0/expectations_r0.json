@@ -45,21 +45,11 @@
  },
  "bert": {
   "eager": {
-   "false_claims": [
-    [
-     "encoder.layer.0.attention.self",
-     "attn_out",
-     "attention_projections_present"
-    ],
-    [
-     "encoder.layer.1.attention.self",
-     "attn_out",
-     "attention_projections_present"
-    ]
-   ],
+   "false_claims": [],
    "fingerprint": "223d70c454cf0e56020fce619f78083ffb7a9a816acfc09ff852aba6152426cd",
    "floors": {
     "bert_self_attention": [
+     "attn_out",
      "d_head",
      "head",
      "input",
@@ -67,8 +57,11 @@
      "n_heads",
      "n_kv_heads",
      "n_q_heads",
+     "pattern",
      "q",
-     "v"
+     "scores",
+     "v",
+     "z"
     ],
     "embedding": [
      "indices",
@@ -200,21 +193,11 @@
  },
  "distilbert": {
   "eager": {
-   "false_claims": [
-    [
-     "transformer.layer.0.attention",
-     "attn_out",
-     "attention_projections_present"
-    ],
-    [
-     "transformer.layer.1.attention",
-     "attn_out",
-     "attention_projections_present"
-    ]
-   ],
+   "false_claims": [],
    "fingerprint": "8f2b049d73b6cdef82f66c871221f14d4683be50d97b0e9a0d63c3228faa18c7",
    "floors": {
     "distilbert_attention": [
+     "attn_out",
      "d_head",
      "head",
      "input",
@@ -222,8 +205,12 @@
      "n_heads",
      "n_kv_heads",
      "n_q_heads",
+     "pattern",
      "q",
-     "v"
+     "result",
+     "scores",
+     "v",
+     "z"
     ],
     "distilbert_ffn": [
      "down_out",
@@ -310,43 +297,7 @@
  },
  "distilgpt2": {
   "eager": {
-   "false_claims": [
-    [
-     "self",
-     "final_norm_kind",
-     "final_norm_present"
-    ],
-    [
-     "self",
-     "final_norm_eps",
-     "final_norm_present"
-    ],
-    [
-     "self",
-     "final_norm_gamma",
-     "final_norm_present"
-    ],
-    [
-     "self",
-     "final_norm_beta",
-     "final_norm_present"
-    ],
-    [
-     "self",
-     "final_norm_input",
-     "final_norm_present"
-    ],
-    [
-     "transformer.h.0.attn",
-     "attn_out",
-     "attention_projections_present"
-    ],
-    [
-     "transformer.h.1.attn",
-     "attn_out",
-     "attention_projections_present"
-    ]
-   ],
+   "false_claims": [],
    "fingerprint": "107b26b31ba0102b97dc45b3d965310e5b89b78f8aad299f77f166d2a2f2d340",
    "floors": {
     "embedding": [
@@ -355,6 +306,7 @@
      "weight"
     ],
     "gpt2_attention": [
+     "attn_out",
      "d_head",
      "head",
      "input",
@@ -362,8 +314,12 @@
      "n_heads",
      "n_kv_heads",
      "n_q_heads",
+     "pattern",
      "q",
-     "v"
+     "result",
+     "scores",
+     "v",
+     "z"
     ],
     "gpt2_mlp": [
      "down_out",
@@ -398,33 +354,7 @@
    }
   },
   "sdpa": {
-   "false_claims": [
-    [
-     "self",
-     "final_norm_kind",
-     "final_norm_present"
-    ],
-    [
-     "self",
-     "final_norm_eps",
-     "final_norm_present"
-    ],
-    [
-     "self",
-     "final_norm_gamma",
-     "final_norm_present"
-    ],
-    [
-     "self",
-     "final_norm_beta",
-     "final_norm_present"
-    ],
-    [
-     "self",
-     "final_norm_input",
-     "final_norm_present"
-    ]
-   ],
+   "false_claims": [],
    "fingerprint": "7a8073876b14b7234e8f6651babec5ab8253a8cc6a9ba26209d11c8f8d648739",
    "floors": {
     "embedding": [
@@ -479,43 +409,7 @@
  },
  "gpt2": {
   "eager": {
-   "false_claims": [
-    [
-     "self",
-     "final_norm_kind",
-     "final_norm_present"
-    ],
-    [
-     "self",
-     "final_norm_eps",
-     "final_norm_present"
-    ],
-    [
-     "self",
-     "final_norm_gamma",
-     "final_norm_present"
-    ],
-    [
-     "self",
-     "final_norm_beta",
-     "final_norm_present"
-    ],
-    [
-     "self",
-     "final_norm_input",
-     "final_norm_present"
-    ],
-    [
-     "transformer.h.0.attn",
-     "attn_out",
-     "attention_projections_present"
-    ],
-    [
-     "transformer.h.1.attn",
-     "attn_out",
-     "attention_projections_present"
-    ]
-   ],
+   "false_claims": [],
    "fingerprint": "5c5bd25332275cc9fecdd634cc61d38fdc9f91b5d09d732acb30d35e17ac5144",
    "floors": {
     "embedding": [
@@ -524,6 +418,7 @@
      "weight"
     ],
     "gpt2_attention": [
+     "attn_out",
      "d_head",
      "head",
      "input",
@@ -531,8 +426,12 @@
      "n_heads",
      "n_kv_heads",
      "n_q_heads",
+     "pattern",
      "q",
-     "v"
+     "result",
+     "scores",
+     "v",
+     "z"
     ],
     "gpt2_mlp": [
      "down_out",
@@ -567,33 +466,7 @@
    }
   },
   "sdpa": {
-   "false_claims": [
-    [
-     "self",
-     "final_norm_kind",
-     "final_norm_present"
-    ],
-    [
-     "self",
-     "final_norm_eps",
-     "final_norm_present"
-    ],
-    [
-     "self",
-     "final_norm_gamma",
-     "final_norm_present"
-    ],
-    [
-     "self",
-     "final_norm_beta",
-     "final_norm_present"
-    ],
-    [
-     "self",
-     "final_norm_input",
-     "final_norm_present"
-    ]
-   ],
+   "false_claims": [],
    "fingerprint": "a3711e0fed1876461ebeeb69dd1e861bdc45f710369e09166e526c1f47e18f8e",
    "floors": {
     "embedding": [
@@ -651,68 +524,8 @@
    "false_claims": [
     [
      "self",
-     "final_norm_kind",
-     "final_norm_present"
-    ],
-    [
-     "self",
-     "final_norm_eps",
-     "final_norm_present"
-    ],
-    [
-     "self",
-     "final_norm_gamma",
-     "final_norm_present"
-    ],
-    [
-     "self",
      "final_norm_beta",
      "final_norm_present"
-    ],
-    [
-     "self",
-     "final_norm_input",
-     "final_norm_present"
-    ],
-    [
-     "model.layers.0.self_attn",
-     "attn_out",
-     "attention_projections_present"
-    ],
-    [
-     "model.layers.0.self_attn",
-     "q",
-     "attention_projections_present"
-    ],
-    [
-     "model.layers.0.self_attn",
-     "k",
-     "attention_projections_present"
-    ],
-    [
-     "model.layers.0.self_attn",
-     "v",
-     "attention_projections_present"
-    ],
-    [
-     "model.layers.1.self_attn",
-     "attn_out",
-     "attention_projections_present"
-    ],
-    [
-     "model.layers.1.self_attn",
-     "q",
-     "attention_projections_present"
-    ],
-    [
-     "model.layers.1.self_attn",
-     "k",
-     "attention_projections_present"
-    ],
-    [
-     "model.layers.1.self_attn",
-     "v",
-     "attention_projections_present"
     ]
    ],
    "fingerprint": "4b2cfa6e9617d1362060d9eeecfee82508316d7d4ba95d980001e3542f0dd5b5",
@@ -731,9 +544,20 @@
      "up_out"
     ],
     "gqa_attention": [
+     "attn_out",
      "d_head",
      "head",
-     "input"
+     "input",
+     "k",
+     "n_heads",
+     "n_kv_heads",
+     "n_q_heads",
+     "pattern",
+     "q",
+     "result",
+     "scores",
+     "v",
+     "z"
     ],
     "language_model_head": [
      "logits",
@@ -764,58 +588,8 @@
    "false_claims": [
     [
      "self",
-     "final_norm_kind",
-     "final_norm_present"
-    ],
-    [
-     "self",
-     "final_norm_eps",
-     "final_norm_present"
-    ],
-    [
-     "self",
-     "final_norm_gamma",
-     "final_norm_present"
-    ],
-    [
-     "self",
      "final_norm_beta",
      "final_norm_present"
-    ],
-    [
-     "self",
-     "final_norm_input",
-     "final_norm_present"
-    ],
-    [
-     "model.layers.0.self_attn",
-     "q",
-     "attention_projections_present"
-    ],
-    [
-     "model.layers.0.self_attn",
-     "k",
-     "attention_projections_present"
-    ],
-    [
-     "model.layers.0.self_attn",
-     "v",
-     "attention_projections_present"
-    ],
-    [
-     "model.layers.1.self_attn",
-     "q",
-     "attention_projections_present"
-    ],
-    [
-     "model.layers.1.self_attn",
-     "k",
-     "attention_projections_present"
-    ],
-    [
-     "model.layers.1.self_attn",
-     "v",
-     "attention_projections_present"
     ]
    ],
    "fingerprint": "adc566f1edc75ac6f29aa6a86c1a0eded3526f38fd77011dba7c73a4d6c6ad17",
@@ -837,7 +611,13 @@
      "attn_out",
      "d_head",
      "head",
-     "input"
+     "input",
+     "k",
+     "n_heads",
+     "n_kv_heads",
+     "n_q_heads",
+     "q",
+     "v"
     ],
     "language_model_head": [
      "logits",
@@ -988,38 +768,7 @@
  },
  "t5": {
   "eager": {
-   "false_claims": [
-    [
-     "encoder.block.0.layer.0.SelfAttention",
-     "attn_out",
-     "attention_projections_present"
-    ],
-    [
-     "encoder.block.1.layer.0.SelfAttention",
-     "attn_out",
-     "attention_projections_present"
-    ],
-    [
-     "decoder.block.0.layer.0.SelfAttention",
-     "attn_out",
-     "attention_projections_present"
-    ],
-    [
-     "decoder.block.0.layer.1.EncDecAttention",
-     "attn_out",
-     "attention_projections_present"
-    ],
-    [
-     "decoder.block.1.layer.0.SelfAttention",
-     "attn_out",
-     "attention_projections_present"
-    ],
-    [
-     "decoder.block.1.layer.1.EncDecAttention",
-     "attn_out",
-     "attention_projections_present"
-    ]
-   ],
+   "false_claims": [],
    "fingerprint": "43c5b08547131274c6d8835f173334db2e160ddbca8a91edccdad301b4c2539a",
    "floors": {
     "embedding": [
@@ -1032,14 +781,20 @@
      "unembed_weight"
     ],
     "t5_attention": [
+     "attn_out",
+     "d_head",
      "head",
      "input",
      "k",
      "n_heads",
      "n_kv_heads",
      "n_q_heads",
+     "pattern",
      "q",
-     "v"
+     "result",
+     "scores",
+     "v",
+     "z"
     ]
    },
    "n_ops": 326,
@@ -1055,6 +810,22 @@
    "false_claims": [],
    "fingerprint": "d0e46bd184c61ebe0a1cda05c1146c352754d8213e1d91149f7221b44e494107",
    "floors": {
+    "gqa_attention": [
+     "attn_out",
+     "d_head",
+     "head",
+     "input",
+     "k",
+     "n_heads",
+     "n_kv_heads",
+     "n_q_heads",
+     "pattern",
+     "q",
+     "result",
+     "scores",
+     "v",
+     "z"
+    ],
     "layer_norm": [
      "beta",
      "gamma",
@@ -1066,6 +837,7 @@
    },
    "n_ops": 74,
    "recipes": {
+    "gqa_attention": 2,
     "layer_norm": 5,
     "transformer_residuals": 2
    }
@@ -1074,6 +846,18 @@
    "false_claims": [],
    "fingerprint": "5ce94261964da0cd4c80fb45fa220b57eb4b97eda19ca388721a0ae37cd11d33",
    "floors": {
+    "gqa_attention": [
+     "attn_out",
+     "d_head",
+     "head",
+     "input",
+     "k",
+     "n_heads",
+     "n_kv_heads",
+     "n_q_heads",
+     "q",
+     "v"
+    ],
     "layer_norm": [
      "beta",
      "gamma",
@@ -1085,6 +869,7 @@
    },
    "n_ops": 62,
    "recipes": {
+    "gqa_attention": 2,
     "layer_norm": 5,
     "transformer_residuals": 2
    }
@@ -1104,12 +889,18 @@
      "beta",
      "gamma",
      "normalized"
+    ],
+    "transformer_residuals": [
+     "resid_mid",
+     "resid_post",
+     "resid_pre"
     ]
    },
    "n_ops": 303,
    "recipes": {
     "embedding": 2,
-    "layer_norm": 16
+    "layer_norm": 16,
+    "transformer_residuals": 6
    }
   },
   "sdpa": {
@@ -1125,12 +916,18 @@
      "beta",
      "gamma",
      "normalized"
+    ],
+    "transformer_residuals": [
+     "resid_mid",
+     "resid_post",
+     "resid_pre"
     ]
    },
    "n_ops": 251,
    "recipes": {
     "embedding": 2,
-    "layer_norm": 16
+    "layer_norm": 16,
+    "transformer_residuals": 6
    }
   }
  }

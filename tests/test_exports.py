@@ -91,7 +91,10 @@ def _assert_netron_structure(payload: dict[str, Any]) -> None:
     assert payload["producerName"] == "torchlens"
     assert payload["opsetImport"] == [{"domain": "ai.torchlens.lossy", "version": 1}]
     assert "not a runnable ONNX model" in payload["docString"]
-    assert {prop["key"]: prop["value"] for prop in payload["metadataProps"]} == {
+    props = {prop["key"]: prop["value"] for prop in payload["metadataProps"]}
+    honesty_value = props.pop("torchlens.capture_honesty")
+    assert json.loads(honesty_value)["schema"] == "torchlens.capture_honesty.v1"
+    assert props == {
         "torchlens.lossy_export": "true",
         "torchlens.runnable": "false",
     }
@@ -404,12 +407,17 @@ def test_tabular_exports_round_trip(export_log: Any, tmp_path: Path) -> None:
     assert "conditional_then_children" in expected.columns
 
     csv_path = tl.export.csv(export_log, tmp_path / "model.csv")
-    csv_df = pd.read_csv(csv_path)
+    # The capture-honesty preamble rides '#' comment lines (WT1 A-V row 24).
+    assert csv_path.read_text(encoding="utf-8").startswith("# torchlens capture honesty:")
+    csv_df = pd.read_csv(csv_path, comment="#")
     assert list(csv_df.columns) == list(expected.columns)
     assert len(csv_df) == len(expected)
 
     json_path = tl.export.json(export_log, tmp_path / "model.json")
-    json_df = pd.read_json(json_path, orient="records")
+    json_payload = json.loads(json_path.read_text(encoding="utf-8"))
+    assert json_payload["schema"] == "torchlens.table_export.v1"
+    assert json_payload["capture_honesty"]["capture_status"] == "complete"
+    json_df = pd.DataFrame(json_payload["rows"])
     assert list(json_df.columns) == list(expected.columns)
     assert len(json_df) == len(expected)
 

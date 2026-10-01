@@ -512,6 +512,16 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "ValidationError": (),
     "VariantScanTruncationWarning": ("Warning",),
     "WildcardRecvUnsupportedError": ("RuntimeError",),
+    # Post-rebase lockstep repair (A10 train rebase): these public error
+    # classes landed without their golden rows -- the three artifact-version
+    # doors via the landed train, the facade/lazy-state/dependency teaching
+    # doors via the A10 entry-facade lane.
+    "ArtifactRuntimeIncompatibleError": ("RuntimeError",),
+    "ArtifactVersionAboveRuntimeError": ("RuntimeError",),
+    "FacadeTeachingError": ("AttributeError",),
+    "LazyStateUnsupportedError": ("RuntimeError",),
+    "MissingDependencyError": ("AttributeError",),
+    "UnknownPersistedFieldError": ("RuntimeError",),
 }
 
 
@@ -1146,6 +1156,12 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "subclass); errors-namespace registration deferred to the S2 "
         "ratification PR"
     ),
+    "torchlens._model_wrappers.UninstrumentableModelWrapperError": (
+        "A02 wave-0 capture-entry teaching refusal (CompatibilityError "
+        "subclass) for assignment-redirecting wrappers (transformer_lens "
+        "TransformerBridge); errors-namespace registration deferred to "
+        "A10's _errors homing"
+    ),
     "torchlens._io.PreReleaseArtifactError": (
         "S3 registrar fail-closed load refusal for switch-stamped pre-release "
         "artifacts; surfaced by the first standing registration importing the "
@@ -1309,6 +1325,10 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     "torchlens.semantic.logit_lens.LogitLensError": (
         "logit_lens refusal (it refuses rather than mislabel a non-standard final "
         "norm); registration deferred to the UI/API naming slate"
+    ),
+    "torchlens.semantic.patching.PatchApplicationError": (
+        "activation-patching ineffective-rerun refusal (patch_ineffective); "
+        "registration deferred to the UI/API naming slate"
     ),
     "torchlens.intervention.errors.BufferThreadGapWarning": (
         "intervention buffer-thread coverage-gap disclosure; warning surface, "

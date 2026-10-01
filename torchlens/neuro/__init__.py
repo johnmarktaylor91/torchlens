@@ -1,52 +1,55 @@
 """Extras-gated neuroscience namespace with no public objects yet.
 
-Import time stays inert: this module must NOT import ``rsatoolbox`` /
-``brainscore_core`` (the ``neuro`` extra's foreign third-party dependencies) as
-a side effect of ``import torchlens.neuro``. A bare package import can happen
-incidentally -- e.g. a portable ``.tlspec`` bundle's metadata unpickler
-resolving a pickled global whose module path names ``torchlens.neuro`` -- and
-an eager import-time dependency check would run that foreign code with no
-trust opt-in. The extras check is therefore deferred to first ATTRIBUTE ACCESS
-via module ``__getattr__`` (PEP 562), preserving the original "clear ImportError
-naming the missing extra" contract at first USE instead of at import time.
+Import time stays inert: this module must NOT import ``rsatoolbox`` (the
+``neuro`` extra's foreign third-party dependency) as a side effect of
+``import torchlens.neuro``. A bare package import can happen incidentally --
+e.g. a portable ``.tlspec`` bundle's metadata unpickler resolving a pickled
+global whose module path names ``torchlens.neuro`` -- and an eager
+import-time dependency check would run that foreign code with no trust
+opt-in.
+
+Attribute access resolves through the shared five-step facade order (neuro
+memo D15; ``torchlens.utils.facade``). The historical ALL-OR-NOTHING
+conjunction gate (rsatoolbox AND brainscore_core, checked by IMPORTING them
+on every attribute access) is gone: it locked the whole namespace on Python
+3.10 even with rsatoolbox present, made ``hasattr`` raise ``ImportError``
+instead of answering, executed foreign code to answer dunder probes, and
+demanded a package nothing here imports. Dependency checks are now PER-NAME
+(each future adapter declares its own ``DependencyGate``), probed with
+``importlib.util.find_spec`` so answering never executes foreign code, and
+every typed refusal subclasses ``AttributeError`` so ``hasattr``/IPython
+canary probes degrade instead of erroring. The facade is pickle-safe:
+resolving this module imports nothing foreign.
+
+The neuro extra installs ``rsatoolbox`` (``pip install "torchlens[neuro]"``);
+adapters landing in this namespace gate on it per-name.
 """
 
 from __future__ import annotations
 
-import importlib
-from typing import Any
+from typing import TYPE_CHECKING as _TYPE_CHECKING
 
-_REQUIRED_DEPS = ("rsatoolbox", "brainscore_core")
+if _TYPE_CHECKING:
+    from typing import Any
 
 __all__: list[str] = []
 
+#: Real active names: none yet. Adapters land here with per-name
+#: ``DependencyGate`` rows in ``_DEPENDENCIES``.
+_LAZY_ATTRS: dict[str, tuple[str, str | None]] = {}
 
-def _check_required_deps() -> None:
-    """Raise a clear ``ImportError`` if the ``neuro`` extra's deps are missing.
+#: Redirect/refusal teaching tables (five-step steps 2-3). Content lands with
+#: the neuro teaching-surface lane; the resolution order is declared now.
+_REDIRECTS: dict[str, str] = {}
+_REFUSALS: dict[str, str] = {}
 
-    Raises
-    ------
-    ImportError
-        Naming every missing dependency, with the install hint.
-    """
-
-    missing_deps: list[str] = []
-    for dep in _REQUIRED_DEPS:
-        try:
-            importlib.import_module(dep)
-        except ImportError:
-            missing_deps.append(dep)
-
-    if missing_deps:
-        missing = ", ".join(missing_deps)
-        raise ImportError(
-            "torchlens.neuro requires extra: install with "
-            f"`pip install torchlens[neuro]`. Missing deps: {missing}"
-        )
+#: Per-name dependency gates (five-step step 4), e.g.
+#: ``{"datasets": DependencyGate("rsatoolbox", 'pip install "torchlens[neuro]"')}``.
+_DEPENDENCIES: dict[str, Any] = {}
 
 
 def __getattr__(name: str) -> Any:
-    """Gate attribute access behind the deferred extras check.
+    """Resolve attributes through the shared five-step facade order.
 
     Parameters
     ----------
@@ -56,15 +59,46 @@ def __getattr__(name: str) -> Any:
     Returns
     -------
     Any
-        Never returns; ``torchlens.neuro`` exports no public objects yet.
+        The resolved attribute (none exist yet; every access teaches).
 
     Raises
     ------
-    ImportError
-        If the ``neuro`` extra's dependencies are not installed.
     AttributeError
-        If the dependencies are installed but ``name`` is not a real attribute.
+        Per the five-step contract: plain for underscore and unknown names,
+        typed teaching subclasses for redirect/refusal rows, and a typed
+        ``ImportError``-and-``AttributeError`` for gated names whose
+        dependency is absent.
     """
 
-    _check_required_deps()
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    from ..utils.facade import resolve_facade_attr
+
+    return resolve_facade_attr(
+        owner=__name__,
+        name=name,
+        module_globals=globals(),
+        lazy_attrs=_LAZY_ATTRS,
+        redirects=_REDIRECTS,
+        refusals=_REFUSALS,
+        dependencies=_DEPENDENCIES,
+    )
+
+
+def __dir__() -> list[str]:
+    """Return the real public names of the namespace and nothing else.
+
+    Returns
+    -------
+    list[str]
+        Sorted public names; accidental implementation imports are not
+        advertised.
+    """
+
+    from ..utils.facade import facade_dir
+
+    return facade_dir(globals(), _LAZY_ATTRS)
+
+
+# ``from __future__ import annotations`` binds ``annotations`` as a reachable
+# module attribute; nothing reads the binding (the future feature is a
+# compile-time flag), so unbind it -- the root facade's own idiom.
+del annotations

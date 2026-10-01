@@ -142,9 +142,18 @@ def summary(
     model: nn.Module,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
+    *,
+    execution_mode: Literal["eval", "train", "same"] = "eval",
+    grad_mode: Literal["off", "same"] = "off",
     **summary_kwargs: Any,
 ) -> str:
     """Run a metadata-only forward pass and return a rendered summary string.
+
+    The one-call door is SAFE by default (A4): the captured forward runs in
+    eval mode under ``torch.no_grad()``, and every module training flag plus
+    the host/device RNG state is restored bit-identically afterwards -- a
+    summary call never mutates the model (BatchNorm running stats included)
+    or advances the caller's RNG streams.
 
     Parameters
     ----------
@@ -154,14 +163,46 @@ def summary(
         Positional args for ``model.forward()``.
     input_kwargs:
         Keyword args for ``model.forward()``.
+    execution_mode:
+        ``"eval"`` (default) runs the captured forward in eval mode and
+        restores every module training flag afterwards. ``"train"`` opts into
+        train-mode execution (stateful layers such as BatchNorm WILL update
+        their buffers). ``"same"`` leaves modes exactly as the caller set
+        them.
+    grad_mode:
+        ``"off"`` (default) runs the captured forward under
+        ``torch.no_grad()``. ``"same"`` keeps the caller's grad context.
     **summary_kwargs:
         Forwarded to ``Trace.summary``.
 
     Returns
     -------
     str
-        Rendered summary text.
+        Rendered summary text, ending with an execution disclosure line.
     """
+    from ._errors import InvalidArgumentError
+    from .utils.rng import log_current_rng_states, set_rng_from_saved_states
+
+    if execution_mode not in ("eval", "train", "same"):
+        raise InvalidArgumentError(
+            f"execution_mode must be 'eval', 'train', or 'same'; got {execution_mode!r}.",
+            code="summary_execution_mode_invalid",
+            remedy=(
+                "Use 'eval' (the default, safe reporting mode -- modes restored after the "
+                "one captured forward), 'train' (explicit opt-in; stateful layers update), "
+                "or 'same' (keep the caller's module modes)."
+            ),
+        )
+    if grad_mode not in ("off", "same"):
+        raise InvalidArgumentError(
+            f"grad_mode must be 'off' or 'same'; got {grad_mode!r}.",
+            code="summary_grad_mode_invalid",
+            remedy=(
+                "Use 'off' (the default; the captured forward runs under torch.no_grad()) "
+                "or 'same' (keep the caller's grad context)."
+            ),
+        )
+
     _reject_opaque_wrappers(model)
     model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
@@ -170,17 +211,49 @@ def summary(
     input_args = _coerce_input_args(model, input_args)
     check_model_and_input_variants(model, input_args, input_kwargs)
 
-    trace = _run_model_and_save_specified_outs(
-        model=model,
-        input_args=input_args,
-        input_kwargs=input_kwargs,
-        layers_to_save=None,
-        recurrence_detection=True,
-    )
+    saved_training_flags = [(module, module.training) for module in model.modules()]
+    rng_snapshot = log_current_rng_states()
+    grad_context: contextlib.AbstractContextManager[Any]
+    grad_context = torch.no_grad() if grad_mode == "off" else contextlib.nullcontext()
     try:
-        return trace.summary(**summary_kwargs)
+        if execution_mode == "eval":
+            model.eval()
+        elif execution_mode == "train":
+            model.train()
+        with grad_context:
+            trace = _run_model_and_save_specified_outs(
+                model=model,
+                input_args=input_args,
+                input_kwargs=input_kwargs,
+                layers_to_save=None,
+                recurrence_detection=True,
+            )
+    finally:
+        for module, was_training in saved_training_flags:
+            module.training = was_training
+        set_rng_from_saved_states(rng_snapshot)
+
+    try:
+        text = trace.summary(**summary_kwargs)
     finally:
         trace.cleanup()
+    return text + "\n" + _summary_execution_note(execution_mode, grad_mode)
+
+
+def _summary_execution_note(execution_mode: str, grad_mode: str) -> str:
+    """Return the one-line execution disclosure appended to one-call summaries."""
+
+    if execution_mode == "eval":
+        mode_part = "eval mode"
+    elif execution_mode == "train":
+        mode_part = "train mode (explicit; stateful layers may have updated buffers)"
+    else:
+        mode_part = "caller's module modes"
+    grad_part = "no_grad" if grad_mode == "off" else "caller's grad context"
+    return (
+        f"Execution: one-call capture ran in {mode_part} under {grad_part}; "
+        "module training flags and RNG state restored."
+    )
 
 
 def show_model_graph(

@@ -1,53 +1,50 @@
 """Extras-gated notebook namespace with no public objects yet.
 
 Import time stays inert: this module must NOT import ``IPython`` /
-``jupyter_client`` (the ``notebook`` extra's foreign third-party dependencies)
-as a side effect of ``import torchlens.notebook``. A bare package import can
-happen incidentally -- e.g. a portable ``.tlspec`` bundle's metadata
-unpickler resolving a pickled global whose module path names
-``torchlens.notebook`` -- and an eager import-time dependency check would run
-that foreign code with no trust opt-in. The extras check is therefore
-deferred to first ATTRIBUTE ACCESS via module ``__getattr__`` (PEP 562),
-preserving the original "clear ImportError naming the missing extra" contract
-at first USE instead of at import time.
+``jupyter_client`` (the ``notebook`` extra's foreign third-party
+dependencies) as a side effect of ``import torchlens.notebook``. A bare
+package import can happen incidentally -- e.g. a portable ``.tlspec``
+bundle's metadata unpickler resolving a pickled global whose module path
+names ``torchlens.notebook`` -- and an eager import-time dependency check
+would run that foreign code with no trust opt-in.
+
+Attribute access resolves through the shared five-step facade order
+(``torchlens.utils.facade``): the historical all-or-nothing conjunction gate
+(which IMPORTED the foreign dependencies on every attribute access and made
+``hasattr`` raise ``ImportError`` instead of answering) is replaced by
+per-name ``DependencyGate`` rows probed with ``importlib.util.find_spec``,
+so answering an attribute probe never executes foreign code and every typed
+refusal subclasses ``AttributeError``. The facade is pickle-safe.
+
+The notebook extra installs the dependencies
+(``pip install "torchlens[notebook]"``); adapters landing here gate on them
+per-name.
 """
 
 from __future__ import annotations
 
-import importlib
-from typing import Any
+from typing import TYPE_CHECKING as _TYPE_CHECKING
 
-_REQUIRED_DEPS = ("IPython", "jupyter_client")
+if _TYPE_CHECKING:
+    from typing import Any
 
 __all__: list[str] = []
 
+#: Real active names: none yet. Adapters land here with per-name
+#: ``DependencyGate`` rows in ``_DEPENDENCIES``.
+_LAZY_ATTRS: dict[str, tuple[str, str | None]] = {}
 
-def _check_required_deps() -> None:
-    """Raise a clear ``ImportError`` if the ``notebook`` extra's deps are missing.
+#: Redirect/refusal teaching tables (five-step steps 2-3).
+_REDIRECTS: dict[str, str] = {}
+_REFUSALS: dict[str, str] = {}
 
-    Raises
-    ------
-    ImportError
-        Naming every missing dependency, with the install hint.
-    """
-
-    missing_deps: list[str] = []
-    for dep in _REQUIRED_DEPS:
-        try:
-            importlib.import_module(dep)
-        except ImportError:
-            missing_deps.append(dep)
-
-    if missing_deps:
-        missing = ", ".join(missing_deps)
-        raise ImportError(
-            "torchlens.notebook requires extra: install with "
-            f"`pip install torchlens[notebook]`. Missing deps: {missing}"
-        )
+#: Per-name dependency gates (five-step step 4), e.g.
+#: ``{"widget": DependencyGate("IPython", 'pip install "torchlens[notebook]"')}``.
+_DEPENDENCIES: dict[str, Any] = {}
 
 
 def __getattr__(name: str) -> Any:
-    """Gate attribute access behind the deferred extras check.
+    """Resolve attributes through the shared five-step facade order.
 
     Parameters
     ----------
@@ -57,15 +54,46 @@ def __getattr__(name: str) -> Any:
     Returns
     -------
     Any
-        Never returns; ``torchlens.notebook`` exports no public objects yet.
+        The resolved attribute (none exist yet; every access teaches).
 
     Raises
     ------
-    ImportError
-        If the ``notebook`` extra's dependencies are not installed.
     AttributeError
-        If the dependencies are installed but ``name`` is not a real attribute.
+        Per the five-step contract: plain for underscore and unknown names,
+        typed teaching subclasses for redirect/refusal rows, and a typed
+        ``ImportError``-and-``AttributeError`` for gated names whose
+        dependency is absent.
     """
 
-    _check_required_deps()
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    from ..utils.facade import resolve_facade_attr
+
+    return resolve_facade_attr(
+        owner=__name__,
+        name=name,
+        module_globals=globals(),
+        lazy_attrs=_LAZY_ATTRS,
+        redirects=_REDIRECTS,
+        refusals=_REFUSALS,
+        dependencies=_DEPENDENCIES,
+    )
+
+
+def __dir__() -> list[str]:
+    """Return the real public names of the namespace and nothing else.
+
+    Returns
+    -------
+    list[str]
+        Sorted public names; accidental implementation imports are not
+        advertised.
+    """
+
+    from ..utils.facade import facade_dir
+
+    return facade_dir(globals(), _LAZY_ATTRS)
+
+
+# ``from __future__ import annotations`` binds ``annotations`` as a reachable
+# module attribute; nothing reads the binding (the future feature is a
+# compile-time flag), so unbind it -- the root facade's own idiom.
+del annotations

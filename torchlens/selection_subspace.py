@@ -169,6 +169,19 @@ def _basis_digest(canonical: torch.Tensor) -> str:
     return digest.hexdigest()
 
 
+#: Provenance-source marker for a basis whose support is the ENTIRE bound
+#: axis. It rides every resolved entry's ``provenance.source`` (and therefore
+#: every ``do()`` audit record), and ``do()`` reads it to fire the
+#: point-of-use disclosure: editing a dense direction's support set is
+#: FULL-AXIS ablation under the documented set semantics, never a projection
+#: along the direction -- the wrong-intent case the walkthrough flagged.
+DENSE_SUPPORT_NOTE = (
+    " [dense direction: support is the ENTIRE axis -- do() edits every "
+    "element of the axis (set semantics), never the component along the "
+    "direction]"
+)
+
+
 def _support_vector(canonical: torch.Tensor, tol: float) -> torch.Tensor:
     """Return the union support over the basis rows (bool ``[d]``)."""
 
@@ -187,6 +200,8 @@ def _resolve_subspace_term(node: _SubspaceTerm, trace: Any) -> ResolvedSelection
     population = _resolve_population(node.within, trace)
     support = _support_vector(node.basis, record.tol)
     source = record.summary()
+    if support.numel() > 1 and bool(support.all()):
+        source += DENSE_SUPPORT_NOTE
     entries: list[SiteEntry] = []
     for entry in population:
         shape = entry.shape

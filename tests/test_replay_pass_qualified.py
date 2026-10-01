@@ -158,14 +158,14 @@ def test_whole_layer_selection_edits_every_pass(recurrent):
     for pass_index in (2, 3):
         got = fork.layer_dict_all_keys[f"linear_1_1:{pass_index}"].out
         assert torch.allclose(got, linear_from_zero)
-    # The output record shares relu:3's call and re-slices the RAW call
-    # output, so it reflects the recomputed upstream (relu:2 zeroed -> the
-    # call recomputes relu(cell(0))) but not relu:3's own member hook --
-    # pre-existing shipped same-call semantics, identical on single-pass
-    # models on main, out of this lane's scope. The per-pass recompute is
-    # what this test pins.
+    # FIX-A (A05): the boundary output node mirrors its parent's resolved
+    # slot, so the whole-layer edit at relu:3 now REACHES the returned
+    # output (zeros). The historical same-call re-slice dropped the member
+    # edit and returned relu(cell(0)) -- the exact silent-wrongness class
+    # the output-contract fix closes.
     output = fork.layer_dict_all_keys["output_1"].out
-    assert torch.allclose(output, torch.relu(linear_from_zero))
+    assert torch.equal(output, fork.layer_dict_all_keys["relu_1_2:3"].out)
+    assert bool((output == 0).all())
 
 
 def test_hook_fires_only_at_targeted_pass(recurrent):
@@ -339,14 +339,15 @@ def test_single_pass_replay_disclosures_keep_bare_labels(single_pass):
     fork.do(tl.units("relu_1_2", _ALL_UNITS).resolve(fork), tl.zero_ablate())
 
     assert bool((fork.layer_dict_all_keys["relu_1_2:1"].out == 0).all())
-    # The output record shares relu's call and re-slices the raw call
-    # output (upstream unchanged here), so it stays bit-identical to the
-    # capture -- pre-existing shipped same-call semantics, pinned as the
-    # single-pass regression proof.
+    # FIX-A (A05): the boundary output node mirrors its parent's resolved
+    # slot, so the edit at the output-producing relu now reaches the
+    # returned output. The historical same-call re-slice kept the fork's
+    # output bit-identical to the CAPTURE, silently dropping the edit.
     assert torch.equal(
         fork.layer_dict_all_keys["output_1"].out,
-        trace.layer_dict_all_keys["output_1"].out,
+        fork.layer_dict_all_keys["relu_1_2:1"].out,
     )
+    assert bool((fork.layer_dict_all_keys["output_1"].out == 0).all())
     assert torch.equal(
         fork.layer_dict_all_keys["linear_1_1:1"].out,
         trace.layer_dict_all_keys["linear_1_1:1"].out,

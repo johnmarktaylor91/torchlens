@@ -67,9 +67,9 @@ from ..selection import (
     ResolvedSelection,
     SelectionError,
     SiteEntry,
-    _derive_masked_edit,
-    _validate_edited,
+    _apply_invalid,
 )
+from .masked_edit import _derive_masked_edit, _validate_edited
 from .types import FireRecord, HelperSpec, LiteralTensor
 
 if TYPE_CHECKING:
@@ -304,6 +304,19 @@ def apply_param_substitution_do(
     replay_module._preflight_log(trace)
 
     if not isinstance(edit, HelperSpec) and not callable(edit):
+        if not isinstance(edit, torch.Tensor):
+            # Same validation as the string-label path: lifting a scalar
+            # through the tensor-only replace_with helper used to crash
+            # bare at fire time.
+            raise _apply_invalid(
+                "not_maskable",
+                f"do(selection, edit) got a {type(edit).__name__} replacement "
+                "value; replacement values must be tensors matching the "
+                "parameter. For a constant fill pass a full-shape tensor "
+                "(e.g. torch.full_like(param, c)) or an edit helper such as "
+                "tl.zero_ablate() or tl.scale().",
+                code="selection_apply_invalid",
+            )
         from .predicates import replace_with
 
         edit = replace_with(edit)

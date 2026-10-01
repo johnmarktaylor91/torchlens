@@ -249,12 +249,24 @@ class TraceSlice(_SelectionOperand):
         return not self._labels
 
     def summary(self) -> str:
-        """Return a human-readable disclosure of members and boundary."""
+        """Return a human-readable disclosure of members and boundary.
+
+        Opens with the source trace's honesty banner when that capture is
+        non-clean: a slice is a VIEW, so summarizing a poisoned, unverified,
+        structure-only, or episode capture without the banner would launder
+        the parent's honesty facts away.
+        """
+
+        from ._capture_honesty import honesty_banner_lines
 
         lines = [
             f"TraceSlice ({self._source}): {len(self._labels)} ops, "
             f"{len(self._internal_edges)} internal edges",
         ]
+        lines.extend(
+            f"  [capture honesty] {banner_line}"
+            for banner_line in honesty_banner_lines(self._trace)
+        )
         if not self._labels:
             lines.append(
                 "  empty region: no member ops (for source->sink slices this "

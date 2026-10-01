@@ -423,6 +423,12 @@ def test_r26_host_escaped_scalar_output_refuses_at_save(
 
 
 @pytest.mark.smoke
+@pytest.mark.filterwarnings(
+    # A08 random-role-init disclosure (runnable_random_init_run): this test
+    # exercises a weight-free runnable run DELIBERATELY; the warning is the
+    # feature under test elsewhere (tests/test_persist_honesty_runnable_random.py).
+    "default:This runnable artifact carries no model weights"
+)
 def test_r26_normal_tensor_output_still_verified(tmp_path: Path) -> None:
     """A normal tensor-output model must still VERIFY (no C1 over-trigger)."""
 

@@ -177,7 +177,12 @@ def _has_nonfinite(out: torch.Tensor) -> bool | None:
         with pause_logging():
             tensor = fp8_widen_for_numeric_ops(tensor)
     try:
-        return bool((~torch.isfinite(tensor)).any().item())
+        # One-pass form: ``isfinite().all()`` allocates ONE bool intermediate and
+        # reduces it, where the historical ``(~isfinite()).any()`` allocated a
+        # second full-size negation first. Equivalent by De Morgan
+        # (``any(~x) == not all(x)``), pinned by the equivalence test in
+        # tests/test_report_honesty_wave0.py.
+        return not bool(torch.isfinite(tensor).all().item())
     except (RuntimeError, TypeError):
         return None
 

@@ -104,5 +104,14 @@
     }
   ],
   "label": "<trace-id>",
-  "schema": "torchlens.model_explorer.v2"
+  "schema": "torchlens.model_explorer.v2",
+  "torchlens_capture_honesty": {
+    "capture_status": "complete",
+    "capture_verification_reason": null,
+    "capture_verified": null,
+    "poisoned": false,
+    "rescue_rerun": false,
+    "schema": "torchlens.capture_honesty.v1",
+    "structure_only": false
+  }
 }

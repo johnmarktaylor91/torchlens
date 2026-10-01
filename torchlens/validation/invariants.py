@@ -568,6 +568,9 @@ _check_param_co_parent_links = _rebind_function(
 _check_layers_with_params_matches_param_usage = _rebind_function(
     _invariants_modules_params._check_layers_with_params_matches_param_usage, globals()
 )
+_deduped_layers_with_params = _rebind_function(
+    _invariants_modules_params._deduped_layers_with_params, globals()
+)
 _check_layer_param_aggregate_dedup = _rebind_function(
     _invariants_modules_params._check_layer_param_aggregate_dedup, globals()
 )

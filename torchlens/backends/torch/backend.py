@@ -1311,12 +1311,22 @@ class TorchBackend:
         # instead of pointing users at an exception they never receive.
         from .rescue import CaptureAttemptFailedWarning
 
+        # B8-44 follow-up (quickstart memo 4.6): the restoration sentence is
+        # scoped to what teardown actually restores -- TorchLens
+        # instrumentation and the torch environment. Model state mutated by
+        # the partially-executed forward (a materialized lazy module, updated
+        # BatchNorm running stats) is NOT rolled back, so the historical
+        # "the model ... restored" claim was false exactly when a forward
+        # materialized a module and then failed.
         self._warn_without_masking(
             exc,
             "TorchLens capture attempt failed "
-            f"({type(exc).__name__}); the model and torch environment were "
-            "restored. Partial diagnostics ride the exception (exc.partial_log "
-            "/ torchlens.partial.from_failed_capture).",
+            f"({type(exc).__name__}); TorchLens instrumentation is removed "
+            "from the model and the torch environment restored (state the "
+            "partial forward already mutated -- e.g. norm running statistics, "
+            "materialized lazy modules, updated buffers -- is not rolled "
+            "back). Partial diagnostics ride the exception "
+            "(exc.partial_log / torchlens.partial.from_failed_capture).",
             CaptureAttemptFailedWarning,
             stacklevel=4,
         )

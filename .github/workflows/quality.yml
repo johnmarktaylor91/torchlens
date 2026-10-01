@@ -194,40 +194,20 @@ jobs:
         # the next release cycle regardless. Do NOT broaden it to another ID
         # without the same exposure analysis written out.
         #
-        # --- transformers 4.x: FOUR advisories with NO IN-BAND FIX (2026-08-19) ---
-        # PYSEC-2025-217  X-CLIP checkpoint-conversion deserialization RCE
-        # PYSEC-2026-2288 Trainer._load_rng_state torch.load RCE      (fix 5.0.0)
-        # PYSEC-2026-2289 malicious config.json RCE                   (fix 5.3.0)
-        # PYSEC-2026-2290 LightGlue model-loading RCE                 (fix 5.5.0)
+        # --- transformers: the four 4.x-band waivers are RETIRED (2026-08) ---
+        # The in-repo transformers band widened to >=4.45,<6 (megaplan FORK-2,
+        # lane A12), so this job's fresh `.[dev,test,tabular]` resolve now
+        # installs transformers 5.x, where all four formerly-waived advisories
+        # (PYSEC-2025-217, PYSEC-2026-2288/2289/2290 -- RCE from loading an
+        # untrusted model artifact) are fixed. Their --ignore-vuln flags came
+        # off WITH the widen: a suppression for a vulnerability that is no
+        # longer in the audited tree is suppression debt, and leaving it
+        # armed would mask a future regression to the same IDs.
         #
-        # All four are the same class: RCE from LOADING AN UNTRUSTED MODEL
-        # ARTIFACT (CVSS vectors are AV:L/UI:R except 2290's AV:N/UI:R -- they
-        # need the victim to load attacker-controlled content).
-        #
-        # Why waived rather than fixed: every fix is in transformers 5.x, and the
-        # `transformers~=4.45` band is DELIBERATE. pyproject records that 5.x
-        # "landed while the hf extra called ~=4.45 supported, and the fleet
-        # recorded reds from exactly that fork", with the standing rule to widen
-        # the adapter band and this extra IN THE SAME CHANGE, never one side
-        # alone. So there is no in-band remedy and crossing the major is a
-        # separately-gated migration, not a pin bump.
-        #
-        # Exposure: transformers is an OPTIONAL extra (hf) plus a test extra --
-        # NOT a runtime dependency, so `pip install torchlens` never pulls it.
-        # torchlens uses none of the vulnerable entry points: no Trainer, no
-        # checkpoint conversion, no LightGlue. The one path it does touch is
-        # from_pretrained's config.json parsing (2289), and only against pinned
-        # well-known public models in its own test suite, never attacker-supplied
-        # repos.
-        #
-        # REVIEW TRIGGER: these four come off together with the transformers-5
-        # migration (tracked), which is now security-motivated rather than a
-        # compat chore. Re-verify the exposure claims above if torchlens ever
-        # adds a Trainer/checkpoint-conversion code path.
+        # The RESIDUAL 4.x-floor exposure (a user who pins transformers 4.x
+        # inside the still-admitted band carries the four advisories) is
+        # documented for users in SECURITY.md with the exposure analysis and
+        # the remedy (transformers>=5.5 clears all four).
         run: |
           pip-audit \
-            --ignore-vuln PYSEC-2026-3624 \
-            --ignore-vuln PYSEC-2025-217 \
-            --ignore-vuln PYSEC-2026-2288 \
-            --ignore-vuln PYSEC-2026-2289 \
-            --ignore-vuln PYSEC-2026-2290
+            --ignore-vuln PYSEC-2026-3624

@@ -10,7 +10,7 @@
 <title>RNNCellLoop</title>
 <polygon fill="white" stroke="transparent" points="-4,4 -4,-414.85 243,-414.85 243,4 -4,4"/>
 <text text-anchor="start" x="8" y="-396.65" font-family="Times,serif" font-weight="bold" font-size="14.00">RNNCellLoop</text>
-<text text-anchor="start" x="8" y="-382.65" font-family="Times,serif" font-size="14.00">6 tensors total (96 B)</text>
+<text text-anchor="start" x="8" y="-382.65" font-family="Times,serif" font-size="14.00">6 tensors total (80 B)</text>
 <text text-anchor="start" x="8" y="-368.65" font-family="Times,serif" font-size="14.00">16 params (all trainable, 64 B)</text>
 <!-- input_1 -->
 <g id="node1" class="node">

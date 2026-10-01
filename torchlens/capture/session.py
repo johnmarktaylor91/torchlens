@@ -319,7 +319,22 @@ class CaptureSession:
             self._activation_escrow_spill_index += 1
             import torch
 
+            from ..backends.torch._tl import clear_meta
+
             with _state.pause_logging():
+                # Spill the payload WITHOUT its TorchLens sidecar: a captured
+                # payload's ``TensorMeta.label_storage`` pins its own
+                # ``UntypedStorage``, and ``torch.save`` serializes the
+                # tensor's ``__dict__``, so the same bytes reach the writer
+                # both as the typed tensor and as the untyped pin ("Cannot
+                # save multiple tensors or storages that view the same data
+                # as different types"). Escrow consumption is raw-index-keyed
+                # (never label-keyed) and ``materialize`` loads with
+                # ``weights_only=True``, which would refuse the sidecar
+                # anyway. Stripping metadata from the payload the escrow
+                # exclusively owns is NOT a clone: the storage is written
+                # once, unchanged.
+                clear_meta(candidate.tensor)
                 torch.save(candidate.tensor, spill_path)
             candidate.tensor = None
             candidate.spill_path = spill_path
@@ -448,7 +463,28 @@ class CaptureSession:
         if gradient_selector is None:
             trace.__dict__.pop("_deferred_retention_selector", None)
             return
-        selected_grads = _get_op_nums_from_user_labels(trace, gradient_selector)
+        from ..intervention.selectors import BaseSelector as _BaseSelector
+
+        selected_grads: list[int] | str
+        if isinstance(gradient_selector, _BaseSelector):
+            # Selector-shaped save_grads resolves like the activation branch:
+            # the public resolve_sites gate refuses mid-capture, so the
+            # unchecked resolver walks the finalized layer list directly.
+            from ..intervention.resolver import _resolve_unchecked
+
+            selected_grads = sorted(
+                {
+                    raw_index
+                    for site in _resolve_unchecked(
+                        tuple(getattr(trace, "layer_list", ())),
+                        gradient_selector,
+                        strict=False,
+                    )
+                    if isinstance((raw_index := getattr(site, "raw_index", None)), int)
+                }
+            )
+        else:
+            selected_grads = _get_op_nums_from_user_labels(trace, gradient_selector)
         trace._grad_op_nums_to_save = selected_grads
         hook_nums = (
             {op.raw_index for op in trace.layer_list}

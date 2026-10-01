@@ -337,10 +337,19 @@ def test_report_surfaces_every_runtime_capability() -> None:
     compat_report = report(SmallCnn(), torch.randn(2, 1, 4, 4))
     row = compat_report.row("torch_capabilities")
     expected = set(get_torch_capability_snapshot()) | set(get_tf_capability_snapshot())
-    rendered = row.details.removeprefix("Runtime capabilities: ")
-    surfaced = {part.split("=", 1)[0] for part in rendered.split(";")[0].split(", ")}
-
+    # The row cell carries the grouped absences-first summary; the FULL dump
+    # moved to the detail accessor (sumfam wave-0 item 2), which is where the
+    # lockstep-with-defined-flags tripwire now bites.
+    surfaced = set(compat_report.capability_snapshot())
     assert surfaced == expected
+    assert row.details.startswith("Runtime capabilities: ")
+    assert "capabilities present" in row.details
+    assert "capability_snapshot()" in row.details
+    # Every ABSENT flag stays named in the row cell itself (absences-first).
+    snapshot = compat_report.capability_snapshot()
+    for name, available in snapshot.items():
+        if not available:
+            assert name in row.details
 
 
 def test_report_detects_known_scope_and_broken_rows() -> None:

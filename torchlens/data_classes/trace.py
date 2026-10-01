@@ -1608,8 +1608,8 @@ class Trace(
         "_source_bundle_manifest_sha256": FieldPolicy.DROP,
         # Two-pass selective-save retention flag (DEFERRED_RETENTION axis).
         "_retain_layers_to_save_output_parents": FieldPolicy.DROP,
-        # Validation side-channel state (B1-04). `validate_forward_pass` /
-        # `validate_saved_outs` are public methods on a user-held Trace, and
+        # Validation side-channel state (B1-04). `validate_forward_pass` is
+        # a public method on a user-held Trace, and
         # validation ENTRY unconditionally sets `_last_validation_failure`
         # (`reset_validation_failure` writes None on every run), so a plain
         # validate-then-save sequence hit

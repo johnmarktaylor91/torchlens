@@ -233,10 +233,13 @@ def format_size(size: float, decimal_places: int = 1) -> str:
 def format_flops(
     flops: float,
     decimal_places: int = 1,
-    *,
-    count_fma_as_two: bool = False,
 ) -> str:
     """Format a FLOP count using SI units.
+
+    A pure formatter: it never converts between FMA conventions (the
+    ``count_fma_as_two`` kwarg it once accepted-and-discarded is REMOVED --
+    convention selection lives on the counting surfaces such as
+    ``Trace.summary``/``flop_count``, which honor it or refuse typed).
 
     Parameters
     ----------
@@ -244,10 +247,6 @@ def format_flops(
         Number of floating-point operations.
     decimal_places:
         Number of decimal places for kilo-FLOPs and larger units.
-    count_fma_as_two:
-        Convention marker for callers that expose FLOP/MAC counting choices.
-        The value does not rescale ``flops``; it records which convention the
-        provided count already follows.
 
     Returns
     -------
@@ -255,7 +254,6 @@ def format_flops(
         Human-readable FLOP string such as ``"3.4 GFLOPs"``.
     """
 
-    del count_fma_as_two
     if flops < 0:
         raise ValueError("flops must be non-negative.")
     if decimal_places == 1:

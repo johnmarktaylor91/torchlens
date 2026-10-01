@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib
-import os
 import re
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -87,12 +86,21 @@ def attribute_walk(model: nn.Module, address: str) -> Any:
 
 @contextmanager
 def stop_after(site: Any) -> Iterator[None]:
-    """Set the experimental stop-after site for ``torchlens.pluck``.
+    """Set an ambient stop-after site for torch captures in this block.
+
+    Torch ``tl.trace`` calls inside the block (including the capture behind
+    ``torchlens.pluck``) compile the site into the halt engine exactly like
+    ``CaptureOptions(stop_after=...)``, halting inclusively after the site is
+    captured. Ambient provenance is exploratory: an explicit ``halt=`` on a
+    trace wins over the ambient site, a chunked capture refuses the
+    combination typed, and a site that never fires WARNS (never refuses,
+    unlike an explicit selector-shaped ``stop_after=``).
 
     Parameters
     ----------
     site:
-        Site where peek may stop early.
+        Module-address or function-name string, live selector
+        (``tl.func``/``tl.module``), or callable halt predicate.
 
     Yields
     ------
@@ -158,8 +166,10 @@ class Session:
             self.model,
             input_args,
             input_kwargs=input_kwargs,
-            intervention_ready=True,
-            name=f"session_{index}",
+            capture=torchlens.options.CaptureOptions(
+                intervention_ready=True,
+                name=f"session_{index}",
+            ),
         )
         metadata = {"index": index, "name": log.trace_label}
         setattr(log, "session_invocation", metadata)
@@ -260,8 +270,10 @@ def auto_capture(model: nn.Module, every: int = 100) -> Iterator[AutoCaptureSess
         If ``TORCHLENS_AUTO=1`` is set.
     """
 
-    if os.environ.get("TORCHLENS_AUTO") == "1":
-        raise RuntimeError("TORCHLENS_AUTO=1 is intentionally unsupported; use auto_capture().")
+    from ..utils.env_flags import closed_bool_env
+
+    if closed_bool_env("TORCHLENS_AUTO"):
+        raise RuntimeError("TORCHLENS_AUTO is intentionally unsupported; use auto_capture().")
     if every <= 0:
         raise ValueError("every must be positive.")
 

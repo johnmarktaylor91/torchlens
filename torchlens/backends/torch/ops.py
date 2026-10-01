@@ -21,6 +21,7 @@ import torch
 from torch.utils.weak import WeakIdKeyDictionary
 
 from ... import _state as _st
+from ..._capture_state_helpers import _is_uninitialized_param
 from ..._errors import TorchLensPostfuncError
 from ..._io import BlobRef
 from ..._robustness import UnsupportedTensorVariantError
@@ -875,6 +876,9 @@ _evaluate_trace_save_predicate = _rebind_function(
     _ops_finalize._evaluate_trace_save_predicate, globals()
 )
 _module_filter_namespace = _rebind_function(_ops_finalize._module_filter_namespace, globals())
+_note_module_filter_suppression = _rebind_function(
+    _ops_finalize._note_module_filter_suppression, globals()
+)
 _make_layer_log_entry = _rebind_function(_ops_finalize._make_layer_log_entry, globals())
 _raise_if_nonfinite_requested = _rebind_function(
     _ops_finalize._raise_if_nonfinite_requested, globals()

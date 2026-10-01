@@ -20,6 +20,7 @@ from .._io import (
 from .._io._json import _MAX_JSON_BYTES, loads_bounded, read_bounded
 from .._io.manifest import Manifest, enforce_version_policy
 from .._io.paths import resolve_bundle_blob_path
+from .._io.streaming import PARTIAL_SENTINEL, REASON_SENTINEL
 from .exceptions import BundleNotFinalizedError, RecoveryError
 from .storage_disk import record_from_json
 from .storage_ram import RamStorageBackend
@@ -179,6 +180,13 @@ def _load_from_index(
     metadata = _read_metadata(bundle_path / "metadata.json")
     records: list[ActivationRecord] = []
     warnings_out = _RecoveryWarningSink(recovery_warnings)
+    # WT1 A-IV item 21 (lane A08): an aborted bundle's PARTIAL/REASON.txt
+    # debris IS the on-disk failure record. Recovery used to discard it and
+    # rebuild the Recording with ``failed=False`` and no error evidence --
+    # laundering a failed capture into a benign "recovered". Carry it.
+    abort_reason = _abort_debris_reason(bundle_path) if recovered else None
+    if abort_reason is not None:
+        warnings_out.append(f"bundle was aborted mid-write: {abort_reason}")
     lines = _read_index_lines(bundle_path / "fastlog_index.jsonl")
     for line_number, raw_line in enumerate(lines, start=1):
         try:
@@ -226,9 +234,31 @@ def _load_from_index(
         metadata=metadata,
         recovered=recovered or bool(final_warnings),
         recovery_warnings=final_warnings,
+        abort_reason=abort_reason,
     )
     RamStorageBackend(recording).finalize()
     return recording
+
+
+def _abort_debris_reason(bundle_path: Path) -> str | None:
+    """Return the persisted abort reason when the bundle was aborted mid-write.
+
+    ``BundleStreamWriter.abort`` (and the fastlog storage backend routed
+    through it) marks the temp bundle with a ``PARTIAL`` sentinel and writes
+    the scrubbed failure reason to ``REASON.txt``. Absence of the sentinel
+    means no abort evidence, never proof of success.
+    """
+
+    if not (bundle_path / PARTIAL_SENTINEL).exists():
+        return None
+    try:
+        text = (bundle_path / REASON_SENTINEL).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        text = ""
+    text = " ".join(text.split())
+    if len(text) > 500:
+        text = text[:500] + "..."
+    return text or "no abort reason recorded"
 
 
 def _format_strict_integrity_error(recovery_warnings: list[str]) -> str:
@@ -481,8 +511,15 @@ def _recording_from_records(
     metadata: dict[str, Any],
     recovered: bool,
     recovery_warnings: list[str],
+    abort_reason: str | None = None,
 ) -> Recording:
-    """Build a Recording around loaded records."""
+    """Build a Recording around loaded records.
+
+    ``abort_reason`` is the PARTIAL/REASON.txt debris text when the bundle was
+    aborted mid-write: the rebuilt Recording then carries ``failed=True`` plus
+    the string evidence, and its derived outcome is FAILED -- recovery
+    salvages records, never the failure verdict (WT1 A-IV item 21).
+    """
 
     halted = bool(metadata.get("halted", False))
     status: Literal["complete", "halted", "partial_error", "recovered"] = (
@@ -512,6 +549,8 @@ def _recording_from_records(
         recovered=recovered,
         status=status,
         recovery_warnings=recovery_warnings,
+        failed=abort_reason is not None,
+        error_repr=(None if abort_reason is None else f"recovered aborted bundle: {abort_reason}"),
     )
 
 

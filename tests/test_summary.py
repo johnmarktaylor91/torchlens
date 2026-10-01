@@ -67,24 +67,24 @@ def test_small_model_default_output_golden(tiny_summary_log: tl.Trace) -> None:
     assert summary_text.endswith(
         "Model: TinySummaryModel\n"
         "+-------------------+--------------+--------+-------+\n"
-        "| Layer             | Output Shape | Params | Train |\n"
+        "| Module (type)     | Output Shape | Params | Train |\n"
         "+-------------------+--------------+--------+-------+\n"
-        "| input             | [1,3,8,8]    | 0      | -     |\n"
+        "| input             | [1,3,8,8]    | -      | -     |\n"
         "| conv (Conv2d)     | [1,4,8,8]    | 108    | yes   |\n"
         "| relu (ReLU)       | [1,4,8,8]    | 0      | -     |\n"
         "| flatten (Flatten) | [1,256]      | 0      | -     |\n"
         "| fc (Linear)       | [1,5]        | 1.3 K  | yes   |\n"
         "| output            | [1,5]        | -      | -     |\n"
         "+-------------------+--------------+--------+-------+\n"
-        "Params: 1,388 unique; trainable: 1,388\n"
+        "Params: 1,388 unique (parameter identity); trainable: 1,388 (100.0%); frozen: 0\n"
         "Ops: 4 total\n"
         "Edges: 5 total\n"
         "Branching factor: 1.00\n"
         "Saved outs: 0 B\n"
-        "Forward FLOPs: 19.2 KFLOPs  MACs: 9.6 KFLOPs\n"
+        "Forward FLOPs: 16.6 KFLOPs  MACs: 8.19 KMACs\n"
         "Unknown-FLOPs ops: 0\n"
-        "FLOP convention: counts use the captured TorchLens convention; "
-        "MACs are reported as FLOPs // 2."
+        "FLOP convention: fma=2 (one multiply-accumulate = 2 FLOPs); "
+        "MACs are true multiply-accumulate counts."
     )
 
 
@@ -101,8 +101,12 @@ def test_summary_discloses_unknown_flops_operations() -> None:
 
     log = tl.trace(_PadModel(), torch.randn(2, 3))
 
-    assert "Unknown-FLOPs ops: 1 (excluded from FLOP/MAC totals)" in log.summary()
-    assert "Unknown-FLOPs ops: 1 (excluded from FLOP/MAC totals)" in log.summary(level="compute")
+    expected = (
+        "Unknown-FLOPs ops: 1 (pad x1; excluded from FLOP/MAC totals; "
+        "remedy: torchlens.capture.flops.register_op_rule)"
+    )
+    assert expected in log.summary()
+    assert expected in log.summary(level="compute")
 
 
 @pytest.mark.parametrize("training", [True, False])
@@ -131,7 +135,7 @@ def test_batchnorm_module_summary_uses_real_output_shape_and_dtype(training: boo
     compute = log.summary(level="compute")
 
     assert "norm (BatchNorm2d) | [2,3,4,4]" in overview
-    assert "| norm  |" in compute
+    assert "| norm " in compute
     assert "float32" in compute
     assert "norm (BatchNorm2d) | [3]" not in overview
 
@@ -197,8 +201,8 @@ def test_memory_summary_names_recurrent_layers_with_pass_count() -> None:
     finally:
         log.cleanup()
 
-    assert "linear_1_1 x3" in rolled_text
-    assert "linear_1_1 x3" not in auto_text
+    assert "linear_1_1 (x3 passes)" in rolled_text
+    assert "linear_1_1 (x3 passes)" not in auto_text
     for pass_num in (1, 2, 3):
         assert f"linear_1_1:{pass_num}" in auto_text
 
@@ -212,13 +216,13 @@ def test_summary_entry_name_uses_layer_num_passes() -> None:
         {"layer_label": "linear_1_1", "num_passes": 3, "ops": {1: object()}},
     )()
 
-    assert _entry_name(entry) == "linear_1_1 x3"
+    assert _entry_name(entry) == "linear_1_1 (x3 passes)"
 
 
 def test_custom_fields_selection(tiny_summary_log: tl.Trace) -> None:
     """Custom field selection should drive the primary table columns."""
     summary_text = tiny_summary_log.summary(fields=["name", "params"])
-    assert "| Layer             | Params |" in summary_text
+    assert "| Module (type)     | Params |" in summary_text
     assert "Output Shape" not in summary_text
 
 

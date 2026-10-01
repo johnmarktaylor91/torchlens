@@ -39,18 +39,25 @@ FALSE_CLAIM_OWNERS = {
 
 # The FACET DIFF between attention implementations, asserted explicitly
 # (memo 4.1: "with the FACET DIFF asserted explicitly (not mere both-run)").
-# Measured: attn_out is structurally absent under EAGER -- the branch
-# mechinterp users deliberately select -- and present under SDPA (memo D7
-# class 1, the top-ranked measured class). Lane A01 flips these rows when
-# the fused-class gate dies; until then a silent change in either direction
-# fails here.
+# Post-A01 (fused-class gate dead, detection graph+config-keyed): attn_out is
+# available on BOTH implementations, and the remaining diff is the honest
+# read-vs-reconstruct boundary -- eager serves scores/pattern/z as REAL
+# captured ops (plus the computed per-head result where the output projection
+# lives inside the module), while a plain SDPA capture reports them
+# needs_capture until reconstruction_ready=True saves the SDPA arguments.
+# A silent change in either direction still fails here.
+_EAGER_REAL_OPS = {"sdpa_only": (), "eager_only": ("pattern", "result", "scores", "z")}
 EAGER_SDPA_FACET_DIFF: dict[str, dict[str, dict[str, tuple[str, ...]]]] = {
-    "gpt2": {"gpt2_attention": {"sdpa_only": ("attn_out",), "eager_only": ()}},
-    "distilgpt2": {"gpt2_attention": {"sdpa_only": ("attn_out",), "eager_only": ()}},
-    "llama": {"gqa_attention": {"sdpa_only": ("attn_out",), "eager_only": ()}},
-    "distilbert": {"distilbert_attention": {"sdpa_only": ("attn_out",), "eager_only": ()}},
-    "bert": {"bert_self_attention": {"sdpa_only": ("attn_out",), "eager_only": ()}},
-    # albert/qwen2/vit/clip/whisper: no facet-availability diff between
+    "gpt2": {"gpt2_attention": dict(_EAGER_REAL_OPS)},
+    "distilgpt2": {"gpt2_attention": dict(_EAGER_REAL_OPS)},
+    "llama": {"gqa_attention": dict(_EAGER_REAL_OPS)},
+    "vit": {"gqa_attention": dict(_EAGER_REAL_OPS)},
+    "distilbert": {"distilbert_attention": dict(_EAGER_REAL_OPS)},
+    # BERT's output projection lives OUTSIDE BertSelfAttention (in
+    # BertSelfOutput), so per-head result is structurally absent on both
+    # implementations and only the real-op trio differs.
+    "bert": {"bert_self_attention": {"sdpa_only": (), "eager_only": ("pattern", "scores", "z")}},
+    # albert/qwen2/clip/whisper: no facet-availability diff between
     # implementations today (their attention carries no recipe, so there is
     # nothing to differ -- the qwen2 emptiness itself is the KNOWN-GAP row).
 }
@@ -60,20 +67,27 @@ EAGER_SDPA_FACET_DIFF: dict[str, dict[str, dict[str, tuple[str, ...]]]] = {
 SDPA_UNSUPPORTED_FAMILIES = ("t5",)
 
 # Facet -> expected shape, resolved against FamilySpec.dims at assert time.
-# ("b" = batch, "s" = sequence, "h" = hidden, "n" = heads, "d" = d_head.)
+# ("b" = batch, "s" = sequence, "h" = hidden, "n" = QUERY heads, "g" = KV
+# heads (= n for MHA), "d" = d_head.)
 # The point is the mask-shape kill: a facet that should be (b, s, h) failing
 # because it arrived ids- or mask-shaped is the silent-wrong class the memo
-# names. q/k/v pin the MEASURED served layout (b, s, n, d) -- pre-permute --
-# deliberately: if A01's per-head work normalizes the layout, this table is
-# updated consciously in that lane, never silently.
+# names. q keeps the served layout (b, s, n, d); k/v carry KV heads (GQA
+# serves them un-expanded); A01's per-head facets pin the canonical layouts
+# the head view slices: scores/pattern are head-major (b, n, dst, src), z is
+# head-major (b, n, s, d), and the per-head result is position-major
+# (b, s, n, h) -- conscious A01 table update, never silent.
 FACET_SHAPE_SPECS: dict[str, tuple[str, ...]] = {
     "resid_pre": ("b", "s", "h"),
     "resid_mid": ("b", "s", "h"),
     "resid_post": ("b", "s", "h"),
     "q": ("b", "s", "n", "d"),
-    "k": ("b", "s", "n", "d"),
-    "v": ("b", "s", "n", "d"),
+    "k": ("b", "s", "g", "d"),
+    "v": ("b", "s", "g", "d"),
     "attn_out": ("b", "s", "h"),
+    "scores": ("b", "n", "s", "s"),
+    "pattern": ("b", "n", "s", "s"),
+    "z": ("b", "n", "s", "d"),
+    "result": ("b", "s", "n", "h"),
     "normalized": ("b", "s", "h"),
     "logits": ("b", "s", "v"),
 }
@@ -93,28 +107,15 @@ SHAPE_SPEC_OVERRIDES: dict[tuple[str, str, str], tuple[str, ...]] = {
     ("clip", "vision_model.post_layernorm", "normalized"): ("b", "h"),  # pooled CLS
 }
 
-# ENUMERATED WRONG-PAYLOAD MANIFEST (the A02 flagship class, measured at R0
-# on 2026-08-26): `resid_pre` is served IDS-SHAPED -- anchored to the token
-# ids, not the residual stream -- on these exact rows. gpt2/distilgpt2: both
-# blocks, both impls; llama/qwen2: layer 1 only (layer 0 is correct). The
-# sweep asserts each row still reproduces its recorded wrong shape (stale
-# rows fail loudly); every non-manifest site enforces the honest shape.
-# Owner: A02 (semantic residual slice: "resid_pre by dataflow+shape, kills
-# the mask-shaped silent wrong read"). Delete rows there when fixed.
-WRONG_PAYLOAD_MANIFEST: dict[tuple[str, str, str, str], tuple[int, ...]] = {
-    ("gpt2", "eager", "transformer.h.0", "resid_pre"): (1, 8),
-    ("gpt2", "eager", "transformer.h.1", "resid_pre"): (1, 8),
-    ("gpt2", "sdpa", "transformer.h.0", "resid_pre"): (1, 8),
-    ("gpt2", "sdpa", "transformer.h.1", "resid_pre"): (1, 8),
-    ("distilgpt2", "eager", "transformer.h.0", "resid_pre"): (1, 8),
-    ("distilgpt2", "eager", "transformer.h.1", "resid_pre"): (1, 8),
-    ("distilgpt2", "sdpa", "transformer.h.0", "resid_pre"): (1, 8),
-    ("distilgpt2", "sdpa", "transformer.h.1", "resid_pre"): (1, 8),
-    ("llama", "eager", "model.layers.1", "resid_pre"): (1, 8),
-    ("llama", "sdpa", "model.layers.1", "resid_pre"): (1, 8),
-    ("qwen2", "eager", "model.layers.1", "resid_pre"): (1, 8),
-    ("qwen2", "sdpa", "model.layers.1", "resid_pre"): (1, 8),
-}
+# ENUMERATED WRONG-PAYLOAD MANIFEST (the A02 flagship class): `resid_pre` was
+# served IDS-SHAPED -- anchored to the token ids, not the residual stream --
+# on 12 exact rows measured 2026-08-26 (gpt2/distilgpt2: both blocks, both
+# impls; llama/qwen2: layer 1). A02 (semantic residual slice: "resid_pre by
+# dataflow+shape") fixed the anchor and DELETED every row in its own change,
+# so the honest-shape floor now enforces the stream shape on all of them.
+# The manifest stays as the mechanism: a NEW wrong-payload site gets a row
+# here (with its owner) and the sweep pins its exact wrong shape until fixed.
+WRONG_PAYLOAD_MANIFEST: dict[tuple[str, str, str, str], tuple[int, ...]] = {}
 WRONG_PAYLOAD_OWNER = "A02 (semantic residual slice)"
 
 # The class-7 capture-dependency inconsistency, pinned exactly (memo D7
@@ -225,24 +226,15 @@ class KnownRed:
 
 
 KNOWN_RED: tuple[KnownRed, ...] = (
-    KnownRed(
-        red_id="logit-lens-final-norm",
-        owner="A03 (semantic reconstruction slice)",
-        exception_type="LogitLensError",
-        message_substring="final_norm_kind",
-        notes="the flagship logit_lens failure reproduced byte-identically on a"
-        " config-built GPT-2 at zero network (memo ground truth); root cause is"
-        " the false final_norm_* absence claims in the known-false manifest",
-    ),
-    KnownRed(
-        red_id="container-output-do-replay",
-        owner="A05 (FIX-A: replay output contract)",
-        exception_type="IndexError",
-        message_substring="too many indices",
-        notes="fork.do() through the replay engine on a trace whose model returned"
-        " an HF ModelOutput container re-applies a recorded container path to an"
-        " already-resolved member and crashes (the HF Cache crash root cause)",
-    ),
+    # The "logit-lens-final-norm" row (flagship logit_lens failure, owner
+    # A03) was deleted by A02: its root cause was the false final_norm_*
+    # absence claims -- the final-norm dataflow anchor fix (mikit F6) makes
+    # logit_lens succeed on the config-built GPT-2, and the sweep test now
+    # asserts the true oracle (final-layer lens == the model's own logits).
+    # container-output-do-replay (A05, FIX-A) was fixed 2026-08-26: the replay
+    # engine no longer re-applies a boundary output node's recorded MODEL-output
+    # container path to the replayed call's already-resolved output. The axes
+    # test flipped to assert the edit lands correctly through the container.
     KnownRed(
         red_id="kwargs-only-plain-module",
         owner="fix bundle (A04/A05 kwarg transport)",

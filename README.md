@@ -1,4 +1,4 @@
-# <img src="images/logo.png" width=8% height=8%> TorchLens
+# <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/logo.png" width=8% height=8%> TorchLens
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
@@ -35,7 +35,7 @@ print(log[7].func_name)            # ... or by ordinal
 log.draw()                    # PDF of the computational graph
 ```
 
-<img src="images/swin_v2_b_demo.jpg" width="70%" height="70%">
+<img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/swin_v2_b_demo.jpg" width="70%" height="70%">
 
 **Quick Links**
 
@@ -140,7 +140,7 @@ log.draw(vis_mode='rolled')       # rolled (compact for recurrent)
 log.draw(vis_mode='unrolled')     # every pass as a distinct node
 ```
 
-<img src="images/alexnet.png" width=30% height=30%>
+<img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/alexnet.png" width=30% height=30%>
 
 
 ## What You Can Do
@@ -210,7 +210,7 @@ log = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=tl.func('r
 log.log_backward(log[log.output_layers[0]].out.sum())
 ```
 
-<img src="images/gradients.png" width=30% height=30%>
+<img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/gradients.png" width=30% height=30%>
 
 Backward capture is PyTorch-only. Non-torch backends expose derived leaf-level
 gradients through a second AD pass. See [docs/backward.md](docs/backward.md).
@@ -233,7 +233,7 @@ check = rf.check(unit)
 outgoing = target.projective_field.at((3, 3), target=log['features.8'])
 ```
 
-<img src="images/receptive_projective_fields.svg" width="70%" alt="Receptive and projective field directions through a neural-network graph">
+<img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/receptive_projective_fields.svg" width="70%" alt="Receptive and projective field directions through a neural-network graph">
 
 See the [receptive and projective fields guide](docs/receptive_projective_fields.md) for the
 status contract, visual overlays, validation, and layer-to-layer queries.
@@ -289,11 +289,11 @@ log.draw(vis_mode='unrolled')        # every pass as a distinct node
 
 Control nesting depth to zoom in on submodules:
 
-<img src="images/nested_modules_example.png" width=80% height=80%>
+<img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/nested_modules_example.png" width=80% height=80%>
 
 For recurrent models, the rolled view collapses repeated structure cleanly:
 
-<img src="images/simple_recurrent.png" width=30% height=30%>
+<img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/simple_recurrent.png" width=30% height=30%>
 
 ```python
 class SimpleRecurrent(torch.nn.Module):
@@ -443,31 +443,31 @@ A sample across families is shown below.
 
 | GoogLeNet (inception + buffer edges) | Stable Diffusion (U-Net denoiser) | CLIP (vision + language towers) |
 |:---:|:---:|:---:|
-| <img src="images/menagerie/googlenet.jpg" height="200"> | <img src="images/menagerie/stable_diffusion.png" height="200"> | <img src="images/menagerie/clip.jpg" height="200"> |
+| <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/googlenet.jpg" height="200"> | <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/stable_diffusion.png" height="200"> | <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/clip.jpg" height="200"> |
 
 **State-Space + Recurrence**
 
 | Mamba (selective SSM) | Recurrent Gemma (linear recurrence) | Whisper (audio encoder-decoder) |
 |:---:|:---:|:---:|
-| <img src="images/menagerie/mamba.jpg" height="200"> | <img src="images/menagerie/recurrent_gemma.jpg" height="200"> | <img src="images/menagerie/whisper.jpg" height="200"> |
+| <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/mamba.jpg" height="200"> | <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/recurrent_gemma.jpg" height="200"> | <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/whisper.jpg" height="200"> |
 
 **Mixture-of-Experts + Generative**
 
 | Mixtral (sparse MoE) | Hierarchical VAE | Perceiver |
 |:---:|:---:|:---:|
-| <img src="images/menagerie/mixtral.jpg" height="200"> | <img src="images/menagerie/hierarchical_vae.png" height="200"> | <img src="images/menagerie/perceiver.jpg" height="200"> |
+| <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/mixtral.jpg" height="200"> | <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/hierarchical_vae.png" height="200"> | <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/perceiver.jpg" height="200"> |
 
 **Graph Networks + Exotic**
 
 | DimeNet (molecular GNN) | CORnet-S (visual cortex, unrolled) | LLaMA (decoder-only LLM) |
 |:---:|:---:|:---:|
-| <img src="images/menagerie/dimenet.png" height="200"> | <img src="images/menagerie/cornet_s.png" height="200"> | <img src="images/menagerie/llama.jpg" height="200"> |
+| <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/dimenet.png" height="200"> | <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/cornet_s.png" height="200"> | <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/llama.jpg" height="200"> |
 
 **Reinforcement Learning + Quantum ML + Scale**
 
 | Decision Transformer (offline RL) | Quantum ML circuit | 3,000-node graph (SFDP layout) |
 |:---:|:---:|:---:|
-| <img src="images/menagerie/decision_transformer.jpg" height="200"> | <img src="images/menagerie/qml.png" height="200"> | <img src="images/menagerie/large_graph_3k.jpg" height="200"> |
+| <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/decision_transformer.jpg" height="200"> | <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/qml.png" height="200"> | <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/large_graph_3k.jpg" height="200"> |
 
 
 ## Pin your architecture in CI
@@ -524,6 +524,12 @@ detached references. The optional `escape_detector="shadow"` diagnoses raw calla
 [detached-reference handling](docs/migration/scoped_detached_patching.md) and the
 [limitations catalog](docs/reference/limitations.md).
 
+A traced model keeps TorchLens wrapper state attached afterwards, so pickling
+the WHOLE module (`pickle.dumps(model)` or `torch.save(model)`) can fail with a
+`PicklingError` after tracing. Call `tl.release_model(model)` to restore
+whole-model serializability; `state_dict()` saves, traces, and saved
+activations are unaffected either way.
+
 
 ## Tutorials and Docs
 
@@ -550,9 +556,14 @@ detached references. The optional `escape_detector="shadow"` diagnoses raw calla
 
 ## Security
 
-Portable bundles contain a pickle file in `metadata.pkl`. Only load bundles
-from trusted sources. Loading an untrusted bundle with `tl.load()` can execute
-arbitrary code.
+Portable bundles contain a pickle file in `metadata.pkl`. It is read through a
+restricted, default-deny unpickler, and foreign callables are never imported at
+load time -- but executing what an artifact describes (running a runnable
+artifact, or opting into `trust_custom_callables=`) is code execution, and
+tracing a model runs its `forward()`. Only load bundles and trace models from
+sources you trust. See [SECURITY.md](SECURITY.md) for the full trust model,
+the supported-versions table, and dependency-advisory status (including the
+transformers 4.x advisories and their remedy).
 
 
 ## Other Packages You Should Check Out

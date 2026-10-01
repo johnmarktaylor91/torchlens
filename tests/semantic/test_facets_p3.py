@@ -13,7 +13,7 @@ from torch.nn import functional as F
 import torchlens as tl
 from torchlens.intervention.errors import SiteResolutionError
 from torchlens.semantic import MissingFacet, MissingFacetError, facets as facets_mod
-from torchlens.semantic.recipes import _load_entrypoint_recipes
+from torchlens.semantic.recipes import activate_entrypoint_recipes
 
 
 class LlamaSdpaAttention(nn.Module):
@@ -307,8 +307,10 @@ def test_transformerlens_alias_menu_mirrors_missing_native_facet() -> None:
         facets_mod.enable_transformerlens_aliases(False)
 
 
-def test_entrypoint_loader_warns_and_skips_broken_plugin(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Broken recipe entry points warn instead of crashing import-time loading."""
+def test_entrypoint_activation_warns_and_skips_broken_plugin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Broken recipe entry points warn instead of crashing explicit activation."""
 
     broken = EntryPoint(
         name="broken",
@@ -328,4 +330,30 @@ def test_entrypoint_loader_warns_and_skips_broken_plugin(monkeypatch: pytest.Mon
         "torchlens.semantic.recipes.metadata.entry_points", lambda: _EntryPoints([broken])
     )
     with pytest.warns(UserWarning, match="Skipping broken torchlens.recipes entry point"):
-        _load_entrypoint_recipes()
+        activated = activate_entrypoint_recipes()
+    assert activated == ()
+
+
+def test_entrypoint_activation_unknown_name_warns_coded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unknown requested provider names warn with the recipes_unknown_provider code."""
+
+    class _EntryPoints(list[EntryPoint]):
+        """Minimal selectable entry-point collection."""
+
+        def select(self, *, group: str) -> list[EntryPoint]:
+            """Return points for one group."""
+
+            return [point for point in self if point.group == group]
+
+    monkeypatch.setattr(
+        "torchlens.semantic.recipes.metadata.entry_points", lambda: _EntryPoints([])
+    )
+    with pytest.warns(UserWarning, match="Unknown torchlens.recipes entry point") as caught:
+        activated = activate_entrypoint_recipes(["nonexistent_provider"])
+    assert activated == ()
+    coded = [w.message for w in caught if getattr(w.message, "fields", {}).get("code")]
+    assert coded, "the unknown-name warning must carry a machine-readable code"
+    assert coded[0].fields["code"] == "recipes_unknown_provider"
+    assert coded[0].fields["unknown_names"] == ["nonexistent_provider"]

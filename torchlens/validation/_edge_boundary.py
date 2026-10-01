@@ -98,6 +98,26 @@ def _splice_edge_substitution_args(
     kwargs = dict(input_args["kwargs"])
     for store_key, payload in entries.items():
         arg_kind, arg_path = store_key
+        if len(tuple(arg_path)) != 1:
+            # TRIPWIRE (shared with the replay/edge splice sites): a nested
+            # store key at this top-level splice would silently re-execute
+            # the child from the WRONG spliced argument and could validate
+            # green. Refuse the entry as invalid instead of guessing.
+            record_validation_failure(
+                trace,
+                ValidationFailure(
+                    check=CHECK_REPLAY,
+                    op_label=target_op.label,
+                    func_name=getattr(target_op, "func_name", None),
+                    message=(
+                        f"edge-substitution entry at {store_key!r} has a nested "
+                        "argument path; the top-level splice cannot apply it "
+                        "faithfully (foreign or future-schema store row)"
+                    ),
+                ),
+            )
+            failed = ValidationCheckResult.failed_result("edge_substitution_nested_path")
+            return None, failed
         value = payload.get("value") if isinstance(payload, dict) else None
         if not isinstance(value, torch.Tensor):
             record_validation_failure(

@@ -355,3 +355,379 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 809b9cf800c155c1490df3f9ffa71ec72d38d321 (dirty)
 recorded: 2026-08-26T11:43:01.718116+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A02: new torchlens/semantic/_hops.py + torchlens/_model_wrappers.py modules enter the static scan corpus (no producer/consumer semantics change)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: f6acd5bf14432f33a868b71e04b2b5adf2fdff1e (dirty)
+recorded: 2026-08-26T20:01:26.197209+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A05 FIX-A: replay.py gains reviewed reads of func_call_id/is_output/parents for the boundary-output slot resolution (_boundary_slot_parent_op); counts match the new sites exactly
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4e5390f341147920806e1ed1674ca78e07bcb712 (dirty)
+recorded: 2026-08-26T20:14:43.153610+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A01 semantic attention: graph-derived eager anchors read op.parents/op.children via getattr in torchlens/semantic/recipes/attention.py (new reviewed consumer sites)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 7ad131d9a7d8cd37c0194ecf4fe5f3640c9d2b92 (clean)
+recorded: 2026-08-26T20:15:21.647909+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A07 numbers-truth lane: tl.summary one-call door now snapshots/restores module training flags (model.modules() consumer site in _user_public_impls)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: eb10846afbcf3096a52c10a03b72c66ec8cdedea (dirty)
+recorded: 2026-08-26T20:15:15.592054+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A07 numbers-truth lane: tl.summary one-call door now snapshots/restores module training flags (model.modules() consumer site in _user_public_impls)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: eb10846afbcf3096a52c10a03b72c66ec8cdedea (dirty)
+recorded: 2026-08-26T20:15:18.305043+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A03 semantic reconstruction slice: logit_lens prediction extractor adds two trace.modules consumer sites (5->7) in torchlens/semantic/logit_lens.py
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: d0a1709733a5fdc40df7a04f71edc2f913648751 (dirty)
+recorded: 2026-08-26T20:37:50.083830+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A07 numbers-truth: two-term compute record derivation reads op fields (func_name/flops_forward/shape/param_shapes/parent_arg_positions) at report time; canonical aggregation module added
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 233ff9216be4744e56218d4e4d3b237073122cac (dirty)
+recorded: 2026-08-26T20:37:58.709266+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A07 numbers-truth: two-term compute record derivation reads op fields (func_name/flops_forward/shape/param_shapes/parent_arg_positions) at report time; canonical aggregation module added
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 233ff9216be4744e56218d4e4d3b237073122cac (dirty)
+recorded: 2026-08-26T20:38:02.097283+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A07 numbers-truth: consumer sites moved in the size-ratchet splits (compute_record.py out of flops.py, _discoverability.py out of _builder.py) and the invariant identity-basis rewrite
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: d91956e60a7b5fa77a02b5e54c4dec626044aa42 (clean)
+recorded: 2026-08-26T21:54:55.613673+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A07 numbers-truth: consumer sites moved in the size-ratchet splits (compute_record.py out of flops.py, _discoverability.py out of _builder.py) and the invariant identity-basis rewrite
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: d91956e60a7b5fa77a02b5e54c4dec626044aa42 (clean)
+recorded: 2026-08-26T21:54:58.188212+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A07 train rebase regen onto e5bf20a6
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: fc7ac317f26c4f0d2a8c20a86d938bdd6c130f3c (clean)
+recorded: 2026-08-27T00:57:48.204699+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A07 train rebase regen onto e5bf20a6
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: fc7ac317f26c4f0d2a8c20a86d938bdd6c130f3c (clean)
+recorded: 2026-08-27T00:57:50.887378+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: R43 split: _finalize_lazy_param_geometry read sites moved verbatim finalization.py -> _lazy_param_geometry.py; no site added or removed
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: e6773f12482b6f7bff05bfe53cdab30345bfbf28 (clean)
+recorded: 2026-08-27T01:13:06.484449+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: R43 split: _finalize_lazy_param_geometry read sites moved verbatim finalization.py -> _lazy_param_geometry.py; no site added or removed
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: e6773f12482b6f7bff05bfe53cdab30345bfbf28 (clean)
+recorded: 2026-08-27T01:13:09.875083+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A05 train rebase regen onto 83cd28b2
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 524f8715ac9a7864959688043a565490b0eed972 (clean)
+recorded: 2026-08-26T23:52:20.954231+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A05 train rebase regen onto 83cd28b2
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 524f8715ac9a7864959688043a565490b0eed972 (clean)
+recorded: 2026-08-26T23:52:24.296760+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A05 train rebase regen onto e5bf20a6 (T12 landed after your fix)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 2dba2528e0ecab958edabc83338714c11ea0de1a (clean)
+recorded: 2026-08-27T00:59:01.034460+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A05 train rebase regen onto e5bf20a6 (T12 landed after your fix)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 2dba2528e0ecab958edabc83338714c11ea0de1a (clean)
+recorded: 2026-08-27T00:59:03.740232+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A03 train rebase regen onto e5bf20a6
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 7c00a0d486e1a4be779bf651979b35fed3d71c00 (clean)
+recorded: 2026-08-27T00:59:13.677997+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A03 train rebase regen onto e5bf20a6
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 7c00a0d486e1a4be779bf651979b35fed3d71c00 (clean)
+recorded: 2026-08-27T00:59:16.261738+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A03 train rebase regen onto 1047c496 (A05 pp regen landed; re-regen required)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 6688920df4ea299faa693965a48607a3a418bdaf (clean)
+recorded: 2026-08-27T03:01:22.277757+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A03 train rebase regen onto 1047c496 (A05 pp regen landed; re-regen required)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 6688920df4ea299faa693965a48607a3a418bdaf (clean)
+recorded: 2026-08-27T03:01:25.726559+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A07 train rebase regen onto 1047c496 (A05 pp regen landed; re-regen required)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: a84c0b3f0176588e62fabafd575cdd2d7a0873e2 (clean)
+recorded: 2026-08-27T03:01:35.116631+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A07 train rebase regen onto 1047c496 (A05 pp regen landed; re-regen required)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: a84c0b3f0176588e62fabafd575cdd2d7a0873e2 (clean)
+recorded: 2026-08-27T03:01:37.880778+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A07 train rebase regen onto 20b9beaa (A03 pp landing invalidated your regen; you are also mid-fix-cycle -- rebase first)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 871df6ba9ea0115508bcaab9edadc7395a62a358 (clean)
+recorded: 2026-08-27T05:44:17.965203+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A07 train rebase regen onto 20b9beaa (A03 pp landing invalidated your regen; you are also mid-fix-cycle -- rebase first)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 871df6ba9ea0115508bcaab9edadc7395a62a358 (clean)
+recorded: 2026-08-27T05:44:21.217617+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: lane A11: dataset_extraction gained inspect.Parameter.kind and nn.Module.modules() reads (D5 position guard + D3 inference guard); non-record attribute reads, reviewed
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 72e8f3285c41978146c66ec8cb5ab633cc90d7e4 (dirty)
+recorded: 2026-08-26T20:05:03.574233+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A11 train rebase regen onto 20b9beaa (A03 pp landing invalidated your regen)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 2a8a8be34ec9d86b919bbfb7a0a2fbbcecf700c5 (clean)
+recorded: 2026-08-27T05:11:44.112021+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A11 train rebase regen onto 20b9beaa (A03 pp landing invalidated your regen)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 2a8a8be34ec9d86b919bbfb7a0a2fbbcecf700c5 (clean)
+recorded: 2026-08-27T05:11:46.613947+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A11 train rebase regen onto fd5fca29 (A07 pp landing invalidated your regen)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: cabe207b6fbffbb0a16cb660d81974821368248f (clean)
+recorded: 2026-08-27T06:25:08.300244+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A11 train rebase regen onto fd5fca29 (A07 pp landing invalidated your regen)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: cabe207b6fbffbb0a16cb660d81974821368248f (clean)
+recorded: 2026-08-27T06:25:11.699663+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A06 capture-options read-site moves
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: b5d504b0ab4a575a6ce32fba711df3356c8266e7 (clean)
+recorded: 2026-08-27T08:37:15.303891+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A06 capture-options read-site moves
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: b5d504b0ab4a575a6ce32fba711df3356c8266e7 (clean)
+recorded: 2026-08-27T08:37:17.939005+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: megasprint A10 entry/facade lane: new torchlens/utils/facade.py + utils/lazy_state.py modules and recipes/_robustness/_runnable_state edits moved producer/consumer scan sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 6685e4c3f591736ad5d49e0936afc94ac7a69e76 (dirty)
+recorded: 2026-08-26T20:12:47.883073+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: megasprint A10 entry/facade lane: new torchlens/utils/facade.py + utils/lazy_state.py modules and recipes/_robustness/_runnable_state edits moved producer/consumer scan sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 6685e4c3f591736ad5d49e0936afc94ac7a69e76 (dirty)
+recorded: 2026-08-26T20:12:51.390457+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A10 train rebase regen onto e5bf20a6
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: e32c53962df2081f132ed1f557dae42407cc49a8 (clean)
+recorded: 2026-08-27T01:15:38.784334+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A10 train rebase regen onto e5bf20a6
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: e32c53962df2081f132ed1f557dae42407cc49a8 (clean)
+recorded: 2026-08-27T01:15:42.398908+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A10 train rebase regen onto 1047c496 (A05 pp regen landed; re-regen required)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 7ca1605736bf108e386d685b8b09afbaec5ae6ac (clean)
+recorded: 2026-08-27T02:59:27.032848+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A10 train rebase regen onto 1047c496 (A05 pp regen landed; re-regen required)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 7ca1605736bf108e386d685b8b09afbaec5ae6ac (clean)
+recorded: 2026-08-27T02:59:30.372828+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A10 train rebase regen onto 20b9beaa (A03 pp landing invalidated your regen)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 1c92c691a9aa1b3a5311e6eb6123ffbeb9c9f0ed (clean)
+recorded: 2026-08-27T05:12:09.062135+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A10 train rebase regen onto 20b9beaa (A03 pp landing invalidated your regen)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 1c92c691a9aa1b3a5311e6eb6123ffbeb9c9f0ed (clean)
+recorded: 2026-08-27T05:12:11.721643+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A10 train rebase regen onto fd5fca29 (A07 pp landing invalidated your regen)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 6901a9e4d6bcea553f5bc2b01bec8fd3828e0bec (clean)
+recorded: 2026-08-27T06:24:56.615627+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A10 train rebase regen onto fd5fca29 (A07 pp landing invalidated your regen)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 6901a9e4d6bcea553f5bc2b01bec8fd3828e0bec (clean)
+recorded: 2026-08-27T06:25:00.401717+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A10 train rebase regen onto 5a0a235f (A11 pp landing invalidated your regen)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: c06be6bf8b9f300055282db4d04ba6bd1caaedb9 (clean)
+recorded: 2026-08-27T07:30:00.469303+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A10 train rebase regen onto 5a0a235f (A11 pp landing invalidated your regen)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: c06be6bf8b9f300055282db4d04ba6bd1caaedb9 (clean)
+recorded: 2026-08-27T07:30:54.862793+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A10 train rebase regen onto ed859edb (A06 pp regen landed)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 300785ea3ba17c5e195298a5d1b227b440a32486 (clean)
+recorded: 2026-08-27T09:28:52.647391+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: A10 train rebase regen onto ed859edb (A06 pp regen landed)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 300785ea3ba17c5e195298a5d1b227b440a32486 (clean)
+recorded: 2026-08-27T09:28:55.184436+00:00

@@ -54,9 +54,9 @@ from ..selection import (
     _apply_invalid,
     _require_edge_provenance,
     _trace_edge_records,
-    _validate_edited,
     edge_address_of,
 )
+from .masked_edit import _validate_edited
 from .types import FireRecord, HelperSpec
 
 if TYPE_CHECKING:
@@ -70,6 +70,34 @@ def _value_digest(value: torch.Tensor) -> str:
 
     payload = value.detach().cpu().contiguous()
     return hashlib.sha256(payload.numpy().tobytes()).hexdigest()
+
+
+def require_depth1_arg_path(arg_path: Any, *, where: str, site: Any) -> None:
+    """TRIPWIRE: refuse a nested store key at a top-level splice site.
+
+    The v1 splice sites substitute at ``arg_path[0]`` directly. A nested
+    (depth-2+) key reaching one of them would silently replace the WHOLE
+    top-level argument at the wrong address -- well-formed, audited, wrong.
+    The entry gate refuses nested addresses at construction, so an entry
+    here is a foreign, forged, or future-schema store row; the
+    nested-container splice is a named future that must extend every splice
+    site together, and until it does each site refuses rather than guesses.
+    """
+
+    if len(tuple(arg_path)) == 1:
+        return
+    raise _apply_invalid(
+        "not_maskable",
+        f"edge-substitution store entry with nested argument path "
+        f"{tuple(arg_path)!r} reached the top-level splice ({where}); v1 "
+        "splices address top-level arguments only and never guess a nested "
+        "address. The entry cannot be applied faithfully -- it is a foreign "
+        "or future-schema store row.",
+        code="selection_apply_invalid",
+        site=site,
+        where=where,
+        arg_path=tuple(arg_path),
+    )
 
 
 def _consumed_value(trace: Any, parent_op: Any, child_op: Any) -> torch.Tensor:
@@ -102,6 +130,19 @@ def _edit_hook(edit: Any, site_label: str) -> tuple[Any, HelperSpec | None, str]
         return edit.factory(), edit, edit.helper_name
     if callable(edit):
         return edit, None, getattr(edit, "__name__", "hook")
+    if not isinstance(edit, torch.Tensor):
+        # Same validation as the string-label path: lifting a scalar through
+        # the tensor-only replace_with helper used to crash bare at fire time.
+        raise _apply_invalid(
+            "not_maskable",
+            f"do(selection, edit) got a {type(edit).__name__} replacement "
+            "value; replacement values must be tensors matching the consumed "
+            "value. For a constant fill pass a full-shape tensor (e.g. "
+            "torch.full_like(consumed, c)) or an edit helper such as "
+            "tl.zero_ablate() or tl.scale().",
+            code="selection_apply_invalid",
+            site=site_label,
+        )
     from .predicates import replace_with
 
     spec = replace_with(edit)
@@ -271,6 +312,11 @@ def _reexecute_child_with_substitution(
     # substituted keeps its "as if" value under a later edge edit (the
     # edge splice below overwrites its own occurrence last if they collide).
     args, kwargs = replay_module._splice_param_substitutions([child_op], args, kwargs)
+    require_depth1_arg_path(
+        arg_path,
+        where="edge re-execution splice",
+        site=getattr(child_op, "label", None),
+    )
     if arg_kind == "positional":
         position = int(arg_path[0])
         args = args[:position] + (substituted,) + args[position + 1 :]
@@ -278,7 +324,14 @@ def _reexecute_child_with_substitution(
         kwargs = dict(kwargs)
         kwargs[arg_path[0]] = substituted
     output = replay_module._execute_replay_func_strict(child_op, args, kwargs)
-    return replay_module._slice_output_by_path(output, tuple(child_op.container_path or ()))
+    # Path resolution shares the replay engine's output contract: a boundary
+    # output node's recorded container_path addresses the MODEL's return
+    # container, never the re-executed call's output (edge records do not
+    # currently reach synthesized boundary nodes, but the contract lives in
+    # one place).
+    return replay_module._slice_output_by_path(
+        output, replay_module._replay_container_path(child_op, trace)
+    )
 
 
 def _record_edge_substitution(

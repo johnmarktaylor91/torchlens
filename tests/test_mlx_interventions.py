@@ -203,7 +203,7 @@ def test_mlx_backward_direction_intervene_refuses_typed() -> None:
 def test_mlx_unsupported_helper_refuses_typed() -> None:
     """Helpers without an MLX-native application refuse by name."""
 
-    with pytest.raises(BackendUnsupportedError, match="resample_ablate"):
+    with pytest.raises(BackendUnsupportedError, match="scramble_elements"):
         tl.trace(
             _TwoLayerMLP(),
             _input(),

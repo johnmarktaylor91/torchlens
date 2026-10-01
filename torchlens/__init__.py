@@ -8,7 +8,6 @@ intentionally small; historical spellings live in their owning submodules.
 
 from __future__ import annotations
 
-import importlib as _importlib
 import sys as _sys
 import types as _types
 from collections.abc import Iterable as _Iterable, Mapping as _Mapping
@@ -65,6 +64,16 @@ _LAZY_ATTRS = {
     # was missing -- the documented spelling resolved only after a separate
     # `import torchlens.autoroute` (import-order side effect).
     "autoroute": ("torchlens.autoroute", None),
+    # Entry/facade repair (megasprint A10; WT1 A-VI item 27, neuro memo item
+    # 2): the integration and appliance namespaces were absent from this map,
+    # so `tl.bridge` resolved only after an unrelated capture side effect
+    # imported it and `tl.callbacks` never resolved at all. All four package
+    # __init__ modules are import-inert by design (foreign dependencies stay
+    # deferred behind their own facades).
+    "bridge": ("torchlens.bridge", None),
+    "callbacks": ("torchlens.callbacks", None),
+    "neuro": ("torchlens.neuro", None),
+    "notebook": ("torchlens.notebook", None),
     "bwd_hook": ("torchlens.intervention", "bwd_hook"),
     "clamp": ("torchlens.intervention", "clamp"),
     "compat": ("torchlens.compat", None),
@@ -76,6 +85,10 @@ _LAZY_ATTRS = {
     # manifest/resume machinery costs nothing until first use.
     "dataset_extraction": ("torchlens.dataset_extraction", None),
     "extract_dataset": ("torchlens.dataset_extraction", "extract_dataset"),
+    # WT1 A-VI item 27: the reader half of the extraction workflow was only
+    # reachable as torchlens.dataset_extraction.load_extraction while the
+    # writer (extract_dataset) was top-level.
+    "load_extraction": ("torchlens.dataset_extraction", "load_extraction"),
     "distributed": ("torchlens.distributed", None),
     "do": ("torchlens.intervention", "do"),
     "examples": ("torchlens.examples", None),
@@ -134,13 +147,13 @@ _LAZY_ATTRS = {
     "save": ("torchlens._io.bundle", "save"),
     "scale": ("torchlens.intervention", "scale"),
     "show_bundle_graph": ("torchlens.user_funcs", "show_bundle_graph"),
+    "summary": ("torchlens.user_funcs", "summary"),
     "splice_module": ("torchlens.intervention", "splice_module"),
     "stats": ("torchlens.stats", None),
     "steer": ("torchlens.intervention", "steer"),
     "sweep": ("torchlens.intervention.sweep", "sweep"),
     "swap_with": ("torchlens.intervention", "swap_with"),
     "trace": ("torchlens.user_funcs", "trace"),
-    "_trace": ("torchlens.user_funcs", "trace"),
     "user_funcs": ("torchlens.user_funcs", None),
     "validate": ("torchlens.validation.consolidated", "validate"),
     "validation": ("torchlens.validation", None),
@@ -206,8 +219,25 @@ def _resolve_top_level(name: str) -> _Any:
     return __getattr__(name)
 
 
+# Five-step facade tables (architecture memo 5.4; mechanism owned by
+# torchlens.utils.facade). The redirect and refusal tables ship EMPTY at the
+# root: entries land with their owning lanes (surface regeneration, docs) --
+# the resolution order is the compatibility promise declared now.
+_REDIRECTS: dict[str, str] = {}
+_REFUSALS: dict[str, str] = {}
+
+
 def __getattr__(name: str) -> _Any:
-    """Return lazy package attributes on demand.
+    """Return lazy package attributes through the five-step facade order.
+
+    The order (architecture memo 5.4, testable spec): (1) underscore-prefixed
+    names raise plain ``AttributeError`` immediately; (2) redirect-table rows
+    raise a typed teaching ``AttributeError`` naming the canonical spelling,
+    with no dependency check; (3) refusal-table rows raise a typed
+    ``AttributeError``; (4) real active names resolve through their per-name
+    dependency gate; (5) everything else raises plain ``AttributeError``.
+    Every typed error subclasses ``AttributeError`` so ``hasattr`` can never
+    explode.
 
     Parameters
     ----------
@@ -222,16 +252,19 @@ def __getattr__(name: str) -> _Any:
     Raises
     ------
     AttributeError
-        If ``name`` is not part of the lazy facade.
+        Per the five-step contract above.
     """
 
-    if name in _LAZY_ATTRS:
-        module_path, attr_name = _LAZY_ATTRS[name]
-        module_obj = _importlib.import_module(module_path)
-        value = module_obj if attr_name is None else getattr(module_obj, attr_name)
-        globals()[name] = value
-        return value
-    raise AttributeError(f"module 'torchlens' has no attribute {name!r}")
+    from .utils.facade import resolve_facade_attr
+
+    return resolve_facade_attr(
+        owner=__name__,
+        name=name,
+        module_globals=globals(),
+        lazy_attrs=_LAZY_ATTRS,
+        redirects=_REDIRECTS,
+        refusals=_REFUSALS,
+    )
 
 
 def __dir__() -> list[str]:
@@ -240,10 +273,13 @@ def __dir__() -> list[str]:
     Returns
     -------
     list[str]
-        Sorted eager globals plus lazy facade names.
+        Sorted real public names (eager globals plus lazy facade rows);
+        single-underscore implementation aliases are not advertised.
     """
 
-    return sorted({*globals(), *_LAZY_ATTRS})
+    from .utils.facade import facade_dir
+
+    return facade_dir(globals(), _LAZY_ATTRS)
 
 
 def _did_you_mean_message(name: str, suggestions: list[str]) -> str:
@@ -551,11 +587,13 @@ __all__ = [
     "pluck",
     "extract",
     "extract_dataset",
+    "load_extraction",
     "validate",
     "decide_recording_of_batch",
     "record_kpi_in_graph",
     "register_tensor_connection",
     "show_bundle_graph",
+    "summary",
     "options",
     "to_disk",
     "AmbiguousOpLookupError",

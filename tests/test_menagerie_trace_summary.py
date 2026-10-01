@@ -134,7 +134,9 @@ def test_trace_summary_small_model_fields_and_store(tmp_path: Path) -> None:
     assert summary["n_modules"] >= 1
     assert summary["n_buffers"] >= 0
     assert summary["total_flops_forward"] > 0
-    assert summary["total_macs_forward"] == summary["total_flops_forward"] // 2
+    # A07 numbers truth: MACs are TRUE multiply-accumulate counts (only the
+    # FMA-family ops contribute), never flops // 2.
+    assert 0 < summary["total_macs_forward"] < summary["total_flops_forward"] // 2
     assert summary["param_memory_bytes"] == summary["param_memory_mb"] * 1_048_576
     assert summary["activation_memory_bytes"] == summary["activation_memory_mb"] * 1_048_576
     assert summary["pct_conv"] > 0.0

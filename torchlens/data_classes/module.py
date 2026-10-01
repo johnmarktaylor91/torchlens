@@ -2544,18 +2544,26 @@ class Module:
 
     @property
     def total_macs_forward(self) -> Macs:
-        """Approximate forward MACs across this Module. 1 MAC = 2 FLOPs."""
-        return Macs(self.total_flops_forward // 2)
+        """TRUE forward MACs across this Module's layers (known splits only).
+
+        Derived from each op's two-term compute record, never ``flops // 2``.
+        Layers with an unknown MAC split are excluded (trace-level
+        disclosure: ``Trace.macs_unknown_split_ops``).
+        """
+
+        return Macs(self._sum_layer_field("total_macs_forward"))
 
     @property
-    def total_macs_backward(self) -> Macs:
-        """Approximate backward MACs across this Module. 1 MAC = 2 FLOPs."""
-        return Macs(self.total_flops_backward // 2)
+    def total_macs_backward(self) -> Macs | None:
+        """Backward MACs are not derivable and always ``None`` (estimates only)."""
+
+        return None
 
     @property
-    def total_macs(self) -> Macs:
-        """Approximate total MACs (forward + backward) for this Module."""
-        return Macs(self.total_flops // 2)
+    def total_macs(self) -> Macs | None:
+        """Total MACs are not derivable and always ``None`` (see total_macs_backward)."""
+
+        return None
 
     def __repr__(self) -> str:
         """Show address, class, depth, param count, layer count, and pass count."""

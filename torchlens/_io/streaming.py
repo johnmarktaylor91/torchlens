@@ -179,6 +179,13 @@ class BundleStreamWriter:
         self._entries_lock = threading.Lock()
         self._known_blob_ids: set[str] = set()
         self._async_engine: AsyncWriteEngine | None = None
+        # WT1 A-IV item 18 (lane A08): streamed bundles enter settlement. The
+        # postprocess step-18 finalize now STAGES the bundle (blobs +
+        # manifest, held scrubbed state) and the tmp->final publish happens
+        # no earlier than settlement, carrying the settled capture-outcome
+        # attestation into metadata.pkl. A capture that settles FAILED never
+        # publishes: the pending writer is aborted (PARTIAL debris).
+        self._staged_scrubbed_state: dict[str, Any] | None = None
 
         try:
             self.tmp_path.parent.mkdir(parents=True, exist_ok=True)
@@ -395,7 +402,58 @@ class BundleStreamWriter:
         *,
         trace: Any,
     ) -> Path:
-        """Finish the bundle by writing remaining blobs, manifest, and metadata.
+        """Finish the bundle: stage everything, then publish immediately.
+
+        Post-settlement callers only (the deferred grad-streaming tail): the
+        settled capture-outcome attestation is read off ``trace`` and
+        persisted. Pre-settlement finalization goes through
+        :meth:`stage_for_settlement` + :meth:`publish_staged` so the
+        tmp->final publish happens no earlier than settlement (WT1 A-IV
+        item 18).
+
+        Parameters
+        ----------
+        scrubbed_state:
+            Portable scrubbed metadata state.
+        blob_specs:
+            Remaining blob specs that were not already streamed during the pass.
+        unsupported:
+            Unsupported tensor records for the manifest.
+        trace:
+            Source ``Trace`` being streamed to disk.
+
+        Returns
+        -------
+        Path
+            Final bundle directory path.
+
+        Raises
+        ------
+        TorchLensIOError
+            If finalization fails.
+        """
+
+        from ..capture.outcome import outcome_for
+
+        self.stage_for_settlement(scrubbed_state, blob_specs, unsupported, trace=trace)
+        settled = outcome_for(trace)
+        return self.publish_staged(None if settled is None else settled.to_payload())
+
+    def stage_for_settlement(
+        self,
+        scrubbed_state: dict[str, Any],
+        blob_specs: list[BlobSpec],
+        unsupported: list[dict[str, str]],
+        *,
+        trace: Any,
+    ) -> Path:
+        """Write remaining blobs and the manifest; hold the state for publish.
+
+        The bundle stays in its temp directory: :meth:`publish_staged` writes
+        ``metadata.pkl`` (with the settled capture-outcome attestation
+        injected), fsyncs, and renames. A capture failure between staging and
+        settlement aborts the writer instead, so a FAILED capture never
+        leaves a publishable artifact (WT1 A-IV item 18).
 
         Parameters
         ----------
@@ -415,12 +473,12 @@ class BundleStreamWriter:
         Returns
         -------
         Path
-            Final bundle directory path.
+            The FUTURE final bundle directory path (not yet published).
 
         Raises
         ------
         TorchLensIOError
-            If finalization fails.
+            If staging fails; the temp bundle is marked PARTIAL.
         """
 
         self._ensure_writable()
@@ -441,11 +499,6 @@ class BundleStreamWriter:
                 save_level="portable",
             )
             _restrict_mode(self.tmp_path / "manifest.json", 0o600)
-            with (self.tmp_path / "metadata.pkl").open("wb") as handle:
-                # B3R4-R21-2: canonical container bytes (set/frozenset members
-                # sorted); persisted metadata must not vary with PYTHONHASHSEED.
-                dump_canonical_metadata(scrubbed_state, handle)
-            _restrict_mode(self.tmp_path / "metadata.pkl", 0o600)
         except TorchLensIOError:
             raise
         except (OSError, TypeError, ValueError, pickle.PickleError) as exc:
@@ -461,7 +514,7 @@ class BundleStreamWriter:
             # bundle.py's ``save()`` (round-8 F3): a hand-enumerated except
             # tuple can always miss the next not-yet-discovered exception
             # shape, or a KeyboardInterrupt/SystemExit/GeneratorExit
-            # unwinding mid-finalize (e.g. during ``pickle.dump()``).
+            # unwinding mid-finalize.
             # Guarantees the ``.tmp`` dir is always marked PARTIAL -- and
             # thus sweepable by ``cleanup_tmp()`` -- for any failure, while
             # re-raising non-``Exception`` ``BaseException``s unwrapped so
@@ -472,6 +525,84 @@ class BundleStreamWriter:
             if isinstance(exc, Exception):
                 raise TorchLensIOError(reason) from exc
             raise
+        self._staged_scrubbed_state = scrubbed_state
+        return self.final_path
+
+    @property
+    def staged_for_settlement(self) -> bool:
+        """Whether the bundle is staged and awaiting its settlement publish."""
+
+        return self._staged_scrubbed_state is not None and not self._finalized
+
+    def _write_staged_metadata(
+        self,
+        scrubbed_state: dict[str, Any],
+        outcome_payload: dict[str, Any] | None,
+    ) -> None:
+        """Write ``metadata.pkl`` with the settled outcome attestation injected."""
+
+        try:
+            scrubbed_state["_capture_outcome"] = outcome_payload
+            with (self.tmp_path / "metadata.pkl").open("wb") as handle:
+                # B3R4-R21-2: canonical container bytes (set/frozenset members
+                # sorted); persisted metadata must not vary with PYTHONHASHSEED.
+                dump_canonical_metadata(scrubbed_state, handle)
+            _restrict_mode(self.tmp_path / "metadata.pkl", 0o600)
+        except TorchLensIOError:
+            raise
+        except (OSError, TypeError, ValueError, pickle.PickleError) as exc:
+            reason = f"Failed to finalize streaming bundle at {self.tmp_path}: {exc}"
+            self.abort(reason)
+            raise TorchLensIOError(reason) from exc
+        except BaseException as exc:
+            reason = f"Failed to finalize streaming bundle at {self.tmp_path}: {exc}"
+            self.abort(reason)
+            if isinstance(exc, Exception):
+                raise TorchLensIOError(reason) from exc
+            raise
+
+    def publish_staged(self, outcome_payload: dict[str, Any] | None) -> Path:
+        """Publish the staged bundle with its settled capture-outcome attestation.
+
+        Parameters
+        ----------
+        outcome_payload:
+            String-only settled-outcome payload (``CaptureOutcome.to_payload``)
+            injected into the persisted state as ``_capture_outcome`` -- the
+            SAME key and codec ordinary ``tl.save()`` bundles persist, so
+            loads adopt it through the identical parse + coherence matrix.
+            ``None`` persists no attestation (loads derive structurally).
+
+        Returns
+        -------
+        Path
+            Final bundle directory path.
+
+        Raises
+        ------
+        TorchLensIOError
+            If nothing is staged or the publish fails; failures mark the temp
+            bundle PARTIAL.
+        """
+
+        scrubbed_state = self._staged_scrubbed_state
+        if scrubbed_state is None:
+            raise TorchLensIOError(
+                "Streaming publish requires a staged bundle; call stage_for_settlement() first."
+            )
+        if self._finalized:
+            raise TorchLensIOError(f"Streaming bundle already published: {self.final_path}")
+        if self._closed:
+            # An abort between staging and settlement already marked the temp
+            # bundle PARTIAL; publishing it would rename failure debris into a
+            # final-named artifact.
+            raise TorchLensIOError(
+                f"Streaming bundle at {self.tmp_path} was aborted; refusing to publish it."
+            )
+        try:
+            self._write_staged_metadata(scrubbed_state, outcome_payload)
+        finally:
+            self._staged_scrubbed_state = None
 
         # Crash-durability before publish: fsync every written blob/sidecar and
         # the staged directories so a power/OS crash after the rename below

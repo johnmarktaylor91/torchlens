@@ -145,13 +145,32 @@ def module_output(module: Any) -> Any | None:
 
 
 def module_output_spec(module: Any, recipe_id: str) -> FacetSpec | AbsenceReason:
-    """Return an op-anchored spec for a module's single output."""
+    """Return an op-anchored spec for a module's single or PRIMARY output.
+
+    Multi-output modules (HF attention returns ``(attn_output, attn_weights)``,
+    4.x adds present-KV entries) resolve to the PRIMARY output leaf -- container
+    position 0 -- through each output op's ``multi_output_name`` role, which was
+    minted from the leaf's container path at capture time. ``ModuleCall.output_ops``
+    order is NOT container order (finalization rebuilds it in op order), so
+    positional pairing with ``output_paths`` would silently pick the wrong leaf
+    (F2, walkthrough A-I: eager ``attn_out`` reported structurally absent while
+    the value sat captured one lookup away).
+    """
 
     try:
         call = module._single_call_or_error()
-        if len(call.output_ops) != 1:
-            return structural("module has ambiguous outputs")
-        op = module.trace.ops[call.output_ops[0]]
+        output_ops = list(call.output_ops)
+        if len(output_ops) == 1:
+            op = module.trace.ops[output_ops[0]]
+        else:
+            primary = _primary_output_label(module, call)
+            if primary is None:
+                return structural(
+                    f"module has {len(output_ops)} outputs and no uniquely"
+                    " resolvable primary output leaf; read the exact leaf via"
+                    " ModuleCall.outs[i] / output_ops[i]"
+                )
+            op = module.trace.ops[primary]
     except (AttributeError, KeyError, IndexError, RuntimeError, ValueError):
         return structural("module output op is unavailable")
     if not op_output_readable(op):
@@ -160,6 +179,43 @@ def module_output_spec(module: Any, recipe_id: str) -> FacetSpec | AbsenceReason
             f"save=... including {getattr(op, 'label', 'the module output')!r}",
         )
     return FacetSpec.from_home(op, home_kind="op", recipe_id=recipe_id)
+
+
+def _primary_output_label(module: Any, call: Any) -> str | None:
+    """Return the label of a multi-output module call's primary output leaf.
+
+    The primary leaf is the first entry of the capture-ordered container
+    traversal (``call.output_paths[0]`` -- tuple position 0 for tuple returns,
+    the first declared field for mapping returns). The match runs through each
+    op's ``multi_output_name`` (minted from the same container path at capture
+    time), never through positional alignment with ``output_paths``. Role-hinted
+    module families (LSTM/GRU/RNN/MultiheadAttention mint hint names instead of
+    path strings) deliberately return ``None`` here and keep the ambiguous-output
+    refusal.
+    """
+
+    paths = tuple(getattr(call, "output_paths", ()) or ())
+    if not paths:
+        return None
+    from ...data_classes._module_role_hints import multi_output_role_from_path
+
+    primary_role = multi_output_role_from_path(paths[0], 0)
+    if primary_role is None:
+        return None
+    trace = getattr(module, "trace", None)
+    if trace is None:
+        return None
+    matches: list[str] = []
+    for label in call.output_ops:
+        try:
+            op = trace.ops[label]
+        except (KeyError, TypeError):
+            continue
+        if getattr(op, "multi_output_name", None) == primary_role:
+            matches.append(label)
+    if len(matches) == 1:
+        return matches[0]
+    return None
 
 
 def parameter_spec(module: Any, name: str, recipe_id: str) -> FacetSpec | AbsenceReason:
@@ -206,6 +262,98 @@ def config_value(obj: Any, *names: str) -> Any | AbsenceReason:
     return structural(f"config metadata {names!r} is absent")
 
 
+def config_object(module: Any) -> Any | None:
+    """Return the module's captured HF config snapshot when present.
+
+    Modern transformers attention modules no longer mirror head counts as
+    module attributes; the numbers live only on ``self.config``, which the
+    capture snapshots into ``custom_attributes["config"]``. This is the
+    CONFIG-BASED detection source (walkthrough A-I item 3): head geometry and
+    ``_attn_implementation`` come from here, never from class names.
+    """
+
+    custom_attributes = getattr(module, "custom_attributes", None)
+    if isinstance(custom_attributes, dict):
+        config = custom_attributes.get("config")
+        if config is not None:
+            return config
+    return getattr(module, "config", None)
+
+
+def config_object_value(module: Any, *names: str) -> Any | None:
+    """Return the first non-``None`` config field from the captured config."""
+
+    config = config_object(module)
+    if config is None:
+        return None
+    for name in names:
+        value = getattr(config, name, None)
+        if value is not None:
+            return value
+    return None
+
+
+def attention_implementation(module: Any) -> str | None:
+    """Return the model-declared attention implementation for a module.
+
+    Reads ``_attn_implementation`` / ``attn_implementation`` from the module
+    record and its captured config snapshot. This is corroborating evidence
+    only: the captured graph (a real SDPA op, a real softmax score path) is
+    the detection authority; the config string covers the no-graph-evidence
+    case (e.g. an external fused kernel TorchLens cannot see).
+    """
+
+    names = ("_attn_implementation", "attn_implementation")
+    custom_attributes = getattr(module, "custom_attributes", None)
+    if isinstance(custom_attributes, dict):
+        for name in names:
+            value = custom_attributes.get(name)
+            if isinstance(value, str):
+                return value
+    value = config_object_value(module, *names)
+    if isinstance(value, str):
+        return value
+    return None
+
+
+def module_op_records(module: Any) -> list[Any]:
+    """Return the op records captured inside a module, in label order."""
+
+    trace = getattr(module, "trace", None)
+    if trace is None:
+        return []
+    try:
+        labels = list(module._op_labels())
+    except (AttributeError, TypeError, ValueError):
+        labels = list(getattr(module, "output_ops", ()) or ())
+    records: list[Any] = []
+    for label in labels:
+        try:
+            records.append(trace.ops[label])
+        except (KeyError, TypeError):
+            continue
+    return records
+
+
+def _reshape_spec_heads(
+    value: FacetSpec, n_heads: int | None, d_head: int | None
+) -> Any | AbsenceReason:
+    """Reshape a spec-backed projection output to the per-head layout."""
+
+    if n_heads is None:
+        return structural("head-count metadata is absent")
+    if d_head is None:
+        try:
+            last_dim = value.read().shape[-1]
+        except (AttributeError, RuntimeError, ValueError):
+            return needs_capture(
+                "projection output could not be read to infer head dimension",
+                "save=... including the projection output",
+            )
+        d_head = last_dim // n_heads
+    return value.heads(n_heads, d_head)
+
+
 def reshape_heads(
     value: Any, n_heads: int | None, d_head: int | None = None
 ) -> Any | AbsenceReason:
@@ -214,18 +362,7 @@ def reshape_heads(
     if isinstance(value, AbsenceReason):
         return value
     if isinstance(value, FacetSpec):
-        if n_heads is None:
-            return structural("head-count metadata is absent")
-        if d_head is None:
-            try:
-                last_dim = value.read().shape[-1]
-            except (AttributeError, RuntimeError, ValueError):
-                return needs_capture(
-                    "projection output could not be read to infer head dimension",
-                    "save=... including the projection output",
-                )
-            d_head = last_dim // n_heads
-        return value.heads(n_heads, d_head)
+        return _reshape_spec_heads(value, n_heads, d_head)
     if not isinstance(value, torch.Tensor) or n_heads is None:
         return structural("head reshape requires tensor value and head-count metadata")
     if value.ndim < 3:

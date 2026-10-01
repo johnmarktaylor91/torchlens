@@ -42,3 +42,27 @@ mutations of declared state (BatchNorm running statistics, buffer counters, `no_
 in-forward parameter updates) persisted on the live model across `run()` calls. Pass
 `carry_state=True` (provisional spelling, documented-unstable) for the old persistence;
 the report discloses the choice as `report.state_carried`.
+
+## `resample_ablate` -> `scramble_elements` (honest rename, same bytes)
+
+The elementwise-scramble helper is renamed: `resample_ablate` implied the
+field's "resampling ablation" (replacing a site's value with another run's
+COHERENT donor value), but the helper has always been an elementwise iid
+scramble from a flattened source -- a structure-destroying noise baseline.
+The canonical constructor is now `torchlens.intervention.scramble_elements`
+(same bytes, same seeds, same draws; specs constructed through either
+spelling carry helper name `"scramble_elements"`).
+
+Which "resample" do you mean?
+
+| You want | Use |
+|---|---|
+| Elementwise iid scramble (noise baseline) | `scramble_elements(source, seed=)` |
+| Coherent donor patch at the same site ("resampling ablation") | `tl.patch_from(other_trace)` |
+| Batch-row permutation | planned stochastic-edit verb (not this helper) |
+| Per-row donor resampling | planned stochastic-edit verb (not this helper) |
+
+Compatibility: saved intervention specs and pickles that persist the helper
+name `"resample_ablate"` keep loading (they reconstruct through the renamed
+constructor). No runtime deprecation shim is added; the old top-level
+spelling is retired with the facade export flip.

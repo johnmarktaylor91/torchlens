@@ -186,9 +186,9 @@
     "conv:1",
     "conv_conv2d_0"
    ],
-   "macs_backward": 608,
-   "macs_forward": 304,
-   "macs_total": 912,
+   "macs_backward": null,
+   "macs_forward": 288,
+   "macs_total": null,
    "module": "conv:1",
    "module_call_depth": 1,
    "modules": [
@@ -316,9 +316,9 @@
    "total_flops_total": 1824,
    "total_func_duration": "<measured>",
    "total_gradient_memory": "<measured>",
-   "total_macs_backward": 608,
-   "total_macs_forward": 304,
-   "total_macs_total": 912,
+   "total_macs_backward": null,
+   "total_macs_forward": 288,
+   "total_macs_total": null,
    "total_param_memory": "<measured>",
    "trace": {
     "__ref__": "Trace",
@@ -466,9 +466,9 @@
     "input_1:1",
     "input_1_raw"
    ],
-   "macs_backward": 0,
-   "macs_forward": 0,
-   "macs_total": 0,
+   "macs_backward": null,
+   "macs_forward": null,
+   "macs_total": null,
    "module": null,
    "module_call_depth": 0,
    "modules": [],
@@ -564,9 +564,9 @@
    "total_flops_total": 0,
    "total_func_duration": "<measured>",
    "total_gradient_memory": "<measured>",
-   "total_macs_backward": 0,
-   "total_macs_forward": 0,
-   "total_macs_total": 0,
+   "total_macs_backward": null,
+   "total_macs_forward": null,
+   "total_macs_total": null,
    "total_param_memory": "<measured>",
    "trace": {
     "__ref__": "Trace",
@@ -750,9 +750,9 @@
     "linear_1_5",
     "linear_1_5_raw"
    ],
-   "macs_backward": 15,
-   "macs_forward": 7,
-   "macs_total": 22,
+   "macs_backward": null,
+   "macs_forward": 6,
+   "macs_total": null,
    "module": "head:1",
    "module_call_depth": 1,
    "modules": [
@@ -872,9 +872,9 @@
    "total_flops_total": 45,
    "total_func_duration": "<measured>",
    "total_gradient_memory": "<measured>",
-   "total_macs_backward": 15,
-   "total_macs_forward": 7,
-   "total_macs_total": 22,
+   "total_macs_backward": null,
+   "total_macs_forward": 6,
+   "total_macs_total": null,
    "total_param_memory": "<measured>",
    "trace": {
     "__ref__": "Trace",
@@ -1038,9 +1038,9 @@
     "mean_1_4",
     "mean_1_4_raw"
    ],
-   "macs_backward": 16,
-   "macs_forward": 16,
-   "macs_total": 32,
+   "macs_backward": null,
+   "macs_forward": 0,
+   "macs_total": null,
    "module": null,
    "module_call_depth": 0,
    "modules": [],
@@ -1140,9 +1140,9 @@
    "total_flops_total": 64,
    "total_func_duration": "<measured>",
    "total_gradient_memory": "<measured>",
-   "total_macs_backward": 16,
-   "total_macs_forward": 16,
-   "total_macs_total": 32,
+   "total_macs_backward": null,
+   "total_macs_forward": 0,
+   "total_macs_total": null,
    "total_param_memory": "<measured>",
    "trace": {
     "__ref__": "Trace",
@@ -1284,9 +1284,9 @@
     "output_1:1",
     "output_1_raw"
    ],
-   "macs_backward": 15,
-   "macs_forward": 7,
-   "macs_total": 22,
+   "macs_backward": null,
+   "macs_forward": null,
+   "macs_total": null,
    "module": null,
    "module_call_depth": 0,
    "modules": [],
@@ -1390,9 +1390,9 @@
    "total_flops_total": 45,
    "total_func_duration": "<measured>",
    "total_gradient_memory": "<measured>",
-   "total_macs_backward": 15,
-   "total_macs_forward": 7,
-   "total_macs_total": 22,
+   "total_macs_backward": null,
+   "total_macs_forward": null,
+   "total_macs_total": null,
    "total_param_memory": "<measured>",
    "trace": {
     "__ref__": "Trace",
@@ -1551,9 +1551,9 @@
     "relu_1_3",
     "relu_1_3_raw"
    ],
-   "macs_backward": 16,
-   "macs_forward": 16,
-   "macs_total": 32,
+   "macs_backward": null,
+   "macs_forward": 0,
+   "macs_total": null,
    "module": null,
    "module_call_depth": 0,
    "modules": [],
@@ -1659,9 +1659,9 @@
    "total_flops_total": 64,
    "total_func_duration": "<measured>",
    "total_gradient_memory": "<measured>",
-   "total_macs_backward": 16,
-   "total_macs_forward": 16,
-   "total_macs_total": 32,
+   "total_macs_backward": null,
+   "total_macs_forward": 0,
+   "total_macs_total": null,
    "total_param_memory": "<measured>",
    "trace": {
     "__ref__": "Trace",
@@ -2321,9 +2321,9 @@
    "total_func_calls_duration": "<measured>",
    "total_internal_activation_memory": "<measured>",
    "total_internal_gradient_memory": "<measured>",
-   "total_macs": 912,
-   "total_macs_backward": 608,
-   "total_macs_forward": 304,
+   "total_macs": null,
+   "total_macs_backward": null,
+   "total_macs_forward": 288,
    "total_output_activation_memory": "<measured>",
    "total_output_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
@@ -2507,9 +2507,9 @@
    "total_func_calls_duration": "<measured>",
    "total_internal_activation_memory": "<measured>",
    "total_internal_gradient_memory": "<measured>",
-   "total_macs": 22,
-   "total_macs_backward": 15,
-   "total_macs_forward": 7,
+   "total_macs": null,
+   "total_macs_backward": null,
+   "total_macs_forward": 6,
    "total_output_activation_memory": "<measured>",
    "total_output_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
@@ -2730,9 +2730,9 @@
    "total_func_calls_duration": "<measured>",
    "total_internal_activation_memory": "<measured>",
    "total_internal_gradient_memory": "<measured>",
-   "total_macs": 1021,
-   "total_macs_backward": 670,
-   "total_macs_forward": 351,
+   "total_macs": null,
+   "total_macs_backward": null,
+   "total_macs_forward": 294,
    "total_output_activation_memory": "<measured>",
    "total_output_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
@@ -2828,6 +2828,7 @@
      "label": null
     }
    ],
+   "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
    "conditional_arm_children": {},
    "conditional_branch_depth": 0,
    "conditional_branch_stack": [],
@@ -3013,9 +3014,9 @@
     "conv:1",
     "conv_conv2d_0"
    ],
-   "macs_backward": 608,
-   "macs_forward": 304,
-   "macs_total": 912,
+   "macs_backward": null,
+   "macs_forward": 288,
+   "macs_total": null,
    "max_distance_from_input": 1,
    "max_distance_to_output": 4,
    "min_distance_from_input": 1,
@@ -3243,6 +3244,7 @@
    ],
    "co_parents": [],
    "code_context": [],
+   "compute_record": null,
    "conditional_arm_children": {},
    "conditional_branch_depth": 0,
    "conditional_branch_stack": [],
@@ -3388,9 +3390,9 @@
     "input_1:1",
     "input_1_raw"
    ],
-   "macs_backward": 0,
-   "macs_forward": 0,
-   "macs_total": 0,
+   "macs_backward": null,
+   "macs_forward": null,
+   "macs_total": null,
    "max_distance_from_input": 0,
    "max_distance_to_output": 5,
    "min_distance_from_input": 0,
@@ -3613,6 +3615,7 @@
      "label": null
     }
    ],
+   "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
    "conditional_arm_children": {},
    "conditional_branch_depth": 0,
    "conditional_branch_stack": [],
@@ -3776,9 +3779,9 @@
     "linear_1_5",
     "linear_1_5_raw"
    ],
-   "macs_backward": 15,
-   "macs_forward": 7,
-   "macs_total": 22,
+   "macs_backward": null,
+   "macs_forward": 6,
+   "macs_total": null,
    "max_distance_from_input": 4,
    "max_distance_to_output": 1,
    "min_distance_from_input": 4,
@@ -3998,6 +4001,7 @@
      "label": null
     }
    ],
+   "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
    "conditional_arm_children": {},
    "conditional_branch_depth": 0,
    "conditional_branch_stack": [],
@@ -4169,9 +4173,9 @@
     "mean_1_4",
     "mean_1_4_raw"
    ],
-   "macs_backward": 16,
-   "macs_forward": 16,
-   "macs_total": 32,
+   "macs_backward": null,
+   "macs_forward": 0,
+   "macs_total": null,
    "max_distance_from_input": 3,
    "max_distance_to_output": 2,
    "min_distance_from_input": 3,
@@ -4361,6 +4365,7 @@
    "children": [],
    "co_parents": [],
    "code_context": [],
+   "compute_record": null,
    "conditional_arm_children": {},
    "conditional_branch_depth": 0,
    "conditional_branch_stack": [],
@@ -4519,9 +4524,9 @@
     "output_1:1",
     "output_1_raw"
    ],
-   "macs_backward": 15,
-   "macs_forward": 7,
-   "macs_total": 22,
+   "macs_backward": null,
+   "macs_forward": null,
+   "macs_total": null,
    "max_distance_from_input": 5,
    "max_distance_to_output": 0,
    "min_distance_from_input": 5,
@@ -4718,6 +4723,7 @@
      "label": null
     }
    ],
+   "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
    "conditional_arm_children": {},
    "conditional_branch_depth": 0,
    "conditional_branch_stack": [],
@@ -4875,9 +4881,9 @@
     "relu_1_3",
     "relu_1_3_raw"
    ],
-   "macs_backward": 16,
-   "macs_forward": 16,
-   "macs_total": 32,
+   "macs_backward": null,
+   "macs_forward": 0,
+   "macs_total": null,
    "max_distance_from_input": 2,
    "max_distance_to_output": 3,
    "min_distance_from_input": 2,
@@ -5588,6 +5594,12 @@
   "completeness_witness_mode": null,
   "completeness_witness_unaccounted_count": null,
   "completeness_witness_verified": null,
+  "compute_coverage": {
+   "\"known\"": 4,
+   "\"not_applicable\"": 2,
+   "\"unknown\"": 0,
+   "\"zero_by_rule\"": 0
+  },
   "compute_layers": "<torchlens.data_classes.layer.LayerAccessor>",
   "compute_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
   "conditional_arm_entry_edges": {},
@@ -6018,38 +6030,40 @@
     "linear_1_4"
    ]
   },
+  "logged_values": {},
   "macs_by_op_type": {
    "\"conv2d\"": {
-    "\"backward\"": 608,
+    "\"backward\"": null,
     "\"count\"": 1,
-    "\"forward\"": 304
+    "\"forward\"": 288
    },
    "\"input\"": {
-    "\"backward\"": 0,
+    "\"backward\"": null,
     "\"count\"": 1,
     "\"forward\"": 0
    },
    "\"linear\"": {
-    "\"backward\"": 15,
+    "\"backward\"": null,
     "\"count\"": 1,
-    "\"forward\"": 7
+    "\"forward\"": 6
    },
    "\"mean\"": {
-    "\"backward\"": 16,
+    "\"backward\"": null,
     "\"count\"": 1,
-    "\"forward\"": 16
+    "\"forward\"": 0
    },
    "\"output\"": {
-    "\"backward\"": 15,
+    "\"backward\"": null,
     "\"count\"": 1,
-    "\"forward\"": 7
+    "\"forward\"": 0
    },
    "\"relu\"": {
-    "\"backward\"": 16,
+    "\"backward\"": null,
     "\"count\"": 1,
-    "\"forward\"": 16
+    "\"forward\"": 0
    }
   },
+  "macs_unknown_split_ops": [],
   "manual_tensor_connections": [],
   "mark_layer_depths": true,
   "max_in_degree": 1,
@@ -6118,8 +6132,11 @@
   "num_param_tensors_frozen": 0,
   "num_param_tensors_trainable": 4,
   "num_params": 29,
+  "num_params_by_path": 29,
+  "num_params_executed": 29,
   "num_params_frozen": 0,
   "num_params_trainable": 29,
+  "num_params_unexecuted": 0,
   "num_saved_grad_fn_calls": 0,
   "num_saved_grad_fns": 0,
   "num_saved_grad_layers": 0,
@@ -6246,6 +6263,7 @@
   "state": "TraceState.PRISTINE",
   "state_history": [],
   "structure_only": false,
+  "tied_param_groups": [],
   "tlspec_version": 6,
   "total_activation_memory": "<measured>",
   "total_autograd_memory": "<measured>",
@@ -6255,15 +6273,17 @@
   "total_flops_backward": 1340,
   "total_flops_forward": 702,
   "total_gradient_memory": "<measured>",
-  "total_macs": 1021,
-  "total_macs_backward": 670,
-  "total_macs_forward": 351,
+  "total_macs": null,
+  "total_macs_backward": null,
+  "total_macs_forward": 294,
   "total_param_gradient_memory": "<measured>",
   "total_param_memory": "<measured>",
   "trace_label": "_aliascnn_N",
   "transform_repr": null,
   "transforms": [],
   "uncalled_modules": [],
+  "unexecuted_param_names": [],
+  "unknown_flop_ops": [],
   "validation_replay_status": "<torchlens.validation.status.ValidationReplayStatus>",
   "verbose": false
  }

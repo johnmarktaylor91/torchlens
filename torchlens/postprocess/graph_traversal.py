@@ -292,6 +292,15 @@ def _add_output_layers(
 
         new_output_node.func = identity
         new_output_node.func_name = "none"
+        # Identity partition (A1): a synthetic output node is a BOUNDARY
+        # bookkeeping row -- it executed nothing, so it OWNS no compute. The
+        # wholesale clone previously inherited the producing op's FLOPs,
+        # double-counting the terminal op in every total (+31% on gpt2, where
+        # the duplicated row is the tied vocabulary projection). The producing
+        # op owns the output tensor and its compute; the alias row displays
+        # shape only and carries not-applicable (None) compute.
+        new_output_node.flops_forward = None
+        new_output_node.flops_backward = None
         new_output_node.code_context = _get_code_context(
             self.num_context_lines,
             source_loading_enabled=self.save_code_context,

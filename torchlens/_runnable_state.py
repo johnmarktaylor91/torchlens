@@ -34,6 +34,7 @@ from .runnable import (
 )
 from .utils._torch_compat import tensor_has_named_dims
 from .utils._torch_symbols import torch_attr
+from .utils.lazy_state import raise_if_pending_state_slots
 
 _INPUT_STRUCTURE_SITE_PREFIX = "input_structure:"
 """Canonical site-label prefix for persisted input-boundary structure facts."""
@@ -140,8 +141,16 @@ def snapshot_capture_state(model: object) -> Mapping[str, torch.Tensor] | None:
         for name, value in state.items()
     ):
         return None
-    with _state.pause_logging():
-        return MappingProxyType({name: value.detach().clone() for name, value in state.items()})
+    # Pending lazy slots refuse TYPED (quickstart memo 4.5): a pending slot
+    # passes the Tensor mapping check above but has no bytes to baseline.
+    raise_if_pending_state_slots(state)
+    # The clone loop sits INSIDE its guard: unclonable values are exactly
+    # the "cannot provide a tensor-only state mapping" None-contract case.
+    try:
+        with _state.pause_logging():
+            return MappingProxyType({name: value.detach().clone() for name, value in state.items()})
+    except Exception:
+        return None
 
 
 def snapshot_persistent_buffer_universe(model: object) -> dict[str, dict[str, Any]] | None:
@@ -1314,6 +1323,34 @@ def _prepare_runnable_state(trace: Any, seed: int | None = None) -> PreparedRunn
         )
 
     slot_values, random_slot_ids = _initialize_state_slots(descriptor, seed)
+    if random_slot_ids:
+        # WT1 A-IV item 17 (persistence honesty): the default runnable save is
+        # weight-free, and running it used to fill every state slot with
+        # random role-init values SILENTLY -- the report disclosed the source,
+        # but nothing warned, and path_faithfulness can legitimately settle
+        # 'verified' (faithfulness against THIS random state, oracle 1). The
+        # warning makes the substitution impossible to miss at the one moment
+        # it matters; settlement semantics are unchanged.
+        from .errors._base import TorchLensWarning
+
+        seed_note = " (seed=None: ambient RNG)" if seed is None else f" (seed={seed})"
+        warnings.warn(
+            TorchLensWarning(
+                "This runnable artifact carries no model weights (the default "
+                "tl.save(level='runnable') is weight-free), so run() filled all "
+                f"{len(random_slot_ids)} state slot(s) with RANDOM "
+                f"torchlens_role_init_v2 values{seed_note}. Outputs come from a "
+                "freshly initialized model, NOT the captured one; the run "
+                "report's 'verified' attests path faithfulness against this "
+                "random state and numeric attestation is not_applicable. "
+                "Remedy: re-save with tl.save(trace, path, level='runnable', "
+                "include_weights=True), or bind real weights with "
+                "trace.load_state_dict(state_dict) before run()",
+                code="runnable_random_init_run",
+                random_slot_count=len(random_slot_ids),
+            ),
+            stacklevel=2,
+        )
     return _staged(
         _with_nonpersistent_buffers(
             PreparedRunnableState(

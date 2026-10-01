@@ -286,40 +286,101 @@ class TraceStatsMixin(_TraceMixinBase):
     # ********************************************
     # ************** MACs Properties *************
     # ********************************************
-    # MACs (multiply-accumulate operations) = FLOPs / 2.
+    # TRUE multiply-accumulate counts, derived from each op's two-term
+    # compute record (fma_macs / other_flops) -- NEVER flops // 2. A ReLU has
+    # zero MACs; a biased Linear's bias adds are not MACs. Backward MACs are
+    # not derivable (backward FLOPs are multiplier estimates) and read None.
 
     @property
     def total_macs_forward(self: "Trace") -> Macs:
-        """Total forward MACs across all layers (skipping None/unknown)."""
-        return Macs(self.total_flops_forward // 2)
+        """Total TRUE forward MACs over ops with a known MAC split.
+
+        Ops whose split is unknown are EXCLUDED and named by
+        ``macs_unknown_split_ops``; when that set is nonempty the figure is a
+        lower bound (the summary footer says so).
+        """
+
+        total = 0
+        for entry in self.layer_list:
+            macs = entry.macs_forward
+            if macs is not None:
+                total += int(macs)
+        return Macs(total)
 
     @property
-    def total_macs_backward(self: "Trace") -> Macs:
-        """Total backward MACs across all layers (skipping None/unknown)."""
-        return Macs(self.total_flops_backward // 2)
+    def unknown_flop_ops(self: "Trace") -> tuple[Any, ...]:
+        """Named ledger of ops with unknown FLOPs, grouped by op name.
+
+        DOCUMENTED-UNSTABLE spelling (A07; costreport D3). Each group carries
+        count, example labels/shapes, and the exact ``register_op_rule``
+        remedy invocation -- a work queue, never an anonymous exclusion.
+        """
+
+        from ..report._compute_truth import unknown_op_ledger
+
+        return unknown_op_ledger(self)
 
     @property
-    def total_macs(self: "Trace") -> Macs:
-        """Total MACs (forward + backward)."""
-        return Macs(self.total_flops // 2)
+    def compute_coverage(self: "Trace") -> dict[str, int]:
+        """Four-way compute coverage counts over every layer-list row.
+
+        DOCUMENTED-UNSTABLE spelling (A07; costreport D2/D3). Keys:
+        ``known`` / ``zero_by_rule`` / ``not_applicable`` / ``unknown`` --
+        every row lands in exactly one class (totality is pinned).
+        """
+
+        from ..report._compute_truth import aggregate_forward_compute
+
+        totals = aggregate_forward_compute(self)
+        return {
+            "known": totals.known,
+            "zero_by_rule": totals.zero_by_rule,
+            "not_applicable": totals.not_applicable,
+            "unknown": totals.unknown,
+        }
+
+    @property
+    def macs_unknown_split_ops(self: "Trace") -> tuple[str, ...]:
+        """Labels of compute ops whose exact MAC split cannot be derived."""
+
+        return tuple(
+            entry.layer_label
+            for entry in self.layer_list
+            if entry.is_compute_op
+            and entry.flops_forward is not None
+            and entry.macs_forward is None
+        )
+
+    @property
+    def total_macs_backward(self: "Trace") -> Macs | None:
+        """Backward MACs are not derivable and always ``None`` (estimates only)."""
+
+        return None
+
+    @property
+    def total_macs(self: "Trace") -> Macs | None:
+        """Total MACs are not derivable and always ``None`` (see total_macs_backward)."""
+
+        return None
 
     @property
     def macs_by_op_type(self: "Trace") -> _CallableDict:
-        """Group MACs by layer type.
+        """Group TRUE forward MACs by layer type.
 
         Returns:
-            Callable dict mapping layer_type to forward/backward/count totals.
+            Callable dict mapping layer_type to forward/backward/count
+            entries. ``backward`` is always ``None`` (not derivable).
         """
-        result: dict[str, dict[str, int | Macs]] = {}
+        result: dict[str, dict[str, int | Macs | None]] = {}
         for entry in self.layer_list:
             lt = entry.layer_type
             if lt not in result:
-                result[lt] = {"forward": Macs(0), "backward": Macs(0), "count": 0}
-            result[lt]["count"] += 1
-            if entry.flops_forward is not None:
-                result[lt]["forward"] += Macs(entry.flops_forward // 2)
-            if entry.flops_backward is not None:
-                result[lt]["backward"] += Macs(entry.flops_backward // 2)
+                result[lt] = {"forward": Macs(0), "backward": None, "count": 0}
+            bucket = result[lt]
+            bucket["count"] = int(bucket["count"] or 0) + 1
+            macs = entry.macs_forward
+            if macs is not None:
+                bucket["forward"] = Macs(int(bucket["forward"] or 0) + int(macs))
         return _CallableDict(result)
 
     # ********************************************
@@ -330,6 +391,55 @@ class TraceStatsMixin(_TraceMixinBase):
     def params(self: "Trace") -> ParamAccessor:
         """Access parameter metadata by address, short name, or index."""
         return self.param_logs
+
+    # Parameter-truth read surface (A2/A3; DOCUMENTED-UNSTABLE spellings
+    # pending naming-session ratification). The accounting basis everywhere is
+    # the Python Parameter OBJECT: ``param_logs`` is object-deduplicated at the
+    # pre-forward scan, so ties are counted once and disclosed, never merged.
+
+    @property
+    def num_params_executed(self: "Trace") -> int:
+        """Total elements of declared parameters CONSUMED by a captured op."""
+
+        return sum(int(pl.num_params) for pl in self.param_logs if pl.used_by_ops)
+
+    @property
+    def num_params_unexecuted(self: "Trace") -> int:
+        """Total elements of declared parameters no captured op consumed."""
+
+        return sum(int(pl.num_params) for pl in self.param_logs if not pl.used_by_ops)
+
+    @property
+    def unexecuted_param_names(self: "Trace") -> tuple[str, ...]:
+        """Addresses of declared parameters no captured op consumed."""
+
+        return tuple(pl.address for pl in self.param_logs if not pl.used_by_ops)
+
+    @property
+    def tied_param_groups(self: "Trace") -> tuple[tuple[str, ...], ...]:
+        """Alias-address groups of parameters registered at more than one path."""
+
+        groups = []
+        for pl in self.param_logs:
+            addresses = tuple(getattr(pl, "all_addresses", None) or (pl.address,))
+            if len(addresses) > 1:
+                groups.append(addresses)
+        return tuple(groups)
+
+    @property
+    def num_params_by_path(self: "Trace") -> int:
+        """Per-module-path parameter total (ties counted once PER PATH).
+
+        This is the ``named_parameters(remove_duplicate=False)`` tally --
+        torchinfo's number. It differs from ``num_params`` exactly when
+        parameters are tied; the summary footer prints both and names the tie.
+        """
+
+        total = 0
+        for pl in self.param_logs:
+            addresses = getattr(pl, "all_addresses", None) or (pl.address,)
+            total += int(pl.num_params) * len(addresses)
+        return total
 
     @property
     def ops(self: "Trace") -> TraceOpAccessor:

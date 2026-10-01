@@ -119,6 +119,12 @@ def test_r35_no_float_torch_equal_in_runnable_modules() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.filterwarnings(
+    # A08 random-role-init disclosure (runnable_random_init_run): this test
+    # exercises a weight-free runnable run DELIBERATELY; the warning is the
+    # feature under test elsewhere (tests/test_persist_honesty_runnable_random.py).
+    "default:This runnable artifact carries no model weights"
+)
 def test_r35_zero_fan_in_linear_runs_random_init(tmp_path: Path) -> None:
     """corr2_3 repro: ``nn.Linear(0, 2)`` random fallback completes typed."""
 
@@ -227,6 +233,12 @@ def test_r35_seeded_run_restores_produced_only_cuda_rng(tmp_path: Path) -> None:
     assert torch.equal(first.output, second.output)
 
 
+@pytest.mark.filterwarnings(
+    # A08 random-role-init disclosure (runnable_random_init_run): this test
+    # exercises a weight-free runnable run DELIBERATELY; the warning is the
+    # feature under test elsewhere (tests/test_persist_honesty_runnable_random.py).
+    "default:This runnable artifact carries no model weights"
+)
 def test_r35_cpu_only_seeded_run_never_touches_cuda_lazy_seed(tmp_path: Path) -> None:
     """A CPU-only descriptor's seeded run must not queue a lazy CUDA seed."""
 

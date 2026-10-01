@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -11,8 +11,10 @@ from typing import (
 )
 
 from ..._errors import InvalidArgumentError
-from ..._source_links import terminal_file_line_link
+from ..._source_links import file_line_text
+from ...quantities import Macs
 from ...utils.display import format_flops, human_readable_size
+from ._discoverability import format_discoverability_summary
 
 if TYPE_CHECKING:
     from ..data_classes.layer import Layer
@@ -79,6 +81,7 @@ def render_model_summary(
     include_ops: bool | None = None,
     max_rows: int | None = 200,
     print_to: Callable[[str], None] | None = None,
+    count_fma_as_two: bool | None = None,
     show_input_preprocessing_details: bool = False,
 ) -> str:
     """Render a textual summary for a ``Trace``.
@@ -136,6 +139,7 @@ def render_model_summary(
             mode=mode,
             show_ops=resolved_show_ops,
             max_rows=max_rows,
+            count_fma_as_two=count_fma_as_two,
         )
     text = (
         f"{format_discoverability_summary(trace, show_input_preprocessing_details=show_input_preprocessing_details)}"
@@ -235,611 +239,6 @@ def _live_op_count(trace: Trace) -> int:
     if events is not None and getattr(events, "op_events", None) is not None:
         return len(events.op_events)
     return len(trace._raw_graph_ws.raw_layer_dict)
-
-
-def format_discoverability_summary(
-    trace: Trace,
-    *,
-    show_input_preprocessing_details: bool = False,
-) -> str:
-    """Render the Phase 13 user-facing discoverability summary.
-
-    Parameters
-    ----------
-    trace:
-        Model log to summarize.
-    show_input_preprocessing_details:
-        Whether to include verification/source detail for input preprocessing.
-
-    Returns
-    -------
-    str
-        Multi-section notebook-friendly summary.
-    """
-
-    spec = getattr(trace, "_intervention_spec", None)
-    target_specs = tuple(getattr(spec, "target_value_specs", ()) or ())
-    hook_specs = tuple(getattr(spec, "hook_specs", ()) or ())
-    lines = [
-        "TorchLens Discoverability Summary",
-        "Capture:",
-        f"  name: {getattr(trace, 'trace_label', None)!r}",
-        f"  model_class_qualname: {getattr(trace, 'model_class_name', None)}",
-        f"  input_shape: {_input_shape_summary(trace)}",
-        *_input_preprocessing_lines(
-            trace,
-            show_details=show_input_preprocessing_details,
-        ),
-        *_output_postprocessing_lines(trace),
-        f"  capture_timestamp: {_capture_timestamp(trace)}",
-        f"  intervention_ready: {bool(getattr(trace, 'intervention_ready', False))}",
-        f"  save_arg_templates: {bool(getattr(trace, 'save_arg_templates', False))}",
-        "Run state:",
-        f"  state: {_run_state_name(trace)}",
-        f"  direct_write_dirty: {bool(getattr(trace, '_has_direct_writes', False))}",
-        f"  append: is_appended={bool(getattr(trace, 'is_appended', False))}, "
-        f"sequence_id={getattr(trace, '_append_sequence_id', 0)}",
-        f"  stale_spec: {_stale_spec_status(trace)}",
-        f"  last_run: {_last_run_summary(trace)}",
-        "Active recipe:",
-        f"  target_value_specs: {len(target_specs)}{_spec_sample(target_specs)}",
-        f"  hook_specs: {len(hook_specs)}{_spec_sample(hook_specs)}",
-        f"  portability: {_portability_status(target_specs, hook_specs)}",
-        "Recent operations:",
-        *_recent_operation_lines(trace),
-        "Lineage:",
-        f"  parent_run: {_parent_run_summary(trace)}",
-        f"  fork_chain: {_fork_chain_summary(trace)}",
-        "Graph and relationship evidence:",
-        f"  graph_shape_hash: {_truncated(getattr(trace, 'graph_shape_hash', None))}",
-        f"  model_class_qualname: {getattr(trace, 'model_class_qualname', None)}",
-        f"  weight_fingerprint: {_truncated(getattr(trace, 'param_hash_quick', None))}",
-        f"  relationship_evidence: {_relationship_evidence_summary(trace)}",
-        "Next operations:",
-        f"  {_next_operation_hint(trace)}",
-        "RNG and helper notes:",
-        f"  {_rng_note_summary(trace)}",
-    ]
-    return "\n".join(lines)
-
-
-def _input_preprocessing_lines(
-    trace: Trace,
-    *,
-    show_details: bool = False,
-) -> list[str]:
-    """Return optional input-preprocessing summary lines.
-
-    Parameters
-    ----------
-    trace:
-        Model log to inspect.
-    show_details:
-        Whether to include verification/source detail.
-
-    Returns
-    -------
-    list[str]
-        Empty list when no automatic preprocessing was applied, otherwise a
-        two-line summary block.
-    """
-
-    record = getattr(trace, "input_preprocessor", None)
-    if record is None:
-        return []
-    lines = ["Input preprocessing:", f"  {record.description}"]
-    if not show_details:
-        return lines
-    verified = bool(getattr(record, "verified", False))
-    status = "verified" if verified else "UNVERIFIED"
-    lines.append(
-        f"  status: {status}; source={getattr(record, 'source', None)}; "
-        f"identifier={getattr(record, 'identifier', None)}"
-    )
-    if not verified:
-        lines.append("  WARNING: input preprocessing is UNVERIFIED; inspect transform assumptions.")
-    return lines
-
-
-def _output_postprocessing_lines(trace: Trace) -> list[str]:
-    """Return output-postprocessing summary lines.
-
-    Parameters
-    ----------
-    trace:
-        Model log to inspect.
-
-    Returns
-    -------
-    list[str]
-        Compact output decode provenance and preview lines.
-    """
-
-    record = getattr(trace, "output_postprocessor", None)
-    if record is None:
-        return [
-            "Output postprocessing:",
-            "  undetected; pass output_style= to decode.",
-        ]
-    verified = "verified" if bool(getattr(record, "verified", False)) else "unverified"
-    confidence = getattr(record, "confidence", None)
-    confidence_text = "" if confidence is None else f", confidence={float(confidence):.2f}"
-    lines = [
-        "Output postprocessing:",
-        f"  style={getattr(record, 'style', None) or 'unknown'}; {verified}{confidence_text}; "
-        f"{getattr(record, 'description', '')}",
-    ]
-    preview = _decoded_output_preview(trace)
-    if preview:
-        lines.append(f"  preview: {preview}")
-    return lines
-
-
-def _decoded_output_preview(trace: Trace) -> str | None:
-    """Return a compact decoded-output preview for discoverability summary.
-
-    Parameters
-    ----------
-    trace:
-        Model log to inspect.
-
-    Returns
-    -------
-    str | None
-        Preview text, if a batch top-k table is available.
-    """
-
-    rows = _decoded_batch_topk_rows(getattr(trace, "decoded_output", None))
-    if not rows:
-        return None
-    parts: list[str] = []
-    for batch_item in sorted({int(row.get("batch_item", 0)) for row in rows})[:2]:
-        item_rows = [row for row in rows if int(row.get("batch_item", -1)) == batch_item][:3]
-        labels = ", ".join(
-            f"{row.get('label')} {float(row.get('prob', 0.0)):.0%}" for row in item_rows
-        )
-        parts.append(f"item {batch_item}: {labels}")
-    return " | ".join(parts)
-
-
-def _decoded_batch_topk_rows(value: Any) -> list[Mapping[str, Any]] | None:
-    """Return batch top-k rows from a decoded output value.
-
-    Parameters
-    ----------
-    value:
-        Decoded output candidate.
-
-    Returns
-    -------
-    list[Mapping[str, Any]] | None
-        Rows if the value is a batch top-k table.
-    """
-
-    if isinstance(value, Mapping) and value.get("kind") == "batch_topk":
-        rows = value.get("rows")
-    elif isinstance(value, list):
-        rows = value
-    else:
-        return None
-    if isinstance(rows, list) and all(
-        isinstance(row, Mapping) and {"batch_item", "rank", "label", "prob"} <= set(row)
-        for row in rows
-    ):
-        return cast(list[Mapping[str, Any]], rows)
-    return None
-
-
-def _input_shape_summary(trace: Trace) -> str:
-    """Return a compact input-shape summary.
-
-    Parameters
-    ----------
-    trace:
-        Model log to inspect.
-
-    Returns
-    -------
-    str
-        Shape summary or ``"unknown"``.
-    """
-
-    layers = getattr(trace, "input_layers", []) or []
-    shape = _combined_shape_str(trace, layers)
-    if shape and shape != "-":
-        return shape
-    metadata = getattr(trace, "input_annotations", {}) or {}
-    if metadata:
-        return _shorten(repr(metadata), limit=80)
-    return "unknown"
-
-
-def _capture_timestamp(trace: Trace) -> str:
-    """Return a readable capture timestamp surrogate.
-
-    Parameters
-    ----------
-    trace:
-        Model log to inspect.
-
-    Returns
-    -------
-    str
-        Pass start/end timing information.
-    """
-
-    pass_start = float(getattr(trace, "capture_start_time", 0.0) or 0.0)
-    pass_end = float(getattr(trace, "capture_end_time", 0.0) or 0.0)
-    if pass_start <= 0:
-        return "unknown"
-    if pass_end > 0:
-        return f"start={pass_start:.6f}, end={pass_end:.6f}"
-    return f"start={pass_start:.6f}"
-
-
-def _run_state_name(trace: Trace) -> str:
-    """Return the run-state enum name.
-
-    Parameters
-    ----------
-    trace:
-        Model log to inspect.
-
-    Returns
-    -------
-    str
-        Run-state name or repr.
-    """
-
-    state = getattr(trace, "state", None)
-    return str(getattr(state, "name", state))
-
-
-def _stale_spec_status(trace: Trace) -> str:
-    """Return whether the out recipe is stale.
-
-    Parameters
-    ----------
-    trace:
-        Model log to inspect.
-
-    Returns
-    -------
-    str
-        Staleness summary.
-    """
-
-    spec_revision = int(getattr(trace, "_spec_revision", 0) or 0)
-    recipe_revision = int(getattr(trace, "_out_recipe_revision", 0) or 0)
-    stale = spec_revision != recipe_revision
-    return f"{stale} (spec={spec_revision}, out_recipe={recipe_revision})"
-
-
-def _last_run_summary(trace: Trace) -> str:
-    """Return a compact last-run context summary.
-
-    Parameters
-    ----------
-    trace:
-        Model log to inspect.
-
-    Returns
-    -------
-    str
-        Last-run status.
-    """
-
-    ctx = getattr(trace, "last_run", None)
-    if not isinstance(ctx, dict) or not ctx:
-        return "none"
-    engine = ctx.get("engine", "unknown")
-    revision = ctx.get("spec_revision", getattr(trace, "_spec_revision", 0))
-    duration = ctx.get("duration_s")
-    duration_text = (
-        f", duration={float(duration):.4f}s" if isinstance(duration, (int, float)) else ""
-    )
-    return f"engine={engine}, spec_revision={revision}{duration_text}"
-
-
-def _spec_sample(specs: Sequence[Any]) -> str:
-    """Return a short sample of recipe specs.
-
-    Parameters
-    ----------
-    specs:
-        Sequence of recipe spec objects.
-
-    Returns
-    -------
-    str
-        Empty string or parenthesized summary.
-    """
-
-    if not specs:
-        return ""
-    labels = [_site_target_repr(getattr(spec, "site_target", None)) for spec in specs[:3]]
-    if len(specs) > 3:
-        labels.append("...")
-    return f" ({', '.join(labels)})"
-
-
-def _site_target_repr(site_target: Any) -> str:
-    """Return a compact site-target representation.
-
-    Parameters
-    ----------
-    site_target:
-        Target spec-like object.
-
-    Returns
-    -------
-    str
-        Compact representation.
-    """
-
-    if site_target is None:
-        return "unknown"
-    kind = getattr(site_target, "selector_kind", getattr(site_target, "kind", None))
-    value = getattr(site_target, "selector_value", getattr(site_target, "value", None))
-    if kind is not None:
-        return f"{kind}:{value}"
-    return _shorten(repr(site_target), limit=48)
-
-
-def _portability_status(target_specs: Sequence[Any], hook_specs: Sequence[Any]) -> str:
-    """Return recipe save/load portability status.
-
-    Parameters
-    ----------
-    target_specs:
-        Target value specs.
-    hook_specs:
-        Hook specs.
-
-    Returns
-    -------
-    str
-        Portability summary.
-    """
-
-    helpers = []
-    for spec in tuple(target_specs) + tuple(hook_specs):
-        helper = getattr(spec, "helper", None)
-        if helper is not None:
-            helpers.append(helper)
-        value = getattr(spec, "value", None)
-        if getattr(value, "portability", None) is not None:
-            helpers.append(value)
-    opaque = sum(1 for helper in helpers if getattr(helper, "portability", None) == "opaque_audit")
-    import_ref = sum(
-        1 for helper in helpers if getattr(helper, "portability", None) == "import_ref"
-    )
-    if opaque:
-        return f"{opaque} opaque -> audit-only"
-    if import_ref:
-        return f"{import_ref} import-ref helper(s) -> environment-dependent"
-    return "all helpers builtin -> portable"
-
-
-def _recent_operation_lines(trace: Trace) -> list[str]:
-    """Return recent operation-history lines.
-
-    Parameters
-    ----------
-    trace:
-        Model log to inspect.
-
-    Returns
-    -------
-    list[str]
-        Indented operation lines.
-    """
-
-    history = list(getattr(trace, "state_history", []) or [])
-    if not history:
-        return ["  none"]
-    lines = []
-    for record in history[-8:]:
-        if isinstance(record, dict):
-            op = record.get("op", "unknown")
-            revision = record.get("spec_revision", "?")
-            detail = _operation_detail(record)
-            lines.append(f"  - {op} (spec={revision}){detail}")
-        else:
-            lines.append(f"  - {_shorten(repr(record), limit=96)}")
-    return lines
-
-
-def _operation_detail(record: Mapping[str, Any]) -> str:
-    """Return selected details from one operation record.
-
-    Parameters
-    ----------
-    record:
-        Operation-history record.
-
-    Returns
-    -------
-    str
-        Optional details string.
-    """
-
-    detail_keys = ("site", "engine", "name", "origins", "hooks", "append_sequence_id")
-    parts = []
-    for key in detail_keys:
-        if key in record and record[key] not in (None, (), []):
-            parts.append(f"{key}={_shorten(repr(record[key]), limit=36)}")
-    return f": {', '.join(parts)}" if parts else ""
-
-
-def _parent_run_summary(trace: Trace) -> str:
-    """Return parent-run status.
-
-    Parameters
-    ----------
-    trace:
-        Model log to inspect.
-
-    Returns
-    -------
-    str
-        Parent summary.
-    """
-
-    parent_ref = getattr(trace, "parent_run", None)
-    if parent_ref is None:
-        return "none"
-    parent = parent_ref()
-    if parent is None:
-        return "collected"
-    return f"{getattr(parent, 'trace_label', None)!r} ({getattr(parent, 'model_class_name', None)})"
-
-
-def _fork_chain_summary(trace: Trace) -> str:
-    """Return a compact fork lineage chain.
-
-    Parameters
-    ----------
-    trace:
-        Model log to inspect.
-
-    Returns
-    -------
-    str
-        Fork chain from root to current log.
-    """
-
-    names = [str(getattr(trace, "trace_label", None))]
-    seen = {id(trace)}
-    current = trace
-    while True:
-        parent_ref = getattr(current, "parent_run", None)
-        if parent_ref is None:
-            break
-        parent = parent_ref()
-        if parent is None or id(parent) in seen:
-            break
-        names.append(str(getattr(parent, "trace_label", None)))
-        seen.add(id(parent))
-        current = parent
-    return " <- ".join(reversed(names))
-
-
-def _truncated(value: Any, *, length: int = 8) -> str:
-    """Return a truncated hash-like value.
-
-    Parameters
-    ----------
-    value:
-        Value to display.
-    length:
-        Maximum prefix length.
-
-    Returns
-    -------
-    str
-        Truncated string or ``"unknown"``.
-    """
-
-    if value is None:
-        return "unknown"
-    text = str(value)
-    return text[:length]
-
-
-def _relationship_evidence_summary(trace: Trace) -> str:
-    """Return relationship evidence enum names.
-
-    Parameters
-    ----------
-    trace:
-        Model log to inspect.
-
-    Returns
-    -------
-    str
-        Compact relationship summary.
-    """
-
-    evidence = getattr(trace, "relationship_evidence", {}) or {}
-    if not evidence:
-        return "unknown"
-    parts = []
-    for key in ("model", "weights", "input", "graph"):
-        value = evidence.get(key)
-        parts.append(f"{key}={getattr(value, 'name', value)}")
-    return ", ".join(parts)
-
-
-def _next_operation_hint(trace: Trace) -> str:
-    """Return available next-operation guidance.
-
-    Parameters
-    ----------
-    trace:
-        Model log to inspect.
-
-    Returns
-    -------
-    str
-        User-facing next-step hint.
-    """
-
-    if getattr(trace, "_has_direct_writes", False):
-        return "direct writes present; replay() or rerun() will overlay recipe state"
-    if getattr(trace, "_spec_revision", 0) != getattr(trace, "_out_recipe_revision", 0):
-        return "spec stale; call replay() or rerun() to propagate"
-    if not getattr(trace, "intervention_ready", False):
-        return "not intervention-ready; recapture with intervention_ready=True for replay templates"
-    return "ready for set(), attach_hooks(), do(), replay(), rerun(), or fork()"
-
-
-def _rng_note_summary(trace: Trace) -> str:
-    """Return helper RNG and non-determinism notes.
-
-    Parameters
-    ----------
-    trace:
-        Model log to inspect.
-
-    Returns
-    -------
-    str
-        RNG summary.
-    """
-
-    notes = []
-    for layer in getattr(trace, "layer_list", []) or []:
-        for record in getattr(layer, "interventions", []) or []:
-            note = getattr(record, "determinism_note", None)
-            if note:
-                notes.append(str(note))
-    if notes:
-        return _shorten("; ".join(notes[:3]), limit=140)
-    if getattr(trace, "save_rng_states", False):
-        return "per-operation RNG states captured"
-    return "no unseeded helper RNG notes"
-
-
-def _shorten(text: str, *, limit: int) -> str:
-    """Shorten text to a fixed display limit.
-
-    Parameters
-    ----------
-    text:
-        Text to shorten.
-    limit:
-        Maximum returned length.
-
-    Returns
-    -------
-    str
-        Shortened text.
-    """
-
-    if len(text) <= limit:
-        return text
-    return f"{text[: max(0, limit - 3)]}..."
 
 
 def _resolve_level(*, level: SummaryLevel, preset: SummaryLevel | None) -> str:
@@ -1003,7 +402,9 @@ def _render_in_progress_summary(
             [
                 "",
                 "Raw Operations:",
-                _render_table(display_fields, rows, max_rows=max_rows),
+                _render_table(
+                    display_fields, rows, max_rows=max_rows, label_overrides={"name": "Op"}
+                ),
             ]
         )
     return "\n".join(lines)
@@ -1063,6 +464,7 @@ def _render_finished_summary(
     mode: SummaryMode,
     show_ops: bool,
     max_rows: int | None,
+    count_fma_as_two: bool | None = None,
 ) -> str:
     """Render a summary for a finalized ``Trace``.
 
@@ -1086,10 +488,17 @@ def _render_finished_summary(
     str
         Rendered summary text.
     """
-    primary_rows, footer_lines = _build_level_rows(trace=trace, level=level, mode=mode)
+    primary_rows, footer_lines = _build_level_rows(
+        trace=trace, level=level, mode=mode, count_fma_as_two=count_fma_as_two
+    )
     lines = [
         _level_title(trace=trace, level=level),
-        _render_table(fields, primary_rows, max_rows=max_rows),
+        _render_table(
+            fields,
+            primary_rows,
+            max_rows=max_rows,
+            label_overrides=_name_label_override(level),
+        ),
     ]
     if footer_lines:
         lines.extend(footer_lines)
@@ -1100,12 +509,28 @@ def _render_finished_summary(
             [
                 "",
                 "Operations:",
-                _render_table(op_fields, op_rows, max_rows=max_rows),
+                _render_table(
+                    op_fields, op_rows, max_rows=max_rows, label_overrides={"name": "Op"}
+                ),
             ]
         )
         if op_footer_lines:
             lines.extend(op_footer_lines)
     return "\n".join(lines)
+
+
+def _name_label_override(level: str) -> dict[str, str] | None:
+    """Return the row-kind-aware heading for the ``name`` column (A10).
+
+    Module-row tables head their name column "Module (type)"; op-row tables
+    head it "Op". The one-size-fits-all "Layer" heading mislabeled both.
+    """
+
+    if level in {"overview", "graph", "compute"}:
+        return {"name": "Module (type)"}
+    if level in {"memory", "waterfall"}:
+        return {"name": "Op"}
+    return None
 
 
 def _level_title(*, trace: Trace, level: str) -> str:
@@ -1140,6 +565,7 @@ def _build_level_rows(
     trace: Trace,
     level: str,
     mode: SummaryMode,
+    count_fma_as_two: bool | None = None,
 ) -> tuple[list[dict[str, str]], list[str]]:
     """Build rows and footer lines for one summary level.
 
@@ -1158,7 +584,7 @@ def _build_level_rows(
         Primary table rows and footer lines.
     """
     if level == "overview":
-        return _build_overview_rows(trace)
+        return _build_overview_rows(trace, count_fma_as_two=count_fma_as_two)
     if level == "graph":
         return _build_graph_rows(trace)
     if level == "memory":
@@ -1169,10 +595,12 @@ def _build_level_rows(
         return _build_waterfall_rows(trace, mode=mode)
     if level == "output":
         return _build_output_rows(trace)
-    return _build_compute_rows(trace)
+    return _build_compute_rows(trace, count_fma_as_two=count_fma_as_two)
 
 
-def _build_overview_rows(trace: Trace) -> tuple[list[dict[str, str]], list[str]]:
+def _build_overview_rows(
+    trace: Trace, count_fma_as_two: bool | None = None
+) -> tuple[list[dict[str, str]], list[str]]:
     """Build the default overview rows.
 
     Parameters
@@ -1189,7 +617,9 @@ def _build_overview_rows(trace: Trace) -> tuple[list[dict[str, str]], list[str]]
         {
             "name": "input",
             "shape": _combined_shape_str(trace, trace.input_layers),
-            "params": "0",
+            # Boundary rows own nothing additive: every additive cell is "-"
+            # (identity partition, A1), never a number.
+            "params": "-",
             "train": "-",
         }
     ]
@@ -1205,19 +635,91 @@ def _build_overview_rows(trace: Trace) -> tuple[list[dict[str, str]], list[str]]
         }
     )
     footer_lines = [
-        f"Params: {_int_with_commas(trace.num_params)} unique; trainable: "
-        f"{_int_with_commas(trace.num_params_trainable)}",
+        *_param_footer_lines(trace),
         f"Ops: {trace.num_ops} total",
         f"Edges: {trace.num_edges} total",
         f"Branching factor: {trace.branching_factor:.2f}",
         f"Saved outs: {human_readable_size(trace.saved_activation_memory)}",
-        f"Forward FLOPs: {_human_flops(trace.total_flops_forward)}  "
-        f"MACs: {_human_flops(trace.total_macs_forward)}",
-        _unknown_flops_footer(trace),
-        "FLOP convention: counts use the captured TorchLens convention; "
-        "MACs are reported as FLOPs // 2.",
+        *_compute_footer_lines(trace, count_fma_as_two),
     ]
     return rows, footer_lines
+
+
+def _compute_footer_lines(trace: Trace, count_fma_as_two: bool | None) -> list[str]:
+    """Return the compute footer block (A5/A6) from the canonical aggregation.
+
+    True MACs come from each op's two-term compute record, never flops//2;
+    the active FMA convention is always named; an explicit fma=1 request on a
+    trace with underivable MAC splits refuses typed
+    (``flop_convention_unavailable``) inside the aggregation -- never
+    accepted-and-ignored.
+    """
+
+    from ...report._compute_truth import aggregate_forward_compute, forward_flops_total
+
+    totals = aggregate_forward_compute(trace)
+    macs_part = f"MACs: {_human_macs(int(totals.macs))}"
+    if totals.macs_unknown_split:
+        count = len(totals.macs_unknown_split)
+        macs_part += f" (lower bound; MAC split unknown for {count} op{'s' if count > 1 else ''})"
+    if count_fma_as_two is False:
+        fma1_total = forward_flops_total(trace, fma=1)
+        flops_line = f"Forward FLOPs (fma=1): {_human_flops(int(fma1_total))}  {macs_part}"
+        convention_line = (
+            "FLOP convention: fma=1 (explicit; one multiply-accumulate = 1 FLOP); "
+            "MACs are true multiply-accumulate counts."
+        )
+    else:
+        marker = " (explicit)" if count_fma_as_two is True else ""
+        flops_line = f"Forward FLOPs: {_human_flops(int(totals.flops_fma2))}  {macs_part}"
+        convention_line = (
+            f"FLOP convention: fma=2{marker} (one multiply-accumulate = 2 FLOPs); "
+            "MACs are true multiply-accumulate counts."
+        )
+    return [flops_line, _unknown_flops_footer(trace), convention_line]
+
+
+def _param_footer_lines(trace: Trace) -> list[str]:
+    """Return the parameter footer block (A2/A3/A12).
+
+    Headline = declared parameters under torch's own identity rule (tie-
+    deduplicated). When ties exist the per-module-path total is printed
+    BESIDE it with the tie named -- so a torchinfo switcher sees why the two
+    tools disagree instead of filing a bug. Declared-but-never-executed
+    parameters are named, never silently dropped.
+    """
+
+    total = int(trace.num_params)
+    trainable = int(trace.num_params_trainable)
+    frozen = int(trace.num_params_frozen)
+    if total > 0:
+        pct = 100.0 * trainable / total
+        headline = (
+            f"Params: {_int_with_commas(total)} unique (parameter identity); "
+            f"trainable: {_int_with_commas(trainable)} ({pct:.1f}%); "
+            f"frozen: {_int_with_commas(frozen)}"
+        )
+    else:
+        headline = "Params: 0"
+    lines = [headline]
+
+    tied_groups = trace.tied_param_groups
+    if tied_groups:
+        by_path = trace.num_params_by_path
+        tie_names = "; ".join(" = ".join(group) for group in tied_groups[:3])
+        extra = "" if len(tied_groups) <= 3 else f" (+{len(tied_groups) - 3} more ties)"
+        lines.append(
+            f"Shared params: {tie_names}{extra} -- counted once; "
+            f"per-module-path total: {_int_with_commas(by_path)}"
+        )
+
+    unexecuted = trace.num_params_unexecuted
+    if unexecuted:
+        names = trace.unexecuted_param_names
+        shown = ", ".join(names[:3])
+        extra = "" if len(names) <= 3 else f" (+{len(names) - 3} more)"
+        lines.append(f"Never executed: {_int_with_commas(unexecuted)} params ({shown}{extra})")
+    return lines
 
 
 def _build_graph_rows(trace: Trace) -> tuple[list[dict[str, str]], list[str]]:
@@ -1275,23 +777,49 @@ def _build_memory_rows(
     running_total = 0
     rows: list[dict[str, str]] = []
     for entry in _iter_operation_entries(trace, mode=mode):
+        # Output alias rows display their shape but OWN no bytes (identity
+        # partition, A1): the producing op owns the returned tensor.
+        alias = _is_output_alias_row(entry)
         memory = int(getattr(entry, "activation_memory", 0) or 0)
-        running_total += memory
+        if not alias:
+            running_total += memory
         rows.append(
             {
                 "name": _entry_name(entry),
                 "shape": _shape_str(getattr(entry, "shape", None)),
                 "dtype": _dtype_str(getattr(entry, "dtype", None)),
-                "tensor_mb": _mb_str(memory),
-                "running_mb": _mb_str(running_total),
+                "tensor_mb": "-" if alias else _mb_str(memory),
+                "running_mb": "-" if alias else _mb_str(running_total),
             }
         )
     footer_lines = [
         f"Tracked tensor volume: {human_readable_size(trace.total_activation_memory)}",
         f"Saved outs: {human_readable_size(trace.saved_activation_memory)}",
-        "Live forward-memory peak: not tracked in Trace",
+        _forward_peak_memory_line(trace),
     ]
     return rows, footer_lines
+
+
+def _forward_peak_memory_line(trace: Trace) -> str:
+    """Return the honest forward-peak-memory footer line.
+
+    Distinguishes a MEASURED zero (the forward fit inside already-resident
+    memory on the cheap host-delta basis) from a capture that never measured
+    the figure at all (no recorded backend, e.g. legacy artifacts or preview
+    backends).
+    """
+
+    backend = getattr(trace, "forward_memory_backend", None)
+    peak = getattr(trace, "forward_peak_memory", None)
+    if not backend or backend == "unknown" or peak is None:
+        return "Live forward-memory peak: unavailable (not measured on this capture)"
+    peak_bytes = int(peak)
+    if peak_bytes == 0:
+        return (
+            f"Live forward-memory peak: 0 B measured ({backend} basis; "
+            "0 can mean the forward fit in already-resident memory)"
+        )
+    return f"Live forward-memory peak: {human_readable_size(peak_bytes)} measured ({backend} basis)"
 
 
 def _build_control_flow_rows(trace: Trace) -> tuple[list[dict[str, str]], list[str]]:
@@ -1363,7 +891,9 @@ def _recurrent_loop_group_lines(
     return [f"Recurrent loop groups ({len(loop_groups)}): {detail}"]
 
 
-def _build_compute_rows(trace: Trace) -> tuple[list[dict[str, str]], list[str]]:
+def _build_compute_rows(
+    trace: Trace, count_fma_as_two: bool | None = None
+) -> tuple[list[dict[str, str]], list[str]]:
     """Build compute-summary rows.
 
     Parameters
@@ -1383,7 +913,7 @@ def _build_compute_rows(trace: Trace) -> tuple[list[dict[str, str]], list[str]]:
                 "name": module.address,
                 "params": _human_count(module.num_params),
                 "flops": _human_flops(module.total_flops_forward),
-                "macs": _human_flops(module.total_macs_forward),
+                "macs": _human_macs(int(module.total_macs_forward)),
                 "time_ms": f"{_module_time_ms(trace, module):.2f}",
                 "dtype": _module_dtype(trace, module),
             }
@@ -1396,10 +926,8 @@ def _build_compute_rows(trace: Trace) -> tuple[list[dict[str, str]], list[str]]:
     )
     wall_ms = float(getattr(trace, "forward_duration", 0.0) or 0.0) * 1000.0
     footer_lines = [
-        f"Params: {_int_with_commas(trace.num_params)} unique",
-        f"Forward FLOPs: {_human_flops(trace.total_flops_forward)}",
-        f"MACs: {_human_flops(trace.total_macs_forward)}",
-        _unknown_flops_footer(trace),
+        *_param_footer_lines(trace),
+        *_compute_footer_lines(trace, count_fma_as_two),
         # Report the compute-relevant accumulated op time (matching the waterfall
         # level) as the headline number, and disclose the raw capture wall time
         # separately as overhead-inclusive. Previously a single "Forward time"
@@ -1511,26 +1039,70 @@ def _build_operation_rows(
     rows: list[dict[str, str]] = []
     running_total = 0
     for entry in _iter_operation_entries(trace, mode=mode):
+        alias = _is_output_alias_row(entry)
         memory = int(getattr(entry, "activation_memory", 0) or 0)
-        running_total += memory
+        if not alias:
+            running_total += memory
         rows.append(
             {
                 "name": _entry_name(entry),
                 "shape": _shape_str(getattr(entry, "shape", None)),
-                "params": _human_count(int(getattr(entry, "num_params", 0) or 0)),
+                "params": "-"
+                if _is_boundary_row(entry)
+                else _human_count(int(getattr(entry, "num_params", 0) or 0)),
                 "parents": _parent_summary(getattr(entry, "parents", [])),
                 "dtype": _dtype_str(getattr(entry, "dtype", None)),
-                "tensor_mb": _mb_str(memory),
-                "running_mb": _mb_str(running_total),
-                "flops": _human_flops(int(getattr(entry, "flops_forward", 0) or 0)),
-                "macs": _human_flops(int(getattr(entry, "macs_forward", 0) or 0)),
-                "time_ms": f"{_entry_func_duration(entry) * 1000:.2f}",
+                "tensor_mb": "-" if alias else _mb_str(memory),
+                "running_mb": "-" if alias else _mb_str(running_total),
+                "flops": _flops_cell(entry),
+                "macs": _macs_cell(entry),
+                "time_ms": "-"
+                if _is_boundary_row(entry)
+                else (f"{_entry_func_duration(entry) * 1000:.2f}"),
             }
         )
     footer_lines = [
         f"Operation rows shown: {len(rows)} ({mode if mode != 'auto' else _effective_mode(trace, mode)})"
     ]
     return rows, footer_lines
+
+
+def _is_boundary_row(entry: Any) -> bool:
+    """Return whether ``entry`` is an input/output boundary pseudo-row.
+
+    Boundary rows render but OWN nothing additive (identity partition, A1):
+    every additive cell renders "-", never a number.
+    """
+
+    return bool(getattr(entry, "is_input", False)) or bool(getattr(entry, "is_output", False))
+
+
+def _is_output_alias_row(entry: Any) -> bool:
+    """Return whether ``entry`` is an output alias row (owns no bytes)."""
+
+    return bool(getattr(entry, "is_output", False))
+
+
+def _flops_cell(entry: Any) -> str:
+    """Typed FLOPs cell: "-" not applicable, "?" unknown, else the value."""
+
+    if _is_boundary_row(entry):
+        return "-"
+    flops = getattr(entry, "flops_forward", None)
+    if flops is None:
+        return "?"
+    return _human_flops(int(flops))
+
+
+def _macs_cell(entry: Any) -> str:
+    """Typed MACs cell: "-" not applicable, "?" unknown, else the value."""
+
+    if _is_boundary_row(entry):
+        return "-"
+    macs = getattr(entry, "macs_forward", None)
+    if macs is None:
+        return "?"
+    return _human_macs(int(macs))
 
 
 def _default_op_fields(level: str) -> list[str]:
@@ -1599,9 +1171,17 @@ def _module_overview_row(
     dict[str, str]
         Renderable overview row.
     """
+    # Trainability is a tri-state (A12): "yes" only when EVERY parameter
+    # element is trainable, "partial" for a mixed module, "no" for none --
+    # the old boolean OR read "yes" with a single unfrozen tensor.
     train = "-"
     if module.num_params > 0:
-        train = "yes" if module.num_params_trainable > 0 else "no"
+        if module.num_params_trainable == module.num_params:
+            train = "yes"
+        elif module.num_params_trainable == 0:
+            train = "no"
+        else:
+            train = "partial"
     return {
         "name": f"{module.address} ({module.class_name})",
         "shape": _module_shape(trace, module),
@@ -1862,7 +1442,9 @@ def _entry_name(entry: Any) -> str:
         if isinstance(pass_label, str):
             return pass_label
     if num_passes > 1 and hasattr(entry, "ops"):
-        return f"{base_name} x{num_passes}"
+        # One pass/op vocabulary (A10): the aggregate rolled row spells its
+        # multiplicity as passes, so a 3-pass layer can never read as 3 ops.
+        return f"{base_name} (x{num_passes} passes)"
     if getattr(entry, "call_index", 1) > 1:
         return str(getattr(entry, "layer_label", base_name))
     return str(base_name)
@@ -1948,7 +1530,10 @@ def _event_source(event: ConditionalEvent) -> str:
     str
         Source locator.
     """
-    return terminal_file_line_link(event.source_file, event.if_stmt_span[0])
+    # Returned summary strings never carry escape bytes (OSC-8 included):
+    # they must be safe to log, diff, snapshot, and paste into issues on any
+    # sink. Hyperlinks are an HTML-renderer concern, never a str() concern.
+    return file_line_text(event.source_file, event.if_stmt_span[0])
 
 
 def _event_bool_layer(event: ConditionalEvent) -> str:
@@ -2102,21 +1687,27 @@ def _unknown_flops_footer(trace: Trace) -> str:
         Unknown-operation count and, when nonzero, the total-exclusion warning.
     """
 
-    count = sum(
-        1 for entry in trace.layer_list if entry.is_compute_op and entry.flops_forward is None
+    from ...report._compute_truth import unknown_op_ledger
+
+    ledger = unknown_op_ledger(trace)
+    if not ledger:
+        return "Unknown-FLOPs ops: 0"
+    count = sum(group.count for group in ledger)
+    named = ", ".join(f"{group.func_name} x{group.count}" for group in ledger[:4])
+    extra = "" if len(ledger) <= 4 else f", +{len(ledger) - 4} more names"
+    return (
+        f"Unknown-FLOPs ops: {count} ({named}{extra}; excluded from FLOP/MAC "
+        "totals; remedy: torchlens.capture.flops.register_op_rule)"
     )
-    if count:
-        return f"Unknown-FLOPs ops: {count} (excluded from FLOP/MAC totals)"
-    return "Unknown-FLOPs ops: 0"
 
 
 def _human_flops(value: int) -> str:
-    """Format FLOPs or MACs compactly.
+    """Format a FLOP count compactly.
 
     Parameters
     ----------
     value:
-        FLOP-like integer.
+        FLOP integer.
 
     Returns
     -------
@@ -2124,6 +1715,17 @@ def _human_flops(value: int) -> str:
         Compact FLOP string.
     """
     return format_flops(value)
+
+
+def _human_macs(value: int) -> str:
+    """Format a MAC count compactly, in MAC units.
+
+    A MACs value must NEVER route through the FLOPs formatter (listA row 13:
+    "718.9 MFLOPs" printed for a MACs quantity) -- formatting dispatches on
+    the semantic type.
+    """
+
+    return str(Macs(value))
 
 
 def _int_with_commas(value: int) -> str:
@@ -2147,6 +1749,7 @@ def _render_table(
     rows: Sequence[dict[str, str]],
     *,
     max_rows: int | None,
+    label_overrides: dict[str, str] | None = None,
 ) -> str:
     """Render an ASCII table.
 
@@ -2158,6 +1761,9 @@ def _render_table(
         Row dictionaries.
     max_rows:
         Maximum number of rows to render.
+    label_overrides:
+        Per-field header overrides so a heading can follow the row kind
+        (module rows vs op rows) instead of the one-size-fits-all "Layer".
 
     Returns
     -------
@@ -2167,6 +1773,10 @@ def _render_table(
     if not rows:
         return "(no rows)"
 
+    labels = dict(_COLUMN_LABELS)
+    if label_overrides:
+        labels.update(label_overrides)
+
     display_rows = list(rows)
     truncated_count = 0
     if max_rows is not None and len(display_rows) > max_rows:
@@ -2175,15 +1785,13 @@ def _render_table(
 
     widths = []
     for field in fields:
-        header = _COLUMN_LABELS[field]
+        header = labels[field]
         cell_width = max(len(str(row.get(field, "-"))) for row in display_rows)
         widths.append(max(len(header), cell_width))
 
     border = "+" + "+".join("-" * (width + 2) for width in widths) + "+"
     header_row = (
-        "| "
-        + " | ".join(_COLUMN_LABELS[field].ljust(width) for field, width in zip(fields, widths))
-        + " |"
+        "| " + " | ".join(labels[field].ljust(width) for field, width in zip(fields, widths)) + " |"
     )
     body_rows = [
         "| "

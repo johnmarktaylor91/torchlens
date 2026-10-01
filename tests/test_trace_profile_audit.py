@@ -98,9 +98,19 @@ def test_trace_profile_preserves_subsecond_time_for_hotspot_sorting() -> None:
     trace = tl.trace(ProfileModel().eval(), torch.randn(2, 4))
     frame = trace.profile().to_pandas()
 
-    assert frame["time"].notna().all()
-    assert (frame["time"] > 0).any()
-    assert frame["time"].tolist() == sorted(frame["time"].tolist(), reverse=True)
+    # Boundary pseudo-rows own no time (identity partition, A1): their cells
+    # are NaN and sort last; every REAL op row keeps its float duration.
+    op_rows = frame[frame["kind"] == "op"]
+    boundary_rows = frame[frame["kind"] == "boundary"]
+    assert not boundary_rows.empty
+    assert boundary_rows["time"].isna().all()
+    assert op_rows["time"].notna().all()
+    assert (op_rows["time"] > 0).any()
+    op_times = op_rows["time"].tolist()
+    assert op_times == sorted(op_times, reverse=True)
+    assert frame["time"].notna().tolist() == sorted(frame["time"].notna().tolist(), reverse=True), (
+        "NaN boundary rows must sort after every timed row"
+    )
     assert any(unit in repr(trace.profile()) for unit in (" us", " ms", " s"))
 
 
@@ -144,16 +154,21 @@ def test_trace_profile_honesty_labels_missing_timing_as_unknown() -> None:
     """Resource provenance distinguishes measured, estimated, and absent values."""
 
     trace = tl.trace(ProfileModel().eval(), torch.randn(2, 4))
-    missing_timing_op = trace.layer_list[0]
+    missing_timing_op = next(
+        op for op in trace.layer_list if not (op.is_input or op.is_output or op.is_buffer)
+    )
     missing_timing_op._internal_set("func_duration", None)
     profile = trace.profile(sort_by="activation_memory")
     honesty = profile.honesty()
     row = honesty.loc[honesty["name"] == missing_timing_op.label].iloc[0]
 
     assert row["time"] == "unknown"
-    assert set(honesty["time"]).issubset({"measured", "unknown"})
-    assert set(honesty["activation_memory"]).issubset({"estimated", "unknown"})
+    # Boundary pseudo-rows carry not_applicable, never a fabricated evidence
+    # label and never "unknown" (costreport D2).
+    assert set(honesty["time"]).issubset({"measured", "unknown", "not_applicable"})
+    assert set(honesty["activation_memory"]).issubset({"estimated", "unknown", "not_applicable"})
     assert "estimated" in set(honesty["flops"])
+    assert "not_applicable" in set(honesty["flops"])
 
 
 def test_trace_audit_clean_model_reports_run_and_skipped_scope() -> None:

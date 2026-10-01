@@ -19,7 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io.scrub import _scrub_signature_string
+from torchlens._io._source_privacy import _scrub_signature_string
 
 pytestmark = pytest.mark.smoke
 

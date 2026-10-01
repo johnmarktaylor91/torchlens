@@ -9,3 +9,131 @@ env: py3.10-torch2.13.0
 torch: 2.13.0
 recorded: 2026-08-15 (backfill entry; future updates append real records via
   tests/_oracle_env.write_provenance)
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: A07 two-term compute record: true bias-aware MACs/FLOPs change trace_summary totals; deliberate refresh on the rebase union
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4f4736ebcfbf0390010a2c56cb7d0e789f452e5f (clean)
+recorded: 2026-08-27T01:12:21.583288+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: A07 two-term compute record: true bias-aware MACs/FLOPs change trace_summary totals; deliberate refresh on the rebase union
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4f4736ebcfbf0390010a2c56cb7d0e789f452e5f (clean)
+recorded: 2026-08-27T01:12:21.643942+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: A07 two-term compute record: true bias-aware MACs/FLOPs change trace_summary totals; deliberate refresh on the rebase union
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4f4736ebcfbf0390010a2c56cb7d0e789f452e5f (clean)
+recorded: 2026-08-27T01:12:21.710071+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: A07 two-term compute record: true bias-aware MACs/FLOPs change trace_summary totals; deliberate refresh on the rebase union
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4f4736ebcfbf0390010a2c56cb7d0e789f452e5f (clean)
+recorded: 2026-08-27T01:12:21.754798+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: A07 two-term compute record: true bias-aware MACs/FLOPs change trace_summary totals; deliberate refresh on the rebase union
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4f4736ebcfbf0390010a2c56cb7d0e789f452e5f (clean)
+recorded: 2026-08-27T01:12:21.815790+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: A07 two-term compute record: true bias-aware MACs/FLOPs change trace_summary totals; deliberate refresh on the rebase union
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4f4736ebcfbf0390010a2c56cb7d0e789f452e5f (clean)
+recorded: 2026-08-27T01:12:22.128715+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: A07 two-term compute record: true bias-aware MACs/FLOPs change trace_summary totals; deliberate refresh on the rebase union
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4f4736ebcfbf0390010a2c56cb7d0e789f452e5f (clean)
+recorded: 2026-08-27T01:12:22.321916+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: A07 two-term compute record: true bias-aware MACs/FLOPs change trace_summary totals; deliberate refresh on the rebase union
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4f4736ebcfbf0390010a2c56cb7d0e789f452e5f (clean)
+recorded: 2026-08-27T01:12:22.375842+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: A07 two-term compute record: true bias-aware MACs/FLOPs change trace_summary totals; deliberate refresh on the rebase union
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4f4736ebcfbf0390010a2c56cb7d0e789f452e5f (clean)
+recorded: 2026-08-27T01:12:22.419684+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: A07 two-term compute record: true bias-aware MACs/FLOPs change trace_summary totals; deliberate refresh on the rebase union
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4f4736ebcfbf0390010a2c56cb7d0e789f452e5f (clean)
+recorded: 2026-08-27T01:12:22.465655+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: A07 two-term compute record: true bias-aware MACs/FLOPs change trace_summary totals; deliberate refresh on the rebase union
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4f4736ebcfbf0390010a2c56cb7d0e789f452e5f (clean)
+recorded: 2026-08-27T01:12:22.573852+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: A07 two-term compute record: true bias-aware MACs/FLOPs change trace_summary totals; deliberate refresh on the rebase union
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4f4736ebcfbf0390010a2c56cb7d0e789f452e5f (clean)
+recorded: 2026-08-27T01:12:22.625628+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: A07 two-term compute record: true bias-aware MACs/FLOPs change trace_summary totals; deliberate refresh on the rebase union
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4f4736ebcfbf0390010a2c56cb7d0e789f452e5f (clean)
+recorded: 2026-08-27T01:12:22.659277+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: A07 two-term compute record: true bias-aware MACs/FLOPs change trace_summary totals; deliberate refresh on the rebase union
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4f4736ebcfbf0390010a2c56cb7d0e789f452e5f (clean)
+recorded: 2026-08-27T01:12:22.703285+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: A07 two-term compute record: true bias-aware MACs/FLOPs change trace_summary totals; deliberate refresh on the rebase union
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4f4736ebcfbf0390010a2c56cb7d0e789f452e5f (clean)
+recorded: 2026-08-27T01:12:22.738703+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: A07 two-term compute record: true bias-aware MACs/FLOPs change trace_summary totals; deliberate refresh on the rebase union
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4f4736ebcfbf0390010a2c56cb7d0e789f452e5f (clean)
+recorded: 2026-08-27T01:12:22.816241+00:00

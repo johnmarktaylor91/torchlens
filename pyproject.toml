@@ -83,17 +83,19 @@ notebook = ["ipython>=8.0", "jupyter-client>=8.0"]
 # rsatoolbox: >=0.1.5 keeps the validated floor; the ceiling admits the 0.2/0.3
 # line because 0.1.5 ships no cp313 wheels (0.3.x is the first that does) and the
 # bridge surface used (rsatoolbox.data.Dataset) is stable across the range.
-# brainscore_core is the real PyPI distribution behind the Brain-Score project's
-# core library -- the previous `brain-score~=2.2` requirement named a dist that
-# does not exist on PyPI at ANY version, so `pip install torchlens[neuro]` was
-# uninstallable for every user (grind r4, R83-1). torchlens.neuro gates on the
-# `brainscore_core` import name. The dist declares requires-python >=3.11 on
-# every release, so the marker keeps the extra installable on 3.10 (rsatoolbox
-# only there; the appliance's dependency gate names the missing package at use
-# time).
+# brainscore_vision is what the code actually consumes: torchlens/bridge/
+# brain_score.py imports brainscore_vision.model_helpers (in NO extra before
+# the 2026-08 completeness audit, WT A-VI item 35 / neuro-memo D17), while the
+# previously-pinned brainscore_core was imported NOWHERE outside the appliance
+# gate tuple. Pinning brainscore_vision pulls brainscore_core transitively, so
+# the torchlens.neuro dependency gate stays satisfied on 3.11+ with the extra
+# now also carrying the bridge's real dependency. brainscore_vision declares
+# requires-python >=3.11 on every release, so the marker keeps the extra
+# installable on 3.10 (rsatoolbox only there; the appliance's dependency gate
+# names the missing package at use time -- same behavior as before).
 neuro = [
     "rsatoolbox>=0.1.5,<0.4",
-    "brainscore_core~=2.2; python_version >= '3.11'",
+    "brainscore_vision~=2.3; python_version >= '3.11'",
 ]
 viz = ["torchshow~=0.5", "lovely-tensors~=0.1.18"]
 tabular = ["pandas>=2.0", "pyarrow>=14"]
@@ -102,10 +104,12 @@ captum = ["captum~=0.7"]
 # the pure tool layer (TOOL_SPECS / call_tool) works without it.
 mcp = ["mcp>=2.0"]
 sae = ["sae-lens~=6.45; python_version >= '3.10'"]
-# `profiler` is an intentional no-op capability marker: torch.profiler ships with
-# torch itself, so this extra pulls no extra packages but stays advertised so users
-# and tooling can request the profiler surface by name.
-profiler = []
+# The former empty `profiler = []` extra was REMOVED (2026-08 completeness
+# audit, E1 item 10 / WT A-VI item 35): torch.profiler ships with torch itself,
+# the tl.bridge.profiler surface imports nothing beyond the base install, and
+# the marker was referenced nowhere (README, docs, package, CI), so it could
+# not be discovered and installed nothing. pip treats an unknown extra as a
+# warning, so `torchlens[profiler]` keeps installing the (sufficient) base.
 lightning = ["lightning~=2.4"]
 wandb = ["wandb>=0.16"]
 # 0.26.5 is excluded because its manylinux wheel ships without libmlx.so (the
@@ -115,9 +119,24 @@ mlx = ["mlx>=0.26,<0.27,!=0.26.5"]
 jax = ["jax[cpu]", "equinox", "flax"]
 tinygrad = ["tinygrad>=0.13,<0.14; python_version >= '3.11'"]
 paddle = ["paddlepaddle>=3.3,<3.4"]
+# `tensorflow` aliases `tf` (same rollup idiom as all/all-stretch) so the two
+# spellings can never drift -- they were previously two byte-identical literal
+# lists (2026-08 completeness audit, E1-r2).
 tf = ["tensorflow>=2.16"]
-tensorflow = ["tensorflow>=2.16"]
-hf = ["transformers~=4.45", "timm~=1.0"]
+tensorflow = ["torchlens[tf]"]
+# tensorboard backs the tl.export.tensorboard exporter (SummaryWriter comes
+# from torch.utils.tensorboard, which requires the `tensorboard` dist at call
+# time). Before this extra existed the exporter was an executes-nowhere
+# surface: no declared install path, and its only test skipped in the
+# reference env (2026-08 completeness audit, tensorboard card section 2).
+tensorboard = ["tensorboard>=2.15,<3"]
+# TRANSFORMERS BAND (in-repo widen, megaplan FORK-2, Phase 0/A12): >=4.45,<6
+# admits the 5.x line the CI matrix already pins (tests.yml rows install
+# transformers==5.14.1) while keeping the validated 4.45 floor. The published-
+# band TIMING (launch vs now) stays a JMT fork; this repo-side widen is what
+# every lane develops against. Band coherence with the `test` extra below is
+# mandatory: widen BOTH in the same change, never one side alone.
+hf = ["transformers>=4.45,<6", "timm~=1.0"]
 gradcam = ["grad-cam~=1.5"]
 shap = ["shap~=0.46"]
 inseq = ["inseq~=0.6"]
@@ -125,21 +144,32 @@ steering = ["steering-vectors~=0.1"]
 repeng = ["repeng~=0.4"]
 dialz = ["dialz~=0.2"]
 nnsight = ["nnsight~=0.4"]
-lit = ["lit-nlp~=1.3"]
+# lit-nlp is bounded to the 1.3 line (LIT-panel memo item 1): `~=1.3` admitted
+# every future 1.x, and lit-nlp 1.3 requires shap<0.46 against the shap~=0.46
+# pin above -- the exact conflict that made the all/all-stretch rollup
+# unsatisfiable. The extra therefore stays OUT of all-stretch (fix-by-
+# exclusion, Batch-8 ruling); [lit,shap] remains unsatisfiable BY DESIGN and
+# is documented rather than hidden.
+lit = ["lit-nlp>=1.3,<1.4"]
 depyf = ["depyf~=0.18"]
 compat-shims = ["torchextractor>=0.3,<2", "sentence-transformers>=2.5,<5"]
 vision-shims = ["torchvision>=0.18,<1"]
-# `all` aliases `all-stretch` so the two never drift. HONEST STATUS (grind
-# r5, b10 R83-1 — the former "vetted satisfiable set" wording was false in
-# two ways): (1) BOTH meta-extras are currently KNOWN-UNSATISFIABLE as
-# shipped — lit-nlp~=1.3 requires shap<0.46 against the shap~=0.46 pin —
-# tracked as a DISCLOSED skip in nightly's extras-resolution gate; fixing
-# the composition is a queued owner decision. (2) The rollup is PARTIAL by
-# design: the framework-backend extras (jax/tf/tensorflow/paddle/mlx/
-# tinygrad) are excluded for conflicting pins, and nine further extras
-# (captum, hf, sae, nnsight, notebook, neuro, tabular, wandb, lightning)
-# are also not rolled up, so `torchlens[all]` never meant "everything".
-# `pip install torchlens[all]` requests exactly `torchlens[all-stretch]`.
+# `all` aliases `all-stretch` so the two never drift, and BOTH resolve:
+# FIX-BY-EXCLUSION (Batch-8 ruling, 2026-08-26): `all` means "everything that
+# installs together", and every excluded member is NAMED here rather than
+# silently dropped.
+#   * lit-nlp (the [lit] extra) is EXCLUDED: lit-nlp 1.3 requires shap<0.46
+#     against the shap~=0.46 pin, the exact conflict that made the rollup
+#     known-unsatisfiable through 2.34.1. Install `torchlens[lit]` separately
+#     (without [shap]) when the LIT bridge is wanted.
+#   * The framework-backend extras (jax/tf/tensorflow/paddle/mlx/tinygrad)
+#     stay excluded for conflicting pins.
+#   * Nine further extras (captum, hf, sae, nnsight, notebook, neuro,
+#     tabular, wandb, lightning) are not rolled up, so `torchlens[all]`
+#     never meant "everything".
+# `pip install torchlens[all]` requests exactly `torchlens[all-stretch]`;
+# nightly's extras-resolution gate now enforces that both meta-extras resolve
+# on every advertised interpreter.
 all = ["torchlens[all-stretch]"]
 all-stretch = [
     "grad-cam~=1.5",
@@ -148,7 +178,6 @@ all-stretch = [
     "steering-vectors~=0.1",
     "repeng~=0.4",
     "dialz~=0.2",
-    "lit-nlp~=1.3",
     "depyf~=0.18",
     "torchextractor>=0.3,<2",
     "sentence-transformers>=2.5,<5",
@@ -190,11 +219,13 @@ dev = [
 test = [
     # BAND COHERENCE (r7 R83-2): the four ML packages the bridge/ adapters
     # wrap are banded HERE to the exact ranges this file's own extras declare
-    # as supported (lightning :106, hf :117, vision-shims :128). Before this,
-    # the eight .[dev,test,tabular] CI legs validated whatever resolved --
+    # as supported (lightning, hf, vision-shims above). Before this, the
+    # eight .[dev,test,tabular] CI legs validated whatever resolved --
     # transformers 5.x landed while the hf extra called ~=4.45 supported, and
     # the fleet recorded reds from exactly that fork. Widen an adapter band
-    # and this extra IN THE SAME CHANGE, never one side alone.
+    # and this extra IN THE SAME CHANGE, never one side alone. The
+    # transformers band below moved to >=4.45,<6 in the SAME change as the hf
+    # extra (megaplan FORK-2 in-repo widen).
     "lightning~=2.4",
     # TRIPWIRE_GUARD deps (tests/test_skip_audit.py): absence silently disarms
     # correctness gates for rendered label geometry, PDF visibility, and plots.
@@ -236,7 +267,7 @@ test = [
     "pydantic>=2.0",
     "PyYAML>=6.0",
     "psutil>=5.9",
-    "transformers~=4.45",
+    "transformers>=4.45,<6",
     "visualpriors",
 ]
 
@@ -436,6 +467,9 @@ extend-exclude = [
     "menagerie",
     "tests/crawler",
     "tests/test_menagerie_*.py",
+    # Harvested-corpus provenance dir: same generated-data doctrine as the
+    # menagerie/ rows (P05 request, sprint packaging queue, landed by A12).
+    "tests/release_goldens",
     "torchlens/data_classes/_schema_bindings.py",
     "torchlens/ir/op_record_manifest.py",
 ]

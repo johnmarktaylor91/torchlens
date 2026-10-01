@@ -2248,16 +2248,36 @@ class Op(_SelectionOperand):
             out = slot("out")
             source_ref = slot("_source_trace_ref")
             source_trace = None if source_ref is None else source_ref()
+            # Lazy-payload honesty gate (agent memo P0 part 1): a saved
+            # payload behind a lazy blob ref MATERIALIZES (sha-verified,
+            # attaching -- interactive semantics preserved) instead of
+            # silently reading ``None``. The historical capture-only
+            # ``_predicate_save_options`` gate limited this to predicate
+            # captures, so every ``tl.load(..., lazy=True)`` artifact
+            # served silent Nones for rows whose manifest says saved=true.
+            # Live streamed captures (``retain_in_memory=False``) keep
+            # their pinned None: the user chose that memory posture and an
+            # attribute read must not re-inflate it by attaching.
             if (
                 out is None
                 and slot("out_ref") is not None
-                and getattr(source_trace, "_predicate_save_options", None) is not None
+                and (
+                    getattr(source_trace, "_predicate_save_options", None) is not None
+                    or getattr(source_trace, "payload_load_status", None) == "loaded_lazy"
+                )
             ):
                 return object.__getattribute__(self, "materialize_out")()
             if (
                 slot("_tracing_finished")
                 and not slot("has_saved_activation", False)
-                and getattr(source_trace, "_predicate_save_options", None) is not None
+                and (
+                    getattr(source_trace, "_predicate_save_options", None) is not None
+                    # P0 part 4: on a LAZILY loaded artifact ``.out`` is never
+                    # a silent None -- unsaved rows refuse typed. Eager and
+                    # preview-backend loads keep their historical None-for-
+                    # unsaved contract.
+                    or getattr(source_trace, "payload_load_status", None) == "loaded_lazy"
+                )
             ):
                 label = slot("label") or slot("layer_label") or slot("_label_raw")
                 raise PayloadUnavailableError(
@@ -2501,14 +2521,43 @@ class Op(_SelectionOperand):
         self.type = value
 
     @property
+    def compute_record(self) -> Any | None:
+        """Two-term compute record (fma_macs / other_flops), derived on read.
+
+        DOCUMENTED-UNSTABLE spelling (A07 numbers-truth lane; the C02 FactCore
+        substrate consumes this). ``None`` for boundary pseudo-rows and ops
+        with unknown FLOPs. See ``torchlens.capture.flops.ComputeRecord``.
+        """
+
+        from ..capture.compute_record import derive_compute_record_for_op
+
+        return derive_compute_record_for_op(self)
+
+    @property
     def macs_forward(self) -> Macs | None:
-        """Forward MACs (multiply-accumulate ops). 1 MAC = 2 FLOPs."""
-        return as_macs(self.flops_forward // 2 if self.flops_forward is not None else None)
+        """TRUE forward multiply-accumulate count, never ``flops // 2``.
+
+        A ReLU has ZERO MACs; a biased Linear's bias adds are not MACs. Ops
+        whose exact MAC split cannot be derived (user-registered rules,
+        unresolvable attention argument shapes) return ``None`` and are named
+        in the summary's MAC coverage disclosure.
+        """
+
+        record = self.compute_record
+        if record is None or record.fma_macs is None:
+            return None
+        return as_macs(record.fma_macs)
 
     @property
     def macs_backward(self) -> Macs | None:
-        """Backward MACs (multiply-accumulate ops). 1 MAC = 2 FLOPs."""
-        return as_macs(self.flops_backward // 2 if self.flops_backward is not None else None)
+        """Backward MACs are not derivable and always ``None``.
+
+        Backward FLOPs are multiplier ESTIMATES on forward FLOPs; no analytic
+        backward op record exists to split them, and a relabeled
+        ``flops // 2`` is exactly the fake-MACs disease this surface removed.
+        """
+
+        return None
 
     @property
     def flops_total(self) -> Flops:
@@ -2523,16 +2572,15 @@ class Op(_SelectionOperand):
         return Flops((self.flops_forward or 0) + (self.flops_backward or 0))
 
     @property
-    def macs_total(self) -> Macs:
-        """Approximate total MACs for this Op.
+    def macs_total(self) -> Macs | None:
+        """Total MACs are not derivable and always ``None``.
 
-        Returns
-        -------
-        Macs
-            Forward plus backward MACs.
+        The backward component is a multiplier estimate with no MAC split
+        (see ``macs_backward``); a forward-only figure under a "total" name
+        would silently under-claim instead.
         """
 
-        return Macs(self.flops_total // 2)
+        return None
 
     @property
     def bytes_read(self) -> Bytes | None:

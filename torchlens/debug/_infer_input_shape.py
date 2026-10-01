@@ -361,7 +361,9 @@ def _has_uninitialized_lazy_state(model: nn.Module) -> bool:
 
     Probing a lazy module would permanently materialize it inside the caller's
     model (often at a degenerate width such as ``in_features=0``), so inference
-    must refuse before building any prior.
+    must refuse before building any prior. The scan itself is the shared
+    detector in ``torchlens.utils.lazy_state`` (hoisted per quickstart memo
+    wave 1a; the capture entry gate consumes the same one).
 
     Parameters
     ----------
@@ -374,18 +376,9 @@ def _has_uninitialized_lazy_state(model: nn.Module) -> bool:
         Whether any module has uninitialized lazy parameters or buffers.
     """
 
-    for module in model.modules():
-        if isinstance(module, nn.modules.lazy.LazyModuleMixin):
-            try:
-                if module.has_uninitialized_params():
-                    return True
-            except Exception:  # noqa: BLE001 - treat unreadable lazy state as uninitialized.
-                return True
-    uninitialized = (nn.parameter.UninitializedParameter, nn.parameter.UninitializedBuffer)
-    return any(
-        isinstance(tensor, uninitialized)
-        for tensor in list(model.parameters(recurse=True)) + list(model.buffers(recurse=True))
-    )
+    from ..utils.lazy_state import has_uninitialized_lazy_state
+
+    return has_uninitialized_lazy_state(model)
 
 
 def _has_adaptive_pool(model: nn.Module) -> bool:
@@ -2119,7 +2112,8 @@ def _infer_input_shape_impl(
     Notes
     -----
     The implementation combines static module introspection, forward pre-hook probe diaries,
-    successful ``tl.trace(..., inference_only=True)`` verification, and torch exception parsing.
+    successful ``tl.trace(..., capture=CaptureOptions(inference_only=True))``
+    verification, and torch exception parsing.
     It measures candidate shapes instead of deriving convolution and pooling formulas.
 
     The helper is read-only with respect to the caller's model: probes and verification

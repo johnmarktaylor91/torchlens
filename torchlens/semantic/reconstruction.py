@@ -303,8 +303,15 @@ def _reconstruct_checked(
         return record
     scores = _attention_scores(record)
     pattern = torch.softmax(scores.float(), dim=-1).to(record.q.dtype)
-    z = torch.matmul(pattern, _expanded_v(record))
-    if not _allclose_sdpa(z, sdpa_op.out):
+    expanded_v = _expanded_v(record)
+    z = torch.matmul(pattern, expanded_v)
+    # Cancellation-aware magnitude bound for the z check: the summation behind
+    # each z element is sum_k pattern[..,k] * V[..,k,:] with pattern >= 0, so
+    # the accumulated-|addend| bound is exactly pattern @ |V|.
+    z_magnitude = torch.matmul(pattern.float(), expanded_v.abs().float())
+    if not _allclose_sdpa(
+        z, sdpa_op.out, magnitude=z_magnitude, reduction_length=int(expanded_v.shape[-2])
+    ):
         return MissingFacet(
             f"{facet} reconstruction validation failed: recomputed z did not match "
             f"SDPA op output {getattr(sdpa_op, 'label', '<unknown>')!r}."
@@ -426,7 +433,13 @@ def _apply_causal_mask(scores: torch.Tensor) -> torch.Tensor:
     return scores.masked_fill(~causal, float("-inf"))
 
 
-def _allclose_sdpa(reconstructed: torch.Tensor, target: torch.Tensor) -> bool:
+def _allclose_sdpa(
+    reconstructed: torch.Tensor,
+    target: torch.Tensor,
+    *,
+    magnitude: torch.Tensor | None = None,
+    reduction_length: int | None = None,
+) -> bool:
     """Return whether a reconstructed tensor matches an SDPA output.
 
     This gate decides whether a reconstructed facet (``scores`` / ``pattern``
@@ -435,14 +448,17 @@ def _allclose_sdpa(reconstructed: torch.Tensor, target: torch.Tensor) -> bool:
     formatting slack. The former hand-picked absolute floors (atol 2e-2 for
     fp16/bf16, 1e-5 for fp32) blessed an ALL-ZERO and a SIGN-FLIPPED
     reconstruction of any payload living below the floor -- post-softmax
-    attention values do exactly that (b4-opus F13-1, probe-proven). The pair
-    now derives from the payload dtype's replay error model
-    (``_tolerances_for_dtype``): a few storage ULPs for fp16/bf16 (fused
-    kernels accumulate wide and round once to storage) and the accumulating
-    512-ULP row for fp32/fp64 (fused-vs-unfused reduction-order drift),
-    with the absolute term at denormal scale -- it absorbs
-    bottom-of-representable-range jitter only and can never bless
-    small-normal corruption.
+    attention values do exactly that (b4-opus F13-1, probe-proven). The
+    replay-table pair that replaced them (denormal-scale absolute term) then
+    refused numerically CORRECT reconstructions wherever the summation behind
+    the target CANCELLED (measured: 19 of 36 correct SDPA reconstructions,
+    input-dependently) -- a reconstruction is independent math, not a replay,
+    so its achievable absolute accuracy at cancellation sites is set by the
+    ADDEND magnitudes. The gate now uses the SEPARATE cancellation-aware
+    reconstruction error model (``torchlens.semantic.tolerances``): same
+    ULP-headroom relative term and denormal floor, plus an elementwise
+    ``magnitude``-scaled term supplied by each call site. The replay table in
+    ``torchlens.utils.tensor_utils`` is deliberately untouched.
 
     Parameters
     ----------
@@ -450,17 +466,23 @@ def _allclose_sdpa(reconstructed: torch.Tensor, target: torch.Tensor) -> bool:
         Reconstructed tensor.
     target:
         Captured target tensor.
+    magnitude:
+        Elementwise accumulated-|addend| bound of the summation that produced
+        ``target``; ``None`` drops the cancellation term (strict comparison).
+    reduction_length:
+        Number of addends behind ``magnitude``.
 
     Returns
     -------
     bool
-        Whether values match within the dtype-derived tolerances.
+        Whether values match within the reconstruction error budget.
     """
 
-    from ..utils.tensor_utils import _tolerances_for_dtype
+    from .tolerances import within_reconstruction_tolerance
 
-    rtol, atol = _tolerances_for_dtype(target.dtype)
-    return bool(torch.allclose(reconstructed.to(target.dtype), target, atol=atol, rtol=rtol))
+    return within_reconstruction_tolerance(
+        reconstructed, target, magnitude=magnitude, reduction_length=reduction_length
+    )
 
 
 def _output_projection(module: Any) -> Any | None:
@@ -512,6 +534,15 @@ def _result_or_missing(module: Any, z: torch.Tensor, sdpa_op: Any) -> torch.Tens
         return MissingFacet("result reconstruction missing prerequisite: output projection weight.")
     if z.ndim < 4:
         return MissingFacet("result reconstruction missing prerequisite: SDPA output rank >= 4.")
+    # Orientation comes from the projection MODULE CLASS, never from shape:
+    # ``transformers.pytorch_utils.Conv1D`` stores its weight [in, out]
+    # (forward is ``x @ W + b``) while ``nn.Linear`` stores [out, in], and a
+    # square projection (d_model == n_heads * d_head, i.e. every standard
+    # transformer) passes any shape guard with either orientation -- the
+    # GPT-2 per-head result was deterministically wrong this way (sum-check
+    # error 18.80).
+    if _projection_weight_is_in_out(projection):
+        weight = weight.transpose(0, 1)
     n_heads = z.shape[-3]
     d_head = z.shape[-1]
     if weight.shape[1] != n_heads * d_head:
@@ -526,14 +557,42 @@ def _result_or_missing(module: Any, z: torch.Tensor, sdpa_op: Any) -> torch.Tens
     if projected is not None:
         bias = _projection_bias(projection)
         summed = result.sum(dim=-2)
+        # Accumulated-|addend| bound for the sum check: the head axis is the
+        # summation, plus the bias addend when present.
+        summed_magnitude = result.detach().abs().float().sum(dim=-2)
+        reduction_length = int(result.shape[-2])
         if bias is not None:
             summed = summed + bias
-        if not _allclose_sdpa(summed, projected):
+            summed_magnitude = summed_magnitude + bias.detach().abs().float()
+            reduction_length += 1
+        if not _allclose_sdpa(
+            summed, projected, magnitude=summed_magnitude, reduction_length=reduction_length
+        ):
             return MissingFacet(
                 f"result reconstruction validation failed: summed per-head contributions "
                 f"did not match output projection after SDPA op {getattr(sdpa_op, 'label', '<unknown>')!r}."
             )
     return result
+
+
+#: Projection classes whose weight is stored [in, out] (forward ``x @ W``).
+#: ``transformers.pytorch_utils.Conv1D`` is the GPT-2-family projection; the
+#: nn.Linear family stores [out, in]. Class-keyed on purpose: square weights
+#: make orientation undecidable from shape, and a wrong orientation on an
+#: UNKNOWN class is caught fail-closed by the sum check against the captured
+#: projection output rather than served silently.
+_IN_OUT_PROJECTION_CLASS_NAMES = frozenset({"Conv1D"})
+
+
+def _projection_weight_is_in_out(module: Any) -> bool:
+    """Return whether a projection module's weight is stored [in, out]."""
+
+    class_name = str(getattr(module, "class_name", "") or "")
+    if not class_name:
+        cls = getattr(module, "cls", None)
+        if cls is not None:
+            class_name = type(cls).__name__
+    return class_name in _IN_OUT_PROJECTION_CLASS_NAMES
 
 
 def _projection_weight(module: Any) -> torch.Tensor | None:

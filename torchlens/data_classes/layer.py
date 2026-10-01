@@ -45,9 +45,9 @@ from .._io import (
 )
 from ..constants import LAYER_LOG_FIELD_ORDER, LAYER_PASS_LOG_FIELD_ORDER
 from ..ir.refs import DtypeRef
-from ..quantities import Bytes, Duration, Flops, Macs, as_macs
+from ..quantities import Bytes, Duration, Flops, Macs
 from ..selection import _SelectionOperand
-from ._accessor_base import Accessor
+from ._accessor_base import Accessor, attach_source_honesty
 from ._repr import format_config_items, format_shape_list
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 
@@ -741,13 +741,19 @@ class Layer(_SelectionOperand):
 
     @property
     def macs_forward(self) -> Macs | None:
-        """Forward MACs (multiply-accumulate ops). 1 MAC = 2 FLOPs."""
-        return as_macs(self.flops_forward // 2 if self.flops_forward is not None else None)
+        """TRUE forward MAC count of the representative pass, never flops//2.
+
+        ``None`` when the exact split is unknown for the representative op.
+        """
+
+        first_op = next(iter(self.ops.values()), None)
+        return None if first_op is None else first_op.macs_forward
 
     @property
     def macs_backward(self) -> Macs | None:
-        """Backward MACs (multiply-accumulate ops). 1 MAC = 2 FLOPs."""
-        return as_macs(self.flops_backward // 2 if self.flops_backward is not None else None)
+        """Backward MACs are not derivable and always ``None`` (estimates only)."""
+
+        return None
 
     @property
     def total_activation_memory(self) -> Bytes:
@@ -786,28 +792,35 @@ class Layer(_SelectionOperand):
         return Flops(self.total_flops_forward + self.total_flops_backward)
 
     @property
-    def macs_total(self) -> Macs:
-        """Representative total MACs for this Layer."""
+    def macs_total(self) -> Macs | None:
+        """Total MACs are not derivable and always ``None`` (see Op.macs_total)."""
 
-        return Macs(self.flops_total // 2)
-
-    @property
-    def total_macs_forward(self) -> Macs:
-        """Sum forward MACs across all Ops in this Layer."""
-
-        return Macs(self.total_flops_forward // 2)
+        return None
 
     @property
-    def total_macs_backward(self) -> Macs:
-        """Sum backward MACs across all Ops in this Layer."""
+    def total_macs_forward(self) -> Macs | None:
+        """Sum TRUE forward MACs across all Ops in this Layer.
 
-        return Macs(self.total_flops_backward // 2)
+        ``None`` when any pass's exact MAC split is unknown -- a partial sum
+        under a total's name would silently under-claim.
+        """
+
+        per_op = [op.macs_forward for op in self.ops.values()]
+        if any(value is None for value in per_op):
+            return None
+        return Macs(sum(int(value) for value in per_op if value is not None))
 
     @property
-    def total_macs_total(self) -> Macs:
-        """Sum total MACs across all Ops in this Layer."""
+    def total_macs_backward(self) -> Macs | None:
+        """Backward MACs are not derivable and always ``None`` (estimates only)."""
 
-        return Macs(self.total_flops_total // 2)
+        return None
+
+    @property
+    def total_macs_total(self) -> Macs | None:
+        """Total MACs are not derivable and always ``None`` (see Op.macs_total)."""
+
+        return None
 
     @property
     def param_names(self) -> list[str]:
@@ -2017,7 +2030,9 @@ class Layer(_SelectionOperand):
 
         s = f"Layer {self.layer_label}:"
         if self.num_passes > 1:
-            s += f" ({self.num_passes} ops)"
+            # One pass/op vocabulary (A10): an aggregate multi-pass layer is
+            # "xN passes", never "N ops".
+            s += f" (x{self.num_passes} passes)"
         s += f"\n\tOutput tensor: shape={self.shape}, dtype={self.dtype}, size={self.activation_memory}"
         if not self.is_input:
             s += f"\n\tFunction: {self.func_name} (grad_fn_handle: {self.grad_fn_class_name})"
@@ -2330,4 +2345,5 @@ class LayerAccessor(Accessor["Layer"]):
         if not self._list:
             return pd.DataFrame(columns=LAYER_LOG_FIELD_ORDER)
         rows = [_layer_log_to_row(ll) for ll in self._list]
-        return pd.DataFrame(rows, columns=LAYER_LOG_FIELD_ORDER)
+        frame = pd.DataFrame(rows, columns=LAYER_LOG_FIELD_ORDER)
+        return attach_source_honesty(frame, self._list)

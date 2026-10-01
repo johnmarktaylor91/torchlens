@@ -24,6 +24,7 @@ from ..options import ReplayOptions, merge_replay_options
 from ..quantities import Bytes
 from ..utils.display import progress_bar
 from ..utils.rng import execute_with_restored_rng_autocast
+from .edge_substitution import require_depth1_arg_path
 from .errors import (
     BufferThreadGapWarning,
     ControlFlowDivergenceError,
@@ -583,7 +584,26 @@ def _run_replay(
                     _install_replay_tensor_hook(log, member, tensor)
                 _check_edge_expectations(member, strict=strict)
             continue
-        representative = replay_group[0]
+        # A synthesized boundary output node carries the parent call's
+        # template but ``func=identity`` -- it replays THROUGH its parent's
+        # function call, so a member that carries the call's real func must
+        # execute the group. Fall back to the full (cone-unfiltered) call
+        # group when the cone holds only boundary nodes (an output-node
+        # origin replayed with recomputation).
+        representative = next(
+            (member for member in replay_group if not getattr(member, "is_output", False)),
+            None,
+        )
+        if representative is None:
+            representative = next(
+                (
+                    member
+                    for member in call_groups.get(site.func_call_id, ())
+                    if not getattr(member, "is_output", False)
+                    and not getattr(member, "is_buffer", False)
+                ),
+                replay_group[0],
+            )
         args, kwargs = _reconstruct_args_from_template(
             _template_for_site(representative),
             representative,
@@ -608,7 +628,23 @@ def _run_replay(
             member_key = _replay_site_key(member)
             if preserve_origins and member_key in origin_keys:
                 continue
-            tensor = _slice_output_by_path(output, tuple(member.container_path or ()))
+            if getattr(member, "is_output", False):
+                # A boundary output node carries its PARENT's resolved slot,
+                # never a re-application of its recorded MODEL-output
+                # container path (the HF structured-output replay crash /
+                # silent integer-path mis-slice). When the parent's value is
+                # already in the overlay (a preserved edited origin, an
+                # earlier group member, a hooked site), the boundary node
+                # mirrors it; otherwise it takes the parent's slot of the
+                # just-executed call.
+                parent = _boundary_slot_parent_op(member, log, label_keys=label_keys)
+                parent_key = _replay_site_key(parent)
+                if parent_key in overlay:
+                    tensor = overlay[parent_key]
+                else:
+                    tensor = _slice_output_by_path(output, tuple(parent.container_path or ()))
+            else:
+                tensor = _slice_output_by_path(output, tuple(member.container_path or ()))
             tensor, records = _apply_replay_hooks(
                 tensor,
                 site=member,
@@ -739,6 +775,101 @@ def _reconstruct_args_from_template(
         for key, component in template.kwargs
     }
     return args, kwargs
+
+
+def _replay_container_path(
+    member: Op,
+    trace: Trace,
+    *,
+    label_keys: dict[str, tuple[str, ...]] | None = None,
+) -> tuple[OutputPathComponent, ...]:
+    """Return the path addressing MEMBER's value inside its replayed call's output.
+
+    A synthesized boundary output node records the MODEL-output container
+    path on ``container_path`` (where its tensor sat in the model's return
+    container -- honest output-contract metadata), but it replays through its
+    PARENT's function call. Re-applying the recorded path to that call's
+    output re-indexes an already-resolved member: the HF structured-output
+    replay crash (a ``HFKey`` applied to a bare logits tensor) and, worse, a
+    silent dimension slice when the recorded path is integer-shaped. The
+    replay-correct path for a boundary node is its parent's ``container_path``
+    -- the slot the boundary value actually occupies in the replayed call's
+    return value. Every other member keeps its own recorded path, so internal
+    tuple/dict slicing of genuine multi-output calls is preserved.
+
+    Parameters
+    ----------
+    member:
+        Replay-group member being resolved.
+    trace:
+        Owning model log.
+    label_keys:
+        Optional precomputed :func:`_label_key_map` result.
+
+    Returns
+    -------
+    tuple[OutputPathComponent, ...]
+        Path into the replayed function's return value.
+    """
+
+    if not getattr(member, "is_output", False):
+        return tuple(member.container_path or ())
+    parent = _boundary_slot_parent_op(member, trace, label_keys=label_keys)
+    return tuple(parent.container_path or ())
+
+
+def _boundary_slot_parent_op(
+    member: Op,
+    trace: Trace,
+    *,
+    label_keys: dict[str, tuple[str, ...]] | None = None,
+) -> Op:
+    """Return the parent op whose output slot a boundary output node carries.
+
+    Parameters
+    ----------
+    member:
+        Boundary output node.
+    trace:
+        Owning model log.
+    label_keys:
+        Optional precomputed :func:`_label_key_map` result.
+
+    Returns
+    -------
+    Op
+        The same-call parent op.
+    """
+
+    parents = tuple(getattr(member, "parents", ()) or ())
+    if len(parents) != 1:
+        raise ReplayPreconditionError(
+            f"boundary output node {_disclosure_label(member)!r} must have exactly one "
+            f"parent to derive its slot in the replayed call's output; found "
+            f"{len(parents)} ({', '.join(repr(parent) for parent in parents)})."
+        )
+    if label_keys is None:
+        label_keys = _label_key_map(trace)
+    parent_label = parents[0]
+    candidate_keys = label_keys.get(parent_label, ())
+    candidates = [
+        trace.layer_dict_all_keys[key] for key in candidate_keys if key in trace.layer_dict_all_keys
+    ]
+    if not candidates and parent_label in trace.layer_dict_all_keys:
+        candidates = [trace.layer_dict_all_keys[parent_label]]
+    same_call = [
+        candidate
+        for candidate in candidates
+        if getattr(candidate, "func_call_id", None) == member.func_call_id
+    ]
+    if len(same_call) != 1:
+        raise ReplayPreconditionError(
+            f"boundary output node {_disclosure_label(member)!r} names parent "
+            f"{parent_label!r}, which does not resolve to exactly one op of the same "
+            f"function call (found {len(same_call)}); its slot in the replayed call's "
+            f"output cannot be derived."
+        )
+    return same_call[0]
 
 
 def _slice_output_by_path(output: Any, path: tuple[OutputPathComponent, ...]) -> torch.Tensor:
@@ -1066,6 +1197,11 @@ def _splice_param_substitutions(
             if not isinstance(value, torch.Tensor):
                 continue
             arg_kind, arg_path = store_key
+            require_depth1_arg_path(
+                arg_path,
+                where="param-substitution replay splice",
+                site=getattr(member, "label", None),
+            )
             if arg_kind == "positional":
                 position = int(arg_path[0])
                 args = args[:position] + (value,) + args[position + 1 :]
@@ -1081,6 +1217,13 @@ def _commit_replay_updates(
     pending_records: Mapping[str, Sequence[FireRecord]],
 ) -> None:
     """Commit replay out updates, rolling back if final writes fail.
+
+    A recomputed site's value derives from capture truth through exactly THIS
+    push's hook fires, so the site's replay-minted node-hook records are
+    REPLACED by this push's fires, never extended: chaining two edits at one
+    site yields two records, not three, and any fire count a user reads
+    describes the CURRENT value. Live-door records (capture facts) and
+    edge-substitution records (the tier-(ii) store's corroboration) survive.
 
     Parameters
     ----------
@@ -1109,13 +1252,33 @@ def _commit_replay_updates(
                 "intervention_replaced": site.intervention_replaced,
             }
             _apply_out_update(site, tensor)
-            if label in pending_records:
-                site.interventions.extend(pending_records[label])
+            new_records = list(pending_records.get(label, ()))
+            if new_records:
+                # This push re-derived the site's value from capture truth
+                # through exactly these fires, so they REPLACE the site's
+                # replay-minted node-hook records (chaining two edits yields
+                # two records, never three). Live-door records (capture
+                # facts), edge records (tier-(ii) corroboration), and
+                # records on sites this push did not fire at survive.
+                old_records = list(site.interventions or ())
+                surviving = [
+                    record
+                    for record in old_records
+                    if record.engine != "replay" or record.edge_address is not None
+                ]
+                # The stored flag may carry a record-invisible capture-time
+                # component (a user-injected tensor mints no FireRecord);
+                # preserve exactly that component across the replacement.
+                record_replaced_before = any(record.replaced for record in old_records)
+                nonrecord_component = bool(site.intervention_replaced) and (
+                    not record_replaced_before
+                )
+                site._internal_set("interventions", surviving + new_records)
                 site._internal_set(
                     "intervention_replaced",
                     bool(
-                        site.intervention_replaced
-                        or any(record.replaced for record in pending_records[label])
+                        nonrecord_component
+                        or any(record.replaced for record in surviving + new_records)
                     ),
                 )
     except Exception:
@@ -1825,5 +1988,6 @@ __all__ = [
     "push",
     "push_from",
     "_reconstruct_args_from_template",
+    "_replay_container_path",
     "_slice_output_by_path",
 ]

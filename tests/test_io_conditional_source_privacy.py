@@ -100,3 +100,38 @@ def test_conditional_source_path_dropped_with_source_excluded(tmp_path: Path) ->
 
     loaded = tl.load(str(spec))
     _assert_no_host_path(_conditional_source_files(loaded))
+
+
+def test_capture_advisory_location_honors_source_privacy(tmp_path: Path) -> None:
+    """The persisted scalar-escape advisory never carries an absolute path.
+
+    Fail-before (SF5 leak): ``annotations["capture_advisories"]`` rows stored
+    the user's escape site as an ABSOLUTE ``"<file>:<line>"`` string, which
+    persisted verbatim into ``metadata.pkl`` even at ``include_source=False``.
+    The advisory FACT (kind, count, message) must survive both save modes; the
+    location is a source-file reference and follows the source policy: bare
+    basename with source kept, dropped entirely with source excluded. The live
+    trace keeps its session-time absolute location either way.
+    """
+
+    trace = _capture()
+    live_rows = trace.annotations.get("capture_advisories")
+    assert live_rows and live_rows[0]["kind"] == "scalar_escape"
+    assert os.path.basename(__file__) in (live_rows[0]["first_location"] or "")
+
+    kept = tmp_path / "advisory_kept.tlspec"
+    tl.save(trace, str(kept), include_source=True)
+    kept_rows = tl.load(str(kept)).annotations["capture_advisories"]
+    assert kept_rows[0]["count"] >= 1
+    kept_location = kept_rows[0]["first_location"]
+    assert kept_location and kept_location.startswith(os.path.basename(__file__))
+    _assert_no_host_path([kept_location.rsplit(":", 1)[0]])
+
+    dropped = tmp_path / "advisory_dropped.tlspec"
+    tl.save(trace, str(dropped), include_source=False)
+    dropped_rows = tl.load(str(dropped)).annotations["capture_advisories"]
+    assert dropped_rows and dropped_rows[0]["kind"] == "scalar_escape"
+    assert dropped_rows[0]["first_location"] is None
+    # The live trace's session-time annotations were never mutated by either save.
+    assert os.path.basename(__file__) in (live_rows[0]["first_location"] or "")
+    assert os.path.isabs(live_rows[0]["first_location"].rsplit(":", 1)[0])

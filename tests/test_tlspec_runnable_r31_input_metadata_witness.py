@@ -343,6 +343,12 @@ def test_r31_autograd_structural_view_read_is_unverifiable(
 
 
 @pytest.mark.smoke
+@pytest.mark.filterwarnings(
+    # A08 random-role-init disclosure (runnable_random_init_run): this test
+    # exercises a weight-free runnable run DELIBERATELY; the warning is the
+    # feature under test elsewhere (tests/test_persist_honesty_runnable_random.py).
+    "default:This runnable artifact carries no model weights"
+)
 def test_r31_requires_grad_oblivious_model_does_not_over_trigger(tmp_path: Path) -> None:
     """A model that never reads autograd flags must NOT diverge on a requires_grad-changed input.
 
@@ -384,6 +390,12 @@ def test_r31_disjoint_storage_view_model_verifies(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
+@pytest.mark.filterwarnings(
+    # A08 random-role-init disclosure (runnable_random_init_run): this test
+    # exercises a weight-free runnable run DELIBERATELY; the warning is the
+    # feature under test elsewhere (tests/test_persist_honesty_runnable_random.py).
+    "default:This runnable artifact carries no model weights"
+)
 def test_r31_metadata_oblivious_model_verifies_exotic_input(tmp_path: Path) -> None:
     """A plain model stays VERIFIED for a slice-of-larger-buffer input (no witnessed reads)."""
 

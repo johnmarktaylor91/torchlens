@@ -173,7 +173,20 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # to a disclosed gap, never crash or perturb the capture), so their guard
     # excepts are deliberately broad, mirroring the ledgered c10d wrap and
     # witness families. Debloat pass target: pre-sprint 528.
-    "BLE001": 539,
+    # 539 -> 540: 2026-08-26 A06 -- the failed-capture preparation release
+    # (user_funcs._release_preparation_after_failed_capture) deliberately
+    # catches Exception so a secondary release failure can NEVER mask the
+    # user's capture exception; it re-surfaces coded
+    # (failed_capture_release_incomplete), the same never-mask class as the
+    # existing teardown sites.
+    # 540->541 (2026-08-26 megasprint A10): snapshot_capture_state's clone
+    # loop moved INSIDE its guard (the historical try/except guarded only
+    # state_dict(), so unclonable state CRASHED instead of honouring the
+    # documented None contract); the guard is deliberately broad because the
+    # function's contract is degrade-to-None for ANY state that cannot
+    # provide a tensor-only clone map -- pending lazy state refuses TYPED
+    # before this guard, so no capture verdict is swallowed.
+    "BLE001": 541,
     # 43->44 (same L8 settle): _record_plane_p's swallow-and-continue is the
     # observer fail-open contract stated above.
     "S110": 44,

@@ -22,15 +22,38 @@ from typing import Any
 import torch
 from torch.nn import functional as F
 
+from ..errors._base import TorchLensError
 from .facets import Facet, MissingFacet
 
-__all__ = ["LogitLensEntry", "LogitLensError", "LogitLensResult", "logit_lens"]
+__all__ = [
+    "LogitLensEntry",
+    "LogitLensError",
+    "LogitLensPrediction",
+    "LogitLensPredictions",
+    "LogitLensResult",
+    "logit_lens",
+    "logit_lens_predictions",
+]
 
 LensFunc = Callable[[torch.Tensor], torch.Tensor]
 
+#: Rank convention for requested-token ranks (one-based; recorded on results
+#: so a consumer never has to guess how ties were broken).
+TIE_CONVENTION = "rank = 1 + count(logits strictly greater); tied logits share the smallest rank"
 
-class LogitLensError(RuntimeError):
-    """Raised when a logit lens cannot be built, validated, or applied."""
+#: Provenance vocabulary for prediction rows. Only a row served directly from
+#: the model's captured output logits may claim to BE the native output;
+#: every projected row says what it is.
+PROVENANCE_NATIVE = "native output"
+PROVENANCE_PROJECTED = "projected through final norm/head"
+
+
+class LogitLensError(TorchLensError, RuntimeError):
+    """Raised when a logit lens cannot be built, validated, or applied.
+
+    Contracted refusals carry a stable ``fields["code"]``; the historical
+    ``RuntimeError`` lineage is preserved for existing catch sites.
+    """
 
 
 @dataclass(frozen=True)
@@ -194,6 +217,84 @@ class LogitLensResult:
         return "\n".join(lines)
 
 
+@dataclass(frozen=True)
+class LogitLensPrediction:
+    """Streaming per-layer prediction summary (one row per projected layer).
+
+    Parameters
+    ----------
+    address:
+        Module address of the transformer block (or the head module for the
+        native-output row).
+    layer_index:
+        Zero-based position among the projected layers; ``None`` for the
+        native-output row.
+    facet:
+        Hidden-state facet that was projected; ``None`` for the native row.
+    provenance:
+        ``"projected through final norm/head"`` for reconstructed rows;
+        ``"native output"`` ONLY for the row served directly from the model's
+        captured output logits.
+    positions:
+        Absolute sequence positions this row covers, in row order.
+    top_ids / top_logits / top_probs:
+        Top-k token ids, logit values, and probabilities shaped
+        ``[batch, n_positions, k]``. Probabilities ALWAYS use the
+        full-vocabulary softmax denominator.
+    logsumexp:
+        Full-vocabulary ``logsumexp`` per position, ``[batch, n_positions]``
+        (float32) -- retains the denominator so any token's probability can
+        be recovered later from its logit.
+    token_ids / token_logits / token_probs / token_ranks:
+        Requested-token values: ids as given, logits/probabilities shaped
+        ``[batch, n_positions, n_tokens]``, and ONE-BASED ranks (int64, tie
+        convention recorded on the parent result).
+    """
+
+    address: str
+    layer_index: int | None
+    facet: str | None
+    provenance: str
+    positions: tuple[int, ...]
+    top_ids: torch.Tensor
+    top_logits: torch.Tensor
+    top_probs: torch.Tensor
+    logsumexp: torch.Tensor
+    token_ids: tuple[int, ...]
+    token_logits: torch.Tensor
+    token_probs: torch.Tensor
+    token_ranks: torch.Tensor
+
+
+@dataclass(frozen=True)
+class LogitLensPredictions:
+    """Result of a streaming :func:`logit_lens_predictions` sweep.
+
+    Parameters
+    ----------
+    rows:
+        Per-layer prediction summaries in block execution order, optionally
+        followed by the native-output row.
+    k:
+        Requested top-k width.
+    facet:
+        Hidden-state facet that was projected.
+    lens_source:
+        ``"model_head"`` or ``"user"`` (see :class:`LogitLensResult`).
+    validated:
+        Whether the reconstructed lens passed numeric validation.
+    tie_convention:
+        Recorded rank tie convention for ``token_ranks``.
+    """
+
+    rows: tuple[LogitLensPrediction, ...]
+    k: int
+    facet: str
+    lens_source: str
+    validated: bool
+    tie_convention: str = TIE_CONVENTION
+
+
 def logit_lens(
     trace: Any,
     *,
@@ -249,9 +350,10 @@ def logit_lens(
         if head_view is None:
             raise LogitLensError(
                 "No module in this trace exposes the 'unembed_weight' facet, so the "
-                "model's own lens cannot be reconstructed. Register a facet recipe "
-                "producing the language_model_head facet names for this architecture "
-                "(tl.facets.register), or pass lens= explicitly."
+                "model's own lens cannot be reconstructed. Remedy: register a facet "
+                "recipe producing the language_model_head facet names for this "
+                "architecture (tl.facets.register), or pass lens= explicitly.",
+                code="logit_lens_head_unavailable",
             )
         default_lens = _build_default_lens(head_view)
         if validate:
@@ -277,6 +379,266 @@ def logit_lens(
         validated=validated,
         final_logits=final_logits,
     )
+
+
+def logit_lens_predictions(
+    trace: Any,
+    *,
+    k: int = 5,
+    positions: Sequence[int] | None = None,
+    tokens: Sequence[int] | None = None,
+    facet: str = "resid_post",
+    layers: Sequence[str] | None = None,
+    lens: LensFunc | Mapping[str, LensFunc] | None = None,
+    validate: bool = True,
+    rtol: float = 1e-4,
+    atol: float = 1e-5,
+    include_native: bool = True,
+) -> LogitLensPredictions:
+    """Stream per-layer top-k predictions without retaining full projections.
+
+    :func:`logit_lens` retains every per-layer ``[batch, positions, vocab]``
+    projection (~2.5 GB extrapolated at 1,024 positions on a 50k vocabulary);
+    this extractor projects ONE layer at a time, reduces it to top-k values,
+    the full-vocabulary ``logsumexp``, and requested-token values/ranks, then
+    discards the layer's full projection. Probabilities always use the
+    full-vocabulary softmax denominator. Only the row served directly from
+    the model's CAPTURED output logits is labelled ``"native output"``;
+    every reconstructed row is labelled ``"projected through final
+    norm/head"``.
+
+    Parameters
+    ----------
+    k:
+        Top-k width per position (clamped to the vocabulary size).
+    positions:
+        Absolute sequence positions to keep (negative indices allowed);
+        defaults to every position a row covers. Positions outside a row's
+        covered range are dropped from THAT row (the native row of a
+        ``logits_to_keep``-sliced capture covers only the last positions).
+    tokens:
+        Token ids whose logit/probability/rank are retained per position.
+    facet / layers / lens / validate / rtol / atol:
+        As in :func:`logit_lens`.
+    include_native:
+        Whether to append the native-output row when captured logits are
+        readable.
+
+    Returns
+    -------
+    LogitLensPredictions
+        Reduced per-layer rows in block order (+ optional native row).
+    """
+
+    if k < 1:
+        raise LogitLensError(
+            f"k must be a positive integer, got {k!r}. Remedy: pass k >= 1.",
+            code="logit_lens_k_invalid",
+        )
+    addresses = _resolve_layer_addresses(trace, facet=facet, layers=layers)
+    head_view = _find_head_view(trace)
+    final_logits = _read_final_logits(head_view)
+    if lens is not None:
+        lens_by_address = _user_lens_by_address(lens, addresses)
+        lens_source, validated = "user", False
+    else:
+        if head_view is None:
+            raise LogitLensError(
+                "No module in this trace exposes the 'unembed_weight' facet, so the "
+                "model's own lens cannot be reconstructed. Remedy: register a facet "
+                "recipe producing the language_model_head facet names for this "
+                "architecture (tl.facets.register), or pass lens= explicitly.",
+                code="logit_lens_head_unavailable",
+            )
+        default_lens = _build_default_lens(head_view)
+        if validate:
+            _validate_lens(trace, head_view, default_lens, rtol=rtol, atol=atol)
+        lens_by_address = dict.fromkeys(addresses, default_lens)
+        lens_source, validated = "model_head", validate
+    token_ids = tuple(int(token) for token in tokens) if tokens is not None else ()
+    rows: list[LogitLensPrediction] = []
+    sequence_length: int | None = None
+    with torch.no_grad():
+        for layer_index, address in enumerate(addresses):
+            hidden = _facet_tensor(trace.modules[address].facets[facet], name=facet)
+            projected = lens_by_address[address](hidden.detach())
+            if sequence_length is None and projected.ndim >= 3:
+                sequence_length = int(projected.shape[-2])
+            rows.append(
+                _reduce_projection_row(
+                    projected,
+                    address=address,
+                    layer_index=layer_index,
+                    facet=facet,
+                    provenance=PROVENANCE_PROJECTED,
+                    position_base=0,
+                    full_length=sequence_length,
+                    k=k,
+                    positions=positions,
+                    token_ids=token_ids,
+                )
+            )
+            del projected
+        if include_native and final_logits is not None:
+            native_length = int(final_logits.shape[-2]) if final_logits.ndim >= 3 else 1
+            full_length = sequence_length if sequence_length is not None else native_length
+            head_address = _head_module_address(trace) or "<head>"
+            rows.append(
+                _reduce_projection_row(
+                    final_logits,
+                    address=head_address,
+                    layer_index=None,
+                    facet=None,
+                    provenance=PROVENANCE_NATIVE,
+                    # HF logits_to_keep projects the LAST K positions, so the
+                    # native row's absolute positions start at S - K.
+                    position_base=max(0, full_length - native_length),
+                    full_length=full_length,
+                    k=k,
+                    positions=positions,
+                    token_ids=token_ids,
+                )
+            )
+    return LogitLensPredictions(
+        rows=tuple(rows),
+        k=k,
+        facet=facet,
+        lens_source=lens_source,
+        validated=validated,
+    )
+
+
+def _head_module_address(trace: Any) -> str | None:
+    """Return the address of the module exposing the unembedding facets."""
+
+    for module in trace.modules:
+        if module.facets.has("unembed_weight"):
+            return str(getattr(module, "address", "")) or None
+    return None
+
+
+def _reduce_projection_row(
+    projected: torch.Tensor,
+    *,
+    address: str,
+    layer_index: int | None,
+    facet: str | None,
+    provenance: str,
+    position_base: int,
+    full_length: int | None,
+    k: int,
+    positions: Sequence[int] | None,
+    token_ids: tuple[int, ...],
+) -> LogitLensPrediction:
+    """Reduce one full projection to its retained prediction summary.
+
+    The full ``[batch, positions, vocab]`` tensor is read exactly once here
+    and never stored on the returned row.
+    """
+
+    work = projected.detach()
+    if work.ndim < 2:
+        raise LogitLensError(
+            f"Projected logits for module {address!r} have shape {tuple(work.shape)}; "
+            "prediction extraction needs at least (positions|batch, vocab). Remedy: "
+            "pass a lens= returning at-least-rank-2 logits for this layer.",
+            code="logit_lens_projection_rank_invalid",
+        )
+    if work.ndim == 2:
+        work = work.unsqueeze(-2)
+    if work.ndim > 3:
+        work = work.reshape(-1, work.shape[-2], work.shape[-1])
+    work = work.float()
+    vocab = int(work.shape[-1])
+    covered = _row_positions(
+        n_row_positions=int(work.shape[-2]),
+        position_base=position_base,
+        full_length=full_length,
+        requested=positions,
+    )
+    local_index = torch.tensor(
+        [position - position_base for position in covered], dtype=torch.long, device=work.device
+    )
+    work = work.index_select(-2, local_index)
+    logsumexp = torch.logsumexp(work, dim=-1)
+    k_eff = min(k, vocab)
+    top_logits, top_ids = work.topk(k_eff, dim=-1)
+    top_probs = torch.exp(top_logits - logsumexp.unsqueeze(-1))
+    if token_ids:
+        bad = [token for token in token_ids if not 0 <= token < vocab]
+        if bad:
+            raise LogitLensError(
+                f"tokens= contains ids {bad!r} outside the vocabulary of size {vocab}. "
+                f"Remedy: pass token ids in [0, {vocab}).",
+                code="logit_lens_token_id_invalid",
+            )
+        token_index = torch.tensor(token_ids, dtype=torch.long, device=work.device)
+        token_logits = work.index_select(-1, token_index)
+        token_probs = torch.exp(token_logits - logsumexp.unsqueeze(-1))
+        # One token at a time: broadcasting all tokens at once materializes a
+        # [batch, positions, n_tokens, vocab] bool -- the exact full-vocab
+        # blowup this extractor exists to avoid.
+        token_ranks = torch.stack(
+            [
+                (work > token_logits[..., index].unsqueeze(-1)).sum(dim=-1) + 1
+                for index in range(len(token_ids))
+            ],
+            dim=-1,
+        )
+    else:
+        empty_shape = (*work.shape[:-1], 0)
+        token_logits = work.new_empty(empty_shape)
+        token_probs = work.new_empty(empty_shape)
+        token_ranks = torch.empty(empty_shape, dtype=torch.long, device=work.device)
+    return LogitLensPrediction(
+        address=address,
+        layer_index=layer_index,
+        facet=facet,
+        provenance=provenance,
+        positions=covered,
+        top_ids=top_ids,
+        top_logits=top_logits,
+        top_probs=top_probs,
+        logsumexp=logsumexp,
+        token_ids=token_ids,
+        token_logits=token_logits,
+        token_probs=token_probs,
+        token_ranks=token_ranks,
+    )
+
+
+def _row_positions(
+    *,
+    n_row_positions: int,
+    position_base: int,
+    full_length: int | None,
+    requested: Sequence[int] | None,
+) -> tuple[int, ...]:
+    """Return the absolute positions a row retains.
+
+    Negative requested positions are normalized against the FULL sequence
+    length; requested positions a row does not cover (e.g. early positions on
+    a ``logits_to_keep``-sliced native row) are dropped from that row.
+    """
+
+    covered_range = range(position_base, position_base + n_row_positions)
+    if requested is None:
+        return tuple(covered_range)
+    length = full_length if full_length is not None else position_base + n_row_positions
+    normalized: list[int] = []
+    for position in requested:
+        absolute = int(position)
+        if absolute < 0:
+            absolute += length
+        if not 0 <= absolute < length:
+            raise LogitLensError(
+                f"positions= entry {position!r} is outside the sequence of length {length}. "
+                f"Remedy: pass positions in [-{length}, {length}).",
+                code="logit_lens_position_invalid",
+            )
+        if absolute in covered_range and absolute not in normalized:
+            normalized.append(absolute)
+    return tuple(normalized)
 
 
 def _resolve_layer_addresses(trace: Any, *, facet: str, layers: Sequence[str] | None) -> list[str]:
@@ -438,18 +800,53 @@ def _validate_lens(trace: Any, head_view: Any, lens: LensFunc, *, rtol: float, a
     reference_logits = _facet_tensor(captured, name="logits").detach()
     with torch.no_grad():
         reconstructed = lens(reference_hidden)
-    if reconstructed.shape != reference_logits.shape or not torch.allclose(
-        reconstructed, reference_logits, rtol=rtol, atol=atol
-    ):
+    comparable = _align_to_captured_slice(reconstructed, reference_logits)
+    if comparable is None or not torch.allclose(comparable, reference_logits, rtol=rtol, atol=atol):
         raise LogitLensError(
             "Reconstructed lens failed validation: applying the reconstructed "
-            "final norm + unembedding to the last block's captured resid_post does "
-            f"not reproduce the captured logits (rtol={rtol}, atol={atol}). The "
-            "head does something the reconstruction does not capture (nonstandard "
-            "norm scaling, an extra projection, or dropout between the last block "
-            "and the head). Pass lens= explicitly or register a corrected facet "
-            "recipe."
+            "final norm + unembedding to the last block's captured resid_post "
+            f"(shape {tuple(reconstructed.shape)}) does not reproduce the captured "
+            f"logits (shape {tuple(reference_logits.shape)}, rtol={rtol}, "
+            f"atol={atol}). The head does something the reconstruction does not "
+            "capture (nonstandard norm scaling, an extra projection, or dropout "
+            "between the last block and the head). Pass lens= explicitly or "
+            "register a corrected facet recipe."
         )
+
+
+def _align_to_captured_slice(
+    reconstructed: torch.Tensor, captured: torch.Tensor
+) -> torch.Tensor | None:
+    """Return the reconstructed slice comparable to sequence-sliced captured logits.
+
+    Current HF causal LMs (transformers 5.x ``logits_to_keep``) project only
+    the LAST ``K`` sequence positions through the head, so the captured
+    ``logits`` facet is ``[..., K, vocab]`` while a full-sequence
+    reconstruction is ``[..., S, vocab]`` with ``K <= S``. The HF slice is
+    ``hidden[:, -K:, :]``, so the comparable reconstruction is the matching
+    suffix -- validation still checks real reconstructed values against real
+    captured values, just on the positions the model actually projected.
+
+    Returns
+    -------
+    torch.Tensor | None
+        ``reconstructed`` itself on exact shape match, its sequence-suffix
+        slice in the ``logits_to_keep`` case, or ``None`` when the shapes are
+        not comparable either way (the caller refuses).
+    """
+
+    if reconstructed.shape == captured.shape:
+        return reconstructed
+    if reconstructed.ndim != captured.ndim or reconstructed.ndim < 3:
+        return None
+    if reconstructed.shape[:-2] != captured.shape[:-2]:
+        return None
+    if reconstructed.shape[-1] != captured.shape[-1]:
+        return None
+    kept = captured.shape[-2]
+    if not 0 < kept <= reconstructed.shape[-2]:
+        return None
+    return reconstructed[..., -kept:, :]
 
 
 def _position_vector(logits: torch.Tensor, *, position: int, batch_index: int) -> torch.Tensor:

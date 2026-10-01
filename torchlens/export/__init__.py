@@ -1,4 +1,11 @@
-"""Static export helpers for TorchLens logs."""
+"""Static export helpers for TorchLens logs.
+
+Every exporter here carries the shared capture-honesty facts
+(:mod:`torchlens._capture_honesty`) in the most format-appropriate slot --
+comment preamble, metadata block, ``DataFrame.attrs``, or a dedicated key --
+so an exported file never presents a possibly-unverified, poisoned, or
+episode capture as clean data (WT1 A-V row 24).
+"""
 
 from __future__ import annotations
 
@@ -7,7 +14,73 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
+from .._capture_honesty import (
+    attach_dataframe_honesty,
+    capture_honesty_facts,
+    honesty_preamble_lines,
+)
+from .._io._json import loads_bounded
 from ..utils.display import atomic_write_text
+
+
+def _honesty_comment_block(log: Any, prefix: str) -> str:
+    """Format the shared honesty preamble as comment lines.
+
+    Parameters
+    ----------
+    log:
+        Capture object being exported.
+    prefix:
+        Comment marker of the destination format (e.g. ``"# "``).
+
+    Returns
+    -------
+    str
+        Newline-terminated comment block.
+    """
+
+    return "".join(f"{prefix}{line}\n" for line in honesty_preamble_lines(log))
+
+
+def _honesty_xml_comment(log: Any) -> str:
+    """Format the shared honesty preamble as one XML/HTML comment.
+
+    Returns
+    -------
+    str
+        Single-line-per-fact comment; ``--`` is collapsed because XML
+        comments must not contain double hyphens.
+    """
+
+    body = "\n".join(line.replace("--", "-") for line in honesty_preamble_lines(log))
+    return f"<!-- {body} -->\n"
+
+
+def _bundle_member_honesty(bundle: Any) -> dict[str, Any]:
+    """Return per-member honesty facts for a Bundle export.
+
+    Parameters
+    ----------
+    bundle:
+        TorchLens ``Bundle``.
+
+    Returns
+    -------
+    dict[str, Any]
+        Member-name-keyed honesty fact blocks (best effort per member).
+    """
+
+    members: dict[str, Any] = {}
+    for member_name in getattr(bundle, "names", ()) or ():
+        # Per-member disclosure fallback: a member the bundle cannot serve (or
+        # whose facts cannot be read) gets an explicit error row, never a
+        # silent omission. The fact reader is getattr-defensive, so the
+        # realistic raise surface is the member lookup itself.
+        try:
+            members[str(member_name)] = capture_honesty_facts(bundle[member_name])
+        except (AttributeError, KeyError, TypeError):
+            members[str(member_name)] = {"error": "member honesty facts unavailable"}
+    return {"members": members}
 
 
 def svg(log: Any, path: str | Path, *, editable: bool = True) -> Path:
@@ -31,7 +104,12 @@ def svg(log: Any, path: str | Path, *, editable: bool = True) -> Path:
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     data = _static_graph_data(log)
-    atomic_write_text(destination, _render_svg(data, editable=editable))
+    rendered = _render_svg(data, editable=editable)
+    # The honesty comment must sit AFTER the XML declaration (a comment before
+    # it is invalid XML) and before the <svg> root.
+    declaration_end = rendered.index("?>\n") + len("?>\n")
+    rendered = rendered[:declaration_end] + _honesty_xml_comment(log) + rendered[declaration_end:]
+    atomic_write_text(destination, rendered)
     return destination
 
 
@@ -58,7 +136,7 @@ def html(log: Any, path: str | Path) -> Path:
     destination.parent.mkdir(parents=True, exist_ok=True)
     data = _static_graph_data(log)
     payload = _json.dumps(data, separators=(",", ":"))
-    atomic_write_text(destination, _render_html(payload))
+    atomic_write_text(destination, _honesty_xml_comment(log) + _render_html(payload))
     return destination
 
 
@@ -83,7 +161,10 @@ def chrome_trace(log: Any, path: str | Path) -> Path:
     payload = {
         "traceEvents": _chrome_trace_events(log),
         "displayTimeUnit": "ms",
-        "metadata": {"schema": "torchlens.chrome_trace.v1"},
+        "metadata": {
+            "schema": "torchlens.chrome_trace.v1",
+            "torchlens_capture_honesty": capture_honesty_facts(log),
+        },
     }
     atomic_write_text(destination, _json.dumps(payload, indent=2))
     return destination
@@ -113,6 +194,7 @@ def chrome_trace_diff(bundle: Any, path: str | Path) -> Path:
         "metadata": {
             "schema": "torchlens.chrome_trace_diff.v1",
             "members": list(bundle.names),
+            "torchlens_capture_honesty": _bundle_member_honesty(bundle),
         },
     }
     atomic_write_text(destination, _json.dumps(payload, indent=2))
@@ -148,6 +230,7 @@ def speedscope(log: Any, path: str | Path) -> Path:
 
     payload = {
         "$schema": "https://www.speedscope.app/file-format-schema.json",
+        "torchlens_capture_honesty": capture_honesty_facts(log),
         "shared": {"frames": frames},
         "profiles": [
             {
@@ -185,6 +268,16 @@ def flamegraph(log: Any, path: str | Path) -> Path:
     destination.parent.mkdir(parents=True, exist_ok=True)
     lines = []
     model_class_name = str(getattr(log, "model_class_name", "TorchLens"))
+    # The folded-stack format has no comment/metadata slot, so the honesty
+    # facts ride a ZERO-WEIGHT synthetic frame: standard flamegraph tools
+    # accept the line and render nothing for weight 0, but the exported file
+    # still carries the facts.
+    facts = capture_honesty_facts(log)
+    honesty_stack = ";".join(
+        _sanitize_flamegraph_frame(f"{key}={facts[key]}".replace(" ", "_"))
+        for key in ("capture_status", "capture_verified", "structure_only", "poisoned")
+    )
+    lines.append(f"torchlens_capture_honesty;{honesty_stack} 0")
     for layer in _iter_layers(log):
         stack = [model_class_name]
         stack.extend(str(module) for module in (getattr(layer, "modules", None) or []))
@@ -234,6 +327,7 @@ def memory_timeline(log: Any, path: str | Path) -> Path:
         "schema": "torchlens.memory_timeline.v1",
         "scope": "tensor",
         "disclaimer": "Tensor scope only; not an allocator trace.",
+        "torchlens_capture_honesty": capture_honesty_facts(log),
         "events": events,
     }
     atomic_write_text(destination, _json.dumps(payload, indent=2))
@@ -317,7 +411,11 @@ def xarray(log: Any) -> Any:
             "neuroid_index": ("neuroid", index_coord),
         },
         name="out",
-        attrs={"assembly": "NeuroidAssembly", "source": "torchlens.export.xarray"},
+        attrs={
+            "assembly": "NeuroidAssembly",
+            "source": "torchlens.export.xarray",
+            "torchlens_capture_honesty": capture_honesty_facts(log),
+        },
     )
 
 
@@ -349,6 +447,9 @@ def tensorboard(log: Any, writer: Any, step: int = 0, prefix: str = "torchlens")
         step,
     )
     writer.add_text(f"{prefix}/model_class_name", str(getattr(log, "model_class_name", "")), step)
+    add_text = getattr(writer, "add_text", None)
+    if callable(add_text):
+        add_text(f"{prefix}/capture_honesty", "; ".join(honesty_preamble_lines(log)), step)
     flush = getattr(writer, "flush", None)
     if callable(flush):
         flush()
@@ -391,7 +492,7 @@ def wandb(log: Any, run: Any | None = None, name: str = "torchlens_trace") -> di
     target_run = run if run is not None else getattr(wandb_module, "run", None)
     if target_run is not None:
         target_run.log({name: table})
-    return {"table": table, "artifact": None}
+    return {"table": table, "artifact": None, "capture_honesty": capture_honesty_facts(log)}
 
 
 def mlflow(log: Any, client: Any | None = None, prefix: str = "torchlens") -> dict[str, Any]:
@@ -417,7 +518,9 @@ def mlflow(log: Any, client: Any | None = None, prefix: str = "torchlens") -> di
         _require_tracker_object(client, method_name="mlflow", required_method="log_metric")
         for key, value in metrics.items():
             client.log_metric(f"{prefix}.{key}", value)
-    return metrics
+    # Honesty facts are returned (not logged): log_metric accepts numerics
+    # only, and coercing verification facts to numbers would misstate them.
+    return {**metrics, "capture_honesty": capture_honesty_facts(log)}
 
 
 def aim(log: Any, run: Any | None = None, prefix: str = "torchlens") -> dict[str, Any]:
@@ -443,7 +546,7 @@ def aim(log: Any, run: Any | None = None, prefix: str = "torchlens") -> dict[str
         _require_tracker_object(run, method_name="aim", required_method="track")
         for key, value in metrics.items():
             run.track(value, name=f"{prefix}.{key}")
-    return metrics
+    return {**metrics, "capture_honesty": capture_honesty_facts(log)}
 
 
 def _require_tracker_object(target: Any, *, method_name: str, required_method: str) -> None:
@@ -481,7 +584,10 @@ def csv(log: Any, path: str | Path, **kwargs: Any) -> Path:
 
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    log.to_pandas().to_csv(destination, index=False, **kwargs)
+    # CSV has no metadata slot: the honesty facts ride ``#`` comment lines
+    # before the header. Read back with pd.read_csv(path, comment="#").
+    table_text = log.to_pandas().to_csv(None, index=False, **kwargs)
+    atomic_write_text(destination, _honesty_comment_block(log, "# ") + table_text)
     return destination
 
 
@@ -509,14 +615,21 @@ def parquet(log: Any, path: str | Path, **kwargs: Any) -> Path:
     """
 
     try:
-        import pyarrow  # noqa: F401
+        import pyarrow
+        import pyarrow.parquet as pyarrow_parquet
     except ImportError as exc:
         raise ImportError(
             "Parquet export requires pyarrow. Install with: pip install torchlens[tabular]"
         ) from exc
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    _parquet_safe_dataframe(log.to_pandas()).to_parquet(destination, **kwargs)
+    table = pyarrow.Table.from_pandas(_parquet_safe_dataframe(log.to_pandas()))
+    # Honesty facts ride the parquet file-level schema metadata (readable via
+    # pyarrow.parquet.read_schema(path).metadata); read_parquet is unaffected.
+    metadata = dict(table.schema.metadata or {})
+    metadata[b"torchlens_capture_honesty"] = _json.dumps(capture_honesty_facts(log)).encode()
+    table = table.replace_schema_metadata(metadata)
+    pyarrow_parquet.write_table(table, destination, **kwargs)
     return destination
 
 
@@ -548,7 +661,14 @@ def json(
 
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    _parquet_safe_dataframe(log.to_pandas()).to_json(destination, orient=orient, **kwargs)
+    rows_json = _parquet_safe_dataframe(log.to_pandas()).to_json(None, orient=orient, **kwargs)
+    payload = {
+        "schema": "torchlens.table_export.v1",
+        "capture_honesty": capture_honesty_facts(log),
+        "orient": orient,
+        "rows": loads_bounded(rows_json),
+    }
+    atomic_write_text(destination, _json.dumps(payload, indent=2))
     return destination
 
 
@@ -587,7 +707,10 @@ def model_explorer(log: Any, path: str | Path) -> Path:
         ),
         # Model Explorer's JSON ingest requires BOTH top-level keys label and
         # graphs to treat the file as a graph collection; without label the
-        # app refuses with "Unsupported JSON format".
+        # app refuses with "Unsupported JSON format". Extra top-level keys
+        # (schema, disclaimer, capture honesty) are tolerated by the pinned
+        # ingest contract.
+        "torchlens_capture_honesty": capture_honesty_facts(log),
         "label": label,
         "graphs": [
             {
@@ -672,6 +795,12 @@ def netron(log: Any, path: str | Path) -> Path:
         "metadataProps": [
             {"key": "torchlens.lossy_export", "value": "true"},
             {"key": "torchlens.runnable", "value": "false"},
+            # Honesty facts as a JSON string value: metadataProps is the one
+            # slot valid ONNX protobuf JSON offers for free-form metadata.
+            {
+                "key": "torchlens.capture_honesty",
+                "value": _json.dumps(capture_honesty_facts(log)),
+            },
         ],
         "graph": {
             "name": str(getattr(log, "model_class_name", "TorchLens graph")),
@@ -917,7 +1046,8 @@ def _tracker_dataframe(log: Any) -> Any:
     """
 
     dataframe = log.to_pandas()
-    return dataframe.apply(lambda column: column.map(_tracker_cell))
+    # ``apply`` builds a new frame, which does not reliably propagate attrs.
+    return attach_dataframe_honesty(dataframe.apply(lambda column: column.map(_tracker_cell)), log)
 
 
 def _parquet_safe_dataframe(dataframe: Any) -> Any:

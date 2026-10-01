@@ -296,6 +296,12 @@ def test_all_save_levels_still_load(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
+@pytest.mark.filterwarnings(
+    # A08 random-role-init disclosure (runnable_random_init_run): this test
+    # exercises a weight-free runnable run DELIBERATELY; the warning is the
+    # feature under test elsewhere (tests/test_persist_honesty_runnable_random.py).
+    "default:This runnable artifact carries no model weights"
+)
 def test_runnable_levels_still_run(tmp_path: Path) -> None:
     """Runnable bundles at all three variants still execute after the guarded load."""
 

@@ -5,8 +5,9 @@ DIFF asserted explicitly (D7 class 1, the top measured class), kwargs
 identity + the static shadowing intersection check (D7 class 3), the
 pass-qualification pin on distilgpt2's 2-pass residual adds (D7 class 8,
 OPUS Q5), and resolved-config-fingerprint rows for the silent config-flag
-class (D7 class 4). Plus the enumerated-red pins for the container-output
-replay crash (FIX-A) and the kwargs-only plain-module transport defect.
+class (D7 class 4). Plus the FLIPPED container-output replay row (FIX-A
+landed: the edit now lands through the ModelOutput container) and the
+enumerated-red pin for the kwargs-only plain-module transport defect.
 """
 
 from __future__ import annotations
@@ -175,9 +176,9 @@ def test_trace_signature_never_absorbs_forward_kwarg_names():
 class _LogitsOnly(nn.Module):
     """distilgpt2 wrapped to a bare-tensor output.
 
-    The ModelOutput-container spelling crashes fork.do() today (the FIX-A
-    enumerated-red row below); the bare-tensor spelling exercises the
-    pass-qualified engine truth NOW so A05's fix cannot regress it.
+    The ModelOutput-container spelling is covered by the flipped FIX-A row
+    below; the bare-tensor spelling pins the pass-qualified engine truth
+    independently of the container path.
     """
 
     def __init__(self, inner: nn.Module) -> None:
@@ -253,10 +254,21 @@ def test_pass_qualification_pin_on_distilgpt2_two_pass_adds():
     )
 
 
-def test_container_output_do_crash_enumerated_red(r0_capture):
+def test_container_output_do_lands_through_model_output_container(r0_capture):
+    """FLIPPED enumerated red (A05, FIX-A): the edit lands through the container.
+
+    fork.do() through the replay engine on a trace whose model returned an HF
+    ModelOutput container used to re-apply the boundary output node's recorded
+    MODEL-output container path to the replayed call's already-resolved output
+    and crash (the HF Cache crash root cause). The fix resolves each boundary
+    node's slot from its parent's path; this asserts the edit propagates to
+    the output and every boundary node's payload equals its parent's resolved
+    slot (the slot-equality oracle that also catches SILENT integer-path
+    mis-slices, not just the crash).
+    """
+
     import torchlens as tl
 
-    red = KNOWN_RED_BY_ID["container-output-do-replay"]
     spec = FAMILY_BY_NAME["distilgpt2"]
     model = spec.build("sdpa")
     ids = spec.input_kwargs()["input_ids"]
@@ -267,19 +279,20 @@ def test_container_output_do_crash_enumerated_red(r0_capture):
     fork = trace.fork()
     mask = torch.zeros_like(trace[f"{sites[0]}:1"].out, dtype=torch.bool)
     mask[0, 0, :] = True
-    try:
-        fork.do(tl.units(f"{sites[0]}:1", mask).resolve(fork), tl.zero_ablate())
-    except red.exception_class() as exc:
-        # Enumerated-red: a failure whose TYPE moves escapes this narrow
-        # catch and errors raw -- re-pin or fix per the row's owner.
-        assert red.message_substring in str(exc)
-        return
-    pytest.fail(
-        f"STALE enumerated-red row {red.red_id!r}: fork.do() through a"
-        " ModelOutput-container trace now works. {red.owner} landed FIX-A --"
-        " delete the KNOWN_RED row and flip this test to assert the edit"
-        " lands correctly through the container."
-    )
+    fork.do(tl.units(f"{sites[0]}:1", mask).resolve(fork), tl.zero_ablate())
+    assert torch.all(fork[f"{sites[0]}:1"].out[0, 0, :] == 0), "edited slice not ablated"
+    output_nodes = [
+        op for op in fork.layer_list if getattr(op, "is_output", False) and op.out is not None
+    ]
+    assert output_nodes, "no boundary output nodes on the ModelOutput-container trace"
+    for node in output_nodes:
+        parent = fork[node.parents[0]]
+        parent_out = parent.ops[0].out if hasattr(parent, "ops") else parent.out
+        assert torch.equal(node.out, parent_out), (
+            f"boundary node {node.label} does not equal its parent's resolved slot"
+        )
+    moved = [node for node in output_nodes if not torch.equal(node.out, trace[node.label].out)]
+    assert moved, "the edit never reached the model-output container"
 
 
 def test_kwargs_only_plain_module_enumerated_red():

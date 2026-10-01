@@ -700,7 +700,7 @@
     }
   ],
   "trace_summary": {
-    "total_flops_forward": 657,
+    "total_flops_forward": 521,
     "uncalled_modules": [
       "positive",
       "positive.0",

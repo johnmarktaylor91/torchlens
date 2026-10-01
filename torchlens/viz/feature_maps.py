@@ -89,7 +89,7 @@ def feature_map_evolution(
         max_channels=max_channels,
     )
 
-    from ..repgeom import _selected_mds_sites, _store_annotation_tensor
+    from ..repgeom import _commit_annotation_tensors, _selected_mds_sites
 
     # ``_selected_mds_sites`` is shared with ``mds_evolution`` and raises
     # diagnostics phrased for that feature (they name ``mds_evolution`` and
@@ -114,6 +114,7 @@ def feature_map_evolution(
             raise ValueError(recast) from exc
         raise
     maps_by_key: FeatureMapEvolution = OrderedDict()
+    staged: OrderedDict[str, torch.Tensor] = OrderedDict()
     non_spatial_shapes: list[str] = []
     for key, _site, activations in selected:
         tensor = _as_cpu_float_tensor(activations)
@@ -142,14 +143,10 @@ def feature_map_evolution(
             ],
             dtype=torch.int64,
         )
-        _store_annotation_tensor(trace, f"featmap:{key}:maps", maps)
-        _store_annotation_tensor(
-            trace,
-            f"featmap:{key}:stimuli",
-            torch.tensor(stimulus_indices, dtype=torch.int64),
-        )
-        _store_annotation_tensor(trace, f"featmap:{key}:channels", channel_ids)
-        _store_annotation_tensor(trace, f"featmap:{key}:counts", counts)
+        staged[f"featmap:{key}:maps"] = maps
+        staged[f"featmap:{key}:stimuli"] = torch.tensor(stimulus_indices, dtype=torch.int64)
+        staged[f"featmap:{key}:channels"] = channel_ids
+        staged[f"featmap:{key}:counts"] = counts
         maps_by_key[key] = maps
 
     if not maps_by_key:
@@ -159,6 +156,9 @@ def feature_map_evolution(
             f"saw {shape_text}. Capture with save= covering the conv layers before calling "
             "feature_map_evolution."
         )
+    # Annotations commit only after the WHOLE sweep succeeds; a failed site
+    # leaves zero blobs behind (gated ATOMIC write, neuro MEMO D4).
+    _commit_annotation_tensors(trace, staged)
     return maps_by_key
 
 

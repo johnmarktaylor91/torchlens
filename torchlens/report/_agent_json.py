@@ -15,13 +15,23 @@ from __future__ import annotations
 
 from typing import Any
 
-from ._explain import _capture_verification, _safe_len
+from .._capture_honesty import (
+    capture_advisories,
+    capture_verification,
+    episode_facts,
+    poison_facts,
+    refuse_presenter_subject,
+)
+from ._explain import _safe_len
 
 #: Schema identifier for the agent trace dump.
 AGENT_TRACE_SCHEMA = "torchlens.agent_trace.v1"
 
 #: Static self-description embedded in every dump so an agent can navigate the
-#: trace without reading prose docs first.
+#: trace without reading prose docs first. ``next_steps`` is built per trace
+#: (:func:`_guide_next_steps`) so every listed spelling is executable by the
+#: dump's reader in its current state -- an entry that needs objects the
+#: reader does not hold (a live ``model``/``x``) teaches a crash.
 _GUIDE: dict[str, Any] = {
     "purpose": (
         "Structural dump of one captured forward pass. Use it to discover "
@@ -49,22 +59,105 @@ _GUIDE: dict[str, Any] = {
             "Settled capture facts. capture_verified=false means parts of "
             "the forward may be missing or unattributed -- treat every count "
             "as a lower bound. structure_only=true means shapes/dtypes are "
-            "hypotheses, not measurements."
+            "hypotheses, not measurements. poisoned=true means this is a "
+            "diverged sparse run kept for inspection; its values are NOT "
+            "model-faithful. An 'episode' block means one wrapped multi-step "
+            "generation run; fidelity_basis='forced' is the non-verifying "
+            "teacher-forcing mode."
         ),
         "truncation": (
             "Non-null when max_ops dropped op rows; counts disclose exactly what was omitted."
         ),
     },
-    "next_steps": {
+}
+
+
+def _guide_next_steps(log: Any) -> dict[str, str]:
+    """Build the per-trace executable next-step menu.
+
+    Every entry must run for a reader holding ONLY ``trace`` (plus an
+    installed torchlens): no entry may require the live ``model``/``x``
+    objects, and state-dependent entries appear only when this trace can
+    honor them.
+
+    Parameters
+    ----------
+    log:
+        Completed trace the dump describes.
+
+    Returns
+    -------
+    dict[str, str]
+        Ordered next-step spellings.
+    """
+
+    steps: dict[str, str] = {
         "summary": "trace.summary()",
         "plain_language_report": "tl.report.explain(trace)",
         "budgeted_report": "tl.report.explain(trace, max_tokens=500)",
-        "one_activation": "trace[<layer_label>].out",
-        "receptive_field": "trace[<layer_label>].receptive_field",
-        "draw_graph": "trace.draw()",
-        "environment_diagnosis": "tl.compat.report(model, x).to_markdown()",
-    },
-}
+        "health_audit": "trace.audit()",
+        "resource_profile": "trace.profile(level='module')",
+        "inventory": "trace.bill_of_materials()",
+        "nonfinite_evidence": "trace.first_nonfinite()",
+        "nonfinite_coverage": "trace.nonfinite_coverage",
+    }
+    if int(getattr(log, "num_saved_ops", 0) or 0) > 0:
+        steps["one_activation"] = "trace[<layer_label>].out"
+    steps["receptive_field"] = "trace[<layer_label>].receptive_field"
+    steps["draw_graph"] = "trace.draw()"
+    if _pandas_available():
+        steps["op_table"] = "trace.to_pandas()"
+        if _first_op_site_key(log) is not None:
+            steps["sites_table"] = "trace.sites_table()"
+        if getattr(log, "decoded_output", None) is not None:
+            steps["output_table"] = "trace.output_table(top_n=5)"
+    logged = (getattr(log, "annotations", {}) or {}).get("logged_values")
+    if isinstance(logged, dict) and logged:
+        steps["logged_values"] = "trace.logged_values"
+    steps["environment_diagnosis"] = "tl.utils.doctor()"
+    return steps
+
+
+def _pandas_available() -> bool:
+    """Return whether pandas is importable in the reader's environment."""
+
+    from importlib.util import find_spec
+
+    try:
+        return find_spec("pandas") is not None
+    except (ImportError, ValueError):
+        return False
+
+
+def _first_op_site_key(log: Any) -> str | None:
+    """Return the first op's site key, or ``None`` on keyless artifacts."""
+
+    for op in getattr(log, "layer_list", []) or []:
+        return getattr(op, "site_key", None)
+    return None
+
+
+def _json_safe_value(value: Any) -> Any:
+    """Return a JSON-primitive projection of one logged value, bounded.
+
+    Parameters
+    ----------
+    value:
+        User-recorded value from ``log_value``.
+
+    Returns
+    -------
+    Any
+        The value itself when it is a JSON primitive, otherwise its ``repr``
+        truncated to 500 characters (disclosed with a trailing ellipsis).
+    """
+
+    if value is None or isinstance(value, bool | int | float | str):
+        return value
+    rendered = repr(value)
+    if len(rendered) > 500:
+        rendered = rendered[:497] + "..."
+    return rendered
 
 
 def _quantity_int(value: Any) -> int | None:
@@ -111,6 +204,40 @@ def _json_shape(shape: Any) -> list[int] | None:
         return None
 
 
+def _payload_state(op: Any) -> str:
+    """Return the op's CURRENT payload state: present | lazy | unsaved.
+
+    Capture-time ``saved`` used to mean two different things (agent memo P0
+    part 4): "a payload is resident" and "a lazy ref could materialize one".
+    This is the resident-now answer, read through the private slot accessor
+    so the probe itself never triggers a materializing ``op.out`` read. A
+    row with ``saved=true`` and ``payload_state="unsaved"`` is a
+    payload-stripped artifact -- saved at capture, no bytes here.
+
+    Parameters
+    ----------
+    op:
+        Operation record.
+
+    Returns
+    -------
+    str
+        ``"present"`` (resident tensor), ``"lazy"`` (materializable blob
+        ref), or ``"unsaved"`` (no payload here).
+    """
+
+    slot = getattr(op, "_slot", None)
+    if callable(slot):
+        if slot("out") is not None:
+            return "present"
+        if slot("out_ref") is not None:
+            return "lazy"
+        return "unsaved"
+    if getattr(op, "out_ref", None) is not None:
+        return "lazy"
+    return "present" if getattr(op, "has_saved_activation", False) else "unsaved"
+
+
 def _site_key_or_none(op: Any) -> str | None:
     """Return the op's structural site key, or ``None`` when unavailable.
 
@@ -149,6 +276,7 @@ def _op_entry(op: Any) -> dict[str, Any]:
     device_ref = getattr(op, "device_ref", None)
     dtype = getattr(op, "dtype", None)
     return {
+        "payload_state": _payload_state(op),
         "label": str(getattr(op, "label", getattr(op, "layer_label", "unknown"))),
         "layer_label": str(getattr(op, "layer_label", "unknown")),
         "pass_index": int(getattr(op, "pass_index", 1) or 1),
@@ -240,6 +368,7 @@ def build_agent_json(log: Any, *, max_ops: int | None = None) -> dict[str, Any]:
         If ``max_ops`` is not a positive integer.
     """
 
+    refuse_presenter_subject(log, "Trace.to_agent_json")
     if max_ops is not None and (
         isinstance(max_ops, bool) or not isinstance(max_ops, int) or max_ops < 1
     ):
@@ -264,14 +393,24 @@ def build_agent_json(log: Any, *, max_ops: int | None = None) -> dict[str, Any]:
         ops = ops[:max_ops]
 
     capture = {
-        **_capture_verification(log),
+        **capture_verification(log),
         "backend": str(getattr(log, "backend", "unknown")),
         "model_class": str(getattr(log, "model_class_name", type(log).__name__)),
         "structure_only": bool(getattr(log, "structure_only", False)),
         "grouping": str(getattr(log, "grouping", "unknown")),
         "has_backward_pass": bool(getattr(log, "has_backward_pass", False)),
         "device_summary": getattr(log, "backend_runtime_device_summary", None),
+        # Poison, episode, and advisory facts are honesty disclosures: a
+        # diverged sparse run or a forced-tokens episode must never dump as an
+        # ordinary clean forward (WT1 A-V row 23).
+        **poison_facts(log),
     }
+    episode = episode_facts(log)
+    if episode is not None:
+        capture["episode"] = episode
+    advisories = capture_advisories(log)
+    if advisories:
+        capture["advisories"] = advisories
 
     modules_map = getattr(log, "modules", {}) or {}
     module_rows = [
@@ -280,14 +419,25 @@ def build_agent_json(log: Any, *, max_ops: int | None = None) -> dict[str, Any]:
         if isinstance(address, str)
     ]
 
+    guide = dict(_GUIDE)
+    guide["next_steps"] = _guide_next_steps(log)
+
+    logged_values = {
+        str(name): _json_safe_value(value)
+        for name, value in (
+            (getattr(log, "annotations", {}) or {}).get("logged_values", {}) or {}
+        ).items()
+    }
+
     return {
         "schema": AGENT_TRACE_SCHEMA,
         "schema_stability": (
             "documented-unstable: field names may be renamed by the naming "
             "ratification sprint; branch on 'schema' before hard-coding."
         ),
-        "guide": _GUIDE,
+        "guide": guide,
         "capture": capture,
+        "logged_values": logged_values,
         "counts": {
             "layers": _safe_len(getattr(log, "layer_labels", None)),
             "operations": int(getattr(log, "num_ops", 0) or 0),

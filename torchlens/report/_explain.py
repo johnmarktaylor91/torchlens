@@ -8,6 +8,13 @@ from typing import Any, Literal
 
 import torch
 
+from .._capture_honesty import (
+    capture_advisories,
+    capture_verification,
+    episode_facts,
+    poison_facts,
+    refuse_presenter_subject,
+)
 from ..data_classes._nonfinite import (
     coverage_gap_note,
     first_nonfinite_layer,
@@ -75,6 +82,7 @@ def explain(
     tri-state stored fact (``None`` = no ceiling recorded).
     """
 
+    refuse_presenter_subject(log, "tl.report.explain")
     if audience not in {"researcher", "practitioner", "auto"}:
         raise ValueError("audience must be 'researcher', 'practitioner', or 'auto'.")
     if format not in {"text", "json"}:
@@ -110,12 +118,16 @@ def explain(
         ("Interventions", _intervention_lines(log)),
         ("Notable patterns", _pattern_lines(log, audience=audience)),
     ]
+    logged_value_lines = _logged_value_lines(log)
+    if logged_value_lines:
+        sections.append(("Logged values", logged_value_lines))
     return _budgeted_report(sections, max_tokens, drop_order=_SECTION_DROP_ORDER)
 
 
 #: Low-value-first order in which ``max_tokens`` drops report sections.
 #: ``Capture status`` is deliberately absent: the honesty facts never drop.
 _SECTION_DROP_ORDER: tuple[str, ...] = (
+    "Logged values",
     "Notable patterns",
     "Interventions",
     "Backward summary",
@@ -399,15 +411,9 @@ def _capture_verification(log: Any) -> dict[str, Any]:
         ``capture_verification_reason``, and ``rescue_rerun``.
     """
 
-    outcome = getattr(log, "outcome", None)
-    status = getattr(outcome, "status", None)
-    status_value = getattr(status, "value", None)
-    return {
-        "capture_status": str(status_value) if status_value is not None else "unknown",
-        "capture_verified": getattr(log, "capture_verified", None),
-        "capture_verification_reason": getattr(log, "capture_verification_reason", None),
-        "rescue_rerun": bool(getattr(log, "rescue_rerun", None) or False),
-    }
+    # Delegates to the ONE shared source (torchlens._capture_honesty) so
+    # explain, to_agent_json, and every exporter preamble read identical facts.
+    return capture_verification(log)
 
 
 def _capture_status_lines(log: Any) -> list[str]:
@@ -447,6 +453,35 @@ def _capture_status_lines(log: Any) -> list[str]:
         lines.append(
             "- This result came from the disclosed rescue re-run "
             "(mode_rescue_rerun), not the primary capture."
+        )
+    poison = poison_facts(log)
+    if poison["poisoned"]:
+        lines.append(
+            "- POISONED sparse run (path_faithfulness="
+            f"{poison.get('path_faithfulness', 'unknown')}): this trace was "
+            "returned via return_diverged=True and its values are NOT "
+            "model-faithful; inspect the divergence, do not publish the numbers."
+        )
+    episode = episode_facts(log)
+    if episode is not None:
+        basis = episode.get("fidelity_basis")
+        lines.append(
+            "- Episode capture: "
+            f"{episode.get('n_steps_declared')} declared step(s), "
+            f"token_feed={episode.get('token_feed')}, "
+            f"fidelity_basis={basis}; per-step ledger at "
+            "trace.annotations['episode']."
+        )
+        if basis == "forced":
+            lines.append(
+                "- Forced-tokens episode: a disclosed NON-VERIFYING mode; "
+                "emitted tokens were supplied, not generated."
+            )
+    for advisory in capture_advisories(log):
+        lines.append(
+            f"- Capture advisory: {advisory.get('kind')} "
+            f"x{advisory.get('count')} (first at "
+            f"{advisory.get('first_location') or 'unknown location'})."
         )
     return lines
 
@@ -592,7 +627,11 @@ def _first_nonfinite_detail(log: Any, saved_label: str) -> str:
     if not hasattr(log, "first_nonfinite"):
         return scoped
     try:
-        return str(log.first_nonfinite())
+        # Explicit link_format: report text is publishable data, so the source
+        # location must stay plain ``path:line`` -- never an OSC 8 escape or a
+        # resolved-absolute-path URI. Duck-typed logs without the kwarg fall
+        # into the TypeError arm and keep the scoped statement.
+        return str(log.first_nonfinite(link_format="text"))
     except (ValueError, RuntimeError, TypeError):
         return scoped
 
@@ -754,6 +793,42 @@ def _intervention_lines(log: Any) -> list[str]:
         f"- Hook edits: {_format_count(len(hook_specs))}.",
         f"- Recorded intervention operations: {_format_count(len(history))}.",
     ]
+
+
+#: Rendering bounds for the Logged values section: user values are arbitrary
+#: objects, and report text must stay bounded no matter what was logged.
+_LOGGED_VALUE_MAX_ENTRIES = 10
+_LOGGED_VALUE_MAX_REPR = 80
+
+
+def _logged_value_lines(log: Any) -> list[str]:
+    """Return capture-time ``log_value`` read-back lines, bounded.
+
+    Parameters
+    ----------
+    log:
+        Model log to inspect.
+
+    Returns
+    -------
+    list[str]
+        Bullet lines for recorded values (empty when none were recorded);
+        entries beyond the cap are disclosed by count, never silently dropped.
+    """
+
+    values = (getattr(log, "annotations", {}) or {}).get("logged_values", {})
+    if not isinstance(values, dict) or not values:
+        return []
+    lines = []
+    for name, value in list(values.items())[:_LOGGED_VALUE_MAX_ENTRIES]:
+        rendered = repr(value)
+        if len(rendered) > _LOGGED_VALUE_MAX_REPR:
+            rendered = rendered[: _LOGGED_VALUE_MAX_REPR - 3] + "..."
+        lines.append(f"- {name} = {rendered}")
+    omitted = len(values) - _LOGGED_VALUE_MAX_ENTRIES
+    if omitted > 0:
+        lines.append(f"- ... and {omitted} more (read them all via trace.logged_values).")
+    return lines
 
 
 def _pattern_lines(log: Any, *, audience: Audience) -> list[str]:

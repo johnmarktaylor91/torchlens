@@ -284,6 +284,9 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
                 "dtype",
                 "equivalence_class",
                 "equivalent_ops",
+                # A1: output nodes reset clone-inherited compute (alias rows own none).
+                "flops_backward",
+                "flops_forward",
                 "func",
                 "func_config",
                 "func_duration",
@@ -929,12 +932,11 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
                 "label",
                 "layer_label",
                 "modules",
-                "num_params",
-                "num_params_frozen",
-                "num_params_trainable",
+                # A07: the per-op num_params/param_memory reads left this step
+                # -- trace/module parameter tallies now derive from the
+                # object-deduplicated param_logs inventory, not per-layer sums.
                 "out_versions_by_child",
                 "output_descendants",
-                "param_memory",
                 "parent_arg_positions",
                 "parents",
                 "recurrent_ops",
@@ -2052,6 +2054,8 @@ PINNED_ORDER_PAIRS: Mapping[tuple[str, str], PinnedPair] = MappingProxyType(
                     "annotations",
                     "autograd_memory",
                     "dtype",
+                    "flops_backward",
+                    "flops_forward",
                     "has_output_descendant",
                     "io_role",
                     "is_atomic_module",
@@ -2133,6 +2137,10 @@ PINNED_ORDER_PAIRS: Mapping[tuple[str, str], PinnedPair] = MappingProxyType(
                     "dtype",
                     "equivalence_class",
                     "equivalent_ops",
+                    # A1: the output node's boundary compute reset (alias rows
+                    # own no compute) rides the same step-1 write set.
+                    "flops_backward",
+                    "flops_forward",
                     "func",
                     "func_config",
                     "func_duration",

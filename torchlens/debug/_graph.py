@@ -165,14 +165,18 @@ def _activation_row(label: str, status: str, reason: str) -> dict[str, Any]:
     }
 
 
-def compare(
+def compare_rows(
     trace_a: Trace,
     trace_b: Trace,
     *,
     rtol: float = 1e-5,
     atol: float = 1e-8,
-) -> pd.DataFrame:
-    """Compare saved dense floating activations across two traces.
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Pandas-free core of :func:`compare` (agent stage-0 item 4).
+
+    The wire path for agent/MCP consumers: plain row dicts plus the attrs
+    mapping, importable and runnable without pandas. :func:`compare` is the
+    optional DataFrame view over this core.
 
     Parameters
     ----------
@@ -187,15 +191,15 @@ def compare(
 
     Returns
     -------
-    pandas.DataFrame
-        One row per pass-qualified op with summary counts in ``df.attrs``.
+    tuple[list[dict[str, Any]], dict[str, Any]]
+        One row dict per pass-qualified op, and the summary attrs (counts,
+        tolerances, per-trace capture-honesty facts).
     """
 
     from torchlens.runnable import refuse_poisoned_trace
 
     refuse_poisoned_trace(trace_a, "faithful comparison")
     refuse_poisoned_trace(trace_b, "faithful comparison")
-    pd = _require_pandas()
     ops_a = {_op_label(op): op for op in _compute_ops(trace_a)}
     ops_b = {_op_label(op): op for op in _compute_ops(trace_b)}
     labels = sorted(set(ops_a) | set(ops_b))
@@ -271,6 +275,49 @@ def compare(
         row.update({"max_abs": max_abs, "mean_abs": mean_abs, "allclose": allclose})
         rows.append(row)
 
+    from .._capture_honesty import capture_honesty_facts
+
+    attrs: dict[str, Any] = {
+        **summary,
+        "rtol": rtol,
+        "atol": atol,
+        "torchlens_capture_honesty": {
+            "trace_a": capture_honesty_facts(trace_a),
+            "trace_b": capture_honesty_facts(trace_b),
+        },
+    }
+    return rows, attrs
+
+
+def compare(
+    trace_a: Trace,
+    trace_b: Trace,
+    *,
+    rtol: float = 1e-5,
+    atol: float = 1e-8,
+) -> pd.DataFrame:
+    """Compare saved dense floating activations across two traces.
+
+    Parameters
+    ----------
+    trace_a:
+        First completed TorchLens trace.
+    trace_b:
+        Second completed TorchLens trace.
+    rtol:
+        Relative tolerance for ``torch.allclose``.
+    atol:
+        Absolute tolerance for ``torch.allclose``.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per pass-qualified op with summary counts in ``df.attrs``.
+        The optional view over :func:`compare_rows` (the pandas-free core).
+    """
+
+    rows, attrs = compare_rows(trace_a, trace_b, rtol=rtol, atol=atol)
+    pd = _require_pandas()
     frame = pd.DataFrame(
         rows,
         columns=[
@@ -284,18 +331,14 @@ def compare(
             "reason",
         ],
     )
-    frame.attrs.update(summary)
-    frame.attrs["rtol"] = rtol
-    frame.attrs["atol"] = atol
+    frame.attrs.update(attrs)
     return frame
 
 
-def dead_neurons(trace: Trace, *, dim: int = 1, threshold: float = 0.0) -> pd.DataFrame:
-    """Find units that are inactive or zero-variance in one completed trace.
-
-    A single trace is a single example; zero-variance here is an insufficient-sample
-    signal, not dataset-level neuron death. Aggregate multiple traces when deciding
-    whether units are dead over a dataset.
+def dead_neurons_rows(
+    trace: Trace, *, dim: int = 1, threshold: float = 0.0
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Pandas-free core of :func:`dead_neurons` (agent stage-0 item 4).
 
     Parameters
     ----------
@@ -308,12 +351,11 @@ def dead_neurons(trace: Trace, *, dim: int = 1, threshold: float = 0.0) -> pd.Da
 
     Returns
     -------
-    pandas.DataFrame
-        Columns are ``op``, ``total_units``, ``dead_count``, ``dead_frac``,
-        ``sample_dead_idx``, and ``reason``.
+    tuple[list[dict[str, Any]], dict[str, Any]]
+        Per-op row dicts and the attrs mapping (skip count, parameters, the
+        insufficient-sample note, capture-honesty facts).
     """
 
-    pd = _require_pandas()
     rows: list[dict[str, Any]] = []
     skipped = 0
     for op in _compute_ops(trace):
@@ -372,12 +414,47 @@ def dead_neurons(trace: Trace, *, dim: int = 1, threshold: float = 0.0) -> pd.Da
             }
         )
 
+    from .._capture_honesty import capture_honesty_facts
+
+    attrs: dict[str, Any] = {
+        "skipped": skipped,
+        "threshold": threshold,
+        "dim": dim,
+        "note": "single-trace zero-variance is insufficient sample",
+        "torchlens_capture_honesty": capture_honesty_facts(trace),
+    }
+    return rows, attrs
+
+
+def dead_neurons(trace: Trace, *, dim: int = 1, threshold: float = 0.0) -> pd.DataFrame:
+    """Find units that are inactive or zero-variance in one completed trace.
+
+    A single trace is a single example; zero-variance here is an insufficient-sample
+    signal, not dataset-level neuron death. Aggregate multiple traces when deciding
+    whether units are dead over a dataset.
+
+    Parameters
+    ----------
+    trace:
+        Completed TorchLens trace.
+    dim:
+        Feature dimension.
+    threshold:
+        Maximum activation value for post-activation death.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns are ``op``, ``total_units``, ``dead_count``, ``dead_frac``,
+        ``sample_dead_idx``, and ``reason``. The optional view over
+        :func:`dead_neurons_rows` (the pandas-free core).
+    """
+
+    rows, attrs = dead_neurons_rows(trace, dim=dim, threshold=threshold)
+    pd = _require_pandas()
     frame = pd.DataFrame(
         rows,
         columns=["op", "total_units", "dead_count", "dead_frac", "sample_dead_idx", "reason"],
     )
-    frame.attrs["skipped"] = skipped
-    frame.attrs["threshold"] = threshold
-    frame.attrs["dim"] = dim
-    frame.attrs["note"] = "single-trace zero-variance is insufficient sample"
+    frame.attrs.update(attrs)
     return frame

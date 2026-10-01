@@ -357,6 +357,13 @@ def _build_graphviz_shell(
     )
     if getattr(trace, "_has_direct_writes", False):
         caption_body += "Direct writes detected - recipe propagation will overlay<br align='left'/>"
+    # Capture-honesty banner (WT1 A-V row 23): a poisoned/diverged sparse run,
+    # an unverified capture, or an episode capture must not RENDER clean --
+    # the graph is a publishable artifact, so the caption carries the facts.
+    from .._capture_honesty import honesty_banner_lines
+
+    for banner_line in honesty_banner_lines(trace):
+        caption_body += f"<B>{html_escape(banner_line)}</B><br align='left'/>"
     encoding_state = getattr(request, "encoding", None)
     if encoding_state is not None and getattr(encoding_state, "stack_spec", None) is not None:
         # Stacking disclosure is part of the contract (memo 4.1): the

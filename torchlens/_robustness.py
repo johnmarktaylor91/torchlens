@@ -41,6 +41,7 @@ import torch
 from torch import nn
 
 from ._distributed import check_distributed_capture
+from ._errors import LazyStateUnsupportedError
 from ._input_walk import INPUT_TREE_MAX_DEPTH
 from .errors._base import CompatibilityError, TorchLensWarning
 from .utils._torch_compat import get_tracing_tensor_types
@@ -408,6 +409,79 @@ def _first_user_frame() -> tuple[str | None, int | None]:
     return None, None
 
 
+def check_lazy_state(model: nn.Module) -> None:
+    """Refuse capture entry on a model carrying un-materialized lazy BUFFERS.
+
+    Pending lazy PARAMETERS are tolerated: the lazy completion unit
+    (quickstart memo wave 1c, landed by the numbers-truth lane) materializes
+    executed lazy modules during the ONE captured forward and keeps
+    never-run ones at zero geometry in the inventory. Pending lazy BUFFERS
+    (``LazyBatchNorm*`` running stats) remain a genuine blocker: the
+    capture-boundary buffer-write tracker must index every buffer's physical
+    storage BEFORE the forward runs, and a pending buffer has no storage yet
+    (measured: ``untyped_storage()`` on it raises torch's raw
+    ``load_state_dict``-flavored ``ValueError`` inside model preparation).
+    For that case the typed ``lazy_uninitialized`` teach names the first
+    pending module and enumerates the pending set by name and ``id()`` on
+    ``exc.fields`` (``pending_modules`` / ``pending_parameters`` /
+    ``pending_buffers``). The model is left untouched -- detection never
+    probes a lazy module.
+
+    Parameters
+    ----------
+    model:
+        The ``nn.Module`` about to be captured.
+
+    Raises
+    ------
+    torchlens._errors.LazyStateUnsupportedError
+        When any lazy BUFFER is still pending. Pending parameters alone
+        never refuse.
+    """
+
+    from .utils.lazy_state import has_uninitialized_lazy_state, pending_lazy_state
+
+    if not has_uninitialized_lazy_state(model):
+        return
+    pending = pending_lazy_state(model)
+    if not pending.buffers:
+        return
+    if pending.modules:
+        address, type_name, _ = pending.modules[0]
+        first = f"model.{address} ({type_name})" if address else f"the root module ({type_name})"
+    else:
+        first = f"buffer {pending.buffers[0][0]!r}"
+    caller_file, caller_line = _first_user_frame()
+    callsite_note = ""
+    if caller_file is not None and caller_line is not None:
+        from ._source_links import file_line_text
+
+        callsite_note = f" Capture was requested at {file_line_text(caller_file, caller_line)}."
+    raise LazyStateUnsupportedError(
+        f"The model contains un-materialized lazy BUFFERS whose storage does "
+        f"not exist until a real forward pass runs -- the first pending "
+        f"module is {first} ({len(pending.modules)} pending module(s), "
+        f"{len(pending.parameters)} pending parameter(s), "
+        f"{len(pending.buffers)} pending buffer(s); the full set rides "
+        f"exc.fields). Capture must index every buffer's physical storage "
+        f"before the forward runs, so this capture would fail inside model "
+        f"preparation with torch's raw uninitialized-parameter ValueError. "
+        f"(Un-materialized lazy PARAMETERS alone are fine: they materialize "
+        f"during the captured forward.) The model was left "
+        f"untouched.{callsite_note}",
+        code="lazy_uninitialized",
+        remedy=(
+            "materialize the lazy modules with one real forward pass outside "
+            "capture -- `with torch.no_grad(): model(x)` -- then retry the capture"
+        ),
+        file_path=caller_file,
+        line_no=caller_line,
+        pending_modules=pending.modules,
+        pending_parameters=pending.parameters,
+        pending_buffers=pending.buffers,
+    )
+
+
 def check_model_and_input_variants(
     model: nn.Module,
     input_args: Any = None,
@@ -432,7 +506,30 @@ def check_model_and_input_variants(
     if input_kwargs is None:
         input_kwargs = {}
 
-    # Distributed/sharded state is checked first: DTensor parameters otherwise
+    # Assignment-redirecting wrappers (transformer_lens TransformerBridge) are
+    # refused before anything else: instrumentation assignments would silently
+    # land on the wrapped components and capture would die with an internal
+    # AttributeError (mikit F10).
+    from ._model_wrappers import check_model_wrapper
+
+    check_model_wrapper(model)
+
+    # Un-materialized lazy PARAMETERS do not refuse capture entry: the lazy
+    # completion unit (quickstart memo wave 1c, landed by the numbers-truth
+    # lane) materializes executed lazy modules during the ONE captured
+    # forward and tolerates never-run ones at zero geometry, so the wave-1a
+    # entry teach flipped off for them on the memo's own signal (4.4: the
+    # refusal holds only until the metadata invariants pass on the lazy-head
+    # fixture). The typed ``lazy_uninitialized`` teach still fires exactly
+    # where the request is genuinely unanswerable today: pending lazy
+    # BUFFERS (the buffer-write tracker cannot index storage that does not
+    # exist yet -- checked here), the armed-lane state baseline
+    # (``state_baseline_unavailable`` in ``snapshot_capture_state`` -- a
+    # pending slot has no bytes to witness), and zero-input shape inference
+    # (refuse before probing; a lazy module accepts any width).
+    check_lazy_state(model)
+
+    # Distributed/sharded state is checked next: DTensor parameters otherwise
     # sail past every dense-tensor check below (a DTensor reports a real device
     # and a strided layout) and capture then silently reports zero parameters.
     check_distributed_capture(model, input_args, input_kwargs)

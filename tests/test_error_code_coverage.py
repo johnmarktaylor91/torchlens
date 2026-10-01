@@ -81,7 +81,6 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "annotation_backend_unsupported",
         "annotation_namespace_invalid",
         "annotation_tensor_not_portable",
-        "auto_environment_unsupported",
         "backend_capability_conformance",
         "backend_error",
         "backward_capture_conflict",
@@ -135,7 +134,9 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "op_lookup_pass_required",
         "option_group_type_invalid",
         "output_device_invalid",
-        "output_sink_conflict",
+        # output_sink_conflict: row DELETED (shrink-only lock-in) -- the REM1
+        # test_io_streaming migration to the typed ArgumentConflictError now
+        # provokes it.
         "recording_events_not_retained",
         "recording_failed_not_convertible",
         "recording_halt_frontier_missing",

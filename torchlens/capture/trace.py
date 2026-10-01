@@ -53,6 +53,7 @@ from .outcome import (
     CapturePhase,
     count_committed_ops,
     demote_outcome,
+    outcome_for,
     safe_exception_str,
     set_capture_phase,
     settle_completed,
@@ -723,6 +724,52 @@ def save_new_outs(
         self._replay_arg_version_data_complete = True
 
 
+def _select_raw_indexes_by_retention_predicate(
+    self: "Trace", predicate: "Callable[[Any], bool]"
+) -> list[int]:
+    """Evaluate a bare retention predicate per finalized op, strict bool.
+
+    Bare retention predicates (the ``save_grads=`` callable spelling) are
+    evaluated per finalized op with a layer-like ctx and a strict-bool return
+    -- mirroring the halt-slot bool contract so a truthy tensor cannot
+    silently select everything.
+
+    Parameters
+    ----------
+    self:
+        Finished trace whose ``layer_list`` supplies the candidate ops.
+    predicate:
+        User callable evaluated per op record.
+
+    Returns
+    -------
+    list[int]
+        Sorted unique raw indexes of the ops the predicate selected.
+
+    Raises
+    ------
+    PredicateError
+        If the predicate returns a non-bool (code ``predicate_return_invalid``).
+    """
+
+    from ..fastlog.exceptions import PredicateError
+
+    selected_raw_indexes: set[int] = set()
+    for layer_entry in getattr(self, "layer_list", []):
+        decision = predicate(layer_entry)
+        if not isinstance(decision, bool):
+            raise PredicateError(
+                "save_grads predicate must return bool. "
+                "Remedy: return True or False from the save_grads predicate.",
+                ctx=layer_entry,
+                result=decision,
+                code="predicate_return_invalid",
+            )
+        if decision:
+            selected_raw_indexes.add(layer_entry.raw_index)
+    return sorted(selected_raw_indexes)
+
+
 def _get_op_nums_from_user_labels(
     self: "Trace", which_layers: str | list[str | int] | None
 ) -> list[int] | str:
@@ -750,6 +797,9 @@ def _get_op_nums_from_user_labels(
                 )
             }
         )
+
+    if callable(which_layers):
+        return _select_raw_indexes_by_retention_predicate(self, which_layers)
 
     if not isinstance(which_layers, list):
         which_layers = [which_layers]  # type: ignore[list-item]
@@ -1199,6 +1249,28 @@ def _drop_semantic_output_transients(self: "Trace") -> None:
 
     for attr_name in _SEMANTIC_OUTPUT_TRANSIENT_FIELDS:
         self.__dict__.pop(attr_name, None)
+
+
+def _publish_streamed_bundle_at_settlement(self: "Trace") -> None:
+    """Publish a staged streamed bundle with its just-settled outcome.
+
+    WT1 A-IV item 18 (lane A08): postprocess step 18 STAGES the streamed
+    bundle and this seam -- immediately after ``settle_completed`` /
+    ``settle_halted`` -- performs the tmp->final publish, injecting the
+    settled capture-outcome attestation into ``metadata.pkl`` (the same
+    ``_capture_outcome`` key ordinary saves persist). A capture that settles
+    FAILED never reaches here: the propagating exception hits the streaming
+    abort handler in ``user_funcs.py`` and the temp bundle is marked PARTIAL,
+    never published. No-op when nothing is staged (non-streamed captures, the
+    deferred grad-streaming mode, the postprocess-free fastlog arm).
+    """
+
+    writer = self.__dict__.get("_out_writer")
+    if writer is None or not getattr(writer, "staged_for_settlement", False):
+        return
+    settled = outcome_for(self)
+    writer.publish_staged(None if settled is None else settled.to_payload())
+    self._out_writer = None
 
 
 def _scrub_failed_capture_transients(self: "Trace") -> None:
@@ -1963,6 +2035,7 @@ def run_and_log_inputs_through_model(
         self._postprocess(output_tensors, output_tensor_addresses)
         self.__dict__.pop("_capture_producer_policy", None)
         settle_completed(self, capture_session)
+        _publish_streamed_bundle_at_settlement(self)
         return outputs
 
     except HaltSignal as halt_exc:
@@ -2017,6 +2090,7 @@ def run_and_log_inputs_through_model(
                 finalize_partial=True,
                 postprocess_ran=postprocess,
             )
+            _publish_streamed_bundle_at_settlement(self)
             return halted_output
         try:
             # Same double-fault fence as the failed-forward arm below: a raising

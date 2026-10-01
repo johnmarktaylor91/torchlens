@@ -1,0 +1,371 @@
+{
+  "schema": "torchlens.migration_claims.v1",
+  "seeded": "2026-08-26",
+  "seeded_by": "megasprint lane A12 (convert-panel memo D6 / wave-0 item 5). Claim rows transcribe PARITY-INTERVENTIONS launch-copy-safe phrasings verbatim; lint rows transcribe the CLAIM-LINT-SEED ledger rows 1-12. F30 owns lint enforcement; new rows append whenever a check pass refutes a claim.",
+  "wording_states": [
+    "full",
+    "narrowed_scope",
+    "limitation"
+  ],
+  "rendering_rule": "A gated claim degrades to its true narrower sentence before it degrades to a limitation banner, and NEVER renders as marketing while its gate is open.",
+  "floor_lints": [
+    "absolutes-without-claim-id",
+    "comparative-terms-near-peer-name",
+    "bare-multipliers",
+    "empty-strengths-section"
+  ],
+  "tl_side_gates": {
+    "gate-d1-hf-lm-replay-crash": {
+      "statement": "The replay/push engine crashes on HF causal-LM outputs (Cache container-path mis-indexing, intervention/replay.py:669,820,1519; reproduced on distilgpt2/gpt2/Qwen2.5/OPT under transformers 5.14.1). Blocks all LLM replay-economics copy and region advertising.",
+      "status": "open",
+      "fix_lane": "megasprint A05 (FIX-A: replay output-contract fix)"
+    },
+    "gate-fork-run-silent-unedited": {
+      "statement": "fork.attach_hooks(...) followed by fork.run(inputs=x) returns the UNEDITED output with zero warnings. Blocks every 'never silently inert' formulation.",
+      "status": "open",
+      "fix_lane": "megasprint phase 1 (intervention honesty cluster)"
+    },
+    "gate-appliance-replaced-false": {
+      "statement": "The semantic appliances never check fire-record replaced=False, so activation_patch_residual_stream can emit publishable-looking flat tables as a SILENT NO-OP on real HF models. Blocks the same 'never silently inert' class.",
+      "status": "open",
+      "fix_lane": "megasprint A01-A03 (semantic slices)"
+    }
+  },
+  "cross_cutting_rules": [
+    "Never say \"nobody has X\" where X is a family word (replay, safety checks, blocks). Say the precise thing TL uniquely has: replay ENGINE with cone recompute + divergence check; DERIVED admissibility; per-firing AUDIT; unfired-hook DISCLOSURE; region ALGEBRA. Precision is also better copy.",
+    "Three TL-side gates before the strongest claims ship: (a) the D1 replay/push crash on HF causal LMs (blocks claim-1 LLM copy and region advertising); (b) the fork.attach_hooks+run silent-unedited bug (blocks \"never silently inert\"); (c) the appliance replaced=False check (same).",
+    "The exact-vs-approximate frame (edge substitution vs linear attribution patching) is the durable cost story; \"they must pay a full forward\" is not.",
+    "Credit competitors by name for what they own (nnsight generation ergonomics + ~1x; pyvene intervention-as-artifact + trainable interventions; TLens cache kit). The concessions strengthen the switch pitch, not weaken it."
+  ],
+  "claims": [
+    {
+      "id": "claim-1-replay-engine",
+      "competitor": "nnsight; TransformerLens; pyvene; baukit; captum",
+      "version_range": "as verified 2026-08-21 (nnsight feature pages; TLens official API docs; pyvene README/source)",
+      "neutral_fact": "No competitor has a replay ENGINE (a what-if applied to a finished recording, recomputing only the affected downstream cone, divergence-checked, audited). Two near-misses launch copy will be attacked with: TransformerLens start_at_layer/stop_at_layer are official partial-forward parameters against a cached residual stream (manual, layer-granular, no checking, no audit); nnsight tracer.stop() and Skip Execution truncate live runs. Gradient attribution patching approximates all patch variants in ~2 forwards + 1 backward.",
+      "allowed_public_wording": "TorchLens is the only tool with a replay engine: apply a what-if to a finished recording and recompute only the affected downstream cone -- divergence-checked and audited, never silently wrong. Everywhere else the unit of experimentation is a live forward pass: TransformerLens can hand-roll partial forwards from a cached residual stream (start_at_layer, one layer granularity, no checking), and gradient-based attribution patching trades exactness for speed; no other tool re-executes a recording.",
+      "narrowed_scope_wording": "While gate-d1-hf-lm-replay-crash is open: scope the sentence to recorded runs WITHOUT LLM examples, or say \"live-hook reruns\" for LLMs (that route works and is numerically verified).",
+      "limitation_wording": "TorchLens applies what-ifs to recorded runs; engine details in the intervention docs.",
+      "required_credit": "TransformerLens start_at_layer partial forwards; gradient attribution patching's ~2-forward cost.",
+      "evidence_refs": [
+        "PARITY-INTERVENTIONS claim 1",
+        "DIGEST-A A08",
+        "DIGEST-G D1"
+      ],
+      "scenario_ids": [],
+      "tl_side_gates": [
+        "gate-d1-hf-lm-replay-crash"
+      ],
+      "last_verified": "2026-08-21",
+      "owner": "A12 (row custody); F30 (lint enforcement)"
+    },
+    {
+      "id": "claim-2-intervention-as-object",
+      "competitor": "pyvene (primary); nnsight (model.edit nuance)",
+      "version_range": "as verified 2026-08-21 (pyvene README/pyvene_101/interventions.py)",
+      "neutral_fact": "Only pyvene treats interventions as durable objects (dict configs, IntervenableModel.save with Hub push, pyreft built on it). pyvene is NOT modelcard-locked: raw string component paths are an escape hatch -- but they are UNVERIFIED strings (no site keys, no structural verification, no drift refusal). pyvene HAS reads (CollectIntervention), site-scoped collection only. pyvene has no past tense: every intervention executes inside a live forward. nnsight model.edit() is a persistent in-memory binding, not a serializable artifact.",
+      "allowed_public_wording": "Only pyvene treats an intervention as a durable object -- serializable configs, trained interventions you can push to the Hub -- and we respect that. But a pyvene address is either a hand-maintained per-family alias or a bare attribute-path string; there is no structural verification and nothing that notices drift. And pyvene has no past tense: it can collect activations at a site, but there is no recording -- every question costs a live forward, and nothing is captured for audit.",
+      "narrowed_scope_wording": "none needed -- wording rule permanently in force (no gate).",
+      "limitation_wording": "Credit pyvene's artifact story without the contrast sentence.",
+      "required_credit": "pyvene intervention-as-artifact + trainable interventions + Hub culture.",
+      "evidence_refs": [
+        "PARITY-INTERVENTIONS claim 2",
+        "DIGEST-A A09"
+      ],
+      "scenario_ids": [],
+      "tl_side_gates": [],
+      "last_verified": "2026-08-21",
+      "owner": "A12 (row custody); F30 (lint enforcement)"
+    },
+    {
+      "id": "claim-3-where-algebra-audit-inert",
+      "competitor": "nnsight; pyvene; TransformerLens; baukit; captum",
+      "version_range": "as verified 2026-08-21",
+      "neutral_fact": "Multi-site region ADDRESSING with derived admissibility: nobody has it (pyvene open P0 #226 asks for it), but single-module block edits exist elsewhere (pyvene SkipIntervention, nnsight Skip Execution, baukit edit_output). nnsight ships scan/validate (FakeTensor shape/type dry-run); TL's uniqueness is SEMANTIC admissibility derived from the captured graph -- say \"derived admissibility\", not \"safety checks\". Audit trails: no competitor produces a per-firing intervention ledger. Silent-inert detection: no competitor counts fires; TL's rerun path reconciles hook_fire_count + unfired_hook_ids. TL-side: the address algebra is REPLAY-ONLY today; live-lane regions are a design item (Build 0c).",
+      "allowed_public_wording": "TorchLens is the only tool where WHERE is an algebra: compose selectors over the captured graph, and admissibility is derived, not asserted -- an edit that cannot apply refuses with a remedy, in types, before your forward runs. Every firing lands in an audit you can read back; hooks that fire nowhere are counted and disclosed, not swallowed. (nnsight's scan/validate dry-runs shapes; nothing anywhere else audits what actually fired.)",
+      "narrowed_scope_wording": "While the two inert-detection gates are open: \"we count fires and disclose unfired hooks\" is true of the rerun path; never \"we can never be silently inert\". Keep region-SURGERY promises off live-run copy until Build 0c ships.",
+      "limitation_wording": "Selector composition and typed refusals described without uniqueness or inertness absolutes.",
+      "required_credit": "nnsight scan/validate pre-run shape checking.",
+      "evidence_refs": [
+        "PARITY-INTERVENTIONS claim 3",
+        "DIGEST-A A07-A10",
+        "DIGEST-G D1",
+        "PROBE-r1b"
+      ],
+      "scenario_ids": [],
+      "tl_side_gates": [
+        "gate-fork-run-silent-unedited",
+        "gate-appliance-replaced-false",
+        "gate-d1-hf-lm-replay-crash"
+      ],
+      "last_verified": "2026-08-21",
+      "owner": "A12 (row custody); F30 (lint enforcement)"
+    },
+    {
+      "id": "claim-4-generation-episode",
+      "competitor": "nnsight (primary); pyvene (intervene_on_prompt nuance)",
+      "version_range": "as verified 2026-08-21 (nnsight Multiple Token Generation docs)",
+      "neutral_fact": "nnsight owns generation ergonomics (tracer.all()/iter[]/.next(), ~1x price). pyvene also intervenes during model.generate. TorchLens composes intervention with HF generation today on all three engines with byte-identical intervened tokens (edit fires at prefill + every decode step); episode capture is priced as a diagnostic: 79 s = ~103x native at N=20 (gpt2-124M, CPU, 8-token prompt), SUPERLINEAR beyond (N=100 -> 657 s = 323x). Cheapest intervened generation is record at ~42x; the ~1x capture-free tier does not exist yet.",
+      "allowed_public_wording": "nnsight has the best generation ergonomics in the field -- one-line tracing of model.generate with per-step intervention -- and at ~1x it owns the price point. TorchLens composes intervention with generation today (same edit, prefill and every decode step, identical tokens across all three capture engines), and adds what nobody else has: generation as a saved, replayable, audited artifact. That evidence tier is priced as a diagnostic: ~103x native at 20 steps (gpt2-124M, CPU), superlinear beyond; capture-lite runs land at ~42x today, and a capture-free runner is roadmap.",
+      "narrowed_scope_wording": "Any 103x citation MUST carry (CPU, gpt2-124M, N=20) and must not imply linearity in N.",
+      "limitation_wording": "Intervened generation composes on all three engines; costs in the benchmark table.",
+      "required_credit": "nnsight generation ergonomics + ~1x live price; pyvene generate-time intervention.",
+      "evidence_refs": [
+        "PARITY-INTERVENTIONS claim 4",
+        "docs/reference/episode_capture.md:42",
+        "PROBE-r1b",
+        "DIGEST-A A08"
+      ],
+      "scenario_ids": [],
+      "tl_side_gates": [],
+      "last_verified": "2026-08-21",
+      "owner": "A12 (row custody); F30 (lint enforcement)"
+    },
+    {
+      "id": "claim-5-tlens-cache-kit",
+      "competitor": "TransformerLens",
+      "version_range": "TLens 3.x mid-pivot to TransformerBridge, as verified 2026-08-21",
+      "neutral_fact": "TLens owns the ActivationCache analysis kit (accumulated_resid/decompose_resid/stack_head_results/logit_attrs, FactoredMatrix/QK/OV) and ecosystem gravity (ARENA, SAELens). TLens 3.x/4.0 is mid-pivot from HookedTransformer (reimplementation, deprecated) to TransformerBridge (wrapping the REAL HF model): the \"we wrap the real model, they reimplement\" differentiator is TIME-LIMITED; the churn (bridge bug cluster incl. #1688 hooks that silently never fire, cite as live bug not permanent property) makes now the cheapest switching window. TLens has its own flags-before-run gates; TL's honest differentiator is typed refusal WITH A REMEDY, never \"no dark hooks\". TLens official zoo is 249 IDs; TLens has no input attribution; TL reads SDPA facets without eager reload (READ-ONLY -- editing still needs a visible/eager site).",
+      "allowed_public_wording": "If your daily driver is the ActivationCache analysis kit -- accumulated_resid, stack_head_results, direct logit attribution -- and the ARENA/SAELens ecosystem around it, TransformerLens is where that kit lives, and we say so. TorchLens is for the moment you step off the paved road: any model (not a registry), verified addresses, attribution built in, and fused-attention internals you can read without reloading the model in eager mode. TransformerLens is itself mid-migration to wrapping real HF models; if you are re-learning an API anyway, compare both.",
+      "narrowed_scope_wording": "none needed -- wording rule permanently in force (no gate).",
+      "limitation_wording": "Credit the TLens kit without the comparison sentence.",
+      "required_credit": "TLens ActivationCache kit + QK/OV + ARENA/SAELens gravity.",
+      "evidence_refs": [
+        "PARITY-INTERVENTIONS claim 5",
+        "DIGEST-A A07 (incl. r2 corrections)"
+      ],
+      "scenario_ids": [],
+      "tl_side_gates": [],
+      "last_verified": "2026-08-21",
+      "owner": "A12 (row custody); F30 (lint enforcement)"
+    }
+  ],
+  "lints": [
+    {
+      "id": "perf-no-single-multiplier",
+      "competitor": "none (self-claim; binds all comparative perf copy against any peer)",
+      "neutral_fact": "Measured tl.trace overhead spans 13.78x plain forward (resnet18, CPU, warm) and 14.77x (gpt2_hf, CPU) to ~50-60x warm plus ~3s cold on a small CPU transformer. Fixed per-call overhead dominates small models; no single multiplier characterizes the engine. The metadata-only path saves memory, not time.",
+      "allowed_public_wording": "Quote the benchmarked table row(s), each number carrying (model, device, N/warmup) from its benchmark artifact; when overhead is discussed, note that the metadata-only path saves memory, not time.",
+      "narrowed_scope_wording": "tl.trace overhead measured 13.78x on resnet18 (CPU, warm) and 14.77x on gpt2_hf (CPU); small models pay proportionally more because fixed per-call overhead dominates.",
+      "limitation_wording": "Trace overhead is model- and device-dependent; see the benchmark table. (No multiplier in copy.)",
+      "required_credit": null,
+      "evidence_refs": [
+        "DIGEST-A s4 #24",
+        "docs/_perf_numbers.md",
+        "A01-r2 measurement"
+      ],
+      "tl_side_gates": [],
+      "lint": "FAIL any sentence publishing a single '<N>x' overhead multiplier as 'the' overhead; FAIL any multiplier not traceable to a benchmark artifact carrying (model, device, N). Also enforces N2: no number without surface/device/model/n and the query that produced it.",
+      "last_verified": "2026-08-20",
+      "owner": "A12 (row custody); F30 (lint enforcement)"
+    },
+    {
+      "id": "perf-fastlog-attribution",
+      "competitor": "none (self-claim)",
+      "neutral_fact": "The 0.83-0.84x-of-plain-forward numbers are FASTLOG halt runs (fastlog_halt_25), measured CPU-only. tl.trace measured 13.78-14.77x (CPU). GPU fastlog-halt measured 4.9-10.4x. Attributing the sub-1x number to tl.trace or to GPU is false.",
+      "allowed_public_wording": "'fastlog with an op-shaped halt (fastlog_halt_25) reached 0.83-0.84x plain forward on CPU' -- engine and device always named alongside the number.",
+      "narrowed_scope_wording": "If engine and device cannot ride with the number, drop the number: 'a capture mode faster than the plain forward exists on CPU via fastlog.'",
+      "limitation_wording": "Sub-forward-cost capture is available in a restricted mode; see the benchmark table.",
+      "required_credit": null,
+      "evidence_refs": [
+        "DIGEST-A s4 #13",
+        "A17-r2 (GPU fastlog-halt 4.9-10.4x)",
+        "docs/_perf_numbers.md"
+      ],
+      "tl_side_gates": [],
+      "lint": "FAIL any attribution of a sub-1x (0.8x-class) number to tl.trace or to GPU; FAIL any 'faster than the forward pass' copy without engine=fastlog and device=CPU attached. Cross-check with halt-selector-shape.",
+      "last_verified": "2026-08-20",
+      "owner": "A12 (row custody); F30 (lint enforcement)"
+    },
+    {
+      "id": "episode-capture-caveats",
+      "competitor": "none (self-claim)",
+      "neutral_fact": "Episode capture is (1) a semi-private surface, (2) refused by non-torch backends, and (3) its per-step logits depend on save policy. All three limits are load-bearing for any capability claim built on it.",
+      "allowed_public_wording": "Any episode-capture claim carries all three caveats verbatim-in-substance: semi-private surface; non-torch backends refuse; per-step logits depend on save policy.",
+      "narrowed_scope_wording": "Episode capture exists behind a semi-private surface with the above limits; it is not yet a supported public engine.",
+      "limitation_wording": "No episode-capture-based capability claims.",
+      "required_credit": null,
+      "evidence_refs": [
+        "DIGEST-A s4 #27",
+        "A13-r2"
+      ],
+      "tl_side_gates": [
+        "promotion of the episode surface to public API -- until it ships, the caveated wording is the ceiling"
+      ],
+      "lint": "While the promotion gate is open, FAIL any episode-capture claim missing any one of the three caveats.",
+      "last_verified": "2026-08-20",
+      "owner": "A12 (row custody); F30 (lint enforcement)"
+    },
+    {
+      "id": "menagerie-phrasing",
+      "competitor": "none (self-claim about the menagerie catalog)",
+      "neutral_fact": "The menagerie README's own claim is '11,600+ cataloged, ~89% algorithmically verified'. Several lanes compressed this to 'verified entries' -- an overclaim corrected fleet-wide.",
+      "allowed_public_wording": "Exactly '11,600+ cataloged, ~89% algorithmically verified' -- verbatim, everywhere the menagerie size or verification status is stated.",
+      "narrowed_scope_wording": "none -- verbatim-phrasing rule; there is no approved paraphrase.",
+      "limitation_wording": "Omit the count and verification figures entirely.",
+      "required_credit": null,
+      "evidence_refs": [
+        "DIGEST-A s4 #28",
+        "A03-r2 correction"
+      ],
+      "tl_side_gates": [],
+      "lint": "FAIL any menagerie size/verification phrasing that is not the ruled string verbatim; FAIL compressions of the class '11,600 verified' / 'verified entries'.",
+      "last_verified": "2026-08-20",
+      "owner": "A12 (row custody); F30 (lint enforcement)"
+    },
+    {
+      "id": "macs-unit-suffix",
+      "competitor": "none (self-claim; unit confusion is the most-reported issue class across FLOPs-counter competitors)",
+      "neutral_fact": "total_macs_forward is rendered through _human_flops and prints a FLOPs suffix ('718.9 MFLOPs') at _builder.py:1214-1215 (also 1386, 1401, 1526; README.md:122), with the FLOPs//2 disclosure line adjacent. MAC records must never render with a FLOPs suffix.",
+      "allowed_public_wording": "(post-fix) MAC quantities carry MAC units; FLOPs quantities carry FLOPs units; compute magnitude is stated via the two-term compute record (lane A07's vocabulary).",
+      "narrowed_scope_wording": "(gate open) Compute magnitudes are quoted from the raw field (total_macs_forward, unit: MACs), never from the rendered string; the rendering defect is named when the rendered output is shown.",
+      "limitation_wording": "No compute-magnitude numbers quoted from rendered summaries until the A07 fix merges.",
+      "required_credit": null,
+      "evidence_refs": [
+        "DIGEST-A s4 #5",
+        "s2a bug 2",
+        "_builder.py:1214-1215,1386,1401,1526",
+        "README.md:122"
+      ],
+      "tl_side_gates": [
+        "megasprint lane A07 merge (two-term compute record) -- while open, wording degrades per D6"
+      ],
+      "lint": "FAIL any rendering, doc, or dossier line where a MAC-derived quantity carries a FLOPs suffix; after the A07 merge, FAIL any quotation of the old mislabeled rendered strings.",
+      "last_verified": "2026-08-20",
+      "owner": "lane A07 owns the fix; A12 (row custody); F30 (lint enforcement)"
+    },
+    {
+      "id": "timing-uniqueness-scope",
+      "competitor": "DeepSpeed (flops profiler, current release) -- the standing counterexample",
+      "neutral_fact": "'No competitor has timing' is true only within summary tools; DeepSpeed's profiler prints per-module latency. Family absolutes about timing are false unscoped.",
+      "allowed_public_wording": "'Among summary tools, torchlens is the only one with per-module measured timing' -- the summary-tools scope always attached -- plus the required credit.",
+      "narrowed_scope_wording": "Drop uniqueness: 'torchlens reports per-module measured timing.'",
+      "limitation_wording": "No uniqueness claim about timing.",
+      "required_credit": "DeepSpeed's flops profiler prints per-module latency.",
+      "evidence_refs": [
+        "DIGEST-A s4 #26",
+        "A01 row 37",
+        "A18"
+      ],
+      "tl_side_gates": [],
+      "lint": "FAIL 'no competitor has timing' or any timing family-absolute lacking the summary-tools scope; FAIL the scoped claim when the DeepSpeed credit is absent (credit-required class; never a family absolute -- say the precise thing).",
+      "last_verified": "2026-08-20",
+      "owner": "A12 (row custody); F30 (lint enforcement)"
+    },
+    {
+      "id": "halt-selector-shape",
+      "competitor": "none (self-claim)",
+      "neutral_fact": "halt= exists as a shipped tl.trace kwarg, but inclusive save-then-halt semantics work only for op-shaped selectors on the fastlog engine. Module-shaped selectors are broken: halt=tl.module matches zero sites (silent full forward); tl.in_module halts EXCLUSIVE of the requested site; pluck's stop_after and experimental.stop_after are silently discarded no-ops. The inclusive primitive exists internally, unexposed (_runnable_transaction.py:819-1023).",
+      "allowed_public_wording": "(current) halt= claims split by selector shape: 'op-shaped halt works on fastlog (0.83-0.84x plain forward, CPU); module-shaped halt is broken.'",
+      "narrowed_scope_wording": "Claim only the working half: op-shaped halt on fastlog, with perf-fastlog-attribution's rules on any number.",
+      "limitation_wording": "No early-halt capability claims.",
+      "required_credit": null,
+      "evidence_refs": [
+        "DIGEST-A s4 #25",
+        "s2a bug 6",
+        "_runnable_transaction.py:819-1023"
+      ],
+      "tl_side_gates": [
+        "s2a bug 6 fix (halt/stop_after cleanup) -- while open, module-shaped copy renders only as the limitation wording"
+      ],
+      "lint": "FAIL any unqualified 'halt= works' / 'stop_after works' claim; require the op-shaped/module-shaped split in every halt claim; cross-check engine and device attribution against perf-fastlog-attribution.",
+      "scope_note": "Refinement (2026-08-26, CHECK-T00 fix cycle): the split requirement binds CAPABILITY claims (sentences asserting halt/stop_after WORKS). A DEFECT report (an underclaim) does not fail the lint for lacking the split, though it should still name the selector shape where known.",
+      "last_verified": "2026-08-20 (adjudication); refinement 2026-08-26",
+      "owner": "A12 (row custody); F30 (lint enforcement); fix rides s2a bug 6"
+    },
+    {
+      "id": "attribution-self-check-scope",
+      "competitor": "none (self-claim; binds all attribution copy)",
+      "neutral_fact": "Of the 8 shipped torchlens attribution method spellings, exactly ONE (integrated_gradients) emits attribution_sum / target_delta / completeness_residual. saliency, input_x_grad, smoothgrad, grad_cam, layer_attribution, layer_conductance and layer_integrated_gradients emit none. Code: torchlens/attribution/_core.py:1001-1013 (sole emit site).",
+      "allowed_public_wording": "'TorchLens's integrated gradients always reports its own completeness check (attribution sum vs target delta, and the residual between them).' Method named, never generalized.",
+      "narrowed_scope_wording": "'our path-integral attribution discloses its convergence residual.'",
+      "limitation_wording": "No self-check claim.",
+      "required_credit": null,
+      "evidence_refs": [
+        "CHECK-P block4 section 5",
+        "torchlens/attribution/_core.py:1001-1013 at f74e4a9e"
+      ],
+      "tl_side_gates": [
+        "none today; re-verify the method list at F06 merge -- if more methods gain the triple, the neutral fact updates by evidence, never silently"
+      ],
+      "lint": "FAIL any UNSCOPED/generalized completeness or self-check phrasing -- 'every result', 'all our methods', or any always-on claim that does not name the method in the same breath (an IG-scoped 'always-on' that names integrated_gradients PASSES); FAIL any attribution self-check claim that does not name integrated_gradients.",
+      "last_verified": "2026-08-26",
+      "owner": "A12 (row custody); F30 (lint enforcement); scope fix rides F06"
+    },
+    {
+      "id": "attention-picture-scope",
+      "competitor": "none (self-claim; binds all attention-picture copy in both directions)",
+      "neutral_fact": "The per-head pattern FACET is unavailable on every family tested (5 of 5: gpt2, bert, distilbert, Qwen2.5-0.5B, gemma-3-1b -- KeyError). On an EAGER-attention load, tl.trace(save=tl.func('softmax')) captures the per-head pattern bitwise-identically to HF output_attentions (max abs diff 0.000e+00 across all 12 gpt2 layers) and renders end to end through render_heatmap. On the DEFAULT fused sdpa load, 0 softmax ops are captured -- nothing carries the pattern.",
+      "allowed_public_wording": "Any can/cannot-draw-an-attention-pattern claim names BOTH the attention implementation (eager vs fused/sdpa) and the route (facet vs captured op). Note where relevant that requiring eager is the same reconfiguration BertViz and CircuitsVis require.",
+      "narrowed_scope_wording": "On an eager-attention load, TorchLens captures and renders the per-head pattern today; the default fused load waits on A01.",
+      "limitation_wording": "No attention-picture capability or incapability claims.",
+      "required_credit": null,
+      "evidence_refs": [
+        "checks/block3.md refutation row 1",
+        "probe R2b",
+        "probe R8"
+      ],
+      "tl_side_gates": [
+        "A01 merge (pattern facets / fused read) -- the eager-scoped wording is legal NOW; unscoped wording is never legal"
+      ],
+      "lint": "FAIL any claim that TorchLens can or cannot draw an attention pattern that does not name the attention implementation (eager vs fused) and the route (facet vs captured op).",
+      "last_verified": "2026-08-26",
+      "owner": "A12 (row custody); F30 (lint enforcement)"
+    },
+    {
+      "id": "halt-module-selector-named",
+      "competitor": "none (self-claim; extends halt-selector-shape)",
+      "neutral_fact": "The two module-shaped halt selectors behave differently at f74e4a9e: halt=tl.module matches ZERO sites (warning + full 542-op forward on gpt2), while halt=tl.in_module('transformer.h.2') HALTS at 99 of 542 ops, EXCLUSIVE of the requested site.",
+      "allowed_public_wording": "Module-halt claims name WHICH module-shaped selector and its inclusive/exclusive behavior.",
+      "narrowed_scope_wording": "'TorchLens stops early at a module region today (in_module, exclusive of the requested site); inclusive named-module stop is A06.'",
+      "limitation_wording": "No module-halt claims (halt-selector-shape's limitation wording).",
+      "required_credit": null,
+      "evidence_refs": [
+        "checks/block3.md refutation rows 5-6",
+        "probe R3",
+        "halt-selector-shape neutral fact"
+      ],
+      "tl_side_gates": [
+        "A06 merge (halt/stop_after reconciliation) -- while open, selector-named wording is the ceiling"
+      ],
+      "lint": "FAIL any module-halt claim that does not name WHICH module-shaped selector, since tl.module matches zero sites while tl.in_module halts exclusive of the requested site. Cross-check with halt-selector-shape.",
+      "last_verified": "2026-08-26",
+      "owner": "A12 (row custody); F30 (lint enforcement); fix rides A06"
+    },
+    {
+      "id": "public-spelling-disclosure",
+      "competitor": "none (self-claim; binds all capability copy)",
+      "neutral_fact": "Several capability claims rest on spellings absent from tl.__all__ (torchlens.viz.node_plots.render_heatmap, torchlens.viz.causal_trace_heatmap, torchlens.semantic.logit_lens) or on spellings that emit deprecation warnings pointing elsewhere (tl.save_intervention, tl.load_intervention_spec, tl.check_spec_compat -> tl.io.* / tl.validation.*).",
+      "allowed_public_wording": "A capability claim resting on a non-exported or deprecated spelling says so, or uses the public/current spelling.",
+      "narrowed_scope_wording": "Name the module path explicitly and mark it 'not yet public API'.",
+      "limitation_wording": "No capability claim on that surface.",
+      "required_credit": null,
+      "evidence_refs": [
+        "checks/block3.md refutation rows 8, 15"
+      ],
+      "tl_side_gates": [
+        "export/promotion of the named spellings (owners: F07 viz, A03 logit_lens, the io/validation rename owner) -- while open, disclosure wording is mandatory"
+      ],
+      "lint": "FAIL any capability claim whose spelling is absent from tl.__all__ or emits a deprecation warning, unless the claim says so.",
+      "last_verified": "2026-08-26",
+      "owner": "A12 (row custody); F30 (lint enforcement)"
+    },
+    {
+      "id": "provenance-scope-matches-number",
+      "competitor": "none (self-claim; binds every attached provenance query in dossiers and launch copy)",
+      "neutral_fact": "An attached provenance query is only a receipt if executing its stated scope literally reproduces the number it labels.",
+      "allowed_public_wording": "A published number carries a query whose stated scope, executed literally, reproduces that number; any wider or narrower universe's delta is stated separately.",
+      "narrowed_scope_wording": "State the executed scope and the number it actually produces; mark the labelled number's universe explicitly (floor/ceiling).",
+      "limitation_wording": "No attached-query claim for that number.",
+      "required_credit": null,
+      "evidence_refs": [
+        "checks/closings.md RECHECK 1 section 2; RECHECK 2 section 3 (origin instance repaired, kept as the worked example)"
+      ],
+      "tl_side_gates": [],
+      "lint": "FAIL any attached query whose stated scope, executed literally, yields a different number than the one it labels.",
+      "last_verified": "2026-08-26",
+      "owner": "A12 (row custody); F30 (lint enforcement)"
+    }
+  ],
+  "check_block_line": "Every check pass over dossiers/boundary copy emits exactly one line: 'CLAIM-LINT: <n_run> run / <n_fail> fail [ids: ...]' (N5)."
+}

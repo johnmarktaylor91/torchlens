@@ -18,7 +18,12 @@ from torchvision.models import resnet18
 
 model = resnet18(weights=None).eval()
 x = torch.randn(1, 3, 224, 224, requires_grad=True)
-trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
+# Gradient-bearing actions need BOTH backward_ready=True and
+# save_mode="reference": the default detaching save mode frees the autograd
+# history the empirical probes consume.
+trace = tl.trace(
+    model, x, capture=tl.options.CaptureOptions(backward_ready=True), save_mode="reference"
+)
 
 op = trace["layer4.1.conv2"]
 rf = op.receptive_field
@@ -28,9 +33,11 @@ print(rf.size, rf.jump, rf.center0)
 box = rf.at((3, 3))
 
 # Gradient-bearing actions use a complete target-element index, including batch.
+# .gradient() and .check() FREE the armed autograd graph by default, so pass
+# retain_graph=True to every gradient-bearing action except the last.
 unit = rf.center_unit(batch_index=0)
-empirical = rf.gradient(unit)
-checked = rf.check(unit)
+empirical = rf.gradient(unit, retain_graph=True)
+checked = rf.check(unit, retain_graph=True)
 overlay = rf.show(unit, gradient=True)
 overlay.save("resnet18_rf.png")
 ```

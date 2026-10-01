@@ -222,6 +222,13 @@ def save_intervention(
         Test injection hook used to simulate tensor-write crashes.
     """
 
+    # WT1 A-IV item 20 (lane A08): the intervention-spec door had NO settled-
+    # outcome gate, so a FAILED/aborted/unknown capture could export its spec
+    # (fire records, target manifest) as if nothing happened. Same N1 authority
+    # and ordering as tl.save(): outcome gate first, then the poison gate.
+    from ..capture.outcome import require_capture_capability
+
+    require_capture_capability(log, "save_analysis")
     from ..runnable import refuse_poisoned_trace
 
     refuse_poisoned_trace(log, "intervention export")
@@ -350,8 +357,15 @@ def load_intervention_spec(
     _reject_symlink_path(spec_path / _MANIFEST_FILE, context="intervention manifest.json")
     data = _read_json_file(spec_path / _SPEC_FILE)
     _validate_format_version(data.get("format_version"))
+    _validate_spec_json_structure(data, spec_path)
     manifest = _read_json_file(spec_path / _MANIFEST_FILE)
-    tensor_entries = [TensorEntry.from_dict(entry) for entry in manifest.get("tensor_entries", [])]
+    manifest_entries = manifest.get("tensor_entries", [])
+    if not isinstance(manifest_entries, list):
+        raise ReplayPreconditionError(
+            f"{spec_path / _MANIFEST_FILE} field 'tensor_entries' must be a list, "
+            f"got {type(manifest_entries).__name__}"
+        )
+    tensor_entries = [TensorEntry.from_dict(entry) for entry in manifest_entries]
     tensors = _load_tensor_refs(spec_path, tensor_entries)
     spec_payload = data["intervention_spec"]
     spec = _deserialize_intervention_spec(
@@ -380,6 +394,41 @@ def load_intervention_spec(
         allowed_custom_callable_modules=allowed_custom_callable_modules,
     )
     return spec
+
+
+def _validate_spec_json_structure(data: dict[str, Any], spec_path: Path) -> None:
+    """Validate the top-level ``spec.json`` structure before deserialization.
+
+    WT1 A-IV item 20 (lane A08): the loader used to index straight into the
+    decoded JSON, so a spec.json missing its ``intervention_spec`` object died
+    with a bare ``KeyError`` and junk-typed top-level fields flowed silently
+    into spec metadata. Structural violations refuse with the module's
+    documented ``ReplayPreconditionError``; deeper per-record staging refusals
+    are the C03 lane's continuing work.
+    """
+
+    spec_payload = data.get("intervention_spec")
+    if not isinstance(spec_payload, dict):
+        raise ReplayPreconditionError(
+            f"{spec_path / _SPEC_FILE} is missing its 'intervention_spec' object "
+            f"(got {type(spec_payload).__name__}); the file is not a TorchLens "
+            "intervention spec or was hand-edited"
+        )
+    declared_level = data.get("save_level")
+    if declared_level is not None:
+        allowed = {member.value for member in SaveLevel}
+        if str(declared_level) not in allowed:
+            raise ReplayPreconditionError(
+                f"{spec_path / _SPEC_FILE} declares unknown save_level "
+                f"{declared_level!r}; expected one of {sorted(allowed)}"
+            )
+    for list_field in ("target_manifest", "helpers", "function_registry_keys"):
+        value = data.get(list_field)
+        if value is not None and not isinstance(value, list):
+            raise ReplayPreconditionError(
+                f"{spec_path / _SPEC_FILE} field {list_field!r} must be a list, "
+                f"got {type(value).__name__}"
+            )
 
 
 def _validate_format_version(format_version: Any) -> None:
@@ -1380,7 +1429,38 @@ def _deserialize_fire_record(
         grad_kind=data.get("grad_kind"),
         tuple_index=data.get("tuple_index"),
         replaced=data.get("replaced"),
+        edge_address=_edge_address_from_json(data.get("edge_address")),
     )
+
+
+def _edge_address_from_json(value: Any) -> tuple | None:
+    """Rebuild a persisted fire-record ``edge_address`` occurrence address.
+
+    WT1 A-IV item 20 (lane A08): the serializer wrote every FireRecord field
+    -- ``edge_address`` included -- but the deserializer omitted it, so the
+    ``(child_func_call_id, arg_kind, arg_path)`` occurrence address was
+    SILENTLY DISCARDED on every load. JSON round-trips tuples as lists, so
+    the address canonicalizes back to nested tuples; a present-but-malformed
+    value refuses typed instead of degrading to the historical silent drop.
+    """
+
+    if value is None:
+        return None
+    if not isinstance(value, (list, tuple)):
+        raise ReplayPreconditionError(
+            "fire-record edge_address must be a JSON array (the "
+            "(child_func_call_id, arg_kind, arg_path) occurrence address), "
+            f"got {type(value).__name__}"
+        )
+
+    def _canonical(item: Any) -> Any:
+        """Rebuild JSON arrays as tuples, recursively (scalars pass through)."""
+
+        if isinstance(item, (list, tuple)):
+            return tuple(_canonical(part) for part in item)
+        return item
+
+    return tuple(_canonical(part) for part in value)
 
 
 def _deserialize_value(

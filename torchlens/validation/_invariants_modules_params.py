@@ -26,6 +26,7 @@ __all__ = (
     "_check_param_usage_reciprocal_links",
     "_check_param_co_parent_links",
     "_check_layers_with_params_matches_param_usage",
+    "_deduped_layers_with_params",
     "_check_layer_param_aggregate_dedup",
 )
 
@@ -489,6 +490,26 @@ def _check_layers_with_params_matches_param_usage(ml: Trace, name: str) -> None:
         )
 
 
+def _deduped_layers_with_params(ml: Trace) -> int:
+    """Count distinct layer labels whose Layer carries any _param_logs.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing layer metadata.
+    """
+
+    seen_layer_labels: set[str] = set()
+    layers_with_params = 0
+    for layer in ml.layer_list:
+        if layer.layer_label in seen_layer_labels:
+            continue
+        seen_layer_labels.add(layer.layer_label)
+        if getattr(layer, "_param_logs", ()):
+            layers_with_params += 1
+    return layers_with_params
+
+
 def _check_layer_param_aggregate_dedup(ml: Trace, name: str) -> None:
     """Check trace param aggregate counts with layer-label deduplication.
 
@@ -505,37 +526,49 @@ def _check_layer_param_aggregate_dedup(ml: Trace, name: str) -> None:
         If deduplicated layer parameter aggregates drift from trace totals.
     """
 
-    seen_layer_labels: set[str] = set()
-    total_params = 0
-    trainable_params = 0
-    frozen_params = 0
-    layers_with_params = 0
+    # A07 numbers truth: trace parameter totals follow PARAMETER OBJECT
+    # IDENTITY (param_logs, object-deduplicated at the pre-forward scan) --
+    # never a per-layer sum, which double-counts a parameter consumed by more
+    # than one layer (tied embeddings, weight-reused layers) and drops
+    # declared-but-never-executed parameters. The tripwire recomputes the
+    # identity sums independently from param_logs.
+    layers_with_params = _deduped_layers_with_params(ml)
+
+    param_logs = list(getattr(ml, "param_logs", []) or [])
+    total_params = sum(int(pl.num_params) for pl in param_logs)
+    trainable_params = sum(int(pl.num_params) for pl in param_logs if pl.is_trainable)
+    frozen_params = sum(int(pl.num_params) for pl in param_logs if not pl.is_trainable)
+
+    # Cross-path tripwire: the DISTINCT parameter identities consumed by
+    # layers must sum to no more than the declared identity inventory (layers
+    # can never consume a parameter the inventory does not declare).
+    consumed_by_identity: dict[int, int] = {}
     for layer in ml.layer_list:
-        if layer.layer_label in seen_layer_labels:
-            continue
-        seen_layer_labels.add(layer.layer_label)
-        if not getattr(layer, "_param_logs", ()):
-            continue
-        layers_with_params += 1
-        total_params += getattr(layer, "num_params", 0)
-        trainable_params += getattr(layer, "num_params_trainable", 0)
-        frozen_params += getattr(layer, "num_params_frozen", 0)
+        for pl in getattr(layer, "_param_logs", ()) or ():
+            consumed_by_identity[id(pl)] = int(pl.num_params)
+    consumed_total = sum(consumed_by_identity.values())
+    if consumed_total > total_params:
+        raise MetadataInvariantError(
+            name,
+            f"layer-consumed distinct-identity param total {consumed_total} exceeds "
+            f"the declared identity inventory {total_params}",
+        )
 
     if total_params != getattr(ml, "num_params", 0):
         raise MetadataInvariantError(
             name,
-            f"deduped layer param total {total_params} != trace.num_params={ml.num_params}",
+            f"identity param total {total_params} != trace.num_params={ml.num_params}",
         )
     if trainable_params != getattr(ml, "num_params_trainable", 0):
         raise MetadataInvariantError(
             name,
-            "deduped trainable param total "
+            "identity trainable param total "
             f"{trainable_params} != trace.num_params_trainable={ml.num_params_trainable}",
         )
     if frozen_params != getattr(ml, "num_params_frozen", 0):
         raise MetadataInvariantError(
             name,
-            f"deduped frozen param total {frozen_params} != "
+            f"identity frozen param total {frozen_params} != "
             f"trace.num_params_frozen={ml.num_params_frozen}",
         )
     if layers_with_params != getattr(ml, "num_layers_with_params", 0):

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from ... import _state as _st
+from ..._capture_state_helpers import _is_uninitialized_param
 from ..._errors import TorchLensPostfuncError
 from ..._state import pause_logging
 from ..._training_validation import TrainingModeConfigError
@@ -423,6 +424,12 @@ def _build_param_fields(
     _param_logs: list[Any] = []
     resolved_parameters: list[torch.nn.Parameter] = []
     for param in arg_parameters:
+        if _is_uninitialized_param(param):
+            # A still-uninitialized lazy parameter reachable at op time can
+            # only be initialization machinery (e.g. a sibling param during a
+            # lazy module's materialize sweep); it has no shape/storage yet
+            # and cannot be a real compute input.
+            continue
         param_meta = get_param_meta(param)
         addr = None if param_meta is None else param_meta.param_address
         if addr is not None and addr in self.param_logs:

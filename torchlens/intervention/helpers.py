@@ -61,30 +61,65 @@ def zero_ablate(*, force_shape_change: bool = False) -> HelperSpec:
     )
 
 
+#: The closed ``mean_ablate(over=)`` vocabulary. ``"self"`` is the only
+#: implemented policy today (a global mean of the fire-time value); axis-aware
+#: reductions are a future family and MUST refuse here until they compute
+#: something -- an accepted-but-ignored token is the audit-only-label defect
+#: this gate exists to kill (edits memo D16).
+MEAN_ABLATE_OVER_TOKENS = ("self",)
+
+
 def mean_ablate(
     source: Any | None = None,
     *,
     over: str = "self",
     force_shape_change: bool = False,
 ) -> HelperSpec:
-    """Create a helper that replaces outs with a source mean.
+    """Create a helper that fills each out with one scalar mean.
 
     Parameters
     ----------
     source:
-        Optional tensor source. When omitted or ``over="self"``, the mean is
-        computed from the current out at hook fire time.
+        Optional external source (a tensor, or an Op-like object exposing
+        ``out``). When given, the fill value is the SOURCE's global mean and
+        never reads the traced batch, so the spec derives
+        ``batch_independent=True`` (append across batch chunks stays sound).
+        When omitted, the mean is computed from the current out at hook fire
+        time -- a value that couples every batch row, so the spec derives
+        ``batch_independent=False`` and the append gate refuses.
     over:
-        Source policy label retained for audit. ``"self"`` and tensor sources
-        are supported.
+        Mean policy. The vocabulary is CLOSED and validated at construction:
+        ``"self"`` (the default -- global mean of the fire-time value) is the
+        only implemented policy. Unknown tokens refuse typed
+        (``intervention_over_invalid``); axis-aware reductions are not
+        implemented and are never silently accepted as audit-only labels.
     force_shape_change:
         Stored escape-hatch metadata for execution.
 
     Returns
     -------
     HelperSpec
-        Built-in forward helper spec.
+        Built-in forward helper spec with a DERIVED ``batch_independent``
+        flag: ``True`` iff the fill value provably never reads the traced
+        batch (external ``source=``), ``False`` otherwise.
     """
+
+    if not isinstance(over, str) or over not in MEAN_ABLATE_OVER_TOKENS:
+        supported = ", ".join(repr(token) for token in MEAN_ABLATE_OVER_TOKENS)
+        raise InvalidArgumentError(
+            f"mean_ablate(over={over!r}) is not a supported mean policy; the "
+            f"vocabulary is closed to {supported}. Axis-aware means are not "
+            "implemented -- accepting the token would record a policy the hook "
+            "does not compute",
+            code="intervention_over_invalid",
+            remedy=(
+                "pass over='self' for the global fire-time mean, or pass "
+                "source=<tensor> to fill from an external source's mean"
+            ),
+            argument="over",
+            received=repr(over),
+            supported=MEAN_ABLATE_OVER_TOKENS,
+        )
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook for mean ablation.
@@ -104,7 +139,10 @@ def mean_ablate(
 
         return _hook
 
-    batch_independent = not (source == "batch_mean" or over in {"batch", "batch_mean", "self"})
+    # DERIVED, never tabled (edits memo D18): True only when the fill value
+    # provably never reads the traced batch. An external source qualifies;
+    # the self-mean reads every batch row and fails closed.
+    batch_independent = source is not None
     return _helper_spec(
         "mean_ablate",
         args=(source,),
@@ -115,14 +153,34 @@ def mean_ablate(
     )
 
 
-def resample_ablate(
+def scramble_elements(
     source: Any | None = None,
     *,
     from_: Any | None = None,
     seed: int | None = None,
     force_shape_change: bool = False,
 ) -> HelperSpec:
-    """Create a helper that samples replacement values from a source tensor.
+    """Create a helper that fills the out with elements drawn iid from a source.
+
+    Every output element is independently replaced by a uniformly sampled
+    element of the FLATTENED source tensor -- an elementwise scramble, a noise
+    baseline that destroys all structure in the replaced value. This helper
+    was previously named ``resample_ablate``, a false friend of the field's
+    "resampling ablation" (which patches COHERENT donor values, never an
+    elementwise scramble); the rename is honest-name-only, same bytes.
+
+    Which "resample" do you mean?
+
+    - **Elementwise scramble (this helper)**: iid element soup from a
+      flattened source; a structure-destroying noise baseline.
+    - **Coherent donor patch (the field's "resampling ablation")**: replace a
+      site's value with another run's coherent value at the SAME site --
+      TorchLens spells that ``tl.patch_from(other_trace)`` today; the seeded
+      donor-sampling plan family extends it.
+    - **Batch-row permutation**: exchange whole examples within the batch --
+      a planned stochastic-edit verb, not this helper.
+    - **Per-row donor resampling**: each row replaced by a sampled donor row
+      -- a planned stochastic-edit verb, not this helper.
 
     Parameters
     ----------
@@ -130,6 +188,8 @@ def resample_ablate(
         Source tensor or Op-like object.
     from_:
         Alias for ``source`` retained for the PLAN.md constructor spelling.
+        Passing BOTH ``source=`` and ``from_=`` refuses typed
+        (``intervention_source_conflict``); the two spellings name one slot.
     seed:
         Optional hook-local RNG seed.
     force_shape_change:
@@ -141,10 +201,19 @@ def resample_ablate(
         Built-in stochastic forward helper spec.
     """
 
+    if source is not None and from_ is not None:
+        raise InvalidArgumentError(
+            "scramble_elements received BOTH source= and from_=; the two "
+            "spellings name the same source slot and choosing one silently "
+            "would hide a caller mistake",
+            code="intervention_source_conflict",
+            remedy="pass exactly one of source= or from_=",
+            argument="source",
+        )
     source_value = source if source is not None else from_
 
     def factory() -> Callable[..., torch.Tensor]:
-        """Return the runtime hook for resample ablation.
+        """Return the runtime hook for the elementwise scramble.
 
         Returns
         -------
@@ -162,9 +231,9 @@ def resample_ablate(
             )
             flat_source = source_tensor.reshape(-1)
             if flat_source.numel() == 0:
-                raise HookValueError("resample_ablate source tensor is empty")
+                raise HookValueError("scramble_elements source tensor is empty")
             if seed is None:
-                _enqueue_nondeterminism_note(hook, "resample_ablate")
+                _enqueue_nondeterminism_note(hook, "scramble_elements")
                 indices = torch.randint(flat_source.numel(), out.shape, device=out.device)
             else:
                 # Generator is CPU-bound; sample on CPU then move to target device
@@ -180,13 +249,20 @@ def resample_ablate(
         return _hook
 
     return _helper_spec(
-        "resample_ablate",
+        "scramble_elements",
         args=(source_value,),
         kwargs={"seed": seed, "force_shape_change": force_shape_change},
         factory=factory,
         batch_independent=False,
         compatible_with_append=not force_shape_change,
     )
+
+
+#: Transitional binding: the top-level facade still routes
+#: ``tl.resample_ablate`` here until the facade owner flips the export to
+#: ``scramble_elements`` (hard rename, no warn-shim -- clean-v2 alias posture).
+#: Specs constructed through either spelling carry the honest name.
+resample_ablate = scramble_elements
 
 
 def steer(
@@ -1157,7 +1233,11 @@ def rebuild_builtin_helper(
         "replace_with": replace_with,
         "zero_ablate": zero_ablate,
         "mean_ablate": mean_ablate,
-        "resample_ablate": resample_ablate,
+        "scramble_elements": scramble_elements,
+        # Artifact-load compatibility: saved specs from before the honest
+        # rename persist helper name "resample_ablate"; they reconstruct
+        # through the same constructor (same bytes, honest name).
+        "resample_ablate": scramble_elements,
         "steer": steer,
         "scale": scale,
         "clamp": clamp,
@@ -1334,7 +1414,15 @@ def _enqueue_nondeterminism_note(hook: HookContext, helper_name: str) -> None:
         Helper name.
     """
 
-    note = f"{helper_name} used unseeded stochastic RNG at {hook.layer_log.get('layer_label')}"
+    # Name the site only when the fire-time spelling is a PUBLIC label. On the
+    # live door only the internal raw label exists (its ordinal need not match
+    # the final label, so suffix-stripping would name the WRONG site); the
+    # FireRecord's attachment op carries the location either way.
+    site = hook.layer_log.get("label") or hook.layer_log.get("layer_label")
+    if isinstance(site, str) and site and not site.endswith("_raw"):
+        note = f"{helper_name} used unseeded stochastic RNG at {site}"
+    else:
+        note = f"{helper_name} used unseeded stochastic RNG"
     hook.run_ctx.setdefault("ledger_notes", []).append(note)
     state_history = hook.run_ctx.get("state_history")
     if isinstance(state_history, list):
@@ -1455,11 +1543,63 @@ __all__ = [
     "project_onto",
     "resample_ablate",
     "scale",
+    "scramble_elements",
     "splice_module",
     "steer",
     "swap_with",
     "zero_ablate",
 ]
+
+
+def _resolve_patch_donor_site(source: Any, layer_log: Any) -> tuple[Any, Any]:
+    """Resolve one PASS-QUALIFIED donor op on the patch source trace.
+
+    Prefers the fire context's pass-qualified ``label`` spelling, then
+    derives ``layer_label:pass_index``; a bare label reaching a multi-pass
+    donor site refuses typed (never guess a pass -- the historical bare
+    lookup silently returned the LAST pass). Returns ``(site_label, op)``.
+    """
+
+    from .errors import HookValueError
+
+    context = layer_log if layer_log else {}
+    qualified = context.get("label")
+    bare = context.get("layer_label")
+    pass_index = context.get("pass_index")
+
+    site_label: Any = None
+    if isinstance(qualified, str) and ":" in qualified:
+        site_label = qualified
+    elif isinstance(bare, str) and isinstance(pass_index, int) and pass_index >= 1:
+        site_label = f"{bare}:{pass_index}"
+    elif bare is not None:
+        site_label = bare
+
+    source_site = None
+    if site_label is not None:
+        source_site = source.layer_dict_all_keys.get(site_label)
+    if source_site is None:
+        raise HookValueError(
+            f"patch_from source trace has no site {site_label!r}; patch "
+            "selections must resolve on sites the source captured "
+            "(multi-pass sites resolve pass-qualified, 'label:pass')."
+        )
+    if isinstance(site_label, str) and ":" not in site_label:
+        num_passes = int(getattr(source_site, "num_passes", 1) or 1)
+        if num_passes > 1:
+            layer_label = getattr(source_site, "layer_label", site_label)
+            spellings = ", ".join(f"'{layer_label}:{index}'" for index in range(1, num_passes + 1))
+            raise HookValueError(
+                f"patch_from donor site {site_label!r} is multi-pass "
+                f"({num_passes} passes) and the fire context carries no pass: "
+                "a donor pass is never guessed (the bare lookup historically "
+                "returned the LAST pass silently). Remedy: address one donor "
+                f"pass explicitly: {spellings}.",
+                code="patch_donor_pass_ambiguous",
+                site=site_label,
+                num_passes=num_passes,
+            )
+    return site_label, source_site
 
 
 def patch_from(source: Any) -> HelperSpec:
@@ -1491,23 +1631,22 @@ def patch_from(source: Any) -> HelperSpec:
         """Return the runtime hook binding source values at fire time."""
 
         def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
-            """Return the source trace's recorded value for this site."""
+            """Return the source trace's recorded value for this site, at
+            this site's PASS.
 
-            site_label = hook.layer_log.get("layer_label") if hook.layer_log else None
-            source_site = None
-            if site_label is not None:
-                source_site = source.layer_dict_all_keys.get(site_label)
-            if source_site is None:
-                from .errors import HookValueError
+            Donor resolution is pass-qualified: the fire-time context's
+            ``label`` (the ``label:pass`` spelling) or ``layer_label`` +
+            ``pass_index`` names ONE donor op. A bare label on a multi-pass
+            donor site is never resolved by guessing -- the historical bare
+            lookup silently returned the LAST pass's value on
+            recurrent/weight-reused models.
+            """
 
-                raise HookValueError(
-                    f"patch_from source trace has no site {site_label!r}; "
-                    "patch selections must resolve on sites the source captured."
-                )
+            from .errors import HookValueError
+
+            site_label, source_site = _resolve_patch_donor_site(source, hook.layer_log)
             value = source_site.out
             if not isinstance(value, torch.Tensor):
-                from .errors import HookValueError
-
                 raise HookValueError(f"patch_from source value at {site_label!r} is not a tensor.")
             # Never hand the source trace's stored tensor itself downstream —
             # the engine writes hook outputs into this trace's records.

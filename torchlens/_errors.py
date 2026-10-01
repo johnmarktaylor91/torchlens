@@ -6,6 +6,12 @@ from typing import Any, cast
 
 from .errors._base import CaptureError, ConfigurationError, TorchLensWarning
 
+#: Layer declaration (architecture memo build item 2, seeding the layer map
+#: the C01 lint consumes): the exception vocabulary is homed at L0 BASIS --
+#: frozen vocabularies and contracts that execute no torchlens behavior --
+#: so importing it from any layer is a downward edge, never an inversion.
+__tl_layer__ = "L0"
+
 
 def _actionable_message(problem: str, remedy: str) -> str:
     """Combine a refusal description with its required user remedy.
@@ -335,6 +341,91 @@ class TraceCleanedUpError(_ActionableErrorMixin, CaptureError, AttributeError):
         )
 
 
+class FacadeTeachingError(_ActionableErrorMixin, ConfigurationError, AttributeError):
+    """Typed teaching refusal from a lazy-facade namespace (steps 2 and 3).
+
+    Keeps ``AttributeError`` lineage so ``hasattr``/``getattr``-with-default
+    probes degrade instead of erroring (the ``TraceCleanedUpError``
+    precedent), while carrying a stable ``code`` (``facade_redirect`` /
+    ``facade_refusal``) and the teaching remedy for direct readers.
+    DOCUMENTED-UNSTABLE pending naming-session ratification.
+    """
+
+    def __init__(
+        self,
+        problem: str,
+        *,
+        code: str,
+        remedy: str,
+        **context: object,
+    ) -> None:
+        """Initialize an actionable facade teaching refusal.
+
+        Parameters
+        ----------
+        problem:
+            Description of the non-resolving facade attribute access.
+        code:
+            Stable machine-readable refusal code.
+        remedy:
+            Canonical spelling or guidance that resolves the lookup.
+        **context:
+            Structured, non-authoritative diagnostic context.
+        """
+
+        super().__init__(
+            _actionable_message(problem, remedy),
+            code=code,
+            remedy=remedy,
+            **cast(dict[str, Any], context),
+        )
+
+
+class MissingDependencyError(_ActionableErrorMixin, ConfigurationError, AttributeError):
+    """Raised when a real facade name's declared foreign dependency is absent.
+
+    The facade step-4 per-name dependency gate (architecture memo 5.4, neuro
+    memo D15). CPython refuses ``class X(ImportError, AttributeError)`` with
+    an instance-layout conflict, so the two memos' requirements cannot both
+    hold at the class level; the load-bearing property is the one that
+    decided the design (``hasattr`` answers ``False`` and never raises), so
+    this error keeps ``AttributeError`` lineage and carries the ImportError
+    SEMANTICS structurally: the message names the exact package and install
+    command, and ``fields["dependency"]`` / ``fields["install"]`` expose them
+    programmatically. It is deliberately NOT caught by ``except
+    ImportError``. DOCUMENTED-UNSTABLE pending naming-session ratification.
+    """
+
+    def __init__(
+        self,
+        problem: str,
+        *,
+        code: str,
+        remedy: str,
+        **context: object,
+    ) -> None:
+        """Initialize an actionable missing-dependency refusal.
+
+        Parameters
+        ----------
+        problem:
+            Description of the gated name and its missing dependency.
+        code:
+            Stable machine-readable refusal code.
+        remedy:
+            Exact install command or import fix that resolves the refusal.
+        **context:
+            Structured, non-authoritative diagnostic context.
+        """
+
+        super().__init__(
+            _actionable_message(problem, remedy),
+            code=code,
+            remedy=remedy,
+            **cast(dict[str, Any], context),
+        )
+
+
 class PayloadUnavailableError(_ActionableErrorMixin, CaptureError, ValueError):
     """Raised when a requested saved payload was never retained or cannot be rebuilt."""
 
@@ -358,6 +449,53 @@ class PayloadUnavailableError(_ActionableErrorMixin, CaptureError, ValueError):
             Concrete caller action that resolves the refusal.
         **context:
             Structured, non-authoritative diagnostic context.
+        """
+
+        super().__init__(
+            _actionable_message(problem, remedy),
+            code=code,
+            remedy=remedy,
+            **cast(dict[str, Any], context),
+        )
+
+
+class LazyStateUnsupportedError(_ActionableErrorMixin, CaptureError, RuntimeError):
+    """Raised at capture entry when the model carries un-materialized lazy BUFFERS.
+
+    The quickstart memo teaching refusal (code ``lazy_uninitialized``),
+    narrowed to the genuinely unanswerable case: pending lazy PARAMETERS are
+    tolerated (the landed completion unit materializes executed lazy modules
+    during the ONE captured forward and keeps never-run ones at zero
+    geometry), but a pending lazy BUFFER (``LazyBatchNorm*`` running stats)
+    has no physical storage for the capture-boundary buffer-write tracker to
+    index, so entry refuses with the pending set named instead of crashing
+    with torch's raw ``load_state_dict``-flavored message. The pending-set
+    enumeration rides ``fields`` (``pending_modules`` /
+    ``pending_parameters`` / ``pending_buffers``) for the buffer-side
+    completion to consume. DOCUMENTED-UNSTABLE pending naming-session
+    ratification.
+    """
+
+    def __init__(
+        self,
+        problem: str,
+        *,
+        code: str = "lazy_uninitialized",
+        remedy: str,
+        **context: object,
+    ) -> None:
+        """Initialize an actionable lazy-state entry refusal.
+
+        Parameters
+        ----------
+        problem:
+            Description naming the first pending module and the pending counts.
+        code:
+            Stable machine-readable refusal code (the one documented value).
+        remedy:
+            Concrete caller action (the measured two-line self-prime).
+        **context:
+            Structured pending-set enumeration and diagnostic context.
         """
 
         super().__init__(

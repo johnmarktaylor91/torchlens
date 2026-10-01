@@ -78,7 +78,11 @@ def test_op_and_layer_convenience_properties() -> None:
     layer = trace.layers[op.layer_label]
 
     assert op.flops_total == (op.flops_forward or 0) + (op.flops_backward or 0)
-    assert op.macs_total == op.flops_total // 2
+    # A07 numbers truth: MACs are TRUE multiply-accumulate counts derived from
+    # the two-term compute record, never flops//2; backward/total MACs are not
+    # derivable from multiplier-estimated backward FLOPs and read None.
+    assert op.macs_total is None
+    assert op.macs_backward is None
     assert op.param_names == [param.name for param in op.params]
     assert op.param_dtypes == [param.dtype for param in op.params]
     assert op.num_param_tensors_trainable == sum(1 for param in op.params if param.is_trainable)
@@ -96,8 +100,9 @@ def test_op_and_layer_convenience_properties() -> None:
     )
     assert layer.flops_total == (layer.flops_forward or 0) + (layer.flops_backward or 0)
     assert layer.total_flops_total == layer.total_flops_forward + layer.total_flops_backward
-    assert layer.macs_total == layer.flops_total // 2
-    assert layer.total_macs_total == layer.total_flops_total // 2
+    assert layer.macs_total is None
+    assert layer.total_macs_total is None
+    assert layer.macs_forward is not None  # forward MACs stay derivable here
     assert layer.param_names == [param.name for param in layer.params]
     assert layer.param_dtypes == [param.dtype for param in layer.params]
     assert layer.has_trainable_params == (layer.num_params_trainable > 0)

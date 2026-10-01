@@ -1431,10 +1431,29 @@ def _fingerprint_model_weights(model: nn.Module) -> str:
         SHA-256 hex digest of parameter metadata.
     """
 
-    entries = [
-        (name, tuple(param.shape), str(param.dtype)) for name, param in model.named_parameters()
-    ]
+    entries: list[tuple[str, object, str]] = []
+    for name, param in model.named_parameters():
+        if _is_uninitialized_param(param):
+            # Lazy modules (nn.LazyLinear etc.) carry UninitializedParameter
+            # until the first forward; shape access raises. Fingerprint the
+            # lazy state explicitly -- it IS the pre-forward identity.
+            entries.append((name, "uninitialized", str(param.dtype)))
+            continue
+        entries.append((name, tuple(param.shape), str(param.dtype)))
     return hashlib.sha256(repr(entries).encode("utf-8")).hexdigest()
+
+
+def _is_uninitialized_param(value: Any) -> bool:
+    """Return whether ``value`` is a lazy (uninitialized) parameter or buffer.
+
+    Shape/numel/storage access on such values raises until the first forward
+    materializes them in place. One implementation, shared with the payload
+    copy path (see ``utils.tensor_utils._is_uninitialized_lazy_tensor``).
+    """
+
+    from .utils.tensor_utils import _is_uninitialized_lazy_tensor
+
+    return _is_uninitialized_lazy_tensor(value)
 
 
 def _input_id_for_relationship_evidence(input_args: Any) -> int:

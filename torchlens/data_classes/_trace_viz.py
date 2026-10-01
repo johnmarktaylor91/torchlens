@@ -447,16 +447,20 @@ class TraceVisualizationMixin(_TraceMixinBase):
         return nonfinite_coverage(self)
 
     def first_nonfinite(
-        self: "Trace", link_format: Literal["terminal", "html", "text"] = "terminal"
+        self: "Trace", link_format: Literal["terminal", "html", "text"] = "text"
     ) -> str:
         """Return a text answer describing the first saved non-finite out.
 
         Parameters
         ----------
         link_format:
-            Source-location link style. ``"terminal"`` emits OSC 8 hyperlinks,
-            ``"html"`` emits VS Code URI anchors, and ``"text"`` emits plain
-            ``path:line`` text.
+            Source-location link style. ``"text"`` (the default) emits plain
+            ``path:line`` text; ``"terminal"`` emits OSC 8 hyperlinks and
+            ``"html"`` emits VS Code URI anchors. The styled registers are
+            OPT-IN because both embed the capture machine's RESOLVED ABSOLUTE
+            path inside the link target: returned strings flow into logs,
+            saved reports, JSON, and MCP responses, where an escape byte
+            breaks diffs/caches and an absolute path is a leak.
 
         Returns
         -------
@@ -691,7 +695,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         include_ops: bool | None = None,
         max_rows: int | None = 200,
         print_to: Callable[[str], None] | None = None,
-        count_fma_as_two: bool = False,
+        count_fma_as_two: bool | None = None,
         show_input_preprocessing_details: bool = False,
     ) -> str:
         """Render a concise text summary of the logged model.
@@ -718,9 +722,13 @@ class TraceVisualizationMixin(_TraceMixinBase):
         print_to:
             Optional callable that receives the rendered summary text.
         count_fma_as_two:
-            FLOP/MAC convention marker for summary consumers. Current captured
-            counts are displayed as stored; this flag reserves the public
-            convention toggle without changing saved metadata.
+            FMA display convention (sentinel default: omitted != explicit).
+            ``None``/``True`` render the stored fma=2 convention (one
+            multiply-accumulate = 2 FLOPs). ``False`` renders fma=1 totals
+            recounted from each op's two-term compute record; a trace holding
+            ops with no derivable MAC split refuses typed
+            (``flop_convention_unavailable``) -- the request is NEVER
+            accepted-and-ignored.
         show_input_preprocessing_details:
             Whether to include verification/source detail for input
             preprocessing records.
@@ -732,7 +740,6 @@ class TraceVisualizationMixin(_TraceMixinBase):
         """
         from ..visualization._summary_internal import render_model_summary
 
-        del count_fma_as_two
         return render_model_summary(
             self,
             level=level,
@@ -744,6 +751,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             include_ops=include_ops,
             max_rows=max_rows,
             print_to=print_to,
+            count_fma_as_two=count_fma_as_two,
             show_input_preprocessing_details=show_input_preprocessing_details,
         )
 

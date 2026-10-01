@@ -623,6 +623,31 @@ def capture_scalar_escape_warning(trace: Any) -> Iterator[None]:
             if state.first_file is not None and state.first_line is not None
             else "an unknown user source location"
         )
+        # SF5 (sumfam wave-0 item 5): the advisory used to EVAPORATE -- a
+        # Python warning is process-transient, so a shared artifact could not
+        # answer "did tensor data escape to Python scalars during capture?".
+        # Record it on the trace's annotations (FieldPolicy.KEEP -> persists)
+        # BEFORE warnings.warn, whose filters may raise. Only names available
+        # in completeness_witness's rebound globals may be used here: locals,
+        # ``state``, and builtins -- hence isinstance guards, not try/except.
+        annotations = getattr(state.trace, "annotations", None)
+        rows = (
+            annotations.setdefault("capture_advisories", [])
+            if isinstance(annotations, dict)
+            else None
+        )
+        if isinstance(rows, list):
+            rows.append(
+                {
+                    "kind": "scalar_escape",
+                    "count": int(state.count),
+                    "first_location": (location if state.first_file is not None else None),
+                    "message": (
+                        "tensor-to-Python scalar escape(s) observed during "
+                        "capture; the dependence is not captured"
+                    ),
+                }
+            )
         warnings.warn(
             ScalarEscapeWarning(
                 "TorchLens observed "

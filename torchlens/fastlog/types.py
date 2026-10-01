@@ -6,7 +6,7 @@ import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
 
 import torch
 
@@ -442,6 +442,14 @@ class Recording(CapturedRun):
     the count from the failing pass.
     """
 
+    # Sanctioned outcome-gate marker (torchlens/capture/outcome.py): this
+    # slots-backed product's validating ``outcome`` property IS the settlement
+    # truth (stamped-record re-parse + conservative derivation, never blessing
+    # COMPLETE). Without it ``outcome_for`` read the absent ``__dict__`` as
+    # UNKNOWN and every capability gate refused settled Recordings with a
+    # false hand-built-object warning (WT1 A-IV item 21, lane A08).
+    _OUTCOME_SELF_AUTHORITY: ClassVar[bool] = True
+
     records: list[ActivationRecord]
     by_pass: dict[int, list[int]]
     by_label: dict[str, list[tuple[int, int]]]
@@ -497,12 +505,14 @@ class Recording(CapturedRun):
         pickles (whose ``_outcome`` slot may be unset) and recovered/unstamped
         recordings derive from the construction status: ``halted`` halt
         markers are construction-time proofs, ``partial_error`` is FAILED,
-        ``recovered`` is UNKNOWN (or reconstructed HALTED where the halt
-        markers survived) with ``recovered=True``, and ``complete`` derives
-        UNATTESTED -- the status string on a deserialized object is a plain
-        spoofable field, and a derivation never blesses COMPLETE (R06; same
-        doctrine as the trace-side structural lattice). All ``derived=True``,
-        never a settle-stamp upgrade.
+        ``recovered`` with carried abort evidence (``failed=True`` from the
+        PARTIAL/REASON.txt debris) is FAILED, ``recovered`` otherwise is
+        UNKNOWN (or reconstructed HALTED where the halt markers survived)
+        with ``recovered=True``, and ``complete`` derives UNATTESTED -- the
+        status string on a deserialized object is a plain spoofable field,
+        and a derivation never blesses COMPLETE (R06; same doctrine as the
+        trace-side structural lattice). All ``derived=True``, never a
+        settle-stamp upgrade.
         """
 
         from ..capture.outcome import CaptureOutcome, CaptureStatus, FailureOrigin
@@ -527,6 +537,20 @@ class Recording(CapturedRun):
                 origin=FailureOrigin.UNKNOWN,
                 reason=self.error_repr,
                 n_ops_committed=self.n_ops_completed,
+                derived=True,
+            )
+        if status == "recovered" and self.failed:
+            # WT1 A-IV item 21 (lane A08): recover() used to rebuild aborted
+            # bundles (PARTIAL sentinel + REASON.txt debris) with
+            # ``failed=False`` and no error evidence -- laundering the failure
+            # record into a benign UNKNOWN. A recovered bundle carrying abort
+            # evidence derives FAILED, never a blank slate.
+            return CaptureOutcome(
+                status=CaptureStatus.FAILED,
+                origin=FailureOrigin.UNKNOWN,
+                reason=self.error_repr,
+                n_ops_committed=self.n_ops_completed,
+                recovered=True,
                 derived=True,
             )
         if status == "halted" or (status == "recovered" and self.halted):
@@ -884,7 +908,9 @@ class Recording(CapturedRun):
             }
             for record in self.records
         ]
-        return pd.DataFrame(rows)
+        from .._capture_honesty import attach_dataframe_honesty
+
+        return attach_dataframe_honesty(pd.DataFrame(rows), self)
 
     def summary(self) -> str:
         """Return a concise human-readable recording summary."""

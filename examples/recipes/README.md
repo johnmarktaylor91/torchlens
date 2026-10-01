@@ -6,7 +6,7 @@ downloads.
 
 | Recipe | Difficulty | Description |
 | --- | --- | --- |
-| `causal_trace_recipe.ipynb` | Intermediate | Clean-versus-corrupt out patching, per-site sweeps with `tl.sites`, output-divergence scoring, and `tl.viz.causal_trace_heatmap`. |
+| `causal_trace_recipe.ipynb` | Intermediate | Clean-versus-corrupt out patching, per-site sweeps with `trace.find_sites`, output-divergence scoring, and `tl.viz.causal_trace_heatmap`. |
 | `contrastive_direction_recipe.ipynb` | Beginner | RepEng-style positive-minus-negative out direction with replay-time steering. |
 | `measure_faithfulness_recipe.ipynb` | Intermediate | ROAD-style ranked removal, output-drop, locality checks, and `tl.validate(scope="intervention")`. |
 | `trainable_intervention_recipe.ipynb` | Advanced | Gradient-based learning of a trainable out intervention parameter. |

@@ -207,8 +207,9 @@ def test_logit_lens_refuses_without_head_facets() -> None:
 
     model = HeadlessModel().eval()
     log = _capture(model, torch.randn(2, 3, 8))
-    with pytest.raises(LogitLensError, match="unembed_weight"):
+    with pytest.raises(LogitLensError, match="unembed_weight") as head_exc:
         logit_lens(log)
+    assert head_exc.value.fields["code"] == "logit_lens_head_unavailable"
 
 
 def test_logit_lens_top_tokens_and_summary_shapes() -> None:

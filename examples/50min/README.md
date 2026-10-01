@@ -11,5 +11,5 @@ These notebooks are longer workflow recipes for users who want the full shape of
 | [`cog_neuro_extraction.ipynb`](cog_neuro_extraction.ipynb) | Per-layer cognitive neuroscience extraction and offline Brain-Score-style evaluation. |
 | [`paired_prompt_patching.ipynb`](paired_prompt_patching.ipynb) | Single-site clean-vs-corrupt prompt patching session. |
 | [`steering.ipynb`](steering.ipynb) | Steering vector construction and replay-time application. |
-| [`ablations_grid.ipynb`](ablations_grid.ipynb) | Ablation sweep over resolved `tl.sites`-style targets. |
+| [`ablations_grid.ipynb`](ablations_grid.ipynb) | Ablation sweep over `trace.find_sites` targets. |
 | [`custom_hooks.ipynb`](custom_hooks.ipynb) | Custom hook composition with replay. |

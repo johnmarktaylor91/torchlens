@@ -118,6 +118,10 @@
     {
       "key": "torchlens.runnable",
       "value": "false"
+    },
+    {
+      "key": "torchlens.capture_honesty",
+      "value": "{\"schema\": \"torchlens.capture_honesty.v1\", \"capture_status\": \"complete\", \"capture_verified\": null, \"capture_verification_reason\": null, \"rescue_rerun\": false, \"structure_only\": false, \"poisoned\": false}"
     }
   ],
   "opsetImport": [

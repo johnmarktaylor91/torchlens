@@ -210,8 +210,10 @@ def _metric_field(by: CostMetric) -> str:
     return fields[by]
 
 
-def hot_path(trace: Trace, by: CostMetric = "flops") -> pd.DataFrame:
-    """Rank source lines by aggregate forward cost.
+def hot_path_rows(
+    trace: Trace, by: CostMetric = "flops"
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Pandas-free core of :func:`hot_path` (agent stage-0 item 4).
 
     Parameters
     ----------
@@ -222,13 +224,11 @@ def hot_path(trace: Trace, by: CostMetric = "flops") -> pd.DataFrame:
 
     Returns
     -------
-    pandas.DataFrame
-        Columns are ``source_file:line``, ``op_count``, ``total_cost``, and
-        ``pct_total``. The number of ops excluded for missing metrics is stored
-        in ``df.attrs["excluded_missing_metric_count"]``.
+    tuple[list[dict[str, Any]], dict[str, Any]]
+        Cost-ranked row dicts and the attrs mapping (excluded count, metric,
+        capture-honesty facts).
     """
 
-    pd = _require_pandas()
     field_name = _metric_field(by)
     rows: dict[str, dict[str, float | int | str]] = {}
     excluded = 0
@@ -252,10 +252,41 @@ def hot_path(trace: Trace, by: CostMetric = "flops") -> pd.DataFrame:
     for row in rows.values():
         row["pct_total"] = 0.0 if total == 0 else float(row["total_cost"]) / total * 100.0
 
+    from .._capture_honesty import capture_honesty_facts
+
+    sorted_rows = sorted(rows.values(), key=lambda row: float(row["total_cost"]), reverse=True)
+    attrs: dict[str, Any] = {
+        "excluded_missing_metric_count": excluded,
+        "metric": by,
+        "torchlens_capture_honesty": capture_honesty_facts(trace),
+    }
+    return [dict(row) for row in sorted_rows], attrs
+
+
+def hot_path(trace: Trace, by: CostMetric = "flops") -> pd.DataFrame:
+    """Rank source lines by aggregate forward cost.
+
+    Parameters
+    ----------
+    trace:
+        Completed TorchLens trace.
+    by:
+        Cost metric: ``"flops"``, ``"memory"``, or ``"duration"``.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns are ``source_file:line``, ``op_count``, ``total_cost``, and
+        ``pct_total``. The number of ops excluded for missing metrics is stored
+        in ``df.attrs["excluded_missing_metric_count"]``. The optional view
+        over :func:`hot_path_rows` (the pandas-free core).
+    """
+
+    rows, attrs = hot_path_rows(trace, by)
+    pd = _require_pandas()
     frame = pd.DataFrame(
-        sorted(rows.values(), key=lambda row: float(row["total_cost"]), reverse=True),
+        rows,
         columns=["source_file:line", "op_count", "total_cost", "pct_total"],
     )
-    frame.attrs["excluded_missing_metric_count"] = excluded
-    frame.attrs["metric"] = by
+    frame.attrs.update(attrs)
     return frame

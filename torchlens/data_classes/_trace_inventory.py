@@ -165,6 +165,9 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
     )
     outcome = getattr(trace, "outcome", None)
     capture_duration = getattr(trace, "capture_duration", None)
+    from .._capture_honesty import capture_advisories, poison_facts
+
+    logged_values = (getattr(trace, "annotations", {}) or {}).get("logged_values", {})
     return {
         "capture": {
             "backend": getattr(trace, "backend", None),
@@ -175,6 +178,8 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
             "grouping": getattr(trace, "grouping", None),
             "save_mode": getattr(trace, "save_mode", None),
             "capture_duration": capture_duration,
+            **poison_facts(trace),
+            "advisories": capture_advisories(trace),
         },
         "graph": {
             "num_ops": len(ops),
@@ -207,4 +212,7 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
             "num_backward_passes": len(getattr(trace, "backward_pass_logs", {}) or {}),
         },
         "annotations": tuple(sorted(getattr(trace, "annotations", {}) or {})),
+        # log_value read-back (sumfam D20): logged values are inventory, not
+        # just an opaque annotations key name.
+        "logged_values": dict(logged_values) if isinstance(logged_values, dict) else {},
     }

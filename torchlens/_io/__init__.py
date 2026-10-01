@@ -6,7 +6,7 @@ bundles backed by ``safetensors``, and rehydrates those bundles into eager or
 lazy model logs. Portable bundles are for archival and analysis, not replay:
 ``validate_forward_pass()`` is unsupported after ``torchlens.load()``,
 expert ``lazy=True, materialize_nested=False`` loads must call
-``torchlens.rehydrate_nested()`` before re-save, and lazy refs open,
+``torchlens.io.rehydrate_nested()`` before re-save, and lazy refs open,
 verify, and close blob files per materialization instead of sharing handles.
 """
 
@@ -494,7 +494,7 @@ def rehydrate_nested(
     --------
     >>> import torchlens as tl
     >>> log = tl.load("demo_bundle", lazy=True, materialize_nested=False)
-    >>> tl.rehydrate_nested(log)
+    >>> tl.io.rehydrate_nested(log)
     >>> log.save("demo_bundle_copy")
     """
 

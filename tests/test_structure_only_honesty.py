@@ -83,10 +83,16 @@ def test_profile_repr_carries_the_banner() -> None:
     assert profile.structure_only is True
     assert "structure-only capture" in repr(profile)
     # Measured-value columns render honestly: nothing presents a hypothesis
-    # figure as "measured".
+    # figure as "measured". Boundary pseudo-rows read not_applicable (A07:
+    # they own no compute by the identity partition) -- also never "measured".
     honesty = profile.honesty()
-    assert set(honesty["flops"].unique()) <= {"estimated", "unknown"}
-    assert set(honesty["activation_memory"].unique()) <= {"estimated", "unknown"}
+    assert set(honesty["flops"].unique()) <= {"estimated", "unknown", "not_applicable"}
+    assert set(honesty["activation_memory"].unique()) <= {
+        "estimated",
+        "unknown",
+        "not_applicable",
+    }
+    assert "measured" not in set(honesty["flops"].unique())
 
 
 @smoke

@@ -1030,12 +1030,23 @@ def _entry_compose(
 # ---------------------------------------------------------------------------
 
 
-def _unresolvable(reason: str, message: str, **fields: Any) -> SelectionError:
-    """Build the closed-reason resolver refusal."""
+def _unresolvable(
+    reason: str,
+    message: str,
+    *,
+    code: str = "selection_unresolvable",
+    **fields: Any,
+) -> SelectionError:
+    """Build the closed-reason resolver refusal.
+
+    ``code`` is always the contracted ``selection_unresolvable``; the explicit
+    keyword exists so a raise site can spell the code visibly (the S-17
+    census counts site-visible codes, the ``_encoding_error`` pattern).
+    """
 
     return SelectionError(
         message,
-        code="selection_unresolvable",
+        code=code,
         reason=reason,
         **fields,
     )
@@ -1351,7 +1362,21 @@ def _resolve_unit_term(node: _UnitTerm, trace: Any) -> ResolvedSelection:
                 raise RuntimeError("units node has neither index_mask nor indices")
             dense = torch.zeros(shape, dtype=torch.bool)
             for coordinates in node.indices:
-                if len(coordinates) != len(shape) or any(
+                if len(coordinates) != len(shape):
+                    raise _unresolvable(
+                        "mask_shape_mismatch",
+                        f"unit index {coordinates!r} has {len(coordinates)} coordinate(s) but "
+                        f"site {op.label!r} output space {shape!r} has rank {len(shape)}: "
+                        "units() takes one integer per output axis, position-for-position. "
+                        "Partial coordinates never broadcast across the remaining axes; to "
+                        "select every position along an axis, pass a bool mask over the full "
+                        "output space instead.",
+                        code="selection_unresolvable",
+                        site=op.label,
+                        given_rank=len(coordinates),
+                        expected_rank=len(shape),
+                    )
+                if any(
                     coordinate < 0 or coordinate >= extent
                     for coordinate, extent in zip(coordinates, shape, strict=True)
                 ):
@@ -1592,156 +1617,55 @@ def _selection_from_layer(layer: Any) -> Selection:
 # ---------------------------------------------------------------------------
 
 
-def _apply_invalid(reason: str, message: str, **fields: Any) -> SelectionError:
-    """Build the closed-reason mask-application refusal."""
+def _apply_invalid(
+    reason: str,
+    message: str,
+    *,
+    code: str = "selection_apply_invalid",
+    **fields: Any,
+) -> SelectionError:
+    """Build the closed-reason mask-application refusal.
 
-    return SelectionError(message, code="selection_apply_invalid", reason=reason, **fields)
-
-
-def _validate_edited(edited: Any, out: torch.Tensor, site_label: str) -> torch.Tensor:
-    """Validate the edit output against the site output (no-broadcast v1)."""
-
-    if not isinstance(edited, torch.Tensor):
-        raise _apply_invalid(
-            "not_maskable",
-            f"element-masked edit at {site_label!r} produced a non-tensor "
-            f"({type(edited).__name__}); masked edits require tensor outputs.",
-            site=site_label,
-        )
-    if tuple(edited.shape) != tuple(out.shape):
-        try:
-            torch.broadcast_shapes(tuple(edited.shape), tuple(out.shape))
-            broadcastable = True
-        except RuntimeError:
-            broadcastable = False
-        raise _apply_invalid(
-            "broadcast" if broadcastable else "shape",
-            f"edit output shape {tuple(edited.shape)!r} does not match site "
-            f"{site_label!r} output shape {tuple(out.shape)!r}; no broadcasting in v1.",
-            site=site_label,
-        )
-    if edited.dtype != out.dtype:
-        raise _apply_invalid(
-            "dtype",
-            f"edit output dtype {edited.dtype} does not match site {site_label!r} "
-            f"output dtype {out.dtype}.",
-            site=site_label,
-        )
-    if edited.device != out.device:
-        raise _apply_invalid(
-            "device",
-            f"edit output device {edited.device} does not match site {site_label!r} "
-            f"output device {out.device}.",
-            site=site_label,
-        )
-    return edited
-
-
-def _masked_factory(inner_factory: Any, mask: _Mask, site_label: str) -> Any:
-    """Wrap a helper hook factory with the engine-owned scatter step."""
-
-    def factory() -> Any:
-        """Instantiate the inner hook and wrap it with the mask scatter."""
-
-        inner = inner_factory()
-
-        def _masked_hook(out: Any, *, hook: Any) -> Any:
-            """Run the inner edit, then scatter only masked elements into ``out``."""
-
-            if not isinstance(out, torch.Tensor):
-                raise _apply_invalid(
-                    "not_maskable",
-                    f"site {site_label!r} produced a non-tensor output at apply "
-                    "time; element-masked edits address single-tensor outputs only.",
-                    site=site_label,
-                )
-            if tuple(out.shape) != mask.shape:
-                raise _apply_invalid(
-                    "shape",
-                    f"site {site_label!r} output shape {tuple(out.shape)!r} does not "
-                    f"match the selection's recorded index space {mask.shape!r}.",
-                    site=site_label,
-                )
-            edited = inner(out, hook=hook)
-            edited = _validate_edited(edited, out, site_label)
-            dense = mask._dense_ro().to(out.device)
-            # EDIT-THEN-SCATTER on a fresh tensor; stored capture truth is
-            # never written through.
-            return torch.where(dense, edited, out)
-
-        return _masked_hook
-
-    return factory
-
-
-def _derive_masked_edit(edit: Any, entry: SiteEntry, digest: str, site_label: str) -> Any:
-    """Derive the per-site edit spec/hook under the mask contract.
-
-    A whole-site mask short-circuits the scatter and returns the edit's
-    behavior unchanged (only the recipe disclosure is stamped). Element
-    masks wrap the hook factory with the engine scatter; the derived spec's
-    factory is session-time (``FieldPolicy.DROP``) — the mask never enters
-    a persisted KEEP field, and the recipe rides the DROP-gated
-    ``selection_recipe`` family.
+    ``code`` is always the contracted ``selection_apply_invalid``; the
+    explicit keyword exists so a raise site can spell the code visibly (the
+    S-17 census counts site-visible codes, the ``_encoding_error`` pattern).
     """
 
-    import dataclasses
+    return SelectionError(message, code=code, reason=reason, **fields)
 
-    from .intervention.types import HelperSpec
 
-    recipe = {
-        "resolve_digest": digest,
-        "site_key": repr(entry.site_key),
-        "relation": entry.provenance.relation,
-        "selected": entry.selected_count,
-        "source": entry.provenance.source,
-    }
-    if isinstance(edit, HelperSpec):
-        disclosure = (
-            ("selection_digest", digest),
-            ("selection_site", repr(entry.site_key)),
-            ("selection_relation", entry.provenance.relation),
+# _validate_edited / _masked_factory / _derive_masked_edit moved to
+# torchlens/intervention/masked_edit.py (R43 file-size ratchet); the
+# do-plan below imports the derivation lazily.
+
+
+def _warn_if_dense_subspace_edit(resolved: ResolvedSelection) -> None:
+    """Point-of-use disclosure: editing a DENSE direction's support set is
+    full-axis ablation (set semantics), never a projection along the
+    direction (list-A row 8; the projection-valued edit is a named fork,
+    not a shipped capability). The marker rides ``provenance.source``, so
+    the audit record discloses it either way; this warning surfaces it at
+    the ``do()`` call itself."""
+
+    import warnings as _warnings
+
+    from .selection_subspace import DENSE_SUPPORT_NOTE
+
+    if any(DENSE_SUPPORT_NOTE in entry.provenance.source for entry in resolved):
+        from .errors import TorchLensWarning
+
+        _warnings.warn(
+            TorchLensWarning(
+                "do() on a dense-direction subspace selection edits EVERY "
+                "element of the bound axis (the documented support-set "
+                "semantics), not the component along the direction; "
+                "projection-valued edits are not a shipped capability. "
+                "Remedy: use a sparse direction (or tol=) to target a "
+                "subset, or accept the full-axis edit knowingly",
+                code="dense_subspace_full_axis_edit",
+            ),
+            stacklevel=4,
         )
-        if entry._mask.form == "whole":
-            return dataclasses.replace(
-                edit,
-                metadata=tuple(edit.metadata) + disclosure,
-                selection_recipe=recipe,
-            )
-        if edit.factory is None:
-            raise _apply_invalid(
-                "not_maskable",
-                f"edit {edit.helper_name!r} has no runtime factory to mask.",
-                site=site_label,
-            )
-        return dataclasses.replace(
-            edit,
-            factory=_masked_factory(edit.factory, entry._mask, site_label),
-            # The derived spec cannot be re-executed from its persisted form
-            # alone (the mask is session-time until the wave-3 bump).
-            portability="opaque_audit",
-            metadata=tuple(edit.metadata) + disclosure,
-            selection_recipe=recipe,
-        )
-    if callable(edit):
-        if entry._mask.form == "whole":
-            return edit
-
-        def _plain_factory() -> Any:
-            """Adapt a bare hook callable to the masked-factory protocol."""
-
-            def _adapter(out: Any, *, hook: Any) -> Any:
-                """Forward to the user's hook callable unchanged."""
-
-                return edit(out, hook=hook)
-
-            return _adapter
-
-        return _masked_factory(_plain_factory, entry._mask, site_label)()
-    raise ValueError(
-        "do(selection, edit) requires an Edit/HelperSpec, a hook callable, or a "
-        f"replacement tensor; got {type(edit).__name__}."
-    )
 
 
 def build_selection_do_plan(
@@ -1762,12 +1686,24 @@ def build_selection_do_plan(
             "(e.g. tl.zero_ablate()), a hook callable, or a replacement tensor."
         )
     resolved = _resolve_do_target(trace, selection_like)
+    _warn_if_dense_subspace_edit(resolved)
 
+    from .intervention.masked_edit import _derive_masked_edit
     from .intervention.types import HelperSpec
 
     if not isinstance(edit, HelperSpec) and not callable(edit):
-        # Raw replacement values (tensors, scalars) route through the shipped
-        # replace_with helper and then obey the same scatter contract.
+        # Raw replacement TENSORS route through the shipped replace_with helper and
+        # obey the scatter contract; anything else refuses with the string-label
+        # path's validation (a scalar lifted through the tensor-only helper used to
+        # crash bare at push time).
+        if not isinstance(edit, torch.Tensor):
+            raise ValueError(
+                f"do(selection, edit) got a {type(edit).__name__} replacement value; "
+                "replacement values must be tensors matching the site output. For a "
+                "constant fill over the selected elements pass a full-shape tensor "
+                "(e.g. torch.full_like(site_out, c)), or use an edit helper such as "
+                "tl.zero_ablate() or tl.scale()."
+            )
         from .intervention.predicates import replace_with
 
         edit = replace_with(edit)
@@ -1805,6 +1741,7 @@ def build_selection_do_plan(
                 "site_key": repr(entry.site_key),
                 "relation": entry.provenance.relation,
                 "selected": entry.selected_count,
+                "source": entry.provenance.source,
             }
             for entry in resolved
         ],

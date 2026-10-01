@@ -54,7 +54,12 @@ class MultiHeadSelfAttention(nn.Module):
 
 
 class DistilBertSelfAttention(nn.Module):
-    """Tiny transformers-5.x DistilBERT unified attention block."""
+    """Tiny transformers-5.x DistilBERT unified attention block.
+
+    Runs a REAL fused ``scaled_dot_product_attention`` so the graph-keyed
+    fused detection (which replaced the dead class-name gate) sees the same
+    evidence a real 5.x default-backend model produces.
+    """
 
     def __init__(self) -> None:
         """Initialize the tiny unified attention block."""
@@ -68,9 +73,14 @@ class DistilBertSelfAttention(nn.Module):
         self.out_lin = nn.Linear(8, 8)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Run the attention-shaped projections."""
+        """Run fused SDPA over head-reshaped projections."""
 
-        return self.out_lin(self.q_lin(x) + self.k_lin(x) + self.v_lin(x))
+        batch, seq, dim = x.shape
+        q = self.q_lin(x).view(batch, seq, 2, 4).transpose(1, 2)
+        k = self.k_lin(x).view(batch, seq, 2, 4).transpose(1, 2)
+        v = self.v_lin(x).view(batch, seq, 2, 4).transpose(1, 2)
+        z = torch.nn.functional.scaled_dot_product_attention(q, k, v)
+        return self.out_lin(z.transpose(1, 2).reshape(batch, seq, dim))
 
 
 class GPT2Attention(nn.Module):
@@ -165,8 +175,11 @@ def test_distilbert_eager_attention_q_shape_and_head_view() -> None:
     assert view.q.shape == (2, 3, 2, 4)
     assert view.head(1).q.shape == (2, 3, 4)
     assert torch.equal(view.head(1).q, view.q[:, :, 1, :])
-    # Eager omits ``pattern`` (consistent with other eager recipes).
+    # This toy computes no attention scores at all (no softmax, no SDPA), so
+    # the graph-keyed detection serves an honest structural absence rather
+    # than a value or a misleading capture hint.
     assert "pattern" not in view.keys()
+    assert view.menu()["pattern"].status == "structurally_absent"
 
 
 @pytest.mark.slow

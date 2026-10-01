@@ -291,9 +291,12 @@ def _str_after_pass(self: "Trace") -> str:
     for layer_ind, layer_entry in enumerate(self.layer_list):
         layer_barcode = layer_entry.layer_label
         pass_index = layer_entry.pass_index
-        total_ops = layer_entry.num_passes
-        if total_ops > 1:
-            pass_str = f" ({pass_index}/{total_ops} ops)"
+        num_passes = layer_entry.num_passes
+        if num_passes > 1:
+            # One pass/op vocabulary (A10): a multi-pass row is "pass k/N",
+            # never "k/N ops" -- "op" is reserved for the executed-op
+            # denominator (Trace.num_ops).
+            pass_str = f" (pass {pass_index}/{num_passes})"
         else:
             pass_str = ""
 

@@ -28,6 +28,7 @@ from .._errors import AmbiguousOpLookupError
 from ..data_classes.cleanup import _project_conditional_child_views
 from ..data_classes.op import Op
 from ..intervention.types import ParentRef
+from ..quantities import Bytes
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -176,23 +177,16 @@ def _log_final_info_for_layers(self: "Trace") -> None:
             submodule_pass_nice_name = ":".join([str(i) for i in layer_entry.atomic_module_call])
             layer_entry.atomic_module_call = submodule_pass_nice_name
 
-        # Tally the tensor sizes:
-        self.total_activation_memory += layer_entry.activation_memory
+        # Tally the tensor sizes. Output pseudo-rows ALIAS the producing op's
+        # tensor (identity partition, A1): the producer owns those bytes, so
+        # the alias row contributes nothing to the tracked total. Input rows
+        # own exactly the external inputs' bytes and stay counted.
+        if layer_entry.layer_type != "output":
+            self.total_activation_memory += layer_entry.activation_memory
 
-        # Tally the parameter sizes:
-        if layer_entry.layer_label not in unique_layers_seen:  # only count params once
-            if layer_entry.uses_params:
-                self.num_layers_with_params += 1
-            self.num_params += layer_entry.num_params
-            self.num_params_trainable += layer_entry.num_params_trainable
-            self.num_params_frozen += layer_entry.num_params_frozen
-            self.num_param_tensors += layer_entry.num_param_tensors
-            self.total_param_memory += layer_entry.param_memory
-            # Tally for modules, too.
-            for module_name, _ in layer_entry.modules:
-                mbd["module_nparams"][module_name] += layer_entry.num_params
-                mbd["module_nparams_trainable"][module_name] += layer_entry.num_params_trainable
-                mbd["module_nparams_frozen"][module_name] += layer_entry.num_params_frozen
+        # Track layers that consume parameters (a per-LAYER fact, kept here):
+        if layer_entry.layer_label not in unique_layers_seen and layer_entry.uses_params:
+            self.num_layers_with_params += 1
 
         unique_layers_seen.add(layer_entry.layer_label)
 
@@ -200,9 +194,58 @@ def _log_final_info_for_layers(self: "Trace") -> None:
 
         self.func_calls_duration += layer_entry.func_duration
 
+    _tally_params_by_identity(self, mbd)
     _compute_fx_qualpaths(self)
     _finalize_output_compute_indexs(self)
     _build_module_hierarchy_dicts(self)
+
+
+def _tally_params_by_identity(self: "Trace", mbd: dict[str, Any]) -> None:
+    """Tally trace- and module-level parameter totals by PARAMETER IDENTITY.
+
+    The accounting basis is the Python Parameter OBJECT (torch's own identity
+    rule): ``self.num_params == sum(p.numel() for p in model.parameters())``
+    by construction. ``param_logs`` is already object-deduplicated at the
+    pre-forward scan (a tied parameter appears ONCE, with its alias paths in
+    ``all_addresses``), so summing it can never double-count ties -- the
+    per-layer tally this replaces charged a tied parameter once per consuming
+    layer (gpt2's wte/lm_head tie read +31% "unique" params) and silently
+    dropped declared-but-never-executed parameters.
+
+    Module rollups are inclusive (a parameter counts once in every module on
+    its owning/alias address chains) and equally tie-deduplicated per module.
+    """
+
+    self.num_params = 0
+    self.num_params_trainable = 0
+    self.num_params_frozen = 0
+    self.num_param_tensors = 0
+    self.total_param_memory = Bytes(0)
+    for pl in self.param_logs:
+        count = int(pl.num_params)
+        self.num_params += count
+        if pl.is_trainable:
+            self.num_params_trainable += count
+        else:
+            self.num_params_frozen += count
+        self.num_param_tensors += 1
+        self.total_param_memory += pl.param_memory
+
+        containing_modules: set[str] = set()
+        owner_addresses = set(getattr(pl, "all_module_addresses", None) or [])
+        owner_addresses.add(pl.module_address)
+        for owner in owner_addresses:
+            if not owner or owner == "self":
+                continue
+            parts = owner.split(".")
+            for depth in range(1, len(parts) + 1):
+                containing_modules.add(".".join(parts[:depth]))
+        for module_name in containing_modules:
+            mbd["module_nparams"][module_name] += count
+            if pl.is_trainable:
+                mbd["module_nparams_trainable"][module_name] += count
+            else:
+                mbd["module_nparams_frozen"][module_name] += count
 
 
 def _normalize_io_role_flags(layer_entry: Op) -> None:

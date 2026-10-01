@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -442,9 +441,10 @@ def validate(
         # setups and none of it feeds the verdict, so default validate calls
         # pay nothing. last_validation_peak_memory() already returns None for
         # the empty off-state.
+        from ..utils.env_flags import closed_bool_env
         from .diagnostics import _LAST_RUN_PEAKS
 
-        peaks_enabled = os.environ.get("TORCHLENS_VALIDATE_PEAK_MEMORY") == "1"
+        peaks_enabled = closed_bool_env("TORCHLENS_VALIDATE_PEAK_MEMORY")
         _LAST_RUN_PEAKS.clear()
         rss_before = _rss_high_water_bytes() if peaks_enabled else None
         cuda_armed = peaks_enabled and torch.cuda.is_available() and torch.cuda.is_initialized()

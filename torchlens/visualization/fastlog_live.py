@@ -115,17 +115,22 @@ def to_pandas(trace: RecordingTrace) -> Any:
         }
         for ctx in trace.events
     ]
-    return pd.DataFrame(
-        rows,
-        columns=[
-            "call_index",
-            "step_num",
-            "kind",
-            "op_type",
-            "address",
-            "shape",
-            "dtype",
-        ],
+    from .._capture_honesty import attach_dataframe_honesty
+
+    return attach_dataframe_honesty(
+        pd.DataFrame(
+            rows,
+            columns=[
+                "call_index",
+                "step_num",
+                "kind",
+                "op_type",
+                "address",
+                "shape",
+                "dtype",
+            ],
+        ),
+        trace,
     )
 
 

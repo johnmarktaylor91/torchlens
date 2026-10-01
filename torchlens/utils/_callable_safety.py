@@ -1541,6 +1541,7 @@ _VETTED_INERT_FIRST_PARTY: frozenset[tuple[str, str]] = frozenset(
         ("torchlens.intervention.helpers", "zero_ablate"),
         ("torchlens.intervention.helpers", "mean_ablate"),
         ("torchlens.intervention.helpers", "resample_ablate"),
+        ("torchlens.intervention.helpers", "scramble_elements"),
         ("torchlens.intervention.helpers", "steer"),
         ("torchlens.intervention.helpers", "scale"),
         ("torchlens.intervention.helpers", "clamp"),

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -266,12 +267,15 @@ def test_tabular_exports_round_trip_csv_and_json(
 
     csv_path = tmp_path / f"{surface_name}.csv"
     tl.export.csv(surface, csv_path)
-    csv_df = pd.read_csv(csv_path)
+    # The capture-honesty preamble rides '#' comment lines (WT1 A-V row 24).
+    csv_df = pd.read_csv(csv_path, comment="#")
     _assert_round_trip_matches(expected_df, csv_df, stable_columns)
 
     json_path = tmp_path / f"{surface_name}.json"
     tl.export.json(surface, json_path, orient="records")
-    json_df = pd.read_json(json_path, orient="records")
+    json_payload = json.loads(json_path.read_text(encoding="utf-8"))
+    assert "capture_honesty" in json_payload
+    json_df = pd.DataFrame(json_payload["rows"])
     _assert_round_trip_matches(expected_df, json_df, stable_columns)
 
 

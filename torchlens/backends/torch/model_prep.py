@@ -23,6 +23,7 @@ import torch
 from torch import nn
 
 from ... import _state
+from ..._capture_state_helpers import _is_uninitialized_param
 from ..._errors import CaptureContextError
 from ...constants import LAYER_PASS_LOG_FIELD_ORDER
 from ...data_classes._module_role_hints import multi_output_role_from_path, role_hints_for_module
@@ -43,6 +44,7 @@ from ...ir.op_record import (
     amend_module_exit_intervention,
     amend_raw_hook_intervention,
 )
+from ...quantities import Bytes
 from ...utils.hashing import make_random_barcode
 from ...utils.introspection import (
     _get_code_context,
@@ -769,13 +771,22 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
             param_address = f"{address}.{param_name}" if address else param_name
             param_id_to_address[pid] = param_address
 
+            # Lazy modules (nn.LazyLinear etc.) hold UninitializedParameter
+            # until the first forward; shape/numel/dtype-kind access raises.
+            # The pre-forward scan TOLERATES them: register the identity now
+            # with deferred geometry, and finalize the inventory after the one
+            # captured forward materializes them in place (postprocess step 15).
+            param_is_lazy = _is_uninitialized_param(param)
+
             # Save original requires_grad before forcing True. Integer/bool-dtype
             # Parameters (e.g. a fixed nn.Parameter(torch.arange(...), requires_grad=False)
             # lookup buffer) are legal PyTorch and never gradient-capable; forcing
             # requires_grad on them raises, so only force floating/complex dtypes.
             requires_grad_before = param.requires_grad
-            if not getattr(trace, "backward_ready", False) and (
-                torch.is_floating_point(param) or torch.is_complex(param)
+            if (
+                not param_is_lazy
+                and not getattr(trace, "backward_ready", False)
+                and (torch.is_floating_point(param) or torch.is_complex(param))
             ):
                 param.requires_grad = True
 
@@ -788,13 +799,13 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
             )
             stamped_params.append(param)
 
-            param_fsize = get_memory_amount(param)
+            param_fsize = Bytes(0) if param_is_lazy else get_memory_amount(param)
             param_log = Param(
                 module_address=module_address,
                 name=param_name,
-                shape=tuple(param.shape),
+                shape=() if param_is_lazy else tuple(param.shape),
                 dtype=param.dtype,
-                num_params=param.numel(),
+                num_params=0 if param_is_lazy else param.numel(),
                 param_memory=param_fsize,
                 trainable=requires_grad_before,
                 address=param_address,
@@ -802,6 +813,8 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
                 has_optimizer=id(param) in optimized_param_ids if optimizer is not None else None,
             )
             param_log._param_ref = param
+            if param_is_lazy:
+                param_log._lazy_at_prep = True  # type: ignore[attr-defined]
             param_logs[param_address] = param_log
 
     trace._param_log_by_pid = param_id_to_address
@@ -2591,6 +2604,13 @@ def module_forward_decorator(
                         "address": frame.address,
                         "module_type": _module_type(module),
                         "module_pass_index": frame.pass_index,
+                        # tl.module evaluates capture-time subjects through
+                        # output_of_module_calls, so a module-boundary halt
+                        # (incl. compiled stop_after= module addresses) can only
+                        # fire if this exit ctx names its own module call; the
+                        # exhaustive path previously left it empty and every
+                        # tl.module halt silently ran the full forward.
+                        "output_of_module_calls": (f"{frame.address}:{frame.pass_index}",),
                     },
                     module_stack=[],
                     history=(),

@@ -79,6 +79,7 @@ ir	submodule
 kernel_telemetry	submodule
 label	declared
 load	declared
+load_extraction	declared
 low_variance	declared
 mean_ablate	declared
 merge_ranks	declared
@@ -136,6 +137,7 @@ stable_across_passes	declared
 stats	submodule
 steer	declared
 subspace	declared
+summary	declared
 swap_with	declared
 sweep	declared
 tap	declared

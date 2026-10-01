@@ -78,4 +78,6 @@ def recompute_candidates(trace: Trace, *, budget_gb: float | None = None) -> pd.
     frame.attrs["budget_gb"] = budget_gb
     for key, value in excluded.items():
         frame.attrs[f"excluded_{key}_count"] = value
-    return frame
+    from .._capture_honesty import attach_dataframe_honesty
+
+    return attach_dataframe_honesty(frame, trace)

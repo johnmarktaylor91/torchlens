@@ -310,9 +310,15 @@ facades = {
     for name, (module_path, attr_name) in tl._LAZY_ATTRS.items()
     if attr_name is None
 }
-shim_private_targets = {"_trace": ("torchlens.user_funcs", "trace")}
-for private_name, (module_path, attr_name) in shim_private_targets.items():
-    assert getattr(tl, private_name) is getattr(importlib.import_module(module_path), attr_name)
+# The five-step facade order (megasprint A10) short-circuits underscore
+# names to plain AttributeError before any table lookup, and the last
+# underscore lazy row (``_trace``) was deleted with it; pin the short-circuit.
+try:
+    tl._trace
+except AttributeError:
+    pass
+else:
+    raise AssertionError("underscore names must not resolve through the lazy facade")
 collisions = {}
 for facade_name, module_path in facades.items():
     eager_module = importlib.import_module(module_path)
@@ -347,6 +353,18 @@ assert collisions == {
     "accessors": [],
     "attribution": [], "autoroute": ["input", "output"],
     "backends": [],
+    # Entry/facade repair (megasprint A10): the integration and appliance
+    # namespaces gained root reachability rows; bridge/callbacks export
+    # exactly their lazy child modules, neuro/notebook export nothing yet.
+    "bridge": [
+        "brain_score", "captum", "depyf", "dialz", "gradcam", "hf",
+        "huggingface", "inseq", "lit", "mcp", "nnsight", "profiler",
+        "repeng", "rsatoolbox", "sae", "sae_lens", "shap",
+        "steering_vectors",
+    ],
+    "callbacks": ["lightning"],
+    "neuro": [],
+    "notebook": [],
     "captured_run": [],
     "compat": ["lovely", "torchextractor", "torchshow"],
     "data_classes": [], "dataset_extraction": [], "debug": [], "distributed": [],

@@ -1094,7 +1094,7 @@
     }
   ],
   "trace_summary": {
-    "total_flops_forward": 1056,
+    "total_flops_forward": 920,
     "uncalled_modules": [
       "choices",
       "layers"

@@ -2,33 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
-
-from .. import _state
+# ``log_value``'s canonical home is ``torchlens.observers`` (capture-time
+# annotation WRITERS live with the observers; reporting surfaces are the
+# READERS). This import is the kept compatibility alias for the historical
+# ``tl.report.log_value`` spelling.
+from ..observers import log_value
 from ._explain import explain
 from ._profile import TraceProfile, build_profile
-
-
-def log_value(name: str, value: Any) -> None:
-    """Record an arbitrary scalar-like value on the active ``Trace``.
-
-    Parameters
-    ----------
-    name:
-        Value name.
-    value:
-        Scalar or JSON-like value to record.
-
-    Raises
-    ------
-    RuntimeError
-        If no TorchLens capture is active.
-    """
-
-    trace = _state._active_trace
-    if trace is None:
-        raise RuntimeError("torchlens.report.log_value() must be called during trace.")
-    trace.annotations.setdefault("logged_values", {})[str(name)] = value
-
 
 __all__ = ["TraceProfile", "build_profile", "explain", "log_value"]

@@ -237,12 +237,39 @@ def test_attribution_patch_attention_heads_matches_activation_ordering() -> None
 
 
 def test_attribution_patch_requires_grad_capture() -> None:
-    """Attribution patching raises a clear error when facet gradients are missing."""
+    """Attribution patching raises a clear error when facet gradients are missing.
+
+    An EXPLICIT ``save_grads=False`` is honored (the required-field
+    composition only fills fields the caller left unspecified), so no facet
+    gradient is captured and the read refuses with the remedy named.
+    """
 
     model = PatchingToyModel()
     clean, corrupted = _inputs()
 
     with pytest.raises(RuntimeError, match="requires grad capture.*Facet gradient unavailable"):
+        tl.facets.patching.attribution_patch_attention_heads(
+            model,
+            clean,
+            corrupted,
+            _metric,
+            trace_kwargs={
+                "capture": tl.options.CaptureOptions(backward_ready=True, save_grads=False)
+            },
+        )
+
+
+def test_patching_refuses_removed_flat_capture_kwargs() -> None:
+    """Flat capture spellings in trace_kwargs refuse with the grouped remedy.
+
+    ``tl.trace`` removed the flat capture kwargs; forwarding them produced a
+    bare ``TypeError`` from ``trace()`` that taught nothing.
+    """
+
+    model = PatchingToyModel()
+    clean, corrupted = _inputs()
+
+    with pytest.raises(ValueError, match="removed flat capture kwargs.*capture="):
         tl.facets.patching.attribution_patch_attention_heads(
             model,
             clean,

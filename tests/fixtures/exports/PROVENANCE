@@ -13,3 +13,35 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 50ee474f49127d999ea7c5e16ec7dd97f6cef59a (dirty)
 recorded: 2026-08-19T07:37:44.927973+00:00
+---
+generator: tests/test_exports.py (model_explorer.json)
+flag: TORCHLENS_REGEN_EXPORT_GOLDENS=1
+reason: A09 report/export honesty (WT1 A-V row 24): model_explorer/netron exports gain the torchlens capture-honesty block (top-level key / metadataProps row); independent oracle tests/test_report_honesty_preamble.py::test_vendor_graph_exports_carry_facts
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4d882edccdaf826afcb0e989bd3fcfcec1c0670e (dirty)
+recorded: 2026-08-26T19:48:25.621123+00:00
+---
+generator: tests/test_exports.py (model_explorer.json)
+flag: TORCHLENS_REGEN_EXPORT_GOLDENS=1
+reason: x
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4d882edccdaf826afcb0e989bd3fcfcec1c0670e (dirty)
+recorded: 2026-08-26T19:48:37.019322+00:00
+---
+generator: tests/test_exports.py (model_explorer.json)
+flag: TORCHLENS_REGEN_EXPORT_GOLDENS=1
+reason: A09 report/export honesty row 24
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4d882edccdaf826afcb0e989bd3fcfcec1c0670e (dirty)
+recorded: 2026-08-26T19:49:14.421896+00:00
+---
+generator: tests/test_exports.py (netron.json)
+flag: TORCHLENS_REGEN_EXPORT_GOLDENS=1
+reason: A09 report/export honesty row 24
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 4d882edccdaf826afcb0e989bd3fcfcec1c0670e (dirty)
+recorded: 2026-08-26T19:49:14.435721+00:00

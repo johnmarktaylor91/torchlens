@@ -1118,7 +1118,44 @@ def _set_payload_load_status(
     ):
         setattr(trace, "payload_load_status", "loaded_device_best_effort")
         return
+    if _has_pending_lazy_payload(trace):
+        # Distinct lazy state (agent memo P0 part 4): "loaded" used to mean
+        # both payloads-resident and payloads-behind-lazy-refs, so consumers
+        # could not tell a materialized artifact from one whose reads hit
+        # disk. Reads on a loaded_lazy trace either materialize sha-verified
+        # blobs or refuse typed -- never a silent None.
+        setattr(trace, "payload_load_status", "loaded_lazy")
+        return
     setattr(trace, "payload_load_status", "loaded")
+
+
+def _has_pending_lazy_payload(trace: Trace) -> bool:
+    """Return whether any op still holds an unmaterialized lazy payload ref.
+
+    Reads through the private slot accessor: a public ``op.out`` read on a
+    lazy op MATERIALIZES the blob (the P0 honesty gate), which a status probe
+    must never trigger.
+
+    Parameters
+    ----------
+    trace:
+        Rehydrated trace to inspect.
+
+    Returns
+    -------
+    bool
+        Whether an out/grad lazy ref exists whose payload slot is empty.
+    """
+
+    for op in getattr(trace, "layer_list", []) or []:
+        slot = getattr(op, "_slot", None)
+        if not callable(slot):
+            continue
+        if slot("out_ref") is not None and slot("out") is None:
+            return True
+        if slot("grad_ref") is not None and slot("grad") is None:
+            return True
+    return False
 
 
 def _payload_hints_are_explicit(
@@ -1183,7 +1220,7 @@ def rehydrate_nested(
 
     >>> import torchlens as tl
     >>> log = tl.load("demo_bundle", lazy=True, materialize_nested=False)
-    >>> tl.rehydrate_nested(log)
+    >>> tl.io.rehydrate_nested(log)
 
     Parameters
     ----------

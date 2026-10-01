@@ -11,6 +11,7 @@ import torch
 from torch import nn
 
 from ... import _state
+from ..._capture_state_helpers import _is_uninitialized_param
 from ...ir import BufferWriteEvent
 from ...utils._torch_compat import tensor_version_or_none
 from ...utils.tensor_utils import safe_copy
@@ -470,6 +471,11 @@ class BufferWriteTracker:
             for module_address, module in _iter_modules_with_addresses(model):
                 for name, tensor in module.named_parameters(recurse=False):
                     if tensor is None:
+                        continue
+                    if _is_uninitialized_param(tensor):
+                        # Lazy params carry no storage until the first forward
+                        # materializes them (and raise ValueError, not the
+                        # storage errors handled below, on any access).
                         continue
                     address = f"{module_address}.{name}" if module_address else name
                     if not armed:
@@ -1136,6 +1142,13 @@ def _shareable_state_dict(model: nn.Module) -> Mapping[str, torch.Tensor] | None
     the same keys, so a shared-baseline sentinel taken against it resolves at read time.
     Any refusal here simply falls back to the private whole-storage clone (today's path)
     -- never a weaker witness, never a changed verdict.
+
+    One deliberate asymmetry: pending (un-materialized) lazy state makes
+    ``snapshot_capture_state`` raise typed ``state_baseline_unavailable`` rather than
+    return, so a pending model never reaches a read of the clone map this helper
+    licensed -- the armed capture aborts at that boundary first (the entry-gate lazy
+    refusal covers only pending BUFFERS; pending parameters reach here on plain
+    captures and materialize during the forward).
     """
 
     state_dict_method = getattr(model, "state_dict", None)

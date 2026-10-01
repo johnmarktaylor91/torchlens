@@ -555,7 +555,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             if model is None:
                 raise EngineDispatchError("do(..., engine='rerun') requires model= and x=.")
             self._validate_supplied_model_matches_capture(model)
-        mutation_kind = self._apply_do_mutation(
+        mutation_kind, attached_handles = self._apply_do_mutation(
             hooks_or_site,
             value_or_hook,
             engine=selected_engine,
@@ -580,10 +580,18 @@ class TraceInterventionMixin(_TraceMixinBase):
             return self
         if selected_engine == "set_only":
             return self
-        if selected_engine == "replay":
-            return self.push(replay=ReplayOptions(strict=strict_value))
-        assert model is not None
-        return self.run(model, x, replay=ReplayOptions(strict=strict_value))
+        try:
+            if selected_engine == "replay":
+                return self.push(replay=ReplayOptions(strict=strict_value))
+            assert model is not None
+            return self.run(model, x, replay=ReplayOptions(strict=strict_value))
+        except BaseException:
+            # A failed do() must not leave its sticky hooks attached: the
+            # next push would silently re-fire them (contamination). Detach
+            # exactly the hooks THIS call attached, then re-raise.
+            for handle_id in attached_handles:
+                self.detach_hooks(handle=handle_id, confirm_mutation=True)
+            raise
 
     def fork(self: "Trace", name: str | None = None) -> "Trace":
         """Create a copy-on-write intervention fork of this log.
@@ -708,7 +716,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         strict: bool,
         confirm_mutation: bool,
         direction: str | None,
-    ) -> str:
+    ) -> tuple[str, tuple[str, ...]]:
         """Apply the mutation part of ``do`` and report its kind.
 
         Parameters
@@ -728,8 +736,10 @@ class TraceInterventionMixin(_TraceMixinBase):
 
         Returns
         -------
-        str
-            ``"set"``, ``"attach_hooks"``, or ``"selection_hooks"``.
+        tuple[str, tuple[str, ...]]
+            The mutation kind (``"set"``, ``"attach_hooks"``, or a
+            ``"selection_*"`` kind) and the sticky-hook handle ids THIS call
+            attached (for the caller's failure cleanup).
         """
 
         from ..selection import ResolvedSelection, Selection
@@ -758,7 +768,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 strict=strict,
                 confirm_mutation=confirm_mutation,
             )
-            return "set"
+            return "set", ()
         if value_or_hook is not None and not callable(value_or_hook):
             self.set(
                 hooks_or_site,
@@ -767,15 +777,15 @@ class TraceInterventionMixin(_TraceMixinBase):
                 strict=strict,
                 confirm_mutation=confirm_mutation,
             )
-            return "set"
-        self.attach_hooks(
+            return "set", ()
+        handle = self.attach_hooks(
             hooks_or_site,
             value_or_hook,
             direction=direction,
             strict=strict,
             confirm_mutation=confirm_mutation,
         )
-        return "attach_hooks"
+        return "attach_hooks", tuple(handle.handle_ids)
 
     def _apply_selection_do(
         self: "Trace",
@@ -785,7 +795,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         engine: str,
         strict: bool,
         direction: str | None,
-    ) -> str:
+    ) -> tuple[str, tuple[str, ...]]:
         """Apply a Selection-targeted edit under the mask-application contract.
 
         The selection resolves against this trace. Interior sites (sites with
@@ -801,24 +811,31 @@ class TraceInterventionMixin(_TraceMixinBase):
 
         Returns
         -------
-        str
-            ``"selection_hooks"`` (interior sites; caller runs the engine),
-            ``"selection_replayed"`` (leaf sites already propagated), or
-            ``"selection_set"`` (leaf values committed without propagation).
+        tuple[str, tuple[str, ...]]
+            The mutation kind -- ``"selection_hooks"`` (interior sites;
+            caller runs the engine), ``"selection_replayed"`` (leaf sites
+            already propagated), or ``"selection_set"`` (leaf values
+            committed without propagation) -- plus the sticky-hook handle
+            ids attached for the hook kind (empty otherwise).
         """
 
         from ..intervention.errors import EngineDispatchError
-        from ..intervention.selectors import label as label_selector
         from ..selection import _lift, build_selection_do_plan
 
         lifted = _lift(selection)
         if lifted is not None and lifted.kind == "EDGE":
-            return self._apply_selection_edge_do(
-                selection, lifted, edit, engine=engine, strict=strict
+            return (
+                self._apply_selection_edge_do(
+                    selection, lifted, edit, engine=engine, strict=strict
+                ),
+                (),
             )
         if lifted is not None and lifted.kind == "PARAM":
-            return self._apply_selection_param_do(
-                selection, lifted, edit, engine=engine, strict=strict
+            return (
+                self._apply_selection_param_do(
+                    selection, lifted, edit, engine=engine, strict=strict
+                ),
+                (),
             )
         resolved, plan, audit = build_selection_do_plan(self, selection, edit)
         leaf_items = [item for item in plan if item["is_leaf"]]
@@ -833,7 +850,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             )
         if not plan:
             self.intervention_audit.append(audit)
-            return "selection_replayed"
+            return "selection_replayed", ()
         if leaf_items:
             if engine not in ("replay", "set_only"):
                 raise EngineDispatchError(
@@ -847,19 +864,45 @@ class TraceInterventionMixin(_TraceMixinBase):
                 for item in leaf_items:
                     push_from(self, item["op"], replay=ReplayOptions(strict=strict))
                 self.intervention_audit.append(audit)
-                return "selection_replayed"
+                return "selection_replayed", ()
             self.intervention_audit.append(audit)
-            return "selection_set"
-        for item in hook_items:
-            self.attach_hooks(
-                label_selector(item["op"].label),
-                item["edit"],
-                strict=strict,
-                confirm_mutation=True,
-                direction=direction,
-            )
+            return "selection_set", ()
+        attached = self._attach_selection_plan_hooks(hook_items, strict=strict, direction=direction)
         self.intervention_audit.append(audit)
-        return "selection_hooks"
+        return "selection_hooks", attached
+
+    def _attach_selection_plan_hooks(
+        self: "Trace",
+        hook_items: list[dict[str, Any]],
+        *,
+        strict: bool,
+        direction: str | None,
+    ) -> tuple[str, ...]:
+        """Attach one selection plan's hooks transactionally.
+
+        A refused site mid-plan must not leave earlier sites armed: on any
+        failure the hooks this plan already attached are detached before the
+        exception propagates. Returns the attached handle ids.
+        """
+
+        from ..intervention.selectors import label as label_selector
+
+        attached: list[str] = []
+        try:
+            for item in hook_items:
+                handle = self.attach_hooks(
+                    label_selector(item["op"].label),
+                    item["edit"],
+                    strict=strict,
+                    confirm_mutation=True,
+                    direction=direction,
+                )
+                attached.extend(handle.handle_ids)
+        except BaseException:
+            for handle_id in attached:
+                self.detach_hooks(handle=handle_id, confirm_mutation=True)
+            raise
+        return tuple(attached)
 
     def _apply_selection_edge_do(
         self: "Trace",

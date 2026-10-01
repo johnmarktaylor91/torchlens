@@ -30,6 +30,35 @@ from .cleanup import (
 from .op import Op
 
 
+def _refuse_loaded_backward_capture(trace: "Trace", entry_point: str) -> None:
+    """Refuse live backward capture on a bundle-loaded analysis trace.
+
+    WT1 A-IV item 21 (lane A08): a loaded trace carries no live autograd
+    handles tied to its recorded forward, so ``log_backward`` used to hook
+    whatever FOREIGN graph the caller's loss came from, half-mutate the trace
+    (backward passes and grad_fns from an unrelated forward), and die with an
+    untyped ``AttributeError`` -- after which ``draw_backward`` silently
+    rendered that wrong graph. Refuse typed BEFORE any mutation.
+    """
+
+    if not getattr(trace, "_loaded_from_bundle", False):
+        return
+    from ..errors import RunCapabilityUnavailableError
+    from ..runnable import RunnableErrorCode
+
+    raise RunCapabilityUnavailableError(
+        f"{entry_point}() is unavailable on a bundle-loaded Trace: the loaded "
+        "artifact carries no live autograd graph tied to its recorded "
+        "forward, so a backward here would capture whatever unrelated graph "
+        "the loss came from and record a wrong backward pass. Re-capture "
+        "live (tl.trace(model, x, capture=CaptureOptions(backward_ready="
+        "True))) and call log_backward on that Trace, or inspect the "
+        "backward metadata this artifact already persisted.",
+        code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+        detection_stage="loaded_backward_capture",
+    )
+
+
 def _materialize_layer_mirrors_for_removed(
     trace: "Trace",
     removed_entries: Iterable[Op],
@@ -1048,6 +1077,7 @@ class TraceValidationMixin(_TraceMixinBase):
         from ..capture.structure_only import require_structure_only_capability
 
         require_structure_only_capability(self, "backward_grads")
+        _refuse_loaded_backward_capture(self, "log_backward")
         spec = get_backend_spec(getattr(self, "backend", "torch"))
         if not spec.capabilities.backward_capture:
             raise BackendUnsupportedError(
@@ -1092,6 +1122,7 @@ class TraceValidationMixin(_TraceMixinBase):
         from ..capture.structure_only import require_structure_only_capability
 
         require_structure_only_capability(self, "backward_grads")
+        _refuse_loaded_backward_capture(self, "recording_backward")
         spec = get_backend_spec(getattr(self, "backend", "torch"))
         if not spec.capabilities.backward_capture:
             raise BackendUnsupportedError(

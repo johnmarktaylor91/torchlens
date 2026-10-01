@@ -97,9 +97,17 @@ def test_mlflow_logs_prefixed_metrics_and_returns_them() -> None:
     client = _Client()
     metrics = tl.export.mlflow(log, client=client, prefix="tlm")
 
-    assert set(metrics) == {"num_layers", "num_saved_ops", "total_activation_memory"}
+    # capture_honesty is RETURNED, never logged (log_metric takes numerics).
+    assert set(metrics) == {
+        "num_layers",
+        "num_saved_ops",
+        "total_activation_memory",
+        "capture_honesty",
+    }
+    assert metrics["capture_honesty"]["capture_status"] == "complete"
     assert metrics["num_layers"] == len(log.layer_list)
-    assert client.logged == {f"tlm.{key}": value for key, value in metrics.items()}
+    numeric_metrics = {key: value for key, value in metrics.items() if key != "capture_honesty"}
+    assert client.logged == {f"tlm.{key}": value for key, value in numeric_metrics.items()}
     # Without a client the metrics are still prepared and returned.
     assert tl.export.mlflow(log, client=None) == metrics
 
@@ -119,7 +127,9 @@ def test_aim_tracks_prefixed_metrics_on_run_object() -> None:
     run = _Run()
     metrics = tl.export.aim(log, run=run, prefix="tla")
 
-    assert run.tracked == {f"tla.{key}": value for key, value in metrics.items()}
+    numeric_metrics = {key: value for key, value in metrics.items() if key != "capture_honesty"}
+    assert run.tracked == {f"tla.{key}": value for key, value in numeric_metrics.items()}
+    assert metrics["capture_honesty"]["capture_status"] == "complete"
     assert tl.export.aim(log, run=None) == metrics
 
 
@@ -283,8 +293,11 @@ def test_json_export_sanitizes_nonprimitive_and_missing_cells(tmp_path: Path) ->
     log = SimpleNamespace(to_pandas=lambda: frame)
 
     destination = tl.export.json(log, tmp_path / "cells.json")
-    records = json.loads(destination.read_text(encoding="utf-8"))
+    payload = json.loads(destination.read_text(encoding="utf-8"))
 
+    # Duck-typed subjects with no capture facts disclose "unknown", not clean.
+    assert payload["capture_honesty"]["capture_status"] == "unknown"
+    records = payload["rows"]
     assert records[0]["payload"] == repr(torch.tensor([1.0]))
     assert records[1]["payload"] is None
 

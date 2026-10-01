@@ -403,6 +403,30 @@ your own callable (or per-address mapping, e.g. a tuned lens), and `layers=` /
 facet recipes producing the same facet names -- the appliance never special
 cases architectures.
 
+`torchlens.semantic.logit_lens_predictions` is the streaming reduction of the
+same sweep: it projects ONE layer at a time, keeps only per-position top-k
+values, the full-vocabulary `logsumexp`, and requested-token logits /
+probabilities / one-based ranks, then discards that layer's full projection --
+so long sequences never materialize every `[batch, positions, vocab]` tensor
+at once:
+
+```python
+from torchlens.semantic import logit_lens_predictions
+
+preds = logit_lens_predictions(log, k=5, positions=[-1], tokens=[the_id])
+preds.rows[3].top_ids                         # one layer's top-k token ids
+preds.rows[-1].provenance                     # "native output" for captured logits
+```
+
+It shares `facet=` / `layers=` / `lens=` / `validate=` semantics (and the
+fail-closed lens validation) with `logit_lens`. Probabilities always use the
+full-vocabulary softmax denominator. `include_native=True` (the default)
+appends a row served directly from the model's CAPTURED output logits,
+labelled `"native output"`; every reconstructed row is labelled `"projected
+through final norm/head"`. On a `logits_to_keep`-sliced capture the native
+row covers only the positions the capture kept, and requested positions
+outside a row's covered range are dropped from that row rather than invented.
+
 ## Fallback
 
 Every module has structural facets even with no semantic recipe. This gives a

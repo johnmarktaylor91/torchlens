@@ -145,6 +145,84 @@ class DoctorReport:
 
         return self.show()
 
+    def __repr__(self) -> str:
+        """Return the designed bounded render, never a dataclass wall.
+
+        The auto-generated dataclass repr was a 3,000+-character one-line
+        wall (sumfam wave-0 item 2). Every emitted line is width-capped with
+        a disclosed truncation; the full row text stays on ``.checks``.
+
+        Returns
+        -------
+        str
+            Bounded multi-line report.
+        """
+
+        lines = []
+        for line in self.show().splitlines():
+            if len(line) > _REPORT_REPR_LINE_CAP:
+                line = line[: _REPORT_REPR_LINE_CAP - 3] + "..."
+            lines.append(line)
+        lines.append("(full row text: report.checks; capability dump: capability_snapshot())")
+        return "\n".join(lines)
+
+    def capability_snapshot(self) -> dict[str, bool]:
+        """Return the full runtime capability snapshot (the detail accessor).
+
+        The doctor row shows the grouped absences-first summary; this is the
+        complete ``flag -> available`` mapping the summary was computed from.
+
+        Returns
+        -------
+        dict[str, bool]
+            Capability flag availability.
+        """
+
+        return _runtime_capability_snapshot()
+
+
+#: Width cap for report ``__repr__`` lines (bounded-reprs doctrine).
+_REPORT_REPR_LINE_CAP = 200
+
+
+def capability_snapshot() -> dict[str, bool]:
+    """Return the full runtime capability snapshot (module-level accessor).
+
+    Returns
+    -------
+    dict[str, bool]
+        Capability flag availability, torch plus optional preview backends.
+    """
+
+    return _runtime_capability_snapshot()
+
+
+def format_capability_summary(snapshot: dict[str, bool]) -> str:
+    """Return the grouped absences-first summary of a capability snapshot.
+
+    ONE shared renderer (sumfam wave-0 item 2): the full ``name=value`` dump
+    used to sit in a report data cell, so every renderer inherited a
+    ~1,900-character line. Absences are the signal and are named first; the
+    full dump moves to the detail accessors.
+
+    Parameters
+    ----------
+    snapshot:
+        Capability flag availability.
+
+    Returns
+    -------
+    str
+        ``present/total capabilities present`` plus the sorted absent names.
+    """
+
+    absent = sorted(name for name, available in snapshot.items() if not available)
+    present = len(snapshot) - len(absent)
+    summary = f"{present}/{len(snapshot)} capabilities present"
+    if absent:
+        summary += "; absent: " + ", ".join(absent)
+    return summary
+
 
 _DOCTOR_EXCLUDED_EXTRAS = frozenset({"all", "all-stretch", "dev", "test"})
 _EXTRA_MARKER_RE = re.compile(r"""extra\s*==\s*['"](?P<extra>[^'"]+)['"]""")
@@ -373,11 +451,14 @@ def _probe_torch_capabilities() -> DoctorCheck:
     # ignore the row.
     missing = [name for name in absent if name not in OPTIONAL_CAPABILITY_FLAGS]
     optional_absent = [name for name in absent if name in OPTIONAL_CAPABILITY_FLAGS]
-    detail = _format_capability_snapshot(snapshot)
+    # Grouped absences-first summary; the full name=value dump lives on the
+    # detail accessor (tl.utils.capability_snapshot()), not in the row cell.
+    detail = format_capability_summary(snapshot)
     if missing:
         detail += "; missing=" + ",".join(missing)
     if optional_absent:
         detail += "; optional_absent=" + ",".join(optional_absent)
+    detail += "; full dump: tl.utils.capability_snapshot()"
     # Report the true state: a missing private-integration capability is a
     # degraded (WARN) row, not a "PASS". These flags are feature-detected and may
     # be legitimately absent across torch versions, so WARN (not FAIL) is honest.
@@ -509,23 +590,6 @@ def _runtime_capability_snapshot() -> dict[str, bool]:
         return snapshot
     snapshot.update(get_tf_capability_snapshot())
     return snapshot
-
-
-def _format_capability_snapshot(snapshot: dict[str, bool]) -> str:
-    """Format capability flags as a stable comma-separated list.
-
-    Parameters
-    ----------
-    snapshot:
-        Capability flags to format.
-
-    Returns
-    -------
-    str
-        Stable ``name=value`` list.
-    """
-
-    return ", ".join(f"{name}={available}" for name, available in sorted(snapshot.items()))
 
 
 def doctor() -> DoctorReport:
@@ -678,8 +742,8 @@ def list_ops(
     return _log_ops_for_mode(model, x, mode)
 
 
-def flop_count(model: nn.Module, x: Any, *, count_fma_as_two: bool = False) -> int:
-    """Return a lightweight FLOP count from TorchLens per-layer metadata.
+def flop_count(model: nn.Module, x: Any, *, count_fma_as_two: bool | None = None) -> int:
+    """Return a lightweight forward FLOP count from TorchLens metadata.
 
     Parameters
     ----------
@@ -688,27 +752,33 @@ def flop_count(model: nn.Module, x: Any, *, count_fma_as_two: bool = False) -> i
     x:
         Input passed to ``trace``.
     count_fma_as_two:
-        FLOP/MAC convention marker. TorchLens stores counts using its capture-time
-        convention; this argument records the requested display convention and is
-        reserved for handlers that can distinguish FMA costs.
+        FMA convention (sentinel default: omitted != explicit). ``None`` and
+        ``True`` count under the stored fma=2 convention (one
+        multiply-accumulate = 2 FLOPs). ``False`` recounts under fma=1 from
+        each op's two-term compute record; ops with no derivable MAC split
+        make the conversion impossible and refuse typed
+        (``flop_convention_unavailable``) -- the request is NEVER
+        accepted-and-ignored.
 
     Returns
     -------
     int
-        Sum of available forward FLOP estimates. Operators without a built-in
-        estimate contribute zero.
+        Sum of available forward FLOP estimates under the requested
+        convention. Operators without a built-in estimate contribute zero
+        (disclosed by ``Trace.summary``'s unknown-op count).
     """
 
-    del count_fma_as_two
     from torchlens import trace as trace_fn
     from torchlens.options import CaptureOptions
+    from torchlens.report._compute_truth import forward_flops_total
 
     trace = cast(Callable[..., Any], trace_fn)(
         model,
         x,
         capture=CaptureOptions(layers_to_save=None),
     )
-    return int(sum(getattr(layer, "flops_forward", None) or 0 for layer in trace.layer_list))
+    fma = 1 if count_fma_as_two is False else 2
+    return int(forward_flops_total(trace, fma=fma))
 
 
 def peek_graph(
@@ -1102,9 +1172,11 @@ __all__ = [
     "_model_expects_single_arg",
     "_safe_copy_arg",
     "assign_to_sequence_or_dict",
+    "capability_snapshot",
     "copy_arg_tree",
     "copy_tensor_payload",
     "doctor",
+    "format_capability_summary",
     "ensure_iterable",
     "get_attr_values_from_tensor_list",
     "get_memory_amount",

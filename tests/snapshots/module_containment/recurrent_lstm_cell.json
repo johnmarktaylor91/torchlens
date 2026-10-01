@@ -366,9 +366,9 @@
       ],
       "num_calls": 3,
       "num_param_tensors": 4,
-      "num_params": 3328,
+      "num_params": 1664,
       "num_params_frozen": 0,
-      "num_params_trainable": 3328,
+      "num_params_trainable": 1664,
       "ops": [
         "lstmcell_1_3",
         "lstmcell_2_4"
@@ -828,7 +828,7 @@
     }
   ],
   "trace_summary": {
-    "total_flops_forward": 528,
+    "total_flops_forward": 264,
     "uncalled_modules": []
   }
 }
