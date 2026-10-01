@@ -42,6 +42,36 @@ def test_every_skin_carries_the_new_records() -> None:
         assert theme.neutral_aggregate_fill.startswith("#")
 
 
+def test_semantic_palette_default_is_the_shared_read_only_legacy_proxy() -> None:
+    """The default palette is the legacy proxy itself, shared and immutable.
+
+    Regression: a plain ``field(default=<mappingproxy>)`` raised ``ValueError:
+    mutable default`` at import on Python 3.11, which broke every test module
+    that imported the visualization package.
+    """
+
+    import dataclasses
+    from types import MappingProxyType
+
+    from torchlens.visualization.themes import VisualizationTheme
+
+    theme = VisualizationTheme(
+        name="probe",
+        graph={},
+        node={},
+        edge={},
+        default_fill="white",
+        default_border="black",
+        default_font="black",
+    )
+    assert theme.semantic_palette is LEGACY_SEMANTIC_PALETTE
+    assert isinstance(theme.semantic_palette, MappingProxyType)
+    with pytest.raises(TypeError):
+        theme.semantic_palette["input"] = "#000000"  # type: ignore[index]
+    palette_field = {f.name: f for f in dataclasses.fields(VisualizationTheme)}["semantic_palette"]
+    assert palette_field.default is dataclasses.MISSING
+
+
 def test_legend_items_field_is_deleted() -> None:
     """The dead legend_items data is gone (memo skins bullet)."""
 
