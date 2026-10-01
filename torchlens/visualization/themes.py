@@ -125,7 +125,10 @@ class VisualizationTheme:
     default_fill: str
     default_border: str
     default_font: str
-    semantic_palette: Mapping[str, str] = field(default=LEGACY_SEMANTIC_PALETTE)
+    # default_factory, not default=: a mappingproxy has no __hash__ before Python 3.12, and
+    # 3.11's dataclass check rejects unhashable defaults at class creation. The factory
+    # returns the same read-only module-level mapping, so value and identity are unchanged.
+    semantic_palette: Mapping[str, str] = field(default_factory=lambda: LEGACY_SEMANTIC_PALETTE)
     ramp: tuple[str, str, str] = ("#F2F2F2", "#79A8CC", "#0072B2")
     neutral_aggregate_fill: str = "#E8EEF2"
     typography: TypographyRecord = field(default=DEFAULT_TYPOGRAPHY)
