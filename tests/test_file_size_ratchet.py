@@ -305,7 +305,11 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # any()/all()) plus the tensor_any_over_dims() helper land at the one
     # sanctioned chokepoint (measured 4223); next 50-line step. Debloat
     # target unchanged: 3450.
-    "torchlens/utils/_torch_compat.py": 4250,
+    # 4250 -> 4300 (2026-10-01 L8 floor fix cont'd): two more capability
+    # probes (CPU Half-dtype kernel coverage, Float8 deterministic-fill)
+    # land at the same chokepoint (measured 4293); next 50-line step.
+    # Debloat target unchanged: 3450.
+    "torchlens/utils/_torch_compat.py": 4300,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     # 3300 -> 3320 (F24 observe): the device-memory bracket at the one
