@@ -472,8 +472,16 @@ def equinox_param_logs(tree: EquinoxModuleTree, trace: Any) -> dict[str, Param]:
             param = param_logs[existing_address]
             if address not in param.all_addresses:
                 param.all_addresses.append(address)
-            if address not in param.co_parent_params:
-                param.co_parent_params.append(address)
+            # NOTE: aliasing (the SAME underlying value reachable at more than
+            # one address) belongs on ``all_addresses`` only.
+            # ``co_parent_params`` is a DIFFERENT relationship -- params that
+            # co-occur as distinct siblings on the SAME op (e.g. a layer's
+            # weight and bias) -- and the ``param_xrefs`` metadata invariant
+            # requires it to be symmetric between two DISTINCT Param objects.
+            # A shared/aliased param is only ONE Param object indexed under
+            # multiple addresses, so appending an alias address here made the
+            # object claim itself as its own co-parent under a name the
+            # reciprocal-link check could never satisfy.
             for alias in tree.metadata.get(module_address, {}).get(
                 "all_addresses", [module_address]
             ):
@@ -563,11 +571,11 @@ def nnx_param_logs(tree: NnxModuleTree, trace: Any) -> dict[str, Param]:
         param.all_module_addresses = list(
             tree.metadata.get(module_address, {}).get("all_addresses", [module_address])
         )
+        # NOTE: see the identical note in ``equinox_param_logs`` -- aliasing
+        # belongs on ``all_addresses`` only, never ``co_parent_params``.
         for alias_address in _nnx_param_alias_addresses(tree, address, module_address):
             if alias_address not in param.all_addresses:
                 param.all_addresses.append(alias_address)
-            if alias_address != address and alias_address not in param.co_parent_params:
-                param.co_parent_params.append(alias_address)
         param_logs[address] = param
     return param_logs
 
@@ -609,11 +617,24 @@ def _walk_equinox_modules(
 
     address_by_id[module_id] = address
     modules_by_class[type(module)][module_id] = address
-    child_addresses = [
-        child_address
-        for child_address, child_module in _iter_equinox_module_children(module, address)
-        if is_equinox_module(child_module)
-    ]
+    # Torch parity: a module shared across two sibling attributes (e.g.
+    # ``self.left`` and ``self.right`` holding the SAME object) must appear
+    # only ONCE in the parent's own ``address_children`` -- under its
+    # PRIMARY address -- with every other attribute name reachable solely
+    # through ``all_addresses``. Listing every alias here duplicated the
+    # child in the parent's own child list (``['left', 'right']`` instead of
+    # ``['left']``) and let a bare ``tl.in_module(primary)`` selector fan out
+    # to both the primary and alias op sets as if they were distinct sites.
+    seen_child_ids: set[int] = set()
+    child_addresses = []
+    for child_address, child_module in _iter_equinox_module_children(module, address):
+        if not is_equinox_module(child_module):
+            continue
+        child_id = id(child_module)
+        if child_id in seen_child_ids:
+            continue
+        seen_child_ids.add(child_id)
+        child_addresses.append(child_address)
     metadata[address] = {
         **_module_source_metadata(module),
         "cls": type(module),
@@ -679,11 +700,19 @@ def _walk_nnx_modules(
 
     address_by_id[module_id] = address
     modules_by_class[type(module)][module_id] = address
-    child_addresses = [
-        child_address
-        for child_address, child_module in _iter_nnx_module_children(module, address)
-        if is_nnx_module(child_module)
-    ]
+    # Torch parity (see the identical note in ``_walk_equinox_modules``): a
+    # module shared across sibling attributes must appear only once, under
+    # its PRIMARY address, in the parent's own ``address_children``.
+    seen_child_ids: set[int] = set()
+    child_addresses = []
+    for child_address, child_module in _iter_nnx_module_children(module, address):
+        if not is_nnx_module(child_module):
+            continue
+        child_id = id(child_module)
+        if child_id in seen_child_ids:
+            continue
+        seen_child_ids.add(child_id)
+        child_addresses.append(child_address)
     metadata[address] = {
         **_module_source_metadata(module),
         "cls": type(module),
@@ -856,11 +885,14 @@ def _attach_param_aliases(
         ``param`` alias fields are updated in place.
     """
 
+    # NOTE: see the identical note in ``equinox_param_logs`` -- aliasing
+    # belongs on ``all_addresses`` only, never ``co_parent_params`` (reserved
+    # for distinct same-op sibling params; a shared/aliased param is one
+    # Param object, and the ``param_xrefs`` invariant's reciprocal-link check
+    # can never be satisfied by a param claiming itself as its own co-parent).
     for alias_address in _nnx_param_alias_addresses(tree, address, module_address):
         if alias_address not in param.all_addresses:
             param.all_addresses.append(alias_address)
-        if alias_address not in param.co_parent_params:
-            param.co_parent_params.append(alias_address)
     for alias in tree.metadata.get(module_address, {}).get("all_addresses", [module_address]):
         if alias not in param.all_module_addresses:
             param.all_module_addresses.append(alias)

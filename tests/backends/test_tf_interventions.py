@@ -105,12 +105,10 @@ def test_tf_intervention_graph_stays_honest_by_construction() -> None:
 
     add_op = next(op for op in trace.layer_list if op.func_name == "AddV2")
     zeros_op = next(op for op in trace.layer_list if op.func_name == "ZerosLike")
-    # N5: parents holds the FINAL pass-qualified op label (``op.label``)
-    # verbatim; the ``rsplit`` used to strip a pass suffix that ``parents``
-    # never carried pre-fix (single-pass ops kept their raw, unstripped
-    # label as the parent reference) -- now every op's edges are relabeled
-    # consistently, so the two sides match without adjustment.
-    assert tuple(add_op.parents) == (zeros_op.label,)
+    # Torch parity: parents resolves through the CONDITIONAL label map -- a
+    # single-pass referenced op (zeros_op, here) by its bare layer_label, a
+    # multi-pass one by its pass-qualified label.
+    assert tuple(add_op.parents) == (zeros_op.layer_label,)
     assert np.allclose(np.asarray(zeros_op.out), [0.0, 0.0, 0.0])
 
 
@@ -186,12 +184,15 @@ def test_tf_unmatched_site_is_a_no_op() -> None:
     """A selector matching nothing anywhere intervenes nowhere and passes."""
 
     x = tf.constant([1.0, -1.0, 2.0])
-    trace = tl.trace(
-        _relu_plus_ten,
-        x,
-        backend="tf",
-        intervene=tl.when(tl.func("nonexistent_op"), tl.zero_ablate()),
-    )
+    # A selector matching nothing anywhere is a disclosed no-op (see
+    # tests/test_zero_match_disclosures.py), not a silent one: it warns.
+    with pytest.warns(UserWarning, match="fired at zero sites"):
+        trace = tl.trace(
+            _relu_plus_ten,
+            x,
+            backend="tf",
+            intervene=tl.when(tl.func("nonexistent_op"), tl.zero_ablate()),
+        )
 
     add_op = next(op for op in trace.layer_list if op.func_name == "AddV2")
     assert np.allclose(np.asarray(add_op.out), [11.0, 10.0, 12.0])

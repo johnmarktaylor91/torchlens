@@ -91,11 +91,13 @@ def test_tf_capture_hand_built_op_chain_edges_and_saved_values() -> None:
 
     assert trace.backend == "tf"
     assert {"AddV2", "Mul"} <= {op.func_name for op in trace.layer_list}
-    # N5: parents/children hold the FINAL pass-qualified op label
-    # (``op.label``), not the internal raw capture identifier
-    # (``_label_raw``) -- the preview finalizer now relabels every op's
-    # edges, matching the multi-pass convention uniformly.
-    assert by_func["Mul"].parents == (by_func["AddV2"].label,)
+    # Torch parity: parents/children hold the FINAL label, not the internal
+    # raw capture identifier (``_label_raw``) -- the preview finalizer now
+    # relabels every op's edges. The final spelling is CONDITIONAL, exactly
+    # like torch (``postprocess/labeling.py``): a referenced op's bare
+    # ``layer_label`` when its own layer has a single pass (as here), and
+    # only a multi-pass referenced layer gets the pass-qualified ``label``.
+    assert by_func["Mul"].parents == (by_func["AddV2"].layer_label,)
     assert np.allclose(trace[by_func["Mul"].label].out, np.array([9.0, 20.0], dtype=np.float32))
     assert np.isfinite(trace[by_func["AddV2"].label].out).all()
 

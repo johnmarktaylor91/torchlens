@@ -201,8 +201,12 @@ def test_tinygrad_derived_grads_survive_grouping() -> None:
 
     assert set(grouped.derived_grads.keys()) == set(ungrouped.derived_grads.keys())
     # Records key on final op labels, which differ across the two layouts;
-    # compare in raw-label space (the per-op capture identity).
-    grouped_raw = {grouped[label]._label_raw for label in grouped.intermediate_derived_grads}
-    ungrouped_raw = {ungrouped[label]._label_raw for label in ungrouped.intermediate_derived_grads}
+    # compare in raw-label space (the per-op capture identity). Accessors
+    # iterate VALUES, not keys (see data_classes/_accessor_base.py), so
+    # iterate through .keys() to get label strings to look up.
+    grouped_raw = {grouped[label]._label_raw for label in grouped.intermediate_derived_grads.keys()}
+    ungrouped_raw = {
+        ungrouped[label]._label_raw for label in ungrouped.intermediate_derived_grads.keys()
+    }
     assert ungrouped_raw, "reference ungrouped trace produced no records"
     assert grouped_raw == ungrouped_raw

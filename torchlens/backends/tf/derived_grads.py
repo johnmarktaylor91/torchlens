@@ -434,16 +434,26 @@ def _tf_trace_intermediate_signatures(
 
     groups: dict[TFIntermediateSignature, list[Any]] = defaultdict(list)
     # Replay-side signatures speak RAW label space (capture input records).
-    # Recurrence grouping rewrites ``op.parents`` to final pass-qualified
-    # labels, so parents are resolved back to raw space before signature
-    # construction; without this every grouped intermediate would silently
-    # fail to match its replay candidate.
-    final_to_raw = {
-        str(getattr(op, "label", "")): str(getattr(op, "_label_raw", ""))
-        for op in getattr(trace, "layer_list", ())
-        if isinstance(getattr(op, "label", None), str)
-        and isinstance(getattr(op, "_label_raw", None), str)
-    }
+    # Recurrence grouping rewrites ``op.parents`` to final labels -- the
+    # pass-qualified ``op.label`` for a multi-pass referenced layer, but the
+    # BARE ``op.layer_label`` (torch parity) for a single-pass one -- so
+    # parents are resolved back to raw space before signature construction.
+    # Both final spellings must resolve: the pass-qualified key always, and
+    # the bare key too for single-pass ops (unambiguous there; omitted for
+    # multi-pass ops, where the bare label would collide across passes and
+    # ``op.parents`` never uses it anyway). Without this every grouped
+    # intermediate would silently fail to match its replay candidate.
+    final_to_raw: dict[str, str] = {}
+    for op in getattr(trace, "layer_list", ()):
+        raw_label = getattr(op, "_label_raw", None)
+        if not isinstance(raw_label, str):
+            continue
+        label = getattr(op, "label", None)
+        if isinstance(label, str):
+            final_to_raw[label] = raw_label
+        layer_label = getattr(op, "layer_label", None)
+        if isinstance(layer_label, str) and int(getattr(op, "num_passes", 1)) == 1:
+            final_to_raw[layer_label] = raw_label
     for op in getattr(trace, "layer_list", ()):
         if bool(getattr(op, "is_input", False)) or not bool(
             getattr(op, "has_saved_activation", False)

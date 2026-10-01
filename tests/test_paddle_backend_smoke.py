@@ -41,9 +41,11 @@ def test_paddle_relu_single_op_smoke() -> None:
     assert trace.module_identity_mode == "function_root"
     assert trace.num_ops == 1
     assert any("relu" in label for label in trace.layer_labels)
-    # N5: output_layers holds the final pass-qualified op label, not the
-    # internal raw capture identifier (never exposed).
-    assert trace.output_layers == ["functional.relu_1_2:1"]
+    # Torch parity: output_layers resolves through the conditional label map
+    # -- the bare layer_label for this single-pass op, not the internal raw
+    # capture identifier (never exposed) nor an unconditionally pass-qualified
+    # label.
+    assert trace.output_layers == ["functional.relu_1_2"]
     capture = trace._paddle_op_captures[0]
     assert capture.op_name == "functional.relu"
     assert capture.tensor_inputs[0].label == "input.arg_0"
@@ -75,15 +77,16 @@ def test_paddle_two_layer_mlp_parents_and_labels() -> None:
     assert "input.arg_0" in trace.layer_labels
     linear1_label = next(label for label in trace.op_labels if "linear_1_" in label)
     relu_label = next(label for label in trace.op_labels if "relu" in label)
-    # N5: ``trace.output_layers`` entries are already the final pass-qualified
-    # op label; appending another ``:1`` produced a double-qualified,
-    # unresolvable label. ``parents`` likewise holds the FINAL label (the
-    # internal raw ``_raw``-suffixed capture identifier is never exposed),
-    # so the expected values are derived from the actual op labels rather
-    # than hardcoded raw strings.
+    # Torch parity: ``parents`` resolves through the CONDITIONAL label map --
+    # the bare ``layer_label`` for these single-pass referenced ops, not the
+    # pass-qualified op label (and never the internal raw ``_raw``-suffixed
+    # capture identifier) -- so the expected values are derived from each
+    # op's own ``layer_label`` rather than hardcoded or op-label strings.
+    linear1_bare = trace[linear1_label].layer_label
+    relu_bare = trace[relu_label].layer_label
     final_label = trace.output_layers[0]
-    assert trace[relu_label].parents == (linear1_label,)
-    assert trace[final_label].parents == (relu_label,)
+    assert trace[relu_label].parents == (linear1_bare,)
+    assert trace[final_label].parents == (relu_bare,)
     assert all(capture.tensor_inputs for capture in trace._paddle_op_captures)
 
 
@@ -102,9 +105,14 @@ def test_paddle_source_input_labels_and_function_root() -> None:
     add_label = next(label for label in trace.op_labels if "__add__" in label)
     input0_label = next(label for label in trace.op_labels if label.startswith("input.arg_0"))
     input1_label = next(label for label in trace.op_labels if label.startswith("input.arg_1"))
-    # N5: parents holds the FINAL pass-qualified op label (e.g.
-    # ``"input.arg_0:1"``), derived here rather than hardcoded bare strings.
-    assert trace[add_label].parents == (input0_label, input1_label)
+    # Torch parity: ``parents`` resolves through the CONDITIONAL label map --
+    # the bare ``layer_label`` for these single-pass inputs (e.g.
+    # ``"input.arg_0"``, not ``"input.arg_0:1"``), derived here from each
+    # op's own ``layer_label`` rather than hardcoded or op-label strings.
+    assert trace[add_label].parents == (
+        trace[input0_label].layer_label,
+        trace[input1_label].layer_label,
+    )
 
 
 def test_paddle_recursion_guard_records_one_composite_op() -> None:
@@ -212,8 +220,13 @@ def test_paddle_same_dtype_astype_preserves_parent_label() -> None:
     matmul_label = next(label for label in trace.op_labels if "matmul" in label)
     add_label = next(label for label in trace.op_labels if "__add__" in label)
     input1_label = next(label for label in trace.op_labels if label.startswith("input.arg_1"))
-    # N5: parents holds the FINAL pass-qualified op label, derived here from
-    # the actual op labels rather than hardcoded raw strings.
-    assert trace[matmul_label].parents == (add_label, input1_label)
+    # Torch parity: ``parents`` resolves through the CONDITIONAL label map --
+    # the bare ``layer_label`` for these single-pass referenced ops, derived
+    # here from each op's own ``layer_label`` rather than hardcoded or
+    # op-label strings.
+    assert trace[matmul_label].parents == (
+        trace[add_label].layer_label,
+        trace[input1_label].layer_label,
+    )
     assert not any("astype" in label for label in trace.layer_labels)
     assert trace._paddle_alias_annotations[0]["preserved_label"] == "tensor.__add___1_3_raw"
