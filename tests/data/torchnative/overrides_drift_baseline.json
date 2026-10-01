@@ -50,6 +50,7 @@
   "torch.is_mps.__get__",
   "torch.is_mtia.__get__",
   "torch.is_nested.__get__",
+  "torch.is_ort.__get__",
   "torch.is_quantized.__get__",
   "torch.is_sparse.__get__",
   "torch.is_sparse_csr.__get__",
