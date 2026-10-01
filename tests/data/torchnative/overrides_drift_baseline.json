@@ -104,6 +104,7 @@
   "torch.mH.__get__",
   "torch.mT.__get__",
   "torch.name.__get__",
+  "torch.names.__get__",
   "torch.nbytes.__get__",
   "torch.ndim.__get__",
   "torch.nn.functional.log_sigmoid",
