@@ -12,8 +12,14 @@ import torch
 import torchlens.trackers as trk
 from torchlens.observability import HistorySchemaError
 from torchlens.trackers._errors import WatchConfigError, WatchRuntimeError
+from torchlens.utils._torch_compat import HAS_AMP_GRADSCALER
 
 pytestmark = pytest.mark.smoke
+
+_requires_gradscaler = pytest.mark.skipif(
+    not HAS_AMP_GRADSCALER,
+    reason="torch.amp.GradScaler (device-agnostic) postdates the torch 2.1 floor",
+)
 
 
 def _mlp() -> tuple[torch.nn.Module, torch.optim.Optimizer]:
@@ -157,6 +163,7 @@ class TestTierP:
 class TestAmpProvenance:
     """Memo 3.11: scale observed at the boundary; skips never fabricate."""
 
+    @_requires_gradscaler
     def test_scale_series_and_unscaled_truth(self) -> None:
         """The amp_scale run-health series carries the observed factor."""
 
@@ -173,6 +180,7 @@ class TestAmpProvenance:
         amp_points = [p for p in sink.scalars if p.tag == "torchlens/run/amp_scale"]
         assert amp_points and amp_points[0].value == 1024.0
 
+    @_requires_gradscaler
     def test_skipped_step_is_absent_not_zero(self) -> None:
         """An overflow-skipped AMP step emits NO fake update and is named."""
 

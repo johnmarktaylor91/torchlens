@@ -25,8 +25,14 @@ from torchlens.observability import (
 )
 from torchlens.observability._artifact import CommittedBlock
 from torchlens.trackers._errors import TagGrammarError, TrackersError
+from torchlens.utils._torch_compat import HAS_AMP_GRADSCALER
 
 pytestmark = pytest.mark.smoke
+
+_requires_gradscaler = pytest.mark.skipif(
+    not HAS_AMP_GRADSCALER,
+    reason="torch.amp.GradScaler (device-agnostic) postdates the torch 2.1 floor",
+)
 
 
 def _spine_of(values: torch.Tensor):
@@ -194,6 +200,7 @@ class TestAmpCorrection:
             trk.correct_histogram(_sketch_of(torch.randn(8)), 3.0)
         assert info.value.fields["code"] == "tracker_scale_invalid"
 
+    @_requires_gradscaler
     def test_gradscaler_cycle_observed(self) -> None:
         """The full CPU GradScaler cycle: observed scale is the real factor."""
 
@@ -215,6 +222,7 @@ class TestAmpCorrection:
         assert corrected.sum == oracle.sum
         assert corrected.finite_absmax == oracle.finite_absmax
 
+    @_requires_gradscaler
     def test_disabled_scaler_is_observed_unscaled(self) -> None:
         """A disabled scaler is an observed fact, not an assumption."""
 
