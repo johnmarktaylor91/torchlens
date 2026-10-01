@@ -154,9 +154,28 @@ def pytest_configure(config: pytest.Config) -> None:
 
         import torchlens as _tl
 
-        with _warnings.catch_warnings():
-            _warnings.simplefilter("ignore")
-            _tl.trace(torch.nn.Linear(2, 2), torch.zeros(1, 2)).cleanup()
+        # This warmup capture is a pure performance convenience (pay the
+        # one-time wrapper-install cost here, not against whichever test
+        # captures first); it carries no correctness contract of its own.
+        # A raise here used to escape `pytest_configure` -- a hook pytest
+        # runs outside any test item's exception handling -- and crash the
+        # whole session with INTERNALERROR (exit 3) instead of a normal
+        # test failure. That made a capture-breaking bug here UNKILLABLE by
+        # the mutation-margin suite: the session never got far enough to
+        # run a single real test, so no FAILED/ERROR node id was ever
+        # produced for the driver to attribute a kill to (mutation_driver.py
+        # W2's `_run_step_8`/`_run_step_17` survivors). Swallow and report
+        # instead: every other SUITE test that captures will still raise
+        # and fail normally, which is the real, attributable kill.
+        try:
+            with _warnings.catch_warnings():
+                _warnings.simplefilter("ignore")
+                _tl.trace(torch.nn.Linear(2, 2), torch.zeros(1, 2)).cleanup()
+        except Exception as warmup_exc:  # noqa: BLE001 - see note above
+            print(
+                f"tests/conftest.py: warmup capture failed ({warmup_exc!r}); "
+                "continuing unwarmed, the first real test pays the one-time cost",
+            )
     _state._collect_usage_stats = False
     _state._function_call_counts.clear()
     _state._function_call_models.clear()
