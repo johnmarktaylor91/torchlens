@@ -500,7 +500,12 @@ def test_tinygrad_multi_output_marks_outputs() -> None:
     trace = tl.trace(_multi_output, x, backend="tinygrad")
 
     assert len(trace.output_layers) == 2
-    assert all(trace.layer_dict_main_keys[label].is_output_parent for label in trace.output_layers)
+    # trace.output_layers holds the CONDITIONAL label (bare for these
+    # single-pass ops, torch parity); layer_dict_main_keys is always keyed
+    # by the pass-qualified op.label (torch parity too), so look each output
+    # up through the full lookup cascade (trace[label]) rather than
+    # layer_dict_main_keys directly.
+    assert all(trace[label].is_output_parent for label in trace.output_layers)
     assert trace.validate_forward_pass(list(_multi_output(x))) is True
 
 
