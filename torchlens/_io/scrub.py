@@ -457,10 +457,20 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
 
     equivalence_groups = state.get("op_equivalence_classes")
     if isinstance(equivalence_groups, dict):
-        state["op_equivalence_classes"] = type(equivalence_groups)(
-            (equivalence_class_map.get(key) or canonical_equivalence_key(key), value)
+        rebuilt_groups = {
+            equivalence_class_map.get(key) or canonical_equivalence_key(key): value
             for key, value in equivalence_groups.items()
-        )
+        }
+        if isinstance(equivalence_groups, defaultdict):
+            # `type(groups)(generator)` treats the first positional arg as
+            # `default_factory`, which must be callable or None: a generator
+            # of (key, value) pairs raised `TypeError: first argument must be
+            # callable or None`. Preserve the factory explicitly instead.
+            remapped_groups = type(equivalence_groups)(equivalence_groups.default_factory)
+            remapped_groups.update(rebuilt_groups)
+        else:
+            remapped_groups = type(equivalence_groups)(rebuilt_groups)
+        state["op_equivalence_classes"] = remapped_groups
 
     grad_fn_order = list(state.get("grad_fn_order") or ())
     grad_fn_logs = state.get("grad_fn_logs") or {}
