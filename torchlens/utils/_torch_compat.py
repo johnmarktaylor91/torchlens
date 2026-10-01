@@ -152,6 +152,9 @@ __all__ = [
     "get_device_mesh_type",
     "get_dtensor_type",
     "get_gradient_edge_support",
+    "get_reduce_tuple_dim_support",
+    "get_cpu_half_kernels_support",
+    "get_cpu_float8_deterministic_fill_support",
     "get_pipelining_module_types",
     "get_fp8_dtypes",
     "get_tracing_tensor_types",
@@ -1370,6 +1373,80 @@ def get_gradient_edge_support(*, force_probe: bool = False) -> bool:
     return HAS_GRADIENT_EDGE
 
 
+def get_reduce_tuple_dim_support(*, force_probe: bool = False) -> bool:
+    """Return whether ``Tensor.any``/``Tensor.all`` accept a tuple ``dim``, lazily.
+
+    Parameters
+    ----------
+    force_probe:
+        Run the probe even on first call. Diagnostic surfaces set this;
+        :func:`tensor_any_over_dims` (the only product consumer) does not, so
+        a plain ``import torchlens`` never pays for the tensor op.
+
+    Returns
+    -------
+    bool
+        See :func:`_probe_reduce_tuple_dim`. Cached after the first call.
+    """
+
+    global HAS_REDUCE_TUPLE_DIM, _REDUCE_TUPLE_DIM_PROBED
+
+    if not _REDUCE_TUPLE_DIM_PROBED or force_probe:
+        HAS_REDUCE_TUPLE_DIM = _probe_reduce_tuple_dim()
+        _REDUCE_TUPLE_DIM_PROBED = True
+    return HAS_REDUCE_TUPLE_DIM
+
+
+def get_cpu_half_kernels_support(*, force_probe: bool = False) -> bool:
+    """Return whether CPU addmm/layer_norm/nextafter accept float16, lazily.
+
+    Parameters
+    ----------
+    force_probe:
+        Run the probe even on first call. Diagnostic surfaces set this; no
+        product code consumes this flag today (test-only), so a plain
+        ``import torchlens`` never pays for the three tensor ops.
+
+    Returns
+    -------
+    bool
+        See :func:`_probe_cpu_half_kernels`. Cached after the first call.
+    """
+
+    global HAS_CPU_HALF_KERNELS, _CPU_HALF_KERNELS_PROBED
+
+    if not _CPU_HALF_KERNELS_PROBED or force_probe:
+        HAS_CPU_HALF_KERNELS = _probe_cpu_half_kernels()
+        _CPU_HALF_KERNELS_PROBED = True
+    return HAS_CPU_HALF_KERNELS
+
+
+def get_cpu_float8_deterministic_fill_support(*, force_probe: bool = False) -> bool:
+    """Return whether CPU empty-fill covers Float8 under determinism, lazily.
+
+    Parameters
+    ----------
+    force_probe:
+        Run the probe even on first call. Diagnostic surfaces set this; no
+        product code consumes this flag today (test-only), so a plain
+        ``import torchlens`` never pays for the transient global-determinism
+        toggle and allocation.
+
+    Returns
+    -------
+    bool
+        See :func:`_probe_cpu_float8_deterministic_fill`. Cached after the
+        first call.
+    """
+
+    global HAS_CPU_FLOAT8_DETERMINISTIC_FILL, _CPU_FLOAT8_DETERMINISTIC_FILL_PROBED
+
+    if not _CPU_FLOAT8_DETERMINISTIC_FILL_PROBED or force_probe:
+        HAS_CPU_FLOAT8_DETERMINISTIC_FILL = _probe_cpu_float8_deterministic_fill()
+        _CPU_FLOAT8_DETERMINISTIC_FILL_PROBED = True
+    return HAS_CPU_FLOAT8_DETERMINISTIC_FILL
+
+
 def _probe_node_prehook() -> bool:
     """Return whether autograd graph nodes support ``register_prehook``.
 
@@ -1579,9 +1656,12 @@ HAS_DETERMINISTIC_FILL_FLAG: bool = _probe_deterministic_fill_flag()
 HAS_AMP_GRADSCALER: bool = _probe_amp_gradscaler()
 HAS_NN_ATTENTION_MODULE: bool = _probe_nn_attention_module()
 HAS_RMSNORM_MODULE: bool = _probe_rmsnorm_module()
-HAS_REDUCE_TUPLE_DIM: bool = _probe_reduce_tuple_dim()
-HAS_CPU_HALF_KERNELS: bool = _probe_cpu_half_kernels()
-HAS_CPU_FLOAT8_DETERMINISTIC_FILL: bool = _probe_cpu_float8_deterministic_fill()
+HAS_REDUCE_TUPLE_DIM: bool = False
+_REDUCE_TUPLE_DIM_PROBED: bool = False
+HAS_CPU_HALF_KERNELS: bool = False
+_CPU_HALF_KERNELS_PROBED: bool = False
+HAS_CPU_FLOAT8_DETERMINISTIC_FILL: bool = False
+_CPU_FLOAT8_DETERMINISTIC_FILL_PROBED: bool = False
 _DYNAMO_OPTIMIZED_MODULE_TYPE: type[Any] | None = None
 _DYNAMO_OPTIMIZED_MODULE_PROBED: bool = False
 _DYNAMO_ORIG_CALLABLE_MARKER_PROBED: bool = False
@@ -1794,6 +1874,9 @@ _LAZY_PROBE_FAMILIES: dict[str, tuple[str, ...]] = {
     ),
     "_DTENSOR_PROBED": ("HAS_DTENSOR", "_DTENSOR_TYPE"),
     "_GRADIENT_EDGE_PROBED": ("HAS_GRADIENT_EDGE",),
+    "_REDUCE_TUPLE_DIM_PROBED": ("HAS_REDUCE_TUPLE_DIM",),
+    "_CPU_HALF_KERNELS_PROBED": ("HAS_CPU_HALF_KERNELS",),
+    "_CPU_FLOAT8_DETERMINISTIC_FILL_PROBED": ("HAS_CPU_FLOAT8_DETERMINISTIC_FILL",),
     "_FUNCOL_GROUP_RESOLUTION_PROBED": (
         "HAS_FUNCOL_GROUP_RESOLUTION",
         "_FUNCOL_GROUP_RESOLVERS",
@@ -2054,6 +2137,9 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     get_fsdp_wrapper_type(force_probe=True)
     get_dtensor_type(force_probe=True)
     get_gradient_edge_support(force_probe=True)
+    get_reduce_tuple_dim_support(force_probe=True)
+    get_cpu_half_kernels_support(force_probe=True)
+    get_cpu_float8_deterministic_fill_support(force_probe=True)
     get_device_mesh_type(force_probe=True)
     get_pipelining_module_types(force_probe=True)
     get_tracing_tensor_types(force_probe=True)
@@ -4194,7 +4280,7 @@ def tensor_any_over_dims(tensor: torch.Tensor, dims: tuple[int, ...]) -> torch.T
 
     if not dims:
         return tensor
-    if HAS_REDUCE_TUPLE_DIM:
+    if get_reduce_tuple_dim_support():
         return tensor.any(dim=dims)
     ndim = tensor.ndim
     result = tensor
