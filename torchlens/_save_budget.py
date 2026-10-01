@@ -657,7 +657,13 @@ class SaveBudget:
         """
 
         for payload in payloads:
-            if not isinstance(payload, torch.Tensor):
+            if not isinstance(payload, torch.Tensor) or payload.is_meta:
+                # A meta tensor has no physical storage to charge (see the
+                # is_meta short-circuit in _retained_storage_identities,
+                # which makes the identity loop below a no-op for it
+                # anyway); skip BEFORE ever opening its device's ledger, so
+                # a meta-only payload never spuriously creates (and warns
+                # on) an unmeasurable "meta" save-budget ledger.
                 continue
             ledger_key = str(payload.device)
             ledger = self._ledger_for(payload.device)
