@@ -132,7 +132,10 @@ def test_singleton_fallback_strips_raw_capture_sentinel() -> None:
     assert op_log.layer_label_short == "input_1_1"
     assert op_log.label == "input_1_1:1"
     assert op_log._label_raw == "input_1_1_raw"
-    assert op_log._layer_label_raw == "input_1_1_raw"
+    # Torch parity (second-pass convention): ``_layer_label_raw`` carries the
+    # finalized layer label, same as ``layer_label`` -- only ``_label_raw``
+    # keeps the ``_raw`` capture sentinel intact.
+    assert op_log._layer_label_raw == "input_1_1"
     assert trace.layer_labels == ["input_1_1"]
     # Raw labels stay resolvable through the lookup keys, just not as the
     # presented layer label.
@@ -178,10 +181,18 @@ def test_relabel_epilogue_fixes_children_even_without_grouping() -> None:
     edge that still names the raw string becomes a dangling reference. This
     must be fixed with ``assignments=None`` (the ``recurrence_detection=False``
     path), the case with no recurrence grouping at all.
+
+    Torch parity (second-pass convention): both ops here are single-pass, so
+    ``parents``/``children``/``input_layers``/``output_layers`` and the
+    lineage sets resolve through the CONDITIONAL mapping to their BARE
+    ``layer_label`` -- never the pass-qualified ``label`` -- while
+    ``recurrent_ops`` (always fully pass-qualified) still reads ``:1``.
     """
 
     producer = SimpleNamespace(
         label="producer_1_1:1",
+        layer_label="producer_1_1",
+        num_passes=1,
         equivalence_class="producer",
         parents=[],
         children=["consumer_1_2_raw"],
@@ -192,6 +203,8 @@ def test_relabel_epilogue_fixes_children_even_without_grouping() -> None:
     )
     consumer = SimpleNamespace(
         label="consumer_1_2:1",
+        layer_label="consumer_1_2",
+        num_passes=1,
         equivalence_class="consumer",
         parents=["producer_1_1_raw"],
         children=[],
@@ -210,19 +223,19 @@ def test_relabel_epilogue_fixes_children_even_without_grouping() -> None:
 
     _apply_recurrence_relabel_epilogue(trace, None, None)
 
-    assert consumer.parents == ["producer_1_1:1"]
-    assert producer.children == ["consumer_1_2:1"]
-    assert trace.input_layers == ["producer_1_1:1"]
-    assert trace.output_layers == ["consumer_1_2:1"]
+    assert consumer.parents == ["producer_1_1"]
+    assert producer.children == ["consumer_1_2"]
+    assert trace.input_layers == ["producer_1_1"]
+    assert trace.output_layers == ["consumer_1_2"]
     assert producer.recurrent_ops == ["producer_1_1:1"]
     assert consumer.recurrent_ops == ["consumer_1_2:1"]
     # N5: lineage sets (seeded with raw labels at capture time or during the
     # pre-relabel depth flood) must be relabeled too, with their original
     # container type (frozenset vs set) preserved.
-    assert producer.root_ancestors == frozenset({"producer_1_1:1"})
+    assert producer.root_ancestors == frozenset({"producer_1_1"})
     assert isinstance(producer.root_ancestors, frozenset)
-    assert producer.input_ancestors == {"producer_1_1:1"}
+    assert producer.input_ancestors == {"producer_1_1"}
     assert isinstance(producer.input_ancestors, set) and not isinstance(
         producer.input_ancestors, frozenset
     )
-    assert consumer.output_descendants == {"consumer_1_2:1"}
+    assert consumer.output_descendants == {"consumer_1_2"}
