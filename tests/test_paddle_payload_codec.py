@@ -52,7 +52,10 @@ def _assign_trace(value: Any) -> Any:
 def _saved_output(trace: Any) -> Any:
     """Return the saved output payload from a loaded assign trace."""
 
-    output_label = f"{trace.output_layers[0]}:1"
+    # N5: ``trace.output_layers`` entries are already the final pass-qualified
+    # op label (``op.label``, e.g. ``"assign_1_2:1"``); appending another
+    # ``:1`` produced a double-qualified, unresolvable label.
+    output_label = trace.output_layers[0]
     return trace[output_label].out
 
 
