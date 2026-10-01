@@ -632,11 +632,18 @@ def tensor_nanequal(
         # IEEE equality hides -0.0 vs +0.0; only certify EXACT when zero sign
         # bits agree too (fp8 widens first: no signbit kernel). A flip falls
         # through -- the tolerance band below may still legitimately accept it.
+        # fp8 tensors must skip this fast path entirely: torch has no
+        # equal_cpu kernel for them at all (raises regardless of whether the
+        # payloads actually match), so the raw torch.equal call below would
+        # crash before ever reaching fp8_safe_comparison_pair's widening --
+        # exactly the class of raw NotImplementedError/RuntimeError the
+        # widened comparison further below exists to avoid.
         if (
             tensor_a.layout == torch.strided
             and tensor_a.dtype.is_floating_point
+            and not _is_fp8_tensor(tensor_a)
             and torch.equal(tensor_a, tensor_b)
-            and _signed_zeros_match(*fp8_safe_comparison_pair(tensor_a, tensor_b))
+            and _signed_zeros_match(tensor_a, tensor_b)
         ):
             return True
 
