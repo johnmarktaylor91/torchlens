@@ -2138,21 +2138,20 @@ class JAXBackend:
             trace.num_layers_with_params = len(
                 {op.layer_label for op in trace.layer_list if op.uses_params}
             )
-            seen_layers: set[str] = set()
-            num_param_tensors = 0
-            num_params = 0
-            num_params_trainable = 0
-            for op_log in trace.layer_list:
-                if op_log.layer_label in seen_layers:
-                    continue
-                seen_layers.add(op_log.layer_label)
-                num_param_tensors += op_log.num_param_tensors
-                num_params += op_log.num_params
-                num_params_trainable += op_log.num_params_trainable
-            trace.num_param_tensors = num_param_tensors
-            trace.num_params = num_params
-            trace.num_params_trainable = num_params_trainable
-            trace.num_params_frozen = num_params - num_params_trainable
+            # Parameter-identity basis, not a per-layer-label dedup sum: a
+            # param reused across more than one op/layer (a tied weight, or a
+            # module shared across two sibling attributes) is attached to
+            # EACH referencing layer, so summing once per unique layer_label
+            # still double-counts the param itself and trips the
+            # ``trace_self_consistency`` invariant's
+            # ``num_param_tensors != len(param_logs)`` check (same fix as
+            # ``backends/_finalize.py``'s ``_update_param_totals_from_layers``).
+            trace.num_param_tensors = len(trace.param_logs)
+            trace.num_params = sum(param.num_params for param in trace.param_logs)
+            trace.num_params_trainable = sum(
+                param.num_params for param in trace.param_logs if param.is_trainable
+            )
+            trace.num_params_frozen = trace.num_params - trace.num_params_trainable
         trace.output_layers = [
             trace._raw_graph_ws.raw_layer_dict[label].layer_label
             if label in trace._raw_graph_ws.raw_layer_dict
@@ -2253,21 +2252,16 @@ class JAXBackend:
         trace.num_layers_with_params = len(
             {op.layer_label for op in trace.layer_list if op.uses_params}
         )
-        seen_layers: set[str] = set()
-        num_param_tensors = 0
-        num_params = 0
-        num_params_trainable = 0
-        for op_log in trace.layer_list:
-            if op_log.layer_label in seen_layers:
-                continue
-            seen_layers.add(op_log.layer_label)
-            num_param_tensors += op_log.num_param_tensors
-            num_params += op_log.num_params
-            num_params_trainable += op_log.num_params_trainable
-        trace.num_param_tensors = num_param_tensors
-        trace.num_params = num_params
-        trace.num_params_trainable = num_params_trainable
-        trace.num_params_frozen = num_params - num_params_trainable
+        # Parameter-identity basis (see the identical note in
+        # ``_jax_recurrence_assignments``'s sibling counter block above):
+        # a per-layer-label dedup sum still double-counts a param shared
+        # across more than one layer.
+        trace.num_param_tensors = len(trace.param_logs)
+        trace.num_params = sum(param.num_params for param in trace.param_logs)
+        trace.num_params_trainable = sum(
+            param.num_params for param in trace.param_logs if param.is_trainable
+        )
+        trace.num_params_frozen = trace.num_params - trace.num_params_trainable
 
     def _attach_pytree_module_logs(
         self,
@@ -2341,6 +2335,19 @@ class JAXBackend:
             normalized_calls = normalize_op_module_calls(op_log.modules)
             op_log.modules = [f"{address}:{call_index}" for address, call_index in normalized_calls]
             op_log.module = op_log.modules[-1] if op_log.modules else None
+            # ``module_call_stack`` carries the same containment fact as
+            # ``modules`` and must get the identical raw-tuple -> "address:N"
+            # string normalization (torch does this in
+            # ``postprocess/labeling.py``'s ``_replace_layer_names_for_layer_entry``).
+            # Left as raw ``(address, call_index)`` tuples, ``str(item)``
+            # calls elsewhere (e.g. the ``module_attribution`` metadata
+            # invariant's claim collection) stringified them as literal
+            # ``"('fc1', 1)"`` tuple reprs instead of a parseable module
+            # address, so a JAX compute op's attribution never resolved.
+            module_call_stack_calls = normalize_op_module_calls(op_log.module_call_stack)
+            op_log.module_call_stack = [
+                f"{address}:{call_index}" for address, call_index in module_call_stack_calls
+            ]
             parent_call_label: str | None = None
             for module_index, (address, call_index) in enumerate(normalized_calls):
                 call_label = f"{address}:{call_index}"
