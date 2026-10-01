@@ -390,11 +390,13 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # with the F24 device-memory bracket to 3302 on the merged tree; next
     # 50-line step above the merged measurement, never a hand-derived
     # subtotal. The post-sprint step-down target is unchanged.
-    # 3350 -> 3400 (2026-10-01 L8 floor-fix "last"): the fast-path subclass-
-    # construction gate (HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE, the table +
-    # helper + decoration-time constant + the fast-path pause branch) lands
-    # here (measured 3374); next 50-line step above it.
-    "torchlens/backends/torch/wrappers.py": 3400,
+    # 3350 -> 3450 (2026-10-01 L8 floor-fix "last"): the subclass-construction
+    # capability gate (HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE, shared by the
+    # LOGGED path's extended __new__/_make_subclass/as_subclass pause and the
+    # FAST path's translate-on-failure refusal, SubclassConstructionUnder
+    # DispatchModeError) lands here across several iterations settling on the
+    # translate-on-failure design (measured 3435); next 50-line step above it.
+    "torchlens/backends/torch/wrappers.py": 3450,
     # 3300 -> 3301 (2026-08-27 C01 item 5): same relocation import re-sort (+1).
     # 3301 -> 3400 (2026-10-01 ci-fix ratchet settle): "give the preview
     # backends torch's label convention" (8e5f966d8) landed the same
