@@ -89,13 +89,22 @@ def _check_site_key_uniqueness(ops: list, name: str) -> None:
             # function_root capture, e.g. JAX's source-path-based scan/while
             # recurrence, never populates one). Site keys are INTENTIONALLY
             # shared across recurring passes of one site (the whole point of
-            # site_key_v1), so two retained ops of the SAME recurring site in
-            # DIFFERENT passes must not collide here; ``pass_index`` is the
-            # backend-neutral "which invocation of this site is this" signal
-            # every op carries (1 for the overwhelming majority of ops, which
-            # are single-pass and already rely on their site_key alone being
-            # distinct -- this never masks a genuine same-pass collision).
-            call_instance = (ROOT_CALL_INSTANCE, getattr(op, "pass_index", 1))
+            # site_key_v1), so two retained ops the GROUPING algorithm
+            # considers the same recurring site (``equivalence_class``) must
+            # not collide here merely for sharing a site_key across passes;
+            # ``pass_index`` then separates those passes within that group.
+            # A JAX while loop's pre-loop condition check is NOT folded into
+            # the same equivalence class as its in-loop repeats (a distinct,
+            # pre-existing grouping boundary -- not something this invariant
+            # should paper over), so keying on equivalence_class first still
+            # catches the real bug class I-S2 exists for: two ops the
+            # grouping algorithm considers STRUCTURALLY DIFFERENT accidentally
+            # minting the identical site_key.
+            call_instance = (
+                ROOT_CALL_INSTANCE,
+                getattr(op, "equivalence_class", None),
+                getattr(op, "pass_index", 1),
+            )
         identity = (str(op.site_key), call_instance)
         if identity in seen:
             raise MetadataInvariantError(
