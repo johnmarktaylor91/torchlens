@@ -434,8 +434,10 @@ attribution-target alias. See the [attribution reference](attribution.md).
 
 **Value helpers**
 : `tl.zero_ablate`, `tl.scale`, `tl.add`, `tl.clamp`, `tl.noise` (Gaussian noise),
-  `tl.mean_ablate` (replace with a source mean), `tl.resample_ablate` (sample replacement
-  values from a source tensor), `tl.replace_with` (fixed value), `tl.swap_with` (another
+  `tl.mean_ablate` (replace with a source mean), `torchlens.intervention.scramble_elements`
+  (elementwise iid scramble from a flattened source -- the honest rename of
+  `tl.resample_ablate`, which still resolves; for coherent donor patching use
+  `tl.patch_from`), `tl.replace_with` (fixed value), `tl.swap_with` (another
   site's tensor), `tl.steer` (add a scaled steering direction), `tl.project_onto` /
   `tl.project_off` (keep or remove the component along a direction), and
   `tl.splice_module` (call a module as a black-box forward splice). Availability outside

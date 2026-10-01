@@ -707,6 +707,11 @@ discussion and code contributions enabling PyTorch Lightning compatibility.
 Network visualizations are generated with Graphviz. Logo created by Nikolaus
 Kriegeskorte.
 
+TorchLens borrows conventions and ideas, with credit, from many tools its
+users already know. The full credit roster -- every project and paper whose
+ideas shaped a shipped feature -- is in
+[docs/acknowledgments.md](docs/acknowledgments.md).
+
 
 ## Citing TorchLens
 

@@ -80,8 +80,8 @@ Which "resample" do you mean?
 |---|---|
 | Elementwise iid scramble (noise baseline) | `scramble_elements(source, seed=)` |
 | Coherent donor patch at the same site ("resampling ablation") | `tl.patch_from(other_trace)` |
-| Batch-row permutation | planned stochastic-edit verb (not this helper) |
-| Per-row donor resampling | planned stochastic-edit verb (not this helper) |
+| Batch-row permutation | `torchlens.intervention.permute_batch` (shipped, lane F02) |
+| Per-row donor resampling | `torchlens.intervention.resample_rows_from` (shipped, lane F02) |
 
 Compatibility: saved intervention specs and pickles that persist the helper
 name `"resample_ablate"` keep loading (they reconstruct through the renamed
@@ -180,3 +180,113 @@ keys and `.get(key)` resolved those keys, so code written against the old model
 the accessor and read each record's `.label` (or index by position/label). The
 partition semantics are unchanged: sources are the buffer-read parents in
 order, sinks the buffer-write children in order.
+
+## Op accessor iteration and indexing share one basis (lane C02, BREAKING)
+
+Iterating an op accessor now yields `Op` records, and `get`/`[]`/iteration
+all share ONE 0-based, pass-qualified basis. Historically iteration yielded
+1-based ints while indexing was 0-based -- a silent off-by-one for any
+consumer that mixed the two. Code that iterated accessors for ints must read
+`op.label`/`op.raw_index` off the yielded records instead.
+
+## One-voice repr/str (lanes C02 + F10, BREAKING for string-parsers)
+
+`Trace`, `PartialTrace`, `Bundle`, `EdgeUseRecord`, `CollectiveJoin`, and
+every accessor render through the one-voice grammar: `repr` is one line
+(was 5-21), `str` is a bounded card, and `repr == str` no longer holds on
+value records. Module/profile trees emit ASCII rails; the stats-line hazard
+marker is ASCII `!`; the number formatter keeps trailing zeros under the
+precision law; `tensor_stats_summary` drops `neg=` from its default line.
+Exact-string consumers of the old dumps must re-pin (the in-tree consumers
+were swept in the same change).
+
+## Model Explorer export schema v3 (lane F15)
+
+The Model Explorer emitter moves to the schema v3 family: the top-level v2
+`schema`/`disclaimer` keys are REMOVED, namespaces derive from the recorded
+`module_call_stack` (percent-escaped, pass-qualified), and universal
+`site_key|ordinal` node ids are appended ALWAYS with an `id_fidelity` stamp.
+Readers of the v2 JSON must re-export; the pinned vendor harness
+(`dist/worker.js`) is the contract oracle.
+
+## `tl.export.tensorboard` requires `step` (lane F26)
+
+The exporter's `step` keyword lost its default: pass the global step
+explicitly (`tl.export.tensorboard(log, writer, step=n)`). A stepless call
+silently landed every export on one x-coordinate, which the TensorBoard
+frontend renders as a single point; requiring the keyword makes the time
+axis an explicit user fact.
+
+## MCP tools renamed onto the nine-tool agent registry plus the ledger trio (lane F29)
+
+The MCP server's `load_overview` and `agent_dump` tools are REMOVED
+(remove-and-rename, no aliases). The registry now serves twelve tools:
+`torchlens_doctor`, `torchlens_api_map`, `torchlens_overview` (was
+`load_overview`), `torchlens_dump` (was `agent_dump`), `torchlens_explain`,
+`torchlens_query_sites`, `torchlens_payload_stats`, `torchlens_compare`,
+`torchlens_schema`, and the ledger family
+(`torchlens_ledger_overview`/`_entry`/`_evidence`). Separately,
+`import torchlens` no longer imports torch (deferred to first use) -- import
+order can no longer be used to force torch initialization.
+
+## `TorchLensLitModel` removed (lane F31)
+
+The LIT stub class `TorchLensLitModel` is REMOVED -- it never worked against
+real LIT (real LIT rejects it at construction). The real adapters are
+`torchlens.bridge.lit.model(net, tokenizer, ...)`, `bridge.lit.dataset`, and
+`bridge.lit.layout`, each returning native LIT objects. Sixteen typed
+`lit_*` refusal codes enter the error contract.
+
+## Submodule advertisement sweep (lane F38)
+
+Sixty-seven zero-evidence advertisement rows were removed across sixteen
+submodule `__all__` lists: 66 names are DEMOTED (still importable at their
+modules, no longer advertised), the duplicate `label` advertisement is
+deduped, and `validate_trace_saved_outs` is DELETED outright. Top-level
+`torchlens.__all__` is untouched by this sweep.
+
+## `extract_dataset` runs no_grad + eval by default (lane A11, behavior change)
+
+Extraction forwards now run under `no_grad` in eval mode with exact
+mode/flag restore afterward. The old default read train-mode activations and
+mutated BatchNorm running statistics during harvest -- silently corrupting
+RDMs downstream. Train-mode extraction, where genuinely wanted, must now be
+requested explicitly.
+
+## rsatoolbox descriptor retirement: "neuroid" -> `feature_index` (lane F22)
+
+`bridge.rsatoolbox.dataset` (now a delegation to `tl.neuro.datasets`)
+retires the "neuroid" channel-descriptor name for the neutral
+`feature_index` (authorized retirement). Legacy shaping/`input_shape`/
+integer-`presentation` spellings are preserved for existing readers; the
+previously silent flatten is now disclosed as `pool="flatten"`.
+
+## `VisualizationTheme.legend_items` deleted (lane F12)
+
+The dead `legend_items` theme field is DELETED. Themes carry
+`semantic_palette`/`ramp`/`neutral_aggregate_fill`; legends derive from the
+active encoding channels, never from a static theme list.
+
+## Root typing leaks removed (lane P02)
+
+`torchlens.Any`, `torchlens.TYPE_CHECKING`, and `torchlens.annotations` --
+accidental typing re-exports, never API -- are removed from the root
+namespace. Import them from `typing`/`__future__`.
+
+## Structure-only capture admits all-meta models (lane F33, default flip)
+
+`CaptureOptions(structure_only=True)` now ADMITS meta-materialized models
+when the substrate is uniform (all-meta inputs and state); mixed real/meta
+substrates refuse typed (`structure_only_substrate_mismatch`) in both
+directions. Previously all meta models refused at entry. Value-bearing
+claims remain hypotheses until `discharge_against` corroborates them; the
+parity gate (real digest == meta digest + CORROBORATED discharge) is the
+acceptance authority.
+
+## Extraction manifest v2 (lanes C04/F18)
+
+`tl.extract_dataset` writes manifest v2 (model identity, transform
+disclosure, input-preprocessing block, per-site identity with L1 site keys).
+v1 artifacts remain readable through `load_extraction`/`open_extraction`;
+resume continuation across the version boundary refuses typed
+(`extraction_resume_*`) rather than grafting mixed-manifest shards.
