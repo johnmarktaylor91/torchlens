@@ -27,6 +27,7 @@ from torchlens.stats._stats_kernel import (
     identity_seed,
     seeded_sample,
 )
+from torchlens.utils._torch_compat import get_cpu_half_kernels_support
 
 pytestmark = pytest.mark.smoke
 
@@ -75,6 +76,13 @@ def test_offset_cancellation_golden_sd_1e_3_f64() -> None:
     assert naive < 0 or abs(naive**0.5 - oracle_sd) / oracle_sd > 0.01
 
 
+@pytest.mark.skipif(
+    not get_cpu_half_kernels_support(),
+    reason="torch 2.1-2.2's CPU aminmax kernel does not cover float16 "
+    "(aminmax_cpu not implemented for 'Half'), so the dense float kernel's "
+    "leading nonfinite-proof reduction degrades tensor_stats to its honest "
+    "unavailable shape (mean=None) instead of computing the pinned value",
+)
 def test_fp16_underflow_pin() -> None:
     """fp16 tiny values: chunked widening keeps the exact mean."""
 

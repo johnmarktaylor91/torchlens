@@ -327,7 +327,13 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # eager cost was still measurably over the import-hygiene budget even
     # after GradientEdge alone went lazy (measured 4443); next 50-line step.
     # Debloat target unchanged: 3450.
-    "torchlens/utils/_torch_compat.py": 4450,
+    # 4450 -> 4550 (2026-10-01 L8 floor2 fix): the prior step's own doc
+    # comment already undercounted its landed diff (measured 4504 at that
+    # commit, not 4443); this step adds one more probed op (CPU aminmax,
+    # folded into the existing CPU-Half-kernels probe) and re-keys to the
+    # next 50-line step above the honest current measurement (4508).
+    # Debloat target unchanged: 3450.
+    "torchlens/utils/_torch_compat.py": 4550,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     # 3300 -> 3320 (F24 observe): the device-memory bracket at the one
