@@ -234,10 +234,20 @@ def test_tf_duplicate_trace_signature_group_is_ambiguous() -> None:
     relu_ops[1].func_call_id = relu_ops[0].func_call_id
     relu_ops[1].parents = tuple(relu_ops[0].parents)
     groups = _tf_trace_intermediate_signatures(trace)
+    # N5: ``op.parents`` holds FINAL pass-qualified labels (every op's edges
+    # are relabeled, not only multi-pass group members), but
+    # ``_tf_trace_intermediate_signatures`` builds its signature in RAW label
+    # space (replay-side signatures match capture input records) and
+    # resolves parents back to raw via a label->raw map first. The expected
+    # signature here must go through the same resolution, or it never
+    # matches the production grouping.
+    label_to_raw = {op.label: op._label_raw for op in trace.layer_list}
     signature = TFIntermediateSignature(
         func_call_id=relu_ops[0].func_call_id,
         op_name=relu_ops[0].func_name,
-        parent_labels=tuple(relu_ops[0].parents),
+        parent_labels=tuple(
+            dict.fromkeys(label_to_raw.get(parent, parent) for parent in relu_ops[0].parents)
+        ),
         module_stack=tuple(relu_ops[0].modules),
     )
 
