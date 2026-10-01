@@ -910,6 +910,24 @@ _TORCH_RNG_DEVICE_SPEC: tuple[tuple[str, str, str], ...] = _TORCH_RNG_CORE_SPEC 
     ("set_rng_state_all", "mutation", "in-forward host mutation of every device engine"),
     ("get_rng_state_all", "structurally_covered", "state-tensor return; r39 escape belt"),
 )
+_TORCH_ACCELERATOR_RNG_SPEC: tuple[tuple[str, str, str], ...] = (
+    ("initial_seed", "replayable_read", "scalar read fully determined by the capture seed"),
+    ("get_rng_state", "structurally_covered", "state-tensor return; r39 escape belt"),
+    ("get_rng_state_all", "structurally_covered", "state-tensor return; r39 escape belt"),
+)
+"""torch 2.14's generic accelerator-agnostic RNG surface (``torch.accelerator.random``).
+
+A DELIBERATELY SEPARATE object from :data:`_TORCH_RNG_DEVICE_SPEC`, even though every
+row's content is a subset of it: ``torch.accelerator`` is a cross-backend ROUTER (it
+defers to whichever concrete accelerator -- cuda/xpu/mtia -- is current) and holds no
+``default_generators`` list of its own, so it must NOT join
+:data:`_DEFAULT_GENERATOR_HOLDER_MODULES`'s identity-matched module set the way
+``torch.cuda``/``torch.xpu``/``torch.mtia`` do (``test_default_generator_resolver_covers_
+every_device_spec_module`` asserts that set is EXACTLY the device-spec holder modules).
+It also has no ``seed``/``manual_seed``/``set_rng_state``/``*_all`` setters at all, so
+reusing the full device spec here would also be a content mismatch, not just an identity
+one.
+"""
 _TORCH_RNG_MODULE_SPECS: tuple[tuple[str, tuple[tuple[str, str, str], ...]], ...] = (
     ("torch", _TORCH_RNG_CORE_SPEC),
     ("torch.random", _TORCH_RNG_CORE_SPEC),
@@ -928,11 +946,9 @@ _TORCH_RNG_MODULE_SPECS: tuple[tuple[str, tuple[tuple[str, str, str], ...]], ...
     ("torch.xpu.random", _TORCH_RNG_DEVICE_SPEC),
     # torch 2.14 adds ``torch.accelerator.random`` (generic accelerator-agnostic
     # RNG surface, eagerly imported by ``torch.accelerator``, itself eagerly
-    # imported by ``torch/__init__.py``): only ``initial_seed``/``get_rng_state``/
-    # ``get_rng_state_all`` exist there (no ``seed``/``manual_seed``/
-    # ``set_rng_state``/``*_all`` setters), so the broader device spec's
-    # feature-detected ``hasattr`` gate naturally selects just those three rows.
-    ("torch.accelerator.random", _TORCH_RNG_DEVICE_SPEC),
+    # imported by ``torch/__init__.py``). Its own dedicated spec (not the
+    # shared device spec -- see that spec's docstring).
+    ("torch.accelerator.random", _TORCH_ACCELERATOR_RNG_SPEC),
 )
 # Non-function endpoints the enumeration meta-test still demands dispositions for.
 _TORCH_RNG_STRUCTURAL_EXTRAS: tuple[tuple[str, str], ...] = (
