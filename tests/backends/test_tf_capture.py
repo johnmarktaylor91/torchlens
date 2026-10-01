@@ -91,7 +91,11 @@ def test_tf_capture_hand_built_op_chain_edges_and_saved_values() -> None:
 
     assert trace.backend == "tf"
     assert {"AddV2", "Mul"} <= {op.func_name for op in trace.layer_list}
-    assert by_func["Mul"].parents == (by_func["AddV2"]._label_raw,)
+    # N5: parents/children hold the FINAL pass-qualified op label
+    # (``op.label``), not the internal raw capture identifier
+    # (``_label_raw``) -- the preview finalizer now relabels every op's
+    # edges, matching the multi-pass convention uniformly.
+    assert by_func["Mul"].parents == (by_func["AddV2"].label,)
     assert np.allclose(trace[by_func["Mul"].label].out, np.array([9.0, 20.0], dtype=np.float32))
     assert np.isfinite(trace[by_func["AddV2"].label].out).all()
 

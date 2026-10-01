@@ -185,12 +185,20 @@ def test_relabel_epilogue_fixes_children_even_without_grouping() -> None:
         equivalence_class="producer",
         parents=[],
         children=["consumer_1_2_raw"],
+        root_ancestors=frozenset({"producer_1_1_raw"}),
+        input_ancestors={"producer_1_1_raw"},
+        output_descendants=set(),
+        internal_source_ancestors=frozenset(),
     )
     consumer = SimpleNamespace(
         label="consumer_1_2:1",
         equivalence_class="consumer",
         parents=["producer_1_1_raw"],
         children=[],
+        root_ancestors=frozenset(),
+        input_ancestors={"producer_1_1_raw"},
+        output_descendants={"consumer_1_2_raw"},
+        internal_source_ancestors=frozenset(),
     )
     raw_dict = {"producer_1_1_raw": producer, "consumer_1_2_raw": consumer}
     trace = SimpleNamespace(
@@ -208,3 +216,13 @@ def test_relabel_epilogue_fixes_children_even_without_grouping() -> None:
     assert trace.output_layers == ["consumer_1_2:1"]
     assert producer.recurrent_ops == ["producer_1_1:1"]
     assert consumer.recurrent_ops == ["consumer_1_2:1"]
+    # N5: lineage sets (seeded with raw labels at capture time or during the
+    # pre-relabel depth flood) must be relabeled too, with their original
+    # container type (frozenset vs set) preserved.
+    assert producer.root_ancestors == frozenset({"producer_1_1:1"})
+    assert isinstance(producer.root_ancestors, frozenset)
+    assert producer.input_ancestors == {"producer_1_1:1"}
+    assert isinstance(producer.input_ancestors, set) and not isinstance(
+        producer.input_ancestors, frozenset
+    )
+    assert consumer.output_descendants == {"consumer_1_2:1"}

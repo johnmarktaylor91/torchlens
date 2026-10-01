@@ -105,7 +105,12 @@ def test_tf_intervention_graph_stays_honest_by_construction() -> None:
 
     add_op = next(op for op in trace.layer_list if op.func_name == "AddV2")
     zeros_op = next(op for op in trace.layer_list if op.func_name == "ZerosLike")
-    assert tuple(add_op.parents) == (zeros_op.label.rsplit(":", 1)[0],)
+    # N5: parents holds the FINAL pass-qualified op label (``op.label``)
+    # verbatim; the ``rsplit`` used to strip a pass suffix that ``parents``
+    # never carried pre-fix (single-pass ops kept their raw, unstripped
+    # label as the parent reference) -- now every op's edges are relabeled
+    # consistently, so the two sides match without adjustment.
+    assert tuple(add_op.parents) == (zeros_op.label,)
     assert np.allclose(np.asarray(zeros_op.out), [0.0, 0.0, 0.0])
 
 
