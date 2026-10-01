@@ -1,3 +1,5 @@
+import traceback
+
 import jax
 import jax.numpy as jnp
 
@@ -31,8 +33,5 @@ trace = tl.trace(uses_custom_vjp, ({}, jnp.ones((2, 3), dtype=jnp.float32)), bac
 try:
     check_metadata_invariants(trace)
     print("metadata invariants: OK")
-except Exception as exc:
-    print("metadata invariants RAISED:", type(exc).__name__, exc)
-
-result = trace.validate_forward_pass([])
-print("validate_forward_pass result:", result, type(result))
+except Exception:
+    traceback.print_exc()
