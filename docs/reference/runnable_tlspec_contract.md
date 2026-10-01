@@ -3118,3 +3118,18 @@ tier with the slow suite), and `classics_resolver_coverage_report` in
 all unsuccessful model attempts as well as every unavailable unique key. A sweep of the full model
 catalog (the Model Menagerie battery) is deliberately separate and runs downstream; the classics
 corpus plus test-suite corpus is the runnable release gate.
+
+**Documented bounded dispositions.** Exactly one key holds one, and nothing broader is excused:
+
+- `FunctionRegistryKey("torch.Tensor", "__new__", "method")`, the legacy `torch.Tensor(...)`
+  constructor called inside `forward`. Observable behavior: runnable save refuses typed at the
+  producer (`unsupported_literal`, detection stage `producer_literal`), because the constructor's
+  class argument is outside the section 2 literal grammar; the resolver also keeps the raw callable
+  `unavailable` (`untrusted_custom_import`, provenance `nonforward_callable_denied`), because its
+  hidden `cdata=` overload wraps a raw pointer as a tensor and would be a memory-safety hole for an
+  untrusted bundle. Bound: only forwards that call the legacy constructor; analysis saves and loads
+  are unaffected, and `torch.tensor(...)` / `Tensor.new(...)` stay runnable. The remedy is a
+  guarded legacy-constructor adapter (capture recipe without the class argument, producer support,
+  size-form uninitialized-memory taint); until it ships, the refusal is pinned by
+  `tests/test_runnable_resolver_release_keys.py`, which fails if the refusal goes silent or the key
+  starts resolving.

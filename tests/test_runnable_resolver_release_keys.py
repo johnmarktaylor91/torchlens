@@ -14,6 +14,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._io import runnable_coherence, runnable_load
 from torchlens._io.runnable import build_sparse_run_descriptor, preflight_sparse_run_descriptor
+from torchlens.errors import RunnablePreflightError
 from torchlens.intervention.resolver import function_registry_key_from_callable
 from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
@@ -23,6 +24,7 @@ from torchlens.runnable import (
     RunnableErrorCode,
     SparseRunDescriptor,
 )
+from torchlens.utils._callable_safety import is_pure_forward_callable
 from torchlens.utils.display import identity
 
 _FFT_NAMES = (
@@ -39,6 +41,7 @@ _FFT_NAMES = (
     "fftshift",
     "ifftshift",
 )
+_LEGACY_CTOR_KEY = FunctionRegistryKey("torch.Tensor", "__new__", "method")
 _BOUNDARY_IDENTITY_KEY = FunctionRegistryKey(
     "custom", "identity", "function", import_path="torchlens.utils.display:identity"
 )
@@ -305,6 +308,72 @@ def test_synthetic_rung_admits_only_the_exact_identity_key(
     assert attachments is None
     record = next(item for item in report.resolver_records if item.registry_id == registry_id)
     assert record.status is ResolverStatus.UNAVAILABLE
+    assert {diagnostic.code for diagnostic in record.diagnostics} == {
+        RunnableErrorCode.UNTRUSTED_CUSTOM_IMPORT
+    }
+
+
+class _LegacyConstructorFamily(nn.Module):
+    """Data, alias and size forms of the legacy ``torch.Tensor(...)`` constructor."""
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Build tensors with the legacy constructor and combine them with the input."""
+
+        data = torch.Tensor([1.0, 2.0, 3.0, 4.0])
+        alias = torch.Tensor(torch.zeros(2, 4))
+        sized = torch.Tensor(2, 4).zero_()
+        return value + data + alias + sized
+
+
+def _legacy_ctor_labels(trace: Any) -> list[str]:
+    """Return the pass-qualified labels of the legacy-constructor ops."""
+
+    ops = trace.ops.values() if hasattr(trace.ops, "values") else trace.ops
+    return [str(op.label) for op in ops if getattr(op, "func_id", None) == _LEGACY_CTOR_KEY]
+
+
+@pytest.mark.smoke
+def test_legacy_tensor_constructor_save_refuses_typed(tmp_path: Path) -> None:
+    """Section-13 disposition: runnable save refuses ``torch.Tensor.__new__`` typed.
+
+    If this stops raising, the legacy constructor became runnable without the
+    round-2 adapter (or the refusal went silent): re-open the disposition.
+    """
+
+    trace = _capture(_LegacyConstructorFamily().eval(), torch.randn(2, 4))
+    labels = _legacy_ctor_labels(trace)
+    assert len(labels) == 3
+    with pytest.raises(RunnablePreflightError) as excinfo:
+        tl.save(trace, tmp_path / "legacy.tlspec", level="runnable")
+    refused = {
+        label
+        for diagnostic in excinfo.value.fields["diagnostics"]
+        if diagnostic.code is RunnableErrorCode.UNSUPPORTED_LITERAL
+        and diagnostic.detection_stage == "producer_literal"
+        for label in diagnostic.affected_op_labels
+    }
+    assert set(labels) <= refused
+
+
+@pytest.mark.smoke
+def test_legacy_tensor_constructor_key_stays_unresolved() -> None:
+    """Section-13 disposition: the resolver keeps refusing the raw legacy constructor.
+
+    The raw callable has a hidden ``cdata=`` raw-pointer overload, so it must never
+    resolve for an untrusted bundle; only a guarded adapter may replace this refusal.
+    """
+
+    assert not is_pure_forward_callable(torch.Tensor.__new__)
+    descriptor = build_sparse_run_descriptor(
+        _capture(_LegacyConstructorFamily().eval(), torch.randn(2, 4))
+    )
+    report, attachments = preflight_sparse_run_descriptor(descriptor)
+    assert attachments is None
+    records = [r for r in report.resolver_records if r.recorded_key == _LEGACY_CTOR_KEY]
+    assert len(records) == 1
+    record = records[0]
+    assert record.status is ResolverStatus.UNAVAILABLE
+    assert record.provenance == "nonforward_callable_denied"
     assert {diagnostic.code for diagnostic in record.diagnostics} == {
         RunnableErrorCode.UNTRUSTED_CUSTOM_IMPORT
     }
