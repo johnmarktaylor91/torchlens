@@ -485,6 +485,22 @@ def _rule_result_uncached(op: Op) -> tuple[_RuleResult, str]:
         return ReceptiveFieldRuleContext(op).passthrough(), "graph_identity"
     name = _normalize_func_name(op.func_name)
     rule = _RF_RULES.get(name)
+    if rule is None:
+        # Some preview backends capture a generic implementation-call name as
+        # func_name that loses the actual operation identity -- tinygrad
+        # reconstructs its graph from the UOp DAG, so an elementwise binary op
+        # (add, mul, ...) carries its Python lambda wrapper's own name
+        # ("<lambda>") as func_name, with the real semantic category only on
+        # layer_type. Fall back to layer_type before reporting unsupported, so
+        # RF rules keyed by canonical op name (e.g. "add") still dispatch for
+        # those ops; this only ever widens dispatch (torch/mlx/tf/jax/paddle
+        # already resolve on the first, unchanged lookup).
+        fallback_name = _normalize_func_name(str(getattr(op, "layer_type", "") or ""))
+        if fallback_name != name:
+            fallback_rule = _RF_RULES.get(fallback_name)
+            if fallback_rule is not None:
+                rule = fallback_rule
+                name = fallback_name
     context = ReceptiveFieldRuleContext(op)
     if rule is None:
         return context.unsupported(f"{op.label}: no receptive-field rule for {name}"), name
@@ -671,8 +687,13 @@ def _passthrough_axis_map(op: Op, parent: Op, result: _RuleResult) -> Mapping[in
         Explicit parent-to-child correspondence, or ``None`` when ambiguous.
     """
 
-    parent_rank = len(parent.shape)
-    child_rank = len(op.shape)
+    # ``shape`` is legitimately ``None`` for a non-tensor-valued op (e.g. a
+    # JAX while/cond decision pseudo-op whose captured output is not a plain
+    # tensor) that is merely a pass-through ancestor on the walk to a real
+    # geometric target; treat it as the op.py-documented shapeless default
+    # (``()``, rank 0) instead of crashing on ``len(None)``.
+    parent_rank = len(parent.shape) if parent.shape is not None else 0
+    child_rank = len(op.shape) if op.shape is not None else 0
     raw_axis_maps = result.values.get("parent_to_child_axes")
     if isinstance(raw_axis_maps, Mapping):
         parent_references = (parent.label, parent.layer_label, parent._layer_label_raw)
@@ -886,8 +907,13 @@ def _compose_window_maps(
 
     assert state.axes is not None
     spatial_rank = len(local_maps)
-    parent_rank = len(parent.shape)
-    child_rank = len(op.shape)
+    # ``shape`` is legitimately ``None`` for a non-tensor-valued op (e.g. a
+    # JAX while/cond decision pseudo-op whose captured output is not a plain
+    # tensor) that is merely a pass-through ancestor on the walk to a real
+    # geometric target; treat it as the op.py-documented shapeless default
+    # (``()``, rank 0) instead of crashing on ``len(None)``.
+    parent_rank = len(parent.shape) if parent.shape is not None else 0
+    child_rank = len(op.shape) if op.shape is not None else 0
     if spatial_rank == 0 or parent_rank < spatial_rank or child_rank < spatial_rank:
         return replace(
             state,
@@ -968,8 +994,13 @@ def _apply_full(
     assert state.axes is not None
     selected = _select_full_axes(result.values.get("axes"), parent, op)
     exact = bool(result.values.get("exact", True))
-    parent_rank = len(parent.shape)
-    child_rank = len(op.shape)
+    # ``shape`` is legitimately ``None`` for a non-tensor-valued op (e.g. a
+    # JAX while/cond decision pseudo-op whose captured output is not a plain
+    # tensor) that is merely a pass-through ancestor on the walk to a real
+    # geometric target; treat it as the op.py-documented shapeless default
+    # (``()``, rank 0) instead of crashing on ``len(None)``.
+    parent_rank = len(parent.shape) if parent.shape is not None else 0
+    child_rank = len(op.shape) if op.shape is not None else 0
     surviving = result.values.get("surviving_parent_axes")
     parent_to_child: Mapping[int, int] | None = None
     if isinstance(surviving, Sequence) and not isinstance(surviving, (str, bytes)):
@@ -1571,6 +1602,13 @@ def _graph_revision(trace: Trace) -> tuple[object, ...]:
     Includes topology (parents/children), shape, role, function identity, and a
     by-value snapshot of the geometry arguments RF rules read, so an argument
     change with unchanged shape+topology still bumps the revision.
+
+    ``op.shape`` is legitimately ``None`` for a non-tensor-valued op -- e.g. a
+    JAX region boundary/projection pseudo-op, whose captured ``output`` is a
+    tuple of values rather than one tensor (``_tensor_ref`` reports
+    ``shape=None`` for exactly this "not a tensor" case). ``None`` is itself a
+    stable, hashable fingerprint component, so it is included as-is instead of
+    calling ``tuple()`` on it.
     """
 
     return tuple(
@@ -1578,7 +1616,7 @@ def _graph_revision(trace: Trace) -> tuple[object, ...]:
             op.label,
             tuple(op.parents),
             tuple(op.children),
-            tuple(op.shape),
+            tuple(op.shape) if op.shape is not None else None,
             op.io_role,
             op.func_name,
             _geometry_args_snapshot(op),
