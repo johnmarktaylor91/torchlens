@@ -403,6 +403,20 @@ _CAPABILITY_PROBE_STATE = frozenset(
         # fired by the RNG monitor BEFORE its window arms (hunt-b8 F1).
         ("torchlens/utils/_torch_compat.py", "_LAZY_TORCH_IMPORTS_WARMED"),
         ("torchlens/utils/tensor_utils.py", "_cuda_available"),
+        # floor2 fix (2026-10-01): torch 2.1.2-floor capability probes --
+        # GradientEdge (one-backward tuple-output signature), the
+        # tuple-dim overload of reduce ops, CPU half-precision kernel
+        # availability, and the CPU float8 deterministic-fill path -- each a
+        # lazy HAS_* probed once on first use, same shape as every other row
+        # in this class.
+        ("torchlens/utils/_torch_compat.py", "HAS_GRADIENT_EDGE"),
+        ("torchlens/utils/_torch_compat.py", "_GRADIENT_EDGE_PROBED"),
+        ("torchlens/utils/_torch_compat.py", "HAS_REDUCE_TUPLE_DIM"),
+        ("torchlens/utils/_torch_compat.py", "_REDUCE_TUPLE_DIM_PROBED"),
+        ("torchlens/utils/_torch_compat.py", "HAS_CPU_HALF_KERNELS"),
+        ("torchlens/utils/_torch_compat.py", "_CPU_HALF_KERNELS_PROBED"),
+        ("torchlens/utils/_torch_compat.py", "HAS_CPU_FLOAT8_DETERMINISTIC_FILL"),
+        ("torchlens/utils/_torch_compat.py", "_CPU_FLOAT8_DETERMINISTIC_FILL_PROBED"),
     }
 )
 """Feature-detection memos for the running torch build.
