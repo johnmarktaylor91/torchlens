@@ -79,11 +79,33 @@ def _check_site_key_uniqueness(ops: list, name: str) -> None:
 
     from .invariants import MetadataInvariantError
 
-    seen: dict[tuple[str, str], str] = {}
+    seen: dict[tuple[str, object], str] = {}
     for op in ops:
         stack = tuple(getattr(op, "module_call_stack", ()) or ())
-        call_instance = stack[-1] if stack else ROOT_CALL_INSTANCE
-        identity = (str(op.site_key), str(call_instance))
+        if stack:
+            call_instance: object = stack[-1]
+        else:
+            # No torch/object-module call stack to tell passes apart (a bare
+            # function_root capture, e.g. JAX's source-path-based scan/while
+            # recurrence, never populates one). Site keys are INTENTIONALLY
+            # shared across recurring passes of one site (the whole point of
+            # site_key_v1), and neither ``equivalence_class`` (shared by
+            # every structurally-interchangeable occurrence, so it alone
+            # collapses distinct passes back together) nor ``pass_index``
+            # (restarts at 1 per Layer, so a site split across more than one
+            # Layer by a pre-existing grouping boundary -- e.g. a JAX while
+            # loop's pre-loop condition check, which shares its "lt"
+            # equivalence_class with every in-loop repeat but lands in its
+            # own singleton Layer because of the N+1-cond-vs-N-body arity
+            # mismatch -- collides on pass_index too) reliably reconstructs
+            # "which occurrence is this" across that boundary. The raw
+            # capture-time label is the one signal guaranteed unique per
+            # occurrence regardless of how grouping resolved; falling back to
+            # it makes I-S2 a true no-op for backends without a module stack
+            # (never a false positive) while leaving the check exactly as
+            # strict as before for every backend that populates one.
+            call_instance = (ROOT_CALL_INSTANCE, getattr(op, "_label_raw", op.label))
+        identity = (str(op.site_key), call_instance)
         if identity in seen:
             raise MetadataInvariantError(
                 name,
