@@ -262,8 +262,9 @@ def test_mlx_module_selectors_filter_static_save() -> None:
     module_trace = tl.trace(MLXSimpleMLP(), _input(), backend="mlx", save=tl.module("l1"))
     in_module_trace = tl.trace(MLXSimpleMLP(), _input(), backend="mlx", save=tl.in_module("l1"))
 
-    assert list(module_trace.saved_ops.keys()) == ["linear_1_2_raw:1"]
-    assert list(in_module_trace.saved_ops.keys()) == ["linear_1_2_raw:1"]
+    # The internal `_raw` capture sentinel is stripped from every final label.
+    assert list(module_trace.saved_ops.keys()) == ["linear_1_2:1"]
+    assert list(in_module_trace.saved_ops.keys()) == ["linear_1_2:1"]
 
 
 @pytest.mark.optional
