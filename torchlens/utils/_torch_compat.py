@@ -81,6 +81,7 @@ __all__ = [
     "HAS_FUNCOL_MODULE",
     "HAS_ASYNC_COLLECTIVE_TENSOR",
     "HAS_CHECKPOINT_HOOK_CLASS",
+    "HAS_CHECKPOINT_INTERNAL_HOOK_CLASS",
     "HAS_AUTOGRAD_ENGINE_QUEUE_CALLBACK",
     "HAS_KINETO_INMEMORY_EVENTS",
     "HAS_KINETO_EVENT_SCOPE",
@@ -101,6 +102,7 @@ __all__ = [
     "HAS_GENERATOR_CLONE_STATE",
     "HAS_GENERATOR_GRAPHSAFE_GET_STATE",
     "HAS_GENERATOR_GRAPHSAFE_SET_STATE",
+    "HAS_GENERATOR_PHILOX_STATE",
     "HAS_JIT_BUILTIN_TABLE",
     "HAS_JIT_BOOLEAN_DISPATCH_TABLE",
     "HAS_JIT_OVERLOAD_RESOLVER",
@@ -1336,6 +1338,7 @@ HAS_DYNAMO_EXPLAIN: bool = _probe_dynamo_explain_module()
 HAS_GENERATOR_CLONE_STATE: bool = hasattr(torch.Generator, "clone_state")
 HAS_GENERATOR_GRAPHSAFE_GET_STATE: bool = hasattr(torch.Generator, "graphsafe_get_state")
 HAS_GENERATOR_GRAPHSAFE_SET_STATE: bool = hasattr(torch.Generator, "graphsafe_set_state")
+HAS_GENERATOR_PHILOX_STATE: bool = hasattr(torch.Generator, "philox_state")
 HAS_SAFE_WEIGHTS_ONLY_LOAD: bool = _probe_safe_weights_only_load()
 HAS_TENSOR_SEQUENCE_SLOT_FIX: bool = _probe_tensor_sequence_slot_fix()
 HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE: bool = _probe_parameter_as_subclass_in_dispatch_mode()
@@ -1426,6 +1429,16 @@ _ASYNC_COLLECTIVE_TENSOR_PROBED: bool = False
 HAS_CHECKPOINT_HOOK_CLASS: bool = False
 _CHECKPOINT_HOOK_CLASS: type[Any] | None = None
 _CHECKPOINT_HOOK_CLASS_PROBED: bool = False
+#: torch >= 2.14 interposes ``_checkpoint_internal_hook`` between
+#: ``_checkpoint_hook``/``_recomputation_hook`` and ``saved_tensors_hooks``; its
+#: ``__enter__``/``__exit__`` stash private cross-call identity state
+#: (``_user_hooks``) directly on the pack-hook callable. Absence (torch 2.13 and
+#: earlier) means the checkpoint-token classifier's hook-object replacement needs
+#: no attribute preservation; presence means it must carry foreign attributes
+#: forward or skip the replacement (see ``backward.py::_carry_foreign_hook_attrs``).
+HAS_CHECKPOINT_INTERNAL_HOOK_CLASS: bool = False
+_CHECKPOINT_INTERNAL_HOOK_CLASS: type[Any] | None = None
+_CHECKPOINT_INTERNAL_HOOK_CLASS_PROBED: bool = False
 HAS_AUTOGRAD_ENGINE_QUEUE_CALLBACK: bool = False
 _AUTOGRAD_ENGINE_QUEUE_CALLBACK: Callable[..., Any] | None = None
 _AUTOGRAD_ENGINE_QUEUE_CALLBACK_PROBED: bool = False
@@ -1499,6 +1512,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_FUNCOL_MODULE",
     "HAS_ASYNC_COLLECTIVE_TENSOR",
     "HAS_CHECKPOINT_HOOK_CLASS",
+    "HAS_CHECKPOINT_INTERNAL_HOOK_CLASS",
     "HAS_AUTOGRAD_ENGINE_QUEUE_CALLBACK",
     "HAS_KINETO_INMEMORY_EVENTS",
     "HAS_KINETO_EVENT_SCOPE",
@@ -1512,6 +1526,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_GENERATOR_CLONE_STATE",
     "HAS_GENERATOR_GRAPHSAFE_GET_STATE",
     "HAS_GENERATOR_GRAPHSAFE_SET_STATE",
+    "HAS_GENERATOR_PHILOX_STATE",
     "HAS_SAFE_WEIGHTS_ONLY_LOAD",
     "HAS_TENSOR_SEQUENCE_SLOT_FIX",
     "HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE",
@@ -1562,6 +1577,10 @@ _LAZY_PROBE_FAMILIES: dict[str, tuple[str, ...]] = {
     "_CHECKPOINT_HOOK_CLASS_PROBED": (
         "HAS_CHECKPOINT_HOOK_CLASS",
         "_CHECKPOINT_HOOK_CLASS",
+    ),
+    "_CHECKPOINT_INTERNAL_HOOK_CLASS_PROBED": (
+        "HAS_CHECKPOINT_INTERNAL_HOOK_CLASS",
+        "_CHECKPOINT_INTERNAL_HOOK_CLASS",
     ),
     "_AUTOGRAD_ENGINE_QUEUE_CALLBACK_PROBED": (
         "HAS_AUTOGRAD_ENGINE_QUEUE_CALLBACK",
@@ -1689,11 +1708,21 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         "HAS_GENERATOR_CLONE_STATE",
         "HAS_GENERATOR_GRAPHSAFE_GET_STATE",
         "HAS_GENERATOR_GRAPHSAFE_SET_STATE",
+        # torch.Generator.philox_state postdates the torch>=2.1 floor (added
+        # torch 2.14): its absence is a healthy older install with no method to
+        # drop a row for (same rationale as the three generator flags above).
+        "HAS_GENERATOR_PHILOX_STATE",
         # GradientEdge / Node.register_prehook postdate the torch>=2.1 floor:
         # their absence is a healthy old install with nothing to shim -- the
         # one-backward read refuses typed instead of degrading.
         "HAS_GRADIENT_EDGE",
         "HAS_NODE_PREHOOK",
+        # _checkpoint_internal_hook (torch.utils.checkpoint) postdates the
+        # torch>=2.1 floor (added torch 2.14): its absence on older torch means
+        # checkpoint hook objects carry no private cross-call identity state to
+        # preserve, not a degradation (backward.py's token-wrapper swap is
+        # unconditionally safe there).
+        "HAS_CHECKPOINT_INTERNAL_HOOK_CLASS",
     }
 )
 """Capability flags whose ``False`` is an absent OPTIONAL feature, not a degradation.
@@ -1801,6 +1830,7 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     get_async_collective_tensor_type(force_probe=True)
     probe_funcol_wait_interposition()
     get_checkpoint_hook_class()
+    get_checkpoint_internal_hook_class()
     get_autograd_engine_queue_callback()
     snapshot = {name: bool(globals()[name]) for name in _CAPABILITY_ATTRS}
     snapshot["AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED"] = bool(AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED)
@@ -2538,6 +2568,37 @@ def get_checkpoint_hook_class() -> type[Any] | None:
             "checkpoint invocation evidence degrades, no false token is minted)",
         )
     return _CHECKPOINT_HOOK_CLASS
+
+
+def get_checkpoint_internal_hook_class() -> type[Any] | None:
+    """Return torch's private ``_checkpoint_internal_hook`` class, or ``None``.
+
+    New in torch 2.14 (``torch/utils/checkpoint.py``): ``_checkpoint_hook`` and
+    ``_recomputation_hook`` both subclass this intermediate class instead of
+    ``torch.autograd.graph.saved_tensors_hooks`` directly. Its ``__enter__`` sets
+    ``self.pack_hook._user_hooks`` (walked by ``_current_user_saved_tensors_hooks``
+    to resolve nested-checkpoint identity) and its ``__exit__`` deletes that same
+    attribute. Absence (torch 2.13 and earlier, or a torch without the private
+    name) means hook objects carry no such cross-call identity state, so a
+    hook-object replacement is always safe; presence means a replacement MUST
+    carry the attribute forward or skip the swap (fail-closed), or torch's own
+    ``__exit__`` raises reaching for state that moved to a different function
+    object -- an exception inside ``__exit__`` that skips the matching
+    ``_pop_saved_tensors_default_hooks()`` call and permanently corrupts torch's
+    global saved-tensors-hooks stack for the rest of the process.
+    """
+
+    global HAS_CHECKPOINT_INTERNAL_HOOK_CLASS, _CHECKPOINT_INTERNAL_HOOK_CLASS
+    global _CHECKPOINT_INTERNAL_HOOK_CLASS_PROBED
+
+    if not _CHECKPOINT_INTERNAL_HOOK_CLASS_PROBED:
+        resolved = _import_module_attr_or_none(
+            "torch.utils.checkpoint", "_checkpoint_internal_hook"
+        )
+        _CHECKPOINT_INTERNAL_HOOK_CLASS = resolved if isinstance(resolved, type) else None
+        HAS_CHECKPOINT_INTERNAL_HOOK_CLASS = _CHECKPOINT_INTERNAL_HOOK_CLASS is not None
+        _CHECKPOINT_INTERNAL_HOOK_CLASS_PROBED = True
+    return _CHECKPOINT_INTERNAL_HOOK_CLASS
 
 
 def get_autograd_engine_queue_callback() -> Callable[..., Any] | None:
