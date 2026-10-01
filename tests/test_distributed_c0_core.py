@@ -28,6 +28,7 @@ from torchlens.distributed import (  # noqa: E402
     _recognizer as recognizer_mod,  # noqa: E402
     audit_membership_lineages,
     derive_collective_recognizer,
+    has_vetted_snapshot,
     membership_digest_for_ranks,
 )
 
@@ -59,6 +60,17 @@ def _ledger(entries):
 
 M = membership_digest_for_ranks([0, 1])
 M2 = membership_digest_for_ranks([0, 1, 2, 3])
+
+# F1 ruling (Lead, 2026-10-01): full arming only runs where a census-vetted
+# torch build exists; on an unvetted torch the typed fail-closed refusal is
+# the correct behavior and is asserted directly instead (see
+# TestCollectiveRecognizer.test_derivation_refuses_typed_when_not_vetted and
+# tests/test_distributed_boundary_gloo.py::TestUnvettedTorchRefusesArming).
+requires_vetted_snapshot = pytest.mark.skipif(
+    not has_vetted_snapshot(),
+    reason="full collective arming requires a census-vetted torch build "
+    "(torchlens.distributed.has_vetted_snapshot() is False here)",
+)
 
 
 class TestMembershipDigest:
@@ -305,6 +317,7 @@ class TestPreJoinLineageAudit:
 
 
 class TestCollectiveRecognizer:
+    @requires_vetted_snapshot
     def test_derivation_matches_vetted_snapshot_on_pinned_torch(self):
         recognizer = derive_collective_recognizer()
         assert recognizer.snapshot_name
@@ -313,6 +326,23 @@ class TestCollectiveRecognizer:
         assert recognizer.classify("_dtensor::shard_dim_alltoall") == "collective"
         assert recognizer.classify("c10d::not_a_real_op") == "unknown_collective"
         assert recognizer.classify("aten::mm") is None
+
+    @pytest.mark.skipif(
+        has_vetted_snapshot(),
+        reason="the unvetted-torch refusal is only observable without a census match",
+    )
+    def test_derivation_refuses_typed_when_not_vetted(self):
+        # F1 (Lead ruling, 2026-10-01): on a torch build with no censused
+        # snapshot, derive_collective_recognizer() -- and therefore
+        # torchlens.distributed.arm() -- must fail closed rather than silently
+        # arming an uncensused dispatcher. This is the correct product
+        # behavior, proven here against the REAL (untampered) runtime census,
+        # not a synthetic mismatch.
+        assert not has_vetted_snapshot()
+        with pytest.raises(UncapturedCollectiveOpError) as excinfo:
+            derive_collective_recognizer()
+        assert excinfo.value.fields["kind"] == "uncaptured_collective_op"
+        assert excinfo.value.fields["layer"] in (0, 1)
 
     def test_layer1_set_inequality_refuses_typed(self, monkeypatch):
         vetted = dict(recognizer_mod.VETTED_NAMESPACE_SNAPSHOTS[0][1])
@@ -381,6 +411,7 @@ def unarmed(tmp_path):
             dist.destroy_process_group()
 
 
+@requires_vetted_snapshot
 class TestArmingAndSeeding:
     def test_arm_before_any_group_is_complete_witness(self, unarmed, tmp_path):
         dist = unarmed
@@ -502,6 +533,7 @@ class TestTeardownClobberSafety:
             lifecycle.restore_wrapped_attr(module, "f", original)
         assert module.f is foreign
 
+    @requires_vetted_snapshot
     def test_disarm_leaves_foreign_patches_intact(self, unarmed):
         dist = unarmed
         pristine_all_reduce = dist.all_reduce
@@ -670,6 +702,7 @@ class TestBrokenArmPoisoning:
     omitted -- precisely the fail-open arming exists to prevent.
     """
 
+    @requires_vetted_snapshot
     def test_failed_arm_with_failed_restore_poisons_state(self, unarmed, monkeypatch):
         from torchlens.errors._base import CompatibilityError
 

@@ -20,20 +20,37 @@ import pytest
 import torch
 from torch import nn
 
-pytestmark = pytest.mark.skipif(
-    not torch.distributed.is_available() or not torch.distributed.is_gloo_available(),
-    reason="torch.distributed gloo unavailable",
-)
-
 import torchlens as tl  # noqa: E402
 from torchlens._io import TorchLensIOError  # noqa: E402
-from torchlens.distributed import _lifecycle as lifecycle  # noqa: E402
+from torchlens.distributed import (  # noqa: E402
+    _lifecycle as lifecycle,
+    has_vetted_snapshot,
+)
 from torchlens.merged import (  # noqa: E402
     MergeConflictError,
     MergedArtifactError,
     MergedSurfaceUnsupportedError,
     MergeInputError,
 )
+
+# Every test in this module calls real `lifecycle.arm()` (via `_capture()`) to
+# produce a live rank core before merging. F1 ruling (Lead, 2026-10-01): these
+# are "full arming" tests and run only where this torch build matches a
+# censused collective-namespace snapshot; the fail-closed refusal on an
+# unvetted torch is asserted instead in
+# tests/test_distributed_boundary_gloo.py::TestUnvettedTorchRefusesArming and
+# tests/test_distributed_c0_core.py::TestCollectiveRecognizer.test_derivation_refuses_typed_when_not_vetted.
+pytestmark = [
+    pytest.mark.skipif(
+        not torch.distributed.is_available() or not torch.distributed.is_gloo_available(),
+        reason="torch.distributed gloo unavailable",
+    ),
+    pytest.mark.skipif(
+        not has_vetted_snapshot(),
+        reason="merge-ranks live captures require a census-vetted torch build "
+        "(torchlens.distributed.has_vetted_snapshot() is False here)",
+    ),
+]
 from torchlens.merged._artifact import canonical_json_bytes  # noqa: E402
 
 
