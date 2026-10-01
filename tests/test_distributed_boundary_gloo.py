@@ -26,8 +26,23 @@ from torchlens.backends.torch.collectives import (  # noqa: E402
     WildcardRecvUnsupportedError,
     remove_collective_wraps,
 )
-from torchlens.distributed import _lifecycle as lifecycle  # noqa: E402
+from torchlens.distributed import (  # noqa: E402
+    UncapturedCollectiveOpError,
+    _lifecycle as lifecycle,
+    has_vetted_snapshot,
+)
 from torchlens.errors._base import CompatibilityError  # noqa: E402
+
+# F1 ruling (Lead, 2026-10-01): full collective arming only runs where a
+# census-vetted torch build exists (torchlens.distributed.has_vetted_snapshot());
+# on an unvetted torch, arm() fails closed with UncapturedCollectiveOpError,
+# which is the correct product behavior and is asserted directly by
+# TestUnvettedTorchRefusesArming below instead.
+requires_vetted_snapshot = pytest.mark.skipif(
+    not has_vetted_snapshot(),
+    reason="full collective arming requires a census-vetted torch build "
+    "(torchlens.distributed.has_vetted_snapshot() is False here)",
+)
 
 
 @pytest.fixture()
@@ -69,6 +84,7 @@ class TestBoundaryNode:
     # (layer.annotations lacks the op's "collective" mirror -- relayed
     # source-side defect). Smoke-mark this class WITH that fix so the
     # commit-tier gate does not inherit a known red.
+    @requires_vetted_snapshot
     def test_allreduce_becomes_boundary_node_with_provenance(self, gloo_world):
         lifecycle.arm()
         log = tl.trace(HandRolledTP(), torch.randn(2, 4))
@@ -80,6 +96,7 @@ class TestBoundaryNode:
         relu = [op for op in log.ops if op.type == "relu"][0]
         assert any("allreduce" in parent for parent in relu.parents)
 
+    @requires_vetted_snapshot
     def test_boundary_carries_collective_boundary_v1_payload(self, gloo_world):
         lifecycle.arm()
         log = tl.trace(HandRolledTP(), torch.randn(2, 4))
@@ -107,6 +124,7 @@ class TestBoundaryNode:
         # The payload is portable plain data.
         json.dumps(info)
 
+    @requires_vetted_snapshot
     def test_trace_journal_and_ledger_are_recorded(self, gloo_world):
         lifecycle.arm()
         log = tl.trace(HandRolledTP(), torch.randn(2, 4))
@@ -118,6 +136,7 @@ class TestBoundaryNode:
         assert record["install_epoch"] in ("armed_before_any_group", "seeded")
         json.dumps(record)
 
+    @requires_vetted_snapshot
     def test_output_passthrough_never_duplicates_boundary_payload(self, gloo_world):
         dist = gloo_world
 
@@ -147,6 +166,7 @@ class TestBoundaryNode:
         assert output_ops
         assert all(op.annotations == {} for op in output_ops)
 
+    @requires_vetted_snapshot
     def test_auto_arm_at_capture_entry_for_spmd(self, gloo_world):
         # No explicit arm(): an initialized SPMD process arms lazily at
         # capture entry with restricted registry seeding.
@@ -157,6 +177,7 @@ class TestBoundaryNode:
         assert info["lifetime_evidence"]["arming_source"] == "auto"
         assert info["lifetime_evidence"]["ordinal_source"] == "seeded"
 
+    @requires_vetted_snapshot
     def test_seq_ticks_at_issue_even_outside_capture(self, gloo_world):
         dist = gloo_world
         lifecycle.arm()
@@ -168,6 +189,7 @@ class TestBoundaryNode:
         info = [op for op in log.ops if op.type == "allreduce"][0].annotations["collective"]
         assert info["correlation"]["seq"] == 1
 
+    @requires_vetted_snapshot
     def test_all_gather_list_destinations_enter_dataflow(self, gloo_world):
         dist = gloo_world
 
@@ -185,6 +207,7 @@ class TestBoundaryNode:
         add = [op for op in log.ops if op.type == "add"][0]
         assert any("allgather" in parent for parent in add.parents)
 
+    @requires_vetted_snapshot
     def test_async_op_records_unobserved_completion(self, gloo_world):
         dist = gloo_world
 
@@ -201,6 +224,7 @@ class TestBoundaryNode:
         assert info["events"] == {"async_op": True, "completion_binding": "unobserved"}
         assert "read_of_inflight_destination" in info["disclosures"]
 
+    @requires_vetted_snapshot
     def test_nested_collectives_inside_object_collective_do_not_tick(self, gloo_world):
         dist = gloo_world
 
@@ -222,6 +246,7 @@ class TestBoundaryNode:
         coll_ticks = sum(count for key, count in state.seq_counters.items() if key[2] == "coll")
         assert coll_ticks == 1
 
+    @requires_vetted_snapshot
     def test_barrier_is_journal_only(self, gloo_world):
         dist = gloo_world
 
@@ -238,6 +263,7 @@ class TestBoundaryNode:
         assert entry["op_labels_raw"] == [] and entry["op_node"] is False
         assert not any(op.type == "barrier" for op in log.ops)
 
+    @requires_vetted_snapshot
     def test_wildcard_recv_refuses_typed_during_capture(self, gloo_world):
         dist = gloo_world
 
@@ -252,6 +278,7 @@ class TestBoundaryNode:
             tl.trace(WildcardModel(), torch.ones(2))
         assert excinfo.value.fields["kind"] == "wildcard_recv_unsupported"
 
+    @requires_vetted_snapshot
     def test_disarm_restores_collective_functions(self, gloo_world):
         dist = gloo_world
         original = dist.all_reduce
@@ -288,6 +315,7 @@ class TestBoundaryNode:
             remove_collective_wraps(originals)
         assert originals[(module, "all_reduce")] is original
 
+    @requires_vetted_snapshot
     def test_unarmed_capture_is_status_quo(self, gloo_world):
         # Arm is refused/absent -> no boundary nodes, capture itself intact
         # (the pre-tier-(b) behavior). Force unarmed by disarming and making
@@ -302,7 +330,7 @@ class TestBoundaryNode:
 
 
 class TestWitnessPolicy:
-    pytestmark = pytest.mark.smoke
+    pytestmark = [pytest.mark.smoke, requires_vetted_snapshot]
 
     def test_digest_witness_records_byte_exact_digests(self, gloo_world):
         from torchlens.backends.torch.collectives import _digest_tensor
@@ -378,7 +406,7 @@ class TestWitnessPolicy:
 
 
 class TestReplayRefusals:
-    pytestmark = pytest.mark.smoke
+    pytestmark = [pytest.mark.smoke, requires_vetted_snapshot]
     """A collective-crossing rank core refuses runnable save + forward replay.
 
     Design v5 3.4: re-issuing a collective outside its communicator hangs or
@@ -430,6 +458,30 @@ class TestReplayRefusals:
         tl.save(log, str(tmp_path / "plain.tlspec"), level="runnable")
         status = log.validate_forward_pass([expected])
         assert status is not None
+
+
+class TestUnvettedTorchRefusesArming:
+    """F1 (Lead ruling, 2026-10-01): the fail-closed complement of every
+
+    ``@requires_vetted_snapshot`` test above. On a torch build whose
+    collective dispatcher namespaces are not a censused row in
+    ``VETTED_NAMESPACE_SNAPSHOTS``, ``arm()`` must refuse typed rather than
+    silently capturing an uncensused dispatcher -- this is the correct
+    product behavior, not a gap to skip around. Runs only when the capability
+    probe says the real (untampered) runtime is NOT vetted; the positive path
+    is ``TestBoundaryNode`` et al. above, gated the opposite way.
+    """
+
+    @pytest.mark.skipif(
+        has_vetted_snapshot(),
+        reason="the unvetted-torch refusal is only observable without a census match",
+    )
+    def test_arm_refuses_typed_on_unvetted_torch(self, gloo_world):
+        assert not has_vetted_snapshot()
+        with pytest.raises(UncapturedCollectiveOpError) as excinfo:
+            lifecycle.arm()
+        assert excinfo.value.fields["kind"] == "uncaptured_collective_op"
+        assert not lifecycle.is_armed()
 
 
 # ---------------------------------------------------------------------------
@@ -504,6 +556,7 @@ def _tp_worker(rank: int, world_size: int, init_file: str, out_dir: str) -> None
 
 
 @pytest.mark.slow
+@requires_vetted_snapshot
 class TestTwoRankSims:
     def test_two_rank_tp_graph_complete_and_keys_align(self, tmp_path):
         import torch.multiprocessing as mp
