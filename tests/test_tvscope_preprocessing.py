@@ -10,6 +10,9 @@ ZERO error-grade findings.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+from typing import Any
+
 import pytest
 import torch
 
@@ -164,6 +167,57 @@ class TestResolver:
             from torchlens.preprocessing import _authorities
 
             _authorities._REGISTERED_ADAPTERS.clear()
+
+
+class TestAntialiasCoercion:
+    """torchvision's legacy "warn" antialias sentinel must declare, not vanish.
+
+    torchvision < ~0.17's classification presets default ``antialias`` to
+    the literal string ``"warn"``, not a bool. Collapsing that to ``None``
+    ("undeclared") made a preset's self-audit register as ``unknown`` (one
+    undeclared field forces the whole verdict to ``unknown``) even when both
+    sides are the exact same declared sentinel.
+    """
+
+    def test_bool_passes_through(self) -> None:
+        from torchlens.preprocessing._authorities import _coerce_antialias
+
+        assert _coerce_antialias(True) is True
+        assert _coerce_antialias(False) is False
+
+    def test_warn_sentinel_declares_itself(self) -> None:
+        from torchlens.preprocessing._authorities import _coerce_antialias
+
+        assert _coerce_antialias("warn") == "warn"
+
+    def test_unrecognized_value_is_undeclared(self) -> None:
+        from torchlens.preprocessing._authorities import _coerce_antialias
+
+        assert _coerce_antialias(None) is None
+        assert _coerce_antialias("something_else") is None
+
+    def test_self_audit_of_a_warn_sentinel_preset_verifies(self) -> None:
+        """A synthetic preset mirroring old torchvision's "warn" default."""
+
+        preset = SimpleNamespace(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225],
+            resize_size=[256],
+            crop_size=[224],
+            interpolation="bilinear",
+            antialias="warn",
+        )
+
+        class _FakeWeights:
+            meta: dict[str, Any] = {}
+            url = "https://example.invalid/fake-weights"
+
+            def transforms(self) -> Any:
+                return preset
+
+        resolution = pp.resolve(_FakeWeights())
+        report = pp.audit(resolution, resolution)
+        assert report.verdict == "verified"
 
 
 class TestAuditOracle:
