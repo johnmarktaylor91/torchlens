@@ -1,0 +1,77 @@
+# D25 KNOWN-GAP manifest: dated, owned, enumerated, MONOTONE-DOWN. A live
+# red without a row here blocks (new delta); a row whose key is green also
+# blocks until deleted (stale). Rows are hand-curated; never regenerated.
+gap_id	predicate	key	dated	owner	note
+GAP-001	surface_classification	aggregate	2026-08-26	A10	undeclared public callable (tl.aggregate is torchlens.stats.aggregate; call-time probe: no warning, so the panel's fact-2 residual settles NOT-deprecated); enters __all__ consciously or moves -- root-facade decision owned by the A10->C01->F35 chain
+GAP-002	cache_key_coverage	CaptureOptions.batch_render	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
+GAP-003	cache_key_coverage	CaptureOptions.distributed_witness	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
+GAP-004	cache_key_coverage	CaptureOptions.emit_nvtx	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
+GAP-005	cache_key_coverage	CaptureOptions.measure_python_peak_memory	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
+GAP-006	cache_key_coverage	CaptureOptions.name	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
+GAP-007	cache_key_coverage	CaptureOptions.raise_on_nan	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
+GAP-008	cache_key_coverage	CaptureOptions.save_budget	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
+GAP-009	cache_key_coverage	CaptureOptions.stop_after	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
+GAP-010	cache_key_coverage	CaptureOptions.track_nonfinite	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
+GAP-011	cache_key_coverage	CaptureOptions.transform	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
+GAP-012	cache_key_coverage	CaptureOptions.unwrap_when_done	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
+GAP-013	cache_key_coverage	CaptureOptions.verbose	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
+GAP-014	cache_key_coverage	InterventionOptions.confirm_mutation	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-015	cache_key_coverage	InterventionOptions.engine	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-016	cache_key_coverage	InterventionOptions.strict	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-017	cache_key_coverage	ReplayOptions.append	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-018	cache_key_coverage	ReplayOptions.differentiable	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-019	cache_key_coverage	ReplayOptions.strict	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-020	cache_key_coverage	StreamingOptions.async_writes	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-021	cache_key_coverage	StreamingOptions.bundle_path	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-022	cache_key_coverage	StreamingOptions.include_buffer_values	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-023	cache_key_coverage	StreamingOptions.include_custom_attributes	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-024	cache_key_coverage	StreamingOptions.max_pending_bytes	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-025	cache_key_coverage	StreamingOptions.out_callback	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-026	cache_key_coverage	StreamingOptions.retain_in_memory	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-027	cache_key_coverage	VisualizationOptions.collapse	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-028	cache_key_coverage	VisualizationOptions.collapse_fn	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-029	cache_key_coverage	VisualizationOptions.collapsed_node_spec_fn	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-030	cache_key_coverage	VisualizationOptions.color_by	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-031	cache_key_coverage	VisualizationOptions.container_path	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-032	cache_key_coverage	VisualizationOptions.depth	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-033	cache_key_coverage	VisualizationOptions.direction	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-034	cache_key_coverage	VisualizationOptions.dpi	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-035	cache_key_coverage	VisualizationOptions.edge_overrides	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-036	cache_key_coverage	VisualizationOptions.file_format	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-037	cache_key_coverage	VisualizationOptions.fold_repeats	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-038	cache_key_coverage	VisualizationOptions.font_size	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-039	cache_key_coverage	VisualizationOptions.for_paper	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-040	cache_key_coverage	VisualizationOptions.grad_edge_overrides	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-041	cache_key_coverage	VisualizationOptions.graph_overrides	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-042	cache_key_coverage	VisualizationOptions.intervention_mode	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-043	cache_key_coverage	VisualizationOptions.layout	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-044	cache_key_coverage	VisualizationOptions.module_overrides	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-045	cache_key_coverage	VisualizationOptions.node_label_fields	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-046	cache_key_coverage	VisualizationOptions.node_overlay	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-047	cache_key_coverage	VisualizationOptions.node_spec_fn	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-048	cache_key_coverage	VisualizationOptions.node_style	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-049	cache_key_coverage	VisualizationOptions.order_siblings	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-050	cache_key_coverage	VisualizationOptions.renderer	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-051	cache_key_coverage	VisualizationOptions.return_graph	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-052	cache_key_coverage	VisualizationOptions.save_only	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-053	cache_key_coverage	VisualizationOptions.scale	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-054	cache_key_coverage	VisualizationOptions.show_buffers	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-055	cache_key_coverage	VisualizationOptions.show_cone	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-056	cache_key_coverage	VisualizationOptions.show_legend	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-057	cache_key_coverage	VisualizationOptions.show_redundant_args	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-058	cache_key_coverage	VisualizationOptions.size_by	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-059	cache_key_coverage	VisualizationOptions.skip_fn	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-060	cache_key_coverage	VisualizationOptions.stack_by	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-061	cache_key_coverage	VisualizationOptions.theme	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-062	cache_key_coverage	VisualizationOptions.view	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-063	cache_key_coverage	trace.backend	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
+GAP-064	cache_key_coverage	trace.episode	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
+GAP-065	cache_key_coverage	trace.grad_options	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
+GAP-066	cache_key_coverage	trace.grouping	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
+GAP-067	cache_key_coverage	trace.jax_static_argnums	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
+GAP-068	cache_key_coverage	trace.profile	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
+GAP-069	cache_key_coverage	trace.recipes	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
+GAP-070	cache_key_coverage	trace.reconstruction_ready	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
+GAP-071	cache_key_coverage	trace.storage	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
+GAP-072	cache_key_coverage	trace.streaming	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
+GAP-073	default_truth	trace.grouping	2026-08-26	A06	docstring default '"structural"' vs authority <no-authority>

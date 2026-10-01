@@ -1,0 +1,9 @@
+# Census root CR5 (schema table, Wave-0 plumbing): the evidence-label lattice
+# (D18). Trust moves only DOWN except through a named verifier that records
+# fingerprints; `unknown` is excluded from totals, which become labeled lower
+# bounds. Populating the conservation matrix is Wave-2 work (build item 14).
+label	trust_rank	note
+formula_exact	3	must equal the closed form exactly
+measured	2	must MOVE under metamorphic perturbation of reality
+derived	1	computed from labeled inputs; label survives derivation
+unknown	0	excluded from totals; total becomes a labeled lower bound

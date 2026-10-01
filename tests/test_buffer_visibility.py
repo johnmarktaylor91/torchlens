@@ -369,31 +369,31 @@ def test_visible_buffer_uses_cylinder_shape(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
-def test_legacy_true_matches_always(tmp_path: Path) -> None:
-    """Legacy ``True`` buffer visibility maps to ``always``."""
+def test_legacy_true_refuses_typed(tmp_path: Path) -> None:
+    """The removed legacy ``True`` buffer-visibility value refuses typed."""
 
     log = _log_model(_BatchNormWithArchitecturalBuffer())
     try:
-        legacy_dot = _render_dot(log, tmp_path, True)
-        tri_state_dot = _render_dot(log, tmp_path, "always")
+        with pytest.raises(tl.errors.InvalidArgumentError) as exc_info:
+            _render_dot(log, tmp_path, True)
     finally:
         log.cleanup()
 
-    assert legacy_dot == tri_state_dot
+    assert exc_info.value.fields["code"] == "buffer_visibility_invalid"
 
 
 @pytest.mark.smoke
-def test_legacy_false_matches_never(tmp_path: Path) -> None:
-    """Legacy ``False`` buffer visibility maps to ``never``."""
+def test_legacy_false_refuses_typed(tmp_path: Path) -> None:
+    """The removed legacy ``False`` buffer-visibility value refuses typed."""
 
     log = _log_model(_BatchNormWithArchitecturalBuffer())
     try:
-        legacy_dot = _render_dot(log, tmp_path, False)
-        tri_state_dot = _render_dot(log, tmp_path, "never")
+        with pytest.raises(tl.errors.InvalidArgumentError) as exc_info:
+            _render_dot(log, tmp_path, False)
     finally:
         log.cleanup()
 
-    assert legacy_dot == tri_state_dot
+    assert exc_info.value.fields["code"] == "buffer_visibility_invalid"
 
 
 @pytest.mark.smoke

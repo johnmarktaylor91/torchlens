@@ -588,18 +588,23 @@ def test_unified_manifest_forward_compat_hard_fail_for_newer_bundle(tmp_path: Pa
 def test_validate_tlspec_rejects_newer_portable_version(tmp_path: Path) -> None:
     """Validation enforces the same portable-version ceiling as loading."""
 
+    from torchlens._io import ArtifactVersionAboveRuntimeError
+
     path = tmp_path / "newer_validation_version.tlspec"
     _captured_log().save(path)
     manifest = _read_manifest(path)
     manifest["tlspec_version"] = TLSPEC_VERSION + 1
     _write_manifest(path, manifest)
+    # G3 ceiling consolidation: the validation entry raises the same typed
+    # refusal (class, stable code, message) as every other above-ceiling door.
     expected = (
         f"Bundle uses tlspec_version={TLSPEC_VERSION + 1}, but this runtime only supports "
-        f"{TLSPEC_VERSION}."
+        f"up to {TLSPEC_VERSION}."
     )
 
-    with pytest.raises(ValueError, match=re.escape(expected)):
+    with pytest.raises(ArtifactVersionAboveRuntimeError, match=re.escape(expected)) as excinfo:
         validate_tlspec(path)
+    assert excinfo.value.fields["code"] == "artifact_version_above_runtime"
 
 
 @pytest.mark.smoke

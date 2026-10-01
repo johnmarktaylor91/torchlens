@@ -10,6 +10,7 @@ from typing import Any
 from .._errors import ArgumentTypeError
 from .._io import JaxPayloadLoadHint, PayloadLoadHints, TorchLensIOError, _json, rehydrate_nested
 from .._io.bundle import cleanup_tmp, load, save
+from .._io.state_contract import inspect_state_contract
 from .._trace_state import TraceState
 from ..intervention.save import save_intervention
 from ..intervention.types import InterventionSpec
@@ -236,6 +237,7 @@ __all__ = [
     "PayloadLoadHints",
     "cleanup_tmp",
     "detect_tlspec_format",
+    "inspect_state_contract",
     "inspect_tlspec",
     "list_logs",
     "load",

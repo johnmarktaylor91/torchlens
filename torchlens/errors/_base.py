@@ -191,6 +191,14 @@ class TorchLensWarning(UserWarning):
         self.fields = dict(payload)
         if message is None and payload:
             message = _message_from_payload(type(self).__name__, self.fields)
+        # Remedy-contract alignment (S-18 warning contract, compo wave 0):
+        # the SAME chokepoint the error base carries above -- derive the
+        # structured ``fields["remedy"]`` from the authored "Remedy: ..."
+        # message tail; an explicit ``remedy=`` kwarg always wins.
+        if message and "remedy" not in self.fields and _REMEDY_MARKER in message:
+            derived_remedy = message.rsplit(_REMEDY_MARKER, 1)[1].strip().rstrip(".")
+            if derived_remedy:
+                self.fields["remedy"] = derived_remedy
         super().__init__("" if message is None else message)
 
 

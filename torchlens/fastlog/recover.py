@@ -11,7 +11,12 @@ from typing import Any, Literal
 from safetensors import SafetensorError
 from safetensors.torch import load_file as load_safetensors_file
 
-from .._io import ArtifactVersionBelowFloorError, TorchLensIOError
+from .._io import (
+    ArtifactRuntimeIncompatibleError,
+    ArtifactVersionAboveRuntimeError,
+    ArtifactVersionBelowFloorError,
+    TorchLensIOError,
+)
 from .._io._json import _MAX_JSON_BYTES, loads_bounded, read_bounded
 from .._io.manifest import Manifest, enforce_version_policy
 from .._io.paths import resolve_bundle_blob_path
@@ -25,6 +30,17 @@ from .types import ActivationRecord, Recording
 # warning-ledger DoS while leaving every realistic bundle untouched.
 _INDEX_MAX_BYTES = _MAX_JSON_BYTES
 _MAX_RECOVERY_WARNINGS = 200
+
+
+#: Governed compatibility refusals recover() must RE-RAISE, never salvage
+#: (D-ECO-9): salvaging a below-floor / above-ceiling / runtime-incompatible
+#: bundle as ``recovered=True`` defeats the version window. recover() keeps
+#: salvaging CORRUPTION -- that is its job; only governed refusals pass through.
+_GOVERNED_COMPATIBILITY_REFUSALS = (
+    ArtifactVersionBelowFloorError,
+    ArtifactVersionAboveRuntimeError,
+    ArtifactRuntimeIncompatibleError,
+)
 
 
 class _RecoveryWarningSink(list):
@@ -124,11 +140,11 @@ def recover(path: str | Path) -> Recording:
         try:
             manifest = Manifest.read(manifest_path)
             _validate_fastlog_layout(bundle_path, manifest)
-        except ArtifactVersionBelowFloorError:
-            # Drop-not-resurrect (R10-4): a bundle whose declared version is
-            # below the rehydration floor is REFUSED by load(); letting the
-            # bare-pass salvage below resurrect it as recovered=True defeated
-            # the floor entirely.
+        except _GOVERNED_COMPATIBILITY_REFUSALS:
+            # Drop-not-resurrect (R10-4, widened by G3/D-ECO-9): a bundle the
+            # version window or runtime policy REFUSES is refused here too;
+            # letting the bare-pass salvage below resurrect it as
+            # recovered=True defeated the governed refusal entirely.
             raise
         except TorchLensIOError:
             pass

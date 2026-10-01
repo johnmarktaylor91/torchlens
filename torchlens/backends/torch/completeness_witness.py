@@ -523,9 +523,6 @@ _INPUT_METADATA_INT_PROPERTY_NAMES = frozenset({"_version", "output_nr"})
 and the autograd output index (``output_nr``). Neither is pinned by the shape+dtype contract;
 both compare exactly across runs."""
 
-INPUT_METADATA_GRAD_PROPERTY = "requires_grad"
-"""Deprecated single-name alias retained for back-compat; see ``INPUT_METADATA_PROPERTY_NAMES``."""
-
 # --- Accessor FAMILIES governing alias/view attribution (r31) -------------------------------
 #
 # A metadata read whose receiver is not the input leaf OBJECT itself is attributed by the

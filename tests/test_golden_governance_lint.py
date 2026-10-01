@@ -653,6 +653,7 @@ _GENERATION_WRAP_GUARD_CENSUS: dict[str, tuple[str, str]] = {
     "TORCHLENS_UPDATE_STATE_KEYSET_ORACLE": ("test_state_keyset_contract.py", "in-process"),
     "TORCHLENS_UPDATE_SURFACE_ORACLE": ("surface_oracle/test_surface_oracle.py", "subprocess"),
     "TORCHLENS_UPDATE_VIZ_RENDER_ORACLE": ("test_viz_render_identity_oracle.py", "in-process"),
+    "TORCHLENS_UPDATE_WRITER_CONTRACT": ("test_tlspec_envelope_contract.py", "in-process"),
 }
 
 #: Flag-shaped literals used only as planted fixtures by governance/guard

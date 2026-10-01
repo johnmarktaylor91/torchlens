@@ -227,6 +227,21 @@ class _RenameAwareUnpickler(SafeBundleUnpickler):
             allowed_custom_callable_modules=allowed_custom_callable_modules,
         )
 
+    def load(self) -> Any:
+        """Unpickle inside the governed-artifact-load contract window.
+
+        Nested record ``__setstate__`` calls run within this frame, so the
+        unknown-field partition (state contract, MEMO 3.3) arms here: governed
+        artifact bytes refuse unknown fields typed, while plain session
+        pickling of live records (which legitimately carries user extras the
+        save path refuses to persist) stays outside the contract.
+        """
+
+        from .state_contract import governed_artifact_load
+
+        with governed_artifact_load():
+            return super().load()
+
 
 @dataclass(frozen=True)
 class _FastCopySpec:

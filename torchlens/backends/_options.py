@@ -72,6 +72,68 @@ def _undispatched_capability_error(
 
 
 @dataclass(frozen=True)
+class OptionCapabilityRow:
+    """Operation-grain capability truth for ONE (backend, trace option) pair.
+
+    Compo wave 0 (row 0.7): the composition ledger references these stable
+    row ids so the future flag split (a backend supporting ``intervene=`` but
+    not ``halt=``, inexpressible under the five coarse flags) is an AUTHORITY
+    change in :func:`operation_grain_capability_rows`, never a ledger
+    rewrite. DOCUMENTED-UNSTABLE spellings pending naming ratification.
+
+    Parameters
+    ----------
+    row_id:
+        Stable ledger id (``trace_option:<option>:<backend>``).
+    backend:
+        Registered backend name.
+    option_name:
+        Public gated trace option.
+    coarse_flag:
+        The ``BackendCapabilities`` flag that owns the option TODAY (the
+        migration inventory named by the memo: ``_options.py``'s ten-onto-
+        five mapping).
+    supported:
+        Operation-grain support truth. Currently projected from the coarse
+        flag; the split refines this value without changing row ids.
+    """
+
+    row_id: str
+    backend: str
+    option_name: str
+    coarse_flag: str
+    supported: bool
+
+
+def operation_grain_capability_rows(spec: BackendSpec) -> tuple[OptionCapabilityRow, ...]:
+    """Project one backend's coarse capability flags onto per-option rows.
+
+    Parameters
+    ----------
+    spec:
+        Registered backend spec.
+
+    Returns
+    -------
+    tuple[OptionCapabilityRow, ...]
+        One row per gated public trace option, in gate-table order.
+    """
+
+    rows = []
+    for option_name, coarse_flag in TRACE_OPTION_CAPABILITY_GATES.items():
+        rows.append(
+            OptionCapabilityRow(
+                row_id=f"trace_option:{option_name}:{spec.name}",
+                backend=spec.name,
+                option_name=option_name,
+                coarse_flag=coarse_flag,
+                supported=bool(getattr(spec.capabilities, coarse_flag)),
+            )
+        )
+    return tuple(rows)
+
+
+@dataclass(frozen=True)
 class ExtraKwargPolicy:
     """Declarative policy for backend-extra public trace kwargs.
 

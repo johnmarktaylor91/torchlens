@@ -1,0 +1,1137 @@
+{
+ "albert": {
+  "eager": {
+   "false_claims": [],
+   "fingerprint": "3c3eec087b73d895044c900f72e06452c402213d2adcffa51f6332d50977ad83",
+   "floors": {
+    "embedding": [
+     "indices",
+     "lookup",
+     "weight"
+    ],
+    "layer_norm": [
+     "beta",
+     "gamma",
+     "normalized"
+    ]
+   },
+   "n_ops": 90,
+   "recipes": {
+    "embedding": 3,
+    "layer_norm": 1
+   }
+  },
+  "sdpa": {
+   "false_claims": [],
+   "fingerprint": "f173b2b3d2fe2107145a7c3ac0ab1d97aa25e636d5509b6fcce5dea7c6675da0",
+   "floors": {
+    "embedding": [
+     "indices",
+     "lookup",
+     "weight"
+    ],
+    "layer_norm": [
+     "beta",
+     "gamma",
+     "normalized"
+    ]
+   },
+   "n_ops": 80,
+   "recipes": {
+    "embedding": 3,
+    "layer_norm": 1
+   }
+  }
+ },
+ "bert": {
+  "eager": {
+   "false_claims": [
+    [
+     "encoder.layer.0.attention.self",
+     "attn_out",
+     "attention_projections_present"
+    ],
+    [
+     "encoder.layer.1.attention.self",
+     "attn_out",
+     "attention_projections_present"
+    ]
+   ],
+   "fingerprint": "223d70c454cf0e56020fce619f78083ffb7a9a816acfc09ff852aba6152426cd",
+   "floors": {
+    "bert_self_attention": [
+     "d_head",
+     "head",
+     "input",
+     "k",
+     "n_heads",
+     "n_kv_heads",
+     "n_q_heads",
+     "q",
+     "v"
+    ],
+    "embedding": [
+     "indices",
+     "lookup",
+     "weight"
+    ],
+    "layer_norm": [
+     "beta",
+     "gamma",
+     "normalized"
+    ],
+    "transformer_residuals": [
+     "resid_mid",
+     "resid_post",
+     "resid_pre"
+    ]
+   },
+   "n_ops": 77,
+   "recipes": {
+    "bert_self_attention": 2,
+    "embedding": 3,
+    "layer_norm": 5,
+    "transformer_residuals": 2
+   }
+  },
+  "sdpa": {
+   "false_claims": [],
+   "fingerprint": "545ccd5ccb44efd47d812f2f575d98d82491943b2f883449318ef4883d096ab9",
+   "floors": {
+    "bert_self_attention": [
+     "attn_out",
+     "d_head",
+     "head",
+     "input",
+     "k",
+     "n_heads",
+     "n_kv_heads",
+     "n_q_heads",
+     "q",
+     "v"
+    ],
+    "embedding": [
+     "indices",
+     "lookup",
+     "weight"
+    ],
+    "layer_norm": [
+     "beta",
+     "gamma",
+     "normalized"
+    ],
+    "transformer_residuals": [
+     "resid_mid",
+     "resid_post",
+     "resid_pre"
+    ]
+   },
+   "n_ops": 67,
+   "recipes": {
+    "bert_self_attention": 2,
+    "embedding": 3,
+    "layer_norm": 5,
+    "transformer_residuals": 2
+   }
+  }
+ },
+ "clip": {
+  "eager": {
+   "false_claims": [],
+   "fingerprint": "11163f4f6541b966893a6349d1e1f96dc1a3db71e1030c50d06e8462ec809586",
+   "floors": {
+    "embedding": [
+     "indices",
+     "lookup",
+     "weight"
+    ],
+    "layer_norm": [
+     "beta",
+     "gamma",
+     "normalized"
+    ],
+    "transformer_residuals": [
+     "resid_mid",
+     "resid_post"
+    ]
+   },
+   "n_ops": 184,
+   "recipes": {
+    "embedding": 3,
+    "layer_norm": 11,
+    "transformer_residuals": 4
+   }
+  },
+  "sdpa": {
+   "false_claims": [],
+   "fingerprint": "b827f6a51f9a295282290ef9cc8839693eb69a3b0283b2904055abad5f78e597",
+   "floors": {
+    "embedding": [
+     "indices",
+     "lookup",
+     "weight"
+    ],
+    "layer_norm": [
+     "beta",
+     "gamma",
+     "normalized"
+    ],
+    "transformer_residuals": [
+     "resid_mid",
+     "resid_post"
+    ]
+   },
+   "n_ops": 148,
+   "recipes": {
+    "embedding": 3,
+    "layer_norm": 11,
+    "transformer_residuals": 4
+   }
+  }
+ },
+ "detection": {
+  "eager": {
+   "false_claims": [],
+   "fingerprint": null,
+   "floors": {},
+   "n_ops": 762,
+   "recipes": {}
+  }
+ },
+ "distilbert": {
+  "eager": {
+   "false_claims": [
+    [
+     "transformer.layer.0.attention",
+     "attn_out",
+     "attention_projections_present"
+    ],
+    [
+     "transformer.layer.1.attention",
+     "attn_out",
+     "attention_projections_present"
+    ]
+   ],
+   "fingerprint": "8f2b049d73b6cdef82f66c871221f14d4683be50d97b0e9a0d63c3228faa18c7",
+   "floors": {
+    "distilbert_attention": [
+     "d_head",
+     "head",
+     "input",
+     "k",
+     "n_heads",
+     "n_kv_heads",
+     "n_q_heads",
+     "q",
+     "v"
+    ],
+    "distilbert_ffn": [
+     "down_out",
+     "input",
+     "intermediate",
+     "output",
+     "up_out"
+    ],
+    "embedding": [
+     "indices",
+     "lookup",
+     "weight"
+    ],
+    "layer_norm": [
+     "beta",
+     "gamma",
+     "input",
+     "normalized"
+    ],
+    "transformer_residuals": [
+     "resid_mid",
+     "resid_post",
+     "resid_pre"
+    ]
+   },
+   "n_ops": 65,
+   "recipes": {
+    "distilbert_attention": 2,
+    "distilbert_ffn": 2,
+    "embedding": 2,
+    "layer_norm": 5,
+    "transformer_residuals": 2
+   }
+  },
+  "sdpa": {
+   "false_claims": [],
+   "fingerprint": "7f644f9c15cc5c774f3404390498cfd6eca12703015d93eec39384d9f7b4e833",
+   "floors": {
+    "distilbert_attention": [
+     "attn_out",
+     "d_head",
+     "head",
+     "input",
+     "k",
+     "n_heads",
+     "n_kv_heads",
+     "n_q_heads",
+     "q",
+     "v"
+    ],
+    "distilbert_ffn": [
+     "down_out",
+     "input",
+     "intermediate",
+     "output",
+     "up_out"
+    ],
+    "embedding": [
+     "indices",
+     "lookup",
+     "weight"
+    ],
+    "layer_norm": [
+     "beta",
+     "gamma",
+     "input",
+     "normalized"
+    ],
+    "transformer_residuals": [
+     "resid_mid",
+     "resid_post",
+     "resid_pre"
+    ]
+   },
+   "n_ops": 55,
+   "recipes": {
+    "distilbert_attention": 2,
+    "distilbert_ffn": 2,
+    "embedding": 2,
+    "layer_norm": 5,
+    "transformer_residuals": 2
+   }
+  }
+ },
+ "distilgpt2": {
+  "eager": {
+   "false_claims": [
+    [
+     "self",
+     "final_norm_kind",
+     "final_norm_present"
+    ],
+    [
+     "self",
+     "final_norm_eps",
+     "final_norm_present"
+    ],
+    [
+     "self",
+     "final_norm_gamma",
+     "final_norm_present"
+    ],
+    [
+     "self",
+     "final_norm_beta",
+     "final_norm_present"
+    ],
+    [
+     "self",
+     "final_norm_input",
+     "final_norm_present"
+    ],
+    [
+     "transformer.h.0.attn",
+     "attn_out",
+     "attention_projections_present"
+    ],
+    [
+     "transformer.h.1.attn",
+     "attn_out",
+     "attention_projections_present"
+    ]
+   ],
+   "fingerprint": "107b26b31ba0102b97dc45b3d965310e5b89b78f8aad299f77f166d2a2f2d340",
+   "floors": {
+    "embedding": [
+     "indices",
+     "lookup",
+     "weight"
+    ],
+    "gpt2_attention": [
+     "d_head",
+     "head",
+     "input",
+     "k",
+     "n_heads",
+     "n_kv_heads",
+     "n_q_heads",
+     "q",
+     "v"
+    ],
+    "gpt2_mlp": [
+     "down_out",
+     "input",
+     "intermediate",
+     "output",
+     "up_out"
+    ],
+    "language_model_head": [
+     "logits",
+     "unembed_weight"
+    ],
+    "layer_norm": [
+     "beta",
+     "gamma",
+     "normalized"
+    ],
+    "transformer_residuals": [
+     "resid_mid",
+     "resid_post",
+     "resid_pre"
+    ]
+   },
+   "n_ops": 125,
+   "recipes": {
+    "embedding": 2,
+    "gpt2_attention": 2,
+    "gpt2_mlp": 2,
+    "language_model_head": 1,
+    "layer_norm": 5,
+    "transformer_residuals": 2
+   }
+  },
+  "sdpa": {
+   "false_claims": [
+    [
+     "self",
+     "final_norm_kind",
+     "final_norm_present"
+    ],
+    [
+     "self",
+     "final_norm_eps",
+     "final_norm_present"
+    ],
+    [
+     "self",
+     "final_norm_gamma",
+     "final_norm_present"
+    ],
+    [
+     "self",
+     "final_norm_beta",
+     "final_norm_present"
+    ],
+    [
+     "self",
+     "final_norm_input",
+     "final_norm_present"
+    ]
+   ],
+   "fingerprint": "7a8073876b14b7234e8f6651babec5ab8253a8cc6a9ba26209d11c8f8d648739",
+   "floors": {
+    "embedding": [
+     "indices",
+     "lookup",
+     "weight"
+    ],
+    "gpt2_attention": [
+     "attn_out",
+     "d_head",
+     "head",
+     "input",
+     "k",
+     "n_heads",
+     "n_kv_heads",
+     "n_q_heads",
+     "q",
+     "v"
+    ],
+    "gpt2_mlp": [
+     "down_out",
+     "input",
+     "intermediate",
+     "output",
+     "up_out"
+    ],
+    "language_model_head": [
+     "logits",
+     "unembed_weight"
+    ],
+    "layer_norm": [
+     "beta",
+     "gamma",
+     "normalized"
+    ],
+    "transformer_residuals": [
+     "resid_mid",
+     "resid_post",
+     "resid_pre"
+    ]
+   },
+   "n_ops": 103,
+   "recipes": {
+    "embedding": 2,
+    "gpt2_attention": 2,
+    "gpt2_mlp": 2,
+    "language_model_head": 1,
+    "layer_norm": 5,
+    "transformer_residuals": 2
+   }
+  }
+ },
+ "gpt2": {
+  "eager": {
+   "false_claims": [
+    [
+     "self",
+     "final_norm_kind",
+     "final_norm_present"
+    ],
+    [
+     "self",
+     "final_norm_eps",
+     "final_norm_present"
+    ],
+    [
+     "self",
+     "final_norm_gamma",
+     "final_norm_present"
+    ],
+    [
+     "self",
+     "final_norm_beta",
+     "final_norm_present"
+    ],
+    [
+     "self",
+     "final_norm_input",
+     "final_norm_present"
+    ],
+    [
+     "transformer.h.0.attn",
+     "attn_out",
+     "attention_projections_present"
+    ],
+    [
+     "transformer.h.1.attn",
+     "attn_out",
+     "attention_projections_present"
+    ]
+   ],
+   "fingerprint": "5c5bd25332275cc9fecdd634cc61d38fdc9f91b5d09d732acb30d35e17ac5144",
+   "floors": {
+    "embedding": [
+     "indices",
+     "lookup",
+     "weight"
+    ],
+    "gpt2_attention": [
+     "d_head",
+     "head",
+     "input",
+     "k",
+     "n_heads",
+     "n_kv_heads",
+     "n_q_heads",
+     "q",
+     "v"
+    ],
+    "gpt2_mlp": [
+     "down_out",
+     "input",
+     "intermediate",
+     "output",
+     "up_out"
+    ],
+    "language_model_head": [
+     "logits",
+     "unembed_weight"
+    ],
+    "layer_norm": [
+     "beta",
+     "gamma",
+     "normalized"
+    ],
+    "transformer_residuals": [
+     "resid_mid",
+     "resid_post",
+     "resid_pre"
+    ]
+   },
+   "n_ops": 125,
+   "recipes": {
+    "embedding": 2,
+    "gpt2_attention": 2,
+    "gpt2_mlp": 2,
+    "language_model_head": 1,
+    "layer_norm": 5,
+    "transformer_residuals": 2
+   }
+  },
+  "sdpa": {
+   "false_claims": [
+    [
+     "self",
+     "final_norm_kind",
+     "final_norm_present"
+    ],
+    [
+     "self",
+     "final_norm_eps",
+     "final_norm_present"
+    ],
+    [
+     "self",
+     "final_norm_gamma",
+     "final_norm_present"
+    ],
+    [
+     "self",
+     "final_norm_beta",
+     "final_norm_present"
+    ],
+    [
+     "self",
+     "final_norm_input",
+     "final_norm_present"
+    ]
+   ],
+   "fingerprint": "a3711e0fed1876461ebeeb69dd1e861bdc45f710369e09166e526c1f47e18f8e",
+   "floors": {
+    "embedding": [
+     "indices",
+     "lookup",
+     "weight"
+    ],
+    "gpt2_attention": [
+     "attn_out",
+     "d_head",
+     "head",
+     "input",
+     "k",
+     "n_heads",
+     "n_kv_heads",
+     "n_q_heads",
+     "q",
+     "v"
+    ],
+    "gpt2_mlp": [
+     "down_out",
+     "input",
+     "intermediate",
+     "output",
+     "up_out"
+    ],
+    "language_model_head": [
+     "logits",
+     "unembed_weight"
+    ],
+    "layer_norm": [
+     "beta",
+     "gamma",
+     "normalized"
+    ],
+    "transformer_residuals": [
+     "resid_mid",
+     "resid_post",
+     "resid_pre"
+    ]
+   },
+   "n_ops": 103,
+   "recipes": {
+    "embedding": 2,
+    "gpt2_attention": 2,
+    "gpt2_mlp": 2,
+    "language_model_head": 1,
+    "layer_norm": 5,
+    "transformer_residuals": 2
+   }
+  }
+ },
+ "llama": {
+  "eager": {
+   "false_claims": [
+    [
+     "self",
+     "final_norm_kind",
+     "final_norm_present"
+    ],
+    [
+     "self",
+     "final_norm_eps",
+     "final_norm_present"
+    ],
+    [
+     "self",
+     "final_norm_gamma",
+     "final_norm_present"
+    ],
+    [
+     "self",
+     "final_norm_beta",
+     "final_norm_present"
+    ],
+    [
+     "self",
+     "final_norm_input",
+     "final_norm_present"
+    ],
+    [
+     "model.layers.0.self_attn",
+     "attn_out",
+     "attention_projections_present"
+    ],
+    [
+     "model.layers.0.self_attn",
+     "q",
+     "attention_projections_present"
+    ],
+    [
+     "model.layers.0.self_attn",
+     "k",
+     "attention_projections_present"
+    ],
+    [
+     "model.layers.0.self_attn",
+     "v",
+     "attention_projections_present"
+    ],
+    [
+     "model.layers.1.self_attn",
+     "attn_out",
+     "attention_projections_present"
+    ],
+    [
+     "model.layers.1.self_attn",
+     "q",
+     "attention_projections_present"
+    ],
+    [
+     "model.layers.1.self_attn",
+     "k",
+     "attention_projections_present"
+    ],
+    [
+     "model.layers.1.self_attn",
+     "v",
+     "attention_projections_present"
+    ]
+   ],
+   "fingerprint": "4b2cfa6e9617d1362060d9eeecfee82508316d7d4ba95d980001e3542f0dd5b5",
+   "floors": {
+    "embedding": [
+     "indices",
+     "lookup",
+     "weight"
+    ],
+    "gated_mlp": [
+     "down_out",
+     "gated_out",
+     "input",
+     "intermediate",
+     "output",
+     "up_out"
+    ],
+    "gqa_attention": [
+     "d_head",
+     "head",
+     "input"
+    ],
+    "language_model_head": [
+     "logits",
+     "unembed_weight"
+    ],
+    "rms_norm": [
+     "gamma",
+     "input",
+     "normalized"
+    ],
+    "transformer_residuals": [
+     "resid_mid",
+     "resid_post",
+     "resid_pre"
+    ]
+   },
+   "n_ops": 186,
+   "recipes": {
+    "embedding": 1,
+    "gated_mlp": 2,
+    "gqa_attention": 2,
+    "language_model_head": 1,
+    "rms_norm": 5,
+    "transformer_residuals": 2
+   }
+  },
+  "sdpa": {
+   "false_claims": [
+    [
+     "self",
+     "final_norm_kind",
+     "final_norm_present"
+    ],
+    [
+     "self",
+     "final_norm_eps",
+     "final_norm_present"
+    ],
+    [
+     "self",
+     "final_norm_gamma",
+     "final_norm_present"
+    ],
+    [
+     "self",
+     "final_norm_beta",
+     "final_norm_present"
+    ],
+    [
+     "self",
+     "final_norm_input",
+     "final_norm_present"
+    ],
+    [
+     "model.layers.0.self_attn",
+     "q",
+     "attention_projections_present"
+    ],
+    [
+     "model.layers.0.self_attn",
+     "k",
+     "attention_projections_present"
+    ],
+    [
+     "model.layers.0.self_attn",
+     "v",
+     "attention_projections_present"
+    ],
+    [
+     "model.layers.1.self_attn",
+     "q",
+     "attention_projections_present"
+    ],
+    [
+     "model.layers.1.self_attn",
+     "k",
+     "attention_projections_present"
+    ],
+    [
+     "model.layers.1.self_attn",
+     "v",
+     "attention_projections_present"
+    ]
+   ],
+   "fingerprint": "adc566f1edc75ac6f29aa6a86c1a0eded3526f38fd77011dba7c73a4d6c6ad17",
+   "floors": {
+    "embedding": [
+     "indices",
+     "lookup",
+     "weight"
+    ],
+    "gated_mlp": [
+     "down_out",
+     "gated_out",
+     "input",
+     "intermediate",
+     "output",
+     "up_out"
+    ],
+    "gqa_attention": [
+     "attn_out",
+     "d_head",
+     "head",
+     "input"
+    ],
+    "language_model_head": [
+     "logits",
+     "unembed_weight"
+    ],
+    "rms_norm": [
+     "gamma",
+     "input",
+     "normalized"
+    ],
+    "transformer_residuals": [
+     "resid_mid",
+     "resid_post",
+     "resid_pre"
+    ]
+   },
+   "n_ops": 150,
+   "recipes": {
+    "embedding": 1,
+    "gated_mlp": 2,
+    "gqa_attention": 2,
+    "language_model_head": 1,
+    "rms_norm": 5,
+    "transformer_residuals": 2
+   }
+  }
+ },
+ "lstm_gru": {
+  "eager": {
+   "false_claims": [],
+   "fingerprint": null,
+   "floors": {
+    "embedding": [
+     "indices",
+     "lookup",
+     "weight"
+    ]
+   },
+   "n_ops": 12,
+   "recipes": {
+    "embedding": 1
+   }
+  }
+ },
+ "mamba": {
+  "eager": {
+   "false_claims": [],
+   "fingerprint": "1e52e379d822a509cd8f789b26998ac722d503101404141a667d9afe1ccb6e3b",
+   "floors": {
+    "embedding": [
+     "indices",
+     "lookup",
+     "weight"
+    ],
+    "language_model_head": [
+     "logits",
+     "unembed_weight"
+    ]
+   },
+   "n_ops": 255,
+   "recipes": {
+    "embedding": 1,
+    "language_model_head": 1
+   }
+  }
+ },
+ "qwen2": {
+  "eager": {
+   "false_claims": [],
+   "fingerprint": "d7613aee0aed6d944bc993c7604408b5abe20b5209053d92fd8d72554be09eb1",
+   "floors": {
+    "embedding": [
+     "indices",
+     "lookup",
+     "weight"
+    ],
+    "language_model_head": [
+     "logits",
+     "unembed_weight"
+    ],
+    "transformer_residuals": [
+     "resid_mid",
+     "resid_post",
+     "resid_pre"
+    ]
+   },
+   "n_ops": 186,
+   "recipes": {
+    "embedding": 1,
+    "language_model_head": 1,
+    "transformer_residuals": 2
+   }
+  },
+  "sdpa": {
+   "false_claims": [],
+   "fingerprint": "bb9205fe2a5293cb49ae7b34519ec5553a781534e7631ce1ea80af0c1666b429",
+   "floors": {
+    "embedding": [
+     "indices",
+     "lookup",
+     "weight"
+    ],
+    "language_model_head": [
+     "logits",
+     "unembed_weight"
+    ],
+    "transformer_residuals": [
+     "resid_mid",
+     "resid_post",
+     "resid_pre"
+    ]
+   },
+   "n_ops": 150,
+   "recipes": {
+    "embedding": 1,
+    "language_model_head": 1,
+    "transformer_residuals": 2
+   }
+  }
+ },
+ "rwkv": {
+  "eager": {
+   "false_claims": [],
+   "fingerprint": "15cee5ec257865c118999de90c4899adf15c167c903a8d7ef9d5545aa3ae7957",
+   "floors": {
+    "embedding": [
+     "indices",
+     "lookup",
+     "weight"
+    ],
+    "layer_norm": [
+     "beta",
+     "gamma",
+     "normalized"
+    ],
+    "transformer_residuals": [
+     "resid_mid",
+     "resid_post"
+    ]
+   },
+   "n_ops": 585,
+   "recipes": {
+    "embedding": 1,
+    "layer_norm": 6,
+    "transformer_residuals": 2
+   }
+  }
+ },
+ "t5": {
+  "eager": {
+   "false_claims": [
+    [
+     "encoder.block.0.layer.0.SelfAttention",
+     "attn_out",
+     "attention_projections_present"
+    ],
+    [
+     "encoder.block.1.layer.0.SelfAttention",
+     "attn_out",
+     "attention_projections_present"
+    ],
+    [
+     "decoder.block.0.layer.0.SelfAttention",
+     "attn_out",
+     "attention_projections_present"
+    ],
+    [
+     "decoder.block.0.layer.1.EncDecAttention",
+     "attn_out",
+     "attention_projections_present"
+    ],
+    [
+     "decoder.block.1.layer.0.SelfAttention",
+     "attn_out",
+     "attention_projections_present"
+    ],
+    [
+     "decoder.block.1.layer.1.EncDecAttention",
+     "attn_out",
+     "attention_projections_present"
+    ]
+   ],
+   "fingerprint": "43c5b08547131274c6d8835f173334db2e160ddbca8a91edccdad301b4c2539a",
+   "floors": {
+    "embedding": [
+     "indices",
+     "lookup",
+     "weight"
+    ],
+    "language_model_head": [
+     "logits",
+     "unembed_weight"
+    ],
+    "t5_attention": [
+     "head",
+     "input",
+     "k",
+     "n_heads",
+     "n_kv_heads",
+     "n_q_heads",
+     "q",
+     "v"
+    ]
+   },
+   "n_ops": 326,
+   "recipes": {
+    "embedding": 4,
+    "language_model_head": 1,
+    "t5_attention": 6
+   }
+  }
+ },
+ "vit": {
+  "eager": {
+   "false_claims": [],
+   "fingerprint": "d0e46bd184c61ebe0a1cda05c1146c352754d8213e1d91149f7221b44e494107",
+   "floors": {
+    "layer_norm": [
+     "beta",
+     "gamma",
+     "normalized"
+    ],
+    "transformer_residuals": [
+     "resid_post"
+    ]
+   },
+   "n_ops": 74,
+   "recipes": {
+    "layer_norm": 5,
+    "transformer_residuals": 2
+   }
+  },
+  "sdpa": {
+   "false_claims": [],
+   "fingerprint": "5ce94261964da0cd4c80fb45fa220b57eb4b97eda19ca388721a0ae37cd11d33",
+   "floors": {
+    "layer_norm": [
+     "beta",
+     "gamma",
+     "normalized"
+    ],
+    "transformer_residuals": [
+     "resid_post"
+    ]
+   },
+   "n_ops": 62,
+   "recipes": {
+    "layer_norm": 5,
+    "transformer_residuals": 2
+   }
+  }
+ },
+ "whisper": {
+  "eager": {
+   "false_claims": [],
+   "fingerprint": "986579949e8fae7a062eecadaa458c81602999f8bdff7fbd3aa50d5709c58729",
+   "floors": {
+    "embedding": [
+     "indices",
+     "lookup",
+     "weight"
+    ],
+    "layer_norm": [
+     "beta",
+     "gamma",
+     "normalized"
+    ]
+   },
+   "n_ops": 303,
+   "recipes": {
+    "embedding": 2,
+    "layer_norm": 16
+   }
+  },
+  "sdpa": {
+   "false_claims": [],
+   "fingerprint": "6ff91df0afb2b2b91ce72547605a6713d9ba8eeb01a50071db8eddb22ddafe14",
+   "floors": {
+    "embedding": [
+     "indices",
+     "lookup",
+     "weight"
+    ],
+    "layer_norm": [
+     "beta",
+     "gamma",
+     "normalized"
+    ]
+   },
+   "n_ops": 251,
+   "recipes": {
+    "embedding": 2,
+    "layer_norm": 16
+   }
+  }
+ }
+}

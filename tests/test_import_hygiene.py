@@ -128,14 +128,11 @@ _TORCHLENS_IMPORT_RSS_BUDGET_KIB = 64 * 1024
 #: SHRINK-ONLY -- a new top-level public name either enters ``__all__``
 #: consciously or is a namespace leak (R31 axis b, namespace identity).
 # The deprecated top-level wrapper functions left this ledger with the
-# shim-removal lane (2026-08-19); only typing artifacts remain.
-_LEGACY_NON_ALL_PUBLIC_NAMES = frozenset(
-    {
-        "Any",
-        "TYPE_CHECKING",
-        "annotations",
-    }
-)
+# shim-removal lane (2026-08-19); the last three typing artifacts (``Any``,
+# ``TYPE_CHECKING``, ``annotations``) left with the oracles wave-0 lane
+# (2026-08-26). The ledger is now EMPTY and stays that way; the
+# reachable-surface walk in tests/oracles owns the fuller classification.
+_LEGACY_NON_ALL_PUBLIC_NAMES: frozenset[str] = frozenset()
 
 
 def _import_probe_script() -> str:
@@ -341,8 +338,15 @@ for facade_name, module_path in facades.items():
         expected = expected_exports.get(public_name, getattr(eager_module, public_name))
         assert getattr(facade_module, public_name) is expected
 
+# P00-fallout refresh (oracles wave 0, 2026-08-26): the shim-removal fallout
+# added four root facades (accessors, backends, types, visualization) whose
+# rows were missing here, leaving this unmarked test red at the integration
+# tip without any gate noticing -- the hand-list-outgrown-by-the-live-walk
+# failure class the oracles harness exists to catch.
 assert collisions == {
+    "accessors": [],
     "attribution": [], "autoroute": ["input", "output"],
+    "backends": [],
     "captured_run": [],
     "compat": ["lovely", "torchextractor", "torchshow"],
     "data_classes": [], "dataset_extraction": [], "debug": [], "distributed": [],
@@ -351,7 +355,8 @@ assert collisions == {
     "fastlog": ["dry_run", "recover"], "intervention": ["sites"],
     "hash": [], "io": [], "ir": [], "merged": [], "observers": [], "options": [],
     "partial": [], "quantities": [], "report": [], "repgeom": [],
-    "receptive_field": ["rules"], "stats": [], "user_funcs": [], "validation": [], "viz": [],
+    "receptive_field": ["rules"], "stats": [], "types": [], "user_funcs": [],
+    "validation": [], "visualization": [], "viz": [],
 }
 
 """

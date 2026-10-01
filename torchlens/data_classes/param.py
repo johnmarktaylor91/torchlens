@@ -729,7 +729,7 @@ class Param:
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         """Restore pickle state without reviving live parameter references."""
-        read_tlspec_version(state, cls_name=type(self).__name__)
+        read_tlspec_version(state, cls_name=type(self).__name__, cls=type(self))
         for removed_field in ("module_class_name", "module_class_qualname", "module_type"):
             state.pop(removed_field, None)
         if "param_memory" not in state and "memory" in state:

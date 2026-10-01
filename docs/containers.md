@@ -7,7 +7,7 @@ TorchLens records input and output container structure for supported Python cont
 Each output leaf `Op` with container metadata exposes `op.container`. The value is a computed `Container` view backed by the captured `ContainerSpec` plus sibling leaf ops; it is not stored as another trace record.
 
 ```python
-trace = tl.trace(model, x, capture_container_structure=True)
+trace = tl.trace(model, x, capture=tl.options.CaptureOptions(capture_container_structure=True))
 container = trace.ops[trace.output_layers[0]].container
 
 container.kind

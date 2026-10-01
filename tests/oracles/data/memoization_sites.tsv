@@ -1,0 +1,7 @@
+key
+torchlens/_io/runnable_load.py::_reverse_index
+torchlens/_runnable_state_context.py::_count_bounded_fake_tensor_mode_class
+torchlens/_runnable_state_context.py::_fake_tensor_mode_class
+torchlens/constants.py::_get_torch_overridable_functions
+torchlens/user_funcs.py::<assign> cache_config
+torchlens/utils/_callable_safety.py::_torch_overridable_callable_ids

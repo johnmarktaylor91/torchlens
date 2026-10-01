@@ -1337,17 +1337,17 @@ class Bundle:
         **kwargs:
             Forwarded to each member's :meth:`Trace.show`. When an output
             path is supplied, member names are appended to produce one artifact
-            per log. ``vis_opt='none'`` is accepted and returns without
+            per log. ``vis_mode='none'`` is accepted and returns without
             rendering, matching ``Trace.show``.
 
         Returns
         -------
         dict[str, str | None]
             Member-keyed render results. Values are DOT source strings when
-            rendering occurs, or ``None`` for skipped ``vis_opt='none'`` calls.
+            rendering occurs, or ``None`` for skipped ``vis_mode='none'`` calls.
         """
 
-        if kwargs.get("vis_opt") == "none" or kwargs.get("vis_mode") == "none":
+        if kwargs.get("vis_mode") == "none":
             return dict.fromkeys(self._members)
 
         base_outpath = kwargs.get("vis_outpath")
@@ -2658,7 +2658,7 @@ def _bundle_show_diff(
 
     Examples
     --------
-    >>> trace = tl.trace(model, x, intervention_ready=True)
+    >>> trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     >>> ablated = trace.fork("ablated")
     >>> ablated.do(tl.module("layer1.0.relu"), tl.zero_ablate())
     >>> bundle = tl.bundle({"clean": trace, "ablated": ablated}, baseline="clean")

@@ -1,0 +1,12 @@
+# Table B (D9): generated exposure bindings, one row per door. Wave-0 seed
+# binds the five wave-0 obligations to their doors; the A/B join is exact
+# and gated (H0). Parity is a query over bindings sharing an obligation id,
+# reported separately, and NEVER populates an oracle cell (D4).
+binding_id	obligation_id	door	census_root	classification	purity_mechanism	scale_sensitive	scale_profile_id	disclosure_kind	positive_control	invariance_witness	history_cells
+BND-W0-001	OBL-W0-SURFACE-CLASS	torchlens	CR1	declared	untouched	no		n/a	test_oracle_w0_surface.py::test_plant_unlisted_reachable_callable_goes_red
+BND-W0-002	OBL-W0-SURFACE-CLASS	torchlens.Trace	CR1	declared	untouched	no		n/a	test_oracle_w0_surface.py::test_plant_new_trace_member_goes_red
+BND-W0-003	OBL-W0-CACHE-KEY-COMPLETE	torchlens.trace	CR2	declared	unset	no		n/a	test_oracle_w0_lints.py::test_plant_new_option_field_blocks
+BND-W0-004	OBL-W0-CACHE-KEY-COMPLETE	torchlens.options.CaptureOptions	CR2	declared	unset	no		n/a	test_oracle_w0_lints.py::test_plant_new_option_field_blocks
+BND-W0-005	OBL-W0-DEPRECATION-IFF	torchlens	CR1	declared	untouched	no		n/a	test_oracle_w0_deprecation.py::test_plant_registered_nonwarning_door_goes_red
+BND-W0-006	OBL-W0-SURFACE-DENOM	torchlens.__all__	CR1	declared	untouched	no		n/a	test_oracle_w0_lints.py::test_plant_denominator_drift_goes_red
+BND-W0-007	OBL-W0-NUMERAL-PROVENANCE	published-docs-and-tests-corpus	CR8	declared	untouched	no		n/a	test_oracle_w0_lints.py::test_plant_numeral_is_found_and_stale_row_blocks

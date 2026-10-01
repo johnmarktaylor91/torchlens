@@ -46,6 +46,7 @@ add names to the top-level `torchlens` namespace:
 | `artifact_structure_only_incoherent` | Loaded structure-only marker is non-bool, co-occurs with a retained value payload (M-C2), or claims `capture_verified=True` (M-C3) | Re-capture and re-save with one current TorchLens version; do not hand-edit the marker, payloads, or the verification verdict |
 | `artifact_version_above_runtime` | Bundle `tlspec_version` is newer than this runtime supports | Upgrade torchlens to the release that wrote the artifact (or newer) |
 | `artifact_version_below_floor` | Artifact predates the rehydration floor (`tlspec_version` < 6 / torchlens < 2.33) | Load and re-save it with a torchlens release that still reads it |
+| `unknown_persisted_field` | Incoming persisted state carries field names outside the reader's declared record contract (fields + defaults + declared aliases); refuses in both writer directions before any object mutation | Load under the release that wrote the artifact; inspect inertly with `torchlens.io.inspect_state_contract`; a reader that dropped a persisted field must declare an alias |
 | `ambiguous_op_lookup` | Accessor key matches multiple pass-qualified objects | Use a full address, pass label, or call index |
 | `auto_environment_unsupported` | `TORCHLENS_AUTO=1` requested implicit capture | Unset it and call `auto_capture()` |
 | `backward_capture_conflict` | `save_grads` conflicts with `backward_ready=False` | Enable or omit `backward_ready` |
@@ -337,6 +338,10 @@ string value fails the gate exactly like an inline code.
 | `wildcard_recv_unsupported` | A point-to-point receive from `ANY_SOURCE` cannot be attributed to a sender | Pass an explicit source rank to `recv`/`irecv` |
 | `intervention_fire_results_unrecordable` | An intervention changed execution but its tensor accepts neither transient metadata nor storage-backed fire-result evidence | Intervene on ordinary tensor outputs, or drop the intervention for this op |
 | `intervention_fire_results_cleanup_failed` | Intervention fire metadata could not be cleared after consumption; refusing prevents stale evidence entering a later capture | Re-run the capture; report the tensor type if it recurs |
+| `rerun_zero_fire` | WARNING (S-18 contract, not a refusal): a rerun hook plan entry fired at zero sites -- the rerun completed but those interventions were silent no-ops | Resolve the target sites against the rerun trace (`trace.resolve_sites`) before re-applying, or route the edit through the push engine (`fork().do(...)`), which validates sites at plan time |
+| `option_receipt_not_options` | `option_receipt()` was passed something other than a constructed TorchLens options object | Pass a constructed options dataclass such as `tl.options.CaptureOptions(...)` |
+| `option_receipt_unknown_field` | An `option_receipt()` adjustment named a field the options class does not have | Use public field names of the passed options class as adjustment keys |
+| `option_receipt_reason_invalid` | An `option_receipt()` adjustment carried a reason outside the closed vocabulary | Adjustment reasons are `forced`, `normalized`, or `refused`; `explicit` and `default` are derived, never supplied |
 
 The related `group_lifetime_evidence_conflict` kind is governed by the merged-trace
 contract (`docs/reference/merged_trace_contract.md`), where it is also a

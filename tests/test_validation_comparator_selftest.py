@@ -59,7 +59,7 @@ def test_degraded_comparator_refuses_to_validate(monkeypatch: pytest.MonkeyPatch
     trace, ground_truth, _model = _traced_linear()
     monkeypatch.setattr(validation_core, "tensor_nanequal", lambda *args, **kwargs: True)
     with pytest.raises(RuntimeError, match="comparator self-test failed"):
-        validation_core.validate_forward_pass(trace, ground_truth)
+        validation_core.validate_saved_outs(trace, ground_truth)
 
 
 def test_always_false_comparator_also_refuses(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -68,14 +68,14 @@ def test_always_false_comparator_also_refuses(monkeypatch: pytest.MonkeyPatch) -
     trace, ground_truth, _model = _traced_linear()
     monkeypatch.setattr(validation_core, "tensor_nanequal", lambda *args, **kwargs: False)
     with pytest.raises(RuntimeError, match="comparator self-test failed"):
-        validation_core.validate_forward_pass(trace, ground_truth)
+        validation_core.validate_saved_outs(trace, ground_truth)
 
 
 def test_healthy_comparator_validates_normally() -> None:
     """The self-test is invisible on a healthy comparator."""
 
     trace, ground_truth, _model = _traced_linear()
-    status = validation_core.validate_forward_pass(trace, ground_truth)
+    status = validation_core.validate_saved_outs(trace, ground_truth)
     assert bool(status)
 
 
@@ -98,7 +98,7 @@ def test_nan_doctrine_is_part_of_the_self_test(monkeypatch: pytest.MonkeyPatch) 
     trace, ground_truth, _model = _traced_linear()
     monkeypatch.setattr(validation_core, "tensor_nanequal", _nan_blind)
     with pytest.raises(RuntimeError, match="comparator self-test failed"):
-        validation_core.validate_forward_pass(trace, ground_truth)
+        validation_core.validate_saved_outs(trace, ground_truth)
 
 
 class TestSignedZeroDoctrine:

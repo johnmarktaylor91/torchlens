@@ -153,7 +153,7 @@ class AtenOp:
             Serialized primitive row state.
         """
 
-        read_tlspec_version(state, cls_name=type(self).__name__)
+        read_tlspec_version(state, cls_name=type(self).__name__, cls=type(self))
         self.__tl_state_restore__(state)
 
 

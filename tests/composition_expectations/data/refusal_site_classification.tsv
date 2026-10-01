@@ -1,0 +1,15 @@
+# refusal_site_classification.tsv -- the S-17 classification ledger (compo memo 3.5).
+# Every raise site of a package *Error class is eventually CONTRACTED (user-reachable:
+# typed + code + non-empty structured remedy + contract-doc row), INTERNAL/CONTROL-FLOW
+# (with justification and review trigger), or KNOWN-GAP. Unclassified sites are the
+# tracked burn-down pool (data/diagnostic_ratchets.tsv); classifying sites lowers the
+# ratchet IN THE SAME CHANGE. Site keys are line-number-free (module:scope:class:factory:ordinal).
+# classification: CONTRACTED | INTERNAL | KNOWN-GAP
+site_key	classification	code	justification
+torchlens.intervention.hooks:live_selector_matches_site:LiveModeLabelError::1	KNOWN-GAP		memo 5.4 flagship witness: reached in <=12 lines following the docs; code=None, remedy empty, class absent from the contract doc
+torchlens.intervention.hooks:_normalize_sticky_hook_specs:ReplayPreconditionError::1	KNOWN-GAP		memo 3.5 witness: codeless on the default-capture path
+torchlens.intervention.hooks:expand_facet_hook_entries:SiteResolutionError::1	KNOWN-GAP		memo 3.5 witness family: zero-match refusal typed and teaching in prose, code=None
+torchlens._fast_run:_FastSparseSession.build:RunCapabilityUnavailableError::1	CONTRACTED	run_capability_unavailable	coded, documented (runnable contract), user-reachable on analysis-only loads
+torchlens._option_receipt:option_receipt:InvalidArgumentError::1	CONTRACTED	option_receipt_not_options	new public diagnostic site contracted in its own change (compo 0.5)
+torchlens._option_receipt:option_receipt:InvalidArgumentError::2	CONTRACTED	option_receipt_unknown_field	new public diagnostic site contracted in its own change (compo 0.5)
+torchlens._option_receipt:option_receipt:InvalidArgumentError::3	CONTRACTED	option_receipt_reason_invalid	new public diagnostic site contracted in its own change (compo 0.5)

@@ -1,0 +1,13 @@
+# D14 declared dont-care list for the capture-cache key, burden-inverted:
+# every dont-care carries an INVARIANCE-WITNESS slot (a registered test id
+# proving the field cannot change capture semantics). Slots are funded by
+# build item 6b (Wave 1-2); an EMPTY slot is a visible debt, never a license
+# to stay empty past 6b. Structural rows only at wave 0 -- everything else
+# uncovered is a dated KNOWN-GAP row, fail-closed.
+field	reason	invariance_witness
+cache	the cache toggle itself cannot be part of the key it guards
+cache_dir	cache location selects the store, never the capture semantics
+trace.capture	grouped-form carrier; its FIELDS are keyed individually
+trace.input_args	hashed directly by _capture_cache_key, outside cache_config
+trace.input_kwargs	hashed directly by _capture_cache_key, outside cache_config
+trace.model	hashed directly by _capture_cache_key, outside cache_config

@@ -34,16 +34,21 @@ repos:
             tests/capture_oracle/goldens/|
             tests/godobject_oracle/goldens/|
             tests/snapshots/|
+            tests/release_goldens/|
             menagerie/crawler/records/|
             menagerie/data/|
-            docs/images/
+            docs/images/|
+            tests/real_model/vendored/
           )
       - id: end-of-file-fixer
         exclude: *generated_artifacts
       - id: check-yaml
       - id: check-added-large-files
-        # canonical perf baselines + the menagerie catalog are intentional large data artifacts
-        exclude: ^(benchmarks/perf_baselines/.*\.json|menagerie/data/master_catalog\.jsonl|menagerie/data/routing_manifest\.tsv|menagerie/data/stable_ids\.jsonl|menagerie/data/crawl_roster\.jsonl)$
+        # canonical perf baselines + the menagerie catalog are intentional large data
+        # artifacts; the harvested release golden corpus is irreplaceable byte-pinned
+        # test data (ecosystem MEMO 3.7 G1, digest-enforced by
+        # tests/test_tlspec_envelope_goldens.py)
+        exclude: ^(benchmarks/perf_baselines/.*\.json|menagerie/data/master_catalog\.jsonl|menagerie/data/routing_manifest\.tsv|menagerie/data/stable_ids\.jsonl|menagerie/data/crawl_roster\.jsonl|tests/release_goldens/genuine_release_artifacts\.tar\.gz)$
       - id: detect-private-key
   - repo: https://github.com/gitleaks/gitleaks
     # Repo-portable secret scanning: this is what makes .gitleaks.toml (the
@@ -84,7 +89,10 @@ repos:
         # containment snapshots, and crawler records/tests are the same
         # deterministic-fixture class (tlspec manifests are FULL of sha256
         # digests by design), surfaced when the CI all-files job first
-        # scanned the whole tree (grind r3, R87).
+        # scanned the whole tree (grind r3, R87). The real-model
+        #         artifact registry, vendored-config provenance, and R0
+        #         expectation goldens are the same class: revision shas and
+        #         per-blob sha256 digests BY DESIGN (testing memo A1/A2).
         exclude: >-
           (?x)^(
             menagerie/data/crawl_roster\.jsonl|
@@ -95,7 +103,12 @@ repos:
             tests/godobject_oracle/goldens/.*|
             tests/snapshots/.*|
             tests/perf_baselines/.*|
-            tests/fixtures/tlspec_v7/.*
+            tests/fixtures/tlspec_v7/.*|
+            tests/release_goldens/.*|
+            torchlens/schemas/writer_contract_v8\.json|
+            tests/real_model/artifact_registry\.jsonl|
+            tests/real_model/vendored/.*|
+            tests/real_model/r0/expectations_r0\.json
           )$
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # PIN AUTHORITY: the `# vX.Y.Z` trailer MUST equal the `ruff==` pin in

@@ -213,6 +213,19 @@ class StopRequest:
 # Capability table + chokepoint
 # ---------------------------------------------------------------------------
 
+#: OUTCOME-DEGRADING load conditions (persisted-state contract, ecosystem MEMO
+#: 3.3/8.2): condition code -> the MOST OPTIMISTIC status a load carrying that
+#: condition may attest. Registered from day one as inert plumbing -- the v1
+#: contract refuses unknown persisted fields before any object exists, so no
+#: shipped path consults this table yet -- but any future accept/disclose mode
+#: MUST fold it into settlement: a loaded object carrying state the reader
+#: could not interpret can never attest COMPLETE (the D-ECO-10 absorption
+#: measurement: a real capture with an absorbed unknown field attested
+#: CaptureStatus.COMPLETE with zero warnings).
+OUTCOME_DEGRADING_LOAD_CONDITIONS: dict[str, CaptureStatus] = {
+    "unknown_persisted_field": CaptureStatus.UNKNOWN,
+}
+
 _ALLOW = "allow"
 
 CAPTURE_OUTCOME_CAPABILITIES: dict[str, dict[CaptureStatus, str]] = {

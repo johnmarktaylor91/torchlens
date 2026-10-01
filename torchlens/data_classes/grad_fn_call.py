@@ -162,7 +162,7 @@ class GradFnCall:
     def __setstate__(self, state: dict[str, Any]) -> None:
         """Restore pickle state and fill fields added in newer versions."""
 
-        read_tlspec_version(state, cls_name=type(self).__name__)
+        read_tlspec_version(state, cls_name=type(self).__name__, cls=type(self))
         grad_fn_call_setstate_defaults: dict[str, Any] = {
             **_GRAD_FN_CALL_CONTAINER_DEFAULTS,
             "label": "",

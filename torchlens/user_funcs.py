@@ -910,7 +910,7 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
     """
 
     # Idempotent when the registry entry already resolved it; load-bearing for
-    # direct/autoroute callers so the deprecated alias is honored, not dropped.
+    # direct/autoroute callers so the internal flat keys are honored, not dropped.
     # intervene=/halt= are DISPATCHED options on MLX (static-label live
     # interventions); recipes= is refused typed by the capture path below.
     # None of the three may flow through the capability-gated reject helper:
@@ -2644,8 +2644,8 @@ def _trace_torch_model(
     # grind-r5 b7 R55 (fable MED, survived from round 1 -- it misdirected two
     # hostile review lanes): the natural multi-input spelling
     # ``tl.trace(model, q, k, v)`` lands tensor ``k`` in ``input_kwargs`` and
-    # ``v`` in the deprecated ``layers_to_save`` slot, then crashes DEEP with
-    # an ambient-import-dependent error that never names the mistake. Refuse
+    # ``v`` in the next positional slot, then crashes DEEP with an
+    # ambient-import-dependent error that never names the mistake. Refuse
     # typed at entry, naming the tuple spelling.
     if input_kwargs is not None and not isinstance(input_kwargs, collections.abc.Mapping):
         raise ArgumentTypeError(
@@ -2895,7 +2895,7 @@ def _trace_torch_model(
     structure_only_value = capture_options.structure_only
     facet_recipes = None if isinstance(recipes, MissingType) else recipes
     if capture_options.stop_after is not None:
-        raise NotImplementedError("stop_after is only supported by torchlens.peek.")
+        raise NotImplementedError("stop_after is only supported by torchlens.pluck.")
     save_grads_policy = capture_options.save_grads
     should_save_grads = save_grads_policy not in (None, False)
     if save_grads_policy is True:
@@ -2920,7 +2920,10 @@ def _trace_torch_model(
         raise ArgumentConflictError(
             "Both disk-backed output storage and an output callback were configured",
             code="output_sink_conflict",
-            remedy="choose either bundle_path/save_outs_to or out_callback/out_sink",
+            remedy=(
+                "choose either disk storage (storage=tl.to_disk(...) / "
+                "streaming.bundle_path) or streaming.out_callback"
+            ),
             arguments=("bundle_path", "out_callback"),
         )
     if structure_only_value:

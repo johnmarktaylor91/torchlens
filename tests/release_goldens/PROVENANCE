@@ -1,0 +1,76 @@
+corpus: genuine_release_artifacts.tar.gz
+sha256: 3429a84fbd406d374afde5b50f6a8be0867ada77b728d6e88309713c6eadcdb3
+size_bytes: 4804520
+harvested: 2026-08-26 (ecosystem tri-lab round 3, Opus lane; imported verbatim
+  2026-08-26 by megasprint lane P05 from the sprint scratch directory --
+  build item ONE of ecosystem MEMO section 6 G1; digest re-verified at import)
+policy: harvested bytes, never regenerated from tags; no in-place regeneration;
+  deletion requires a ledger retirement row (MEMO section 3.7)
+---
+artifact: art_v2.16.0_portable
+writer_release: 2.16.0
+writer_python: 3.10.20
+writer_torch: 2.13.0+cu130
+generator: generators/write216.py (log_forward_pass-era API, no level= kwarg)
+schema: io_format_version=2 (genuine v2.16 spellings: io_format_version,
+  n_activation_blobs, n_gradient_blobs)
+model: torchvision resnet18 IMAGENET1K_V1, input 1x3x32x32
+notes: only genuine v2.16.0 ModelLog bundle in existence; 111 layers;
+  reader matrix: v2.17.0 loads it, v2.22.0..v2.34.1 fail untyped,
+  main refuses with a false ">= 2.33" remedy (erratum FORK F2)
+---
+artifact: art_v2.31.0_portable
+writer_release: 2.31.0
+writer_python: 3.10.20
+writer_torch: 2.13.0+cu130
+generator: generators/write_artifact.py <outdir> portable
+schema: tlspec_version=6
+model: torchvision resnet18 IMAGENET1K_V1, input 1x3x32x32
+notes: producer-floor writer (ledger pair-consistency floor 2.31.0)
+---
+artifact: art_v2.31.0_audit
+writer_release: 2.31.0
+writer_python: 3.10.20
+writer_torch: 2.13.0+cu130
+generator: generators/write_artifact.py <outdir> audit
+schema: tlspec_version=6
+model: torchvision resnet18 IMAGENET1K_V1, input 1x3x32x32
+---
+artifact: art_v2.32.4_portable
+writer_release: 2.32.4
+writer_python: 3.10.20
+writer_torch: 2.13.0+cu130
+generator: generators/write_artifact.py <outdir> portable
+schema: tlspec_version=6
+model: torchvision resnet18 IMAGENET1K_V1, input 1x3x32x32
+---
+artifact: art_v2.33.0_portable
+writer_release: 2.33.0
+writer_python: 3.10.20
+writer_torch: 2.13.0+cu130
+generator: generators/write_artifact.py <outdir> portable
+schema: tlspec_version=6
+model: torchvision resnet18 IMAGENET1K_V1, input 1x3x32x32
+notes: same tlspec stamp as v2.34.1 with a different persisted field set --
+  the same-stamp drift pair; only the exact writer identifies the grammar
+---
+artifact: art_v2.34.1_portable
+writer_release: 2.34.1
+writer_python: 3.10.20
+writer_torch: 2.13.0+cu130
+generator: generators/write_artifact.py <outdir> portable
+schema: tlspec_version=6
+model: torchvision resnet18 IMAGENET1K_V1, input 1x3x32x32
+notes: same tlspec stamp as v2.33.0 with a different persisted field set
+---
+artifact: art_main_portable
+writer_release: unreleased main (self-reports 2.34.1; dev-build identity --
+  exact_release + commit + dirty state belong in the ledger row, never the
+  _tlspec_prerelease marker)
+writer_python: 3.10.20
+writer_torch: 2.13.0+cu130
+generator: generators/write_artifact.py <outdir> portable
+schema: tlspec_version=8
+model: torchvision resnet18 IMAGENET1K_V1, input 1x3x32x32
+notes: support_class internal-dev; recorded as an internal transition,
+  never invented stable history

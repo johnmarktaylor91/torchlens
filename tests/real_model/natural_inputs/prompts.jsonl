@@ -1,0 +1,8 @@
+{"id": "clean-factual-1", "kind": "clean_corrupt_pair", "clean": "The Eiffel Tower is located in the city of", "corrupt": "The Colosseum is located in the city of", "note": "single-hop factual pair for patching workflows"}
+{"id": "clean-factual-2", "kind": "clean_corrupt_pair", "clean": "The capital of France is", "corrupt": "The capital of Italy is", "note": "capital-city pair; calibrated goldens derive from a calibration script, never intuition"}
+{"id": "left-padded-batch-1", "kind": "padded_batch", "texts": ["A short prompt.", "A somewhat longer prompt that forces left padding in the batch."], "padding_side": "left", "note": "left padding changes the graph (309 vs 290 ops measured); only identity assertions can see it"}
+{"id": "encoder-sentence-1", "kind": "encoder_sentence", "text": "The quick brown fox jumps over the lazy dog.", "note": "masked-encoder substrate sentence"}
+{"id": "encoder-pair-1", "kind": "encoder_pair", "text_a": "How far is the moon from the earth?", "text_b": "The average distance is about 384,400 kilometers.", "note": "token-type / sentence-pair realism"}
+{"id": "chat-template-1", "kind": "chat", "messages": [{"role": "user", "content": "Name one planet in the solar system."}], "note": "real chat-template input for instruct checkpoints"}
+{"id": "clip-captions-1", "kind": "caption_set", "captions": ["an astronaut floating in space", "a photo of a cat", "a diagram of a neural network"], "note": "CLIP zero-shot caption set; pairs with ni-image-pd-1"}
+{"id": "seq2seq-translate-1", "kind": "seq2seq", "text": "translate English to German: The house is small.", "note": "T5 task-prefixed input"}

@@ -1,0 +1,5 @@
+# Exact-passed-ID floor for the daily canary's R1 arm (testing MEMO D3/A6:
+# "latest torch + latest transformers/timm + R0 sweep + DistilGPT2 core,
+# PASSED-count attested"). Consumed by scripts/check_ci_executed_tests.py
+# --passed-ids in .github/workflows/latest-canary.yml.
+tests.real_model.r1.test_realism_pretrained_core::test_distilgpt2_real_tokenizer_trace_matches_direct

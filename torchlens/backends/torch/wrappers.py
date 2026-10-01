@@ -3271,7 +3271,9 @@ def wrapped(
 
     Usage::
 
-        with torchlens.wrapped():
+        from torchlens.backends.torch.wrappers import wrapped
+
+        with wrapped():
             log = torchlens.trace(model, x)
         # torch is clean again here
 

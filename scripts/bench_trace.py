@@ -1,4 +1,4 @@
-"""Benchmark ``log_forward_pass`` on a 20-layer MLP."""
+"""Benchmark ``tl.trace`` capture overhead on a 20-layer MLP."""
 
 import argparse
 import os
@@ -14,7 +14,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from torchlens import log_forward_pass  # noqa: E402
+from torchlens import trace  # noqa: E402
 
 
 class TwentyLayerMLP(nn.Module):
@@ -63,7 +63,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 
 def run_once(model: nn.Module, x: torch.Tensor) -> float:
-    """Time one ``log_forward_pass`` call.
+    """Time one ``trace`` call.
 
     Args:
         model: Model to log.
@@ -73,7 +73,7 @@ def run_once(model: nn.Module, x: torch.Tensor) -> float:
         Elapsed wall-clock seconds.
     """
     start = time.perf_counter()
-    log_forward_pass(model, x)
+    trace(model, x)
     return time.perf_counter() - start
 
 

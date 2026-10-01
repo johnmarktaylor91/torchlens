@@ -1,0 +1,5 @@
+# The D21 deprecation-door registry (oracles wave 0). EMPTY BY DESIGN:
+# interim-phase policy is remove-and-rename (tests/test_deprecation_inventory.py
+# pins the package deprecation-free on the static side). A row here obligates
+# the call-time bidirectional gate in tests/oracles/test_oracle_w0_deprecation.py.
+door	replacement	since

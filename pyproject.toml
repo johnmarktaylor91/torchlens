@@ -299,6 +299,13 @@ markers = [
     "backend_tinygrad: marks tests that require the optional tinygrad backend runtime",
     "backend_paddle: marks tests that require the optional paddle backend runtime",
     "tf_backend: marks tests that require the optional TensorFlow backend runtime",
+    # The two composition-sprint SELECTION markers (compo memo row 0.1). ORTHOGONAL
+    # selectors, never cost tiers: they compose with any smoke/heavy/slow tier and
+    # never alter tier resolution or duration budgets. The marker ALGEBRA is declared
+    # ONCE in tests/composition_expectations/marker_algebra.py and lockstep-enforced
+    # by tests/test_marker_lint.py -- a new marker lands in both places or goes red.
+    "compo: composition-expectation ledger row (orthogonal selection marker, never a cost tier)",
+    "real_model: exercises a real-architecture or real-checkpoint fixture (orthogonal selection marker; the R0 gate selects -m 'smoke or real_model')",
 ]
 addopts = "-m 'not rare'"
 xfail_strict = true

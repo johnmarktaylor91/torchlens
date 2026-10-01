@@ -1,7 +1,7 @@
 """Streaming bundle writer used during forward-pass out capture.
 
 This module implements the strict streaming writer behind
-``trace(save_outs_to=...)``. It writes one safetensors blob
+``trace(storage=tl.to_disk(...))``. It writes one safetensors blob
 per saved out into a temporary bundle during the forward pass, then
 finalizes ``manifest.json`` and ``metadata.pkl`` at postprocess time so the
 returned log can stay memory-backed or disk-backed with the same on-disk

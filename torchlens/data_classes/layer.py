@@ -33,7 +33,7 @@ All other 78+ fields use the first pass's values only.
 import copy
 import weakref
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, Any, Literal, Optional, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional, cast
 
 from .._errors import AmbiguousOpLookupError, InvalidArgumentError, RecordBindingError
 from .._io import (
@@ -672,6 +672,16 @@ class Layer(_SelectionOperand):
     )
     PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
 
+    #: Aggregate-facade mirror contract (state-contract service): a pickled
+    #: Layer's state carries the Op-shaped mirror fields the facade reads
+    #: through to ``ops[0]``, so the known/unknown partition for Layer folds
+    #: in the Op record contract. Resolved lazily by module path (the Op
+    #: import above is TYPE_CHECKING-only).
+    PORTABLE_STATE_MIRROR_CONTRACT: ClassVar[tuple[str, str]] = (
+        "torchlens.data_classes.op",
+        "Op",
+    )
+
     def __init__(self, first_pass: "Op") -> None:
         """Initialize the aggregate facade for one layer.
 
@@ -1107,7 +1117,7 @@ class Layer(_SelectionOperand):
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         """Restore pickle state produced by ``__getstate__``."""
-        read_tlspec_version(state, cls_name=type(self).__name__)
+        read_tlspec_version(state, cls_name=type(self).__name__, cls=type(self))
         resolver_status_was_present = "resolver_status" in state
         layer_setstate_defaults: dict[str, Any] = {
             **_LAYER_LOG_CONTAINER_DEFAULTS,

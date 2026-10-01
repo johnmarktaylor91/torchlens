@@ -28,9 +28,11 @@ from . import (
     MIN_TLSPEC_VERSION,
     MIN_TORCHLENS_VERSION_TEXT,
     TLSPEC_VERSION,
+    ArtifactRuntimeIncompatibleError,
     ArtifactSchemaAgeWarning,
     TorchLensIOError,
     _json,
+    above_ceiling_error,
     below_floor_error,
 )
 
@@ -538,6 +540,12 @@ class Manifest:
             raise below_floor_error(
                 observed=f"tlspec_version={raw_version}", subject="Bundle manifest"
             )
+        if isinstance(raw_version, int) and raw_version > TLSPEC_VERSION:
+            # Symmetric with the below-floor check above (G3): a FUTURE
+            # manifest may carry renamed/extra fields, and without this gate
+            # it refuses with a misleading missing-required-field error
+            # instead of the above-ceiling refusal that names the remedy.
+            raise above_ceiling_error(observed=raw_version, subject="Bundle manifest")
 
         required_int_fields = (
             "tlspec_version",
@@ -933,14 +941,7 @@ def enforce_version_policy(manifest: Manifest) -> None:
     """
 
     if manifest.tlspec_version > TLSPEC_VERSION:
-        raise TorchLensIOError(
-            "Bundle uses tlspec_version="
-            f"{manifest.tlspec_version}, but this runtime only supports "
-            f"{TLSPEC_VERSION}. Remedy: upgrade torchlens to the release that "
-            "wrote this artifact (or newer).",
-            code="artifact_version_above_runtime",
-            remedy=("upgrade torchlens to the release that wrote this artifact (or newer)"),
-        )
+        raise above_ceiling_error(observed=manifest.tlspec_version, subject="Bundle")
     if manifest.tlspec_version < MIN_TLSPEC_VERSION:
         raise below_floor_error(
             observed=f"tlspec_version={manifest.tlspec_version}", subject="Bundle"
@@ -965,7 +966,7 @@ def enforce_version_policy(manifest: Manifest) -> None:
     manifest_torch = _parse_version(manifest.torch_version, label="manifest torch")
     if runtime_torch is not None and manifest_torch is not None:
         if runtime_torch.major != manifest_torch.major:
-            raise TorchLensIOError(
+            raise ArtifactRuntimeIncompatibleError(
                 "Bundle torch_version="
                 f"{manifest.torch_version} is incompatible with runtime torch_version="
                 f"{torch.__version__} (major version mismatch). Remedy: load the "
@@ -982,7 +983,7 @@ def enforce_version_policy(manifest: Manifest) -> None:
                 stacklevel=2,
             )
     elif manifest.torch_version != torch.__version__:
-        raise TorchLensIOError(
+        raise ArtifactRuntimeIncompatibleError(
             "Bundle torch_version="
             f"{manifest.torch_version} could not be parsed compatibly with runtime "
             f"torch_version={torch.__version__}; refusing load. Remedy: load the "

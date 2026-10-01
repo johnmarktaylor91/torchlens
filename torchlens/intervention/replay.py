@@ -535,7 +535,7 @@ def _run_replay(
     pending_updates: dict[str, torch.Tensor] = {}
     pending_records: dict[str, list[FireRecord]] = {}
 
-    for site in progress_bar(cone, total=len(cone), desc="torchlens.replay"):
+    for site in progress_bar(cone, total=len(cone), desc="torchlens.push"):
         site_key = _replay_site_key(site)
         if preserve_origins and site_key in origin_keys:
             pending_updates[site_key] = overlay[site_key]

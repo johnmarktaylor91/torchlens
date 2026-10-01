@@ -151,8 +151,16 @@ CANONICAL_SUBMODULES = [
 ]
 
 
-def test_all_matches_frozen_96_name_surface() -> None:
+def test_all_matches_frozen_target_ledger() -> None:
     """Top-level ``__all__`` should match the current frozen API ledger.
+
+    DECLARED gate only (oracles wave-0 re-point, never fork): this ledger is
+    the declared claim; the REACHABLE surface -- everything ``dir(tl)``
+    actually serves, class layer included -- is owned and counted by
+    tests/oracles/test_oracle_w0_surface.py, which cites this ledger. The
+    historical name of this test carried a stale count (the fact-10
+    four-values-for-one-quantity instance); counts now live in data, not
+    names.
 
     Phase 1a budget was 40; backward-parity sprint added 6 (grad_clip, grad_noise,
     grad_clamp, grad_fn, intervening, label) = 46; post-backward

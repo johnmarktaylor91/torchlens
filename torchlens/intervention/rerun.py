@@ -12,7 +12,7 @@ import torch
 from torch import nn
 
 from .._chunking import iter_chunked_inputs, normalize_chunk_paths, plan_chunks
-from .._errors import InvalidArgumentError
+from .._errors import InvalidArgumentError, TorchLensWarning
 from .._input_coerce import _coerce_input_args
 from .._trace_state import TraceState
 from ..options import ReplayOptions, merge_replay_options
@@ -1198,10 +1198,21 @@ def _reconcile_rerun_hook_fires(
         fallback_fired[base] -= consumed
         unfired.extend([plan_id] * (shortfall - consumed))
     if unfired:
+        # First CONTRACTED S-18 row (compo wave 0): the one warning standing
+        # between a user and a silently un-applied intervention carries a
+        # stable machine-readable code and a structured remedy -- consumers
+        # branch on ``fields["code"]``, never on message text.
         warnings.warn(
-            "Rerun hook plan entries fired at zero sites on the new inputs: "
-            f"{unfired!r}. The rerun completed, but those interventions were no-ops.",
-            UserWarning,
+            TorchLensWarning(
+                "Rerun hook plan entries fired at zero sites on the new inputs: "
+                f"{unfired!r}. The rerun completed, but those interventions were "
+                "no-ops. Remedy: resolve the target sites against the rerun trace "
+                "(trace.resolve_sites) before re-applying, or route the edit "
+                "through the push engine (fork().do(...)), which validates sites "
+                "at plan time",
+                code="rerun_zero_fire",
+                unfired_plan_ids=list(unfired),
+            ),
             stacklevel=3,
         )
     return total_fired, tuple(unfired)

@@ -271,13 +271,26 @@ def _probe_live(model_key: str, make_selector: Callable[[], Any]) -> Any:
 
     try:
         selector = make_selector()
+        # Fold the per-model capture opt-ins into ONE CaptureOptions so the
+        # hook wiring never collides with _extra_trace_kwargs' capture= key.
+        extra = dict(_extra_trace_kwargs(model_key))
+        base_capture = extra.pop("capture", None)
+        capture_kwargs: dict[str, Any] = {"hooks": [(selector, _probe_hook)]}
+        if base_capture is not None:
+            capture_kwargs.update(
+                {
+                    name: value
+                    for name, value in base_capture.as_dict().items()
+                    if base_capture.is_field_explicit(name)
+                }
+            )
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             tl.trace(
                 model,
                 x,
-                **_extra_trace_kwargs(model_key),
-                capture=tl.options.CaptureOptions(hooks=[(selector, _probe_hook)]),
+                **extra,
+                capture=tl.options.CaptureOptions(**capture_kwargs),
             )
     except Exception as exc:  # noqa: BLE001
         return _error_cell(exc)

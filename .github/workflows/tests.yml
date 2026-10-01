@@ -59,18 +59,21 @@ jobs:
             python: "3.13"
             torch: "2.6.0+cpu"
             torchvision: "0.21.0+cpu"
+            transformers: "5.14.1"
             numpy: numpy
             scope: smoke
           - track: canonical
             python: "3.10"
             torch: "2.8.0+cpu"
             torchvision: "0.23.0+cpu"
+            transformers: "5.14.1"
             numpy: numpy
             scope: smoke
           - track: canonical
             python: "3.11"
             torch: "2.8.0+cpu"
             torchvision: "0.23.0+cpu"
+            transformers: "5.14.1"
             numpy: numpy
             scope: smoke
             # ONE gating row runs with pytest-randomly installed (grind r4,
@@ -86,6 +89,7 @@ jobs:
             python: "3.10"
             torch: "2.13.0+cpu"
             torchvision: "0.28.0+cpu"
+            transformers: "5.14.1"
             numpy: numpy
             scope: smoke
             # This row's environment matches the byte-oracle goldens' committed
@@ -107,12 +111,14 @@ jobs:
             python: "3.11"
             torch: "2.13.0+cpu"
             torchvision: "0.28.0+cpu"
+            transformers: "5.14.1"
             numpy: numpy
             scope: smoke
           - track: newest-admitted
             python: "3.12"
             torch: "2.13.0+cpu"
             torchvision: "0.28.0+cpu"
+            transformers: "5.14.1"
             numpy: numpy
             scope: smoke
             # Python >= 3.12 is advertised support AND selects the
@@ -123,6 +129,7 @@ jobs:
             python: "3.13"
             torch: "2.13.0+cpu"
             torchvision: "0.28.0+cpu"
+            transformers: "5.14.1"
             numpy: numpy
             scope: smoke
             # Python 3.13 was the last classifier-advertised interpreter with
@@ -164,6 +171,16 @@ jobs:
             "${NUMPY_SPEC}" \
             "pydot==4.0.1" \
             "graphviz==0.21"
+
+      - name: Install transformers for the R0 real-model sweep
+        # Testing MEMO A4/A6 (lane P04): the R0 deep sweep (config-built real
+        # upstream classes, zero network) is BLOCKING on every row whose torch
+        # admits the pinned transformers (5.x floor is torch>=2.4). The three
+        # torch<2.4 floor rows run without it -- gate R0_TRANSFORMERS_RUNTIME
+        # in tests/real_model/r0/conftest.py names this split -- until the
+        # HF_FLOOR version leg (B2) lands per-version expectations.
+        if: matrix.transformers != ''
+        run: uv pip install --system "transformers==${{ matrix.transformers }}"
 
       - name: Arm randomized test ordering (order-isolation gate row)
         if: matrix.randomized == '1'
@@ -218,14 +235,35 @@ jobs:
         # Executed-floor attestation on EVERY smoke row (previously only the
         # nightly preview-backend legs had one): a row where collection drift,
         # a conftest guard, or mass importorskip/oracle skipping hollows out
-        # the suite must go red, not green. The smoke tier selects ~5,026
-        # tests (re-trued 2026-08-16, r7 R41: the old "~3900"/1900 pair had
-        # lagged the tier by a thousand tests, tolerating a silent 61% loss);
-        # the floor is roughly half so normal churn and per-torch-version
-        # skips never trip it, and the 15% skip-fraction bound scales with
-        # the selection so the ratchet no longer weakens as the suite grows.
+        # the suite must go red, not green. The smoke tier selects ~5,660
+        # tests (re-trued 2026-08-26, megaplan D13: the 2,500 floor had lagged
+        # the tier again, tolerating a silent 56% hollow-out against a comment
+        # intending ~50% -- the same drift class as r7 R41's "~3900"/1900
+        # pair); the floor is roughly half so normal churn and per-torch-
+        # version skips never trip it, the 15% skip-fraction bound scales
+        # with the selection, and tests/test_gate_infra_floor_drift.py now
+        # RE-DERIVES the floor from the live selection count so this class
+        # of drift goes red instead of waiting for the next audit.
         run: |
-          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/smoke.junit.xml" 2500 0.15
+          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/smoke.junit.xml" 2830 0.15
+
+      - name: R0 real-model gate (blocking; PASSED-count attested)
+        if: matrix.transformers != ''
+        # Testing MEMO section 10 PR row: the 14-family R0 deep sweep --
+        # structure, attn-impl facet diff, absence-claim adjudication, kwargs
+        # identity, payload identity, pass-qualification pin, config
+        # fingerprints -- at ZERO network bytes. The smoke selection above
+        # already runs these (they are smoke-marked); this dedicated run is
+        # the gate-shaped attestation: exact PASSED floor, so a skip cascade
+        # or a fail-tolerant future refactor cannot hollow it out.
+        # TORCHLENS_REQUIRE_R0 flips gate R0_TRANSFORMERS_RUNTIME fail-closed:
+        # a broken transformers install on a CLAIMING row is red, never a skip.
+        env:
+          TORCHLENS_REQUIRE_R0: "1"
+        run: |
+          pytest tests/real_model/r0 -p no:randomly --tb=short -q \
+            --junitxml="${{ runner.temp }}/r0.junit.xml"
+          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/r0.junit.xml" 0 --min-passed 71
 
       - name: Enforce the render byte oracle
         if: matrix.render_byte_oracle == '1'

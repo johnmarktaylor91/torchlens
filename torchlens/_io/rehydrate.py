@@ -38,6 +38,7 @@ from .scrub import (
     _RAW_INPUT_IMAGE_MAX_EDGE,
     _pin_in_memo,
 )
+from .state_contract import governed_artifact_load
 from .state_keys import invalidate_static_class_attr_cache, static_class_attr
 
 _LEGACY_CAPTURE_TRACE_KEYS = {
@@ -101,7 +102,11 @@ def rehydrate_trace(
     portable_key_order = tuple(state_for_load)
 
     trace = Trace.__new__(Trace)
-    trace.__setstate__(state_for_load)
+    # The root Trace state is governed artifact bytes: arm the unknown-field
+    # partition (state contract, MEMO 3.3) around its ``__setstate__`` exactly
+    # like the metadata unpickler arms it for nested records.
+    with governed_artifact_load():
+        trace.__setstate__(state_for_load)
     trace.raw_input = _rehydrate_small_raw_images(getattr(trace, "raw_input", None))
     trace.raw_output = _rehydrate_small_raw_images(getattr(trace, "raw_output", None))
     _apply_manifest_backend(trace, manifest)

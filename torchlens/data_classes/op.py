@@ -3772,7 +3772,7 @@ class Op(_SelectionOperand):
     def __setstate__(self, state: dict[str, Any]) -> None:
         """Restore pickle state produced by ``__getstate__``."""
         _ensure_detached_store(self)
-        read_tlspec_version(state, cls_name=type(self).__name__)
+        read_tlspec_version(state, cls_name=type(self).__name__, cls=type(self))
         resolver_status_was_present = "resolver_status" in state
         default_fill_state(
             state,

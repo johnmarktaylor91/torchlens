@@ -684,17 +684,17 @@ def _validate_tlspec_version_ceiling(tlspec_version: int) -> None:
 
     Raises
     ------
-    ValueError
-        If the declared version is newer than this runtime supports.
+    torchlens._io.ArtifactVersionAboveRuntimeError
+        If the declared version is newer than this runtime supports. Typed
+        through the one G3 chokepoint: the bare ``ValueError`` this used to
+        raise was swallowed by the load path's generic exception laundering
+        and surfaced codeless.
     """
 
-    from .._io import TLSPEC_VERSION
+    from .._io import TLSPEC_VERSION, above_ceiling_error
 
     if tlspec_version > TLSPEC_VERSION:
-        raise ValueError(
-            f"Bundle uses tlspec_version={tlspec_version}, but this runtime only supports "
-            f"{TLSPEC_VERSION}."
-        )
+        raise above_ceiling_error(observed=tlspec_version, subject="Bundle")
 
 
 # JSON Schema keywords supported by ``_validate_schema_properties``. Annotation

@@ -1272,6 +1272,141 @@ def test_serial_marker_is_not_a_budget_exemption() -> None:
     assert _duration_budget_tier(_FakeItem({"rare"})) is None
 
 
+# ---------------------------------------------------------------------------
+# Marker ALGEBRA lockstep (megasprint P03, compo memo row 0.1 / conflict rule
+# 16). The algebra -- every marker's one role, incl. the ORTHOGONAL selection
+# markers `compo` and `real_model` -- is declared ONCE in
+# tests/composition_expectations/marker_algebra.py. This lint holds pyproject
+# and the algebra in lockstep BOTH directions and pins the orthogonality
+# contract: selection markers never join tier resolution, never exempt a
+# budget, and never conflict with any tier.
+# ---------------------------------------------------------------------------
+
+
+def _pyproject_declared_markers() -> dict[str, str]:
+    """Parse ``[tool.pytest.ini_options] markers`` into name -> description.
+
+    Line/regex-based on purpose: ``tomllib`` is 3.11+ and the suite's floor
+    row runs 3.10 (the test_ci_packaging_gates / coverage-floor idiom).
+    """
+
+    import re
+
+    pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    lines = pyproject.read_text(encoding="utf-8").splitlines()
+    start = lines.index("markers = [")
+    declared: dict[str, str] = {}
+    for line in lines[start + 1 :]:
+        if line.strip() == "]":
+            break
+        match = re.match(r'\s*"([A-Za-z0-9_]+):\s*(.*)",\s*$', line)
+        if match is not None:
+            declared[match.group(1)] = match.group(2)
+    assert declared, "pyproject markers block parsed empty -- the regex idiom drifted"
+    return declared
+
+
+def test_marker_algebra_lockstep_with_pyproject() -> None:
+    """Every pyproject marker has exactly one algebra role, and vice versa."""
+
+    from tests.composition_expectations.marker_algebra import (
+        MARKER_ALGEBRA,
+        algebra_violations,
+    )
+
+    violations = algebra_violations(_pyproject_declared_markers(), MARKER_ALGEBRA)
+    assert not violations, (
+        "pyproject markers and the marker algebra drifted (the algebra is "
+        "declared ONCE; land both sides in one change):\n  " + "\n  ".join(violations)
+    )
+
+
+def test_marker_algebra_lockstep_is_red_capable() -> None:
+    """A planted undeclared/unroled/unknown-role marker each goes red."""
+
+    from tests.composition_expectations.marker_algebra import algebra_violations
+
+    algebra = {"smoke": "tier", "compo": "selection"}
+    declared = {"smoke": "d", "compo": "d"}
+    assert algebra_violations(declared, algebra) == []
+    assert any(
+        "no role in the marker algebra" in violation
+        for violation in algebra_violations({**declared, "planted": "d"}, algebra)
+    )
+    assert any(
+        "no pyproject declaration" in violation
+        for violation in algebra_violations(declared, {**algebra, "ghost": "tier"})
+    )
+    assert any(
+        "unknown role" in violation
+        for violation in algebra_violations(declared, {**algebra, "compo": "vibe"})
+    )
+
+
+def test_selection_markers_are_orthogonal_to_every_tier() -> None:
+    """`compo`/`real_model` combine with any tier without a combo violation.
+
+    Orthogonality is the row-0.1 contract: selection markers are selectors,
+    never cost tiers, so no tier combination may be flagged and the smoke
+    incompatibility set may never absorb them (that would silently turn a
+    selector into a tier exemption channel).
+    """
+
+    from tests.composition_expectations.marker_algebra import (
+        SELECTION_MARKERS,
+        TIER_MARKERS,
+    )
+
+    assert {"compo", "real_model"} == SELECTION_MARKERS
+    assert {"smoke", "heavy", "slow"} == TIER_MARKERS
+    assert not SELECTION_MARKERS & set(_SMOKE_INCOMPATIBLE_MARKERS)
+    for selection in SELECTION_MARKERS:
+        for tier in TIER_MARKERS:
+            assert _tier_combo_violations({selection, tier}, set(), "planted::node") == []
+        # Selection markers also compose with each other and alone.
+        assert _tier_combo_violations(SELECTION_MARKERS | {"smoke"}, set(), "planted::node") == []
+
+
+def test_selection_markers_do_not_alter_tier_resolution() -> None:
+    """Tier/budget resolution is blind to selection markers (never an exemption).
+
+    A `compo`-marked test resolves exactly as its tier markers dictate: alone
+    it is `unmarked` (5s budget), with `heavy` it is heavy (20s), and only the
+    contract-exempt tiers (`slow`/`rare`) return None -- adding a selection
+    marker can never disarm the duration budget the way the pre-fix `serial`
+    marker could.
+    """
+
+    from tests.composition_expectations.marker_algebra import SELECTION_MARKERS
+    from tests.conftest import (
+        HEAVY_DURATION_BUDGET_SECONDS,
+        SMOKE_DURATION_BUDGET_SECONDS,
+        _duration_budget_tier,
+    )
+
+    class _FakeItem:
+        def __init__(self, markers: set[str]) -> None:
+            self._markers = markers
+
+        def get_closest_marker(self, name: str):
+            return object() if name in self._markers else None
+
+    for selection in SELECTION_MARKERS:
+        assert _duration_budget_tier(_FakeItem({selection})) == (
+            "unmarked",
+            SMOKE_DURATION_BUDGET_SECONDS,
+        )
+        assert _duration_budget_tier(_FakeItem({selection, "smoke"})) == (
+            "smoke",
+            SMOKE_DURATION_BUDGET_SECONDS,
+        )
+        assert _duration_budget_tier(_FakeItem({selection, "heavy"})) == (
+            "heavy",
+            HEAVY_DURATION_BUDGET_SECONDS,
+        )
+        assert _duration_budget_tier(_FakeItem({selection, "slow"})) is None
+
+
 def test_sessionfinish_budget_tripwire_flips_exit_status(
     request: pytest.FixtureRequest,
 ) -> None:

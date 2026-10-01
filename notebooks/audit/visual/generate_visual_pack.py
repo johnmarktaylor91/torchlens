@@ -247,7 +247,7 @@ def _structure_trace(model_key: str):
 
     def _build():
         m, x = MODELS[model_key]()
-        return tl.trace(m, x, capture_container_structure=True)
+        return tl.trace(m, x, capture=tl.options.CaptureOptions(capture_container_structure=True))
 
     return _build
 

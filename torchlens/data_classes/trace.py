@@ -96,6 +96,7 @@ from ._trace_accessors import (
     _invalidate_trace_module_call_accessor_cache,
     _invalidate_trace_op_layer_accessor_caches,
 )
+from ._trace_legacy_state import TRACE_PORTABLE_STATE_ALIASES, pop_retired_legacy_keys
 from .backward_pass import BackwardPass
 from .derived_grad import DerivedGradAccessor
 from .field_policy import (
@@ -1181,6 +1182,12 @@ class Trace(
     _receptive_field_solution: Any
     _rf_directional_solutions: Any
     _tl_rf_probe_active: Any
+
+    #: Legacy persisted spellings ``__setstate__`` still adapts, published by
+    #: the writer contract as the record's alias rules (alias-or-fail,
+    #: ecosystem MEMO 3.3). The reasoned ledger lives in
+    #: ``_trace_legacy_state.py``.
+    PORTABLE_STATE_ALIASES: ClassVar[frozenset[str]] = TRACE_PORTABLE_STATE_ALIASES
 
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "trace_label": FieldPolicy.KEEP,
@@ -3043,7 +3050,9 @@ class Trace(
             "_trace_core",
         ):
             state.pop(field_name, None)
-        serialized_tlspec_version = read_tlspec_version(state, cls_name=type(self).__name__)
+        serialized_tlspec_version = read_tlspec_version(
+            state, cls_name=type(self).__name__, cls=type(self)
+        )
         containers_were_serialized = "_containers" in state and state["_containers"] is not None
         setstate_defaults = {
             **_MODEL_LOG_DEFAULT_FILL,
@@ -3157,6 +3166,7 @@ class Trace(
             state["_saved_grad_labels"] = state.pop("_saved_grads_set")
         state.pop("_keep_grads_in_memory", None)
         state.pop("_grad_stream_retain_in_memory", None)
+        pop_retired_legacy_keys(state)
         if state.get("_intervention_spec") is None:
             state["_intervention_spec"] = InterventionSpec()
         if not state.get("relationship_evidence"):

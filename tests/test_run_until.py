@@ -140,18 +140,42 @@ def test_live_truncation_leaves_source_outcome_complete():
 
 
 def test_live_truncation_leaves_no_halted_trace_registered():
-    """No HALTED trace is enumerable after a truncated live run; the result IS."""
+    """No HALTED trace minted by a truncated live run is enumerable; the result IS.
+
+    The oracle is scoped to the logs THIS run minted, against a strong-ref
+    snapshot of the registry (strong refs pin identities, so a prior log
+    cannot die mid-window and donate its address to a fresh one). The
+    registry is process-global and a HALTED capture is a legitimate
+    registered product elsewhere -- ``tl.trace(halt=...)`` returns one, and
+    its dropped cyclic graph (settle evidence carries the halt traceback,
+    which welds the capture frames into the trace's cycle) stays weakly
+    enumerable until a full gen-2 collection, which CPython's long-lived
+    25% rule makes rare mid-session. The former whole-registry sweep
+    therefore failed whenever any halt-firing test ran earlier in the same
+    randomized session (train T05; reproduced at chunk seed 36 with the
+    polluter being test_zero_match_disclosures's own returned halted log).
+    Scoping to fresh logs keeps full sensitivity to the contract under
+    test: an internal throwaway left registered by the truncated run is a
+    fresh HALTED entry and still fails.
+    """
 
     from torchlens import io as tlio
     from torchlens.capture.outcome import CaptureStatus
 
+    prior = tlio.list_logs()
     _model, _log, result = _live_until_relu()
-    logs = tlio.list_logs()
-    assert not any(
-        getattr(entry, "outcome", None) is not None and entry.outcome.status is CaptureStatus.HALTED
-        for entry in logs
+    fresh = [entry for entry in tlio.list_logs() if not any(entry is p for p in prior)]
+    halted_fresh = [
+        entry
+        for entry in fresh
+        if getattr(entry, "outcome", None) is not None
+        and entry.outcome.status is CaptureStatus.HALTED
+    ]
+    assert not halted_fresh, (
+        "the truncated live run left a HALTED trace enumerable through "
+        "tl.io.list_logs(); the internal halt settle must stay invisible"
     )
-    assert any(entry is result.trace for entry in logs)
+    assert any(entry is result.trace for entry in fresh)
 
 
 def test_skipped_site_carries_no_stale_payload():

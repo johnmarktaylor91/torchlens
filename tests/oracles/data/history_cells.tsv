@@ -1,0 +1,9 @@
+# Census root CR9 (schema table, Wave-0 plumbing): D16 process histories as
+# explicit fixtures, never an ambient hygiene rule. Each history cell itself
+# starts from a clean subprocess with predecessors run in-process. Cells
+# beyond H-WARM are argument-funded and are the panel's first recommended cut.
+cell	definition	mandatory_scope
+H-CLEAN	fresh process, no prior capture	every purity/effectiveness row
+H-WARM	one successful prior capture with different semantic options	every semantic option (instance-funded: facts 5-6)
+H-FAILED	one raising prior capture in-process	~6 safety/correctness options (rides the transaction harness read-after-failure step)
+H-BOTH	one successful then one raising prior capture	~6 safety/correctness options (schema + plant)

@@ -1,0 +1,27 @@
+# universe_cardinalities.tsv -- the PRINTED cardinality baseline (compo memo 3.2).
+# Exact-equality lockstep: unexplained drift is a red gate. If you deliberately
+# changed a universe (new backend, new option, new raise/warn site, new extra),
+# update the row IN THE SAME CHANGE and classify any new diagnostic sites (S-17/S-18).
+# OPEN = declared universe whose derivation lands in a later wave (counted as missing).
+universe_id	cardinality
+U-BACKENDS	6
+U-PUBLIC-OPERATIONS	112
+U-CAPTURE-OPTIONS	47
+U-RAISE-SITES	2281
+U-WARN-SITES	175
+U-ENV-VARS	11
+U-SAVE-LEVELS	4
+U-EXTRAS	32
+U-PRODUCT-STATES	OPEN
+U-EDIT-VERBS	OPEN
+U-RENDER-SURFACES	OPEN
+U-MODEL-TRAITS	OPEN
+U-TAUGHT-PATHS	OPEN
+U-DEPRECATED-ALIASES	OPEN
+U-FOREIGN-APIS	OPEN
+U-PARAM-NAMES	OPEN
+U-CONTAINER-PROTOCOL	OPEN
+U-VIEW-VS-COPY	OPEN
+U-UNTRUSTED-ENTRY	OPEN
+U-GLOSSARY-TERMS	OPEN
+U-PROSE-CLAIMS	OPEN

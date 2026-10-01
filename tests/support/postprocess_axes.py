@@ -393,15 +393,17 @@ def _axis_buffer_from_input() -> Any:
 def _axis_lookback(tmp_dir: str, *, streaming: bool, transform: bool) -> Any:
     _seed_everything()
     model, model_input = _oracle_case("plain_cnn")
-    kwargs: dict[str, Any] = {}
+    kwargs: dict[str, Any] = {"save": tl.func("relu")}
     if streaming:
         kwargs["storage"] = tl.to_disk(Path(tmp_dir) / "lookback.tlspec")
     if transform:
-        kwargs["activation_transform"] = lambda t: t.detach() * 1.0
+        # save= carries either the predicate or the SaveOptions bundle, so the
+        # relu selection moves to capture.layers_to_save when a transform rides.
+        kwargs["save"] = tl.options.SaveOptions(activation_transform=lambda t: t.detach() * 1.0)
+        kwargs["capture"] = tl.options.CaptureOptions(layers_to_save=tl.func("relu"))
     return tl.trace(
         model,
         model_input,
-        save=tl.func("relu"),
         lookback=2,
         lookback_payload_policy="detached_raw",
         **kwargs,

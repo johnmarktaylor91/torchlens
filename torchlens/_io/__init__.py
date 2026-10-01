@@ -57,6 +57,48 @@ class ArtifactVersionBelowFloorError(TorchLensIOError):
     """
 
 
+class ArtifactVersionAboveRuntimeError(TorchLensIOError):
+    """Raised when an artifact declares a schema newer than this runtime's ceiling.
+
+    The artifact is valid; the READER is too old. Distinct from
+    :class:`ArtifactVersionBelowFloorError` (artifact too old) and from
+    integrity refusals: the remedy is upgrading torchlens to the release that
+    wrote the artifact (or newer), never editing the artifact. Every
+    above-ceiling site routes through :func:`above_ceiling_error` so the
+    refusal carries the same stable ``fields["code"]`` everywhere (G3
+    consolidation; the bare ``ValueError`` at the validation entry used to
+    defeat the load path's typed-refusal pass-through).
+    """
+
+
+class ArtifactRuntimeIncompatibleError(TorchLensIOError):
+    """Raised when the RUNTIME cannot serve an otherwise-valid artifact.
+
+    A runtime-axis refusal (torch major-version mismatch, unparseable torch
+    version), never a schema-calendar one: the artifact stays valid and loads
+    under a runtime with the recorded major version. Distinct class so
+    callers and the compatibility ledger can tell runtime policy apart from
+    the version window (ecosystem MEMO 3.1/3.2).
+    """
+
+
+class UnknownPersistedFieldError(TorchLensIOError):
+    """Raised when incoming persisted state carries fields this reader does not know.
+
+    The persisted-state contract (ecosystem MEMO 3.3): unknown fields refuse
+    TYPED, in BOTH writer directions, by default -- a newer writer's additive
+    field is captured truth this reader would silently drop (the
+    ``dropped_edge_tensor_args`` lesson: the one real unknown field in
+    torchlens history was evidence whose loss also disabled a metadata
+    invariant), and an older writer's field this reader deleted without an
+    alias is a reader regression. ``fields`` carries ``code``
+    (``unknown_persisted_field``), ``record_type``, ``unknown_fields``,
+    ``declared_tlspec_version``, ``runtime_tlspec_version``, and ``remedy``.
+    Inert inventory (see everything without loading anything):
+    ``torchlens.io.inspect_state_contract``.
+    """
+
+
 class PreReleaseArtifactError(TorchLensIOError):
     """Raised when a pre-release-marked artifact loads without the switch.
 
@@ -131,6 +173,52 @@ def below_floor_error(
         floor_torchlens_version=MIN_TORCHLENS_VERSION_TEXT,
         path=path,
         remedy=_BELOW_FLOOR_REMEDY,
+    )
+
+
+_ABOVE_CEILING_REMEDY = "Upgrade torchlens to the release that wrote this artifact (or newer)."
+
+
+def above_ceiling_error(
+    *,
+    observed: int,
+    subject: str = "Artifact",
+    path: str | None = None,
+) -> ArtifactVersionAboveRuntimeError:
+    """Build the typed above-runtime-ceiling refusal with structured fields.
+
+    The single constructor for every "artifact is newer than this runtime"
+    refusal (G3 ceiling consolidation): the manifest policy gate, the pickle
+    state gate, and the validation entry all raise through here, so the code,
+    ceiling, and remedy are identical no matter which door the artifact came
+    in through.
+
+    Parameters
+    ----------
+    observed:
+        The declared ``tlspec_version`` on the incoming artifact or state.
+    subject:
+        Human-readable subject named in the message (e.g. ``"Bundle"``).
+    path:
+        Artifact path, when the caller has one.
+
+    Returns
+    -------
+    ArtifactVersionAboveRuntimeError
+        The typed refusal, ready to raise.
+    """
+
+    message = (
+        f"{subject} uses tlspec_version={observed}, but this runtime only supports "
+        f"up to {TLSPEC_VERSION}. {_ABOVE_CEILING_REMEDY}"
+    )
+    return ArtifactVersionAboveRuntimeError(
+        message,
+        code="artifact_version_above_runtime",
+        observed=observed,
+        ceiling_tlspec_version=TLSPEC_VERSION,
+        path=path,
+        remedy=_ABOVE_CEILING_REMEDY,
     )
 
 
@@ -210,7 +298,7 @@ class FieldPolicy(str, Enum):
     WEAKREF_STRIP = "weakref_strip"
 
 
-def read_tlspec_version(state: dict[str, Any], *, cls_name: str) -> int:
+def read_tlspec_version(state: dict[str, Any], *, cls_name: str, cls: type | None = None) -> int:
     """Validate the serialized I/O format version for one object state.
 
     Parameters
@@ -219,6 +307,16 @@ def read_tlspec_version(state: dict[str, Any], *, cls_name: str) -> int:
         Serialized state dict for the object being restored.
     cls_name:
         Human-readable class name used in errors.
+    cls:
+        The portable record class being restored. When provided, the
+        persisted-state contract's known/unknown partition runs here --
+        BEFORE any object mutation, identically on all three storage paths
+        (``__dict__``-backed, hook-restored columnar, slotted) -- and unknown
+        fields refuse typed in both writer directions (MEMO 3.3). The
+        partition is scoped to the governed-artifact-load window armed by
+        the ``.tlspec`` loaders; plain session pickling stays outside the
+        contract because live records legitimately round-trip user-set
+        extras the save path refuses to persist.
 
     Returns
     -------
@@ -230,6 +328,10 @@ def read_tlspec_version(state: dict[str, Any], *, cls_name: str) -> int:
     ArtifactVersionBelowFloorError
         If the state predates the ``tlspec_version >= MIN_TLSPEC_VERSION``
         rehydration floor (including unversioned pre-sprint states).
+    UnknownPersistedFieldError
+        If ``cls`` is provided, a governed artifact load is in progress, and
+        the state carries fields outside the class's declared contract
+        (fields + defaults + declared aliases).
     TorchLensIOError
         If the serialized version is newer than this runtime understands or
         is not an integer.
@@ -242,12 +344,14 @@ def read_tlspec_version(state: dict[str, Any], *, cls_name: str) -> int:
     if not isinstance(version, int):
         raise TorchLensIOError(f"{cls_name} pickle state has invalid tlspec_version={version!r}.")
     if version > TLSPEC_VERSION:
-        raise TorchLensIOError(
-            f"{cls_name} pickle state uses tlspec_version={version}, "
-            f"but this runtime only supports up to {TLSPEC_VERSION}."
-        )
+        raise above_ceiling_error(observed=version, subject=f"{cls_name} pickle state")
     if version < MIN_TLSPEC_VERSION:
         _raise_below_floor(cls_name, f"tlspec_version={version}")
+    if cls is not None:
+        from .state_contract import enforce_known_state, governed_load_active
+
+        if governed_load_active():
+            enforce_known_state(cls, state, declared_version=version)
     return version
 
 

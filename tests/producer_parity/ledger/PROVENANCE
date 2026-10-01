@@ -347,3 +347,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 05148a3b1f93b4dbd45da4e20abde6f8873abe91 (dirty)
 recorded: 2026-08-19T17:38:36.052984+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: P00 shim deletion rewrote torchlens/__init__.py producer sites (cb7e7137/6898c243); reviewed refresh reconciling static_scan.json with the no-shim package root
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 809b9cf800c155c1490df3f9ffa71ec72d38d321 (dirty)
+recorded: 2026-08-26T11:43:01.718116+00:00

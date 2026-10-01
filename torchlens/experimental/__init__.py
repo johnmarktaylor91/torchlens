@@ -87,7 +87,7 @@ def attribute_walk(model: nn.Module, address: str) -> Any:
 
 @contextmanager
 def stop_after(site: Any) -> Iterator[None]:
-    """Set the experimental stop-after site for ``torchlens.peek``.
+    """Set the experimental stop-after site for ``torchlens.pluck``.
 
     Parameters
     ----------

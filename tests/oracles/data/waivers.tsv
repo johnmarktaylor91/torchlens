@@ -1,0 +1,5 @@
+# D24 waiver ledger: dated, owned, issue-linked, 90-day expiry, counted from
+# rows never prose. A waiver may NEVER authorize a known plausible silent
+# wrong answer (silent_wrong_risk must be "none"; anything else refuses).
+# EMPTY at wave 0.
+waiver_id	created	expires	owner	issue	scope	reason	second_reviewer	silent_wrong_risk

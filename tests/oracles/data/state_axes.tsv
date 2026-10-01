@@ -1,0 +1,30 @@
+# Census root CR4 (schema table, Wave-0 plumbing): the H2 snapshot-union axes
+# plus the four postconditions that caught what value digests cannot. Status
+# is deferred until build item 7 (purity/state harness core, Wave 1) wires
+# the snapshot; the AXES are the closed enumeration the harness must cover.
+axis	kind	status	note
+param_bytes	snapshot	deferred	parameter tensor bytes
+param_identities	snapshot	deferred	parameter object identities and aliasing
+buffer_bytes	snapshot	deferred	buffer tensor bytes (BN running stats, counters)
+buffer_identities	snapshot	deferred	buffer object identities
+storage_aliasing	snapshot	deferred	untyped-storage aliasing topology
+grads	snapshot	deferred	.grad tensors
+requires_grad	snapshot	deferred	requires_grad flags
+recursive_modes	snapshot	deferred	train/eval mode per submodule
+instance_attributes	snapshot	deferred	instance __dict__ deltas (incl. installed forward)
+module_hooks	snapshot	deferred	per-module hook dicts
+global_hooks	snapshot	deferred	torch global hook registries
+tl_registries	snapshot	deferred	TorchLens process registries
+tl_caches	snapshot	deferred	TorchLens capture cache state
+python_rng	snapshot	deferred	random module state
+numpy_rng	snapshot	deferred	numpy global + witnessed generator state
+torch_cpu_rng	snapshot	deferred	torch CPU RNG state
+torch_cuda_rng	snapshot	deferred	torch CUDA RNG state (device-gated)
+ambient_torch_globals	snapshot	deferred	default dtype/device, grad mode, printoptions
+input_bytes	snapshot	deferred	input tensor bytes
+input_identity	snapshot	deferred	input object identity + version counters
+temp_artifacts	snapshot	deferred	temp files/dirs created by the call
+postcondition_pickle	postcondition	deferred	pickle.dumps(model) succeeds after the call
+postcondition_torch_save	postcondition	deferred	torch.save(model) succeeds after the call
+postcondition_next_forward	postcondition	deferred	next plain forward bit-identical
+postcondition_next_tl_read	postcondition	deferred	next TorchLens read unpoisoned

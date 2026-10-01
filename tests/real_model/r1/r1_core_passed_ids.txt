@@ -1,0 +1,7 @@
+# Exact-passed-ID floor for the full R1-core legs (PR telemetry / the R1
+# train gate; testing MEMO B1 idiom): every node below must PASS in the
+# leg's junit -- absence, skip, failure, error, or rename is red.
+# Consumed by scripts/check_ci_executed_tests.py --passed-ids.
+tests.real_model.r1.test_realism_pretrained_core::test_distilgpt2_real_tokenizer_trace_matches_direct
+tests.real_model.r1.test_realism_pretrained_core::test_albert_real_cross_layer_sharing_is_multi_pass
+tests.real_model.r1.test_realism_pretrained_core::test_resnet18_real_weights_natural_image_matches_direct

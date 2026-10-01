@@ -1,0 +1,9 @@
+# Table A (D9): obligation definitions, stored ONCE. Wave-0 seed: the five
+# contracts wave 0 itself enforces; Waves 1-2 populate the quantity/state/
+# option matrices from the censuses. All names placeholder pending naming.
+obligation_id	title	meaning	evidence_grade	state_contract	owner
+OBL-W0-SURFACE-CLASS	every reachable public name classifies 4-way	counted set: dir(torchlens) non-underscore (module layer) + dir(cls) non-underscore for module-level classes (class layer); classes = declared|submodule|deprecated|undeclared; undeclared requires a dated KNOWN-GAP row	I1	PURE_OBSERVER	P02
+OBL-W0-CACHE-KEY-COMPLETE	every option/entry parameter is cache-keyed or witnessed-dont-care	counted set: public fields of the six Options groups + tl.trace parameters; covered = cache_config key (alias-mapped) | dont-care with witness slot | dated KNOWN-GAP row; burden-inverted per D14	I1	UNSET	A06
+OBL-W0-DEPRECATION-IFF	a call warns deprecation iff the registry says so	behavior root: observed CALLS through invocation templates, never metadata (D6); warning must name the registered replacement and the replacement must resolve (D21)	I1	PURE_OBSERVER	P02
+OBL-W0-SURFACE-DENOM	the public-surface denominator is multi-root anchored	counted set: len(__all__); roots: static AST parse, runtime length, PUBLIC_SURFACE_SIZE constant, TARGET_ALL ledger length, classification-baseline declared count; the reachable denominator publishes beside it with its counted set (D8)	I1	PURE_OBSERVER	P02
+OBL-W0-NUMERAL-PROVENANCE	published numerals are censused with a dated legacy baseline	counted set: NUMERAL_COUNTED_SET in tests/oracles/_censuses.py; stale baseline rows block; FactRef enforcement for NEW numerals lands Wave 2 (H5)	I1	PURE_OBSERVER	F36

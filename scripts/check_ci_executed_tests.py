@@ -6,9 +6,22 @@ skips every test and pytest exits 0, so the leg stays green while covering
 nothing. This check reads the run's junit XML and fails when the number of
 EXECUTED tests (collected minus skipped) is below the leg's declared floor.
 
+Non-blocking legs additionally need PASSED-count attestation (testing MEMO
+D4): ``executed = total - skipped`` counts failures as executed, which is
+harmless on a blocking leg (the failures already fail it) and unsound the
+moment a leg is non-blocking. ``--min-passed`` floors the PASSED count, and
+``--passed-ids FILE`` is the exact-passed-ID floor: every listed node must
+appear in the junit as a PASS -- absence, skip, failure, error, or rename
+is red.
+
 Usage::
 
-    python scripts/check_ci_executed_tests.py <junit.xml> <min_executed>
+    python scripts/check_ci_executed_tests.py <junit.xml> <min_executed> [max_skipped_fraction]
+    python scripts/check_ci_executed_tests.py <junit.xml> 0 --min-passed <N>
+    python scripts/check_ci_executed_tests.py <junit.xml> 0 --passed-ids <file>
+
+The passed-ids file holds one ``<classname>::<name>`` per line (pytest junit
+identity); blank lines and ``#`` comments are ignored.
 """
 
 from __future__ import annotations
@@ -39,6 +52,42 @@ def count_executed_tests(junit_path: Path) -> tuple[int, int]:
     return total - skipped, skipped
 
 
+def count_passed_tests(junit_path: Path) -> int:
+    """Return the PASSED count: total minus skipped, failures, and errors."""
+
+    root = ElementTree.parse(junit_path).getroot()
+    suites = [root] if root.tag == "testsuite" else list(root.iter("testsuite"))
+    total = sum(int(suite.get("tests", 0)) for suite in suites)
+    skipped = sum(int(suite.get("skipped", 0)) for suite in suites)
+    failures = sum(int(suite.get("failures", 0)) for suite in suites)
+    errors = sum(int(suite.get("errors", 0)) for suite in suites)
+    return total - skipped - failures - errors
+
+
+def collect_passed_ids(junit_path: Path) -> set[str]:
+    """Return ``classname::name`` for every PASSED testcase in the junit."""
+
+    root = ElementTree.parse(junit_path).getroot()
+    passed: set[str] = set()
+    for case in root.iter("testcase"):
+        if any(child.tag in ("skipped", "failure", "error") for child in case):
+            continue
+        passed.add(f"{case.get('classname', '')}::{case.get('name', '')}")
+    return passed
+
+
+def check_passed_ids(junit_path: Path, ids_path: Path) -> list[str]:
+    """Return the exact-passed-ID floor violations (empty when green)."""
+
+    required = [
+        line.strip()
+        for line in ids_path.read_text().splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    passed = collect_passed_ids(junit_path)
+    return [node_id for node_id in required if node_id not in passed]
+
+
 def main(argv: list[str]) -> int:
     """Run the executed-test floor check.
 
@@ -58,9 +107,26 @@ def main(argv: list[str]) -> int:
         Process exit code: 0 when the floor is met, 1 otherwise.
     """
 
+    min_passed: int | None = None
+    passed_ids_path: Path | None = None
+    positional: list[str] = []
+    index = 0
+    while index < len(argv):
+        token = argv[index]
+        if token == "--min-passed":
+            min_passed = int(argv[index + 1])
+            index += 2
+        elif token == "--passed-ids":
+            passed_ids_path = Path(argv[index + 1])
+            index += 2
+        else:
+            positional.append(token)
+            index += 1
+    argv = positional
     if len(argv) not in (2, 3):
         print(
-            "usage: check_ci_executed_tests.py <junit.xml> <min_executed> [max_skipped_fraction]",
+            "usage: check_ci_executed_tests.py <junit.xml> <min_executed>"
+            " [max_skipped_fraction] [--min-passed N] [--passed-ids FILE]",
             file=sys.stderr,
         )
         return 2
@@ -88,6 +154,29 @@ def main(argv: list[str]) -> int:
             file=sys.stderr,
         )
         return 1
+    if min_passed is not None:
+        passed = count_passed_tests(junit_path)
+        if passed < min_passed:
+            print(
+                f"passed-count check FAILED: {passed} passed (< floor {min_passed})."
+                " On a non-blocking leg executed counts are unsound (failures"
+                " count as executed); the PASSED floor is the attestation.",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"passed-count check passed: {passed} passed (floor {min_passed}).")
+    if passed_ids_path is not None:
+        missing = check_passed_ids(junit_path, passed_ids_path)
+        if missing:
+            print(
+                "exact-passed-ID floor FAILED: these required nodes did not PASS"
+                " (absent, skipped, failed, errored, or renamed):",
+                file=sys.stderr,
+            )
+            for node_id in missing:
+                print(f"  {node_id}", file=sys.stderr)
+            return 1
+        print(f"exact-passed-ID floor passed: {passed_ids_path}")
     print(f"executed-test check passed: {executed} executed, {skipped} skipped.")
     return 0
 

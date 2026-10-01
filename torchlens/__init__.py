@@ -12,14 +12,14 @@ import importlib as _importlib
 import sys as _sys
 import types as _types
 from collections.abc import Iterable as _Iterable, Mapping as _Mapping
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING as _TYPE_CHECKING, Any as _Any
 
 import torch as _torch
 from torch import nn as _nn
 
 __version__ = "2.34.1"
 
-if TYPE_CHECKING:
+if _TYPE_CHECKING:
     from .data_classes.trace import Trace
     from .intervention import Bundle
 
@@ -187,7 +187,7 @@ _LAZY_ATTRS = {
 }
 
 
-def _resolve_top_level(name: str) -> Any:
+def _resolve_top_level(name: str) -> _Any:
     """Resolve a top-level TorchLens attribute, honoring existing globals.
 
     Parameters
@@ -206,7 +206,7 @@ def _resolve_top_level(name: str) -> Any:
     return __getattr__(name)
 
 
-def __getattr__(name: str) -> Any:
+def __getattr__(name: str) -> _Any:
     """Return lazy package attributes on demand.
 
     Parameters
@@ -358,7 +358,7 @@ def _matching_saved_layer_labels(trace: Trace, pattern: str) -> list[str]:
     return [str(label)]
 
 
-def pluck(model: _nn.Module, x: Any, layer: str, stop_after: Any | None = None) -> _torch.Tensor:
+def pluck(model: _nn.Module, x: _Any, layer: str, stop_after: _Any | None = None) -> _torch.Tensor:
     """Return the saved out for one layer.
 
     Parameters
@@ -399,9 +399,9 @@ def pluck(model: _nn.Module, x: Any, layer: str, stop_after: Any | None = None) 
 
 def _extract_layers_with_trace(
     model: _nn.Module,
-    x: Any,
+    x: _Any,
     layers: _Iterable[str] | _Mapping[str, str],
-) -> tuple[Trace, dict[str, _torch.Tensor], dict[str, Any]]:
+) -> tuple[Trace, dict[str, _torch.Tensor], dict[str, _Any]]:
     """Run one selective capture and resolve the requested layers.
 
     Parameters
@@ -436,7 +436,7 @@ def _extract_layers_with_trace(
         ),
     )
     outputs: dict[str, _torch.Tensor] = {}
-    views: dict[str, Any] = {}
+    views: dict[str, _Any] = {}
     if isinstance(layers, _Mapping):
         for label, pattern in layer_plan.items():
             outputs[label] = _out_from_log(trace, pattern)
@@ -456,7 +456,7 @@ def _extract_layers_with_trace(
 
 def extract(
     model: _nn.Module,
-    x: Any,
+    x: _Any,
     layers: _Iterable[str] | _Mapping[str, str],
 ) -> dict[str, _torch.Tensor]:
     """Return saved outs for many layers.
@@ -481,7 +481,7 @@ def extract(
     return outputs
 
 
-def bundle(*args: Any, **kwargs: Any) -> Bundle:
+def bundle(*args: _Any, **kwargs: _Any) -> Bundle:
     """Construct a TorchLens Bundle.
 
     Parameters
@@ -501,7 +501,7 @@ def bundle(*args: Any, **kwargs: Any) -> Bundle:
 class _TorchLensModule(_types.ModuleType):
     """Protect top-level callables whose names collide with submodules."""
 
-    def __setattr__(self, name: str, value: Any) -> None:
+    def __setattr__(self, name: str, value: _Any) -> None:
         """Keep the public ``bundle`` constructor after its package is imported.
 
         Parameters
@@ -639,3 +639,12 @@ __all__ = [
     "pass_variance",
     "subspace",
 ]
+
+# ``from __future__ import annotations`` binds ``annotations`` as a reachable
+# module attribute -- the last of the three typing-import leaks the oracles
+# panel found on the public surface (``Any`` and ``TYPE_CHECKING`` now enter
+# underscore-aliased). Nothing reads the binding (the future feature is a
+# compile-time flag), so unbind it; attribute access falls through to
+# ``__getattr__`` and raises AttributeError like every other undeclared name.
+# Gated by tests/oracles (reachable-surface walk + classification).
+del annotations

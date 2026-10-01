@@ -206,8 +206,7 @@ def show_model_graph(
 
     Runs an exhaustive forward pass (no outs saved) to discover the graph
     structure, renders the visualization, then cleans up the Trace.  For more
-    control, use ``trace`` with ``vis_mode`` set and access the Trace
-    directly.
+    control, use ``trace`` and call ``Trace.draw`` on the result directly.
 
     Parameters
     ----------
@@ -228,8 +227,6 @@ def show_model_graph(
         ``"forward"``. Built-in modes use source captured at log time; callable
         modes receive the live model object and are only available while that
         object is still alive.
-    vis_node_mode:
-        Deprecated alias for ``visualization.node_mode``.
     collapse:
         Smart module-collapse mode: ``"none"``, ``"auto"``, ``"max"``, or a
         float in ``[0.0, 1.0]``. Float levels follow the public monotone
@@ -239,14 +236,14 @@ def show_model_graph(
         every eligible repeated run. ``False`` disables run folding.
     random_seed:
         Fixed RNG seed for stochastic models. Reseeds the process-global RNG
-        engines without restoring them; see ``tl.trace``'s ``random_seed``.
+        engines without restoring them; see ``capture.random_seed`` on ``tl.trace``.
     recurrence_detection:
         If True, run full isomorphic subgraph expansion. Set this to False when
         the forward pass has more than about 1M operations and postprocessing
         speed matters.
     visualization:
         Grouped visualization options. When omitted, ``show_model_graph``
-        defaults to ``VisualizationOptions(mode="unrolled")``.
+        defaults to ``VisualizationOptions(view="unrolled")``.
 
     Returns
     -------

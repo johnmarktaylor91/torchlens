@@ -135,7 +135,7 @@ class Buffer:
     def __setstate__(self, state: dict[str, Any]) -> None:
         """Restore pickle state without reviving the source-trace weakref."""
 
-        read_tlspec_version(state, cls_name=type(self).__name__)
+        read_tlspec_version(state, cls_name=type(self).__name__, cls=type(self))
         default_fill_state(
             state,
             defaults={

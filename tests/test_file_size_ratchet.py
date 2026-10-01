@@ -110,6 +110,12 @@ _NEW_FILE_LINE_CAP = 2000
 #: capability probes in utils/_torch_compat.py (3450 -> 3550). PRE-SPRINT
 #: BASELINES unchanged (bundle 4450, _torch_compat 3450-eve, witness 2050-eve
 #: at 75439a67); the debloat pass keeps all three as targets.
+#: 2026-08-26 P03 fix cycle: options.py (2371, over its 2300 ceiling after the
+#: compo option-receipt landed) SPLIT along its natural seams instead of a
+#: raise -- the value validators moved to _options_validation.py and the
+#: explicitness readers + option receipt to _option_receipt.py; at 1950 lines
+#: it drops under the unledgered cap and its row is DELETED per the two-way
+#: staleness rule.
 _GOD_FILE_CEILINGS: dict[str, int] = {
     "torchlens/validation/core.py": 5350,
     "torchlens/data_classes/op.py": 5250,
@@ -132,7 +138,10 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # its own ceiling to 4050 BEFORE rebasing; main had independently grown the
     # same file, so 4050 was a pre-rebase subtotal and the merged truth is their
     # union. Stepped EXACT (no 50-line slack) so the next raise is also conscious.
-    "torchlens/user_funcs.py": 4055,
+    # 4055 -> 3800 (2026-08-26 shim removal): the flat-kwarg warning ladders,
+    # moved-name wrappers, and paper-era shims came out of trace()'s entry;
+    # re-keyed down to the next 50-line step above the post-deletion measure.
+    "torchlens/user_funcs.py": 3800,
     "torchlens/backends/torch/backward.py": 4450,
     # 3800 -> 3850: L1 adds the grouping knob mirror + grouping_policy stamp
     # settlement (~25 lines) on top of the re-stepped feature-sprint baseline.
@@ -146,7 +155,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # routing mass lands here by design (measured 3756). PRE-SPRINT BASELINE
     # unchanged (3450-eve at 75439a67); the debloat pass keeps it as target.
     "torchlens/utils/_torch_compat.py": 3800,
-    "torchlens/backends/torch/wrappers.py": 3400,
+    # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
+    # patch_policy/patch_modules warn kwargs left; next 50-line step down.
+    "torchlens/backends/torch/wrappers.py": 3300,
     "torchlens/backends/tinygrad/backend.py": 3300,
     "torchlens/backends/mlx/backend.py": 3250,
     "torchlens/postprocess/_contracts.py": 3250,
@@ -164,14 +175,6 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     "torchlens/postprocess/loop_grouping_adapter.py": 2600,
     "torchlens/visualization/_render_leaf.py": 2400,
     "torchlens/visualization/_render_edges.py": 2450,
-    # Raised 2400 -> 2425 at the L5 channel-core merge (color_by + tri-state
-    # show_legend): options.py is the ONE serialized shared option surface
-    # every feature lane's grouped options must land on, so reviewed
-    # per-merge raises here are the ratchet working as intended (growth
-    # noticed, reason stated), not silent god-file regrowth.
-    # 2550 -> 2600 (2026-08-19 async disk writes): StreamingOptions gains the
-    # documented async_writes/max_pending_bytes knobs + to_disk docstrings.
-    "torchlens/options.py": 2600,
     "torchlens/intervention/save.py": 2350,
     # Raised 2400 -> 2425 at the facet-cache persistence fix (2026-08-17): the
     # +22 lines are the TEACHING half of the completeness refusal -- for an
@@ -230,11 +233,17 @@ _MAX_LEDGER_SLACK = 100
 #: count, while the census machinery and the assertions are what must be read
 #: together. Every new global in the package lands here, so the growth is
 #: structural and will recur until the data moves out.
+#: 2026-08-26 shim removal: test_validation 8600->8700, test_real_world_models
+#: 4850->5150, test_toy_models 4050->4500 -- the flat->grouped codemod spells
+#: every former one-line flat-kwarg trace() call as a wrapped grouped-options
+#: call, so the growth is mechanical spelling verbosity, not new test content.
+#: Next 50-line step above the post-codemod measure; the debloat pass owns
+#: shrinking these back via helper extraction.
 _TEST_FILE_CEILINGS: dict[str, int] = {
-    "tests/test_validation.py": 8600,
+    "tests/test_validation.py": 8700,
     "tests/example_models.py": 5500,
-    "tests/test_real_world_models.py": 4850,
-    "tests/test_toy_models.py": 4050,
+    "tests/test_real_world_models.py": 5150,
+    "tests/test_toy_models.py": 4500,
     "tests/test_auto_collapse_metrics.py": 3200,
     "tests/test_backward.py": 2550,
     "tests/validation_goldens/test_validation_exemption_hardening.py": 2400,

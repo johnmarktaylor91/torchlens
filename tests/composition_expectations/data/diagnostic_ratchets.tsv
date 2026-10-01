@@ -1,0 +1,12 @@
+# diagnostic_ratchets.tsv -- S-17/S-18 monotone burn-down baselines (compo memo 3.5).
+# Exact-equality gates with teaching messages: a NEW site must be classified/coded in
+# its own change (count would grow -> red); burning sites down lowers the number in
+# the same change. Baselines only ever DECREASE except when a deliberately added,
+# classified site moves the total.
+metric	count
+s17_total_sites	2281
+s17_uncoded_sites	1733
+s17_unclassified_sites	2274
+s18_total_sites	175
+s18_uncoded_sites	174
+s18_contract_rows	1

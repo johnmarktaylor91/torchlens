@@ -1,4 +1,11 @@
-name: Latest Torch Canary
+name: Latest Torch + HF Canary
+
+# HF_LATEST_CANARY (testing MEMO D3/A6): daily UNPINNED latest torch,
+# torchvision, transformers, and timm. Extends the historical torch-only
+# canary with the R0 real-model sweep and the DistilGPT2 R1 core, each
+# PASSED-count attested (executed counts are unsound on a non-blocking leg:
+# failures count as executed). Non-blocking out-of-band only -- a red here
+# never gates unrelated PRs; it feeds the canary-break protocol.
 
 on:
   schedule:
@@ -44,6 +51,8 @@ jobs:
             -e ".[dev,tabular]" \
             torch \
             torchvision \
+            transformers \
+            timm \
             "pydot==4.0.1" \
             "graphviz==0.21"
 
@@ -51,14 +60,21 @@ jobs:
         run: |
           uv pip check
           python - <<'PY'
+          import timm
           import torch
           import torchvision
+          import transformers
           from torchvision.ops import nms
 
           boxes = torch.tensor([[0.0, 0.0, 1.0, 1.0]])
           scores = torch.tensor([1.0])
           assert nms(boxes, scores, 0.5).tolist() == [0]
-          print(torch.__version__, torchvision.__version__)
+          print(
+              "torch", torch.__version__,
+              "torchvision", torchvision.__version__,
+              "transformers", transformers.__version__,
+              "timm", timm.__version__,
+          )
           PY
 
       - name: Run smoke tests and compatibility coverage
@@ -84,3 +100,37 @@ jobs:
         # per-version skips are exactly what it exists to surface loudly.
         run: |
           python scripts/check_ci_executed_tests.py "${{ runner.temp }}/canary-smoke.junit.xml" 2500
+
+      - name: R0 real-model sweep on latest transformers (PASSED-count attested)
+        # Testing MEMO A6: the 14-family config-built sweep runs against the
+        # UNPINNED latest transformers. A fingerprint/op-count/facet drift is
+        # exactly what this leg exists to surface -- it fails the run and
+        # feeds the canary-break triage, never a PR gate.
+        run: |
+          pytest tests/real_model/r0 -p no:randomly --tb=short -q \
+            --junitxml="${{ runner.temp }}/canary-r0.junit.xml"
+          python scripts/check_ci_executed_tests.py \
+            "${{ runner.temp }}/canary-r0.junit.xml" 0 --min-passed 71
+
+      - name: Restore the pinned artifact cache (exact key, no prefix fallback)
+        id: artifact-cache
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: .artifact-cache
+          key: ${{ hashFiles('tests/real_model/artifact_registry.jsonl') }}-canary-v1
+
+      - name: Preflight-fetch the canary R1 arm (DistilGPT2 core)
+        # The ONLY networked model step; every blob is sha256-verified, cache
+        # hits are rehashed (verify-on-hit), and the byte cap is linted with
+        # lstat. A missing artifact fails HERE, loudly -- never a test skip.
+        run: |
+          python scripts/preflight_fetch_artifacts.py fetch --venue canary --cache-dir .artifact-cache
+
+      - name: DistilGPT2 R1 core, offline, exact-passed-ID floor
+        run: |
+          eval "$(python scripts/preflight_fetch_artifacts.py print-env --cache-dir .artifact-cache | sed 's/^/export /')"
+          pytest tests/real_model/r1 -k distilgpt2 -p no:randomly --tb=short -q \
+            --junitxml="${{ runner.temp }}/canary-r1.junit.xml"
+          python scripts/check_ci_executed_tests.py \
+            "${{ runner.temp }}/canary-r1.junit.xml" 0 --min-passed 1 \
+            --passed-ids tests/real_model/r1/canary_passed_ids.txt

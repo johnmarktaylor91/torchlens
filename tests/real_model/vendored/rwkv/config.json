@@ -1,0 +1,21 @@
+{
+  "_name_or_path": "/home/younes_huggingface_co/rwkv/rwkv-169m-pile",
+  "architectures": [
+    "RwkvForCausalLM"
+  ],
+  "attention_hidden_size": 768,
+  "bos_token_id": 0,
+  "context_length": 1024,
+  "eos_token_id": 0,
+  "hidden_size": 768,
+  "intermediate_size": 3072,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "rwkv",
+  "num_hidden_layers": 12,
+  "rescale_every": 6,
+  "tie_word_embeddings": false,
+  "torch_dtype": "float32",
+  "transformers_version": "4.29.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50277
+}

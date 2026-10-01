@@ -27,6 +27,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.experimental import node_styles
 
 OUTPUT_DIR = Path(__file__).resolve().parent.parent / "docs" / "images" / "encoding"
 
@@ -124,11 +125,15 @@ def render_suppression_evidence() -> None:
     try:
         _render(transformer, "suppression_transformer_after")
         _render(transformer, "suppression_transformer_before", show_redundant_args=True)
-        _render(transformer, "suppression_attention_style_after", node_style="attention")
+        _render(
+            transformer,
+            "suppression_attention_style_after",
+            node_spec_fn=node_styles.attention_node_mode,
+        )
         _render(
             transformer,
             "suppression_attention_style_before",
-            node_style="attention",
+            node_spec_fn=node_styles.attention_node_mode,
             show_redundant_args=True,
         )
     finally:
