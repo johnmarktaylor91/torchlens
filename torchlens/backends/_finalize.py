@@ -92,10 +92,12 @@ def finalize_single_pass_trace(
         single-pass layout.
     relabel_sidecar_labels:
         Backend hook receiving the COMPLETE ``{raw_label: final_op_label}``
-        mapping after grouping relabels the graph. Backends holding
+        mapping after per-op final labels are assigned. Backends holding
         label-keyed sidecar state (validation replay inventories, intervention
         records) must remap it atomically here; capture-index-keyed sidecars
-        may ignore the hook. Only called when ``recurrence_detection`` is on.
+        may ignore the hook. Called unconditionally (N5: every op's raw label
+        differs from its final label now, not only multi-pass group members),
+        not only when ``recurrence_detection`` is on.
 
     Returns
     -------
@@ -151,8 +153,10 @@ def finalize_single_pass_trace(
         # resolves to its exact op (a layer label would resolve to pass 1 and
         # mis-seed distances for outputs produced by a later pass).
         compute_preview_input_output_distances(trace)
-    if assignments is not None:
-        _apply_recurrence_relabel_epilogue(trace, assignments, relabel_sidecar_labels)
+    # N5: always relabel, even when grouping did not run -- every op's final
+    # identity differs from its raw identity (the ``_raw`` capture sentinel
+    # is always stripped), not just multi-pass group members.
+    _apply_recurrence_relabel_epilogue(trace, assignments, relabel_sidecar_labels)
     # The stored flag is the EFFECTIVE value: ``True`` only when the neutral
     # grouper actually ran over this graph, so an ungrouped finalize can never
     # claim grouping that never happened. (JAX finalizes through its own
@@ -602,17 +606,18 @@ def _finalize_single_op(
 
 def _apply_recurrence_relabel_epilogue(
     trace: Trace,
-    assignments: dict[str, RecurrenceAssignment],
+    assignments: dict[str, RecurrenceAssignment] | None,
     relabel_sidecar_labels: SidecarRelabelHook | None,
 ) -> None:
-    """Relabel graph metadata after recurrence assignments were applied.
+    """Relabel graph metadata after per-op final labels were assigned.
 
     Parameters
     ----------
     trace:
         Trace whose ops already carry final (possibly pass-qualified) labels.
     assignments:
-        Recurrence assignments keyed by raw label.
+        Recurrence assignments keyed by raw label, or ``None`` when grouping
+        did not run (every op is its own singleton, single-pass "group").
     relabel_sidecar_labels:
         Backend hook receiving the complete raw-to-final label mapping so
         label-keyed sidecar state can be remapped atomically.
@@ -625,18 +630,18 @@ def _apply_recurrence_relabel_epilogue(
 
     Notes
     -----
-    Edge labels are rewritten only for members of multi-pass groups: singleton
-    ops keep their raw labels as layer labels (the historical layout), while a
-    grouped member's raw label no longer names any visible layer and every
-    reference to it must follow the op to its pass-qualified label. Raw labels
-    stay resolvable through ``lookup_keys`` either way.
+    N5: every op's final identity now differs from its raw identity (the raw
+    label's internal ``_raw`` capture sentinel is always stripped,
+    ``strip_raw_label_suffix``), not just multi-pass group members, so every
+    label-bearing edge (``parents``, ``children``, trace-side input/output
+    lists, backend sidecars) must be relabeled unconditionally -- this runs
+    whether or not recurrence grouping ran (``assignments`` may be ``None``).
+    Raw labels stay resolvable through ``lookup_keys`` either way.
     """
 
     raw_dict = trace._raw_graph_ws.raw_layer_dict
     raw_to_final = {label: raw_dict[label].label for label in raw_dict}
-    changed = {
-        label: final for label, final in raw_to_final.items() if raw_dict[label].num_passes != 1
-    }
+    changed = {label: final for label, final in raw_to_final.items() if final != label}
     if changed:
         for op_log in raw_dict.values():
             relabel_edge_metadata(op_log, changed)
@@ -667,10 +672,11 @@ def _apply_recurrence_relabel_epilogue(
         equivalent_labels_by_key.setdefault(op_log.equivalence_class, set()).add(op_log.label)
     for label, op_log in raw_dict.items():
         op_log.equivalent_ops = equivalent_labels_by_key[op_log.equivalence_class]
+        recurrent_labels = (
+            assignments[label].recurrent_labels if assignments is not None else (label,)
+        )
         op_log.recurrent_ops = [
-            raw_to_final[member]
-            for member in assignments[label].recurrent_labels
-            if member in raw_to_final
+            raw_to_final[member] for member in recurrent_labels if member in raw_to_final
         ]
     trace.op_equivalence_classes.clear()
     trace.op_equivalence_classes.update(equivalent_labels_by_key)
