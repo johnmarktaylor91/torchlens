@@ -16,6 +16,8 @@ Run: python tools/generate_record_schema.py [--check]
 from __future__ import annotations
 
 import sys
+import types
+import typing
 from pathlib import Path
 from typing import Any
 
@@ -129,9 +131,39 @@ def _annotation_for(cls: type, name: str) -> str | None:
     for mro_cls in cls.__mro__:
         annotations = mro_cls.__dict__.get("__annotations__", {})
         if name in annotations:
-            annotation = annotations[name]
-            return annotation if isinstance(annotation, str) else repr(annotation)
+            return _render_annotation(annotations[name])
     return None
+
+
+def _render_annotation(annotation: Any) -> str:
+    """Render one annotation to a string that is identical on every Python.
+
+    String annotations (modules under ``from __future__ import annotations``)
+    pass through. Evaluated ones are canonicalized: ``repr`` of an evaluated
+    union differs by interpreter (``Any | None`` evaluates to
+    ``typing.Optional[typing.Any]`` on 3.10 but to a ``types.UnionType``
+    reading ``typing.Any | None`` on 3.11+), which made the generated file
+    stale on every interpreter but the one that last wrote it. Unions render
+    as their ``|``-joined members in declaration order.
+
+    Parameters
+    ----------
+    annotation:
+        Class-declared annotation object or string.
+
+    Returns
+    -------
+    str
+        Interpreter-independent annotation text.
+    """
+
+    if isinstance(annotation, str):
+        return annotation
+    if annotation is type(None):
+        return "None"
+    if typing.get_origin(annotation) is typing.Union or isinstance(annotation, types.UnionType):
+        return " | ".join(_render_annotation(arg) for arg in typing.get_args(annotation))
+    return repr(annotation)
 
 
 def _is_property(cls: type, name: str) -> bool:
