@@ -592,7 +592,13 @@ def _finalize_single_op(
     if assignment is not None:
         op_log.equivalence_class = assignment.equivalence_key
     trace.layer_list.append(op_log)
-    trace.layer_dict_main_keys[label if num_passes == 1 else pass_label] = op_log
+    # Torch parity: layer_dict_main_keys is ALWAYS keyed by the pass-qualified
+    # op.label (postprocess/labeling.py's
+    # ``self.layer_dict_main_keys[layer_entry.label] = layer_entry``), never
+    # the raw backend label -- a single-pass op's raw label was never a valid
+    # main key, so any lookup of a relabeled (bare or pass-qualified) final
+    # label through this dict raised KeyError for every single-pass op.
+    trace.layer_dict_main_keys[pass_label] = op_log
     trace.layer_dict_all_keys[label] = op_log
     trace.layer_dict_all_keys[pass_label] = op_log
     # Torch parity: always register the bare layer label (not just for
