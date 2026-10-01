@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 import torch
+from _oracle_env import expect_bundle_minor_version_mismatch
 from surface_oracle._snapshot import canonical_dump, snapshot_trace_surface
 
 import torchlens as tl
@@ -53,7 +54,8 @@ def test_legacy_analysis_artifact_loads_byte_identically() -> None:
         guard_wrap_state_for_golden_update(_UPDATE_ENV)
         require_update_reason(_UPDATE_ENV)
     assert _ANALYSIS_ARTIFACT.exists(), "frozen legacy artifact missing"
-    loaded = tl.load(str(_ANALYSIS_ARTIFACT))
+    with expect_bundle_minor_version_mismatch():
+        loaded = tl.load(str(_ANALYSIS_ARTIFACT))
     actual = canonical_dump(snapshot_trace_surface(loaded))
 
     if regen:
@@ -109,7 +111,8 @@ def test_legacy_artifact_site_key_refusal_teaches() -> None:
 
     from torchlens._errors import InvalidArgumentError
 
-    loaded = tl.load(str(_ANALYSIS_ARTIFACT))
+    with expect_bundle_minor_version_mismatch():
+        loaded = tl.load(str(_ANALYSIS_ARTIFACT))
     layer = loaded[loaded.layer_labels[0]]
     with pytest.raises(InvalidArgumentError) as site_exc:
         _ = layer.site_key
@@ -143,7 +146,8 @@ def test_legacy_runnable_artifact_runs_verified() -> None:
     """
 
     assert _RUNNABLE_ARTIFACT.exists(), "frozen runnable artifact missing"
-    loaded = tl.load(str(_RUNNABLE_ARTIFACT))
+    with expect_bundle_minor_version_mismatch():
+        loaded = tl.load(str(_RUNNABLE_ARTIFACT))
     assert loaded.archived_activations, "legacy archived-activation family failed to load"
     torch.manual_seed(_SEED)
     x = torch.linspace(-0.5, 0.5, 16).reshape(1, 1, 4, 4)
