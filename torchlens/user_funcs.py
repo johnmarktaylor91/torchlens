@@ -935,11 +935,18 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
     # None of the three may flow through the capability-gated reject helper:
     # with interventions=True that would raise the never-dispatches
     # conformance error instead of running or refusing them properly.
+    # ``capture`` itself is NOT checked here (N5 fix): it is a grouped
+    # CaptureOptions object, almost never strictly None/MISSING in practice,
+    # and MLX supports many of its fields (layers_to_save, output_device,
+    # ...). Blanket-rejecting the whole object made every
+    # ``capture=CaptureOptions(...)`` call fail with "does not support:
+    # capture" regardless of content; the real per-field support/rejection
+    # already happens downstream in ``_trace_mlx_model`` (e.g.
+    # ``capture_options.intervention_ready``, ``capture_options.hooks``).
     reject_extra_trace_kwargs(
         {
             "lookback": kwargs["lookback"],
             "lookback_payload_policy": kwargs["lookback_payload_policy"],
-            "capture": kwargs["capture"],
             "storage": kwargs["storage"],
             "streaming": kwargs["streaming"],
             "inference_only": kwargs.get("inference_only", MISSING),
@@ -979,48 +986,59 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
             "trace(intervene=tl.when(...)) predicates; recipe specs (recipes=) "
             "are not supported. Use the PyTorch backend for intervention recipes."
         )
-    activation_transform = kwargs["activation_transform"]
+    # N5 fix: every name below except the genuine top-level ``trace()``
+    # parameters (model, input_args, input_kwargs, capture, save,
+    # grad_transform, grad_options, intervene, halt) moved into the grouped
+    # ``capture=CaptureOptions(...)`` object and no longer reaches this
+    # function as a flat key -- ``kwargs["activation_transform"]`` and
+    # friends raised ``KeyError`` on every call once the sprint removed the
+    # flat spelling from ``trace()``'s own signature. ``.get(..., MISSING)``
+    # reports "not flatly specified" so ``_trace_mlx_model``'s own
+    # ``merge_capture_options``/``merge_save_options`` calls fall through to
+    # the grouped object's value, exactly like direct/internal callers who
+    # still pass the flat spelling.
+    activation_transform = kwargs.get("activation_transform", MISSING)
     return _trace_mlx_model(
         kwargs["model"],
         kwargs["input_args"],
         kwargs["input_kwargs"],
-        layers_to_save=kwargs["layers_to_save"],
-        transform=kwargs["transform"],
-        save_raw_input=kwargs["save_raw_input"],
-        batch_render=kwargs["batch_render"],
-        output_transform=kwargs["output_transform"],
-        output_style=kwargs.get("output_style"),
-        output_head=kwargs.get("output_head"),
-        save_raw_output=kwargs["save_raw_output"],
+        layers_to_save=kwargs.get("layers_to_save", MISSING),
+        transform=kwargs.get("transform", MISSING),
+        save_raw_input=kwargs.get("save_raw_input", MISSING),
+        batch_render=kwargs.get("batch_render", MISSING),
+        output_transform=kwargs.get("output_transform", MISSING),
+        output_style=kwargs.get("output_style", MISSING),
+        output_head=kwargs.get("output_head", MISSING),
+        save_raw_output=kwargs.get("save_raw_output", MISSING),
         layer_visualizers=MISSING,
         save_visualizations=MISSING,
-        keep_orphans=kwargs["keep_orphans"],
-        output_device=kwargs["output_device"],
+        keep_orphans=kwargs.get("keep_orphans", MISSING),
+        output_device=kwargs.get("output_device", MISSING),
         activation_transform=activation_transform,
         grad_transform=kwargs["grad_transform"],
-        save_raw_activations=kwargs["save_raw_activations"],
-        save_raw_gradients=kwargs["save_raw_gradients"],
-        capture_tensor_grad_hooks=kwargs["capture_tensor_grad_hooks"],
-        save_arg_values=kwargs["save_arg_values"],
-        save_grads=kwargs["save_grads"],
-        save_code_context=kwargs["save_code_context"],
-        save_rng_states=kwargs["save_rng_states"],
-        random_seed=kwargs["random_seed"],
-        num_context_lines=kwargs["num_context_lines"],
-        compute_input_output_distances=kwargs["compute_input_output_distances"],
-        recurrence_detection=kwargs["recurrence_detection"],
-        intervention_ready=kwargs["intervention_ready"],
-        hooks=kwargs["hooks"],
+        save_raw_activations=kwargs.get("save_raw_activations", MISSING),
+        save_raw_gradients=kwargs.get("save_raw_gradients", MISSING),
+        capture_tensor_grad_hooks=kwargs.get("capture_tensor_grad_hooks", MISSING),
+        save_arg_values=kwargs.get("save_arg_values", MISSING),
+        save_grads=kwargs.get("save_grads", MISSING),
+        save_code_context=kwargs.get("save_code_context", MISSING),
+        save_rng_states=kwargs.get("save_rng_states", MISSING),
+        random_seed=kwargs.get("random_seed", MISSING),
+        num_context_lines=kwargs.get("num_context_lines", MISSING),
+        compute_input_output_distances=kwargs.get("compute_input_output_distances", MISSING),
+        recurrence_detection=kwargs.get("recurrence_detection", MISSING),
+        intervention_ready=kwargs.get("intervention_ready", MISSING),
+        hooks=kwargs.get("hooks", MISSING),
         capture=kwargs["capture"],
         save=save_options,
         save_predicate=save_predicate,
         visualization=None,
-        backward_ready=kwargs["backward_ready"],
-        name=kwargs["name"],
-        module_filter=kwargs["module_filter"],
-        module_identity_mode=kwargs["module_identity_mode"],
+        backward_ready=kwargs.get("backward_ready", MISSING),
+        name=kwargs.get("name", MISSING),
+        module_filter=kwargs.get("module_filter", MISSING),
+        module_identity_mode=kwargs.get("module_identity_mode", MISSING),
         grad_options=kwargs["grad_options"],
-        verbose=kwargs["verbose"],
+        verbose=kwargs.get("verbose", MISSING),
         intervene=kwargs["intervene"],
         halt=kwargs["halt"],
     )
