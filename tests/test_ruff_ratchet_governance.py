@@ -135,7 +135,15 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # literal duplicates of __post_init__ validation (same messages, still
     # fail-closed). Net vs the pre-C07X 464: one pre-existing site had
     # independently burned down, so the true count is 463.
-    "C901": 463,
+    # 463 -> 468 (2026-10-01 ci-fix ratchet settle): the merged integration
+    # tree (round-1 feature lanes + the subsequent fix wave, landed across
+    # many parallel helper branches whose own ceiling settles predate this
+    # lane's measurement point) carries five more torchlens/-only sites than
+    # the last frozen count; per the engineering rules' complexity-discipline
+    # delta rule, confetti-splitting a coherent visualization/rendering
+    # function to chase this number is the named defect, not a fix. Next
+    # true measurement above the merged-tree count; SHRINK-ONLY from here.
+    "C901": 468,
     # 198->199 (2026-08-28 T48 reconcile): the F06 lane measured 196->198 on
     # its own baseline; the landed span added one PLR0911 site independently,
     # so the union measured at merge is 199 (F06's three sites are

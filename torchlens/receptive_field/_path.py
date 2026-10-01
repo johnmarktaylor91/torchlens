@@ -67,7 +67,7 @@ def resolve_graph_point(trace: Trace, handle: object) -> Op:
     if isinstance(handle, Layer):
         _require_trace_owner(trace, handle.source_trace, handle.layer_label)
         if handle.num_passes != 1 or len(handle.ops) != 1:
-            passes = ", ".join(f"layer.ops[{index}]" for index in handle.ops.keys())
+            passes = ", ".join(f"layer.ops[{index}]" for index in handle.ops)
             raise AmbiguousPassError(
                 f"Layer {handle.layer_label!r} has {handle.num_passes} passes: {passes}."
             )
@@ -89,7 +89,7 @@ def resolve_graph_point(trace: Trace, handle: object) -> Op:
     if isinstance(handle, Module):
         _require_trace_owner(trace, handle._source_trace, handle.address)
         if handle.num_calls != 1 or len(handle.calls) != 1:
-            calls = ", ".join(f"module.calls[{index}]" for index in handle.calls.keys())
+            calls = ", ".join(f"module.calls[{index}]" for index in handle.calls)
             raise AmbiguousCallError(
                 f"Module {handle.address!r} has {handle.num_calls} calls: {calls}."
             )
