@@ -108,19 +108,27 @@ def test_manifest_policy_warns_not_raises_on_minor_mismatch() -> None:
     major, minor, *_ = runtime.split(".")
     drifted = f"{major}.{int(minor) + 1}.0+cu130"
 
+    def _is_minor_mismatch(item: warnings_module.WarningMessage) -> bool:
+        return issubclass(item.category, TorchLensWarning) and "minor version mismatch" in str(
+            item.message
+        )
+
+    # The reference manifest's own tlspec_version may also be older than this
+    # runtime's, which independently fires the unrelated ArtifactSchemaAgeWarning
+    # (also a TorchLensWarning subclass) -- filter by message, not just category,
+    # so that advisory never gets conflated with the one under test here.
     with warnings_module.catch_warnings(record=True) as caught:
         warnings_module.simplefilter("always")
         enforce_version_policy(Manifest.from_dict({**base, "torch_version": drifted}))
-    mismatch_warnings = [item for item in caught if issubclass(item.category, TorchLensWarning)]
+    mismatch_warnings = [item for item in caught if _is_minor_mismatch(item)]
     assert len(mismatch_warnings) == 1
     message = str(mismatch_warnings[0].message)
-    assert "minor version mismatch" in message
     assert drifted in message
 
     with warnings_module.catch_warnings(record=True) as caught_exact:
         warnings_module.simplefilter("always")
         enforce_version_policy(Manifest.from_dict({**base, "torch_version": torch.__version__}))
-    assert not any(issubclass(item.category, TorchLensWarning) for item in caught_exact)
+    assert not any(_is_minor_mismatch(item) for item in caught_exact)
 
 
 def test_recover_reraises_governed_refusals() -> None:
