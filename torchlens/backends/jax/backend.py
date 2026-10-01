@@ -2372,6 +2372,19 @@ class JAXBackend:
             parent_call_label: str | None = None
             for module_index, (address, call_index) in enumerate(normalized_calls):
                 call_label = f"{address}:{call_index}"
+                # Torch parity (same population as
+                # ``backends/_finalize.py::populate_object_module_build_data``):
+                # each ModuleCall's own ancestor chain, read by
+                # ``_build_module_logs`` to build ``ModuleCall.module_call_stack``.
+                # Missing here, every JAX ModuleCall's stack stayed empty and
+                # tripped the ``module_hierarchy`` invariant's ancestor-prefix
+                # check for any module nested more than one level deep.
+                if call_label not in mbd["module_call_stacks"]:
+                    mbd["module_call_stacks"][call_label] = [
+                        f"{ancestor_address}:{ancestor_call_index}"
+                        for ancestor_address, ancestor_call_index in normalized_calls[:module_index]
+                        if ancestor_address != "self"
+                    ]
                 if mbd["module_num_calls"][address] < call_index:
                     mbd["module_num_calls"][address] = call_index
                 mbd["module_num_tensors"][address] += 1
