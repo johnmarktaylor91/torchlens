@@ -264,16 +264,20 @@ SUITE = [
     # golden pins every _vtimed-wrapped step's timing bucket on a default
     # capture, so a whole-function return-None disarm of _run_step_11_5,
     # _run_step_11_75, _run_step_12, or _run_step_16_5 drops its bucket from
-    # the set and fails the exact-equality assert. The write-audit matrix
-    # test independently proves the same steps (plus _run_step_19 /
-    # _should_run_step_19) by their declared op-store columns never becoming
-    # observed-effective on ANY capture axis when the step never runs. Step
-    # 17.5 is deliberately unwrapped by _vtimed (writes=frozenset() too, so
-    # the matrix test cannot see it either); its own direct killer is
-    # test_step17_5_drops_capture_phase_workspaces.
+    # the set and fails the exact-equality assert. Step 17.5 is deliberately
+    # unwrapped by _vtimed (and declares no op-store writes), so its own
+    # direct killer is test_step17_5_drops_capture_phase_workspaces; step 19
+    # and its gate are conditional (absent from the bucket golden's default
+    # axis either way), so their killer asserts the eviction effect directly
+    # on a streaming capture. (test_postprocess_enforcement.py's
+    # write-audit matrix test, test_matrix_union_reports, would independently
+    # prove several of these too, but its EXPECTED_PHANTOM_WRITES golden is
+    # red on its own in the CI mutation env's narrower EXTRAS=dev,tabular --
+    # confirmed red on main, unrelated to this change -- so it cannot be
+    # added here without breaking the pristine control.)
     "tests/test_postprocess_dag.py::test_phase_timing_bucket_names_default_capture",
     "tests/test_postprocess_dag.py::test_step17_5_drops_capture_phase_workspaces",
-    "tests/test_postprocess_enforcement.py::test_matrix_union_reports",
+    "tests/test_postprocess_dag.py::test_step19_and_gate_evict_streamed_outs_from_memory",
     # W3 exempt killers (X02, X07): direct negative-case calls already proved
     # the data parent/destination must stay strictly perturbed; they lived
     # outside this suite. X05/X06 killers are in test_bug_fixes_phase14.py.
