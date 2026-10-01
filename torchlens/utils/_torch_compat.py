@@ -1289,22 +1289,44 @@ def _probe_expanded_weights_conv_picker() -> bool:
 
 
 def _probe_gradient_edge() -> bool:
-    """Return whether the public autograd GradientEdge surface exists.
+    """Return whether torch's GradientEdge surface actually WORKS end to end.
 
     Returns
     -------
     bool
         ``True`` when ``torch.autograd.graph`` exposes both ``GradientEdge``
         and ``get_gradient_edge`` -- the ``(node, output slot)`` addressing
-        pair the one-backward read engine seeds ``autograd.grad`` with.
-        Absent on older torch (the surface postdates the 2.1 floor), which is
-        a healthy old install, not a degradation: the read refuses typed.
+        pair the one-backward read engine seeds ``autograd.grad`` with -- AND
+        a real ``autograd.grad`` call seeding an OUTPUT ``GradientEdge`` with
+        an explicit cotangent succeeds. Attribute presence alone is
+        insufficient: torch 2.2-2.3 ships the ``GradientEdge`` class, but its
+        own internal ``torch.autograd._make_grads`` calls ``out.is_nested`` on
+        every output -- including a bare ``GradientEdge``, which has no such
+        attribute -- and raises ``AttributeError`` (fixed upstream by 2.4,
+        matching this read's long-documented "2.4+" remedy text). Absent on
+        older torch or broken on this intermediate band is a healthy old
+        install either way, not a TorchLens degradation: the read refuses
+        typed.
     """
 
-    return (
-        _import_module_attr_or_none("torch.autograd.graph", "GradientEdge") is not None
-        and _import_module_attr_or_none("torch.autograd.graph", "get_gradient_edge") is not None
-    )
+    if (
+        _import_module_attr_or_none("torch.autograd.graph", "GradientEdge") is None
+        or _import_module_attr_or_none("torch.autograd.graph", "get_gradient_edge") is None
+    ):
+        return False
+    from torch.autograd.graph import GradientEdge
+
+    try:
+        x = torch.randn(1, requires_grad=True)
+        h = x * 2
+        torch.autograd.grad(
+            [GradientEdge(h.grad_fn, h.output_nr)],
+            [x],
+            grad_outputs=[torch.ones(1)],
+        )
+    except Exception:
+        return False
+    return True
 
 
 def _probe_node_prehook() -> bool:

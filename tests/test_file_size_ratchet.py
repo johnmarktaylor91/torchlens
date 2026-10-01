@@ -309,7 +309,13 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # probes (CPU Half-dtype kernel coverage, Float8 deterministic-fill)
     # land at the same chokepoint (measured 4293); next 50-line step.
     # Debloat target unchanged: 3450.
-    "torchlens/utils/_torch_compat.py": 4300,
+    # 4300 -> 4350 (2026-10-01 L8 floor fix cont'd): _probe_gradient_edge()
+    # strengthened from bare attribute presence to a real functional probe
+    # (torch 2.2-2.3 ships the class but its own _make_grads crashes on a
+    # GradientEdge output; fixed by 2.4, matching the read's documented
+    # "2.4+" remedy) at the same chokepoint (measured 4315); next 50-line
+    # step. Debloat target unchanged: 3450.
+    "torchlens/utils/_torch_compat.py": 4350,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     # 3300 -> 3320 (F24 observe): the device-memory bracket at the one
