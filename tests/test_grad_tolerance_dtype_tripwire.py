@@ -15,7 +15,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from torchlens.utils._torch_compat import HAS_CPU_HALF_KERNELS
+from torchlens.utils._torch_compat import get_cpu_half_kernels_support
 from torchlens.utils.tensor_utils import (
     LAYER_GRAD_VALIDATION_ATOL,
     LAYER_GRAD_VALIDATION_RTOL,
@@ -28,7 +28,7 @@ from torchlens.utils.tensor_utils import (
 pytestmark = pytest.mark.smoke
 
 _requires_cpu_half_kernels = pytest.mark.skipif(
-    not HAS_CPU_HALF_KERNELS,
+    not get_cpu_half_kernels_support(),
     reason="CPU addmm/nextafter for float16 postdates the torch 2.1 floor",
 )
 

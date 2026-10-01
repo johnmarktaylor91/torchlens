@@ -25,7 +25,7 @@ from torchlens.dataset_extraction import (
     extract_dataset,
     open_extraction,
 )
-from torchlens.utils._torch_compat import HAS_CPU_FLOAT8_DETERMINISTIC_FILL
+from torchlens.utils._torch_compat import get_cpu_float8_deterministic_fill_support
 
 pytestmark = pytest.mark.smoke
 
@@ -190,14 +190,14 @@ def test_pool_kills_raggedness_across_batches(tmp_path: Path) -> None:
         pytest.param(
             "float8_e4m3fn",
             marks=pytest.mark.skipif(
-                not HAS_CPU_FLOAT8_DETERMINISTIC_FILL,
+                not get_cpu_float8_deterministic_fill_support(),
                 reason="CPU Float8 empty-fill under deterministic mode postdates the torch 2.1 floor",
             ),
         ),
         pytest.param(
             "float8_e5m2",
             marks=pytest.mark.skipif(
-                not HAS_CPU_FLOAT8_DETERMINISTIC_FILL,
+                not get_cpu_float8_deterministic_fill_support(),
                 reason="CPU Float8 empty-fill under deterministic mode postdates the torch 2.1 floor",
             ),
         ),

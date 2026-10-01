@@ -785,12 +785,12 @@ def test_tensor_any_over_dims_fallback_matches_native_tuple_dim(
 ) -> None:
     """The torch-2.1 fallback path is byte-identical to the native tuple-dim call."""
 
-    if not tc.HAS_REDUCE_TUPLE_DIM:
+    if not tc.get_reduce_tuple_dim_support():
         pytest.skip("native tuple-dim any() unavailable; nothing to compare against")
     mask = torch.rand((3, 4, 5)) > 0.5
-    monkeypatch.setattr(tc, "HAS_REDUCE_TUPLE_DIM", False)
+    monkeypatch.setattr(tc, "get_reduce_tuple_dim_support", lambda: False)
     fallback = tc.tensor_any_over_dims(mask, (0, 2))
-    monkeypatch.setattr(tc, "HAS_REDUCE_TUPLE_DIM", True)
+    monkeypatch.setattr(tc, "get_reduce_tuple_dim_support", lambda: True)
     native = tc.tensor_any_over_dims(mask, (0, 2))
     assert torch.equal(fallback, native)
 
@@ -850,3 +850,60 @@ def test_get_gradient_edge_support_is_lazy_and_caches(monkeypatch: pytest.Monkey
     second = tc.get_gradient_edge_support()
     assert calls == 1, "the probe must not re-run once latched"
     assert first == second == tc.HAS_GRADIENT_EDGE
+
+
+@pytest.mark.parametrize(
+    "getter_name",
+    [
+        "get_reduce_tuple_dim_support",
+        "get_cpu_half_kernels_support",
+        "get_cpu_float8_deterministic_fill_support",
+    ],
+)
+def test_real_op_probe_getters_are_lazy_and_cache(
+    getter_name: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each real-tensor-op probe latches after one call (import-hygiene budget).
+
+    L8 floor fix: HAS_CPU_HALF_KERNELS, HAS_CPU_FLOAT8_DETERMINISTIC_FILL, and
+    HAS_REDUCE_TUPLE_DIM all run real tensor ops (addmm/layer_norm/nextafter,
+    a deterministic-mode empty-fill, a tuple-dim any()) that measurably
+    inflated a plain ``import torchlens``. Each is on the same lazy-probe
+    pattern as HAS_GRADIENT_EDGE: this pins that the underlying probe
+    function runs at most once per latch, independent of which real value it
+    returns on this torch build.
+    """
+
+    getter = getattr(tc, getter_name)
+    probe_name = {
+        "get_reduce_tuple_dim_support": "_probe_reduce_tuple_dim",
+        "get_cpu_half_kernels_support": "_probe_cpu_half_kernels",
+        "get_cpu_float8_deterministic_fill_support": "_probe_cpu_float8_deterministic_fill",
+    }[getter_name]
+    probed_name = {
+        "get_reduce_tuple_dim_support": "_REDUCE_TUPLE_DIM_PROBED",
+        "get_cpu_half_kernels_support": "_CPU_HALF_KERNELS_PROBED",
+        "get_cpu_float8_deterministic_fill_support": "_CPU_FLOAT8_DETERMINISTIC_FILL_PROBED",
+    }[getter_name]
+    flag_name = {
+        "get_reduce_tuple_dim_support": "HAS_REDUCE_TUPLE_DIM",
+        "get_cpu_half_kernels_support": "HAS_CPU_HALF_KERNELS",
+        "get_cpu_float8_deterministic_fill_support": "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
+    }[getter_name]
+
+    calls = 0
+    real_probe = getattr(tc, probe_name)
+
+    def _counting_probe() -> bool:
+        nonlocal calls
+        calls += 1
+        return real_probe()
+
+    monkeypatch.setattr(tc, probe_name, _counting_probe)
+    monkeypatch.setattr(tc, probed_name, False)
+    monkeypatch.setattr(tc, flag_name, False)
+
+    first = getter()
+    second = getter()
+    assert calls == 1, "the probe must not re-run once latched"
+    assert first == second == getattr(tc, flag_name)

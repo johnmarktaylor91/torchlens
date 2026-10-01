@@ -23,7 +23,10 @@ from torchlens._extraction.dtype_policy import tensor_payload_bytes
 from torchlens._extraction.reader import open_extraction
 from torchlens._extraction.resume import model_structure_record
 from torchlens.dataset_extraction import DatasetExtractionResumeError, extract_dataset
-from torchlens.utils._torch_compat import HAS_CPU_FLOAT8_DETERMINISTIC_FILL, HAS_CPU_HALF_KERNELS
+from torchlens.utils._torch_compat import (
+    get_cpu_float8_deterministic_fill_support,
+    get_cpu_half_kernels_support,
+)
 
 pytestmark = pytest.mark.smoke
 
@@ -235,7 +238,7 @@ def test_v1_callable_record_refuses_as_incomparable_not_as_behavior_change(
 
 
 @pytest.mark.skipif(
-    not HAS_CPU_FLOAT8_DETERMINISTIC_FILL,
+    not get_cpu_float8_deterministic_fill_support(),
     reason="CPU Float8 empty-fill under deterministic mode postdates the torch 2.1 floor",
 )
 def test_tensor_payload_bytes_covers_numpy_less_dtypes() -> None:
@@ -256,7 +259,7 @@ def test_tensor_payload_bytes_covers_numpy_less_dtypes() -> None:
         pytest.param(
             torch.float16,
             marks=pytest.mark.skipif(
-                not HAS_CPU_HALF_KERNELS,
+                not get_cpu_half_kernels_support(),
                 reason="CPU addmm for float16 postdates the torch 2.1 floor",
             ),
         ),
