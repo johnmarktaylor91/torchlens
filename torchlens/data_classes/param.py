@@ -186,6 +186,12 @@ class Param:
         "_param_ref": FieldPolicy.DROP,
         "_param_ref_released": FieldPolicy.DROP,
         "_source_trace_ref": FieldPolicy.DROP,
+        # Transient postprocess bookkeeping (set True at prep for a param
+        # still pending as an UninitializedParameter, flipped back to False
+        # by step 15's `_finalize_lazy_param_geometry` once the captured
+        # forward materializes it in place). Never meaningful after a Trace
+        # finishes construction; DROP, same as the other internal flags here.
+        "_lazy_at_prep": FieldPolicy.DROP,
         "num_calls": FieldPolicy.KEEP,
         "used_by_ops": FieldPolicy.KEEP,
         "used_by_layers": FieldPolicy.KEEP,
