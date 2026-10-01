@@ -333,7 +333,12 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # folded into the existing CPU-Half-kernels probe) and re-keys to the
     # next 50-line step above the honest current measurement (4508).
     # Debloat target unchanged: 3450.
-    "torchlens/utils/_torch_compat.py": 4550,
+    # 4550 -> 4600 (2026-10-01 L8 floor2 fix cont'd): one more lazy capability
+    # probe (meta-tensor Tensor.item() guard, HAS_META_ITEM_GUARD, gating the
+    # structure-only layer-2 backstop's NotImplementedError-vs-RuntimeError
+    # classification) lands at the same chokepoint (measured 4576); next
+    # 50-line step. Debloat target unchanged: 3450.
+    "torchlens/utils/_torch_compat.py": 4600,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     # 3300 -> 3320 (F24 observe): the device-memory bracket at the one

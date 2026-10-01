@@ -26,6 +26,7 @@ from torchlens.capture.structure_only import (
     ValueDependentBranchError,
 )
 from torchlens.options import CaptureOptions
+from torchlens.utils._torch_compat import get_meta_item_guard_support
 
 smoke = pytest.mark.smoke
 
@@ -310,6 +311,13 @@ def _neutralize_layer2(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @smoke
+@pytest.mark.skipif(
+    not get_meta_item_guard_support(),
+    reason="torch 2.1-2.2 have no Tensor.item()-cannot-be-called-on-meta-tensors guard: "
+    "the same MetaContextBranch forward instead dies in the aten dispatcher with a "
+    "NotImplementedError, which layer 2 classifies as the sibling "
+    "MetaKernelUnavailableError (meta_kernel_unavailable), not ValueDependentBranchError",
+)
 def test_layer2_backstop_catches_when_layer1_is_dead(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
