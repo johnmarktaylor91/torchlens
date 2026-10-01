@@ -167,3 +167,25 @@ def test_capture_failure_advisory_scopes_the_restoration_claim() -> None:
     for message in advisories:
         assert "the model and torch environment were restored" not in message
         assert "not rolled back" in message
+
+
+def test_materialized_lazy_param_trace_round_trips_through_save_load(tmp_path) -> None:
+    """A captured lazy-module trace saves and loads (nightly platform-canary).
+
+    The prep-time flag the finalization pipeline uses to track an
+    UninitializedParameter (``Param._lazy_at_prep``, reset False once step
+    15 re-reads the materialized geometry) is plain instance state with no
+    declared portable policy; before it got one, ``tl.save`` on ANY trace of
+    a model holding a lazy module (``nn.LazyLinear`` et al.) raised
+    ``TorchLensIOError: Param._lazy_at_prep is missing from
+    PORTABLE_STATE_SPEC`` -- exactly the shape of model nightly.yml's
+    platform-canary step traces with a predicate ``save=``.
+    """
+
+    model = nn.Sequential(nn.Conv2d(3, 4, 3), nn.ReLU(), nn.Flatten(), nn.LazyLinear(5))
+    trace = tl.trace(model, torch.randn(2, 3, 8, 8), save=tl.func("relu"))
+
+    path = tmp_path / "lazy_canary.tlspec"
+    tl.save(trace, str(path))
+    loaded = tl.load(str(path))
+    assert loaded.layer_labels == trace.layer_labels
