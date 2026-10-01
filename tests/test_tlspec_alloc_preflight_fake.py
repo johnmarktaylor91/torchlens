@@ -22,6 +22,7 @@ nesting-depth guard (C4).
 from __future__ import annotations
 
 import json
+import os
 import resource
 import types
 from collections.abc import Iterator
@@ -132,6 +133,8 @@ def _rlimit_cap(extra: int = 1 << 30) -> Iterator[None]:
     the former (not the latter) is raised is the proof that NO allocation occurred.
     """
 
+    if not os.path.exists("/proc/self/status"):
+        pytest.skip("address-space cap reads /proc/self/status (Linux only)")
     with open("/proc/self/status", encoding="ascii") as handle:
         vmsize_kb = next(int(line.split()[1]) for line in handle if line.startswith("VmSize"))
     soft, hard = resource.getrlimit(resource.RLIMIT_AS)
