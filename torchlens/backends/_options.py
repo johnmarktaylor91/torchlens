@@ -562,6 +562,41 @@ def default_if_missing(value: Any, default: Any) -> Any:
     return default if is_missing(value) else value
 
 
+def resolve_optional_capture_field(capture: Any, field_name: str, flat_value: Any) -> Any:
+    """Resolve one ``capture=`` field whose backend-local flat kwarg defaults to ``None``.
+
+    Some preview backend ``capture_trace`` parameters predate ``CaptureOptions``
+    and still spell a handful of optional fields (e.g. ``save_grads``,
+    ``module_filter``, ``transform``) with a concrete ``None`` default instead
+    of the ``MissingType`` sentinel, so ``is_missing()`` cannot tell "the
+    caller left this unset" apart from an explicit ``capture=`` value the way
+    it can for every ``MISSING``-defaulted field. ``flat_value is not None``
+    is treated as an explicit direct/legacy flat-kwarg call and wins; otherwise
+    an explicitly-set ``capture.field_name`` wins; otherwise the result stays
+    ``None`` (the flat default), matching the field's pre-``capture=`` behavior.
+
+    Parameters
+    ----------
+    capture:
+        Grouped ``CaptureOptions`` supplied to ``trace()``, or ``None``.
+    field_name:
+        ``CaptureOptions`` attribute name to read when the flat value is unset.
+    flat_value:
+        Backend-local flat kwarg's current value (``None`` when unset).
+
+    Returns
+    -------
+    Any
+        The effective value for this capture knob.
+    """
+
+    if flat_value is not None:
+        return flat_value
+    if capture is not None and capture.is_field_explicit(field_name):
+        return getattr(capture, field_name)
+    return None
+
+
 def reject_extra_trace_kwargs(
     kwargs: dict[str, Any],
     policy: ExtraKwargPolicy,

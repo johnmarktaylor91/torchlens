@@ -36,6 +36,7 @@ from ...ir.op_record import amend_preview_output_parent_rebind
 from ...ir.predicate import RecordContext
 from ...ir.refs import DeviceRef, DtypeRef, ParamRef, ReservedLabel, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
+from ...options import CaptureOptions, merge_capture_options
 from ...postprocess._materialize import materialize_from_events
 from ...postprocess._selective_save import (
     apply_static_label_save_policy,
@@ -67,6 +68,7 @@ from .._options import (
     is_missing as _is_missing,
     reject_extra_trace_kwargs,
     reject_unsupported_trace_options,
+    resolve_optional_capture_field as _resolve_optional_capture_field,
 )
 from .._validation_shared import float_replay_tolerances_for_dtype_name, scalar_replay_close
 
@@ -266,6 +268,7 @@ class TinygradBackend:
         lookback_payload_policy: str = "metadata_only",
         module_identity_mode: str | None | MissingType = MISSING,
         grad_options: GradOptions | None | MissingType = MISSING,
+        capture: CaptureOptions | None = None,
         **kwargs: Any,
     ) -> Trace:
         """Capture a tinygrad raw-function forward pass into a TorchLens trace.
@@ -337,6 +340,10 @@ class TinygradBackend:
             discovered callable object graphs can use ``"object_module"``.
         grad_options
             tinygrad ``GradOptions`` for bracketed leaf-level derived gradients.
+        capture
+            Grouped ``CaptureOptions``. The sole post-sprint spelling for the
+            flat capture kwargs above; an explicit field here is merged in
+            (``merge_capture_options``) ahead of this backend's own defaults.
         **kwargs
             Extra public trace kwargs rejected by this backend.
 
@@ -348,6 +355,55 @@ class TinygradBackend:
 
         save_predicate = pop_static_label_save_predicate(kwargs, backend_name="tinygrad")
         self._reject_extra_kwargs(kwargs)
+        # N5 fix: ``trace()`` no longer passes these as flat kwargs at all --
+        # see the matching comment in ``backends/jax/backend.py``.
+        capture_options = merge_capture_options(
+            capture=capture,
+            layers_to_save=layers_to_save,
+            keep_orphans=keep_orphans,
+            output_device=output_device,
+            detach_saved_activations=detach_saved_activations,
+            save_arg_values=save_arg_values,
+            save_code_context=save_code_context,
+            save_rng_states=save_rng_states,
+            recurrence_detection=recurrence_detection,
+            compute_input_output_distances=compute_input_output_distances,
+            verbose=verbose,
+            backward_ready=backward_ready,
+            name=name,
+            save_raw_input=save_raw_input,
+            batch_render=batch_render,
+            save_raw_output=save_raw_output,
+            save_visualizations=save_visualizations,
+            module_identity_mode=module_identity_mode,
+        )
+        layers_to_save = capture_options.layers_to_save
+        keep_orphans = capture_options.keep_orphans
+        output_device = capture_options.output_device
+        detach_saved_activations = capture_options.detach_saved_activations
+        save_arg_values = capture_options.save_arg_values
+        save_code_context = capture_options.save_code_context
+        save_rng_states = capture_options.save_rng_states
+        recurrence_detection = capture_options.recurrence_detection
+        compute_input_output_distances = capture_options.compute_input_output_distances
+        verbose = capture_options.verbose
+        backward_ready = capture_options.backward_ready
+        name = capture_options.name
+        save_raw_input = capture_options.save_raw_input
+        batch_render = capture_options.batch_render
+        save_raw_output = capture_options.save_raw_output
+        save_visualizations = capture_options.save_visualizations
+        module_identity_mode = capture_options.module_identity_mode
+        save_grads = _resolve_optional_capture_field(capture, "save_grads", save_grads)
+        module_filter = _resolve_optional_capture_field(capture, "module_filter", module_filter)
+        transform = _resolve_optional_capture_field(capture, "transform", transform)
+        output_transform = _resolve_optional_capture_field(
+            capture, "output_transform", output_transform
+        )
+        layer_visualizers = _resolve_optional_capture_field(
+            capture, "layer_visualizers", layer_visualizers
+        )
+        random_seed = _resolve_optional_capture_field(capture, "random_seed", random_seed)
         layers_to_save = _default_if_missing(layers_to_save, "all")
         keep_orphans = _default_if_missing(keep_orphans, False)
         output_device = _default_if_missing(output_device, "same")
