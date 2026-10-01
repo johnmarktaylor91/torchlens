@@ -1535,8 +1535,22 @@ def _probe_nn_attention_module() -> bool:
         :func:`_probe_attention_causal_bias`), so it is safe to import
         directly. Absent on torch 2.1-2.2 (the namespace postdates the 2.1
         floor), a healthy old install, not a degradation.
+
+    Notes
+    -----
+    The absent case checks with ``find_spec`` FIRST (proves non-existence
+    without executing anything) before ever calling
+    ``importlib.import_module``: two full failed-import attempts (one per
+    attribute) measurably inflated ``import torchlens`` on the torch
+    2.1/2.2 floor, where the namespace genuinely does not exist, well past
+    this module's own import-hygiene budget (``test_import_hygiene.py``).
     """
 
+    try:
+        if importlib.util.find_spec("torch.nn.attention") is None:
+            return False
+    except (ImportError, AttributeError, ValueError):
+        return False
     return (
         _import_module_attr_or_none("torch.nn.attention", "SDPBackend") is not None
         and _import_module_attr_or_none("torch.nn.attention", "sdpa_kernel") is not None
