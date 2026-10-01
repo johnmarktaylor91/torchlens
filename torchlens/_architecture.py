@@ -183,6 +183,11 @@ TORCH_PRIVATE_LICENSED_PACKAGES: frozenset[str] = frozenset(
         # at the ONE sanctioned probe chokepoint (utils/_torch_compat); the
         # package holds no direct torch._ touches of its own.
         "attribution",
+        # L8 floor fix: receptive_field's multi-axis any() reduction routes
+        # through tensor_any_over_dims() at the ONE sanctioned probe
+        # chokepoint (utils/_torch_compat); the package holds no direct
+        # torch._ touches of its own.
+        "receptive_field",
         # F27 Kineto join + memory-parity oracle: observability consumes the
         # HAS_KINETO_INMEMORY_EVENTS / HAS_KINETO_EVENT_SCOPE /
         # HAS_MEMORY_PROFILE capability flags and their accessors, all living
