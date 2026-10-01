@@ -26,6 +26,7 @@ from __future__ import annotations
 import io
 import pickle
 import re
+import sys
 import types
 from pathlib import Path
 from typing import Any
@@ -532,6 +533,41 @@ class TestDerivedCacheCensus:
                 f"{poisoned} torchlens wrappers keyed into the dynamo rule map "
                 "despite the pre-wrap warm"
             )
+        finally:
+            if not _state._is_decorated:
+                wrap_torch()
+
+    def test_submodule_alias_imported_mid_epoch_is_restored_by_unwrap(self):
+        # torch.onnx.operators re-exports torch._shape_as_tensor under a
+        # second name ("from torch import _shape_as_tensor as shape_as_tensor"),
+        # lazily imported by torch itself rather than eagerly by `import
+        # torch` -- so the one-time ORIG_TORCH_FUNCS scan at `import
+        # torchlens` time can miss it. If that submodule's FIRST import lands
+        # while wrappers are installed (simulated here by importing it
+        # mid-epoch, exactly as torch._dynamo.trace_rules's own rule-table
+        # build does when resolving "torch.onnx.operators.shape_as_tensor"),
+        # its module-level alias binds to the WRAPPER; without tracking this
+        # alias, unwrap_torch() never restores it and dynamo's identity-keyed
+        # rule map stays permanently poisoned for the rest of the process
+        # (round-2 CI triage, 2026-10-01).
+        import importlib
+
+        from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
+
+        sys.modules.pop("torch.onnx.operators", None)
+        _ensure_wrapped()
+        try:
+            onnx_operators = importlib.import_module("torch.onnx.operators")
+            assert id(onnx_operators.shape_as_tensor) in _state._decorated_to_orig, (
+                "test setup: importing torch.onnx.operators mid-epoch did not "
+                "bind its alias to the current torchlens wrapper"
+            )
+            unwrap_torch()
+            assert id(onnx_operators.shape_as_tensor) not in _state._decorated_to_orig, (
+                "torch.onnx.operators.shape_as_tensor survived unwrap_torch() as a "
+                "torchlens wrapper: the submodule-alias inventory did not track it"
+            )
+            assert onnx_operators.shape_as_tensor is torch._shape_as_tensor
         finally:
             if not _state._is_decorated:
                 wrap_torch()
