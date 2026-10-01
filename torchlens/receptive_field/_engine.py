@@ -1587,6 +1587,13 @@ def _graph_revision(trace: Trace) -> tuple[object, ...]:
     Includes topology (parents/children), shape, role, function identity, and a
     by-value snapshot of the geometry arguments RF rules read, so an argument
     change with unchanged shape+topology still bumps the revision.
+
+    ``op.shape`` is legitimately ``None`` for a non-tensor-valued op -- e.g. a
+    JAX region boundary/projection pseudo-op, whose captured ``output`` is a
+    tuple of values rather than one tensor (``_tensor_ref`` reports
+    ``shape=None`` for exactly this "not a tensor" case). ``None`` is itself a
+    stable, hashable fingerprint component, so it is included as-is instead of
+    calling ``tuple()`` on it.
     """
 
     return tuple(
@@ -1594,7 +1601,7 @@ def _graph_revision(trace: Trace) -> tuple[object, ...]:
             op.label,
             tuple(op.parents),
             tuple(op.children),
-            tuple(op.shape),
+            tuple(op.shape) if op.shape is not None else None,
             op.io_role,
             op.func_name,
             _geometry_args_snapshot(op),
