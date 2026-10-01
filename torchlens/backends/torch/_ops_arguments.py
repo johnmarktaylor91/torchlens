@@ -73,6 +73,24 @@ def _function_registry_key(
 
     from torchlens.intervention.resolver import function_registry_key_from_callable
 
+    if func_name == "linear":
+        import sys
+
+        print(
+            "DIAGPRINT func=",
+            func,
+            "id=",
+            id(func),
+            "module=",
+            getattr(func, "__module__", None),
+            "qualname=",
+            getattr(func, "__qualname__", None),
+            "is_C_nn_linear=",
+            func is torch._C._nn.linear,
+            "is_F_linear=",
+            func is torch.nn.functional.linear,
+            file=sys.stderr,
+        )
     if func_name in _SAFE_TENSOR_PROPERTY_NAMES:
         return FunctionRegistryKey("torch.Tensor", str(func_name), "method")
     return function_registry_key_from_callable(func)
