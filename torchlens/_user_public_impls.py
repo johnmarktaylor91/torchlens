@@ -1580,7 +1580,16 @@ def _validate_forward_pass_torch(
         # already-flipped deterministic stance for the life of the process
         # (the finally below never ran). Restoring to the just-snapshotted
         # priors is idempotent when an install never landed.
-        torch.use_deterministic_algorithms(True, warn_only=True)
+        #
+        # Skip forcing it on torch builds whose CPU fill_empty_deterministic_
+        # kernel does not cover Float8 (HAS_CPU_FLOAT8_DETERMINISTIC_FILL):
+        # the kernel is missing outright there, so warn_only=True cannot help,
+        # and forcing crashed any validation that allocates a fresh Float8
+        # CPU tensor.
+        from .utils._torch_compat import get_cpu_float8_deterministic_fill_support
+
+        if get_cpu_float8_deterministic_fill_support():
+            torch.use_deterministic_algorithms(True, warn_only=True)
         if num_threads is not None:
             torch.set_num_threads(num_threads)
         ground_truth_model, plain_attr_snapshot = _model_for_ground_truth_validation(model)
