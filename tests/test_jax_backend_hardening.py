@@ -537,9 +537,11 @@ def test_jax_old_style_prng_key_tlspec_round_trips_as_uint32_array(tmp_path: Pat
     manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
     loaded = tl.load(path)
     loaded_key = _first_saved_op(loaded).out
-    input_entries = [
-        entry for entry in manifest["tensors"] if entry.get("label") == "input_1_1_raw:1"
-    ]
+    # The internal ``_raw`` capture sentinel is stripped from every preview
+    # layer label before it reaches a public surface like the portable
+    # manifest (see "strip the internal _raw sentinel from preview layer
+    # labels"); the real final label is bare of it.
+    input_entries = [entry for entry in manifest["tensors"] if entry.get("label") == "input_1_1:1"]
 
     assert str(loaded_key.dtype) == "uint32"
     assert loaded_key.shape == (2,)
