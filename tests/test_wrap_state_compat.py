@@ -1044,6 +1044,17 @@ _ORIGINAL_HOLDING_SITE_ALLOWLIST = {
     ("torch", "_sym_sqrt"),
     ("torch.functional", "_add_docstr"),
     ("torch.functional", "overload"),
+    # torch 2.1.2 floor only (the CI 2.1.2/2.2.2 rows): ``torch.obj`` is an
+    # undocumented module attribute whose underlying object IS, by identity,
+    # ``torch.zeros_like``'s own raw C callable (verified: id(torch.obj) ==
+    # id(torch.zeros_like) pre-wrap; absent from get_orig_torch_funcs()'s
+    # roster and from torch.overrides.get_testing_overrides(), so no torch
+    # release documents or exercises it as a real entry point -- a torch
+    # 2.1.2 build quirk, not a torchlens gap). Calling it post-wrap runs the
+    # identical raw zeros_like implementation either spelling would have run
+    # pre-wrap: a stronger composite-over-wrapped-interiors case than the
+    # entries above (not just interior-composite -- the SAME object).
+    ("torch", "obj"),
 }
 
 
