@@ -45,7 +45,7 @@ Single render-then-staple script (a locked design decision):
 | C | Containers, module focus, call depth, skip_fn/collapse_fn/node_spec_fn hooks, override dicts |
 | D | Loop rolling & recurrence: unrolled-vs-rolled, back-edges, pass-count sweep, fused-kernel contrast, loops with branching |
 | E | Collapse & run folding: none/auto/max, float-t filmstrip, fold_repeats, ellipsis grammar, segments, remainder labels, known artifacts, plan/schedule diagnostics |
-| F | Node content: node_mode presets, overlays (incl. the NaN debugger), label fields, code panel, typography, raw I/O thumbnails, input-transform summary |
+| F | Node content: node_mode presets (default/profiling), node_spec_fn domain styles, overlays (incl. the NaN debugger), label fields, code panel, typography, raw I/O thumbnails, input-transform summary |
 | G | Themes (all five presets) |
 | H | Backward & combined graphs |
 | I | Control flow & interventions |
@@ -111,9 +111,11 @@ it is in this pack:
 - **Feature preconditions** (a panel silently showing nothing usually means a
   missing trace flag, not a broken renderer):
   - intervention site/cone/hook styling marks PLANNED interventions:
-    `tl.trace(..., intervention_ready=True)` then `trace.set(...)`. Live
+    `tl.trace(..., capture=CaptureOptions(intervention_ready=True))` then
+    `trace.set(...)`. Live
     `intervene=` fire records do not style nodes.
-  - raw-input thumbnails need `tl.trace(model, raw, transform=fn)` (raw input
+  - raw-input thumbnails need `tl.trace(model, raw,
+    capture=CaptureOptions(transform=fn))` (raw input
     is only stored when a transform produced the model-ready tensor).
   - container labels/collapsed need `intervention_ready=True`;
     `show_containers='nodes'` needs `capture_container_structure=True`;

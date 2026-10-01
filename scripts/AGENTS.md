@@ -4,7 +4,7 @@
 
 | File | Purpose |
 |------|---------|
-| `bench_log_forward_pass.py` | Local benchmark harness for capture overhead |
+| `bench_trace.py` | Local benchmark harness for capture overhead |
 | `build_torchlens_theme_gallery.py` | Generate visualization theme gallery artifacts (dagua renderer) |
 | `check_ci_executed_tests.py` | Executed-floor attestation over a junit XML (wired into CI legs) |
 | `check_flops_coverage.py` | Report FLOPs handler coverage (`torchlens/capture/flops.py`) against decorated torch functions |

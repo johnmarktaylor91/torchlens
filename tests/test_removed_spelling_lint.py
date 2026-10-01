@@ -287,12 +287,9 @@ _ALLOWED: dict[str, tuple[frozenset[str], str]] = {
         "removal-record prose: keep_op/keep_module raise TypeError",
     ),
     "AGENTS.md": (
-        frozenset({"keep_op"}),
-        "removal-record prose: keep_op/keep_module raise TypeError",
-    ),
-    "CLAUDE.md": (
-        frozenset({"patch", "paper_era"}),
-        "removal-record prose + the docs-lockstep incident's historical reference",
+        frozenset({"keep_op", "patch", "paper_era"}),
+        "removal-record prose (keep_op/keep_module raise TypeError) + the "
+        "docs-lockstep incident's historical reference; CLAUDE.md only imports this file",
     ),
     "tests/test_removed_spelling_lint.py": (
         frozenset({"ALL"}),

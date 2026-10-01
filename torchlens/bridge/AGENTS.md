@@ -15,7 +15,12 @@ optional dependency.
 - `captum.py`: `attribute()`, `layer()` (extra: `torchlens[captum]`).
 - `shap.py`: `explain()` (default `shap.DeepExplainer`; extra `torchlens[shap]`).
 - `sae_lens.py`: `encode()`, `decode()` (extra: `torchlens[sae]`).
-- `lit.py`: `TorchLensLitModel`, `model()` (extra: `torchlens[lit]`).
+- `lit/`: `model(net, tokenizer, *, task=, sites=, ...)` wraps a LIVE model as
+  a real `lit_nlp.api.model.Model` (classification + causal LM); `dataset()`,
+  `layout()` (extra: `torchlens[lit]`; import-inert, call-time gate; site
+  identity = structural `site_key`, never labels; doc:
+  `docs/reference/lit_bridge.md`). The old Trace-wrapping stub is deleted --
+  real LIT rejected it at construction.
 - `hf.py`: `trace_text()`, `trace_image()`, `trace_multimodal()` plus input
   detection helpers (`_is_hf_text_input`, `_is_hf_image_input`,
   `_is_hf_multimodal_input`, ...). This is the autoroute bridge: consumed by
@@ -34,14 +39,20 @@ optional dependency.
   TorchLens lookup, `"logits"` maps to the model output);
   `activations_extractor()` wires it into a real
   `ActivationsExtractorHelper` (import gate: `brainscore_vision`, which
-  needs Python >= 3.11 — wiring is pinned against the 2.3.22 wheel source
-  and stub-tested, but UNVERIFIED against a running install here).
+  needs Python >= 3.11 — LIVE-GATE VERIFIED 2026-08-29 against a running
+  brainscore-vision 2.3.22 install on py3.12/CPU: resnet18 through a real
+  helper + StimulusSet with value/order/coordinate/logits parity).
 - `rsatoolbox.py`: `dataset()` (extra: `torchlens[neuro]`).
 - `mcp.py`: Model Context Protocol stdio server (`python -m
   torchlens.bridge.mcp`; extra: `torchlens[mcp]`, mcp>=2.0). Read-only tools
   over SAVED `.tlspec` artifacts + environment: `torchlens_doctor`,
-  `torchlens_api_map`, `torchlens_load_overview`, `torchlens_agent_dump`,
-  `torchlens_explain`. The pure layer (`TOOL_SPECS`/`call_tool`) has NO mcp
+  `torchlens_api_map`, `torchlens_overview`, `torchlens_dump`,
+  `torchlens_explain`, `torchlens_query_sites`, `torchlens_payload_stats`,
+  `torchlens_compare`, `torchlens_schema`, and the F03 ledger family
+  (`torchlens_ledger_overview`/`_entry`/`_evidence`). The removed
+  `torchlens_load_overview`/`torchlens_agent_dump` spellings were renamed to
+  `torchlens_overview`/`torchlens_dump` (F29 remove-and-rename, no aliases).
+  The pure layer (`TOOL_SPECS`/`call_tool`) has NO mcp
   dependency and is what tests drive; `_build_server()` wires the mcp>=2.0
   `MCPServer` high-level API (schemas derived from handler signatures — keep
   handler params in sync with `TOOL_SPECS`). No tool executes user code or

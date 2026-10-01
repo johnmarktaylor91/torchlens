@@ -4,7 +4,7 @@ Two gates live here:
 
 * the per-block gate over the P2 ``docs/`` pages (``DOC_FILES``), and
 * the canonical-page gate that EXECUTES every non-sketch Python fence in
-  ``README.md``, ``CLAUDE.md``, and ``AGENTS.md`` top to bottom, statement by
+  ``README.md`` and ``AGENTS.md`` (``CLAUDE.md`` only imports it) top to bottom, statement by
   statement, in one shared namespace per page.
 
 The canonical-page ambient contract is deliberately tiny: the harness injects
@@ -194,7 +194,7 @@ def test_doc_python_blocks_run_reference_views(
     _run_doc_block(file_name, block_index, code, tmp_path)
 
 
-CANONICAL_PAGES = ("README.md", "CLAUDE.md", "AGENTS.md")
+CANONICAL_PAGES = ("README.md", "AGENTS.md")
 _SKETCH_MARKER_RE = re.compile(r"^\s*#.*\bAPI sketch\b", re.IGNORECASE)
 _OPTIONAL_AMBIENT_NAMES = frozenset({"tf_model", "tf_x"})
 

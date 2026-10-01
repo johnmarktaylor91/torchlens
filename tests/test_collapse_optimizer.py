@@ -1910,7 +1910,8 @@ def test_collapse_ceiling_documented_lockstep() -> None:
     ``collapse="auto"|"max"``, ``Trace.collapse_plan()`` and
     ``Trace.collapse_schedule()`` for large traces; per the LOCKED docs rule the
     constant (and its current value) must appear in the user-facing collapse
-    docs, the limitations catalog, the glossary, and both agent guides.
+    docs, the limitations catalog, the glossary, and the agent guide (AGENTS.md;
+    CLAUDE.md only imports it).
     """
 
     from torchlens.visualization.collapse_optimizer import COLLAPSE_OPTIMIZER_MAX_OPS
@@ -1920,7 +1921,6 @@ def test_collapse_ceiling_documented_lockstep() -> None:
         repo_root / "docs" / "reference" / "collapse.md",
         repo_root / "docs" / "reference" / "limitations.md",
         repo_root / "docs" / "reference" / "glossary.md",
-        repo_root / "CLAUDE.md",
         repo_root / "AGENTS.md",
     ]
     for page in doc_pages:

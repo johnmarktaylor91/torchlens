@@ -17,9 +17,8 @@ pytestmark = pytest.mark.smoke
 # tests/oracles/test_oracle_w0_lints.py -- one cites the other, never forks).
 PUBLIC_SURFACE_SIZE = 116
 PUBLIC_SURFACE_DOCS = (
-    "CLAUDE.md",
+    "AGENTS.md",
     "torchlens/AGENTS.md",
-    "torchlens/CLAUDE.md",
     "docs/for-ai-agents.md",
     "docs/migration/v2.0_api_changes.md",
 )
@@ -105,18 +104,17 @@ def test_agent_docs_use_current_internal_paths() -> None:
         assert (root / relative_path).is_file(), relative_path
 
     validation_docs = "\n".join(
-        (root / path).read_text(encoding="utf-8")
-        for path in ("torchlens/validation/AGENTS.md", "torchlens/validation/CLAUDE.md")
+        (root / path).read_text(encoding="utf-8") for path in ("torchlens/validation/AGENTS.md",)
     )
     assert "tlspec_manifest_v{schema_version}.json" in validation_docs
     assert "capture/backward.py" not in validation_docs
 
-    intervention_doc = (root / "torchlens/intervention/CLAUDE.md").read_text(encoding="utf-8")
+    intervention_doc = (root / "torchlens/intervention/AGENTS.md").read_text(encoding="utf-8")
     assert "tl.Bundle" in intervention_doc
     assert "torchlens.bundle.Bundle" not in intervention_doc
 
 
-#: Structured smoke-count claim in CLAUDE.md's tier section. The lockstep test
+#: Structured smoke-count claim in AGENTS.md's tier section. The lockstep test
 #: below requires the claim to PARSE (dated, with raw collect-only numbers);
 #: the drift tripwire compares the parsed numbers against a live collection so
 #: the gate detects staleness instead of freezing it (the pre-r3 version
@@ -131,14 +129,14 @@ def test_dated_test_tier_claim_is_present_and_selector_is_additive() -> None:
     """Require a parseable dated tier record and default rare-test exclusion."""
 
     root = _repo_root()
-    guide = (root / "CLAUDE.md").read_text(encoding="utf-8")
+    guide = (root / "AGENTS.md").read_text(encoding="utf-8")
     assert TIER_CLAIM_RE.search(guide), (
-        "CLAUDE.md's Testing Tiers section lost its structured smoke-count "
+        "AGENTS.md's Testing Tiers section lost its structured smoke-count "
         "claim ('~Nk tests (S/T collect-only, measured YYYY-MM-DD)'); the "
         "drift tripwire needs it parseable"
     )
     assert re.search(r"measured 20\d{2}-\d{2}-\d{2}.{0,200}took \d+s \(~\d+ min\)", guide, re.S), (
-        "CLAUDE.md lost its dated smoke wall-clock measurement record"
+        "AGENTS.md lost its dated smoke wall-clock measurement record"
     )
     assert 'pytest tests/ -m "not rare and not slow"' in guide
 
@@ -160,7 +158,7 @@ BUDGET_CLAIM_RE = re.compile(
 
 
 def test_documented_duration_budgets_match_the_shipped_constants() -> None:
-    """CLAUDE.md and tests/AGENTS.md budget sentences track conftest reality."""
+    """AGENTS.md and tests/AGENTS.md budget sentences track conftest reality."""
 
     root = _repo_root()
     conftest_text = (root / "tests" / "conftest.py").read_text(encoding="utf-8")
@@ -174,7 +172,7 @@ def test_documented_duration_budgets_match_the_shipped_constants() -> None:
         for match in re.findall(pattern, conftest_text, flags=re.MULTILINE)
     }
     assert set(shipped) == {"smoke", "heavy", "grace"}, "conftest budget constants moved or renamed"
-    for doc in ("CLAUDE.md", "tests/AGENTS.md"):
+    for doc in ("AGENTS.md", "tests/AGENTS.md"):
         text = (root / doc).read_text(encoding="utf-8")
         claim = BUDGET_CLAIM_RE.search(text)
         assert claim is not None, (
@@ -337,7 +335,7 @@ CURATED_NAMESPACE_DOCS = {
     "torchlens.semantic": ("docs/facets.md",),
     "torchlens.debug": ("docs/reference/debug.md",),
 }
-CURATED_COMMON_VENUES = ("docs/reference/glossary.md", "CLAUDE.md", "AGENTS.md")
+CURATED_COMMON_VENUES = ("docs/reference/glossary.md", "AGENTS.md")
 
 
 def test_curated_namespace_callables_are_documented() -> None:
@@ -374,22 +372,22 @@ def test_tier_census_figures_agree_across_docs() -> None:
     was slow-marked and CLAUDE-only. This half is a pure textual
     consistency gate (no collection; lives here in the smoke-marked docs
     lockstep module -- its old home tests/test_docs_tier_drift.py is
-    module-slow): the total in CLAUDE.md's
+    module-slow): the total in AGENTS.md's
     smoke sentence must equal the total in tests/AGENTS.md's unmarked row.
     The live-count validation above stays slow (it pays a full collection).
     """
 
     root = Path(__file__).resolve().parents[1]
-    claude = (root / "CLAUDE.md").read_text(encoding="utf-8")
+    claude = (root / "AGENTS.md").read_text(encoding="utf-8")
     agents = (root / "tests" / "AGENTS.md").read_text(encoding="utf-8")
     claude_match = re.search(r"\((\d[\d,]*)/(\d[\d,]*) collect-only, measured ([0-9-]+)", claude)
-    assert claude_match, "CLAUDE.md lost its smoke census sentence"
+    assert claude_match, "AGENTS.md lost its smoke census sentence"
     agents_match = re.search(r"\((\d[\d,]*)/(\d[\d,]*), \d+%, measured ([0-9-]+)", agents)
     assert agents_match, "tests/AGENTS.md lost its unmarked census row"
     claude_total = int(claude_match.group(2).replace(",", ""))
     agents_total = int(agents_match.group(2).replace(",", ""))
     assert claude_total == agents_total, (
-        f"tier census totals contradict: CLAUDE.md says {claude_total} "
+        f"tier census totals contradict: AGENTS.md says {claude_total} "
         f"(measured {claude_match.group(3)}) but tests/AGENTS.md says "
         f"{agents_total} (measured {agents_match.group(3)}) — remeasure ONCE "
         "and update both docs in the same change"

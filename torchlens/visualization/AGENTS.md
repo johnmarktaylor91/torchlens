@@ -47,14 +47,25 @@ The `_render_dot.py` entry point is split across sibling helper modules; all are
 | `_svg_compose.py` | SVG post-processing (image inlining, viewBox normalization) and code-panel composition |
 | `_render_utils.py` | Internal Graphviz helpers shared across rendering paths (subprocess execution, HTML escaping) |
 | `_label_format.py` | Node label formatting helpers |
-| `_edge_multiplicity.py` | Rendered-edge multiplicity disclosure (dedupe registry, honest `xN` edge labels) |
+| `_typography.py` | The one typography record (vizmech D29): pinned font family + semantic size roles consumed by every label builder |
+| `_legend.py` | The one compact HTML-table legend node in a dedicated rank (role legend, channel disclosures, backward key as sections; vizmech D28/D30) |
+| `_geometry_audit.py` | Geometry audit v2 + usability envelopes: widened element classes, grid-indexed pairing, engine-attributed parsing (vizmech wave 3; test-support instrument) |
+| `_edge_multiplicity.py` | Rendered-edge multiplicity disclosure (dedupe registry, honest `xN` edge labels) and the D9 argument-position edge-label builders; at visible fan-in >= `_ARG_LABEL_MIDPOINT_FANIN` argument labels ride reserved-space midpoint labels and same-pair parallel arg edges merge into one row-listing edge (D03-R4) |
+| `_buffer_visibility.py` | Tri-state `show_buffer_layers` visibility predicates (R43 split from `_render_edges.py`) |
 | `_condensed_flow.py` | Child condensed-flow-graph construction for smart module collapse |
+| `_segment_descriptors.py` | Segment descriptor construction and label derivation for collapse plans |
+| `_collapse_disclosures.py` | Human-facing collapse disclosure warnings (no-silent-floor, memo D4) |
 | `_rank_layout_internal/`, `_summary_internal/` | Rank-layout backend internals and `summary()` internals |
 | `renderers/` | Renderer protocol (`base.py`) and the Graphviz backend (`graphviz.py`) |
 
 Smart collapse: `auto_collapse.py` (analysis + fold discovery), `collapse_optimizer.py` (v2
-frontier selection; owns the `COLLAPSE_OPTIMIZER_MAX_OPS` compute ceiling), and
-`collapse_plan.py` (plan/schedule projection) form the engine.
+frontier selection; owns the `COLLAPSE_OPTIMIZER_MAX_OPS` defensive constant),
+`collapse_plan.py` (plan/schedule records), and the F11 modules --
+`_collapse_signatures.py` (B1 member-fingerprint memo), `_collapse_runs.py` (B2 indexed
+run-fold legality), `collapse_estimator.py` ((U, W) admission estimator, budget, watchdog),
+`collapse_fallback.py` (deterministic significance-greedy fallback planner),
+`collapse_ladder.py` (typed event ladder: auto, float levels, and the public schedule),
+`collapse_patterns.py` (declarative user-named pattern folding) -- form the engine.
 
 Backward and combined graph entrypoints live in `_render_entrypoints.py`. Their grad-function source
 normalizers produce the same `RenderIRNode`, `RenderIREdge`, and `RenderIRRegion` records as the forward
@@ -120,8 +131,24 @@ pure-Python rank layout above 20,000 cost units.
 - `_svg_compose.py`: SVG post-processing (image inlining, viewBox normalization) and code-panel composition.
 - `_render_utils.py`: internal Graphviz helpers shared across rendering paths.
 - `_label_format.py`: node-label formatting helpers.
-- `_edge_multiplicity.py`: rendered-edge multiplicity disclosure (r19 dedupe registry).
+- `_typography.py`: the one typography record (vizmech D29) -- pinned font family +
+  semantic size roles consumed by every label builder.
+- `_legend.py`: the one compact HTML-table legend node in a dedicated rank; the role
+  legend, channel disclosures, and the backward key are sections of it (D28/D30).
+- `_geometry_audit.py`: geometry audit v2 + usability envelopes -- widened element
+  classes, grid-indexed pairing, engine-attributed parsing (vizmech wave 3;
+  test-support instrument).
+- `_edge_multiplicity.py`: rendered-edge multiplicity disclosure (r19 dedupe registry)
+  plus the D9 argument-position edge-label builders; at visible fan-in >=
+  `_ARG_LABEL_MIDPOINT_FANIN` argument labels relocate to reserved-space midpoint
+  labels and same-pair parallel arg edges merge into one row-listing edge (D03-R4).
+- `_buffer_visibility.py`: tri-state `show_buffer_layers` predicates (R43 split from
+  `_render_edges.py`).
 - `_condensed_flow.py`: child condensed-flow-graph construction for smart collapse.
+- `_segment_descriptors.py`: segment descriptor construction and label derivation for
+  collapse plans (R43 split from `collapse_optimizer.py`).
+- `_collapse_disclosures.py`: human-facing collapse disclosure warnings (no-silent-floor,
+  collapse memo D4; R43 split from `auto_collapse.py`).
 - `request.py`: resolved visualization requests and output targets.
 
 ## Gotchas

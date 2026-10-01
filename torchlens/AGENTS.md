@@ -6,14 +6,14 @@ Roles are functional: the coordinator owns design and integration, implementers 
 
 TorchLens extracts outs and metadata from backend-resolved captures. PyTorch eager capture is the
 stable default; MLX, JAX, tinygrad, Paddle, and TensorFlow are technical-preview backends. `import torchlens`
-exposes the public API and compatibility shims, but torch wrapping is lazy: the first torch capture
+exposes the public API, but torch wrapping is lazy: the first torch capture
 prepares the model and calls `wrap_torch()` from `backends/torch/`.
 
 ## Architecture Overview
 
 ```
 import torchlens
-  |- exposes 119 top-level public names in __all__
+  |- exposes 116 top-level public names in __all__
   |- eagerly imports ONLY the light spine: options, errors/_state, ir.*,
   |  captured_run, observers, quantities, _deprecations, _errors, _io,
   |  _literals, _save_budget, utils,
@@ -81,12 +81,18 @@ trace.draw(show_containers="nodes")
 Provisional semantic I/O surface (review-day names):
 
 ```python
-log = tl.trace(model, x, output_style="classification", output_head="logits")
+log = tl.trace(
+    model, x, capture=tl.options.CaptureOptions(output_style="classification", output_head="logits")
+)
 log.output_table(top_n=5)
 log.summary(level="output")
 log.to_pandas(include_decoded_output_summary=True)
 
-input_log = tl.trace(model, raw_text, transform=text_to_tensor, save_raw_input="small")
+input_log = tl.trace(
+    model,
+    raw_text,
+    capture=tl.options.CaptureOptions(transform=text_to_tensor, save_raw_input="small"),
+)
 input_log.draw(show_input_transform_summary=True)
 
 mds_layers = tl.in_module("block1") | tl.in_module("block2")
@@ -129,13 +135,13 @@ exclusive with backward-related capture because it discards the autograd graph.
 
 | Path | Purpose |
 |------|---------|
-| `__init__.py` | Top-level API, 119-name `__all__`, deprecation shims, `peek`/`extract` helpers |
+| `__init__.py` | Top-level API, 116-name `__all__`, lazy facade, `pluck`/`extract` helpers |
 | `_state.py` | Global logging toggle, active log, decoration maps, prepared-model registry; no torchlens imports except the sanctioned `errors._base` leaf (a RUNTIME base-class import, cycle-safe; only its TYPE_CHECKING block is typing-only) |
 | `_trace_state.py` | Small runtime state enum exposed through `torchlens.io` |
 | `_errors.py`, `errors/` | Public and legacy exception classes |
 | `_io/`, `io/` | Portable `.tlspec` save/load, manifest, lazy tensor refs, public I/O helpers |
 | `options.py` | Capture, save, visualization, replay, intervention, and streaming option groups |
-| `observers.py` | `tap()` and `span()` observer helpers (`record_span` is a deprecated warning alias) |
+| `observers.py` | `tap()` and `span()` observer helpers |
 | `report/` | `report.explain(log)` and capture-time scalar logging |
 | `stats/` | Streaming stats and `aggregate()` over dataloaders |
 | `types.py`, `accessors/` | Moved type/accessor aliases for non-top-level public names |
@@ -240,7 +246,7 @@ exclusive with backward-related capture because it discards the autograd graph.
 - `intervention/_topology/` - internal bundle supergraph and topology diff support.
 - `merged/` - cross-rank merging (C1): `tl.merge_ranks`/`tl.merge_report`, the
   `MergedTrace` presenter, frozen merge vocabularies, and the merged-directory
-  artifact (routes 2 of the 119 `__all__` names; own AGENTS.md).
+  artifact (routes 2 of the 116 `__all__` names; own AGENTS.md).
 - `distributed/` - explicit-collective capture support: `tl.distributed.arm()`,
   group-lifecycle ledger, membership-lineage audit (own AGENTS.md).
 - `bundle/` - the intervention `Bundle` product and its aligned Super* views.
@@ -359,7 +365,7 @@ authority.
 
 | File | Purpose |
 |------|---------|
-| `__init__.py` | Public API exports, moved-name deprecation shims, `peek`, `extract`, `batched_extract`, validation aliases |
+| `__init__.py` | Public API exports, lazy facade, `pluck`, `extract`, `extract_dataset` routing |
 | `_state.py` | Global toggle, active log, decoration maps, prepared model registry; no torchlens imports except the sanctioned `errors._base` leaf |
 | `_trace_state.py` | Runtime state enum surfaced through `torchlens.io` |
 | `_errors.py`, `_robustness.py`, `_training_validation.py` | Legacy/public error and compatibility helpers |
@@ -367,7 +373,7 @@ authority.
 | `_source_links.py` | Source-link helpers used by reports/visualization |
 | `constants.py` | FIELD_ORDER tuples and decorated torch function discovery |
 | `options.py` | Immutable grouped options and flat-argument merge helpers |
-| `observers.py` | `tap`, `span` (canonical; `record_span` is a deprecated warning alias), and active span state |
+| `observers.py` | `tap`, `span`, and active span state |
 | `types.py` | Moved public type aliases not kept in top-level `__all__` |
 | `user_funcs.py` | Main capture, summary, visualization, validation, and bundle graph entry points |
 
@@ -381,10 +387,11 @@ authority.
 
 ## Public Surface
 
-`torchlens.__all__` is intentionally small and currently has 119 names. New user-facing
+`torchlens.__all__` is intentionally small and currently has 116 names. New user-facing
 objects should usually live under submodules (`torchlens.io`, `torchlens.options`,
-`torchlens.bridge`, `torchlens.errors`, etc.) with moved-name shims only when compatibility
-requires them.
+`torchlens.bridge`, `torchlens.errors`, etc.). Interim-phase policy is remove-and-rename,
+never deprecation shims (tests/test_deprecation_inventory.py pins the package
+deprecation-free).
 
 Unified capture examples:
 
@@ -453,11 +460,17 @@ run preparation behind a no-allocation readiness capability gate.
 Provisional semantic I/O examples (review-day names):
 
 ```python
-classifier_trace = tl.trace(model, x, output_style="classification", output_head="logits")
+classifier_trace = tl.trace(
+    model, x, capture=tl.options.CaptureOptions(output_style="classification", output_head="logits")
+)
 classifier_trace.output_table(top_n=5)
 classifier_trace.summary(level="output")
 
-input_trace = tl.trace(model, raw_text, transform=text_to_tensor, save_raw_input="small")
+input_trace = tl.trace(
+    model,
+    raw_text,
+    capture=tl.options.CaptureOptions(transform=text_to_tensor, save_raw_input="small"),
+)
 input_trace.draw(show_input_transform_summary=True)
 
 mds_layers = tl.in_module("block1") | tl.in_module("block2")
@@ -491,8 +504,9 @@ Sprint C RDM, feature-map, and scree node visuals are PIL-only render-time image
 from `tl.viz.render_*` primitives and are provisional until review-day signoff.
 
 `record(keep_op=...)` and `record(keep_module=...)` are removed and raise `TypeError`.
-`record(save=...)` is the only selective-capture spelling. `layers_to_save=[...]` still exists
-as the deprecated flat alias for final-label selection; it is NOT two-pass-only —
+`record(save=...)` is the only selective-capture spelling. `capture=CaptureOptions(
+layers_to_save=[...])` remains the final-label selection door (the bare flat kwarg is
+removed); it is NOT two-pass-only —
 `_trace_selector_helpers.py` builds a live single-pass predicate whenever early labels
 suffice, falling back to two-pass resolution otherwise. An
 unqualified recurrent layer label saves all passes, while `"label:2"` saves only pass 2.

@@ -35,8 +35,9 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `_trace_fork.py` | M11 copy-on-write fork builder (COW shells over `OpStoreView`s) |
 | `_compaction.py` | Freeze-seam Op metadata pooling (M11 fold) + M14 duplicate/empty container-cell pooling (`PooledCell`, hydrate-on-read) + singleton label-list compaction (bare str + identity-gated store registry, kind tables only) |
 | `_layer_spec.py` | `_LAYER_MIRROR_SPEC` and the Layer mirror-field spec (split out of `layer.py`) |
+| `_layer_accessors.py` | `OpAccessor`/`LayerAccessor` dict-like lookup (split out of `layer.py`; re-exported there) |
 | `_schema_bindings.py` | GENERATED per-field `StorageBinding` axes — DO NOT EDIT; regenerate with `tools/generate_record_schema.py` |
-| `_trace_components.py` | Declared `TRACE_FIELD_OWNERSHIP` component map — 316 entries, pinned equal to the `FIELD_POLICY` key set (the 220-name `MODEL_LOG_FIELD_ORDER` is a strict subset) |
+| `_trace_components.py` | Declared `TRACE_FIELD_OWNERSHIP` component map — 328 entries, pinned equal to the `FIELD_POLICY` key set (the 229-name `MODEL_LOG_FIELD_ORDER` is a strict subset) |
 | `_trace_stack.py` | Order-aligned activation stacking for completed traces |
 | `_trace_rehydrate.py` | Load-side Trace rehydration |
 | `_backend_capability_guards.py` | Backend capability guard helpers |
@@ -47,9 +48,11 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `_trace_validation.py` | Trace validation and log-entry removal helpers |
 | `_trace_viz.py` | Trace visualization entrypoints |
 | `op.py` | `Op` two-word row facade (`_core`/`_row` over `_trace_core`), `TensorLog` alias, tensor save, per-pass fields |
+| `_op_transforms.py` | User-transform apply + train-mode/streaming output validation helpers (split from `op.py`; `op.py` re-exposes them) |
 | `layer.py` | `Layer` aggregate, pass delegation, graph unions |
 | `buffer.py` | `Buffer` and `BufferAccessor` |
 | `module.py` | `ModuleCall`, `Module`, `ModuleAccessor` |
+| `_call_tree.py` | ModuleCall ASCII call-tree printer + call-scope op resolution/edge-count helpers (split from `module.py`) |
 | `param.py` | `Param`, lazy grad access, `ParamAccessor` |
 | `backward_pass.py` | Per-invocation backward-pass records and accessor |
 | `grad_fn.py` | Backward graph `GradFn` and accessor |
@@ -183,13 +186,13 @@ whole fork graph.
 ## Key Access Patterns
 
 ```python
-log["conv2d_1_5"]      # Layer aggregate
-log["conv2d_1_5:2"]    # Op for a specific pass
-log[3]                 # Op by ordinal
-log.layers             # LayerAccessor
-log.modules            # ModuleAccessor
-log.params             # ParamAccessor
-log.buffers            # BufferAccessor
+log["conv2d_1_5"]  # Layer aggregate
+log["conv2d_1_5:2"]  # Op for a specific pass
+log[3]  # Op by ordinal
+log.layers  # LayerAccessor
+log.modules  # ModuleAccessor
+log.params  # ParamAccessor
+log.buffers  # BufferAccessor
 ```
 
 Single-pass `Layer` values delegate per-pass attributes:
@@ -197,8 +200,8 @@ Single-pass `Layer` values delegate per-pass attributes:
 ```python
 layer = log.layers["linear_1_1"]
 layer.out
-layer.children       # union across ops
-layer.ops             # dict[int, Op]
+layer.children  # union across ops
+layer.ops  # dict[int, Op]
 ```
 
 ## Field Management
