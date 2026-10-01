@@ -1538,15 +1538,18 @@ def _probe_cpu_half_kernels() -> bool:
     Returns
     -------
     bool
-        ``True`` when CPU ``addmm``, ``layer_norm``, and ``nextafter`` all
-        accept float16 operands. torch 2.1-2.2's CPU backend is missing these
-        kernels for Half tensors (``addmm_impl_cpu_``, ``LayerNormKernelImpl``,
-        ``nextafter_cpu`` all raise ``"... not implemented for 'Half'"``);
-        later torch ships them. Absence is a genuine torch CPU limitation on
-        the floor, not a TorchLens degradation -- tests that exercise a
-        half-precision CPU forward, or TorchLens's own ULP-step validation
-        machinery (``torch.nextafter`` in ``validation/core.py`` and
-        ``validation/exemptions.py``) on a Half-dtype output, skip on it.
+        ``True`` when CPU ``addmm``, ``layer_norm``, ``nextafter``, and
+        ``aminmax`` all accept float16 operands. torch 2.1-2.2's CPU backend
+        is missing these kernels for Half tensors (``addmm_impl_cpu_``,
+        ``LayerNormKernelImpl``, ``nextafter_cpu``, and ``aminmax_cpu`` all
+        raise ``"... not implemented for 'Half'"``); later torch ships them.
+        Absence is a genuine torch CPU limitation on the floor, not a
+        TorchLens degradation -- tests that exercise a half-precision CPU
+        forward, or TorchLens's own ULP-step validation machinery
+        (``torch.nextafter`` in ``validation/core.py`` and
+        ``validation/exemptions.py``) or dense tensor-stats kernel
+        (``torch.aminmax`` in ``stats/_stats_kernel.py``) on a Half-dtype
+        output, skip on it.
     """
 
     try:
@@ -1554,6 +1557,7 @@ def _probe_cpu_half_kernels() -> bool:
         torch.addmm(half, half, half)
         torch.nn.functional.layer_norm(half, (2,))
         torch.nextafter(half, half)
+        torch.aminmax(half)
     except RuntimeError:
         return False
     return True
