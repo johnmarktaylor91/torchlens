@@ -40,6 +40,20 @@ from tests.real_model.r0.families import FAMILIES, FAMILY_BY_NAME, FamilySpec
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Skip every transformers-dependent item when the floor row has none installed.
+
+    L8 floor fix: this gate originally only matched items whose PATH sat under
+    ``tests/real_model/r0/``, so sibling files elsewhere in ``tests/`` that
+    import ``tests.real_model.r0.families`` (and transitively transformers) at
+    RUNTIME -- e.g. ``tests/test_sem_resid_a02.py`` -- crashed with
+    ``ModuleNotFoundError`` on the floor rows instead of skipping cleanly. The
+    registered ``real_model`` marker (``pyproject.toml``: "the R0 gate selects
+    -m 'smoke or real_model'") is the actual session-wide signal a test needs
+    this runtime, so match on it directly in addition to the directory check
+    (hook implementations receive the full session item list regardless of
+    which conftest registered them).
+    """
+
     if importlib.util.find_spec("transformers") and importlib.util.find_spec("torchvision"):
         return
     if os.environ.get("TORCHLENS_REQUIRE_R0") == "1":
@@ -55,7 +69,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     )
     this_dir = os.path.dirname(__file__)
     for item in items:
-        if str(item.path).startswith(this_dir):
+        if str(item.path).startswith(this_dir) or item.get_closest_marker("real_model") is not None:
             item.add_marker(marker)
 
 
