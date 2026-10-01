@@ -364,7 +364,12 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # structure-only layer-2 backstop's NotImplementedError-vs-RuntimeError
     # classification) lands at the same chokepoint (measured 4576); next
     # 50-line step. Debloat target unchanged: 3450.
-    "torchlens/utils/_torch_compat.py": 4600,
+    # 4600 -> 4650 (2026-10-01 L8 floor-fix "last"): one more lazy capability
+    # probe (strict-subclass construction under an active dispatch mode,
+    # HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE, the sibling of the existing
+    # Parameter-to-Tensor probe) lands at the same chokepoint (measured 4628);
+    # next 50-line step. Debloat target unchanged: 3450.
+    "torchlens/utils/_torch_compat.py": 4650,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     # 3300 -> 3320 (F24 observe): the device-memory bracket at the one
@@ -385,7 +390,11 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # with the F24 device-memory bracket to 3302 on the merged tree; next
     # 50-line step above the merged measurement, never a hand-derived
     # subtotal. The post-sprint step-down target is unchanged.
-    "torchlens/backends/torch/wrappers.py": 3350,
+    # 3350 -> 3400 (2026-10-01 L8 floor-fix "last"): the fast-path subclass-
+    # construction gate (HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE, the table +
+    # helper + decoration-time constant + the fast-path pause branch) lands
+    # here (measured 3374); next 50-line step above it.
+    "torchlens/backends/torch/wrappers.py": 3400,
     # 3300 -> 3301 (2026-08-27 C01 item 5): same relocation import re-sort (+1).
     # 3301 -> 3400 (2026-10-01 ci-fix ratchet settle): "give the preview
     # backends torch's label convention" (8e5f966d8) landed the same

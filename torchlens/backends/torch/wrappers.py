@@ -37,6 +37,7 @@ from ...data_classes.func_call_location import FuncCallLocation
 from ...data_classes.internal_types import FuncExecutionContext
 from ...utils._torch_compat import (
     HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE,
+    HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE,
     dynamo_is_compiling,
     fix_tensor_sequence_slot,
     get_current_function_mode_stack,
@@ -1485,6 +1486,44 @@ def _setattr_ignoring_advisories(namespace: Any, name: str, value: Any) -> None:
         setattr(namespace, name, value)
 
 
+# Positional index of the target Tensor subclass ``cls`` argument for each
+# wrapped callable whose ORIGINAL can crash under an active python
+# TorchDispatchMode on torch 2.1/2.2 (``HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE``;
+# see ``_fast_path_pauses_for_subclass_ctor`` below). ``__new__``/
+# ``_make_subclass`` are called as ``cls(...)``/``cls._make_subclass(cls,
+# ...)`` (class first); ``as_subclass`` is an instance method,
+# ``tensor.as_subclass(cls)`` (class second). This is the FAST-PATH-only
+# table: the LOGGED path's own ``__new__``-only gap-tracked pause (see
+# ``constructs_tensor_subclass`` below) is unrelated and untouched.
+_FAST_PATH_SUBCLASS_CLS_ARG_INDEX: dict[str, int] = {
+    "__new__": 0,
+    "_make_subclass": 0,
+    "as_subclass": 1,
+}
+
+
+def _fast_path_constructs_strict_subclass(args: tuple[Any, ...], idx: int) -> bool:
+    """Return whether ``args[idx]`` is a strict (non-``torch.Tensor``) subclass cls.
+
+    Parameters
+    ----------
+    args:
+        Positional call arguments.
+    idx:
+        Index of the candidate subclass ``cls`` argument.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``args[idx]`` is a type strictly below ``torch.Tensor``.
+    """
+
+    if len(args) <= idx:
+        return False
+    cls = args[idx]
+    return isinstance(cls, type) and cls is not torch.Tensor and issubclass(cls, torch.Tensor)
+
+
 _MUTATING_TENSOR_PROPERTY_SETTERS = frozenset({"real", "imag", "data"})
 
 # Setters that rebind the receiver to the RHS's storage instead of writing in
@@ -1562,6 +1601,21 @@ def torch_func_decorator(
     # to run under any python TorchDispatchMode when handed a strict Tensor
     # subclass cls (see pause_own_dispatch_modes); every other op pays nothing.
     constructs_tensor_subclass = func_name == "__new__"
+    # FAST-PATH-only gate (direct top-level ``__new__``/``_make_subclass``/
+    # ``as_subclass`` calls made with logging disabled -- e.g. a user model or
+    # intervention hook constructing a subclass during a replay/validation
+    # pass, or TorchLens's own paused internal calls): ``None`` whenever the
+    # active torch build tolerates subclass construction under a dispatch
+    # mode (``HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE``, the common case -- zero
+    # cost there) or ``func_name`` is not one of the three. Deliberately
+    # DISTINCT from ``constructs_tensor_subclass`` above: the LOGGED path's
+    # existing ``__new__``-only pause and its ``mode_paused_interior`` gap
+    # accounting are untouched by this.
+    _fast_path_subclass_cls_index = (
+        None
+        if HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE
+        else _FAST_PATH_SUBCLASS_CLS_ARG_INDEX.get(func_name)
+    )
     # Decoration-time constant: ``propagate_detached_saved_activation`` is a
     # guaranteed no-op for any name outside the propagation allowlist, but its
     # ARGUMENTS (two tensor collections, each with a BFS fall-back for nested
@@ -1606,7 +1660,13 @@ def torch_func_decorator(
                 materialize_deferred_for_call(_collect_tensor_args(args, kwargs))
             if needs_device_injection:
                 kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
-            out = func(*args, **kwargs)
+            if _fast_path_subclass_cls_index is not None and _fast_path_constructs_strict_subclass(
+                args, _fast_path_subclass_cls_index
+            ):
+                with pause_own_dispatch_modes():
+                    out = func(*args, **kwargs)
+            else:
+                out = func(*args, **kwargs)
             fast_collector = _state._active_fast_run_collector
             if fast_collector is not None and fast_collector.wants_function(func_name):
                 fast_collector.capture_function(func_name, out)

@@ -108,6 +108,7 @@ __all__ = [
     "HAS_JIT_OVERLOAD_RESOLVER",
     "HAS_NAMED_TENSOR_API",
     "HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE",
+    "HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE",
     "HAS_DYNAMO_OPTIMIZED_MODULE",
     "HAS_DYNAMO_ORIG_CALLABLE_MARKER",
     "HAS_FSDP_WRAPPER",
@@ -1009,6 +1010,41 @@ def _probe_parameter_as_subclass_in_dispatch_mode() -> bool:
     return type(plain_tensor) is torch.Tensor
 
 
+class _SubclassCtorProbe(torch.Tensor):
+    """Plain strict Tensor subclass used only by the ctor-in-mode probe below."""
+
+
+def _probe_subclass_ctor_in_dispatch_mode() -> bool:
+    """Return whether constructing a STRICT Tensor subclass works in a dispatch mode.
+
+    Torch 2.1 and 2.2 reject ``Tensor.as_subclass``/``_make_subclass`` (and the
+    equivalent ``__new__`` path) into a custom (non-``torch.Tensor``) subclass
+    while a :class:`TorchDispatchMode` is active: "Creating a new Tensor
+    subclass X but the raw Tensor object is already associated to a python
+    object of type Tensor." This reproduces on stock torch with a no-op mode
+    (TorchLens's own wrapping is not the cause); newer torch permits the
+    conversion. TorchLens's completeness witness and intervention-ready
+    captures are themselves dispatch modes, so call sites that construct or
+    convert into a strict subclass while one is active need this behavioral
+    probe rather than a parsed version string. Sibling probe (Parameter-to-
+    Tensor, the opposite direction, also version-gated but independently):
+    :func:`_probe_parameter_as_subclass_in_dispatch_mode`.
+
+    Returns
+    -------
+    bool
+        ``True`` when the conversion succeeds inside a redispatching mode.
+    """
+
+    base = torch.empty(0)
+    try:
+        with _ParameterAsSubclassProbeMode():
+            converted = base.as_subclass(_SubclassCtorProbe)
+    except (RuntimeError, TypeError):
+        return False
+    return type(converted) is _SubclassCtorProbe
+
+
 def _probe_roll_tensor_shifts() -> bool:
     """Return whether ``torch.roll`` accepts a bare 0-dim tensor ``shifts``.
 
@@ -1711,6 +1747,7 @@ HAS_GENERATOR_PHILOX_STATE: bool = hasattr(torch.Generator, "philox_state")
 HAS_SAFE_WEIGHTS_ONLY_LOAD: bool = _probe_safe_weights_only_load()
 HAS_TENSOR_SEQUENCE_SLOT_FIX: bool = _probe_tensor_sequence_slot_fix()
 HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE: bool = _probe_parameter_as_subclass_in_dispatch_mode()
+HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE: bool = _probe_subclass_ctor_in_dispatch_mode()
 # r-b4 R26-5a: ROLL_TENSOR_SHIFTS_SUPPORTED is a TEST HELPER, not a published
 # capability. It tracks a user-side torch spelling limitation (torch.roll with a
 # bare 0-dim tensor `shifts`: 2.8 rejects, 2.13 accepts) on which TorchLens does
@@ -1912,6 +1949,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_SAFE_WEIGHTS_ONLY_LOAD",
     "HAS_TENSOR_SEQUENCE_SLOT_FIX",
     "HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE",
+    "HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE",
     "HAS_SAVED_TENSORS_HOOK_INTROSPECTION",
     "HAS_SAVED_TENSORS_HOOKS_PATCHABLE",
     "HAS_CODE_POSITIONS",

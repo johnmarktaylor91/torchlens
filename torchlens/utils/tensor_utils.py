@@ -25,8 +25,13 @@ from typing import Any, Literal, cast, get_args
 
 import torch
 
+from ..backends.torch._modes import pause_own_dispatch_modes
 from ..backends.torch._tl import get_tensor_label, set_tensor_label
-from ._torch_compat import get_fp8_dtypes, get_functorch_wrapped_tensor_checker
+from ._torch_compat import (
+    HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE,
+    get_fp8_dtypes,
+    get_functorch_wrapped_tensor_checker,
+)
 from ._torch_symbols import torch_attr
 from .env_flags import closed_bool_env
 
@@ -903,6 +908,45 @@ def concatenate_batch_tensors(left: torch.Tensor, right: torch.Tensor) -> torch.
         return torch.cat([left, right], dim=0)
 
 
+@contextmanager
+def _pause_dispatch_modes_for_subclass_clone(x: Any) -> Iterator[None]:
+    """Pause TorchLens dispatch modes around a strict-subclass ``clone()``, when needed.
+
+    Torch's default ``__torch_function__`` subclass-return conversion calls
+    ``ret.as_subclass(cls)`` INSIDE ``x.clone()`` to reconstruct the subclass
+    type (R16-5, see ``torchlens/backends/torch/wrappers.py``). On torch 2.1
+    and 2.2 that reconstruction raises "Creating a new Tensor subclass ...
+    already associated to a python object" whenever a TorchLens dispatch mode
+    (the completeness witness, armed by default; an intervention-ready
+    capture's mode) is active -- reproduced on stock torch with a no-op mode,
+    not something TorchLens's own wrapping causes. Pausing ONCE here, around
+    the whole ``clone()`` call, covers that nested reconstruction in a single
+    non-reentrant bracket (see ``HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE``); a
+    plain ``torch.Tensor``/``Parameter`` receiver, or a modern torch build
+    that tolerates the reconstruction, pays nothing.
+
+    Parameters
+    ----------
+    x:
+        Tensor about to be cloned with its own type preserved.
+
+    Yields
+    ------
+    None
+        The ``clone()`` call this brackets.
+    """
+
+    if (
+        HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE
+        or type(x) is torch.Tensor
+        or type(x) is torch.nn.Parameter
+    ):
+        yield
+        return
+    with pause_own_dispatch_modes():
+        yield
+
+
 def _safe_get_memory_format(t: torch.Tensor) -> torch.memory_format:
     """Best-effort memory format probe — returns ``preserve_format`` on any error.
 
@@ -1670,10 +1714,11 @@ def _copy_tensor_payload(
                 # follow-up move preserves the historical behavior.
                 pass
     if not detach_tensor:
-        try:
-            return x.clone(memory_format=mem_fmt)
-        except (TypeError, RuntimeError):
-            return x.clone()
+        with _pause_dispatch_modes_for_subclass_clone(x):
+            try:
+                return x.clone(memory_format=mem_fmt)
+            except (TypeError, RuntimeError):
+                return x.clone()
     try:
         return x.detach().clone(memory_format=mem_fmt)
     except (TypeError, RuntimeError):
