@@ -1476,16 +1476,27 @@ class TinygradBackend:
 
         src = list(getattr(capture.uop, "src", ()) or ())
         # Captured UOp metadata speaks RAW label space (frozen at emit time).
-        # Recurrence grouping rewrites graph edges to final pass-qualified
-        # labels, so op-side labels are resolved back to raw space before the
-        # frozen-capture comparison; an unresolvable label keeps its literal
-        # text and fails closed against the capture.
-        final_to_raw = {
-            str(known_op.label): str(known_op._label_raw)
-            for known_op in ops_by_raw_label.values()
-            if isinstance(getattr(known_op, "label", None), str)
-            and isinstance(getattr(known_op, "_label_raw", None), str)
-        }
+        # Recurrence grouping rewrites graph edges to final labels -- the
+        # pass-qualified ``op.label`` for a multi-pass referenced layer, but
+        # the BARE ``op.layer_label`` (torch parity) for a single-pass one --
+        # so op-side labels are resolved back to raw space before the
+        # frozen-capture comparison. Both final spellings must resolve: the
+        # pass-qualified key always, and the bare key too for single-pass
+        # ops (unambiguous there; omitted for multi-pass ops, where the bare
+        # label would collide across passes and ``parents`` never uses it
+        # anyway). An unresolvable label keeps its literal text and fails
+        # closed against the capture.
+        final_to_raw: dict[str, str] = {}
+        for known_op in ops_by_raw_label.values():
+            raw_label = getattr(known_op, "_label_raw", None)
+            if not isinstance(raw_label, str):
+                continue
+            label = getattr(known_op, "label", None)
+            if isinstance(label, str):
+                final_to_raw[label] = raw_label
+            layer_label = getattr(known_op, "layer_label", None)
+            if isinstance(layer_label, str) and int(getattr(known_op, "num_passes", 1)) == 1:
+                final_to_raw[layer_label] = raw_label
         graph_positions = {
             position: (final_to_raw.get(label, label) if isinstance(label, str) else label)
             for position, label in getattr(op, "parent_arg_positions", {}).get("args", {}).items()
@@ -2881,14 +2892,21 @@ def _parent_perturbations_change_output(
         True when a value parent perturbation affects replayed child output.
     """
 
-    # Op-side labels may be pass-qualified after recurrence grouping; resolve
-    # them back to the raw capture identity before raw-keyed lookups.
-    final_to_raw = {
-        str(known_op.label): str(known_op._label_raw)
-        for known_op in ops_by_raw_label.values()
-        if isinstance(getattr(known_op, "label", None), str)
-        and isinstance(getattr(known_op, "_label_raw", None), str)
-    }
+    # Op-side labels resolve through the CONDITIONAL label map after
+    # recurrence grouping (bare layer_label for a single-pass referenced op,
+    # pass-qualified label for a multi-pass one, torch parity); resolve both
+    # spellings back to the raw capture identity before raw-keyed lookups.
+    final_to_raw: dict[str, str] = {}
+    for known_op in ops_by_raw_label.values():
+        raw_label = getattr(known_op, "_label_raw", None)
+        if not isinstance(raw_label, str):
+            continue
+        label = getattr(known_op, "label", None)
+        if isinstance(label, str):
+            final_to_raw[label] = raw_label
+        layer_label = getattr(known_op, "layer_label", None)
+        if isinstance(layer_label, str) and int(getattr(known_op, "num_passes", 1)) == 1:
+            final_to_raw[layer_label] = raw_label
     graph_positions = {
         position: (final_to_raw.get(label, label) if isinstance(label, str) else label)
         for position, label in getattr(op, "parent_arg_positions", {}).get("args", {}).items()
