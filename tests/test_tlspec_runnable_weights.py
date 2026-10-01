@@ -136,7 +136,9 @@ def test_runnable_save_normal_model_remains_tensor_payload_free(tmp_path: Path) 
     assert path.is_dir()
 
 
-@pytest.mark.smoke
+@pytest.mark.heavy  # measured 7-14s across CI rows (round-2 CI triage, 2026-10-01): over
+# the smoke 5s ceiling even on a quiet row; re-tiered rather than sped up, since the
+# cost is the runnable save/load/run round trip the test exists to exercise.
 @pytest.mark.filterwarnings(
     # A08 random-role-init disclosure (runnable_random_init_run): this test
     # exercises a weight-free runnable run DELIBERATELY; the warning is the
