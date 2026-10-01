@@ -11,6 +11,7 @@ import pytest
 
 import torchlens as tl
 from torchlens.backends import BackendUnsupportedError
+from torchlens.intervention.errors import MultiMatchWarning
 from torchlens.validation.invariants import check_metadata_invariants
 
 jax = pytest.importorskip("jax")
@@ -339,7 +340,8 @@ def test_jax_equinox_simple_mlp_uses_pytree_module_hierarchy() -> None:
     assert trace.modules["fc1"].params
     assert {param.module_address for param in trace.modules["fc1"].params} == {"fc1"}
     assert trace.params["fc1.weight"].is_trainable is True
-    fc1_labels = trace.resolve_sites(tl.in_module("fc1"), max_fanout=8).labels()
+    with pytest.warns(MultiMatchWarning, match="will fan out"):
+        fc1_labels = trace.resolve_sites(tl.in_module("fc1"), max_fanout=8).labels()
     assert fc1_labels
     assert all("fc1:1" in trace[label].modules for label in fc1_labels)
     check_metadata_invariants(trace)
@@ -360,7 +362,8 @@ def test_jax_nnx_simple_mlp_uses_pytree_module_hierarchy() -> None:
     assert trace.modules["fc1"].params
     assert {param.module_address for param in trace.modules["fc1"].params} == {"fc1"}
     assert trace.params["fc1.kernel"].is_trainable is True
-    fc1_labels = trace.resolve_sites(tl.in_module("fc1"), max_fanout=8).labels()
+    with pytest.warns(MultiMatchWarning, match="will fan out"):
+        fc1_labels = trace.resolve_sites(tl.in_module("fc1"), max_fanout=8).labels()
     assert fc1_labels
     assert all("fc1:1" in trace[label].modules for label in fc1_labels)
     check_metadata_invariants(trace)
@@ -388,8 +391,9 @@ def test_jax_equinox_nested_modules_preserve_address_tree_and_selectors() -> Non
     assert {param.module_address for param in trace.modules["encoder.proj"].params} == {
         "encoder.proj"
     }
-    proj_labels = trace.resolve_sites(tl.in_module("encoder.proj"), max_fanout=8).labels()
-    encoder_labels = trace.resolve_sites(tl.in_module("encoder"), max_fanout=8).labels()
+    with pytest.warns(MultiMatchWarning, match="will fan out"):
+        proj_labels = trace.resolve_sites(tl.in_module("encoder.proj"), max_fanout=8).labels()
+        encoder_labels = trace.resolve_sites(tl.in_module("encoder"), max_fanout=8).labels()
     assert set(proj_labels) < set(encoder_labels)
     assert all("encoder.proj:1" in trace[label].modules for label in proj_labels)
     check_metadata_invariants(trace)
@@ -418,8 +422,9 @@ def test_jax_nnx_nested_modules_preserve_address_tree_and_selectors() -> None:
         "encoder.proj"
     }
     assert trace.params["encoder.scale"].module_address == "encoder"
-    proj_labels = trace.resolve_sites(tl.in_module("encoder.proj"), max_fanout=8).labels()
-    encoder_labels = trace.resolve_sites(tl.in_module("encoder"), max_fanout=8).labels()
+    with pytest.warns(MultiMatchWarning, match="will fan out"):
+        proj_labels = trace.resolve_sites(tl.in_module("encoder.proj"), max_fanout=8).labels()
+        encoder_labels = trace.resolve_sites(tl.in_module("encoder"), max_fanout=8).labels()
     assert set(proj_labels) < set(encoder_labels)
     assert all("encoder.proj:1" in trace[label].modules for label in proj_labels)
     check_metadata_invariants(trace)
@@ -604,7 +609,8 @@ def _assert_pytree_modules_surface(trace: Any, tmp_path: Path) -> None:
     assert trace.module_identity_mode == "pytree_module"
     assert len(trace.modules) > 1
     assert trace.modules["fc1"].address == "fc1"
-    assert trace.resolve_sites(tl.in_module("fc1"), max_fanout=8).labels()
+    with pytest.warns(MultiMatchWarning, match="will fan out"):
+        assert trace.resolve_sites(tl.in_module("fc1"), max_fanout=8).labels()
 
 
 def _assert_pytree_module_children_surface(trace: Any, tmp_path: Path) -> None:
