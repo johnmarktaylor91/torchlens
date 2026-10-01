@@ -216,7 +216,10 @@ def _read_pt_shard(path: Path, keys: list[str] | None) -> dict[str, torch.Tensor
         Per-key payloads.
     """
 
-    raw = torch.load(path, weights_only=True, mmap=True)
+    # torch<2.3's mmap path requires a literal str filename (``ValueError: f
+    # must be a string filename``); a plain str is accepted on every
+    # supported torch version, so this is not a version branch.
+    raw = torch.load(str(path), weights_only=True, mmap=True)
     out: dict[str, torch.Tensor | RaggedBatch] = {}
     for key, value in raw.items():
         if keys is not None and key not in keys:

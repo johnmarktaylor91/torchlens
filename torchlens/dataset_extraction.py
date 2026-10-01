@@ -682,8 +682,11 @@ def _load_v1_extraction(
     batch_paths = [container_path / str(row["file"]) for row in rows]
     for batch_path in batch_paths:
         # mmap=True is a measured 13.4x on selective reads and retroactive on
-        # every existing artifact.
-        payload = torch.load(batch_path, weights_only=True, mmap=True)
+        # every existing artifact. torch<2.3's mmap path requires a literal
+        # str filename (``ValueError: f must be a string filename``), so pass
+        # one explicitly -- a plain str is accepted on every supported torch
+        # version, so this is not a version branch.
+        payload = torch.load(str(batch_path), weights_only=True, mmap=True)
         for key, tensor in payload.items():
             if selected is not None and key not in selected:
                 continue

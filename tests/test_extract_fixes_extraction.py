@@ -132,6 +132,34 @@ def test_load_extraction_passes_mmap_and_weights_only(
 
 
 @pytest.mark.smoke
+def test_pt_shard_reader_mmaps_a_path_object(tmp_path: Path) -> None:
+    """The lazy ``.pt`` shard reader also mmaps from a ``Path``, not just a ``str``.
+
+    torch<2.3's ``torch.load(..., mmap=True)`` raises ``ValueError: f must be
+    a string filename`` when handed a ``pathlib.Path``; ``read_shard``'s
+    ``.pt`` codec must stringify its path before calling it.
+    """
+    from torchlens._extraction.shards import read_shard
+
+    model = nn.Sequential(nn.Linear(3, 4), nn.ReLU()).eval()
+    stimuli = torch.randn(4, 3)
+    out_dir = tmp_path / "artifact"
+    extract_dataset(
+        model,
+        stimuli,
+        ["relu"],
+        batch_size=4,
+        output_dir=out_dir,
+        progress=False,
+        shard_format="pt",
+    )
+    shard_path = next(out_dir.glob("batch_*.pt"))
+    assert isinstance(shard_path, Path)
+    payload = read_shard(shard_path, "pt")
+    assert "relu" in payload
+
+
+@pytest.mark.smoke
 def test_stimulus_ids_in_memory_refuses_typed() -> None:
     """In-memory mode refuses stimulus_ids= with a teaching typed error (D2)."""
 
