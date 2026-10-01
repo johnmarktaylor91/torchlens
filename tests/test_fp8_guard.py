@@ -588,8 +588,13 @@ def test_no_fp8_variant_can_be_trusted_to_its_native_finiteness_kernel() -> None
             f"the widened check must see {dtype}'s non-finite pattern"
         )
         try:
+            # torch's exact exception type for a missing fp8 kernel is not
+            # stable across versions: some builds raise NotImplementedError,
+            # others a bare RuntimeError (NotImplementedError IS a
+            # RuntimeError, but not the reverse, so catching only the
+            # subclass misses the floor's bare-RuntimeError shape).
             native_ok = bool((~torch.isfinite(payload)).all())
-        except NotImplementedError:
+        except RuntimeError:
             continue
         if native_ok:
             trustworthy.append(str(dtype))
