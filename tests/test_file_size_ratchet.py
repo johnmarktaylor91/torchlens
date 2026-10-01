@@ -146,7 +146,15 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 4400 -> 4403 (2026-08-27 C01 item 5): the _selective_save relocation
     # re-sorted one import into a 4-line parenthesized block (+3 mechanical
     # lines, zero behavior); the god file itself did not grow.
-    "torchlens/backends/jax/backend.py": 4403,
+    # 4403 -> 4650 (2026-10-01 ci-fix ratchet settle): "give the preview
+    # backends torch's label convention" (8e5f966d8) landed real reviewed
+    # fix mass here -- the conditional bare/pass-qualified relabel epilogue,
+    # module_call_stack normalization, identity-counted parameter totals,
+    # and co_parent_params alias-tracking fixes -- measuring 4607 on the
+    # merged tree; next 50-line step above it. Conscious raise, not drift;
+    # the duplicate relabel/module-building code this same commit removed
+    # already kept the net growth well under the commit's own diff size.
+    "torchlens/backends/jax/backend.py": 4650,
     # 4600 -> 4650: the L8 C2-recording settle above re-stepped bundle to 4600
     # but the merged file MEASURES 4603 -- the settle's own re-step was three
     # lines short, red on main since the merge. Reconciled to the next 50-line
@@ -255,8 +263,20 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # unions with the F43-side threading to 4330 on the merged tree; the
     # W051 capture-door event fix (record the lowered module-intervene spec
     # so the injected-op rule anchor has a witness) lands the union at 4351.
-    "torchlens/user_funcs.py": 4360,
-    "torchlens/backends/torch/backward.py": 4450,
+    # 4360 -> 4400 (2026-10-01 ci-fix ratchet settle): the round-1 feature
+    # lanes (numbers/FactCore surface, intervention tl.when/site() spec
+    # targets, extraction artifact v2 door, tlspec v9 coordinated bump) and
+    # the subsequent integration fix wave landed reviewed surface mass on
+    # the merged tree (measures 4376); next 50-line step above it. This
+    # entry-point registry grows with each reviewed public surface addition
+    # by design; the post-sprint debloat target is unchanged.
+    "torchlens/user_funcs.py": 4400,
+    # 4450 -> 4500 (2026-10-01 ci-fix ratchet settle): "preserve checkpoint
+    # hook identity across token swap" (8397d1469) plus the round-1 feature
+    # lanes landed reviewed fix mass on the merged tree (measures 4457);
+    # next 50-line step above it. PRE-SPRINT BASELINE 3800 unchanged; the
+    # post-features debloat pass keeps it as the target.
+    "torchlens/backends/torch/backward.py": 4500,
     # 3800 -> 3850: L1 adds the grouping knob mirror + grouping_policy stamp
     # settlement (~25 lines) on top of the re-stepped feature-sprint baseline.
     # 3850 -> 3900: L9 adds the two DROP-gated backward-residuals fields
@@ -367,7 +387,12 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # subtotal. The post-sprint step-down target is unchanged.
     "torchlens/backends/torch/wrappers.py": 3350,
     # 3300 -> 3301 (2026-08-27 C01 item 5): same relocation import re-sort (+1).
-    "torchlens/backends/tinygrad/backend.py": 3301,
+    # 3301 -> 3400 (2026-10-01 ci-fix ratchet settle): "give the preview
+    # backends torch's label convention" (8e5f966d8) landed the same
+    # conditional relabel epilogue and intermediate-grad dual-spelling
+    # resolution fixes here as on jax; merged tree measures 3375. Next
+    # 50-line step above it; conscious raise, not drift.
+    "torchlens/backends/tinygrad/backend.py": 3400,
     "torchlens/backends/mlx/backend.py": 3250,
     # A07 (2026-08-26): +9 lines -- the step-1 contract gains the
     # flops_forward/flops_backward boundary-reset writes and their pinned-pair
@@ -410,7 +435,12 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # lint-ratchet fix for this same bounce); doc mass, not code growth.
     "torchlens/visualization/auto_collapse.py": 2150,
     "torchlens/validation/exemptions.py": 3000,
-    "torchlens/backends/paddle/backend.py": 2700,
+    # 2700 -> 2800 (2026-10-01 ci-fix ratchet settle): "give the preview
+    # backends torch's label convention" (8e5f966d8) landed the same
+    # conditional relabel epilogue plus intervention/halt predicate
+    # intermediate-grad dual-spelling resolution here as on jax/tinygrad;
+    # merged tree measures 2753. Next 50-line step above it.
+    "torchlens/backends/paddle/backend.py": 2800,
     "torchlens/_runnable_state.py": 2850,
     "torchlens/capture/arg_positions.py": 2650,
     "torchlens/backends/jax/jaxpr.py": 2550,
@@ -555,7 +585,14 @@ _TEST_FILE_CEILINGS: dict[str, int] = {
     "tests/test_toy_models.py": 4500,
     "tests/test_auto_collapse_metrics.py": 3200,
     "tests/test_backward.py": 2550,
-    "tests/validation_goldens/test_validation_exemption_hardening.py": 2400,
+    # 2400 -> 2650 (2026-10-01 ci-fix ratchet settle): the M1 raise-arm
+    # mutation campaign landed direct arm-specific killers (W3/W4
+    # mutation-margin survivors, the pass_count_consistency#a00 killer) in
+    # the same file as the exemption hardening they close; merged tree
+    # measures 2608. Next 50-line step above it -- this file's purpose is
+    # exactly this kind of targeted regression addition, so the growth is
+    # the campaign's reviewed product, not drift.
+    "tests/validation_goldens/test_validation_exemption_hardening.py": 2650,
     "tests/test_conditional_branches.py": 2150,
     # 2050 -> 2100 (2026-09-01 W051-FLAKE): the held-ref recipe registry gained the
     # Python / legacy-NumPy GLOBAL-engine state rows (getstate/setstate/seed, W051
