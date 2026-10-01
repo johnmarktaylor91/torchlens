@@ -2388,10 +2388,64 @@ def test_layer_pass_layer_log_xrefs_fires_on_label_key_mismatch() -> None:
         _check_layer_pass_to_layer_log_xrefs(fake_trace)  # type: ignore[arg-type]
 
 
+def test_layer_pass_layer_log_xrefs_fires_on_ops_key_mismatch() -> None:
+    """Arm 1: a layer's ``ops`` keys must match ``range(1, num_passes + 1)``.
+
+    (M1 raise-arm campaign: ``layer_pass_layer_log_xrefs#a01`` survivor --
+    the label-mismatch killer above trips arm 0 first, leaving this arm
+    unexercised.)
+    """
+
+    matching_label = "real_label_1_1"
+    layer_with_wrong_keys = SimpleNamespace(
+        layer_label=matching_label,
+        num_passes=1,
+        ops={2: SimpleNamespace(pass_index=2, layer_label=matching_label)},
+    )
+    fake_trace = SimpleNamespace(layer_logs={matching_label: layer_with_wrong_keys})
+
+    with pytest.raises(MetadataInvariantError, match="layer_pass_layer_log_xrefs"):
+        _check_layer_pass_to_layer_log_xrefs(fake_trace)  # type: ignore[arg-type]
+
+
 def test_non_torch_backward_inert_fires_on_populated_backward_flag() -> None:
     """A non-torch trace declaring ``has_backward_pass`` must raise."""
 
     fake_trace = SimpleNamespace(has_backward_pass=True)
+
+    with pytest.raises(MetadataInvariantError, match="non_torch_backward_inert"):
+        _check_non_torch_backward_inert(fake_trace)  # type: ignore[arg-type]
+
+
+def test_non_torch_backward_inert_fires_on_populated_grad_fn_logs() -> None:
+    """Arm 1: ``grad_fn_logs`` alone (no other backward field) must raise.
+
+    Mutation-margin arming (M1 raise-arm campaign, run 36309580288):
+    ``non_torch_backward_inert#a01`` survived because the whole-function
+    killer above only ever trips the first ``has_backward_pass`` arm; every
+    later arm needs its own scenario where every EARLIER arm stays silent.
+    """
+
+    fake_trace = SimpleNamespace(has_backward_pass=False, grad_fn_logs={"relu_1_1": object()})
+
+    with pytest.raises(MetadataInvariantError, match="non_torch_backward_inert"):
+        _check_non_torch_backward_inert(fake_trace)  # type: ignore[arg-type]
+
+
+def test_non_torch_backward_inert_fires_on_nonzero_backward_pass_count() -> None:
+    """Arm 5 (last): a nonzero ``num_backward_passes`` alone must raise.
+
+    (M1 raise-arm campaign: ``non_torch_backward_inert#a05`` survivor.)
+    """
+
+    fake_trace = SimpleNamespace(
+        has_backward_pass=False,
+        grad_fn_logs=None,
+        grad_fn_order=None,
+        backward_pass_logs=None,
+        backward_root_grad_fn_object_ids=None,
+        num_backward_passes=2,
+    )
 
     with pytest.raises(MetadataInvariantError, match="non_torch_backward_inert"):
         _check_non_torch_backward_inert(fake_trace)  # type: ignore[arg-type]
