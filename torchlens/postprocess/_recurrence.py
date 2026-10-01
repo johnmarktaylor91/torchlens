@@ -281,7 +281,9 @@ def relabel_edge_metadata(
     Returns
     -------
     None
-        ``parents``, ``children``, ``parent_arg_positions``, and ``_edge_uses``
+        ``parents``, ``children``, ``parent_arg_positions``, ``_edge_uses``,
+        and the raw-label-bearing lineage sets (``input_ancestors``,
+        ``output_descendants``, ``root_ancestors``, ``internal_source_ancestors``)
         are updated in place.
     """
 
@@ -293,6 +295,28 @@ def relabel_edge_metadata(
         raw_to_final.get(child, child) if isinstance(child, str) else child
         for child in op_log.children
     ]
+    # N5: lineage sets are seeded with raw labels at capture time
+    # (``root_ancestors={reserved.label_raw}``) or during the pre-relabel
+    # input/output depth flood (``input_ancestors``/``output_descendants``
+    # add the still-raw ``trace.input_layers``/``output_layers`` seeds) --
+    # both must follow every other raw-label-bearing field through this
+    # same raw-to-final substitution, or they survive postprocessing and
+    # trip the ``graph_ordering`` invariant.
+    for lineage_field in (
+        "input_ancestors",
+        "output_descendants",
+        "root_ancestors",
+        "internal_source_ancestors",
+    ):
+        lineage = getattr(op_log, lineage_field, None)
+        if lineage:
+            # Reconstruct via the ORIGINAL container type (set or frozenset)
+            # rather than always a plain set: callers may rely on the
+            # existing type (e.g. frozenset hashability).
+            relabeled = (
+                raw_to_final.get(item, item) if isinstance(item, str) else item for item in lineage
+            )
+            setattr(op_log, lineage_field, type(lineage)(relabeled))
     parent_arg_positions = getattr(op_log, "parent_arg_positions", None)
     if parent_arg_positions:
         op_log.parent_arg_positions = {
