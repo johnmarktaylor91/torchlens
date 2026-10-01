@@ -1508,7 +1508,7 @@ _SUBCLASS_CLS_ARG_INDEX: dict[str, int] = {
 }
 
 
-def _constructs_strict_subclass(args: tuple[Any, ...], idx: int) -> bool:
+def _constructs_strict_subclass(args: tuple[Any, ...], idx: int | None) -> bool:
     """Return whether ``args[idx]`` is a strict (non-``torch.Tensor``) subclass cls.
 
     Parameters
@@ -1516,7 +1516,9 @@ def _constructs_strict_subclass(args: tuple[Any, ...], idx: int) -> bool:
     args:
         Positional call arguments.
     idx:
-        Index of the candidate subclass ``cls`` argument.
+        Index of the candidate subclass ``cls`` argument, or ``None`` when the
+        caller has none (always ``False``; lets callers pass their own
+        ``... | None`` index constant without narrowing it themselves first).
 
     Returns
     -------
@@ -1524,7 +1526,7 @@ def _constructs_strict_subclass(args: tuple[Any, ...], idx: int) -> bool:
         ``True`` when ``args[idx]`` is a type strictly below ``torch.Tensor``.
     """
 
-    if len(args) <= idx:
+    if idx is None or len(args) <= idx:
         return False
     cls = args[idx]
     return isinstance(cls, type) and cls is not torch.Tensor and issubclass(cls, torch.Tensor)
