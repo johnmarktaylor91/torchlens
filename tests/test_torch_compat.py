@@ -798,3 +798,31 @@ def test_tensor_any_over_dims_fallback_matches_native_tuple_dim(
     monkeypatch.setattr(tc, "HAS_REDUCE_TUPLE_DIM", True)
     native = tc.tensor_any_over_dims(mask, (0, 2))
     assert torch.equal(fallback, native)
+
+
+def test_probe_gradient_edge_is_functional_not_just_attribute_presence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The probe calls real autograd.grad, not just hasattr (torch 2.2-2.3 trap).
+
+    L8 floor fix: torch 2.2-2.3 ships ``torch.autograd.graph.GradientEdge``
+    but its OWN ``_make_grads`` internal crashes with
+    ``AttributeError: 'GradientEdge' object has no attribute 'is_nested'``
+    when a GradientEdge is used as an output with an explicit cotangent --
+    exactly what the one-backward read engine does. The probe must catch
+    this and return False on such a build.
+    """
+
+    def _broken_grad(*args: object, **kwargs: object) -> None:
+        raise AttributeError("'GradientEdge' object has no attribute 'is_nested'")
+
+    monkeypatch.setattr(torch.autograd, "grad", _broken_grad)
+    assert tc._probe_gradient_edge() is False
+
+
+def test_probe_gradient_edge_true_when_autograd_grad_succeeds() -> None:
+    """On a healthy torch build the functional probe reports True."""
+
+    if not tc.HAS_GRADIENT_EDGE:
+        pytest.skip("this torch build genuinely lacks working GradientEdge support")
+    assert tc._probe_gradient_edge() is True
