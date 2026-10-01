@@ -32,6 +32,7 @@ from torchlens.backends.torch.wrappers import (
     get_orig_torch_funcs,
     is_decorated_function,
 )
+from torchlens.distributed import has_vetted_snapshot
 from torchlens.utils.introspection import nested_getattr
 
 pytestmark = pytest.mark.smoke
@@ -143,6 +144,13 @@ def test_partial_first_time_decoration_completes_on_retry(monkeypatch) -> None:
     assert tl.trace(nn.Linear(4, 4), torch.randn(1, 4)).num_ops >= 1
 
 
+@pytest.mark.skipif(
+    not has_vetted_snapshot(),
+    reason="full collective arming requires a census-vetted torch build "
+    "(torchlens.distributed.has_vetted_snapshot() is False here); on an unvetted "
+    "torch, _arm's recognizer derivation refuses typed before reaching the second "
+    "install family this test provokes (F1 ruling, Lead, 2026-10-01).",
+)
 def test_distributed_arm_restores_its_wraps_when_the_second_install_fails(
     monkeypatch,
 ) -> None:
