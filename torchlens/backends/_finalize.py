@@ -653,12 +653,19 @@ def _apply_recurrence_relabel_epilogue(
     its layer has a single pass, its pass-qualified ``label`` only when the
     layer is multi-pass (``_raw_to_final_layer_labels`` /
     ``final_lookup_label``) -- never the unconditionally-qualified op label.
-    ``input_layers``/``output_layers``/``buffer_layers`` instead always use
-    the bare ``layer_label`` (``_rename_model_history_layer_names``), while
-    ``internal_source_ops`` and the equivalence/recurrence groups always use
-    the fully pass-qualified op label. Previews must match this exactly so
-    backend-neutral code (and relation accessors) see the same convention
-    regardless of backend.
+    Torch's own ``input_layers``/``output_layers``/``buffer_layers`` rename
+    (``_rename_model_history_layer_names``) instead always uses the bare
+    ``layer_label`` unconditionally, but ONLY because torch always wraps the
+    real computation in single-pass input/output pseudo-ops, so the two
+    mappings coincide there in practice; torch never exercises the
+    multi-pass case for these fields. Previews do not always wrap this way
+    -- ``output_layers`` can name the real last-pass op of a multi-pass
+    layer directly -- and a bare label there would be ambiguous (multi-pass
+    bare-label lookups refuse typed), defeating the whole point of
+    ``output_layers`` as "the op that produced this output". So these
+    fields use the same CONDITIONAL mapping as ``parents``/``children``
+    here; ``internal_source_ops`` and the equivalence/recurrence groups
+    still always use the fully pass-qualified op label.
     """
 
     raw_dict = trace._raw_graph_ws.raw_layer_dict
@@ -667,11 +674,9 @@ def _apply_recurrence_relabel_epilogue(
         label: (op_log.layer_label if op_log.num_passes == 1 else op_log.label)
         for label, op_log in raw_dict.items()
     }
-    raw_to_final_bare = {label: op_log.layer_label for label, op_log in raw_dict.items()}
     changed_op = {label: final for label, final in raw_to_final_op.items() if final != label}
     changed_layer = {label: final for label, final in raw_to_final_layer.items() if final != label}
-    changed_bare = {label: final for label, final in raw_to_final_bare.items() if final != label}
-    if changed_op or changed_layer or changed_bare:
+    if changed_op or changed_layer:
         if changed_layer:
             for op_log in raw_dict.values():
                 relabel_edge_metadata(op_log, changed_layer)
@@ -680,15 +685,15 @@ def _apply_recurrence_relabel_epilogue(
         # reads them through ``trace[label]``). ``internal_source_ops`` names
         # grouped computational ops and is rewritten to the pass-qualified
         # final label; ``input_layers``/``output_layers``/``buffer_layers``
-        # name pseudo-ops (never grouped) and always resolve to the bare
-        # layer label, matching the torch backend exactly. The module-log
+        # resolve through the same conditional mapping as ``parents``/
+        # ``children`` (see the torch-parity note above). The module-log
         # builders map these to layer space at their own boundary.
         for attr_name, mapping in (
-            ("input_layers", changed_bare),
-            ("output_layers", changed_bare),
-            ("internal_source_layers", changed_bare),
+            ("input_layers", changed_layer),
+            ("output_layers", changed_layer),
+            ("internal_source_layers", changed_layer),
             ("internal_source_ops", changed_op),
-            ("buffer_layers", changed_bare),
+            ("buffer_layers", changed_layer),
         ):
             labels = getattr(trace, attr_name, None)
             if isinstance(labels, list):

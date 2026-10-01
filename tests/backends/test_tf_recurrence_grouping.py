@@ -87,7 +87,11 @@ def test_tf_repeated_dense_groups_into_passes() -> None:
     assert {op.num_passes for op in (*matmul_ops, *relu_ops)} == {3}
     assert list(relu_ops[0].recurrent_ops) == [op.label for op in relu_ops]
     assert trace.layer_num_calls[relu_ops[0].layer_label] == 3
-    status = TFBackend().validate_trace(trace)
+    # validate_trace() itself returns the bare pass/fail bool (torch-parity
+    # convention: see test_mlx_backend_validation/test_paddle_backend_validation);
+    # the rich status lives on trace.validation_replay_status afterward.
+    assert TFBackend().validate_trace(trace) is True
+    status = trace.validation_replay_status
     assert status.failed_node_count == 0
     assert status.replayed_node_count >= 1
 
@@ -106,8 +110,10 @@ def test_tf_grouping_matches_ungrouped_validation_verdict() -> None:
         capture=tl.options.CaptureOptions(recurrence_detection=False),
     )
 
-    grouped_status = TFBackend().validate_trace(grouped)
-    ungrouped_status = TFBackend().validate_trace(ungrouped)
+    assert TFBackend().validate_trace(grouped) is True
+    assert TFBackend().validate_trace(ungrouped) is True
+    grouped_status = grouped.validation_replay_status
+    ungrouped_status = ungrouped.validation_replay_status
     assert grouped_status.failed_node_count == ungrouped_status.failed_node_count == 0
     assert grouped_status.replayed_node_count == ungrouped_status.replayed_node_count
     assert ungrouped.recurrence_detection is False

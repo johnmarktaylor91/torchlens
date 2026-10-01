@@ -5,8 +5,12 @@ lineage sets ``input_ancestors``/``output_descendants``/``root_ancestors``)
 through a CONDITIONAL mapping: a referenced op's bare ``layer_label`` when its
 layer has a single pass, and its pass-qualified ``label`` only when the
 referenced layer is multi-pass. ``trace.input_layers``/``trace.output_layers``
-always use the bare layer label. Previews must reproduce this exactly so
-backend-neutral code sees one contract regardless of backend.
+resolve through the identical conditional mapping (torch's own rename always
+emits the bare label there too, but only because torch always wraps real
+computation in single-pass input/output pseudo-ops; a preview's output can be
+the real last-pass op of a multi-pass layer directly, where a bare label would
+be ambiguous). Previews must reproduce this exactly so backend-neutral code
+sees one contract regardless of backend.
 """
 
 from __future__ import annotations
@@ -16,33 +20,39 @@ import pytest
 pytestmark = pytest.mark.backend_parity
 
 
-def _assert_torch_label_convention(trace) -> None:
-    """Every parent/child reference is bare iff its own layer is single-pass."""
+def _assert_conditional_label(trace, label: str, *, context: str) -> None:
+    """A label is bare iff its own layer is single-pass; checked for lineage."""
 
     layer_num_calls = trace.layer_num_calls
+    if ":" in label:
+        layer_label, _, pass_suffix = label.rpartition(":")
+        assert pass_suffix.isdigit(), f"{label!r} ({context}) has a non-numeric suffix after ':'"
+    else:
+        layer_label = label
+    num_calls = layer_num_calls[layer_label]
+    if num_calls == 1:
+        assert label == layer_label, (
+            f"single-pass layer {layer_label!r} must be referenced bare ({context}), got {label!r}"
+        )
+    else:
+        assert label != layer_label, (
+            f"multi-pass layer {layer_label!r} must be referenced "
+            f"pass-qualified ({context}), got the bare label"
+        )
+
+
+def _assert_torch_label_convention(trace) -> None:
+    """Every parent/child/input/output reference follows the conditional rule."""
+
     for op in trace.layer_list:
         for neighbor_label in (*op.parents, *op.children):
-            if ":" in neighbor_label:
-                layer_label, _, pass_suffix = neighbor_label.rpartition(":")
-                assert pass_suffix.isdigit(), (
-                    f"{neighbor_label!r} referenced from {op.label!r} has a "
-                    "non-numeric suffix after ':'"
-                )
-            else:
-                layer_label = neighbor_label
-            num_calls = layer_num_calls[layer_label]
-            if num_calls == 1:
-                assert neighbor_label == layer_label, (
-                    f"single-pass layer {layer_label!r} must be referenced bare "
-                    f"from {op.label!r}, got {neighbor_label!r}"
-                )
-            else:
-                assert neighbor_label != layer_label, (
-                    f"multi-pass layer {layer_label!r} must be referenced "
-                    f"pass-qualified from {op.label!r}, got the bare label"
-                )
-    assert all(":" not in label for label in trace.input_layers)
-    assert all(":" not in label for label in trace.output_layers)
+            _assert_conditional_label(
+                trace, neighbor_label, context=f"referenced from {op.label!r}"
+            )
+    for label in trace.input_layers:
+        _assert_conditional_label(trace, label, context="trace.input_layers")
+    for label in trace.output_layers:
+        _assert_conditional_label(trace, label, context="trace.output_layers")
 
 
 @pytest.mark.backend_tinygrad
