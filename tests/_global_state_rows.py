@@ -417,6 +417,8 @@ _CAPABILITY_PROBE_STATE = frozenset(
         ("torchlens/utils/_torch_compat.py", "_CPU_HALF_KERNELS_PROBED"),
         ("torchlens/utils/_torch_compat.py", "HAS_CPU_FLOAT8_DETERMINISTIC_FILL"),
         ("torchlens/utils/_torch_compat.py", "_CPU_FLOAT8_DETERMINISTIC_FILL_PROBED"),
+        ("torchlens/utils/_torch_compat.py", "HAS_META_ITEM_GUARD"),
+        ("torchlens/utils/_torch_compat.py", "_META_ITEM_GUARD_PROBED"),
     }
 )
 """Feature-detection memos for the running torch build.
