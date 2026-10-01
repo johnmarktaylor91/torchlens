@@ -687,8 +687,13 @@ def _passthrough_axis_map(op: Op, parent: Op, result: _RuleResult) -> Mapping[in
         Explicit parent-to-child correspondence, or ``None`` when ambiguous.
     """
 
-    parent_rank = len(parent.shape)
-    child_rank = len(op.shape)
+    # ``shape`` is legitimately ``None`` for a non-tensor-valued op (e.g. a
+    # JAX while/cond decision pseudo-op whose captured output is not a plain
+    # tensor) that is merely a pass-through ancestor on the walk to a real
+    # geometric target; treat it as the op.py-documented shapeless default
+    # (``()``, rank 0) instead of crashing on ``len(None)``.
+    parent_rank = len(parent.shape) if parent.shape is not None else 0
+    child_rank = len(op.shape) if op.shape is not None else 0
     raw_axis_maps = result.values.get("parent_to_child_axes")
     if isinstance(raw_axis_maps, Mapping):
         parent_references = (parent.label, parent.layer_label, parent._layer_label_raw)
@@ -902,8 +907,13 @@ def _compose_window_maps(
 
     assert state.axes is not None
     spatial_rank = len(local_maps)
-    parent_rank = len(parent.shape)
-    child_rank = len(op.shape)
+    # ``shape`` is legitimately ``None`` for a non-tensor-valued op (e.g. a
+    # JAX while/cond decision pseudo-op whose captured output is not a plain
+    # tensor) that is merely a pass-through ancestor on the walk to a real
+    # geometric target; treat it as the op.py-documented shapeless default
+    # (``()``, rank 0) instead of crashing on ``len(None)``.
+    parent_rank = len(parent.shape) if parent.shape is not None else 0
+    child_rank = len(op.shape) if op.shape is not None else 0
     if spatial_rank == 0 or parent_rank < spatial_rank or child_rank < spatial_rank:
         return replace(
             state,
@@ -984,8 +994,13 @@ def _apply_full(
     assert state.axes is not None
     selected = _select_full_axes(result.values.get("axes"), parent, op)
     exact = bool(result.values.get("exact", True))
-    parent_rank = len(parent.shape)
-    child_rank = len(op.shape)
+    # ``shape`` is legitimately ``None`` for a non-tensor-valued op (e.g. a
+    # JAX while/cond decision pseudo-op whose captured output is not a plain
+    # tensor) that is merely a pass-through ancestor on the walk to a real
+    # geometric target; treat it as the op.py-documented shapeless default
+    # (``()``, rank 0) instead of crashing on ``len(None)``.
+    parent_rank = len(parent.shape) if parent.shape is not None else 0
+    child_rank = len(op.shape) if op.shape is not None else 0
     surviving = result.values.get("surviving_parent_axes")
     parent_to_child: Mapping[int, int] | None = None
     if isinstance(surviving, Sequence) and not isinstance(surviving, (str, bytes)):
