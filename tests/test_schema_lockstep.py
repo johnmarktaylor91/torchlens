@@ -1481,3 +1481,26 @@ def test_field_policy_entries_declare_a_portable_policy() -> None:
             assert isinstance(item.portable_policy, FieldPolicy), (
                 f"{catalog.owner.__name__}.{name} has a non-FieldPolicy portable policy"
             )
+
+
+@smoke
+def test_schema_generator_renders_unions_identically_on_every_python() -> None:
+    """Evaluated union annotations render the same text on 3.10 and 3.11+.
+
+    Regression: the generator used ``repr``, which reads
+    ``typing.Optional[typing.Any]`` on 3.10 and ``typing.Any | None`` on 3.11+,
+    so the generated bindings were stale on every other interpreter.
+    """
+
+    from typing import Any, Literal, Optional, Union
+
+    from tools.generate_record_schema import _render_annotation
+
+    assert _render_annotation(Optional[Any]) == "typing.Any | None"  # noqa: UP045
+    assert _render_annotation(Union[int, None]) == "int | None"  # noqa: UP007
+    assert _render_annotation(int | None) == "int | None"
+    assert _render_annotation(Any | None) == "typing.Any | None"
+    assert _render_annotation("Any | None") == "Any | None"
+    assert _render_annotation(Path | None) == "pathlib.Path | None"
+    assert _render_annotation(Union[Literal["a"], str]) == "typing.Literal['a'] | str"  # noqa: UP007
+    assert _render_annotation(list[int] | None) == "list[int] | None"
