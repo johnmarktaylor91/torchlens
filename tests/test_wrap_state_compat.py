@@ -856,6 +856,25 @@ _MEMBERSHIP_TABLE_REVIEWED: dict[tuple[str, str], str] = {
         "Export serde sym-op table; consulted only while serializing an "
         "ExportedProgram, out of eager capture scope by contract."
     ),
+    # torch 2.14 additions.
+    ("torch._higher_order_ops.flex_gemm", "FLEX_GEMM_OP_ALIASES"): (
+        "FlexGEMM decomposition-pass alias table keyed by torch.mm/addmm/bmm/"
+        "baddbmm; eagerly imported with torch (torch/__init__.py imports "
+        "torch._higher_order_ops, whose __init__ imports flex_gemm), so keys "
+        "are pre-wrap originals. Consulted only while torch.compile/Inductor "
+        "lowers a FlexGEMM higher-order op to its underlying aten overload -- "
+        "out of eager capture scope by contract, the same class as the "
+        "torch._export sym-op tables above."
+    ),
+    ("torch.utils.dlpack", "ReadOnlyTensorWrapper._DLPACK_ALLOWED"): (
+        "DLPack read-only-export allowlist keyed by torch.Tensor.__dlpack__ / "
+        "__dlpack_device__; eagerly imported with torch (torch/__init__.py "
+        "imports torch.utils.dlpack), so keys are pre-wrap originals. "
+        "Membership is checked inside ReadOnlyTensorWrapper.__torch_function__, "
+        "where the C-level __torch_function__ protocol supplies the ORIGINAL "
+        "func operand -- same basis as UninitializedTensorMixin._allowed_methods "
+        "and the MaskedTensor reduce maps above."
+    ),
 }
 
 # Compiler/export/quantization namespaces are out of capture scope by contract
