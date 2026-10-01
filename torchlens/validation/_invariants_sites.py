@@ -89,22 +89,19 @@ def _check_site_key_uniqueness(ops: list, name: str) -> None:
             # function_root capture, e.g. JAX's source-path-based scan/while
             # recurrence, never populates one). Site keys are INTENTIONALLY
             # shared across recurring passes of one site (the whole point of
-            # site_key_v1), so two retained ops the GROUPING algorithm
-            # considers the same recurring site (``equivalence_class``) must
-            # not collide here merely for sharing a site_key across passes;
-            # ``pass_index`` then separates those passes within that group.
-            # A JAX while loop's pre-loop condition check is NOT folded into
-            # the same equivalence class as its in-loop repeats (a distinct,
-            # pre-existing grouping boundary -- not something this invariant
-            # should paper over), so keying on equivalence_class first still
-            # catches the real bug class I-S2 exists for: two ops the
-            # grouping algorithm considers STRUCTURALLY DIFFERENT accidentally
-            # minting the identical site_key.
-            call_instance = (
-                ROOT_CALL_INSTANCE,
-                getattr(op, "equivalence_class", None),
-                getattr(op, "pass_index", 1),
-            )
+            # site_key_v1): ``equivalence_class`` is the grouping algorithm's
+            # own "these occurrences are interchangeable" signal, computed
+            # independently of whether every such occurrence actually landed
+            # in the same multi-pass Layer (a JAX while loop's pre-loop
+            # condition check shares its "lt" equivalence_class with every
+            # in-loop repeat, but is a separate singleton Layer -- the N+1
+            # cond-vs-N-body asymmetry is a distinct, pre-existing grouping
+            # boundary, not a site-identity bug). Two ops sharing BOTH a
+            # site_key and an equivalence_class are therefore never a
+            # collision regardless of their individual pass_index; two ops
+            # sharing a site_key with DIFFERENT equivalence classes still is
+            # -- the real bug class I-S2 exists for.
+            call_instance = (ROOT_CALL_INSTANCE, getattr(op, "equivalence_class", None))
         identity = (str(op.site_key), call_instance)
         if identity in seen:
             raise MetadataInvariantError(
