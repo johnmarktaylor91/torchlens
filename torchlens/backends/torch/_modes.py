@@ -7,11 +7,55 @@ from contextlib import contextmanager
 
 from torch.utils._python_dispatch import TorchDispatchMode
 
+from ...errors._base import CompatibilityError
 from ...utils._torch_compat import get_current_dispatch_mode_stack
 
 
 class _TorchLensDispatchMode(TorchDispatchMode):
     """Marker base for Python dispatch modes owned by TorchLens."""
+
+
+class SubclassConstructionUnderDispatchModeError(CompatibilityError, RuntimeError):
+    """A strict Tensor subclass cannot be constructed while a mode is active here.
+
+    Torch 2.1 and 2.2 raise "Creating a new Tensor subclass X but the raw
+    Tensor object is already associated to a python object of type Tensor"
+    from ``__new__``/``_make_subclass``/``as_subclass`` whenever ANY python
+    ``TorchDispatchMode`` is active -- reproduced on stock torch with a no-op
+    mode, not something TorchLens's own wrapping causes (see
+    ``HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE`` in ``torchlens.utils._torch_compat``).
+    A single non-reentrant pause bracket safely covers TorchLens's OWN nested
+    reconstruction calls (``safe_copy``'s subclass-preserving clone); pausing
+    a DIRECT, top-level construction call made while a TorchLens dispatch
+    mode (the completeness witness; an intervention-ready capture's mode) is
+    armed was tried and reverted after it corrupted interpreter state when
+    exercised across several capture paths in one process (segfault on
+    torch 2.1.2). This typed, disclosed refusal is the legitimate
+    degradation instead: upgrade to a torch release where
+    ``HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE`` is ``True``, or avoid constructing
+    or converting into a custom Tensor subclass (``__new__``,
+    ``_make_subclass``, ``as_subclass`` into a non-``torch.Tensor`` cls)
+    inside a model forward, an intervention hook, or a ``validate_forward_pass``
+    replay while capturing on this torch build.
+    """
+
+
+def _any_owned_dispatch_mode_active() -> bool:
+    """Return whether a TorchLens-owned dispatch mode is on the active stack.
+
+    Read-only: unlike :func:`pause_own_dispatch_modes`, this never pops or
+    re-enters anything, so it carries none of that bracket's reentrancy risk.
+
+    Returns
+    -------
+    bool
+        ``True`` when any active mode is a :class:`_TorchLensDispatchMode`.
+    """
+
+    stack = get_current_dispatch_mode_stack()
+    if not stack:
+        return False
+    return any(isinstance(mode, _TorchLensDispatchMode) for mode in stack)
 
 
 def _exit_own_dispatch_modes() -> tuple[_TorchLensDispatchMode, ...] | None:

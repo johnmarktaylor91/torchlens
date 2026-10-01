@@ -20,7 +20,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.backends.torch._modes import SubclassConstructionUnderDispatchModeError
 from torchlens.options import CaptureOptions
+from torchlens.utils._torch_compat import HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE
 
 
 class RejectingTensor(torch.Tensor):
@@ -86,6 +88,17 @@ def test_boundary_evidence_survives_attr_rejecting_replacement() -> None:
     ``internal_source`` with no interventions and no parents.
     """
 
+    if not HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE:
+        # Floor-torch capability gap (torch 2.1/2.2): constructing the
+        # attr-rejecting RejectingTensor subclass inside the hook, while an
+        # intervention-ready capture's TorchLens dispatch mode is active,
+        # refuses typed instead of crashing on torch's own "already
+        # associated to a python object" RuntimeError. See
+        # SubclassConstructionUnderDispatchModeError.
+        with pytest.raises(SubclassConstructionUnderDispatchModeError):
+            _boundary_capture(_rejecting_replace_hook)
+        return
+
     log = _boundary_capture(_rejecting_replace_hook)
 
     boundary = next(
@@ -103,6 +116,12 @@ def test_boundary_evidence_survives_attr_rejecting_replacement() -> None:
 @pytest.mark.smoke
 def test_rejecting_and_plain_replacements_classify_identically() -> None:
     """Attr-rejecting and ordinary replacement tensors produce the same structure."""
+
+    if not HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE:
+        # Same floor-torch gap as test_boundary_evidence_survives_attr_rejecting_replacement.
+        with pytest.raises(SubclassConstructionUnderDispatchModeError):
+            _boundary_capture(_rejecting_replace_hook)
+        return
 
     rejecting_log = _boundary_capture(_rejecting_replace_hook)
     plain_log = _boundary_capture(_plain_replace_hook)
