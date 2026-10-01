@@ -34,6 +34,7 @@ __all__ = [
     "UNCAPTURED_COLLECTIVE_OP",
     "UncapturedCollectiveOpError",
     "derive_collective_recognizer",
+    "has_vetted_snapshot",
 ]
 
 UNCAPTURED_COLLECTIVE_OP = "uncaptured_collective_op"
@@ -274,6 +275,71 @@ def _layer2_offenders() -> list[str]:
     return sorted(set(offenders))
 
 
+def _match_vetted_snapshot(
+    runtime_sets: dict[str, set[str]],
+) -> tuple[
+    tuple[str, dict[str, frozenset[str]]] | None,
+    dict[str, dict[str, dict[str, list[str]]]],
+]:
+    """Layer-1 set-equality match of ``runtime_sets`` against every snapshot.
+
+    Returns ``(matched, per_snapshot_mismatches)``: ``matched`` is the first
+    ``(snapshot_name, vetted)`` pair whose five namespace op-sets equal the
+    runtime's, or ``None`` when no snapshot matches; ``per_snapshot_mismatches``
+    names the added/removed ops per namespace for every snapshot that did not
+    match (empty when ``matched`` is not ``None``). Shared by
+    :func:`derive_collective_recognizer` (which raises on no match) and
+    :func:`has_vetted_snapshot` (which only asks the yes/no question).
+    """
+
+    matched: tuple[str, dict[str, frozenset[str]]] | None = None
+    per_snapshot_mismatches: dict[str, dict[str, dict[str, list[str]]]] = {}
+    for snapshot_name, vetted in VETTED_NAMESPACE_SNAPSHOTS:
+        mismatches: dict[str, dict[str, list[str]]] = {}
+        for namespace in COLLECTIVE_NAMESPACES:
+            runtime_ops = runtime_sets[namespace]
+            vetted_ops = vetted[namespace]
+            added = sorted(runtime_ops - vetted_ops)
+            removed = sorted(vetted_ops - runtime_ops)
+            if added or removed:
+                mismatches[namespace] = {"added": added, "removed": removed}
+        if not mismatches:
+            matched = (snapshot_name, vetted)
+            break
+        per_snapshot_mismatches[snapshot_name] = mismatches
+    return matched, per_snapshot_mismatches
+
+
+def has_vetted_snapshot() -> bool:
+    """Capability probe: does this torch build match a censused snapshot?
+
+    Cheap, read-only, and NEVER raises: answers whether the running torch's
+    collective dispatcher namespaces (layer 1 of :func:`derive_collective_recognizer`)
+    equal one of the rows in :data:`VETTED_NAMESPACE_SNAPSHOTS`. This is a
+    TorchLens-owned census fact, not a generic torch capability (it compares
+    the runtime against OUR reviewed allowlist, not against a torch API's mere
+    presence), so it lives here next to the snapshot table rather than in
+    ``torchlens/utils/_torch_compat.py``.
+
+    Use this to gate tests and call sites that require full collective arming
+    to succeed: on an unvetted torch, :func:`derive_collective_recognizer` (and
+    therefore :func:`torchlens.distributed.arm`) correctly raises
+    :class:`UncapturedCollectiveOpError` -- that fail-closed refusal is the
+    product's correct behavior, not a bug to route around. A caller that wants
+    to assert the refusal itself should call ``arm()``/``derive_collective_recognizer()``
+    directly rather than branch on this flag first.
+    """
+
+    try:
+        runtime_sets = _runtime_namespace_sets()
+    except UncapturedCollectiveOpError:
+        # Dispatcher schema enumeration itself is unavailable on this build
+        # (layer 0): there is no runtime census to match against.
+        return False
+    matched, _ = _match_vetted_snapshot(runtime_sets)
+    return matched is not None
+
+
 def derive_collective_recognizer() -> CollectiveRecognizer:
     """Derive and verify the collective recognizer against this runtime.
 
@@ -292,22 +358,7 @@ def derive_collective_recognizer() -> CollectiveRecognizer:
     """
 
     runtime_sets = _runtime_namespace_sets()
-
-    matched: tuple[str, dict[str, frozenset[str]]] | None = None
-    per_snapshot_mismatches: dict[str, dict[str, dict[str, list[str]]]] = {}
-    for snapshot_name, vetted in VETTED_NAMESPACE_SNAPSHOTS:
-        mismatches: dict[str, dict[str, list[str]]] = {}
-        for namespace in COLLECTIVE_NAMESPACES:
-            runtime_ops = runtime_sets[namespace]
-            vetted_ops = vetted[namespace]
-            added = sorted(runtime_ops - vetted_ops)
-            removed = sorted(vetted_ops - runtime_ops)
-            if added or removed:
-                mismatches[namespace] = {"added": added, "removed": removed}
-        if not mismatches:
-            matched = (snapshot_name, vetted)
-            break
-        per_snapshot_mismatches[snapshot_name] = mismatches
+    matched, per_snapshot_mismatches = _match_vetted_snapshot(runtime_sets)
 
     if matched is None:
         raise UncapturedCollectiveOpError(

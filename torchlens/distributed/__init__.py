@@ -14,6 +14,11 @@ tier:
   the merge engine runs over it.
 * Typed refusal vocabulary: ``ambiguous_group_lifetime``,
   ``group_lifetime_evidence_conflict``, ``uncaptured_collective_op``.
+* :func:`has_vetted_snapshot` -- the read-only capability probe for whether
+  this torch build's collective dispatcher matches a censused row in
+  :data:`torchlens.distributed._recognizer.VETTED_NAMESPACE_SNAPSHOTS`. Never
+  raises; use it to know in advance whether :func:`arm` can succeed, without
+  changing arm()'s own fail-closed behavior on an unvetted build.
 
 Capture of explicit ``torch.distributed`` collectives as boundary nodes is
 armed automatically at capture entry for already-initialized SPMD processes;
@@ -49,6 +54,7 @@ from ._recognizer import (
     CollectiveRecognizer as CollectiveRecognizer,
     UncapturedCollectiveOpError,
     derive_collective_recognizer,
+    has_vetted_snapshot,
 )
 
 __all__ = [
@@ -67,6 +73,7 @@ __all__ = [
     "auto_arm_degradation",
     "derive_collective_recognizer",
     "disarm",
+    "has_vetted_snapshot",
     "is_armed",
     "membership_digest_for_ranks",
 ]
