@@ -16,6 +16,8 @@ Run: python tools/generate_record_schema.py [--check]
 from __future__ import annotations
 
 import sys
+import types
+import typing
 from pathlib import Path
 from typing import Any
 
@@ -129,9 +131,70 @@ def _annotation_for(cls: type, name: str) -> str | None:
     for mro_cls in cls.__mro__:
         annotations = mro_cls.__dict__.get("__annotations__", {})
         if name in annotations:
-            annotation = annotations[name]
-            return annotation if isinstance(annotation, str) else repr(annotation)
+            return _render_annotation(annotations[name])
     return None
+
+
+def _render_annotation(annotation: Any) -> str:
+    """Render one annotation to a string that is identical on every Python.
+
+    String annotations (modules under ``from __future__ import annotations``)
+    pass through, and evaluated non-unions keep their ``repr``. Evaluated
+    unions are canonicalized, because ``repr`` of a union differs by
+    interpreter (``Any | None`` evaluates to
+    ``typing.Optional[typing.Any]`` on 3.10 but to a ``types.UnionType``
+    reading ``typing.Any | None`` on 3.11+), which made the generated file
+    stale on every interpreter but the one that last wrote it. Unions render
+    as their ``|``-joined members in declaration order.
+
+    Parameters
+    ----------
+    annotation:
+        Class-declared annotation object or string.
+
+    Returns
+    -------
+    str
+        Interpreter-independent annotation text.
+    """
+
+    if isinstance(annotation, str):
+        return annotation
+    if _is_union(annotation):
+        return " | ".join(_render_union_member(arg) for arg in typing.get_args(annotation))
+    return repr(annotation)
+
+
+def _is_union(annotation: Any) -> bool:
+    """Return whether ``annotation`` is a ``typing.Union`` or ``X | Y`` union."""
+
+    return typing.get_origin(annotation) is typing.Union or isinstance(annotation, types.UnionType)
+
+
+def _render_union_member(member: Any) -> str:
+    """Render one union member the way a ``types.UnionType`` repr names it.
+
+    Parameters
+    ----------
+    member:
+        One argument of a union annotation.
+
+    Returns
+    -------
+    str
+        ``None`` for ``NoneType``, a bare name for builtins, a
+        module-qualified name for other plain classes, else ``repr``.
+    """
+
+    if member is type(None):
+        return "None"
+    if _is_union(member):
+        return " | ".join(_render_union_member(arg) for arg in typing.get_args(member))
+    if isinstance(member, type) and not isinstance(member, types.GenericAlias):
+        if member.__module__ == "builtins":
+            return member.__qualname__
+        return f"{member.__module__}.{member.__qualname__}"
+    return repr(member)
 
 
 def _is_property(cls: type, name: str) -> bool:
