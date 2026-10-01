@@ -1727,7 +1727,11 @@ def test_jax_trace_unrolls_while_and_groups_iterations() -> None:
     assert len(cond_ops) >= 4
     assert body_adds
     assert any(op.num_passes == 3 for op in body_adds)
-    assert all(decisions[0].label in _control_parent_labels(op) for op in (*cond_ops, *body_adds))
+    # Torch parity: see the identical fix for
+    # test_jax_trace_unrolls_cond_executed_branch_with_control_edge.
+    assert all(
+        decisions[0].layer_label in _control_parent_labels(op) for op in (*cond_ops, *body_adds)
+    )
     assert trace.validate_forward_pass([]) is True
 
 
