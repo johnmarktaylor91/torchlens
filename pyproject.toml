@@ -297,7 +297,10 @@ test = [
     "requests",
     "soxr",
     "timm~=1.0",
-    "torchaudio",
+    # torchaudio is deliberately NOT here: its last release (2.11.0) is built
+    # only for torch 2.11, so on every other CI torch it installs but fails to
+    # load (`undefined symbol: torch_library_impl`). The torchaudio model tests
+    # importorskip it.
     "torch_geometric",
     "torchvision>=0.18,<1",
     # PyYAML/psutil are direct test imports (tests/test_ci_packaging_gates.py
