@@ -8,6 +8,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "intervention_replaced",
+  "file": "torchlens/_capture_honesty.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/_capture_state_helpers.py",
@@ -88,6 +96,22 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "func_call_id",
+  "file": "torchlens/_io/_load_validators.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/_io/_load_validators.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_io/bundle.py",
@@ -126,6 +150,14 @@
   "has_default": false,
   "sites": 1,
   "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/_io/injection_codec.py",
+  "has_default": true,
+  "sites": 2,
+  "via_getattr": true
  },
  {
   "ambiguous": true,
@@ -324,7 +356,15 @@
   "field": "kind",
   "file": "torchlens/_runnable_output_contracts.py",
   "has_default": false,
-  "sites": 8,
+  "sites": 10,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "output",
+  "file": "torchlens/_runnable_output_contracts.py",
+  "has_default": false,
+  "sites": 1,
   "via_getattr": false
  },
  {
@@ -350,6 +390,14 @@
   "has_default": true,
   "sites": 1,
   "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "output",
+  "file": "torchlens/_runnable_transaction.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
  },
  {
   "ambiguous": false,
@@ -2409,6 +2457,22 @@
  },
  {
   "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/capture/_episode_ledger_anchors.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/capture/_episode_ledger_anchors.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
   "field": "kind",
   "file": "torchlens/capture/_nonfinite_prefix.py",
   "has_default": false,
@@ -2908,7 +2972,7 @@
   "field": "parents",
   "file": "torchlens/capture/projectors.py",
   "has_default": false,
-  "sites": 7,
+  "sites": 8,
   "via_getattr": false
  },
  {
@@ -4299,6 +4363,14 @@
   "ambiguous": false,
   "field": "pass_index",
   "file": "torchlens/intervention/binding.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/intervention/binding.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -4355,6 +4427,14 @@
   "ambiguous": false,
   "field": "source_trace",
   "file": "torchlens/intervention/hooks.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "intervention_replaced",
+  "file": "torchlens/intervention/injection.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -4561,10 +4641,50 @@
  },
  {
   "ambiguous": false,
-  "field": "raw_index",
+  "field": "func_call_id",
   "file": "torchlens/intervention/runtime.py",
   "has_default": true,
   "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "layer_type",
+  "file": "torchlens/intervention/runtime.py",
+  "has_default": true,
+  "sites": 2,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/intervention/runtime.py",
+  "has_default": true,
+  "sites": 2,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "output",
+  "file": "torchlens/intervention/runtime.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/intervention/runtime.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "raw_index",
+  "file": "torchlens/intervention/runtime.py",
+  "has_default": true,
+  "sites": 2,
   "via_getattr": true
  },
  {
@@ -4748,7 +4868,7 @@
   "field": "kind",
   "file": "torchlens/ir/container.py",
   "has_default": false,
-  "sites": 13,
+  "sites": 19,
   "via_getattr": false
  },
  {
@@ -7233,14 +7353,6 @@
  },
  {
   "ambiguous": true,
-  "field": "kind",
-  "file": "torchlens/report/_flops_report.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/report/_flops_report.py",
   "has_default": false,
@@ -7868,7 +7980,7 @@
   "field": "kind",
   "file": "torchlens/trackers/_watch.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -8021,6 +8133,14 @@
   "file": "torchlens/utils/__init__.py",
   "has_default": false,
   "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/utils/_rng_channels.py",
+  "has_default": false,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -8812,7 +8932,7 @@
   "field": "kind",
   "file": "torchlens/visualization/_geometry_audit.py",
   "has_default": false,
-  "sites": 11,
+  "sites": 13,
   "via_getattr": false
  },
  {
@@ -9170,6 +9290,14 @@
  {
   "ambiguous": true,
   "field": "kind",
+  "file": "torchlens/visualization/_surgery_diff.py",
+  "has_default": false,
+  "sites": 9,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
   "file": "torchlens/visualization/auto_collapse.py",
   "has_default": false,
   "sites": 1,
@@ -9427,6 +9555,14 @@
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/visualization/lenses/_resolve.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/visualization/lenses/_resolve.py",
   "has_default": true,
   "sites": 2,
   "via_getattr": true
@@ -9444,7 +9580,7 @@
   "field": "kind",
   "file": "torchlens/visualization/lenses/audit/battery.py",
   "has_default": false,
-  "sites": 4,
+  "sites": 5,
   "via_getattr": false
  },
  {
@@ -9501,14 +9637,6 @@
   "file": "torchlens/visualization/source_graph.py",
   "has_default": false,
   "sites": 2,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "kind",
-  "file": "torchlens/visualization/surgery_diff.py",
-  "has_default": false,
-  "sites": 9,
   "via_getattr": false
  },
  {

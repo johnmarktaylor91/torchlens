@@ -1549,6 +1549,18 @@ def normalize_selector_like(selector_like: Any, *, lifecycle: Lifecycle) -> Base
         from ..intervention.selectors import where
 
         return where(selector_like)
+    # An ``Op``/``Layer`` RECORD is the most precise site spelling a user can
+    # hold (AUD-CODE 4.10, W051-REPLAY out-of-fence item 1). Lower it to its
+    # PASS-QUALIFIED ``Op.label`` selector(s) here, so the ``set()`` door,
+    # ``resolve_sites(record)`` and the mutator site validation all address
+    # exactly the pass(es) the record names -- never the bare ``layer_label``
+    # (the LAST pass of a multi-pass layer) the live arm below would pick.
+    # Lazy import: ``intervention.hooks`` imports this module.
+    from ..intervention.hooks import lower_record_site_target
+
+    lowered = lower_record_site_target(selector_like)
+    if lowered is not selector_like:
+        return lowered
     if lifecycle == "live" and hasattr(selector_like, "layer_label"):
         from ..intervention.selectors import label
 

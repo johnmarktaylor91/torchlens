@@ -1692,6 +1692,12 @@ def merge_visualization_options(
     else:
         values = visualization.as_dict()
         specified_fields = _explicit_fields(visualization)
+        if "view" not in specified_fields:
+            # The grouped object's non-explicit view default ("none") must not
+            # shadow the calling function's default mode: show_model_graph
+            # with a VisualizationOptions that leaves view unset used to merge
+            # to view="none" and silently render NOTHING (D04 integration fix).
+            values["view"] = function_default_mode
 
     flat_values: dict[str, Any] = {
         "view": view,

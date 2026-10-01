@@ -48,7 +48,6 @@ def attach_failed_episode_ledger(exc: BaseException, resolved: ResolvedEpisode) 
             trace,
             resolved,
             fidelity=_fidelity_basis(resolved, None),
-            started=started,
             step_join=_live_step_join_envelope(resolved, n_total, started),
         )
         complete_steps = returned if returned is not None else max(started - 1, 0)

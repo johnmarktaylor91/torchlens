@@ -30,6 +30,14 @@ This lane deliberately mints NO digest and NO persisted field (foldA D7): the
 positive "this ledger belongs to this product" claim is F40b's mint and F42's
 consumption. This module only stops the ledger riding a fresh execution.
 
+The per-op ``Op.episode_step`` stamps (lane F42, written at settlement) are
+evidence of the SAME captured execution as the ledger, so the policy scrubs
+them on every fresh-execution product alongside the ledger drop (W051 fix
+for audit finding AUD-CODE 1.1: a stamped product whose ledger became a
+travel note read as ``capture_kind="plain"`` and could be SAVED but never
+LOADED -- the C07X identity-fact gate refuses stamps without a declaration,
+correctly; the defect was the surviving stamps, never the gate).
+
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming session;
 semantics are pinned by the foldA memo (D6) and the red tests in
 ``tests/test_episode_truth_travel_policy.py``.
@@ -46,6 +54,7 @@ __all__ = [
     "AnnotationsTravelPolicy",
     "register_travel_policy",
     "registered_travel_policies",
+    "scrub_episode_step_stamps",
     "scrub_fresh_execution_annotations",
     "travel_policy_for",
 ]
@@ -175,9 +184,33 @@ def _episode_drop_detail(payload: Any) -> str:
     return (
         f"episode evidence{origin} describes the ORIGINAL captured execution; "
         "this product is a fresh re-execution (run/refresh), so the per-step "
-        "ledger was dropped by the annotations travel policy. Re-capture with "
+        "ledger was dropped and the per-op episode_step stamps were cleared by "
+        "the annotations travel policy. Re-capture with "
         "tl.trace(..., episode=...) to derive step evidence for these inputs."
     )
+
+
+def scrub_episode_step_stamps(trace: Any) -> int:
+    """Clear every ``Op.episode_step`` stamp on ONE fresh-execution product.
+
+    The stamps are per-op evidence of the captured execution (which stepped
+    call recorded the op); on a re-executed product they would answer
+    ``at_step`` post hoc from stale evidence, and they make the product
+    unloadable once the ledger is a travel note (the load gate admits stamps
+    only beside an episode declaration). Returns the number of stamps
+    cleared; a product with no stamps is a no-op.
+    """
+
+    cleared = 0
+    for op in getattr(trace, "layer_list", None) or ():
+        if getattr(op, "episode_step", None) is None:
+            continue
+        try:
+            op.episode_step = None
+        except (AttributeError, TypeError):
+            continue
+        cleared += 1
+    return cleared
 
 
 def scrub_fresh_execution_annotations(trace: Any) -> tuple[str, ...]:
@@ -185,7 +218,11 @@ def scrub_fresh_execution_annotations(trace: Any) -> tuple[str, ...]:
 
     Called from the provider settlement finalizer for every product that
     presents a re-executed forward. Registered capture-evidence keys are
-    dropped per their drop mode; every other sub-key travels untouched.
+    dropped per their drop mode; every other sub-key travels untouched. The
+    per-op ``Op.episode_step`` stamps are cleared on every fresh-execution
+    product (:func:`scrub_episode_step_stamps`), whether or not the product
+    still carries the ledger key -- the stamps describe the same original
+    execution the ledger does.
 
     Parameters
     ----------
@@ -201,6 +238,7 @@ def scrub_fresh_execution_annotations(trace: Any) -> tuple[str, ...]:
         product carried none of them).
     """
 
+    scrub_episode_step_stamps(trace)
     annotations = getattr(trace, "annotations", None)
     if not isinstance(annotations, dict):
         return ()

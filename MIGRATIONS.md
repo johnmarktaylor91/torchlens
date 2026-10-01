@@ -168,3 +168,15 @@ executes the supplied module's `forward`, a different entry point than
 the captured bound method). Replay engines and loaded-sparse `run()` are
 unaffected. Remedy for legacy artifacts: re-capture with a current
 TorchLens, or use the replay engine.
+
+## Op-Level Buffer Accessor Iteration (behavior change)
+
+Op-level buffer accessors (`op.buffer_sources` / `op.buffer_sinks` and friends)
+now share the layer-accessor access model: iteration yields the resolved `Op`
+records themselves, and `.get(...)` resolves on the same 0-based-position /
+label basis as `__getitem__`. Previously iteration yielded internal call-index
+keys and `.get(key)` resolved those keys, so code written against the old model
+(`for key in acc: acc.get(key)`) now receives `Op` records directly -- iterate
+the accessor and read each record's `.label` (or index by position/label). The
+partition semantics are unchanged: sources are the buffer-read parents in
+order, sinks the buffer-write children in order.

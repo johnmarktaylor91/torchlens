@@ -15,7 +15,7 @@ def test_trace_streaming_on_iterable_inputs() -> None:
     traces = utils.trace_streaming(
         model,
         [torch.ones(1, 2), torch.zeros(1, 2)],
-        layers_to_save="none",
+        capture=tl.options.CaptureOptions(layers_to_save="none"),
     )
     assert len(traces) == 2
 

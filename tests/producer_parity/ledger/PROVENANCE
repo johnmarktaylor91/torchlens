@@ -1916,3 +1916,182 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 2edca5d6777ca6b83ef510770575c5bd96792bae (clean)
 recorded: 2026-08-31T04:42:03.048365+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T95d assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 3e17f5de739513cb9810be27290bae2320bb43e8 (clean)
+recorded: 2026-09-01T03:31:47.714239+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T95d assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 3e17f5de739513cb9810be27290bae2320bb43e8 (clean)
+recorded: 2026-09-01T03:31:52.226845+00:00
+reason: FIXD03-F13: buffer-visibility predicates split out of _render_edges.py (R43 ratchet) moved their read sites; arg-label fan-in relocation added _edge_multiplicity read sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: bb135c71d134b8e4cad14970f2ce888174b29a38 (dirty)
+recorded: 2026-08-31T17:21:38.244861+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T96 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: a75dae187ef4452556a74a3c6d57ac8e0ef607f5 (clean)
+recorded: 2026-09-01T04:03:32.346914+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T96 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: a75dae187ef4452556a74a3c6d57ac8e0ef607f5 (clean)
+recorded: 2026-09-01T04:03:37.787690+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T97 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: e1a15b512f2f11f30bc50503d24ea3e19c56617b (clean)
+recorded: 2026-09-01T21:29:43.080545+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T97 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: e1a15b512f2f11f30bc50503d24ea3e19c56617b (clean)
+recorded: 2026-09-01T21:29:47.505471+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T98f assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: ebcecf3a7d0c64f9e32a142c3a6f3059f3dcc4db (clean)
+recorded: 2026-09-02T00:06:43.801557+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T98f assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: ebcecf3a7d0c64f9e32a142c3a6f3059f3dcc4db (clean)
+recorded: 2026-09-02T00:06:49.281930+00:00
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: W051-MECH AUD-CODE 3.12c: flops_report breakdown no longer reads CostTreeRow.kind (inclusive subtree_flops on every depth-1 row); the consumer read-site row for kind in torchlens/report/_flops_report.py is retired
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 271eafcc89f3b7bc0a072472ac123d8e390861cb (dirty)
+recorded: 2026-09-01T22:07:30.937320+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T99c assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 6af7363307374cd8880629152996bdf7948c54fb (clean)
+recorded: 2026-09-02T01:24:35.229284+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T99c assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 6af7363307374cd8880629152996bdf7948c54fb (clean)
+recorded: 2026-09-02T01:24:40.627183+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T100 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 09dfed47ee4145e211e959203332ed72569a0692 (clean)
+recorded: 2026-09-02T02:01:56.985099+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T100 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 09dfed47ee4145e211e959203332ed72569a0692 (clean)
+recorded: 2026-09-02T02:02:01.507980+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T103 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: df01b4a5ba373cfb41acb879e23d18318e17ab5e (clean)
+recorded: 2026-09-02T03:59:23.688500+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T103 assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: df01b4a5ba373cfb41acb879e23d18318e17ab5e (clean)
+recorded: 2026-09-02T03:59:28.142217+00:00
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: FW2-B item 6: torchlens/visualization/surgery_diff.py renamed to _surgery_diff.py (the public callable was shadowed by its own child module after first import); per-file read-site rows re-keyed verbatim, no site added or removed
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: fa1f20d6c0617ca0a31980bb932397b564b332e6 (dirty)
+recorded: 2026-09-02T00:17:17.175711+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T102b assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 496aac8bffe7bc7236eac02a329f033127ac2583 (clean)
+recorded: 2026-09-02T04:32:41.227587+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T102b assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 496aac8bffe7bc7236eac02a329f033127ac2583 (clean)
+recorded: 2026-09-02T04:32:45.712225+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T104b assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: fb2b2ff0c71171af9fab0530db0e9e7fcf7dff38 (clean)
+recorded: 2026-09-02T06:21:30.785146+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T104b assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: fb2b2ff0c71171af9fab0530db0e9e7fcf7dff38 (clean)
+recorded: 2026-09-02T06:21:36.306023+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T105b assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: db54b56bbfbb266e40e1971348be16c9ea8a3597 (clean)
+recorded: 2026-09-02T12:30:40.099850+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: train T105b assembly regen (merged read-site basis)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: db54b56bbfbb266e40e1971348be16c9ea8a3597 (clean)
+recorded: 2026-09-02T12:30:45.596051+00:00

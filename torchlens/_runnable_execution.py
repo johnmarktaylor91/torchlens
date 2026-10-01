@@ -422,6 +422,12 @@ _require_live_source_model = _rebind_function(
     _runnable_transaction._require_live_source_model, globals()
 )
 _attempt_live_forward = _rebind_function(_runnable_transaction._attempt_live_forward, globals())
+_live_graph_change_check = _rebind_function(
+    _runnable_transaction._live_graph_change_check, globals()
+)
+_settle_live_graph_change = _rebind_function(
+    _runnable_transaction._settle_live_graph_change, globals()
+)
 _split_live_inputs = _rebind_function(_runnable_transaction._split_live_inputs, globals())
 _install_live_until_latch = _rebind_function(
     _runnable_transaction._install_live_until_latch, globals()
@@ -595,6 +601,9 @@ _fresh_bare_tensor_root = _rebind_function(
 )
 _reconstruct_live_output = _rebind_function(
     _runnable_output_contracts._reconstruct_live_output, globals()
+)
+_diagnose_live_output = _rebind_function(
+    _runnable_output_contracts._diagnose_live_output, globals()
 )
 _container_from_paths = _rebind_function(
     _runnable_output_contracts._container_from_paths, globals()

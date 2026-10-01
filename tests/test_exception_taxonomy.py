@@ -448,7 +448,7 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "OpaqueCallableInExecutableSaveError": ("ValueError",),
     "OutputAttributionError": ("RuntimeError",),
     "PartialCaptureLookupError": ("ValueError",),
-    "PathDivergenceError": ("RuntimeError",),
+    "PathDivergenceError": ("ValueError", "RuntimeError"),
     "PayloadUnavailableError": ("ValueError",),
     "PoisonedRunError": ("RuntimeError",),
     "PostTraceParamUnavailable": ("RuntimeError",),
@@ -522,6 +522,52 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "LazyStateUnsupportedError": ("RuntimeError",),
     "MissingDependencyError": ("AttributeError",),
     "UnknownPersistedFieldError": ("RuntimeError",),
+    # Taxonomy closure (the last pre-release reds): rows for the two
+    # already-registered episode classes that never received one, and for
+    # BundleExperimentError, defined beside them in errors/episode.py but
+    # never imported into the registry.
+    "BundleExperimentError": ("RuntimeError",),
+    "CheckpointSeriesLiveParamsError": ("RuntimeError",),
+    "EpisodeJoinError": ("RuntimeError",),
+    "BindingPreflightError": ("ValueError",),
+    "BindingRuntimeError": ("RuntimeError",),
+    "RegionError": ("ValueError",),
+    "HistoryArtifactError": (),
+    "HistorySchemaError": (),
+    "ObservabilityError": (),
+    "ObserverEventError": (),
+    "ProfilerSessionError": (),
+    "SpanError": (),
+    "StatKernelError": (),
+    "WatchLifecycleError": (),
+    "WatchPlanError": (),
+    "WatchRenderError": (),
+    "SinkDeliveryError": (),
+    "SinkProtocolError": (),
+    "TagGrammarError": (),
+    "TrackersError": (),
+    "WatchConfigError": (),
+    "WatchRuntimeError": (),
+    "CheckConfigError": (),
+    "CheckLifecycleError": (),
+    "CheckViolationError": (),
+    "ReadError": ("ValueError",),
+    "ReadInternalError": ("RuntimeError",),
+    "GradFnWalkError": (),
+    "ModelExplorerExportError": ("RuntimeError",),
+    "FeatureShapingError": ("ValueError",),
+    "SiteInventoryError": ("ValueError",),
+    "MechInterpError": ("RuntimeError",),
+    "NeuroHandoffError": ("ValueError",),
+    "PreprocessingAuditError": ("RuntimeError",),
+    "NormReconstructionError": ("RuntimeError",),
+    "EchoConfigError": (),
+    "EchoStatsError": (),
+    "FittedArtifactError": ("RuntimeError",),
+    "TvizError": ("RuntimeError",),
+    "RankRenderEndpointError": ("RuntimeError",),
+    "PluginLoadWarning": ("Warning",),
+    "SynthesizedValueReadWarning": ("Warning",),
 }
 
 
@@ -1402,6 +1448,24 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     "torchlens.intervention.errors.PendingValueEditsWarning": (
         "intervention pending-edit disclosure; warning surface, registration "
         "deferred to the UI/API naming slate"
+    ),
+    # -- taxonomy closure: the three stranded classes that are NOT public
+    # catch targets today --
+    "torchlens.visualization.collapse_estimator.FallbackDegrade": (
+        "internal control-flow signal of the smart-collapse quality planner: "
+        "raised at budget checkpoints (allocation cap, watchdog) and caught at "
+        "the selection entry, which degrades to the linear fallback; never "
+        "escapes to user code"
+    ),
+    "torchlens._errors.SubstrateMismatchError": (
+        "S2-gated structure-only substrate refusal (CaptureError subclass, code "
+        "structure_only_substrate_mismatch); errors-namespace registration "
+        "rides the S2 ratification PR with its structure-only siblings above"
+    ),
+    "torchlens._errors.WeightsfreeIntegrityError": (
+        "S2-gated weights-free admission/settlement refusal (CaptureError "
+        "subclass); errors-namespace registration rides the S2 ratification "
+        "PR with its structure-only siblings above"
     ),
 }
 

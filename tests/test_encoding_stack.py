@@ -330,8 +330,9 @@ def test_single_pass_stem_stays_unannotated(tmp_path: Path) -> None:
 def test_caption_and_legend_disclose_annotation(lockstep_log: tl.Trace, tmp_path: Path) -> None:
     dot = _draw(lockstep_log, tmp_path, stack_by=True)
     assert "stacked by: pass_index (auto)" in dot
-    assert "cluster_torchlens_encoding_legend" in dot
-    assert "stack_by: pass_index (auto)" in dot
+    # vizmech 13 (D28): the channel disclosure rides the ONE table legend node.
+    legend_line = next(line for line in dot.splitlines() if line.strip().startswith("tl_legend"))
+    assert "stack_by: pass_index (auto)" in legend_line
 
 
 def test_explicit_field_bypasses_license(chained_log: tl.Trace, tmp_path: Path) -> None:

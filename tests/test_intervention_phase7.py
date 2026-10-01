@@ -568,7 +568,7 @@ def test_rerun_append_true_dispatches_to_append() -> None:
     x = torch.randn(2, 3)
     log = _capture(ReluAdd(), x)
 
-    run(log, ReluAdd(), x, append=True)
+    run(log, ReluAdd(), x, replay=tl.options.ReplayOptions(append=True))
 
     assert log.state is TraceState.APPENDED
 

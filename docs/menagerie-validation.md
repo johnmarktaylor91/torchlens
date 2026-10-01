@@ -1,14 +1,18 @@
 # Menagerie Validation
 
-The TorchLens menagerie is a browsable, queryable atlas of 11,600+ neural-network
-architecture families. Each verified row is not just instantiated or rendered: it is
-captured by TorchLens and algorithmically checked with forward replay plus the
-TorchLens metadata-invariant tripwire.
+The TorchLens menagerie is a browsable, queryable atlas of thousands of neural-network
+architecture entries: 8,500+ catalog rows across ~3,600 architecture families in this
+repository's `menagerie/data/master_catalog.jsonl` (8,533 rows / 3,637 families measured
+2026-08-16; the live site carries additional locally-validated entries). Each verified row
+is not just instantiated or rendered: it is captured by TorchLens and algorithmically
+checked with forward replay plus the TorchLens metadata-invariant tripwire.
 
-The public status should be read as approximate and moving. The campaign is roughly
-89% verified and climbing, with about 5,400 distinct architectures after collapsing
-shape-blind graph hashes. For exact local counts, rebuild or inspect the catalog and
-ledger:
+The public status should be read as approximate and moving: the campaign has verified
+thousands of models across all major architecture families and is climbing. The catalog
+rows carry no verification-status field and the append-only verification ledger
+(`menagerie/data/verification.db`) lives on the menagerie machine, not in the public
+checkout, so a percentage cannot be reproduced from this tree and is deliberately not
+claimed here. For exact local counts, rebuild or inspect the catalog and ledger:
 
 ```bash
 python -m menagerie.catalog build

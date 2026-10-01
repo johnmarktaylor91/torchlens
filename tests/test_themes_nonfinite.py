@@ -24,6 +24,8 @@ from torchlens.visualization.lenses._nonfinite import (
 from torchlens.visualization.lenses.audit import CORPUS
 from torchlens.visualization.node_spec import NodeSpec
 
+pytestmark = pytest.mark.smoke  # measured <0.5s per test (W051-GATE, AUD-CODE 0.1)
+
 
 def _member(name: str) -> Any:
     """Return one corpus member by name."""

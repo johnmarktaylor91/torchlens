@@ -543,6 +543,17 @@ class BundleStreamWriter:
 
         try:
             scrubbed_state["_capture_outcome"] = outcome_payload
+            from ._portability_preflight import preflight_metadata_portability
+            from .bundle import _RenameAwareUnpickler
+
+            # Write/read symmetry (AUD-CODE 2.20): dry-run the canonical bytes
+            # through the loader's restricted unpickler before writing; the
+            # real write keeps the ``dump_canonical_metadata`` seam.
+            preflight_metadata_portability(
+                scrubbed_state,
+                unpickler_factory=_RenameAwareUnpickler,
+                bundle_path=self.tmp_path,
+            )
             with (self.tmp_path / "metadata.pkl").open("wb") as handle:
                 # B3R4-R21-2: canonical container bytes (set/frozenset members
                 # sorted); persisted metadata must not vary with PYTHONHASHSEED.

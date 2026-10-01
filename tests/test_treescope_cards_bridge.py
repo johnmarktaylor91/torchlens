@@ -23,6 +23,8 @@ from torch import nn
 import torchlens as tl
 from torchlens.bridge import treescope as bridge
 
+pytestmark = pytest.mark.smoke  # measured <0.5s per test (W051-GATE, AUD-CODE 0.1)
+
 treescope = pytest.importorskip("treescope")
 
 

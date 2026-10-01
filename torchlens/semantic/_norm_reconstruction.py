@@ -18,6 +18,16 @@ kit's DLA. The rules, verbatim from the panel memo:
   producing a plausible ranking -- the silent-wrongness class this exists to
   kill). Unmatched conventions (a Gemma-style ``(1 + weight)`` without a
   matching recipe convention) and missing ``eps`` REFUSE, never guess.
+- The recompute runs in the ACCUMULATION dtype (fp32 for fp16/bf16 payloads,
+  the payload dtype otherwise) and is rounded ONCE to the payload dtype for
+  the comparison -- the arithmetic the norm kernel itself performs and the
+  arithmetic :mod:`torchlens.semantic.tolerances` models
+  (``RECONSTRUCTION_ULP_HEADROOM`` for half payloads is a few storage ULPs
+  of a round-once result). Recomputing in the payload dtype rounds at every
+  step and misses the budget on a CORRECT half-precision norm (AUD-CODE
+  2.12: bf16/fp16 LayerNorm refused ``norm_convention_unmatched`` with a
+  wrong diagnosis). The frozen ``scale``/``mean`` are handed out in the
+  accumulation dtype; the ``gamma``/``beta`` payloads stay as evidenced.
 
 Every spelling is DOCUMENTED-UNSTABLE pending the naming session.
 """
@@ -69,9 +79,11 @@ class NormReconstruction:
     output:
         Captured norm output tensor (the validation target).
     scale:
-        Frozen per-(batch, position) denominator, keepdim on the feature axis.
+        Frozen per-(batch, position) denominator, keepdim on the feature axis,
+        in the ACCUMULATION dtype (fp32 for half-precision payloads).
     mean:
-        Frozen per-(batch, position) centering mean (``None`` for RMS kinds).
+        Frozen per-(batch, position) centering mean (``None`` for RMS kinds),
+        in the accumulation dtype.
     gamma:
         Affine weight (``None`` for ``normalize_only``).
     beta:
@@ -138,6 +150,23 @@ def _feature_stats(
     return None, torch.sqrt(value.pow(2).mean(dim=-1, keepdim=True) + eps)
 
 
+_HALF_PRECISION_DTYPES = frozenset({torch.float16, torch.bfloat16})
+
+
+def _accumulation_dtype(payload_dtype: torch.dtype) -> torch.dtype:
+    """Return the dtype the norm's arithmetic accumulates in.
+
+    Half-precision payloads (fp16/bf16) accumulate in fp32 and round once to
+    storage -- the kernel's own arithmetic and the arithmetic the tolerance
+    model in :mod:`torchlens.semantic.tolerances` budgets for. Every other
+    dtype accumulates as itself.
+    """
+
+    if payload_dtype in _HALF_PRECISION_DTYPES:
+        return torch.float32
+    return payload_dtype
+
+
 def _reconstruct(
     value: torch.Tensor,
     *,
@@ -148,26 +177,35 @@ def _reconstruct(
 ) -> tuple[torch.Tensor | None, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Return (mean, scale, reconstruction, |addend| magnitude) for one form.
 
-    The magnitude is the cancellation-aware error basis: a normalized element
+    The arithmetic runs in the ACCUMULATION dtype (:func:`_accumulation_dtype`)
+    and the reconstruction is rounded ONCE to the payload dtype, so the
+    comparison against the captured output sees exactly the storage-rounding
+    error the tolerance model budgets (a payload-dtype recompute of a bf16
+    norm rounds at every step and misses a correct output by whole tenths).
+    ``mean``/``scale``/``magnitude`` stay in the accumulation dtype: the
+    magnitude is the cancellation-aware error basis -- a normalized element
     near zero is the difference of same-scale quantities ``x`` and ``mean``,
     so its achievable absolute accuracy is set by ``(|x| + |mean|) / scale``,
     never by the tiny output value (the exact refused-19/36-correct class).
     """
 
-    mean, scale = _feature_stats(value, centered=centered, eps=eps)
+    acc = value.to(_accumulation_dtype(value.dtype))
+    mean, scale = _feature_stats(acc, centered=centered, eps=eps)
     if mean is not None:
-        recon = (value - mean) / scale
-        magnitude = (value.abs() + mean.abs()) / scale
+        recon = (acc - mean) / scale
+        magnitude = (acc.abs() + mean.abs()) / scale
     else:
-        recon = value / scale
-        magnitude = value.abs() / scale
+        recon = acc / scale
+        magnitude = acc.abs() / scale
     if gamma is not None:
-        recon = recon * gamma
-        magnitude = magnitude * gamma.abs()
+        acc_gamma = gamma.to(acc.dtype)
+        recon = recon * acc_gamma
+        magnitude = magnitude * acc_gamma.abs()
     if beta is not None:
-        recon = recon + beta
-        magnitude = magnitude + beta.abs()
-    return mean, scale, recon, magnitude
+        acc_beta = beta.to(acc.dtype)
+        recon = recon + acc_beta
+        magnitude = magnitude + acc_beta.abs()
+    return mean, scale, recon.to(value.dtype), magnitude
 
 
 def _candidate_forms(
@@ -191,6 +229,26 @@ def _candidate_forms(
     return (
         ("normalize_only", True, None, None),
         ("normalize_only", False, None, None),
+    )
+
+
+def _unmatched_remedy(payload_dtype: torch.dtype) -> str:
+    """Return the ``norm_convention_unmatched`` remedy, dtype-aware on half payloads.
+
+    A genuine mismatch on a half-precision model must still teach the right
+    cause: the recompute was NOT the payload-dtype arithmetic the AUD-CODE
+    2.12 defect performed, so precision is not the explanation.
+    """
+
+    remedy = "register a facet recipe evidencing this norm's convention; the kit never guesses"
+    if payload_dtype not in _HALF_PRECISION_DTYPES:
+        return remedy
+    acc_dtype = _accumulation_dtype(payload_dtype)
+    return remedy + (
+        f"; the norm ran in {payload_dtype} -- the recompute is "
+        f"{acc_dtype}-accumulate, rounded once and compared in the payload dtype "
+        f"within RECONSTRUCTION_ULP_HEADROOM[{payload_dtype}], so this refusal is a "
+        f"convention mismatch, not a precision artifact"
     )
 
 
@@ -254,7 +312,7 @@ def reconstruct_norm(  # noqa: PLR0913 -- the D8 evidence set: every input is re
         if within_reconstruction_tolerance(
             recon, output, magnitude=magnitude, reduction_length=int(input.shape[-1])
         ):
-            residual = float((recon.float() - output.float()).abs().max())
+            residual = float((recon.detach().float() - output.detach().float()).abs().max())
             return NormReconstruction(
                 kind=kind,
                 eps=eps_value,
@@ -271,6 +329,8 @@ def reconstruct_norm(  # noqa: PLR0913 -- the D8 evidence set: every input is re
                     "result": "validated",
                     "max_abs_residual": residual,
                     "form": f"{kind}/{'centered' if centered else 'uncentered'}",
+                    "payload_dtype": str(input.dtype),
+                    "accumulation_dtype": str(_accumulation_dtype(input.dtype)),
                 },
             )
         tried.append(f"{kind}/{'centered' if centered else 'uncentered'}")
@@ -281,8 +341,10 @@ def reconstruct_norm(  # noqa: PLR0913 -- the D8 evidence set: every input is re
         f"{class_name or 'the norm'} at {module_address or '<unknown>'} "
         f"(tried: {', '.join(tried)}). A nonstandard convention (e.g. Gemma-style "
         f"(1 + weight)) needs its own recipe convention.",
-        remedy="register a facet recipe evidencing this norm's convention; the kit never guesses",
+        remedy=_unmatched_remedy(input.dtype),
         module_address=module_address,
         tried=tried,
+        payload_dtype=str(input.dtype),
+        accumulation_dtype=str(_accumulation_dtype(input.dtype)),
     )
     raise AssertionError("unreachable")

@@ -130,14 +130,34 @@ class LensResolution:
     notices: tuple[str, ...] = dataclass_field(default=())
 
 
+def _module_facets_say_attention(trace: Trace) -> bool:
+    """The facet leg of the attention-subject probe.
+
+    ``Module.facets`` is single-call and refuses ``module_call_ambiguous``
+    on any reused module; that per-module accessor limitation is never the
+    TRACE-level fact and must not surface as the user's refusal (D03-R1)
+    -- the op scan in :func:`_has_attention_subject` still probes those
+    modules' calls.
+    """
+
+    try:
+        for module in trace.modules:
+            try:
+                if module.facets.has("q"):
+                    return True
+            except InvalidArgumentError as error:
+                if error.fields.get("code") != "module_call_ambiguous":
+                    raise
+    except (AttributeError, TypeError):
+        pass
+    return False
+
+
 def _has_attention_subject(trace: Trace) -> bool:
     """Return whether the trace factually contains attention structure."""
 
-    try:
-        if next(iter(trace.attention_blocks()), None) is not None:
-            return True
-    except (AttributeError, TypeError):
-        pass
+    if _module_facets_say_attention(trace):
+        return True
     for op in trace.ops:
         if str(getattr(op, "layer_type", "")) in _ATTENTION_OP_TYPES:
             return True
@@ -483,7 +503,10 @@ def _perf_stage(
         )
     coverage = source_coverage(trace, source.member)
     build.disclosure.append(
-        f"coverage: encoded {coverage.encoded} of {coverage.total} ops ({source.member})"
+        # The reconciling phrase: the encoding legend counts VISIBLE nodes,
+        # this line counts ops -- two denominators, one picture (D03 AMBER).
+        f"coverage: encoded {coverage.encoded} of {coverage.total} ops ({source.member}); "
+        "the legend counts visible nodes, which can each aggregate several ops"
     )
     build.disclosure.append(source.family.unit_wording)
     if source.aggregation_line is not None:

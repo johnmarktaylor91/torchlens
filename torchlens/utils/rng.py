@@ -66,6 +66,9 @@ try:  # ``resource`` is POSIX-only; feature-detected for the clock family.
 except ImportError:  # pragma: no cover - non-POSIX platforms
     _resource_module = None  # type: ignore[assignment]
 
+# Foreign-thread pure-read channel routing: split to _rng_channels.py under the
+# R43 file-size ratchet. The monitor keeps thin builder delegates below.
+from . import _rng_channels
 from ._torch_compat import (
     HAS_GENERATOR_CLONE_STATE,
     HAS_GENERATOR_GRAPHSAFE_GET_STATE,
@@ -779,7 +782,7 @@ class HostNondeterminismRow:
     """One declared host-nondeterminism channel in the frozen monitoring registry.
 
     ``family`` groups the channel (``clock`` / ``entropy`` / ``construction`` /
-    ``rng_primitive`` / ``rng_instance``); ``target`` is its human-readable identity;
+    ``rng_primitive`` / ``rng_instance`` / ``rng_global_state``); ``target`` is its identity;
     ``strategy`` is HOW it is observed (see the coverage meta-test's allowlist);
     ``thread_scope`` is WHERE a positive can be observed (``any`` -- thread-independent
     module/class patch or process inventory; ``owner`` -- capture owner thread only;
@@ -1339,6 +1342,9 @@ def _build_host_nondeterminism_registry() -> tuple[HostNondeterminismRow, ...]:
             "generator_method",
         )
     )
+    # W051 (2.17): the Python / legacy-NumPy GLOBAL-engine state surface (consumed-only).
+    for family, target, strategy, scope, classification in _rng_channels.registry_rows():
+        rows.append(HostNondeterminismRow(family, target, strategy, scope, classification))
     return tuple(rows)
 
 
@@ -1440,23 +1446,7 @@ Past the cap one ``uncertain_detail_capped`` marker discloses the suppression.
 """
 
 
-class HostRngMonitorResult:
-    """Outcome of one capture-scoped host-nondeterminism monitoring window."""
-
-    __slots__ = ("channels", "replayable_reads", "uncertain", "uncertain_detail")
-
-    def __init__(self) -> None:
-        self.channels: set[str] = set()
-        # r65 CLUSTER Z: torch RNG reads fully determined by the capture seed
-        # (``initial_seed`` family). A member sets ``host_rng_consumed`` WITHOUT
-        # poisoning the capture seed: a run at the capture seed stays verified and any
-        # other/absent seed ceilings -- exactly the python-``random`` branch semantics.
-        # Kept apart from ``channels``, whose members ceiling permanently.
-        self.replayable_reads: set[str] = set()
-        self.uncertain: bool = False
-        # Actionable named-thread / failure detail for the INCOMPLETE ceiling so the
-        # readiness diagnostic and ``tl.compat.report()`` can name the offending domain.
-        self.uncertain_detail: tuple[str, ...] = ()
+HostRngMonitorResult = _rng_channels.HostRngMonitorResult  # W051: lives beside its routing
 
 
 def _torchlens_module_globals_ids() -> frozenset[int]:
@@ -2154,6 +2144,8 @@ class host_nondeterminism_monitor:
         # keeps a TorchLens capture wrapper's shared code object from ever being
         # registered (which would misattribute every wrapped torch call).
         self._held_code_marks: dict[int, tuple[str, str]] = {}
+        self._global_engine_prefixes: dict[int, str] = {}  # W051 2.17: singleton id -> prefix
+        self._owner_sync_session: Any = None  # W051 2.16: per-window owner-join state
         # r67 C1: identity ROUTING CACHE of the process/device default generators --
         # it selects WHICH GENERATOR_METHOD_TABLE column applies, never WHETHER a
         # Generator receiver is classified (every ``isinstance(receiver,
@@ -2162,9 +2154,12 @@ class host_nondeterminism_monitor:
         # populated mid-forward still selects the default column.
         self._default_generator_ids: frozenset[int] = frozenset()
         # r41 hon2_1: idents of threads hooked by the in-window threading profile
-        # hook. DIAGNOSTIC-only since r43 deleted the escape belt's 3-class thread
-        # gate (replaced by the binary owner/non-owner check in
-        # ``_completeness_cross_thread.py``); no production verdict reads it.
+        # hook (registered race-free at thread bootstrap). Verdict-relevant again
+        # since the foreign-thread pure-read split: ``_rng_channels.mark_pure_read``
+        # consults it to keep in-window-started threads CEILING while ambient
+        # pre-existing threads only disclose. Absence is fail-closed: a failed
+        # profile install already flagged uncertainty, so an unregistered
+        # in-window thread can never rescue a verdict.
         self._in_window_thread_idents: set[int] = set()
         # NumPy 2.x binds Generator/RandomState Cython callables as Python methods
         # that emit no profile ``c_call`` event. The feature-detected fallback
@@ -2379,15 +2374,9 @@ class host_nondeterminism_monitor:
         self._held_ref_marks.setdefault(id(original), (channel, time_arg_index))
 
     def _entropy_wrapper(self, original: Any, channel: str) -> Any:
-        """Build a marking passthrough wrapper for one OS-entropy channel."""
+        """Build a marking passthrough wrapper for one OS-entropy channel (thread-routed)."""
 
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            """Mark the entropy channel, then delegate to the original."""
-
-            self._mark(channel)
-            return original(*args, **kwargs)
-
-        return wrapper
+        return _rng_channels.entropy_wrapper(self, original, channel)
 
     def _raw_thread_spawn_wrapper(self, original: Any) -> Any:
         """Build a passthrough spawn wrapper that profile-hooks the NEW thread.
@@ -2421,41 +2410,22 @@ class host_nondeterminism_monitor:
         return wrapper
 
     def _clock_wrapper(self, original: Any, channel: str, time_arg_index: int | None) -> Any:
-        """Build a marking passthrough wrapper for one clock channel.
+        """Build a marking passthrough wrapper for one clock channel (thread-routed).
 
         ``time_arg_index`` names the positional argument that makes the call a pure
         transform of a caller-supplied time (``localtime(ts)``); when it is
         supplied and non-``None`` the call reads no clock and is not marked.
         """
 
-        tl_ids = self._tl_globals_ids
-
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            """Mark the clock channel for an implicit-now read from a non-TorchLens frame.
-
-            Frames owned by TorchLens module globals are exempt: the per-op capture
-            clock reads would otherwise self-ceiling every capture. An unreadable
-            caller frame is treated as foreign, which over-marks rather than under-marks.
-            """
-
-            explicit_time = (
-                time_arg_index is not None
-                and len(args) > time_arg_index
-                and args[time_arg_index] is not None
-            )
-            if not explicit_time:
-                try:
-                    caller_globals_id = id(_sys_module._getframe(1).f_globals)
-                except Exception:
-                    caller_globals_id = -1
-                if caller_globals_id not in tl_ids:
-                    self._mark(channel)
-            return original(*args, **kwargs)
-
-        return wrapper
+        return _rng_channels.clock_wrapper(self, original, channel, time_arg_index)
 
     def _instance_method_wrapper(self, original: Any, channel: str) -> Any:
-        """Build a marking passthrough wrapper for one RNG-instance draw method."""
+        """Build a thread-routed marking passthrough for one RNG-instance draw method.
+
+        W051 (2.18): a PRIVATE instance draw is thread-local, so it routes like the
+        clock/entropy reads (foreign threads disclose, then settle against the owner's
+        in-window waits -- ``_rng_channels``); model-held instances stay digest-belted.
+        """
 
         exempt_ids = self._exempt_ids
 
@@ -2463,7 +2433,7 @@ class host_nondeterminism_monitor:
             """Mark the channel unless the receiver is an exempt (TorchLens-owned) instance."""
 
             if id(self_rng) not in exempt_ids:
-                self._mark(channel)
+                _rng_channels.mark_thread_routed(self, channel)
             return original(self_rng, *args, **kwargs)
 
         return wrapper
@@ -2533,6 +2503,9 @@ class host_nondeterminism_monitor:
         if mark is None:
             return
         channel, disposition = mark
+        if disposition == _rng_channels.OWNER_SYNC_DISPOSITION:
+            _rng_channels.note_owner_wait(self, channel, frame)
+            return
         self._mark_disposition(channel, disposition)
 
     @staticmethod
@@ -2957,6 +2930,8 @@ class host_nondeterminism_monitor:
         # these exact types cannot be a torch/NumPy/Python RNG or datetime class, so
         # bypassing the remaining receiver classifiers is behavior-preserving.
         if type(receiver) in _INERT_PROFILE_C_CALL_RECEIVER_TYPES:
+            return
+        if _rng_channels.classify_consumed_only_receiver(self, receiver, arg, frame):
             return
         # r67 C1: method c_calls on ANY ``torch.Generator`` receiver -- process/device
         # defaults, user-constructed, model-held, RETURNED clones, and subclasses (an
@@ -4487,6 +4462,8 @@ class host_nondeterminism_monitor:
         return (
             ("prologue", self._install_prologue),
             ("rng_primitive", self._install_python_rng_primitives),
+            ("global_engine_state", self._install_global_engine_state_surfaces),
+            ("owner_sync", lambda: _rng_channels.install_owner_sync_surfaces(self)),
             ("entropy", self._install_entropy_surfaces),
             ("construction", self._install_construction_surfaces),
             ("clock", self._install_clock_surfaces),
@@ -4612,24 +4589,30 @@ class host_nondeterminism_monitor:
                     deferred = exc
         self._restores.clear()
         try:
-            for holder, before in self._generator_states:
-                try:
-                    if self._digest_rng_witnessable(holder) != before:
-                        self._mark("model_attribute_generator")
-                except Exception:
-                    self._flag_uncertain("inventory_compare_failed")
-            for holder, before in self._deep_generator_states:
-                try:
-                    if self._digest_rng_witnessable(holder) != before:
-                        self._mark("frame_reachable_generator")
-                except Exception:
-                    self._flag_uncertain("inventory_compare_failed")
+            self._compare_generator_inventories()
+            _rng_channels.settle_foreign_reads(self)
         except BaseException as exc:  # noqa: BLE001 -- unwind already complete
             self._flag_uncertain("teardown_interrupted")
             if deferred is None:
                 deferred = exc
         if deferred is not None:
             raise deferred
+
+    def _compare_generator_inventories(self) -> None:
+        """Unwind stage: mark any inventoried generator whose state digest moved in-window."""
+
+        for holder, before in self._generator_states:
+            try:
+                if self._digest_rng_witnessable(holder) != before:
+                    self._mark("model_attribute_generator")
+            except Exception:
+                self._flag_uncertain("inventory_compare_failed")
+        for holder, before in self._deep_generator_states:
+            try:
+                if self._digest_rng_witnessable(holder) != before:
+                    self._mark("frame_reachable_generator")
+            except Exception:
+                self._flag_uncertain("inventory_compare_failed")
 
     def _restore_profile_hooks(self) -> None:
         """Hand the profile slots back, never overwriting a hook that is not ours.
@@ -4677,6 +4660,9 @@ class host_nondeterminism_monitor:
 
         self._tl_globals_ids = _torchlens_module_globals_ids()
         self._exempt_ids = frozenset(id(item) for item in _rng_exempt_instances())
+        self._global_engine_prefixes = _rng_channels.global_engine_state_prefixes()
+        # W051 (2.16): owner-thread sync primitives ride the held-code ``call`` layer.
+        self._held_code_marks.update(_rng_channels.owner_sync_code_marks())
 
     def _install_python_rng_primitives(self) -> None:
         """Patch the Python RNG class primitives (instances, subclasses, the bare C base)."""
@@ -4694,6 +4680,11 @@ class host_nondeterminism_monitor:
                             f"{holder.__module__}.{holder.__qualname__}.{method_name}",
                         ),
                     )
+
+    def _install_global_engine_state_surfaces(self) -> None:
+        """Patch the Python / legacy-NumPy global-engine STATE surface (W051 2.17)."""
+
+        _rng_channels.install_global_engine_state_surfaces(self)
 
     def _install_entropy_surfaces(self) -> None:
         """Patch the OS-entropy funnels (``os``/``random._urandom``) with held-ref registration."""

@@ -273,7 +273,12 @@ def test_capture_digest_minted_and_recomputable_from_the_product():
         escalated_from=None,
         reason=None,
     )
-    assert mint_capture_digest(trace, resolved.address, N_STEPS) == digest
+    # W051 (audit 3.2): the digest is the CONTENT-BINDING form, minted over
+    # the product identity plus the finished ledger payload.
+    assert mint_capture_digest(trace, resolved.address, N_STEPS, trace.annotations["episode"]) == (
+        digest
+    )
+    assert mint_capture_digest(trace, resolved.address, N_STEPS) != digest  # the legacy v1 form
 
 
 def test_capture_digest_differs_across_seeds():

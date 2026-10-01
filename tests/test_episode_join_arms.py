@@ -545,7 +545,10 @@ def test_forced_feed_joins_still_measure() -> None:
     )
     envelope = _envelope(log)
     assert envelope["claim"] == "measured"
-    # The forced feed appends the forced token, which IS the evidence
-    # column's emission, so the joins measure continuous.
-    assert envelope["grades"] == [None, "continuous", "continuous"]
+    # The forced feed appends the DECLARED token; the join is graded against
+    # the declaration (W051, audit 3.4), never against the evidence column --
+    # this fixture's root happens to return the forced tokens, which made the
+    # historical `continuous` grade degenerate.
+    assert envelope["grades"] == [None, "forced", "forced"]
+    assert envelope["basis"] == {"1": "forced_tokens", "2": "forced_tokens"}
     assert log.annotations["episode"]["header"]["token_feed"] == "forced"

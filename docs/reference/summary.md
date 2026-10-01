@@ -63,7 +63,7 @@ the COMPLETE folded tree in 19 body rows -- nothing hidden.
 
 ## The grammar
 
-```python
+```text
 tl.summary(model, input_args=None, input_kwargs=None,
     # Everything below is keyword-only.
     input_size=None,          # synthetic input shape (XOR real input_args)

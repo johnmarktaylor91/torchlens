@@ -107,6 +107,31 @@ class TensorBoardSink:
         detail = "; ".join(f"{vendor}: {evidence}" for vendor, evidence in self.relays.items())
         return ("relay_configured", detail)
 
+    def preflight_histograms(self, descriptor: Any) -> None:
+        """Refuse histogram requests over a DETECTED relay at attach.
+
+        Same refusal as ``emit_histogram`` (G6), moved to the moment the user
+        is looking: raised inside emission it was swallowed by the engine's
+        runtime latch and silently stopped every later row (AUD-CODE 2.14).
+        """
+
+        del descriptor
+        self.relays = detect_relays() or self.relays
+        if self.relays:
+            raise TrackersError(
+                f"A TensorBoard relay is active ({', '.join(sorted(self.relays))}) "
+                "and histogram series ride NON-uniform log2 edges the relay would "
+                "silently deliver wrong; refusing at attach, before any emission.",
+                code="tracker_relay_histogram_unsupported",
+                sink="TensorBoardSink",
+                relays=tuple(sorted(self.relays)),
+                remedy=(
+                    "Send histograms through a native sink (WandbSink / "
+                    "JSONLSink), or drop hist_every= on this relay run; "
+                    "scalar series remain faithful on every measured route."
+                ),
+            )
+
     def emit_scalar(self, point: ScalarPoint) -> None:
         """Write one scalar through ``add_scalar`` at the caller's step."""
 

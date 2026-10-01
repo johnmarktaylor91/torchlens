@@ -124,6 +124,52 @@ class ContainerSpec:
     lossy_reconstruction: bool = False
 
 
+def declared_leaf_slots(spec: ContainerSpec) -> int:
+    """Return how many flat leaf values ``spec`` consumes when rebuilt.
+
+    Every declared component of a container node that carries no child spec is a
+    LEAF slot filled from the flat leaf stream (``rebuild_container_from_spec``);
+    ``literal`` nodes consume nothing and ``opaque`` nodes cannot be rebuilt at all
+    (counted as zero -- callers gate on ``kind`` first). The count lets a consumer
+    detect the opaque-leaf arm (AUD-HONESTY H1) BEFORE rebuilding: a spec whose slot
+    count exceeds the captured tensor-leaf count declares a slot the capture could
+    not represent (a tensor-holding cache object), so the rebuild would run dry.
+
+    Parameters
+    ----------
+    spec:
+        Container node to measure.
+
+    Returns
+    -------
+    int
+        Number of flat leaf values the rebuild of ``spec`` consumes.
+    """
+
+    if spec.kind in {"literal", "opaque"}:
+        return 0
+    child_by_key = dict(spec.child_specs)
+    if spec.kind in {"tuple", "list"}:
+        components: list[OutputPathComponent] = [
+            TupleIndex(index) for index in range(spec.length or 0)
+        ]
+    elif spec.kind == "dict":
+        components = [DictKey(key) for key in spec.keys]
+    elif spec.kind == "hf_model_output":
+        components = [HFKey(key) for key in spec.keys]
+    elif spec.kind == "namedtuple":
+        components = [NamedField(name) for name in spec.fields]
+    elif spec.kind == "dataclass":
+        components = [DataclassField(name) for name in spec.fields]
+    else:
+        components = [component for component, _child in spec.child_specs]
+    total = 0
+    for component in components:
+        child = child_by_key.get(component)
+        total += 1 if child is None else declared_leaf_slots(child)
+    return total
+
+
 def rebuild_container_from_spec(spec: ContainerSpec, leaves: list[Any] | tuple[Any, ...]) -> Any:
     """Rebuild an output container from a spec and flat leaves.
 
@@ -1106,7 +1152,20 @@ def _rebuild_child_or_leaf(
     try:
         return next(leaf_iter)
     except StopIteration as exc:
-        raise ValueError("Not enough leaves supplied for ContainerSpec.") from exc
+        # Opaque-leaf arm (AUD-HONESTY H1): a declared slot with no child spec is a
+        # LEAF slot the flat leaf stream must fill. Running dry here means the captured
+        # value at this slot was an opaque non-tensor object the contract could not
+        # represent (a tensor-holding cache such as a HuggingFace ``DynamicCache`` under
+        # ``past_key_values``), never a corrupt leaf stream -- name the slot so the
+        # runnable consumers can settle the typed ``output_structure_mismatch`` verdict
+        # with a remedy instead of surfacing a bare arity error.
+        raise ValueError(
+            "Not enough leaves supplied for ContainerSpec: declared leaf slot "
+            f"{component!r} has no captured tensor leaf to fill it. The captured value "
+            "at this slot was an opaque non-tensor object (for example a HuggingFace "
+            "DynamicCache under past_key_values) that the output-container contract "
+            "cannot rebuild."
+        ) from exc
 
 
 class ContainerReconstructionError(_ActionableErrorMixin, TorchLensError, ValueError):
@@ -1583,6 +1642,7 @@ __all__ = [
     "OutputPathComponent",
     "RegisteredContainer",
     "TupleIndex",
+    "declared_leaf_slots",
     "get_registered_container",
     "mapping_extra_instance_state",
     "namedtuple_extra_instance_state",

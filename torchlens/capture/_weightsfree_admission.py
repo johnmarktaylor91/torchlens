@@ -352,7 +352,9 @@ def _null_autocast_scope() -> Iterator[None]:
     llama family on the declared transformers 4.x band (defect L8).
     ``enabled=True`` on meta still delegates to torch and raises. Scoped to
     the admitted forward only; the shipped ``torch.autocast`` object is
-    restored on exit. Disclosed table condition: code introspecting
+    restored on exit. The replacement is a SUBCLASS of the shipped class
+    (``isinstance``/``issubclass``/``inspect.isclass``/decorator use hold
+    inside the scope). Disclosed table condition: code introspecting
     ``torch.is_autocast_enabled()`` inside the shimmed scope sees outer
     state (no measured model does this).
     """
@@ -360,20 +362,57 @@ def _null_autocast_scope() -> Iterator[None]:
     import torch as _torch
 
     original = _torch.autocast
-
-    def _shimmed_autocast(device_type: Any, *args: Any, **kwargs: Any) -> Any:
-        """Map exactly (meta device AND enabled=False) to a null context."""
-
-        enabled = kwargs.get("enabled", True)
-        if str(device_type) == "meta" and enabled is False:
-            return contextlib.nullcontext()
-        return original(device_type, *args, **kwargs)
-
-    setattr(_torch, "autocast", _shimmed_autocast)  # noqa: B010 — scoped shim swap
+    shim = _null_on_meta_autocast_class(original)
+    setattr(_torch, "autocast", shim)  # noqa: B010 — scoped shim swap (a CLASS, see below)
     try:
         yield
     finally:
         setattr(_torch, "autocast", original)  # noqa: B010 — restore the shipped class
+
+
+def _null_on_meta_autocast_class(original: type[Any]) -> type[Any]:
+    """Build the scoped ``torch.autocast`` replacement as a SUBCLASS.
+
+    The shim must stay a class deriving from the shipped ``torch.autocast``:
+    user code that introspects the scope (``isinstance(ctx, torch.autocast)``,
+    ``issubclass``, ``inspect.isclass(torch.autocast)``, decorator use
+    ``@torch.autocast(...)``) must see the same kind of object it does outside
+    the admitted forward. The historical FUNCTION swap broke every such check
+    inside the scope (AUD-CODE 4.3). Exactly the null call -- ``meta`` device
+    AND ``enabled=False`` -- skips the base initializer (which validates the
+    device string and raises on meta) and enters/exits as a no-op; every
+    other call constructs and behaves as the shipped class.
+    """
+
+    class _NullOnMetaAutocast(original):
+        """``torch.autocast`` whose (meta, enabled=False) call is a null scope."""
+
+        _tl_null: bool
+
+        def __init__(self, device_type: Any, *args: Any, **kwargs: Any) -> None:
+            enabled = kwargs.get("enabled", True)
+            if len(args) >= 2:
+                enabled = args[1]
+            if str(device_type) == "meta" and enabled is False:
+                self._tl_null = True
+                return
+            self._tl_null = False
+            super().__init__(device_type, *args, **kwargs)
+
+        def __enter__(self) -> Any:
+            if self._tl_null:
+                return self
+            return super().__enter__()
+
+        def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> Any:
+            if self._tl_null:
+                return None
+            return super().__exit__(exc_type, exc_val, exc_tb)
+
+    _NullOnMetaAutocast.__name__ = original.__name__
+    _NullOnMetaAutocast.__qualname__ = original.__qualname__
+    _NullOnMetaAutocast.__module__ = original.__module__
+    return _NullOnMetaAutocast
 
 
 @contextlib.contextmanager
@@ -382,8 +421,9 @@ def _absorbed_ambient_device_context() -> Iterator[None]:
 
     Where the mode-stack surgery primitives exist (feature-detected
     ``HAS_TORCH_FUNCTION_STACK_SURGERY``), every caller-active
-    ``DeviceContext`` is popped for the duration of the forward and pushed
-    back on exit in original order — its catch-all ``__torch_function__``
+    ``DeviceContext`` is popped for the duration of the forward and the
+    exact original stack interleaving is restored on exit — its catch-all
+    ``__torch_function__``
     re-entry respells every dunder op (defect L3) while TorchLens's own
     injection already covers factory placement. Where the primitives are
     missing, a caller-active context refuses typed with the exit-the-context
@@ -418,20 +458,30 @@ def _absorbed_ambient_device_context() -> Iterator[None]:
     # stack matches, so every mode is kept in place (the compat accessor
     # discloses the degradation through HAS_DEVICE_CONTEXT_DISPATCH).
     device_context_type: type[Any] = get_device_context_type() or type(None)
-    popped: list[Any] = []
-    kept: list[Any] = []
+    # Snapshot the ENTIRE original stack, bottom to top, then re-push only the
+    # non-device modes in their original relative order for the forward.
+    original_top_down: list[Any] = []
     while len_stack() > 0:
-        mode = pop_stack()
-        (popped if isinstance(mode, device_context_type) else kept).append(mode)
-    for mode in reversed(kept):
+        original_top_down.append(pop_stack())
+    original_bottom_up = list(reversed(original_top_down))
+    kept = [mode for mode in original_bottom_up if not isinstance(mode, device_context_type)]
+    for mode in kept:
         push_stack(mode)
     try:
         yield
     finally:
-        # Rebuild the original stack order: pop the kept modes, interleave is
-        # not needed — DeviceContexts sat below/among kept modes, but exact
-        # relative order among non-device modes is preserved and the device
-        # contexts are restored innermost-last (their factory-injection
-        # semantics are order-independent among themselves).
-        for mode in reversed(popped):
+        # Restore the EXACT original interleaving (AUD-CODE 4.3: the historical
+        # rebuild pushed every popped DeviceContext on TOP of the kept modes,
+        # losing the caller's ordering). Whatever the forward left on the
+        # stack above the kept modes (an unbalanced user push) is preserved
+        # on top of the restored original stack rather than dropped.
+        current_top_down: list[Any] = []
+        while len_stack() > 0:
+            current_top_down.append(pop_stack())
+        current_bottom_up = list(reversed(current_top_down))
+        kept_ids = {id(mode) for mode in kept}
+        leftover = [mode for mode in current_bottom_up if id(mode) not in kept_ids]
+        for mode in original_bottom_up:
+            push_stack(mode)
+        for mode in leftover:
             push_stack(mode)

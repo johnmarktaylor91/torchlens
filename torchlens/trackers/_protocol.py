@@ -139,12 +139,21 @@ def require_capabilities(sink: Any, needed: tuple[str, ...]) -> None:
 
 @dataclass
 class SinkLedger:
-    """Per-sink delivery accounting for the close report (memo 3.13)."""
+    """Per-sink delivery accounting for the close report (memo 3.13).
+
+    ``name`` is the DISPLAY name (the sink's class name, disambiguated with
+    ``#2``, ``#3``, ... when several sinks of one class share a session);
+    ``sink_id`` is the object identity the row is keyed on. ``emitted_data_points``
+    counts DATA-family scalars and histograms only -- run-health, manifest,
+    and check rows never count toward "the dashboard has data".
+    """
 
     name: str
+    sink_id: int = 0
     emitted_scalars: int = 0
     emitted_histograms: int = 0
     emitted_texts: int = 0
+    emitted_data_points: int = 0
     failed: bool = False
     failure: str | None = None
     relay_state: str = "computed"
@@ -158,6 +167,7 @@ class SinkLedger:
             "emitted_scalars": self.emitted_scalars,
             "emitted_histograms": self.emitted_histograms,
             "emitted_texts": self.emitted_texts,
+            "emitted_data_points": self.emitted_data_points,
             "failed": self.failed,
             "failure": self.failure,
             "relay_state": self.relay_state,
@@ -167,20 +177,34 @@ class SinkLedger:
 
 @dataclass
 class EmissionLedger:
-    """Whole-run delivery accounting: one row per sink, shared counters."""
+    """Whole-run delivery accounting: one row per sink OBJECT, shared counters.
 
-    sinks: dict[str, SinkLedger] = field(default_factory=dict)
+    Rows are keyed by ``id(sink)`` (the session holds every sink for its whole
+    lifetime, so identities are stable), never by class name: two JSONL sinks
+    (local + NFS is the realistic config) used to share ONE row, so a failure
+    in either latched BOTH -- the healthy sink was silently starved and the
+    counts merged (AUD-CODE 2.13).
+    """
+
+    sinks: dict[int, SinkLedger] = field(default_factory=dict)
     computed_scalars: int = 0
     computed_histograms: int = 0
     dropped_points: int = 0
 
     def row(self, sink: Any) -> SinkLedger:
-        """The (created-on-first-use) ledger row for one sink."""
+        """The (created-on-first-use) ledger row for one sink object."""
 
-        name = sink_name(sink)
-        if name not in self.sinks:
-            self.sinks[name] = SinkLedger(name=name)
-        return self.sinks[name]
+        key = id(sink)
+        row = self.sinks.get(key)
+        if row is None:
+            base = sink_name(sink)
+            same_class = sum(
+                1 for other in self.sinks.values() if other.name.split("#", 1)[0] == base
+            )
+            name = base if same_class == 0 else f"{base}#{same_class + 1}"
+            row = SinkLedger(name=name, sink_id=key)
+            self.sinks[key] = row
+        return row
 
 
 __all__ = [

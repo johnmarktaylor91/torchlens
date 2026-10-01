@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import pickle
 from pathlib import Path
 from typing import Any
@@ -127,8 +128,37 @@ def test_roofline_properties_are_absent_from_all_field_orders() -> None:
     assert property_names.isdisjoint(state)
 
 
+def _bundle_bytes_sans_save_time(path: Path) -> dict[str, bytes]:
+    """Return bundle file bytes with the manifest's ``created_at`` normalized out.
+
+    Parameters
+    ----------
+    path:
+        Bundle directory.
+
+    Returns
+    -------
+    dict[str, bytes]
+        Relative-path to file contents; ``manifest.json`` is re-serialized
+        canonically without its save-time ``created_at`` stamp.
+    """
+
+    files = _bundle_bytes(path)
+    manifest = json.loads(files["manifest.json"])
+    manifest.pop("created_at", None)
+    files["manifest.json"] = json.dumps(manifest, sort_keys=True).encode("utf-8")
+    return files
+
+
 def test_roofline_access_does_not_change_pickle_or_tlspec_bytes(tmp_path: Path) -> None:
-    """Property access adds no cached state to pickle or portable bundles."""
+    """Property access adds no cached state to pickle or portable bundles.
+
+    The bundle comparison normalizes ``manifest.json``'s ``created_at`` out
+    because the claim is that roofline access changes no persisted bytes IT
+    owns, and the per-second save timestamp is save-time provenance that two
+    consecutive saves legitimately disagree on across a second boundary
+    (GATE-FIX row 7: 3/16 bare-tip flakes were exactly that stamp).
+    """
 
     trace = tl.trace(nn.Linear(2, 2), torch.ones(1, 2))
     op = _op(trace, "linear")
@@ -142,7 +172,7 @@ def test_roofline_access_does_not_change_pickle_or_tlspec_bytes(tmp_path: Path) 
     after_pickle = pickle.dumps(trace)
     tl.save(trace, after_bundle)
     assert before_pickle == after_pickle
-    assert _bundle_bytes(before_bundle) == _bundle_bytes(after_bundle)
+    assert _bundle_bytes_sans_save_time(before_bundle) == _bundle_bytes_sans_save_time(after_bundle)
 
     loaded = tl.load(after_bundle)
     loaded_op = _op(loaded, "linear")

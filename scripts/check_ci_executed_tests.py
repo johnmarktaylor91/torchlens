@@ -76,6 +76,23 @@ def collect_passed_ids(junit_path: Path) -> set[str]:
     return passed
 
 
+def normalize_node_id(node_id: str) -> str:
+    """Map a pytest node id onto the junit ``classname::name`` spelling.
+
+    pytest writes ``tests/a/b.py::test_x`` on the command line and in
+    ``--collect-only`` output but ``classname="tests.a.b" name="test_x"`` in
+    the junit report. The passed-ids floor files are maintained in the
+    path spelling (the RG manifest lint checks them against collection), so
+    the floor check accepts either spelling (D05 release gate, 2026-09-02:
+    the path-spelled RG floor never matched a single junit row).
+    """
+
+    path, sep, name = node_id.partition("::")
+    if sep and path.endswith(".py"):
+        return path[:-3].replace("/", ".") + "::" + name
+    return node_id
+
+
 def check_passed_ids(junit_path: Path, ids_path: Path) -> list[str]:
     """Return the exact-passed-ID floor violations (empty when green)."""
 
@@ -85,7 +102,11 @@ def check_passed_ids(junit_path: Path, ids_path: Path) -> list[str]:
         if line.strip() and not line.strip().startswith("#")
     ]
     passed = collect_passed_ids(junit_path)
-    return [node_id for node_id in required if node_id not in passed]
+    return [
+        node_id
+        for node_id in required
+        if node_id not in passed and normalize_node_id(node_id) not in passed
+    ]
 
 
 def main(argv: list[str]) -> int:

@@ -252,6 +252,42 @@ _HELD_REF_RECIPES: dict[str, _HeldRecipe] = {
         lambda f: f(4),
         frozenset({"os.urandom", "random._urandom"}),
     ),
+    # W051 (AUD-CODE 2.17): the Python global-engine STATE surface. The held bound
+    # method's body enters the C base ``_random.Random.<name>`` on the exempt singleton
+    # receiver, classified by name in ``_classify_c_call``. ``seed`` is bracketed so the
+    # probe leaves the process engine where it found it.
+    "random.getstate": _HeldRecipe(
+        lambda: __import__("random").getstate, lambda f: f(), frozenset({"random.getstate"})
+    ),
+    "random.setstate": _HeldRecipe(
+        lambda: __import__("random").setstate,
+        lambda f: f(__import__("random").getstate()),
+        frozenset({"random.setstate"}),
+    ),
+    "random.seed": _HeldRecipe(
+        lambda: __import__("random").seed,
+        lambda f: (lambda s: (f(1234), __import__("random").setstate(s)))(
+            __import__("random").getstate()
+        ),
+        frozenset({"random.seed"}),
+    ),
+    # The legacy NumPy singleton's bound Cython state methods: on numpy 1.x the c_call
+    # receiver classifier marks them; on numpy>=2 they emit NO profile event (the
+    # documented profile-silent residual; the module-attr spellings stay witnessed), so
+    # the test body skips them there.
+    "numpy.random.get_state": _HeldRecipe(
+        lambda: np.random.get_state, lambda f: f(), frozenset({"numpy.random.get_state"})
+    ),
+    "numpy.random.set_state": _HeldRecipe(
+        lambda: np.random.set_state,
+        lambda f: f(np.random.get_state()),
+        frozenset({"numpy.random.set_state"}),
+    ),
+    "numpy.random.seed": _HeldRecipe(
+        lambda: np.random.seed,
+        lambda f: (lambda s: (f(1234), np.random.set_state(s)))(np.random.get_state()),
+        frozenset({"numpy.random.seed"}),
+    ),
     "numpy.random.default_rng": _HeldRecipe(
         lambda: np.random.default_rng,
         lambda f: f(),
@@ -361,9 +397,7 @@ _HELD_REF_TARGETS: tuple[str, ...] = tuple(
 )
 
 
-@pytest.mark.smoke
-@pytest.mark.parametrize("target", _HELD_REF_TARGETS)
-def test_held_ref_registry_channel_marks(target: str) -> None:
+def _check_held_ref_registry_channel_marks(target: str) -> None:
     """Every module-patched registry row marks through a PRE-WINDOW held reference.
 
     The parametrization is derived from the LIVE registry: a future ``module_patch``
@@ -371,7 +405,9 @@ def test_held_ref_registry_channel_marks(target: str) -> None:
     registration is dropped fails behaviorally (no channel marked). r65: torch RNG
     ``replayable_read`` rows mark the non-ceiling ``replayable_reads`` set, so the
     assertion checks the union; the probe brackets global torch RNG state because the
-    entropy/mutation recipes genuinely reseed it.
+    entropy/mutation recipes genuinely reseed it. Split into two alternating-half
+    families (every target lands in exactly one) purely for the smoke family
+    duration budget; the checked behavior is identical.
     """
 
     recipe = _HELD_REF_RECIPES.get(target)
@@ -379,6 +415,14 @@ def test_held_ref_registry_channel_marks(target: str) -> None:
         pytest.fail(f"no held-ref probe recipe for registry target {target!r}")
     if target == "resource.getrusage" and _resource is None:
         pytest.skip("resource module unavailable on this platform")
+    if (
+        target in {"numpy.random.get_state", "numpy.random.set_state", "numpy.random.seed"}
+        and rng_mod._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST
+    ):
+        pytest.skip(
+            "numpy>=2 binds the legacy singleton's state methods as profile-silent Cython "
+            "methods: the held-reference spelling is the documented residual (W051 2.17)"
+        )
     try:
         held = recipe.get()
     except AttributeError:
@@ -398,6 +442,22 @@ def test_held_ref_registry_channel_marks(target: str) -> None:
             torch.cuda.set_rng_state_all(cuda_states)
     marked = result.channels | result.replayable_reads
     assert recipe.channels & marked, f"held reference to {target!r} left marks {sorted(marked)!r}"
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize("target", _HELD_REF_TARGETS[0::2])
+def test_held_ref_registry_channel_marks_even(target: str) -> None:
+    """Alternating half A of the held-ref registry sweep (see the shared body)."""
+
+    _check_held_ref_registry_channel_marks(target)
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize("target", _HELD_REF_TARGETS[1::2])
+def test_held_ref_registry_channel_marks_odd(target: str) -> None:
+    """Alternating half B of the held-ref registry sweep (see the shared body)."""
+
+    _check_held_ref_registry_channel_marks(target)
 
 
 # ======================================================================================

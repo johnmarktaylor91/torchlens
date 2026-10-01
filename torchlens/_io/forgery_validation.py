@@ -102,11 +102,21 @@ def validate_persisted_forgery_surfaces(trace: Trace) -> None:
         If a persisted field violates its closed schema or structural anchor.
     """
 
+    # Lazy: ``_load_validators`` imports this module's helpers at top level.
+    from ._load_validators import (
+        _validate_annotation_families,
+        _validate_edge_carriers,
+        _validate_graph_structure,
+    )
+
     _validate_site_keys(trace)
     _validate_distributed_scope(trace)
     _validate_timing_provenance(trace)
     _validate_checkpoint_witness(trace)
     _validate_intervention_audit(trace)
+    _validate_edge_carriers(trace)
+    _validate_graph_structure(trace)
+    _validate_annotation_families(trace)
     _validate_kernel_telemetry(trace)
     _validate_structure_only_coherence(trace)
     _validate_sidecar_namespace(trace)

@@ -18,6 +18,7 @@ Every spelling here is DOCUMENTED-UNSTABLE pending the naming session.
 
 from __future__ import annotations
 
+import html
 import re
 import subprocess
 from dataclasses import dataclass, field
@@ -281,12 +282,31 @@ def _node_boxes(layout: dict[str, Any]) -> dict[str, tuple[float, float, float, 
     return boxes
 
 
+def _visible_label_text(label: Any) -> str:
+    """Return the longest VISIBLE line of an edge label.
+
+    ``dot -Tjson`` returns HTML-like labels (Graphviz ``<...>`` markup: the
+    shipped In/Out multiplicity tables) as RAW markup; sizing a box from
+    markup length manufactured phantom geometry penetrations -- a 175-char
+    ``<TABLE...>`` label whose visible text is ~7 chars read as a 420 pt
+    half-width (D03-R2). Only the text content carries rendered width.
+    """
+
+    text = str(label).strip()
+    if text.startswith("<") and text.endswith(">"):
+        text = html.unescape(re.sub(r"<[^>]*>", "\n", text))
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    return max(lines, key=len) if lines else ""
+
+
 def _label_boxes(layout: dict[str, Any]) -> list[tuple[str, tuple[float, float, float, float]]]:
     """Estimate edge-label bounding boxes from label positions and text.
 
     ``dot -Tjson`` gives the label CENTER (``lp``); the box is estimated
-    from text length at the emitted font size (default 8pt labels) --
-    deterministic, disclosed as an estimate in the report manifest.
+    from VISIBLE text length at the emitted font size (default 8pt labels)
+    -- deterministic, disclosed as an estimate in the report manifest.
+    HTML-like markup contributes only its text content (D03-R2); a label
+    with no visible text has no box.
     """
 
     boxes: list[tuple[str, tuple[float, float, float, float]]] = []
@@ -300,15 +320,62 @@ def _label_boxes(layout: dict[str, Any]) -> list[tuple[str, tuple[float, float, 
         except ValueError:
             continue
         font_size = float(edge.get("fontsize", 8.0))
-        text = max(str(label).splitlines(), key=len)
+        text = _visible_label_text(label)
+        if not text:
+            continue
         half_w = 0.30 * font_size * len(text)
         half_h = 0.60 * font_size
         boxes.append(
             (
-                str(label),
+                text,
                 (center_x - half_w, center_y - half_h, center_x + half_w, center_y + half_h),
             )
         )
+    return boxes
+
+
+def _endpoint_label_boxes(
+    layout: dict[str, Any],
+) -> list[tuple[int, str, str, tuple[float, float, float, float]]]:
+    """Exact head/tail-label glyph boxes from the edge draw ops (D03-R5).
+
+    The bare ``label``/``lp`` read above is structurally blind to
+    ``headlabel``/``taillabel`` text (the shipped ``arg N`` family rides
+    exactly that channel). Head/tail labels are read here from the
+    ``_hldraw_``/``_tldraw_`` op arrays, whose ``T`` ops carry the engine's
+    COMPUTED glyph-run geometry -- exact, not estimated, and therefore
+    immune to the markup-length estimation defect class (D03-R2).
+
+    Returns ``(edge_index, kind, text, (x0, y0, x1, y1))`` tuples in points,
+    y-up; the glyph bbox y-extent is ``[baseline - 0.22 * fontsize,
+    baseline + 0.78 * fontsize]`` (the calibrated v1 glyph model).
+    """
+
+    boxes: list[tuple[int, str, str, tuple[float, float, float, float]]] = []
+    for edge_index, edge in enumerate(layout.get("edges", ())):
+        for key, kind in (("_hldraw_", "headlabel"), ("_tldraw_", "taillabel")):
+            size = 14.0
+            for op in edge.get(key) or ():
+                if op.get("op") == "F":
+                    size = float(op.get("size", size))
+                elif op.get("op") == "T":
+                    x, y = float(op["pt"][0]), float(op["pt"][1])
+                    width = float(op["width"])
+                    align = op.get("align", "l")
+                    if align == "r":
+                        x0 = x - width
+                    elif align == "c":
+                        x0 = x - width / 2.0
+                    else:
+                        x0 = x
+                    boxes.append(
+                        (
+                            edge_index,
+                            kind,
+                            str(op.get("text", "")),
+                            (x0, y - 0.22 * size, x0 + width, y + 0.78 * size),
+                        )
+                    )
     return boxes
 
 
@@ -322,13 +389,42 @@ def _overlap_pt(
     return min(dx, dy) if dx > 0 and dy > 0 else 0.0
 
 
+def _endpoint_label_collisions(
+    endpoint_boxes: list[tuple[int, str, str, tuple[float, float, float, float]]],
+    nodes: dict[str, tuple[float, float, float, float]],
+) -> list[str]:
+    """Collision descriptions for endpoint-label boxes (vs nodes and each other).
+
+    Same-edge pairs are exempt: one edge's head and tail labels sit at
+    opposite ends, never the pileup class.
+    """
+
+    collisions: list[str] = []
+    for index, (edge_index, kind, text, box) in enumerate(endpoint_boxes):
+        for name, node_box in nodes.items():
+            depth = _overlap_pt(box, node_box)
+            if depth > PENETRATION_TOLERANCE_PT:
+                collisions.append(f"{kind} {text[:24]!r}->{name} ({depth:.1f}pt)")
+        for other_index, other_kind, other_text, other_box in endpoint_boxes[index + 1 :]:
+            if other_index == edge_index:
+                continue
+            depth = _overlap_pt(box, other_box)
+            if depth > PENETRATION_TOLERANCE_PT:
+                collisions.append(
+                    f"{kind} {text[:24]!r}~{other_kind} {other_text[:24]!r} ({depth:.1f}pt)"
+                )
+    return collisions
+
+
 def geometry_findings(dot_source: str) -> list[AuditFinding]:
     """Exact-layout geometry checks via ``dot -Tjson``.
 
-    Two checks: node-node box overlap, and edge-label-vs-node penetration
-    (label boxes estimated from text metrics; head/tail labels are counted
-    as candidates -- the R0 baseline is the blocking reference for the
-    shipped ``arg N`` family).
+    Three checks: node-node box overlap, edge-label-vs-node penetration
+    (midpoint label boxes estimated from text metrics), and endpoint-label
+    collision (``headlabel``/``taillabel`` glyph boxes read EXACTLY from
+    the ``_hldraw_``/``_tldraw_`` draw ops, checked against node boxes and
+    against each other -- the D03-R4 high-fan-in pileup class; the historic
+    two-check form was structurally blind to it, D03-R5).
     """
 
     layout = _dot_json(dot_source)
@@ -347,6 +443,8 @@ def geometry_findings(dot_source: str) -> list[AuditFinding]:
             depth = _overlap_pt(label_box, node_box)
             if depth > PENETRATION_TOLERANCE_PT:
                 label_penetrations.append(f"{label_text[:24]!r}->{name} ({depth:.1f}pt)")
+    endpoint_boxes = _endpoint_label_boxes(layout)
+    endpoint_collisions = _endpoint_label_collisions(endpoint_boxes, nodes)
     return [
         AuditFinding(
             check="geometry_node_overlap",
@@ -363,6 +461,17 @@ def geometry_findings(dot_source: str) -> list[AuditFinding]:
             if not label_penetrations
             else f"{len(label_penetrations)} penetrations: " + "; ".join(label_penetrations[:5]),
             measurements={"count": len(label_penetrations), "label_boxes": len(labels)},
+        ),
+        AuditFinding(
+            check="geometry_endpoint_label_collision",
+            passed=not endpoint_collisions,
+            detail="no head/tail-label collisions"
+            if not endpoint_collisions
+            else f"{len(endpoint_collisions)} collisions: " + "; ".join(endpoint_collisions[:5]),
+            measurements={
+                "count": len(endpoint_collisions),
+                "endpoint_label_boxes": len(endpoint_boxes),
+            },
         ),
     ]
 

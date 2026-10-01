@@ -359,6 +359,11 @@ class CouplingAttestation:
     fire_counts: tuple[int | None, ...]
     outside_step_fires: int | None
     segments: tuple[CouplingSegment, ...]
+    #: W051 (audit 3.2): whether the evidence column was re-derived from the
+    #: product's RETAINED root output and matched (``True``); ``None`` when
+    #: nothing could be compared (kind ``none``, unretained payload) -- the
+    #: binding then rests on identity + ledger content alone, disclosed.
+    evidence_rederived: bool | None = None
 
 
 def _episode_payload(subject: Any) -> Mapping[str, Any] | None:
@@ -413,13 +418,37 @@ def attest_coupling(subject: Any) -> CouplingAttestation | None:
             "Re-capture with this TorchLens version to mint the binding.",
             code="episode_coupling_unmintable",
         )
-    recomputed = _recompute_capture_digest(subject, payload)
+    from ._episode_derivation import recompute_capture_digests, rederived_evidence_matches
+
+    recomputed, legacy = recompute_capture_digests(subject, payload)
     if recomputed != persisted:
+        if legacy == persisted:
+            raise _coupling_error(
+                "this episode ledger carries a pre-content-binding capture "
+                "digest (the v1 identity-only form), so the ledger content "
+                "cannot be attested against the product. Re-capture with this "
+                "TorchLens version to mint the content-binding digest.",
+                code="episode_coupling_unmintable",
+            )
         raise _coupling_error(
             "this episode ledger's capture digest does not match the digest "
-            "recomputed from the product it rides: the ledger does not "
-            "describe this execution (a foreign or tampered ledger). "
-            "Re-capture, or recover the original product.",
+            "recomputed from the product it rides and the ledger's own "
+            "content: the ledger does not describe this execution (a foreign "
+            "or rewritten ledger). Re-capture, or recover the original product.",
+            code="episode_coupling_unbound",
+            persisted_digest=persisted,
+            recomputed_digest=recomputed,
+        )
+    # The digest binds content; the re-derivation binds that content to the
+    # product's own retained values (a re-minted foreign ledger over an
+    # identical program -- two equal-length prompts -- is caught here).
+    evidence_rederived = rederived_evidence_matches(subject, payload)
+    if evidence_rederived is False:
+        raise _coupling_error(
+            "this episode ledger's evidence column does not re-derive from the "
+            "product's retained root output: the ledger does not describe this "
+            "execution (a foreign ledger over an identical program). Re-capture, "
+            "or recover the original product.",
             code="episode_coupling_unbound",
             persisted_digest=persisted,
             recomputed_digest=recomputed,
@@ -441,18 +470,8 @@ def attest_coupling(subject: Any) -> CouplingAttestation | None:
         # disclosed residual, never a zero claim.
         outside_step_fires=None,
         segments=coupling_segments(subject),
+        evidence_rederived=evidence_rederived,
     )
-
-
-def _recompute_capture_digest(subject: Any, payload: Mapping[str, Any]) -> str:
-    """Recompute the F40b capture digest from the product alone."""
-
-    from ._episode_derivation import mint_capture_digest
-
-    header = payload["header"]
-    rows = payload.get("rows") or []
-    started = sum(1 for row in rows if row.get("status") != "absent")
-    return mint_capture_digest(subject, str(header.get("stepped_module")), started)
 
 
 # ---------------------------------------------------------------------------

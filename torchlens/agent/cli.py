@@ -10,6 +10,14 @@ on stdout; diagnostics go to stderr; no ANSI in pipes.
 Exit codes (closed set): 0 ok; 1 CI gate tripped (``--fail-on``); 2
 usage/schema error; 3 artifact unreadable / wrong kind; 4 typed analysis
 refusal.
+
+``--fail-on`` gates READ the emitted record, never recompute: ``unverified``
+(any ``capture.capture_verified is False``), ``incomplete`` (envelope status
+not ``ok``, ``structure_only``, or ``capture_status != "complete"`` -- halted,
+aborted, failed, unattested, unknown), ``nonfinite`` (audit non-finite labels
+or a ``nonfinite_ops`` anomaly), ``mismatch`` (compare: changed sites or a
+fingerprint miss), ``truncation`` (any truncation disclosure). overview,
+dump, explain, and diff all carry the blocks the gates read.
 """
 
 from __future__ import annotations
@@ -37,6 +45,9 @@ _ARTIFACT_CODES = (
     "agent_artifact_unreadable",
     "agent_artifact_load_refused",
     "agent_artifact_kind_unsupported",
+    # The loader's own integrity refusal (a corrupted metadata.pkl) is an
+    # unreadable artifact too, not an analysis refusal.
+    "bundle_metadata_integrity_refused",
 )
 
 
@@ -121,12 +132,71 @@ def _tier0(verb: str, args: argparse.Namespace) -> int:
     return _tier0_info(args.path, as_json)
 
 
+def _capture_blocks(envelope: dict[str, Any]) -> list[dict[str, Any]]:
+    """Every capture honesty block a record carries (one, or one per side).
+
+    overview/explain/dump carry ``data.capture`` directly; compare carries
+    ``data.capture = {"reference": ..., "subject": ...}``. A gate reads them
+    all: a diff over one unverified side is an unverified diff.
+    """
+
+    capture = (envelope.get("data") or {}).get("capture")
+    if not isinstance(capture, dict):
+        return []
+    if "capture_status" in capture:
+        return [capture]
+    return [side for side in capture.values() if isinstance(side, dict)]
+
+
+def _audit_blocks(envelope: dict[str, Any]) -> list[dict[str, Any]]:
+    """Every audit block a record carries (one, or one per compare side)."""
+
+    audit = (envelope.get("data") or {}).get("audit")
+    if not isinstance(audit, dict):
+        return []
+    if "nonfinite" in audit or "health" in audit:
+        return [audit]
+    return [side for side in audit.values() if isinstance(side, dict)]
+
+
+def _check_unverified(envelope: dict[str, Any]) -> bool:
+    """Whether any capture block records an explicit verification ceiling.
+
+    ``capture_verified`` is TRI-STATE: ``None`` means no ceiling recorded (a
+    healthy capture) and never trips.
+    """
+
+    return any(block.get("capture_verified") is False for block in _capture_blocks(envelope))
+
+
+def _check_incomplete(envelope: dict[str, Any]) -> bool:
+    """Whether the record is anything short of a settled COMPLETE capture.
+
+    Trips on a degraded envelope status, a structure-only capture, or a
+    ``capture_status`` other than ``complete`` -- HALTED, ABORTED_NONFINITE,
+    FAILED, UNATTESTED (legacy, never blessed complete), and UNKNOWN all trip
+    (AUD-CODE 3.11a: the gate used to ignore HALTED). A record without a
+    capture block cannot prove completeness and trips too.
+    """
+
+    if envelope.get("status") != "ok":
+        return True
+    blocks = _capture_blocks(envelope)
+    if not blocks:
+        return True
+    return any(
+        bool(block.get("structure_only")) or block.get("capture_status") != "complete"
+        for block in blocks
+    )
+
+
 def _check_nonfinite(envelope: dict[str, Any]) -> bool:
-    """Whether the record's audit block or anomalies carry non-finite evidence."""
+    """Whether the record's audit block(s) or anomalies carry non-finite evidence."""
 
     data = envelope.get("data") or {}
-    audit = data.get("audit") or {}
-    if (audit.get("nonfinite") or {}).get("n_labels", 0) > 0:
+    if any(
+        (audit.get("nonfinite") or {}).get("n_labels", 0) > 0 for audit in _audit_blocks(envelope)
+    ):
         return True
     return any(anomaly.get("kind") == "nonfinite_ops" for anomaly in data.get("anomalies") or [])
 
@@ -141,13 +211,8 @@ def _check_mismatch(envelope: dict[str, Any]) -> bool:
 
 #: --fail-on check -> record predicate (each READS, never recomputes).
 _FAIL_ON_PREDICATES: dict[str, Any] = {
-    "unverified": lambda envelope: (
-        ((envelope.get("data") or {}).get("capture") or {}).get("capture_verified") is False
-    ),
-    "incomplete": lambda envelope: (
-        bool(((envelope.get("data") or {}).get("capture") or {}).get("structure_only"))
-        or envelope.get("status") != "ok"
-    ),
+    "unverified": _check_unverified,
+    "incomplete": _check_incomplete,
     "nonfinite": _check_nonfinite,
     "mismatch": _check_mismatch,
     "truncation": lambda envelope: envelope.get("truncation") is not None,
@@ -238,6 +303,7 @@ def _build_parser() -> argparse.ArgumentParser:
     dump_parser.add_argument("--view", choices=["overview", "graph", "full"], default=None)
     dump_parser.add_argument("--max-rows", type=int, dest="max_rows")
     dump_parser.add_argument("--class-id", dest="class_id")
+    dump_parser.add_argument("--max-tokens", type=int, dest="max_tokens")
     explain_parser = _add("explain", "Plain-language report.", path=True)
     explain_parser.add_argument("--max-tokens", type=int, dest="max_tokens")
     explain_parser.add_argument("--audience", choices=["researcher", "practitioner", "auto"])
@@ -260,7 +326,7 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="fail_on",
         help=f"Comma-joined CI gates from: {', '.join(FAIL_ON_CHECKS)}.",
     )
-    for gated in (overview_parser, explain_parser):
+    for gated in (overview_parser, dump_parser, explain_parser):
         gated.add_argument(
             "--fail-on",
             dest="fail_on",

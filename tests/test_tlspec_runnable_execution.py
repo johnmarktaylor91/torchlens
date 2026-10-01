@@ -387,6 +387,12 @@ def test_loaded_sparse_run_with_user_state_matches_live_values_and_is_transactio
     assert all(check.passed for check in result.report.contract_checks)
 
 
+@pytest.mark.filterwarnings(
+    # A08 random-role-init disclosure (runnable_random_init_run): this test
+    # exercises a weight-free runnable run DELIBERATELY; the warning is the
+    # feature under test elsewhere (tests/test_persist_honesty_runnable_random.py).
+    "default:This runnable artifact carries no model weights"
+)
 def test_loaded_sparse_random_state_runs_have_correct_shape_and_seed_determinism(
     runnable_execution_artifact: tuple[Path, RunnableExecutionModel, tl.Trace],
 ) -> None:
@@ -1504,6 +1510,12 @@ class _BatchNormModel(nn.Module):
 
 
 @pytest.mark.parametrize("train", [False, True])
+@pytest.mark.filterwarnings(
+    # A08 random-role-init disclosure (runnable_random_init_run): this test
+    # exercises a weight-free runnable run DELIBERATELY; the warning is the
+    # feature under test elsewhere (tests/test_persist_honesty_runnable_random.py).
+    "default:This runnable artifact carries no model weights"
+)
 def test_h5_batchnorm_records_mode_and_verifies(train: bool, tmp_path: Path) -> None:
     """A BatchNorm model records its mode and still VERIFIES (no over-trigger)."""
 
@@ -1527,6 +1539,12 @@ def test_h5_batchnorm_records_mode_and_verifies(train: bool, tmp_path: Path) -> 
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
+@pytest.mark.filterwarnings(
+    # A08 random-role-init disclosure (runnable_random_init_run): this test
+    # exercises a weight-free runnable run DELIBERATELY; the warning is the
+    # feature under test elsewhere (tests/test_persist_honesty_runnable_random.py).
+    "default:This runnable artifact carries no model weights"
+)
 def test_h5_dropout_model_in_eval_records_mode_and_verifies(tmp_path: Path) -> None:
     """A Dropout model captured in eval records its mode and still VERIFIES."""
 
@@ -1594,6 +1612,12 @@ def test_h5_mode_sensitive_op_without_declared_mode_is_unverifiable(
     assert "module_training_mode" in str(excinfo.value.fields.get("diagnostics"))
 
 
+@pytest.mark.filterwarnings(
+    # A08 random-role-init disclosure (runnable_random_init_run): this test
+    # exercises a weight-free runnable run DELIBERATELY; the warning is the
+    # feature under test elsewhere (tests/test_persist_honesty_runnable_random.py).
+    "default:This runnable artifact carries no model weights"
+)
 def test_h5_mode_insensitive_model_without_mode_still_verifies(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

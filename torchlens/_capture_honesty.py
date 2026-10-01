@@ -49,8 +49,11 @@ def capture_verification(log: Any) -> dict[str, Any]:
     dict[str, Any]
         ``capture_status`` (the settled ``CaptureOutcome`` status value, or
         ``"unknown"`` when the log carries none), tri-state
-        ``capture_verified`` (``None`` = no ceiling recorded),
-        ``capture_verification_reason``, and ``rescue_rerun``.
+        ``capture_verified`` (``None`` = NOT RECORDED: the default capture does
+        not arm the completeness witness, so the absence of a ceiling is not a
+        clean bill -- ``True`` requires ``wrap_torch(completeness_witness=True)``
+        or the ``tl.validate`` paths; load also degrades a claimed ``True`` to
+        ``None``), ``capture_verification_reason``, and ``rescue_rerun``.
     """
 
     outcome = getattr(log, "outcome", None)
@@ -189,6 +192,55 @@ def capture_advisories(log: Any) -> list[dict[str, Any]]:
     return [dict(entry) for entry in advisories if isinstance(entry, dict)]
 
 
+def intervention_facts(log: Any) -> dict[str, Any] | None:
+    """Return the intervention disclosure for a log, or ``None`` when untouched.
+
+    AUD-HONESTY M5: a capture-time ``intervene=`` (or a fork-side ``do()``) leaves
+    the outcome ``complete`` while the retained values at the fired sites are
+    COUNTERFACTUAL. Every honesty surface that reads
+    :func:`capture_honesty_facts` must therefore carry the intervention evidence,
+    or an agent reading a zero-ablated dump has no way to know the numbers are
+    not the model's. Evidence is read from the persisted record, never inferred:
+    per-op ``intervention_replaced`` flags and ``FireRecord`` lists, plus the
+    ``intervention_audit`` rows (fork-side ``do()`` / ``PARAM`` / ``EVENT`` kinds).
+
+    Parameters
+    ----------
+    log:
+        Capture object.
+
+    Returns
+    -------
+    dict[str, Any] | None
+        ``{"intervened": True, "replaced_ops": [...], "replaced_op_count": n,
+        "fire_count": n, "audit_row_count": n, "audit_kinds": [...]}`` when any
+        intervention evidence exists; ``None`` for an untouched log.
+    """
+
+    replaced: list[str] = []
+    fires = 0
+    for layer in getattr(log, "layer_list", None) or ():
+        records = getattr(layer, "interventions", None) or ()
+        fires += len(records)
+        if bool(getattr(layer, "intervention_replaced", False)):
+            label = getattr(layer, "layer_label", None)
+            if isinstance(label, str):
+                replaced.append(label)
+    audit = getattr(log, "intervention_audit", None)
+    audit_rows = [row for row in (audit or ()) if isinstance(row, dict)]
+    kinds = sorted({str(row.get("kind")) for row in audit_rows if row.get("kind") is not None})
+    if not replaced and not fires and not audit_rows:
+        return None
+    return {
+        "intervened": True,
+        "replaced_ops": replaced,
+        "replaced_op_count": len(replaced),
+        "fire_count": int(fires),
+        "audit_row_count": len(audit_rows),
+        "audit_kinds": kinds,
+    }
+
+
 def capture_honesty_facts(log: Any) -> dict[str, Any]:
     """Return the full JSON-primitive honesty fact block for one log.
 
@@ -201,8 +253,8 @@ def capture_honesty_facts(log: Any) -> dict[str, Any]:
     -------
     dict[str, Any]
         Schema-stamped facts: verification quartet, ``structure_only``,
-        poison disclosure, episode disclosure (when present), and advisories
-        (when present).
+        poison disclosure, episode disclosure (when present), intervention
+        disclosure (when present, M5), and advisories (when present).
     """
 
     facts: dict[str, Any] = {
@@ -216,6 +268,9 @@ def capture_honesty_facts(log: Any) -> dict[str, Any]:
     episode = episode_facts(log)
     if episode is not None:
         facts["episode"] = episode
+    interventions = intervention_facts(log)
+    if interventions is not None:
+        facts["interventions"] = interventions
     advisories = capture_advisories(log)
     if advisories:
         facts["advisories"] = advisories
@@ -287,6 +342,38 @@ def _structure_only_status_lines(facts: dict[str, Any]) -> list[str]:
     ]
 
 
+def _verification_verdict_lines(facts: dict[str, Any]) -> list[str]:
+    """Return the preamble's verification-verdict lines (header + ceiling/not-recorded).
+
+    The ``capture_verified`` flag is tri-state: ``False`` names the ceiling reason,
+    ``True`` reads ``true``, and ``None`` reads ``not_recorded`` with the arming hint.
+    """
+
+    verified = facts["capture_verified"]
+    if verified is False:
+        verified_text = "unverified"
+    elif verified is True:
+        verified_text = "true"
+    else:
+        # L10: "checked and clean" and "never checked" are indistinguishable once
+        # the witness verdict is absent (default capture, or a load-degraded True),
+        # so the preamble says so instead of printing a ``none`` that reads as a
+        # recorded verdict.
+        verified_text = "not_recorded"
+    lines = [
+        f"torchlens capture honesty: status={facts['capture_status']} verified={verified_text}"
+    ]
+    if verified is False:
+        reason = facts["capture_verification_reason"] or "unrecorded reason"
+        lines.append(f"verification ceiling: {reason}")
+    elif verified is None:
+        lines.append(
+            "capture verification not recorded: the completeness witness is not armed on "
+            "the default capture (wrap_torch(completeness_witness=True) or tl.validate arm it)"
+        )
+    return lines
+
+
 def honesty_preamble_lines(log: Any) -> list[str]:
     """Return the plain-text capture-honesty preamble for file exports.
 
@@ -307,14 +394,7 @@ def honesty_preamble_lines(log: Any) -> list[str]:
     """
 
     facts = capture_honesty_facts(log)
-    verified = facts["capture_verified"]
-    verified_text = "unverified" if verified is False else str(verified).lower()
-    lines = [
-        f"torchlens capture honesty: status={facts['capture_status']} verified={verified_text}"
-    ]
-    if verified is False:
-        reason = facts["capture_verification_reason"] or "unrecorded reason"
-        lines.append(f"verification ceiling: {reason}")
+    lines = _verification_verdict_lines(facts)
     if facts["rescue_rerun"]:
         lines.append("result from disclosed rescue re-run (mode_rescue_rerun)")
     if facts["structure_only"]:
@@ -335,6 +415,16 @@ def honesty_preamble_lines(log: Any) -> list[str]:
         )
         if basis == "forced":
             lines.append("forced-tokens episode: a disclosed NON-VERIFYING mode")
+    interventions = facts.get("interventions")
+    if interventions is not None:
+        lines.append(
+            "INTERVENED capture: "
+            f"{interventions.get('fire_count')} fire(s) replaced "
+            f"{interventions.get('replaced_op_count')} op(s) "
+            f"{interventions.get('replaced_ops')}; audit rows "
+            f"{interventions.get('audit_row_count')} {interventions.get('audit_kinds')} -- "
+            "values at fired sites are COUNTERFACTUAL, not the model's"
+        )
     for advisory in facts.get("advisories", ()):
         lines.append(
             f"capture advisory: {advisory.get('kind')} x{advisory.get('count')} "

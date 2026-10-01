@@ -252,8 +252,11 @@ def test_show_containers_nodes_homogeneous_collapse_is_coherent(tmp_path: Path) 
     # "collapsed"/"auto" mode -- never drawn as edgeless orphans.
     leaf_declarations = {name for name in declared if name.startswith("output_")}
     assert leaf_declarations == set()
-    # No declared node is an orphan (graphviz "graph"/"node" defaults aside).
-    orphan_declarations = declared - endpoints - {"graph", "node"}
+    # No declared node is an orphan. The three DOT attr_stmt keywords
+    # (graph/node/edge) are attribute defaults, not nodes: the typography
+    # record pins ``fontname`` on the edge scope of every preset, so the
+    # source now carries a global ``edge [...]`` line the node regex matches.
+    orphan_declarations = declared - endpoints - {"graph", "node", "edge"}
     assert orphan_declarations == set()
 
 

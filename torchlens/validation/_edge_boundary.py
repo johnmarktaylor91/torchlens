@@ -65,7 +65,9 @@ def _fail_uncorroborated_edge_entries(
         for record in (getattr(target_op, "interventions", None) or ())
         if getattr(record, "edge_address", None) is not None
     }
-    for store_key in entries:
+    from ..intervention.edge_substitution import tensor_content_digest
+
+    for store_key, payload in entries.items():
         arg_kind, arg_path = store_key
         address = (target_op.func_call_id, arg_kind, tuple(arg_path))
         stamp = stamps.get(store_key)
@@ -83,6 +85,31 @@ def _fail_uncorroborated_edge_entries(
                 ),
             )
             return ValidationCheckResult.failed_result("edge_substitution_uncorroborated")
+        # The stamp's value_digest is the CONTENT half of the corroboration:
+        # a stored value that no longer digests to what was stamped is a
+        # tampered or foreign store row, and re-executing the child from it
+        # would corroborate the wrong value (AUD-CODE 4.10: the digest was
+        # minted at every write and checked nowhere).
+        value = payload.get("value") if isinstance(payload, dict) else None
+        stamped_digest = stamp.get("value_digest")
+        if (
+            isinstance(value, torch.Tensor)
+            and isinstance(stamped_digest, str)
+            and tensor_content_digest(value) != stamped_digest
+        ):
+            record_validation_failure(
+                trace,
+                ValidationFailure(
+                    check=CHECK_REPLAY,
+                    op_label=target_op.label,
+                    func_name=getattr(target_op, "func_name", None),
+                    message=(
+                        f"edge-substitution entry at {address!r} does not digest to its "
+                        "corroboration stamp (stored value and stamped value_digest disagree)"
+                    ),
+                ),
+            )
+            return ValidationCheckResult.failed_result("edge_substitution_stamp_mismatch")
     return None
 
 
@@ -201,3 +228,104 @@ def _reexecute_edge_boundary(
         )
         return ValidationCheckResult.failed_result("edge_boundary_reexecution_mismatch")
     return ValidationCheckResult("edge_intervention_boundary", "edge_boundary_reexecuted")
+
+
+def _parent_arg_evidence(
+    trace: Trace, target_layer: Op, parent_layer: Op
+) -> tuple[torch.Tensor, str | None] | ValidationCheckResult:
+    """Resolve the parent value a child's saved arg slot must be compared against.
+
+    Returns ``(parent_outs, capture_digest)`` or an ``unverified`` result.
+    ``out_versions_by_child`` stores per-child snapshots when an in-place op
+    modified the tensor between uses (capture truth; compared directly, the
+    pass-qualified child label first). Otherwise the parent's saved out is the
+    evidence -- EXCEPT on a REPLAY-PROPAGATED trace (AUD-CODE 2.9): once the
+    replay engine has overwritten this parent's out, the child's
+    ``saved_args`` snapshot (capture truth, retained unmodified by design)
+    can no longer be compared against ``parent.out`` (a pushed value that
+    legitimately differs) -- every non-identity edited fork false-FAILED at
+    the first downstream op. The engine records the capture-time content
+    digest of every out it overwrites, so the SAME equality question ("does
+    the snapshot at this slot equal the parent's capture-time value?") is
+    answered against that digest: still exact, still bidirectional, never
+    skipped. A recomputed parent with no recordable digest stays unverified,
+    never validated.
+    """
+
+    from .core import ValidationCheckResult, _saved_out_payload
+
+    target_op_label = getattr(target_layer, "label", target_layer.layer_label)
+    versions = parent_layer.out_versions_by_child
+    for key in (target_op_label, target_layer.layer_label):
+        if key in versions:
+            return versions[key], None
+    capture_digest = _replay_capture_digest_for(trace, parent_layer)
+    if capture_digest is None and _is_replay_recomputed(trace, parent_layer):
+        return ValidationCheckResult.unverified("replay_recomputed_parent_unattested")
+    parent_outs = _saved_out_payload(parent_layer)
+    if parent_outs is None:
+        return ValidationCheckResult.unverified("missing_saved_parent_payload")
+    return parent_outs, capture_digest
+
+
+def _tensor_content_digest(value: torch.Tensor) -> str:
+    """Return the replay engine's content digest of one tensor (shared spelling)."""
+
+    from ..intervention.edge_substitution import tensor_content_digest
+
+    return tensor_content_digest(value)
+
+
+def _replay_capture_digest_for(trace: Trace, op: Op) -> str | None:
+    """Return the capture-time digest of an op's out if replay overwrote it."""
+
+    from ..intervention._replay_context import replay_capture_digest
+
+    return replay_capture_digest(trace, op)
+
+
+def _is_replay_recomputed(trace: Trace, op: Op) -> bool:
+    """Return whether the replay engine has overwritten this op's out on this trace.
+
+    Derived from the replay run context's committed-site set (the digest
+    ledger keys), so a site whose pre-edit out could not be digested still
+    reads as recomputed and is never mistaken for capture truth.
+    """
+
+    from ..intervention._replay_context import REPLAY_CAPTURE_DIGESTS_KEY, _replay_site_key
+
+    run_ctx = getattr(trace, "last_run", None)
+    if not isinstance(run_ctx, dict):
+        return False
+    digests = run_ctx.get(REPLAY_CAPTURE_DIGESTS_KEY)
+    return isinstance(digests, dict) and _replay_site_key(op) in digests
+
+
+def _capture_payload_equal(trace: Trace, candidate: Op, target_layer: Op, value: Any) -> bool:
+    """Return whether ``value`` equals the candidate's CAPTURE-TIME out as the target consumed it.
+
+    A child-versioned snapshot (``out_versions_by_child``) is capture truth
+    and compares directly; a replay-recomputed candidate compares through its
+    recorded capture digest; an untouched candidate compares its saved out.
+    Unknown evidence (no payload, no digest) reads as not equal.
+    """
+
+    from ..utils.tensor_utils import tensor_nanequal
+    from .core import _saved_out_payload
+
+    if not isinstance(value, torch.Tensor):
+        return False
+    versions = getattr(candidate, "out_versions_by_child", None) or {}
+    for key in (getattr(target_layer, "label", None), target_layer.layer_label):
+        if key is not None and key in versions:
+            snapshot = versions[key]
+            return isinstance(snapshot, torch.Tensor) and bool(
+                tensor_nanequal(value, snapshot, allow_tolerance=False)
+            )
+    digest = _replay_capture_digest_for(trace, candidate)
+    if digest is not None:
+        return _tensor_content_digest(value) == digest
+    if _is_replay_recomputed(trace, candidate):
+        return False
+    payload = _saved_out_payload(candidate)
+    return payload is not None and bool(tensor_nanequal(value, payload, allow_tolerance=False))

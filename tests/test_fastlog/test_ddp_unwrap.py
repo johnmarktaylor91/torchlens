@@ -27,15 +27,36 @@ class DdpModel(nn.Module):
         return self.linear(x)
 
 
+def _teardown_process_group(created: bool) -> None:
+    """Disarm distributed capture, then destroy the group this module created.
+
+    Capturing under an initialized process group lazily ARMS distributed
+    capture (``maybe_auto_arm`` at capture entry), and arming is process-
+    lifetime by design: it survives ``destroy_process_group``. Left armed,
+    ``_plane_p_requested()`` stays True and the completeness dispatch witness
+    rides EVERY later capture in the session -- flipping ``FailureOrigin``
+    classifications (test_capture_outcome_authority) and raising host-write
+    witness flags on innocent value-free traces (test_weightsfree_persistence).
+    Disarm through the public spelling BEFORE the group goes away so the
+    wrapped ``destroy_process_group`` is restored to the original first.
+    """
+
+    tl.distributed.disarm()
+    if created and torch.distributed.is_initialized():
+        torch.distributed.destroy_process_group()
+
+
 @pytest.fixture()
 def process_group(tmp_path: Path) -> Iterator[None]:
-    """Single-rank gloo group, destroyed on teardown.
+    """Single-rank gloo group, disarmed and destroyed on teardown.
 
     The historical helper left the default group INITIALIZED for the rest of
     the session, which flipped ``warn_parallel``'s distributed-rank exception
     on for every later test in the process (the round-3 child-process refusal
     reds: a fake child read as a rank because ``dist.is_initialized()`` was
-    still True). Only a group THIS module created is destroyed.
+    still True). Only a group THIS module created is destroyed. Teardown also
+    disarms the lazily-armed distributed capture (see
+    :func:`_teardown_process_group`).
     """
 
     if not torch.distributed.is_available():
@@ -49,9 +70,10 @@ def process_group(tmp_path: Path) -> Iterator[None]:
             rank=0,
             world_size=1,
         )
-    yield
-    if created and torch.distributed.is_initialized():
-        torch.distributed.destroy_process_group()
+    try:
+        yield
+    finally:
+        _teardown_process_group(created)
 
 
 def test_ddp_wrapped_model_records_unwrapped_module(process_group: None) -> None:
@@ -79,3 +101,23 @@ def test_ddp_bundle_path_gets_rank_prefix(process_group: None, tmp_path: Path) -
 
     assert recording.bundle_path == tmp_path / "rank_00" / "bundle.tlfast"
     assert (tmp_path / "rank_00" / "bundle.tlfast" / "manifest.json").exists()
+
+
+def test_process_group_teardown_disarms_distributed_capture(process_group: None) -> None:
+    """A capture under the group arms distributed capture; teardown must disarm it.
+
+    Regression pin for the session-pollution leak: the arming survived the
+    fixture, so every later capture in the process ran under the completeness
+    dispatch witness. The teardown helper is exercised directly so the
+    contract is checked inside the test body rather than trusted to a
+    finalizer nobody asserts on.
+    """
+
+    ddp_model = torch.nn.parallel.DistributedDataParallel(DdpModel())
+    tl.fastlog.record(ddp_model, torch.ones(1, 2), default_op=True)
+    assert tl.distributed.is_armed(), "capture under an initialized group should auto-arm"
+
+    _teardown_process_group(created=False)
+
+    assert not tl.distributed.is_armed()
+    assert torch.distributed.is_initialized(), "created=False must not destroy a foreign group"

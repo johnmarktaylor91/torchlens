@@ -673,6 +673,7 @@ def _evaluate_instance(
 
     from .edge_substitution import _consumed_value, _edit_hook
     from .hooks import make_hook_context
+    from .runtime import validate_hook_output
 
     exit_values: dict[str, torch.Tensor] = {}
     for label in instance.exit_ops:
@@ -703,7 +704,16 @@ def _evaluate_instance(
                 code="region_splice_arity_mismatch",
                 remedy="return exactly one tensor per exit op, in exit order",
             )
-        return dict(zip(instance.exit_ops, results, strict=True))
+        splice_context = make_hook_context(
+            name="splice_module",
+            timing="post",
+            direction="forward",
+            layer_log=graph.ops[instance.exit_ops[0]],
+            run_ctx={"region": region_target.region_digest, "instance": instance.index},
+        )
+        return _validated_exit_values(
+            instance, exit_values, results, validate_hook_output, splice_context
+        )
 
     if len(instance.exit_ops) == 1:
         label = instance.exit_ops[0]
@@ -716,7 +726,11 @@ def _evaluate_instance(
             run_ctx={"region": region_target.region_digest, "instance": instance.index},
         )
         replaced = hook_callable(exit_values[label], hook=context)
-        return {label: replaced}
+        # The SAME payload gate every other edit door runs (node-level do,
+        # intervene=, spec.bind): a region exit value feeds the recorded
+        # consumers, so a shape/dtype/device change is a downstream lie, not
+        # an edit (AUD-CODE 3.7c).
+        return {label: validate_hook_output(replaced, exit_values[label], hook_context=context)}
 
     if isinstance(edit, (HelperSpec, torch.Tensor)) or not callable(edit):
         raise RegionError(
@@ -745,7 +759,24 @@ def _evaluate_instance(
             code="region_splice_arity_mismatch",
             remedy="return a tuple of len(region.instances[i].exit_ops) tensors",
         )
-    return dict(zip(instance.exit_ops, result, strict=True))
+    return _validated_exit_values(
+        instance, exit_values, list(result), validate_hook_output, context
+    )
+
+
+def _validated_exit_values(
+    instance: RegionInstance,
+    exit_values: dict[str, torch.Tensor],
+    results: list[Any],
+    validate: Any,
+    context: Any,
+) -> dict[str, torch.Tensor]:
+    """Run every replacement through the hook payload gate against its exit value."""
+
+    return {
+        label: validate(value, exit_values[label], hook_context=context)
+        for label, value in zip(instance.exit_ops, results, strict=True)
+    }
 
 
 def _refuse_inadmissible_region_do(

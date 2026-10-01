@@ -7,7 +7,7 @@ niche with `echo=` -- one line per captured op (truthier than source lines),
 plus crash workflows torchsnooper never had. The decorator idiom maps in five
 lines:
 
-```python
+```text
 # @torchsnooper.snoop()          ->  echo= on the capture entry
 # with torchsnooper.snoop():     ->  fastlog.Recorder(model, echo=...)
 import torchlens as tl

@@ -298,6 +298,18 @@ _ALLOWED: dict[str, tuple[frozenset[str], str]] = {
         frozenset({"ALL"}),
         "this lint's own ledger",
     ),
+    "torchlens/__init__.py": (
+        frozenset({"paper_era"}),
+        "teaching redirect table: the three paper-era rows raise a typed "
+        "facade_redirect AttributeError naming the canonical home (AUD-CODE "
+        "3.14; GATE-FIX row 1) -- a redirect for a removed name is the table's "
+        "purpose, never a resurrection; tests/test_w051_capt3_paper_era_redirects.py pins them",
+    ),
+    "tests/test_w051_capt3_paper_era_redirects.py": (
+        frozenset({"paper_era"}),
+        "pytest.raises teaching pin: the three paper-era redirect rows refuse "
+        "typed and name their canonical spelling",
+    ),
     "tests/test_packaging_docs_a12.py": (
         frozenset({"tl_moved"}),
         "sibling removed-spelling scanner over docs/examples cells; naming "

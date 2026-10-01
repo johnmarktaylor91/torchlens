@@ -272,14 +272,19 @@ class TestFuncConfigIntegration:
         assert pass_log.func_config["out_features"] == 5
 
     def test_func_config_in_str_output(self):
-        """func_config should appear in the string representation when non-empty."""
+        """func_config stays discoverable from the string representation.
+
+        The F10 lovely card replaced the historical five-line summary (which
+        inlined a ``Config:`` block); the op card now advertises the
+        ``.func_config`` accessor on its ``More:`` exits line instead.
+        """
         model = nn.Linear(10, 5)
         log = tl.trace(model, torch.randn(1, 10))
 
         linear_layer = next(ly for ly in log.layers if ly.layer_type == "linear")
-        s = str(linear_layer)
-        assert "Config:" in s
-        assert "out_features=5" in s
+        op_card = str(linear_layer.ops[0])
+        assert ".func_config" in op_card
+        assert linear_layer.ops[0].func_config["out_features"] == 5
 
     def test_func_config_not_in_str_when_empty(self):
         """Layers with no func_config should not show the config line."""

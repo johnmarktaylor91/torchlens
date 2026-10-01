@@ -2016,10 +2016,16 @@ def test_branch_entry_with_arg_label_keeps_semantic_and_argument_labels_separate
     edge_line = _find_edge_line(dot_source, parent_label, child_label)
 
     assert 'label=<<FONT POINT-SIZE="18"><b><u>THEN</u></b></FONT>>' in edge_line
+    # Argument labels route through the padded non-bold builder (vizmech
+    # D9); the separation contract is unchanged -- the semantic branch label
+    # keeps the midpoint, the arg label rides head/x (this copy had kept the
+    # pre-D9 bold spelling and was red on the train tip; the
+    # test_conditional_rendering sibling was already updated).
     assert (
-        "headlabel=<<FONT POINT-SIZE='10'><b>arg" in edge_line
-        or "xlabel=<<FONT POINT-SIZE='10'><b>arg" in edge_line
+        'headlabel=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6">' in edge_line
+        or 'xlabel=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6">' in edge_line
     )
+    assert ">arg" in edge_line
 
 
 @requires_code_positions

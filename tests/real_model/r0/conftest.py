@@ -1,15 +1,27 @@
-"""Session-scoped R0 fixtures: one build+trace per (family, impl) per session.
+"""Package-scoped R0 fixtures: one build+trace per (family, impl) per R0 block.
 
 The deep sweep runs many assertions against each captured trace; caching the
 capture keeps the whole R0 gate at seconds (memo section 10 PR row). Models
 are ~100-225k params, inputs are 8 tokens -- the cache is a few MB.
+
+The cache is PACKAGE-scoped and emptied when the session leaves this package
+(FLOORLEAK). The historical session scope kept every family's model AND its
+finished ``Trace`` alive for the rest of the process: a default capture's
+saved activations carry autograd history, so each cached trace also pinned
+its whole live forward graph (~100 gc-visible activation tensors for whisper
+alone), and the process-wide live-holder tripwires in
+``tests/test_brainpipe_capture_floor.py`` read red for every later test in
+the session. A cache that outlives the tests that read it is a fixture leak,
+not a capture leak.
 """
 
 from __future__ import annotations
 
+import gc
 import importlib.util
 import os
 import warnings
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
 
@@ -68,9 +80,27 @@ class R0Capture:
     coverage: Any
 
 
-@pytest.fixture(scope="session")
-def r0_capture_cache() -> dict[tuple[str, str], R0Capture]:
-    return {}
+def r0_cache_lifetime() -> Iterator[dict[tuple[str, str], R0Capture]]:
+    """Yield a fresh capture cache; empty it when the lifetime closes.
+
+    The explicit ``clear()`` (rather than trusting the dict to die with the
+    fixture value) releases every cached model and Trace even if a consumer
+    kept a reference to the dict itself; ``gc.collect()`` then reclaims the
+    autograd graphs the traces' saved activations kept alive, so the tests
+    that follow start from the process baseline.
+    """
+
+    cache: dict[tuple[str, str], R0Capture] = {}
+    try:
+        yield cache
+    finally:
+        cache.clear()
+        gc.collect()
+
+
+@pytest.fixture(scope="package")
+def r0_capture_cache() -> Iterator[dict[tuple[str, str], R0Capture]]:
+    yield from r0_cache_lifetime()
 
 
 @pytest.fixture()

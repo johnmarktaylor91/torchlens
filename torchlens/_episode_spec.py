@@ -32,8 +32,10 @@ class EpisodeSpec:
     verification oracle / deep-dive product for TENS of steps, not hundreds.
     Measured on gpt2-124M (CPU): N=20 costs 79 s / 146 MB artifact / 1.9 GB
     peak RSS; N=100 costs 657 s (323x native) / 947 MB / 5.4 GB. Cost is
-    SUPERLINEAR in step count. The guarded-fast tier remains the default
-    engine for episode-scale work.
+    SUPERLINEAR in step count. The guarded-fast tier (``trace.run(fast=True)``,
+    which needs a functional ``save=tl.func(...)`` on the capture; the default
+    capture re-runs through ``trace.run(inputs=...)``) is the engine for
+    episode-scale re-runs.
 
     Parameters
     ----------
@@ -135,6 +137,14 @@ class EpisodeSpec:
         ``declared`` -- disclosed, never silently continuous; series claims
         still refuse across it (``episode_join_declared_crossing``), the
         run stays chain-shaped by declaration.
+    step_input_from:
+        Which stepped-call argument is the carried step input the join
+        measures: a positional index (int) or a keyword name (str). None
+        selects by the disclosed preference rule (input_ids and friends
+        first, auxiliary masks/positions/timesteps last). A declaration
+        naming no tensor argument is disclosed, never guessed around: the
+        join records ``step_input_not_found`` in the ``step_join`` envelope
+        and grades ``unchecked``.
     expected_tokens:
         The cheap-tier product's per-step token column (one tuple per step),
         carried so the escalated capture can discharge the E-A3 fidelity
@@ -160,3 +170,4 @@ class EpisodeSpec:
     feed: Literal["open", "closed"] = "open"
     on_feed_break: Literal["disclose", "refuse"] = "disclose"
     crossings: tuple[int, ...] = ()
+    step_input_from: str | int | None = None

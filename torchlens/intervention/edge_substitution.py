@@ -65,11 +65,29 @@ if TYPE_CHECKING:
 __all__ = ["apply_edge_substitution_do"]
 
 
+def tensor_content_digest(value: torch.Tensor) -> str:
+    """Return the sha256 of a tensor's raw element bytes (dtype-agnostic).
+
+    The bytes are read through a flat ``uint8`` view of the contiguous
+    payload, so the digest is byte-identical to the historical
+    ``numpy().tobytes()`` spelling for every numpy-representable dtype and
+    additionally covers dtypes numpy cannot represent (``bfloat16``,
+    ``float8``). Two tensors of the same shape and dtype digest equal iff
+    they are bitwise equal (NaN payloads included); the digest carries no
+    shape or dtype, so callers compare digests only within one site.
+    """
+
+    payload = value.detach().cpu().contiguous()
+    if payload.numel() == 0:
+        return hashlib.sha256(b"").hexdigest()
+    raw = payload.view(-1).view(torch.uint8)
+    return hashlib.sha256(raw.numpy().tobytes()).hexdigest()
+
+
 def _value_digest(value: torch.Tensor) -> str:
     """Return a stable content digest for one substituted payload."""
 
-    payload = value.detach().cpu().contiguous()
-    return hashlib.sha256(payload.numpy().tobytes()).hexdigest()
+    return tensor_content_digest(value)
 
 
 def require_depth1_arg_path(arg_path: Any, *, where: str, site: Any) -> None:
@@ -101,10 +119,17 @@ def require_depth1_arg_path(arg_path: Any, *, where: str, site: Any) -> None:
 
 
 def _consumed_value(trace: Any, parent_op: Any, child_op: Any) -> torch.Tensor:
-    """Return the capture-truth value the child consumed on this edge."""
+    """Return the value the child currently consumes on this edge.
+
+    Pass-qualified first: ``out_versions_by_child`` is keyed by the child's
+    own op label, and the bare ``layer_label`` of a multi-pass child names
+    its LAST pass, so it is consulted only as the single-pass fallback.
+    """
 
     versions = getattr(parent_op, "out_versions_by_child", None) or {}
-    version = versions.get(child_op.layer_label)
+    version = versions.get(getattr(child_op, "label", None))
+    if not isinstance(version, torch.Tensor):
+        version = versions.get(child_op.layer_label)
     if isinstance(version, torch.Tensor):
         return version
     out = parent_op.out
@@ -115,6 +140,28 @@ def _consumed_value(trace: Any, parent_op: Any, child_op: Any) -> torch.Tensor:
             site=parent_op.label,
         )
     return out
+
+
+def _current_edge_value(
+    trace: Any, parent_op: Any, child_op: Any, store_key: tuple[Any, ...]
+) -> torch.Tensor:
+    """Return the value the child consumes at this occurrence RIGHT NOW.
+
+    Edits COMPOSE like replay hooks: a later edge edit at an occurrence that
+    already carries a tier-(ii) substitution derives from the substituted
+    value (``zero_ablate`` then ``scale(0.5)`` stays zero; ``scale(0.5)``
+    twice yields a quarter), never from a stale pre-edit snapshot that the
+    store no longer asserts. Without an entry the consumed value is the
+    parent's current out (pushed upstream edits included).
+    """
+
+    entries = getattr(child_op, "edge_substitutions", None) or {}
+    existing = entries.get(store_key)
+    if isinstance(existing, dict):
+        value = existing.get("value")
+        if isinstance(value, torch.Tensor):
+            return value
+    return _consumed_value(trace, parent_op, child_op)
 
 
 def _edit_hook(edit: Any, site_label: str) -> tuple[Any, HelperSpec | None, str]:
@@ -216,7 +263,8 @@ def apply_edge_substitution_do(
                     site=record.child_label,
                 )
 
-            consumed = _consumed_value(trace, parent_op, child_op)
+            store_key = (arg_kind, tuple(arg_path))
+            consumed = _current_edge_value(trace, parent_op, child_op, store_key)
             hook_callable, helper_spec, helper_name = _edit_hook(edit, record.child_label)
             context = hooks_module.make_hook_context(
                 name=helper_name,
@@ -234,7 +282,6 @@ def apply_edge_substitution_do(
                 trace, child_op, address, substituted, strict=strict
             )
 
-            store_key = (arg_kind, tuple(arg_path))
             value_digest = _record_edge_substitution(
                 child_op,
                 store_key,
@@ -276,10 +323,17 @@ def apply_edge_substitution_do(
                 replaced=False,
                 edge_address=tuple(address),
             )
+            # PASS-QUALIFIED commit key (AUD-CODE 1.2): the bare
+            # ``layer_label`` of a multi-pass child resolves to its LAST
+            # pass, so an edge into pass k < N committed the new out and the
+            # FireRecord onto pass N while ``push_from`` then pushed pass k's
+            # UNCHANGED captured out -- a silent no-op whose audit row still
+            # claimed success. ``_replay_site_key`` is the engine's own key.
+            child_key = replay_module._replay_site_key(child_op)
             replay_module._commit_replay_updates(
                 trace,
-                {child_op.layer_label: new_out},
-                {child_op.layer_label: [fire_record]},
+                {child_key: new_out},
+                {child_key: [fire_record]},
             )
             replay_module.push_from(trace, child_op)
             applied.append(
@@ -310,9 +364,11 @@ def _reexecute_child_with_substitution(
     args, kwargs = replay_module._reconstruct_args_from_template(
         template, child_op, trace, {}, strict=strict
     )
-    # Composition coherence: a child whose PARAMETER was previously
-    # substituted keeps its "as if" value under a later edge edit (the
-    # edge splice below overwrites its own occurrence last if they collide).
+    # Composition coherence: every tier-(ii) entry the child already carries
+    # (param, region, AND earlier edge substitutions) is re-spliced first, so
+    # a later edge edit never silently reverts a sibling occurrence's edit;
+    # the edge splice below overwrites its OWN occurrence last if they
+    # collide.
     args, kwargs = replay_module._splice_param_substitutions([child_op], args, kwargs)
     require_depth1_arg_path(
         arg_path,

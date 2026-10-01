@@ -77,6 +77,33 @@ class WandbSink:
 
         return frozenset({"scalar", "raw_histogram", "text_manifest", "run_metadata"})
 
+    def preflight_histograms(self, descriptor: HistogramDescriptor) -> None:
+        """Refuse an over-cap grid at ATTACH, before any emission.
+
+        The engine calls this when histograms are requested. Refusing here
+        (typed, while the user is at the console) replaces the old shape of
+        the same refusal: raised inside ``emit_histogram`` on the first
+        sampled step, where the engine's runtime latch swallowed it and
+        stopped ALL delivery to this sink after step 0 (AUD-CODE 2.14).
+        """
+
+        buckets = 2 * len(descriptor.bucket_edges()) - 1
+        if buckets > WANDB_BUCKET_CAP:
+            raise TrackersError(
+                f"wandb.Histogram accepts at most {WANDB_BUCKET_CAP} buckets; "
+                f"the requested descriptor renders {buckets} per signed "
+                "sketch. Refusing at attach beats a latched sink after step 0.",
+                code="tracker_histogram_bucket_cap",
+                sink="WandbSink",
+                buckets=buckets,
+                cap=WANDB_BUCKET_CAP,
+                remedy=(
+                    "Watch with descriptor=torchlens.trackers.WANDB_SAFE_"
+                    "DESCRIPTOR (497 buckets), or route histograms to "
+                    "TensorBoardSink/JSONLSink."
+                ),
+            )
+
     def emit_scalar(self, point: ScalarPoint) -> None:
         """Log one scalar at the caller's step (never wandb's own counter)."""
 

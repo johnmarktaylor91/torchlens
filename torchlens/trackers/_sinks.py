@@ -9,9 +9,11 @@ with zero optional dependencies.
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 from pathlib import Path
-from typing import Any, TextIO
+from typing import Any, BinaryIO
 
 from ._errors import SinkDeliveryError
 from ._records import EMISSION_SCHEMA_VERSION, HistogramPoint, ScalarPoint, TextPoint
@@ -83,6 +85,12 @@ class JSONLSink:
     then ``{"kind": "scalar" | "histogram" | "text" | "graph", ...}`` rows in
     emission order. A write failure latches the sink failed and raises
     typed; the absent ``{"kind": "closed"}`` footer marks a partial file.
+
+    Every row is ONE unbuffered write and the file is truncated back to the
+    last fully written row on failure, so "rows already written remain valid
+    JSONL" is a property of the file, not a hope: the old default-buffered
+    handle left a TORN last line whenever the filesystem died mid-flush
+    (AUD-CODE 2.14).
     """
 
     def __init__(self, path: str | Path) -> None:
@@ -91,7 +99,8 @@ class JSONLSink:
         self.path = Path(path)
         self._failed = False
         self._closed = False
-        self._handle: TextIO = self.path.open("w", encoding="ascii")
+        self._committed_bytes = 0
+        self._handle: BinaryIO = self.path.open("wb", buffering=0)
         self._write_row({"format": JSONL_FORMAT, "version": EMISSION_SCHEMA_VERSION})
 
     def capabilities(self) -> frozenset[str]:
@@ -112,12 +121,19 @@ class JSONLSink:
                 path=str(self.path),
                 remedy="Construct a fresh sink on a healthy filesystem path.",
             )
+        line = (json.dumps(row, ensure_ascii=True, sort_keys=True) + "\n").encode("ascii")
         try:
-            self._handle.write(json.dumps(row, ensure_ascii=True, sort_keys=True) + "\n")
+            written = 0
+            while written < len(line):
+                # An unbuffered raw handle may accept a PARTIAL write (ENOSPC
+                # mid-row); loop until the row is whole or the OS refuses.
+                count = self._handle.write(line[written:])
+                written += int(count or 0)
         except (OSError, ValueError) as exc:
             # ValueError covers writes on a handle the OS/user already
             # closed -- the same delivery failure as a raw OSError.
             self._failed = True
+            self._truncate_torn_tail()
             raise SinkDeliveryError(
                 f"JSONLSink({self.path}) write failed: {exc}. The sink is "
                 "latched failed; rows already written remain valid JSONL and "
@@ -127,6 +143,18 @@ class JSONLSink:
                 path=str(self.path),
                 remedy="Free disk space or point the sink at a writable path.",
             ) from exc
+        self._committed_bytes += len(line)
+
+    def _truncate_torn_tail(self) -> None:
+        """Best-effort: cut the file back to the last fully written row.
+
+        Shrinking never needs free space, so this succeeds on the ENOSPC path
+        that tore the row; a handle the caller already closed wrote nothing
+        past the committed prefix, so there is nothing to cut.
+        """
+
+        with contextlib.suppress(OSError, ValueError):
+            os.ftruncate(self._handle.fileno(), self._committed_bytes)
 
     def emit_scalar(self, point: ScalarPoint) -> None:
         """Write one scalar row."""

@@ -46,9 +46,10 @@ and the CLI (python -m torchlens <verb>).
 - torchlens_overview: mode="manifest" is the torch-free preflight (never
   unpickles); mode="folded" (default) is the recurrence-folded structural
   view -- a repeated transformer block states once with n_instances.
-- torchlens_dump: view=overview|graph|full; graph pages op rows and takes
-  class_id= for fold drill-down.
-- torchlens_explain: the plain-language report, budgeted by max_tokens.
+- torchlens_dump: view=overview|graph|full; graph and full page op rows
+  (echo data.next) and graph takes class_id= for fold drill-down.
+- torchlens_explain: the plain-language report, budgeted by max_tokens
+  (default 4000); carries the same capture/audit honesty blocks as overview.
 - torchlens_query_sites: structured site discovery over a closed JSON
   query AST (persisted facts only; value predicates stay in Python).
 - torchlens_payload_stats: bounded numbers over saved tensors -- never the
@@ -63,7 +64,8 @@ Three resources, never conflated: response tokens, result rows, payload
 bytes. Every result carries a truncation object (null when nothing was
 dropped) whose how_to_get_more is a concrete next call. Row tools page
 through a transparent continuation struct; artifact or query drift between
-pages refuses typed.
+pages refuses typed. When the token backstop trims a page, data.next is
+re-minted at the first dropped row, so paging always reaches every row.
 
 ## Trust boundary
 

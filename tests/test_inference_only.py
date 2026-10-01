@@ -91,7 +91,7 @@ def test_inference_only_rejects_backward_related_capture_flags(
 
     model, x = _model_and_input()
     with pytest.raises(TrainingModeConfigError, match=flag_name):
-        tl.trace(model, x, **kwargs, capture=tl.options.CaptureOptions(inference_only=True))
+        tl.trace(model, x, capture=tl.options.CaptureOptions(inference_only=True, **kwargs))
 
 
 def test_inference_only_allows_default_tensor_grad_hook_flag() -> None:

@@ -14,7 +14,10 @@ must EARN; (3) the parameter contract verbatim (unique / trainable /
 frozen / executed / unexecuted, ties named); (4) the always-visible
 backward STATUS line; (5) the 6ND comparator facts; (6) an optional
 module breakdown from the same cost-tree rows. No timing, no throughput,
-no MFU in the default report.
+no MFU in the default report. The model door holds the fused MHA /
+TransformerEncoder fast path off during its capture so every matmul stays
+visible to the cost rules; the breakdown block lists depth-1 INCLUSIVE
+mass that partitions the forward total exactly.
 
 D11: the comparator's D is the HF-as-implemented numel of the main input
 -- padding included (measured: D=numel matches the executed dense body
@@ -184,7 +187,9 @@ class FlopsReport:
         if self.six_nd is not None:
             lines.extend(self.six_nd.lines())
         if self.breakdown:
-            lines.append("breakdown (top module calls by exclusive known FLOPs):")
+            lines.append(
+                "breakdown (top module calls by inclusive known FLOPs; rows sum to forward):"
+            )
             lines.extend(f"  {line}" for line in self.breakdown)
         return "\n".join(lines)
 
@@ -255,10 +260,17 @@ def _build_report(
     breakdown: tuple[str, ...] = ()
     if breakdown_top_k:
         tree = build_cost_tree(trace, top_k=breakdown_top_k, max_depth=1, aggregation=agg)
+        # Depth-1 rows carry their INCLUSIVE mass: a call row's subtree
+        # (its own ops plus everything nested below the depth cutoff), the
+        # root-direct remainder, and the top-k remainder. Together they
+        # partition forward_flops exactly, so nested-module mass can never
+        # vanish from the block (AUD-CODE 3.12c: the former exclusive
+        # ``self_flops`` read showed 136 of 2376 FLOPs for a Sequential of
+        # two blocks plus a head, with no remainder line).
         breakdown = tuple(
-            f"{row.label}: {row.self_flops if row.kind != 'root' else row.subtree_flops} FLOPs"
+            f"{row.label}: {row.subtree_flops} FLOPs"
             for row in tree.rows
-            if row.depth == 1 and (row.self_flops or 0) > 0
+            if row.depth == 1 and (row.subtree_flops or 0) > 0
         )
     return FlopsReport(
         convention=agg.convention,
@@ -353,7 +365,20 @@ def flops_report(
 
 
 def _capture_for_report(model: Any, input_args: Any, input_kwargs: dict[str, Any] | None) -> Any:
-    """Run the model door's ONE capture under the summary execution contract."""
+    """Run the model door's ONE capture under the summary execution contract.
+
+    The fused ``nn.MultiheadAttention`` / ``nn.TransformerEncoderLayer`` fast
+    path is held OFF for the capture through the public
+    ``torch.backends.mha.set_fastpath_enabled`` switch (prior value restored
+    afterwards). Under eval + ``no_grad`` those modules otherwise dispatch to
+    ``_native_multi_head_attention`` / ``_transformer_encoder_layer_fwd``:
+    ONE opaque op each with no cost rule, so the report read 0 FLOPs
+    (lower bound) for exactly the matmuls the unfused path counts
+    formula-exact (AUD-CODE 3.12a). The arithmetic is identical on both
+    paths; only its visibility to the cost rules differs. Without the
+    switch (torch builds predating it) the fused ops stay disclosed as
+    unknown-cost rows, never counted as zero.
+    """
 
     import torch
 
@@ -362,11 +387,21 @@ def _capture_for_report(model: Any, input_args: Any, input_kwargs: dict[str, Any
 
     saved_training_flags = [(module, module.training) for module in model.modules()]
     rng_snapshot = log_current_rng_states()
+    mha_backend = getattr(torch.backends, "mha", None)
+    get_fastpath = getattr(mha_backend, "get_fastpath_enabled", None)
+    set_fastpath = getattr(mha_backend, "set_fastpath_enabled", None)
+    fastpath_was: bool | None = None
+    if callable(get_fastpath) and callable(set_fastpath):
+        fastpath_was = bool(get_fastpath())
     try:
         model.eval()
+        if set_fastpath is not None and fastpath_was is not None:
+            set_fastpath(False)
         with torch.no_grad():
             return _trace(model, input_args, input_kwargs or {})
     finally:
+        if set_fastpath is not None and fastpath_was is not None:
+            set_fastpath(fastpath_was)
         for module, was_training in saved_training_flags:
             module.training = was_training
         set_rng_from_saved_states(rng_snapshot)

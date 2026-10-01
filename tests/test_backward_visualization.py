@@ -227,7 +227,11 @@ def test_backward_graph_marks_order_and_accumulation_edges(tmp_path: Path) -> No
         vis_fileformat="svg",
     )
 
-    assert "order 1" in dot
+    # vizmech item 17: "order 1" on EVERY node of an ordinary backward is a
+    # uniform constant row and is SUPPRESSED when no node exceeds order 1;
+    # the legend still teaches the encoding.
+    assert "order 1" not in dot
+    assert "order N = derivative order" in dot
     assert "label=accum" in dot
     assert "style=dotted" in dot
 

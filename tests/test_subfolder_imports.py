@@ -36,19 +36,23 @@ def test_notebook_import_stays_inert() -> None:
 
     module = importlib.import_module("torchlens.notebook")
 
-    assert module.__all__ == []
+    # F22 facade contract: __all__ advertises only dependency-present real
+    # names, resolved via find_spec WITHOUT importing the foreign packages.
+    assert set(module.__all__) <= {"cards", "cardtree", "frontier"}
     assert "IPython" not in sys.modules
     assert "jupyter_client" not in sys.modules
 
 
 def test_notebook_attribute_access_reports_missing_dependency() -> None:
-    """First attribute access still names the missing optional dependency."""
+    """Unknown attribute access teaches AttributeError-lineage regardless of deps."""
     _drop_module("torchlens.notebook")
 
     module = importlib.import_module("torchlens.notebook")
 
     with patch.dict("sys.modules", {"IPython": None}):
-        with pytest.raises(ImportError, match=r"torchlens\.notebook requires extra"):
+        # F22 facade contract: unknown names never mask as ImportError --
+        # dependency reporting belongs to KNOWN names only.
+        with pytest.raises(AttributeError, match=r"torchlens\.notebook"):
             module.anything
 
 
@@ -77,20 +81,29 @@ def test_neuro_import_stays_inert() -> None:
 
     module = importlib.import_module("torchlens.neuro")
 
-    assert module.__all__ == []
+    # F22 facade contract: __all__ advertises only dependency-present real
+    # names, resolved via find_spec WITHOUT importing the foreign packages.
+    assert set(module.__all__) <= {"datasets", "rdms"}
     assert "rsatoolbox" not in sys.modules
     assert "brainscore_core" not in sys.modules
 
 
 def test_neuro_attribute_access_reports_missing_dependency() -> None:
-    """First attribute access still names the missing optional dependency."""
+    """Known-name access with the dependency absent names the missing package."""
+    pytest.importorskip("rsatoolbox")
     _drop_module("torchlens.neuro")
 
     module = importlib.import_module("torchlens.neuro")
 
+    from torchlens._errors import MissingDependencyError
+
     with patch.dict("sys.modules", {"rsatoolbox": None}):
-        with pytest.raises(ImportError, match=r"torchlens\.neuro requires extra"):
-            module.anything
+        # F22 teaching refusal: a KNOWN name whose optional dependency cannot
+        # import refuses typed, naming the package (AttributeError never masks
+        # a real missing dependency; ImportError-shaped masking is the old
+        # pre-F22 contract).
+        with pytest.raises(MissingDependencyError, match="rsatoolbox"):
+            module.datasets
 
 
 def test_neuro_attribute_access_when_deps_present() -> None:

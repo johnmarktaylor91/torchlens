@@ -21,7 +21,12 @@ Population laws implemented here:
 - D11: external tensor populations carry a mandatory sha256 content digest
   paid once at preparation; trace-backed populations record an ADDRESS
   identity by default (``digest_kind="address"``) with ``digest_population=True``
-  opting into the value hash.
+  opting into the value hash. BOTH identities are built from PERSISTED capture
+  facts and retained payload bytes only -- never ``id()``, never a construction
+  ordinal: the derived-seed law (stochastic.py D5/D6) folds
+  ``population_identity`` into every draw, so a process-salted identity would
+  silently break rerun reproducibility for every trace-backed population
+  (fable51 audit AUD-CODE 2.1; the F02 uuid defect's sibling).
 - D13: persisted records store digests and counts; ephemeral refusal messages
   may print agreement keys and class sizes (they teach without persisting).
 """
@@ -84,34 +89,124 @@ def _tensor_content_digest(members: Sequence[torch.Tensor]) -> str:
 
     hasher = hashlib.sha256()
     for member in members:
-        hasher.update(str(tuple(member.shape)).encode())
-        hasher.update(str(member.dtype).encode())
-        hasher.update(
-            member.detach().to("cpu").contiguous().numpy().tobytes()
-            if member.dtype not in (torch.bfloat16,)
-            else member.detach().to("cpu", torch.float32).contiguous().numpy().tobytes()
-        )
+        _update_tensor_hash(hasher, member)
     return hasher.hexdigest()
+
+
+def _update_tensor_hash(hasher: hashlib._Hash, tensor: torch.Tensor) -> None:
+    """Fold one tensor's shape, dtype, and bytes into ``hasher`` (D11)."""
+
+    hasher.update(str(tuple(tensor.shape)).encode())
+    hasher.update(str(tensor.dtype).encode())
+    hasher.update(
+        tensor.detach().to("cpu").contiguous().numpy().tobytes()
+        if tensor.dtype not in (torch.bfloat16,)
+        else tensor.detach().to("cpu", torch.float32).contiguous().numpy().tobytes()
+    )
+
+
+def _iter_member_ops(member: Any) -> tuple[Any, ...]:
+    """Return a trace member's op records, one per pass-qualified op, in label order.
+
+    ``layer_dict_all_keys`` aliases every op under several keys; records are
+    deduplicated by their pass-qualified ``label`` and ordered by that label
+    so the walk is a pure function of the capture (never dict identity or
+    insertion history).
+    """
+
+    table = getattr(member, "layer_dict_all_keys", None) or {}
+    by_label: dict[str, Any] = {}
+    for value in table.values():
+        label = getattr(value, "label", None)
+        if isinstance(label, str) and label not in by_label:
+            by_label[label] = value
+    return tuple(by_label[label] for label in sorted(by_label))
+
+
+#: Persisted capture facts entering the trace ADDRESS identity, in order.
+#: ``trace_label`` is deliberately ABSENT: it is a process-global registry
+#: ordinal (``twoblock_1``, ``twoblock_2``, ...), a transient of the session,
+#: not a fact of the capture.
+_TRACE_ADDRESS_FACTS = (
+    "model_class_qualname",
+    "random_seed",
+    "num_operations",
+    "input_signature_hash",
+)
 
 
 def _trace_address_digest(members: Sequence[Any]) -> str:
     """Compute the ADDRESS identity digest for trace-backed members (D11).
 
-    The address -- trace fingerprints in member order -- identifies the
-    population without hashing payload bytes; ``digest_population=True`` opts
-    into the value hash at first per-site resolution instead.
+    The address -- PERSISTED capture facts plus the per-op label/shape/dtype
+    geometry, in member order -- identifies the population without hashing
+    payload bytes; ``digest_population=True`` opts into the value hash. The
+    address is a pure function of the captures: the same declared
+    experiment in a fresh process mints the same identity, which the
+    derived-seed law requires (an object address here salted every draw --
+    fable51 audit AUD-CODE 2.1). Two captures that agree on every fact and
+    every op geometry but differ in VALUES share one address by design;
+    that is exactly what ``digest_population=True`` distinguishes.
     """
 
     hasher = hashlib.sha256()
     for member in members:
-        identity = (
-            str(getattr(member, "trace_label", "") or ""),
-            str(getattr(member, "model_class_qualname", "") or ""),
-            str(getattr(member, "random_seed", "") or ""),
-            str(getattr(member, "num_operations", "") or ""),
+        facts = tuple(str(getattr(member, name, "") or "") for name in _TRACE_ADDRESS_FACTS)
+        hasher.update("|".join(facts).encode())
+        for op in _iter_member_ops(member):
+            geometry = (
+                str(getattr(op, "label", "")),
+                str(getattr(op, "shape", "")),
+                str(getattr(op, "dtype", "")),
+            )
+            hasher.update("|".join(geometry).encode())
+            hasher.update(b"\x1e")
+        hasher.update(b"\x1d")
+    return hasher.hexdigest()
+
+
+def _trace_payload_digest(members: Sequence[Any], address_digest: str) -> str:
+    """Compute the CONTENT digest of trace-backed members (``digest_population=True``).
+
+    Hashes every RETAINED raw payload (``has_saved_activation`` ops) of every
+    member, keyed by pass-qualified label, on top of the address digest, so
+    the stamp ``digest_kind="content"`` is TRUE: two populations whose
+    members retain different values never share a content identity. Costs
+    one pass over the retained bytes (measured: ~310 ms per gpt2 batch-32
+    residual), paid once at preparation.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``population_digest_unavailable`` when no member retains any payload
+        -- a value hash over nothing would stamp "content" while hashing an
+        address, the exact mislabel this digest exists to prevent.
+    """
+
+    hasher = hashlib.sha256(address_digest.encode())
+    hashed_payloads = 0
+    for member in members:
+        for op in _iter_member_ops(member):
+            if not getattr(op, "has_saved_activation", False):
+                continue
+            value = getattr(op, "out", None)
+            if not isinstance(value, torch.Tensor):
+                continue
+            hasher.update(str(getattr(op, "label", "")).encode())
+            _update_tensor_hash(hasher, value)
+            hashed_payloads += 1
+        hasher.update(b"\x1d")
+    if hashed_payloads == 0:
+        raise InvalidArgumentError(
+            "digest_population=True hashes the members' RETAINED payloads, but no "
+            "member retains any saved activation; a content digest over nothing "
+            "would stamp digest_kind='content' on an address identity",
+            code="population_digest_unavailable",
+            remedy="capture the donor traces with the donor sites saved (save= "
+            "covering them), or drop digest_population= to record the address identity",
+            argument="digest_population",
+            member_count=len(members),
         )
-        hasher.update("|".join(identity).encode())
-        hasher.update(str(id(member)).encode())
     return hasher.hexdigest()
 
 
@@ -444,10 +539,13 @@ def reference(
     data:
         Optional per-member agreement datums, aligned with member order.
     digest_population:
-        For trace-backed populations, opt into value hashing (measured cost:
-        hashing one gpt2 batch-32 residual is ~310 ms). The default records
-        the ADDRESS identity, which already identifies the draw completely
-        together with the realized permutation (edits memo D11).
+        For trace-backed populations, opt into value hashing of every
+        RETAINED payload (measured cost: hashing one gpt2 batch-32 residual
+        is ~310 ms). The default records the ADDRESS identity -- persisted
+        capture facts plus per-op geometry, never object addresses -- which
+        already identifies the draw completely together with the realized
+        permutation (edits memo D11). Members that retain no payload at all
+        refuse ``population_digest_unavailable`` under the opt-in.
 
     Returns
     -------
@@ -460,7 +558,8 @@ def reference(
         ``population_origin_required`` on a missing/empty origin;
         ``population_heterogeneous`` when tensor members disagree in shape or
         dtype; ``population_empty`` / ``population_datum_count_mismatch`` per
-        the dataclass invariants.
+        the dataclass invariants; ``population_digest_unavailable`` when
+        ``digest_population=True`` finds no retained payload to hash.
     """
 
     if not isinstance(origin, str) or not origin.strip():
@@ -510,12 +609,10 @@ def reference(
         digest_kind: Literal["content", "address"] = "address"
         digest = _trace_address_digest(members)
         if digest_population:
-            # Value-hash opt-in: fold each member's retained site labels in;
-            # per-site payload hashing stays lazy (paid at first resolution).
-            hasher = hashlib.sha256(digest.encode())
-            for member in members:
-                hasher.update(",".join(sorted(getattr(member, "layer_labels", ()) or ())).encode())
-            digest = hasher.hexdigest()
+            # Value-hash opt-in: every retained payload of every member is
+            # hashed NOW (paid once at preparation, D10), so the "content"
+            # stamp is earned rather than asserted.
+            digest = _trace_payload_digest(members, digest)
             digest_kind = "content"
         return Reference(
             members=members,

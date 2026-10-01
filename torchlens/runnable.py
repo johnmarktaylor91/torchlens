@@ -1540,7 +1540,7 @@ class RunReport:
             parts.append(f"truncated_at={self.stopped_at!r}")
         if self.nondeterministic_sources:
             parts.append(f"nondeterministic={','.join(self.nondeterministic_sources)}")
-        return f"RunReport({', '.join(parts)})"
+        return f"{type(self).__name__}({', '.join(parts)})"
 
 
 def _describe_value(value: Any) -> str:

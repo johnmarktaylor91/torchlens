@@ -51,7 +51,12 @@ from ..utils.tensor_utils import (
     tensor_all_nan,
     tensor_nanequal,
 )
-from ._edge_boundary import _check_edge_intervention_boundary
+from ._edge_boundary import (
+    _capture_payload_equal,
+    _check_edge_intervention_boundary,
+    _parent_arg_evidence,
+    _tensor_content_digest,
+)
 from .exemptions import (
     CUSTOM_EXEMPTION_CHECKS,
     SKIP_PERTURBATION_ENTIRELY,
@@ -2168,27 +2173,24 @@ def _check_arglocs_correct_for_arg(
         Structured validation result for this argument location.
     """
     target_layer_label = target_layer.layer_label
-    target_op_label = getattr(target_layer, "label", target_layer_label)
     parent_layer_label = parent_layer.layer_label
     parent_arg_labels = {getattr(parent_layer, "label", parent_layer_label), parent_layer_label}
-    # out_versions_by_child stores per-child snapshots when an in-place
-    # op modified the tensor between uses.  Fall back to out
-    # when no child-specific version exists.
-    if target_op_label in parent_layer.out_versions_by_child:
-        parent_outs = parent_layer.out_versions_by_child[target_op_label]
-    elif target_layer_label in parent_layer.out_versions_by_child:
-        parent_outs = parent_layer.out_versions_by_child[target_layer_label]
-    else:
-        parent_outs = _saved_out_payload(parent_layer)
-    if parent_outs is None:
-        return ValidationCheckResult.unverified("missing_saved_parent_payload")
+    evidence_or_result = _parent_arg_evidence(self, target_layer, parent_layer)
+    if isinstance(evidence_or_result, ValidationCheckResult):
+        return evidence_or_result
+    parent_outs, capture_digest = evidence_or_result
 
-    if isinstance(saved_arg_val, torch.Tensor):
+    if not isinstance(saved_arg_val, torch.Tensor):
+        parent_layer_matches_arg = False
+    elif capture_digest is not None:
+        parent_layer_matches_arg = _tensor_content_digest(saved_arg_val) == capture_digest
+    else:
         parent_layer_matches_arg = tensor_nanequal(
             saved_arg_val, parent_outs, allow_tolerance=False
         )
-    else:
-        parent_layer_matches_arg = False
+    # Every value-shaped exemption below inspects the CAPTURE-TIME value; on
+    # the digest path the snapshot IS that value whenever it matched.
+    evidence = saved_arg_val if capture_digest is not None else parent_outs
     parent_layerged_as_arg = (
         argloc_key in target_layer.parent_arg_positions[arg_type]
         and target_layer.parent_arg_positions[arg_type][argloc_key] in parent_arg_labels
@@ -2205,19 +2207,17 @@ def _check_arglocs_correct_for_arg(
         parent_layer_matches_arg
         and (not parent_layerged_as_arg)
         and (not _parent_logged_for_any_arg_alias(target_layer, parent_arg_labels))
-        and (parent_outs.numel() != 0)
-        and (parent_outs.dtype != torch.bool)
-        and (not tensor_all_nan(parent_outs))
-        and (not torch.all(parent_outs == 0))
-        and (not torch.all(torch.abs(parent_outs) == 1))
+        and (evidence.numel() != 0)
+        and (evidence.dtype != torch.bool)
+        and (not tensor_all_nan(evidence))
+        and (not torch.all(evidence == 0))
+        and (not torch.all(torch.abs(evidence) == 1))
         and not any(
-            torch.equal(parent_outs, other_parent_out)
+            _capture_payload_equal(
+                self, _op_for_validation_label(self, other_parent), target_layer, evidence
+            )
             for other_parent in target_layer.parents
             if other_parent != parent_layer_label
-            and (
-                other_parent_out := _saved_out_payload(_op_for_validation_label(self, other_parent))
-            )
-            is not None
         )
     ):
         if verbose:
@@ -2382,29 +2382,6 @@ def _orphan_candidate_index(self: "Trace") -> dict[tuple[Any, Any], list[Op]]:
         index.setdefault((tuple(payload.shape), payload.dtype), []).append(candidate)
     self.__dict__["_validation_orphan_candidate_index"] = index
     return index
-
-
-def _candidate_payload_for_target(candidate: Op, target_layer: Op) -> torch.Tensor | None:
-    """Return the candidate's out as the target would have consumed it.
-
-    Parameters
-    ----------
-    candidate:
-        Potential producer op.
-    target_layer:
-        Consuming op whose arg slot is being attributed.
-
-    Returns
-    -------
-    torch.Tensor or None
-        Child-versioned snapshot when one exists, else the saved out.
-    """
-
-    versions = getattr(candidate, "out_versions_by_child", None) or {}
-    for key in (getattr(target_layer, "label", None), target_layer.layer_label):
-        if key is not None and key in versions:
-            return cast(torch.Tensor, versions[key])
-    return _saved_out_payload(candidate)
 
 
 def _foreach_sibling_attributes_slot(
@@ -2624,8 +2601,7 @@ def _check_unattributed_arg_slots(
                 # attributed at ANY slot of this op is not a dropped edge.
                 if candidate_labels & attributed_labels:
                     continue
-                payload = _candidate_payload_for_target(candidate, target_layer)
-                if payload is None or not tensor_nanequal(value, payload, allow_tolerance=False):
+                if not _capture_payload_equal(self, candidate, target_layer, value):
                     continue
                 # Ambiguity mirror of Case 1: if an ATTRIBUTED parent carries
                 # identical values, the slot value plausibly came from it.
@@ -2635,10 +2611,7 @@ def _check_unattributed_arg_slots(
                         attributed_op = _op_for_validation_label(self, attributed_label)
                     except (KeyError, ValueError):
                         continue
-                    attributed_payload = _candidate_payload_for_target(attributed_op, target_layer)
-                    if attributed_payload is not None and tensor_nanequal(
-                        value, attributed_payload, allow_tolerance=False
-                    ):
+                    if _capture_payload_equal(self, attributed_op, target_layer, value):
                         ambiguous = True
                         break
                 if ambiguous:

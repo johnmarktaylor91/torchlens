@@ -379,6 +379,16 @@ def validate(
     summarizing the failure; the full structured record is available from
     :func:`torchlens.validation.last_validation_failure` and
     :func:`torchlens.validation.get_validation_diagnostics`.
+
+    A metadata-invariant failure on the forward/saved scopes (a
+    :class:`~torchlens.validation.invariants.MetadataInvariantError` raised by
+    the invariant pass) is ONE more way the verdict is ``False``: the bool
+    contract holds for every failure class (W051-HONESTY L9 -- stale-parent
+    models returned ``False`` while a worker-thread escape raised through the
+    same door, so callers branching on the bool missed the second class). The
+    invariant itself is untouched and still records its identity on the side
+    channel; the lower-level :func:`torchlens.validation.validate_forward_pass`
+    door keeps raising it.
     """
 
     normalized_scope = scope.lower()
@@ -454,16 +464,26 @@ def validate(
             # which clobbers the caller's process-wide high-water counter.
             # A run that stays under the pre-existing peak honestly reads 0.
             cuda_peak_before = int(torch.cuda.max_memory_allocated())
+        from .invariants import MetadataInvariantError
+
         try:
-            passed = validate_forward_pass(
-                model,
-                input_args,
-                input_kwargs=input_kwargs,
-                random_seed=random_seed,
-                verbose=verbose,
-                validate_metadata=validate_metadata,
-                backend=backend,
-            )
+            try:
+                passed = validate_forward_pass(
+                    model,
+                    input_args,
+                    input_kwargs=input_kwargs,
+                    random_seed=random_seed,
+                    verbose=verbose,
+                    validate_metadata=validate_metadata,
+                    backend=backend,
+                )
+            except MetadataInvariantError as invariant_error:
+                # L9: the bool contract covers EVERY failure class. The
+                # invariant pass already recorded its identity on the side
+                # channel before re-raising (validation/core.py); make sure a
+                # record exists for the R67 warning below, then settle False.
+                _record_invariant_failure_if_missing(invariant_error)
+                passed = False
         finally:
             rss_after = _rss_high_water_bytes() if peaks_enabled else None
             if rss_before is not None and rss_after is not None:
@@ -509,6 +529,27 @@ def validate(
         random_seed=random_seed,
         verbose=verbose,
         validate_metadata=validate_metadata,
+    )
+
+
+def _record_invariant_failure_if_missing(invariant_error: BaseException) -> None:
+    """Record a metadata-invariant failure on the side channel when none is present."""
+
+    from .diagnostics import (
+        CHECK_METADATA_INVARIANT,
+        ValidationFailure,
+        last_validation_failure,
+        record_validation_failure,
+    )
+
+    if last_validation_failure() is not None:
+        return
+    record_validation_failure(
+        None,
+        ValidationFailure(
+            check=CHECK_METADATA_INVARIANT,
+            message=f"{type(invariant_error).__name__}: {invariant_error}",
+        ),
     )
 
 

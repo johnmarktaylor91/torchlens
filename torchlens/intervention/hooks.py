@@ -34,8 +34,16 @@ from .selectors import (
     GradKindSelector,
     NotSelector,
     _classify_selector_direction,
+    label,
 )
-from .types import HelperSpec, HookSpec, InterventionSpec, TargetSpec, TargetValueSpec
+from .types import (
+    FrozenTargetSpec,
+    HelperSpec,
+    HookSpec,
+    InterventionSpec,
+    TargetSpec,
+    TargetValueSpec,
+)
 
 HookTiming: TypeAlias = Literal["pre", "post"]
 HookDirection: TypeAlias = Literal["forward", "backward"]
@@ -226,7 +234,8 @@ def normalize_hook_plan(
 
     pairs = _dispatch_hook_pairs(hooks_or_site, hook, default_site_target=default_site_target)
     entries: list[NormalizedHookEntry] = []
-    for order, (site_target, hook_like) in enumerate(pairs):
+    for order, (raw_site_target, hook_like) in enumerate(pairs):
+        site_target = lower_record_site_target(raw_site_target)
         helper_spec = hook_like if isinstance(hook_like, HelperSpec) else None
         # The escape hatch is requested by the helper's own force_shape_change
         # kwarg (e.g. tl.replace_with(t, force_shape_change=True)); it rides
@@ -266,6 +275,63 @@ def normalize_hook_plan(
                 )
             )
     return entries
+
+
+def lower_record_site_target(site_target: Any) -> Any:
+    """Lower an ``Op``/``Layer`` RECORD used as a hook site to an exact selector.
+
+    A record is the most precise site spelling a user can hold (``do(
+    log["relu_1_2:2"].ops[0], edit)``), yet the post-hoc resolver only knew
+    selector-likes and refused it ("Unsupported site query"), while the
+    spec lowering would have dropped an ``Op`` to its BARE ``layer_label``
+    -- the last pass of a multi-pass layer -- had it been accepted
+    (AUD-CODE 4.10). Lower here, at plan normalization, so every door
+    downstream (validation, target spec, replay hook targets) sees the
+    PASS-QUALIFIED ``Op.label`` of each addressed pass: one ``Op`` record
+    is exactly its own pass; a ``Layer`` record is the explicit ALL-passes
+    spelling (a composite over every pass label), mirroring
+    ``Layer.__selection__()``. Selector-likes and everything else pass
+    through unchanged.
+    """
+
+    labels = _record_site_pass_labels(site_target)
+    if labels is None:
+        return site_target
+    if len(labels) == 1:
+        return label(labels[0])
+    return CompositeSelector("or", tuple(label(name) for name in labels))
+
+
+def _record_site_pass_labels(site_target: Any) -> list[str] | None:
+    """Return the distinct pass-qualified ``Op.label``s an ``Op``/``Layer`` record addresses.
+
+    ``None`` means ``site_target`` is not a lowerable record (a selector-like,
+    a string, an object without ``layer_label``/iterable ``ops``, an empty
+    record, or one whose ops lack a string label) and must pass through
+    :func:`lower_record_site_target` unchanged.
+    """
+
+    if isinstance(site_target, (BaseSelector, TargetSpec, FrozenTargetSpec, str)) or not hasattr(
+        site_target, "layer_label"
+    ):
+        return None
+    ops = getattr(site_target, "ops", None)
+    if ops is None or isinstance(ops, (str, bytes)):
+        return None
+    try:
+        # ``Layer.ops`` is an accessor (iterable, not a builtin sequence);
+        # ``Op.ops`` is the one-tuple of the record itself.
+        op_records = list(ops)
+    except TypeError:
+        return None
+    labels: list[str] = []
+    for op in op_records:
+        op_label = getattr(op, "label", None)
+        if not isinstance(op_label, str) or not op_label:
+            return None
+        if op_label not in labels:
+            labels.append(op_label)
+    return labels or None
 
 
 def _validate_live_site_target(site_target: Any, *, allow_replay_only: bool = False) -> None:

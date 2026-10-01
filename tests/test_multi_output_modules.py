@@ -599,15 +599,21 @@ def test_opaque_in_list_module_output_structure_matches_output_paths() -> None:
 
     call = trace.module_calls["sub:1"]
     assert call.output_structure is not None
-    # Outer container is the real (list, dict) tuple, not a back-filled stand-in.
-    assert call.output_structure.kind == "tuple"
-    assert call.output_structure.length == 2
+    # The outer container is the REAL (list, dict) tuple's spec, not a back-filled
+    # stand-in from an unrelated output layer. Since W051-HONESTY H1 a
+    # tensor-holding opaque object is never admitted as a reconstructable leaf,
+    # so the enclosing list and tuple record honestly as ``opaque`` (the runnable
+    # save refuses at preflight instead of advertising a contract the codec
+    # cannot fill); the type identity of the real root is still recorded.
+    assert call.output_structure.kind == "opaque"
+    assert call.output_structure.type_qualname == "tuple"
 
     structure_paths = set(_container_tensor_leaf_paths(call.output_structure))
     output_paths = {tuple(path) for path in (call.output_paths or ()) if tuple(path)}
     # The opaque holder lives at list slot 0 inside tuple slot 0.
     holder_prefix = (TupleIndex(index=0), TupleIndex(index=0))
-    assert structure_paths == {holder_prefix}
+    # An opaque structure declares no reconstructable leaf paths.
+    assert structure_paths == set()
     # cert10 (b68b6de5) extends each BFS-fallback leaf path with typed
     # components inside the opaque object so distinct tensors keep DISTINCT
     # replay-meaningful paths (identical paths formerly caused all but the

@@ -30,6 +30,7 @@ by what.
 
 from __future__ import annotations
 
+import weakref
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, replace as _dc_replace
@@ -50,13 +51,14 @@ from ..observability._collector import StepTruth
 from ..observability._kernels import spine_result_from_vector, spine_vector
 from ..observability._schema import validate_step_order
 from ..utils.env_flags import closed_bool_env
-from ._amp import observed_grad_scale
-from ._errors import WatchConfigError, WatchRuntimeError
+from ._amp import correct_spine, corrected_gradient_block, observed_grad_scale, unscale_stage
+from ._errors import SinkProtocolError, TrackersError, WatchConfigError, WatchRuntimeError
 from ._protocol import EmissionLedger, require_capabilities, sink_name
 from ._records import (
     ScalarPoint,
     StepEmission,
     TagGrammar,
+    TextPoint,
     build_manifest,
     emission_from_block,
     spine_scalars,
@@ -85,6 +87,23 @@ _NEVER = 2**62
 #: Default scalar cadence (memo 3.8, majority; the G1 gate may tune the
 #: constant, never the first/last rule).
 DEFAULT_EVERY = 50
+
+#: Live (unclosed) sessions per model, keyed by the tag-grammar components
+#: ``(name, namespace)``. A second ``watch()`` on the same model under the
+#: same grammar would install a second hook set and emit every point TWICE
+#: into a shared sink (AUD-CODE 2.14); it refuses typed, while distinct
+#: ``name=`` values keep the documented multi-session spelling.
+_ACTIVE_SESSIONS: weakref.WeakKeyDictionary[
+    torch.nn.Module, dict[tuple[str | None, str | None], WatchSession]
+] = weakref.WeakKeyDictionary()
+
+#: Boundary scale evidence -> the StepBlock ``unscaled`` tri-state (the C06
+#: record keeps the numbers it measured; "no" = still scaled, corrected at
+#: emission). Anything else is "unknown", never a default.
+_EVIDENCE_TO_UNSCALED = {"unscaled_observed": "yes", "unscaled_derived": "no"}
+
+#: Boundary scale evidence -> the per-observation ``grad_scale`` stamp (D7).
+_EVIDENCE_TO_GRAD_SCALE = {"unscaled_observed": "unscaled", "unscaled_derived": "scaled"}
 
 
 def _module_census(model: torch.nn.Module) -> dict[str, int]:
@@ -246,9 +265,15 @@ class WatchSession:
         self._own_optimizer_handle: Any = None
         self._post_handles: list[Any] = []
         self._manifest_emitted = False
+        self._forward_handle: Any = None
+        self._deferred_attach: list[ScalarPoint | TextPoint] = []
         self._pending_events: list[ObserverEvent] = []
         if self.event_stream is not None:
-            self.event_stream.subscribe(self._pending_events.append)
+            # Subscribe a METHOD, never the bound ``append`` of the initial
+            # list: the old subscription kept feeding the original list after
+            # the first drain rebound ``_pending_events`` to a fresh one, so
+            # every verdict after the first drain was orphaned (AUD-CODE 2.14c).
+            self.event_stream.subscribe(self._receive_event)
 
     # -- emission plumbing -------------------------------------------------
 
@@ -265,9 +290,13 @@ class WatchSession:
                 for scalar in emission.scalars:
                     sink.emit_scalar(scalar)
                     row.emitted_scalars += 1
+                    if self.grammar.is_data_tag(scalar.tag):
+                        row.emitted_data_points += 1
                 for histogram in emission.histograms:
                     sink.emit_histogram(histogram)
                     row.emitted_histograms += 1
+                    if self.grammar.is_data_tag(histogram.tag):
+                        row.emitted_data_points += 1
                 for text in emission.texts:
                     sink.emit_text(text)
                     row.emitted_texts += 1
@@ -275,11 +304,20 @@ class WatchSession:
                 row.failed = True
                 row.failure = f"{type(exc).__name__}: {exc}"
                 self._named_skips.append(
-                    f"sink {sink_name(sink)} latched failed at step {emission.step}: {row.failure}"
+                    f"sink {row.name} latched failed at step {emission.step}: {row.failure}"
                 )
 
-    def _emit_manifest(self) -> None:
-        """Emit the versioned series manifest once (memo 3.5)."""
+    def _stage_attach_rows(self) -> None:
+        """Build the manifest (memo 3.5) + heartbeat rows; emission is deferred.
+
+        Both used to land at step 0 the moment ``watch()`` returned. A resumed
+        wandb run (already at step N) DROPS every ``log(step=0)`` call, so the
+        rows saying "this run is being watched" were exactly the ones that
+        vanished (AUD-CODE 2.14). They now ride the first step the session
+        actually sees (``_emit_attach_rows``); ``close()`` emits them at the
+        last seen step (or 0 when no step ever ran) so no run ends without
+        them. Emission order is preserved: they precede the first data row.
+        """
 
         if self._manifest_emitted or self.collector is None:
             return
@@ -289,8 +327,20 @@ class WatchSession:
             self.grammar,
             grains={site_id: site.kind for site_id, site in self.collector._sites_by_id.items()},
         )
-        self._emit(StepEmission(step=0, scalars=(), histograms=(), texts=(manifest,)))
+        heartbeat = ScalarPoint(self.grammar.run_health("attached"), 0, 1.0)
+        self._deferred_attach = [manifest, heartbeat]
+
+    def _emit_attach_rows(self, step: int) -> None:
+        """Emit the staged manifest + heartbeat exactly once, at ``step``."""
+
+        if self._manifest_emitted or not self._deferred_attach:
+            return
         self._manifest_emitted = True
+        rows = [_dc_replace(point, step=step) for point in self._deferred_attach]
+        self._deferred_attach = []
+        texts = tuple(point for point in rows if isinstance(point, TextPoint))
+        scalars = tuple(point for point in rows if isinstance(point, ScalarPoint))
+        self._emit(StepEmission(step=step, scalars=scalars, histograms=(), texts=texts))
 
     def _drain(self) -> None:
         """Emit every newly committed block since the last drain."""
@@ -300,10 +350,34 @@ class WatchSession:
         blocks = self.collector.ring.blocks
         fresh = blocks[self._drained_blocks :]
         self._drained_blocks = len(blocks)
+        sites = dict(self.collector._sites_by_id)
         for block in fresh:
-            emission = emission_from_block(block, dict(self.collector._sites_by_id), self.grammar)
+            step = block.block.global_step
+            self._emit_attach_rows(step)
+            block, derived = self._unscale_derived(block)
+            emission = emission_from_block(block, sites, self.grammar)
+            if derived:
+                disclosure = ScalarPoint(self.grammar.run_health("amp_unscale_derived"), step, 1.0)
+                emission = _dc_replace(emission, scalars=emission.scalars + (disclosure,))
             self._emit(emission)
             self._drain_events(block)
+
+    def _unscale_derived(self, block: CommittedBlock) -> tuple[CommittedBlock, int]:
+        """Correct a block reduced from SCALED grads in closed form (memo 3.11).
+
+        The boundary stamped ``unscaled="no"`` plus the observed power-of-two
+        scale when the scaler had NOT unscaled this optimizer (a plain
+        ``opt.step()`` after ``scaler.scale(loss).backward()``). The ring
+        record keeps the scaled numbers it measured; the EMISSION carries the
+        corrected ones (evidence ``unscaled_derived``, disclosed on
+        ``torchlens/run/amp_unscale_derived``). Scaled numbers used to ship
+        stamped ``unscaled='yes'`` (AUD-CODE 2.14b).
+        """
+
+        truth = block.block
+        if truth.unscaled != "no" or truth.scale is None or truth.scale <= 0.0:
+            return (block, 0)
+        return corrected_gradient_block(block, float(truth.scale))
 
     def _drain_events(self, block: CommittedBlock) -> None:
         """Serialize check findings from the shared event stream (chassis).
@@ -316,17 +390,33 @@ class WatchSession:
 
         if self.event_stream is None:
             return
-        step = block.block.global_step
-        pending, self._pending_events = self._pending_events, []
+        self._flush_pending_events(block.block.global_step)
+
+    def _receive_event(self, event: ObserverEvent) -> None:
+        """EventStream subscriber: buffer until the next drain."""
+
+        self._pending_events.append(event)
+
+    def _flush_pending_events(self, fallback_step: int) -> None:
+        """Serialize every buffered verdict; the buffer is drained IN PLACE."""
+
+        pending = list(self._pending_events)
+        del self._pending_events[:]
         for event in pending:
             if event.kind == "verdict" and event.verdict is not None:
                 value = {"pass": 0.0, "warn": 1.0, "fail": 2.0}.get(event.verdict)
                 if value is not None:
-                    self._emit_check(event.key, value, event.accepted_step_id or step)
+                    step = (
+                        event.accepted_step_id
+                        if event.accepted_step_id is not None
+                        else fallback_step
+                    )
+                    self._emit_check(event.key, value, step)
 
     def _emit_check(self, name: str, value: float, step: int) -> None:
         """Emit one check outcome scalar (0 pass / 1 warn / 2 fail)."""
 
+        self._emit_attach_rows(step)
         point = ScalarPoint(self.grammar.check(name), step, value)
         self._emit(StepEmission(step=step, scalars=(point,), histograms=()))
 
@@ -389,13 +479,11 @@ class WatchSession:
         read is exact (update halves it on overflow steps).
         """
 
-        del optimizer, args, kwargs
+        del args, kwargs
         self._optimizer_fired_this_step = True
         self._optimizer_ever_fired = True
         if self._current_scaler is not None:
-            scale, _evidence = observed_grad_scale(self._current_scaler)
-            self._scale_at_boundary = scale
-            self._scale_evidence = "unscaled_observed" if scale is not None else "unavailable"
+            self._read_boundary_scale(optimizer)
         if self._step_open or self.collector is None:
             return
         if self.step_source is None:
@@ -416,8 +504,84 @@ class WatchSession:
         sampled = self._scheduled(step_value)
         self._apply_cadence(step_value, sampled)
         validate_step_order(self.collector._last_step, step_value, same_segment=True)
-        self.collector._open_block(step_value, provenance="implicit")
+        self._open_implicit_block(step_value)
         self._note_step(step_value, sampled)
+
+    def _read_boundary_scale(self, optimizer: Any) -> None:
+        """Read the scale AND whether the grads at this boundary are unscaled.
+
+        ``scaler.step(optimizer)`` unscales in place before ``optimizer.step()``
+        (evidence ``unscaled_observed``); a plain ``optimizer.step()`` after
+        ``scaler.scale(loss).backward()`` leaves the factor on every grad, so
+        the reduction is corrected in closed form at emission (evidence
+        ``unscaled_derived``); an unreadable stage is ``scaled_unknown_factor``
+        and the record says so. A readable ``get_scale()`` alone used to be
+        taken as proof of unscaling (AUD-CODE 2.14b).
+        """
+
+        scale, evidence = observed_grad_scale(self._current_scaler)
+        self._scale_at_boundary = scale
+        if scale is None:
+            self._scale_evidence = "unavailable"
+            return
+        if evidence == "unscaled_observed":
+            # A disabled scaler: factor 1.0 is an observed fact.
+            self._scale_evidence = evidence
+            return
+        stage = unscale_stage(self._current_scaler, optimizer)
+        self._scale_evidence = {
+            "unscaled": "unscaled_observed",
+            "scaled": "unscaled_derived",
+        }.get(stage, "scaled_unknown_factor")
+
+    def _open_implicit_block(self, step_value: int) -> None:
+        """Open the implicit block WITHOUT discarding the forward's observations.
+
+        Under ``step=callable`` the module forward hooks fill the collector's
+        staging buffers BEFORE ``optimizer.step()`` reaches this boundary, and
+        ``_open_block`` zeroes those buffers as part of opening -- so tier M
+        emitted ZERO activations on the documented ``step=`` spelling and never
+        refused (AUD-CODE 2.14a). The pending forward staging is carried across
+        the open here; an open that ADOPTS pending staging on the collector
+        side is the durable home (filed).
+        """
+
+        collector = self.collector
+        if collector is None:
+            return
+        staging = collector._staging
+        touched = list(collector._staging_touched)
+        pending = staging.clone() if staging is not None and any(touched) else None
+        sketch = collector._sketch_staging
+        pending_sketch = sketch.clone() if pending is not None and sketch is not None else None
+        overflow = list(collector._staging_overflow)
+        collector._open_block(step_value, provenance="implicit")
+        if pending is not None and collector._staging is not None:
+            collector._staging.copy_(pending)
+            collector._staging_touched = touched
+            if pending_sketch is not None and collector._sketch_staging is not None:
+                collector._sketch_staging.copy_(pending_sketch)
+        if overflow:
+            collector._staging_overflow.extend(overflow)
+
+    def _forward_entry_hook(self, module: Any, args: Any) -> None:
+        """Tier M under ``step=callable``: schedule the forward's observations.
+
+        The collector's module hooks consult the per-stream cadence AT FORWARD
+        TIME, but the boundary hook (which reads the step and decides
+        sampling) fires inside ``optimizer.step()`` afterwards -- so without
+        this hook a step's activations were gathered under the PREVIOUS step's
+        decision. Registered only when both ``step=`` and ``activations`` are
+        requested; the explicit ``watch.step`` scope already schedules at entry.
+        """
+
+        del module, args
+        if self._step_open or self.collector is None or self.step_source is None:
+            return
+        if self.collector._block_open:
+            return
+        step_value = int(self.step_source())
+        self._apply_cadence(step_value, self._scheduled(step_value))
 
     def _boundary_post_hook(self, optimizer: Any, args: Any, kwargs: Any) -> None:
         """Registered LAST: drain freshly committed implicit blocks."""
@@ -519,13 +683,17 @@ class WatchSession:
             )
             scale = self._scale_at_boundary if self._scale_at_boundary is not None else exit_scale
             truth_updates["scale"] = scale
-            truth_updates["unscaled"] = (
-                "yes" if self._scale_evidence == "unscaled_observed" else "unknown"
-            )
+            truth_updates["unscaled"] = _EVIDENCE_TO_UNSCALED.get(self._scale_evidence, "unknown")
         if skipped or not self._optimizer_fired_this_step:
             truth_updates["optimizer_status"] = "skipped" if skipped else "unknown"
         if self.collector is not None and self.collector._block_open:
             self.collector._block_truth.update(truth_updates)
+            if scaler is not None:
+                # D7: every gradient observation carries the boundary's scale
+                # truth, never a default; the emitter corrects "scaled" rows.
+                stamp = _EVIDENCE_TO_GRAD_SCALE.get(self._scale_evidence, "unknown")
+                for key in list(self.collector._block_grad_scale):
+                    self.collector._block_grad_scale[key] = stamp
         self._step_open = False
         transaction.__exit__(
             type(failure) if failure is not None else None,
@@ -537,7 +705,18 @@ class WatchSession:
             self._named_skips.append(
                 f"amp_skipped: step {step_value} (scale decrement observed; no fake update emitted)"
             )
-        self._drain()
+        try:
+            self._drain()
+        except TrackersError as exc:
+            if failure is None:
+                raise
+            # ``finally`` context: a typed drain refusal (tag safety, scale
+            # shift) must never MASK the training loop's own exception; it is
+            # recorded and the user's exception keeps propagating.
+            self._named_skips.append(
+                f"drain refused at step {step_value} while the loop's own exception "
+                f"unwound: {exc.fields.get('code')}"
+            )
         self._enforce_phases(step_value, failure, skipped)
 
     def _enforce_phases(
@@ -610,7 +789,49 @@ class WatchSession:
         last = self._seen_steps[-1]
         if self._sampled_steps and self._sampled_steps[-1] == last:
             return
+        include_gradients, derive_scale = self._forced_gradient_policy(last)
+        scalars = self._forced_sample_scalars(last, include_gradients, derive_scale)
+        if scalars:
+            self._sampled_steps.append(last)
+            self._emit_attach_rows(last)
+            if derive_scale is not None and include_gradients:
+                scalars.append(
+                    ScalarPoint(self.grammar.run_health("amp_unscale_derived"), last, 1.0)
+                )
+            self._emit(StepEmission(step=last, scalars=tuple(scalars), histograms=()))
+            self._named_skips.append(f"final_sample_forced at step {last}")
+
+    def _forced_gradient_policy(self, last: int) -> tuple[bool, float | None]:
+        """Whether the forced sample may read ``p.grad``, and the AMP factor to divide out.
+
+        ``p.grad`` at close is whatever the last backward left: unscaled in
+        place under ``scaler.step`` (read as is), still scaled under a plain
+        ``optimizer.step`` (corrected by the observed scale), or of unknown
+        basis when the scaler's stage was unreadable (skipped, named).
+        """
+
+        grad_evidence = self._scale_evidence if self._current_scaler is not None else "unavailable"
+        include_gradients = "gradients" in self.signals
+        if include_gradients and grad_evidence == "scaled_unknown_factor":
+            include_gradients = False
+            self._named_skips.append(
+                f"final_sample_gradients_skipped at step {last}: AMP scale evidence unknown"
+            )
+        derive_scale = (
+            self._scale_at_boundary
+            if grad_evidence == "unscaled_derived" and self._scale_at_boundary
+            else None
+        )
+        return (include_gradients, derive_scale)
+
+    def _forced_sample_scalars(
+        self, last: int, include_gradients: bool, derive_scale: float | None
+    ) -> list[ScalarPoint]:
+        """Reduce parameters (and admitted gradients) directly for the forced sample."""
+
         scalars: list[ScalarPoint] = []
+        if self.collector is None:
+            return scalars
         with torch.no_grad(), _state.pause_logging():
             for name, param in self.model.named_parameters():
                 slot = self.collector._param_sites.get(name)
@@ -618,20 +839,19 @@ class WatchSession:
                     continue
                 leaf = slot.record.display_label
                 targets = [("parameters", param.detach())]
-                if param.grad is not None and "gradients" in self.signals:
+                if param.grad is not None and include_gradients:
                     targets.append(("gradients", param.grad.detach()))
                 for family, tensor in targets:
                     if family == "parameters" and "parameters" not in self.signals:
                         continue
                     spine = spine_result_from_vector(spine_vector(tensor).cpu(), "float64")
+                    if family == "gradients" and derive_scale is not None:
+                        spine = correct_spine(spine, float(derive_scale))
                     for statistic, value in spine_scalars(spine).items():
                         scalars.append(
                             ScalarPoint(self.grammar.data(family, statistic, leaf), last, value)
                         )
-        if scalars:
-            self._sampled_steps.append(last)
-            self._emit(StepEmission(step=last, scalars=tuple(scalars), histograms=()))
-            self._named_skips.append(f"final_sample_forced at step {last}")
+        return scalars
 
     def close(self, *, unwinding: bool = False) -> CloseReport:
         """Detach everything, force the last sample, settle the report.
@@ -644,27 +864,35 @@ class WatchSession:
         if self._closed:
             return self._report()
         self._closed = True
+        _deregister_session(self)
         if self.collector is not None:
             if self._own_optimizer_handle is not None:
                 self._own_optimizer_handle.remove()
                 self._own_optimizer_handle = None
             for handle in list(getattr(self, "_post_handles", ())):
                 handle.remove()
+            if self._forward_handle is not None:
+                self._forward_handle.remove()
+                self._forward_handle = None
             self._final_forced_sample()
             self.collector.detach()
+            fallback = self._seen_steps[-1] if self._seen_steps else 0
+            self._emit_attach_rows(fallback)
+            if self.event_stream is not None:
+                self._flush_pending_events(fallback)
+        self._flush_and_close_sinks()
         report = self._report()
-        for sink in self.sinks:
-            row = self.ledger.row(sink)
-            try:
-                sink.flush()
-                sink.close()
-            except Exception as exc:  # noqa: BLE001 - latched + reported, never silent
-                row.failed = True
-                row.failure = f"close: {type(exc).__name__}: {exc}"
-        emitted_any = any(
-            row.emitted_scalars or row.emitted_histograms for row in self.ledger.sinks.values()
-        )
-        if not unwinding and self.collector is not None and self._seen_steps and not emitted_any:
+        # DATA points only: a heartbeat or manifest landing in a sink is not
+        # "the dashboard has data" (the old count let run-health rows mask an
+        # empty run, AUD-CODE 2.14a).
+        emitted_any = any(row.emitted_data_points for row in self.ledger.sinks.values())
+        if (
+            not unwinding
+            and self.collector is not None
+            and self._seen_steps
+            and not emitted_any
+            and not self._data_absence_explained()
+        ):
             raise WatchRuntimeError(
                 "watch closed with ZERO successfully emitted data points for "
                 "the requested signals -- an empty dashboard with no "
@@ -677,6 +905,40 @@ class WatchSession:
                 ),
             )
         return report
+
+    def _flush_and_close_sinks(self) -> None:
+        """Flush then close every sink, latching failures on its ledger row.
+
+        flush and close are SEPARATE attempts: a flush that raised used to
+        skip close() entirely and leak the handle (AUD-CODE 2.14).
+        """
+
+        for sink in self.sinks:
+            row = self.ledger.row(sink)
+            try:
+                sink.flush()
+            except Exception as exc:  # noqa: BLE001 - latched + reported, never silent
+                row.failed = True
+                row.failure = f"flush: {type(exc).__name__}: {exc}"
+            try:
+                sink.close()
+            except Exception as exc:  # noqa: BLE001 - latched + reported, never silent
+                row.failed = True
+                prefix = f"{row.failure}; " if row.failure else ""
+                row.failure = f"{prefix}close: {type(exc).__name__}: {exc}"
+
+    def _data_absence_explained(self) -> bool:
+        """True when EVERY seen step carries a named data-absence skip.
+
+        An AMP-skipped step or a demoted missing phase is the loop working
+        as declared, not an unexplained empty panel; a latched sink is not
+        an explanation of absent data and still raises.
+        """
+
+        explained = sum(
+            1 for skip in self._named_skips if skip.startswith(("amp_skipped", "phase_missing"))
+        )
+        return explained >= len(self._seen_steps)
 
     def _report(self) -> CloseReport:
         """Assemble the close report from the ledgers."""
@@ -869,6 +1131,7 @@ def watch(
     needed = ["scalar", "text_manifest"] + (["raw_histogram"] if needs_histograms else [])
     for sink in sinks:
         require_capabilities(sink, tuple(needed))
+    _refuse_duplicate_sinks(sinks)
     if disabled_by is not None:
         session = WatchSession(
             model,
@@ -902,13 +1165,9 @@ def watch(
             ),
         )
     streams = tuple(_SIGNAL_STREAMS[signal] for signal in requested if signal in _SIGNAL_STREAMS)
-    base_settings = settings if settings is not None else WatchSettings()
-    if descriptor is not None or needs_histograms:
-        base_settings = _dc_replace(
-            base_settings,
-            descriptor=descriptor if descriptor is not None else base_settings.descriptor,
-            sketch_cadence=1 if needs_histograms else base_settings.sketch_cadence,
-        )
+    base_settings = _resolve_settings(settings, descriptor, needs_histograms)
+    _refuse_second_session(model, grammar)
+    _preflight_histogram_sinks(sinks, base_settings.descriptor, needs_histograms)
     collector = HistoryCollector(
         model,
         sites=tuple(select) if select is not None else None,
@@ -922,6 +1181,8 @@ def watch(
     else:
         _discover_without_forward(collector)
     _check_budgets(collector, budgets)
+    _preflight_tags(grammar, collector, requested)
+    _refuse_sparse_gradients(collector, requested)
     session = WatchSession(
         model,
         sinks,
@@ -944,10 +1205,157 @@ def watch(
         session._post_handles = [optimizer.register_step_post_hook(session._boundary_post_hook)]
     else:
         session._post_handles = []
-    session._emit_manifest()
-    heartbeat = ScalarPoint(grammar.run_health("attached"), 0, 1.0)
-    session._emit(StepEmission(step=0, scalars=(heartbeat,), histograms=()))
+    _arm_forward_scheduling(session, model, step, requested)
+    session._stage_attach_rows()
+    _register_session(model, grammar, session)
     return session
+
+
+def _resolve_settings(
+    settings: WatchSettings | None,
+    descriptor: HistogramDescriptor | None,
+    needs_histograms: bool,
+) -> WatchSettings:
+    """Fold the descriptor override and the sketch tier into the C06 settings."""
+
+    base_settings = settings if settings is not None else WatchSettings()
+    if descriptor is not None or needs_histograms:
+        base_settings = _dc_replace(
+            base_settings,
+            descriptor=descriptor if descriptor is not None else base_settings.descriptor,
+            sketch_cadence=1 if needs_histograms else base_settings.sketch_cadence,
+        )
+    return base_settings
+
+
+def _arm_forward_scheduling(
+    session: WatchSession,
+    model: torch.nn.Module,
+    step: Callable[[], int] | None,
+    requested: tuple[str, ...],
+) -> None:
+    """Install the tier-M forward-entry scheduler when ``step=`` drives the axis."""
+
+    if step is not None and "activations" in requested:
+        session._forward_handle = model.register_forward_pre_hook(session._forward_entry_hook)
+
+
+def _refuse_duplicate_sinks(sinks: tuple[Any, ...]) -> None:
+    """One sink OBJECT listed twice would receive every point twice."""
+
+    seen: set[int] = set()
+    for sink in sinks:
+        if id(sink) in seen:
+            raise SinkProtocolError(
+                f"{sink_name(sink)} appears more than once in to=: one sink "
+                "object listed twice would receive every point twice while its "
+                "ledger row counted them once.",
+                code="tracker_sink_duplicate",
+                sink=sink_name(sink),
+                remedy="List each sink object once (two files need two JSONLSink objects).",
+            )
+        seen.add(id(sink))
+
+
+def _register_session(model: torch.nn.Module, grammar: TagGrammar, session: WatchSession) -> None:
+    """Record ``session`` as the live watcher of ``model`` under its grammar."""
+
+    _ACTIVE_SESSIONS.setdefault(model, {})[(grammar.name, grammar.namespace)] = session
+
+
+def _deregister_session(session: WatchSession) -> None:
+    """Forget ``session`` at close (idempotent; other grammars untouched)."""
+
+    live = _ACTIVE_SESSIONS.get(session.model)
+    if not live:
+        return
+    key = (session.grammar.name, session.grammar.namespace)
+    if live.get(key) is session:
+        del live[key]
+
+
+def _refuse_second_session(model: torch.nn.Module, grammar: TagGrammar) -> None:
+    """A second open session on one model under one grammar duplicates every point."""
+
+    live = _ACTIVE_SESSIONS.get(model) or {}
+    existing = live.get((grammar.name, grammar.namespace))
+    if existing is not None and not existing._closed:
+        raise WatchConfigError(
+            "This model already has an open watch session under the same tag "
+            f"grammar (name={grammar.name!r}, namespace={grammar.namespace!r}); "
+            "a second session would install a second hook set and emit every "
+            "point TWICE into a shared sink.",
+            code="tracker_namespace_collision",
+            name=grammar.name,
+            namespace=grammar.namespace,
+            remedy=(
+                "close() the open session first, or pass a distinct name= so "
+                "the two series stay distinguishable."
+            ),
+        )
+
+
+def _preflight_histogram_sinks(
+    sinks: tuple[Any, ...], descriptor: HistogramDescriptor, needs_histograms: bool
+) -> None:
+    """Attach-time histogram admission for sinks that declare a check.
+
+    A sink may expose ``preflight_histograms(descriptor)`` raising typed;
+    the same refusal raised inside ``emit_histogram`` used to be swallowed
+    by the runtime latch and silently stopped every later row.
+    """
+
+    if not needs_histograms:
+        return
+    for sink in sinks:
+        preflight = getattr(sink, "preflight_histograms", None)
+        if callable(preflight):
+            preflight(descriptor)
+
+
+def _preflight_tags(
+    grammar: TagGrammar, collector: HistoryCollector, requested: tuple[str, ...]
+) -> None:
+    """Render one tag per catalogued site at ATTACH so an unsafe leaf refuses now.
+
+    The first render used to happen inside the first drain -- inside a
+    ``finally`` -- where the typed refusal masked the user's own exception.
+    """
+
+    param_families = tuple(f for f in ("parameters", "gradients", "updates") if f in requested)
+    for site in collector._sites_by_id.values():
+        families = param_families if site.kind == "param" else ("activations",)
+        for family in (*families, "nonfinite"):
+            grammar.data(family, "norm", site.display_label)
+
+
+def _refuse_sparse_gradients(collector: HistoryCollector, requested: tuple[str, ...]) -> None:
+    """Gradient watching over ``sparse=True`` modules refuses at attach.
+
+    The gradient reduction kernel needs dense grads; a sparse grad used to
+    crash UNTYPED inside the optimizer pre-hook, aborting the user's step.
+    """
+
+    if "gradients" not in requested:
+        return
+    sparse: list[str] = []
+    for name in collector._param_sites:
+        owner, _, _leaf = name.rpartition(".")
+        try:
+            module = collector.model.get_submodule(owner) if owner else collector.model
+        except AttributeError:
+            continue
+        if getattr(module, "sparse", False) is True:
+            sparse.append(name)
+    if sparse:
+        raise WatchConfigError(
+            f"Parameters {sparse} belong to modules constructed with sparse=True "
+            "(sparse gradients); the gradient reduction needs dense grads and "
+            "would crash INSIDE optimizer.step(), aborting the update.",
+            code="watch_sparse_grad_unsupported",
+            parameters=tuple(sparse),
+            remedy="Exclude them via select=, or construct the module with sparse=False.",
+        )
 
 
 def _discover_without_forward(collector: HistoryCollector) -> None:

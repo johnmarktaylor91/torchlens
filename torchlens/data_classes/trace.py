@@ -2999,6 +2999,13 @@ class Trace(
         # `_transform`, a fourth raw-callable holder the original fix missed
         # (it covered only the deprecated activation_transform= spelling).
         state["_transform"] = None
+        # Facet recipe snapshot (FieldPolicy.DROP): its entries pickle builtin
+        # recipe FUNCTIONS by import identity, so a later recipe rename made
+        # every earlier plain pickle unloadable (gqa_sdpa_attention,
+        # 2026-08-26). Serialize to the loaded-artifact form (None);
+        # `_snapshot_for_record` falls back to the live registry exactly as it
+        # does for every tlspec-loaded Trace.
+        state["facet_registry_snapshot"] = None
         state.pop("_raw_graph_ws", None)
         state.pop("_module_capture_ws", None)
         state.pop("_wrapper_runtime_ws", None)

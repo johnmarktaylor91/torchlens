@@ -1,7 +1,9 @@
 """The audit-only plan checker (weightsfree memo D14, face 4).
 
 nnsight-scan parity: resolve selectors against a trace, check multiplicity
-and index bounds, and compare declared replacement geometry (a meta/real
+(a bare selector must name at least one site; a declared replacement is ONE
+geometry for ONE site) and index bounds (a pass-qualified ``label:k`` must
+name an existing pass), and compare declared replacement geometry (a meta/real
 tensor or any shape/dtype-bearing spec) against the trace's hypothesis
 shapes/dtypes. The report is a PERSISTABLE artifact whose claims carry typed
 status until discharged — where nnsight's scan evaporates with its trace
@@ -165,12 +167,22 @@ def check_plan(trace: Any, plan: Any) -> PlanCheckReport:
                 "use label strings or structural selectors (tl.func, "
                 "tl.in_module, label selectors and their compositions)",
             )
+        bounds_finding = _index_bounds_finding(trace, selector)
+        if bounds_finding is not None:
+            checks.append(
+                PlanSiteCheck(
+                    selector=repr(selector),
+                    resolved_labels=(),
+                    multiplicity_ok=False,
+                    replacement_verdict=bounds_finding,
+                )
+            )
+            continue
         table = trace.resolve_sites(selector)
         labels_attr = getattr(table, "labels", None)
         raw_labels = labels_attr() if callable(labels_attr) else labels_attr
         labels = tuple(str(site) for site in (raw_labels or _labels_of(table)))
-        multiplicity_ok = len(labels) > 0
-        verdict = "not_declared"
+        multiplicity_ok, verdict = _multiplicity_verdict(labels, replacement)
         if replacement is not None and multiplicity_ok:
             verdict = _geometry_verdict(trace, labels, replacement)
         checks.append(
@@ -191,6 +203,62 @@ def check_plan(trace: Any, plan: Any) -> PlanCheckReport:
             if bool(getattr(trace, "structure_only", False))
             else "measured"
         ),
+    )
+
+
+def _multiplicity_verdict(labels: tuple[str, ...], replacement: Any) -> tuple[bool, str]:
+    """Return ``(multiplicity_ok, verdict)`` for one resolved plan entry.
+
+    A bare selector audits site EXISTENCE (at least one site). A declared
+    replacement is ONE geometry destined for ONE site (nnsight-scan parity:
+    ``module.output = value`` names one call), so an entry that resolves to
+    several sites is a multiplicity finding, never ``multiplicity_ok`` --
+    the historical ``len(labels) > 0`` blessed a selector fanning one
+    replacement out over 50 sites (AUD-CODE 4.2).
+    """
+
+    count = len(labels)
+    if count == 0:
+        return False, "site_unresolved: selector matched no site on this trace"
+    if replacement is not None and count > 1:
+        return False, (
+            f"multiplicity_mismatch: {count} sites resolved for ONE declared "
+            "replacement; qualify the selector to a single site "
+            "(a pass-qualified label such as 'label:pass')"
+        )
+    return True, "not_declared"
+
+
+def _index_bounds_finding(trace: Any, selector: Any) -> str | None:
+    """Return an index-bounds finding for a pass-qualified label, or ``None``.
+
+    ``label:k`` names pass ``k`` (1-based) of a layer that exists on the
+    trace; ``k`` outside ``1..num_passes`` is a plan defect the resolver
+    would otherwise surface as an opaque "matched 0 sites" refusal. Unknown
+    base labels are NOT bounds findings (the resolver's typo refusal owns
+    them); non-string selectors have no index to bound.
+    """
+
+    if not isinstance(selector, str) or ":" not in selector:
+        return None
+    base, _, pass_text = selector.rpartition(":")
+    try:
+        pass_index = int(pass_text)
+    except ValueError:
+        return None
+    layer_labels = {
+        str(getattr(layer, "layer_label", "")) for layer in getattr(trace, "layer_list", ())
+    }
+    if base not in layer_labels:
+        return None
+    layer = trace[base]
+    num_passes = int(getattr(layer, "num_passes", 1) or 1)
+    if 1 <= pass_index <= num_passes:
+        return None
+    return (
+        f"index_out_of_bounds: pass {pass_index} of {base!r} does not exist "
+        f"(the layer ran {num_passes} pass{'es' if num_passes != 1 else ''}; "
+        f"valid pass indices are 1..{num_passes})"
     )
 
 

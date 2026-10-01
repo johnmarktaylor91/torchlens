@@ -192,19 +192,25 @@ class injection_recorder:
                 args: tuple[Any, ...] = (),
                 kwargs: dict[str, Any] | None = None,
             ) -> Any:
-                """Run the call, then record its tensor outputs as injected."""
+                """Snapshot the inputs, run the call, record its tensor outputs."""
 
                 kwargs = kwargs or {}
-                out = func(*args, **kwargs)
                 name = getattr(func, "__name__", None)
                 if not name:
-                    return out
+                    return func(*args, **kwargs)
                 layer_type = _normalize_func_name(name)
                 if layer_type not in wrap_universe:
-                    return out
+                    return func(*args, **kwargs)
+                # The replay evidence is snapshotted BEFORE the call runs: an
+                # in-place callable (mul_, relu_, copy_, F.relu(inplace=True))
+                # rewrites its own argument storage, so a post-call snapshot
+                # would be the OUTPUT and the attestation replay would compute
+                # f(f(x)) and call an honest capture forged (AUD-CODE 2.3a).
+                snapshot = _snapshot_call_inputs(args, kwargs, torch.Tensor)
+                out = func(*args, **kwargs)
                 if not _has_tensor(out, torch.Tensor):
                     return out
-                recorder._record_call((layer_type, name, func), args, kwargs, out, torch.Tensor)
+                recorder._record_call((layer_type, name, func), snapshot, out, torch.Tensor)
                 return out
 
         self._mode = _Mode()
@@ -221,15 +227,15 @@ class injection_recorder:
     def _record_call(
         self,
         call: tuple[str, str, Any],
-        args: tuple[Any, ...],
-        kwargs: dict[str, Any],
+        snapshot: tuple[tuple[Any, ...] | None, tuple[tuple[str, Any], ...] | None],
         out: Any,
         tensor_type: type,
     ) -> None:
         """Mint one InjectedOp per tensor output slot of one intercepted call.
 
         ``call`` is the intercepted identity triple
-        ``(layer_type, func_name, func)``.
+        ``(layer_type, func_name, func)``; ``snapshot`` is the PRE-CALL
+        ``(saved_args, saved_kwargs)`` pair from :func:`_snapshot_call_inputs`.
         """
 
         layer_type, func_name, func = call
@@ -250,14 +256,7 @@ class injection_recorder:
             callable_ref = function_registry_key_from_callable(func)
         except (AttributeError, KeyError, TypeError, ValueError):
             callable_ref = None
-        saved_args = _snapshot_call_values(args, tensor_type)
-        saved_kwargs: tuple[tuple[str, Any], ...] | None = None
-        if saved_args is not None:
-            snapped_kwarg_values = _snapshot_call_values(tuple(kwargs.values()), tensor_type)
-            if snapped_kwarg_values is None:
-                saved_args = None
-            else:
-                saved_kwargs = tuple(zip(kwargs.keys(), snapped_kwarg_values, strict=True))
+        saved_args, saved_kwargs = snapshot
         anchor = self.anchor
         records = _injection_store(self.trace)
         for slot, value in outputs:
@@ -288,6 +287,24 @@ class injection_recorder:
                     fire_device=str(value.device),
                 )
             )
+
+
+def _snapshot_call_inputs(
+    args: tuple[Any, ...], kwargs: dict[str, Any], tensor_type: type[Any]
+) -> tuple[tuple[Any, ...] | None, tuple[tuple[str, Any], ...] | None]:
+    """Snapshot one call's positional AND keyword inputs before it runs.
+
+    Returns ``(saved_args, saved_kwargs)``; any unsnapshotable value on
+    either side makes the WHOLE call replay-ineligible (``(None, None)``).
+    """
+
+    saved_args = _snapshot_call_values(args, tensor_type)
+    if saved_args is None:
+        return None, None
+    snapped_kwarg_values = _snapshot_call_values(tuple(kwargs.values()), tensor_type)
+    if snapped_kwarg_values is None:
+        return None, None
+    return saved_args, tuple(zip(kwargs.keys(), snapped_kwarg_values, strict=True))
 
 
 def _snapshot_call_values(
@@ -421,8 +438,9 @@ def injected_ops(trace: Any) -> tuple[InjectedOp, ...]:
         return tuple(records)
     import dataclasses
 
+    ops = tuple(getattr(trace, "layer_list", ()) or ())
     by_raw: dict[str, Any] = {}
-    for op in getattr(trace, "layer_list", ()) or ():
+    for op in ops:
         raw = getattr(op, "raw_label", None)
         if isinstance(raw, str):
             by_raw.setdefault(raw, op)
@@ -431,6 +449,8 @@ def injected_ops(trace: Any) -> tuple[InjectedOp, ...]:
         # live fire-time labels carry the transient "_raw" suffix the
         # finished records drop
         host = by_raw.get(record.host_label) or by_raw.get(record.host_label.removesuffix("_raw"))
+        if host is None:
+            host = _module_boundary_host(ops, record.host_label)
         if host is None:
             resolved.append(record)
             continue
@@ -450,6 +470,32 @@ def injected_ops(trace: Any) -> tuple[InjectedOp, ...]:
     state["records"] = resolved
     state["resolved"] = True
     return tuple(resolved)
+
+
+def _module_boundary_host(ops: tuple[Any, ...], host_label: str) -> Any | None:
+    """Resolve a module-boundary firing's host op from its ``address:pass`` label.
+
+    A ``tl.module(...)`` rule fires at a real module hook, where the only
+    identity that exists is the module call label (``fc1:1``); no op carries
+    that raw label. The host is the retained op that PRODUCED that module
+    call's output: the ``interventionreplacement`` op the capture mints at
+    module exit when the hook replaced the value (preferred -- it carries
+    ``intervention_replaced=True``), else the module's own output op. Both
+    list the module call in ``output_of_module_calls``. ``None`` when no
+    retained op exits that module call (the record stays unanchored and the
+    codec refuses to persist it typed).
+    """
+
+    fallback: Any | None = None
+    for op in ops:
+        exits = getattr(op, "output_of_module_calls", None) or ()
+        if host_label not in exits:
+            continue
+        if getattr(op, "intervention_replaced", False):
+            return op
+        if fallback is None:
+            fallback = op
+    return fallback
 
 
 def next_firing_index(trace: Any, spec_rule_id: str) -> int:
@@ -750,9 +796,38 @@ def _replay_record(record: InjectedOp, func: Any, torch: Any) -> tuple[str, str 
     slot_value = _select_output_slot(replayed, record.provenance.output_slot, torch)
     if slot_value is None:
         return "diverged", "replay_output_structure"
-    if torch.equal(slot_value, record.out):
+    if _replay_values_match(slot_value, record.out, torch):
         return "attested", None
     return "diverged", "replay_value_mismatch"
+
+
+def _replay_values_match(replayed: Any, recorded: Any, torch: Any) -> bool:
+    """Exact positional equality that treats NaN as equal to NaN.
+
+    ``torch.equal`` reads ``NaN != NaN``, so an HONEST injected op whose
+    output legitimately holds NaN (``log`` of a negative value inside a
+    hook) replayed to the identical result would be called ``diverged``
+    (AUD-CODE 3.7b). Equality here is exact per element -- same dtype,
+    shape, and device; every finite element equal; NaN exactly where the
+    record has NaN. This is not a tolerance: no differing finite value
+    passes.
+    """
+
+    if (
+        replayed.dtype != recorded.dtype
+        or tuple(replayed.shape) != tuple(recorded.shape)
+        or replayed.device != recorded.device
+    ):
+        return False
+    if torch.equal(replayed, recorded):
+        return True
+    if not (replayed.is_floating_point() or replayed.is_complex()):
+        return False
+    replayed_nan = torch.isnan(replayed)
+    recorded_nan = torch.isnan(recorded)
+    if not torch.equal(replayed_nan, recorded_nan):
+        return False
+    return bool(torch.equal(replayed[~replayed_nan], recorded[~recorded_nan]))
 
 
 def _select_output_slot(replayed: Any, output_slot: int, torch: Any) -> Any:

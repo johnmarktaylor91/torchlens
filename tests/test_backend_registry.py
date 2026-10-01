@@ -253,7 +253,12 @@ def test_torch_rejects_explicit_inert_trace_option_values(kwargs: dict[str, Any]
     """Torch should reject explicit public options it cannot honor."""
 
     with pytest.raises(BackendUnsupportedError):
-        tl.trace(_TinyModel(), torch.ones(1), backend="torch", **kwargs)
+        tl.trace(
+            _TinyModel(),
+            torch.ones(1),
+            backend="torch",
+            capture=tl.options.CaptureOptions(**kwargs),
+        )
 
 
 def test_torch_accepts_default_equivalent_trace_option_values() -> None:

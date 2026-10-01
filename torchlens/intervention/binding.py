@@ -106,6 +106,11 @@ class BindReport:
     fires: tuple[dict[str, Any], ...] = ()
     fire_records: tuple[Any, ...] = ()
     zero_fire_rule_ids: tuple[str, ...] = ()
+    #: Canonical address -> the OTHER addresses the same module object is
+    #: registered under (``named_modules(remove_duplicate=False)``). A rule
+    #: anchored on the canonical name fires at EVERY call site of the shared
+    #: module; alias spellings never resolve (bind_static_anchor_unresolved).
+    module_aliases: dict[str, tuple[str, ...]] = field(default_factory=dict)
     execution_effect: str = _BIND_EXECUTION_EFFECT
     error: str | None = None
     cleanup: str = "removed"
@@ -227,6 +232,29 @@ class _RulePlan:
         self.boundary_targets: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class _BindFireSite:
+    """The coordinate of one fired bind target, as the fire ledger records it.
+
+    Attributes
+    ----------
+    target_label:
+        Pass-qualified target label (``"relu_1_2:1"`` / ``"blocks.7:2"``).
+    site_key:
+        L1 structural site key when minted (module address on boundary
+        fires; ``None`` when underivable).
+    container_path:
+        Path of the fired tensor leaf inside the target's output structure.
+    pass_index:
+        One-based pass index of the fire.
+    """
+
+    target_label: str
+    site_key: str | None
+    container_path: tuple[Any, ...]
+    pass_index: int
+
+
 class _BindSession:
     """Mutable per-call runtime state (counters, stack, fires, minter)."""
 
@@ -254,39 +282,51 @@ class _BindSession:
     def record_fire(
         self,
         plan: _RulePlan,
+        site: _BindFireSite,
         *,
-        target_label: str,
-        site_key: str | None,
-        container_path: tuple[Any, ...],
-        pass_index: int,
+        replaced: bool,
+        in_place_op: bool = False,
     ) -> None:
-        """Mint one fire disclosure through the ONE builder and ledger it."""
+        """Mint one fire disclosure through the ONE builder and ledger it.
+
+        ``site`` is the fired target's coordinate (label, site key, container
+        path, pass index) as one frozen carrier.
+        ``replaced`` is derived by the caller from object identity
+        (``hooked is not out``), exactly as the capture lane derives it -- an
+        identity hook fired but replaced nothing (AUD-CODE 3.7a).
+        ``in_place_op`` discloses that the target was an in-place torch call
+        (``mul_``, ``relu_``, ``F.relu(inplace=True)``): this lane substitutes
+        the RETURNED handle only, so a caller that ignores the return and
+        keeps the mutated storage never sees the edit.
+        """
 
         previous_notes = tuple(self.run_ctx.get("ledger_notes", ()))
         record = build_fire_record(
-            target_label=target_label,
-            container_path=container_path,
+            target_label=site.target_label,
+            container_path=site.container_path,
             engine="bind",
             helper=plan.helper_spec,
-            site_label=site_key,
+            site_label=site.site_key,
             timing="post",
             direction="forward",
             helper_name=plan.display_name,
             run_ctx=self.run_ctx,
             previous_notes=previous_notes,
-            replaced=True,
+            replaced=replaced,
         )
         self.fire_records.append(record)
         self.rule_fire_counts[plan.rule.rule_id] += 1
         self.fires.append(
             {
                 "rule_id": plan.rule.rule_id,
-                "target": target_label,
-                "site_key": site_key,
-                "container_path": tuple(container_path),
-                "pass_index": pass_index,
+                "target": site.target_label,
+                "site_key": site.site_key,
+                "container_path": tuple(site.container_path),
+                "pass_index": site.pass_index,
                 "helper": plan.display_name,
                 "execution_effect": _BIND_EXECUTION_EFFECT,
+                "replaced": replaced,
+                "in_place_op": in_place_op,
                 "timestamp": record.timestamp,
             }
         )
@@ -331,9 +371,18 @@ class _BindDispatchMode:
                     return out
                 if not _has_tensor(out, torch.Tensor):
                     return out
-                return _consider_op(session, plans, (layer_type, name, out))
+                in_place = _is_in_place_call(name, kwargs)
+                return _consider_op(session, plans, (layer_type, name, out), in_place=in_place)
 
         return _Mode()
+
+
+def _is_in_place_call(func_name: str, kwargs: dict[str, Any]) -> bool:
+    """Whether one intercepted torch call mutates its input storage in place."""
+
+    if kwargs.get("inplace") is True:
+        return True
+    return func_name.endswith("_") and not func_name.endswith("__")
 
 
 def _has_tensor(value: Any, tensor_type: type) -> bool:
@@ -373,6 +422,8 @@ def _consider_op(
     session: _BindSession,
     plans: list[_RulePlan],
     call: tuple[str, str, Any],
+    *,
+    in_place: bool = False,
 ) -> Any:
     """Evaluate + apply op-level rules against one executed torch call.
 
@@ -465,10 +516,14 @@ def _consider_op(
         hooked = _execute_hook(plan.hook_callable, out, hook_ctx)
         session.record_fire(
             plan,
-            target_label=raw_label,
-            site_key=site_key,
-            container_path=container_path,
-            pass_index=max(session.root_passes, 1),
+            _BindFireSite(
+                target_label=raw_label,
+                site_key=site_key,
+                container_path=container_path,
+                pass_index=max(session.root_passes, 1),
+            ),
+            replaced=hooked is not out,
+            in_place_op=in_place,
         )
         if hooked is not out:
             replacements[container_path] = hooked
@@ -579,6 +634,13 @@ class _ArmedRuntime:
                 session.module_pass_counts[address] += 1
                 if module_id == root_id:
                     session.root_passes += 1
+                if address == "":
+                    # The root module owns the pass count but is NOT a
+                    # containing module: the capture minter's module axis
+                    # holds submodule addresses only, so a root frame here
+                    # minted ``s1|/fc1|...`` against capture's ``s1|fc1|...``
+                    # for every submodule op (AUD-CODE 2.3d).
+                    return
                 session.module_stack.append(
                     ModuleStackFrame(
                         address=address,
@@ -664,10 +726,13 @@ def _make_boundary_hook(
             hooked = _execute_hook(plan.hook_callable, out, hook_ctx)
             session.record_fire(
                 plan,
-                target_label=f"{address}:{pass_index}",
-                site_key=address,
-                container_path=container_path,
-                pass_index=pass_index,
+                _BindFireSite(
+                    target_label=f"{address}:{pass_index}",
+                    site_key=address,
+                    container_path=container_path,
+                    pass_index=pass_index,
+                ),
+                replaced=hooked is not out,
             )
             if hooked is not out:
                 replacements[container_path] = hooked
@@ -682,8 +747,38 @@ def _make_boundary_hook(
     return _boundary
 
 
+def _module_aliases(model: Any, modules_by_address: dict[str, Any]) -> dict[str, str]:
+    """Map every alias address to the canonical name of the shared module.
+
+    ``named_modules()`` de-duplicates: a module object registered under two
+    attributes (``self.dec = self.enc``) is reported ONCE, under the first
+    name. The other spellings are aliases -- no hook can distinguish the two
+    call sites, so an anchor on an alias cannot resolve, and an anchor on
+    the canonical name fires at every call site (AUD-CODE 3.7d).
+    """
+
+    canonical_by_id = {id(module): address for address, module in modules_by_address.items()}
+    aliases: dict[str, str] = {}
+    for address, module in model.named_modules(remove_duplicate=False):
+        canonical = canonical_by_id.get(id(module))
+        if canonical is not None and canonical != address:
+            aliases[address] = canonical
+    return aliases
+
+
+def _alias_disclosure(aliases: dict[str, str]) -> dict[str, tuple[str, ...]]:
+    """Invert the alias map into canonical address -> alias spellings."""
+
+    disclosure: dict[str, list[str]] = {}
+    for alias, canonical in aliases.items():
+        disclosure.setdefault(canonical, []).append(alias)
+    return {canonical: tuple(names) for canonical, names in disclosure.items()}
+
+
 def _lower_rules(
-    spec: InterventionSpec, modules_by_address: dict[str, Any]
+    spec: InterventionSpec,
+    modules_by_address: dict[str, Any],
+    aliases: dict[str, str] | None = None,
 ) -> tuple[list[_RulePlan], list[_RulePlan], dict[str, tuple[str, ...]]]:
     """Lower every rule and resolve its static anchors before ANY forward.
 
@@ -696,6 +791,7 @@ def _lower_rules(
         ``bind_static_anchor_unresolved`` for stale module addresses.
     """
 
+    aliases = aliases or {}
     boundary_plans: list[_RulePlan] = []
     op_level_plans: list[_RulePlan] = []
     resolved: dict[str, tuple[str, ...]] = {}
@@ -707,6 +803,13 @@ def _lower_rules(
             bare = _bare_address(anchor)
             if bare in modules_by_address:
                 hits.append(bare)
+            elif bare in aliases:
+                unresolved.append(
+                    f"{rule.rule_id}: {anchor!r} is an alias of {aliases[bare]!r} (the same "
+                    "module object registered under both names; named_modules() reports "
+                    f"only {aliases[bare]!r}, and a rule anchored there fires at EVERY call "
+                    "site of the shared module)"
+                )
             else:
                 unresolved.append(f"{rule.rule_id}: {anchor!r}")
         if _rule_contains_module_boundary(rule):
@@ -731,7 +834,9 @@ def _lower_rules(
             f"any forward: {', '.join(unresolved)}",
             code="bind_static_anchor_unresolved",
             remedy="fix the module addresses to names in "
-            "model.named_modules(), or drop the stale rules from the spec",
+            "model.named_modules() (an alias spelling resolves to its canonical "
+            "name, which fires at every call site), or drop the stale rules "
+            "from the spec",
         )
     return boundary_plans, op_level_plans, resolved
 
@@ -888,7 +993,9 @@ class BoundInterventionExecutor:
             )
         modules_by_address = dict(model.named_modules())
         object.__setattr__(self, "_modules_by_address", modules_by_address)
-        boundary_plans, op_level_plans, resolved = _lower_rules(spec, modules_by_address)
+        aliases = _module_aliases(model, modules_by_address)
+        object.__setattr__(self, "_module_aliases", _alias_disclosure(aliases))
+        boundary_plans, op_level_plans, resolved = _lower_rules(spec, modules_by_address, aliases)
         object.__setattr__(self, "_boundary_plans", boundary_plans)
         object.__setattr__(self, "_op_level_plans", op_level_plans)
         object.__setattr__(self, "_resolved_static_targets", resolved)
@@ -991,6 +1098,7 @@ class BoundInterventionExecutor:
             fires=tuple(session.fires),
             fire_records=tuple(session.fire_records),
             zero_fire_rule_ids=zero_fire,
+            module_aliases=dict(self._module_aliases),
             error=error,
             cleanup=self._cleanup_verdict,
             duration_s=time.monotonic() - session.start,

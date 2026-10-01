@@ -17,6 +17,8 @@ from torch import nn
 import torchlens as tl
 from torchlens.visualization import lenses
 
+pytestmark = pytest.mark.smoke  # measured <0.5s per test (W051-GATE, AUD-CODE 0.1)
+
 
 @pytest.fixture(scope="module")
 def plain_log() -> Any:

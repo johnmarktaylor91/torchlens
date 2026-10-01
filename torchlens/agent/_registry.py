@@ -125,13 +125,18 @@ def _fit_token_budget(
     envelope: dict[str, Any],
     max_tokens: int,
     *,
-    row_key: str | None,
+    row_key: str | tuple[str, ...] | None,
 ) -> dict[str, Any]:
     """Enforce the response-token budget on one built envelope.
 
     Row caps applied FIRST by the handlers; this is the genuine backstop.
-    When the non-droppable floor alone exceeds the budget, the floor returns
-    with ``budget_floor_exceeded`` -- never a plausible fragment.
+    When rows are dropped on a PAGING tool the continuation struct is
+    re-minted from the trimmed row count, so the next page starts at the
+    first dropped row (AUD-CODE 2.7b: trimming after the handler minted
+    ``data.next`` left the omitted rows unreachable). When the non-droppable
+    floor alone exceeds the budget, the floor returns with
+    ``budget_floor_exceeded`` -- carrying the record's ``capture`` honesty
+    block when it has one, never a plausible fragment.
 
     Parameters
     ----------
@@ -140,7 +145,8 @@ def _fit_token_budget(
     max_tokens:
         Effective token budget.
     row_key:
-        Key inside ``data`` holding droppable rows (``None`` = nothing to drop).
+        Key (or candidate keys, first present list wins) inside ``data``
+        holding droppable rows (``None`` = nothing to drop).
 
     Returns
     -------
@@ -151,21 +157,36 @@ def _fit_token_budget(
     if _budgets.estimate_tokens(canonical_dumps(envelope)) <= max_tokens:
         return envelope
     data = envelope.get("data") or {}
-    rows = data.get(row_key) if row_key else None
+    key = _present_row_key(data, row_key)
+    rows = data.get(key) if key else None
     if isinstance(rows, list) and rows:
+        pages = "next" in data and isinstance(data.get("offset"), int)
         keep = len(rows)
         while keep > 0:
             keep = min(keep - 1, keep * 3 // 4)
             trial = dict(envelope)
             trial_data = dict(data)
-            trial_data[row_key] = rows[:keep]
+            trial_data[key] = rows[:keep]
+            if pages:
+                trial_data["next"] = _budgets.continuation_struct(
+                    offset=int(data["offset"]) + keep,
+                    artifact_id=str((envelope.get("artifact") or {}).get("id")),
+                    request=dict(envelope.get("request") or {}),
+                    schema=str(envelope.get("schema")),
+                )
             trial["data"] = trial_data
             omitted_total = (envelope.get("truncation") or {}).get("omitted", 0)
             trial["truncation"] = {
                 "included": keep,
                 "omitted": omitted_total + (len(rows) - keep),
                 "policy": "token budget backstop dropped trailing rows after the row cap",
-                "how_to_get_more": "raise max_tokens (within the ceiling) or page with the continuation struct",
+                "how_to_get_more": (
+                    "echo data.next as the continuation argument (the next page starts "
+                    "at the first dropped row), or raise max_tokens within the ceiling"
+                    if pages
+                    else "raise max_tokens (within the ceiling) or narrow the site set "
+                    "with labels=/query=; this tool does not page"
+                ),
             }
             if _budgets.estimate_tokens(canonical_dumps(trial)) <= max_tokens:
                 return trial
@@ -173,15 +194,38 @@ def _fit_token_budget(
     if _budgets.estimate_tokens(canonical_dumps(envelope)) <= max_tokens:
         return envelope
     floor = dict(envelope)
-    floor["data"] = {"budget_floor_exceeded": True}
+    floor_data: dict[str, Any] = {"budget_floor_exceeded": True}
+    if isinstance(data.get("capture"), dict):
+        floor_data["capture"] = data["capture"]
+    floor["data"] = floor_data
     floor["status"] = "budget_floor_exceeded"
     floor["truncation"] = {
         "included": 0,
         "omitted": -1,
         "policy": "the non-droppable floor alone exceeded max_tokens",
-        "how_to_get_more": "raise max_tokens; the floor carries only honesty facts",
+        "how_to_get_more": (
+            "raise max_tokens within the served ceiling"
+            + (
+                " or lower max_rows so a page fits"
+                if "max_rows" in (envelope.get("limits") or {})
+                else ""
+            )
+            + "; the floor carries only the capture honesty facts (when the record has them)"
+        ),
     }
     return floor
+
+
+def _present_row_key(data: dict[str, Any], row_key: str | tuple[str, ...] | None) -> str | None:
+    """Return the first candidate row key whose value is a list in ``data``."""
+
+    if row_key is None:
+        return None
+    candidates = (row_key,) if isinstance(row_key, str) else row_key
+    for candidate in candidates:
+        if isinstance(data.get(candidate), list):
+            return candidate
+    return None
 
 
 # --------------------------------------------------------------------------
@@ -281,8 +325,16 @@ def _handle_dump(args: dict[str, Any]) -> dict[str, Any]:
     )
     data["view"] = view
     data["load_plan"] = plan
+    if view != "overview":
+        # Every gateable record carries the honesty blocks (AUD-CODE 3.11a):
+        # the full view's own capture block is the same source, so setdefault.
+        from ._overview import honesty_blocks
+
+        blocks = honesty_blocks(log)
+        data.setdefault("capture", blocks["capture"])
+        data["audit"] = blocks["audit"]
     truncation = None
-    if view == "graph":
+    if view in ("graph", "full"):
         data["next"] = (
             _budgets.continuation_struct(
                 offset=offset + included,
@@ -310,22 +362,33 @@ def _handle_dump(args: dict[str, Any]) -> dict[str, Any]:
 
 
 def _handle_explain(args: dict[str, Any]) -> dict[str, Any]:
-    """Budgeted plain-language report."""
+    """Budgeted plain-language report.
+
+    ``max_tokens`` defaults to the tool's declared orientation budget (the
+    registry's ``default_limits``; AUD-CODE 4.8 -- the handler used to pass
+    ``None``, an unbudgeted report under a declared default). The record
+    carries the same ``capture``/``audit`` honesty blocks the overview
+    serves, so ``--fail-on unverified|incomplete|nonfinite`` READ them here
+    instead of being dead gates (AUD-CODE 3.11a).
+    """
 
     from ..report import explain
     from ._artifacts import load_trace
+    from ._overview import honesty_blocks
 
     log, plan, block = load_trace(args["path"])
+    max_tokens = args.get("max_tokens", _budgets.ORIENTATION_MAX_TOKENS)
     report = explain(
         log,
         audience=args.get("audience", "auto"),
-        max_tokens=args.get("max_tokens"),
+        max_tokens=max_tokens,
     )
     return build_envelope(
         schema="torchlens.agent.explain.v1",
-        data={"report": str(report), "load_plan": plan},
+        data={"report": str(report), "load_plan": plan, **honesty_blocks(log)},
         artifact=block,
         request=args,
+        limits={"max_tokens": max_tokens, "token_estimator": _budgets.TOKEN_ESTIMATOR},
     )
 
 
@@ -352,6 +415,7 @@ def _handle_query_sites(args: dict[str, Any]) -> dict[str, Any]:
     data = {
         "header": header,
         "rows": page,
+        "offset": offset,
         "handoff": handoff,
         "load_plan": plan,
         "next": (
@@ -404,6 +468,18 @@ def _handle_payload_stats(args: dict[str, Any]) -> dict[str, Any]:
         max_call_bytes=_budgets.MAX_CALL_BYTES,
     )
     unsaved = [row["label"] for row in rows if row.get("status") == "unsaved"]
+    warnings: list[str] = []
+    requested = args.get("labels")
+    if requested:
+        served = {row["label"] for row in rows} | {row["label"].rsplit(":", 1)[0] for row in rows}
+        unmatched = [str(label) for label in requested if str(label) not in served]
+        if unmatched:
+            # An unknown label used to vanish into ``status ok, rows=[]`` (AUD-CODE
+            # 4.8); name it so a typo never reads as "no data".
+            warnings.append(
+                f"labels not found in this artifact (no row served): {', '.join(unmatched)}; "
+                "discover spellings via torchlens_query_sites"
+            )
     handoff = (
         "tl.trace(model, x, save="
         + (
@@ -424,6 +500,7 @@ def _handle_payload_stats(args: dict[str, Any]) -> dict[str, Any]:
             "max_blob_bytes": _budgets.MAX_BLOB_BYTES,
             "max_call_bytes": _budgets.MAX_CALL_BYTES,
         },
+        warnings=warnings,
         truncation=_budgets.truncation_block(
             included=len(rows),
             omitted=max(0, header["population_total"] - len(rows)),
@@ -442,6 +519,17 @@ def _handle_compare(args: dict[str, Any]) -> dict[str, Any]:
     max_rows = _budgets.resolve_limit(
         args.get("max_rows"), _budgets.DEFAULT_MAX_ROWS, name="max_rows"
     )
+    tolerances = {"rtol": float(args.get("rtol", 1e-5)), "atol": float(args.get("atol", 1e-8))}
+    for name, value in tolerances.items():
+        if not (value >= 0) or value == float("inf"):  # NaN fails the >= comparison
+            # torch.allclose raises an untyped RuntimeError on a negative
+            # tolerance (AUD-CODE 4.8); refuse typed at the boundary instead.
+            raise InvalidArgumentError(
+                f"{name}={value!r} is not a finite non-negative tolerance",
+                code="agent_argument_invalid",
+                remedy=f"pass {name} >= 0 (allclose tolerances are magnitudes)",
+                tool="torchlens_compare",
+            )
     reference, _, ref_block = load_trace(args["reference"])
     subject, _, sub_block = load_trace(args["subject"])
     data = compare_traces(
@@ -449,14 +537,26 @@ def _handle_compare(args: dict[str, Any]) -> dict[str, Any]:
         subject,
         ref_block=ref_block,
         sub_block=sub_block,
-        rtol=float(args.get("rtol", 1e-5)),
-        atol=float(args.get("atol", 1e-8)),
+        rtol=tolerances["rtol"],
+        atol=tolerances["atol"],
         max_rows=max_rows,
     )
     data["handoff"] = (
         "ref = tl.load(reference); sub = tl.load(subject); "
         "sel = tl.changed(ref).resolve(sub)  # every element that moved"
     )
+    # Per-side honesty blocks so the CLI's --fail-on gates READ this record
+    # (AUD-CODE 3.11a): a diff over an unverified or NaN-poisoned side must
+    # be gateable without a second tool call.
+    from ._overview import honesty_blocks
+
+    reference_blocks = honesty_blocks(reference)
+    subject_blocks = honesty_blocks(subject)
+    data["capture"] = {
+        "reference": reference_blocks["capture"],
+        "subject": subject_blocks["capture"],
+    }
+    data["audit"] = {"reference": reference_blocks["audit"], "subject": subject_blocks["audit"]}
     envelope = build_envelope(
         schema=COMPARE_SCHEMA,
         data=data,
@@ -612,8 +712,9 @@ def tool_specs() -> tuple[AgentToolSpec, ...]:
                 "Structural dump views over a saved Trace. view=overview is "
                 "the folded orientation; view=graph pages execution-ordered "
                 "op rows with edges (class_id= drills into one fold class); "
-                "view=full is every agent-safe structural block. Payload "
-                "values are never inlined."
+                "view=full is every agent-safe structural block with its op "
+                "rows paged the same way (echo data.next). Payload values are "
+                "never inlined."
             ),
             input_schema={
                 "type": "object",
@@ -625,6 +726,7 @@ def tool_specs() -> tuple[AgentToolSpec, ...]:
                         "type": "string",
                         "description": "Fold-class filter (graph view).",
                     },
+                    "max_tokens": _max_tokens_property(_budgets.ROW_TOOL_MAX_TOKENS),
                     "continuation": _continuation_property(),
                 },
                 "required": ["path"],
@@ -653,7 +755,11 @@ def tool_specs() -> tuple[AgentToolSpec, ...]:
                     "max_tokens": {
                         "type": "integer",
                         "minimum": 1,
-                        "description": "Token budget (~4 chars/token).",
+                        "description": (
+                            "Report token budget (~4 chars/token); default "
+                            f"{_budgets.ORIENTATION_MAX_TOKENS}. Whole sections drop "
+                            "low-value-first; the capture-status floor never drops."
+                        ),
                     },
                     "audience": {"type": "string", "enum": ["researcher", "practitioner", "auto"]},
                 },
@@ -796,8 +902,8 @@ def tool_specs() -> tuple[AgentToolSpec, ...]:
 
 
 #: Row keys per tool for the token-budget backstop (droppable rows).
-_ROW_KEYS: dict[str, str] = {
-    "torchlens_dump": "rows",
+_ROW_KEYS: dict[str, str | tuple[str, ...]] = {
+    "torchlens_dump": ("rows", "ops"),
     "torchlens_query_sites": "rows",
     "torchlens_payload_stats": "rows",
     "torchlens_compare": "rows",

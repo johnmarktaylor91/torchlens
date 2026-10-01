@@ -99,8 +99,10 @@ def test_shared_plan_identity_shares_one_donor_group() -> None:
     assert plan_a.donor_group_id == plan_b.donor_group_id
     # ... while the batch normalizer keeps D8's other half: distinct plan
     # OBJECTS inside ONE transaction never share a donor group, even with
-    # identical visible arguments -- the second object gets a deterministic
-    # clause-order suffix, so a rerun of this batch reproduces it too.
+    # identical visible arguments -- each colliding per_group object gets a
+    # suffix derived from its OWN clause selections (never the clause
+    # ordinal, which made the draw depend on clause order -- AUD-CODE 2.2),
+    # so a rerun of this batch in any clause order reproduces it.
     fork_two = log.fork()
     fork_two.do(
         [
@@ -111,8 +113,16 @@ def test_shared_plan_identity_shares_one_donor_group() -> None:
     two_plan_records = sampling_records(fork_two)[-2:]
     group_ids = {row["donor_group_id"] for row in two_plan_records}
     assert len(group_ids) == 2, "kwargs coincidence never shares a donor group"
-    assert plan_a.donor_group_id in group_ids
-    assert f"{plan_b.donor_group_id}#1" in group_ids
+    assert all(gid.startswith(f"{plan_a.donor_group_id}#") for gid in group_ids)
+    fork_three = log.fork()
+    fork_three.do(
+        [
+            (log["relu_2_4"].__selection__(), tl.patch_from(plan_b)),
+            (log["relu_1_2"].__selection__(), tl.patch_from(plan_a)),
+        ]
+    )
+    reversed_ids = {row["donor_group_id"] for row in sampling_records(fork_three)[-2:]}
+    assert reversed_ids == group_ids, "clause order never moves a donor group"
 
 
 @pytest.mark.smoke

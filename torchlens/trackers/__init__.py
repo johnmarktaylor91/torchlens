@@ -32,7 +32,14 @@ own receivers -- TorchLens owns the engine, they own the sink.
 
 from __future__ import annotations
 
-from ._amp import SCALE_EVIDENCE, correct_histogram, correct_spine, observed_grad_scale
+from ._amp import (
+    SCALE_EVIDENCE,
+    correct_histogram,
+    correct_spine,
+    corrected_gradient_block,
+    observed_grad_scale,
+    unscale_stage,
+)
 from ._callbacks import HFTrainerWatchCallback, LightningWatchCallback, derived_cadence
 from ._errors import (
     SinkDeliveryError,
@@ -128,6 +135,7 @@ __all__ = [
     "build_manifest",
     "correct_histogram",
     "correct_spine",
+    "corrected_gradient_block",
     "derived_cadence",
     "detect_relays",
     "emission_from_block",
@@ -137,5 +145,6 @@ __all__ = [
     "observed_grad_scale",
     "require_capabilities",
     "spine_scalars",
+    "unscale_stage",
     "watch",
 ]

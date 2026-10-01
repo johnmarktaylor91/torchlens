@@ -330,7 +330,12 @@ def test_unrunnable_nonfinite_check_warns_instead_of_reading_as_clean(monkeypatc
         """Model producing several bfloat16 activations."""
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Cast through bfloat16 twice.
+            """Cast through bfloat16 with a real NaN in the activation.
+
+            The two-stage check (snoop D4) screens every tensor through a
+            float32 accumulator, so a kernel-less dtype only reaches its own
+            ``isfinite`` call on a TRIPPED screen -- the NaN makes the screen
+            trip and the exact stage-2 check hit the refusing kernel.
 
             Parameters
             ----------
@@ -343,8 +348,12 @@ def test_unrunnable_nonfinite_check_warns_instead_of_reading_as_clean(monkeypatc
                 float32 output.
             """
 
-            reduced = x.to(torch.bfloat16)
-            return (reduced + 1).to(torch.float32)
+            reduced = (x.abs() + 1).to(torch.bfloat16) / 0.0
+            # clamp() maps the +inf back to a finite value so the only
+            # nonfinite activation on the forward is the bfloat16 one --
+            # every float32 op stays finite and the real raise_on_nan abort
+            # never fires.
+            return reduced.clamp(-1.0, 1.0).to(torch.float32)
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")

@@ -360,8 +360,13 @@ def _stage_param_entry(
             "across its consumers; the current value is ambiguous.",
             param_address=param_address,
         )
+    staged = _existing_param_substitution(occurrences_by_op, param_address)
     with torch.no_grad():
-        consumed = first_value.detach().clone()
+        # Edits COMPOSE like replay hooks (AUD-CODE 4.10): a second
+        # ``do(tl.params(p), scale(0.5))`` derives from the value the
+        # consumers currently see (the staged "as if" value), so it yields a
+        # quarter, never a fresh half computed from the untouched live param.
+        consumed = (staged if staged is not None else first_value).detach().clone()
     substituted, helper_spec, helper_name = _substituted_value(
         entry, edit, resolve_digest, consumed, param_address
     )
@@ -400,6 +405,37 @@ def _stage_param_entry(
             "occurrences": param_occurrences,
         }
     )
+
+
+def _existing_param_substitution(
+    occurrences_by_op: list[tuple[Any, str, list[tuple[str, tuple[Any, ...], torch.Tensor]]]],
+    param_address: str,
+) -> torch.Tensor | None:
+    """Return the value an earlier param edit already staged for this parameter.
+
+    Every consumption of one parameter is staged with ONE substituted tensor,
+    so the first param-kind tier-(ii) entry addressed to ``param_address`` is
+    the current "as if" value. ``None`` when no consumer carries one.
+    """
+
+    for child_op, _consumer_label, occurrences in occurrences_by_op:
+        entries = getattr(child_op, "edge_substitutions", None) or {}
+        for arg_kind, arg_path, _matched in occurrences:
+            value = _staged_param_value(entries.get((arg_kind, tuple(arg_path))), param_address)
+            if value is not None:
+                return value
+    return None
+
+
+def _staged_param_value(payload: Any, param_address: str) -> torch.Tensor | None:
+    """Return the tensor of one param-kind store entry for ``param_address``, else None."""
+
+    if not isinstance(payload, dict) or payload.get("substitution_kind") != "param":
+        return None
+    if payload.get("parent_label") != param_address:
+        return None
+    value = payload.get("value")
+    return value if isinstance(value, torch.Tensor) else None
 
 
 def _derive_entry_occurrences(

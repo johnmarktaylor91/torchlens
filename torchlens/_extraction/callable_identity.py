@@ -46,6 +46,7 @@ import torch
 from torch import nn
 
 from .._errors import InvalidArgumentError
+from .dtype_policy import tensor_payload_bytes
 
 __tl_layer__ = "L5"
 
@@ -60,8 +61,12 @@ __all__ = [
 #: Pinned algorithm id recorded beside every callable-identity digest.
 CALLABLE_IDENTITY_ALGORITHM_ID = "tl_callable_identity_blake2b"
 
-#: Pinned encoding version of the digest fold.
-CALLABLE_IDENTITY_ALGORITHM_VERSION = 1
+#: Pinned encoding version of the digest fold. v2 folds nested code objects
+#: structurally (v1 repr'd ``co_consts``, which embedded a process address for
+#: every nested code object -- audit 2.10c); v1 and v2 digests are
+#: INCOMPARABLE, which the resume rules disclose instead of reading as a
+#: behavior change.
+CALLABLE_IDENTITY_ALGORITHM_VERSION = 2
 
 #: Launch pure-module allowlist: stdlib-pure namespaces plus torch + numpy —
 #: exactly the tested set (extract D8) — plus torchlens itself (the
@@ -254,7 +259,7 @@ def _fold_leaf(fold: _Fold, value: Any, path: str) -> bool:
             fold.demote(path, "meta_tensor")
             return True
         fold.feed("tensor", f"{tuple(detached.shape)}|{detached.dtype}")
-        fold.feed("tensor_bytes", detached.cpu().contiguous().reshape(-1).numpy().tobytes())
+        fold.feed("tensor_bytes", tensor_payload_bytes(detached))
         return True
     if type(value).__module__ == "numpy" and hasattr(value, "tobytes"):
         fold.feed("ndarray", f"{getattr(value, 'shape', None)}|{getattr(value, 'dtype', None)}")
@@ -542,6 +547,48 @@ def _loaded_global_names(code: types.CodeType) -> list[str]:
     return seen
 
 
+def _fold_code_object(fold: _Fold, code: types.CodeType) -> None:
+    """Fold one code object's process-stable facts, recursing into nested code.
+
+    ``repr(code.co_consts)`` was folded historically; a nested code object
+    (generator expression, nested lambda, comprehension on Python < 3.12)
+    reprs as ``<code object <genexpr> at 0x7f...>`` -- an ADDRESS -- so the
+    digest changed on every process and every resume with such a transform
+    refused ``extraction_resume_callable_mismatch`` (audit 2.10c). Nested
+    code objects fold structurally instead; only address-free consts repr.
+
+    Parameters
+    ----------
+    fold:
+        The active fold.
+    code:
+        The code object.
+    """
+
+    fold.feed("co_code", code.co_code)
+    fold.feed(
+        "co_facts",
+        repr(
+            (
+                code.co_names,
+                code.co_varnames,
+                code.co_freevars,
+                code.co_cellvars,
+                code.co_argcount,
+                code.co_kwonlyargcount,
+                code.co_flags,
+            )
+        ),
+    )
+    fold.feed("co_consts_len", str(len(code.co_consts)))
+    for const in code.co_consts:
+        if isinstance(const, types.CodeType):
+            fold.feed("nested_code", const.co_name)
+            _fold_code_object(fold, const)
+        else:
+            fold.feed("const", repr(const))
+
+
 def _fold_code(fold: _Fold, fn: types.FunctionType, path: str, depth: int) -> None:
     """Fold one Python function: code facts, defaults, cells, loaded globals.
 
@@ -565,20 +612,7 @@ def _fold_code(fold: _Fold, fn: types.FunctionType, path: str, depth: int) -> No
         return
     fold._fn_memo[marker] = len(fold._fn_memo)
     code = fn.__code__
-    fold.feed("co_code", code.co_code)
-    fold.feed(
-        "co_facts",
-        repr(
-            (
-                code.co_names,
-                code.co_varnames,
-                code.co_argcount,
-                code.co_kwonlyargcount,
-                code.co_flags,
-                code.co_consts,
-            )
-        ),
-    )
+    _fold_code_object(fold, code)
     for index, default in enumerate(fn.__defaults__ or ()):
         _fold_value(fold, default, f"{path}.__defaults__[{index}]", depth)
     for name, default in sorted((fn.__kwdefaults__ or {}).items()):

@@ -259,6 +259,11 @@ def scrub_for_save(
     else:
         scrubbed_state["_io_module_accessor_state"] = None
     _stamp_replacement_evidence(trace, scrubbed_state)
+    # AUD-CODE 3.11g: annotation tensors become plain detached tensors on the
+    # scrubbed copy (the live trace keeps its session-time objects).
+    from ._portability_preflight import sanitize_state_annotations
+
+    sanitize_state_annotations(scrubbed_state)
     _scrub_nondeterministic_identities(scrubbed_state)
     detach_conditional_trace_backrefs(scrubbed_state)
     return scrubbed_state, blob_specs, options.unsupported_tensor_records

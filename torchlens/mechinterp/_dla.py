@@ -26,6 +26,7 @@ Spellings DOCUMENTED-UNSTABLE pending the naming session.
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import torch
@@ -170,6 +171,30 @@ def _map_positions(
     return tuple(residual_positions), tuple(logits_rows)
 
 
+def _position_coordinates(
+    anchor: LMHeadAnchor, residual: torch.Tensor, positions: Any
+) -> tuple[torch.Tensor, tuple[int, ...], tuple[int, ...]]:
+    """Resolve the requested positions against BOTH tensors they index (D9).
+
+    Returns the captured logits, the residual-stream rows, and the matching
+    logits rows -- translated through the recipe's ``logits_position_map``
+    when the ``logits_to_keep`` slice is active, refused when unmappable.
+    """
+
+    view = anchor.facets()
+    logits = view["logits"].value
+    try:
+        position_map = view["logits_position_map"]
+    except KeyError:
+        position_map = None
+    residual_len = int(residual.shape[1])
+    logits_len = int(logits.shape[-2]) if logits.dim() >= 2 else 1
+    residual_positions, logits_rows = _map_positions(
+        positions, residual_len, logits_len, position_map
+    )
+    return logits, residual_positions, logits_rows
+
+
 def _as_token_tuple(tokens: Any, vocab: int, argname: str) -> tuple[int, ...]:
     """Normalize a token spec to a tuple of in-vocab ids."""
 
@@ -227,19 +252,14 @@ def direct_logit_contributions(
     norm = anchor.norm_reconstruction()
     w_u, unembed_bias = _math_unembed(anchor)
     answer_ids, vs_ids, directions = _token_directions_for(w_u, answer, vs)
-    folded = norm.folded_directions(directions)  # [d_model, n_dirs]
+    # The identity budget is CANCELLATION-AWARE per element: rows, constant
+    # and native are also projected on the UN-differenced answer / vs
+    # directions so the |addend| basis never shrinks to a small logit DIFF
+    # whose rounding is inherited from two ~100-logit operands.
+    direction_terms = _direction_terms(w_u, answer_ids, vs_ids)  # (ans,) or (ans, vs)
+    folded_terms = tuple(norm.folded_directions(term) for term in direction_terms)
 
-    logits = anchor.facets()["logits"].value
-    view = anchor.facets()
-    try:
-        position_map = view["logits_position_map"]
-    except KeyError:
-        position_map = None
-    residual_len = int(norm.input.shape[1])
-    logits_len = int(logits.shape[-2]) if logits.dim() >= 2 else 1
-    residual_positions, logits_rows = _map_positions(
-        positions, residual_len, logits_len, position_map
-    )
+    logits, residual_positions, logits_rows = _position_coordinates(anchor, norm.input, positions)
     pos_index = torch.as_tensor(residual_positions, dtype=torch.long)
     scale = norm.scale.index_select(1, pos_index)  # [b, n_pos, 1]
 
@@ -250,49 +270,68 @@ def direct_logit_contributions(
         and torch.equal(target_value.detach(), norm.input.detach())
     )
 
-    def _project(value: torch.Tensor) -> torch.Tensor:
-        """Push one component through the frozen linearization + directions."""
+    def _project_terms(value: torch.Tensor) -> tuple[torch.Tensor, ...]:
+        """Push one component through the frozen linearization, per direction term."""
 
         if tuple(value.shape) != tuple(norm.input.shape):
             value = value.expand(norm.input.shape)
         selected = value.index_select(1, pos_index).to(torch.float32)
         if norm.centered:
             selected = selected - selected.mean(dim=-1, keepdim=True)
-        return (selected / scale) @ folded  # [b, n_pos, n_dirs]
+        normalized = selected / scale
+        return tuple(normalized @ folded for folded in folded_terms)  # each [b, n_pos, n_dirs]
 
     rows = []
     coordinates = []
+    magnitude = torch.zeros(
+        (norm.input.shape[0], len(residual_positions), folded_terms[0].shape[1]),
+        dtype=torch.float32,
+    )
     for row in components.rows:
-        rows.append(_project(row.value))
+        terms = _project_terms(row.value)
+        rows.append(_difference(terms))
+        magnitude = magnitude + _addend_magnitude(terms)
         coordinates.append(row.coordinate)
 
-    shape = (norm.input.shape[0], len(residual_positions), folded.shape[1])
+    shape = (int(magnitude.shape[0]), int(magnitude.shape[1]), int(magnitude.shape[2]))
     if full_stack:
         constant = _constant_row(shape, norm, directions, unembed_bias, answer_ids, vs_ids)
         native = _native_logits(logits, logits_rows, answer_ids, vs_ids)
+        magnitude = (
+            magnitude
+            + _constant_row(shape, norm, direction_terms[0], unembed_bias, answer_ids, None).abs()
+        )
+        magnitude = magnitude + _native_logits(logits, logits_rows, answer_ids, None).abs()
+        if vs_ids is not None:
+            magnitude = (
+                magnitude
+                + _constant_row(shape, norm, direction_terms[1], unembed_bias, vs_ids, None).abs()
+            )
+            magnitude = magnitude + _native_logits(logits, logits_rows, vs_ids, None).abs()
     else:
         # Partial stack (e.g. head contributions): the exactness claim is
         # LINEARITY -- rows must sum to the projection of the stack's own
         # target region; the full-logit constant row does not belong here.
         constant = torch.zeros(shape, dtype=torch.float32)
         assert target_value is not None  # noqa: S101 -- proven by _require_admissible
-        native = _project(target_value)
+        target_terms = _project_terms(target_value)
+        native = _difference(target_terms)
+        magnitude = magnitude + _addend_magnitude(target_terms)
 
     values = torch.stack(rows)  # [n_rows, b, n_pos, n_dirs]
     reconstructed = values.sum(dim=0) + constant
-    residual = float((reconstructed - native).detach().abs().max())
-    tolerance = _identity_tolerance(values)
-    if residual > tolerance:
-        refuse(
-            code="mi_dla_identity_failed",
-            message=f"sum(rows) + constant misses the captured native logits by {residual:.3e} "
-            f"(tolerance {tolerance:.3e}). A wrong norm fold costs 8.7-120 logits while "
-            "still ranking components plausibly; this table is refused, not served.",
-            remedy="this is a kit or capture defect, not a user error: report it with "
-            "tl.compat.report(model, x)",
-            max_abs_residual=residual,
-            tolerance=tolerance,
-        )
+    receipt = _check_identity(
+        reconstructed,
+        native,
+        magnitude,
+        n_addends=len(rows) + 2,
+        eps=_identity_eps(logits, norm.input),
+    )
+    receipt["check"] = (
+        "sum_rows_plus_constant_vs_native"
+        if full_stack
+        else "sum_rows_vs_projected_target (partial stack)"
+    )
 
     return ContributionScores(
         tuple(coordinates),
@@ -302,14 +341,7 @@ def direct_logit_contributions(
         answer_tokens=answer_ids,
         vs_tokens=vs_ids,
         positions=tuple(residual_positions),
-        identity_receipt={
-            "check": "sum_rows_plus_constant_vs_native"
-            if full_stack
-            else "sum_rows_vs_projected_target (partial stack)",
-            "result": "verified",
-            "max_abs_residual": residual,
-            "tolerance": tolerance,
-        },
+        identity_receipt=receipt,
     )
 
 
@@ -406,18 +438,124 @@ def _native_logits(
     return native
 
 
-def _identity_tolerance(values: torch.Tensor) -> float:
-    """Return the DLA identity tolerance (the measured ~1.5e-05 class).
+def _direction_terms(
+    w_u: torch.Tensor, answer_ids: tuple[int, ...], vs_ids: tuple[int, ...] | None
+) -> tuple[torch.Tensor, ...]:
+    """Return the UN-differenced raw direction matrices: ``(answer,)`` or ``(answer, vs)``."""
+
+    terms = [w_u.index_select(1, torch.as_tensor(answer_ids, dtype=torch.long))]
+    if vs_ids is not None:
+        terms.append(w_u.index_select(1, torch.as_tensor(vs_ids, dtype=torch.long)))
+    return tuple(terms)
+
+
+def _difference(terms: tuple[torch.Tensor, ...]) -> torch.Tensor:
+    """Fold projected direction terms into the served value (``answer - vs``)."""
+
+    return terms[0] - terms[1] if len(terms) == 2 else terms[0]
+
+
+def _addend_magnitude(terms: tuple[torch.Tensor, ...]) -> torch.Tensor:
+    """The cancellation-aware |addend| basis of one projected component."""
+
+    magnitude = terms[0].abs()
+    for term in terms[1:]:
+        magnitude = magnitude + term.abs()
+    return magnitude
+
+
+#: Identity-budget ULP headroom over the pairwise-summation depth term. The
+#: kit's re-association error measured <= 1.6 x eps x |addend| basis per
+#: element on gpt2 (layer- and head-grain, full and partial stacks, batch
+#: 1-2); 4x the depth-weighted model leaves ~15-25x margin per element while
+#: staying ~10x under the former global scalar (AUD-CODE 4.6).
+IDENTITY_BUDGET_HEADROOM: float = 4.0
+
+#: Wire name of the budget model, disclosed in every identity receipt.
+IDENTITY_BUDGET_MODEL: str = "per_element_cancellation_aware_v2"
+
+
+def _identity_eps(*tensors: torch.Tensor) -> float:
+    """Return the machine epsilon of the coarsest floating dtype in the chain.
+
+    Rows are projected in float32, so float32 eps is the floor; a
+    half-precision native logit or norm input widens the budget to ITS eps
+    (the model's own rounding is part of the identity being checked).
+    """
+
+    eps = float(torch.finfo(torch.float32).eps)
+    for tensor in tensors:
+        if tensor.dtype.is_floating_point:
+            eps = max(eps, float(torch.finfo(tensor.dtype).eps))
+    return eps
+
+
+def _identity_budget(magnitude: torch.Tensor, *, n_addends: int, eps: float) -> torch.Tensor:
+    """Return the PER-ELEMENT identity budget for the DLA re-association error.
 
     The DLA path genuinely re-associates (per-component contractions summed
     in a different order than the model's matmul), so the gate cannot be
-    bitwise. The budget is the cancellation-aware model: accumulated |addend|
-    magnitude times reduction-depth ULP headroom.
+    bitwise. The budget is the cancellation-aware model evaluated at EVERY
+    element: that element's accumulated |addend| magnitude (un-differenced
+    rows + constant + native) times the pairwise-summation depth term times
+    ULP headroom. A global scalar taken at the largest-magnitude element
+    (the former model) handed low-magnitude elements a budget ~300x their
+    observed residual and let a wrong small row hide under it.
     """
 
-    magnitude = float(values.detach().abs().sum(dim=0).max()) + 1.0
-    n_addends = max(2, values.shape[0] * 8)
-    eps = float(torch.finfo(torch.float32).eps)
-    import math
+    depth = 1.0 + math.log2(max(2, n_addends))
+    return IDENTITY_BUDGET_HEADROOM * depth * eps * (magnitude.detach().to(torch.float32) + eps)
 
-    return 16.0 * (1.0 + math.log2(n_addends)) * eps * magnitude
+
+def _unravel(flat_index: int, shape: tuple[int, ...]) -> tuple[int, ...]:
+    """Row-major flat index -> coordinate (pure Python; no numpy dependency)."""
+
+    coordinate: list[int] = []
+    for extent in reversed(shape):
+        flat_index, axis_index = divmod(flat_index, max(1, extent))
+        coordinate.append(axis_index)
+    return tuple(reversed(coordinate))
+
+
+def _check_identity(
+    reconstructed: torch.Tensor,
+    native: torch.Tensor,
+    magnitude: torch.Tensor,
+    *,
+    n_addends: int,
+    eps: float,
+) -> dict[str, Any]:
+    """Gate the identity element-wise; return the receipt or refuse typed."""
+
+    budget = _identity_budget(magnitude, n_addends=n_addends, eps=eps)
+    residual = (reconstructed.detach().to(torch.float32) - native.detach().to(torch.float32)).abs()
+    fraction = residual / budget
+    worst = int(fraction.argmax())
+    worst_residual = float(residual.flatten()[worst])
+    worst_budget = float(budget.flatten()[worst])
+    receipt: dict[str, Any] = {
+        "result": "verified",
+        "max_abs_residual": float(residual.max()),
+        "tolerance": worst_budget,
+        "max_budget_fraction": float(fraction.flatten()[worst]),
+        "budget_model": IDENTITY_BUDGET_MODEL,
+        "budget_eps": eps,
+        "n_addends": int(n_addends),
+    }
+    if worst_residual > worst_budget:
+        coordinate = _unravel(worst, tuple(residual.shape))
+        refuse(
+            code="mi_dla_identity_failed",
+            message=f"sum(rows) + constant misses the captured native logits by "
+            f"{worst_residual:.3e} at element {coordinate} (per-element budget "
+            f"{worst_budget:.3e}; max |residual| {receipt['max_abs_residual']:.3e}). A wrong "
+            "norm fold costs 8.7-120 logits while still ranking components plausibly; "
+            "this table is refused, not served.",
+            remedy="this is a kit or capture defect, not a user error: report it with "
+            "tl.compat.report(model, x)",
+            max_abs_residual=receipt["max_abs_residual"],
+            tolerance=worst_budget,
+            worst_element=coordinate,
+            budget_model=IDENTITY_BUDGET_MODEL,
+        )
+    return receipt

@@ -97,9 +97,9 @@ def test_declared_extra_probes_track_packaging_metadata() -> None:
 
     assert set(probes) == expected
     assert requirement_extras <= set(probes)
-    assert {"jax", "mlx", "paddle", "profiler", "sae", "tensorflow", "tf", "tinygrad"} <= set(
-        probes
-    )
+    # the no-op [profiler] extra is gone (A12: the empty-extra class is closed), so
+    # it is no longer a probe; the test_packaging_docs_a12 lockstep pins its absence.
+    assert {"jax", "mlx", "paddle", "sae", "tensorflow", "tf", "tinygrad"} <= set(probes)
 
 
 def test_capability_row_optional_absences_do_not_warn(monkeypatch: pytest.MonkeyPatch) -> None:

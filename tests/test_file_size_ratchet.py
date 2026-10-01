@@ -150,7 +150,17 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # stage-1 save-entry refusal slot (+7: comment, lazy import, call) now
     # rides the tip's debloated bundle (union measures 4600) -- the lane's
     # 4660 raise is unnecessary and the ceiling burns back down.
-    "torchlens/_io/bundle.py": 4650,
+    # 4650 -> 4700 (2026-09-02 W051-IO / T102 lint-size settle): the save
+    # path gains the write/read-symmetry portability preflight (the canonical
+    # metadata.pkl bytes dry-run through the loader's default-deny unpickler
+    # before anything is written) and the load path the manifest anchors
+    # (stamp / n_layers checked against the pickled root state, AUD-CODE
+    # 3.0b). Both bodies live in their own modules (_portability_preflight,
+    # _artifact_anchors); bundle.py carries only the two call seams and the
+    # persisted-row-count disclosure (+27 measured at settle). Conscious
+    # raise, F41 precedent; PRE-SPRINT BASELINE 4450 and the debloat target
+    # are unchanged.
+    "torchlens/_io/bundle.py": 4700,
     "torchlens/_io/runnable_load.py": 3850,
     # 4200 -> 4050: the wave-0 governance sweep extracted the structure-only
     # Layer-0 entry contract to capture/_structure_only_entry.py; re-keyed
@@ -237,8 +247,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 4290/4350 (2026-08-30 F43 re-reconcile vs T85): duplicate-key collapse --
     # the landed T85 mass (F01-AMENDED log_injections + F28 echo, 4328 alone)
     # unions with the F43-side threading to 4330 on the merged tree; the
-    # landed 4350 ceiling already clears the union and stays.
-    "torchlens/user_funcs.py": 4350,
+    # W051 capture-door event fix (record the lowered module-intervene spec
+    # so the injected-op rule anchor has a witness) lands the union at 4351.
+    "torchlens/user_funcs.py": 4360,
     "torchlens/backends/torch/backward.py": 4450,
     # 3800 -> 3850: L1 adds the grouping knob mirror + grouping_policy stamp
     # settlement (~25 lines) on top of the re-stepped feature-sprint baseline.
@@ -502,7 +513,17 @@ _TEST_FILE_CEILINGS: dict[str, int] = {
     "tests/test_backward.py": 2550,
     "tests/validation_goldens/test_validation_exemption_hardening.py": 2400,
     "tests/test_conditional_branches.py": 2150,
-    "tests/test_tlspec_runnable_r41_crossthread_witness.py": 2050,
+    # 2050 -> 2100 (2026-09-01 W051-FLAKE): the held-ref recipe registry gained the
+    # Python / legacy-NumPy GLOBAL-engine state rows (getstate/setstate/seed, W051
+    # 2.17) plus the numpy>=2 profile-silent skip -- the c_call receiver half of the
+    # lane's foreign-thread join coverage, whose thread-routing pins live in
+    # tests/test_w051_nondeterminism_foreign_join.py. The rows are entries in the ONE
+    # registry table the parametrized held-ref test consumes, so a split would sever
+    # the table from its recipe type; next 50-line step above the measured 2088.
+    # T105: +16 lines splitting the held-ref sweep into two alternating-half
+    # families for the smoke duration budget (2s isolated, boundary-flaky
+    # in-session at 76 cells); next 50-line step above the measured 2104.
+    "tests/test_tlspec_runnable_r41_crossthread_witness.py": 2150,
 }
 
 

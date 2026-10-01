@@ -29,3 +29,67 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 9fb0dac87004c577c24a6803dd6faf0c89067069 (dirty)
 recorded: 2026-08-17T10:55:36.417723+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (public_accessors_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: D04 integration closure: tlspec v9/C07X entry-dark slots grew the field orders (Op: episode_step, injection_provenance, tl_authored_root; Trace: root_entry_point, source_snapshots, structure_evidence) -- purely additive coordinated schema change the goldens predate
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 88d59b16cdbda283f83de8238629fd8d059d12a3 (dirty)
+recorded: 2026-09-01T07:11:38.722437+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (default_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: D04 integration closure: tlspec v9/C07X entry-dark slots grew the field orders (Op: episode_step, injection_provenance, tl_authored_root; Trace: root_entry_point, source_snapshots, structure_evidence) -- purely additive coordinated schema change the goldens predate
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 88d59b16cdbda283f83de8238629fd8d059d12a3 (dirty)
+recorded: 2026-09-01T07:11:38.808616+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (backward_ready_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: D04 integration closure: tlspec v9/C07X entry-dark slots grew the field orders (Op: episode_step, injection_provenance, tl_authored_root; Trace: root_entry_point, source_snapshots, structure_evidence) -- purely additive coordinated schema change the goldens predate
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 88d59b16cdbda283f83de8238629fd8d059d12a3 (dirty)
+recorded: 2026-09-01T07:11:38.878674+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (field_order_dataframe_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: D04 integration closure: tlspec v9/C07X entry-dark slots grew the field orders (Op: episode_step, injection_provenance, tl_authored_root; Trace: root_entry_point, source_snapshots, structure_evidence) -- purely additive coordinated schema change the goldens predate
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 88d59b16cdbda283f83de8238629fd8d059d12a3 (dirty)
+recorded: 2026-09-01T07:11:39.263757+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_roundtrip_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: D04 integration closure: tlspec v9/C07X entry-dark slots grew the field orders (Op: episode_step, injection_provenance, tl_authored_root; Trace: root_entry_point, source_snapshots, structure_evidence) -- purely additive coordinated schema change the goldens predate
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 88d59b16cdbda283f83de8238629fd8d059d12a3 (dirty)
+recorded: 2026-09-01T07:11:39.555490+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: D04 integration closure: tlspec v9/C07X entry-dark slots grew the field orders (Op: episode_step, injection_provenance, tl_authored_root; Trace: root_entry_point, source_snapshots, structure_evidence) -- purely additive coordinated schema change the goldens predate
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 88d59b16cdbda283f83de8238629fd8d059d12a3 (dirty)
+recorded: 2026-09-01T07:11:39.576358+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (selective_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: D04 integration closure: tlspec v9/C07X entry-dark slots grew the field orders (Op: episode_step, injection_provenance, tl_authored_root; Trace: root_entry_point, source_snapshots, structure_evidence) -- purely additive coordinated schema change the goldens predate
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 88d59b16cdbda283f83de8238629fd8d059d12a3 (dirty)
+recorded: 2026-09-01T07:11:39.666923+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: D04 integration closure: tlspec v9/C07X entry-dark slots grew the field orders (Op: episode_step, injection_provenance, tl_authored_root; Trace: root_entry_point, source_snapshots, structure_evidence) -- purely additive coordinated schema change the goldens predate
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 88d59b16cdbda283f83de8238629fd8d059d12a3 (dirty)
+recorded: 2026-09-01T07:11:39.814192+00:00

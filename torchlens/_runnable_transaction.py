@@ -16,6 +16,7 @@ from ._runnable_state import (
     runnable_tensor_byte_digest,
 )
 from .errors import (
+    PathDivergenceError,
     RunCapabilityUnavailableError,
     RuntimeSignatureDriftError,
 )
@@ -55,6 +56,7 @@ if TYPE_CHECKING:
         _contract_check,
         _control_witness_source_slot_ids,
         _declared_nondeterministic_sources,
+        _diagnose_live_output,
         _execute_sparse_call,
         _finalize_provider_run,
         _first_failed_live_input_check,
@@ -72,7 +74,6 @@ if TYPE_CHECKING:
         _raise_failed_contract_as_divergence,
         _raise_numeric_attestation_failure,
         _raw_activation_slot_ids,
-        _reconstruct_live_output,
         _reconstruct_output,
         _run_fork_name,
         _seed_run_generators,
@@ -763,7 +764,7 @@ def _attempt_live_forward(
     inputs_pair: tuple[Any, Any],
     until_plan: _RunUntilPlan | None,
     ctx: _LiveFinalizeContext,
-) -> None:
+) -> tuple[ContractCheck, BaseException] | None:
     """Run the refresh forward with the soft input-contract classifier.
 
     r41 hon1_3 (corr2_4 parity): the soft input-contract checks are
@@ -773,6 +774,17 @@ def _attempt_live_forward(
     divergent-but-executable input (changed batch / seq-len) still runs and
     may honestly settle VERIFIED (fresh-refresh semantics); classification
     happens only at native-failure time.
+
+    Returns
+    -------
+    tuple[ContractCheck, BaseException] | None
+        ``None`` when the refresh projected cleanly. When the refresh projector's
+        generic graph-signature arm refused (the executed graph no longer matches
+        the captured one -- value-dependent control flow took another branch), the
+        failed ``call_structure_mismatch`` contract check paired with the projector
+        error, for :func:`_settle_live_graph_change` to enforce the caller's
+        ``on_divergence`` policy through the shared spine (AUD-HONESTY H3). The
+        typed D18 buffer-sink refusal and native model failures re-raise raw.
     """
 
     input_args, input_kwargs = inputs_pair
@@ -799,7 +811,101 @@ def _attempt_live_forward(
             # A native failure on a NON-divergent input re-raises raw below -- a
             # genuinely failing model is not a divergence.
             _raise_failed_contract_as_divergence(first_failed, fork=None, cause=exc)
+        graph_change_detail = getattr(exc, "refresh_graph_change_detail", None)
+        if isinstance(exc, ValueError) and graph_change_detail is not None:
+            # H3: the projector's generic graph-signature arm IS a path divergence
+            # (the recorded schedule was not re-executed); hand it to the policy
+            # spine instead of leaking the projector's bare ``ValueError``.
+            return _live_graph_change_check(exc, str(graph_change_detail)), exc
         raise
+    return None
+
+
+def _live_graph_change_check(error: BaseException, detail: str) -> ContractCheck:
+    """Build the failed live-provider contract check for a refresh graph change (H3).
+
+    Code ``call_structure_mismatch`` (the executed op sequence differs from the
+    recorded one), stage ``refresh_graph_signature``; the message keeps the pinned
+    "computational graph changed" phrase for historical callers and ends with the
+    remedy. Consumers branch on the code, never the text.
+    """
+
+    return _contract_check(
+        "live_refresh_graph_signature",
+        False,
+        RunnableErrorCode.CALL_STRUCTURE_MISMATCH,
+        f"{error} Remedy: re-capture with the new inputs (tl.trace(model, inputs)); the "
+        "live provider refreshes only a forward whose executed graph matches the "
+        "captured one",
+        details=(
+            ("reason", "refresh_graph_changed"),
+            ("detail", detail),
+            ("detection_stage", "refresh_graph_signature"),
+            (
+                "remedy",
+                "re-capture with the new inputs; the live provider refreshes only a "
+                "forward whose executed graph matches the captured one",
+            ),
+        ),
+    )
+
+
+def _settle_live_graph_change(
+    fork: Any,
+    check: ContractCheck,
+    error: BaseException,
+    ctx: _LiveFinalizeContext,
+) -> RunResult:
+    """Enforce ``on_divergence`` for a live refresh whose graph changed (H3).
+
+    ``RAISE`` (default) raises the typed ``PathDivergenceError`` carrying the
+    failed check with the projector error chained, exactly like the sparse
+    provider's first-contradiction raise. ``RETURN_DIVERGED`` settles through the
+    ONE provider finalizer: ``path_faithfulness=DIVERGED``, poisoned, ``output``
+    ``None`` (no faithful refreshed output exists -- the fork retains the SOURCE
+    capture's values, which the poison mark keeps every faithful consumer from
+    reading as fresh).
+
+    Interim typing bridge: ``PathDivergenceError`` does not (yet) carry
+    ``ValueError`` in its lineage while the historical ``save_new_outs`` /
+    ``run()`` callers pin ``except ValueError`` on this exact refusal. Until the
+    one-line lineage change lands in ``torchlens.errors.runnable`` (recorded
+    OUT-OF-FENCE by lane W051-HONESTY; this bridge then dissolves on its own), the
+    RAISE arm re-raises the projector's ``ValueError`` decorated with the SAME
+    structured facts the typed error carries (``fields["code"]`` /
+    ``["path_faithfulness"]`` / ``["first_mismatch"]`` / ``["contract_check"]`` /
+    ``["remedy"]``), so code branching on the structured fields already works.
+    """
+
+    diagnostic = check.diagnostic
+    if ctx.divergence_policy is DivergencePolicy.RAISE:
+        if issubclass(PathDivergenceError, ValueError):
+            _raise_failed_contract_as_divergence(check, fork=None, cause=error)
+        remedy = dict(diagnostic.details).get("remedy", "") if diagnostic is not None else ""
+        error.fields = {  # type: ignore[attr-defined]
+            "code": RunnableErrorCode.CALL_STRUCTURE_MISMATCH.value,
+            "path_faithfulness": PathFaithfulness.DIVERGED,
+            "first_mismatch": diagnostic,
+            "contract_check": check,
+            "remedy": remedy,
+        }
+        raise error
+    return _finalize_provider_run(
+        fork=fork,
+        output=None,
+        readiness=_live_readiness_report(ctx.trace),
+        state_source=StateSource.LIVE_MODEL_STATE,
+        initializer_policy_version=None,
+        seed=ctx.seed,
+        random_filled_slot_ids=(),
+        contract_checks=(check,),
+        provisional_path_faithfulness=PathFaithfulness.DIVERGED,
+        provisional_mismatch=diagnostic,
+        numeric_attestation=NumericAttestationStatus.NOT_PRESENT,
+        divergence_policy=ctx.divergence_policy,
+        nondeterministic_sources=_live_nondeterministic_sources(ctx.trace),
+        state_carried=ctx.carry_state,
+    )
 
 
 def _split_live_inputs(inputs: Any) -> tuple[Any, Any]:
@@ -915,16 +1021,33 @@ def _finalize_truncated_live_run(
 def _finalize_full_live_run(fork: Any, ctx: _LiveFinalizeContext) -> RunResult:
     """Finalize the full (untruncated) live path with the output honesty gate."""
 
-    output, faithful = _reconstruct_live_output(fork)
-    # A lossy output container (computed non-field/non-key state, __slots__, or a
-    # data-descriptor field) cannot be faithfully rebuilt, so it is UNVERIFIABLE here
-    # too -- never a false VERIFIED on the live-refresh provider.
-    if _container_spec_reconstruction_lossy(_output_container_spec(fork)):
-        faithful = False
+    diagnosis = _diagnose_live_output(fork)
+    output, faithful = diagnosis.output, diagnosis.faithful
     # Honesty gate: only a faithfully reconstructed output (exact container type
     # and non-tensor leaves) is VERIFIED. An output we could only approximate
-    # from naive leaf paths is UNVERIFIABLE, never blessed with a wrong object.
+    # from naive leaf paths -- or a lossy container type (computed non-field/non-key
+    # state, __slots__, a data-descriptor field) -- is UNVERIFIABLE, never blessed
+    # with a wrong object. The diagnosis names WHY and the remedy (AUD-HONESTY
+    # H1/H2): a declared container whose contract the default capture did not
+    # persist, an opaque tensor-holding leaf (HuggingFace DynamicCache), or an
+    # opaque root.
     provisional = PathFaithfulness.VERIFIED if faithful else PathFaithfulness.UNVERIFIABLE
+    check_message = (
+        "Live output could not be faithfully reconstructed from its captured container contract."
+    )
+    check_details: tuple[tuple[str, str], ...] = ()
+    if not faithful:
+        reason = diagnosis.reason or "unknown"
+        remedy = diagnosis.remedy or ""
+        check_message = (
+            f"{check_message} Reason: {reason}"
+            f"{' (' + diagnosis.detail + ')' if diagnosis.detail else ''}. Remedy: {remedy}"
+        )
+        check_details = (
+            ("reason", reason),
+            ("detail", diagnosis.detail),
+            ("remedy", remedy),
+        )
     # Deephunt F2: the live report must declare the same capture-side host-RNG
     # evidence the sparse producer derives ``host_rng`` from. VERIFIED stays
     # correct for this provider (the fresh refresh is its own oracle-1 run),
@@ -943,8 +1066,8 @@ def _finalize_full_live_run(fork: Any, ctx: _LiveFinalizeContext) -> RunResult:
                 "live_output_reconstruction",
                 faithful,
                 RunnableErrorCode.OUTPUT_STRUCTURE_MISMATCH,
-                "Live output could not be faithfully reconstructed from its "
-                "captured container contract.",
+                check_message,
+                details=check_details,
             ),
         ),
         provisional_path_faithfulness=provisional,
@@ -1043,7 +1166,11 @@ def run_live_trace(
         prior_log_ids=prior_log_ids,
     )
     try:
-        _attempt_live_forward(fork, model, _split_live_inputs(inputs), until_plan, finalize_ctx)
+        graph_change = _attempt_live_forward(
+            fork, model, _split_live_inputs(inputs), until_plan, finalize_ctx
+        )
+        if graph_change is not None:
+            return _settle_live_graph_change(fork, graph_change[0], graph_change[1], finalize_ctx)
         if until_plan is not None:
             return _finalize_truncated_live_run(fork, until_plan, finalize_ctx)
         return _finalize_full_live_run(fork, finalize_ctx)

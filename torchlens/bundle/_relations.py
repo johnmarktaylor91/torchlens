@@ -77,7 +77,9 @@ __all__ = [
     "MEMBER_ROW_KINDS",
     "PAIR_ROW_KINDS",
     "RELATION_CLAIM_GRADES",
+    "RELATION_DECLARED_GRADE_KEY",
     "RELATION_EVIDENCE_BUDGET_BYTES",
+    "RELATION_MEASURED_GRADES",
     "RELATION_UNCHECKED_REASONS",
     "RESERVED_EVIDENCE_SCHEMA_IDS",
     "MemberRelationRow",
@@ -90,8 +92,23 @@ __all__ = [
 #: Reserved NOW so the D8 composition rule (outcomes gate whether a check
 #: RUNS; evidence never adjudicates an outcome) is expressible without a
 #: later coordinated bump. Users extend the RELATION vocabulary, never this
-#: TRUST vocabulary.
+#: TRUST vocabulary -- and they never MINT trust either (W051-HONESTY M8):
+#: every evidence item that reaches a row today is user-authored (no
+#: TorchLens producer writes evidence envelopes yet), so the MEASUREMENT
+#: grades in :data:`RELATION_MEASURED_GRADES` are clamped to ``disclosed`` at
+#: row construction (relate-time AND load-time, since a loaded payload is
+#: rebuilt through the same constructor) with the declared grade preserved
+#: under ``declared_grade``. ``disclosed`` and ``unchecked`` (with its
+#: contracted reason) are the two grades a user may author.
 RELATION_CLAIM_GRADES = frozenset({"verified", "consistent", "disclosed", "unchecked", "divergent"})
+
+#: Grades that assert a TorchLens MEASUREMENT. A user-authored item carrying
+#: one is clamped to ``disclosed`` (never refused: the declaration is real
+#: evidence of what the user believes, just not a check TorchLens ran).
+RELATION_MEASURED_GRADES = frozenset({"verified", "consistent", "divergent"})
+
+#: Item key preserving the grade a user declared before the clamp.
+RELATION_DECLARED_GRADE_KEY = "declared_grade"
 
 #: Closed unchecked-reason menu (C07X items 9-10). D15: a teaching refusal
 #: must never state something false, and no lane may invent an uncontracted
@@ -233,8 +250,29 @@ def _validated_params(kind: str, params: Any) -> dict[str, Any]:
             continue
         value = params[key]
         _validate_param_value(kind, key, value)
-        validated[key] = value
+        validated[key] = _clamp_evidence_grades(value) if key == "evidence" else value
     return validated
+
+
+def _clamp_evidence_grades(envelope: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the envelope with user-authored MEASUREMENT grades clamped to ``disclosed``.
+
+    Runs after :func:`_validate_evidence_envelope` (so every item is a
+    well-formed graded claim) at BOTH doors -- ``Bundle.relate`` and the
+    payload rebuild at load -- because both construct the row through
+    :class:`MemberRelationRow`. Idempotent: a clamped item re-loads unchanged
+    and its ``declared_grade`` is never overwritten. Schema-specific keys are
+    preserved opaque.
+    """
+
+    items: list[dict[str, Any]] = []
+    for item in envelope["items"]:
+        clamped = dict(item)
+        if clamped.get("grade") in RELATION_MEASURED_GRADES:
+            clamped.setdefault(RELATION_DECLARED_GRADE_KEY, clamped["grade"])
+            clamped["grade"] = "disclosed"
+        items.append(clamped)
+    return {**dict(envelope), "items": items}
 
 
 def _validate_param_value(kind: str, key: str, value: Any) -> None:

@@ -333,7 +333,64 @@ def _collate_to_envelope(
             envelope.disclosure.setdefault("kind", "user")
     else:
         envelope = default_collate(list(raw), plan.model, run_state)
+        _refuse_unbindable_default_positionals(plan.model, envelope, batch_index)
     return _move_envelope_to_device(envelope, plan.device)
+
+
+def _refuse_unbindable_default_positionals(
+    model: nn.Module, envelope: BatchEnvelope, batch_index: int
+) -> None:
+    """Refuse default-collated positional inputs ``forward`` cannot bind (3.13).
+
+    Tuple/list stimulus items (``(x, y)`` pairs, ``TensorDataset`` rows,
+    ``DataLoader`` batches) default-collate to one positional input per
+    element. When ``forward`` declares fewer bindable positional parameters
+    than that, the model call would fail with a raw ``TypeError`` from
+    inside the model; the teaching refusal names the mismatch and the
+    ``collate=`` door instead. Uninspectable or ``*args`` forwards are left
+    alone (declaration-based, never arity sniffing).
+
+    Parameters
+    ----------
+    model:
+        Model about to consume the batch.
+    envelope:
+        The default-collated envelope.
+    batch_index:
+        Zero-based batch index.
+
+    Raises
+    ------
+    torchlens.errors.InvalidArgumentError
+        ``extraction_collate_ambiguous`` when the positional count exceeds
+        the bindable positional parameter count.
+    """
+
+    n_positional = len(envelope.args)
+    if n_positional <= 1:
+        return
+    parameters = _positional_forward_parameters(model)
+    if parameters is None or n_positional <= len(parameters):
+        return
+    raise InvalidArgumentError(
+        f"Default collation of batch {batch_index} produced {n_positional} "
+        f"positional inputs from tuple/list stimulus items, but "
+        f"{type(model).__name__}.forward binds only {len(parameters)} "
+        f"positional parameter(s) ({[param.name for param in parameters]}). "
+        "Items shaped like (input, label) pairs -- TensorDataset rows, "
+        "DataLoader batches -- are ambiguous to the default collation, "
+        "which cannot know which element is the model input.",
+        code="extraction_collate_ambiguous",
+        remedy=(
+            "pass collate= returning the model input for a batch of items: "
+            "a single Tensor, a Mapping of forward kwargs, or a "
+            "torchlens.dataset_extraction.BatchEnvelope(args=..., "
+            "kwargs=..., row_count=...)"
+        ),
+        batch_index=batch_index,
+        n_positional=n_positional,
+        n_bindable=len(parameters),
+    )
 
 
 def _positional_forward_parameters(model: nn.Module) -> list[Any] | None:
@@ -867,12 +924,17 @@ def _apply_ragged_gate(
         return True  # trimmed keys legitimately vary on the token axis
     if observed == expected:
         return False
-    if plan.ragged == "trim" and mask_shaped and observed[1:] == expected[1:]:
-        # The key is mask-shaped but batch zero happened to match widths;
-        # admit it to the trimmed set now (drift proves raggedness).
-        trimmed.add(key)
-        return True
-    raise_ragged_refusal(key, batch_index, expected, observed)
+    # A key frozen DENSE at batch zero (no mask, or equal widths) that only
+    # now proves ragged is REFUSED, never late-admitted: the manifest layout
+    # is frozen once per artifact, and a trimmed shard under a dense key
+    # made materialize()/load_extraction drop rows silently (audit 1.3).
+    raise_ragged_refusal(
+        key,
+        batch_index,
+        expected,
+        observed,
+        late_mask_shaped=plan.ragged == "trim" and mask_shaped and observed[1:] == expected[1:],
+    )
     return False  # unreachable: the refusal always raises
 
 
@@ -1152,6 +1214,13 @@ def _layer_metadata(
         }
         if key in trimmed:
             entry["stored_per_stimulus_shape"] = [None] + (stored_shape[1:] if stored_shape else [])
+        # The frozen POST-POOL shape the D4 ragged gate compares against;
+        # resume rehydrates the gate from it (audit 2.10b). Trimmed keys
+        # vary on the token axis, recorded as None.
+        pooled_shape = list((run_state.get("pooled_shapes") or {}).get(key) or [])
+        if key in trimmed:
+            pooled_shape = [None] + pooled_shape[1:]
+        entry["pooled_per_stimulus_shape"] = pooled_shape
         dtype_fact = (run_state.get("dtype_facts") or {}).get(key)
         if dtype_fact is not None:
             entry["dtype_conversion"] = dtype_fact
@@ -1569,6 +1638,14 @@ def run_to_disk(plan: _RunPlan, container_path: Path, resume: bool) -> list[Path
     run_state: dict[str, Any] = {}
     if prep_state.get("selector_plan_record") is not None:
         run_state["selector_plan"] = prep_state["selector_plan_record"]
+    ragged_state = prep_state.get("ragged_state")
+    if ragged_state is not None:
+        # A continuation freezes NOTHING from its own first batch: the D4
+        # gate compares against the manifest's frozen layouts and shapes
+        # (audit 2.10b: a resumed run could otherwise commit [4,16,16]
+        # shards under a [4,8,8] key, or trimmed shards under a dense one).
+        run_state["pooled_shapes"] = dict(ragged_state["pooled_shapes"])
+        run_state["trimmed_keys"] = set(ragged_state["trimmed_keys"])
     remaining = _consume_skipped_with_replay(plan, completed_rows, run_state)
     n_skip = sum(int(row["n_rows"]) for row in completed_rows)
     start_index = len(completed_rows)

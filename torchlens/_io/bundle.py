@@ -48,8 +48,10 @@ from . import (
     _json,
     raise_if_manifest_below_floor,
 )
+from ._artifact_anchors import check_manifest_metadata_anchors, persisted_anchor_facts
 from ._canonical_pickle import dump_canonical_metadata
 from ._durability import fsync_dir, fsync_tree
+from ._portability_preflight import preflight_metadata_portability
 from ._safe_unpickle import SafeBundleUnpickler
 from ._save_gates import (
     _refuse_edge_intervened_save,
@@ -788,6 +790,7 @@ def save(
         if skipped_blob_ids:
             _apply_skipped_blobs_to_scrubbed_state(scrubbed_state, skipped_blob_ids)
 
+        persisted_rows = scrubbed_state.get("layer_list")
         manifest = _build_manifest(
             trace=trace,
             tensor_entries=tensor_entries,
@@ -806,6 +809,9 @@ def save(
                         included=include_buffer_values and sparse_run_descriptor is None,
                     )
                 ),
+                persisted_op_rows=(
+                    len(persisted_rows) if isinstance(persisted_rows, list) else None
+                ),
             ),
         )
         _warn_custom_attribute_embedding(custom_attributes_disclosure)
@@ -819,6 +825,17 @@ def save(
             scrubbed_state=scrubbed_state,
         )
         _restrict_mode(tmp_path / "manifest.json", 0o600)
+        # Write/read symmetry (AUD-CODE 2.20): the canonical bytes are dry-run
+        # through the loader's restricted unpickler FIRST; an unportable value
+        # refuses typed, naming its key path, and nothing is written. The real
+        # write below stays on the ``dump_canonical_metadata`` seam (interrupt /
+        # poisoned-write tests hook it); canonical dumps are deterministic, so
+        # the validated and written bytes are identical.
+        preflight_metadata_portability(
+            scrubbed_state,
+            unpickler_factory=_RenameAwareUnpickler,
+            bundle_path=bundle_path,
+        )
         with (tmp_path / "metadata.pkl").open("wb") as handle:
             # B3R4-R21-2: canonical container bytes (set/frozenset members
             # sorted), so persisted metadata does not vary with PYTHONHASHSEED.
@@ -1582,6 +1599,9 @@ def _load_trace_payload(
                 "hand-edited. Remedy: re-save the trace with tl.save().",
                 code="metadata_payload_not_a_mapping",
             )
+        # AUD-CODE 3.0b: snapshot the stamp/row-count facts from the bytes as
+        # written; rehydration mutates the persisted layer_list in place.
+        anchor_facts = persisted_anchor_facts(scrubbed_state)
     except TorchLensIOError:
         raise
     except (pickle.UnpicklingError, EOFError) as exc:
@@ -1627,6 +1647,18 @@ def _load_trace_payload(
             f"Failed to load bundle at {bundle_path}: metadata nesting exceeded the "
             "interpreter recursion limit during rehydration."
         ) from exc
+    # AUD-CODE 3.0b: the manifest's stamp and row count must agree with the
+    # pickled root state (a tl.migrate lineage is the one witnessed exception).
+    # Runs AFTER rehydrate so the owner-specific persisted-claim refusals
+    # (injection codec, site keys, graph structure, ...) keep precedence.
+    check_manifest_metadata_anchors(manifest, anchor_facts, bundle_path)
+    # W051-CAPT3 (EPISODE remainder): inside ``Trace.__setstate__`` the root
+    # output was an unmaterialized blob handle, so the episode ledger's
+    # evidence anchor had nothing to compare. Payloads are attached now; the
+    # load itself refutes a ledger re-minted over another execution.
+    from ..capture._episode_ledger_anchors import reanchor_loaded_episode_evidence
+
+    reanchor_loaded_episode_evidence(trace)
     _reanchor_visualizer_paths(trace, bundle_path)
     setattr(trace, "_loaded_from_bundle", True)
     setattr(trace, "_source_bundle_manifest_sha256", sha256_of_file(manifest_path))
@@ -2146,8 +2178,8 @@ def _preflight_unified_trace_manifest(
     Raises
     ------
     ArtifactVersionBelowFloorError
-        If the manifest predates the tlspec_version 6 / torchlens 2.33
-        rehydration floor. Checked before schema validation so a pre-floor
+        If the manifest predates the tlspec_version 6 rehydration floor
+        (first written by released torchlens 2.31.0). Checked before schema validation so a pre-floor
         artifact (which also fails the current schema) refuses with the
         floor named instead of a missing-field error.
     TorchLensIOError
@@ -3659,10 +3691,18 @@ def _warn_buffer_value_embedding(disclosure: Mapping[str, Any]) -> None:
 
 
 class _SaveDisclosures(NamedTuple):
-    """Save-time disclosure payloads for the two harvested channels."""
+    """Save-time manifest disclosures harvested from the scrubbed state.
+
+    ``custom_attributes`` / ``buffer_values`` are the two harvested-channel
+    payloads. ``persisted_op_rows`` is the PERSISTED op-row count (the scrubbed
+    ``layer_list``, which carries F44 injected-op rows the live ``layer_list``
+    never holds); the loader anchors ``manifest.n_layers`` against
+    ``metadata.pkl`` (AUD-CODE 3.0b). ``None`` falls back to the live count.
+    """
 
     custom_attributes: dict[str, Any] | None
     buffer_values: dict[str, Any] | None
+    persisted_op_rows: int | None = None
 
 
 def _build_manifest(
@@ -3687,8 +3727,8 @@ def _build_manifest(
         When ``False`` the environment-provenance git commit hash is omitted, so
         ``include_source=False`` also drops the cwd repo's HEAD commit (B8-19).
     disclosures:
-        Save-time disclosures of the harvested module-attribute channel and
-        the captured pre-forward buffer-value channel.
+        Save-time disclosures of the harvested module-attribute channel, the
+        captured pre-forward buffer-value channel, and the persisted op-row count.
 
     Returns
     -------
@@ -3699,6 +3739,7 @@ def _build_manifest(
     n_out_blobs = sum(1 for entry in tensor_entries if entry.kind == "out")
     n_grad_blobs = sum(1 for entry in tensor_entries if entry.kind == "grad")
     n_auxiliary_blobs = len(tensor_entries) - n_out_blobs - n_grad_blobs
+    n_layers = disclosures.persisted_op_rows if disclosures else None
     return Manifest(
         tlspec_version=TLSPEC_VERSION,
         torchlens_version=TORCHLENS_VERSION,
@@ -3715,7 +3756,7 @@ def _build_manifest(
             "Z",
         ),
         bundle_format="directory",
-        n_layers=len(trace.layer_list),
+        n_layers=len(trace.layer_list) if n_layers is None else n_layers,
         n_out_blobs=n_out_blobs,
         n_grad_blobs=n_grad_blobs,
         n_auxiliary_blobs=n_auxiliary_blobs,

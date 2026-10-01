@@ -33,6 +33,32 @@ if TYPE_CHECKING:
     from ..data_classes.trace import Trace
 
 
+def output_payload_aliases_parent(returned: Any, retained: Any) -> bool:
+    """True iff the returned output tensor IS the producer's retained payload value.
+
+    The output pseudo-row may share the producer's ONE retained payload
+    (HONESTY 13-R1) exactly when the tensor the model returned equals the
+    producer's retained ``out`` bit-for-bit under the same shape, dtype and
+    device (NaN-equal, so a NaN output is not a spurious "difference"). Any
+    other case -- unretained producer, meta payloads, a cross-device
+    ``output_device`` policy, an in-place mutation after the producer, a view
+    whose base shape differs -- keeps the historical physical copy so the
+    variation is recorded, never hidden.
+    """
+
+    if not (torch.is_tensor(returned) and torch.is_tensor(retained)):
+        return False
+    if returned.is_meta or retained.is_meta:
+        return False
+    if (
+        tuple(returned.shape) != tuple(retained.shape)
+        or returned.dtype != retained.dtype
+        or str(returned.device) != str(retained.device)
+    ):
+        return False
+    return bool(tensor_nanequal(returned, retained))
+
+
 def _resolve_output_parent_labels(
     self: "Trace", output_tensors: list[torch.Tensor]
 ) -> list["str | None"]:
@@ -435,9 +461,20 @@ def _add_output_layers(
             _detach_payload = not (
                 torch.is_tensor(_parent_payload) and _parent_payload.grad_fn is not None
             )
-            actual_output_raw = safe_copy(output_tensor, detach_tensor=_detach_payload)
-            if output_node.output_device not in [str(actual_output_raw.device), "same"]:
-                actual_output_raw = safe_to(actual_output_raw, output_node.output_device)
+            if output_payload_aliases_parent(output_tensor, output_node.out):
+                # HONESTY 13-R1: the producer already retains this exact value,
+                # so the output pseudo-row rides that ONE retained payload
+                # instead of a second physical copy (the byte model charged
+                # both: a full duplicate of the logits on large models). The
+                # A1 identity partition already says the producer owns the
+                # bytes; the payload now agrees. Differing values (an in-place
+                # mutation after the producer) still copy below and record
+                # the variation.
+                actual_output_raw = output_node.out
+            else:
+                actual_output_raw = safe_copy(output_tensor, detach_tensor=_detach_payload)
+                if output_node.output_device not in [str(actual_output_raw.device), "same"]:
+                    actual_output_raw = safe_to(actual_output_raw, output_node.output_device)
             actual_output_transformed = None
             if self.activation_transform is not None:
                 actual_output_transformed = output_node._apply_transform(

@@ -714,6 +714,14 @@ def test_bundle_version_policy_rows(
         return
 
     if expectation == "schema_age_warning":
+        # A real between-floor writer stamped the pickled root state AND the
+        # manifest from the same TLSPEC_VERSION; a manifest-only edit is a
+        # spliced artifact and trips the manifest/metadata integrity anchor
+        # before the age advisory. Keep the fixture coherent.
+        metadata_path = bundle_path / "metadata.pkl"
+        state = pickle.loads(metadata_path.read_bytes())  # trusted bytes this test wrote
+        state["tlspec_version"] = MIN_TLSPEC_VERSION
+        metadata_path.write_bytes(pickle.dumps(state))
         with pytest.warns(ArtifactSchemaAgeWarning, match=resolved_expected_text or ""):
             loaded = load(bundle_path)
         assert loaded.model_class_name == "_ConvBundleModel"

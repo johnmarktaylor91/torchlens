@@ -28,6 +28,8 @@ from torchlens.visualization.themes import (
     resolve_theme,
 )
 
+pytestmark = pytest.mark.smoke  # measured <0.5s per test (W051-GATE, AUD-CODE 0.1)
+
 
 def test_every_skin_carries_the_new_records() -> None:
     """Palette, 3-anchor ramp, and neutral fill on all five skins."""

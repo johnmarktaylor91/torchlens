@@ -35,9 +35,14 @@ pass, step, and site. The fix is one stateless mechanism:
   is what the stateless law MEANS. Identical declarations are the same
   experiment by extensionality; deliberate cross-clause donor sharing stays
   plan OBJECT reuse (D8), and the selection-batch normalizer disambiguates
-  distinct equal-content plan objects inside one transaction with
-  deterministic clause-order suffixes (:func:`assign_batch_donor_groups`),
-  so accidental kwargs-coincidence sharing within a batch cannot happen.
+  distinct equal-content ``per_rule``/``per_group`` plan objects inside one
+  transaction with suffixes derived from each object's CLAUSE SELECTIONS
+  (:func:`assign_batch_donor_groups`) -- never the clause ordinal, so a
+  batch draws the same donors in any clause order; ``per_firing`` plans are
+  never suffixed because their site-bearing coordinate already separates
+  the clauses, which keeps batch ``do()`` equal to sequential ``do()``
+  (fable51 audit AUD-CODE 2.2). Accidental kwargs-coincidence sharing
+  within a batch still cannot happen.
 
 - ``share_draw=`` is a named, defaulted, RECORDED choice (D7):
   ``"per_firing"`` (default -- each firing is a distinct node in the
@@ -70,7 +75,7 @@ from __future__ import annotations
 
 import hashlib
 import warnings
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Literal, cast
 
@@ -125,22 +130,72 @@ def _mint_donor_group_id(
     the same key, so the derived-seed law reproduces every draw on a rerun.
     ``agree_on`` callables have no stable content hash, so they contribute a
     presence marker only; the realized eligible class already reflects the
-    key function at fire time. Distinct equal-content plan objects inside ONE
-    selection-batch transaction are disambiguated by
-    :func:`assign_batch_donor_groups` (D8), never at construction.
+    key function at fire time. The subject datum enters as a CONTENT token
+    (:func:`_datum_digest`): tensor datums hash their bytes, never their
+    ``repr`` -- a repr is print-option dependent and rounds two different
+    tensors to one string (fable51 audit AUD-CODE 3.8). Distinct
+    equal-content plan objects inside ONE selection-batch transaction are
+    disambiguated by :func:`assign_batch_donor_groups` (D8), never at
+    construction.
     """
 
     payload = "\x1f".join(
         (
-            "donor_group_v1",
+            "donor_group_v2",
             population_identity,
             repr(seed),
             share_draw,
-            repr(matching),
+            _datum_digest(matching),
             "keyed" if agree_on is not None else "unkeyed",
         )
     )
     return hashlib.sha256(payload.encode()).hexdigest()[:12]
+
+
+def _feed_datum(hasher: hashlib._Hash, value: Any) -> None:
+    """Fold one agreement datum into ``hasher`` by CONTENT (type-tagged, recursive)."""
+
+    if isinstance(value, torch.Tensor):
+        hasher.update(b"T")
+        hasher.update(str(tuple(value.shape)).encode())
+        hasher.update(str(value.dtype).encode())
+        cpu = value.detach().to("cpu")
+        if cpu.dtype == torch.bfloat16:
+            cpu = cpu.to(torch.float32)
+        hasher.update(cpu.contiguous().numpy().tobytes())
+        return
+    if isinstance(value, OneDatum):
+        hasher.update(b"O")
+        _feed_datum(hasher, value.value)
+        return
+    if isinstance(value, PerRowDatums):
+        hasher.update(b"R")
+        for item in value.values:
+            _feed_datum(hasher, item)
+        return
+    if isinstance(value, Mapping):
+        hasher.update(b"M")
+        for key in sorted(value, key=repr):
+            _feed_datum(hasher, key)
+            _feed_datum(hasher, value[key])
+        return
+    if isinstance(value, (list, tuple)):
+        hasher.update(b"L" if isinstance(value, list) else b"U")
+        for item in value:
+            _feed_datum(hasher, item)
+        return
+    # Scalars and everything else: repr IS the content for builtin scalars;
+    # foreign objects fall back to repr by documented contract.
+    hasher.update(b"S")
+    hasher.update(repr(value).encode())
+
+
+def _datum_digest(value: Any) -> str:
+    """Return the sha256 content token of one agreement datum (16 hex chars)."""
+
+    hasher = hashlib.sha256()
+    _feed_datum(hasher, value)
+    return hasher.hexdigest()[:16]
 
 
 def _require_seed(seed: Any, verb: str) -> int | str:
@@ -217,7 +272,13 @@ def _firing_coordinate(hook: HookContext, share_draw: str) -> tuple[Any, ...]:
     omits the site component -- that omission IS donor sharing across sites.
     ``per_rule`` is the empty coordinate (one draw for every firing).
     The coordinate is logical, never a physical fire counter, so re-firing is
-    idempotent and checkpoint recompute reuses the same draw.
+    idempotent and checkpoint recompute reuses the same draw. The
+    ``generation_step`` slot reads ``run_ctx["generation_step"]``, which no
+    door writes yet (the episode door owns that threading); it is ``None``
+    on every shipped path and stays in the formula so the D6 law's shape is
+    stable when it lands. The live door stamps ``site_key`` (and the module
+    call pass) on its site proxy so both doors derive one coordinate; a
+    door that cannot mint a key falls back to the pass-qualified label.
     """
 
     if share_draw == "per_rule":
@@ -447,8 +508,9 @@ class SamplingPlan:
     reconstructing the same declaration reproduces the same draws (the
     stateless law's whole point); deliberate donor sharing across clauses is
     plan OBJECT reuse (D8), and the selection-batch normalizer
-    (:func:`assign_batch_donor_groups`) suffixes distinct equal-content plan
-    objects inside one transaction so kwargs coincidence never shares a group.
+    (:func:`assign_batch_donor_groups`) suffixes distinct equal-content
+    ``per_rule``/``per_group`` plan objects inside one transaction by their
+    clause selections so kwargs coincidence never shares a group.
     """
 
     population: Reference
@@ -793,6 +855,20 @@ def plan_patch_helper(plan: SamplingPlan) -> HelperSpec:
     return spec
 
 
+def _clause_selection_key(selection: Any) -> str:
+    """Return the process-stable identity of one batch clause's selection.
+
+    A resolved selection contributes its freeze-time ``resolve_digest``; a
+    query contributes its canonical repr (the Selection AST repr carries no
+    object addresses). Never an ordinal, never ``id()``.
+    """
+
+    digest = getattr(selection, "resolve_digest", None)
+    if callable(digest):
+        return f"resolved:{digest()}"
+    return f"query:{selection!r}"
+
+
 def assign_batch_donor_groups(
     pairs: Sequence[tuple[Any, Any]],
 ) -> list[tuple[Any, Any]]:
@@ -801,10 +877,22 @@ def assign_batch_donor_groups(
     Donor sharing is a deliberate act: reusing ONE plan object across
     clauses keeps one ``donor_group_id`` (all its clauses share draws under
     ``per_group``). Separately constructed plans never share -- even with
-    identical visible arguments: distinct plan OBJECTS whose content digests
-    collide inside this transaction get deterministic clause-order suffixes
-    (``<digest>#1``, ``#2``, ...; the first keeps the bare digest), so the
-    disambiguation itself reproduces on a rerun of the same declared batch.
+    identical visible arguments. Distinct plan OBJECTS whose content digests
+    collide inside this transaction are disambiguated by CONTENT, never by
+    clause order (fable51 audit AUD-CODE 2.2; the ordinal suffix made the
+    second clause's draw depend on what preceded it and made batch ``do()``
+    differ from sequential ``do()``):
+
+    - ``per_firing`` plans are NEVER suffixed: their logical firing
+      coordinate carries the site, so two equal-content plans at two sites
+      already draw independently, and the batch reproduces the sequential
+      draws exactly.
+    - ``per_rule`` / ``per_group`` plans (site-free coordinates) get
+      ``<digest>#<key>`` where ``key`` is a digest of the sorted selection
+      identities of THAT object's clauses (:func:`_clause_selection_key`),
+      so reordering the batch cannot move a draw, and a rerun of the same
+      declared batch reproduces it.
+
     Composed leaves need no entry here: ``composed_leaf_path`` already enters
     the derived seed and separates leaf streams.
 
@@ -820,25 +908,36 @@ def assign_batch_donor_groups(
         donor groups; non-sampling edits pass through untouched.
     """
 
-    replacement_by_object: dict[int, SamplingPlan | None] = {}
-    digest_order: dict[str, list[int]] = {}
-    normalized: list[tuple[Any, Any]] = []
+    plan_by_object: dict[int, SamplingPlan] = {}
+    clause_keys_by_object: dict[int, list[str]] = {}
+    objects_by_digest: dict[str, list[int]] = {}
     for selection, edit in pairs:
         plan = getattr(edit, "_tl_sampling_plan", None)
         if plan is None:
-            normalized.append((selection, edit))
             continue
         key = id(plan)
-        if key not in replacement_by_object:
-            order = digest_order.setdefault(plan.donor_group_id, [])
-            ordinal = len(order)
-            order.append(key)
-            replacement_by_object[key] = (
-                replace(plan, donor_group_id=f"{plan.donor_group_id}#{ordinal}")
-                if ordinal
-                else None
-            )
-        replaced = replacement_by_object[key]
+        plan_by_object.setdefault(key, plan)
+        clause_keys_by_object.setdefault(key, []).append(_clause_selection_key(selection))
+        objects = objects_by_digest.setdefault(plan.donor_group_id, [])
+        if key not in objects:
+            objects.append(key)
+
+    replacement_by_object: dict[int, SamplingPlan | None] = {}
+    for digest, objects in objects_by_digest.items():
+        for key in objects:
+            plan = plan_by_object[key]
+            if len(objects) < 2 or plan.share_draw == "per_firing":
+                replacement_by_object[key] = None
+                continue
+            suffix = hashlib.sha256(
+                "\x1f".join(sorted(clause_keys_by_object[key])).encode()
+            ).hexdigest()[:12]
+            replacement_by_object[key] = replace(plan, donor_group_id=f"{digest}#{suffix}")
+
+    normalized: list[tuple[Any, Any]] = []
+    for selection, edit in pairs:
+        plan = getattr(edit, "_tl_sampling_plan", None)
+        replaced = None if plan is None else replacement_by_object[id(plan)]
         normalized.append((selection, edit if replaced is None else plan_patch_helper(replaced)))
     return normalized
 
@@ -1082,7 +1181,13 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
                     "population_identity": source.population_identity,
                     "digest_kind": source.digest_kind,
                     "population_count": len(source),
-                    "eligible_count": len(set(donor_ids)),
+                    # The eligible CLASS size: distinct members eligible for
+                    # at least one subject row (== population_count without
+                    # an agreement condition). The number of distinct donors
+                    # the draw happened to pick is a different fact and has
+                    # its own key (fable51 audit AUD-CODE 4.5).
+                    "eligible_count": len(set().union(*eligible_cache.values())),
+                    "distinct_donor_count": len(set(donor_ids)),
                     "agreement_class_size": min(
                         (len(rows_) for rows_ in eligible_cache.values()), default=0
                     ),

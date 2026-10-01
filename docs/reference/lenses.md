@@ -5,9 +5,17 @@ session; the public `draw(theme=..., skin=...)` kwargs are a named
 [UI-SPRINT] fork. Until ratification the door is:
 
 ```python
+from pathlib import Path
+
+import torch
+import torch.nn as nn
+
+import torchlens as tl
 from torchlens.visualization import lenses
 
-lenses.draw_with_lens(trace, "speed", skin="paper", vis_fileformat="svg")
+trace = tl.trace(nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 4)), torch.randn(2, 8))
+out = Path(globals().get("DOCS_TMPDIR", "/tmp")) / "speed"
+lenses.draw_with_lens(trace, "speed", skin="paper", vis_fileformat="svg", vis_outpath=str(out))
 resolution = lenses.resolve_lens(trace, "speed")   # inspect without drawing
 ```
 

@@ -305,7 +305,7 @@ def split_restored_injected_rows(trace: Any) -> None:
     if not injected:
         return
     remaining = [op for op in rows if getattr(op, "injection_provenance", None) is None]
-    _validate_split_rows(injected, remaining)
+    _validate_split_rows(injected, remaining, _recorded_rule_ids(trace))
     rows[:] = remaining
     from ..intervention.injection import injection_state
 
@@ -328,16 +328,54 @@ def _refuse_codec(message: str, reason: str) -> NoReturn:
     )
 
 
-def _validate_split_rows(injected: list[Any], remaining: list[Any]) -> None:
+def _recorded_rule_ids(trace: Any) -> frozenset[str]:
+    """The spec rule ids this artifact's own intervention record vouches for.
+
+    Every spec-driven capture writes ONE ``intervention_event_v2`` envelope
+    per transaction (the fire-evidence chokepoint) whose ``rules`` payload
+    names each rule id; the persisted EVENT rows of the canonical audit
+    carry the same payload. An injected row's ``spec_rule_id`` must be one
+    of these -- the anchor that stops a re-labelled row from claiming a
+    rule the artifact never ran.
+    """
+
+    state = trace.__dict__
+    rows: list[Any] = []
+    history = state.get("state_history")
+    if isinstance(history, list):
+        rows.extend(
+            row
+            for row in history
+            if isinstance(row, dict) and row.get("op") == "intervention_event"
+        )
+    audit = state.get("intervention_audit")
+    if isinstance(audit, list):
+        rows.extend(row for row in audit if isinstance(row, dict) and row.get("kind") == "EVENT")
+    recorded: set[str] = set()
+    for row in rows:
+        for rule in row.get("rules") or ():
+            rule_id = rule.get("rule_id") if isinstance(rule, dict) else None
+            if isinstance(rule_id, str) and rule_id:
+                recorded.add(rule_id)
+    return frozenset(recorded)
+
+
+def _validate_split_rows(
+    injected: list[Any], remaining: list[Any], recorded_rule_ids: frozenset[str]
+) -> None:
     """Validate the split-out injected rows fail-closed (forgery refuses)."""
 
-    remaining_site_keys = {
-        key for op in remaining if isinstance((key := getattr(op, "site_key", None)), str)
-    }
+    hosts_by_site_key: dict[str, list[Any]] = {}
+    for op in remaining:
+        key = getattr(op, "site_key", None)
+        if isinstance(key, str):
+            hosts_by_site_key.setdefault(key, []).append(op)
     injected_labels: set[str] = set()
     durable_keys: set[tuple[Any, ...]] = set()
     for row in injected:
-        injected_labels.add(_validate_one_split_row(row, remaining_site_keys, durable_keys))
+        injected_labels.add(
+            _validate_one_split_row(row, hosts_by_site_key, durable_keys, recorded_rule_ids)
+        )
     for op in remaining:
         for relation in ("parents", "children"):
             for related in tuple(getattr(op, relation, ()) or ()):
@@ -351,8 +389,9 @@ def _validate_split_rows(injected: list[Any], remaining: list[Any]) -> None:
 
 def _validate_one_split_row(
     row: Any,
-    remaining_site_keys: set[str],
+    hosts_by_site_key: dict[str, list[Any]],
     durable_keys: set[tuple[Any, ...]],
+    recorded_rule_ids: frozenset[str],
 ) -> str:
     """Validate one injected row's identity and anchoring; return its label."""
 
@@ -378,15 +417,70 @@ def _validate_one_split_row(
             "record_duplicate",
         )
     durable_keys.add(durable)
-    if record["host_site_key"] not in remaining_site_keys:
-        _refuse_codec(
-            f"injected-op row {label!r} anchors to host site key "
-            f"{record['host_site_key']!r}, which no retained model op carries",
-            "host_missing",
-        )
     _validate_row_op_identity(row, label)
     _validate_envelope(row, label)
+    _validate_host_anchor(row, label, record, hosts_by_site_key, recorded_rule_ids)
     return label
+
+
+def _pass_qualified_label(op: Any) -> str:
+    """The ``layer_label:pass_index`` spelling of one restored model op row."""
+
+    layer_label = str(getattr(op, "layer_label", ""))
+    pass_index = getattr(op, "pass_index", None)
+    return f"{layer_label}:{pass_index}" if pass_index is not None else layer_label
+
+
+def _validate_host_anchor(
+    row: Any,
+    label: str,
+    record: Any,
+    hosts_by_site_key: dict[str, list[Any]],
+    recorded_rule_ids: frozenset[str],
+) -> None:
+    """Tie the row's three anchor claims to the artifact's own evidence.
+
+    ``host_site_key`` must be a retained op's key; the envelope's
+    ``host_label`` must be THAT op's pass-qualified label; ``host_pass`` must
+    be that op's pass index; and a spec ``spec_rule_id`` must be one the
+    artifact's intervention record names. Checking only key existence let a
+    row be re-anchored to any other op with a forged rule id and pass and
+    still load and attest (AUD-CODE 2.3c) -- attestation proves
+    ``callable(args) == out``, never WHERE, so the anchor is the only
+    loaded-side identity tripwire. ``adhoc:`` ids claim no spec rule (the
+    legacy hook-plan door) and are anchored by host alone.
+    """
+
+    host_site_key = record["host_site_key"]
+    candidates = hosts_by_site_key.get(host_site_key, ())
+    if not candidates:
+        _refuse_codec(
+            f"injected-op row {label!r} anchors to host site key "
+            f"{host_site_key!r}, which no retained model op carries",
+            "host_missing",
+        )
+    host_label = row.annotations[_ENVELOPE_KEY]["host_label"]
+    host = next((op for op in candidates if _pass_qualified_label(op) == host_label), None)
+    if host is None:
+        _refuse_codec(
+            f"injected-op row {label!r} names host {host_label!r}, but no retained model "
+            f"op at host site key {host_site_key!r} carries that label",
+            "host_label_mismatch",
+        )
+    host_pass = getattr(host, "pass_index", None)
+    if host_pass is not None and record["host_pass"] != host_pass:
+        _refuse_codec(
+            f"injected-op row {label!r} claims host_pass {record['host_pass']!r}, but its "
+            f"host {host_label!r} executed as pass {host_pass!r}",
+            "host_pass_mismatch",
+        )
+    rule_id = record["spec_rule_id"]
+    if not rule_id.startswith("adhoc:") and rule_id not in recorded_rule_ids:
+        _refuse_codec(
+            f"injected-op row {label!r} claims spec rule {rule_id!r}, which the artifact's "
+            "intervention record never ran",
+            "rule_unrecorded",
+        )
 
 
 def _validate_row_op_identity(row: Any, label: str) -> None:

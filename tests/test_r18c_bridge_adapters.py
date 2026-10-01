@@ -37,6 +37,10 @@ class _FakeLayer:
         self.layer_label = label
         self.out = torch.zeros(3) if out is None else out
         self.is_input = is_input
+        # Neuro eligibility gate (F22, memo item 9): saved-payload evidence and
+        # shape ride the record, never an ``out`` read.
+        self.has_saved_activation = isinstance(self.out, torch.Tensor)
+        self.shape = tuple(self.out.shape) if isinstance(self.out, torch.Tensor) else None
 
 
 class _FakeLog:

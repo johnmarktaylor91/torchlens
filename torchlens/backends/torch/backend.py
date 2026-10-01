@@ -858,11 +858,16 @@ class TorchBackend:
         self_trace._runnable.output_losslessness = runnable_output_losslessness(
             outputs, output_entries
         )
-        # The container_spec is only user-facing metadata when explicitly opted
-        # into via capture_container_structure (or implied by intervention_ready);
-        # with the default OFF it must stay None on output layers. The container
-        # *path*, however, is always preserved so forward-replay validation can
-        # slice multi-output containers back to the right leaf.
+        # The per-op container_spec is only user-facing metadata when explicitly
+        # opted into via capture_container_structure (or implied by
+        # intervention_ready); with the default OFF it must stay None on output
+        # layers. The container *path*, however, is always preserved so
+        # forward-replay validation can slice multi-output containers back to the
+        # right leaf, and the FINAL-output ContainerSpec is always registered as
+        # the model-output snapshot (below): the live ``run()`` provider rebuilds
+        # the exact tuple/dict/ModelOutput the model returned from that one
+        # snapshot, so a default capture settles VERIFIED instead of the
+        # remedy-only ``container_contract_unrecorded`` (W051-HONESTY H2).
         persist_container_spec = getattr(self_trace, "intervention_ready", False) or getattr(
             self_trace, "_capture_container_structure", False
         )
@@ -882,7 +887,9 @@ class TorchBackend:
             setattr(self_trace, "_output_container_specs_by_raw_label", output_specs_by_raw_label)
         else:
             output_tensors_w_addresses_all = []
-        if output_entries and persist_container_spec:
+        if output_entries:
+            # Every capture (one spec per capture): the model-output snapshot is
+            # the contract the live provider reconstructs from.
             _register_model_output_container_snapshot(self_trace, outputs, output_entries)
         # (container_path is stored above for validation replay even when the spec is None)
         if not output_entries:

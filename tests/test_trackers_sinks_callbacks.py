@@ -56,7 +56,9 @@ class TestHFTrainerCallback:
         callback.on_train_end(_Args(), state, None)
         assert callback.session is None
         steps = sorted({p.step for p in sink.scalars if p.tag.startswith("gradients/")})
-        assert steps and steps[0] == 0
+        # HF increments ``state.global_step`` AFTER optimizer.step() and logs
+        # at the incremented value; rows land on that axis (AUD-CODE 2.14).
+        assert steps and steps[0] == 1
 
     def test_derived_cadence_from_trainer_args(self) -> None:
         pytest.importorskip("transformers")

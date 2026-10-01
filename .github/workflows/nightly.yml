@@ -627,7 +627,7 @@ jobs:
       - name: Round-trip packaged tlspec
         working-directory: ${{ runner.temp }}
         run: |
-          wheel-venv/bin/python -c "import torch, torchlens as tl; from torch import nn; from torchlens.validation import validate_tlspec; path='wheel-smoke.tlspec'; trace=tl.trace(nn.Linear(2, 1), torch.randn(1, 2), layers_to_save='none'); trace.save(path); validate_tlspec(path); loaded=tl.load(path); assert loaded.num_ops == trace.num_ops"
+          wheel-venv/bin/python -c "import torch, torchlens as tl; from torch import nn; from torchlens.validation import validate_tlspec; path='wheel-smoke.tlspec'; trace=tl.trace(nn.Linear(2, 1), torch.randn(1, 2), capture=tl.options.CaptureOptions(layers_to_save='none')); trace.save(path); validate_tlspec(path); loaded=tl.load(path); assert loaded.num_ops == trace.num_ops"
 
       - name: PEP 561 consumer smoke (installed wheel exposes its types)
         # Red-capable in BOTH directions (grind r3, R84 LOW: py.typed shipped
@@ -664,6 +664,21 @@ jobs:
             "tests/test_packaging_diet.py::test_built_wheel_manifest_is_diet" \
             "tests/test_ci_packaging_gates.py::test_built_sdist_manifest_is_governed" \
             --tb=short -q
+
+      - name: Forward-load gate (the previous release's wheel loads the new goldens)
+        # P05 / ecosystem MEMO 3.4 G8 (packaging_requests 2026-08-26, placement
+        # ruled by D05): install the PREVIOUS release's torchlens wheel
+        # (--no-deps --target; torch is reused from this env) and analysis-load
+        # the current tree's golden artifacts under it. Green = every golden at
+        # or below the previous reader's schema ceiling loads cleanly and every
+        # golden above it refuses TYPED. The only mechanism that catches a
+        # same-stamp drift break (the released v2.33.0/v2.34.1 pair). "Previous"
+        # is the live PyPI latest, so the gate follows every release without a
+        # hand-edited version literal (~40 s measured green against 2.34.1).
+        run: |
+          previous="$(curl -sSf https://pypi.org/pypi/torchlens/json | python -c 'import json,sys; print(json.load(sys.stdin)["info"]["version"])')"
+          echo "previous release: torchlens $previous"
+          python tools/forward_load_gate.py --previous "$previous"
 
   platform-canary:
     # macOS and Windows had ZERO controlled execution while the universal
@@ -803,3 +818,375 @@ jobs:
             pytest tests/ -m smoke --ignore-glob="*menagerie*" --ignore=tests/crawler \
               -p randomly --randomly-seed="$seed" --tb=short -q
           done
+
+  hf-band-legs:
+    # F36 (testing memo D3/B3; packaging_requests 2026-08-30, landed by D05):
+    # every band the support-policy table CLAIMS is a band whose floor edge
+    # and current release actually EXECUTE. Three reviewed constraint legs
+    # under tests/support/proofnet/constraints/ (never resolver-chosen):
+    #   hf_floor       transformers 4.45.2 / timm 1.0.3   (the claimed floor)
+    #   hf_4_current   transformers 4.57.6 / timm 1.0.28  (weekly-refreshed)
+    #   hf_5_candidate transformers 5.14.1 / timm 1.0.28  (the 5.x candidate)
+    # Each runs the R0 real-model gate + the version-policy lockstep; the
+    # candidate leg additionally runs the offline R1 + RG workflow gallery
+    # against the EXACT passed-ID floor (tests/workflow_gallery/rg_passed_ids.txt)
+    # -- the enumerated-red manifest rows (rg_enumerated_red_hf5.tsv) carry no
+    # test ids, so "reds match the manifest exactly" is enforced as: every
+    # gallery node in the passed-ID floor PASSES (a new red is an absent pass,
+    # a stale red is caught when the pinned typed settlement stops holding)
+    # plus the manifest's own live-scenario lint. Non-blocking, non-claiming
+    # until the manifest empties (published-band timing is FORK-2).
+    name: HF band leg (${{ matrix.leg }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - leg: hf_floor
+            python: "3.10"
+          - leg: hf_4_current
+            python: "3.11"
+          - leg: hf_5_candidate
+            python: "3.11"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ matrix.python }}
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+
+      - name: Install Graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+
+      - name: Install the leg's reviewed pins
+        run: |
+          # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          uv pip install --system \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -c "tests/support/proofnet/constraints/${{ matrix.leg }}.txt" \
+            -e ".[dev,test,tabular,hf]" \
+            "torch==2.13.0+cpu" \
+            "torchvision==0.28.0+cpu"
+          uv pip check
+          python -c 'import timm, transformers; print("transformers", transformers.__version__, "timm", timm.__version__)'
+
+      - name: Version-policy lockstep (installed env sits inside this named leg)
+        run: pytest tests/test_proofnet_version_policy.py -p no:randomly --tb=short -q
+
+      - name: R0 real-model gate (PASSED-count attested; candidate leg runs every row)
+        if: matrix.leg == 'hf_5_candidate'
+        env:
+          TORCHLENS_REQUIRE_R0: "1"
+        run: |
+          pytest tests/real_model/r0 tests/composition_expectations -m 'smoke or real_model' \
+            -p no:randomly --tb=short -q --junitxml="${{ runner.temp }}/r0.junit.xml"
+          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/r0.junit.xml" 0 --min-passed 71
+
+      - name: R0 real-model gate (PASSED-count attested; 4.x legs, band-keyed rows deselected)
+        # The R0 op-count goldens (expectations_r0.json fingerprints), the
+        # use_cache fingerprint row, the vendored GPT-2 tokenizer loader and
+        # the distilbert sdpa axis are recorded on the transformers-5.x band
+        # (measured 2026-09-02 by the D05 release gate: 25 of 139 rows red on
+        # 4.45.2 and 4.57.6, every one a band-keyed expectation or fixture,
+        # zero capture defects). They are deselected HERE, by name, until the
+        # per-band expectations the tests.yml R0_TRANSFORMERS_RUNTIME note
+        # promises land (sprint/packaging_requests.tsv, D05 -> P04/F36 row);
+        # the README support table states exactly this scope. Never widen the
+        # deselection without re-truing that table.
+        if: matrix.leg != 'hf_5_candidate'
+        env:
+          TORCHLENS_REQUIRE_R0: "1"
+        run: |
+          pytest tests/real_model/r0 tests/composition_expectations -m 'smoke or real_model' \
+            -p no:randomly --tb=short -q --junitxml="${{ runner.temp }}/r0.junit.xml" \
+            --deselect tests/real_model/r0/test_realism_randinit_sweep.py \
+            --deselect tests/real_model/r0/test_realism_randinit_axes.py::test_config_fingerprint_use_cache_row \
+            --deselect "tests/real_model/r0/test_realism_randinit_axes.py::test_kwargs_identity_traced_equals_direct[distilbert]" \
+            --deselect tests/real_model/r0/test_realism_registry.py::test_vendored_gpt2_tokenizer_loads_offline
+          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/r0.junit.xml" 0 --min-passed 71
+
+      - name: Restore the pinned artifact cache (candidate leg only)
+        if: matrix.leg == 'hf_5_candidate'
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: .artifact-cache
+          key: ${{ hashFiles('tests/real_model/artifact_registry.jsonl') }}-nightly-v1
+
+      - name: Preflight-fetch the R1/RG artifacts (candidate leg only; the ONLY networked model step)
+        if: matrix.leg == 'hf_5_candidate'
+        run: python scripts/preflight_fetch_artifacts.py fetch --venue nightly --cache-dir .artifact-cache
+
+      - name: R1 + RG workflow gallery, offline, exact passed-ID floor (candidate leg only)
+        if: matrix.leg == 'hf_5_candidate'
+        run: |
+          eval "$(python scripts/preflight_fetch_artifacts.py print-env --cache-dir .artifact-cache | sed 's/^/export /')"
+          pytest tests/real_model/r1 tests/workflow_gallery -p no:randomly --tb=short -q \
+            --junitxml="${{ runner.temp }}/rg.junit.xml"
+          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/rg.junit.xml" 0 \
+            --passed-ids tests/workflow_gallery/rg_passed_ids.txt
+          pytest tests/workflow_gallery/test_proofnet_rg_manifest.py -p no:randomly --tb=short -q
+
+  lit-real:
+    # F31 (LIT memo item 8; packaging_requests 2026-08-28, landed by D05): the
+    # first CI leg that ever INSTALLS the LIT bridge's real dependency. lit-nlp
+    # 1.3.x requires numpy<2, so the leg pins numpy 1.26.4 (the floor pin the
+    # tests.yml floor rows already run). tests/test_lit_bridge_real.py loads
+    # its tiny checkpoints OFFLINE and skips when they are not cached, so the
+    # cache is warmed FIRST -- a skip cascade would otherwise pass the PASSED
+    # floor check as red, never as green. The [lit,hf] COMBINATION is resolved
+    # on every advertised interpreter (the extras gate resolves single extras
+    # only) and [lit,shap] is asserted UNSATISFIABLE, documenting the
+    # by-design shap<0.46 conflict named in pyproject.
+    name: LIT bridge (real lit-nlp)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+
+      - name: Resolve the [lit,hf] combination on every advertised interpreter; assert [lit,shap] unsatisfiable
+        run: |
+          printf 'numpy==1.26.4\n' > "${{ runner.temp }}/numpy1.txt"
+          for pv in 3.10 3.11 3.12 3.13; do
+            uv pip compile pyproject.toml --extra lit --extra hf -c "${{ runner.temp }}/numpy1.txt" \
+              --python-version "$pv" --no-header -q -o "${{ runner.temp }}/lit-hf-$pv.txt"
+            echo "[lit,hf] resolves on $pv"
+          done
+          if uv pip compile pyproject.toml --extra lit --extra shap --python-version 3.12 \
+               --no-header -q -o "${{ runner.temp }}/lit-shap.txt" 2>/dev/null; then
+            echo "[lit,shap] RESOLVED: the documented by-design conflict is gone; update pyproject's lit/all-stretch notes"
+            exit 1
+          fi
+          echo "[lit,shap] unsatisfiable by design (documented)"
+
+      - name: Install lit-nlp + transformers on numpy 1.x
+        run: |
+          # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          uv pip install --system \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,lit,hf]" \
+            "torch==2.13.0+cpu" \
+            "numpy==1.26.4"
+          uv pip check
+          python -c 'import lit_nlp, numpy, transformers; assert numpy.__version__.startswith("1."), numpy.__version__; print("lit-nlp", lit_nlp.__version__, "transformers", transformers.__version__)'
+
+      - name: Warm the tiny-checkpoint cache (the test file itself runs OFFLINE)
+        run: |
+          python - <<'PY'
+          from transformers import AutoModelForCausalLM, AutoModelForSequenceClassification, AutoTokenizer
+          for name, cls in (
+              ("hf-internal-testing/tiny-random-distilbert", AutoModelForSequenceClassification),
+              ("sshleifer/tiny-gpt2", AutoModelForCausalLM),
+          ):
+              AutoTokenizer.from_pretrained(name)
+              cls.from_pretrained(name)
+              print("cached", name)
+          PY
+
+      - name: Real-LIT gates (PASSED-count attested)
+        run: |
+          pytest tests/test_lit_bridge_real.py tests/test_lit_bridge_contract.py \
+            -p no:randomly --tb=short -q --junitxml="${{ runner.temp }}/lit.junit.xml"
+          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/lit.junit.xml" 0 --min-passed 16
+
+  brainscore-live:
+    # F20 (brainpipe memo D-23/F-2; packaging_requests 2026-08-28, landed by
+    # D05): the live Brain-Score verification leg -- released brainscore-vision
+    # (the [brainscore] extra, ~=2.3) drives the REAL ActivationsExtractorHelper
+    # through tests/test_bridge_brain_score_extractor.py (L1/L2 rows; the L3
+    # public benchmark score is out of scope for CI). brainscore-vision pins
+    # numpy<2, so the leg is what it is: py3.12 + numpy 1.26.4 (uv-resolved
+    # together with [dev,test,tabular] on 2026-09-02).
+    name: Brain-Score seam (real brainscore-vision)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+
+      - name: Install the Brain-Score seam
+        run: |
+          # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          uv pip install --system \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,test,tabular,brainscore]" \
+            "torch==2.13.0+cpu" \
+            "torchvision==0.28.0+cpu"
+          uv pip check
+          python -c 'import brainscore_vision; print("brainscore_vision", brainscore_vision.__version__)'
+
+      - name: Brain-Score extractor seam gates (PASSED-count attested)
+        # 6 rows in the file; the refusal-path row self-skips when the package
+        # IS installed, so 5 must pass.
+        run: |
+          pytest tests/test_bridge_brain_score_extractor.py -p no:randomly --tb=short -q \
+            --junitxml="${{ runner.temp }}/brainscore.junit.xml"
+          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/brainscore.junit.xml" 0 --min-passed 5
+
+  tlens-oracle-canary:
+    # F05 (mikit memo D13; packaging_requests 2026-08-28, landed by D05): the
+    # TransformerLens oracle rows (Gate 2, G2a/G2b/G2c) execute against the
+    # exact-pinned [tlens-oracle] extra. A non-blocking canary: every row must
+    # EXECUTE (executed floor = the file's 6 rows; failures count as executed)
+    # and be visible, so a TLens drift shows up here instead of in a PR gate.
+    name: TransformerLens oracle canary
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+
+      - name: Install the pinned TransformerLens oracle
+        run: |
+          # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          uv pip install --system \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,test,tabular,tlens-oracle]" \
+            "torch==2.13.0+cpu" \
+            "torchvision==0.28.0+cpu"
+          uv pip check
+          python -c 'import transformer_lens, transformers; print("transformer_lens", transformer_lens.__version__, "transformers", transformers.__version__)'
+
+      - name: TransformerLens oracle rows (executed floor; canary)
+        run: |
+          pytest tests/test_mikit_oracle_tlens.py -p no:randomly --tb=short -q \
+            --junitxml="${{ runner.temp }}/tlens.junit.xml"
+          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/tlens.junit.xml" 6 0.0
+
+  netron-vendor:
+    # F14 (netron memo D-08/D-09/D-20; packaging_requests 2026-08-28, landed
+    # by D05 as the scheduled tier): the executed netron 9.2.2 parser harness
+    # over the exported artifacts (node >= 20 ships on ubuntu-24.04) plus the
+    # serve/widget one-liner. netron is EXACT-pinned here (pin REFRESHED, never
+    # widened); the weekly workflow runs the same suite against unpinned-latest
+    # netron as a drift canary. The per-PR path-filtered tier and the
+    # Playwright browser smoke stay queued (PR-time cost is a gate-law ruling).
+    name: Netron vendor parser (pinned 9.2.2)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+
+      - name: Install the test environment + pinned netron
+        run: |
+          # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          uv pip install --system \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,test,tabular]" \
+            "torch==2.13.0+cpu" \
+            "torchvision==0.28.0+cpu" \
+            "netron==9.2.2"
+          uv pip check
+          node --version
+          python -c 'import netron, onnx; print("netron", netron.__version__, "onnx", onnx.__version__)'
+
+      - name: Vendor-parser + serve gates (PASSED-count attested)
+        run: |
+          pytest tests/test_netron_export_vendor.py tests/test_netron_export_serve.py \
+            -p no:randomly --tb=short -q --junitxml="${{ runner.temp }}/netron.junit.xml"
+          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/netron.junit.xml" 0 --min-passed 6
+
+  model-explorer-contract:
+    # F15 (modelexplorer memo B11; packaging_requests 2026-08-28, landed by
+    # D05 as the scheduled tier): the vendor contract executes against the
+    # pinned ai-edge-model-explorer 0.1.32 (installed --no-deps: its server
+    # stack is not the contract; the dataclasses + worker are) with node >= 20
+    # for the worker oracle. EXACT executed-count expectation: every row in
+    # both files executes and NONE skips (skip fraction 0.0) -- the
+    # importorskip defect the request names. The drift step compares the
+    # PyPI and npm latest against the pins and reports in the job summary
+    # (this workflow has no issues:write; drift never moves a release gate).
+    name: Model Explorer vendor contract (pinned 0.1.32)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+
+      - name: Install the test environment + pinned Model Explorer (no deps)
+        run: |
+          # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          uv pip install --system \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,test,tabular]" \
+            "torch==2.13.0+cpu" \
+            "torchvision==0.28.0+cpu"
+          uv pip install --system --no-deps "ai-edge-model-explorer==0.1.32"
+          node --version
+          python -c 'import model_explorer; print("model_explorer imported")'
+
+      - name: Vendor contract + real-model rows (exact executed count, zero skips)
+        run: |
+          pytest tests/test_modelexplorer_contract.py tests/test_modelexplorer_real.py \
+            -p no:randomly --tb=short -q --junitxml="${{ runner.temp }}/me.junit.xml"
+          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/me.junit.xml" 15 0.0
+
+      - name: Vendor drift canary (PyPI + npm latest vs the pins; summary only)
+        continue-on-error: true
+        run: |
+          pypi_latest="$(curl -sSf https://pypi.org/pypi/ai-edge-model-explorer/json | python -c 'import json,sys; print(json.load(sys.stdin)["info"]["version"])')"
+          npm_latest="$(npm view ai-edge-model-explorer-visualizer version)"
+          {
+            echo "## Model Explorer vendor drift"
+            echo "- PyPI ai-edge-model-explorer: pinned 0.1.32, latest $pypi_latest"
+            echo "- npm ai-edge-model-explorer-visualizer: pinned 0.1.2, latest $npm_latest"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$pypi_latest" != "0.1.32" ] || [ "$npm_latest" != "0.1.2" ]; then
+            echo "vendor drift detected (see summary): open an intentional contract-profile update, never move a release gate"
+            exit 1
+          fi

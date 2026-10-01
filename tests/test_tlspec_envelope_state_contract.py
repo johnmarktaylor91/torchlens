@@ -23,6 +23,7 @@ The MEMO 3.3 test obligations, on real bytes where the spec demands it:
 
 from __future__ import annotations
 
+import json
 import pickle
 import shutil
 import tarfile
@@ -34,7 +35,12 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._io import TLSPEC_VERSION, TorchLensIOError, UnknownPersistedFieldError
+from torchlens._io import (
+    MIN_TLSPEC_VERSION,
+    TLSPEC_VERSION,
+    TorchLensIOError,
+    UnknownPersistedFieldError,
+)
 from torchlens._io.state_contract import governed_artifact_load
 
 pytestmark = [pytest.mark.heavy]
@@ -160,7 +166,7 @@ def test_session_pickle_stays_outside_the_contract(tiny_trace) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_old_writers_direction_on_harvested_bytes(corpus_dir: Path) -> None:
+def test_old_writers_direction_on_harvested_bytes(corpus_dir: Path, tmp_path: Path) -> None:
     """Every governed writer's artifact settles per its governed window."""
 
     import warnings
@@ -169,8 +175,17 @@ def test_old_writers_direction_on_harvested_bytes(corpus_dir: Path) -> None:
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        # Governed loadable writers: load green, honest outcomes.
+        # Governed loadable writers: load green, honest outcomes. The
+        # rehydration floor is ``tlspec_version >= 6`` (MIN_TLSPEC_VERSION),
+        # and the FIRST tlspec-6 writer was released v2.31.0 (measured on
+        # genuine wheels; the compat ledger's governed producer windows), so
+        # the v2.31.0 / v2.32.4 artifacts LOAD losslessly -- adjudicated in
+        # WAVE-0-5.1 (AUD-CODE 2.4): the code was right, this pin and three
+        # doc sentences had inherited the false "first shipped in 2.33" claim.
         for name, expected_status in (
+            ("art_v2.31.0_portable", "UNATTESTED"),
+            ("art_v2.31.0_audit", "UNATTESTED"),
+            ("art_v2.32.4_portable", "UNATTESTED"),
             ("art_v2.33.0_portable", "UNATTESTED"),
             ("art_v2.34.1_portable", "UNATTESTED"),
             ("art_main_portable", "COMPLETE"),
@@ -178,14 +193,22 @@ def test_old_writers_direction_on_harvested_bytes(corpus_dir: Path) -> None:
             trace = tl.load(corpus_dir / name)
             assert len(trace) == 151
             assert trace.outcome.status.name == expected_status
-        # Below-floor writers: governed typed refusal, never a crash.
-        for name in ("art_v2.31.0_portable", "art_v2.31.0_audit", "art_v2.32.4_portable"):
-            with pytest.raises(ArtifactVersionBelowFloorError):
-                tl.load(corpus_dir / name)
-        # The genuine v2.16 bundle refuses typed (erratum FORK F2 owns the
-        # remedy text; this pins that it cannot crash untyped or load wrong).
+        # Below-floor stamps refuse typed with the floor named. The genuine
+        # v2.16 bundle predates the integer stamp entirely, so it refuses
+        # through the same typed family (erratum FORK F2 owns the remedy
+        # text; this pins that it cannot crash untyped or load wrong).
+        assert MIN_TLSPEC_VERSION == 6
         with pytest.raises(TorchLensIOError):
             tl.load(corpus_dir / "art_v2.16.0_portable")
+        # An integer stamp below the floor refuses with the floor-specific type.
+        below_floor = tmp_path / "art_below_floor.tlspec"
+        shutil.copytree(corpus_dir / "art_v2.31.0_portable", below_floor)
+        manifest_path = below_floor / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["tlspec_version"] = MIN_TLSPEC_VERSION - 1
+        manifest_path.write_text(json.dumps(manifest))
+        with pytest.raises(ArtifactVersionBelowFloorError):
+            tl.load(below_floor)
 
 
 @pytest.fixture()

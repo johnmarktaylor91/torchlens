@@ -168,6 +168,10 @@ interchangeable refuse.
   selective nulling of a value refuses at parse (`merged_schema_invalid`)
   instead of silently deleting a cross-check finding; a uniformly-absent
   core remains the honest capability-absent shape and stays finding-free.
+  The journal's `boundaries` container itself must be a list (or tuple) of
+  boundary records: an int/bool/mapping/string container refuses
+  `merged_schema_invalid` at merge entry, live and loaded cores alike, with
+  the container named (W051-CAPT3; previously a bare `TypeError`).
 - Presence expectations and gaps derive from the group memberships recorded
   INSIDE the surviving rank cores' boundary records. A declared
   `expected_ranks` input can only WIDEN expectations, never narrow them.

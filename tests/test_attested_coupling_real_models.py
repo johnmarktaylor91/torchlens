@@ -17,7 +17,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.errors.episode import EpisodeCaptureError, EpisodeJoinError
+from torchlens.errors.episode import EpisodeCaptureError, EpisodeDeclarationError, EpisodeJoinError
 from torchlens.intervention import at_step
 from torchlens.options import EpisodeSpec
 
@@ -193,16 +193,49 @@ def test_distilgpt2_replay_refuses_both_engines_and_survives_save_load(tmp_path)
         loaded.run(inputs=prompt)
 
 
-def test_distilgpt2_exogenous_join_scopes_facts_per_segment():
-    """The tool-call shape: coupled facts split at the measured break."""
+def test_distilgpt2_declared_crossing_scopes_facts_per_segment():
+    """The tool-call shape: coupled facts split at the declared crossing.
+
+    The root returns the FULL fed ids (prompt + emissions + the two injected
+    tool tokens), so the evidence column derives under the declared-crossing
+    chain arm (W051 FIX2): each step's emission sits right after its
+    MEASURED entry, the positions read are disclosed in the header, and the
+    join into step 1 grades ``declared``.
+    """
 
     runner = _ToolInjectGenerate(build_distilgpt2("eager"), N_STEPS, inject_at=1)
-    log = _coupled_trace(runner, tl.when(tl.func("softmax"), tl.scale(0.5)))
-    envelope = _header(log)["step_join"]
+    log = tl.trace(
+        runner,
+        _prompt(),
+        episode=EpisodeSpec(stepped_module=runner.model, n_steps=N_STEPS, crossings=(1,)),
+        intervene=tl.when(tl.func("softmax"), tl.scale(0.5)),
+        capture=tl.options.CaptureOptions(random_seed=CAPTURE_SEED),
+    )
+    header = _header(log)
+    envelope = header["step_join"]
     assert envelope is not None and envelope["break_step"] == 1
+    assert envelope["grades"] == [None, "declared", "continuous"]
+    # 8-token prompt; step 1's entry carries the emission plus 2 tool tokens.
+    assert header["step_output_positions"] == [8, 11, 12]
     segments = log.episode_coupling.segments
     assert [(s.start_step, s.end_step) for s in segments] == [(0, 0), (1, 2)]
     assert all(s.fire_count_total is not None for s in segments)
+
+
+def test_distilgpt2_undeclared_injection_refuses_ambiguous_column():
+    """Undeclared mid-loop injection on a full-ids root: refuse, teach crossings.
+
+    Measured alone, two surplus positions in step 1's entry are
+    indistinguishable from multi-token decoding, so tail alignment would
+    misattribute the tool token to step 0 (the pre-license behaviour); the
+    license refuses typed and names the ``crossings`` declaration.
+    """
+
+    runner = _ToolInjectGenerate(build_distilgpt2("eager"), N_STEPS, inject_at=1)
+    with pytest.raises(EpisodeDeclarationError) as excinfo:
+        _coupled_trace(runner, tl.when(tl.func("softmax"), tl.scale(0.5)))
+    assert excinfo.value.fields["code"] == "episode_declaration_invalid"
+    assert "crossings=(k, ...)" in str(excinfo.value)
 
 
 def test_distilgpt2_feed_closed_strict_arm_halts_coupled_capture():

@@ -18,6 +18,8 @@ import torchlens as tl
 from torchlens.visualization import lenses
 from torchlens.visualization.lenses import audit
 
+pytestmark = pytest.mark.smoke  # measured <0.5s per test (W051-GATE, AUD-CODE 0.1)
+
 
 @pytest.fixture(scope="module")
 def keyed() -> Any:
@@ -61,7 +63,7 @@ def test_key_is_generated_from_machine_record(keyed: Any) -> None:
 def test_packets_are_seed_deterministic(keyed: Any) -> None:
     """Same seed, same order; filenames masked; phases honour the memo."""
 
-    _, _, key = keyed
+    log, resolution, key = keyed
     first = audit.build_packet(key, ["a.png"], seed=11)
     second = audit.build_packet(key, ["a.png"], seed=11)
     assert [q["id"] for q in first.questions] == [q["id"] for q in second.questions]
@@ -70,7 +72,12 @@ def test_packets_are_seed_deterministic(keyed: Any) -> None:
     assert phases[0] == "free_response"
     assert phases[-1] == "transcription"
     assert first.judges == 3
-    assert audit.build_packet(key, ["a.png"], seed=11, sentinel=True).judges == 5
+    # A sentinel packet needs the sentinel-generated key (its known-bad
+    # control must be able to FAIL -- D03-R6).
+    sentinel_key = audit.generate_answer_key(
+        log, member_name="toy", resolution=resolution, sentinel=True
+    )
+    assert audit.build_packet(sentinel_key, ["a.png"], seed=11, sentinel=True).judges == 5
 
 
 def test_scoring_flags_honesty_hits_zero_tolerance(keyed: Any) -> None:

@@ -233,15 +233,22 @@ def resolve_budget(
         coverage_gap = 0.0 if coverage is None else max(0.0, COVERAGE_FLOOR - coverage)
         return (band_distance + coverage_gap * BAND_TARGET, float(count))
 
-    step, coverage = min(candidates, key=_distance)
+    # The dial must genuinely compact: the full graph (t=0.0, already known to
+    # sit above the ceiling here) is never the served "nearest" point while the
+    # schedule offers ANY compacting stop, even when it is arithmetically
+    # closer to the band (a 282-op graph with a two-point schedule 282 -> 4
+    # served the 282-op wall as nearest: |282-220| < |100-4|; AUD-CODE 3.9).
+    compacting = [pair for pair in candidates if pair[0].visible_count < full_visible]
+    step, coverage = min(compacting or candidates, key=_distance)
     warnings.warn(
         TorchLensWarning(
             "the visible-detail budget resolver found no float-schedule point "
             f"inside the {BAND_FLOOR}-{BAND_CEILING} band"
             + (" at the coverage floor" if channel_active else "")
-            + f"; serving the nearest point ({step.visible_count} visible at "
-            f"collapse={step.t:g}). Remedy: focus the render with module= or "
-            "vis_call_depth=, or pass an explicit collapse= override.",
+            + f"; serving the nearest compacting point ({step.visible_count} "
+            f"visible at collapse={step.t:g}, full graph {full_visible}). "
+            "Remedy: focus the render with module= or vis_call_depth=, or pass "
+            "an explicit collapse= override.",
             code="lens_budget_band_missed",
         ),
         stacklevel=3,

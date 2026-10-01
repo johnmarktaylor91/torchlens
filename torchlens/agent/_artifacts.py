@@ -21,13 +21,17 @@ EAGER_LOAD_MAX_BYTES = 256 * 1024 * 1024
 #: Declared payload-entry count above which a served load REFUSES.
 LOAD_MAX_PAYLOAD_ENTRIES = 100_000
 
-#: Content-digest-keyed structural cache of loaded artifacts.
+#: Structural cache of loaded artifacts, keyed by manifest digest PLUS the
+#: metadata.pkl content witness (:func:`_metadata_witness`).
 _TRACE_CACHE: dict[str, tuple[Any, dict[str, Any]]] = {}
 _TRACE_CACHE_MAX = 4
 
 #: (path, dev, ino, size, mtime_ns) -> digest. A VERIFIED cache hint only.
 _DIGEST_HINTS: dict[tuple[str, int, int, int, int], str] = {}
 _DIGEST_HINTS_MAX = 16
+
+#: metadata.pkl stat identity -> sha256 witness (the cache-key join, 3.11c).
+_METADATA_HINTS: dict[tuple[str, int, int, int, int], str] = {}
 
 
 def _loads_bounded(text: str) -> Any:
@@ -90,9 +94,78 @@ def artifact_digest(path: Path) -> tuple[str, bytes | None]:
     if manifest_path is not None and manifest_path.is_file():
         manifest_bytes = manifest_path.read_bytes()
         return sha256(manifest_bytes).hexdigest(), manifest_bytes
-    from torchlens._io.manifest import sha256_of_file
+    return _sha256_of_file(path), None
 
-    return sha256_of_file(path), None
+
+def _sha256_of_file(path: Path) -> str:
+    """Stream-hash one file with the stdlib only.
+
+    A LOCAL copy of ``torchlens._io.manifest.sha256_of_file``: importing that
+    module executes the ``_io`` package ``__init__`` (which imports torch),
+    and this runs on the TIER-0 ``info`` path for single-file / non-directory
+    inputs (AUD-CODE 3.11e). Parity with the ``_io`` authority is pinned by
+    tests/test_w051_agent_artifacts.py.
+
+    Parameters
+    ----------
+    path:
+        File to hash (a directory hashes as empty: nothing is read).
+
+    Returns
+    -------
+    str
+        Hex digest.
+    """
+
+    from hashlib import sha256
+
+    digest = sha256()
+    if not path.is_file():
+        return digest.hexdigest()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _metadata_witness(path: Path) -> str:
+    """Return the content witness of ``metadata.pkl`` for the structural cache.
+
+    The manifest digest is the artifact's IDENTITY, but the cache serves the
+    UNPICKLED trace, and two directories can share one manifest while their
+    ``metadata.pkl`` bytes differ (a copy whose metadata was overwritten or
+    corrupted). Keying the cache on the manifest alone served the healthy
+    trace for the corrupted copy (AUD-CODE 3.11c); the witness joins the
+    key so any metadata change is a cache MISS and reloads through the
+    integrity-checked ``tl.load`` door. Hashed once per stat identity
+    (the same verified-hint pattern as :data:`_DIGEST_HINTS`); a single-
+    file artifact is already content-hashed and reads ``""``.
+
+    Parameters
+    ----------
+    path:
+        Artifact path.
+
+    Returns
+    -------
+    str
+        Hex digest of ``metadata.pkl`` (``""`` when the artifact has none).
+    """
+
+    metadata_path = path / "metadata.pkl" if path.is_dir() else None
+    if metadata_path is None or not metadata_path.is_file():
+        return ""
+    identity = _stat_identity(metadata_path)
+    if identity is not None:
+        hinted = _METADATA_HINTS.get(identity)
+        if hinted is not None:
+            return hinted
+    witness = _sha256_of_file(metadata_path)
+    if identity is not None:
+        if len(_METADATA_HINTS) >= _DIGEST_HINTS_MAX:
+            _METADATA_HINTS.pop(next(iter(_METADATA_HINTS)))
+        _METADATA_HINTS[identity] = witness
+    return witness
 
 
 def _stat_identity(path: Path) -> tuple[str, int, int, int, int] | None:
@@ -372,7 +445,8 @@ def load_trace(path_arg: str) -> tuple[Any, dict[str, Any], dict[str, Any]]:
     digest, manifest_bytes = resolve_digest(path)
     manifest, _ = read_manifest(path) if manifest_bytes is None else _parse(manifest_bytes)
     block = artifact_block(path, digest, manifest)
-    cached = _TRACE_CACHE.get(digest)
+    cache_key = f"{digest}:{_metadata_witness(path)}"
+    cached = _TRACE_CACHE.get(cache_key)
     if cached is not None:
         return cached[0], cached[1], block
     plan = build_load_plan(manifest)
@@ -410,7 +484,7 @@ def load_trace(path_arg: str) -> tuple[Any, dict[str, Any], dict[str, Any]]:
     health_facts(loaded)
     if len(_TRACE_CACHE) >= _TRACE_CACHE_MAX:
         _TRACE_CACHE.pop(next(iter(_TRACE_CACHE)))
-    _TRACE_CACHE[digest] = (loaded, plan)
+    _TRACE_CACHE[cache_key] = (loaded, plan)
     return loaded, plan, block
 
 

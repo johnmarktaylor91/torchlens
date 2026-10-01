@@ -46,6 +46,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
+from ..constants import OP_LOG_FIELD_ORDER
 from ..errors import TorchLensWarning
 
 if TYPE_CHECKING:
@@ -421,10 +422,36 @@ class RooflineResult:
         )
 
 
+#: The Op record fields the roofline traffic model reads (D21: read-once /
+#: write-once ideal traffic = parent outputs + own output + parameters
+#: consumed). Pinned against the Op field vocabulary at import by
+#: :func:`_pin_traffic_fields`, so a field rename can never silently zero a
+#: traffic term again (AUD-CODE 2.11: a ``params_memory`` misspelling read
+#: ``None`` through ``getattr`` and dropped ALL parameter traffic, reporting a
+#: Linear(256, 512) at 85 FLOP/B instead of 1.96 FLOP/B).
+ROOFLINE_TRAFFIC_FIELDS: tuple[str, ...] = ("activation_memory", "param_memory")
+_TRAFFIC_OUTPUT_FIELD, _TRAFFIC_PARAM_FIELD = ROOFLINE_TRAFFIC_FIELDS
+
+
+def _pin_traffic_fields() -> None:
+    """Refuse to import over a traffic field the Op vocabulary does not carry."""
+
+    unknown = [name for name in ROOFLINE_TRAFFIC_FIELDS if name not in OP_LOG_FIELD_ORDER]
+    if unknown:
+        raise RuntimeError(
+            "roofline traffic reads Op fields absent from OP_LOG_FIELD_ORDER: "
+            f"{unknown}. A renamed field would silently drop that traffic term; "
+            "update ROOFLINE_TRAFFIC_FIELDS in the same change as the rename."
+        )
+
+
+_pin_traffic_fields()
+
+
 def _op_ideal_traffic(op: Any, trace: Any) -> int | None:
     """Read-once/write-once logical traffic for one op, if derivable."""
 
-    output_bytes = getattr(op, "activation_memory", None)
+    output_bytes = getattr(op, _TRAFFIC_OUTPUT_FIELD, None)
     if output_bytes is None:
         return None
     total = int(output_bytes)
@@ -433,12 +460,12 @@ def _op_ideal_traffic(op: Any, trace: Any) -> int | None:
             parent = trace[str(parent_label)]
         except (KeyError, ValueError):
             return None
-        parent_bytes = getattr(parent, "activation_memory", None)
+        parent_bytes = getattr(parent, _TRAFFIC_OUTPUT_FIELD, None)
         if parent_bytes is not None:
             total += int(parent_bytes)
-    fields_bytes = getattr(op, "params_memory", None)
-    if fields_bytes is not None:
-        total += int(fields_bytes)
+    param_bytes = getattr(op, _TRAFFIC_PARAM_FIELD, None)
+    if param_bytes is not None:
+        total += int(param_bytes)
     return total
 
 

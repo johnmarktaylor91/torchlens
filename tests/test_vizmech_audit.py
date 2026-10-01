@@ -2,9 +2,11 @@
 
 Calibration discipline (memo s6): every metric is proven in BOTH directions
 -- a known-bad must fail and a known-good must pass with headroom, never
-tuned-tight. The known-bad here is the real 12-way ``torch.stack`` fan-in
-(argument head labels collide at every degree until the wave-4 midpoint
-conversion); the known-good is a plain chain.
+tuned-tight. The known-bad is a PINNED hand-built DOT reproducing the
+historic 12-way fan-in head-label pileup (the live renderer no longer
+produces it: FIXD03-F13 relocated high-fan-in argument labels to midpoint
+labels, so a renderer-produced fixture would silently disarm the
+calibration); the known-good is a plain chain.
 """
 
 from __future__ import annotations
@@ -52,15 +54,51 @@ def _audit(model: nn.Module, x: torch.Tensor, tmp_path: Path, name: str) -> Audi
     return audit_layout(parsed)
 
 
-def test_known_bad_fan_in_fails(tmp_path: Path) -> None:
-    """The 12-way stack fan-in must trip the collision oracle."""
+def _pinned_fan_in_pileup_dot(n: int = 12) -> str:
+    """Hand-built DOT reproducing the historic fan-in head-label pileup.
 
-    result = _audit(_FanStack(12), torch.randn(2, 3), tmp_path, "fan12")
+    ``n`` sources feed one sink, each edge carrying an ``arg (0, k)``
+    ``headlabel`` with no placement attrs -- graphviz paints every head
+    label at one shared radius, so they smear into one band (the D03-R4
+    geometry). Pinned so the instrument calibration cannot be disarmed by
+    product fixes to the live renderer.
+    """
+
+    lines = ["digraph knownbad {", "  rankdir=BT;", '  sink [shape=box, label="cat_1_13"];']
+    for i in range(n):
+        lines.append(f'  s{i} [shape=box, label="conv2d_{i}"];')
+        lines.append(f"  s{i} -> sink [headlabel=<arg (0, {i})>, labelfontsize=8, arrowsize=.7];")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def test_known_bad_fan_in_fails() -> None:
+    """The pinned 12-way fan-in head-label pileup must trip the oracle."""
+
+    dot = _pinned_fan_in_pileup_dot(12)
+    parsed = parse_layout_json(run_layout_json(dot, "dot"), engine="dot", dot_source=dot)
+    result = audit_layout(parsed)
     assert result.hard_violation_count >= 10, result.describe("fan12")
     kinds = {violation.kind for violation in result.violations}
     # The knot hits multiple element classes at once (labels, nodes,
     # splines, arrowheads) -- the widened audit sees all of them.
     assert {"text-node", "text-arrowhead"} <= kinds
+
+
+def test_live_fan_in_renders_clean(tmp_path: Path) -> None:
+    """The live renderer's 12-way fan-in is CLEAN (D03-R4 midpoint fix).
+
+    The exact geometry the pinned known-bad above reproduces must no longer
+    be produced by the product: argument labels at visible fan-in >=
+    ``_ARG_LABEL_MIDPOINT_FANIN`` ride reserved-space midpoint labels, and
+    the argument-row inventory survives the relocation intact.
+    """
+
+    result = _audit(_FanStack(12), torch.randn(2, 3), tmp_path, "fan12live")
+    assert result.hard_violation_count == 0, result.describe("fan12live")
+    arg_texts = [text for text in result.text_multiset if str(text).startswith("arg (0, ")]
+    assert len(arg_texts) == 12, f"argument-label inventory lost rows: {sorted(arg_texts)}"
+    result.require_minimums(edge_midpoint=12)
 
 
 def test_known_good_chain_passes_with_inventory(tmp_path: Path) -> None:

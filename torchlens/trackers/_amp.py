@@ -26,10 +26,11 @@ When checks grows the shared primitive, this becomes a delegating consumer
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import replace
 from typing import Any
 
-from ..observability import HistogramResult, SpineResult
+from ..observability import CommittedBlock, HistogramResult, SpineResult
 from ._errors import TrackersError
 
 __tl_layer__ = "L8"
@@ -77,6 +78,86 @@ def observed_grad_scale(source: Any) -> tuple[float | None, str]:
     if not is_enabled():
         return (1.0, "unscaled_observed")
     return (float(get_scale()), "scaled_unknown_factor")
+
+
+#: ``GradScaler`` per-optimizer stage names -> whether ``p.grad`` is unscaled
+#: at the optimizer-step boundary. READY = the scaler has not unscaled this
+#: optimizer since the last ``update()`` (grads still carry the factor);
+#: UNSCALED / STEPPED = ``unscale_`` ran (in place) before the boundary.
+_STAGE_TO_TRUTH = {"READY": "scaled", "UNSCALED": "unscaled", "STEPPED": "unscaled"}
+
+
+def unscale_stage(scaler: Any, optimizer: Any) -> str:
+    """Whether ``optimizer``'s gradients are unscaled at the step boundary.
+
+    Reads the scaler's per-optimizer stage record (``_per_optimizer_states``,
+    a ``GradScaler`` implementation detail that has carried the READY /
+    UNSCALED / STEPPED stage since torch 1.6; duck-typed here, degrading to
+    ``"unknown"`` -- never to a guess -- when the record is absent or has an
+    unrecognized shape). ``scaler.step(optimizer)`` unscales before it calls
+    ``optimizer.step()``; a plain ``optimizer.step()`` after
+    ``scaler.scale(loss).backward()`` does NOT, and the boundary sees grads
+    still multiplied by the scale. Before this read the engine asserted
+    ``unscaled="yes"`` whenever ``get_scale()`` merely worked (AUD-CODE 2.14b).
+
+    Returns
+    -------
+    str
+        ``"unscaled"`` | ``"scaled"`` | ``"unknown"``.
+    """
+
+    if scaler is None or optimizer is None:
+        return "unknown"
+    states = getattr(scaler, "_per_optimizer_states", None)
+    if not isinstance(states, Mapping):
+        return "unknown"
+    # ``.get`` never materializes a defaultdict entry: a scaler that has not
+    # touched this optimizer since ``update()`` holds no record, which is the
+    # READY state by construction (nothing has unscaled these grads).
+    state = states.get(id(optimizer))
+    if state is None:
+        return "scaled"
+    if not isinstance(state, Mapping):
+        return "unknown"
+    stage = state.get("stage")
+    name = getattr(stage, "name", stage)
+    return _STAGE_TO_TRUTH.get(str(name), "unknown") if name is not None else "unknown"
+
+
+def corrected_gradient_block(block: CommittedBlock, scale: float) -> tuple[CommittedBlock, int]:
+    """Return ``block`` with every SCALED gradient observation corrected.
+
+    Observations stamped ``grad_scale="scaled"`` on gradient streams get the
+    closed-form correction (:func:`correct_spine` / :func:`correct_histogram`)
+    and are re-stamped ``"unscaled"``; everything else is returned as is.
+    The second element counts the corrected observations so the emitter can
+    disclose the derivation (evidence ``unscaled_derived``) on the run-health
+    series instead of presenting corrected numbers as observed ones.
+    """
+
+    corrected = 0
+    observations = []
+    for observation in block.observations:
+        if (
+            observation.stream in ("param_grad", "activation_grad")
+            and observation.grad_scale == "scaled"
+            and observation.spine is not None
+        ):
+            observation = replace(
+                observation,
+                spine=correct_spine(observation.spine, scale),
+                sketch=(
+                    correct_histogram(observation.sketch, scale)
+                    if observation.sketch is not None
+                    else None
+                ),
+                grad_scale="unscaled",
+            )
+            corrected += 1
+        observations.append(observation)
+    if not corrected:
+        return (block, 0)
+    return (replace(block, observations=tuple(observations)), corrected)
 
 
 def _divide(value: float | None, factor: float) -> float | None:
@@ -192,5 +273,7 @@ __all__ = [
     "SCALE_EVIDENCE",
     "correct_histogram",
     "correct_spine",
+    "corrected_gradient_block",
     "observed_grad_scale",
+    "unscale_stage",
 ]

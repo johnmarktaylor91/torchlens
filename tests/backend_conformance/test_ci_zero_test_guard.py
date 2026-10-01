@@ -117,3 +117,48 @@ def test_nightly_legs_declare_meaningful_executed_floors() -> None:
     assert len(floors) == len(backends), "every leg must declare executed_floor"
     assert all(floor >= 10 for floor in floors), floors
     assert '"${{ matrix.executed_floor }}"' in workflow
+
+
+def test_passed_ids_floor_accepts_path_spelled_node_ids(tmp_path: Path) -> None:
+    """The exact-passed-ID floor matches pytest path ids against junit classnames.
+
+    The RG floor file spells nodes ``tests/pkg/test_mod.py::test_x`` (what
+    ``--collect-only`` prints and the manifest lint checks); the junit report
+    spells the same node ``classname="tests.pkg.test_mod" name="test_x"``. The
+    check must join the two spellings, and a genuinely missing or failed node
+    must still be named.
+    """
+
+    junit = tmp_path / "rg.junit.xml"
+    junit.write_text(
+        '<testsuites><testsuite name="pytest" tests="2" skipped="0" failures="1" errors="0">'
+        '<testcase classname="tests.pkg.test_mod" name="test_ok" time="0.1"/>'
+        '<testcase classname="tests.pkg.test_mod" name="test_red" time="0.1">'
+        "<failure>boom</failure></testcase>"
+        "</testsuite></testsuites>"
+    )
+    ids = tmp_path / "ids.txt"
+    ids.write_text(
+        "# floor\ntests/pkg/test_mod.py::test_ok\ntests/pkg/test_mod.py::test_red\n"
+        "tests/pkg/test_mod.py::test_absent\n"
+    )
+    result = subprocess.run(
+        [sys.executable, str(_GUARD), str(junit), "0", "--passed-ids", str(ids)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    report = result.stdout + result.stderr
+    assert result.returncode == 1, report
+    assert "tests/pkg/test_mod.py::test_red" in report
+    assert "tests/pkg/test_mod.py::test_absent" in report
+    assert "test_ok" not in report.split("did not PASS", 1)[1]
+
+    ids.write_text("tests/pkg/test_mod.py::test_ok\n")
+    result = subprocess.run(
+        [sys.executable, str(_GUARD), str(junit), "0", "--passed-ids", str(ids)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

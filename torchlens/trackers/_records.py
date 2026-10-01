@@ -201,6 +201,18 @@ class TagGrammar:
         self.name = name
         self.namespace = namespace
 
+    def is_data_tag(self, tag: str) -> bool:
+        """True when ``tag`` belongs to a DATA family (never run-health/meta/check).
+
+        The close-time emptiness verdict counts data points only: a heartbeat
+        or manifest landing in a sink is not "the dashboard has data".
+        """
+
+        parts = tag.split("/")
+        if self.namespace is not None and parts and parts[0] == self.namespace:
+            parts = parts[1:]
+        return bool(parts) and parts[0] in FAMILIES
+
     def _root(self, family: str) -> str:
         """Family (plus optional namespace/name components) prefix."""
 

@@ -18,7 +18,7 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens._vocab.node_spec import NodeSpec
-from torchlens.visualization.surgery_diff import surgery_diff
+from torchlens.visualization import surgery_diff
 from torchlens.visualization.surgery_visuals import (
     CREDIT_ROWS,
     MARK_BASES,

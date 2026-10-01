@@ -131,6 +131,12 @@ def test_r67_defensive_materialization_source_scan() -> None:
 
 
 @pytest.mark.parametrize("caller", sorted(_CALLER_CONTEXTS))
+@pytest.mark.filterwarnings(
+    # A08 random-role-init disclosure (runnable_random_init_run): this test
+    # exercises a weight-free runnable run DELIBERATELY; the warning is the
+    # feature under test elsewhere (tests/test_persist_honesty_runnable_random.py).
+    "default:This runnable artifact carries no model weights"
+)
 def test_r67_state_artifact_matrix_under_caller_contexts(caller: str, tmp_path: Path) -> None:
     """Embedded/user/random state runs are caller-ambient-independent.
 

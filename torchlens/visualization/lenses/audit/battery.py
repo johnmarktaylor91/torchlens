@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import math
 import random
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -66,6 +67,7 @@ _KIND_TO_PHASE = {
     "bridged_vs_direct": "honesty_probe",
     "per_call_vs_aggregate": "honesty_probe",
     "direction": "task_probe",
+    "channel_semantics": "honesty_probe",
 }
 
 
@@ -105,6 +107,38 @@ class BatteryScore:
         return self.correct / self.total if self.total else 0.0
 
 
+def _require_sentinel_probe(key: AnswerKey) -> None:
+    """Refuse a sentinel packet whose known-bad control cannot fail.
+
+    A battery that cannot separate its own anchors is a broken battery,
+    not a verdict (D03-R6).
+    """
+
+    if not any(question.kind == "channel_semantics" for question in key.questions):
+        raise InvalidArgumentError(
+            "a sentinel (known-bad) packet needs a channel-semantics probe; "
+            "without one the control cannot fail and the battery cannot "
+            "separate its anchors",
+            code="battery_sentinel_probe_missing",
+            remedy="generate the key with generate_answer_key(..., sentinel=True)",
+            argument="sentinel",
+        )
+
+
+def _forced_choice_options(question: Any) -> list[str]:
+    """Assemble a forced-choice option list, deduped case-insensitively.
+
+    A probe whose ANSWER is the no-meaning option (the sentinel
+    channel-semantics probe) must not present it twice.
+    """
+
+    options: list[str] = []
+    for option in (str(question.answer), *question.distractors, "no meaning"):
+        if option.strip().lower() not in {seen.strip().lower() for seen in options}:
+            options.append(option)
+    return options
+
+
 def build_packet(
     key: AnswerKey,
     image_paths: list[str],
@@ -118,8 +152,16 @@ def build_packet(
     Filenames are masked (an evaluator never sees the lens or model name),
     order is seeded-random within the memo's fixed phase discipline, and
     the presentation rules ride the packet so D03 does not re-derive them.
+
+    A ``sentinel`` (known-bad control) packet REQUIRES a channel-semantics
+    probe in the key: without one the control cannot fail and the battery
+    cannot separate its own anchors -- a broken battery, not a verdict
+    (D03-R6). Generate the key with ``generate_answer_key(...,
+    sentinel=True)``.
     """
 
+    if sentinel:
+        _require_sentinel_probe(key)
     rng = random.Random(seed)
     masked = tuple(f"image_{index:02d}.png" for index in range(len(image_paths)))
     free_phase: list[dict[str, Any]] = [
@@ -151,7 +193,7 @@ def build_packet(
             "question": question.question,
         }
         if question.distractors:
-            options = [str(question.answer), *question.distractors, "no meaning"]
+            options = _forced_choice_options(question)
             rng.shuffle(options)
             entry["options"] = options
             entry["phase"] = "forced_choice"
@@ -199,7 +241,9 @@ def score_responses(key: AnswerKey, responses: dict[str, Any]) -> BatteryScore:
     """Score evaluator responses against the generated key.
 
     A wrong answer on a question guarding an honesty class is a CONFIRMED
-    class hit: zero tolerance, no threshold arithmetic applies.
+    class hit: zero tolerance, no threshold arithmetic applies. A response
+    matching the answer, ANY ``accepted`` alternative (a tied extremum), or
+    the complete accepted set named as a collection is correct (D03-R7).
     """
 
     total = 0
@@ -211,7 +255,11 @@ def score_responses(key: AnswerKey, responses: dict[str, Any]) -> BatteryScore:
             continue
         total += 1
         response = responses[question.id]
-        is_correct = _matches(question.answer, response)
+        is_correct = (
+            _matches(question.answer, response)
+            or any(_matches(candidate, response) for candidate in question.accepted)
+            or (bool(question.accepted) and _matches(list(question.accepted), response))
+        )
         kind_total, kind_correct = by_kind.get(question.kind, (0, 0))
         by_kind[question.kind] = (kind_total + 1, kind_correct + (1 if is_correct else 0))
         if is_correct:
@@ -226,17 +274,103 @@ def score_responses(key: AnswerKey, responses: dict[str, Any]) -> BatteryScore:
     )
 
 
+#: Standalone tokens that decide a boolean response's polarity.
+_BOOLEAN_TOKENS = {"yes": True, "true": True, "no": False, "false": False}
+
+
+def _normalized(value: Any) -> str:
+    """Case/whitespace-neutral text form."""
+
+    return str(value).strip().lower()
+
+
+def _label_stem(text: str) -> str:
+    """Strip one trailing ``:N`` pass qualifier, else return the text."""
+
+    stem, sep, tail = text.rpartition(":")
+    return stem if sep and tail.isdigit() else text
+
+
+def _string_matches(expected: Any, actual: Any) -> bool:
+    """Case/whitespace-neutral equality with label-spelling interchange.
+
+    The bare and ``:N``-qualified spellings of ONE label are the same
+    answer (D03-R7); two DIFFERENTLY-qualified spellings never match
+    through the bare stem.
+    """
+
+    expected_text, actual_text = _normalized(expected), _normalized(actual)
+    if expected_text == actual_text:
+        return True
+    return _label_stem(expected_text) == actual_text or expected_text == _label_stem(actual_text)
+
+
+def _boolean_matches(expected: bool, actual: Any) -> bool:
+    """The FIRST standalone yes/true/no/false token decides polarity.
+
+    An elaborated "No (false). The scale is ordinal ..." is a correct
+    refusal, not a format miss (D03-R7); a response with no boolean token
+    never matches.
+    """
+
+    if isinstance(actual, bool):
+        return expected == actual
+    for token in re.findall(r"[a-z]+", _normalized(actual)):
+        polarity = _BOOLEAN_TOKENS.get(token)
+        if polarity is not None:
+            return polarity is expected
+    return False
+
+
+def _response_items(actual: Any) -> list[Any] | None:
+    """Normalize a collection response; ``None`` = not collection-shaped.
+
+    A string response is read as a comma-separated label list.
+    """
+
+    if isinstance(actual, str):
+        return [part for part in map(str.strip, actual.split(",")) if part]
+    if isinstance(actual, (list, tuple, set, frozenset)):
+        return list(actual)
+    return None
+
+
+def _collection_matches(expected: Any, actual: Any) -> bool:
+    """Order-insensitive label-set equality with spelling interchange.
+
+    An empty expected set also accepts a bare "none".
+    """
+
+    actual_items = _response_items(actual)
+    if actual_items is None:
+        return False
+    expected_items = list(expected)
+    if not expected_items:
+        return not actual_items or [_normalized(item) for item in actual_items] == ["none"]
+    return all(
+        any(_string_matches(expected_item, item) for item in actual_items)
+        for expected_item in expected_items
+    ) and all(
+        any(_string_matches(expected_item, item) for expected_item in expected_items)
+        for item in actual_items
+    )
+
+
 def _matches(expected: Any, actual: Any) -> bool:
     """Loose-but-deterministic answer matching (case/whitespace neutral)."""
 
     if isinstance(expected, bool):
-        if isinstance(actual, bool):
-            return expected == actual
-        text = str(actual).strip().lower()
-        return text in ("yes", "true") if expected else text in ("no", "false")
-    if isinstance(expected, (list, tuple, set, frozenset, dict)):
-        return expected == actual
-    return str(expected).strip().lower() == str(actual).strip().lower()
+        return _boolean_matches(expected, actual)
+    if isinstance(expected, dict):
+        if not isinstance(actual, dict):
+            return False
+        actual_by_key = {_normalized(key): value for key, value in actual.items()}
+        return set(map(_normalized, expected)) == set(actual_by_key) and all(
+            _matches(value, actual_by_key[_normalized(key)]) for key, value in expected.items()
+        )
+    if isinstance(expected, (list, tuple, set, frozenset)):
+        return _collection_matches(expected, actual)
+    return _string_matches(expected, actual)
 
 
 def _one_sided_bound(scores: list[float], *, upper: bool) -> float:

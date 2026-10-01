@@ -89,10 +89,13 @@ def test_extras_composition_repairs_hold() -> None:
     empty = sorted(name for name, reqs in extras.items() if not reqs)
     assert not empty, f"empty extras install nothing and market nothing: {empty}"
 
-    # the neuro extra carries what the code consumes (bridge/brain_score.py
-    # imports brainscore_vision; brainscore_core arrives transitively).
-    assert any(req.startswith("brainscore_vision") for req in extras["neuro"])
-    assert not any(req.startswith("brainscore_core") for req in extras["neuro"])
+    # neuro memo D17 (landed by D05, 2026-09-02): [neuro] is rsatoolbox-only and the
+    # Brain-Score seam is its own [brainscore] extra (brainscore_vision 2.3 pins
+    # scikit-learn<1.6, under which rsatoolbox 0.3 cannot import); brainscore_core
+    # is imported nowhere and arrives transitively.
+    assert not any(req.startswith("brainscore") for req in extras["neuro"])
+    assert any(req.startswith("brainscore_vision") for req in extras["brainscore"])
+    assert not any(req.startswith("brainscore_core") for req in extras["brainscore"])
 
 
 @pytest.mark.smoke

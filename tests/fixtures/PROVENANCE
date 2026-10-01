@@ -1,0 +1,20 @@
+generator: manual regeneration in a scratch worktree detached at 85c8c60f8 (the fixture's
+  original capture commit): pickle.loads(old fixture) -> trace.facet_registry_snapshot = None
+  -> pickle.dumps(trace, protocol=5) -> tests/fixtures/legacy_trace_85c8c60f.pkl
+artifact: tests/fixtures/legacy_trace_85c8c60f.pkl (nn.Identity traced on a (1, 2) float32
+  CPU input at 85c8c60f8; layers input_1 / output_1; len(trace) == 2)
+reason: FW2-B item 12-B. The original bytes embedded builtin facet recipe FUNCTIONS by import
+  identity (STACK_GLOBAL rows for torchlens.semantic.recipes.{attention,embedding,mlp,norm,
+  residual}) through the session-time facet_registry_snapshot; 2b552c886 (2026-08-26) renamed
+  gqa_sdpa_attention -> gqa_attention under the remove-and-rename policy, so pickle.loads raised
+  AttributeError. ROOT CAUSE FIXED FIRST in the same lane: Trace.__getstate__ now serializes
+  facet_registry_snapshot as None (the loaded-artifact form; _snapshot_for_record falls back
+  to the live registry), pinned by tests/test_fw2b_pickle_recipe_globals.py. The fixture's
+  purpose (legacy flat _runnable_* / _build_state / _raw_graph_ws / _module_capture_ws /
+  _wrapper_runtime_ws field layout normalizing through the current state seam) is preserved:
+  those fields come from the 85c8c60f8 class layout, which the re-pickle at that commit keeps;
+  the only module globals that left the bytes are torchlens.semantic.facets and
+  torchlens.semantic.recipes.*. No loader check was weakened.
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+recorded: 2026-09-02

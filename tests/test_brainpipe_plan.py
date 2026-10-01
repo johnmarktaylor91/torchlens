@@ -19,6 +19,8 @@ import torch.nn as nn
 
 from torchlens import brainpipe as bp
 
+pytestmark = pytest.mark.smoke  # measured <0.5s per test (W051-GATE, AUD-CODE 0.1)
+
 
 class _BatchInvariantModel(nn.Module):
     """Model with one batch-invariant site (a broadcast constant)."""

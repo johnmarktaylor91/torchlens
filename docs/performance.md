@@ -122,7 +122,17 @@ unwrap_torch()
 ```
 
 The independent aten-level completeness witness is also opt-in and can run alone or alongside the
-callable detector:
+callable detector. **This is the only route to `capture_verified=True`.** A plain `tl.trace()` never
+arms it: every default capture reads `capture_verified=None`, which every honesty surface renders as
+"not recorded" -- not a clean bill. Escapes the wrappers themselves observe (worker-thread ops,
+`torch.jit.script` regions, direct `torch.ops.aten.*` calls, `.data.copy_()`) still ceiling the
+default capture to `False`, and tensor-to-scalar escapes (`.item()`, `int(argmax)`) raise the
+`scalar_escape` advisory; but host tensor sources the wrappers cannot see -- `torch.from_numpy(...)`
+/ `torch.as_tensor(np_array)` / `torch.from_dlpack(...)` round-trips, an `autograd.Function` whose
+forward runs in NumPy, and in-forward storage writes through `.numpy()` / `untyped_storage()`
+aliases -- leave NO ceiling and NO advisory on the default capture (the op is visible to a graph
+reader as an internal-source op with `parents=()`). Arm the witness (or run `tl.validate`) when that
+class of escape matters:
 
 ```python
 import torch

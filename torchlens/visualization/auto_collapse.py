@@ -1395,7 +1395,15 @@ def _indexed_parent_stem(address: str) -> str:
         stem = name
     else:
         stem = indexed_stem.rstrip("._") or ""
-    return f"{parent}.{stem}" if parent and stem else parent or stem or name
+    if parent and stem:
+        return f"{parent}.{stem}"
+    if indexed_stem is not None:
+        # A bare indexed ROOT child ("0", "1", ... under nn.Sequential as the
+        # root) has an EMPTY shared stem. Falling back to the name here gave
+        # every root sibling a DISTINCT run key, silently vetoing root-child
+        # run folding (D03-R3).
+        return parent or stem
+    return parent or stem or name
 
 
 def _common_parent_address(addresses: tuple[str, ...]) -> str | None:

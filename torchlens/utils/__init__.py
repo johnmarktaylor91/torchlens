@@ -224,7 +224,15 @@ def format_capability_summary(snapshot: dict[str, bool]) -> str:
     return summary
 
 
-_DOCTOR_EXCLUDED_EXTRAS = frozenset({"all", "all-stretch", "dev", "test"})
+# Extras the user-facing doctor never probes: the rollups and the contributor/test
+# extras. deploy / tlens-oracle / trackers-relay-test are TEST-FACING (pyproject: the
+# skip-audit ledger's optional-preview rows, the TransformerLens oracle rows, the
+# tracker relay-fidelity pins) and never advertised to users; probing them also
+# imports peft/transformer_lens/wandb/clearml for real (the probe IS an import),
+# which pushed the doctor past the MCP doctor tool's 12 s budget (D05, 2026-09-02).
+_DOCTOR_EXCLUDED_EXTRAS = frozenset(
+    {"all", "all-stretch", "dev", "test", "deploy", "tlens-oracle", "trackers-relay-test"}
+)
 _EXTRA_MARKER_RE = re.compile(r"""extra\s*==\s*['"](?P<extra>[^'"]+)['"]""")
 _REQUIREMENT_IMPORT_NAME_OVERRIDES: dict[str, tuple[str, ...]] = {
     "brain-score": ("brainscore_core",),
@@ -440,22 +448,47 @@ def _probe_torch_capabilities() -> DoctorCheck:
         Snapshot of probed private integration capabilities.
     """
 
+    from . import _torch_compat as _tc
     from ._torch_compat import OPTIONAL_CAPABILITY_FLAGS
 
     snapshot = _runtime_capability_snapshot()
     absent = [name for name, available in snapshot.items() if not available]
+
+    def _probe_latched(name: str) -> bool:
+        """Return whether a flag's lazy probe has actually run.
+
+        Lazily probed flags (kineto event fields, memory profile, ...) default
+        ``False`` with a ``_<NAME>_PROBED`` latch flipped at first use; a flag
+        with no latch is probed eagerly at import and always reads as latched.
+        """
+
+        latch = "_" + name.removeprefix("HAS_") + "_PROBED"
+        return bool(getattr(_tc, latch, True))
+
     # r-b4 R26-4: only genuine DEGRADATIONS drive WARN. An absent optional
     # feature (interpreter-version surface, upstream-removed API, an optional
     # backend that is not installed) is reported with its true value but keeps
     # a healthy install at PASS -- a permanent false alarm trains users to
-    # ignore the row.
-    missing = [name for name in absent if name not in OPTIONAL_CAPABILITY_FLAGS]
+    # ignore the row. A lazily probed flag whose probe has never run is
+    # UNPROBED, not missing: nothing has consumed the capability yet, so
+    # nothing has degraded (D04 integration fix; the doctor previously read
+    # every unprobed-lazy default-False flag as a degradation WARN).
+    missing = [
+        name for name in absent if name not in OPTIONAL_CAPABILITY_FLAGS and _probe_latched(name)
+    ]
+    unprobed = [
+        name
+        for name in absent
+        if name not in OPTIONAL_CAPABILITY_FLAGS and not _probe_latched(name)
+    ]
     optional_absent = [name for name in absent if name in OPTIONAL_CAPABILITY_FLAGS]
     # Grouped absences-first summary; the full name=value dump lives on the
     # detail accessor (tl.utils.capability_snapshot()), not in the row cell.
     detail = format_capability_summary(snapshot)
     if missing:
         detail += "; missing=" + ",".join(missing)
+    if unprobed:
+        detail += "; unprobed=" + ",".join(unprobed)
     if optional_absent:
         detail += "; optional_absent=" + ",".join(optional_absent)
     detail += "; full dump: tl.utils.capability_snapshot()"

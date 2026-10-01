@@ -126,6 +126,9 @@ class TestFieldOrderSync:
             "save_budget",
             "distributed_witness",
             "track_nonfinite",
+            # F24 device-memory lane: fifth session knob, DROP, unordered, load
+            # restores the default (CaptureOptions.track_device_memory).
+            "track_device_memory",
         }
         portable_unordered = {
             "checkpoint_invocation_witness",

@@ -72,7 +72,10 @@ def _op_rank(op: Any) -> int | None:
 def _fold_key(op: Any) -> tuple[Any, ...]:
     """Compute the versioned fold key for one op.
 
-    Key = (normalized module_call_stack, func_name, rank[, pass_index]) --
+    Key = (normalized module_call_stack, func_name, rank, boundary role
+    [, pass_index]) -- the boundary role keeps a model's input and output
+    nodes in DISTINCT classes even when their shapes match (AUD-CODE
+    3.11b; both spell ``func_name="none"`` with an empty stack), and
     ``pass_index`` participates ONLY on multi-pass ops (never claim
     uniformity across a pass boundary).
 
@@ -91,10 +94,58 @@ def _fold_key(op: Any) -> tuple[Any, ...]:
         normalize_module_path(str(entry)) for entry in getattr(op, "module_call_stack", ()) or ()
     )
     func_name = str(getattr(op, "func_name", "unknown"))
-    key: tuple[Any, ...] = (stack, func_name, _op_rank(op))
+    key: tuple[Any, ...] = (stack, func_name, _op_rank(op), _boundary_role(op))
     if int(getattr(op, "num_passes", 1) or 1) > 1:
         key = (*key, int(getattr(op, "pass_index", 1) or 1))
     return key
+
+
+def _boundary_role(op: Any) -> str | None:
+    """Return the op's graph-boundary role: input / output / input_output / None."""
+
+    is_input = bool(getattr(op, "is_input", False))
+    is_output = bool(getattr(op, "is_output", False))
+    if is_input and is_output:
+        return "input_output"
+    if is_input:
+        return "input"
+    if is_output:
+        return "output"
+    return None
+
+
+def _edge_index(ops: list[Any], label_to_class: dict[str, str]) -> dict[str, str]:
+    """Map every edge spelling an op record can carry to its class id.
+
+    ``op.parents``/``op.children`` spell single-pass neighbours by BARE layer
+    label (``"linear_1_1"``) and multi-pass neighbours pass-qualified
+    (``"linear_1_1:2"``), while ``label_to_class`` is keyed by the
+    pass-qualified ``op.label``; without this bridge every single-pass
+    trace folded with empty parent/child classes (AUD-CODE 3.11b). A bare
+    reference to a MULTI-pass layer stays unresolved: it names several
+    classes and claiming any one of them would over-state the relation.
+
+    Parameters
+    ----------
+    ops:
+        Op records.
+    label_to_class:
+        ``op.label`` -> class id.
+
+    Returns
+    -------
+    dict[str, str]
+        Edge spelling -> class id.
+    """
+
+    index = dict(label_to_class)
+    for op in ops:
+        if int(getattr(op, "num_passes", 1) or 1) == 1:
+            bare = str(getattr(op, "layer_label", ""))
+            class_id = label_to_class.get(str(getattr(op, "label", "")))
+            if bare and class_id is not None:
+                index.setdefault(bare, class_id)
+    return index
 
 
 def _split_value(op: Any, field: str) -> Any:
@@ -145,6 +196,7 @@ class FoldClass:
     module_path: tuple[str, ...]
     func_name: str
     rank: int | None
+    boundary: str | None
     pass_index: int | None
     n_instances: int
     members: tuple[str, ...]
@@ -206,10 +258,11 @@ def fold_trace(log: Any) -> FoldResult:
         for op in groups[full_key]:
             label_to_class[str(getattr(op, "label", ""))] = class_id
 
+    edge_index = _edge_index(ops, label_to_class)
     classes: list[FoldClass] = []
     for full_key in order:
         members = groups[full_key]
-        (stack, func_name, rank, *pass_part), split = full_key
+        (stack, func_name, rank, boundary, *pass_part), split = full_key
         fields: dict[str, Any] = dict(zip(_SPLIT_FIELDS, split, strict=True))
         if fields["shape"] is not None:
             fields["shape"] = list(fields["shape"])
@@ -217,18 +270,18 @@ def fold_trace(log: Any) -> FoldResult:
             fields[field] = _disclose([_disclosed_value(op, field) for op in members])
         parent_ids = sorted(
             {
-                label_to_class[str(parent)]
+                edge_index[str(parent)]
                 for op in members
                 for parent in getattr(op, "parents", ()) or ()
-                if str(parent) in label_to_class
+                if str(parent) in edge_index
             }
         )
         child_ids = sorted(
             {
-                label_to_class[str(child)]
+                edge_index[str(child)]
                 for op in members
                 for child in getattr(op, "children", ()) or ()
-                if str(child) in label_to_class
+                if str(child) in edge_index
             }
         )
         classes.append(
@@ -237,6 +290,7 @@ def fold_trace(log: Any) -> FoldResult:
                 module_path=stack,
                 func_name=func_name,
                 rank=rank,
+                boundary=boundary,
                 pass_index=pass_part[0] if pass_part else None,
                 n_instances=len(members),
                 members=tuple(str(getattr(op, "label", "")) for op in members),
@@ -279,6 +333,8 @@ def fold_class_rows(result: FoldResult) -> list[dict[str, Any]]:
             "child_classes": list(cls.child_classes),
             **cls.fields,
         }
+        if cls.boundary is not None:
+            row["boundary"] = cls.boundary
         if cls.pass_index is not None:
             row["pass_index"] = cls.pass_index
         rows.append(row)

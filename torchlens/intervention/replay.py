@@ -25,6 +25,12 @@ from ..options import ReplayOptions, merge_replay_options
 from ..quantities import Bytes
 from ..utils.display import progress_bar
 from ..utils.rng import execute_with_restored_rng_autocast
+from ._replay_context import (
+    REPLAY_CAPTURE_DIGESTS_KEY,
+    _ensure_replay_run_ctx,
+    _record_capture_digest,
+    _replay_site_key,
+)
 from .audit import _hook_name, _replay_fire_record
 from .edge_substitution import require_depth1_arg_path
 from .errors import (
@@ -368,23 +374,6 @@ def _clear_param_gradient_projection(param_log: Any) -> None:
     param_log._grad_shape = None
     param_log._grad_dtype = None
     param_log._grad_memory = Bytes(0)
-
-
-def _replay_site_key(site: Op) -> str:
-    """Return the pass-qualified replay key for one op record.
-
-    ``Op.label`` is the pass-qualified ``layer_label:pass`` spelling on every
-    finished-trace op (single-pass ops carry ``:1``), and every such spelling
-    is a ``layer_dict_all_keys`` lookup key, so replay state keyed by it can
-    never collide across passes of a recurrence-grouped layer. Bare
-    ``layer_label`` keys map to the LAST pass only — keying replay state by
-    them is exactly the pass-blind corruption this key exists to prevent.
-    """
-
-    label = getattr(site, "label", None)
-    if isinstance(label, str) and label:
-        return label
-    return site.layer_label
 
 
 def _disclosure_label(site: Op) -> str:
@@ -1201,15 +1190,18 @@ def _splice_param_substitutions(
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
 ) -> tuple[tuple[Any, ...], dict[str, Any]]:
-    """Re-splice param-kind tier-(ii) substitutions into reconstructed args.
+    """Re-splice EVERY tier-(ii) substitution into reconstructed args.
 
     A parameter argument reconstructs from its template ``LiteralTensor`` as
-    the LIVE (unsubstituted) parameter, so cone recomputation must re-apply
-    the substituted value here — otherwise a push would silently revert the
-    "as if" edit. STRICTLY gated to ``substitution_kind`` in
-    ``("param", "region")`` — region exit entries (F01) re-splice like param
-    entries, nested container paths included; edge-selection entries keep
-    their shipped no-re-splice semantics (parity-pinned).
+    the LIVE (unsubstituted) parameter, and an edge argument reconstructs
+    from the parent's CURRENT out, so cone recomputation must re-apply every
+    substituted value here — otherwise a later push (a second edge edit on
+    another arg of the same child, an upstream act edit, a param edit whose
+    cone reaches the child) silently reverts the edit while the store, the
+    stamp, and the audit row keep asserting it (AUD-CODE 2.9b). Param and
+    region entries (F01, nested container paths included) and edge-selection
+    entries all re-splice: a tier-(ii) entry IS the value the child consumes
+    at that occurrence until it is removed or overwritten.
 
     Parameters
     ----------
@@ -1230,8 +1222,6 @@ def _splice_param_substitutions(
         entries = getattr(member, "edge_substitutions", None) or {}
         for store_key, payload in entries.items():
             if not isinstance(payload, dict):
-                continue
-            if payload.get("substitution_kind") not in ("param", "region"):
                 continue
             value = payload.get("value")
             if not isinstance(value, torch.Tensor):
@@ -1278,9 +1268,15 @@ def _commit_replay_updates(
     """
 
     snapshots: dict[str, dict[str, Any]] = {}
+    run_ctx = _ensure_replay_run_ctx(log)
+    known_digests = run_ctx.get(REPLAY_CAPTURE_DIGESTS_KEY)
+    if not isinstance(known_digests, dict):
+        known_digests = {}
+    new_digests: dict[str, str] = {}
     try:
         for label, tensor in pending_updates.items():
             site = log.layer_dict_all_keys[label]
+            _record_capture_digest(site, known_digests, new_digests)
             snapshots[label] = {
                 "out": site.out,
                 "transformed_out": site.transformed_out,
@@ -1329,6 +1325,9 @@ def _commit_replay_updates(
             for field_name, value in state.items():
                 site._internal_set(field_name, value)
         raise
+    if new_digests:
+        # Rebind, never mutate: the run context may be shared with a fork.
+        run_ctx[REPLAY_CAPTURE_DIGESTS_KEY] = {**known_digests, **new_digests}
 
 
 def _apply_out_update(site: Op, tensor: torch.Tensor) -> None:
@@ -1895,7 +1894,13 @@ def _threaded_buffer_value(
         return None
     producer_key = parents[0] if len(parents) == 1 else None
     producer = trace.layer_dict_all_keys.get(producer_key) if producer_key is not None else None
-    recomputed = overlay.get(producer_key) if producer_key is not None else None
+    # The overlay is keyed by the pass-qualified replay key while a
+    # SINGLE-pass producer spells its parent label bare (``copy_1_4`` vs
+    # ``copy_1_4:1``); resolve the producer first and look up ITS replay key,
+    # or every single-pass buffer write silently fell into the
+    # "producer outside the cone" branch below with no gap disclosed
+    # (AUD-CODE 2.8).
+    recomputed = overlay.get(_replay_site_key(producer)) if producer is not None else None
 
     def _gap(reason: str) -> None:
         """Disclose one unthreadable buffer version (raise under strict)."""
@@ -1918,10 +1923,17 @@ def _threaded_buffer_value(
         return None
     write_kind = getattr(site, "buffer_write_kind", None)
     if write_kind not in {"inplace", "reassign"}:
-        _gap(
-            f"write kind {write_kind!r} does not prove the writing op's output equals "
-            "the post-write buffer state"
-        )
+        # A DECLARED (fused-mutator) write whose bytes provably did not change
+        # -- every eval-mode BatchNorm/InstanceNorm/GroupNorm buffer is
+        # journaled this way (``rescue._buffer_write_labels`` applies the same
+        # evidence rule) -- keeps its captured value with NOTHING to disclose:
+        # that value IS the replay value. ``True``/``None`` (changed or
+        # unknown) stay the fail-closed disclosure.
+        if getattr(site, "buffer_value_changed", None) is not False:
+            _gap(
+                f"write kind {write_kind!r} does not prove the writing op's output equals "
+                "the post-write buffer state"
+            )
         return None
     captured_site = site.out
     captured_producer = producer.out
@@ -1937,31 +1949,6 @@ def _threaded_buffer_value(
         )
         return None
     return recomputed
-
-
-def _ensure_replay_run_ctx(log: Trace) -> dict[str, Any]:
-    """Return a mutable replay run context on ``log``.
-
-    Parameters
-    ----------
-    log:
-        Model log being replayed.
-
-    Returns
-    -------
-    dict[str, Any]
-        Run context dictionary.
-    """
-
-    if not isinstance(getattr(log, "last_run", None), dict):
-        log.last_run = {}
-    run_ctx = cast(dict[str, Any], log.last_run)
-    # Seed law D5 (F02): thread the capture's recorded seed so seed='auto'
-    # stochastic edits canonicalize their base seed on the replay door too.
-    trace_seed = getattr(log, "random_seed", None)
-    if trace_seed is not None:
-        run_ctx.setdefault("trace_random_seed", trace_seed)
-    return run_ctx
 
 
 def _is_namedtuple_instance(value: Any) -> bool:

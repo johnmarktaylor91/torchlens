@@ -83,23 +83,65 @@ notebook = ["ipython>=8.0", "jupyter-client>=8.0"]
 # rsatoolbox: >=0.1.5 keeps the validated floor; the ceiling admits the 0.2/0.3
 # line because 0.1.5 ships no cp313 wheels (0.3.x is the first that does) and the
 # bridge surface used (rsatoolbox.data.Dataset) is stable across the range.
-# brainscore_vision is what the code actually consumes: torchlens/bridge/
-# brain_score.py imports brainscore_vision.model_helpers (in NO extra before
-# the 2026-08 completeness audit, WT A-VI item 35 / neuro-memo D17), while the
-# previously-pinned brainscore_core was imported NOWHERE outside the appliance
-# gate tuple. Pinning brainscore_vision pulls brainscore_core transitively, so
-# the torchlens.neuro dependency gate stays satisfied on 3.11+ with the extra
-# now also carrying the bridge's real dependency. brainscore_vision declares
-# requires-python >=3.11 on every release, so the marker keeps the extra
-# installable on 3.10 (rsatoolbox only there; the appliance's dependency gate
-# names the missing package at use time -- same behavior as before).
+# neuro is rsatoolbox-ONLY (neuro memo D17, both halves landed by D05 2026-09-02).
+# The Brain-Score seam (torchlens/bridge/brain_score.py imports
+# brainscore_vision.model_helpers) lives in its OWN extra below, which is the
+# spelling torchlens.neuro's teaching remedy names
+# ('pip install "torchlens[brainscore]" (Python >= 3.11)'). Carrying
+# brainscore_vision inside [neuro] was measured BROKEN in the D05 clean-venv
+# extras audit: brainscore_vision 2.3.22 pins scikit-learn<1.6 while rsatoolbox
+# 0.3.x imports sklearn.utils.validation.validate_data (scikit-learn >= 1.6), so
+# `torchlens[neuro]` resolved (scikit-learn 1.5.2) and then could not
+# `import rsatoolbox` on 3.11+. Pure-RSA users now never resolve Brain-Score at
+# all; [neuro,brainscore] together still hits the upstream conflict (disclosed in
+# docs/reference/neuro.md). brainscore_vision declares requires-python >=3.11 on
+# every release, so its marker keeps [brainscore] installable (empty) on 3.10 and
+# the appliance's dependency gate names the missing package at use time.
+# brainscore_core is named nowhere (imported nowhere; arrives transitively).
 neuro = [
     "rsatoolbox>=0.1.5,<0.4",
-    "brainscore_vision~=2.3; python_version >= '3.11'",
 ]
-viz = ["torchshow~=0.5", "lovely-tensors~=0.1.18"]
+brainscore = ["brainscore_vision~=2.3; python_version >= '3.11'"]
+# F14 (netron memo D-20): the serve/widget one-liner's teaching refusal
+# (netron_serve_unavailable) names this extra; bounded below the next major.
+# CI pins netron==9.2.2 EXACT for the vendor-parser harness (pin REFRESHED,
+# never widened); the artifact FILE itself needs no extra.
+netron = ["netron>=9.2,<10"]
+# F16: the treescope bridge extra. torchlens/bridge/treescope.py probes
+# capability at first use, so the released-but-torch-broken 0.1.10 stays
+# installable and degrades strictly (the probe, not the pin, is the gate).
+treescope = ["treescope>=0.1.10"]
+# F18 (extract memo D15): hdf5/mat exporters only -- lazy imports, the typed
+# extraction_export_dependency_missing refusal names this extra, and NOTHING
+# lands on the default path (the npy exporter runs dependency-free).
+extraction-export = ["h5py>=3.10", "scipy>=1.10"]
+# F37 (deployment envelope): the extra the skip-audit ledger's optional-preview
+# rows for bitsandbytes/peft name. CPU wheels suffice (bitsandbytes 0.50.2 runs
+# 8/4-bit linears on CPU, measured 2026-08-31); installing it un-skips
+# tests/test_deploy_env_{offload,device_map,quantized,peft}.py in any leg.
+deploy = ["accelerate>=1.0", "peft>=0.17", "bitsandbytes>=0.48"]
+# F05 (mikit memo D13): TEST-ONLY oracle extra, exact-pinned on the
+# transformers-5.x band (uv-resolved 2026-09-02: transformer-lens 3.8.0 pulls
+# transformers 5.16.1, inside >=4.45,<6). Deliberately NOT folded into [test]:
+# every CI leg installs [test], and the TransformerLens stack would ride into
+# all of them for the sake of the Gate-2 oracle rows (G2a/G2b/G2c), which
+# importorskip until this extra is installed. Never advertised to users.
+tlens-oracle = ["transformer-lens==3.8.0"]
+# F26 (trackers memo item 1 / section 7 rows 3-4): relay-fidelity TEST extra
+# for the T-RELAY-W / T-RELAY-C pins in tests/test_trackers_sinks_relay_pins.py
+# (importorskip today; activate by installing this extra). Exact pins on
+# purpose: a relay-fidelity pin against a floating tracker is not a pin.
+trackers-relay-test = ["wandb==0.28.2", "clearml==2.1.12", "tensorboard>=2.21"]
+# F07 FORK-T1 branch A (tviz memo section 10): torchlens.tviz resolves
+# matplotlib at CALL time and refuses typed (tv_matplotlib_missing) naming this
+# extra; the band is the one already proven in the test extra. cairosvg is
+# deliberately NOT added (tviz memo N15/N16).
+viz = ["torchshow~=0.5", "lovely-tensors~=0.1.18", "matplotlib>=3.8,<4"]
 tabular = ["pandas>=2.0", "pyarrow>=14"]
-captum = ["captum~=0.7"]
+# F06 (attrib memo section 6, packaging_requests 2026-08-28): the oracle ledger
+# B10 was measured on captum 0.9.0; `~=0.7` excluded every 0.8/0.9 release and
+# blocked the consolidated ledger. Bounded at the next major.
+captum = ["captum>=0.7,<1.0"]
 # `mcp` gates the torchlens.bridge.mcp stdio server (python -m torchlens.bridge.mcp);
 # the pure tool layer (TOOL_SPECS / call_tool) works without it.
 mcp = ["mcp>=2.0"]
@@ -142,7 +184,14 @@ shap = ["shap~=0.46"]
 inseq = ["inseq~=0.6"]
 steering = ["steering-vectors~=0.1"]
 repeng = ["repeng~=0.4"]
-dialz = ["dialz~=0.2"]
+# D05 extras audit (2026-09-02): dialz 0.2 imports IPython.display at import time
+# (dialz/visualize.py) without declaring ipython, so `torchlens[dialz]` installed
+# but could not `import dialz` in a clean venv -- the ipython rider closes that.
+# Its gguf<0.14 pin resolves sentencepiece 0.2.0, which ships no cp313 wheels and
+# fails its sdist build, so the extra is marked out on 3.13 (installable, empty;
+# the fix-by-exclusion idiom the tinygrad extra already uses). The same two
+# members appear in all-stretch below.
+dialz = ["dialz~=0.2; python_version < '3.13'", "ipython>=8.0; python_version < '3.13'"]
 nnsight = ["nnsight~=0.4"]
 # lit-nlp is bounded to the 1.3 line (LIT-panel memo item 1): `~=1.3` admitted
 # every future 1.x, and lit-nlp 1.3 requires shap<0.46 against the shap~=0.46
@@ -177,7 +226,9 @@ all-stretch = [
     "inseq~=0.6",
     "steering-vectors~=0.1",
     "repeng~=0.4",
-    "dialz~=0.2",
+    # dialz: ipython rider + 3.13 exclusion, see the dialz extra above.
+    "dialz~=0.2; python_version < '3.13'",
+    "ipython>=8.0; python_version < '3.13'",
     "depyf~=0.18",
     "torchextractor>=0.3,<2",
     "sentence-transformers>=2.5,<5",
@@ -269,7 +320,24 @@ test = [
     "psutil>=5.9",
     "transformers>=4.45,<6",
     "visualpriors",
+    # F14 (netron memo B0/D-07): un-skips the strict onnx.ModelProto parse +
+    # check_model(full_check=True) acceptance gate in EVERY CI leg -- the
+    # memo's falsified "contract-tested" baseline. protobuf backs the JSON
+    # parser the same gate uses.
+    "onnx>=1.22",
+    "protobuf",
+    # F33 (weightsfree memo item 20): unlocks the Tier-2 init_empty_weights()
+    # and device_map="meta" on-ramp rows -- the one DIGEST-AUDIT-named spelling
+    # never executed in four rounds (tests importorskip so absence stays green).
+    "accelerate>=1.0",
 ]
+
+# F29 (agent memo 3.11): the console-script spelling beside the shipped
+# `python -m torchlens`; the CLI, its exit codes, and tier-0 torch purity are
+# tested through -m (tests/test_agent_cli*.py), and setuptools writes this to
+# dist-info/entry_points.txt (inside the wheel-diet allowlist).
+[project.scripts]
+torchlens = "torchlens.agent.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/johnmarktaylor91/torchlens"
@@ -294,6 +362,10 @@ torchlens = [
     "autoroute/data/*.json",
     "autoroute/data/*.md",
     "schemas/*.json",
+    # mechinterp/_aliases.py reads translation.json through importlib.resources at
+    # runtime; the D05 wheel-venue gate (2026-09-02) caught the file missing from
+    # BOTH artifacts (three tests/test_mikit_* rows red on the installed wheel).
+    "mechinterp/*.json",
 ]
 
 [tool.setuptools.exclude-package-data]
@@ -362,6 +434,12 @@ filterwarnings = [
     # fatal -- like the capability-degradation warning above. Fires whenever save_mode=
     # 'reference' is used, so it is not per-test assertable.
     "default:save_mode='reference' stores source tensors by reference.*:UserWarning:torchlens(\\.|$)",
+    # A06 (batchnorm_train_stats_mutated disclosure): once-per-process in the
+    # package but re-armed per test by the autouse sentinel reset; train-BN
+    # fixtures are a common idiom, so like the save_mode caveat above it is
+    # visible-not-fatal and asserted locally in
+    # tests/test_capopts_truth_batchnorm_warn.py.
+    "default:tracing runs the model's REAL forward.*:UserWarning:torchlens(\\.|$)",
     # Informational disclosure (r6 H2): an activation archive saved from a `save=` selective
     # capture records no original-input digests, so numeric attestation can never apply.
     # Fires for every selective include_activations= save -- a commonly exercised idiom, so

@@ -253,6 +253,22 @@ def test_activation_footprint_fields_are_populated() -> None:
 
     full = tl.trace(_plain_model(), torch.randn(2, 4))
     assert int(full.total_activation_memory) > 0
+    # A1 identity partition: total EXCLUDES output pseudo-rows (the producer
+    # owns the bytes). D-17 byte model: saved counts PHYSICAL retained
+    # storage once per storage. HONESTY 13-R1: the output pseudo-row now
+    # rides the producer's ONE retained payload (no second physical copy),
+    # so the two aggregates agree exactly and the output row's own bytes
+    # are already inside total. Still an exact pin: any drift in either
+    # accounting, or a returning redundant copy, trips it.
+    output_rows = [
+        layer
+        for layer in full.layer_list
+        if layer.layer_type == "output" and layer.has_saved_activation
+    ]
+    assert output_rows and all(int(layer.activation_memory) > 0 for layer in output_rows)
+    for layer in output_rows:
+        parent = full[layer.parents[0]]
+        assert layer.out.untyped_storage().data_ptr() == parent.out.untyped_storage().data_ptr()
     assert int(full.saved_activation_memory) == int(full.total_activation_memory)
 
     sparse = tl.trace(_plain_model(), torch.randn(2, 4), save=tl.func("relu"))

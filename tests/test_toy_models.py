@@ -2030,7 +2030,7 @@ def test_functional_after_submodule_not_box():
     relu_layers = [label for label in mh.layer_labels if "relu" in label.lower()]
     assert len(relu_layers) > 0, "No relu layer found"
     relu_entry = mh[relu_layers[0]]
-    _, shape, _ = _get_node_address_shape_color(mh, relu_entry, show_buffer_layers=False)
+    _, shape, _ = _get_node_address_shape_color(mh, relu_entry, show_buffer_layers="never")
     assert shape == "oval", f"Functional relu should be oval, got {shape}"
 
 

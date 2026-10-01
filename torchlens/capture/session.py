@@ -498,22 +498,33 @@ class CaptureSession:
 
         selected_grads: list[int] | str
         if isinstance(gradient_selector, _BaseSelector):
-            # Selector-shaped save_grads resolves like the activation branch:
-            # the public resolve_sites gate refuses mid-capture, so the
-            # unchecked resolver walks the finalized layer list directly.
-            from ..intervention.resolver import _resolve_unchecked
+            if _selector_needs_backward_context(gradient_selector):
+                # Backward-context selectors (in_backward_pass, grad_input/
+                # grad_output, grad_fn kinds) are undecidable in site space --
+                # site-lifecycle evaluation reads them as False, which used to
+                # resolve ZERO hook sites and silently record nothing. Hook
+                # placement takes the honest superset (every op); retention
+                # stays exact because the fire-time policy re-evaluates the
+                # selector per grad event with the backward context attached.
+                selected_grads = "all"
+            else:
+                # Selector-shaped save_grads resolves like the activation
+                # branch: the public resolve_sites gate refuses mid-capture,
+                # so the unchecked resolver walks the finalized layer list
+                # directly.
+                from ..intervention.resolver import _resolve_unchecked
 
-            selected_grads = sorted(
-                {
-                    raw_index
-                    for site in _resolve_unchecked(
-                        tuple(getattr(trace, "layer_list", ())),
-                        gradient_selector,
-                        strict=False,
-                    )
-                    if isinstance((raw_index := getattr(site, "raw_index", None)), int)
-                }
-            )
+                selected_grads = sorted(
+                    {
+                        raw_index
+                        for site in _resolve_unchecked(
+                            tuple(getattr(trace, "layer_list", ())),
+                            gradient_selector,
+                            strict=False,
+                        )
+                        if isinstance((raw_index := getattr(site, "raw_index", None)), int)
+                    }
+                )
         else:
             selected_grads = _get_op_nums_from_user_labels(trace, gradient_selector)
         trace._grad_op_nums_to_save = selected_grads
@@ -815,6 +826,42 @@ def compile_legacy_capture_plan(
         backend_name=backend_name,
         retention_profile=retention_profile,
     )
+
+
+#: Selector kinds decidable only with backward-fire context (pass number,
+#: grad kind, grad_fn identity); site-lifecycle evaluation reads them as
+#: False, so hook placement must not consult site resolution for them.
+_BACKWARD_CONTEXT_SELECTOR_KINDS = frozenset(
+    {"backward_pass", "grad_kind", "grad_fn", "grad_fn_handle", "grad_fn_label"}
+)
+
+
+def _selector_needs_backward_context(selector: Any) -> bool:
+    """Return whether a selector tree contains a backward-context leaf.
+
+    Parameters
+    ----------
+    selector
+        Selector (possibly composite/negated) supplied as ``save_grads``.
+
+    Returns
+    -------
+    bool
+        Whether any leaf requires backward-fire context to evaluate.
+    """
+
+    stack: list[Any] = [selector]
+    while stack:
+        node = stack.pop()
+        if getattr(node, "selector_kind", None) in _BACKWARD_CONTEXT_SELECTOR_KINDS:
+            return True
+        children = getattr(node, "selectors", None)
+        if isinstance(children, (list, tuple)):
+            stack.extend(children)
+        wrapped = getattr(node, "selector", None)
+        if wrapped is not None:
+            stack.append(wrapped)
+    return False
 
 
 def _negative_selector_windows(selector: Any) -> tuple[int, ...]:

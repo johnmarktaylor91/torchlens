@@ -1407,7 +1407,7 @@ def _vis(
             container_path=opj(VIS_DIR, filename),
             save_only=True,
             file_format="pdf",
-            show_buffers=buffer_layers,
+            show_buffers="always" if buffer_layers else "never",
             direction=direction,
         ),
     )

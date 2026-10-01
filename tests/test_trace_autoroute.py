@@ -97,7 +97,7 @@ def test_chat_message_input_enables_chat_template(monkeypatch: pytest.MonkeyPatc
     assert calls[0]["model"] is model
     assert calls[0]["text"] == messages
     assert calls[0]["chat_template"] is True
-    assert calls[0]["layers_to_save"] == "none"
+    assert calls[0]["capture"].layers_to_save == "none"
 
 
 def test_explicit_transform_overrides_autoroute(monkeypatch: pytest.MonkeyPatch) -> None:

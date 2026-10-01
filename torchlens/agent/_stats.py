@@ -501,26 +501,7 @@ def _stat_one(  # noqa: PLR0913 - one site's request facets, internal keyword th
         counts = _counts(floatish)
         result.update({key: counts[key] for key in counts if key in value_metrics})
     if reduction is not None:
-        retain_dim = reduction.get("retain_dim")
-        if not isinstance(retain_dim, int) or isinstance(retain_dim, bool):
-            raise InvalidArgumentError(
-                f"reduction={reduction!r} must name an integer retain_dim",
-                code="agent_reduction_invalid",
-                remedy='pass reduction={"retain_dim": <int>} (one explicit dimension INDEX)',
-            )
-        reduced, extent = _reduced_rows(
-            working.float() if working.dtype == torch.bool else working,
-            retain_dim,
-            value_metrics,
-            max_rows,
-            rank_by,
-        )
-        result["reduction"] = {
-            "retain_dim": retain_dim,
-            "extent": extent,
-            "rows": reduced,
-            "reduced_axes": "all_but_retain_dim",
-        }
+        result.update(_reduce_one(working, reduction, value_metrics, max_rows, rank_by))
         return result
     scalar_wanted = [
         m for m in value_metrics if m in ("min", "max", "mean", "std", "l1_norm", "l2_norm")
@@ -538,3 +519,59 @@ def _stat_one(  # noqa: PLR0913 - one site's request facets, internal keyword th
             working.float() if working.dtype == torch.bool else working, k, largest=False
         )
     return result
+
+
+def _reduce_one(
+    working: Any,
+    reduction: dict[str, Any],
+    value_metrics: list[str],
+    max_rows: int,
+    rank_by: str | None,
+) -> dict[str, Any]:
+    """Validate ``reduction=`` and reduce one site to per-index rows along ``retain_dim``.
+
+    An ill-typed ``retain_dim`` is a call-level argument error (raised); an out-of-range
+    one is a per-SITE geometry fact returned as a ``reduction_unsupported`` row update.
+    """
+
+    torch = _torch()
+    retain_dim = reduction.get("retain_dim")
+    if not isinstance(retain_dim, int) or isinstance(retain_dim, bool):
+        raise InvalidArgumentError(
+            f"reduction={reduction!r} must name an integer retain_dim",
+            code="agent_reduction_invalid",
+            remedy='pass reduction={"retain_dim": <int>} (one explicit dimension INDEX)',
+        )
+    ndim = int(working.dim())
+    if not (-ndim <= retain_dim < ndim):
+        # A per-SITE geometry fact, never a batch failure (AUD-CODE 3.11f):
+        # one rank-0 payload among rank-2 sites must not fail the call.
+        shape = [int(dim) for dim in working.shape]
+        return {
+            "status": "reduction_unsupported",
+            "reduction": {"retain_dim": retain_dim, "extent": None, "rows": []},
+            "metric_note": (
+                "rank-0 (scalar) payload has no dimension to retain"
+                if ndim == 0
+                else f"retain_dim={retain_dim} is out of range for a rank-{ndim} payload"
+            ),
+            "remedy": (
+                "drop reduction= for this site, or select sites of one rank via query= "
+                f"(this payload's shape is {shape})"
+            ),
+        }
+    reduced, extent = _reduced_rows(
+        working.float() if working.dtype == torch.bool else working,
+        retain_dim,
+        value_metrics,
+        max_rows,
+        rank_by,
+    )
+    return {
+        "reduction": {
+            "retain_dim": retain_dim,
+            "extent": extent,
+            "rows": reduced,
+            "reduced_axes": "all_but_retain_dim",
+        }
+    }

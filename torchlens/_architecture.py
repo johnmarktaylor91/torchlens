@@ -79,6 +79,10 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_io.runnable_load": "L3",
     "_io.accessor_rebuild": "L3",
     "_io.forgery_validation": "L3",
+    # W051-IO: the AUD-CODE 3.0 load validators split out of forgery_validation
+    # (R43 size cap) sit at ITS tier; the module imports its shared refusal/
+    # census helpers back from it eagerly.
+    "_io._load_validators": "L3",
     # -- L2 ENGINE ----------------------------------------------------------
     "capture": "L2",
     "backends": "L2",

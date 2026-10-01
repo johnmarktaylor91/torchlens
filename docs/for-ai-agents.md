@@ -259,9 +259,12 @@ The nine tools:
   manifest JSON only, NEVER unpickles: the safe first look at an artifact you did not
   produce); `mode="folded"` (default) is the recurrence-folded structural view (a
   repeated transformer block states once with `n_instances`, splits disclosed).
-- `torchlens_dump` — `view=overview|graph|full`; graph pages op rows with edges and takes
-  `class_id=` for fold drill-down.
-- `torchlens_explain` — `tl.report.explain(trace, max_tokens=..., audience=...)`.
+- `torchlens_dump` — `view=overview|graph|full`; `graph` and `full` page their op rows
+  under `max_rows` (echo `data.next` as `continuation`), `graph` takes `class_id=` for fold
+  drill-down, and `max_tokens` lowers the served token ceiling.
+- `torchlens_explain` — `tl.report.explain(trace, max_tokens=..., audience=...)`;
+  `max_tokens` defaults to the 4000-token orientation budget, and the record carries the
+  same `capture`/`audit` honesty blocks the overview serves.
 - `torchlens_query_sites` — structured site discovery over a closed JSON query AST
   (persisted facts only; regex/callables/value predicates refuse typed naming the Python
   path; no fanout cap on listing; results carry the runnable Python handoff).
@@ -289,7 +292,22 @@ assert set(__import__("torchlens").__all__) <= names
 
 The CI wedge: `python -m torchlens diff baseline.tlspec candidate.tlspec --fail-on
 mismatch` exits 1 when comparable saved payloads moved (closed exit-code set: 0 ok, 1
-gate tripped, 2 usage, 3 artifact unreadable, 4 typed refusal).
+gate tripped, 2 usage, 3 artifact unreadable, 4 typed refusal). Every `--fail-on` gate
+READS the emitted record, never recomputes, and `overview`, `dump`, `explain`, and `diff`
+all carry the blocks the gates read: `unverified` trips on an explicit
+`capture_verified: false` (the tri-state `null` means no ceiling was recorded and never
+trips); `incomplete` trips on a non-`ok` envelope status, a structure-only capture, or any
+`capture_status` other than `complete` (halted, aborted, failed, unattested, unknown);
+`nonfinite` trips on audit non-finite labels or a `nonfinite_ops` anomaly; `mismatch`
+trips on changed sites or a fingerprint miss; `truncation` trips on any truncation
+disclosure. On `diff`, a gate reads both sides.
+
+Paging and budgets: row tools (`dump`, `query_sites`) page through the transparent
+`data.next` continuation struct. When the response-token backstop trims a page, `data.next`
+is re-minted at the first dropped row, so following `next` always reaches every row; when
+even the non-droppable floor exceeds `max_tokens`, the envelope returns
+`status: "budget_floor_exceeded"` carrying only the `capture` honesty block (when the record
+has one) and a disclosure naming the levers.
 
 ## Anti-patterns
 

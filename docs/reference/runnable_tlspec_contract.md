@@ -1405,7 +1405,7 @@ Exception classes are `RunnableTLSPECError(TorchLensError)`,
 `StateBindingError(ConfigurationError, ValueError)`,
 `RunPreconditionError(ConfigurationError, ValueError)`,
 `RuntimeSignatureDriftError(CompatibilityError, RuntimeError)`,
-`PathDivergenceError(ValidationError, RuntimeError)`,
+`PathDivergenceError(ValidationError, RuntimeError, ValueError)`,
 `NumericAttestationError(ValidationError, RuntimeError)`,
 `PoisonedRunError(ValidationError, RuntimeError)`, and
 `SparseCorePayloadError(ValidationError, AssertionError)`. Each also subclasses
@@ -1813,7 +1813,20 @@ run seed), while python/numpy host draws are only ever re-run by the conceptual 
 Python/numpy consumption is snapshot-detected, records the capture seed, and a matching-seed
 replay stays `verified`/`attested` while an off-seed or seedless run ceilings -- an in-forward
 python/numpy RESEED is self-reproducing on-seed and stays honest through the same snapshot
-compare. An in-forward HOST mutation of the torch engine, by contrast, desyncs every downstream
+compare. The snapshot compare alone cannot see a self-cleaning sequence (`getstate -> draw ->
+setstate`, or a `seed`/`set_state` from a pre-window value leaves the boundary states EQUAL
+while the forward consumed a host scalar), so the global-engine STATE surface carries its own
+`replayable_read` rows (W051): `random.getstate`/`setstate`/`seed` and
+`numpy.random.get_state`/`set_state`/`seed` (both the `numpy.random` and `numpy.random.mtrand`
+spellings) are module-attr patched, and the Python spellings are additionally classified by
+`c_call` on the singleton receiver (a held `from random import getstate` alias bypasses the
+module attribute but its body enters `_random.Random.getstate` on the global engine). A touch
+records consumption exactly like a draw does -- the replay then REQUIRES the capture seed, at
+which the fresh oracle reproduces the same draw -- and never ceilings permanently (a user's
+private `random.Random` instance's state methods carry no row; its draws keep item 1 below).
+Residual: the legacy NumPy singleton's bound Cython state methods emit no `c_call` on numpy>=2,
+so a held `from numpy.random import get_state` alias (or a direct `mtrand._rand.set_state`)
+is the numpy>=2 profile-silent shape of this surface -- the module-attr spellings stay witnessed. An in-forward HOST mutation of the torch engine, by contrast, desyncs every downstream
 DAG RNG op from both the capture and the oracle (replay never re-executes host code), so it
 ceilings permanently (item 7 below).
 
@@ -2031,10 +2044,58 @@ scan; module-namespace expansion skips stdlib and the torch/numpy/torchlens pack
 exhaustion fails closed as `deep_inventory_budget_exhausted`); unseeded
 construction and Python `random` by the construction/class patches. Held-reference spellings of
 the module-attr channels mark on the owner and every in-window hooked thread by original-builtin
-identity; module-attr patched spellings remain thread-independent. The monitor does NOT ceiling a
+identity; module-attr patched spellings of MUTATING surfaces (global-engine reseeds/state writes,
+generator draws) remain thread-independent -- a foreign draw on a shared engine desyncs replay no
+matter which thread made it. THREAD-LOCAL channel touches -- the module-attr patched pure-READ
+channels (the clock family, the OS-entropy and construction funnels) and the class-patched
+PRIVATE-instance draw primitives (item 1 below; W051) -- ceiling directly from the owner thread
+and in-window-started threads; a touch made by a PRE-EXISTING non-hooked thread (a tracker flush
+loop, an asyncio manager, a GUI timer, stdlib `tempfile`'s process-global name sequence) reads
+no shared replayable state, so it is disclosed session-only on the monitor result
+(`foreign_thread_reads`) and is never a ceiling BY ITSELF. It settles at teardown against the
+OWNER thread's in-window SYNCHRONIZATIONS (W051, the join rule): every owner-thread entry into a
+stdlib blocking primitive from a non-TorchLens frame -- the closed vocabulary
+`threading.Event.wait` / `Condition.wait` / `Condition.wait_for` / `Thread.join` /
+`Semaphore.acquire` (blocking form) / `Barrier.wait`, `concurrent.futures.Future.result` /
+`.exception` / `wait` / `as_completed`, `queue.Queue.get` / `SimpleQueue.get`,
+`asyncio.BaseEventLoop.run_until_complete` / `run_forever`,
+`multiprocessing.pool.ApplyResult.get` / `.wait` -- is class-patch witnessed (with the
+function's code identity as the held-reference layer, so a pre-bound `wait = event.wait` alias is
+still an entry) and resolved to its COUNTERPART thread through per-window stamps of
+`threading.Condition.notify`/`notify_all` (weakly keyed; the user's object is never mutated;
+`Thread.join` resolves to the joined thread directly). Waits are classified for the whole thread
+universe (owner AND in-window hooked workers), so a relay through a hooked worker cannot launder a
+foreign value into a hooked-only join. A counterpart OUTSIDE the capture's thread universe is an
+UNHOOKED JOIN (disclosed session-only as `owner_unhooked_joins`); a wait with no resolvable
+counterpart (a primitive notified before the window, an asyncio loop run, a module-level `wait`,
+the C `SimpleQueue.get`) is UNATTRIBUTED. Disclosed foreign reads are promoted to monitor
+uncertainty (`foreign_thread_read_joined:<channel>` + `owner_thread_waited:<primitive>`) iff the
+universe had at least one unhooked or unattributed wait. A join whose every counterpart is hooked
+(the owner waiting on its OWN in-window workers) promotes nothing -- those workers' touches
+ceiling directly -- and a producer-side `Queue.put` block, a non-blocking `Semaphore.acquire`
+probe, or a wait initiated by a TorchLens-owned frame (the async disk writer's backpressure) is
+not a join. The verdict is UNCERTAIN, not a `channels` ceiling: the monitor observed a join and a
+touch but cannot attribute the value flow. Consequences: a benign background thread the capture
+NEVER synchronizes with in-window never ceilings; a background thread that touches a monitored
+channel and that the owner waits on in-window (a handshake `Event` after a clock read, a
+pre-warmed executor's `Future` carrying `time.time()`, a running loop's
+`run_coroutine_threadsafe(...).result()`) is indistinguishable from value feed-in and settles
+INCOMPLETE -- the pre-W051 false-`verified` class. NAMED FORK, unruled ("unhooked join alone
+ceilings"): an unhooked join with NO disclosed read -- the joined thread consumed a profile-only
+channel nothing can observe on an unhooked thread (`PRE_POOL.submit(datetime.now).result()`, a
+HELD `from time import perf_counter` executed on a pre-warmed worker) -- is disclosed but today
+settles CERTAIN; it is the clause-(iv) residual below, pinned as strict xfails
+(`tests/test_w051_nondeterminism_foreign_join.py`). Settling it uncertain is one call in
+`_rng_channels.settle_foreign_reads` but changes the r41 doctrine that a digest-witnessed draw on
+a pre-existing worker the owner rendezvous with is CERTAIN (five r41 pins flip), so it awaits a
+ruling rather than an in-lane decision. The monitor does NOT ceiling a
 capture merely because a benign background thread (a DataLoader worker, a Jupyter history thread, a
-pytest plugin thread) is alive, and it does NOT run a process-wide `gc` scan per capture (the
+pytest plugin thread) is alive or reads a module-level clock/entropy channel inside the window,
+and it does NOT run a process-wide `gc` scan per capture (the
 r39-draft inventory cost ~900 ms/capture and perturbed the peak-memory measurement -- removed).
+Documented residuals of the join rule: an owner that receives a foreign thread's value WITHOUT
+entering any vocabulary primitive (busy-polling a plain shared variable, a bare `lock.acquire`
+rendezvous, a `select`/`socket` read, a subprocess pipe) is the same class as clause (iv) below.
 
 Absence of a touch proves no touch of THIS NAMED vocabulary; it does not claim environmental
 determinism for channels outside it. The residual tail is exactly: (i) direct `/dev/urandom` file
@@ -2055,7 +2116,10 @@ spelling exists for a pre-window held slot-writer; the architectural closure is 
 `sys.monitoring` port named below (interpreter-global, immune to profile-slot swaps);
 (iv) a generator drawn on a PRE-EXISTING
 (already-running, non-owner, non-hooked) thread -- which `threading.setprofile` cannot reach on
-Python <= 3.11 -- or, for the profile-silent numpy>=2 Cython method shape, on ANY thread, that is
+Python <= 3.11 -- whose value reaches the owner either WITHOUT an entry into the join vocabulary
+above or through a join with NO disclosed read on that thread (the unruled fork above; a join
+WITH a disclosed read settles INCOMPLETE as of W051), or, for the
+profile-silent numpy>=2 Cython method shape, on ANY thread, that is
 reachable from NO digest root except BY EXECUTING USER CODE (a property/descriptor `__get__`
 body, `__getattr__`, or a callable's return value) or through a deliberately leafed edge: a
 FUNCTION attribute (`fn.rng = gen`), a hostile builtin-container SUBCLASS's elements, a
@@ -2460,9 +2524,16 @@ never against oracle 1.
 The in-scope counterpart is a host write that occurs *within* the captured forward and corrupts the
 captured computation: a host write through a zero-copy alias into a captured activation's storage, or
 into a registered parameter/buffer's storage, changes what the taken-path DAG consumed. These are
-witnessed — observable writes are caught by whole-storage byte comparison (including per-consumption
-sampling), and the only unobservable surface (a raw `data_ptr()` pointer) fails closed to
-`unverifiable`. Parameters and buffers are witnessed identically: a bytes-changed-but-version-static
+witnessed **when the completeness witness is armed** (the `tl.validate` paths arm it for their own
+run; `wrap_torch(completeness_witness=True)` arms it for every capture; the sparse producer's
+save-time census runs it) — observable writes are caught by whole-storage byte comparison (including
+per-consumption sampling), and the only unobservable surface (a raw `data_ptr()` pointer) fails
+closed to `unverifiable`. The DEFAULT live `run()` provider does NOT arm the witness: a default
+capture whose forward wrote through such an alias carries `capture_verified=None` (not recorded,
+never a clean bill), its parent/child payloads may disagree, and the live refresh can still settle
+`verified` under oracle 1 (the fresh forward IS the model) while `tl.validate(scope="forward")`
+and the loaded-sparse provider catch the contradiction. Read `capture_verified=None` as "no
+witness ran", not "nothing escaped". Parameters and buffers are witnessed identically: a bytes-changed-but-version-static
 storage during the forward is an opaque host write-back (`unverifiable`), while a read-only exposure
 of either stays `verified`. A distinct in-scope vehicle is a storage POINTER swap rather than a
 byte write: a state-derived activation (or buffer) whose storage is `.data=`/`set_`-rebound to
@@ -2825,6 +2896,36 @@ live-refresh executes a fresh model forward and may honestly report `verified` w
 run completes and its output contract is lossless. Inexecutable input divergence is typed as
 `PathDivergenceError` for both providers.
 
+- **Live output-contract diagnosis (W051-HONESTY H1/H2).** A live `run()` whose refreshed output
+  cannot be rebuilt faithfully settles `unverifiable` + poison with the `live_output_reconstruction`
+  check carrying code `output_structure_mismatch`, a CLOSED `details["reason"]`, and a remedy the
+  message ends with: `container_contract_unrecorded` (a declared tuple/dict/namedtuple/dataclass/
+  `ModelOutput` whose contract the capture did not persist -- since W051-CAPT2 the final-output
+  `ContainerSpec` is registered on EVERY capture, so this arm is reachable only from artifacts
+  written before that change; the remedy still names
+  `CaptureOptions(capture_container_structure=True)`, which `intervention_ready=True` implies, or
+  returning a bare tensor), `opaque_leaf` (a declared container carrying a tensor-holding object the
+  contract cannot rebuild, e.g. a HuggingFace `DynamicCache` under `past_key_values` -- pass
+  `use_cache=False` / `return_dict=False` or wrap the model to return the logits tensor; the
+  declared leaf-slot count is measured against the captured leaves BEFORE rebuilding, so this
+  never surfaces as the codec's arity `ValueError`), `opaque_root` (set/frozenset/custom object),
+  `lossy_reconstruction`, and `reconstruction_failed`. The fresh-forward losslessness proof's own
+  `reason` (`opaque_leaf:<Type>`) drives the opaque-leaf arm on default captures. Consumers branch
+  on the code + reason, never the text.
+- **Live refresh graph change (W051-HONESTY H3).** The refresh projector's generic graph-signature
+  refusal (value-dependent control flow took another branch) is a PATH DIVERGENCE on the live
+  provider: it settles through the shared divergence-policy spine with code
+  `call_structure_mismatch` (`details["reason"] == "refresh_graph_changed"`, stage
+  `refresh_graph_signature`). `on_divergence=return_diverged` returns the poisoned `diverged`
+  result through the one finalizer (`output` is `None`: no faithful refreshed output exists; the
+  returned fork retains the SOURCE capture's values under the poison mark). The default `raise`
+  carries `fields["code"]`, `["path_faithfulness"]`, `["first_mismatch"]`, `["contract_check"]`,
+  and `["remedy"]`; the message keeps the historical "computational graph changed" phrase as a
+  compatibility floor. INTERIM LINEAGE NOTE: historical `save_new_outs`/`run()` callers pin
+  `except ValueError` on this refusal, so until `PathDivergenceError` gains `ValueError` in its
+  bases the raised object is the projector's `ValueError` decorated with those same fields; the
+  code path switches to the typed error automatically once the lineage lands. The typed D18
+  `BufferSinkRoutingError` arm is unchanged.
 - **Live opaque output (corr2_5).** The live provider's bare-tensor fast path is gated on the
   FRESH refresh forward's output-losslessness proof (`bare_tensor_root` + `lossless`, one leaf, no
   fallback/duplicate) -- `save_new_outs` copies that proof onto the projected fork, because a

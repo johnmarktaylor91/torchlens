@@ -111,7 +111,12 @@ class HFTrainerWatchCallback:
             signals=self.signals,
             select=self.select,
             optimizer=optimizer,
-            step=lambda: int(state.global_step),
+            # The Trainer increments ``state.global_step`` AFTER
+            # ``optimizer.step()`` returns and logs at the incremented value,
+            # so the value visible inside the optimizer boundary is one behind
+            # HF's own log axis; ``+ 1`` lands every row on the step HF's
+            # panels show for the same update (AUD-CODE 2.14).
+            step=lambda: int(state.global_step) + 1,
             every=every,
             **self.watch_kwargs,
         )

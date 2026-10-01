@@ -797,7 +797,7 @@ def test_meshgrid_perturbation_decisions_are_real_not_whole_op_skipped() -> None
     with torch.no_grad():
         ground_truth = model(*inputs)
     trace = _capture(model, inputs)
-    status = validation_core.validate_forward_pass(trace, [ground_truth])
+    status = validation_core.validate_saved_outs(trace, [ground_truth])
     assert bool(status)
     meshgrid_perturbations = [
         decision

@@ -433,7 +433,7 @@ def output_containers_from_op(op: Op) -> tuple[Container, ...]:
     if trace is None or not hasattr(trace, "_containers"):
         container = container_from_op(op)
         return () if container is None else (container,)
-    if getattr(op, "container_spec", None) is None:
+    if getattr(op, "container_spec", None) is None and not _op_is_final_output(op):
         container = container_from_op(op)
         return () if container is None else (container,)
     index = _output_registry_index(trace)
@@ -511,7 +511,11 @@ def _container_from_registry(op: Op) -> Container | None:
     trace = op._source_trace_or_none()
     if trace is None or not hasattr(trace, "_containers"):
         return None
-    if getattr(op, "container_spec", None) is None:
+    if getattr(op, "container_spec", None) is None and not _op_is_final_output(op):
+        # A per-op spec is the opt-in metadata (capture_container_structure /
+        # intervention_ready); the FINAL-output snapshot is registered on every
+        # capture (W051-HONESTY H2), so final-output ops read the registry even
+        # when their own record carries no spec.
         return None
     index = _output_registry_index(trace)
     labels = (getattr(op, "layer_label", None), getattr(op, "layer_label_raw", None))

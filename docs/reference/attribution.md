@@ -385,7 +385,7 @@ provenance refuses; a fully opaque callable is probed twice on the unperturbed i
 
 ### `text` -- the token-attribution two-liner
 
-```python
+```text
 result = tl.attribution.text(model, tokenizer, "The Eiffel Tower is in", target=" Paris")
 result.show()
 ```

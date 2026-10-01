@@ -995,6 +995,22 @@ def all_live_records(trace: Trace) -> dict[str, list[Any]]:
     return families
 
 
+def runtime_attribute_names(record: Any) -> set[str]:
+    """Return every attribute a live record carries at runtime.
+
+    ``__dict__``-backed records contribute their instance dict; columnar /
+    slotted records (``Op`` carries only ``(_core, _row)`` plus generated
+    field descriptors) contribute their stored-field universe through the
+    ``state_items`` adapter, which is also what ``__getstate__`` persists.
+    """
+
+    from torchlens.data_classes._state_adapter import state_items
+
+    names = set(vars(record)) if hasattr(record, "__dict__") else set()
+    names |= {name for name, _value in state_items(record)}
+    return names
+
+
 def undeclared_runtime_attributes(
     instance_attrs: set[str],
     policy: dict[str, RecordFieldPolicy],
@@ -1046,14 +1062,29 @@ def test_live_record_attributes_are_all_declared(lockstep_trace: Trace, record_n
     """
 
     record = _live_records(lockstep_trace)[record_name]
-    undeclared = undeclared_runtime_attributes(
-        set(vars(record)) if hasattr(record, "__dict__") else set(),
-        type(record).FIELD_POLICY,
-    )
+    runtime_names = runtime_attribute_names(record)
+    # AUD-CODE 3.0c: the derivation must be NON-VACUOUS. ``Op`` is a columnar
+    # slotted record with no ``__dict__``; the former ``vars(record)`` read
+    # yielded an empty set there, so an undeclared dynamic slot could never
+    # have been caught. Every record family carries fields at runtime.
+    assert runtime_names, f"{record_name}: runtime attribute derivation is vacuous"
+    undeclared = undeclared_runtime_attributes(runtime_names, type(record).FIELD_POLICY)
     assert not undeclared, (
         f"{record_name} carries undeclared attributes at runtime "
         f"(add them to FIELD_POLICY): {sorted(undeclared)}"
     )
+
+
+@smoke
+def test_runtime_attribute_derivation_catches_an_undeclared_op_slot(lockstep_trace: Trace) -> None:
+    """The AUD-CODE 3.0c non-vacuity pin: an undeclared Op column IS reported."""
+
+    op = _live_records(lockstep_trace)["Op"]
+    names = runtime_attribute_names(op)
+    assert len(names) > 100, "Op's stored-field universe must be enumerated, not vars()"
+    assert "_source_trace_ref" in names, "dynamic slots are part of the runtime universe"
+    flagged = undeclared_runtime_attributes(names | {"a_new_dynamic_slot"}, Op.FIELD_POLICY)
+    assert flagged == {"a_new_dynamic_slot"}
 
 
 def _postprocess_axis_names() -> list[str]:

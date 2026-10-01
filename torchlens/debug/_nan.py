@@ -254,11 +254,14 @@ def _module_address(op: Op) -> str | None:
     atomic_address = getattr(op, "atomic_module_address", None)
     if isinstance(atomic_address, str):
         return atomic_address
+    # Live (mid-capture) ops have no atomic_module_address yet; the fallback
+    # reads the innermost module CALL label ("0:1"), which carries the pass
+    # qualifier -- strip it so the field keeps its ADDRESS contract.
     module = getattr(op, "module", None)
     if isinstance(module, tuple) and module and isinstance(module[0], str):
-        return module[0]
+        return module[0].rsplit(":", 1)[0]
     if isinstance(module, str):
-        return module
+        return module.rsplit(":", 1)[0]
     return None
 
 

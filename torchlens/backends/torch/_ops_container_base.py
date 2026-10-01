@@ -481,15 +481,19 @@ def _object_holds_tensor(value: Any) -> bool:
 def _leaf_is_reconstructable(item: Any) -> bool:
     """Return whether a childless (``_build_container_spec is None``) output leaf can be restored.
 
-    A tensor leaf is filled from the flat leaf stream; an opaque container that
-    still HOLDS tensors keeps the status-quo BFS capture. A pure non-tensor leaf we
-    cannot represent (``memoryview``, an arbitrary object with no tensors) makes the
-    enclosing container non-reconstructable so replay is honestly UNVERIFIABLE
-    instead of crashing on a missing leaf (advertise-then-crash).
+    A tensor leaf is filled from the flat leaf stream and an encodable literal
+    is rebuilt in place. ANY other leaf makes the enclosing container
+    non-reconstructable (recorded ``opaque``), so replay is honestly
+    UNVERIFIABLE and the runnable save refuses at preflight instead of
+    advertising a contract the codec cannot fill: a pure non-tensor object
+    (``memoryview``, an arbitrary object with no tensors) AND a tensor-HOLDING
+    opaque object (HuggingFace ``DynamicCache``) alike. The latter used to pass
+    as a leaf (W051-HONESTY H1): the spec then declared one slot where the
+    capture's BFS fallback held several tensors, and the rebuild ran dry with a
+    bare ``ValueError``. The BFS tolerance that still CAPTURES those tensors
+    lives in the output walker, not here; this predicate is the spec builder's.
     """
 
     if isinstance(item, torch.Tensor):
         return True
-    if _literal_value_supported(item) or isinstance(item, torch.Size):
-        return True
-    return _object_holds_tensor(item)
+    return bool(_literal_value_supported(item) or isinstance(item, torch.Size))

@@ -51,9 +51,10 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   stamps the declaration and lands a per-step status ledger (grammar v2,
   `episode_ledger_version=2`: header with the declared `step_output_kind`
   (`tokens`/`digest`/`none`), the `step_output_from` source disclosure, the
-  tail-aligned `step_axis`, the minted `capture_digest` binding, the measured
+  `step_axis` with the disclosed `step_output_positions` each row was read
+  from, the minted `capture_digest` binding, the measured
   `step_join` envelope grading every cross-step join —
-  continuous/transformed/declared/exogenous/unchecked, with episode-dependent
+  continuous/forced/transformed/declared/exogenous/unchecked, with episode-dependent
   claims refused across a measured break — and, on intervened (COUPLED)
   captures, the deterministic `intervention_digest`; rows with
   `complete`/`interrupted`/`absent`
@@ -1010,9 +1011,29 @@ S2/S3-gated*
   (`saved_args`, `out_versions_by_child`, `parent.out`) is retained
   unmodified — the pre-edit snapshot that makes divergence decidable.
   Validation: every tier-(ii) entry must be corroborated (FireRecord +
-  stamp) else FAIL; corroborated children are RE-EXECUTED with the
-  substituted value spliced at the address and must match (verdict
-  `edge_intervention_boundary` — a different check, never no check).
+  stamp, and the stored value must digest to the stamp's `value_digest` —
+  `edge_substitution_stamp_mismatch` otherwise) else FAIL; corroborated
+  children are RE-EXECUTED with the substituted value spliced at the
+  address and must match (verdict `edge_intervention_boundary` — a
+  different check, never no check). Commits are PASS-QUALIFIED: an edge
+  into pass k of a multi-pass child edits exactly pass k (the FireRecord,
+  store, and pushed cone all land on `child.label`, never the bare
+  `layer_label` that names the last pass). Edits at one occurrence
+  COMPOSE like replay hooks (a second edit derives from the substituted
+  value; `scale(0.5)` twice is a quarter, every fire is kept), and every
+  tier-(ii) entry — edge, param, region — is RE-SPLICED whenever the cone
+  recomputes the child, so a second edge edit on another arg, an upstream
+  act edit, or a param edit reaching the child never silently reverts it.
+  FULL VALIDATION OF EDITED FORKS: the replay engine records the
+  capture-time content digest of every site's out the first time it
+  overwrites it (session-time, in the replay run context), and the
+  argument-logging check compares each child's retained `saved_args`
+  snapshot against that digest for replay-recomputed parents — the same
+  exact bidirectional check, never skipped — so non-identity act, edge,
+  and param forks validate against their hand-computed ground truth and
+  the boundary check is reached in a passing validation; a recomputed
+  parent with no recordable digest reads `unverified`
+  (`replay_recomputed_parent_unattested`), never validated.
   PERSISTENCE: the edge carriers persist as of tlspec v8, so ordinary
   saves proceed. The `edge_intervention_save_unsupported` refusal survives
   as a schema-regression tripwire (re-firing at ALL four save levels,
@@ -1041,9 +1062,10 @@ deprecation shim owed*
   engine: tier-(ii) `Op.edge_substitutions` entries marked
   `substitution_kind="param"`, edit-then-scatter masking over the param
   index space, one replay pass over all consumer origins (cone
-  recomputation RE-SPLICES param-kind entries so later pushes never
-  silently revert the edit; edge-kind entries keep their shipped
-  no-re-splice semantics), and the same validation boundary
+  recomputation RE-SPLICES every tier-(ii) entry — param, region, AND
+  edge kinds — so later pushes never silently revert any edit; a chained
+  `do(tl.params(p), scale(0.5))` COMPOSES on the staged "as if" value,
+  0.25, keeping both FireRecords), and the same validation boundary
   (`edge_intervention_boundary` — a different check, never no check;
   uncorroborated entries FAIL). Replay/push engine ONLY:
   rerun/set_only refuse `param_substitution_engine_unsupported`. The audit

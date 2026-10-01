@@ -26,9 +26,12 @@ class KeyQuestion:
 
     ``kind`` is the probe family (``extrema_max`` / ``extrema_min`` /
     ``status_nonfinite`` / ``ranking_pair`` / ``path_reachability`` /
-    ``bridged_vs_direct`` / ``io_identification`` / ``direction``);
-    ``honesty_class`` names the zero-tolerance class the question guards,
-    when it guards one.
+    ``bridged_vs_direct`` / ``io_identification`` / ``direction`` /
+    ``channel_semantics``); ``honesty_class`` names the zero-tolerance
+    class the question guards, when it guards one. ``accepted`` lists
+    ADDITIONAL correct answers -- a tied extremum names every tied label
+    here (a key that demands one label on a tie is battery ambiguity,
+    D03-R7), and naming the complete tie as a collection also scores.
     """
 
     id: str
@@ -37,6 +40,7 @@ class KeyQuestion:
     answer: Any
     distractors: tuple[str, ...] = ()
     honesty_class: str | None = None
+    accepted: tuple[Any, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -68,6 +72,98 @@ def _channel_values(trace: Trace, member: str) -> dict[str, float]:
     return values
 
 
+def _canonical_display_labels(labels: Any) -> list[str]:
+    """Collapse alternative spellings of ONE op to one displayed entry.
+
+    The nonfinite channel keys BOTH the pass-qualified ``label:N`` and the
+    bare layer label per op; a key packing both spellings into one
+    set-equality list is unanswerable -- the image prints one (D03-R7).
+    The bare spelling wins where both are present; a genuinely distinct
+    pass spelling (bare stem absent) is kept as-is.
+    """
+
+    pool = {str(label) for label in labels}
+    kept: list[str] = []
+    for label in sorted(pool):
+        stem, sep, tail = label.rpartition(":")
+        if sep and tail.isdigit() and stem in pool:
+            continue
+        kept.append(label)
+    return kept
+
+
+def _extrema_questions(values: dict[str, float]) -> list[KeyQuestion]:
+    """The extrema/ordinal probe family over the resolved channel values.
+
+    A tied extremum accepts EVERY tied label (D03-R7: a key that demands
+    one label on a tie is battery ambiguity, not an evaluator error);
+    distractors never name a tied label.
+    """
+
+    max_label = max(values, key=values.__getitem__)
+    min_label = min(values, key=values.__getitem__)
+    max_ties = tuple(sorted(label for label, value in values.items() if value == values[max_label]))
+    min_ties = tuple(sorted(label for label, value in values.items() if value == values[min_label]))
+    others = sorted(label for label in values if label not in max_ties)[:3]
+    questions = [
+        KeyQuestion(
+            id="extrema-max",
+            kind="extrema_max",
+            question="Which node is HIGHEST on the encoded colour scale?",
+            answer=max_label,
+            distractors=tuple(others),
+            accepted=max_ties,
+        ),
+        KeyQuestion(
+            id="extrema-min",
+            kind="extrema_min",
+            question="Which node is LOWEST on the encoded colour scale?",
+            answer=min_label,
+            accepted=min_ties,
+        ),
+    ]
+    if len(values) >= 2 and max_label != min_label:
+        questions.append(
+            KeyQuestion(
+                id="ordinal-1",
+                kind="ranking_pair",
+                question=(
+                    f"The scale is ordinal. Is {max_label!r} necessarily "
+                    f"MANY TIMES larger than {min_label!r}?"
+                ),
+                answer=False,
+                honesty_class="ORDINAL-as-RATIO",
+            )
+        )
+    return questions
+
+
+def _sentinel_probe() -> KeyQuestion:
+    """The channel-semantics probe (D03-R6).
+
+    The ONE question a known-bad control can fail: the fill of a sentinel
+    render is dishonest by construction, so the machine answer is the
+    no-meaning option; a judge who reads the bad channel as meaningful
+    misses it and confirms the ABSENCE class.
+    """
+
+    return KeyQuestion(
+        id="channel-semantics-1",
+        kind="channel_semantics",
+        question=(
+            "What does the node FILL COLOUR encode in this picture? "
+            "If you believe it carries no reliable meaning, say so."
+        ),
+        answer="no meaning",
+        distractors=(
+            "a per-node numeric quantity on an ordered colour scale",
+            "the operation's category or type",
+            "how recently each operation ran",
+        ),
+        honesty_class="ABSENCE",
+    )
+
+
 def _reachable(trace: Trace, source_label: str, target_label: str) -> bool:
     """Directed reachability over the trace's recorded children edges."""
 
@@ -95,6 +191,7 @@ def generate_answer_key(
     *,
     member_name: str,
     resolution: Any = None,
+    sentinel: bool = False,
 ) -> AnswerKey:
     """Generate the answer key for one rendered lens artifact.
 
@@ -102,6 +199,14 @@ def generate_answer_key(
     and ranking from the resolved channel values, status from the derived
     nonfinite channel, paths from the recorded DAG, bridged-vs-direct from
     the compiled filter, boundaries from the boundary flags.
+
+    ``sentinel=True`` declares a KNOWN-BAD control artifact (a render whose
+    colour channel is dishonest BY CONSTRUCTION) and mints the
+    channel-semantics probe that lets the control FAIL: without it the
+    sentinel's only scoreable probes never touch the bad channel and the
+    battery cannot separate its own anchors (D03-R6). The probe is still
+    machine-generated -- the flag states how the artifact was constructed,
+    never a hand-authored answer.
     """
 
     questions: list[KeyQuestion] = []
@@ -132,46 +237,14 @@ def generate_answer_key(
     if resolution is not None and resolution.source is not None:
         values = _channel_values(trace, resolution.source.member)
         if values:
-            max_label = max(values, key=values.__getitem__)
-            min_label = min(values, key=values.__getitem__)
-            others = sorted(label for label in values if label != max_label)[:3]
-            questions.append(
-                KeyQuestion(
-                    id="extrema-max",
-                    kind="extrema_max",
-                    question="Which node is HIGHEST on the encoded colour scale?",
-                    answer=max_label,
-                    distractors=tuple(others),
-                )
-            )
-            questions.append(
-                KeyQuestion(
-                    id="extrema-min",
-                    kind="extrema_min",
-                    question="Which node is LOWEST on the encoded colour scale?",
-                    answer=min_label,
-                )
-            )
-            if len(values) >= 2 and max_label != min_label:
-                questions.append(
-                    KeyQuestion(
-                        id="ordinal-1",
-                        kind="ranking_pair",
-                        question=(
-                            f"The scale is ordinal. Is {max_label!r} necessarily "
-                            f"MANY TIMES larger than {min_label!r}?"
-                        ),
-                        answer=False,
-                        honesty_class="ORDINAL-as-RATIO",
-                    )
-                )
+            questions.extend(_extrema_questions(values))
 
     if resolution is not None and resolution.nonfinite is not None:
         channel = resolution.nonfinite
-        nan_labels = sorted(
+        nan_labels = _canonical_display_labels(
             label for label, state in channel.states.items() if state in ("nan", "mixed")
         )
-        unchecked = sorted(
+        unchecked = _canonical_display_labels(
             label for label, state in channel.states.items() if state == "not_checked"
         )
         questions.append(
@@ -225,4 +298,6 @@ def generate_answer_key(
             )
         )
 
+    if sentinel:
+        questions.append(_sentinel_probe())
     return AnswerKey(member=member_name, lens=lens_name, questions=tuple(questions))

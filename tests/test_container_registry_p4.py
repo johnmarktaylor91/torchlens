@@ -107,7 +107,12 @@ def test_flag_off_container_persistence_is_semantically_neutral(
     tmp_path: Path,
     save_path: str,
 ) -> None:
-    """Flag-off traces stay container-free through every persistence path."""
+    """Flag-off traces carry ONLY the final-output snapshot through every persistence path.
+
+    The model-output ContainerSpec is registered on every capture (W051-HONESTY
+    H2); the record set is identical across default, explicit-False and the
+    round trip, and it never grows module-boundary or input records.
+    """
 
     baseline = tl.trace(
         NestedRoundTripModel(), _payload(), capture=tl.options.CaptureOptions(random_seed=0)
@@ -155,9 +160,11 @@ def test_flag_off_container_persistence_is_semantically_neutral(
         )
         round_tripped = tl.load(path)
 
-    assert "_containers" not in baseline.__dict__
-    assert "_containers" not in explicit_false.__dict__
-    assert "_containers" not in round_tripped.__dict__
+    for trace in (baseline, explicit_false, round_tripped):
+        records = list(trace._containers.values())
+        assert len(records) == 1, records
+        roles = {snapshot.role for snapshot in records[0].snapshots}
+        assert roles and roles <= {Role.MODEL_OUTPUT, Role.CALL_OUTPUT}
     assert baseline.graph_shape_hash == explicit_false.graph_shape_hash
     assert _semantic_digest(baseline) == _semantic_digest(explicit_false)
     assert _semantic_digest(explicit_false) == _semantic_digest(round_tripped)

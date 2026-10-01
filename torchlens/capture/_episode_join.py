@@ -48,7 +48,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, NoReturn
 
-from ._episode_derivation import _declaration_error
+from ._episode_derivation import _declaration_error, _flat_cpu_snapshot
 
 if TYPE_CHECKING:
     import torch.nn as nn
@@ -78,7 +78,15 @@ STEP_JOIN_SCHEMA = "episode_step_join_v1"
 #: Closed join-grade vocabulary (trace-verb verdict section 2). ``None`` in
 #: the grades column marks a join that does not exist (the prefill row and
 #: rows that never started); it is not a member of this vocabulary.
-STEP_JOIN_GRADES = frozenset({"continuous", "transformed", "declared", "exogenous", "unchecked"})
+#: ``forced`` (W051, audit 3.4): the entry continues the prior entry plus the
+#: DECLARED ``forced_tokens`` token for that step -- a teacher-forced join,
+#: measured against the declaration, never against the model's emission (the
+#: evidence column of a forced episode is whatever the root returned, e.g.
+#: the model's predictions). Not a break grade: the feed is declared, chain-
+#: shaped by construction, and never a free continuation.
+STEP_JOIN_GRADES = frozenset(
+    {"continuous", "forced", "transformed", "declared", "exogenous", "unchecked"}
+)
 
 #: Grades that BREAK the closed-episode claim (the join is not one feed).
 _BREAK_GRADES = frozenset({"exogenous", "declared"})
@@ -100,6 +108,11 @@ _ENVELOPE_KEYS = frozenset(
         "reasons",
     }
 )
+#: Optional v1 envelope slots (additive within the family; an envelope that
+#: lacks one reads the slot as undisclosed). ``entry_basis`` (W051, audit
+#: 3.3): per-step disclosure of WHICH call argument the entry evidence came
+#: from (``"positional[i]"`` / ``"kwarg[name]"``).
+_OPTIONAL_ENVELOPE_KEYS = frozenset({"entry_basis"})
 
 #: The one armed join session of the running capture (captures are
 #: single-threaded by design; ``armed_capture`` sets and clears it). Lane
@@ -135,7 +148,8 @@ def default_break_teaching(step: int, exogenous_positions: int | None) -> str:
     """
 
     if exogenous_positions is not None:
-        cause = f"{exogenous_positions} positions entered this loop from outside the capture"
+        noun = "position" if exogenous_positions == 1 else "positions"
+        cause = f"{exogenous_positions} {noun} entered this loop from outside the capture"
     else:
         cause = "content entered this loop from outside the capture"
     return (
@@ -213,7 +227,7 @@ def _tensor_digest(value: Any) -> str:
 
     import torch
 
-    source = value.detach().cpu().reshape(-1)
+    source = _flat_cpu_snapshot(value)
     flat = torch.empty(source.shape, dtype=source.dtype)
     flat.copy_(source)
     hasher = hashlib.sha256()
@@ -224,25 +238,130 @@ def _tensor_digest(value: Any) -> str:
     return f"sha256:{hasher.hexdigest()}"
 
 
-def _first_tensor(args: tuple[Any, ...], kwargs: Mapping[str, Any] | None) -> Any | None:
-    """The step's ENTRY EVIDENCE: the first tensor among the call arguments.
+#: Keyword names that NAME the carried step input on the shipped realism
+#: shapes (HF causal/seq2seq LMs, diffusers/flow-matching denoisers); a tensor
+#: under one of these is preferred over positional order (W051, audit 3.3).
+_PREFERRED_ENTRY_KWARGS: tuple[str, ...] = (
+    "input_ids",
+    "decoder_input_ids",
+    "inputs_embeds",
+    "sample",
+    "hidden_states",
+    "x",
+)
+#: Keyword names that are AUXILIARY to the step input (masks, positions,
+#: timesteps, cache bookkeeping): never the carried state, so a tensor under
+#: one of these is chosen only when nothing else is a tensor.
+_AUXILIARY_ENTRY_KWARGS: frozenset[str] = frozenset(
+    {
+        "attention_mask",
+        "encoder_attention_mask",
+        "decoder_attention_mask",
+        "token_type_ids",
+        "position_ids",
+        "cache_position",
+        "timestep",
+        "timesteps",
+        "t",
+        "labels",
+    }
+)
 
-    Disclosed basis choice: the stepped call's first positional (then
-    keyword) tensor is the step input on every shipped realism shape
-    (``input_ids`` for LMs, the carried sample for diffusion/fixed-point
-    roots). A call with no tensor argument degrades the join to
-    ``unchecked``, never to a guess.
+
+def _tensor_candidates(
+    args: tuple[Any, ...], kwargs: Mapping[str, Any] | None
+) -> list[tuple[str, Any]]:
+    """Every tensor argument of one stepped call as ``(basis_label, tensor)``.
+
+    Basis labels are the persisted spelling of WHICH argument was read:
+    ``"positional[i]"`` or ``"kwarg[name]"``.
     """
 
     import torch
 
-    for value in args:
+    found: list[tuple[str, Any]] = []
+    for index, value in enumerate(args):
         if isinstance(value, torch.Tensor):
-            return value
-    for value in (kwargs or {}).values():
+            found.append((f"positional[{index}]", value))
+    for name, value in (kwargs or {}).items():
         if isinstance(value, torch.Tensor):
-            return value
-    return None
+            found.append((f"kwarg[{name}]", value))
+    return found
+
+
+def _declared_entry(
+    candidates: Sequence[tuple[str, Any]], step_input_from: str | int
+) -> tuple[str, Any] | tuple[None, None]:
+    """Rule 1 of the entry ladder: the explicitly declared argument, or nothing.
+
+    An int names a positional index, a str a keyword. A declaration that names
+    no tensor argument returns ``(None, None)``; the caller discloses the miss.
+    """
+
+    wanted = (
+        f"positional[{step_input_from}]"
+        if isinstance(step_input_from, int)
+        else f"kwarg[{step_input_from}]"
+    )
+    for label, tensor in candidates:
+        if label == wanted:
+            return (label, tensor)
+    return (None, None)
+
+
+def _select_entry(
+    args: tuple[Any, ...],
+    kwargs: Mapping[str, Any] | None,
+    step_input_from: str | int | None,
+) -> tuple[str, Any] | tuple[None, None]:
+    """Choose the step's ENTRY EVIDENCE tensor and disclose WHICH argument.
+
+    Returns ``(basis_label, tensor)``; ``(None, None)`` when no tensor
+    argument qualifies (the join degrades to ``unchecked``, never a guess).
+
+    Selection, in order (W051, audit 3.3 -- the historical rule was "first
+    tensor argument" with no disclosure, so a timestep-first denoiser graded
+    its TIMESTEP and a kwargs-first masked LM graded its ATTENTION MASK):
+
+    1. an explicit ``step_input_from`` declaration (an int names a
+       positional index, a str a keyword) -- honored exactly; a declaration
+       that names no tensor returns ``(None, None)`` with the miss disclosed
+       by the caller;
+    2. a tensor under a PREFERRED keyword (``input_ids`` first);
+    3. the first tensor argument whose name is not AUXILIARY, positional
+       arguments first -- among positional tensors, a 0-d/1-element float
+       tensor beside a wider tensor is read as a scalar timestep and passed
+       over;
+    4. the first tensor argument of any kind.
+
+    The chosen argument is persisted per step in the envelope's
+    ``entry_basis`` slot, so a consumer can see what the grade measured.
+    """
+
+    candidates = _tensor_candidates(args, kwargs)
+    if not candidates:
+        return (None, None)
+    if step_input_from is not None:
+        return _declared_entry(candidates, step_input_from)
+    by_label = dict(candidates)
+    for name in _PREFERRED_ENTRY_KWARGS:
+        label = f"kwarg[{name}]"
+        if label in by_label:
+            return (label, by_label[label])
+    non_auxiliary = [
+        (label, tensor)
+        for label, tensor in candidates
+        if not (label.startswith("kwarg[") and label[6:-1] in _AUXILIARY_ENTRY_KWARGS)
+    ]
+    if non_auxiliary:
+        widest = max(int(tensor.numel()) for _label, tensor in non_auxiliary)
+        for label, tensor in non_auxiliary:
+            scalar_like = tensor.numel() <= 1 and tensor.is_floating_point()
+            if scalar_like and widest > 1:
+                continue  # a timestep beside the carried sample
+            return (label, tensor)
+        return non_auxiliary[0]
+    return candidates[0]
 
 
 def _first_tensor_leaf(output: Any) -> Any | None:
@@ -275,6 +394,10 @@ class _StepBoundary:
     entry_digest: str | None = None
     exit_digest: str | None = None
     unavailable_reason: str | None = None
+    #: Which call argument the entry evidence was read from
+    #: (``"positional[i]"`` / ``"kwarg[name]"``); persisted per step in the
+    #: envelope's ``entry_basis`` slot (W051, audit 3.3).
+    entry_argument: str | None = None
 
 
 def _suffix_alignment(cur: Sequence[int], expected: Sequence[int], wildcard_tail: int) -> int:
@@ -295,6 +418,46 @@ def _suffix_alignment(cur: Sequence[int], expected: Sequence[int], wildcard_tail
         if all(cur[i] == expected[offset + i] or (offset + i) >= wild_from for i in range(length)):
             return length
     return 0
+
+
+def _exogenous_position_count(
+    cur: Sequence[int], expected: Sequence[int], wildcard_tail: int
+) -> int:
+    """Count the entry positions NOT explained by ``expected`` (W051, 3.5).
+
+    The count is a POSITIONAL DIFF under the most charitable of two
+    alignments, never the length of the unaligned suffix:
+
+    - the natural window alignment: ``cur`` read as the trailing window of
+      ``expected`` (append feed, last-token KV feed, sliding window all
+      align at offset ``len(expected) - len(cur)``), or, when ``cur`` is
+      LONGER than ``expected``, aligned from position 0 with every position
+      past ``expected``'s end unexplained (tokens appended from outside);
+    - the longest suffix alignment (:func:`_suffix_alignment`), which
+      explains a ``cur`` prefix and leaves the rest unexplained.
+
+    Zero exactly when the entry continues the prior entry plus emission
+    (``_suffix_alignment`` aligned every position); one context position
+    edited in an 8-token entry counts 1, not 8.
+    """
+
+    n_expected = len(expected)
+    n_cur = len(cur)
+    wild_from = n_expected - wildcard_tail
+    if n_cur <= n_expected:
+        offset = n_expected - n_cur
+        overflow = 0
+    else:
+        offset = 0
+        overflow = n_cur - n_expected
+    natural = overflow + sum(
+        1
+        for i in range(min(n_cur, n_expected))
+        if cur[i] != expected[offset + i] and (offset + i) < wild_from
+    )
+    aligned = _suffix_alignment(cur, expected, wildcard_tail)
+    by_suffix = n_cur - aligned if aligned > 0 else n_cur
+    return min(natural, by_suffix)
 
 
 def _entry_rows(boundary: _StepBoundary) -> list[tuple[int, ...]] | None:
@@ -354,7 +517,7 @@ def _grade_token_join(
         else:
             expected = prev_rows[row_index] + (0,)
             wildcard_tail = 1
-        exogenous += len(cur_row) - _suffix_alignment(cur_row, expected, wildcard_tail)
+        exogenous += _exogenous_position_count(cur_row, expected, wildcard_tail)
     return ("continuous", 0) if exogenous == 0 else ("exogenous", exogenous)
 
 
@@ -374,11 +537,15 @@ class EpisodeJoinSession:
         feed: str,
         on_feed_break: str,
         crossings: tuple[int, ...],
+        step_input_from: str | int | None = None,
     ) -> None:
         self._stepped_module = stepped_module
         self.feed = feed
         self.on_feed_break = on_feed_break
         self.crossings = frozenset(crossings)
+        #: Declared entry argument (``EpisodeSpec.step_input_from``); ``None``
+        #: selects by the disclosed preference rule (:func:`_select_entry`).
+        self.step_input_from = step_input_from
         self.boundaries: list[_StepBoundary] = []
         self.live_grades: dict[int, str] = {}
         self.live_break_step: int | None = None
@@ -502,10 +669,15 @@ class EpisodeJoinSession:
 
         import torch
 
-        entry = _first_tensor(args, kwargs)
+        basis_label, entry = _select_entry(args, kwargs, self.step_input_from)
         if entry is None:
-            boundary.unavailable_reason = "no_tensor_entry"
+            boundary.unavailable_reason = (
+                "no_tensor_entry"
+                if self.step_input_from is None
+                else f"step_input_not_found:{self.step_input_from!r}"
+            )
             return
+        boundary.entry_argument = basis_label
         is_integer = entry.dtype in (
             torch.int8,
             torch.int16,
@@ -514,7 +686,7 @@ class EpisodeJoinSession:
             torch.uint8,
         )
         if is_integer and entry.numel() <= ENTRY_SNAPSHOT_ELEMENT_CEILING and entry.dim() <= 2:
-            boundary.entry_ids = tuple(int(v) for v in entry.detach().cpu().reshape(-1).tolist())
+            boundary.entry_ids = tuple(int(v) for v in _flat_cpu_snapshot(entry).tolist())
             boundary.entry_shape = tuple(entry.shape)
         boundary.entry_digest = _tensor_digest(entry)
 
@@ -639,6 +811,38 @@ def _settle_one_join(
     }[_graph_connected(trace, resolved.address, step - 1, step)]
 
 
+def _expected_feed_for_step(
+    step: int,
+    forced_tokens: Sequence[Any] | None,
+    tokens_column: Sequence[Any] | None,
+) -> tuple[tuple[int, ...] | None, tuple[Any, ...] | None]:
+    """The ``(forced, emitted)`` feed the join into ``step`` is graded against.
+
+    Teacher forcing (W051, audit 3.4): the join into step k feeds the DECLARED
+    token ``forced_tokens[k-1]``; the evidence column is whatever the root
+    returned (often the model's predictions), so grading against it would
+    report a false exogenous break. Without forcing, the emitted evidence is
+    the previous row's token tuple when the column carries one.
+    """
+
+    if forced_tokens is not None and step - 1 < len(forced_tokens):
+        return (int(forced_tokens[step - 1]),), None
+    if tokens_column is not None and step - 1 < len(tokens_column):
+        candidate = tokens_column[step - 1]
+        if isinstance(candidate, tuple):
+            return None, candidate
+    return None, None
+
+
+def _entry_argument_for(session: Any, step: int) -> str | None:
+    """Which call argument the live hooks read step ``step``'s entry evidence from."""
+
+    if step >= len(session.boundaries):
+        return None
+    argument = session.boundaries[step].entry_argument
+    return str(argument) if argument is not None else None
+
+
 def settle_step_join(
     trace: Any,
     resolved: Any,
@@ -661,27 +865,30 @@ def settle_step_join(
     basis: dict[str, str] = {}
     exogenous_positions: dict[str, int] = {}
     reasons: dict[str, str] = {}
+    entry_basis: dict[str, str] = {}
     tokens_column: Sequence[Any] | None = None
     if evidence_by_row is not None and resolved.step_output_kind == "tokens":
         tokens_column = evidence_by_row
+    forced_tokens = getattr(resolved, "forced_tokens", None)
     for step in range(1, len(row_statuses)):
         if row_statuses[step] == "absent":
             grades.append(None)
             continue
-        emitted = None
-        if tokens_column is not None and step - 1 < len(tokens_column):
-            candidate = tokens_column[step - 1]
-            if isinstance(candidate, tuple):
-                emitted = candidate
+        forced, emitted = _expected_feed_for_step(step, forced_tokens, tokens_column)
         grade, join_basis, exogenous, reason = _settle_one_join(
-            trace, resolved, session, step, emitted
+            trace, resolved, session, step, forced if forced is not None else emitted
         )
+        if forced is not None and grade == "continuous":
+            grade, join_basis = "forced", "forced_tokens"
         grades.append(grade)
         basis[str(step)] = join_basis
         if exogenous is not None:
             exogenous_positions[str(step)] = exogenous
         if reason is not None:
             reasons[str(step)] = reason
+        argument = _entry_argument_for(session, step)
+        if argument is not None:
+            entry_basis[str(step)] = argument
     break_step = next((index for index, grade in enumerate(grades) if grade in _BREAK_GRADES), None)
     return {
         "schema": STEP_JOIN_SCHEMA,
@@ -692,6 +899,10 @@ def settle_step_join(
         "live_break_step": session.live_break_step,
         "exogenous_positions": exogenous_positions,
         "reasons": reasons,
+        # W051 (audit 3.3): WHICH call argument each step's entry evidence
+        # was read from. Optional in the v1 envelope (pre-W051 envelopes
+        # lack it and load as "argument undisclosed"); never a guess.
+        "entry_basis": entry_basis,
     }
 
 
@@ -710,10 +921,12 @@ def validate_step_join_envelope(envelope: Mapping[str, Any], n_rows: int) -> Non
         ``episode_ledger_incoherent``; the quarantine row).
     """
 
-    if set(envelope) != _ENVELOPE_KEYS:
+    keys = set(envelope)
+    if not keys >= _ENVELOPE_KEYS or not keys <= (_ENVELOPE_KEYS | _OPTIONAL_ENVELOPE_KEYS):
         raise ValueError(
             "episode step_join envelope must carry exactly the keys "
-            f"{sorted(_ENVELOPE_KEYS)}, got {sorted(envelope)}"
+            f"{sorted(_ENVELOPE_KEYS)} (optionally {sorted(_OPTIONAL_ENVELOPE_KEYS)}), "
+            f"got {sorted(envelope)}"
         )
     if envelope["schema"] != STEP_JOIN_SCHEMA:
         raise ValueError(
@@ -768,7 +981,10 @@ def _validate_envelope_mappings(envelope: Mapping[str, Any], n_rows: int) -> Non
         ("basis", str),
         ("exogenous_positions", int),
         ("reasons", str),
+        ("entry_basis", str),
     ):
+        if mapping_slot in _OPTIONAL_ENVELOPE_KEYS and mapping_slot not in envelope:
+            continue
         mapping_value = envelope[mapping_slot]
         if not isinstance(mapping_value, Mapping):
             raise ValueError(f"episode step_join {mapping_slot} must be a mapping")

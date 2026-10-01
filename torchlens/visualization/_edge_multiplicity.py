@@ -14,8 +14,11 @@ from ._render_utils import html_escape
 from ._typography import DEFAULT_TYPOGRAPHY
 
 __all__ = [
+    "_ARG_LABEL_MIDPOINT_FANIN",
     "_bump_deduped_edge_multiplicity",
     "_html_argument_edge_label",
+    "_merge_parallel_arg_midpoint",
+    "_register_arg_midpoint_edge",
     "_register_deduped_edge",
     "_set_argument_edge_label",
 ]
@@ -113,15 +116,7 @@ def _bump_deduped_edge_multiplicity(
     body_index = entry["body_index"]
     if body_index is None:
         return
-    calls = getattr(graphviz_graph, "calls", None)
-    if calls is not None:
-        from .render_ir import RenderIRDotStatement
-
-        calls[body_index] = RenderIRDotStatement("edge", (), tuple(entry["edge_dict"].items()))
-    else:
-        rewrite = graphviz.Digraph()
-        rewrite.edge(**entry["edge_dict"])
-        graphviz_graph.body[body_index] = rewrite.body[-1]
+    _rewrite_emitted_edge(graphviz_graph, body_index, entry["edge_dict"])
 
 
 # The argument-label channel routes through the same tuned one-cell-table
@@ -136,6 +131,33 @@ _ARG_EDGE_LABEL_PREFIX = (
     f'<TR><TD><FONT POINT-SIZE="{_EDGE_LABEL_FONT_SIZE}">'
 )
 _ARG_EDGE_LABEL_SUFFIX = "</FONT></TD></TR></TABLE>>"
+
+#: Visible fan-in at/above which a child op's argument labels relocate from
+#: ``headlabel`` to a midpoint ``label`` (FIXD03-F13, D03-R4). Graphviz
+#: reserves layout space ONLY for midpoint labels; every head label of a
+#: node is painted post-layout at one default radius, so they smear into
+#: one band as fan-in grows. Sweep provenance (toy N-way cat ladder, dot
+#: 2.43, hard geometry violations): fan-in 3/4/5/6/8/12/24 measured
+#: 0/1/0/3/11/15/75 with headlabels and 0 at EVERY degree after midpoint
+#: relocation (+5-10% canvas area; densenet121 collapse=auto: 302
+#: arg-label violations -> 0). Per-edge ``labeldistance``/``labelangle``
+#: staggering was swept FIRST and is dominated by the unset baseline at
+#: every grid point (place_portlabel trap, playbook s1): 15 -> 20..38 and
+#: 75 -> 86..214. PORTABILITY: the threshold conditions on an emit-time
+#: structural fact (visible parent count), never on font metrics.
+_ARG_LABEL_MIDPOINT_FANIN = 4
+
+#: Registry-key marker for the same-pair parallel arg-edge merge; namespaced
+#: so entries can share the render entrypoint's ``deduped_edge_registry``
+#: without colliding with visual-dedupe keys (those are
+#: ``(tail, head, signature)`` tuples of edge attrs, never this literal).
+_ARG_MERGE_KEY_MARKER = "__tl_arg_midpoint_merge__"
+
+
+def _arg_midpoint_registry_key(tail_name: str, head_name: str) -> tuple[str, str, str]:
+    """Registry key for one rendered (tail, head) pair's merged arg edge."""
+
+    return (_ARG_MERGE_KEY_MARKER, tail_name, head_name)
 
 
 def _html_argument_edge_label(rows: list[str]) -> str:
@@ -164,7 +186,9 @@ def _argument_edge_label_rows_text(arg_label: str) -> str | None:
     return None
 
 
-def _set_argument_edge_label(edge_dict: dict[str, Any], arg_label: str) -> None:
+def _set_argument_edge_label(
+    edge_dict: dict[str, Any], arg_label: str, *, prefer_midpoint: bool = False
+) -> str:
     """Attach an argument-position label without overwriting semantic edge labels.
 
     Args:
@@ -172,15 +196,27 @@ def _set_argument_edge_label(edge_dict: dict[str, Any], arg_label: str) -> None:
             Mutable Graphviz edge attribute dict.
         arg_label:
             HTML label string describing edge argument positions.
+        prefer_midpoint:
+            High-fan-in mode (D03-R4): route the label to a midpoint
+            ``label`` -- which graphviz reserves real layout space for --
+            when no semantic midpoint label occupies the slot; a taken slot
+            falls back to the historical head/xlabel chain.
+
+    Returns:
+        The channel the label landed on: ``"label"``, ``"headlabel"``, or
+        ``"xlabel"``.
     """
+    if prefer_midpoint and "label" not in edge_dict:
+        edge_dict["label"] = arg_label
+        return "label"
     if "headlabel" not in edge_dict:
         edge_dict["headlabel"] = arg_label
-        return
+        return "headlabel"
     if "xlabel" not in edge_dict:
         edge_dict["xlabel"] = arg_label
-        return
+        return "xlabel"
     if edge_dict["xlabel"] == arg_label:
-        return
+        return "xlabel"
     # Two builder-shaped labels merge into ONE table (two sibling tables under
     # one HTML root are not a valid graphviz label); anything else keeps the
     # historical tag surgery for foreign label shapes.
@@ -190,5 +226,92 @@ def _set_argument_edge_label(edge_dict: dict[str, Any], arg_label: str) -> None:
         edge_dict["xlabel"] = (
             f"{_ARG_EDGE_LABEL_PREFIX}{existing_rows}<BR/>{new_rows}{_ARG_EDGE_LABEL_SUFFIX}"
         )
-        return
+        return "xlabel"
     edge_dict["xlabel"] = edge_dict["xlabel"][:-1] + "<br/>" + arg_label[1:]
+    return "xlabel"
+
+
+def _rewrite_emitted_edge(
+    graphviz_graph: graphviz.Digraph, body_index: int, edge_dict: dict[str, Any]
+) -> None:
+    """Rewrite one already-emitted edge statement in place (label updates).
+
+    Mirrors the multiplicity-bump rewrite: statement order -- and therefore
+    DOT byte determinism for untouched renders -- is unchanged.
+    """
+
+    calls = getattr(graphviz_graph, "calls", None)
+    if calls is not None:
+        from .render_ir import RenderIRDotStatement
+
+        calls[body_index] = RenderIRDotStatement("edge", (), tuple(edge_dict.items()))
+    else:
+        rewrite = graphviz.Digraph()
+        rewrite.edge(**edge_dict)
+        graphviz_graph.body[body_index] = rewrite.body[-1]
+
+
+def _register_arg_midpoint_edge(
+    registry: dict[tuple[Any, ...], dict[str, Any]] | None,
+    tail_name: str,
+    head_name: str,
+    edge_dict: dict[str, Any],
+    body_index: int | None,
+) -> None:
+    """Record one emitted midpoint-arg-labeled edge for same-pair merging.
+
+    Parameters mirror :func:`_register_deduped_edge`; ``body_index`` is
+    ``None`` for cluster-queued edges (their dicts stay mutable until
+    serialization).
+    """
+
+    if registry is None:
+        return
+    registry[_arg_midpoint_registry_key(tail_name, head_name)] = {
+        "edge_dict": edge_dict,
+        "body_index": body_index,
+    }
+
+
+def _merge_parallel_arg_midpoint(
+    registry: dict[tuple[Any, ...], dict[str, Any]] | None,
+    tail_name: str,
+    head_name: str,
+    arg_label: str,
+    graphviz_graph: graphviz.Digraph,
+) -> bool:
+    """Fold a same-pair parallel arg edge into the pair's merged edge.
+
+    D03-R4, high-fan-in mode: when a collapsed source feeds one child at N
+    argument slots, N visually identical parallel edges each carrying one
+    ``arg (0, k)`` head label rendered as an unreadable smear -- and the
+    per-edge indices carried no distinguishing information, because every
+    edge connected the SAME two rendered boxes. Under midpoint relocation
+    the pair renders as ONE edge whose reserved-space midpoint label lists
+    every argument row (arrival order, deduplicated), so the slot inventory
+    stays exactly recoverable; this follows the run-fold ellipsis
+    precedent (one summary edge over N parallel occurrence edges).
+
+    Returns ``True`` when the occurrence was merged (the caller skips
+    emitting it), ``False`` when no merged edge exists yet or either label
+    is not builder-shaped.
+    """
+
+    if registry is None:
+        return False
+    entry = registry.get(_arg_midpoint_registry_key(tail_name, head_name))
+    if entry is None:
+        return False
+    existing_label = entry["edge_dict"].get("label", "")
+    existing_rows = _argument_edge_label_rows_text(existing_label)
+    new_rows = _argument_edge_label_rows_text(arg_label)
+    if existing_rows is None or new_rows is None:
+        return False
+    seen_rows = existing_rows.split("<BR/>")
+    add_rows = [row for row in new_rows.split("<BR/>") if row not in seen_rows]
+    if add_rows:
+        merged = "<BR/>".join(seen_rows + add_rows)
+        entry["edge_dict"]["label"] = f"{_ARG_EDGE_LABEL_PREFIX}{merged}{_ARG_EDGE_LABEL_SUFFIX}"
+        if entry["body_index"] is not None:
+            _rewrite_emitted_edge(graphviz_graph, entry["body_index"], entry["edge_dict"])
+    return True

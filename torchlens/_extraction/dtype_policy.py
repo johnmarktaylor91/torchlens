@@ -23,6 +23,33 @@ import torch
 
 from .._errors import InvalidArgumentError
 
+
+def tensor_payload_bytes(tensor: torch.Tensor) -> bytes:
+    """Return a tensor's raw contiguous payload bytes, for ANY dense dtype.
+
+    ``tensor.numpy()`` refuses dtypes NumPy lacks (bf16, the fp8 family)
+    with a raw ``TypeError`` -- the crash bf16 stimuli hit in the stimulus
+    digest, the envelope input digest, and the callable-identity fold
+    (audit 2.10d). Reinterpreting the flat buffer as ``uint8`` never routes
+    the element type through NumPy.
+
+    Parameters
+    ----------
+    tensor:
+        Any dense tensor (moved to CPU here; 0-dim and empty safe).
+
+    Returns
+    -------
+    bytes
+        The flattened contiguous payload bytes.
+    """
+
+    flat = tensor.detach().reshape(-1).cpu().contiguous()
+    if flat.numel() == 0:
+        return b""
+    return flat.view(torch.uint8).numpy().tobytes()
+
+
 __tl_layer__ = "L5"
 
 __all__ = ["cast_for_store", "resolve_dtype_policy"]

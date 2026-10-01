@@ -9,6 +9,10 @@ DOCUMENTED-UNSTABLE pending the naming sprint.
 Install: `pip install "torchlens[neuro]"` (rsatoolbox, every supported
 Python). The Brain-Score seam is a separate extra:
 `pip install "torchlens[brainscore]"` (brainscore-vision, Python >= 3.11).
+Keep the two in separate environments: brainscore-vision 2.3 pins
+scikit-learn<1.6 while rsatoolbox 0.3 needs scikit-learn>=1.6, so
+`torchlens[neuro,brainscore]` resolves but `import rsatoolbox` fails
+(measured 2026-09-02; an upstream pin, not a torchlens choice).
 `__all__`/`dir()` advertise only the names whose dependency is present;
 accessing an unadvertised name teaches the exact install command.
 

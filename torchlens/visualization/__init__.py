@@ -22,7 +22,7 @@ _SURGERY_EXPORTS = {
     "render_surgery": "surgery_visuals",
     "surgery_census": "surgery_visuals",
     "surgery_facts": "surgery_visuals",
-    "surgery_diff": "surgery_diff",
+    "surgery_diff": "_surgery_diff",
 }
 
 

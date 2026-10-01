@@ -197,14 +197,34 @@ def test_output_container_views_match_legacy_fields() -> None:
     assert torch.equal(rebuilt.right, torch.tensor([3.0]))
 
 
-def test_flag_off_has_no_container_registry_attr() -> None:
-    """Default flag-off traces do not expose portable registry records."""
+def test_flag_off_registers_only_the_final_output_snapshot() -> None:
+    """Default flag-off traces carry ONE portable record: the final-output snapshot.
+
+    The model-output ContainerSpec is registered on every capture (W051-HONESTY
+    H2, so a default-capture live ``run()`` reconstructs the real container);
+    module-boundary and input records stay behind the
+    ``capture_container_structure`` opt-in.
+    """
 
     trace = tl.trace(RepeatedTensorOutput(), torch.tensor([1.0]))
 
-    assert "_containers" not in trace.__dict__
+    _assert_only_final_output_record(trace)
     assert "_container_ordinals_by_output_op_label" not in trace.__dict__
     assert "_build_state" not in trace.__dict__
+
+
+def _assert_only_final_output_record(trace: tl.Trace) -> None:
+    """Assert the registry holds exactly the model-output snapshot record."""
+
+    records = list(trace._containers.values())
+    assert len(records) == 1, records
+    snapshots = records[0].snapshots
+    assert snapshots and {snapshot.role for snapshot in snapshots} <= {
+        Role.MODEL_OUTPUT,
+        Role.CALL_OUTPUT,
+    }
+    assert all(getattr(snapshot.site, "model_ref", None) == "self:1" for snapshot in snapshots)
+    assert all(getattr(snapshot.site, "position", None) == "return" for snapshot in snapshots)
 
 
 def _assert_no_live_registry_state(trace: tl.Trace) -> None:

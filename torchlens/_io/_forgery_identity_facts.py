@@ -45,6 +45,46 @@ def _ops_of(trace: Trace) -> tuple[Any, ...]:
 _ROOT_ENTRY_POINT_KINDS = frozenset({"module_call", "bound_method", "function_call"})
 
 
+#: First tlspec stamp on which an ABSENT ``Trace.root_entry_point`` refuses.
+#: The C07X writers stamp the fact unconditionally, but they ride the SAME v9
+#: window as pre-C07X v9 writers whose artifacts are checked in (e.g.
+#: ``tests/agent_surface_goldens/clean.tlspec``: tlspec 9, torchlens 2.34.1,
+#: no root_entry_point), so within v9 the slot is ENTRY-DARK by construction
+#: and absence cannot be told from deletion. The tripwire is armed for the
+#: next coordinated bump (AUD-CODE 3.0e; W051-IO).
+_ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC = 10
+
+
+def _refuse_absent_root_entry_point_on_current_schema(trace: Trace) -> None:
+    """Refuse a v9+ governed artifact whose root entry-point fact is absent (AUD-CODE 3.0e).
+
+    Only inside the governed ``.tlspec`` load window: plain session pickling of
+    live records keeps its historical tolerance, and artifacts stamped below
+    ``_ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC`` keep the legacy ``None`` reading.
+    """
+
+    from .state_contract import governed_load_active
+
+    stamp = getattr(trace, "tlspec_version", None)
+    if not governed_load_active() or not isinstance(stamp, int) or isinstance(stamp, bool):
+        return
+    if stamp < _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC:
+        return
+    _refuse_identity(
+        f"Trace.root_entry_point is absent on a tlspec_version={stamp} artifact; every "
+        f"writer since tlspec {_ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC} stamps the root "
+        "invocation descriptor unconditionally (C07X), so absence is a deleted or "
+        "forged identity fact rather than the legacy reading.",
+        code="artifact_root_entry_point_invalid",
+        field="Trace.root_entry_point",
+        reason="absent_on_current_schema",
+        remedy=(
+            "re-save the artifact with one current TorchLens version; do not delete "
+            "the root entry-point identity fact"
+        ),
+    )
+
+
 def _validate_root_entry_point(trace: Trace) -> None:
     """Validate the Trace-level root entry-point identity fact (C07X).
 
@@ -57,6 +97,7 @@ def _validate_root_entry_point(trace: Trace) -> None:
 
     value = getattr(trace, "root_entry_point", None)
     if value is None:
+        _refuse_absent_root_entry_point_on_current_schema(trace)
         return
     reason = None
     if not isinstance(value, str):

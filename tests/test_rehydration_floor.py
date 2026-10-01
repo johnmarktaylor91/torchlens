@@ -8,6 +8,7 @@ floor, instead of being resurrected through legacy field-alias ladders.
 from __future__ import annotations
 
 import json
+import pickle
 import warnings
 from pathlib import Path
 
@@ -22,10 +23,33 @@ from torchlens._io import (
     ArtifactSchemaAgeWarning,
     TorchLensIOError,
 )
+from torchlens._io._canonical_pickle import dump_canonical_metadata
 from torchlens.data_classes.op import Op
 from torchlens.errors import ArtifactVersionBelowFloorError
 
 FLOOR_MATCH = "torchlens 2.33"
+
+
+def _stamp_between_floor(path: Path, version: int) -> None:
+    """Re-stamp a saved bundle as a COHERENT ``tlspec_version=version`` artifact.
+
+    Every torchlens writer stamps ``manifest.json`` AND the pickled root state
+    from the same ``TLSPEC_VERSION`` (a stampless state refuses below floor),
+    and the one lawful manifest-only bump (``tl.migrate``) leaves a witness.
+    A manifest-only edit therefore models NO real writer and trips the
+    manifest/metadata integrity anchor (``bundle_manifest_metadata_mismatch``)
+    before any age advisory; both stamps move together here.
+    """
+
+    manifest_path = path / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["tlspec_version"] = version
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    metadata_path = path / "metadata.pkl"
+    state = pickle.loads(metadata_path.read_bytes())  # trusted bytes this test wrote
+    state["tlspec_version"] = version
+    with metadata_path.open("wb") as handle:
+        dump_canonical_metadata(state, handle)
 
 
 def _build_trace() -> tl.Trace:
@@ -163,11 +187,8 @@ def test_between_floor_advisory_is_a_visible_user_warning(tmp_path: Path) -> Non
     trace = _build_trace()
     path = tmp_path / "between_floor.tlspec"
     tl.save(trace, path)
-    manifest_path = path / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert MIN_TLSPEC_VERSION < TLSPEC_VERSION, "no between-floor range to exercise"
-    manifest["tlspec_version"] = MIN_TLSPEC_VERSION
-    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    _stamp_between_floor(path, MIN_TLSPEC_VERSION)
 
     # resetwarnings() drops pytest's own filters so this asserts against the
     # DEFAULT interpreter filters -- the exact regime that hid the old category.

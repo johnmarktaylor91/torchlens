@@ -617,11 +617,22 @@ def _build_grid(parsed: ParsedLayout) -> _Grid:
     return grid
 
 
+#: Endpoint-label kinds carry NO own-edge exemption (FIXD03-F13, D03-R5):
+#: graphviz paints head/tail labels post-layout beside their own spline near
+#: their own arrowhead, so "own spline/arrowhead" is exactly where this
+#: class collides -- the blanket exemption made the commonest head-label
+#: defect structurally invisible (demonstrated false negative: toy_branchy,
+#: a visible own-spline glyph crossing scored 0 by both oracles).
+_ENDPOINT_LABEL_KINDS = ("edge-head", "edge-tail")
+
+
 def _is_own_pair(box: TextBox, item: object) -> bool:
     """True when ``item`` is ``box``'s own element (the OWN exemption).
 
-    A node's own label, an edge's own spline/arrowheads, same-owner text --
-    the exemption is scoped to the owner element only.
+    A node's own label, an edge's own MIDPOINT label vs its spline, and
+    same-owner text stay exempt; an edge-head/edge-tail label is NEVER
+    exempt from its own spline or arrowheads (see
+    ``_ENDPOINT_LABEL_KINDS``).
     """
 
     if isinstance(item, TextBox):
@@ -629,9 +640,9 @@ def _is_own_pair(box: TextBox, item: object) -> bool:
     if isinstance(item, NodeRecord):
         return box.kind in ("node-label", "legend-text", "port-cell") and box.owner == item.name
     if isinstance(item, EdgeRecord):
-        return box.owner == item.name
+        return box.kind not in _ENDPOINT_LABEL_KINDS and box.owner == item.name
     arrow_edge = cast("tuple[EdgeRecord, int, tuple[Point, ...]]", item)[0]
-    return box.owner == arrow_edge.name
+    return box.kind not in _ENDPOINT_LABEL_KINDS and box.owner == arrow_edge.name
 
 
 def _classify_pair(box: TextBox, item: object) -> tuple[str, str, float] | None:
@@ -663,9 +674,11 @@ def audit_layout(parsed: ParsedLayout, pen_eps: float = PEN_EPS) -> AuditResult:
     Every text box is checked against foreign nodes, splines, arrowheads,
     cluster borders, and other text boxes -- through the grid prefilter, with
     penwidth-inflated outlines. Self-pairs are exempt: a node's own label, a
-    cluster's own caption ON its border row, an edge's label against its own
-    spline/arrowheads (v1 semantics: own-spline contact is expected for
-    head/tail labels; the OWN exemption is scoped to the owner element only).
+    cluster's own caption ON its border row, an edge's MIDPOINT label against
+    its own spline/arrowheads. Head/tail labels get NO own-edge exemption
+    (D03-R5): they are painted beside their own spline near their own
+    arrowhead, so an own-spline crossing there is a real placement defect,
+    not expected contact.
     """
 
     grid = _build_grid(parsed)

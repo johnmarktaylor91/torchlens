@@ -502,7 +502,17 @@ _escape_detector_mode: str = "off"
 """Callable escape detector mode: ``"off"`` or diagnostic ``"shadow"``."""
 
 _completeness_witness_mode: str = "off"
-"""Dispatcher completeness witness mode: ``"off"`` or diagnostic ``"shadow"``."""
+"""Dispatcher completeness witness mode: ``"off"`` or diagnostic ``"shadow"``.
+
+OFF BY DEFAULT (AUD-HONESTY H4): a plain ``tl.trace()`` never arms the aten-dispatch
+census, so ``Trace.capture_verified`` stays ``None`` (NOT RECORDED -- never a clean
+bill) and host escapes only the census can see (``from_numpy``/``as_tensor``/
+``from_dlpack`` round-trips, numpy-backed ``autograd.Function`` forwards, in-forward
+storage writes) leave no ceiling. The ``tl.validate`` paths flip it to ``"shadow"``
+for their own run, and ``wrap_torch(completeness_witness=True)`` arms it for every
+capture; only an armed census can produce ``capture_verified=True``. Flipping the
+default on is a JMT fork (cost + observer-effect trade), not a lane decision.
+"""
 
 _runnable_ledger_armed: bool = False
 # Private wave-0 ATen recorder edge-token arm. It is capture-scoped and never portable.

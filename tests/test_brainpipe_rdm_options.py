@@ -17,6 +17,8 @@ import torchlens as tl
 from torchlens import repgeom
 from torchlens.stats import CKA, cka
 
+pytestmark = pytest.mark.smoke  # measured <0.5s per test (W051-GATE, AUD-CODE 0.1)
+
 
 def _acts(n: int = 10, d: int = 24) -> torch.Tensor:
     torch.manual_seed(3)

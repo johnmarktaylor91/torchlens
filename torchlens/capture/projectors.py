@@ -18,10 +18,15 @@ if TYPE_CHECKING:
 
 _REFRESH_SOURCES: WeakKeyDictionary[Any, Any] = WeakKeyDictionary()
 
-#: Pinned refresh graph-change message term. Public callers match on the
-#: literal phrase "computational graph changed", so every projector refusal --
-#: the untyped generic signature arm and the typed D18 buffer-sink arms alike
-#: -- carries this exact base message.
+#: Pinned refresh graph-change message term. Historical ``save_new_outs`` callers
+#: match on the literal phrase "computational graph changed", so every projector
+#: refusal -- the generic signature arm and the typed D18 buffer-sink arms alike
+#: -- carries this exact base message. The phrase is a compatibility floor, not
+#: the branching contract: the generic arm stamps ``refresh_graph_change_detail``
+#: on the raised ``ValueError`` (AUD-HONESTY H3) so the live ``run()`` provider
+#: settles it through the divergence spine (``PathDivergenceError`` /
+#: ``RunnableErrorCode.CALL_STRUCTURE_MISMATCH``, ``on_divergence`` honored), and
+#: public code branches on ``exc.fields["code"]`` / the run report, never text.
 _GRAPH_CHANGE_MESSAGE = (
     "The computational graph changed for this forward pass compared to the original "
     "call to trace (either due to different inputs or a different "
@@ -349,6 +354,13 @@ class RefreshProjector:
         detail_suffix = "" if detail is None else f" Detail: {detail}."
         error = ValueError(f"{_GRAPH_CHANGE_MESSAGE}{detail_suffix}")
         error.partial_log = PartialTrace(refreshed, error)  # type: ignore[attr-defined]
+        # H3 marker: the live provider identifies the generic graph-change arm by
+        # this attribute (never by message text) and routes it through the shared
+        # divergence-policy spine. The D18 buffer-sink arms are already typed and
+        # deliberately do NOT carry it.
+        error.refresh_graph_change_detail = (  # type: ignore[attr-defined]
+            "graph signature changed" if detail is None else str(detail)
+        )
         return error
 
     @staticmethod
@@ -618,13 +630,25 @@ class RefreshProjector:
                 _add_tensor_backward_hook(self.target, layer.out, layer._layer_label_raw)
 
     def _separate_output_payloads(self) -> None:
-        """Copy output-node payloads so they do not alias their parent payloads."""
+        """Settle refreshed output-node payloads against their producer's payload.
 
+        HONESTY 13-R1 (same rule as plain capture, ``graph_traversal``): when
+        the refreshed output value IS the producer's retained payload, the
+        output pseudo-row rides that ONE payload; a differing value keeps its
+        own physical copy, so a refresh never hides a variation and never
+        re-acquires the redundant duplicate the byte model charged.
+        """
+
+        from ..postprocess.graph_traversal import output_payload_aliases_parent
         from ..utils.tensor_utils import safe_copy
 
         for output_label in self.target.output_layers:
             output = self.target.layer_dict_all_keys[output_label]
             if not output.parents or output.out is None:
+                continue
+            parent_out = self.target.layer_dict_all_keys[output.parents[0]].out
+            if output_payload_aliases_parent(output.out, parent_out):
+                output._internal_set("out", parent_out)
                 continue
             output._internal_set(
                 "out",

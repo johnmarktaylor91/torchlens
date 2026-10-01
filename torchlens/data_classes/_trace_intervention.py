@@ -1139,8 +1139,9 @@ class TraceInterventionMixin(_TraceMixinBase):
         across clauses is plan OBJECT identity (D8): one ``SamplingPlan``
         reused in several pairs carries one content-digest ``donor_group_id``;
         distinct equal-content plan objects are disambiguated here by the
-        batch normalizer (``assign_batch_donor_groups``, deterministic
-        clause-order suffixes) so kwargs coincidence never shares a group
+        batch normalizer (``assign_batch_donor_groups``,
+        clause-selection-keyed suffixes; ``per_firing`` never suffixed)
+        so kwargs coincidence never shares a group
         while a rerun of the same declared batch still reproduces its draws.
 
         v1 scope (capability-reported, never silently narrowed): ACT
@@ -1744,10 +1745,19 @@ class TraceInterventionMixin(_TraceMixinBase):
             Mutable target spec stored in the intervention recipe.
         """
 
+        from ..intervention.hooks import lower_record_site_target
+
         if isinstance(site, TargetSpec):
             target = copy.copy(site)
             target.strict = strict or target.strict
             return target
+        # An ``Op``/``Layer`` RECORD lowers to its PASS-QUALIFIED label
+        # selector(s) first (AUD-CODE 4.10, W051-REPLAY out-of-fence item 2):
+        # an ``Op`` is exactly its own pass (``site.label``, never the bare
+        # ``layer_label`` = the LAST pass of a multi-pass layer); a multi-pass
+        # ``Layer`` is the explicit all-passes composite. Selector-likes pass
+        # through unchanged.
+        site = lower_record_site_target(site)
         if hasattr(site, "to_target_spec"):
             target = site.to_target_spec()
             target.strict = strict or target.strict

@@ -186,7 +186,12 @@ def mask_row_geometry(mask: torch.Tensor) -> dict[str, Any]:
 
 
 def raise_ragged_refusal(
-    key: str, batch_index: int, planned_shape: list[Any], observed_shape: list[int]
+    key: str,
+    batch_index: int,
+    planned_shape: list[Any],
+    observed_shape: list[int],
+    *,
+    late_mask_shaped: bool = False,
 ) -> None:
     """Raise the D4 entry-gate refusal on first width drift.
 
@@ -204,6 +209,13 @@ def raise_ragged_refusal(
         Frozen per-stimulus shape from batch zero.
     observed_shape:
         This batch's observed per-stimulus shape.
+    late_mask_shaped:
+        Whether the key was frozen DENSE at batch zero (no mask, or an
+        all-equal-width batch) under ``ragged="trim"`` and only now proves
+        ragged. A key's layout is frozen once for the whole artifact, so a
+        late trimmed admission would mix dense and trimmed shards under a
+        manifest-dense key and readers would silently drop rows; the
+        refusal teaches the batch-zero requirement instead.
 
     Raises
     ------
@@ -211,24 +223,48 @@ def raise_ragged_refusal(
         ``extraction_ragged_refused``, always.
     """
 
-    raise InvalidArgumentError(
-        f"Output key {key!r} changed per-stimulus shape at batch "
-        f"{batch_index}: batch zero froze {planned_shape}, this batch "
-        f"produced {observed_shape}. Variable-width outputs are refused "
-        "by default (ragged='refuse') BEFORE the offending shard commits; "
-        "only already-committed shards are preserved — on real text the "
-        "first drift typically arrives at batch 1, so expect the preserved "
-        "prefix to be a single shard.",
-        code="extraction_ragged_refused",
-        remedy=(
+    if late_mask_shaped:
+        problem = (
+            f"Output key {key!r} changed per-stimulus shape at batch "
+            f"{batch_index}: batch zero froze {planned_shape} as a DENSE "
+            f"layout (no attention mask reached the model, or every row had "
+            f"the same width), this batch produced {observed_shape} with a "
+            "mask. ragged='trim' stores a key TRIMMED only when batch zero "
+            "is mask-shaped: the artifact's per-key layout is frozen once, "
+            "and admitting a trimmed shard under a manifest-dense key would "
+            "make every reader drop rows silently. Refused BEFORE the "
+            "offending shard commits; only already-committed shards are "
+            "preserved."
+        )
+        remedy = (
+            "supply the attention mask on EVERY batch (including all-equal-"
+            "width ones) so batch zero is mask-shaped, or pad/collate every "
+            "batch to one fixed width, or pool the site (pool=)"
+        )
+    else:
+        problem = (
+            f"Output key {key!r} changed per-stimulus shape at batch "
+            f"{batch_index}: batch zero froze {planned_shape}, this batch "
+            f"produced {observed_shape}. Variable-width outputs are refused "
+            "by default (ragged='refuse') BEFORE the offending shard commits; "
+            "only already-committed shards are preserved — on real text the "
+            "first drift typically arrives at batch 1, so expect the preserved "
+            "prefix to be a single shard."
+        )
+        remedy = (
             "pool the site (pool=), collate to a fixed length (both change "
             "the signature and are disclosed as such), or opt into "
             "ragged='trim' to store true per-stimulus extents"
-        ),
+        )
+    raise InvalidArgumentError(
+        problem,
+        code="extraction_ragged_refused",
+        remedy=remedy,
         key=key,
         batch_index=batch_index,
         planned_shape=planned_shape,
         observed_shape=observed_shape,
+        late_mask_shaped=late_mask_shaped,
     )
 
 

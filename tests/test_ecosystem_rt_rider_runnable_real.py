@@ -41,7 +41,11 @@ from torchlens.runnable import PathFaithfulness, StateSource
 
 pytest.importorskip("transformers")
 
-from tests.real_model.r0.families import _token_ids, build_gpt2  # noqa: E402
+from tests.real_model.r0.families import (  # noqa: E402
+    _token_ids,
+    build_gpt2,
+    build_gpt2_default_cache,
+)
 
 pytestmark = [pytest.mark.heavy, pytest.mark.real_model]
 
@@ -156,3 +160,34 @@ def test_gpt2_recording_outcome_gate_reads_complete(gpt2_and_inputs):
     assert gate_outcome.status is CaptureStatus.COMPLETE
     hand_built = [w for w in caught if "hand-built" in str(w.message)]
     assert hand_built == []
+
+
+def test_gpt2_default_cache_config_live_run_reaches_verdict_or_typed_remedy(gpt2_and_inputs):
+    """AUD-HONESTY H1 at the R0 roster tier: the rows above pin ``use_cache=False`` +
+    ``intervention_ready=True`` only, so the HF DEFAULT configuration (KV cache on) was
+    never exercised by a ``run()`` test. On both the default capture and the
+    ``intervention_ready`` capture a default-config GPT-2 ``run()`` must reach VERIFIED
+    or a TYPED remedy (never the bare "Not enough leaves" ValueError the audit hit),
+    and the remedy must name ``use_cache=False``."""
+
+    _, input_ids = gpt2_and_inputs
+    torch.manual_seed(0)
+    model = build_gpt2_default_cache("eager").eval()
+    assert model.config.use_cache is True
+    for options in (CaptureOptions(), CaptureOptions(intervention_ready=True)):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            trace = tl.trace(model, input_ids, capture=options)
+        result = trace.run(inputs=input_ids)
+        if result.report.path_faithfulness is PathFaithfulness.VERIFIED:
+            continue
+        checks = [
+            c for c in result.report.contract_checks if c.name == "live_output_reconstruction"
+        ]
+        assert len(checks) == 1 and not checks[0].passed
+        diagnostic = checks[0].diagnostic
+        assert diagnostic.code.value == "output_structure_mismatch"
+        details = dict(diagnostic.details)
+        assert details["reason"] == "opaque_leaf", details
+        assert "use_cache=False" in details["remedy"]
+        assert diagnostic.message.rstrip(".").endswith(details["remedy"])

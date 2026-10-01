@@ -636,12 +636,14 @@ def _assert_op_level_buffer_accessors(trace: tl.Trace) -> None:
             for child_label in op.children
             if trace[child_label].is_buffer and trace[child_label].buffer_write_kind is not None
         ]
-        # OpAccessor iterates call-index keys (like op.input_ops); .get(key) resolves the Op
-        # (int __getitem__ is 0-based list position, not the sparse parent-index key).
-        source_ops = op.buffer_source_ops
-        sink_ops = op.buffer_sink_ops
-        assert [source_ops.get(k).label for k in source_ops] == expected_sources
-        assert [sink_ops.get(k).label for k in sink_ops] == expected_sinks
+        # OpAccessor reads are Op-valued (C02 read basis, pinned by
+        # tests/test_w051_gate_layer_accessors.py): iteration yields the Ops in
+        # parents/children order, and int keys are 0-based POSITIONS, never the
+        # sparse 1-based parent-index storage key. The datamodel claim under
+        # test is the ordered partition itself: sources are exactly the
+        # buffer-read parents, sinks exactly the buffer-write children.
+        assert [source.label for source in op.buffer_source_ops] == expected_sources
+        assert [sink.label for sink in op.buffer_sink_ops] == expected_sinks
 
 
 def test_buffer_op_accessors_partition_read_and_write_versions() -> None:

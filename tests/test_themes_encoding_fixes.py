@@ -29,6 +29,8 @@ from torchlens.visualization._encoding import (
     resolve_color_by,
 )
 
+pytestmark = pytest.mark.smoke  # measured <0.5s per test (W051-GATE, AUD-CODE 0.1)
+
 
 def _state_for(transform: str) -> EncodingState:
     """Build a populated-enough state carrying one transform."""

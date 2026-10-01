@@ -29,6 +29,7 @@ import torch
 from torch import nn
 
 from .._errors import InvalidArgumentError
+from .dtype_policy import tensor_payload_bytes
 
 __tl_layer__ = "L5"
 
@@ -630,7 +631,7 @@ def _digest_value(hasher: Any, value: Any) -> None:
     if isinstance(value, torch.Tensor):
         detached = value.detach()
         hasher.update(f"tensor|{tuple(detached.shape)}|{detached.dtype}".encode())
-        hasher.update(detached.cpu().contiguous().reshape(-1).numpy().tobytes())
+        hasher.update(tensor_payload_bytes(detached))
         return
     if isinstance(value, Mapping):
         hasher.update(f"map|{len(value)}".encode())

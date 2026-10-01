@@ -1884,6 +1884,7 @@ def _run_model_and_save_specified_outs(
         layers_to_save = "none"
 
     module_intervene_selector = None
+    lowered_intervene_spec = None
     module_intervene_entries: list[Any] = []
     candidate_intervene_selector = getattr(intervene_predicate, "selector", None)
     candidate_intervene_decision = getattr(intervene_predicate, "decision", None)
@@ -1895,6 +1896,11 @@ def _run_model_and_save_specified_outs(
         and candidate_intervene_decision.direction in {"forward", "both"}
     ):
         module_intervene_selector = candidate_intervene_selector
+        # .selector is non-None only for single-rule specs, so rules[0] is
+        # exact; the rule digest is unrecoverable downstream of this
+        # lowering (W051-BIND 2.3b).
+        spec_rules: Any = getattr(intervene_predicate, "rules", ())
+        lowered_rule_id = spec_rules[0].rule_id
         module_intervene_entries = [
             replace(
                 entry,
@@ -1902,6 +1908,7 @@ def _run_model_and_save_specified_outs(
                     **dict(entry.metadata),
                     "created_by": "intervene_predicate",
                     "zero_match_ledger": "intervene_selector",
+                    "rule_id": lowered_rule_id,
                 },
             )
             for entry in normalize_hook_plan(
@@ -1910,6 +1917,9 @@ def _run_model_and_save_specified_outs(
                 direction=candidate_intervene_decision.direction,
             )
         ]
+        # Keep the original spec: the capture-door event must record the rules
+        # payload the loader's injected-op anchor (W051-BIND 2.3c) vouches by.
+        lowered_intervene_spec = intervene_predicate
         intervene_predicate = None
     if intervention_spec is None:
         intervention_spec = _backward_intervention_spec_from_predicate(intervene_predicate)
@@ -1955,6 +1965,9 @@ def _run_model_and_save_specified_outs(
     except BaseException:
         _release_capture_slot()
         raise
+    from .snoop._entry import echo_forward_failure, finish_echo, open_echo_session
+
+    echo_session: Any = None
     try:
         from .semantic import facets as facets_mod
 
@@ -2122,19 +2135,23 @@ def _run_model_and_save_specified_outs(
             # product on failure and is visible to postprocess consumers; the
             # settlement-time writer replaces it with the finalized ledger.
             attach_episode_header(trace, episode_resolved)
+        # Echo narrator (snoop D1): one read-only observer per capture
+        # (runtime-only state). Opened INSIDE the guarded region: the echo
+        # sink opens its path eagerly, and a sink-open failure (missing
+        # directory, unwritable path) used to escape between the slot claim
+        # and the forward's own guard, leaking the capture reservation for as
+        # long as the exception object lived (AUD-CODE 2.15) -- the next
+        # tl.trace then refused reentrant_trace on an idle process.
+        echo_session = open_echo_session(trace, echo_options)
     except BaseException:
-        # A pre-forward setup failure (the Trace ctor or any later pre-forward
-        # step) must not leak the capture-global runtime context configured just
-        # above: the forward's own try/finally only guards the window starting
-        # below. Reset here so the protected region begins no later than
-        # configure_capture_runtime_context().
+        # A pre-forward setup failure (the Trace ctor, the echo sink open, or
+        # any later pre-forward step) must not leak the capture-global runtime
+        # context configured just above: the forward's own try/finally only
+        # guards the window starting below. Reset here so the protected region
+        # begins no later than configure_capture_runtime_context().
         _state.reset_capture_runtime_context()
         _release_capture_slot()
         raise
-    from .snoop._entry import echo_forward_failure, finish_echo, open_echo_session
-
-    # Echo narrator (snoop D1): one read-only observer per capture (runtime-only state).
-    echo_session = open_echo_session(trace, echo_options)
     try:
         # C03 live site-key minting (surgery Build 0c): when a configured
         # predicate addresses by structural site (tl.site), arm one streaming
@@ -2214,7 +2231,14 @@ def _run_model_and_save_specified_outs(
         layers_to_save_request=_selective_layers_to_save_request,
     )
     _record_capture_intervention_event(
-        trace, intervene_predicate if intervene_predicate is not None else module_intervene_selector
+        trace,
+        intervene_predicate
+        if intervene_predicate is not None
+        else (
+            lowered_intervene_spec
+            if lowered_intervene_spec is not None
+            else module_intervene_selector
+        ),
     )
     return trace
 

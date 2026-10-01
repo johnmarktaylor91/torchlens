@@ -41,6 +41,7 @@ from .._io import _json
 from ..errors._base import ConfigurationError
 from ..transforms._pipeline import OpaqueStep
 from .callable_identity import classify_callable
+from .dtype_policy import tensor_payload_bytes
 from .selector_plan import SelectorPlan, selector_request_record
 from .shards import shard_extension
 
@@ -151,8 +152,7 @@ def _tensor_digest(stimuli: torch.Tensor) -> str:
     hasher.update(str(stimuli.dtype).encode())
     flat = stimuli.detach().reshape(-1)
     stride = max(1, flat.numel() // _DIGEST_SAMPLE_ELEMENTS)
-    sample = flat[::stride].cpu().contiguous()
-    hasher.update(sample.numpy().tobytes())
+    hasher.update(tensor_payload_bytes(flat[::stride]))
     return f"sha256:{hasher.hexdigest()}"
 
 
@@ -295,6 +295,7 @@ def build_signature(plan: _RunPlan, model_identity_record: dict[str, Any]) -> di
         "stimuli": _stimuli_signature(plan.stimuli),
         "stimulus_ids_digest": stimulus_ids_digest(plan.stimulus_ids),
         "model_identity": model_identity_record,
+        "model_structure": model_structure_record(plan.model),
         "padding_side": "as_collated",
         "position_ids_source": "derived_or_refused",
         "model_mode": "eval_no_grad",
@@ -306,6 +307,103 @@ def build_signature(plan: _RunPlan, model_identity_record: dict[str, Any]) -> di
         "callable_identity": _callable_identity_signature(plan),
         "selector_plan": selector_plan_record,
     }
+
+
+#: Algorithm id of the structural model record (module tree + hyperparameters).
+MODEL_STRUCTURE_ALGORITHM_ID = "tl_model_structure_v1"
+
+
+def model_structure_record(model: nn.Module) -> dict[str, Any]:
+    """Digest the model's ARCHITECTURE: module tree qualnames + ``extra_repr``.
+
+    The D6 identity record measures ``state_dict()`` only, so two models with
+    identical weights and different hyperparameters (``padding_mode``,
+    activation class, ``eps``, ``stride``) shared one identity and a resume
+    across them completed a MIXED artifact (audit 2.10a). This record folds
+    every module's registered name, class qualname, and ``extra_repr()`` in
+    ``named_modules()`` order; it is compared on resume beside the identity
+    record and refuses under the same code.
+
+    Parameters
+    ----------
+    model:
+        The model.
+
+    Returns
+    -------
+    dict[str, Any]
+        ``{"digest", "algorithm_id", "n_modules"}``.
+    """
+
+    hasher = hashlib.blake2b(digest_size=32)
+    n_modules = 0
+    for name, module in model.named_modules():
+        n_modules += 1
+        cls = type(module)
+        try:
+            extra = module.extra_repr()
+        except Exception:  # noqa: BLE001 - a user extra_repr may raise anything
+            extra = "<extra_repr_unavailable>"
+        hasher.update(f"{name}|{cls.__module__}.{cls.__qualname__}|{extra}\n".encode())
+    return {
+        "digest": f"blake2b:{hasher.hexdigest()}",
+        "algorithm_id": MODEL_STRUCTURE_ALGORITHM_ID,
+        "n_modules": n_modules,
+    }
+
+
+def _refuse_model_structure_mismatch(
+    recorded: Any, current: Any, manifest_path: Path, audits: list[dict[str, Any]]
+) -> None:
+    """Refuse a resume whose model ARCHITECTURE differs from the record (2.10a).
+
+    Parameters
+    ----------
+    recorded:
+        The artifact's recorded structure record (absent on older
+        manifests: disclosed, never compared).
+    current:
+        The resuming run's structure record.
+    manifest_path:
+        Manifest path, for the refusal message.
+    audits:
+        Resume audit rows (an unrecorded structure appends a disclosure).
+
+    Raises
+    ------
+    DatasetExtractionResumeError
+        ``extraction_resume_model_identity_mismatch`` on a differing
+        structure digest.
+    """
+
+    if not isinstance(recorded, Mapping):
+        audits.append(
+            {
+                "kind": "model_structure_unrecorded",
+                "semantics": "architecture_unverified_by_record",
+            }
+        )
+        return
+    if recorded.get("digest") == current.get("digest") and recorded.get(
+        "algorithm_id"
+    ) == current.get("algorithm_id"):
+        return
+    raise DatasetExtractionResumeError(
+        f"Extraction artifact at {str(manifest_path.parent)!r} records a "
+        "different MODEL STRUCTURE than the resuming run: the weights match "
+        "the record but the module tree or a constructor hyperparameter "
+        "(padding_mode, activation class, eps, stride, ...) differs. "
+        "Continuing would silently mix the artifact's activations with a "
+        "different architecture's.",
+        code="extraction_resume_model_identity_mismatch",
+        remedy=(
+            "resume with the exact model construction that produced the "
+            "artifact, or extract into a fresh directory"
+        ),
+        mismatched_fields=["model_structure"],
+        recorded_structure=dict(recorded),
+        requested_structure=dict(current),
+    )
 
 
 def _base_manifest(
@@ -547,19 +645,44 @@ def _apply_callable_identity_rules(
             )
             continue
         if both_complete:
-            raise DatasetExtractionResumeError(
-                f"Callable slot {slot!r} classifies COMPLETE on both sides "
-                "but the digests differ — the callable's observable "
-                "behavior changed since the prefix was written.",
-                code="extraction_resume_callable_mismatch",
-                remedy=(
+            encoding_changed = (rec.get("algorithm_id"), rec.get("algorithm_version")) != (
+                cur.get("algorithm_id"),
+                cur.get("algorithm_version"),
+            )
+            if encoding_changed:
+                problem = (
+                    f"Callable slot {slot!r} was recorded under callable-identity "
+                    f"encoding {rec.get('algorithm_id')!r} v{rec.get('algorithm_version')} "
+                    f"and this TorchLens computes v{cur.get('algorithm_version')}; the "
+                    "two digests are INCOMPARABLE, so the prefix's callable "
+                    "semantics cannot be verified against the resuming one (this "
+                    "is not evidence that the callable changed)."
+                )
+                remedy = (
+                    "attest continuity with the artifact's recorded pipeline_id= "
+                    "(recorded from the FIRST run), or extract into a fresh directory"
+                )
+            else:
+                problem = (
+                    f"Callable slot {slot!r} classifies COMPLETE on both sides "
+                    "but the digests differ — the callable's observable "
+                    "behavior changed since the prefix was written."
+                )
+                remedy = (
                     "resume with the original callable, extract into a "
                     "fresh directory, or attest the deliberate refactor "
                     "with the artifact's recorded pipeline_id="
-                ),
+                )
+            raise DatasetExtractionResumeError(
+                problem,
+                code="extraction_resume_callable_mismatch",
+                remedy=remedy,
                 slot=slot,
                 recorded_digest=rec.get("digest"),
                 current_digest=cur.get("digest"),
+                encoding_changed=encoding_changed,
+                recorded_algorithm_version=rec.get("algorithm_version"),
+                current_algorithm_version=cur.get("algorithm_version"),
             )
         opaque = sorted(
             set(rec.get("opaque_references") or []) | set(cur.get("opaque_references") or [])
@@ -628,6 +751,9 @@ def _refuse_signature_mismatch(
         field for field in compare_signatures(recorded, current) if field != "callable_identity"
     ]
     if not mismatched:
+        _refuse_model_structure_mismatch(
+            recorded.get("model_structure"), current.get("model_structure"), manifest_path, audits
+        )
         return audits
     if "model_identity" in mismatched:
         raise DatasetExtractionResumeError(
@@ -661,6 +787,65 @@ def _refuse_signature_mismatch(
     )
 
 
+def _rehydrate_ragged_state(
+    manifest: Mapping[str, Any], audit: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    """Rebuild the D4 ragged gate's frozen state from the manifest (2.10b).
+
+    A continuation must compare every new batch against the ARTIFACT's
+    frozen layouts and post-pool shapes, never against its own first batch:
+    otherwise a resumed run committed ``[4, 16, 16]`` shards under a
+    ``[4, 8, 8]`` key (every reader then raised a raw ``RuntimeError``) or
+    dense shards under a trimmed key (readers dropped rows). The layers
+    block records ``layout`` and (since this fix) ``pooled_per_stimulus_shape``;
+    an older manifest without the pooled shape falls back to the stored
+    shape when no transform separates the two, and otherwise leaves the key
+    to the per-shard transform-plan check with an audit row.
+
+    Parameters
+    ----------
+    manifest:
+        The recorded manifest (its ``layers`` block may still be absent
+        when no batch committed).
+    audit:
+        The resume audit list; underivable keys append a disclosure row.
+
+    Returns
+    -------
+    dict | None
+        ``{"pooled_shapes": {...}, "trimmed_keys": {...}}`` or ``None``
+        when the artifact froze no layers yet (batch zero freezes anew).
+    """
+
+    layers = manifest.get("layers")
+    if not isinstance(layers, Mapping):
+        return None
+    plans = (manifest.get("run") or {}).get("transform_plans") or {}
+    pooled_shapes: dict[str, list[Any]] = {}
+    trimmed_keys: set[str] = set()
+    for key, entry in layers.items():
+        if not isinstance(entry, Mapping):
+            continue
+        trimmed = entry.get("layout") == "trimmed"
+        if trimmed:
+            trimmed_keys.add(key)
+        pooled = entry.get("pooled_per_stimulus_shape")
+        if pooled is None and not plans.get(key):
+            pooled = entry.get("stored_per_stimulus_shape")
+        if pooled is None:
+            audit.append(
+                {
+                    "kind": "ragged_gate_unrehydrated",
+                    "key": key,
+                    "reason": "manifest_predates_pooled_shape_record_under_transform",
+                    "coverage": "stored shape checked per shard by the transform plan",
+                }
+            )
+            continue
+        pooled_shapes[key] = list(pooled)
+    return {"pooled_shapes": pooled_shapes, "trimmed_keys": trimmed_keys}
+
+
 def _completed_prefix(manifest: dict[str, Any], container_path: Path) -> list[dict[str, Any]]:
     """Return the v1 ledgered shard prefix whose files are all present.
 
@@ -686,6 +871,23 @@ def _completed_prefix(manifest: dict[str, Any], container_path: Path) -> list[di
             break
         prefix.append(row)
     return prefix
+
+
+def _stale_shard_files(container_path: Path) -> list[Path]:
+    """List a directory's shard files of either native format.
+
+    Parameters
+    ----------
+    container_path:
+        Extraction directory.
+
+    Returns
+    -------
+    list[pathlib.Path]
+        ``batch_*.pt`` and ``batch_*.safetensors`` files, sorted.
+    """
+
+    return sorted([*container_path.glob("batch_*.pt"), *container_path.glob("batch_*.safetensors")])
 
 
 def _clean_orphan_tmp_files(container_path: Path) -> None:
@@ -806,6 +1008,7 @@ def _prepare_disk_run(
                 ),
                 dict(recorded_selector.get("request") or {}),
             )
+        prep_state["ragged_state"] = _rehydrate_ragged_state(existing, prep_state["resume_audit"])
         _clean_orphan_tmp_files(container_path)
         # A torn final ledger line is crash debris: cleared before appends
         # resume, or the next commit would concatenate into it.
@@ -827,22 +1030,51 @@ def _prepare_disk_run(
             output_dir=str(container_path),
         )
 
-    # Fresh run (resume=False, or resume=True into an empty directory): any
-    # prior artifact machinery in the directory belongs to a different run
-    # identity, so the append-only ledger and write-once sidecar reset with
-    # the manifest.
+    # Fresh run (resume=False, or resume=True into an empty directory).
+    plan, writer = _start_fresh_run(plan, container_path)
+    return plan, writer, [], None, prep_state
+
+
+def _start_fresh_run(plan: _RunPlan, container_path: Path) -> tuple[_RunPlan, ArtifactWriter]:
+    """Reset the directory to a fresh run identity and mint its manifest.
+
+    Any prior artifact machinery in the directory belongs to a different run
+    identity, so the append-only ledger and write-once sidecar reset with the
+    manifest.
+
+    Parameters
+    ----------
+    plan:
+        Resolved run configuration (its ``shard_format`` may be ``None``;
+        fresh runs resolve to safetensors).
+    container_path:
+        Extraction directory (already created).
+
+    Returns
+    -------
+    tuple[_RunPlan, ArtifactWriter]
+        The plan with its resolved shard format and the writer bound to the
+        freshly written manifest.
+    """
+
     plan = dataclasses.replace(plan, shard_format=plan.shard_format or "safetensors")
     _clean_orphan_tmp_files(container_path)
     for stale in (LEDGER_FILENAME, STIMULUS_IDS_FILENAME):
         with contextlib.suppress(OSError):
             (container_path / stale).unlink()
+    # Higher-index shards of a longer prior run would otherwise outlive the
+    # new ledger as unledgered debris (audit 4.7): readers are ledger-driven,
+    # so nothing read them, but the directory lied about its contents.
+    for stale_shard in _stale_shard_files(container_path):
+        with contextlib.suppress(OSError):
+            stale_shard.unlink()
     identity = resolve_model_identity(plan.model, plan.model_identity)
     manifest = _base_manifest(build_signature(plan, identity), plan.stimulus_ids, plan.input_block)
     writer = ArtifactWriter(container_path, manifest)
     writer.write_manifest()
     if plan.stimulus_ids is not None:
         writer.write_stimulus_ids_sidecar(plan.stimulus_ids)
-    return plan, writer, [], None, prep_state
+    return plan, writer
 
 
 def resolve_model_identity(model: nn.Module, model_identity: Any) -> dict[str, Any]:

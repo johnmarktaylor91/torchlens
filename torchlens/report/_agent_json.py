@@ -19,6 +19,7 @@ from .._capture_honesty import (
     capture_advisories,
     capture_verification,
     episode_facts,
+    intervention_facts,
     poison_facts,
     refuse_presenter_subject,
 )
@@ -63,7 +64,11 @@ _GUIDE: dict[str, Any] = {
             "diverged sparse run kept for inspection; its values are NOT "
             "model-faithful. An 'episode' block means one wrapped multi-step "
             "generation run; fidelity_basis='forced' is the non-verifying "
-            "teacher-forcing mode."
+            "teacher-forcing mode. An 'interventions' block means values at "
+            "the listed replaced_ops (and everything downstream) are "
+            "COUNTERFACTUAL edits, not the model's own forward. "
+            "capture_verified=null means the completeness witness was not "
+            "armed (default capture) -- no verdict, not a clean bill."
         ),
         "truncation": (
             "Non-null when max_ops dropped op rows; counts disclose exactly what was omitted."
@@ -148,11 +153,20 @@ def _json_safe_value(value: Any) -> Any:
     Returns
     -------
     Any
-        The value itself when it is a JSON primitive, otherwise its ``repr``
-        truncated to 500 characters (disclosed with a trailing ellipsis).
+        The value itself when it is a strict-JSON primitive (non-finite
+        floats become the tagged ``{"nonfinite": ...}`` record), otherwise
+        its ``repr`` truncated to 500 characters (disclosed with a trailing
+        ellipsis).
     """
 
-    if value is None or isinstance(value, bool | int | float | str):
+    if isinstance(value, float):
+        # Non-finite floats are not JSON: tag them the way every agent-surface
+        # envelope does (AUD-CODE 2.6) so ``json.dumps(..., allow_nan=False)``
+        # -- the documented JSON-serializable promise -- holds.
+        from ..agent._envelope import json_safe
+
+        return json_safe(value)
+    if value is None or isinstance(value, bool | int | str):
         return value
     rendered = repr(value)
     if len(rendered) > 500:
@@ -487,6 +501,12 @@ def build_agent_json(log: Any, *, max_ops: int | None = None) -> dict[str, Any]:
     episode = episode_facts(log)
     if episode is not None:
         capture["episode"] = episode
+    # M5: an intervened capture stays ``complete`` while the values at the fired
+    # sites are counterfactual; the dump must say so or an agent reads a
+    # zero-ablated forward as the model's own numbers.
+    interventions = intervention_facts(log)
+    if interventions is not None:
+        capture["interventions"] = interventions
     advisories = capture_advisories(log)
     if advisories:
         capture["advisories"] = advisories

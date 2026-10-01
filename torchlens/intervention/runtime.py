@@ -5,7 +5,6 @@ from __future__ import annotations
 import inspect
 import time
 import warnings
-import weakref
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from types import SimpleNamespace
@@ -15,10 +14,19 @@ import torch
 
 from .. import _state
 from .._state import pause_logging
-from ..backends.torch._tl import clear_tensor_label, copy_replacement_meta, get_tensor_label
+from ..backends.torch._tl import copy_replacement_meta
 from ..capture.arg_positions import _normalize_func_name
+from ..data_classes._site_key import call_instance_id, render_site_key, site_axis
 from ..ir.intervention import FireResult
 from ..utils.arg_handling import copy_arg_tree
+from ._module_boundary import (
+    _apply_module_boundary_live_hooks as _apply_module_boundary_live_hooks,
+    _peek_module_intervention_parent_labels as _peek_module_intervention_parent_labels,
+    _peek_tensor_live_fire_results as _peek_tensor_live_fire_results,
+    _record_module_intervention_parent_labels as _record_module_intervention_parent_labels,
+    _record_tensor_live_fire_results as _record_tensor_live_fire_results,
+    _replace_tensor_outputs as _replace_tensor_outputs,
+)
 from .errors import HookSignatureError, HookValueError
 from .hooks import (
     HookContext,
@@ -26,7 +34,6 @@ from .hooks import (
     live_backward_selector_matches,
     live_selector_matches_site,
     make_hook_context,
-    make_live_site_proxy,
 )
 from .types import FireRecord
 
@@ -406,6 +413,7 @@ def _apply_live_hooks(
     hook_plan = _state._active_hook_plan
     if not hook_plan:
         return out, ()
+    _stamp_live_site_identity(site)
 
     current_out = out
     fire_results: list[FireResult] = []
@@ -448,12 +456,21 @@ def _apply_live_hooks(
         pre_hook_dtype = str(current_out.dtype)
         version_before = _tensor_version(current_out)
         content_before = _tensor_content_probe(current_out)
-        result = _execute_hook(
-            normalized_entry.normalized_callable,
-            current_out,
-            hook_context,
-            force_shape_change=bool(normalized_entry.metadata.get("force_shape_change", False)),
+        # F01 log_injections: a pre-lowered plan entry that carries its spec
+        # rule id (the tl.module(...) lowering at the capture entry) anchors
+        # this firing's injected ops to that PERSISTED id; entries without one
+        # leave the door's own ``current_rule`` untouched (AUD-CODE 2.3b).
+        entry_rule_id = normalized_entry.metadata.get("rule_id")
+        stamped_state = (
+            _armed_injection_state(_state._active_trace) if isinstance(entry_rule_id, str) else None
         )
+        with _current_injection_rule(stamped_state, entry_rule_id):
+            result = _execute_hook(
+                normalized_entry.normalized_callable,
+                current_out,
+                hook_context,
+                force_shape_change=bool(normalized_entry.metadata.get("force_shape_change", False)),
+            )
         result, replaced = _apply_inplace_replacement_to_mutated_storage(
             result,
             current_out=current_out,
@@ -681,378 +698,33 @@ def _apply_inplace_replacement_to_mutated_storage(
     return current_out, False
 
 
-def _apply_module_boundary_live_hooks(
-    out_orig: Any,
-    *,
-    module_address: str,
-    module_call_index: int,
-    module_type: str,
-    call_args: tuple[Any, ...],
-    call_kwargs: dict[str, Any],
-) -> Any:
-    """Apply module-boundary live hooks to module forward outputs.
+def _armed_injection_state(trace: Any) -> dict[str, Any] | None:
+    """The trace's consolidated injection state when ``log_injections`` is armed."""
 
-    Parameters
-    ----------
-    out_orig:
-        Raw module forward output.
-    module_address:
-        TorchLens module address.
-    module_call_index:
-        One-based module call index.
-    module_type:
-        Module type name.
-    call_args:
-        Original module positional inputs.
-    call_kwargs:
-        Original module keyword inputs.
+    state = getattr(trace, "_tl_injection_state", None)
+    if isinstance(state, dict) and state.get("armed", False):
+        return state
+    return None
 
-    Returns
-    -------
-    Any
-        Module output with any tensor replacements applied.
+
+@contextmanager
+def _current_injection_rule(state: dict[str, Any] | None, rule_id: Any) -> Iterator[None]:
+    """Stamp ``rule_id`` as the armed injection state's ``current_rule`` for the body.
+
+    ``state`` is ``None`` when ``log_injections`` is not armed (or when the
+    caller has nothing to stamp); the body then runs with the recorder's own
+    ``current_rule`` untouched. Otherwise the stamp is cleared on exit, even
+    when the hook raises, so no later firing inherits a stale rule id.
     """
 
-    trace = _state._active_trace
-    predicate_options = getattr(trace, "_predicate_save_options", None)
-    predicate_intervene = getattr(predicate_options, "intervene", None)
-    predicate_selector = getattr(predicate_intervene, "selector", None)
-    if predicate_selector is not None:
-        from ..ir.selector_eval import selector_contains_kind
-        from .selectors import BaseSelector
-
-        if not isinstance(predicate_selector, BaseSelector) or not selector_contains_kind(
-            predicate_selector, "module"
-        ):
-            predicate_intervene = None
-    else:
-        predicate_intervene = None
-    if not _state._active_hook_plan and predicate_intervene is None:
-        return out_orig
-    module_call = (module_address, module_call_index)
-    replacements: dict[tuple[Any, ...], torch.Tensor] = {}
-    for out, container_path in _iter_tensor_outputs(out_orig):
-        site = make_live_site_proxy(
-            _layer_label_raw=f"{module_address}:{module_call_index}",
-            func_name=module_type,
-            layer_type=module_type.lower(),
-            tensor=out,
-            func_call_id=0,
-            container_path=container_path,
-            fields={
-                "raw_index": 0,
-                "module": module_call,
-                "modules": (module_call,),
-                "output_of_module_calls": (module_call,),
-                "_tl_module_boundary": True,
-            },
-        )
-        setattr(site, "_tl_module_boundary", True)
-        hooked, fire_results = _apply_live_hooks(
-            out,
-            site=site,
-            container_path=container_path,
-            call_args=call_args,
-            call_kwargs=call_kwargs,
-        )
-        all_fire_results = list(fire_results)
-        if predicate_intervene is not None and trace is not None:
-            from ..backends.torch.ops import _record_predicate_intervention_spec
-            from ..capture.predicates import _evaluate_intervene_op
-            from .hooks import normalize_hook_plan
-
-            assert predicate_options is not None
-            decision = _evaluate_intervene_op(site, predicate_options)
-            if decision is not None:
-                _record_predicate_intervention_spec(trace, site, decision)
-                hook_entries = normalize_hook_plan(
-                    decision.hook,
-                    default_site_target=predicate_selector,
-                    direction=decision.direction,
-                )
-                with active_intervention_context(
-                    intervention_spec=getattr(trace, "_intervention_spec", None),
-                    hook_plan=hook_entries,
-                ):
-                    hooked, predicate_fire_results = _apply_live_hooks(
-                        hooked,
-                        site=site,
-                        container_path=container_path,
-                        call_args=call_args,
-                        call_kwargs=call_kwargs,
-                    )
-                all_fire_results.extend(predicate_fire_results)
-                if predicate_fire_results:
-                    trace._tl_intervene_selector_fire_count = int(
-                        getattr(trace, "_tl_intervene_selector_fire_count", 0)
-                    ) + len(predicate_fire_results)
-        fire_results = tuple(all_fire_results)
-        if fire_results:
-            if hooked is not out:
-                parent_label = get_tensor_label(out)
-                if parent_label is not None:
-                    _record_module_intervention_parent_labels(hooked, (parent_label,), trace)
-                clear_tensor_label(hooked)
-            _record_tensor_live_fire_results(hooked, fire_results)
-        if hooked is not out:
-            replacements[container_path] = hooked
-    if not replacements:
-        return out_orig
-    return _replace_tensor_outputs(out_orig, replacements)
-
-
-_MODULE_INTERVENTION_PARENTS_ATTR = "_tl_module_intervention_parent_labels"
-_MODULE_INTERVENTION_PARENTS_TABLE = "_tl_module_intervention_parents_by_id"
-
-
-def _record_tensor_live_fire_results(
-    tensor: torch.Tensor, fire_results: tuple[FireResult, ...]
-) -> None:
-    """Attach module-boundary fire results to a tensor, never dropping them silently.
-
-    A replacement tensor that rejects dynamic attributes used to swallow the
-    evidence (bare ``except: pass``), so the module exit reran with no
-    intervention provenance and the fresh value was misclassified as an
-    ``internal_source``. Delegate to the op-level setter, which falls back to
-    the storage-owned side table and raises a typed ``CompatibilityError``
-    only when NEITHER channel is writable.
-
-    Parameters
-    ----------
-    tensor:
-        Tensor that received a live module-boundary hook.
-    fire_results:
-        Fire results emitted by the live hook dispatcher.
-    """
-
-    from ..backends.torch._ops_interventions import _set_tensor_live_fire_results
-
-    _set_tensor_live_fire_results(tensor, fire_results)
-
-
-def _peek_tensor_live_fire_results(tensor: torch.Tensor) -> tuple[FireResult, ...]:
-    """Return (without consuming) live fire results attached to ``tensor``.
-
-    Checks the plain attribute first, then the storage-owned side table the
-    robust setter falls back to for attr-rejecting replacement tensors. The
-    module-exit consumer gates its replacement-vs-internal-source
-    classification on this peek, so it must see both channels.
-
-    Parameters
-    ----------
-    tensor:
-        Tensor about to be classified at a module exit.
-    """
-
+    if state is None:
+        yield
+        return
+    state["current_rule"] = rule_id
     try:
-        fire_results = tuple(getattr(tensor, "_tl_live_fire_results", ()) or ())
-    except Exception:
-        fire_results = ()
-    if fire_results:
-        return fire_results
-    from ..backends.torch import _ops_interventions as intervention_state
-
-    try:
-        with pause_logging():
-            storage = tensor.untyped_storage()
-        records = getattr(storage, intervention_state._LIVE_FIRE_RESULTS_STORAGE_ATTR, None)
-    except Exception:
-        return ()
-    if not isinstance(records, dict):
-        return ()
-    entry = records.get(id(tensor))
-    if entry is not None and entry[0]() is tensor:
-        return tuple(entry[1])
-    return ()
-
-
-def _record_module_intervention_parent_labels(
-    tensor: torch.Tensor,
-    parent_labels: tuple[str, ...],
-    trace: Any,
-) -> None:
-    """Record the replaced-parent labels for a module-boundary replacement.
-
-    Falls back to a trace-scoped identity-keyed table (weakly guarded against
-    id reuse, dying with the capture) when the replacement tensor rejects
-    dynamic attributes, so the boundary op minted at module exit keeps its
-    dataflow parents instead of silently losing them.
-
-    Parameters
-    ----------
-    tensor:
-        Replacement tensor produced by a live module-boundary hook.
-    parent_labels:
-        Raw labels of the replaced module-output tensors.
-    trace:
-        Active trace owning the fallback table (``None`` tolerated; the loss
-        is then disclosed with a warning rather than swallowed).
-    """
-
-    labels = tuple(parent_labels)
-    try:
-        setattr(tensor, _MODULE_INTERVENTION_PARENTS_ATTR, labels)
-        return
-    except Exception:
-        pass
-    if trace is None:
-        warnings.warn(
-            "TorchLens could not record intervention parent provenance for a "
-            "module-boundary replacement tensor (dynamic attributes rejected and "
-            "no active trace); the replacement op will carry no parents.",
-            stacklevel=2,
-        )
-        return
-    table = trace.__dict__.setdefault(_MODULE_INTERVENTION_PARENTS_TABLE, {})
-    table[id(tensor)] = (weakref.ref(tensor), labels)
-
-
-def _peek_module_intervention_parent_labels(tensor: torch.Tensor, trace: Any) -> tuple[str, ...]:
-    """Return the recorded replaced-parent labels for ``tensor``, if any.
-
-    Parameters
-    ----------
-    tensor:
-        Module-output tensor being classified at a module exit.
-    trace:
-        Active trace whose fallback table is consulted when the tensor
-        carries no attribute.
-    """
-
-    try:
-        labels = tuple(getattr(tensor, _MODULE_INTERVENTION_PARENTS_ATTR, ()) or ())
-    except Exception:
-        labels = ()
-    if labels:
-        return labels
-    table = getattr(trace, _MODULE_INTERVENTION_PARENTS_TABLE, None) if trace is not None else None
-    if not isinstance(table, dict):
-        return ()
-    entry = table.get(id(tensor))
-    if entry is not None and entry[0]() is tensor:
-        return tuple(entry[1])
-    return ()
-
-
-def _iter_tensor_outputs(
-    value: Any, path: tuple[Any, ...] = ()
-) -> Iterator[tuple[torch.Tensor, tuple[Any, ...]]]:
-    """Yield tensor leaves and their paths from a module output structure.
-
-    Parameters
-    ----------
-    value:
-        Module output value to traverse.
-    path:
-        Current container path prefix.
-
-    Yields
-    ------
-    tuple[torch.Tensor, tuple[Any, ...]]
-        Tensor leaf and stable path.
-    """
-
-    if isinstance(value, torch.Tensor):
-        yield value, path
-        return
-    if isinstance(value, tuple):
-        for index, item in enumerate(value):
-            yield from _iter_tensor_outputs(item, (*path, index))
-        return
-    if isinstance(value, list):
-        for index, item in enumerate(value):
-            yield from _iter_tensor_outputs(item, (*path, index))
-        return
-    if isinstance(value, dict):
-        for key, item in value.items():
-            yield from _iter_tensor_outputs(item, (*path, key))
-
-
-def _replace_tensor_outputs(value: Any, replacements: dict[tuple[Any, ...], torch.Tensor]) -> Any:
-    """Return ``value`` with tensor leaves replaced by path.
-
-    Parameters
-    ----------
-    value:
-        Original module output structure.
-    replacements:
-        Mapping from tensor leaf path to replacement tensor.
-
-    Returns
-    -------
-    Any
-        Output structure with replacements applied.
-    """
-
-    if () in replacements:
-        return replacements[()]
-    if isinstance(value, tuple):
-        rebuilt_items = tuple(
-            _replace_tensor_outputs_by_child(item, replacements, (index,))
-            for index, item in enumerate(value)
-        )
-        if _is_namedtuple_instance(value):
-            return tuple.__new__(type(value), rebuilt_items)
-        return type(value)(rebuilt_items)
-    if isinstance(value, list):
-        return [
-            _replace_tensor_outputs_by_child(item, replacements, (index,))
-            for index, item in enumerate(value)
-        ]
-    if isinstance(value, dict):
-        return {
-            key: _replace_tensor_outputs_by_child(item, replacements, (key,))
-            for key, item in value.items()
-        }
-    return value
-
-
-def _replace_tensor_outputs_by_child(
-    value: Any, replacements: dict[tuple[Any, ...], torch.Tensor], prefix: tuple[Any, ...]
-) -> Any:
-    """Return a child value with replacements beneath ``prefix`` applied.
-
-    Parameters
-    ----------
-    value:
-        Child value to rebuild.
-    replacements:
-        Full replacement mapping.
-    prefix:
-        Path prefix for ``value`` within its parent.
-
-    Returns
-    -------
-    Any
-        Child value with matching replacements applied.
-    """
-
-    child_replacements = {
-        path[len(prefix) :]: replacement
-        for path, replacement in replacements.items()
-        if path[: len(prefix)] == prefix
-    }
-    if not child_replacements:
-        return value
-    return _replace_tensor_outputs(value, child_replacements)
-
-
-def _is_namedtuple_instance(value: Any) -> bool:
-    """Return whether ``value`` is a namedtuple instance.
-
-    Parameters
-    ----------
-    value:
-        Candidate container.
-
-    Returns
-    -------
-    bool
-        Whether ``value`` is a tuple with ``_fields`` metadata.
-    """
-
-    fields = getattr(type(value), "_fields", None)
-    return isinstance(value, tuple) and isinstance(fields, tuple)
+        yield
+    finally:
+        state["current_rule"] = None
 
 
 def _hook_call_inputs_for_site(
@@ -1698,6 +1370,134 @@ def _coerce_hook_entry(entry: Any) -> NormalizedHookEntry:
     if isinstance(entry, NormalizedHookEntry):
         return entry
     raise HookValueError("live hook execution requires a normalized hook plan entry")
+
+
+class _LiveSiteMinter:
+    """Incremental ``site_key_v1`` minter for the LIVE door (F02 D6 coordinate).
+
+    The replay door reads the postprocess-minted ``Op.site_key``; the live
+    door fires BEFORE its op is journaled, so it PEEKS the key the postprocess
+    minter will assign: consume every op already journaled on the capture's
+    ``capture_events.op_events`` in execution order under the same cohort rule as
+    :class:`~torchlens.data_classes._site_key.SiteKeyMinter` (pass-qualified
+    innermost call instance, pass-free module site, layer type, output
+    slot), then report ``seen + 1`` for the firing op without consuming it
+    (it is consumed when its own record lands). Both doors therefore derive
+    ONE logical firing coordinate, and a stochastic edit draws the same
+    donor at capture time and on replay (fable51 audit AUD-CODE 3.8: the raw
+    ordinal label shifted whenever an unrelated upstream op was added).
+
+    DISCLOSED RESIDUAL: postprocess prunes orphan ops (they consume no
+    ordinals, SF-63); orphan-ness is not knowable live, so a to-be-pruned op
+    that PRECEDES the firing op inside the same cohort shifts the live
+    ordinal by one relative to replay. The pass component derives from the
+    innermost module call's pass (functional, module-free recurrence is
+    grouped only at postprocess and stays a residual).
+    """
+
+    __slots__ = ("_seen", "_consumed", "_first_raw_index_by_call")
+
+    def __init__(self) -> None:
+        self._seen: dict[tuple[str, tuple[str, ...], str, int | None], int] = {}
+        self._consumed = 0
+        self._first_raw_index_by_call: dict[int, int] = {}
+
+    @staticmethod
+    def _cohort(
+        modules: Any, layer_type: str, slot: int | None
+    ) -> tuple[str, tuple[str, ...], str, int | None]:
+        """Return the SiteKeyMinter cohort tuple for one op position."""
+
+        return (call_instance_id(modules), site_axis(modules), str(layer_type), slot)
+
+    @staticmethod
+    def _journal_output_slot(record: Any) -> int | None:
+        """Read one journaled op's ``multi_output_index`` (flat event or decomposed record)."""
+
+        output = getattr(record, "output", None)
+        slot = getattr(output, "multi_output_index", None) if output is not None else None
+        if slot is None:
+            slot = getattr(record, "multi_output_index", None)
+        return slot if isinstance(slot, int) else None
+
+    def consume(self, trace: Any) -> None:
+        """Advance over every op journaled since the last call, in execution order."""
+
+        events = getattr(getattr(trace, "capture_events", None), "op_events", None)
+        if events is None:
+            workspace = getattr(trace, "_raw_graph_ws", None)
+            records = getattr(workspace, "raw_layer_dict", None) or {}
+            events = [records[label] for label in list(records)]
+        journal = list(events)
+        for record in journal[self._consumed :]:
+            cohort = self._cohort(
+                getattr(record, "modules", None) or (),
+                getattr(record, "layer_type", ""),
+                self._journal_output_slot(record),
+            )
+            self._seen[cohort] = self._seen.get(cohort, 0) + 1
+        self._consumed = len(journal)
+
+    def output_slot(self, site: Any) -> int | None:
+        """Derive the firing op's ``multi_output_index`` from its live facts.
+
+        A bare tensor output (empty container path) has no slot; inside a
+        container the slot is the op's position among the call's outputs,
+        which the wrapper reserves as consecutive raw indexes.
+        """
+
+        if not getattr(site, "container_path", ()):
+            return None
+        raw_index = getattr(site, "raw_index", None)
+        call_id = getattr(site, "func_call_id", None)
+        if not isinstance(raw_index, int) or call_id is None:
+            return None
+        first = self._first_raw_index_by_call.setdefault(call_id, raw_index)
+        return raw_index - first
+
+    def peek(self, modules: Any, layer_type: str, slot: int | None) -> str:
+        """Return the key the postprocess minter will assign to the firing op."""
+
+        cohort = self._cohort(modules, layer_type, slot)
+        ordinal = self._seen.get(cohort, 0) + 1
+        return render_site_key(site_axis(modules), str(layer_type), slot, ordinal)
+
+
+def _stamp_live_site_identity(site: Any) -> None:
+    """Stamp ``site_key`` + module-call ``pass_index`` on a live op site proxy.
+
+    Exhaustive-mode op sites only: module-boundary splice sites carry no op
+    record, and predicate-mode (``tl.record``) captures have no replay door
+    to agree with, so both keep the label fallback of the derived-seed
+    coordinate.
+    Idempotent (a proxy stamped once is left alone).
+    """
+
+    if getattr(site, "site_key", None) or getattr(site, "_tl_module_boundary", False):
+        return
+    trace = _state._active_trace
+    if trace is None or getattr(trace, "capture_mode", None) != "exhaustive":
+        return
+    # The minter rides the session-only run context (last_run, FieldPolicy
+    # DROP) rather than its own Trace attr: no schema/ownership row, and the
+    # portable-state gate never sees it.
+    run_ctx = _live_run_ctx()
+    minter = run_ctx.get("site_minter")
+    if minter is None:
+        minter = _LiveSiteMinter()
+        run_ctx["site_minter"] = minter
+    minter.consume(trace)
+    modules = list(getattr(site, "modules", None) or ())
+    if not modules:
+        from ..backends.torch._ops_capture_records import _snapshot_exhaustive_module_stack
+
+        modules = _snapshot_exhaustive_module_stack(trace)
+    layer_type = getattr(site, "layer_type", "") or ""
+    site.site_key = minter.peek(modules, layer_type, minter.output_slot(site))
+    if getattr(site, "pass_index", None) is None:
+        innermost = modules[-1] if modules else None
+        pass_index = innermost[1] if isinstance(innermost, tuple) and len(innermost) == 2 else 1
+        site.pass_index = int(pass_index) if isinstance(pass_index, int) else 1
 
 
 def _live_run_ctx() -> dict[str, Any]:

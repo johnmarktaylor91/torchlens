@@ -13,6 +13,7 @@ from .._capture_honesty import (
     capture_advisories,
     capture_verification,
     episode_facts,
+    intervention_facts,
     poison_facts,
     refuse_presenter_subject,
 )
@@ -75,7 +76,8 @@ def explain(
     as ``"unknown"`` rather than inferred. ``capture_status`` is the log's
     settled ``CaptureOutcome`` status value (``"partial"`` for a failed
     partial capture), never assumed complete; ``capture_verified`` is the
-    tri-state stored fact (``None`` = no ceiling recorded).
+    tri-state stored fact (``None`` = not recorded; the default capture does not arm
+    the completeness witness).
     """
 
     refuse_presenter_subject(log, "tl.report.explain")
@@ -403,7 +405,7 @@ def _capture_verification(log: Any) -> dict[str, Any]:
     dict[str, Any]
         ``capture_status`` (the settled ``CaptureOutcome`` status value, or
         ``"unknown"`` when the log carries none), tri-state
-        ``capture_verified`` (``None`` = no ceiling recorded),
+        ``capture_verified`` (``None`` = not recorded, witness not armed),
         ``capture_verification_reason``, and ``rescue_rerun``.
     """
 
@@ -497,7 +499,23 @@ def _capture_status_lines(log: Any) -> list[str]:
     elif facts["capture_verified"] is True:
         lines.append("- Capture verification: verified.")
     else:
-        lines.append("- Capture verification: no ceiling recorded.")
+        # H4/L10: the default capture never arms the completeness witness, so an
+        # absent verdict must not read as a clean bill -- host escapes the
+        # wrappers cannot see (from_numpy/as_tensor/from_dlpack round-trips,
+        # numpy-backed autograd.Functions, storage writes) leave no ceiling here.
+        lines.append(
+            "- Capture verification: not recorded (the completeness witness is not "
+            "armed on the default capture; wrap_torch(completeness_witness=True) or "
+            "tl.validate arm it). Absence of a ceiling is not a clean bill."
+        )
+    interventions = intervention_facts(log)
+    if interventions is not None:
+        lines.append(
+            f"- INTERVENED capture: {interventions['fire_count']} intervention fire(s) "
+            f"replaced {interventions['replaced_op_count']} op(s) "
+            f"{interventions['replaced_ops']}; values at those sites and downstream are "
+            "counterfactual edits, not the model's own forward."
+        )
     if facts["rescue_rerun"]:
         lines.append(
             "- This result came from the disclosed rescue re-run "

@@ -43,6 +43,23 @@ the captured native logit` runs on EVERY call. Convention, in one sentence:
 DLA linearly decomposes the ACTUAL logits at the actual operating point; it
 is not a set of counterfactuals.
 
+The identity gate cannot be bitwise (the kit re-associates the model's
+matmul), so it runs against a PER-ELEMENT budget
+(`identity_receipt["budget_model"] == "per_element_cancellation_aware_v2"`):
+each element's own accumulated |addend| basis -- the rows, constant and
+native logit projected on the UN-differenced answer and `vs` directions, so
+a logit DIFF inherits the rounding of its two ~100-logit operands instead of
+being budgeted at its small value -- times the pairwise-summation depth term
+`1 + log2(n_rows + 2)`, times 4x ULP headroom, at the machine epsilon of the
+coarsest floating dtype in the chain (float32 floor). A global scalar taken
+at the largest-magnitude element (the former model) handed low-magnitude
+elements ~300x their observed residual. The receipt discloses
+`max_abs_residual`, `tolerance` (the budget AT the worst-fraction element),
+`max_budget_fraction` (<= 1 when verified; measured 0.002-0.07 on gpt2
+layer- and head-grain, full and partial stacks), `budget_eps` and
+`n_addends`; a failing element is named in the `mi_dla_identity_failed`
+refusal (`worst_element`).
+
 ## Coverage and honesty surfaces
 
 - `attention_head_contributions`: per-QUERY-head rows from the validated

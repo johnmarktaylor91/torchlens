@@ -32,10 +32,10 @@ rather than normalizing (the C07X grammar-v2 amendment).
 from __future__ import annotations
 
 import copy
+import dataclasses
 import hashlib
 import json
 import uuid
-import warnings
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -43,10 +43,13 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 from ._episode_derivation import (
     _call_returned,
     _declaration_error,
-    _derive_step_evidence,
+    _derive_step_column,
+    _derive_step_evidence,  # noqa: F401 -- the four-clause price probe imports it from here
     _pass_range_for_call,
     mint_capture_digest,
+    validate_step_output_positions,
 )
+from ._episode_ledger_anchors import _anchor_loaded_ledger, quarantine_loaded_ledger
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -202,11 +205,14 @@ _HEADER_PAYLOAD_KEYS = frozenset(
         "step_output_kind",
         "step_output_from",
         "step_axis",
+        "step_output_positions",
         "step_join",
         "capture_digest",
         "intervention_digest",
     }
 )
+# Optional at LOAD (W051 FIX2): pre-disclosure v2 artifacts lack the key (None = tail).
+_OPTIONAL_HEADER_PAYLOAD_KEYS = frozenset({"step_output_positions"})
 _ROW_PAYLOAD_KEYS = frozenset(
     {
         "episode_step",
@@ -363,13 +369,16 @@ class EpisodeLedgerHeader:
         ``"output"`` for the undeclared single-output default, and ``None``
         exactly when ``step_output_kind="none"`` (no source is consumed).
     step_axis:
-        Declared step axis of the step-output source (the generic spelling;
-        per-step evidence is TAIL-ALIGNED along it). ``None`` when
-        ``step_output_kind="none"``.
+        Declared step axis of the step-output source (the generic spelling).
+        ``None`` when ``step_output_kind="none"``.
+    step_output_positions:
+        The step-axis positions each row's ``step_output`` was read from
+        (W051 FIX2): the tail on the one-emission-per-step shapes, the measured
+        chain positions under the declared-crossing arm; ``None`` = no column.
     step_join:
         Measured cross-step continuity envelope (``episode_step_join_v1``,
         lane F40c): per-row join grades from the closed
-        continuous/transformed/declared/exogenous/unchecked vocabulary,
+        continuous/forced/transformed/declared/exogenous/unchecked vocabulary,
         the first break step, live-detection disclosure, exogenous position
         counts, and unchecked reasons. ABSENT (``None``) = UNMEASURED (a
         pre-measurement artifact or a failed live measurement); every
@@ -403,6 +412,7 @@ class EpisodeLedgerHeader:
     step_output_kind: StepOutputKind = "tokens"
     step_output_from: str | None = None
     step_axis: int | None = None
+    step_output_positions: tuple[int, ...] | None = None
     step_join: Mapping[str, Any] | None = None
     capture_digest: str | None = None
     intervention_digest: str | None = None
@@ -439,6 +449,9 @@ class EpisodeLedgerHeader:
             not isinstance(self.step_axis, int) or isinstance(self.step_axis, bool)
         ):
             raise ValueError("episode-ledger step_axis must be an int or None")
+        validate_step_output_positions(
+            self.step_output_positions, step_output_kind=self.step_output_kind
+        )
         if self.step_join is not None:
             _require_string_keyed_mapping(self.step_join, field_name="step_join")
         # Optional string slots share one non-empty-or-None contract.
@@ -468,6 +481,9 @@ class EpisodeLedgerHeader:
             "step_output_kind": self.step_output_kind,
             "step_output_from": self.step_output_from,
             "step_axis": self.step_axis,
+            "step_output_positions": (
+                list(self.step_output_positions) if self.step_output_positions is not None else None
+            ),
             "step_join": dict(self.step_join) if self.step_join is not None else None,
             "capture_digest": self.capture_digest,
             "intervention_digest": self.intervention_digest,
@@ -492,7 +508,7 @@ class EpisodeLedgerHeader:
         unknown = set(payload) - _HEADER_PAYLOAD_KEYS
         if unknown:
             raise ValueError(f"episode-ledger header has unknown keys {sorted(unknown)}")
-        missing = _HEADER_PAYLOAD_KEYS - set(payload)
+        missing = _HEADER_PAYLOAD_KEYS - _OPTIONAL_HEADER_PAYLOAD_KEYS - set(payload)
         if missing:
             raise ValueError(f"episode-ledger header is missing keys {sorted(missing)}")
         if payload["capture_kind"] != CAPTURE_KIND_EPISODE:
@@ -540,6 +556,10 @@ class EpisodeLedgerHeader:
             ),
             step_output_from=_optional_str(payload, "step_output_from"),
             step_axis=step_axis,
+            step_output_positions=validate_step_output_positions(
+                payload.get("step_output_positions"),
+                step_output_kind=str(payload["step_output_kind"]),
+            ),
             step_join=cast("Mapping[str, Any] | None", payload["step_join"]),
             capture_digest=_optional_str(payload, "capture_digest"),
             intervention_digest=_optional_str(payload, "intervention_digest"),
@@ -755,6 +775,12 @@ class EpisodeLedger:
         self._rows: tuple[EpisodeLedgerRow, ...] = tuple(rows)
         _check_monotone_prefix_law(self._rows)
         _check_step_output_presence_rule(header, self._rows)
+        validate_step_output_positions(
+            header.step_output_positions,
+            step_output_kind=header.step_output_kind,
+            n_rows=len(self._rows),
+            rows_with_output=sum(row.step_output is not None for row in self._rows),
+        )
         if header.step_join is not None:
             from ._episode_join import validate_step_join_envelope
 
@@ -1101,6 +1127,11 @@ class ResolvedEpisode:
     on_feed_break: str = "disclose"
     crossings: tuple[int, ...] = ()
     join_session: Any = None
+    # W051 (audit 3.3): the declared entry argument the join measures
+    # (positional index or keyword name); None selects by the disclosed
+    # preference rule. Read from ``EpisodeSpec.step_input_from`` when the
+    # spec carries it (the spec field itself is the options owner's).
+    step_input_from: str | int | None = None
     # Attested coupling (lane F42): the live fire-attribution session, set
     # by the trace entry exactly when intervene= rides an episode capture.
     # None = uncoupled (the reserved slots stay entry-dark None).
@@ -1309,8 +1340,9 @@ def resolve_episode_declaration(spec: EpisodeSpec, model: Any) -> ResolvedEpisod
             f"wrapped-tier cost ceiling of {EPISODE_DECLARED_STEP_CEILING}. "
             "Wrapped episode capture cost is SUPERLINEAR in step count "
             "(measured gpt2-124M CPU: N=100 = 657 s / 5.4 GB peak RSS); the "
-            "guarded-fast tier (trace.run(inputs=..., fast=True)) is the "
-            "engine for episode-scale re-runs. Remedy: declare fewer steps, "
+            "guarded-fast tier (trace.run(inputs=..., fast=True), which needs "
+            "a functional save= such as save=tl.func(...) on the capture) is "
+            "the engine for episode-scale re-runs. Remedy: declare fewer steps, "
             "or pass EpisodeSpec(acknowledge_step_cost=True) to accept the "
             "diagnostic-tier cost explicitly.",
             code="episode_step_ceiling_exceeded",
@@ -1318,6 +1350,17 @@ def resolve_episode_declaration(spec: EpisodeSpec, model: Any) -> ResolvedEpisod
     from ._episode_join import _validated_join_declaration
 
     crossings = _validated_join_declaration(spec, declared_steps)
+    step_input_from = getattr(spec, "step_input_from", None)
+    if step_input_from is not None and not (
+        (isinstance(step_input_from, int) and not isinstance(step_input_from, bool))
+        or (isinstance(step_input_from, str) and step_input_from)
+    ):
+        raise _declaration_error(
+            f"EpisodeSpec.step_input_from={step_input_from!r} must be a positional "
+            "argument index (int) or a keyword argument name (non-empty str) "
+            "naming the stepped call's carried input, or None.",
+            code="episode_declaration_invalid",
+        )
     reason = spec.reason
     if (spec.escalated_from is None) != (reason is None):
         raise _declaration_error(
@@ -1359,7 +1402,9 @@ def resolve_episode_declaration(spec: EpisodeSpec, model: Any) -> ResolvedEpisod
             feed=spec.feed,
             on_feed_break=spec.on_feed_break,
             crossings=crossings,
+            step_input_from=step_input_from,
         ),
+        step_input_from=step_input_from,
     )
 
 
@@ -1425,8 +1470,8 @@ def _build_header(
     resolved: ResolvedEpisode,
     *,
     fidelity: FidelityBasis | None = None,
-    started: int = 0,
     step_join: Mapping[str, Any] | None = None,
+    positions: tuple[int, ...] | None = None,
 ) -> EpisodeLedgerHeader:
     """Build the finalized ledger header from the settled trace."""
 
@@ -1465,8 +1510,12 @@ def _build_header(
         step_output_kind=resolved.step_output_kind,
         step_output_from=((resolved.step_output_from or "output") if consumes_source else None),
         step_axis=resolved.step_axis if consumes_source else None,
+        step_output_positions=positions if consumes_source else None,
         step_join=step_join,
-        capture_digest=mint_capture_digest(trace, resolved.address, started),
+        # The content-binding digest (W051, audit 3.2) is minted over the
+        # FINISHED ledger payload, so the header is built unbound here and
+        # bound in ``_write_settled_episode_ledger`` once the rows exist.
+        capture_digest=None,
         intervention_digest=intervention_digest,
     )
 
@@ -1640,12 +1689,13 @@ def _write_settled_episode_ledger(trace: Any, resolved: ResolvedEpisode) -> Epis
     statuses = _derive_row_statuses(status, phase, calls, started)
 
     evidence_by_row: list[tuple[int, ...]] | list[str] | None = None
+    positions: tuple[int, ...] | None = None
     if (
         statuses
         and all(row_status == "complete" for row_status in statuses)
         and (started == n_total)
     ):
-        evidence_by_row = _derive_step_evidence(trace, resolved, started)
+        evidence_by_row, positions = _derive_step_column(trace, resolved, started)
 
     # Settlement join grading (lane F40c): re-grade every join exactly
     # against the evidence column; the envelope rides the header's reserved
@@ -1660,8 +1710,8 @@ def _write_settled_episode_ledger(trace: Any, resolved: ResolvedEpisode) -> Epis
         trace,
         resolved,
         fidelity=_fidelity_basis(resolved, evidence_by_row),
-        started=started,
         step_join=join_envelope,
+        positions=positions,
     )
 
     frontier: dict[str, str] | None = None
@@ -1686,6 +1736,16 @@ def _write_settled_episode_ledger(trace: Any, resolved: ResolvedEpisode) -> Epis
     )
 
     try:
+        unbound = EpisodeLedger(header, rows)
+        # Bind LAST (W051, audit 3.2): the digest covers every persisted
+        # ledger fact, so it is minted over the validated unbound payload
+        # and written into the header the product carries.
+        header = dataclasses.replace(
+            header,
+            capture_digest=mint_capture_digest(
+                trace, resolved.address, started, unbound.to_payload()
+            ),
+        )
         ledger = EpisodeLedger(header, rows)
     except ValueError as exc:
         raise _ledger_error(str(exc), code="episode_ledger_incoherent") from exc
@@ -1813,6 +1873,32 @@ def capture_kind_for(trace: Any) -> str:
     return CAPTURE_KIND_EPISODE
 
 
+#: Loaded episode-key payload shapes that carry no ledger to validate: an
+#: already-quarantined record round-tripping and the pre-finalize declaration
+#: marker (session-time shape). Both load as-is.
+_INERT_EPISODE_PAYLOAD_KEYS: tuple[frozenset[str], ...] = (
+    frozenset({"quarantined", "code", "detail"}),
+    frozenset({"declared"}),
+)
+
+
+def _inert_loaded_episode_shape(payload: Any) -> bool:
+    """``True`` when the loaded episode-key payload needs no validation."""
+
+    if payload is None:
+        return True
+    return isinstance(payload, Mapping) and frozenset(payload) in _INERT_EPISODE_PAYLOAD_KEYS
+
+
+def _loaded_ledger_version(payload: Mapping[str, Any]) -> Any:
+    """The family version the loaded header spells (``None`` when unreadable)."""
+
+    header_payload = payload.get("header")
+    if not isinstance(header_payload, Mapping):
+        return None
+    return header_payload.get("episode_ledger_version")
+
+
 def validate_loaded_episode_annotations(trace: Trace) -> None:
     """Validate a loaded ``annotations["episode"]`` payload, FAIL-CLOSED.
 
@@ -1837,12 +1923,8 @@ def validate_loaded_episode_annotations(trace: Trace) -> None:
     if not isinstance(annotations, dict):
         return
     payload = annotations.get(EPISODE_ANNOTATIONS_KEY)
-    if payload is None:
+    if _inert_loaded_episode_shape(payload):
         return
-    if isinstance(payload, Mapping) and set(payload) == {"quarantined", "code", "detail"}:
-        return  # already-quarantined record round-tripping
-    if isinstance(payload, Mapping) and set(payload) == {"declared"}:
-        return  # pre-finalize declaration marker (session-time shape)
     parse_error: str | None = None
     if isinstance(payload, Mapping) and set(payload) == {"header", "rows"}:
         header_payload = payload.get("header")
@@ -1860,11 +1942,7 @@ def validate_loaded_episode_annotations(trace: Trace) -> None:
         # version is consumed BEFORE the full parse so a foreign-grammar
         # payload quarantines with the grammar named, never as an incidental
         # unknown-key finding -- and it NEVER normalizes.
-        loaded_version = (
-            header_payload.get("episode_ledger_version")
-            if isinstance(header_payload, Mapping)
-            else None
-        )
+        loaded_version = _loaded_ledger_version(payload)
         if loaded_version != EPISODE_LEDGER_VERSION:
             parse_error = (
                 f"episode ledger grammar version {loaded_version!r} is not the "
@@ -1877,7 +1955,6 @@ def validate_loaded_episode_annotations(trace: Trace) -> None:
         else:
             try:
                 EpisodeLedger.from_payload(payload)
-                return  # valid — keep as claims (or unverified disclosure)
             except (TypeError, ValueError) as exc:
                 message = str(exc)
                 if "episode_ledger_payload_in_structure_only" in message:
@@ -1885,23 +1962,15 @@ def validate_loaded_episode_annotations(trace: Trace) -> None:
                         message, code="episode_ledger_payload_in_structure_only"
                     ) from exc
                 parse_error = message
+            else:
+                # Structural anchors (W051, audit 2.19/3.2): a grammatically
+                # valid ledger must also describe THIS product.
+                parse_error = _anchor_loaded_ledger(trace, payload)
+                if parse_error is None:
+                    return  # valid — keep as claims (or unverified disclosure)
     else:
         parse_error = "episode annotations payload does not carry the {'header', 'rows'} shape"
-    from ..errors import TorchLensWarning
-
-    warnings.warn(
-        "episode ledger failed load validation and was quarantined "
-        f"(episode_ledger_incoherent): {parse_error}. The product's episode "
-        "rows are no longer claims; the outcome derivation treats the ledger "
-        "fail-closed.",
-        TorchLensWarning,
-        stacklevel=2,
-    )
-    annotations[EPISODE_ANNOTATIONS_KEY] = {
-        "quarantined": True,
-        "code": "episode_ledger_incoherent",
-        "detail": parse_error,
-    }
+    quarantine_loaded_ledger(annotations, parse_error, stacklevel=3)
 
 
 # Re-export (import at the BOTTOM: the fold module imports this module's

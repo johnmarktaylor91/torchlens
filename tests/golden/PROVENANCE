@@ -34,3 +34,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 5e0163e5f470e4b4a93d43195afc80d688e020ec (dirty)
 recorded: 2026-08-28T01:00:03.605600+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: D04 integration closure: vizmech uniform-row suppression (item 17: order/grad rows suppressed when uniform) and the F12/vizmech backward-render rework changed the backward_combined structural record; golden predates the merged lanes; keep_orphans/style oracle cases also updated to the ratified capture=/node_spec_fn spellings
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+source: 88d59b16cdbda283f83de8238629fd8d059d12a3 (dirty)
+recorded: 2026-09-01T08:04:20.085723+00:00

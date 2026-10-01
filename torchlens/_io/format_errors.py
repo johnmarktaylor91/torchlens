@@ -23,10 +23,11 @@ class TorchLensIOError(CompatibilityError, RuntimeError):
 class ArtifactVersionBelowFloorError(TorchLensIOError):
     """Raised when an artifact predates the supported rehydration floor.
 
-    TorchLens loads artifacts written by torchlens ``2.33`` or newer
-    (``tlspec_version >= 6``). Older artifacts refuse with this error rather
-    than being partially reconstructed; re-save them with a torchlens release
-    in the ``2.33``-to-``2.34`` range that can still read them.
+    TorchLens loads artifacts stamped ``tlspec_version >= 6`` (the first
+    tlspec-6 writer was released torchlens ``2.31.0``; the floor is the stamp,
+    never a release name). Older artifacts refuse with this error rather than
+    being partially reconstructed; re-save them with a torchlens release the
+    compat ledger proves able to read them.
     """
 
 

@@ -1,5 +1,10 @@
 # <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/logo.png" width=8% height=8%> TorchLens
 
+[![PyPI version](https://img.shields.io/pypi/v/torchlens.svg)](https://pypi.org/project/torchlens/)
+[![Python versions](https://img.shields.io/pypi/pyversions/torchlens.svg)](https://pypi.org/project/torchlens/)
+[![PyTorch 2.1+](https://img.shields.io/badge/PyTorch-2.1%2B-EE4C2C.svg)](https://pytorch.org/)
+[![Release](https://github.com/johnmarktaylor91/torchlens/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/johnmarktaylor91/torchlens/actions/workflows/release.yml)
+[![Nightly](https://github.com/johnmarktaylor91/torchlens/actions/workflows/nightly.yml/badge.svg)](https://github.com/johnmarktaylor91/torchlens/actions/workflows/nightly.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
 **See, save, and steer any PyTorch model.** TorchLens captures every activation
@@ -8,13 +13,13 @@ computational graph, exposes rich per-op metadata, and lets you intervene on the
 network as it runs. Any architecture, even dynamic and recurrent ones.
 
 > **[Explore the Model Menagerie](https://modelmenagerie.ai)** -- a live, browsable atlas of
-> **11,600+ cataloged neural-network architecture entries** captured with TorchLens, from
-> McCulloch & Pitts (1943)
-> to today's frontier models. *(Early preview.)*
+> **thousands of cataloged neural-network architecture entries** (8,500+ in this repository's
+> catalog, across ~3,600 architecture families) captured with TorchLens, from McCulloch & Pitts
+> (1943) to today's frontier models. *(Early preview.)*
 
-Run across **11,600+ cataloged entries** in the Model Menagerie (image, video, audio,
-multimodal, language; feedforward, recurrent, transformer, GNN, MoE, diffusion). Roughly
-**89% are currently algorithmically verified** for capture correctness: each verified
+Run across **thousands of cataloged entries** in the Model Menagerie (image, video, audio,
+multimodal, language; feedforward, recurrent, transformer, GNN, MoE, diffusion) --
+**verified on thousands of models across all major architecture families**: each verified
 capture is replayed op-by-op against its own forward pass, with metadata-invariant
 tripwires over the graph, so faithful capture is **proven, not assumed**. TorchLens also
 records **180+ metadata fields per operation**, and
@@ -62,11 +67,13 @@ log = tl.trace(lm, "The quick brown fox")            # HF models: a string is a 
   [Migration tables](docs/migration/)
 
 
-## Validated across 11,600+ catalog entries
+## Validated across thousands of catalog entries
 
 TorchLens is not just smoke-tested on example models. Its menagerie validation
-campaign runs the same adversarial check across more than **11,600 cataloged
-architecture entries**: capture the model with TorchLens, forward-replay the
+campaign runs the same adversarial check across the cataloged architecture
+entries (**8,500+ rows across ~3,600 families** in this repository's
+`menagerie/data/master_catalog.jsonl`; the live site carries additional
+locally-validated entries): capture the model with TorchLens, forward-replay the
 captured DAG, compare replayed outputs against the original forward pass, and
 run metadata-invariant tripwires over the resulting graph. If replay or an
 invariant fails, the capture is treated as genuinely wrong and caught
@@ -76,9 +83,10 @@ automatically, not waved through because the model "ran."
 model forward -> TorchLens capture -> DAG replay -> output parity + metadata invariants
 ```
 
-Today, roughly **89%** of that 11,600+ catalog is algorithmically verified and
-climbing, covering about **5,400 distinct architecture families** after variants are
-collapsed. That is the wedge:
+Today the campaign has algorithmically verified **thousands of models across all major
+architecture families**, and the count is climbing; the exact per-row verification status
+lives in the append-only menagerie ledger (see `docs/menagerie-validation.md`) rather than
+in this README, so the public claim stays hedged until the campaign closes. That is the wedge:
 TorchLens aims for captures that are **provably faithful, not just plausible**.
 Plain forward hooks and static extraction utilities can be fast and useful, but
 they can also silently miss dynamic paths, reused modules, functional ops,
@@ -99,7 +107,22 @@ sudo apt install graphviz   # Debian/Ubuntu; see graphviz.org for other platform
 pip install torchlens
 ```
 
-Compatible with PyTorch 2.1+.
+Supported versions (each row below is executed by a CI leg on every release, not
+asserted from metadata; the full platform statement is in
+[docs/reference/limitations.md](docs/reference/limitations.md)):
+
+| Component | Supported | How it is verified |
+|---|---|---|
+| Python | 3.10, 3.11, 3.12, 3.13 | one smoke-tier CI row per interpreter, plus clean-venv wheel installs at release |
+| PyTorch | 2.1+ on Python 3.10/3.11; 2.2+ on 3.12; 2.6+ on 3.13 (the first torch with wheels for each interpreter) | floor rows pin the exact floor pair per interpreter; newest-admitted rows pin the current release; a daily canary runs latest |
+| transformers (`torchlens[hf]`) | 4.45 (the floor) and the current 4.x release install, import, pass the version-policy lockstep and every real-model R0 row that is not keyed to the 5.x band (the op-count goldens and three fixtures recorded on 5.x are deselected on the 4.x legs until per-band expectations land); 5.x runs as a CANDIDATE band whose remaining reds are enumerated in `tests/workflow_gallery/rg_enumerated_red_hf5.tsv` | floor / current / candidate constraint legs under `tests/support/proofnet/constraints/` (nightly `hf-band-legs`) |
+| Platforms | Linux/CPU is the tested platform; macOS and Windows run a nightly import + capture + save/load canary only | see the CI-attested platforms section of the limitations doc |
+
+`pip install torchlens` installs the CPU-agnostic core (torch is resolved by pip for
+your platform); optional integrations are extras, e.g. `pip install "torchlens[hf]"`.
+Every declared extra is resolved on every supported interpreter by the nightly
+metadata gate, and `torchlens[all]` means "everything that installs together" (the
+excluded members are named in `pyproject.toml`).
 
 
 ## Quickstart
@@ -520,9 +543,9 @@ comparison with forward hooks.
 ## Gallery
 
 TorchLens visualizes any architecture -- no matter how exotic. Explore the
-**[Model Menagerie](https://modelmenagerie.ai)**: a browsable atlas of **11,600+ cataloged
+**[Model Menagerie](https://modelmenagerie.ai)**: a browsable atlas of **thousands of cataloged
 neural-network architecture entries** -- from McCulloch & Pitts (1943) to today's frontier
-models -- each with structured metadata and a TorchLens-rendered diagram. Roughly 89%
+models -- each with structured metadata and a TorchLens-rendered diagram. Thousands of them
 currently carry the replay-and-invariant verification described above.
 
 > **Early preview.** The gallery is live and growing; full-text search, a downloadable dataset, and

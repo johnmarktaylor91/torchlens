@@ -287,6 +287,9 @@ BLUEPRINT_LENS = register_lens(
             "show_containers": False,
             "show_buffer_layers": "meaningful",
         },
-        disclosure=("may hit the existing typed size/timeout refusal; never silently compacts",),
+        disclosure=(
+            "full detail at every scale; a graph too large to draw is refused "
+            "with instructions, never silently simplified",
+        ),
     )
 )

@@ -40,6 +40,22 @@ The tier-O refusal carries the sentence no user could guess: narrowing
 CUDA rows). Until the tier ships, `tl.record(model, inputs,
 save=<predicate>)` on the steps you care about is the explicit spelling.
 
+## AMP truth: observed, derived, or unknown -- never asserted
+
+Pass the scaler into the step scope (`watch.step(n, scaler=scaler)`) and
+the engine reads TWO facts at the optimizer boundary: the scale
+(`torchlens/run/amp_scale`) and whether the gradients it reduced were
+already unscaled. `scaler.step(optimizer)` unscales in place before the
+boundary, so the record says `unscaled="yes"` and the numbers are
+observed. A plain `optimizer.step()` after `scaler.scale(loss).backward()`
+never unscales: the record says `unscaled="no"`, the emitted gradient
+statistics are corrected in closed form (bit-exact for the scaler's
+power-of-two scales) and the derivation is disclosed on the run-health
+series `torchlens/run/amp_unscale_derived`. A scaler whose stage cannot be
+read (a duck-typed object without the per-optimizer stage record) stamps
+`unknown` and ships the numbers as measured -- unknown never masquerades
+as a factor of one.
+
 ## The step law
 
 Every record carries the CALLER's `global_step`. There is no hidden
@@ -50,6 +66,47 @@ failure -- see the table below). Sources: `with watch.step(n):`
 `step=callable` at attach for unchanged loops, or the framework callbacks
 (`HFTrainerWatchCallback`, `LightningWatchCallback`). Duplicate or
 decreasing steps refuse unless `new_segment=True` declares a resume.
+
+Under `step=callable` the engine schedules tier-M activation observation
+at forward entry (one root forward pre-hook, installed only when both
+`step=` and `activations` are requested) and carries the forward's
+observations across the implicit block open at the optimizer boundary, so
+the two step spellings observe the same activation statistics. The HF
+callback lands rows on the Trainer's own log axis: `state.global_step` is
+incremented AFTER `optimizer.step()`, so the callback reads it `+ 1`.
+
+The manifest and the `torchlens/run/attached` heartbeat ride the FIRST
+step the session sees (and the last seen step, or 0, at close when no
+step ran): a resumed wandb run drops every `log(step=0)` call, and those
+were exactly the rows that vanished.
+
+## Attach-time refusals (nothing latches silently after step 0)
+
+- Two sinks of one class get two ledger rows (`JSONLSink`, `JSONLSink#2`):
+  rows are keyed by sink OBJECT, so one failing file never starves its
+  sibling. The same sink object listed twice refuses
+  (`tracker_sink_duplicate`).
+- A second `watch()` on a model that already has an open session under the
+  same `name=`/`namespace=` refuses (`tracker_namespace_collision`); a
+  distinct `name=` keeps both series distinguishable.
+- Tag safety is checked for every catalogued site at attach
+  (`tracker_tag_unsafe`), never first inside a step's `finally`; a typed
+  drain refusal while the loop's own exception unwinds is recorded as a
+  named skip and never masks that exception.
+- Gradient watching over `sparse=True` modules refuses at attach
+  (`watch_sparse_grad_unsupported`) instead of crashing inside
+  `optimizer.step()`.
+- Sinks may implement `preflight_histograms(descriptor)`; `WandbSink`
+  (512-bucket cap) and `TensorBoardSink` (relay detected) refuse a
+  `hist_every=` request at attach rather than latching on the first
+  sampled step.
+- `watch_close_empty` counts DATA points only: heartbeat, manifest, and
+  check rows never make an empty run look populated. A run whose every
+  step is explained by a named skip (AMP-skipped, demoted missing phase)
+  is not empty.
+- `JSONLSink` writes each row unbuffered and truncates a torn row on
+  failure, so rows already on disk are always whole JSONL; `flush()` and
+  `close()` are separate attempts at teardown.
 
 ## What each route costs you (the measured fidelity table)
 

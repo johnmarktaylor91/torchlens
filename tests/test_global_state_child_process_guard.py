@@ -21,6 +21,8 @@ from torch import nn
 import torchlens as tl
 from torchlens import _state
 
+pytestmark = pytest.mark.smoke  # measured <0.5s per test (W051-GATE, AUD-CODE 0.1)
+
 
 def test_child_process_capture_refusal_is_typed(monkeypatch: pytest.MonkeyPatch) -> None:
     """The child-process guard raises a typed, actionable refusal.

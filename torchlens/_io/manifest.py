@@ -939,8 +939,8 @@ def enforce_version_policy(manifest: Manifest, *, bundle_path: Path | None = Non
     Raises
     ------
     ArtifactVersionBelowFloorError
-        If the bundle predates the ``tlspec_version >= 6`` / torchlens 2.33
-        rehydration floor.
+        If the bundle predates the ``tlspec_version >= 6`` rehydration floor
+        (first written by released torchlens 2.31.0).
     TorchLensIOError
         If the bundle targets a newer I/O format or an incompatible torch
         major version.

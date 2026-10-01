@@ -276,7 +276,11 @@ def test_package_percentage_aggregation_is_red_capable() -> None:
 #: agent/_artifacts.py's spec_from_file_location None guard fires only on a
 #: corrupted install (missing _io/_json.py file). All three are environment
 #: guards, not logic branches.
-_PRAGMA_NO_COVER_CEILING = 60
+# 60 -> 61 (2026-09-01 FLAKEHUNT rng-channels split): the split module carries a
+# typing-only TYPE_CHECKING import guard and rng.py a non-POSIX ImportError
+# guard -- both structurally unreachable in the Linux CI environment, both
+# inline-justified. Conscious raise per this test's own remedy.
+_PRAGMA_NO_COVER_CEILING = 61
 
 
 def test_pragma_no_cover_census_never_grows() -> None:

@@ -110,16 +110,23 @@ class RankEvidence:
     shard_local: bool
 
 
-def _refuse(detail: str, **payload: Any) -> MergeInputError:
+def _refuse(
+    detail: str,
+    *,
+    code: MergedErrorCode = MergedErrorCode.MERGED_SCHEMA_INVALID,
+    **payload: Any,
+) -> MergeInputError:
     """Build the typed parse refusal for malformed rank evidence.
 
     Carries a ``fields["remedy"]`` like every other merged refusal (R65-12:
     this shared constructor was the one remedy-less family in the package).
+    ``code`` defaults to the schema refusal; a raise site may spell it
+    explicitly so the S-17 census reads the site as coded.
     """
 
     return MergeInputError(
         f"Rank-core evidence is not a valid collective_boundary_v1 journal: {detail}",
-        code=MergedErrorCode.MERGED_SCHEMA_INVALID,
+        code=code,
         remedy=(
             "treat the rank core as tampered or corrupt; re-capture the rank "
             "under the distributed opt-in rather than merging this evidence"
@@ -506,6 +513,18 @@ def extract_rank_evidence(trace: Any, source: str) -> RankEvidence:
             source=source,
         )
     boundaries = record["boundaries"]
+    if not isinstance(boundaries, (list, tuple)):
+        # W051-CAPT3 (IO remainder): the per-rank journal the merge JOINS is
+        # validated here at merge entry, live and loaded cores alike. A
+        # non-sequence ``boundaries`` (an int, a bool, a mapping, a string)
+        # previously escaped as a bare TypeError from the row walk or was
+        # mis-read row-by-row; it refuses typed with the container named.
+        raise _refuse(
+            f"boundaries of {source} is not a list of boundary records "
+            f"(got {type(boundaries).__name__})",
+            code=MergedErrorCode.MERGED_SCHEMA_INVALID,
+            source=source,
+        )
     install_epoch = record.get("install_epoch")
     if install_epoch not in _INSTALL_EPOCHS:
         raise _refuse(

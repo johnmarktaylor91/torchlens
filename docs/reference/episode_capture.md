@@ -42,9 +42,20 @@ cost is SUPERLINEAR in step count — measured on gpt2-124M (CPU, 8-token
 prompt): N=20 costs 79 s (103x native) with a 146 MB artifact and 1.9 GB peak
 RSS; N=100 costs 657 s (323x native), 947 MB, 5.4 GB peak RSS. Do not plan
 wrapped episode captures for hundreds of steps; the guarded-fast tier
-(`trace.run(inputs=..., fast=True)`) is the default engine for episode-scale
+(`trace.run(inputs=..., fast=True)`) is the engine for episode-scale
 re-runs, and it must reproduce the wrapped tier's tokens bit-exactly (a
-pinned cross-tier identity test guards this).
+pinned cross-tier identity test guards this). The guarded-fast tier is NOT
+reachable from the default capture above: `fast=True` collects functional
+operations only when the capture requested them explicitly, so an episode
+capture meant for fast re-runs must pass a functional save predicate --
+`tl.trace(runner, ids, episode=..., save=tl.func("cat"))` (any `tl.func(...)`
+selection covering the loop's functional ops) -- or the run refuses typed
+(`run_capability_unavailable`, teaching the `save=` remedy). The default
+capture re-runs through `trace.run(inputs=...)` (the full transactional
+tier) instead. Either re-run is a FRESH execution: the product drops the
+episode ledger to a travel note and clears the per-op `episode_step` stamps
+(the travel policy below), and the product saves and loads as a plain
+capture.
 
 **The declared-step cost ceiling.** A declaration beyond
 `EPISODE_DECLARED_STEP_CEILING` (100 steps, counting `n_steps` or the
@@ -126,22 +137,71 @@ single output tensor; multi-output roots refuse with the available slots
 listed. The resolved source disclosure is written to the ledger header
 (`"output"` for the single-output default).
 
-Per-step positions are TAIL-ALIGNED along the declared `step_axis`: the
-LAST `n_steps` positions are the per-step emissions (one appended position
-per step). A root returning what real `generate()` returns —
-prompt+completion — keeps its prompt prefix out of the evidence column, an
+Per-step positions are TAIL-ALIGNED along the declared `step_axis` by
+default: the LAST `n_steps` positions are the per-step emissions (one
+appended position per step). A root returning what real `generate()` returns
+— prompt+completion — keeps its prompt prefix out of the evidence column, an
 emitted-only root is the equal-size special case of the same rule, and a
 source carrying FEWER positions than steps ran refuses typed. No cache
 arithmetic is involved anywhere: the KV-cache last-token feed and the
 append-all feed derive identical evidence columns from identical episodes.
+The positions actually read are DISCLOSED in the header's
+`step_output_positions` (one step-axis index per row, bound by the capture
+digest; `None` when no column derived), so any reader re-derives the column
+from the retained root output without the live measurement; grammar-v2
+artifacts written before the disclosure lack the slot and read as
+tail-aligned.
+
+**The tail-alignment license (token-shaped episodes).** Tail alignment
+presumes ONE appended position per step. On a token-shaped episode
+(`step_output_kind="tokens"`, or any kind whose step-0 entry was a
+token-id-shaped integer tensor) the derivation is licensed only when the
+source width is exactly `n_steps` (emitted-only root) or exactly the
+MEASURED step-0 entry width plus `n_steps` (prompt+completion); any other
+width -- multi-token decoding (speculative/Medusa/MTP), draft+verify loops, a
+stepped module called more than once per iteration -- refuses typed
+(`episode_declaration_invalid`) with the licensed widths named, instead of
+silently misattributing tokens to steps and then grading FALSE exogenous
+breaks against the misattributed column. The ONE further admission is the
+declared-crossing chain arm (W051 FIX2): when the root returns the FULL fed
+id sequence -- every step's MEASURED entry is a prefix of it, row for row --
+each step's emission is the position right after its own entry, and
+positions a tool call injected between steps are admitted exactly when the
+receiving step is declared in `EpisodeSpec(crossings=(k, ...))`; the column
+derives at the measured chain positions (disclosed in
+`step_output_positions`) and the join into the crossing grades `declared`.
+An UNDECLARED surplus stays refused, with the crossings remedy named:
+measured alone, two extra positions in a step's entry are indistinguishable
+from multi-token decoding by the stepped module, so the declaration -- never
+a root-shape guess -- decides. A `digest` column over a float
+carried state (fixed-point / diffusion loops, where no token width exists)
+is a disclosed positional slice convention keyed by the header's
+`step_output_from` / `step_axis` -- recomputable by any reader, consumed by
+no join re-grade -- and keeps the `>= n_steps` admission.
 
 The header's `capture_digest` binds the ledger to ITS product: minted at
-settlement (`mint_capture_digest`, schema tag `episode_capture_digest_v1`)
+settlement (`mint_capture_digest`, schema tag `episode_capture_digest_v2`)
 as hex SHA-256 over canonical JSON of the product's recomputable identity
 facts — ordered recorded op labels, stepped-module address and call count,
-and the managed `entry_seed` — so a consumer recomputes it from the product
-alone and compares. The attested-coupling lane (F42) consumes it; the
-travel policy below stays the negative guarantee it complements.
+and the managed `entry_seed` — PLUS every persisted ledger fact (the header
+declaration and disclosure fields, the `step_join` envelope, the
+`intervention_digest`, every row's status, coord, `step_output`, and witness
+slots; the random `episode_id` is excluded so identical re-runs mint
+identical digests). A consumer recomputes it from the product and its
+persisted ledger and compares: any post-mint rewrite of ledger content
+reads unbound (`episode_coupling_unbound`). The digest is an INTEGRITY
+binding, not a signature — a forger who re-mints over swapped content is
+caught by the evidence RE-DERIVATION cross-check: attestation and load
+re-derive the evidence column from the product's retained root output and
+compare it to the rows (`CouplingAttestation.evidence_rederived` is `True`
+when it matched, `None` when nothing could be compared — `kind="none"` or an
+unretained payload — and a mismatch refuses/quarantines). The historical
+v1 form hashed identity alone, so two equal-length prompts minted identical
+digests and a rewritten ledger still attested bound; a persisted v1 digest
+now reads as PRE-BINDING (`episode_coupling_unmintable`, re-capture to
+bind), never as foreign. The attested-coupling lane (F42) consumes the
+binding; the travel policy below stays the negative guarantee it
+complements.
 
 ## Attested coupling (`episode=` x `intervene=`)
 
@@ -242,6 +302,14 @@ Per-row grades (closed vocabulary; the join INTO step k, grades[0] is null):
   the prior entry plus the evidence-column emission (append, last-token
   KV-cache, and sliding-window feeds are all one rule), or the entry is
   byte-identical to the prior step's output (`digest_direct` basis).
+- `forced` — a teacher-forced join (`EpisodeSpec(forced_tokens=...)`): the
+  entry continues the prior entry plus the DECLARED forced token for that
+  step (`forced_tokens` basis). Graded against the declaration, never the
+  evidence column — a forced root may return the model's predictions, which
+  are not what was fed. Not a break: the feed is declared and chain-shaped
+  by construction; it is also never read as a free `continuous` join. An
+  entry that does not continue with the declared token grades `exogenous`
+  (the declaration does not match the executed feed).
 - `transformed` — the entry derives from the prior step's output through
   ops observed inside the capture (the pass-qualified graph witness; the
   scheduler/diffusion shape).
@@ -252,7 +320,23 @@ Per-row grades (closed vocabulary; the join INTO step k, grades[0] is null):
   outside the capture (the envelope counts the exogenous positions on the
   token basis).
 - `unchecked` — the join was not measurable (no tensor entry, snapshot
-  failure, oversize entry); the reason is recorded, never a guess.
+  failure, oversize entry, a declared `step_input_from` that names no tensor
+  argument); the reason is recorded, never a guess.
+
+**Which argument is the entry.** The join measures the stepped call's
+CARRIED INPUT, chosen by a disclosed preference rule and persisted per step
+in the envelope's `entry_basis` slot (`"positional[i]"` / `"kwarg[name]"`):
+an explicit `step_input_from` declaration (positional index or keyword name)
+is honored exactly; otherwise a tensor under a preferred keyword
+(`input_ids`, `decoder_input_ids`, `inputs_embeds`, `sample`,
+`hidden_states`, `x`) wins, then the first non-auxiliary tensor argument
+(masks, `position_ids`, `cache_position`, `timestep`/`t`, `labels` are
+auxiliary; a 0-d/one-element float tensor beside a wider tensor is read as a
+timestep and passed over), then any tensor. The historical rule was "first
+tensor argument" with no disclosure, so a kwargs-first masked LM graded its
+attention MASK (false exogenous positions on a true continuation) and a
+timestep-first denoiser graded its TIMESTEP. Envelopes written before this
+slot existed load with the argument undisclosed (`entry_basis` absent).
 
 Three arms (both FORK-4 arms are BUILT; the ruling selects the default's
 shape):
@@ -361,6 +445,30 @@ and geometry violations quarantine `episode_ledger_incoherent`. Pre-v8
 artifacts never carry the key (the v7 scrub dropped it; the live trace kept
 its session-time ledger).
 
+**Loads anchor the ledger to the product.** A grammatically valid ledger is
+not enough: the presence of the key was once the ONLY anchor, so a ledger
+copied from a real episode artifact into any artifact's
+`annotations["episode"]` loaded with zero warnings and made the product an
+"episode". Every load now checks, in order, that the header's
+`stepped_module` recorded at least one call on this product (from the
+restored op records' module entries), that the started-row count equals
+that call count and every row's `member_call_index` names a recorded call,
+that the persisted `capture_digest` equals the digest recomputed from the
+product and the ledger's own content (a legacy v1 identity digest is
+admitted at load and reads pre-binding at attestation), and that the
+evidence column re-derives from the retained root output (skipped, never
+failed, when the payload is not retained). Inside a `.tlspec` load the
+payload blobs attach only after the metadata restores, so the bundle loader
+runs that fourth anchor a second time once the payloads are attached: a
+ledger re-minted over another execution of the same program is refuted by
+the LOAD itself, not on the first `trace.episode_coupling` read (which
+still re-derives against the attached payload). Any failure quarantines
+`episode_ledger_incoherent` with the failed anchor named in the note's
+`detail`; the product still loads, its rows stop being claims, and
+`Trace.capture_kind` keeps reading `episode` (a quarantined ledger is a
+declaration in doubt, not an absent one — the per-op `episode_step` stamps
+of a corrupted genuine artifact must stay loadable).
+
 ## Teacher forcing (disclosed, non-verifying)
 
 `EpisodeSpec(forced_tokens=...)` declares a teacher-forced feed: the driver
@@ -368,7 +476,11 @@ feeds the declared tokens instead of the model's emissions. The ledger header
 records `token_feed="forced"` and `fidelity_basis="forced"` — an explicitly
 NON-VERIFYING disclosed mode; token-fidelity obligations never verify a
 forced episode. Recompute-and-compare remains the verifying default
-everywhere else.
+everywhere else. The measured `step_join` of a forced episode grades each
+join against the DECLARED token (`forced` grade, `forced_tokens` basis), so
+a root that returns the model's predictions instead of the fed tokens is not
+misread as an exogenous break; step-series reads, replay, and the fold stay
+open across forced joins.
 
 ## The managed RNG recipe
 

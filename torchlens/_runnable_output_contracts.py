@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
@@ -29,7 +30,6 @@ if TYPE_CHECKING:
         _container_leaf_paths,
         _contract_check,
         _decode_literal,
-        _fresh_bare_tensor_root,
         _input_site_value,
         _inventory_site_positions,
         _is_model_input_literal_witness,
@@ -40,6 +40,8 @@ if TYPE_CHECKING:
     )
 
 __all__ = (
+    "LiveOutputDiagnosis",
+    "_diagnose_live_output",
     "_reconstruct_live_output",
     "_container_from_paths",
     "_write_output_path",
@@ -56,6 +58,67 @@ __all__ = (
 )
 
 
+#: Closed reason vocabulary for a live output the provider could not rebuild
+#: faithfully (AUD-HONESTY H1/H2). Every reason pairs with a remedy naming the
+#: user action; consumers branch on ``RunReport.first_mismatch.code`` +
+#: ``details["reason"]``, never on message text.
+_LIVE_OUTPUT_REASON_REMEDIES: dict[str, str] = {
+    "opaque_leaf": (
+        "the declared output container carries a slot TorchLens cannot rebuild (an "
+        "opaque tensor-holding object such as a HuggingFace DynamicCache under "
+        "past_key_values); for HuggingFace models pass use_cache=False "
+        "(model.config.use_cache = False) or return_dict=False, or wrap the model to "
+        "return the logits tensor, then re-capture and run again"
+    ),
+    "container_contract_unrecorded": (
+        "this capture recorded the output leaf paths but no output-container contract "
+        "(the default capture does not persist it); re-capture with "
+        "capture=CaptureOptions(capture_container_structure=True) -- or "
+        "intervention_ready=True, which implies it -- so the live run can rebuild the "
+        "exact tuple/dict/ModelOutput, or wrap the model to return a bare tensor"
+    ),
+    "opaque_root": (
+        "return a tensor or a supported container (tuple, list, dict, namedtuple, "
+        "dataclass, HuggingFace ModelOutput) instead of an unordered set / custom object"
+    ),
+    "lossy_reconstruction": (
+        "the output container type carries instance state (computed non-field/non-key "
+        "attributes, __slots__, or a data-descriptor field) the non-invoking rebuild "
+        "cannot restore; return a plain container or a bare tensor"
+    ),
+    "reconstruction_failed": (
+        "the recorded output-container contract could not be applied to the refreshed "
+        "leaves; re-capture with capture_container_structure=True and, for HuggingFace "
+        "models, use_cache=False or return_dict=False"
+    ),
+}
+
+
+@dataclass(frozen=True)
+class LiveOutputDiagnosis:
+    """The live provider's output-reconstruction verdict with its teaching remedy.
+
+    ``faithful`` is ``True`` only when ``output`` is the exact object a live forward
+    returns (correct container type, non-tensor literal leaves preserved) or the
+    genuine single bare tensor. Otherwise ``output`` is a best-effort approximation,
+    ``reason`` is one closed :data:`_LIVE_OUTPUT_REASON_REMEDIES` key, ``detail``
+    names the concrete evidence, and ``remedy`` the user action -- the typed
+    settlement the audit's H1/H2 findings demanded in place of a bare
+    ``ValueError`` or a remedy-less ``output_structure_mismatch``.
+    """
+
+    output: Any
+    faithful: bool
+    reason: str | None = None
+    detail: str = ""
+
+    @property
+    def remedy(self) -> str | None:
+        """Return the closed-vocabulary remedy for ``reason`` (``None`` when faithful)."""
+
+        return None if self.reason is None else _LIVE_OUTPUT_REASON_REMEDIES[self.reason]
+
+
 def _reconstruct_live_output(trace: Any) -> tuple[Any, bool]:
     """Reconstruct refreshed live output faithfully and report reconstruction fidelity.
 
@@ -69,12 +132,66 @@ def _reconstruct_live_output(trace: Any) -> tuple[Any, bool]:
         only when the output could merely be approximated from naive leaf paths (no
         faithful container contract, e.g. an opaque/BFS-fallback container); the
         caller then downgrades ``path_faithfulness`` to ``UNVERIFIABLE`` instead of
-        blessing a lossy substitution with ``VERIFIED``.
+        blessing a lossy substitution with ``VERIFIED``. The diagnosed spelling is
+        :func:`_diagnose_live_output`, which also carries the reason and remedy.
     """
 
+    diagnosis = _diagnose_live_output(trace)
+    return diagnosis.output, diagnosis.faithful
+
+
+def _diagnose_live_output(trace: Any) -> LiveOutputDiagnosis:
+    """Rebuild the refreshed live output and diagnose any loss of fidelity (H1/H2).
+
+    Arms, in order:
+
+    1. A recorded reconstructable final-output container whose declared leaf-slot
+       count equals the captured tensor-leaf count rebuilds the exact object
+       (``faithful=True``). A slot-count excess is the OPAQUE-LEAF arm: the capture
+       admitted a tensor-holding non-tensor object (HuggingFace ``DynamicCache``) as
+       a leaf the contract cannot represent -- settled typed with the
+       ``use_cache=False`` / ``return_dict=False`` remedy instead of the bare
+       "Not enough leaves" ``ValueError`` the rebuild would raise.
+    2. A genuine single bare-tensor root (gated on the FRESH refresh proof, r39
+       corr2_5) is returned as-is.
+    3. Output leaves carrying container PATHS but no recorded spec are a declared
+       tuple/dict/ModelOutput whose contract the default capture did not persist:
+       best-effort ``_container_from_paths`` approximation, reason
+       ``container_contract_unrecorded`` naming ``capture_container_structure=True``.
+    4. Anything else is an opaque root (set / custom object): best-effort value,
+       reason ``opaque_root``.
+
+    A lossy container type (``_container_spec_reconstruction_lossy``) downgrades any
+    arm to ``lossy_reconstruction``.
+    """
+
+    # The REBOUND spellings: the raw ``_runnable_call_outputs`` functions resolve
+    # their own helpers (``_op_for_label``) only through the execution module's
+    # globals.
+    from ._runnable_execution import (
+        _container_spec_reconstruction_lossy,
+        _fresh_bare_tensor_root,
+        _output_container_spec,
+    )
+    from ._runnable_output_contracts import LiveOutputDiagnosis, _unfaithful_root_diagnosis
     from .data_classes.container import container_from_op
+    from .ir.container import declared_leaf_slots
 
     output_labels = tuple(getattr(trace, "output_layers", ()) or ())
+    lossy = _container_spec_reconstruction_lossy(_output_container_spec(trace))
+
+    def _approximation() -> Any:
+        """Best-effort container rebuilt from the retained output leaf paths."""
+
+        values = [
+            (
+                tuple(getattr(trace.ops[label], "container_path", ()) or ()),
+                trace.ops[label].out,
+            )
+            for label in output_labels
+        ]
+        return _container_from_paths(values)
+
     for label in output_labels:
         op = trace.ops[label]
         container = container_from_op(op)
@@ -82,11 +199,35 @@ def _reconstruct_live_output(trace: Any) -> tuple[Any, bool]:
         # ``reconstruct`` rebuilds the SAME object a live forward returns (container
         # kind + literal leaves + fields).
         if (
-            container is not None
-            and container.root_kind == "final_output"
-            and container.supports_reconstruct
+            container is None
+            or container.root_kind != "final_output"
+            or not container.supports_reconstruct
+            or container.spec is None
         ):
-            return container.reconstruct(values="out"), True
+            continue
+        spec = container.spec
+        slots = declared_leaf_slots(spec)
+        leaves = len(container.leaves)
+        if slots != leaves:
+            return LiveOutputDiagnosis(
+                _approximation(),
+                False,
+                "opaque_leaf",
+                f"declared {spec.kind} output {spec.type_qualname or ''} has {slots} leaf "
+                f"slot(s) but the capture holds {leaves} tensor leaf/leaves",
+            )
+        try:
+            rebuilt = container.reconstruct(values="out")
+        except ValueError as exc:
+            return LiveOutputDiagnosis(_approximation(), False, "reconstruction_failed", str(exc))
+        if lossy:
+            return LiveOutputDiagnosis(
+                rebuilt,
+                False,
+                "lossy_reconstruction",
+                f"{spec.kind} output {spec.type_qualname or ''} reconstructs lossily",
+            )
+        return LiveOutputDiagnosis(rebuilt, True)
     if len(output_labels) == 1:
         op = trace.ops[output_labels[0]]
         has_spec = getattr(op, "container_spec", None) is not None
@@ -98,15 +239,46 @@ def _reconstruct_live_output(trace: Any) -> tuple[Any, bool]:
             # SAME "one leaf, no spec, no path" signature, so without this positive proof a
             # wrong bare-tensor object would be blessed faithful (and a multi-tensor set would
             # silently drop a leaf). A missing/opaque proof falls through to faithful=False.
-            return op.out, True
+            return LiveOutputDiagnosis(op.out, not lossy, "lossy_reconstruction" if lossy else None)
     # Multi-leaf output lacking a faithful reconstructable container contract, or a
     # single leaf that was actually a non-reconstructable (opaque) container. Return
-    # a best-effort approximation but report it as NOT faithful.
-    values = [
-        (tuple(getattr(trace.ops[label], "container_path", ()) or ()), trace.ops[label].out)
-        for label in output_labels
-    ]
-    return _container_from_paths(values), False
+    # a best-effort approximation but report it as NOT faithful, naming WHY.
+    return _unfaithful_root_diagnosis(trace, output_labels, lossy, _approximation())
+
+
+def _unfaithful_root_diagnosis(
+    trace: Any, output_labels: Sequence[str], lossy: bool, approximation: Any
+) -> LiveOutputDiagnosis:
+    """Classify a non-faithful live output root into its closed reason + evidence.
+
+    Reads the fresh refresh's ``output_losslessness`` proof and the recorded leaf
+    paths to pick ONE :data:`_LIVE_OUTPUT_REASON_REMEDIES` key: a lossy container
+    type, the H1 opaque-leaf proof refusal, the H2 unrecorded container contract,
+    or the opaque root fallback.
+    """
+
+    proof = getattr(getattr(trace, "__dict__", {}).get("_runnable"), "output_losslessness", None)
+    root_type = proof.get("root_type") if isinstance(proof, Mapping) else None
+    root_kind = proof.get("root_kind") if isinstance(proof, Mapping) else None
+    proof_reason = str(proof.get("reason") or "") if isinstance(proof, Mapping) else ""
+    pathed = any(getattr(trace.ops[label], "container_path", ()) for label in output_labels)
+    detail = f"fresh output root {root_type!r} ({root_kind or 'unproven'})"
+    if lossy:
+        reason = "lossy_reconstruction"
+    elif proof_reason.startswith("opaque_leaf:"):
+        # H1: the fresh forward's losslessness proof names the exact opaque leaf
+        # (``opaque_leaf:DynamicCache``) inside an otherwise declared container.
+        reason = "opaque_leaf"
+        detail = f"{detail}; proof refused on {proof_reason}"
+    elif pathed and root_kind != "opaque":
+        # H2: declared tuple/dict/ModelOutput leaves with recorded paths -- the
+        # contract exists in the forward but the default capture did not persist it.
+        reason = "container_contract_unrecorded"
+    else:
+        reason = "opaque_root"
+        if proof_reason:
+            detail = f"{detail}; proof refused on {proof_reason}"
+    return LiveOutputDiagnosis(approximation, False, reason, detail)
 
 
 def _container_from_paths(values: Sequence[tuple[tuple[str | int, ...], Any]]) -> Any:

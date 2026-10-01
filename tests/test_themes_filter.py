@@ -18,6 +18,8 @@ import torchlens as tl
 from torchlens.visualization import lenses
 from torchlens.visualization.lenses.audit import CORPUS
 
+pytestmark = pytest.mark.smoke  # measured <0.5s per test (W051-GATE, AUD-CODE 0.1)
+
 
 def _member(name: str) -> Any:
     """Return one corpus member by name."""

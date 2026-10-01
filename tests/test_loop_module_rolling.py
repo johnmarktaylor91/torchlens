@@ -827,7 +827,7 @@ def test_self_loop_label_order_flips_with_layout_direction(tmp_path: Path) -> No
 
     trace = _trace(ReusedReluLoop())
     topdown_dot = _render_dot(
-        trace, tmp_path, "relu_topdown", vis_call_depth=1000, vis_direction="topdown"
+        trace, tmp_path, "relu_topdown", vis_call_depth=1000, direction="topdown"
     )
     self_edges = _dot_self_edge_attrs(topdown_dot)
     assert len(self_edges) == 1

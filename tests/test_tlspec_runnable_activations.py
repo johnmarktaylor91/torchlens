@@ -501,6 +501,12 @@ def test_corrupt_archived_digest_fails_tripwire_and_rolls_back(tmp_path: Path) -
     assert not bool(loaded._runnable.poisoned)
 
 
+@pytest.mark.filterwarnings(
+    # A08 random-role-init disclosure (runnable_random_init_run): this test
+    # exercises a weight-free runnable run DELIBERATELY; the warning is the
+    # feature under test elsewhere (tests/test_persist_honesty_runnable_random.py).
+    "default:This runnable artifact carries no model weights"
+)
 def test_random_state_changed_input_and_non_equivalent_state_are_not_applicable(
     tmp_path: Path,
 ) -> None:

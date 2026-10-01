@@ -56,11 +56,35 @@ class OpAccessor(Accessor["Op"]):
             return resolved
         raise KeyError(f"Op '{key}' not found in scoped Layer ops.")
 
-    def __setitem__(self, key: int, value: "Op") -> None:
-        """Set an Op by 1-based pass index."""
+    def set_pass(self, pass_index: int, value: "Op") -> None:
+        """Store ``value`` as pass ``pass_index`` (1-based, the storage key).
 
-        self._dict[key] = value
+        The explicit write spelling: the accessor's storage is keyed by the
+        1-based pass index (``ops[k]`` on the read side is the 0-based
+        POSITION, so ``set_pass(k, op)`` is read back as ``ops[k - 1]``).
+        Finalization writes every pass through this basis.
+        """
+
+        if not isinstance(pass_index, int) or isinstance(pass_index, bool) or pass_index < 1:
+            raise ValueError(
+                f"OpAccessor.set_pass expects a 1-based pass index (int >= 1), got {pass_index!r}"
+            )
+        self._dict[pass_index] = value
         self._list = [op for _, op in sorted(self._dict.items())]
+
+    def __setitem__(self, key: int, value: "Op") -> None:
+        """Set an Op by 1-based pass index (``set_pass`` is the explicit spelling).
+
+        KNOWN ASYMMETRY (AUD-CODE 4.4, pinned by
+        ``tests/test_w051_gate_layer_accessors.py``): ``__getitem__(int)``
+        is the 0-based position while this write is the 1-based pass index,
+        so ``ops[1] = op`` is read back as ``ops[0]``. The write basis is
+        load-bearing for the finalization callers
+        (``layer_log.ops[op_log.pass_index] = op_log``); flipping it to the
+        read basis is a coordinated change across those callers.
+        """
+
+        self.set_pass(key, value)
 
     def __contains__(self, key: object) -> bool:
         """Return whether key resolves to an Op."""
@@ -193,9 +217,7 @@ class LayerAccessor(Accessor["Layer"]):
         if key in self._dict:
             return self._dict[key]
         matches = [
-            layer
-            for layer in self._list
-            if key in {layer.layer_label, layer.layer_label, layer.layer_label_short}
+            layer for layer in self._list if key in {layer.layer_label, layer.layer_label_short}
         ]
         if len(matches) == 1:
             return matches[0]

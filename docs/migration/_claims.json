@@ -17,18 +17,38 @@
   "tl_side_gates": {
     "gate-d1-hf-lm-replay-crash": {
       "statement": "The replay/push engine crashes on HF causal-LM outputs (Cache container-path mis-indexing, intervention/replay.py:669,820,1519; reproduced on distilgpt2/gpt2/Qwen2.5/OPT under transformers 5.14.1). Blocks all LLM replay-economics copy and region advertising.",
-      "status": "open",
-      "fix_lane": "megasprint A05 (FIX-A: replay output-contract fix)"
+      "status": "closed",
+      "fix_lane": "megasprint A05 (FIX-A: replay output-contract fix)",
+      "closed_by": "megasprint A05 (FIX-A replay output-contract fix), merged on sprint/megasprint-2026-08-27; in the D05 release commit lineage (base 0537becb799d)",
+      "closure_evidence": [
+        "tests/test_fixa_escrow_replay_output_contract.py (5 arms)",
+        "tests/real_model/r0/test_realism_randinit_axes.py::test_container_output_do_lands_through_model_output_container (real distilgpt2 nested cache)"
+      ],
+      "verified_at": "2026-09-02 (D05 release gate: P tier on the release commit and on the venv-installed wheel)"
     },
     "gate-fork-run-silent-unedited": {
       "statement": "fork.attach_hooks(...) followed by fork.run(inputs=x) returns the UNEDITED output with zero warnings. Blocks every 'never silently inert' formulation.",
-      "status": "open",
-      "fix_lane": "megasprint phase 1 (intervention honesty cluster)"
+      "status": "closed",
+      "fix_lane": "megasprint phase 1 (intervention honesty cluster)",
+      "closed_by": "megasprint A04 (intervention honesty cluster) + the run/attach contract: fork.run(inputs=...) after attach_hooks now REFUSES typed",
+      "closure_evidence": [
+        "probe 2026-09-02 at 0537becb799d: fork.attach_hooks(zero_ablate relu) then fork.run(inputs=x) raises EngineDispatchError code=run_staged_spec_unapplied naming the staged hook count and the intervened-rerun spelling; no un-intervened result is ever returned",
+        "tests/test_interv_honesty_failed_do_cleanup.py::test_explicit_attach_hooks_stays_sticky_by_contract",
+        "tests/test_intervention_phase7.py::test_rerun_warns_when_value_dependent_sticky_hook_stops_matching"
+      ],
+      "verified_at": "2026-09-02 (D05 release gate)"
     },
     "gate-appliance-replaced-false": {
       "statement": "The semantic appliances never check fire-record replaced=False, so activation_patch_residual_stream can emit publishable-looking flat tables as a SILENT NO-OP on real HF models. Blocks the same 'never silently inert' class.",
-      "status": "open",
-      "fix_lane": "megasprint A01-A03 (semantic slices)"
+      "status": "closed",
+      "fix_lane": "megasprint A01-A03 (semantic slices)",
+      "closed_by": "megasprint A03 (semantic RECONSTRUCTION slice): fire ledger refuses never-fired and all-refused (replaced=False) campaigns typed (PatchApplicationError)",
+      "closure_evidence": [
+        "tests/test_sem_recon_patching.py::test_fire_ledger_refuses_all_refused_replacements",
+        "tests/test_sem_recon_patching.py::test_fire_ledger_refuses_never_fired",
+        "tests/test_sem_recon_patching.py::test_all_identical_campaign_disclosed"
+      ],
+      "verified_at": "2026-09-02 (D05 release gate)"
     }
   },
   "cross_cutting_rules": [
@@ -200,16 +220,16 @@
       "id": "menagerie-phrasing",
       "competitor": "none (self-claim about the menagerie catalog)",
       "neutral_fact": "The menagerie README's own claim is '11,600+ cataloged, ~89% algorithmically verified'. Several lanes compressed this to 'verified entries' -- an overclaim corrected fleet-wide.",
-      "allowed_public_wording": "Exactly '11,600+ cataloged, ~89% algorithmically verified' -- verbatim, everywhere the menagerie size or verification status is stated.",
-      "narrowed_scope_wording": "none -- verbatim-phrasing rule; there is no approved paraphrase.",
-      "limitation_wording": "Omit the count and verification figures entirely.",
+      "allowed_public_wording": "The RULINGS.md:51 hedge: 'verified on thousands of models across all major architecture families'; the repository catalog counts may be stated once with their measurement date (8,533 rows / 3,637 families, measured 2026-08-16; '8,500+ across ~3,600 families').",
+      "narrowed_scope_wording": "none -- the hedge is the ceiling; no percentage paraphrase is approved.",
+      "limitation_wording": "State the repository catalog counts with their measurement date; never a verification percentage until the campaign closes (the verification ledger is not in the public checkout, so no percentage is reproducible from the tree).",
       "required_credit": null,
       "evidence_refs": [
         "DIGEST-A s4 #28",
         "A03-r2 correction"
       ],
       "tl_side_gates": [],
-      "lint": "FAIL any menagerie size/verification phrasing that is not the ruled string verbatim; FAIL compressions of the class '11,600 verified' / 'verified entries'.",
+      "lint": "FAIL any menagerie verification percentage (the retired '~89%' / '11,600+' figures included) and compressions of the class '11,600 verified' / 'verified entries'; catalog counts must carry their measurement date.",
       "last_verified": "2026-08-20",
       "owner": "A12 (row custody); F30 (lint enforcement)"
     },
@@ -367,5 +387,10 @@
       "owner": "A12 (row custody); F30 (lint enforcement)"
     }
   ],
-  "check_block_line": "Every check pass over dossiers/boundary copy emits exactly one line: 'CLAIM-LINT: <n_run> run / <n_fail> fail [ids: ...]' (N5)."
+  "check_block_line": "Every check pass over dossiers/boundary copy emits exactly one line: 'CLAIM-LINT: <n_run> run / <n_fail> fail [ids: ...]' (N5).",
+  "gates_last_reviewed": {
+    "date": "2026-09-02",
+    "by": "megasprint lane D05 (release artifacts)",
+    "rule": "A gate reads closed ONLY when its pin tests are GREEN on the exact release commit AND on the venv-installed wheel (D05 FULL gate); a red pin re-opens the gate and the claim renders in its narrowed_scope_wording again."
+  }
 }

@@ -290,6 +290,48 @@ def _skip_relu(layer: Any) -> bool:
     return "relu" in str(getattr(layer, "func_name", "")).lower()
 
 
+def _vision_style_spec(layer: Any, default: Any) -> Any:
+    """Apply the relocated vision domain style (experimental.node_styles).
+
+    Parameters
+    ----------
+    layer:
+        Per-pass Op or aggregate Layer being rendered.
+    default:
+        Current node spec.
+
+    Returns
+    -------
+    Any
+        Node spec with the vision IO-shape row applied.
+    """
+
+    from torchlens.experimental import node_styles
+
+    return node_styles.vision_node_mode(layer, default)
+
+
+def _attention_style_spec(layer: Any, default: Any) -> Any:
+    """Apply the relocated attention domain style (experimental.node_styles).
+
+    Parameters
+    ----------
+    layer:
+        Per-pass Op or aggregate Layer being rendered.
+    default:
+        Current node spec.
+
+    Returns
+    -------
+    Any
+        Node spec with the attention style applied.
+    """
+
+    from torchlens.experimental import node_styles
+
+    return node_styles.attention_node_mode(layer, default)
+
+
 def _cases() -> tuple[OracleCase, ...]:
     """Return the covering design for every public ``Trace.draw`` axis.
 
@@ -312,7 +354,9 @@ def _cases() -> tuple[OracleCase, ...]:
             OracleCNN,
             (1, 1, 8, 8),
             {
-                "node_mode": "vision",
+                # Domain styles moved to torchlens.experimental.node_styles
+                # (builtin node_mode keeps only 'default'/'profiling').
+                "node_spec_fn": _vision_style_spec,
                 "vis_theme": "dark",
                 "node_overlay": "bytes",
                 "show_legend": True,
@@ -396,7 +440,7 @@ def _cases() -> tuple[OracleCase, ...]:
                 "vis_node_placement": "rank",
                 "direction": "topdown",
                 "vis_show_cone": False,
-                "node_mode": "attention",
+                "node_spec_fn": _attention_style_spec,
                 "show_containers": "labels",
             },
         ),
@@ -784,7 +828,9 @@ def _capture_case(case: OracleCase, tmp_path: Path) -> dict[str, Any]:
     torch.manual_seed(271828)
     model = case.model()
     model.train(case.train)
-    trace_kwargs: dict[str, Any] = {"keep_orphans": case.keep_orphans}
+    trace_kwargs: dict[str, Any] = {
+        "capture": tl.options.CaptureOptions(keep_orphans=case.keep_orphans)
+    }
     if case.intervene:
         trace_kwargs["intervene"] = tl.when(tl.func("relu"), tl.zero_ablate())
     trace = tl.trace(model, _seeded_input(case.input_shape), **trace_kwargs)

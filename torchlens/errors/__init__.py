@@ -19,6 +19,7 @@ from ._base import (
     ValidationError,
 )
 from .episode import (
+    BundleExperimentError,
     BundleRelationError,
     CheckpointSeriesLiveParamsError,
     EpisodeCaptureError,
@@ -290,6 +291,64 @@ _LAZY_EXCEPTION_PATHS = {
     ),
     "StopSignalSwallowedError": ("torchlens.capture.outcome", "StopSignalSwallowedError"),
     "PartialCaptureLookupError": ("torchlens.partial", "PartialCaptureLookupError"),
+    # Taxonomy closure: user-reachable typed refusals defined in subpackage
+    # error modules, bound lazily so every user-facing class has one public
+    # catch spelling. The defining module stays the import home.
+    # -- intervention binding (spec.bind) and regions (F01) --
+    "BindingPreflightError": ("torchlens.intervention.errors", "BindingPreflightError"),
+    "BindingRuntimeError": ("torchlens.intervention.errors", "BindingRuntimeError"),
+    "RegionError": ("torchlens.intervention.errors", "RegionError"),
+    # -- observability substrate (F25) and trackers (F26); every class is in
+    # its subpackage __all__ and carries contract-doc codes --
+    "HistoryArtifactError": ("torchlens.observability._errors", "HistoryArtifactError"),
+    "HistorySchemaError": ("torchlens.observability._errors", "HistorySchemaError"),
+    "ObservabilityError": ("torchlens.observability._errors", "ObservabilityError"),
+    "ObserverEventError": ("torchlens.observability._errors", "ObserverEventError"),
+    "ProfilerSessionError": ("torchlens.observability._errors", "ProfilerSessionError"),
+    "SpanError": ("torchlens.observability._errors", "SpanError"),
+    "StatKernelError": ("torchlens.observability._errors", "StatKernelError"),
+    "WatchLifecycleError": ("torchlens.observability._errors", "WatchLifecycleError"),
+    "WatchPlanError": ("torchlens.observability._errors", "WatchPlanError"),
+    "WatchRenderError": ("torchlens.observability._quantiles", "WatchRenderError"),
+    "SinkDeliveryError": ("torchlens.trackers._errors", "SinkDeliveryError"),
+    "SinkProtocolError": ("torchlens.trackers._errors", "SinkProtocolError"),
+    "TagGrammarError": ("torchlens.trackers._errors", "TagGrammarError"),
+    "TrackersError": ("torchlens.trackers._errors", "TrackersError"),
+    "WatchConfigError": ("torchlens.trackers._errors", "WatchConfigError"),
+    "WatchRuntimeError": ("torchlens.trackers._errors", "WatchRuntimeError"),
+    # -- kit and appliance refusals (checks, one-backward attribution, debug,
+    # model-explorer export, features, inventory, mechinterp, neuro,
+    # preprocessing, semantic norm reconstruction, snoop, stats, tviz, rank
+    # render) and the two user-filterable warning categories --
+    "CheckConfigError": ("torchlens.checks._errors", "CheckConfigError"),
+    "CheckLifecycleError": ("torchlens.checks._errors", "CheckLifecycleError"),
+    "CheckViolationError": ("torchlens.checks._errors", "CheckViolationError"),
+    "ReadError": ("torchlens.attribution.onebackward._errors", "ReadError"),
+    "ReadInternalError": ("torchlens.attribution.onebackward._errors", "ReadInternalError"),
+    "GradFnWalkError": ("torchlens.debug._grad_fn_walk", "GradFnWalkError"),
+    "ModelExplorerExportError": (
+        "torchlens.export._model_explorer._errors",
+        "ModelExplorerExportError",
+    ),
+    "FeatureShapingError": ("torchlens.features", "FeatureShapingError"),
+    "SiteInventoryError": ("torchlens.inventory", "SiteInventoryError"),
+    "MechInterpError": ("torchlens.mechinterp._errors", "MechInterpError"),
+    "NeuroHandoffError": ("torchlens.neuro._handoff", "NeuroHandoffError"),
+    "PreprocessingAuditError": ("torchlens.preprocessing._audit", "PreprocessingAuditError"),
+    "NormReconstructionError": (
+        "torchlens.semantic._norm_reconstruction",
+        "NormReconstructionError",
+    ),
+    "EchoConfigError": ("torchlens.snoop._errors", "EchoConfigError"),
+    "EchoStatsError": ("torchlens.snoop._errors", "EchoStatsError"),
+    "FittedArtifactError": ("torchlens.stats._fitted", "FittedArtifactError"),
+    "TvizError": ("torchlens.tviz._errors", "TvizError"),
+    "RankRenderEndpointError": (
+        "torchlens.visualization._rank_layout_internal.layout",
+        "RankRenderEndpointError",
+    ),
+    "PluginLoadWarning": ("torchlens.ecosystem.plugins", "PluginLoadWarning"),
+    "SynthesizedValueReadWarning": ("torchlens.quickstart._gate", "SynthesizedValueReadWarning"),
 }
 
 
@@ -333,6 +392,7 @@ def __dir__() -> list[str]:
 
 __all__ = [
     "BufferSinkRoutingError",
+    "BundleExperimentError",
     "BundleRelationError",
     "CaptureError",
     "CheckpointSeriesLiveParamsError",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -71,11 +72,18 @@ def _assert_round_trip(record: Any, columns: list[str], tmp_path: Path) -> None:
 
     csv_path = tmp_path / f"{type(record).__name__}.csv"
     tl.export.csv(record, csv_path)
-    csv_df = pd.read_csv(csv_path)
+    # tl.export.csv prepends the capture-honesty disclosure as a comment line.
+    csv_df = pd.read_csv(csv_path, comment="#")
 
     json_path = tmp_path / f"{type(record).__name__}.json"
     tl.export.json(record, json_path, orient="records")
-    json_df = pd.read_json(json_path, orient="records")
+    # tl.export.json writes the torchlens.table_export.v1 honesty ENVELOPE
+    # ({schema, capture_honesty, orient, rows}), not a bare records array --
+    # consumers read the rows key.
+    envelope = json.loads(json_path.read_text())
+    assert envelope["schema"] == "torchlens.table_export.v1"
+    assert envelope["orient"] == "records"
+    json_df = pd.DataFrame(envelope["rows"])
 
     for actual in (csv_df, json_df):
         assert list(actual.columns) == list(expected.columns)

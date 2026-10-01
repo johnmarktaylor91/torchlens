@@ -313,7 +313,12 @@ def test_capture_container_structure_reconstructs_without_intervention_ready() -
 
 
 def test_capture_container_structure_default_off_preserves_output_shape_metadata() -> None:
-    """Default OFF matches explicit False and does not capture final output specs."""
+    """Default OFF matches explicit False: no per-op container specs on output layers.
+
+    The FINAL-output snapshot is registered on every capture (W051-HONESTY H2),
+    so ``reconstruct_output()`` rebuilds the real model output on both traces
+    while the op records keep ``container_spec=None``.
+    """
 
     model = HFLikeModel()
     x = torch.tensor([1.0])
@@ -333,8 +338,10 @@ def test_capture_container_structure_default_off_preserves_output_shape_metadata
         ]
         == [None, None, None]
     )
-    with pytest.raises(ValueError, match="No reconstructable final-output container"):
-        default_trace.reconstruct_output()
+    for trace in (default_trace, explicit_false_trace):
+        rebuilt = trace.reconstruct_output()
+        assert isinstance(rebuilt, DemoModelOutput)
+        assert torch.equal(rebuilt["logits"], x + 1)
 
 
 def test_assign_into_container_by_path_raises_on_mapping_assignment_failure() -> None:
@@ -429,6 +436,10 @@ def test_path_only_container_view_degrades_without_reconstruction() -> None:
         torch.tensor([1.0]),
         capture=tl.options.CaptureOptions(intervention_ready=True),
     )
+    # The final-output snapshot is registered on every capture; a PATH-ONLY view is
+    # what a final-output op exposes when no registry record backs it (a legacy
+    # artifact), so detach the registry to reach that degraded view.
+    trace.__dict__.pop("_containers", None)
     op = trace.ops[trace.output_layers[0]].copy()
     op.source_trace = trace
     op.container_spec = None

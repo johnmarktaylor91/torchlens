@@ -122,6 +122,29 @@ def build_gpt2(impl: str) -> nn.Module:
     return _seeded(GPT2LMHeadModel(_hf_config("gpt2", GPT2Config, shrink, impl)))
 
 
+def build_gpt2_default_cache(impl: str) -> nn.Module:
+    """The shrunk GPT-2 with the HuggingFace DEFAULT ``use_cache=True`` (AUD-HONESTY H1).
+
+    ``build_gpt2`` pins ``use_cache=False`` so the runnable artifact can round-trip; this
+    sibling keeps the KV cache on -- the configuration every real user has -- so the
+    live ``run()`` surface is exercised against a ``DynamicCache``-bearing ModelOutput.
+    """
+
+    from transformers import GPT2Config, GPT2LMHeadModel
+
+    shrink = {
+        "n_layer": 2,
+        "n_head": 2,
+        "n_embd": 64,
+        "vocab_size": VOCAB,
+        "n_positions": 64,
+        "bos_token_id": 0,
+        "eos_token_id": 0,
+    }
+    torch.manual_seed(SEED)
+    return _seeded(GPT2LMHeadModel(_hf_config("gpt2", GPT2Config, shrink, impl)))
+
+
 def build_distilgpt2(impl: str) -> nn.Module:
     from transformers import GPT2Config, GPT2LMHeadModel
 

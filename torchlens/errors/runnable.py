@@ -59,8 +59,14 @@ class RuntimeSignatureDriftError(RunnableTLSPECError, CompatibilityError, Runtim
     """A resolved native callable rejected the frozen recipe during execution."""
 
 
-class PathDivergenceError(RunnableTLSPECError, ValidationError, RuntimeError):
-    """A structure, shape, mutation, or control witness contradicted the path."""
+class PathDivergenceError(RunnableTLSPECError, ValidationError, RuntimeError, ValueError):
+    """A structure, shape, mutation, or control witness contradicted the path.
+
+    ``ValueError`` lineage (W051-HONESTY H3): the historical ``except ValueError``
+    callers and the pinned ``match="computational graph changed"`` on a refresh
+    graph change keep holding while the RAISE policy surfaces the TYPED error
+    (structured ``fields``) instead of the projector's bare ``ValueError``.
+    """
 
 
 class NumericAttestationError(RunnableTLSPECError, ValidationError, RuntimeError):

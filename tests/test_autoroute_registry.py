@@ -89,7 +89,7 @@ def test_override_pattern_unregister_then_register_replacement() -> None:
     assert result is sentinel
     assert calls[0][0] is model
     assert calls[0][1] == "hello"
-    assert calls[0][2]["layers_to_save"] == "none"
+    assert calls[0][2]["capture"].layers_to_save == "none"
 
 
 def test_list_and_list_glob() -> None:

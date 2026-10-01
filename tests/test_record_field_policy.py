@@ -236,6 +236,12 @@ def test_record_field_order_attributes_are_live(case: RecordCase) -> None:
         trace.cleanup()
 
 
+@pytest.mark.filterwarnings(
+    # A08 random-role-init disclosure (runnable_random_init_run): this test
+    # exercises a weight-free runnable run DELIBERATELY; the warning is the
+    # feature under test elsewhere (tests/test_persist_honesty_runnable_random.py).
+    "default:This runnable artifact carries no model weights"
+)
 def test_trace_runnable_field_order_slots_are_live_and_loaded_values_override(
     tmp_path: Path,
 ) -> None:

@@ -2,9 +2,17 @@
 
 # ruff: noqa: F403, F405
 
+from ._buffer_visibility import (
+    _buffer_name_segment,
+    _is_buffer_visible,
+    _is_noise_buffer,
+)
 from ._edge_multiplicity import (
+    _ARG_LABEL_MIDPOINT_FANIN,
     _bump_deduped_edge_multiplicity,
     _html_argument_edge_label,
+    _merge_parallel_arg_midpoint,
+    _register_arg_midpoint_edge,
     _register_deduped_edge,
     _set_argument_edge_label,
 )
@@ -13,26 +21,6 @@ from ._render_leaf import *
 from ._render_utils import html_escape
 from ._typography import DEFAULT_TYPOGRAPHY
 from .collapse_plan import OpSegment
-
-
-def _buffer_name_segment(address: str | None) -> str:
-    """Return the last dotted segment of a buffer address.
-
-    Parameters
-    ----------
-    address:
-        Fully qualified buffer address, if available.
-
-    Returns
-    -------
-    str
-        Final dotted address segment, or an empty string for missing addresses.
-    """
-
-    if address is None:
-        return ""
-    return address.split(".")[-1]
-
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -77,53 +65,6 @@ def _build_segment_lookup(
         for member in segment.members:
             member_addresses.setdefault(str(member), (position, segment))
     return _SegmentLookup(qualified_labels, base_labels, member_addresses)
-
-
-def _is_noise_buffer(node: GraphNode) -> bool:
-    """Return whether ``node`` is a hardcoded noisy buffer.
-
-    Parameters
-    ----------
-    node:
-        Candidate graph node.
-
-    Returns
-    -------
-    bool
-        True when the node is a buffer whose last address segment is filtered in
-        ``"meaningful"`` mode.
-    """
-
-    source_node = _unwrap_focus_node(node)
-    if not source_node.is_buffer:
-        return False
-    address = getattr(source_node, "address", None)
-    return _buffer_name_segment(address) in _NOISE_BUFFER_NAMES
-
-
-def _is_buffer_visible(node: GraphNode, show_buffer_layers: BufferVisibilityLiteral) -> bool:
-    """Return whether a buffer node should be visible in the current mode.
-
-    Parameters
-    ----------
-    node:
-        Candidate graph node.
-    show_buffer_layers:
-        Canonical tri-state visibility mode.
-
-    Returns
-    -------
-    bool
-        True when the node is visible. Non-buffer nodes are always visible.
-    """
-
-    if not node.is_buffer:
-        return True
-    if show_buffer_layers == "always":
-        return True
-    if show_buffer_layers == "never":
-        return False
-    return not _is_noise_buffer(node)
 
 
 def _render_node_label(node: GraphNode, vis_mode: str) -> str:
@@ -1340,6 +1281,7 @@ def _add_edges_for_node(
         edge_touches_ellipsis = tail_name.endswith("___runfoldellipsis") or head_name.endswith(
             "___runfoldellipsis"
         )
+        arg_label_channel: str | None = None
         if (
             not edge_is_self_loop
             and not child_is_collapsed_module
@@ -1347,7 +1289,7 @@ def _add_edges_for_node(
             and not edge_has_boundary
             and not edge_touches_ellipsis
         ):
-            _label_node_arguments_if_needed(
+            arg_label_channel = _label_node_arguments_if_needed(
                 self,
                 _base_node_for_metadata(parent_node),
                 _base_node_for_metadata(metadata_child),
@@ -1356,6 +1298,22 @@ def _add_edges_for_node(
                 render_edge.argument_label,
                 rolled_maps,
             )
+        # Same-pair parallel arg edges under high-fan-in midpoint mode fold
+        # into ONE rendered edge whose midpoint label lists every argument
+        # row (D03-R4): N edges between the same two boxes carry no
+        # distinguishing per-edge geometry, so the merged row list is the
+        # exact same information without the N-way parallel band.
+        # CC note: the merge gate must sit inline in this per-edge decision
+        # ladder (between labeling and emission, before the visual dedupe) --
+        # the ladder is the essential state machine of edge emission.
+        if arg_label_channel == "label" and _merge_parallel_arg_midpoint(
+            deduped_edge_registry,
+            tail_name,
+            head_name,
+            edge_dict["label"],
+            graphviz_graph,
+        ):
+            continue
 
         for arg_name, arg_val in overrides.edge.items():  # type: ignore[union-attr]
             if callable(arg_val):
@@ -1391,16 +1349,27 @@ def _add_edges_for_node(
             _register_deduped_edge(
                 deduped_edge_registry, visual_dedupe_key, raw_edge_identity, edge_dict, None
             )
+            if arg_label_channel == "label":
+                _register_arg_midpoint_edge(
+                    deduped_edge_registry, tail_name, head_name, edge_dict, None
+                )
         else:
             graphviz_graph.edge(**edge_dict)
             emitted_calls = getattr(graphviz_graph, "calls", None)
+            emitted_index = (
+                len(emitted_calls if emitted_calls is not None else graphviz_graph.body) - 1
+            )
             _register_deduped_edge(
                 deduped_edge_registry,
                 visual_dedupe_key,
                 raw_edge_identity,
                 edge_dict,
-                len(emitted_calls if emitted_calls is not None else graphviz_graph.body) - 1,
+                emitted_index,
             )
+            if arg_label_channel == "label":
+                _register_arg_midpoint_edge(
+                    deduped_edge_registry, tail_name, head_name, edge_dict, emitted_index
+                )
         # r-b6 R19-4: input-connectivity marks EVERY module containing a
         # connected endpoint, for every edge. The historical loop broke after
         # the first entry (its guard compared a name to itself, so it was
@@ -1592,12 +1561,13 @@ def _label_node_arguments_if_needed(
     show_buffer_layers: BufferVisibilityLiteral = "meaningful",
     occurrence_argument_label: str | None = None,
     rolled_maps: "_RolledEdgeMaps | None" = None,
-) -> None:
+) -> str | None:
     """Add argument position labels to an edge when the child has multiple non-commutative parents.
 
     For nodes like ``sub(a, b)`` where argument order matters, labels like
     ``"arg 0"`` / ``"arg 1"`` are added to distinguish which parent feeds
-    which argument.
+    which argument. Returns the label channel used (``"label"`` /
+    ``"headlabel"`` / ``"xlabel"``), or ``None`` when no label was added.
 
     Note on substring false-positive risk: the lookup ``parent_node.layer_label == arg_label``
     uses exact equality, so substring matching is not an issue here.  However, the
@@ -1616,7 +1586,7 @@ def _label_node_arguments_if_needed(
         rolled_maps: Optional per-draw memo of the rolled-edge map properties.
     """
     if not _should_mark_arguments_on_edge(self, child_node, show_buffer_layers, rolled_maps):
-        return
+        return None
 
     if occurrence_argument_label is not None:
         arg_labels = [occurrence_argument_label]
@@ -1628,9 +1598,17 @@ def _label_node_arguments_if_needed(
                     arg_labels.append(f"{arg_type[:-1]} {str(arg_loc)}")
 
     if not arg_labels:
-        return
+        return None
     arg_label = _html_argument_edge_label(arg_labels)
-    _set_argument_edge_label(edge_dict, arg_label)
+    # High-fan-in children route their argument labels to a midpoint
+    # ``label`` (reserved layout space) instead of a ``headlabel`` (painted
+    # post-layout at one shared radius, where they smear into one band --
+    # D03-R4; sweep provenance on ``_ARG_LABEL_MIDPOINT_FANIN``).
+    prefer_midpoint = (
+        _visible_parent_count(self, child_node, show_buffer_layers, rolled_maps)
+        >= _ARG_LABEL_MIDPOINT_FANIN
+    )
+    return _set_argument_edge_label(edge_dict, arg_label, prefer_midpoint=prefer_midpoint)
 
 
 def _should_mark_arguments_on_edge(
@@ -1656,20 +1634,35 @@ def _should_mark_arguments_on_edge(
     if child_node.layer_type in COMMUTE_FUNCS:
         return False
 
+    return _visible_parent_count(self, child_node, show_buffer_layers, rolled_maps) > 1
+
+
+def _visible_parent_count(
+    self: "Trace",
+    child_node: Union["Op", "Layer"],
+    show_buffer_layers: BufferVisibilityLiteral = "meaningful",
+    rolled_maps: "_RolledEdgeMaps | None" = None,
+) -> int:
+    """Visible incoming fan-in of a child node (buffer visibility applied).
+
+    Unrolled ``Op`` children count their shown parents; rolled ``Layer``
+    children report the MAX shown-parent count across passes (one pass with
+    multiple parents is what makes argument labels meaningful, and the
+    worst pass is what the fan-in placement gate must see).
+    """
     if isinstance(child_node, Op):
-        return _should_mark_arguments_on_unrolled_edge(self, child_node, show_buffer_layers)
-    elif isinstance(child_node, Layer):
-        return _should_mark_arguments_on_rolled_edge(
-            self, child_node, show_buffer_layers, rolled_maps
-        )
+        return _visible_parent_count_unrolled(self, child_node, show_buffer_layers)
+    if isinstance(child_node, Layer):
+        return _visible_parent_count_rolled(self, child_node, show_buffer_layers, rolled_maps)
+    return 0
 
 
-def _should_mark_arguments_on_unrolled_edge(
+def _visible_parent_count_unrolled(
     self: "Trace",
     child_node: "Op",
     show_buffer_layers: BufferVisibilityLiteral = "meaningful",
-) -> bool:
-    """Returns True if argument labels should be shown on an unrolled graph edge.
+) -> int:
+    """Shown-parent count of an unrolled graph child.
 
     Args:
         child_node: The child Op node whose incoming edge is being considered.
@@ -1688,16 +1681,16 @@ def _should_mark_arguments_on_unrolled_edge(
             ]
         )
 
-    return num_parents_shown > 1
+    return num_parents_shown
 
 
-def _should_mark_arguments_on_rolled_edge(
+def _visible_parent_count_rolled(
     self: "Trace",
     child_node: "Layer",
     show_buffer_layers: BufferVisibilityLiteral = "meaningful",
     rolled_maps: "_RolledEdgeMaps | None" = None,
-) -> bool:
-    """Returns True if argument labels should be shown on a rolled graph edge.
+) -> int:
+    """Max per-pass shown-parent count of a rolled graph child.
 
     Args:
         child_node: The child Layer node whose incoming edge is being considered.
@@ -1705,6 +1698,7 @@ def _should_mark_arguments_on_rolled_edge(
         rolled_maps: Optional per-draw memo of the rolled-edge map properties.
     """
     maps = rolled_maps if rolled_maps is not None else _RolledEdgeMaps()
+    max_parents_shown = 0
     for _call_index, pass_parents in maps.parents_per_pass(child_node).items():
         num_parents_shown = len(pass_parents)
         if show_buffer_layers != "always":
@@ -1717,10 +1711,9 @@ def _should_mark_arguments_on_rolled_edge(
                     for parent in pass_parents
                 ]
             )
-        if num_parents_shown > 1:
-            return True
+        max_parents_shown = max(max_parents_shown, num_parents_shown)
 
-    return False
+    return max_parents_shown
 
 
 def _op_is_model_input_container_leaf(node: GraphNode) -> bool:
@@ -2343,7 +2336,8 @@ __all__ = [
     "_self_loop_is_single_op_module",
     "_set_argument_edge_label",
     "_should_mark_arguments_on_edge",
-    "_should_mark_arguments_on_rolled_edge",
-    "_should_mark_arguments_on_unrolled_edge",
     "_surfaced_own_output_ops",
+    "_visible_parent_count",
+    "_visible_parent_count_rolled",
+    "_visible_parent_count_unrolled",
 ]

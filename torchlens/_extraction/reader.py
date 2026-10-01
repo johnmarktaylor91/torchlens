@@ -23,6 +23,7 @@ from __future__ import annotations
 import bisect
 import zlib
 from collections import OrderedDict
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -909,6 +910,15 @@ class ExtractionReader:
                     ragged.setdefault(key, []).append(value)
                 else:
                     dense.setdefault(key, []).append(value)
+        mixed = sorted(set(dense) & set(ragged))
+        if mixed:
+            _raise_mixed_layout(
+                f"Output key(s) {mixed} are stored DENSE in some shards and "
+                "TRIMMED in others; concatenating either subset alone would "
+                "silently drop the other's rows, so the artifact is refused "
+                "as a whole.",
+                mixed_layout_keys=mixed,
+            )
         out: dict[str, Any] = {key: torch.cat(parts, dim=0) for key, parts in dense.items()}
         for key, carriers in ragged.items():
             out[key] = _merge_ragged(carriers)
@@ -941,9 +951,93 @@ class ExtractionReader:
                 remedy="open_extraction(dir, in_progress=True) to monitor",
             )
         before = len(self._rows)
-        self._rows = read_trusted_rows(self._container)
+        rows = read_trusted_rows(self._container)
+        check_layout_coherence(self._manifest, rows)
+        self._rows = rows
         self._row_starts = [int(row["row_start"]) for row in self._rows]
         return len(self._rows) - before
+
+
+def check_layout_coherence(manifest: Mapping[str, Any], rows: list[dict[str, Any]]) -> None:
+    """Refuse an artifact whose ledgered per-shard layouts contradict the manifest.
+
+    The manifest ``layers`` block freezes ONE layout per key; every ledger
+    row's ``keys[key].layout`` (absent = dense) must agree. A mixed artifact
+    -- dense shards under a trimmed key or the reverse -- made
+    ``materialize()``/``load_extraction`` return a subset of the rows on a
+    ``status=complete`` artifact (audit 1.3), so the contradiction refuses
+    at open, before any payload is read.
+
+    Parameters
+    ----------
+    manifest:
+        Parsed manifest (a ``layers`` block still absent skips the check:
+        no batch has frozen a layout yet).
+    rows:
+        Trusted ledger rows.
+
+    Raises
+    ------
+    torchlens.dataset_extraction.DatasetExtractionResumeError
+        ``extraction_manifest_invalid`` naming the key, the offending shard,
+        and both layouts.
+    """
+
+    layers = manifest.get("layers")
+    if not isinstance(layers, Mapping):
+        return
+    for row in rows:
+        facts_by_key = row.get("keys")
+        if not isinstance(facts_by_key, Mapping):
+            continue
+        for key, facts in facts_by_key.items():
+            entry = layers.get(key)
+            if not isinstance(entry, Mapping) or not isinstance(facts, Mapping):
+                continue
+            declared = entry.get("layout") or "dense"
+            observed = facts.get("layout") or "dense"
+            if declared == observed:
+                continue
+            _raise_mixed_layout(
+                f"Output key {key!r} is declared {declared!r} in the manifest "
+                f"layers block but shard {row.get('file')!r} ledgers it as "
+                f"{observed!r}; a per-key layout is frozen once per artifact, "
+                "and reading a mixed artifact would silently drop the rows "
+                "stored in the other layout.",
+                key=key,
+                shard=row.get("file"),
+                declared_layout=declared,
+                ledgered_layout=observed,
+            )
+
+
+def _raise_mixed_layout(problem: str, **fields: Any) -> None:
+    """Raise the ONE mixed-layout refusal (open-time check and materialize belt).
+
+    Parameters
+    ----------
+    problem:
+        The problem sentence naming the contradiction.
+    **fields:
+        Structured context (key, shard, layouts, or the mixed key list).
+
+    Raises
+    ------
+    torchlens.dataset_extraction.DatasetExtractionResumeError
+        ``extraction_manifest_invalid``, always.
+    """
+
+    from ..dataset_extraction import DatasetExtractionResumeError
+
+    raise DatasetExtractionResumeError(
+        problem,
+        code="extraction_manifest_invalid",
+        remedy=(
+            "re-extract into a fresh directory (the writer now refuses a "
+            "layout change after batch zero)"
+        ),
+        **fields,
+    )
 
 
 def _merge_ragged(carriers: list[RaggedBatch]) -> RaggedBatch:
@@ -1090,6 +1184,7 @@ def open_extraction(
             status=manifest.get("status"),
         )
     rows = read_trusted_rows(container)
+    check_layout_coherence(manifest, rows)
     if manifest.get("status") == "complete":
         n_ledgered = (manifest.get("totals") or {}).get("n_shards")
         if len(rows) != n_ledgered:

@@ -13,7 +13,8 @@ EXPECTED_MODELLOG_METHODS = {
     "visualization_field_audit",
     "to_pandas",
     "save_new_outs",
-    "validate_saved_outs",
+    # validate_saved_outs is the validation-core function spelling; the Trace
+    # METHOD is validate_forward_pass (remove-and-rename, no shim kept).
     "validate_forward_pass",
     "check_metadata_invariants",
     "cleanup",

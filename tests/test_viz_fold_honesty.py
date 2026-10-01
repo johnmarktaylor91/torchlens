@@ -489,3 +489,86 @@ def cast_module(trace: tl.Trace, address: str):  # noqa: ANN201
     """Resolve one Module record by address."""
 
     return trace.modules[address]
+
+
+class _LinBlock(nn.Module):
+    """Linear+ReLU block matching the D03-R3 repro roster."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(8, 8)
+        self.act = nn.ReLU()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.act(self.lin(x))
+
+
+def test_indexed_parent_stem_shared_for_bare_root_children() -> None:
+    """Bare-numeric root children share ONE run stem (D03-R3 root cause).
+
+    ``_indexed_parent_stem`` fell back to the name itself when both the
+    parent and the indexed stem were empty, so root children "0", "1", ...
+    each carried a DISTINCT run key and no run could ever extend.
+    """
+
+    from torchlens.visualization.auto_collapse import _indexed_parent_stem
+
+    stems = {_indexed_parent_stem(str(i)) for i in range(8)}
+    assert len(stems) == 1, f"root siblings must share one stem; got {stems}"
+    # Unindexed root names keep their own stem (no over-merge).
+    assert _indexed_parent_stem("encoder") == "encoder"
+    # Nested indexed children keep the historical shared parent stem.
+    assert _indexed_parent_stem("blocks.0") == _indexed_parent_stem("blocks.1") == "blocks"
+
+
+def test_fold_repeats_true_folds_root_child_runs() -> None:
+    """D03-R3 resolver pin: root-child repeated runs fold standalone.
+
+    ``resolve_repeat_folds(trace, None, fold_repeats=True)`` returned ``{}``
+    for an 8x Linear+ReLU ``nn.Sequential`` ROOT while collapse="max" folded
+    the same run and the same blocks nested one level down folded fine --
+    the inertness was scoped precisely to direct children of the root.
+    """
+
+    from torchlens.visualization.auto_collapse import resolve_repeat_folds
+
+    torch.manual_seed(0)
+    trace = tl.trace(nn.Sequential(*[_LinBlock() for _ in range(8)]), torch.randn(2, 8))
+    folds = resolve_repeat_folds(trace, None, fold_repeats=True)
+    assert set(folds) == {str(i) for i in range(8)}, (
+        "fold_repeats=True must fold the root-child repeated run; "
+        f"resolver returned {sorted(folds)}"
+    )
+    fold = folds["0"]
+    assert fold.multiplicity == 8
+    assert fold.representative == "0"
+
+
+def test_fold_repeats_true_root_child_dot_not_inert(tmp_path) -> None:
+    """D03-R3 render pin: standalone fold_repeats=True changes the DOT.
+
+    The packet measurement: ``draw(collapse="none", fold_repeats=True)`` on
+    the root-child roster rendered byte-identical DOT to
+    ``fold_repeats=False`` (sha256 equal, no fold marker). Post-fix the
+    sources differ and the "+7 more" ellipsis is emitted.
+    """
+
+    torch.manual_seed(0)
+    trace = tl.trace(nn.Sequential(*[_LinBlock() for _ in range(8)]), torch.randn(2, 8))
+    sources: dict[bool, str] = {}
+    for fold_repeats in (True, False):
+        outpath = tmp_path / f"root_fold_{fold_repeats}"
+        trace.draw(
+            collapse="none",
+            fold_repeats=fold_repeats,
+            vis_save_only=True,
+            vis_fileformat="dot",
+            vis_outpath=str(outpath),
+        )
+        sources[fold_repeats] = (tmp_path / f"root_fold_{fold_repeats}.dot").read_text()
+    assert sources[True] != sources[False], (
+        "fold_repeats=True rendered byte-identical DOT to fold_repeats=False "
+        "on a root-child repeated run (D03-R3 inertness)"
+    )
+    assert "+7 more" in sources[True]
+    assert "+7 more" not in sources[False]

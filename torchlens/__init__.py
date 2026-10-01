@@ -238,10 +238,79 @@ def _resolve_top_level(name: str) -> _Any:
 
 
 # Five-step facade tables (architecture memo 5.4; mechanism owned by
-# torchlens.utils.facade). The redirect and refusal tables ship EMPTY at the
-# root: entries land with their owning lanes (surface regeneration, docs) --
-# the resolution order is the compatibility promise declared now.
-_REDIRECTS: dict[str, str] = {}
+# torchlens.utils.facade). The redirect table is the teaching compensator for
+# the 2026-08 shim-removal pass (docs/migration/v2.0_api_changes.md): every
+# removed top-level spelling raises a typed ``facade_redirect`` AttributeError
+# naming its canonical home instead of a bare "no attribute" (AUD-CODE 3.14).
+# A redirect row wins over a real name (step 2 precedes step 4), so no row may
+# name a LIVE top-level attribute; tests/test_w051_gate_facade_redirects.py
+# pins that and that every canonical dotted path resolves. The refusal table
+# stays empty at the root: no root name is deliberately refused today (the
+# appliance namespaces, e.g. torchlens.neuro, carry their own refusal rows).
+# Paper-era 1.x names (the pre-2.0 capture verb, the pre-2.0 log class, the
+# paper-era saved-activation validator) ARE rows: teaching redirects for
+# removed names are the table's purpose. The repo-wide removed-spelling lint
+# (tests/test_removed_spelling_lint.py, group paper_era) admits exactly this
+# file for that group through its audited _ALLOWED ledger (GATE-FIX row 1);
+# docs/reference/deprecations.md teaches the same names in prose.
+_REDIRECTS: dict[str, str] = {
+    "ActivationPostfunc": "use torchlens.types.ActivationPostfunc",
+    "batched_extract": "use torchlens.extract_dataset",
+    "build_render_audit": "use torchlens.experimental.dagua.build_render_audit",
+    "check_metadata_invariants": "use torchlens.validation.check_metadata_invariants",
+    "check_spec_compat": "use torchlens.validation.check_spec_compat",
+    "cleanup_tmp": "use torchlens.io.cleanup_tmp",
+    "draw_backward": "use torchlens.visualization.draw_backward",
+    "FuncCallLocation": "use torchlens.types.FuncCallLocation",
+    "GradFn": "use torchlens.types.GradFn",
+    "GradFnAccessor": "use torchlens.accessors.GradFnAccessor",
+    "GradientPostfunc": "use torchlens.types.GradientPostfunc",
+    "LayerAccessor": "use torchlens.accessors.LayerAccessor",
+    "list_logs": "use torchlens.io.list_logs",
+    "load_intervention_spec": "use torchlens.io.load_intervention_spec",
+    "log_forward_pass": "use torchlens.trace(model, x) -- log_forward_pass was the pre-2.0 capture verb",
+    "log_model_metadata": "use torchlens.io.log_model_metadata",
+    "MetadataInvariantError": "use torchlens.errors.MetadataInvariantError",
+    "ModelHistory": "use torchlens.Trace -- ModelHistory was renamed ModelLog, then Trace",
+    "ModelLog": "use torchlens.Trace -- ModelLog was renamed Trace",
+    "Module": "use torchlens.types.Module",
+    "ModuleAccessor": "use torchlens.accessors.ModuleAccessor",
+    "NodeSpec": "use torchlens.experimental.dagua.NodeSpec",
+    "Param": "use torchlens.types.Param",
+    "peek": "use torchlens.pluck",
+    "preview_fastlog": "use torchlens.fastlog.preview",
+    "record_span": "use torchlens.span",
+    "rehydrate_nested": "use torchlens.io.rehydrate_nested",
+    "render_lines_to_html": "use torchlens.experimental.dagua.render_lines_to_html",
+    "render_trace_with_dagua": "use torchlens.experimental.dagua.render_trace_with_dagua",
+    "replay": "use torchlens.push",
+    "replay_from": "use torchlens.push_from",
+    "rerun": "use torchlens.run",
+    "reset_naming_counter": "use torchlens.io.reset_naming_counter",
+    "resolve_sites": "use torchlens.validation.resolve_sites",
+    "save_intervention": "use torchlens.io.save_intervention",
+    "SaveLevel": "use torchlens.types.SaveLevel",
+    "show_model_graph": "use torchlens.visualization.show_model_graph",
+    "SiteTable": "use torchlens.types.SiteTable",
+    "SpecCompat": "use torchlens.types.SpecCompat",
+    "StreamingOptions": "use torchlens.options.StreamingOptions",
+    "suppress_mutate_warnings": "use torchlens.io.suppress_mutate_warnings",
+    "TargetManifestDiff": "use torchlens.types.TargetManifestDiff",
+    "TensorLog": "use torchlens.types.TensorLog",
+    "TensorSliceSpec": "use torchlens.types.TensorSliceSpec",
+    "TorchLensPostfuncError": "use torchlens.errors.TorchLensPostfuncError",
+    "trace_to_dagua_graph": "use torchlens.experimental.dagua.trace_to_dagua_graph",
+    "TraceState": "use torchlens.io.TraceState",
+    "TrainingModeConfigError": "use torchlens.errors.TrainingModeConfigError",
+    "unwrap_torch": "use torchlens.backends.torch.wrappers.unwrap_torch",
+    "validate_backward_pass": "use torchlens.validation.validate_backward_pass",
+    "validate_batch_of_models_and_inputs": "use torchlens.validation.validate_batch_of_models_and_inputs",
+    "validate_forward_pass": "use torchlens.validation.validate_forward_pass",
+    "validate_saved_activations": "use torchlens.validate(scope='saved')",
+    "VisualizationOptions": "use torchlens.options.VisualizationOptions",
+    "wrap_torch": "use torchlens.backends.torch.wrappers.wrap_torch",
+    "wrapped": "use torchlens.backends.torch.wrappers.wrapped",
+}
 _REFUSALS: dict[str, str] = {}
 
 

@@ -134,7 +134,9 @@ def _anomalies_block(log: Any, capture: dict[str, Any]) -> list[dict[str, Any]]:
     """Notable anomalies an agent must not miss, each one structured row."""
 
     anomalies: list[dict[str, Any]] = []
-    if not capture.get("capture_verified", True):
+    # ``capture_verified`` is TRI-STATE (None = no ceiling recorded, a HEALTHY
+    # capture); only an explicit False is an anomaly (AUD-CODE 2.5).
+    if capture.get("capture_verified") is False:
         anomalies.append(
             {
                 "kind": "capture_unverified",
@@ -175,6 +177,29 @@ def _next_operations(has_payloads: bool) -> dict[str, str]:
     if has_payloads:
         steps["values"] = 'call_tool("torchlens_payload_stats", {"path": <path>})'
     return steps
+
+
+def honesty_blocks(log: Any) -> dict[str, Any]:
+    """The ``capture`` + ``audit`` honesty blocks every gateable record carries.
+
+    One source for overview, explain, and compare (AUD-CODE 3.11a): the CLI's
+    ``--fail-on unverified|incomplete|nonfinite`` gates READ these two blocks,
+    so a record without them cannot be gated.
+
+    Parameters
+    ----------
+    log:
+        Loaded ``Trace``.
+
+    Returns
+    -------
+    dict[str, Any]
+        ``{"capture": ..., "audit": ...}``.
+    """
+
+    from ..report._agent_json import build_agent_json
+
+    return {"capture": build_agent_json(log, max_ops=1)["capture"], "audit": _audit_block(log)}
 
 
 def folded_overview(log: Any) -> dict[str, Any]:
@@ -219,6 +244,55 @@ def folded_overview(log: Any) -> dict[str, Any]:
     return data
 
 
+def _paged_full_dump(
+    dump: dict[str, Any], *, max_rows: int, offset: int
+) -> tuple[dict[str, Any], int, int]:
+    """Page the ``full`` view's op rows (AUD-CODE 2.7a).
+
+    The full dump is ``build_agent_json`` -- every agent-safe structural block
+    -- whose only unbounded member is the ``ops`` row list. Paging it under
+    the row cap keeps ``view="full"`` usable past ~200 ops instead of
+    tripping the token floor; the inner ``truncation`` block stays the
+    agent_trace disclosure of what this page omits, and every other block
+    (capture, counts, modules, ...) is full-capture truth on every page.
+
+    Parameters
+    ----------
+    dump:
+        The complete ``torchlens.agent_trace.v1`` record.
+    max_rows:
+        Row cap.
+    offset:
+        Row offset.
+
+    Returns
+    -------
+    tuple[dict, int, int]
+        Paged record (``rows_total``/``offset`` added), rows included, rows
+        omitted after this page.
+    """
+
+    ops = list(dump.get("ops") or [])
+    total = len(ops)
+    page = ops[offset : offset + max_rows]
+    omitted_total = total - len(page)
+    dump["ops"] = page
+    dump["rows_total"] = total
+    dump["offset"] = offset
+    if omitted_total > 0:
+        dump["truncation"] = {
+            "ops_included": len(page),
+            "ops_omitted": omitted_total,
+            "policy": f"execution-ordered op rows paged at max_rows={max_rows} from offset={offset}",
+            "note": (
+                "Op rows outside this page were omitted; counts above remain "
+                "the full-capture truth. Echo data.next as the continuation "
+                "argument for the next page."
+            ),
+        }
+    return dump, len(page), max(0, total - offset - len(page))
+
+
 def dump_view(
     log: Any,
     *,
@@ -236,9 +310,9 @@ def dump_view(
     view:
         One of :data:`DUMP_VIEWS`.
     max_rows:
-        Row cap for the ``graph`` view (paged, execution-ordered).
+        Row cap for the ``graph`` and ``full`` views (paged, execution-ordered).
     offset:
-        Row offset for the ``graph`` view.
+        Row offset for the ``graph`` and ``full`` views.
     class_id:
         Optional fold-class filter for drill-down (``graph`` view only).
 
@@ -265,7 +339,7 @@ def dump_view(
     if view == "overview":
         return folded_overview(log), 0, 0
     if view == "full":
-        return build_agent_json(log), 0, 0
+        return _paged_full_dump(build_agent_json(log), max_rows=max_rows, offset=offset)
     ops = list(getattr(log, "layer_list", []) or [])
     if class_id is not None:
         fold = fold_trace(log)

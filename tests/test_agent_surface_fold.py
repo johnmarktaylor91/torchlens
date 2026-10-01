@@ -161,34 +161,43 @@ def test_fold_coherence_with_the_collapse_plan(tmp_path: Path) -> None:
 
 
 @pytest.mark.slow
-def test_fold_is_flat_across_the_gpt2_depth_series() -> None:
-    """Criteria (i)+(iii) on the real depth series: flat classes, <=4k tokens.
+def test_fold_is_flat_across_the_gpt2_depth_series(tmp_path) -> None:
+    """Criteria (i)+(iii) on the real depth series: flat classes, and the
+    SERVED overview inside the 4k orientation budget on the deepest model.
 
     distilgpt2 / gpt2 / gpt2-medium (6/12/24 blocks): the class count must be
-    FLAT (not linear in depth) and the folded overview must serialize under
-    the 4k orientation budget on the deepest model.
+    FLAT (not linear in depth), and the overview envelope actually served for
+    the deepest model must fit the orientation budget with any trim DISCLOSED.
+    The raw class-rows token proxy this replaces never guarded the served
+    envelope: the backstop was already trimming gpt2-medium at base while the
+    proxy held by 18 tokens (W051-AGENT report, out-of-fence item 1).
     """
 
     transformers = pytest.importorskip("transformers")
+    from torchlens.agent import call_tool
+    from torchlens.agent._budgets import estimate_tokens
     from torchlens.agent._envelope import canonical_dumps, json_safe
-    from torchlens.agent._fold import fold_class_rows
 
     counts: dict[str, int] = {}
-    deepest_tokens = 0
     for name in ("distilgpt2", "gpt2", "gpt2-medium"):
         model = transformers.AutoModelForCausalLM.from_pretrained(name).eval()
         input_ids = torch.arange(12).unsqueeze(0)
         log = tl.trace(model, (), input_kwargs={"input_ids": input_ids}, save=None)
         fold = fold_trace(log)
         counts[name] = len(fold.classes)
-        rows_text = canonical_dumps(json_safe(fold_class_rows(fold)))
-        deepest_tokens = max(deepest_tokens, -(-len(rows_text) // 4))
         assert fold.membership().keys() == {str(op.label) for op in log.layer_list}
+        if name == "gpt2-medium":
+            artifact = tmp_path / "gpt2_medium.tlspec"
+            tl.save(log, artifact)
+            envelope = call_tool("torchlens_overview", {"path": str(artifact)})
+            served = estimate_tokens(canonical_dumps(json_safe(envelope)))
+            assert served <= 4_000, f"served overview is ~{served} tokens"
+            truncation = envelope.get("truncation")
+            assert truncation is None or truncation["omitted"] > 0
         del model, log
     # Flat: the 24-block count must not scale with depth (allow small drift
     # from boundary blocks, never a per-block term).
     assert counts["gpt2-medium"] - counts["distilgpt2"] <= 6, counts
-    assert deepest_tokens <= 4_000, f"folded classes serialize to ~{deepest_tokens} tokens"
 
 
 @pytest.mark.slow

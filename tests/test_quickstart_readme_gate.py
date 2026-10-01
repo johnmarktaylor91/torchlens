@@ -6,8 +6,9 @@ README.md) runs in a fresh subprocess with every warning recorded, twice:
 - ZERO warnings (deprecations included) -- the gate that guards the first
   screen forever;
 - the two runs' stdout must be byte-identical after normalizing EXACTLY the
-  declared volatile-field list (today: ``capture_timestamp``) -- a NEW
-  volatile field FAILS this gate rather than being silently normalized;
+  declared volatile-field list (today: ``capture_timestamp`` and the summary's
+  host-RSS ``forward peak`` token) -- a NEW volatile field FAILS this gate
+  rather than being silently normalized;
 - pinned structural facts (real resnet18, eval mode, the stable-address
   activation shape) so a content regression cannot hide behind determinism.
 
@@ -33,7 +34,15 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 
 #: The asserted-exact volatile-field normalizer list (memo D16). Adding a
 #: line pattern here is a reviewed golden change, never a quiet fix.
-_VOLATILE_LINE_PATTERNS = (re.compile(r"^\s*capture_timestamp: .*$", re.MULTILINE),)
+_VOLATILE_LINE_PATTERNS = (
+    re.compile(r"^\s*capture_timestamp: .*$", re.MULTILINE),
+    # The summary's Memory line prints ``forward peak <N> MB (<meaning>)``: on
+    # CPU that is the host RSS growth, documented as a real runtime measurement
+    # that is never portable (it read 78.9 MB and 80 MB on two cold runs of the
+    # same block -- AUD-CODE 3.10). Only the peak TOKEN is volatile; the
+    # activation byte counts on the same line stay pinned.
+    re.compile(r"forward peak \d+(?:\.\d+)? [KMGT]?i?B \((?:[^()]|\([^()]*\))*\)"),
+)
 
 _RUNNER = """
 import json, sys, warnings
@@ -106,7 +115,8 @@ def test_readme_first_screen_zero_warnings_and_reproducible(tmp_path: Path) -> N
     normalized_second = _normalize(second["stdout"])
     assert normalized_first == normalized_second, (
         "README first-screen output is not reproducible after normalizing the "
-        "DECLARED volatile fields (capture_timestamp). A new volatile field "
+        "DECLARED volatile fields (capture_timestamp, the host-RSS forward-peak "
+        "token). A new volatile field "
         "fails this gate deliberately -- extend _VOLATILE_LINE_PATTERNS only "
         "as a reviewed change.\n"
         + "\n".join(

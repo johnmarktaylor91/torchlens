@@ -407,27 +407,31 @@ def _python_handoff(node: dict[str, Any]) -> str:
     if not _contains_closure(node):
         return f"[str(op.label) for op in log.layer_list if {_condition_expr(node)}]"
     if node["op"] in ("followed_by", "preceded_by") and not _contains_closure(node["item"]):
+        # A literal mirror of ``_eval_query``'s closure pass: edges spell
+        # single-pass neighbours BARE and multi-pass neighbours pass-
+        # qualified, so the index maps BOTH spellings per row and the
+        # sweep runs in the tool's order. A layer_label-keyed dict collapsed
+        # the passes of a recurrent layer and missed every pass-qualified
+        # edge, so the handoff disagreed with the tool on multi-pass traces
+        # (AUD-CODE 3.11d).
         edge = "children" if node["op"] == "followed_by" else "parents"
+        order = (
+            "range(len(rows) - 1, -1, -1)" if node["op"] == "followed_by" else "range(len(rows))"
+        )
         return (
-            f"inner = {{str(op.layer_label) for op in log.layer_list "
-            f"if {_condition_expr(node['item'])}}}\n"
-            f"edges = {{str(op.layer_label): [str(x) for x in op.{edge}] "
-            "for op in log.layer_list}\n"
-            "reach = set()\n"
-            "for label in list(edges):\n"
-            "    stack = list(edges[label])\n"
-            "    seen = set()\n"
-            "    while stack:\n"
-            "        item = stack.pop()\n"
-            "        if item in seen:\n"
-            "            continue\n"
-            "        seen.add(item)\n"
-            "        if item in inner:\n"
-            "            reach.add(label)\n"
+            "rows = list(log.layer_list)\n"
+            f"inner = [bool({_condition_expr(node['item'])}) for op in rows]\n"
+            "index = {}\n"
+            "for i, op in enumerate(rows):\n"
+            "    index.setdefault(str(op.label), []).append(i)\n"
+            "    index.setdefault(str(op.layer_label), []).append(i)\n"
+            "closure = [False] * len(rows)\n"
+            f"for i in {order}:\n"
+            f"    for neighbor in rows[i].{edge}:\n"
+            "        if any(inner[j] or closure[j] for j in index.get(str(neighbor), []) if j != i):\n"
+            "            closure[i] = True\n"
             "            break\n"
-            "        stack.extend(edges.get(item, []))\n"
-            "matched = [str(op.label) for op in log.layer_list "
-            "if str(op.layer_label) in reach]"
+            "matched = [str(op.label) for op, flag in zip(rows, closure) if flag]"
         )
     return (
         "matched = call_tool('torchlens_query_sites', "
