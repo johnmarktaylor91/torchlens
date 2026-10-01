@@ -124,6 +124,8 @@ __all__ = [
     "HAS_NN_ATTENTION_MODULE",
     "HAS_RMSNORM_MODULE",
     "HAS_REDUCE_TUPLE_DIM",
+    "HAS_CPU_HALF_KERNELS",
+    "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
     "tensor_any_over_dims",
     "HAS_CACHED_UNTYPED_STORAGE_WRAPPER",
     "HAS_TENSOR_SEQUENCE_SLOT_FIX",
@@ -1392,6 +1394,64 @@ def _probe_rmsnorm_module() -> bool:
     return getattr(torch.nn, "RMSNorm", None) is not None
 
 
+def _probe_cpu_half_kernels() -> bool:
+    """Return whether common CPU kernels accept the ``torch.float16`` dtype.
+
+    Returns
+    -------
+    bool
+        ``True`` when CPU ``addmm``, ``layer_norm``, and ``nextafter`` all
+        accept float16 operands. torch 2.1-2.2's CPU backend is missing these
+        kernels for Half tensors (``addmm_impl_cpu_``, ``LayerNormKernelImpl``,
+        ``nextafter_cpu`` all raise ``"... not implemented for 'Half'"``);
+        later torch ships them. Absence is a genuine torch CPU limitation on
+        the floor, not a TorchLens degradation -- tests that exercise a
+        half-precision CPU forward, or TorchLens's own ULP-step validation
+        machinery (``torch.nextafter`` in ``validation/core.py`` and
+        ``validation/exemptions.py``) on a Half-dtype output, skip on it.
+    """
+
+    try:
+        half = torch.randn(2, 2, dtype=torch.float16)
+        torch.addmm(half, half, half)
+        torch.nn.functional.layer_norm(half, (2,))
+        torch.nextafter(half, half)
+    except RuntimeError:
+        return False
+    return True
+
+
+def _probe_cpu_float8_deterministic_fill() -> bool:
+    """Return whether CPU tensor allocation fills Float8 dtypes under determinism.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``torch.empty(dtype=torch.float8_e4m3fn)`` succeeds with
+        ``torch.use_deterministic_algorithms(True)`` active. torch 2.1-2.2's
+        ``fill_empty_deterministic_`` CPU kernel does not cover Float8 dtypes,
+        so any empty-tensor allocation under deterministic mode (TorchLens's
+        own dtype-cast path included) raises
+        ``RuntimeError: "fill_empty_deterministic_" not implemented for
+        'Float8_e4m3fn'``. Absence is a genuine torch CPU limitation on the
+        floor, not a TorchLens degradation.
+    """
+
+    float8_dtype = getattr(torch, "float8_e4m3fn", None)
+    if float8_dtype is None:
+        return False
+    was_deterministic = torch.are_deterministic_algorithms_enabled()
+    was_warn_only = torch.is_deterministic_algorithms_warn_only_enabled()
+    try:
+        torch.use_deterministic_algorithms(True)
+        torch.empty((1,), dtype=float8_dtype)
+    except RuntimeError:
+        return False
+    finally:
+        torch.use_deterministic_algorithms(was_deterministic, warn_only=was_warn_only)
+    return True
+
+
 def _probe_reduce_tuple_dim() -> bool:
     """Return whether ``Tensor.any``/``Tensor.all`` accept a tuple ``dim``.
 
@@ -1458,6 +1518,8 @@ HAS_AMP_GRADSCALER: bool = _probe_amp_gradscaler()
 HAS_NN_ATTENTION_MODULE: bool = _probe_nn_attention_module()
 HAS_RMSNORM_MODULE: bool = _probe_rmsnorm_module()
 HAS_REDUCE_TUPLE_DIM: bool = _probe_reduce_tuple_dim()
+HAS_CPU_HALF_KERNELS: bool = _probe_cpu_half_kernels()
+HAS_CPU_FLOAT8_DETERMINISTIC_FILL: bool = _probe_cpu_float8_deterministic_fill()
 _DYNAMO_OPTIMIZED_MODULE_TYPE: type[Any] | None = None
 _DYNAMO_OPTIMIZED_MODULE_PROBED: bool = False
 _DYNAMO_ORIG_CALLABLE_MARKER_PROBED: bool = False
@@ -1645,6 +1707,8 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_NN_ATTENTION_MODULE",
     "HAS_RMSNORM_MODULE",
     "HAS_REDUCE_TUPLE_DIM",
+    "HAS_CPU_HALF_KERNELS",
+    "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
 )
 
 
@@ -1841,6 +1905,12 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         "HAS_NN_ATTENTION_MODULE",
         "HAS_RMSNORM_MODULE",
         "HAS_REDUCE_TUPLE_DIM",
+        # CPU Half-dtype kernel coverage (addmm/layer_norm/nextafter) and
+        # Float8 empty-fill under deterministic mode both postdate the torch
+        # 2.1 floor: genuine old-torch CPU limitations, not TorchLens
+        # degradations -- tests that need them skip on these flags.
+        "HAS_CPU_HALF_KERNELS",
+        "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
     }
 )
 """Capability flags whose ``False`` is an absent OPTIONAL feature, not a degradation.

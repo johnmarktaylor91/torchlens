@@ -403,6 +403,12 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_NN_ATTENTION_MODULE": tc.HAS_NN_ATTENTION_MODULE,
         "HAS_RMSNORM_MODULE": tc.HAS_RMSNORM_MODULE,
         "HAS_REDUCE_TUPLE_DIM": tc.HAS_REDUCE_TUPLE_DIM,
+        # CPU Half-dtype kernel coverage (addmm/layer_norm/nextafter) and
+        # Float8 empty-fill under deterministic mode both postdate the torch
+        # 2.1 floor: genuine old-torch CPU limitations. Build-dependent, so
+        # mirror the live post-snapshot capability.
+        "HAS_CPU_HALF_KERNELS": tc.HAS_CPU_HALF_KERNELS,
+        "HAS_CPU_FLOAT8_DETERMINISTIC_FILL": tc.HAS_CPU_FLOAT8_DETERMINISTIC_FILL,
         # W21 cold-start: FSDP wrapper detection is lazily probed (never imports
         # torch.distributed.fsdp on plain captures); distributed availability is
         # build-dependent, so mirror the live post-snapshot capability.
@@ -733,6 +739,8 @@ def test_fill_uninitialized_memory_flag_visible_in_capability_snapshot() -> None
     assert snapshot["HAS_NN_ATTENTION_MODULE"] == tc.HAS_NN_ATTENTION_MODULE
     assert snapshot["HAS_RMSNORM_MODULE"] == tc.HAS_RMSNORM_MODULE
     assert snapshot["HAS_REDUCE_TUPLE_DIM"] == tc.HAS_REDUCE_TUPLE_DIM
+    assert snapshot["HAS_CPU_HALF_KERNELS"] == tc.HAS_CPU_HALF_KERNELS
+    assert snapshot["HAS_CPU_FLOAT8_DETERMINISTIC_FILL"] == tc.HAS_CPU_FLOAT8_DETERMINISTIC_FILL
 
 
 def test_read_fill_uninitialized_memory_returns_none_when_absent(
