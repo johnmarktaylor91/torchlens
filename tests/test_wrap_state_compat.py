@@ -1069,6 +1069,14 @@ _KNOWN_DEAD_ROSTER_ROWS = {
     # Removed upstream (absent on torch 2.13); kept in IGNORED_FUNCS for the
     # torch releases that still expose it. R3-B3-R02-1 evidence row.
     ("torch", "_sparse_csr_tensor"),
+    # The public FP8/MoE entry points (constants.py's "FP8/MoE entry points"
+    # comment): added upstream in torch 2.13 (absent on 2.8 and earlier, incl.
+    # the 2.1 floor and 2.8 canonical CI rows); kept in IGNORED_FUNCS for the
+    # torch releases that expose them. Not-yet-introduced is the same silent-
+    # gap shape this gate closes for removed rows.
+    ("torch.nn.functional", "grouped_mm"),
+    ("torch.nn.functional", "scaled_grouped_mm"),
+    ("torch.nn.functional", "scaled_mm"),
 }
 
 
