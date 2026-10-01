@@ -1000,6 +1000,7 @@ def test_synthetic_control_parent_is_retained_by_orphan_pruning() -> None:
             self.output_layers = ["output"]
             self.buffer_layers: list[str] = []
             self.internal_sink_ops: list[str] = []
+            self.internally_terminated_bool_ops: list[str] = []
             self.keep_orphans = False
             self._orphan_labels: list[str] = []
 
