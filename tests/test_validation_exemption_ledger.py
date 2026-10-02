@@ -335,6 +335,18 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         ),
     ),
     Exemption(
+        code="addcmul_zero_annihilator",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation.exemptions:_addcmul_zero_annihilator_decision",
+        refuses=(
+            "a non-zero (or NaN/Inf-bearing) sibling multiplied operand or "
+            "non-zero value=, where the product does carry the perturbed value; "
+            "a perturbed input= (the additive, non-multiplied operand) is never "
+            "matched and stays strict"
+        ),
+    ),
+    Exemption(
         code="binary_extrema_dominated",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
