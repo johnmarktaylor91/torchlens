@@ -70,7 +70,11 @@ def _torch_fuses_mha_output_reshape() -> bool:
             "cannot read torch.nn.functional.multi_head_attention_forward source, so the "
             "multihead_attention_demo golden variant cannot be selected; re-audit the fixture"
         ) from exc
-    transpose_prefix = r"attn_output\s*=\s*attn_output\.transpose\(\s*0\s*,\s*1\s*\)"
+    # torch 2.7.1 wraps the RHS in parens for line length
+    # ("attn_output = (\n    attn_output.transpose(...)...\n)") -- an upstream
+    # formatting-only change, so the optional "(" is tolerated here rather
+    # than treated as a new, unrecognized spelling.
+    transpose_prefix = r"attn_output\s*=\s*\(?\s*attn_output\.transpose\(\s*0\s*,\s*1\s*\)"
     output_extent = r"\(\s*tgt_len\s*\*\s*bsz\s*,\s*embed_dim\s*\)"
     if re.search(rf"{transpose_prefix}\.reshape{output_extent}", source):
         return True
@@ -92,6 +96,22 @@ def test_mha_probe_recognizes_exact_legacy_output_chain(
     source = """
 def multi_head_attention_forward():
     attn_output = attn_output.transpose(0, 1).contiguous().view(tgt_len * bsz, embed_dim)
+"""
+    monkeypatch.setattr(inspect, "getsource", lambda _object: source)
+
+    assert _torch_fuses_mha_output_reshape() is False
+
+
+def test_mha_probe_recognizes_paren_wrapped_legacy_output_chain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """torch 2.7.1 wraps the legacy RHS in parens for line length; still legacy."""
+
+    source = """
+def multi_head_attention_forward():
+    attn_output = (
+        attn_output.transpose(0, 1).contiguous().view(tgt_len * bsz, embed_dim)
+    )
 """
     monkeypatch.setattr(inspect, "getsource", lambda _object: source)
 
