@@ -1106,7 +1106,7 @@ def _indeterminate_unit(owner: Op, batch_index: int) -> tuple[int, ...]:
     # ``shape`` is legitimately ``None`` for a non-tensor-valued op (e.g. a
     # JAX while/cond decision pseudo-op); treat it as the op.py-documented
     # shapeless default (``()``) instead of crashing on an empty iteration.
-    owner_shape = owner.shape if owner.shape is not None else ()
+    owner_shape: tuple[int, ...] = owner.shape if owner.shape is not None else ()
     unit = [int(extent) // 2 for extent in owner_shape]
     if unit and 0 <= batch_index < int(owner_shape[0]):
         unit[0] = batch_index
