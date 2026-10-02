@@ -256,6 +256,7 @@ def _make_storage_property_wrapper(
     objclass = getattr(descriptor, "__objclass__", None)
     if objclass is not None:
         replacement.__objclass__ = objclass
+    replacement.__name__ = name
     return replacement
 
 
@@ -849,4 +850,5 @@ def _make_invisible_escape_property(
     # constructor-landmine note in _tl.py.
     replacement = DescriptorCompatProperty(getter, doc=name)
     replacement.__objclass__ = getattr(descriptor, "__objclass__", torch.Tensor)
+    replacement.__name__ = name
     return replacement

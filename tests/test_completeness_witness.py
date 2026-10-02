@@ -1470,6 +1470,13 @@ def test_descriptor_compat_property_construction_never_raises_without_a_docstrin
     this test rather than silently degrading a capture to
     observer-install-failed via the shared ``except (TypeError,
     AttributeError)`` guards every install loop uses.
+
+    (``instance.__doc__`` is NOT asserted here: ``DescriptorCompatProperty``'s
+    own class docstring shadows the per-instance ``doc=`` in MRO attribute
+    lookup on a ``__dict__``-less slotted instance, so reading it back would
+    pin a read-back artifact rather than the construction behavior this test
+    targets. ``__name__`` has no such class-level shadow and is asserted
+    directly.)
     """
 
     from torchlens.backends.torch._tl import DescriptorCompatProperty
@@ -1484,11 +1491,13 @@ def test_descriptor_compat_property_construction_never_raises_without_a_docstrin
 
     getter_only = DescriptorCompatProperty(getter, doc="getter_only")
     getter_only.__objclass__ = object
-    assert getter_only.__doc__ == "getter_only"
+    getter_only.__name__ = "getter_only"
+    assert getter_only.__name__ == "getter_only"
 
     getter_and_setter = DescriptorCompatProperty(getter, setter, doc="getter_and_setter")
     getter_and_setter.__objclass__ = object
-    assert getter_and_setter.__doc__ == "getter_and_setter"
+    getter_and_setter.__name__ = "getter_and_setter"
+    assert getter_and_setter.__name__ == "getter_and_setter"
 
 
 def test_observer_install_succeeds_regardless_of_dynamo_import_state() -> None:

@@ -332,6 +332,7 @@ def _make_input_metadata_grad_property(
     # constructor-landmine note in _tl.py.
     replacement = DescriptorCompatProperty(getter, setter if has_setter else None, doc=name)
     replacement.__objclass__ = getattr(descriptor, "__objclass__", torch.Tensor)
+    replacement.__name__ = name
     return replacement
 
 

@@ -293,6 +293,7 @@ def _make_escalated_property(descriptor: Any, state: _StructureOnlyBeltState, na
     # constructor-landmine note in _tl.py.
     replacement = DescriptorCompatProperty(getter, doc=name)
     replacement.__objclass__ = getattr(descriptor, "__objclass__", torch.Tensor)
+    replacement.__name__ = name
     return replacement
 
 

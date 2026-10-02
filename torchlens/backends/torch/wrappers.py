@@ -2909,6 +2909,7 @@ def _decorate_torch_func_pairs(func_pairs: list[tuple[str, str]]) -> None:
             new_property.__objclass__ = getattr(
                 orig_descriptor, "__objclass__", local_func_namespace
             )
+            new_property.__name__ = func_name
             try:
                 _setattr_ignoring_advisories(local_func_namespace, func_name, new_property)
                 # #31: Only add mapper entries if setattr succeeded — otherwise
