@@ -131,10 +131,12 @@ must each run <5s measured, `heavy` carries the 5-20s tests, `slow` the >20s one
 `tests/test_marker_lint.py` enforces it: combining `smoke` with `heavy`/`slow`/`serial`/`rare`
 fails (markers are additive — the test would still run under `-m smoke`), and the runtime
 tripwire holds smoke/unmarked tests to budget 5s and heavy 20s (load-scaled 1x-4x plus a 2s
-boundary-noise grace, charged on min(wall, cpu)) — an offender fails the session it ran in. `pytest -n auto` requires the
-optional `pytest-xdist` plugin, which is not installed by TorchLens's declared test extra.
-When xdist is installed separately, measure before relying on it: torch intra-op threads can
-oversubscribe workers, and fixture/import setup may dominate.
+boundary-noise grace, charged on min(wall, cpu)) — an offender fails the session it ran in. `pytest-xdist` ships in the
+`dev` extra: run `OMP_NUM_THREADS=1 pytest tests/ -m smoke -n N` with N equal to the cores you
+declared (never `-n auto`). Measured 2026-10-02 on a 32-core Linux worker: smoke took 5.5 min at
+`-n 8` against 28 min serial. Every worker collects the whole suite first (about 100-140 s), so the gain
+shrinks below 4 workers; tests/conftest.py merges the workers' duration ledgers so the tripwire
+still fires.
 
 Use `pytest.importorskip()` for optional migration dependencies. Keep tests
 deterministic and run documentation examples when they are meant to be executable.
