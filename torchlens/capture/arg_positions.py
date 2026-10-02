@@ -849,6 +849,13 @@ _UNARY_FUNCS = [
     "symfloat",
     "symint",
     "symnot",
+    # torch.sym_sum(xs): N-ary add over a list/tuple of ints or SymInts (never
+    # Tensors -- "only does something special for integers" per its own
+    # docstring). Position 0 is the single sequence argument; _P0_INPUT's
+    # generic list-walk in _append_tensor_or_param extracts nothing from it
+    # (ints, not tensors), the same honest no-op as its symint/symfloat/symnot
+    # neighbors above. Exercised by nested/jagged-tensor shape arithmetic.
+    "symsum",
     "reciprocal",
     "square",
     "nantonum",
