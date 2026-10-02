@@ -1366,6 +1366,11 @@ def _probe_gradient_edge() -> bool:
     try:
         x = torch.randn(1, requires_grad=True)
         h = x * 2
+        if h.grad_fn is None:
+            # Never happens for a requires_grad leaf's product, but the
+            # static annotation is ``Node | None``; treat an impossible-in-
+            # practice None the same as any other probe failure below.
+            return False
         torch.autograd.grad(
             [GradientEdge(h.grad_fn, h.output_nr)],
             [x],
@@ -4372,6 +4377,7 @@ else:
 # fill flag and, in the APPLY direction, as schema tolerance for artifacts
 # recorded by older producers.
 
+_torch_deterministic_module: types.ModuleType | None
 if HAS_DETERMINISTIC_FILL_FLAG:
     import torch.utils.deterministic as _torch_deterministic_module
 else:
@@ -4396,7 +4402,10 @@ def read_fill_uninitialized_memory() -> bool | None:
 
     if _torch_deterministic_module is None:
         return None
-    return bool(_torch_deterministic_module.fill_uninitialized_memory)
+    # ``fill_uninitialized_memory`` is a module-``__getattr__`` property;
+    # static typing has no stub for it, so read it dynamically rather than
+    # via attribute access (``getattr`` is accurate here, not a workaround).
+    return bool(getattr(_torch_deterministic_module, "fill_uninitialized_memory"))
 
 
 def write_fill_uninitialized_memory(value: bool) -> None:
@@ -4409,7 +4418,9 @@ def write_fill_uninitialized_memory(value: bool) -> None:
 
     if _torch_deterministic_module is None:
         return
-    _torch_deterministic_module.fill_uninitialized_memory = bool(value)
+    # See the matching comment in ``read_fill_uninitialized_memory``: this is
+    # a module-``__getattr__`` property with no static stub.
+    setattr(_torch_deterministic_module, "fill_uninitialized_memory", bool(value))
 
 
 def tensor_any_over_dims(tensor: torch.Tensor, dims: tuple[int, ...]) -> torch.Tensor:
