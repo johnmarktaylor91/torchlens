@@ -1045,6 +1045,14 @@ _SAFE_EXPLICIT_GLOBALS: frozenset[tuple[str, str]] = frozenset(
         ("numpy._core.numeric", "_frombuffer"),
         ("numpy.core.multiarray", "_reconstruct"),
         ("numpy._core.multiarray", "_reconstruct"),
+        # NumPy scalar reconstruction (``np.float64(...)``, ``np.int64(...)``, a
+        # bare numpy scalar living anywhere in user metadata -- e.g. an
+        # ``input_structure`` dataclass field). Unlike ``_reconstruct`` /
+        # ``_frombuffer`` (an attacker-sized shape/count), ``scalar(dtype, obj)``
+        # is bounded by the fixed dtype itemsize (at most a few bytes): there is
+        # no attacker-controlled allocation size to refuse.
+        ("numpy.core.multiarray", "scalar"),
+        ("numpy._core.multiarray", "scalar"),
     }
 )
 
