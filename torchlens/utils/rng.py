@@ -1033,6 +1033,13 @@ _TORCH_RNG_UNIMPORTED_MODULE_EXTRAS: tuple[tuple[str, str], ...] = (
         "tracker's state could ever reach a captured forward",
     ),
     (
+        "torch.distributed.tensor.parallel.api.is_rng_supported_mesh",
+        "pure capability predicate (torch 2.2): reads the device handle and returns "
+        "whether it exposes set_rng_state, at most warning on an unsupported device "
+        "mesh -- no entropy draw, no engine mutation, nothing that could desync a "
+        "replay",
+    ),
+    (
         "torch.distributed.pipeline.sync.checkpoint.restore_rng_states",
         "torch.distributed.pipeline was removed from torch (gone by the 2.3 era; only "
         "the torch>=2.1 floor still carries it). Its checkpoint recomputation pairs "
