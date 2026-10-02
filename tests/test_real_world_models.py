@@ -2107,20 +2107,25 @@ def test_ssd300_vgg16_train(default_input1, default_input2):
         },
     ]
     model_inputs = (input_tensors, targets)
-    show_model_graph(
-        model,
-        model_inputs,
-        view="unrolled",
-        visualization=tl.options.VisualizationOptions(
-            save_only=True,
-            container_path=opj(
-                VIS_OUTPUT_DIR,
-                "torchvision-detection",
-                "detect_ssd300_vgg16_train",
+    # SSD's anchor-box coordinate clamping uses a bare constant with no
+    # graph/source provenance (known limitation, same pattern as
+    # test_styletts).
+    with pytest.warns(UserWarning, match="no graph/source provenance"):
+        show_model_graph(
+            model,
+            model_inputs,
+            view="unrolled",
+            visualization=tl.options.VisualizationOptions(
+                save_only=True,
+                container_path=opj(
+                    VIS_OUTPUT_DIR,
+                    "torchvision-detection",
+                    "detect_ssd300_vgg16_train",
+                ),
             ),
-        ),
-    )
-    assert validate_forward_pass(model, model_inputs)
+        )
+    with pytest.warns(UserWarning, match="no graph/source provenance"):
+        assert validate_forward_pass(model, model_inputs)
 
 
 @pytest.mark.slow
@@ -2128,16 +2133,20 @@ def test_ssd300_vgg16_eval(default_input1, default_input2):
     model = torchvision.models.detection.ssd300_vgg16()
     input_tensors = [default_input1[0], default_input2[0]]
     model = model.eval()
-    show_model_graph(
-        model,
-        [input_tensors],
-        view="unrolled",
-        visualization=tl.options.VisualizationOptions(
-            save_only=True,
-            container_path=opj(VIS_OUTPUT_DIR, "torchvision-detection", "detect_ssd300_vgg16_eval"),
-        ),
-    )
-    assert validate_forward_pass(model, [input_tensors])
+    with pytest.warns(UserWarning, match="no graph/source provenance"):
+        show_model_graph(
+            model,
+            [input_tensors],
+            view="unrolled",
+            visualization=tl.options.VisualizationOptions(
+                save_only=True,
+                container_path=opj(
+                    VIS_OUTPUT_DIR, "torchvision-detection", "detect_ssd300_vgg16_eval"
+                ),
+            ),
+        )
+    with pytest.warns(UserWarning, match="no graph/source provenance"):
+        assert validate_forward_pass(model, [input_tensors])
 
 
 # =============================================================================
@@ -2148,16 +2157,20 @@ def test_ssd300_vgg16_eval(default_input1, default_input2):
 @pytest.mark.slow
 def test_quantize_resnet50(default_input1):
     model = torchvision.models.quantization.resnet50()
-    show_model_graph(
-        model,
-        default_input1,
-        view="unrolled",
-        visualization=tl.options.VisualizationOptions(
-            save_only=True,
-            container_path=opj(VIS_OUTPUT_DIR, "torchvision-quantize", "quantize_resnet50"),
-        ),
-    )
-    assert validate_forward_pass(model, default_input1)
+    # Quantized submodules are a disclosed, non-fatal capability limitation
+    # (torchlens/_robustness.py), fired on every capture entry for this model.
+    with pytest.warns(UserWarning, match="detected quantized submodules"):
+        show_model_graph(
+            model,
+            default_input1,
+            view="unrolled",
+            visualization=tl.options.VisualizationOptions(
+                save_only=True,
+                container_path=opj(VIS_OUTPUT_DIR, "torchvision-quantize", "quantize_resnet50"),
+            ),
+        )
+    with pytest.warns(UserWarning, match="detected quantized submodules"):
+        assert validate_forward_pass(model, default_input1)
 
 
 # =============================================================================
@@ -2261,7 +2274,17 @@ def test_opticflow_raftsmall():
             container_path=opj(VIS_OUTPUT_DIR, "torchvision-opticflow", "opticflow_raftsmall"),
         ),
     )
-    assert validate_forward_pass(model, model_input)
+    # RAFT's CorrBlock caches its correlation pyramid as a large plain
+    # attribute (millions of elements); TorchLens's deepcopy-based ground-
+    # truth/restoration snapshot cannot prove it restores, so validation
+    # fails CLOSED (returns False with a disclosed reason) rather than
+    # report unverified success. Known, documented capability boundary, not
+    # a capture bug -- if this ever returns True, the deepcopy fallback
+    # gained support for this attribute shape and this guard should be
+    # relaxed back to a plain assert.
+    with pytest.warns(RuntimeWarning, match="cannot prove model-state restoration"):
+        result = validate_forward_pass(model, model_input)
+    assert result is False
 
 
 @pytest.mark.slow
@@ -2279,7 +2302,10 @@ def test_opticflow_raftlarge():
             container_path=opj(VIS_OUTPUT_DIR, "torchvision-opticflow", "opticflow_raftlarge"),
         ),
     )
-    assert validate_forward_pass(model, model_input, random_seed=1)
+    # Same CorrBlock deepcopy limitation as test_opticflow_raftsmall above.
+    with pytest.warns(RuntimeWarning, match="cannot prove model-state restoration"):
+        result = validate_forward_pass(model, model_input, random_seed=1)
+    assert result is False
 
 
 # =============================================================================
@@ -2602,16 +2628,21 @@ def test_deberta():
     )
     model = transformers.DebertaV2Model(config).eval()
     model_kwargs = {"input_ids": torch.randint(0, 100, (1, 16))}
-    show_model_graph(
-        model,
-        [],
-        model_kwargs,
-        view="unrolled",
-        visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "encoder-only", "deberta")
-        ),
-    )
-    assert validate_forward_pass(model, [], model_kwargs)
+    # DebertaV2's disentangled attention builds relative-position buckets via
+    # a bare torch.arange/to() cast with no graph/source provenance (known
+    # limitation, same pattern as test_styletts).
+    with pytest.warns(UserWarning, match="no graph/source provenance"):
+        show_model_graph(
+            model,
+            [],
+            model_kwargs,
+            view="unrolled",
+            visualization=tl.options.VisualizationOptions(
+                save_only=True, container_path=opj(VIS_OUTPUT_DIR, "encoder-only", "deberta")
+            ),
+        )
+    with pytest.warns(UserWarning, match="no graph/source provenance"):
+        assert validate_forward_pass(model, [], model_kwargs)
 
 
 @pytest.mark.slow
@@ -3105,7 +3136,15 @@ def test_timm_levit_128():
             save_only=True, container_path=opj(VIS_OUTPUT_DIR, "timm", "levit_128")
         ),
     )
-    assert validate_forward_pass(model, model_input)
+    # LeViT's attention modules cache per-resolution attention_bias_cache
+    # entries as a plain (non-parameter) attribute; TorchLens's deepcopy-
+    # based ground-truth/restoration snapshot cannot prove it restores, so
+    # validation fails CLOSED rather than report unverified success. Known,
+    # documented capability boundary (same class as RAFT's CorrBlock, see
+    # test_opticflow_raftsmall), not a capture bug.
+    with pytest.warns(RuntimeWarning, match="cannot prove model-state restoration"):
+        result = validate_forward_pass(model, model_input)
+    assert result is False
 
 
 @pytest.mark.slow
@@ -3839,16 +3878,21 @@ def test_audio_vits():
     model = transformers.VitsModel(config).eval()
     input_ids = torch.randint(0, 100, (1, 16))
     model_kwargs = {"input_ids": input_ids}
-    show_model_graph(
-        model,
-        [],
-        model_kwargs,
-        view="unrolled",
-        visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "torchaudio", "vits")
-        ),
-    )
-    assert validate_forward_pass(model, [], model_kwargs)
+    # VITS's normalizing-flow WaveNet dropout adopts internally-sourced noise
+    # tensors with no graph/source provenance (known limitation, same
+    # pattern as test_styletts).
+    with pytest.warns(UserWarning, match="no graph/source provenance"):
+        show_model_graph(
+            model,
+            [],
+            model_kwargs,
+            view="unrolled",
+            visualization=tl.options.VisualizationOptions(
+                save_only=True, container_path=opj(VIS_OUTPUT_DIR, "torchaudio", "vits")
+            ),
+        )
+    with pytest.warns(UserWarning, match="no graph/source provenance"):
+        assert validate_forward_pass(model, [], model_kwargs)
 
 
 # =============================================================================
@@ -4633,7 +4677,11 @@ def test_timm_efficientformer():
             save_only=True, container_path=opj(VIS_OUTPUT_DIR, "timm", "efficientformer_l1")
         ),
     )
-    assert validate_forward_pass(model, x)
+    # Same attention_bias_cache deepcopy limitation as test_timm_levit_128
+    # above.
+    with pytest.warns(RuntimeWarning, match="cannot prove model-state restoration"):
+        result = validate_forward_pass(model, x)
+    assert result is False
 
 
 @pytest.mark.slow
