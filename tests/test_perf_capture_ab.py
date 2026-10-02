@@ -491,6 +491,18 @@ def main() -> None:
     if args.write_baseline and not args.reason:
         raise SystemExit("--write-baseline requires --reason (declared re-baselining point)")
 
+    # Match the gate's ambient state: tests/conftest.py's autouse
+    # _reset_rng_state fixture forces torch.use_deterministic_algorithms(True)
+    # for every pytest test, test_small_capture_overhead_within_gate included,
+    # but this script has no pytest fixtures when run standalone for a
+    # baseline write. Measured here (2026-10-02, a 32-core Linux worker): recording without
+    # this forced the trace floor ~14% BELOW what the same box measures under
+    # pytest's deterministic-algorithms-on state, so an apples-to-script
+    # baseline failed the apples-to-pytest gate every time, independent of
+    # any real regression. Forcing it here makes the two measurement
+    # conditions match.
+    torch.use_deterministic_algorithms(True)
+
     payload: dict[str, Any] = {
         "context": load_context(),
         "statistic": SMALL_CAPTURE_STATISTIC,
