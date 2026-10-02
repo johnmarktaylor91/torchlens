@@ -1415,6 +1415,57 @@ def test_validate_forward_pass_warns_on_stateful_retrace_divergence() -> None:
     assert diagnostics[0][0].extra["first_op_count"] == warning.fields["first_op_count"]
 
 
+def test_validate_forward_pass_retrace_mismatch_records_a_structured_failure() -> None:
+    """A retrace-mismatch downgrade to False is readable, not a bare repr(False).
+
+    ``_downgrade_retrace_mismatch_to_unverified`` forces ``outs_are_valid =
+    False`` even when the replay itself passed cleanly (menagerie's
+    ``convit_tiny/small/base`` "replay failed (False)" rows: a one-time
+    lazily-cached attribute -- timm convit's GPSA ``rel_indices`` -- makes the
+    model's SECOND forward from the same state take a different op path than
+    its first, which this check correctly flags). Only a non-failing
+    ``ValidationDiagnostic`` was ever recorded for this decision-flipping
+    downgrade, never the ``ValidationFailure`` a caller's
+    ``get_validation_failure(trace)`` actually reads.
+    """
+
+    class ToggleBranch(nn.Module):
+        """Model that changes control flow after one forward pass."""
+
+        def __init__(self) -> None:
+            """Initialize branch state."""
+
+            super().__init__()
+            self.use_mul = False
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run a different branch after the first pass."""
+
+            if self.use_mul:
+                out = x * 2
+            else:
+                out = x + 1
+            self.use_mul = True
+            return out
+
+    observed: list[Any] = []
+
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        result = user_public_impls._validate_forward_pass_torch(
+            ToggleBranch(),
+            torch.randn(2, 3),
+            _trace_observer=observed.append,
+        )
+
+    assert result is False
+    assert len(observed) == 1
+    failure = get_validation_failure(observed[0])
+    assert failure is not None
+    assert failure.check == "retrace_mismatch"
+    assert "stateful/non-reproducible" in failure.summary()
+
+
 def test_validate_forward_pass_retrace_mismatch_marks_trace_unverified() -> None:
     """The retained trace status stays honest after pristine re-trace drift."""
 
