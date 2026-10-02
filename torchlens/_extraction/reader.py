@@ -31,6 +31,7 @@ import torch
 
 from .._data_substrate import ExtractionArtifactError, read_trusted_rows
 from .._errors import InvalidArgumentError
+from ..utils._torch_symbols import torch_attr
 from .ragged import RaggedBatch, to_padded
 from .shards import read_shard
 
@@ -1084,7 +1085,7 @@ def _dtype_size(dtype_name: str) -> int:
     """
 
     name = dtype_name.removeprefix("torch.")
-    dtype = getattr(torch, name, None)
+    dtype = torch_attr(name)
     if isinstance(dtype, torch.dtype):
         return torch.empty((), dtype=dtype).element_size()
     return 1

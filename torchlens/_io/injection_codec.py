@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Any, NoReturn
 
 import torch
 
+from ._torch_symbols import torch_attr
 from .format_contract import BlobRef, TorchLensIOError
 from .scrub import BlobSpec
 
@@ -747,7 +748,7 @@ def _decode_leaf(kind: str, value: Any, materialize: Callable[[BlobRef], Any]) -
     if kind == "tensor":
         return materialize(value)
     if kind == "dtype":
-        resolved = getattr(torch, value, None)
+        resolved = torch_attr(value)
         if not isinstance(resolved, torch.dtype):
             _refuse_codec(f"encoded dtype {value!r} does not resolve on torch", "codec_args")
         return resolved
