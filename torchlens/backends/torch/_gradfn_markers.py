@@ -68,7 +68,10 @@ def _push_gradfn_marker(
     profiler = _obs_session_profiler()
     if profiler is None:
         return
-    pass_index = int(getattr(trace, "_active_backward_pass_index", 0) or 0)
+    try:
+        pass_index = int(trace._active_backward_pass_index or 0)
+    except AttributeError:
+        pass_index = 0
     try:
         marker = torch.profiler.record_function(
             f"torchlens::gradfn::{grad_fn_object_id}:{pass_index}:{call_index}"
