@@ -61,14 +61,14 @@ __all__ = [
     "EPISODE_DECLARED_STEP_CEILING",
     "EPISODE_STEP_JOIN_MEASURED",
     "STEP_JOIN_UNMEASURED",
-    "EpisodeFoldResult",
+    "EpisodeFoldResult",  # noqa: F822 -- lazily bound by module __getattr__ below
     "EpisodeLedger",
     "EpisodeLedgerHeader",
     "EpisodeLedgerRow",
     "ResolvedEpisode",
     "attach_episode_header",
     "capture_kind_for",
-    "derive_episode_status",
+    "derive_episode_status",  # noqa: F822 -- lazily bound by module __getattr__ below
     "episode_ledger_for",
     "episode_step_join_claim",
     "mint_capture_digest",
@@ -1973,10 +1973,23 @@ def validate_loaded_episode_annotations(trace: Trace) -> None:
     quarantine_loaded_ledger(annotations, parse_error, stacklevel=3)
 
 
-# Re-export (import at the BOTTOM: the fold module imports this module's
-# vocabularies, so a top placement would be a circular import): the S6-floor
-# fold split out to ``_episode_fold`` at the C07X amendment.
-from ._episode_fold import (  # noqa: E402
-    EpisodeFoldResult,
-    derive_episode_status,
-)
+# Re-export, LAZY (PEP 562 module __getattr__): the fold module imports this
+# module's vocabularies at ITS top level (C07X amendment, R43 size
+# discipline), so an EAGER re-export back here -- even placed at the bottom
+# of this file -- still raises whenever a fresh process imports
+# ``_episode_fold`` first: this module's re-export line would run while
+# ``_episode_fold`` is still mid-initialization (its own classes not yet
+# defined), the textbook two-module cycle
+# (tests/test_module_import_isolation.py's exhaustive cold-import sweep).
+# Deferring the back-import to first ATTRIBUTE ACCESS means both modules have
+# finished loading by then, however the caller entered.
+def __getattr__(name: str) -> Any:
+    """Lazily resolve the re-exported S6-floor fold names."""
+
+    if name in ("EpisodeFoldResult", "derive_episode_status"):
+        from . import _episode_fold
+
+        value = getattr(_episode_fold, name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
