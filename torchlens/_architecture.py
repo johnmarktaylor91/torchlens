@@ -230,6 +230,12 @@ TORCH_PRIVATE_LICENSED_PACKAGES: frozenset[str] = frozenset(
         # sanctioned probe chokepoint (utils/_torch_compat); the module
         # holds no direct torch._ touches of its own.
         "_user_public_impls",
+        # L8 fix (2026-10-01): the FLOPs report's model-door capture holds
+        # the fused MHA/TransformerEncoderLayer fast path off through
+        # force_mha_slow_path() / HAS_MHA_FASTPATH_SWITCH at the ONE
+        # sanctioned probe chokepoint (utils/_torch_compat); the package
+        # holds no direct torch._ touches of its own.
+        "report",
     }
 )
 
