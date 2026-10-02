@@ -1,6 +1,7 @@
 import gc
 import os
 import random
+import re
 import sys
 import time
 import weakref
@@ -540,6 +541,34 @@ def pytest_collection_finish(session: pytest.Session) -> None:
     gc.freeze()
 
 
+#: A test id embedding an object address (the default repr of a lambda or a
+#: plain object used as a parametrize value) differs between processes, so
+#: pytest-xdist workers collect "different tests" and the whole run errors.
+_UNSTABLE_NODEID_RE = re.compile(r" at 0x[0-9a-fA-F]+")
+
+
+def _reject_process_unstable_nodeids(items: list[pytest.Item]) -> None:
+    """Fail collection when any test id carries a per-process object address.
+
+    Parameters
+    ----------
+    items:
+        Collected test items.
+
+    Raises
+    ------
+    pytest.UsageError
+        Naming every unstable id; give the parametrization explicit ``ids=``.
+    """
+
+    unstable = [item.nodeid for item in items if _UNSTABLE_NODEID_RE.search(item.nodeid)]
+    if unstable:
+        raise pytest.UsageError(
+            "test ids embed a per-process object address (breaks pytest-xdist and "
+            "-k selection); give these parametrizations explicit ids=: " + ", ".join(unstable)
+        )
+
+
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Order the ArgSpec coverage test last; skip assertion-dependent tests under -O.
 
@@ -549,6 +578,8 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     under ``-O`` and must SKIP, not fail, so the ``-O`` leg stays a meaningful
     verdict-identity check on everything else.
     """
+
+    _reject_process_unstable_nodeids(items)
 
     if not __debug__:
         skip_no_assertions = pytest.mark.skip(
@@ -618,6 +649,76 @@ def _coverage_requested(config: pytest.Config) -> bool:
     return bool(cov_source)
 
 
+def _export_worker_duration_ledger(session: pytest.Session) -> None:
+    """Ship this pytest-xdist worker's duration ledger to the controller.
+
+    Under xdist every test runs in a worker process, so the offender and family
+    ledgers live on worker sessions, and xdist does not turn a worker's
+    sessionfinish exit status into a controller failure. Without this export
+    the always-on tripwire would be silently disarmed in parallel runs.
+    """
+
+    workeroutput = getattr(session.config, "workeroutput", None)
+    if workeroutput is None:
+        return
+    workeroutput["tl_duration_ledger"] = {
+        "offenders": [list(row) for row in getattr(session, "_tl_duration_budget_offenders", [])],
+        "family_stats": {
+            key: list(value)
+            for key, value in getattr(session, "_tl_smoke_family_stats", {}).items()
+        },
+        "load_factor": _SESSION_LOAD_FACTOR or 1.0,
+    }
+
+
+@pytest.hookimpl(optionalhook=True)
+def pytest_testnodedown(node: Any, error: object) -> None:
+    """Merge a finished pytest-xdist worker's duration ledger on the controller.
+
+    Parameters
+    ----------
+    node:
+        The xdist worker controller; ``node.workeroutput`` holds the ledger.
+    error:
+        Worker crash information, unused.
+    """
+
+    del error
+    ledger = getattr(node, "workeroutput", {}).get("tl_duration_ledger")
+    if ledger is None:
+        return
+    merged = getattr(node.config, "_tl_xdist_duration_ledger", None)
+    if merged is None:
+        merged = {"offenders": [], "family_stats": {}, "load_factor": 1.0}
+        node.config._tl_xdist_duration_ledger = merged
+    merged["offenders"].extend(tuple(row) for row in ledger["offenders"])
+    for key, (total, count) in ledger["family_stats"].items():
+        prior_total, prior_count = merged["family_stats"].get(key, (0.0, 0))
+        merged["family_stats"][key] = (prior_total + total, prior_count + count)
+    merged["load_factor"] = max(merged["load_factor"], ledger["load_factor"])
+
+
+def _import_xdist_duration_ledger(session: pytest.Session) -> None:
+    """Install the merged worker ledgers on the controller session.
+
+    Family budgets are recomputed from the merged cell counts with the same
+    formula as ``pytest_runtest_protocol`` (using the largest worker load
+    factor), because a family's cells are split across workers.
+    """
+
+    merged = getattr(session.config, "_tl_xdist_duration_ledger", None)
+    if merged is None:
+        return
+    session._tl_duration_budget_offenders = list(merged["offenders"])
+    session._tl_smoke_family_stats = dict(merged["family_stats"])
+    session._tl_smoke_family_budgets = {
+        key: merged["load_factor"]
+        * max(2.0 * SMOKE_DURATION_BUDGET_SECONDS, SMOKE_FAMILY_PER_CELL_SECONDS * count)
+        + DURATION_BUDGET_GRACE_SECONDS
+        for key, (_total, count) in merged["family_stats"].items()
+    }
+
+
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     """Enforce the duration budget, then write coverage artifacts.
 
@@ -629,6 +730,8 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         Final pytest exit status.
     """
 
+    _export_worker_duration_ledger(session)
+    _import_xdist_duration_ledger(session)
     _enforce_duration_budget_at_sessionfinish(session, exitstatus)
     del exitstatus
     _state._collect_usage_stats = False
