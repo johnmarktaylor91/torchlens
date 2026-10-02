@@ -11,6 +11,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._capture_state_helpers import reset_compiled_model_unwrap_warning_state
+from torchlens.distributed import has_vetted_snapshot
 
 
 class ViewModel(nn.Module):
@@ -124,6 +125,12 @@ def test_ddp_wrapped_slow_keeps_local_module_grad(tmp_path: Path) -> None:
     order and broke hundreds of unrelated tests downstream (2026-10 fast-tier
     incident). Destroy only the group THIS test created, same convention as
     the other distributed fixtures in this suite.
+
+    Capturing under a genuinely initialized process group also triggers that
+    same disclosure on an unvetted torch build (F1, Lead ruling
+    2026-10-01) -- the correct, honest product behavior (see
+    ``test_distributed_boundary_gloo.py::TestUnvettedTorchRefusesArming`),
+    expected here rather than treated as a surprise failure.
     """
 
     already_initialized = torch.distributed.is_available() and torch.distributed.is_initialized()
@@ -131,12 +138,13 @@ def test_ddp_wrapped_slow_keeps_local_module_grad(tmp_path: Path) -> None:
         pytest.skip("torch.distributed is unavailable")
     try:
         ddp_model = torch.nn.parallel.DistributedDataParallel(nn.Linear(4, 2))
-
-        trace = tl.trace(
-            ddp_model,
-            torch.randn(3, 4, requires_grad=True),
-            capture=tl.options.CaptureOptions(backward_ready=True, random_seed=0),
-        )
+        x = torch.randn(3, 4, requires_grad=True)
+        capture = tl.options.CaptureOptions(backward_ready=True, random_seed=0)
+        if has_vetted_snapshot():
+            trace = tl.trace(ddp_model, x, capture=capture)
+        else:
+            with pytest.warns(UserWarning, match="uncaptured_collective_op"):
+                trace = tl.trace(ddp_model, x, capture=capture)
         saved = trace[trace.output_layers[0]].out
 
         ddp_model.module.zero_grad(set_to_none=True)
