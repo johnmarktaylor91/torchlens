@@ -343,6 +343,24 @@ def _run_capture_cells(
                 note=f"skipped: pre-existing two-pass limitation ({type(exc).__name__})",
             )
         )
+    except UserWarning as exc:
+        # The hardcoded "relu" name is a literal layer-label lookup, not a
+        # predicate: it zero-matches any workload with no ReLU-labeled op
+        # (e.g. a GELU-activated transformer/GPT stack in the matrix), and
+        # the zero-match tripwire (error::UserWarning:torchlens) promotes
+        # that disclosure to a hard failure here same as the lookback_payload
+        # cell's old relu-selector above. Record N/A for the same reason --
+        # this bench cell demonstrates the legacy layers_to_save= sugar, not
+        # ReLU specifically, and not every workload has one.
+        results.append(
+            BenchResult(
+                workload.name,
+                "legacy two-pass layers_to_save",
+                float("nan"),
+                float("nan"),
+                note=f"skipped: no relu-labeled layer in this workload ({exc})",
+            )
+        )
 
     def lookback_payload() -> tl.Trace:
         """Run retroactive save with detached lookback payloads."""
