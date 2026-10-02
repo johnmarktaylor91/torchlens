@@ -1098,11 +1098,30 @@ def _build_torch_rng_surface() -> tuple[TorchRngSurfaceRow, ...]:
         # import cost on every "import torchlens", W21): the attribute itself
         # is trusted present (empirically verified; a frozen legacy module on a
         # fixed torch build has no live surface to drift).
+        #
+        # find_spec is import-free ONLY when every ancestor package up to (not
+        # including) the searched name is ALREADY in sys.modules: importlib
+        # auto-imports (and EXECUTES) any missing ancestor to read its
+        # __path__ before it can search within it (stdlib-documented
+        # behavior, not a torchlens choice). module_path's own parent is the
+        # nearest ancestor find_spec would need to import if absent -- e.g.
+        # resolving "torch.distributed.tensor.parallel.api" imports
+        # "torch.distributed.tensor.parallel" if it is not already loaded,
+        # and that package's own __init__ eagerly imports
+        # torch._dynamo.external_utils on torch 2.7.1 (the exact cascade the
+        # 2026-10 fast-tier cold-start regression traced: ~90 torch._dynamo /
+        # torch.distributed.fsdp submodules on a PLAIN capture). Skip the
+        # probe entirely when that ancestor is not already present instead of
+        # paying its import to answer the question (same degrade-to-absent
+        # the sys.modules-gated groups above already use).
         module_path, _, _name = target.rpartition(".")
-        try:
-            found = _importlib_util.find_spec(module_path) is not None
-        except (ImportError, AttributeError, ValueError):
-            found = False
+        ancestor, _, _leaf = module_path.rpartition(".")
+        found = False
+        if not ancestor or ancestor in _sys_module.modules:
+            try:
+                found = _importlib_util.find_spec(module_path) is not None
+            except (ImportError, AttributeError, ValueError):
+                found = False
         if found:
             rows.append(TorchRngSurfaceRow(target, "structurally_covered", note))
     return tuple(rows)
