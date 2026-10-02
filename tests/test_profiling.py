@@ -19,6 +19,7 @@ import pytest
 import torch
 
 from torchlens import trace as trace_fn
+from torchlens.options import CaptureOptions
 from torchlens.validation import validate_forward_pass
 from torchlens.validation.invariants import MetadataInvariantError
 
@@ -157,7 +158,10 @@ def _profile_model(name, model, input_tensor, description):
     """Profile a single model. Returns a results dict."""
     raw_time = _time_raw_forward(model, input_tensor)
 
-    log, lfp_time = _time_fn(trace_fn, model, input_tensor, random_seed=42)
+    # random_seed routes through capture=CaptureOptions(...); trace() itself
+    # has no random_seed kwarg (unrecognized model-input keywords refuse
+    # typed -- they are routed to the model's own forward() call instead).
+    log, lfp_time = _time_fn(trace_fn, model, input_tensor, capture=CaptureOptions(random_seed=42))
 
     # save_new_outs requires the computational graph to match the
     # original trace exactly.  For some models (e.g. AlexNet) this
