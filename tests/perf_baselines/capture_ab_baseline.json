@@ -1,32 +1,32 @@
 {
   "context": {
     "nproc": 32,
-    "torch_num_threads": 16,
-    "torch_version": "2.13.0+cu130",
-    "load_average_1m": 3.05
+    "torch_num_threads": 1,
+    "torch_version": "2.7.1+cpu",
+    "load_average_1m": 0.19
   },
   "statistic": "min_trace_floor_ms_v1",
-  "sha": "b1241aa108b3d95b0c9b15c4321f1a5a5675dac7",
+  "sha": "97af925e3967233526051e257e4d59d000dd4b53",
   "small_capture": {
     "cnn": {
-      "native_ms": 0.5701839691027999,
-      "trace_ms": 32.78240101644769,
-      "ratio": 57.494427751154944,
-      "native_median_ms": 0.6047434872016311,
-      "trace_median_ms": 34.056351985782385,
+      "native_ms": 0.49489492084831,
+      "trace_ms": 26.821354986168444,
+      "ratio": 54.19606032770226,
+      "native_median_ms": 0.5240364698693156,
+      "trace_median_ms": 28.323392965830863,
       "native_n": 300.0,
       "trace_n": 72.0
     },
     "mlp": {
-      "native_ms": 0.08941401029005647,
-      "trace_ms": 25.99003800423816,
-      "ratio": 290.6707564052571,
-      "native_median_ms": 0.09409800986759365,
-      "trace_median_ms": 27.210847474634647,
+      "native_ms": 0.08332007564604282,
+      "trace_ms": 21.093937917612493,
+      "ratio": 253.16753200300678,
+      "native_median_ms": 0.08487899322062731,
+      "trace_median_ms": 22.01773354317993,
       "native_n": 300.0,
       "trace_n": 72.0
     }
   },
-  "rebaseline_reason": "gated statistic change median_of_12 ratio -> min_trace_floor_ms_v1: the D15 10% ceiling was unsatisfiable on the ratio (median spread ~30%, mlp 220-313 over 5 quiet runs 2026-08-17; min-ratio still hostage to process-level native-floor allocation luck 0.088-0.122ms which also masks real trace regressions behind slow native draws). Trace floor is the stable regression signal (mlp 25.1-26.3ms over 6 fresh processes); ratio stays recorded for provenance. Declared re-baselining point, lane F testinfra 2026-08-19.",
-  "rebaselined": "2026-08-19"
+  "rebaseline_reason": "re-baseline on a 32-core Linux worker (nproc-matching the original recording box) under the weekly rare-tier's pinned torch 2.7.1+cpu; the prior baseline (torch 2.13.0+cu130, recorded 2026-08-19) never matched any CI environment torch build, so the context guard failed unconditionally in CI without ever measuring a real regression. Ceiling logic (GATE_CEILING_FRACTION) unchanged; this only re-anchors the same-box reference floor to an environment the weekly leg actually runs.",
+  "rebaselined": "2026-10-02"
 }
