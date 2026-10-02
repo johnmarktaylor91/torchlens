@@ -285,8 +285,15 @@ def test_brain_score_bridge_mocked_offline_fixture_matches_direct_scores() -> No
     assert bridge_scores == direct_scores
 
 
+@pytest.mark.heavy
 def test_lightning_layer_profiler_callback_fires_and_saves_results(tmp_path: Path) -> None:
-    """Lightning callback should profile one batch and persist a JSONL record."""
+    """Lightning callback should profile one batch and persist a JSONL record.
+
+    Measured at 10.1s wall (weekly leg, 2026-10-02), over the unmarked/smoke
+    7s budget (tests/conftest.py); the heavy tier's 20s+grace budget covers
+    it. The bridge-gate step (weekly.yml) runs this whole file unfiltered, so
+    the executed-floor count (11) is unaffected by the marker.
+    """
 
     lightning = pytest.importorskip("lightning")
     lightning_base = lightning.LightningModule
