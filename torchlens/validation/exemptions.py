@@ -1690,7 +1690,8 @@ def posthoc_perturb_check(
     4. **Full overwrite** (__setitem__ with same-shape replacement).
     5. **Structural output templates** for *_like/meshgrid/broadcast_tensors.
     6. **Narrow value proofs** such as a non-perturbed multiplicative zero
-       operand or a dominated binary extrema operand.
+       operand (plain ``mul``/``multiply`` or the ``addcmul`` fused form) or a
+       dominated binary extrema operand.
 
     Returns a structured decision. ``exempt=False`` means replay-level probes
     may still provide diagnostic evidence before validation fails.
@@ -2409,6 +2410,10 @@ def _posthoc_value_proof_decision(
         decision = _locally_constant_nan_multiplication_decision(layer, layers_to_perturb, args)
         if decision.exempt:
             return decision
+    if layer.func_name in _ADDCMUL_FUNC_NAMES and len(args) > 2:
+        decision = _addcmul_zero_annihilator_decision(layer, layers_to_perturb, args)
+        if decision.exempt:
+            return decision
     if layer.func_name in {"__matmul__", "matmul", "mm", "bmm"} and len(args) > 1:
         decision = _matmul_zero_annihilator_decision(layer, layers_to_perturb, args)
         if decision.exempt:
@@ -2630,6 +2635,88 @@ _MULTIPLICATIVE_ANNIHILATOR_FUNC_NAMES = frozenset(
         "multiply_",
     }
 )
+
+
+#: ``addcmul``/``addcmul_`` compute ``input + value * tensor1 * tensor2``: a
+#: fused multiply-add whose multiplied PAIR sits at positions {1, 2} (not the
+#: plain-``mul`` {0, 1} the annihilator proof above assumes), with position 0
+#: the additive ``input`` that is never multiplied. Kept as its own registry
+#: and decision function rather than folded into
+#: ``_MULTIPLICATIVE_ANNIHILATOR_FUNC_NAMES`` so the shared decision's
+#: position assumption stays correct for every spelling it already covers.
+_ADDCMUL_FUNC_NAMES = frozenset({"addcmul", "addcmul_"})
+
+
+def _addcmul_zero_annihilator_decision(
+    layer: Op,
+    layers_to_perturb: list[str],
+    args: tuple[Any, ...],
+) -> PosthocPerturbDecision:
+    """Return a proof decision for ``addcmul``'s multiplied-pair zero annihilator.
+
+    ``addcmul(input, tensor1, tensor2, value=1)`` computes
+    ``input + value * tensor1 * tensor2``. A perturbed parent at the
+    ``tensor1``/``tensor2`` slot (args[1]/args[2]) can never reach the output
+    when the SIBLING multiplied operand is provably all-zero, or when
+    ``value`` itself is exactly zero -- the same proof
+    ``_multiplicative_zero_annihilator_decision`` already makes for plain
+    ``mul``/``multiply``, extended to addcmul's three-operand fused form. A
+    perturbed ``input`` (args[0]) is the additive term, never multiplied, so
+    it is out of scope here and stays strict (returns non-exempt).
+
+    timm's ConvNeXtV2 Global Response Norm layer initializes its gain to
+    ``nn.Parameter(torch.zeros(...))`` and feeds it to ``addcmul`` as
+    ``tensor1``, so this is the random-init shape of a real architecture, not
+    a synthetic edge case.
+
+    Parameters
+    ----------
+    layer:
+        ``addcmul``/``addcmul_`` op whose unchanged perturbed replay is being
+        classified.
+    layers_to_perturb:
+        Parent labels selected for perturbation.
+    args:
+        Saved positional arguments for ``layer``.
+
+    Returns
+    -------
+    PosthocPerturbDecision
+        Exempt decision when the sibling multiplied operand (or ``value``) is
+        provably zero, otherwise non-exempt.
+    """
+
+    if len(layers_to_perturb) != 1:
+        return PosthocPerturbDecision(False, "not_addcmul_zero_annihilator")
+    arg_positions = layer.parent_arg_positions.get("args", {})
+    perturbed_label = layers_to_perturb[0]
+    if arg_positions.get(1) == perturbed_label:
+        other_position = 2
+    elif arg_positions.get(2) == perturbed_label:
+        other_position = 1
+    else:
+        return PosthocPerturbDecision(False, "not_addcmul_zero_annihilator")
+
+    saved_kwargs = getattr(layer, "saved_kwargs", None) or {}
+    value: Any = saved_kwargs.get("value", 1)
+    if "value" not in saved_kwargs and len(args) > 3:
+        value = args[3]
+    if isinstance(value, Number) and value == 0:
+        return PosthocPerturbDecision(
+            True,
+            "addcmul_zero_annihilator",
+            "addcmul value=0 annihilates both multiplied operands",
+        )
+
+    if len(args) <= other_position:
+        return PosthocPerturbDecision(False, "not_addcmul_zero_annihilator")
+    if _is_all_zero_value(args[other_position]):
+        return PosthocPerturbDecision(
+            True,
+            "addcmul_zero_annihilator",
+            f"non-perturbed addcmul operand at args[{other_position}] is all zero",
+        )
+    return PosthocPerturbDecision(False, "not_addcmul_zero_annihilator")
 
 
 def _multiplicative_zero_annihilator_decision(
