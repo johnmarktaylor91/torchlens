@@ -2263,6 +2263,15 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # calls refuse typed instead of recording correlated boundary nodes,
         # the same honest degradation every other optional probe here takes.
         "HAS_FUNCOL_GROUP_RESOLUTION",
+        # torch._C._autograd._top_saved_tensors_default_hooks (peeks the
+        # innermost installed default saved-tensors pack/unpack hook pair) is
+        # probed EAGERLY at import time with no lazy latch, so its absence is
+        # never merely "unprobed" -- on a torch build without it,
+        # saved_tensors_default_hooks_active() honestly answers None instead
+        # of degrading capture-time side-effect analysis; nothing shims it.
+        # Absent on torch 2.7.1 specifically (measured on the nightly
+        # fast-tier leg, 2026-10-02).
+        "HAS_SAVED_TENSORS_HOOK_INTROSPECTION",
     }
 )
 """Capability flags whose ``False`` is an absent OPTIONAL feature, not a degradation.
