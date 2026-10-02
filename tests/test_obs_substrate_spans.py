@@ -72,21 +72,46 @@ class TestOneProfilerDoor:
             "through it instead of opening a second door."
         )
 
+    #: Files besides backward.py itself that register a grad_fn node pre/posthook,
+    #: each with a standing reason. Adding a row requires a lane-report-visible
+    #: justification, same bar as _PROFILER_DOOR_ALLOWLIST above.
+    _GRAD_FN_HOOK_SITE_EXEMPTIONS = {
+        # backward.py's OWN per-fire timing helper (L9 backward residuals):
+        # directly imported and called from backward.py
+        # (`from ._fire_timing import _register_fire_timing_prehook`, invoked at
+        # its one call site) -- split into its own file for the file-size
+        # ratchet, not a second door. Its registration carries its own
+        # try/except deliberately separated from the shipped coverage hook (an
+        # optional measurement must never turn a complete-coverage node into a
+        # gap), documented inline in _fire_timing.py.
+        "backends/torch/_fire_timing.py",
+        # The onebackward attribution engine's opt-in "frozen=" site masking
+        # (FreezeHooks): hooks a SEPARATE, attribution-scoped backward() replay
+        # the engine itself drives (never the capture's own observed backward
+        # pass observe's bisector watches), installed and removed around that
+        # one engine call. Not a parallel stack on the same pass.
+        "attribution/onebackward/_frozen.py",
+    }
+
     def test_no_parallel_grad_fn_hook_stack(self) -> None:
-        """grad_fn node pre/posthook registration stays in backward.py.
+        """grad_fn node pre/posthook registration stays in backward.py's own door.
 
         observe's backward bisector and the F27 flip-2 marker sink must SHARE
         the shipped node-hook registration path -- a second stack would fire
-        hooks twice and split pass-boundary cleanup.
+        hooks twice and split pass-boundary cleanup. ``backward.py``'s own
+        helper modules and the attribution engine's independently-scoped
+        replay hooks are not that: see ``_GRAD_FN_HOOK_SITE_EXEMPTIONS``.
         """
 
         offenders: list[str] = []
         for path in sorted(_PACKAGE_ROOT.rglob("*.py")):
             relative = str(path.relative_to(_PACKAGE_ROOT))
-            if relative == "backends/torch/backward.py":
+            if relative == "backends/torch/backward.py" or relative in (
+                self._GRAD_FN_HOOK_SITE_EXEMPTIONS
+            ):
                 continue
             text = path.read_text(encoding="utf-8")
-            if "register_multi_grad_hook" in text or ".register_prehook(" in text:
+            if "register_multi_grad_hook(" in text or ".register_prehook(" in text:
                 offenders.append(relative)
         assert offenders == [], (
             f"grad_fn node-hook registration found outside backward.py: {offenders}"
