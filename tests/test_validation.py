@@ -8391,7 +8391,23 @@ def test_validation_teardown_is_per_step_fenced(monkeypatch: pytest.MonkeyPatch)
     restore skipped the thread-count restore, the state_dict restore, the plain
     attribute restore, AND the trace session cleanup. Every step must run and
     the first failure must still propagate.
+
+    The capability probe behind ``get_cpu_float8_deterministic_fill_support()``
+    is latched per-test by the ``_restore_lazy_capability_probes`` autouse
+    fixture (conftest.py), so it always re-probes from cold here -- and its
+    own internal toggle-then-restore of ``torch.use_deterministic_algorithms``
+    has the EXACT shape (``False``/``warn_only=False``) this test's fault
+    injection targets. Left cold, the injected failure fires inside the probe
+    at ``_validate_forward_pass_torch``'s entry gate, before ``trace`` is ever
+    assigned -- a real "nothing to clean up yet" case, not the teardown bug
+    this test exists to catch. Force-probing it first with the REAL
+    (unpatched) function warms the cache so the probe is a no-op gate check
+    once the monkeypatch is live, and the single injected failure lands
+    exactly where intended: the function's own teardown restore.
     """
+    from torchlens.utils._torch_compat import get_cpu_float8_deterministic_fill_support
+
+    get_cpu_float8_deterministic_fill_support(force_probe=True)
 
     model = nn.Sequential(nn.Linear(4, 4)).eval()
     x = torch.randn(2, 4)
