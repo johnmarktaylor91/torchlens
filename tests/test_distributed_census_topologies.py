@@ -300,8 +300,8 @@ def _trace_shape_summary(log) -> list[tuple[str, object]]:
 
 
 @pytest.mark.heavy
-@requires_vetted_snapshot
 class TestZeroInterferenceGate:
+    @requires_vetted_snapshot
     def test_zi1_armed_on_vs_off_dense_capture_identical(self):
         """ZI-1: arming changes NOTHING about a dense non-distributed capture."""
 
@@ -325,6 +325,7 @@ class TestZeroInterferenceGate:
         assert _fingerprint_model_content(model) == content_before
         assert model_state_digest(model) == model_state_digest(model)
 
+    @requires_vetted_snapshot
     def test_zi4_disarm_restores_every_wrapper_twice(self):
         """ZI-4: disarm restores every wrapped attr; a second cycle is clean."""
 
@@ -355,6 +356,7 @@ class TestZeroInterferenceGate:
         degradation = lifecycle.auto_arm_degradation()
         assert degradation is not None and "uncaptured_collective_op" in degradation
 
+    @requires_vetted_snapshot
     def test_auto_arm_vs_explicit_arm_parity(self, single_rank_world):
         """One workload, lazy auto-arm vs explicit arm(): boundary records
         equivalent modulo the install-epoch diagnostic."""
