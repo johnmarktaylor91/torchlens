@@ -55,21 +55,11 @@ assert channels == (), (
 assert log._runnable.host_rng_unreplayable is False, (
     "deterministic first selective capture settled unreplayable"
 )
-if "torch._dynamo" in sys.modules:
-    print("OK")
-else:
-    # warm_lazy_torch_imports() documents this as benign-and-unlatched: a
-    # failed import is evicted from sys.modules and the window stays clean
-    # either way (the channel-cleanliness assertions above already passed).
-    # On torch 2.7.1 specifically the warm import itself currently fails
-    # closed (torch._dynamo.variables.torch_function's module-level
-    # populate_builtin_to_tensor_fn_map / is_tensor_base_attr_getter raises
-    # AttributeError: 'property' object has no attribute '__objclass__' the
-    # first time it inspects a completeness-witness-replaced Tensor
-    # property such as requires_grad/grad_fn/is_leaf) -- a real torch/
-    # TorchLens interaction, tracked separately, not something this gate
-    # can exercise further on this build.
-    print("VACUOUS_ON_THIS_TORCH_BUILD")
+assert "torch._dynamo" in sys.modules, (
+    "the capture never triggered (or pre-warmed) the dynamo import; "
+    "this gate is vacuous on this torch build"
+)
+print("OK")
 """
 
 
@@ -87,16 +77,6 @@ def test_first_selective_runnable_capture_is_not_poisoned_by_lazy_dynamo_import(
         "first-selective-capture channel-cleanliness child failed:\n"
         f"STDOUT:{completed.stdout}\nSTDERR:{completed.stderr}"
     )
-    if "VACUOUS_ON_THIS_TORCH_BUILD" in completed.stdout:
-        pytest.skip(
-            "torch's lazy torch._dynamo import could not be pre-warmed on this "
-            "torch build (warm_lazy_torch_imports' own documented benign-"
-            "failure path); the channel-cleanliness assertions this test "
-            "exists for already passed inside the child before this check, so "
-            "there is nothing further this gate can exercise here. See the "
-            "child script's comment for the tracked torch/TorchLens "
-            "interaction this build hits."
-        )
     assert "OK" in completed.stdout
 
 
