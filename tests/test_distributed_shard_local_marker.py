@@ -27,11 +27,25 @@ pytestmark = pytest.mark.skipif(
 )
 
 import torchlens as tl  # noqa: E402
-from torchlens.distributed import _lifecycle as lifecycle  # noqa: E402
+from torchlens.distributed import (  # noqa: E402
+    _lifecycle as lifecycle,
+    has_vetted_snapshot,
+)
 from torchlens.distributed._dtensor import (  # noqa: E402
     RANK_LOCAL_SHARD,
     shard_local_placements,
     value_marks_shard_local,
+)
+
+# F1 ruling (Lead, 2026-10-01): full collective arming only runs where a
+# census-vetted torch build exists (torchlens.distributed.has_vetted_snapshot());
+# on an unvetted torch, arm() fails closed with UncapturedCollectiveOpError.
+# Only the two TestMergeScopeMarkerKey tests that build a real armed rank
+# core need this; the rest of the module never arms.
+requires_vetted_snapshot = pytest.mark.skipif(
+    not has_vetted_snapshot(),
+    reason="full collective arming requires a census-vetted torch build "
+    "(torchlens.distributed.has_vetted_snapshot() is False here)",
 )
 
 
@@ -195,6 +209,7 @@ class TestMergeScopeMarkerKey:
         log.distributed_scope = RANK_LOCAL_SHARD
         return log
 
+    @requires_vetted_snapshot
     def test_c5r_public_merge_entry_refuses(self, gloo_world):
         from torchlens.merged._errors import MergeInputError
 
@@ -204,6 +219,7 @@ class TestMergeScopeMarkerKey:
         assert excinfo.value.fields["code"] == "merge_scope_unsupported"
         assert excinfo.value.fields["reason"] == "shard_local_member_unsupported"
 
+    @requires_vetted_snapshot
     def test_c5r_direct_rank_evidence_construction_refuses(self, gloo_world):
         """The membership-authority precedent: the marker key runs INSIDE
         derive_merge, so directly constructed RankEvidence refuses too."""

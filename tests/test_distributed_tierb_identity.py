@@ -27,8 +27,23 @@ from torchlens._distributed import (  # noqa: E402
     DistributedCaptureUnsupportedError,
     detect_distributed_state,
 )
-from torchlens.distributed import _lifecycle as lifecycle  # noqa: E402
+from torchlens.distributed import (  # noqa: E402
+    _lifecycle as lifecycle,
+    has_vetted_snapshot,
+)
 from torchlens.distributed._dtensor import dtensor_dual_geometry  # noqa: E402
+
+# F1 ruling (Lead, 2026-10-01): full collective arming only runs where a
+# census-vetted torch build exists (torchlens.distributed.has_vetted_snapshot());
+# on an unvetted torch, arm() fails closed with UncapturedCollectiveOpError.
+# Only the three TestRefusalParity tests below call a real arm(); the rest of
+# the module (dual-geometry extraction, test_refusing_kinds_unchanged) is
+# unrelated to vetting and must keep running everywhere.
+requires_vetted_snapshot = pytest.mark.skipif(
+    not has_vetted_snapshot(),
+    reason="full collective arming requires a census-vetted torch build "
+    "(torchlens.distributed.has_vetted_snapshot() is False here)",
+)
 
 
 @pytest.fixture()
@@ -131,6 +146,7 @@ class TestRefusalParity:
             == REFUSING_KINDS
         )
 
+    @requires_vetted_snapshot
     def test_dtensor_capture_still_refuses_when_armed(self, single_rank_mesh):
         from torch.distributed.tensor import Shard, distribute_tensor
 
@@ -144,6 +160,7 @@ class TestRefusalParity:
         kinds = [finding.kind for finding in excinfo.value.fields["findings"]]
         assert "dtensor" in kinds
 
+    @requires_vetted_snapshot
     def test_dense_tp_hooks_still_refuse_when_armed(self, single_rank_mesh):
         pytest.importorskip("torch.distributed.tensor.parallel")
         from torch.distributed.tensor.parallel import PrepareModuleInput, parallelize_module
@@ -160,6 +177,7 @@ class TestRefusalParity:
         kinds = [finding.kind for finding in excinfo.value.fields["findings"]]
         assert "tensor_parallel" in kinds
 
+    @requires_vetted_snapshot
     def test_dense_explicit_collectives_capture_when_armed(self, single_rank_mesh):
         # The parity counterpoint: what tier (b) actually makes honest.
         import torch.distributed as dist

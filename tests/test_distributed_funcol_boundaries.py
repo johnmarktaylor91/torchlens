@@ -18,18 +18,31 @@ import pytest
 import torch
 from torch import nn
 
-pytestmark = pytest.mark.skipif(
-    not torch.distributed.is_available() or not torch.distributed.is_gloo_available(),
-    reason="torch.distributed gloo unavailable",
-)
-
 import torchlens as tl  # noqa: E402
 from torchlens.backends.torch.funcol import (  # noqa: E402
     FUNCOL_BOUNDARY_SCHEMA,
     active_funcol_session,
 )
-from torchlens.distributed import _lifecycle as lifecycle  # noqa: E402
+from torchlens.distributed import _lifecycle as lifecycle, has_vetted_snapshot  # noqa: E402
 from torchlens.errors._base import CompatibilityError  # noqa: E402
+
+pytestmark = pytest.mark.skipif(
+    not torch.distributed.is_available() or not torch.distributed.is_gloo_available(),
+    reason="torch.distributed gloo unavailable",
+)
+
+# F1 ruling (Lead, 2026-10-01): full collective arming only runs where a
+# census-vetted torch build exists (torchlens.distributed.has_vetted_snapshot());
+# on an unvetted torch, arm() fails closed with UncapturedCollectiveOpError.
+# Applied to the classes/tests that call a real arm(); test_unarmed_capture_
+# is_status_quo_for_funcol and test_dead_session_kernel_executes_real_wait_
+# and_skips_bookkeeping deliberately exercise the UNARMED/no-session path and
+# must keep running everywhere.
+requires_vetted_snapshot = pytest.mark.skipif(
+    not has_vetted_snapshot(),
+    reason="full collective arming requires a census-vetted torch build "
+    "(torchlens.distributed.has_vetted_snapshot() is False here)",
+)
 
 
 @pytest.fixture()
@@ -86,6 +99,7 @@ def _funcol_boundaries(log):
 
 
 @pytest.mark.heavy
+@requires_vetted_snapshot
 class TestFuncolBoundaryNode:
     def test_funcol_becomes_boundary_node_no_provenance_escape(self, gloo_world):
         """The pinned gap, closed: boundary node + parenting, zero escape signals."""
@@ -227,6 +241,7 @@ class TestFuncolBoundaryNode:
 
 @pytest.mark.heavy
 class TestPlaneWLifetime:
+    @requires_vetted_snapshot
     def test_session_cleared_and_interposition_torn_down(self, gloo_world):
         """The capture-scoped session never survives the capture window."""
 
@@ -252,6 +267,7 @@ class TestPlaneWLifetime:
             log = tl.trace(WaitedFuncol(), torch.ones(3))
         assert "distributed" not in log.annotations
 
+    @requires_vetted_snapshot
     def test_disarm_restores_funcol_functions(self, gloo_world):
         """Every wrapped funcol attr is restored to its pristine function."""
 
@@ -263,6 +279,7 @@ class TestPlaneWLifetime:
         lifecycle.disarm()
         assert funcol_module.all_reduce is pristine
 
+    @requires_vetted_snapshot
     def test_group_resolver_capability_gap_refuses_typed(self, gloo_world, monkeypatch):
         """Fail-closed: no resolvable group -> typed refusal, never a silent omission."""
 
@@ -280,6 +297,7 @@ class TestPlaneWLifetime:
 
 
 @pytest.mark.heavy
+@requires_vetted_snapshot
 class TestFuncolRefusalParity:
     def test_merge_refuses_funcol_bearing_core_typed(self, gloo_world):
         """C1 merge scope: a funcol-bearing rank core refuses MERGE_SCOPE_UNSUPPORTED."""
@@ -342,6 +360,7 @@ class TestFuncolRefusalParity:
 
 
 @pytest.mark.heavy
+@requires_vetted_snapshot
 class TestFuncolPersistence:
     def test_save_load_round_trips_the_boundary_disclosure(self, gloo_world, tmp_path):
         """The v0 payload survives save/load; refusal parity holds on the load."""
@@ -377,6 +396,7 @@ class TestFuncolSessionLeak:
     dead-ref (leaked-kernel) behavior.
     """
 
+    @requires_vetted_snapshot
     def test_later_trace_collectable_in_armed_process(self, gloo_world):
         """After arming, an ordinary Trace must die when the user drops it.
 
@@ -405,6 +425,7 @@ class TestFuncolSessionLeak:
         gc.collect()
         assert ref() is None
 
+    @requires_vetted_snapshot
     def test_weakref_kernel_still_observes_live_completions(self, gloo_world):
         """The leak fix must not disable plane-W: live captures stay observed.
 

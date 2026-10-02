@@ -24,11 +24,6 @@ import pytest
 import torch
 from torch import nn
 
-pytestmark = pytest.mark.skipif(
-    not torch.distributed.is_available() or not torch.distributed.is_gloo_available(),
-    reason="torch.distributed gloo unavailable",
-)
-
 import torchlens as tl  # noqa: E402
 from tests.support.census_harness import (  # noqa: E402
     CENSUS_ROWS,
@@ -51,6 +46,25 @@ from tests.support.census_harness import (  # noqa: E402
 from torchlens.distributed import (  # noqa: E402
     _lifecycle as lifecycle,
     _recognizer as recognizer_mod,
+    has_vetted_snapshot,
+)
+
+pytestmark = pytest.mark.skipif(
+    not torch.distributed.is_available() or not torch.distributed.is_gloo_available(),
+    reason="torch.distributed gloo unavailable",
+)
+
+# F1 ruling (Lead, 2026-10-01): full collective arming only runs where a
+# census-vetted torch build exists (torchlens.distributed.has_vetted_snapshot());
+# on an unvetted torch, arm() fails closed with UncapturedCollectiveOpError.
+# Applied to the classes/tests that arm (directly or through a shared
+# helper) before exercising their row; TestRowGreenGate, TestDualChannelBareLeg,
+# and the handful of other tests named below never arm and must keep running
+# everywhere.
+requires_vetted_snapshot = pytest.mark.skipif(
+    not has_vetted_snapshot(),
+    reason="full collective arming requires a census-vetted torch build "
+    "(torchlens.distributed.has_vetted_snapshot() is False here)",
 )
 
 
@@ -230,6 +244,7 @@ class TestCensusReportGenerator:
         )
         assert payload["rows"][0]["product"] == "row green"
 
+    @requires_vetted_snapshot
     def test_criteria_2_through_4_refuse_without_plane_p(self):
         """A green can never be vacuous: unarmed captures carry no plane-P
         journal, so requesting criteria 2-4 on one raises instead of
@@ -285,6 +300,7 @@ def _trace_shape_summary(log) -> list[tuple[str, object]]:
 
 
 @pytest.mark.heavy
+@requires_vetted_snapshot
 class TestZeroInterferenceGate:
     def test_zi1_armed_on_vs_off_dense_capture_identical(self):
         """ZI-1: arming changes NOTHING about a dense non-distributed capture."""
@@ -377,6 +393,7 @@ class TestZeroInterferenceGate:
 
 
 @pytest.mark.slow
+@requires_vetted_snapshot
 class TestZeroInterferenceSuiteAndPerf:
     #: ZI-2's NAMED representative subset -- enumerated here, not "whatever was
     #: convenient"; silent truncation of the subset is itself a red.
@@ -467,6 +484,7 @@ class TestZeroInterferenceSuiteAndPerf:
 
 
 @pytest.mark.heavy
+@requires_vetted_snapshot
 class TestGroupAControlsWave0:
     def test_a1_dense_armed_on_zi_baseline_criterion1_green(self):
         lifecycle.disarm()
@@ -659,6 +677,7 @@ class TestGroupASpawnSims:
 
 
 @pytest.mark.heavy
+@requires_vetted_snapshot
 class TestGroupBRefusedInWave0:
     def _refusal(self, row_id, build, expected=("dtensor",)):
         lifecycle.arm()
@@ -767,6 +786,7 @@ class TestGroupBRefusedInWave0:
 
 @pytest.mark.heavy
 class TestGroupCRefusalParity:
+    @requires_vetted_snapshot
     def test_c1r_sharded_tensor_refuses_with_variant_tag(self, single_rank_world):
         from torch.distributed._shard import sharded_tensor
         from torch.distributed._shard.sharding_spec import ChunkShardingSpec
@@ -793,6 +813,7 @@ class TestGroupCRefusalParity:
         finding = next(f for f in excinfo.value.fields["findings"] if f.kind == "dtensor")
         assert "ShardedTensor" in finding.detail
 
+    @requires_vetted_snapshot
     def test_c2r_prepare_module_input_refuses(self, single_rank_mesh):
         from torch.distributed.tensor.parallel import PrepareModuleInput, parallelize_module
 
@@ -810,6 +831,7 @@ class TestGroupCRefusalParity:
         result = run_refusal_row("C2r", build, ("tensor_parallel",))
         assert result.green, result.failures
 
+    @requires_vetted_snapshot
     def test_c3r_synthetic_unattributable_tp_hook_fails_closed(self, single_rank_world):
         import torch.distributed.tensor.parallel  # noqa: F401  (namespace gate)
 
@@ -827,6 +849,7 @@ class TestGroupCRefusalParity:
         )
         assert result.green, result.failures
 
+    @requires_vetted_snapshot
     def test_c4r_pp_composed_with_tp_refuses(self, single_rank_world):
         import torch.distributed.tensor.parallel  # noqa: F401  (namespace gate)
         from torch.distributed.pipelining import PipelineStage
@@ -877,6 +900,7 @@ class TestGroupCRefusalParity:
 
 
 @pytest.mark.heavy
+@requires_vetted_snapshot
 class TestWave1FullCriteria:
     def test_a1_full_criteria_is_the_first_row_green(self):
         """A1 re-run to FULL criteria: the zero-interference anchor must be
@@ -988,6 +1012,7 @@ class TestWave1FullCriteria:
 
 
 @pytest.mark.heavy
+@requires_vetted_snapshot
 class TestGroupNSelfHonesty:
     def test_n1_perturbing_factory_goes_red(self):
         """N1: K1's red -- a factory that perturbs between legs must fail."""
@@ -1119,6 +1144,7 @@ class TestGroupNSelfHonesty:
 
 
 @pytest.mark.heavy
+@requires_vetted_snapshot
 class TestWave0ReportEmission:
     def test_wave0_report_end_to_end(self, tmp_path):
         lifecycle.disarm()
