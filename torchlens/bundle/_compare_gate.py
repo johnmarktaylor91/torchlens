@@ -138,7 +138,7 @@ def _input_value_digest(trace: Trace) -> str | None:
         SHA-256 hex digest, or ``None`` when input identity is unprovable.
     """
 
-    revision = getattr(trace, "_spec_revision", None)
+    revision = trace._spec_revision
     try:
         cached = _INPUT_VALUE_DIGEST_CACHE.get(trace)
     except TypeError:
