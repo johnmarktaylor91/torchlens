@@ -62,11 +62,35 @@ __all__ = [
     "has_detached_saved_activations",
     "propagate_detached_saved_activation",
     "detached_saved_activation_label",
+    "DescriptorCompatProperty",
 ]
 
 
 class TorchLensMeta:
     """Branded base for TorchLens-owned ``._tl`` metadata."""
+
+
+class DescriptorCompatProperty(property):
+    """A ``property`` that can carry ``__objclass__`` like the C descriptor it replaces.
+
+    A plain ``property`` has no ``__dict__`` and refuses an ``__objclass__``
+    assignment (it is a slots-only builtin type), unlike the ``getset_descriptor``
+    / autograd-property it replaces on ``torch.Tensor`` at several sites
+    (wrappers.py's ``Tensor.real``/``imag`` rewrap, the completeness-witness
+    ``requires_grad``/``grad_fn``/``is_leaf`` recording properties, the
+    invisible-escape and structure-only-belt escalated properties). Third-party
+    introspection over ``torch.Tensor``'s own attributes may assume every
+    property-shaped member is a genuine descriptor with ``__objclass__`` and
+    access it unconditionally (observed: torch 2.7.1's dynamo import-time
+    ``populate_builtin_to_tensor_fn_map`` / ``is_tensor_base_attr_getter`` raises
+    ``AttributeError: 'property' object has no attribute '__objclass__'`` the
+    first time it runs after ANY of these replacements is installed). Every
+    site that replaces a Tensor-level descriptor with a ``property`` should use
+    this subclass and set ``__objclass__`` (normally ``torch.Tensor``) so the
+    replacement stays a faithful stand-in on every torch version.
+    """
+
+    __slots__ = ("__objclass__",)
 
 
 @dataclass

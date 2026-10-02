@@ -68,6 +68,7 @@ from ._modes import SubclassConstructionUnderDispatchModeError, pause_own_dispat
 from ._op_markers import _pop_op_markers, _push_op_markers
 from ._tl import (
     _DETACHED_ACTIVATION_PROPAGATION_FUNCS,
+    DescriptorCompatProperty,
     get_param_meta,
     get_tensor_label,
     has_detached_saved_activations,
@@ -2804,25 +2805,6 @@ def _stamp_wrapper_provenance(
         pass
 
 
-class _DescriptorCompatProperty(property):
-    """A ``property`` that can carry ``__objclass__`` like the C descriptor it replaces.
-
-    A plain ``property`` has no ``__dict__`` and refuses an ``__objclass__``
-    assignment (it is a slots-only builtin type), unlike the ``getset_descriptor``
-    it replaces below, which always carries one. Third-party introspection over
-    ``torch.Tensor``'s own attributes may assume every property-shaped member is a
-    genuine descriptor with ``__objclass__`` and access it unconditionally (observed:
-    torch 2.7.1's dynamo import-time ``populate_builtin_to_tensor_fn_map`` raises
-    ``AttributeError: 'property' object has no attribute '__objclass__'`` the first
-    time it runs after TorchLens has replaced a getset descriptor such as
-    ``Tensor.real``/``Tensor.imag``). This subclass adds the one slot so the
-    replacement stays a more faithful stand-in for the descriptor it displaced,
-    independent of which torch version is running.
-    """
-
-    __slots__ = ("__objclass__",)
-
-
 def _decorate_torch_func_pairs(func_pairs: list[tuple[str, str]]) -> None:
     """Collect argument names, then decorate one batch of torch func targets.
 
@@ -2921,7 +2903,7 @@ def _decorate_torch_func_pairs(func_pairs: list[tuple[str, str]]) -> None:
             mark_decorated_function(getter_dec)
             mark_decorated_function(setter_dec)
             mark_decorated_function(deleter_dec)
-            new_property = _DescriptorCompatProperty(
+            new_property = DescriptorCompatProperty(
                 getter_dec, setter_dec, deleter_dec, doc=func_name
             )
             new_property.__objclass__ = getattr(

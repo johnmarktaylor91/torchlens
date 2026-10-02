@@ -55,7 +55,7 @@ import torch
 from ... import _state
 from ...errors._base import TorchLensError
 from ...utils._torch_symbols import torch_attr
-from ._tl import get_tensor_label
+from ._tl import DescriptorCompatProperty, get_tensor_label
 from .completeness_witness import (
     _TORCHLENS_ROOT,
     HOST_VALUE_ESCAPE_METHODS,
@@ -289,7 +289,9 @@ def _make_escalated_property(descriptor: Any, state: _StructureOnlyBeltState, na
         _maybe_refuse_escape(state, name, self)
         return descriptor.__get__(self, type(self))
 
-    return property(getter)
+    replacement = DescriptorCompatProperty(getter)
+    replacement.__objclass__ = getattr(descriptor, "__objclass__", torch.Tensor)
+    return replacement
 
 
 def _install_method_belt(

@@ -17,6 +17,7 @@ from ... import _state
 # value binding never sees runtime capability flips).
 from ...utils import _torch_compat
 from ...utils._torch_symbols import torch_attr
+from ._tl import DescriptorCompatProperty
 
 if TYPE_CHECKING:
     from .completeness_witness import (
@@ -327,7 +328,9 @@ def _make_input_metadata_grad_property(
         """
         descriptor.__set__(self, value)
 
-    return property(getter, setter if has_setter else None)
+    replacement = DescriptorCompatProperty(getter, setter if has_setter else None)
+    replacement.__objclass__ = getattr(descriptor, "__objclass__", torch.Tensor)
+    return replacement
 
 
 @contextmanager
