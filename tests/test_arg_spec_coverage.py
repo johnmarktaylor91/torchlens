@@ -236,7 +236,6 @@ _KNOWN_UNSUPPORTED_ARG_SPEC_REASONS = {
     "standardgammagrad": "demoted fragment: schema mismatch: missing_positions=[], extra_positions=[1], missing_names=[]",
     "symite": "Python/operator protocol helper with nonstandard callable metadata",
     "symsqrt": "Python/operator protocol helper with nonstandard callable metadata",
-    "symsum": "Python/operator protocol helper with nonstandard callable metadata",
     "testautogradmultipledispatch": "autograd/backward helper left on dynamic fallback pending gradient schema audit",
     "testautogradmultipledispatchview": "autograd/backward helper left on dynamic fallback pending gradient schema audit",
     "testautogradmultipledispatchviewcopy": "autograd/backward helper left on dynamic fallback pending gradient schema audit",
