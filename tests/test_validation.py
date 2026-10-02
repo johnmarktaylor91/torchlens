@@ -37,6 +37,7 @@ from torchlens.validation import (
     ValidationDiagnostic,
     check_metadata_invariants,
     get_validation_diagnostics,
+    get_validation_failure,
     validate_forward_pass,
 )
 from torchlens.validation.core import (
@@ -1634,6 +1635,65 @@ def test_unsnapshotable_attr_fails_closed_before_validation() -> None:
         "skipping restoration for this attribute only" in str(item.message) for item in caught
     )
     assert any("cannot prove model-state restoration" in str(item.message) for item in caught)
+
+
+def test_unsnapshotable_attr_early_refusal_is_not_a_bare_false() -> None:
+    """An early precondition refusal (before any Trace exists) is still diagnosable.
+
+    ``_validate_forward_pass_torch`` can return bare ``False`` from several
+    early-refusal sites (unsnapshotable plain attrs, an unreproducible input
+    topology, a non-pristine ground truth, a dropped-output enumeration
+    defect) that all run BEFORE Step 2 builds a ``Trace``. The structured
+    ``ValidationFailure`` side channel (``record_validation_failure`` /
+    ``get_validation_failure``) is keyed off a live ``Trace``, so a caller
+    that only reads ``get_validation_failure(trace)`` saw nothing for these
+    and fell back to an uninformative ``repr(False)`` (menagerie's
+    ``convit_*`` "replay failed (False)" rows). ``get_validation_failure(None)``
+    must now surface the same precondition reason via the process-level
+    ``last_validation_failure()`` side channel.
+    """
+
+    class LockBackedToggle(nn.Module):
+        """Stateful model with one unsnapshotable but unused lock."""
+
+        def __init__(self) -> None:
+            """Initialize the lock and branch counter."""
+
+            super().__init__()
+            self.lock = threading.Lock()
+            self.step = 0
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Change graph shape after the first execution."""
+
+            output = x + 1 if self.step == 0 else x * 2
+            self.step += 1
+            return output
+
+    observed_traces: list[Any] = []
+
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        result = user_public_impls._validate_forward_pass_torch(
+            LockBackedToggle(),
+            torch.randn(3),
+            _trace_observer=observed_traces.append,
+        )
+
+    assert result is False
+    failure = get_validation_failure(None)
+    assert failure is not None
+    assert "cannot prove model-state restoration" in failure.summary()
+
+    # The caller-shaped regression (menagerie's convit_* "replay failed
+    # (False)" rows): a real caller never polls get_validation_failure(None)
+    # directly, it reads the failure INSIDE its own _trace_observer callback
+    # (passed trace=None at this early-exit site), the same place every later
+    # mismatch is read from.
+    assert observed_traces == [None]
+    observer_read_failure = get_validation_failure(observed_traces[0])
+    assert observer_read_failure is not None
+    assert "cannot prove model-state restoration" in observer_read_failure.summary()
 
 
 def test_uncopyable_opaque_branch_state_fails_closed() -> None:
