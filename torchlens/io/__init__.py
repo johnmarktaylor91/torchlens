@@ -86,13 +86,24 @@ def detect_tlspec_format(path: str | Path) -> str:
             # died on the absent spec.json with an untyped FileNotFoundError
             # (R73) instead of falling through to the typed manifest refusal.
             return "v2.16_intervention_with_kind"
+        if has_tlspec_version:
+            # `tlspec_version` is itself a tlspec-schema-only marker: the
+            # genuine pre-tlspec v2.16 ModelLog format never carried it (it
+            # used `io_format_version`/`n_activation_blobs` instead, matched
+            # below). A manifest with `tlspec_version` but no `kind` is an
+            # older-but-still-modern unified manifest (or one whose `kind`
+            # was lost) -- route it through v2.0_unified so the REAL numeric
+            # `tlspec_version` floor check applies. The former fallthrough
+            # here misrouted exactly this shape into the legacy
+            # ArtifactVersionBelowFloorError path with a "pre-tlspec
+            # ModelLog format" message that is false for a tlspec-schema
+            # artifact (R73 fast-tier fuzz finding, 2026-10).
+            return "v2.0_unified"
 
     spec = _read_json_object_if_present(tlspec_path / "spec.json")
     if spec is not None and "format_version" in spec:
         return "v2.16_intervention"
 
-    if manifest is not None and "tlspec_version" in manifest:
-        return "v2.16_modellog_portable"
     if (
         manifest is not None
         and "io_format_version" in manifest
