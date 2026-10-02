@@ -10,6 +10,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.distributed import has_vetted_snapshot
 
 
 class DdpModel(nn.Module):
@@ -76,12 +77,29 @@ def process_group(tmp_path: Path) -> Iterator[None]:
         _teardown_process_group(created)
 
 
+def _record_under_group(*args: object, **kwargs: object):
+    """Call tl.fastlog.record, expecting the unvetted-torch disclosure.
+
+    Capturing under a genuinely initialized process group lazily arms
+    collective capture; on a census-vetted torch build that is silent, and on
+    an unvetted build (F1, Lead ruling 2026-10-01) it degrades and warns on
+    every capture entry -- the correct, honest product behavior (see
+    test_distributed_boundary_gloo.py::TestUnvettedTorchRefusesArming), not a
+    gap to route around.
+    """
+
+    if has_vetted_snapshot():
+        return tl.fastlog.record(*args, **kwargs)
+    with pytest.warns(UserWarning, match="uncaptured_collective_op"):
+        return tl.fastlog.record(*args, **kwargs)
+
+
 def test_ddp_wrapped_model_records_unwrapped_module(process_group: None) -> None:
     """This exercises only the unwrapped .module, NOT DDP forward semantics."""
 
     ddp_model = torch.nn.parallel.DistributedDataParallel(DdpModel())
 
-    recording = tl.fastlog.record(ddp_model, torch.ones(1, 2), default_op=True)
+    recording = _record_under_group(ddp_model, torch.ones(1, 2), default_op=True)
 
     assert len(recording) > 0
 
@@ -92,7 +110,7 @@ def test_ddp_bundle_path_gets_rank_prefix(process_group: None, tmp_path: Path) -
     ddp_model = torch.nn.parallel.DistributedDataParallel(DdpModel())
     requested = tmp_path / "bundle.tlfast"
 
-    recording = tl.fastlog.record(
+    recording = _record_under_group(
         ddp_model,
         torch.ones(1, 2),
         default_op=True,
@@ -103,6 +121,11 @@ def test_ddp_bundle_path_gets_rank_prefix(process_group: None, tmp_path: Path) -
     assert (tmp_path / "rank_00" / "bundle.tlfast" / "manifest.json").exists()
 
 
+@pytest.mark.skipif(
+    not has_vetted_snapshot(),
+    reason="full collective arming requires a census-vetted torch build "
+    "(torchlens.distributed.has_vetted_snapshot() is False here)",
+)
 def test_process_group_teardown_disarms_distributed_capture(process_group: None) -> None:
     """A capture under the group arms distributed capture; teardown must disarm it.
 
