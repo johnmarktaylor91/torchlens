@@ -1,0 +1,2 @@
+# Test planner tools; keep production dependencies in pyproject.toml.
+pytest-split==0.10.0

@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "project": "torchlens",
+  "command": [
+    "uv",
+    "run",
+    "--python",
+    "3.12",
+    "--with-requirements",
+    "requirements-test-tiers.txt",
+    "--with-editable",
+    ".[dev,test,tabular]",
+    "python",
+    "-m",
+    "pytest"
+  ],
+  "inner": {
+    "seconds": 120,
+    "cpus": 1,
+    "args": [
+      "-o",
+      "addopts=",
+      "-x",
+      "--tb=short"
+    ],
+    "map": {
+      "torchlens/visualization/themes.py": [
+        "tests/test_themes.py"
+      ],
+      "torchlens/visualization/theme_registry.py": [
+        "tests/test_themes.py"
+      ]
+    }
+  },
+  "pre_merge": {
+    "seconds": 1800,
+    "shards": 3,
+    "cpus": 1,
+    "args": [
+      "tests/",
+      "-o",
+      "addopts=",
+      "-m",
+      "not rare and not slow",
+      "--splits",
+      "{shards}",
+      "--group",
+      "{shard}",
+      "--splitting-algorithm",
+      "least_duration",
+      "--randomly-seed=20261002",
+      "--tb=short"
+    ]
+  },
+  "ci": {
+    "provider": "github-actions",
+    "workflows": [
+      "tests.yml",
+      "nightly.yml",
+      "weekly.yml",
+      "latest-canary.yml",
+      "mutation.yml"
+    ],
+    "scope": "Full supported-version matrix, slow/rare tests and mutation campaigns; no local rerun after an unchanged passing result.",
+    "budget_minutes_per_job": 60,
+    "status": "Existing workflows; full branch triggers and timeout enforcement require separate CI integration."
+  },
+  "notes": [
+    "Use test-tier inner --changed PATH or --test tests/file.py::test_name. Unmapped changes require reviewed targets; no automatic full-suite fallback.",
+    "Budgets are aggregate worker command seconds, including uv setup: inner 120; pre_merge 3 x 600. Timeout is incomplete validation, never success.",
+    "Linux workers need uv, Python 3.12 provisioning and Graphviz for rendering tests. Dependency resolution failures are environment failures, not test passes.",
+    "Keep one process per shard until deterministic collection and xdist duration aggregation fixes are integrated. Shards share one seed and source revision.",
+    "Pre_merge excludes slow/rare only; CI retains them. No coverage claim for the inner selection. Existing baseline failures remain release blockers.",
+    "Map is deliberately partial; extend it with verified dependency knowledge. A test-only change selects that test file directly."
+  ]
+}
