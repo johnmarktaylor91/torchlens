@@ -2310,6 +2310,12 @@ def test_taskonomy(default_input1):
 @pytest.mark.slow
 def test_dimenet():
     torch_geometric_nn = pytest.importorskip("torch_geometric.nn")
+    # DimeNet's forward calls radius_graph(), which torch_geometric routes
+    # through the optional compiled pyg-lib extension; pyg-lib is not in
+    # pyproject.toml's declared test deps (notoriously hard to install, no
+    # pure-torch fallback torch_geometric ships here), so no CI leg installs
+    # it. Genuinely absent optional dependency, not a capture bug.
+    pytest.importorskip("pyg_lib")
     DimeNet = torch_geometric_nn.DimeNet
     model = DimeNet(6, 3, 4, 2, 6, 3)
     z = torch.tensor([6, 1, 1, 1, 1])
