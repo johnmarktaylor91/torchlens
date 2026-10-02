@@ -176,6 +176,32 @@ def test_r45_every_tensor_getset_descriptor_is_classified() -> None:
         assert name in denied, f"a denied property was wrongly admitted: {name}"
 
 
+def test_r45_wrapped_getset_descriptor_carries_objclass() -> None:
+    """Every TorchLens-wrapped Tensor property still exposes ``__objclass__``.
+
+    torch 2.7.1's dynamo import-time ``populate_builtin_to_tensor_fn_map`` walks
+    ``torch.Tensor``'s own members and accesses ``__objclass__`` unconditionally on
+    every property-shaped one, raising ``AttributeError: 'property' object has no
+    attribute '__objclass__'`` the moment it reaches a getset descriptor (e.g.
+    ``Tensor.real``) that TorchLens had already replaced with a bare ``property``
+    (a bug independent of whether anything is actively capturing). The replacement
+    must keep carrying ``__objclass__`` like the descriptor it displaced.
+    """
+
+    # wrap_torch() installs lazily on first capture; conftest's session warmup
+    # already paid this cost, but trigger (and clean up) one here too so the
+    # test is self-contained regardless of fixture/collection order.
+    tl.trace(torch.nn.Linear(2, 2), torch.zeros(1, 2)).cleanup()
+    for name in _iter_tensor_getset_descriptor_names():
+        member = torch.Tensor.__dict__.get(name)
+        if not isinstance(member, property):
+            continue  # an untouched getset_descriptor; nothing to check here.
+        assert hasattr(member, "__objclass__"), (
+            f"Tensor.{name} was replaced by a property with no __objclass__"
+        )
+        assert member.__objclass__ is torch.Tensor
+
+
 def test_r45_shipped_pure_view_predicate_agrees_with_shipped_set() -> None:
     """The shipped ``_pure_view`` predicate agrees with the shipped canonical set.
 
