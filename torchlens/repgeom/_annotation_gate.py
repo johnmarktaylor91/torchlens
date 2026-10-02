@@ -207,7 +207,10 @@ def _commit_annotation_tensors(trace: Any, staged: OrderedDict[str, torch.Tensor
             "Tensor annotation blobs are supported only for torch traces in this "
             f"release; this trace uses backend={backend_name!r}."
         )
-    validate_tensor = getattr(trace, "_validate_annotation_tensor", None)
+    try:
+        validate_tensor = trace._validate_annotation_tensor
+    except AttributeError:
+        validate_tensor = None
     if not callable(validate_tensor):
         raise ValueError("trace does not support validated tensor annotation blobs.")
     for key, tensor in staged.items():
@@ -217,11 +220,18 @@ def _commit_annotation_tensors(trace: Any, staged: OrderedDict[str, torch.Tensor
                 f"key {key!r} staged {type(tensor).__name__}."
             )
         validate_tensor(tensor)
-    if getattr(trace, "_annotation_blobs", None) is None:
+    try:
+        blobs_absent = trace._annotation_blobs is None
+    except AttributeError:
+        blobs_absent = True
+    if blobs_absent:
         trace._annotation_blobs = {}
     for key, tensor in staged.items():
         trace._annotation_blobs[key] = tensor
-    mark_mutated = getattr(trace, "_mark_annotations_mutated", None)
+    try:
+        mark_mutated = trace._mark_annotations_mutated
+    except AttributeError:
+        mark_mutated = None
     if callable(mark_mutated):
         mark_mutated()
 
