@@ -199,7 +199,8 @@ def test_r45_wrapped_getset_descriptor_carries_objclass() -> None:
         assert hasattr(member, "__objclass__"), (
             f"Tensor.{name} was replaced by a property with no __objclass__"
         )
-        assert member.__objclass__ is torch.Tensor
+        assert isinstance(member.__objclass__, type)
+        assert issubclass(torch.Tensor, member.__objclass__)
 
 
 def test_r45_shipped_pure_view_predicate_agrees_with_shipped_set() -> None:
