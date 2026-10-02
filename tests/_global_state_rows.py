@@ -419,6 +419,12 @@ _CAPABILITY_PROBE_STATE = frozenset(
         ("torchlens/utils/_torch_compat.py", "_CPU_FLOAT8_DETERMINISTIC_FILL_PROBED"),
         ("torchlens/utils/_torch_compat.py", "HAS_META_ITEM_GUARD"),
         ("torchlens/utils/_torch_compat.py", "_META_ITEM_GUARD_PROBED"),
+        # ratchet2 ci-fix (2026-10-01): the MHA fastpath-switch probe joined
+        # the lazy pattern (was eager at import, tripping the import-hygiene
+        # duration budget on the torch>=2.1 floor's py3.10 leg); same shape
+        # as every other row in this class.
+        ("torchlens/utils/_torch_compat.py", "HAS_MHA_FASTPATH_SWITCH"),
+        ("torchlens/utils/_torch_compat.py", "_MHA_FASTPATH_SWITCH_PROBED"),
     }
 )
 """Feature-detection memos for the running torch build.
