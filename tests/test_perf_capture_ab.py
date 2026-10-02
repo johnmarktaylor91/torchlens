@@ -469,11 +469,97 @@ def test_fast_tier_floor_decode_reference() -> None:
     )
 
 
+def _git_sha() -> str:
+    """Return the current commit SHA, or ``"unknown"`` when unavailable."""
+
+    import subprocess
+
+    try:
+        return subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=Path(__file__).parent,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+
+
+def _write_baseline(small_capture: dict[str, dict[str, float]], reason: str) -> None:
+    """Write ``capture_ab_baseline.json`` from a measured ``small_capture`` payload."""
+
+    payload: dict[str, Any] = {
+        "context": load_context(),
+        "statistic": SMALL_CAPTURE_STATISTIC,
+        "sha": _git_sha(),
+        "small_capture": small_capture,
+        "rebaseline_reason": reason,
+        "rebaselined": time.strftime("%Y-%m-%d"),
+    }
+    BASELINE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    BASELINE_PATH.write_text(json.dumps(payload, indent=2) + "\n")
+
+
+#: Opt-in env vars for the pytest-native baseline writer below. Never armed in
+#: CI (a plain presence check, not the "1"-only arming convention other
+#: golden-mutation flags use, since this baseline is not part of the
+#: GOLDEN_FLAG_REGISTRY/_oracle_env governance -- it is gated by its own
+#: required reason instead).
+WRITE_BASELINE_ENV_VAR = "TORCHLENS_PERF_AB_WRITE_BASELINE"
+WRITE_BASELINE_REASON_ENV_VAR = "TORCHLENS_PERF_AB_REASON"
+
+
+@pytest.mark.skipif(
+    os.environ.get(WRITE_BASELINE_ENV_VAR) != "1",
+    reason=(
+        f"opt-in baseline writer; set {WRITE_BASELINE_ENV_VAR}=1 and "
+        f"{WRITE_BASELINE_REASON_ENV_VAR}=... at a declared re-baselining point"
+    ),
+)
+def test_write_baseline_under_pytest() -> None:
+    """Record ``capture_ab_baseline.json`` from INSIDE pytest (opt-in, never CI).
+
+    ``main()``'s ``--write-baseline`` runs this file as a bare script with
+    none of pytest's fixtures or collection overhead; on a 32-core Linux worker
+    (2026-10-02), ``test_small_capture_overhead_within_gate`` measured trace
+    floors ~14-20% HIGHER under pytest than a same-box bare-script
+    recording taken moments earlier, with the box's load average near zero
+    both times -- a baseline written outside pytest fails the pytest-gated
+    comparison unconditionally, independent of any real regression. This
+    test performs the SAME pooled measurement and write (``repeats=3``,
+    matching ``main()``'s default) from inside pytest, so the recorded
+    floor matches the gate's actual runtime.
+    """
+
+    reason = os.environ.get(WRITE_BASELINE_REASON_ENV_VAR)
+    if not reason:
+        pytest.fail(
+            f"set {WRITE_BASELINE_REASON_ENV_VAR} (declared re-baselining point); "
+            "refusing to write an undocumented baseline"
+        )
+    _require_quiet_box("before an opt-in baseline write")
+    _write_baseline(pooled_capture_overhead_rows(), reason)
+    print(f"baseline written: {BASELINE_PATH}")
+
+
 def main() -> None:
-    """Measurement/report pass: print all rows, optionally refresh baseline."""
+    """Measurement/report pass: print all rows, optionally refresh baseline.
+
+    ``--write-baseline`` here runs as a BARE SCRIPT, with none of pytest's
+    fixtures or collection overhead. Measured on a 32-core Linux worker (2026-10-02): the
+    same box's trace floor runs measurably (~14-20%) higher under pytest
+    than a bare-script recording taken moments earlier, both at a near-zero
+    load average, so a baseline recorded this way can fail
+    ``test_small_capture_overhead_within_gate`` unconditionally, independent
+    of any real regression. Prefer the pytest-native writer instead:
+    ``TORCHLENS_PERF_AB_WRITE_BASELINE=1 TORCHLENS_PERF_AB_REASON="..." pytest
+    tests/test_perf_capture_ab.py::test_write_baseline_under_pytest -m rare``.
+    This CLI path stays for quick diagnostics (``--skip-small``,
+    ``--decode-model``) where an exact pytest-floor match does not matter.
+    """
 
     import argparse
-    import subprocess
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--decode-model", default=os.environ.get("TL_PERF_AB_DECODE_MODEL"))
@@ -491,32 +577,11 @@ def main() -> None:
     if args.write_baseline and not args.reason:
         raise SystemExit("--write-baseline requires --reason (declared re-baselining point)")
 
-    # Match the gate's ambient state: tests/conftest.py's autouse
-    # _reset_rng_state fixture forces torch.use_deterministic_algorithms(True)
-    # for every pytest test, test_small_capture_overhead_within_gate included,
-    # but this script has no pytest fixtures when run standalone for a
-    # baseline write. Measured here (2026-10-02, a 32-core Linux worker): recording without
-    # this forced the trace floor ~14% BELOW what the same box measures under
-    # pytest's deterministic-algorithms-on state, so an apples-to-script
-    # baseline failed the apples-to-pytest gate every time, independent of
-    # any real regression. Forcing it here makes the two measurement
-    # conditions match.
-    torch.use_deterministic_algorithms(True)
-
     payload: dict[str, Any] = {
         "context": load_context(),
         "statistic": SMALL_CAPTURE_STATISTIC,
+        "sha": _git_sha(),
     }
-    try:
-        payload["sha"] = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            cwd=Path(__file__).parent,
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout.strip()
-    except (OSError, subprocess.CalledProcessError):
-        payload["sha"] = "unknown"
 
     if not args.skip_small:
         if args.write_baseline:
