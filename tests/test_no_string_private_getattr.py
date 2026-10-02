@@ -138,7 +138,13 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # 124 -> 123 (2026-08-17 privprobes reconcile, d4a2b8a6): the standalone
     # `_warned_implicit_backward_pass` read in tensor_tracking.py was
     # discharged by the one-shot-warning consolidation into `_warned_once`.
-    "backends/torch": 123,
+    # 123 -> 116 (fast2 ci-fix reconcile): nine sites from the F01
+    # injection/offload-shim/FLIP-2 lanes converted to direct private reads
+    # or a shared `peek_*` seam (buffer_writes.py's
+    # `peek_buffer_write_tracker`, now reused by six call sites that were
+    # each a separate string reach-in before this reconcile, net -7 there
+    # alone), discharging all nine new sites plus six pre-existing ones.
+    "backends/torch": 116,
     "bridge": 1,
     "bundle": 1,
     # 20 -> 22 (2026-08-16 l2 episode, f2228f46 S7 suite): the episode
@@ -151,7 +157,11 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # projector): projectors.py reads `module_training_modes` through the
     # optional `_runnable` seam (f2bc65a6 idiom); absent on never-run traces,
     # so the empty-modes default is the correct "no recorded modes" reading.
-    "capture": 23,
+    # 23 -> 21 (fast2 ci-fix reconcile): the episode-failed/nonfinite-prefix/
+    # peak-memory sites converted to direct private reads guarded by
+    # try/except AttributeError, net -2 after the new episode/peak-memory
+    # additions.
+    "capture": 21,
     # 25 -> 27 (2026-08-14 fix-wave reconcile, 7f90a885 fix/walkers): the
     # linear ordinal_index cache keys its per-trace memo on the session-time
     # `_backward_projection_revision` counter in grad_fn_call.py (x2); absent
@@ -172,14 +182,22 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # snapshot-restore): _trace_validation.py reads the state-compromised
     # latch through the optional `_runnable` seam; absent means no prior
     # run() ever latched, so the None default correctly passes the gate.
-    "data_classes": 32,
+    # 32 -> 25 (fast2 ci-fix reconcile): _op_dedup.py's seven dedup-cache
+    # reach-ins (getattr + setattr) and _trace_validation.py's new
+    # `_loaded_from_bundle` read converted to direct private reads guarded
+    # by try/except AttributeError.
+    "data_classes": 25,
     "experimental": 1,
     "fastlog": 2,
     # 43 -> 44 (2026-08-17 privprobes reconcile, d4a2b8a6 one-shot-warning
     # consolidation): the replay.py refresh scrub discards one key from the
     # consolidated `_warned_once` set; absent on traces that never warned, so
     # the empty-set default is the correct "nothing to discard" reading.
-    "intervention": 44,
+    # 44 -> 41 (fast2 ci-fix reconcile): the F01 injection-state reads across
+    # injection.py/runtime.py/_module_boundary.py/_ops_interventions.py
+    # (backends/torch) converted to the shared `peek_injection_state` seam
+    # or a direct read guarded by try/except AttributeError.
+    "intervention": 41,
     "ir": 2,
     # 5 -> 8 (2026-08-16 l2/l3 merge-gate reconcile, 5f0a4f8d aten wave 0):
     # _primitive_profile.py reads the optional DROP-gated
@@ -189,7 +207,12 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     "postprocess": 8,
     "report": 1,
     # 7 -> 6 (2026-08-14 fixwave-2 reconcile): one reach-in discharged upstream.
-    "repgeom": 6,
+    # 6 -> 0 (fast2 ci-fix reconcile): every repgeom reach-in (the
+    # `_annotation_blobs`/`_validate_annotation_tensor`/
+    # `_mark_annotations_mutated` trio across _annotation_gate.py,
+    # _node_visuals.py, and _trace_views.py) converted to direct private
+    # reads guarded by try/except AttributeError; no row left to hold --
+    # same zero-row convention as a package that never had a reach-in.
     # 0 -> 2 (2026-08-14 fixwave-2 reconcile, R40 viz hardening): the shared
     # `_visualizer_dir` scratch-dir helpers moved into utils/display.py; the
     # attribute is genuinely optional session state (absent until the first
