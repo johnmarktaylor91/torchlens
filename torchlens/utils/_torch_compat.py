@@ -2253,6 +2253,16 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # instead of value_dependent_branch_unsupported -- a healthy old
         # install classified by the honest alternate path, not a degradation.
         "HAS_META_ITEM_GUARD",
+        # torch.distributed._functional_collectives._resolve_group /
+        # torch.distributed.distributed_c10d._resolve_process_group (funcol
+        # group resolution, merge-ranks C2 recording) are torch-private
+        # surfaces absent on torch 2.7.1 specifically (measured on the
+        # nightly fast-tier leg, 2026-10-02) though present on both the
+        # declared torch>=2.1 floor's neighbors and the canonical/newest
+        # pins: a healthy install with nothing to shim -- captured funcol
+        # calls refuse typed instead of recording correlated boundary nodes,
+        # the same honest degradation every other optional probe here takes.
+        "HAS_FUNCOL_GROUP_RESOLUTION",
     }
 )
 """Capability flags whose ``False`` is an absent OPTIONAL feature, not a degradation.
