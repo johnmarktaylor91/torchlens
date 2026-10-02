@@ -364,6 +364,27 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         refuses="the DIVIDEND operand, keyed off parent_arg_positions not tensor equality",
     ),
     Exemption(
+        code="sdpa_zero_query_uniform_attention",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation.exemptions:_sdpa_zero_query_decision",
+        refuses=(
+            "a non-zero (or NaN/Inf-bearing) saved query, and a perturbed query or "
+            "value operand -- both genuinely influence sdpa's output even when query "
+            "is zero, so only the key operand is ever exempted"
+        ),
+    ),
+    Exemption(
+        code="softmax_singleton_reduction_dim",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation.exemptions:_softmax_singleton_dim_decision",
+        refuses=(
+            "a reduction dimension with more than one element, and a perturbed parent "
+            "other than softmax's own (sole) logits input"
+        ),
+    ),
+    Exemption(
         code="locally_constant_by_construction",
         tier="posthoc",
         contract="C2 perturbation sensitivity",

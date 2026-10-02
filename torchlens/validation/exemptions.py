@@ -2469,6 +2469,14 @@ def _posthoc_value_proof_decision(
         decision = _matmul_zero_annihilator_decision(layer, layers_to_perturb, args)
         if decision.exempt:
             return decision
+    if layer.func_name == "scaled_dot_product_attention" and len(args) > 2:
+        decision = _sdpa_zero_query_decision(layer, layers_to_perturb, args)
+        if decision.exempt:
+            return decision
+    if layer.func_name in {"softmax", "_softmax"} and len(args) > 0:
+        decision = _softmax_singleton_dim_decision(layer, layers_to_perturb, args)
+        if decision.exempt:
+            return decision
     if layer.func_name == "linear" and len(args) > 1:
         decision = _linear_zero_weight_input_decision(layer, layers_to_perturb, args)
         if decision.exempt:
@@ -2812,6 +2820,131 @@ def _multiplicative_zero_annihilator_decision(
             f"non-perturbed multiplication operand at args[{other_position}] is all zero",
         )
     return PosthocPerturbDecision(False, "not_multiplicative_zero_annihilator")
+
+
+def _sdpa_zero_query_decision(
+    layer: Op,
+    layers_to_perturb: list[str],
+    args: tuple[Any, ...],
+) -> PosthocPerturbDecision:
+    """Return a proof decision for sdpa's key operand under a zero query.
+
+    ``scaled_dot_product_attention(query, key, value)`` computes
+    ``softmax(query @ key.transpose(-2, -1) / sqrt(head_dim)) @ value``. When
+    ``query`` is provably all-zero, every row of ``query @ key.transpose(-2, -1)``
+    is exactly zero regardless of ``key``, so the softmax is exactly uniform
+    regardless of ``key`` and the output reduces to an unweighted average of
+    ``value`` -- the perturbed ``key`` operand provably cannot influence the
+    output, the same zero-annihilator shape already proved for
+    ``mul``/``addcmul``/batch_norm's weight, applied here to sdpa's query
+    operand instead.
+
+    Several ViT/CaiT-style class-attention implementations (including
+    menagerie's compact CaiT reimplementation) zero-initialize the class
+    token and rely on ``nn.MultiheadAttention``'s zero-initialized
+    ``in_proj_bias``, so the FIRST class-attention block's query is exactly
+    zero at random init for any input, not a synthetic edge case.
+
+    A perturbed ``query`` (args[0]) or ``value`` (args[2]) is out of scope
+    here and stays strict: both genuinely influence sdpa's output even when
+    query is zero (perturbing query away from zero changes the attention
+    weights; perturbing value always changes the weighted/unweighted
+    average).
+
+    Parameters
+    ----------
+    layer:
+        ``scaled_dot_product_attention`` op whose unchanged perturbed replay
+        is being classified.
+    layers_to_perturb:
+        Parent labels selected for perturbation.
+    args:
+        Saved positional arguments for ``layer`` (``query, key, value, ...``).
+
+    Returns
+    -------
+    PosthocPerturbDecision
+        Exempt decision when the perturbed parent is the key operand and the
+        saved query is provably all-zero, otherwise non-exempt.
+    """
+
+    if len(layers_to_perturb) != 1:
+        return PosthocPerturbDecision(False, "not_sdpa_zero_query")
+    arg_positions = layer.parent_arg_positions.get("args", {})
+    perturbed_label = layers_to_perturb[0]
+    if arg_positions.get(1) != perturbed_label:
+        return PosthocPerturbDecision(False, "not_sdpa_zero_query")
+    query = args[0] if len(args) > 0 else None
+    if not _is_all_zero_value(query):
+        return PosthocPerturbDecision(False, "not_sdpa_zero_query")
+    return PosthocPerturbDecision(
+        True,
+        "sdpa_zero_query_uniform_attention",
+        "saved query is all zero: softmax(query @ key^T) is exactly uniform regardless "
+        "of key, so the key operand cannot influence sdpa's output",
+    )
+
+
+def _softmax_singleton_dim_decision(
+    layer: Op,
+    layers_to_perturb: list[str],
+    args: tuple[Any, ...],
+) -> PosthocPerturbDecision:
+    """Return a proof decision for softmax reduced over a size-1 dimension.
+
+    ``softmax(x)_i = exp(x_i) / sum_j exp(x_j)``: when the reduction dimension
+    has exactly one element, this collapses to ``exp(x_0) / exp(x_0) == 1``
+    for ANY finite ``x_0`` -- a shape-based identity, not a magnitude
+    heuristic, and true regardless of the logits' actual values or training
+    state (unlike the zero-annihilator exemptions, it never depends on a
+    weight staying exactly zero).
+
+    timm's ``csatv2`` family computes channel self-attention with a trivial
+    single-key dimension; every ``softmax`` op in a freshly constructed
+    ``csatv2``/``csatv2_21m`` reduces over a size-1 dimension, confirmed by
+    direct introspection of the real model.
+
+    Parameters
+    ----------
+    layer:
+        ``softmax`` op whose unchanged perturbed replay is being classified.
+    layers_to_perturb:
+        Parent labels selected for perturbation.
+    args:
+        Saved positional arguments for ``layer``.
+
+    Returns
+    -------
+    PosthocPerturbDecision
+        Exempt decision when the perturbed parent is softmax's (sole) input
+        and the reduced dimension has size 1, otherwise non-exempt.
+    """
+
+    if len(layers_to_perturb) != 1:
+        return PosthocPerturbDecision(False, "not_softmax_singleton_dim")
+    arg_positions = layer.parent_arg_positions.get("args", {})
+    perturbed_label = layers_to_perturb[0]
+    if arg_positions.get(0) != perturbed_label:
+        return PosthocPerturbDecision(False, "not_softmax_singleton_dim")
+    out = getattr(layer, "out", None)
+    if not isinstance(out, torch.Tensor) or out.ndim == 0:
+        return PosthocPerturbDecision(False, "not_softmax_singleton_dim")
+    saved_kwargs = getattr(layer, "saved_kwargs", None) or {}
+    dim = saved_kwargs.get("dim")
+    if dim is None and len(args) > 1 and isinstance(args[1], int):
+        dim = args[1]
+    if dim is None:
+        dim = -1
+    if dim < -out.ndim or dim >= out.ndim:
+        return PosthocPerturbDecision(False, "not_softmax_singleton_dim")
+    if out.shape[dim] == 1:
+        return PosthocPerturbDecision(
+            True,
+            "softmax_singleton_reduction_dim",
+            f"softmax's reduction dim={dim} has size 1: softmax of a single element is "
+            "identically 1 regardless of its value",
+        )
+    return PosthocPerturbDecision(False, "not_softmax_singleton_dim")
 
 
 def _locally_constant_nan_multiplication_decision(
