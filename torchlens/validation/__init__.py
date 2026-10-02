@@ -101,6 +101,15 @@ def validate_tlspec(
         raise ValueError(f"Unrecognized TorchLens .tlspec format at {tlspec_path}.")
 
     manifest = inspect_tlspec(tlspec_path)
+    # `kind` is a ledgered legacy-manifest tolerance
+    # (test_tlspec_parse_fuzz.py _OPTIONAL_KEYS): an absent `kind` means a
+    # plain trace, the only kind that existed before the bundle/intervention
+    # discriminator, never a missing-required-field refusal. Mirrors the
+    # same default at the `_load_unified_tlspec` dispatch chokepoint
+    # (torchlens/_io/bundle.py); this reads the manifest independently
+    # (by path, not the dispatcher's in-memory dict) so the default must be
+    # applied here too.
+    manifest.setdefault("kind", "trace")
     schema_version = _manifest_schema_version(manifest)
     schema = _load_tlspec_manifest_schema(schema_version)
     _validate_manifest_against_schema(
