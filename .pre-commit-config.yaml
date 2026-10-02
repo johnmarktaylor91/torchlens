@@ -112,7 +112,8 @@ repos:
             tests/real_model/vendored/.*|
             tests/real_model/r0/expectations_r0\.json|
             tests/classics_corpus/manifest\.json|
-            tests/transforms_corpus/.*
+            tests/transforms_corpus/.*|
+            tests/fixtures/s5_render_golden_manifest\.json
           )$
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # PIN AUTHORITY: the `# vX.Y.Z` trailer MUST equal the `ruff==` pin in
