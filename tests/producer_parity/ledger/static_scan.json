@@ -3148,7 +3148,7 @@
   "field": "modules",
   "file": "torchlens/constants.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -6944,6 +6944,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "layer_type",
+  "file": "torchlens/receptive_field/_engine.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": true,
   "field": "parents",
   "file": "torchlens/receptive_field/_engine.py",
@@ -8148,7 +8156,7 @@
   "field": "modules",
   "file": "torchlens/utils/_torch_compat.py",
   "has_default": false,
-  "sites": 12,
+  "sites": 13,
   "via_getattr": false
  },
  {
@@ -8244,7 +8252,7 @@
   "field": "modules",
   "file": "torchlens/utils/rng.py",
   "has_default": false,
-  "sites": 4,
+  "sites": 5,
   "via_getattr": false
  },
  {
@@ -8662,6 +8670,14 @@
   "has_default": false,
   "sites": 1,
   "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "equivalence_class",
+  "file": "torchlens/validation/_invariants_sites.py",
+  "has_default": true,
+  "sites": 3,
+  "via_getattr": true
  },
  {
   "ambiguous": false,
