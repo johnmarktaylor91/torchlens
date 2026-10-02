@@ -526,7 +526,12 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     "torchlens/debug/_infer_input_shape.py": 2250,
     "torchlens/postprocess/ast_branches.py": 2250,
     "torchlens/visualization/_render_nodes.py": 2150,
-    "torchlens/_io/_safe_unpickle.py": 2100,
+    # 2100 -> 2150 (2026-10-02 ci-fix fast2 settle): the numpy bounded-scalar
+    # reconstructor trust fix (`fix(io): trust numpy's bounded scalar
+    # reconstructor during unpickle`) added +8 reviewed security-fix lines,
+    # landing the file at 2101. Reviewed raise with a stated reason; next
+    # 50-line step above the measurement.
+    "torchlens/_io/_safe_unpickle.py": 2150,
     "torchlens/visualization/_render_flow.py": 2100,
     # Raised 2250 -> 2300 at the A08 persistence-honesty lane (2026-08-26): the
     # +16 lines are the streamed-bundle settlement seam (WT1 A-IV item 18) --
