@@ -160,9 +160,7 @@ def test_batched_extract_memory_and_disk_on_three_architectures(
     )
     assert len(container_paths) == 2
     assert all(path.exists() for path in container_paths)
-    # The test's own just-written shard (trusted): torch>=2.6 defaults
-    # weights_only=True, which this plain Python container fails.
-    assert label in torch.load(container_paths[0], weights_only=False)
+    assert label in torch.load(container_paths[0])
 
 
 def test_list_modules_on_three_architectures(architecture: tuple[nn.Module, torch.Tensor]) -> None:
