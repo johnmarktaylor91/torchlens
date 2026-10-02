@@ -278,6 +278,20 @@ PHANTOM_WRITE_EXEMPTIONS = {
         "register_buffer, cooked recording, top-level read). Retires "
         "loudly the day a path produces one"
     ),
+    ("15", "_param_logs"): (
+        "reviewed widening (sol finding 6 in-place audit): step 15 mutates "
+        "the Param records a layer's _param_logs list already POINTS AT "
+        "(used_by_ops/used_by_layers/co_parent_params on the Param rows "
+        "themselves) rather than reassigning the Op's _param_logs column, "
+        "so the column-reassignment write audit can never observe it; the "
+        "declared write documents ownership of that mutation, not an "
+        "assignment the matrix could witness"
+    ),
+    ("16", "_param_logs"): (
+        "same in-place-mutation shape as ('15', '_param_logs'): module-log "
+        "building reads and mutates the referenced Param rows without ever "
+        "reassigning the Op's _param_logs column"
+    ),
 }
 
 #: Declared-but-never-observed READS with their named exemptions — the
