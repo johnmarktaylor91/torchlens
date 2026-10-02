@@ -1008,18 +1008,6 @@ _TORCH_RNG_STRUCTURAL_EXTRAS: tuple[tuple[str, str], ...] = (
         "torch.utils.data.graph_settings.apply_shuffle_seed",
         "deprecated alias delegating to apply_random_seed (same structural coverage)",
     ),
-    (
-        "torch.distributed.tensor.parallel.api.TensorParallelRNGTracker",
-        "tensor-parallel distributed-training RNG tracker (torch 2.2 re-export of "
-        "torch.distributed._tensor.random.TensorParallelRNGTracker, eagerly imported "
-        "by bare `import torch` on that version). Construction only READS the device "
-        "engine's state (get_rng_state); its seeding/region methods compose "
-        "set_seed -> fork_rng -> device get/set_rng_state, transiting the same "
-        "module-patched mutation rows torch.random.fork_rng already covers above. "
-        "Active tensor_parallel usage is independently refused at capture entry by "
-        "DistributedCaptureUnsupportedError (the tensor_parallel finding) before this "
-        "tracker's state could ever reach a captured forward",
-    ),
 )
 # Structural extras whose MODULE is never eagerly imported by torch or torchlens
 # (unlike every _TORCH_RNG_STRUCTURAL_EXTRAS target above, all already sitting in
@@ -1028,6 +1016,22 @@ _TORCH_RNG_STRUCTURAL_EXTRAS: tuple[tuple[str, str], ...] = (
 # happened to import the module first in the session. find_spec proves existence
 # without paying the module's own import cost (W21 cold-start guarantee).
 _TORCH_RNG_UNIMPORTED_MODULE_EXTRAS: tuple[tuple[str, str], ...] = (
+    (
+        "torch.distributed.tensor.parallel.api.TensorParallelRNGTracker",
+        "tensor-parallel distributed-training RNG tracker (torch 2.2 re-export of "
+        "torch.distributed._tensor.random.TensorParallelRNGTracker). NOT eagerly "
+        "imported by bare `import torch`/`import torchlens` -- it only lands in "
+        "sys.modules when some OTHER already-collected test imports "
+        "torch.distributed.tensor.parallel, so it belongs in this find_spec-checked "
+        "group, not the sys.modules-checked one above (the exact failure mode this "
+        "group exists to avoid). Construction only READS the device engine's state "
+        "(get_rng_state); its seeding/region methods compose "
+        "set_seed -> fork_rng -> device get/set_rng_state, transiting the same "
+        "module-patched mutation rows torch.random.fork_rng already covers above. "
+        "Active tensor_parallel usage is independently refused at capture entry by "
+        "DistributedCaptureUnsupportedError (the tensor_parallel finding) before this "
+        "tracker's state could ever reach a captured forward",
+    ),
     (
         "torch.distributed.pipeline.sync.checkpoint.restore_rng_states",
         "torch.distributed.pipeline was removed from torch (gone by the 2.3 era; only "
