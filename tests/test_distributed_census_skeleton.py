@@ -25,7 +25,21 @@ from tests.support.census_harness import (  # noqa: E402
     run_census_criterion_1,
     run_census_criterion_2,
 )
-from torchlens.distributed import _lifecycle as lifecycle  # noqa: E402
+from torchlens.distributed import (  # noqa: E402
+    _lifecycle as lifecycle,
+    has_vetted_snapshot,
+)
+
+# F1 ruling (Lead, 2026-10-01; test_distributed_census_topologies.py): full
+# collective arming only runs where a census-vetted torch build exists; on an
+# unvetted torch, arm() fails closed with UncapturedCollectiveOpError inside
+# the spawned worker, which mp.spawn re-raises as ProcessRaisedException.
+# _p2p_worker (below) arms unconditionally, so the same gate applies here.
+requires_vetted_snapshot = pytest.mark.skipif(
+    not has_vetted_snapshot(),
+    reason="full collective arming requires a census-vetted torch build "
+    "(torchlens.distributed.has_vetted_snapshot() is False here)",
+)
 
 
 class TestCensusSkeleton:
@@ -113,6 +127,7 @@ def _p2p_worker(rank: int, world_size: int, init_file: str, out_dir: str) -> Non
 
 @pytest.mark.slow
 class TestP2PChannelSim:
+    @requires_vetted_snapshot
     def test_sender_and_receiver_derive_the_same_channel(self, tmp_path):
         import torch.multiprocessing as mp
 
