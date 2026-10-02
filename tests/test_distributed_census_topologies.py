@@ -631,8 +631,14 @@ def _a3_worker(rank: int, world_size: int, init_file: str, out_dir: str) -> None
 
 
 @pytest.mark.slow
+@requires_vetted_snapshot
 class TestGroupASpawnSims:
-    """W2 spawn gloo sims -- CPU-only, sequential, RAM-preflighted."""
+    """W2 spawn gloo sims -- CPU-only, sequential, RAM-preflighted.
+
+    Both spawned workers (_a2_worker, _a3_worker) call arm() unconditionally;
+    the F1 ruling gate (see requires_vetted_snapshot above) was applied to
+    every OTHER arming class/test in this file but missed this one.
+    """
 
     def _spawn(self, worker, tmp_path, world_size: int = 2) -> list[dict]:
         import torch.multiprocessing as mp
