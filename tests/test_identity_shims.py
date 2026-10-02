@@ -538,8 +538,9 @@ class TestAsSubclassOpIdentity:
                 SubclassConstructionUnderDispatchModeError,
             )
 
-            with pytest.raises(SubclassConstructionUnderDispatchModeError):
+            with pytest.raises(SubclassConstructionUnderDispatchModeError) as excinfo:
                 tl.validation.validate_forward_pass(Model(), torch.randn(2, 3))
+            assert excinfo.value.fields["code"] == "subclass_ctor_under_dispatch_mode_unsupported"
             return
         assert tl.validation.validate_forward_pass(Model(), torch.randn(2, 3))
 
