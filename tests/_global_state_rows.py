@@ -456,10 +456,6 @@ _DIAGNOSTIC_AUDIT_STATE = frozenset(
         # test instrument read via legality_check_count(); never reset by
         # library code and never steers behavior.
         ("torchlens/visualization/_collapse_runs.py", "_LEGALITY_CHECKS"),
-        # Theme lens preset registry-as-data (C05 N12): registered at import
-        # by torchlens code, mutated only through register_lens. Ledgered by
-        # F11 paying the missed C05 governance row (red at bare tip ca622a77).
-        ("torchlens/visualization/theme_registry.py", "_REGISTRY"),
         # Last-run validation readbacks (B8-42 / R33-2): the internal
         # validation trace never escapes tl.validate, so the first failure
         # and the peak observation mirror into these slots, cleared at each
@@ -564,6 +560,10 @@ _WEAK_SUBJECT_TABLES = frozenset(
         ("torchlens/visualization/_collapse_disclosures.py", "_BUDGET_WARNED_TRACES"),
         ("torchlens/visualization/collapse_optimizer.py", "_RESULT_CACHE"),
         ("torchlens/visualization/collapse_optimizer.py", "_SCHEDULE_CACHE"),
+        # W051-TRACK live session registry (ratchet2 census catch-up): keyed
+        # weakly by the watched model via WeakKeyDictionary, so a session's
+        # per-grammar entry dies with its model instead of outliving it.
+        ("torchlens/trackers/_watch.py", "_ACTIVE_SESSIONS"),
     }
 )
 """Side tables keyed WEAKLY by their subject (trace, tensor, model, code).
@@ -832,6 +832,7 @@ _WEAKLY_HELD = frozenset(
         ("torchlens/visualization/_collapse_disclosures.py", "_BUDGET_WARNED_TRACES"),
         ("torchlens/visualization/collapse_optimizer.py", "_RESULT_CACHE"),
         ("torchlens/visualization/collapse_optimizer.py", "_SCHEDULE_CACHE"),
+        ("torchlens/trackers/_watch.py", "_ACTIVE_SESSIONS"),
     }
 )
 """Every inventory member whose container is bound WEAKLY, across all classes.
