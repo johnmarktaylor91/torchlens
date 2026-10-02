@@ -105,6 +105,7 @@
   "torch.linalg.linalg_vector_norm",
   "torch.mH.__get__",
   "torch.mT.__get__",
+  "torch.manual_seed",
   "torch.name.__get__",
   "torch.names.__get__",
   "torch.nbytes.__get__",
