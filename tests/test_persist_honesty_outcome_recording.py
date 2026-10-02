@@ -86,9 +86,11 @@ def test_hand_built_object_still_warns_unknown():
     class NotAProduct:
         pass
 
-    with pytest.warns(RuntimeWarning, match="hand-built"):
-        with pytest.raises(CaptureOutcomeError) as excinfo:
-            require_capture_capability(NotAProduct(), "save_analysis")
+    with (
+        pytest.warns(RuntimeWarning, match="hand-built"),
+        pytest.raises(CaptureOutcomeError) as excinfo,
+    ):
+        require_capture_capability(NotAProduct(), "save_analysis")
     assert excinfo.value.fields["status"] == "unknown"
 
 
