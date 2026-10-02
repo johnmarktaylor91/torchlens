@@ -840,6 +840,7 @@ def test_same_op_repeat(vector_input):
     )
 
 
+@pytest.mark.heavy
 def test_repeated_op_type_in_loop(default_input1):
     model = example_models.RepeatedOpTypeInLoop()
     assert validate_forward_pass(model, default_input1)
@@ -863,6 +864,7 @@ def test_repeated_op_type_in_loop(default_input1):
     )
 
 
+@pytest.mark.heavy
 def test_varying_loop_noparam1(default_input1):
     model = example_models.VaryingLoopNoParam1()
     assert validate_forward_pass(model, default_input1)
@@ -886,6 +888,7 @@ def test_varying_loop_noparam1(default_input1):
     )
 
 
+@pytest.mark.heavy
 def test_varying_loop_noparam2(default_input1):
     model = example_models.VaryingLoopNoParam2()
     assert validate_forward_pass(model, default_input1)
@@ -1244,6 +1247,7 @@ def test_module_looping_clash3(default_input1):
     )
 
 
+@pytest.mark.heavy
 def test_nested_param_free_loops(default_input1):
     """Tests nested loop topology where inner ops have the same equivalence type
     across levels but surrounding ops differ per level.
