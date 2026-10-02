@@ -315,5 +315,8 @@ def test_rank_engine_creates_missing_output_directory(tmp_path):
         vis_save_only=True,
         vis_node_placement="rank",
     )
-    assert (outdir / "graph.dot").exists()
+    # The intermediate .dot source is removed after a successful render
+    # (render_rank_layout: `if render_succeeded and os.path.exists(source_path):
+    # os.remove(source_path)`), so only the final rendered artifact persists;
+    # the directory-creation fix is proven by this file existing at all.
     assert (outdir / "graph.svg").exists()
