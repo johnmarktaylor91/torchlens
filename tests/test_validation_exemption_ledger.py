@@ -385,6 +385,16 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         ),
     ),
     Exemption(
+        code="layer_norm_singleton_normalized_shape",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation.exemptions:_layer_norm_singleton_shape_decision",
+        refuses=(
+            "a normalized_shape spanning more than one element, and a perturbed parent "
+            "other than layer_norm's own input"
+        ),
+    ),
+    Exemption(
         code="locally_constant_by_construction",
         tier="posthoc",
         contract="C2 perturbation sensitivity",

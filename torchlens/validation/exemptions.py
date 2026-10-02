@@ -2477,6 +2477,10 @@ def _posthoc_value_proof_decision(
         decision = _softmax_singleton_dim_decision(layer, layers_to_perturb, args)
         if decision.exempt:
             return decision
+    if layer.func_name == "layer_norm" and len(args) > 1:
+        decision = _layer_norm_singleton_shape_decision(layer, layers_to_perturb, args)
+        if decision.exempt:
+            return decision
     if layer.func_name == "linear" and len(args) > 1:
         decision = _linear_zero_weight_input_decision(layer, layers_to_perturb, args)
         if decision.exempt:
@@ -2948,6 +2952,75 @@ def _softmax_singleton_dim_decision(
             "identically 1 regardless of its value",
         )
     return PosthocPerturbDecision(False, "not_softmax_singleton_dim")
+
+
+def _layer_norm_singleton_shape_decision(
+    layer: Op,
+    layers_to_perturb: list[str],
+    args: tuple[Any, ...],
+) -> PosthocPerturbDecision:
+    """Return a proof decision for layer_norm over a size-1 normalized_shape.
+
+    ``layer_norm`` mean-centers and rescales each group spanning the trailing
+    ``normalized_shape`` dims: ``(x - mean) / sqrt(var + eps)``. When that span
+    has exactly one element, the mean IS that element, so the centered value is
+    IDENTICALLY zero (and the variance is identically zero) before the affine
+    transform -- regardless of the input's actual value. The output (the
+    affine ``bias``, or exactly 0 with no affine) is therefore a constant
+    independent of the input, the same shape-based identity already proved for
+    softmax's singleton reduction dim, applied to layer_norm's
+    ``normalized_shape`` instead.
+
+    timm's ``csatv2`` channel-attention branch normalizes a pooled,
+    single-channel representation (``normalized_shape=(1,)``); fixing
+    ``csatv2``'s diagnosed softmax-singleton-dim failure unmasked this
+    downstream op in the same trivial-dimension branch, confirmed by direct
+    introspection of the real model: ``layernorm_49_904``'s
+    input shape was ``(1, 49, 1)``.
+
+    Parameters
+    ----------
+    layer:
+        ``layer_norm`` op whose unchanged perturbed replay is being classified.
+    layers_to_perturb:
+        Parent labels selected for perturbation.
+    args:
+        Saved positional arguments for ``layer``
+        (``input, normalized_shape, weight, bias, eps``).
+
+    Returns
+    -------
+    PosthocPerturbDecision
+        Exempt decision when the perturbed parent is layer_norm's input and
+        ``normalized_shape``'s element count is exactly 1, otherwise
+        non-exempt.
+    """
+
+    if len(layers_to_perturb) != 1:
+        return PosthocPerturbDecision(False, "not_layer_norm_singleton_shape")
+    arg_positions = layer.parent_arg_positions.get("args", {})
+    perturbed_label = layers_to_perturb[0]
+    if arg_positions.get(0) != perturbed_label:
+        return PosthocPerturbDecision(False, "not_layer_norm_singleton_shape")
+    if len(args) <= 1:
+        return PosthocPerturbDecision(False, "not_layer_norm_singleton_shape")
+    normalized_shape = args[1]
+    dims = normalized_shape if isinstance(normalized_shape, (list, tuple)) else (normalized_shape,)
+    try:
+        element_count = 1
+        for dim_size in dims:
+            element_count *= int(dim_size)
+    except (TypeError, ValueError):
+        return PosthocPerturbDecision(False, "not_layer_norm_singleton_shape")
+    if element_count != 1:
+        return PosthocPerturbDecision(False, "not_layer_norm_singleton_shape")
+    return PosthocPerturbDecision(
+        True,
+        "layer_norm_singleton_normalized_shape",
+        f"layer_norm's normalized_shape={normalized_shape!r} spans exactly 1 element per "
+        "group: mean-centering a single element is identically zero before the affine "
+        "transform, so the input's value cannot influence the output",
+    )
 
 
 def _locally_constant_nan_multiplication_decision(
