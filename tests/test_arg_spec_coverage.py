@@ -305,6 +305,12 @@ _TORCH_VERSION_VARYING_UNSUPPORTED = frozenset(
         "expandsinglevalue",
         "jitunused",
         "listorempty",
+        # Decorated on the other pinned CI legs but absent on torch 2.7.1 (the
+        # Nightly fast-tier leg, discovered 2026-10): internal fan-mode /
+        # nonlinearity-type helpers used by torch.nn.init's kaiming
+        # calculations, torch-version-varying like the rest of this ledger.
+        "fanmode",
+        "nonlinearitytype",
     }
 )
 
