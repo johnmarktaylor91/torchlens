@@ -1071,6 +1071,26 @@ def _torch_rng_holder_module(module_path: str) -> ModuleType | None:
     return module if isinstance(module, ModuleType) else None
 
 
+def _module_exists_without_importing(module_path: str) -> bool:
+    """Return whether ``module_path`` resolves, without importing a new ancestor.
+
+    ``find_spec`` is import-free ONLY when ``module_path``'s ancestor is
+    already in ``sys.modules`` (importlib auto-imports a missing one to read
+    its ``__path__`` first): resolving "torch.distributed.tensor.parallel.
+    api" this way imports "...tensor.parallel" if absent, which eagerly
+    imports torch._dynamo on torch 2.7.1 (2026-10 cold-start regression).
+    Degrade to "not found" instead of paying a missing ancestor's import.
+    """
+
+    ancestor, _, _leaf = module_path.rpartition(".")
+    if ancestor and ancestor not in _sys_module.modules:
+        return False
+    try:
+        return _importlib_util.find_spec(module_path) is not None
+    except (ImportError, AttributeError, ValueError):
+        return False
+
+
 def _build_torch_rng_surface() -> tuple[TorchRngSurfaceRow, ...]:
     """Assemble the frozen torch RNG API disposition table (feature-detected)."""
 
@@ -1088,41 +1108,14 @@ def _build_torch_rng_surface() -> tuple[TorchRngSurfaceRow, ...]:
         if module is not None and hasattr(module, name):
             rows.append(TorchRngSurfaceRow(target, "structurally_covered", note))
     for target, note in _TORCH_RNG_UNIMPORTED_MODULE_EXTRAS:
-        # Unlike _TORCH_RNG_STRUCTURAL_EXTRAS's targets (all already imported by
-        # the time torch/torchlens finish their OWN imports), torch.distributed
-        # .pipeline is never eagerly imported by anything -- requiring it to
-        # already sit in sys.modules would make this row's coverage depend on
-        # which OTHER test happened to import it first in the session, landing
-        # or missing this row by accident. find_spec proves the module exists
-        # without importing it (never paying torch.distributed.pipeline's own
-        # import cost on every "import torchlens", W21): the attribute itself
-        # is trusted present (empirically verified; a frozen legacy module on a
-        # fixed torch build has no live surface to drift).
-        #
-        # find_spec is import-free ONLY when every ancestor package up to (not
-        # including) the searched name is ALREADY in sys.modules: importlib
-        # auto-imports (and EXECUTES) any missing ancestor to read its
-        # __path__ before it can search within it (stdlib-documented
-        # behavior, not a torchlens choice). module_path's own parent is the
-        # nearest ancestor find_spec would need to import if absent -- e.g.
-        # resolving "torch.distributed.tensor.parallel.api" imports
-        # "torch.distributed.tensor.parallel" if it is not already loaded,
-        # and that package's own __init__ eagerly imports
-        # torch._dynamo.external_utils on torch 2.7.1 (the exact cascade the
-        # 2026-10 fast-tier cold-start regression traced: ~90 torch._dynamo /
-        # torch.distributed.fsdp submodules on a PLAIN capture). Skip the
-        # probe entirely when that ancestor is not already present instead of
-        # paying its import to answer the question (same degrade-to-absent
-        # the sys.modules-gated groups above already use).
+        # Unlike _TORCH_RNG_STRUCTURAL_EXTRAS's targets (already imported by
+        # the time torch/torchlens finish their own imports), these modules
+        # are never eagerly imported by anything; sys.modules-gating them
+        # would make coverage depend on which OTHER test imported them first
+        # (W21). _module_exists_without_importing proves existence instead,
+        # import-free; the attribute itself is trusted present.
         module_path, _, _name = target.rpartition(".")
-        ancestor, _, _leaf = module_path.rpartition(".")
-        found = False
-        if not ancestor or ancestor in _sys_module.modules:
-            try:
-                found = _importlib_util.find_spec(module_path) is not None
-            except (ImportError, AttributeError, ValueError):
-                found = False
-        if found:
+        if _module_exists_without_importing(module_path):
             rows.append(TorchRngSurfaceRow(target, "structurally_covered", note))
     return tuple(rows)
 
