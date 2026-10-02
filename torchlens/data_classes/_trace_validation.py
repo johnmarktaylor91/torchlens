@@ -41,7 +41,11 @@ def _refuse_loaded_backward_capture(trace: "Trace", entry_point: str) -> None:
     rendered that wrong graph. Refuse typed BEFORE any mutation.
     """
 
-    if not getattr(trace, "_loaded_from_bundle", False):
+    try:
+        loaded_from_bundle = trace._loaded_from_bundle
+    except AttributeError:
+        loaded_from_bundle = False
+    if not loaded_from_bundle:
         return
     from ..errors import RunCapabilityUnavailableError
     from ..runnable import RunnableErrorCode
