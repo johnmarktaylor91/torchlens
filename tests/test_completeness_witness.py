@@ -1451,3 +1451,82 @@ def test_observer_restore_leaves_no_shadow_entries() -> None:
     assert set(vars(torch.Tensor)) == tensor_keys_before
     for cls in storage_classes:
         assert set(vars(cls)) == storage_keys_before[cls]
+
+
+def test_descriptor_compat_property_construction_never_raises_without_a_docstring() -> None:
+    """``DescriptorCompatProperty`` must construct with an UNDOCUMENTED getter.
+
+    Regression for a real installation bug (not a dynamo/force-eager-stance
+    interaction as first suspected): CPython's ``property.__init__`` only
+    stores an implicit ``fget.__doc__`` directly on the C struct for the
+    EXACT ``property`` type. For any subclass -- ``DescriptorCompatProperty``
+    included -- it instead does ``self.__doc__ = fget.__doc__`` through the
+    normal attribute-set protocol, even when ``fget.__doc__`` is ``None``,
+    which raises ``AttributeError: '...' object attribute '__doc__' is
+    read-only`` against this slots-only subclass's missing ``__dict__``.
+    Every production call site now passes ``doc=`` explicitly (never
+    defaulted) to route around the C-struct fast path instead; this pins the
+    construction itself so a future call site that forgets ``doc=`` fails
+    this test rather than silently degrading a capture to
+    observer-install-failed via the shared ``except (TypeError,
+    AttributeError)`` guards every install loop uses.
+    """
+
+    from torchlens.backends.torch._tl import DescriptorCompatProperty
+
+    def getter(self: object) -> int:
+        return 0
+
+    def setter(self: object, value: int) -> None:
+        pass
+
+    assert getter.__doc__ is None  # the exact undocumented-callable shape that broke
+
+    getter_only = DescriptorCompatProperty(getter, doc="getter_only")
+    getter_only.__objclass__ = object
+    assert getter_only.__doc__ == "getter_only"
+
+    getter_and_setter = DescriptorCompatProperty(getter, setter, doc="getter_and_setter")
+    getter_and_setter.__objclass__ = object
+    assert getter_and_setter.__doc__ == "getter_and_setter"
+
+
+def test_observer_install_succeeds_regardless_of_dynamo_import_state() -> None:
+    """Install succeeds identically whether or not ``torch._dynamo`` is imported.
+
+    Regression for the real failure mode behind a since-reverted fix: the
+    completeness-witness belt's ``requires_grad``/``grad_fn``/``is_leaf``,
+    storage-property, and invisible-escape (``__cuda_array_interface__``)
+    installers each construct a ``DescriptorCompatProperty`` without an
+    explicit ``doc=``, which raised ``AttributeError`` on EVERY install
+    attempt (see
+    ``test_descriptor_compat_property_construction_never_raises_without_a_docstring``)
+    -- caught by the SAME ``except (TypeError, AttributeError)`` guard every
+    install loop uses, so the belt silently degraded to
+    ``host_escape_observer_install_failed`` for every capture, independent of
+    ``torch._dynamo``. That observer-install outcome (and therefore the
+    witness-completeness verdict it feeds, ``ESCAPE_OBSERVER_UNCERTAIN`` ->
+    ``INCOMPLETE_SCALAR_ESCAPE``) must be the SAME whether this process has
+    ever imported ``torch._dynamo`` or not -- the install belt itself must
+    never depend on dynamo's import state.
+    """
+
+    class _Trace:
+        """Weakrefable trace stand-in."""
+
+    def _install_succeeds() -> bool:
+        trace = _Trace()
+        state = cw._WitnessState(trace=trace, owner_thread_id=0, guard_pass_index=1)
+        with cw._observe_invisible_host_escapes(state):
+            pass
+        return not cw.host_escape_observer_install_failed(trace)
+
+    assert _install_succeeds(), "observer install failed before torch._dynamo was imported"
+
+    import importlib
+
+    importlib.import_module("torch._compile")
+    importlib.import_module("torch._dynamo")
+    assert "torch._dynamo" in __import__("sys").modules
+
+    assert _install_succeeds(), "observer install failed after torch._dynamo was imported"

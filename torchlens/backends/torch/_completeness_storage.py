@@ -17,6 +17,7 @@ import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is
 from ... import _state
 from ...errors import ScalarEscapeWarning
 from ._tl import (
+    DescriptorCompatProperty,
     get_tensor_label,
 )
 
@@ -249,7 +250,13 @@ def _make_storage_property_wrapper(
                 _nonowner_storage_observe(state, self)
         return value
 
-    return property(getter)
+    # doc= MUST be explicit (never defaulted): see DescriptorCompatProperty's
+    # constructor-landmine note in _tl.py.
+    replacement = DescriptorCompatProperty(getter, doc=name)
+    objclass = getattr(descriptor, "__objclass__", None)
+    if objclass is not None:
+        replacement.__objclass__ = objclass
+    return replacement
 
 
 def _make_storage_raw_pointer_wrapper(original: Any, state: _WitnessState) -> Any:
@@ -795,7 +802,9 @@ def _make_module_escape_wrapper(original: Any, state: _WitnessState) -> Any:
     return wrapper
 
 
-def _make_invisible_escape_property(descriptor: Any, state: _WitnessState) -> property:
+def _make_invisible_escape_property(
+    descriptor: Any, state: _WitnessState, name: str = "__cuda_array_interface__"
+) -> property:
     """Wrap a zero-copy buffer PROPERTY to record its SOURCE tensor, then read through.
 
     Used for ``__cuda_array_interface__`` (a non-callable getset descriptor the method
@@ -836,4 +845,8 @@ def _make_invisible_escape_property(descriptor: Any, state: _WitnessState) -> pr
                 _nonowner_escape_observe(state, self)
         return descriptor.__get__(self, torch.Tensor)
 
-    return property(getter)
+    # doc= MUST be explicit (never defaulted): see DescriptorCompatProperty's
+    # constructor-landmine note in _tl.py.
+    replacement = DescriptorCompatProperty(getter, doc=name)
+    replacement.__objclass__ = getattr(descriptor, "__objclass__", torch.Tensor)
+    return replacement

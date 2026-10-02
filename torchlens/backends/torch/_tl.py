@@ -88,6 +88,19 @@ class DescriptorCompatProperty(property):
     site that replaces a Tensor-level descriptor with a ``property`` should use
     this subclass and set ``__objclass__`` (normally ``torch.Tensor``) so the
     replacement stays a faithful stand-in on every torch version.
+
+    CONSTRUCTOR LANDMINE: always pass an explicit ``doc=`` keyword. CPython's
+    ``property.__init__`` only stores an implicit ``fget.__doc__`` directly on
+    the C struct for the EXACT ``property`` type; for any subclass it instead
+    does ``self.__doc__ = fget.__doc__`` through the normal attribute-set
+    protocol (even when ``fget.__doc__`` is ``None``), which raises
+    ``AttributeError: '...' object attribute '__doc__' is read-only`` against
+    this slots-only subclass's missing ``__dict__``. A caller that omits
+    ``doc=`` gets that AttributeError on every construction -- indistinguishable
+    from (and commonly swallowed by) the same ``except (TypeError,
+    AttributeError)`` guards these replacements install under, silently
+    degrading the capture to observer-install-failed instead of installing the
+    replacement at all.
     """
 
     __slots__ = ("__objclass__",)
