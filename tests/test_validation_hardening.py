@@ -665,6 +665,36 @@ def test_f2_inplace_zero_mask_validates() -> None:
     assert _quiet_validate(_InplaceZeroMask(), torch.randn(3, 4)) is True
 
 
+def test_addcmul_zero_gain_validates() -> None:
+    """``addcmul(x, zero_gain, branch)`` (timm GRN/LayerScale spelling) must
+    pass validation, matching the existing ``mul``/``multiply`` annihilator
+    proof.
+
+    ``torch.addcmul(input, tensor1, tensor2, value=1)`` computes
+    ``input + value * tensor1 * tensor2``: when ``tensor1`` is provably
+    all-zero, ``tensor2``'s value can never reach the output, exactly the
+    annihilator case ``_multiplicative_zero_annihilator_decision`` already
+    proves for plain ``mul``/``multiply`` -- but that function only
+    recognizes a 2-operand op at positions {0, 1}, so ``addcmul`` (operands
+    at positions {1, 2}, with position 0 the additive, never-multiplied
+    ``input``) falls through to the generic ``perturbation_insensitive``
+    failure instead. timm's ConvNeXtV2 GRN layer initializes its gain
+    exactly this way (``nn.Parameter(torch.zeros(...))``), so every freshly
+    constructed ConvNeXtV2 model hits this at random init.
+    """
+
+    class _ZeroGainAddcmul(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.gain = nn.Parameter(torch.zeros(4))
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            branch = x * 2.0
+            return torch.addcmul(x, self.gain, branch)
+
+    assert _quiet_validate(_ZeroGainAddcmul(), torch.randn(3, 4)) is True
+
+
 def test_w35_nonzero_literal_never_exempted() -> None:
     """Armed-proof: the annihilator proof requires an exactly-zero co-arg.
 
