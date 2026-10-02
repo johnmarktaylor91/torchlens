@@ -207,8 +207,15 @@ def test_sae_lens_bridge_encode_matches_direct_sae() -> None:
     assert torch.allclose(bridge_result, direct_result)
 
 
+@pytest.mark.heavy
 def test_sae_lens_bridge_decode_matches_direct_sae() -> None:
-    """SAE Lens bridge decoding should match a direct SAE decode call."""
+    """SAE Lens bridge decoding should match a direct SAE decode call.
+
+    Measured at 11.2s wall (weekly leg, 2026-10-01), over the unmarked/smoke
+    7s budget (tests/conftest.py); the heavy tier's 20s+grace budget covers
+    it. The bridge-gate step (weekly.yml) runs this whole file unfiltered, so
+    the executed-floor count (11) is unaffected by the marker.
+    """
 
     pytest.importorskip("sae_lens")
     torch.manual_seed(14)
