@@ -112,24 +112,53 @@ def test_autocast_wrapping_slow_keeps_grad() -> None:
 
 
 def test_ddp_wrapped_slow_keeps_local_module_grad(tmp_path: Path) -> None:
-    """DDP unwrap populates LOCAL .module grads only; this is not DDP sync semantics."""
+    """DDP unwrap populates LOCAL .module grads only; this is not DDP sync semantics.
 
+    ``_init_process_group`` used to leave the group it created initialized
+    for the rest of the process: every later ``tl.trace()`` call then saw
+    ``torch.distributed.is_initialized() is True`` and lazily tried to arm
+    collective capture (``maybe_auto_arm``), which warns on a torch build
+    whose dispatcher namespaces are not a vetted census row -- a warning the
+    suite's ``error::UserWarning:torchlens`` filter promotes to a hard
+    failure. Under pytest-randomly this leak could land anywhere in the run
+    order and broke hundreds of unrelated tests downstream (2026-10 fast-tier
+    incident). Destroy only the group THIS test created, same convention as
+    the other distributed fixtures in this suite.
+    """
+
+    already_initialized = torch.distributed.is_available() and torch.distributed.is_initialized()
     if not _init_process_group(tmp_path):
         pytest.skip("torch.distributed is unavailable")
-    ddp_model = torch.nn.parallel.DistributedDataParallel(nn.Linear(4, 2))
+    try:
+        ddp_model = torch.nn.parallel.DistributedDataParallel(nn.Linear(4, 2))
 
-    trace = tl.trace(
-        ddp_model,
-        torch.randn(3, 4, requires_grad=True),
-        capture=tl.options.CaptureOptions(backward_ready=True, random_seed=0),
-    )
-    saved = trace[trace.output_layers[0]].out
+        trace = tl.trace(
+            ddp_model,
+            torch.randn(3, 4, requires_grad=True),
+            capture=tl.options.CaptureOptions(backward_ready=True, random_seed=0),
+        )
+        saved = trace[trace.output_layers[0]].out
 
-    ddp_model.module.zero_grad(set_to_none=True)
-    saved.sum().backward()
+        ddp_model.module.zero_grad(set_to_none=True)
+        saved.sum().backward()
 
-    assert all(param.grad is not None for param in ddp_model.module.parameters())
-    trace.cleanup()
+        assert all(param.grad is not None for param in ddp_model.module.parameters())
+        trace.cleanup()
+    finally:
+        if not already_initialized and torch.distributed.is_initialized():
+            torch.distributed.destroy_process_group()
+
+
+def test_ddp_wrapped_slow_does_not_leak_process_group(tmp_path: Path) -> None:
+    """Regression for the 2026-10 fast-tier incident: this test must leave
+    ``torch.distributed`` exactly as it found it, or every later capture in
+    the process lazily (and, on an unvetted torch build, loudly) tries to
+    arm collective capture against a group nobody else owns."""
+
+    pre_existing = torch.distributed.is_available() and torch.distributed.is_initialized()
+    test_ddp_wrapped_slow_keeps_local_module_grad(tmp_path)
+    post = torch.distributed.is_available() and torch.distributed.is_initialized()
+    assert post == pre_existing
 
 
 def test_view_reshape_ops_keep_grad() -> None:
