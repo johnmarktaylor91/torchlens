@@ -25,7 +25,6 @@ from typing import Any, Literal, cast, get_args
 
 import torch
 
-from ..backends.torch._modes import pause_own_dispatch_modes
 from ..backends.torch._tl import get_tensor_label, set_tensor_label
 from ._torch_compat import (
     HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE,
@@ -943,6 +942,11 @@ def _pause_dispatch_modes_for_subclass_clone(x: Any) -> Iterator[None]:
     ):
         yield
         return
+    # Deferred: backends.torch is upward of utils in the layer map (C01 item
+    # 1); this branch is the floor-only (torch 2.1/2.2) fallback, so a plain
+    # `import torchlens` never pays for it.
+    from ..backends.torch._modes import pause_own_dispatch_modes
+
     with pause_own_dispatch_modes():
         yield
 
