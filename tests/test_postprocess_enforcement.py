@@ -515,7 +515,9 @@ def exc_code_line(stdout: str) -> str:
     return stdout.strip().split()[-1]
 
 
-@pytest.mark.smoke
+@pytest.mark.heavy  # measured 7.0-7.9s across CI rows (round-2/3 CI triage, 2026-10-01):
+# consistently over the smoke ceiling on every row (a real -O child-process spawn), not
+# a one-off load spike.
 def test_audit_armed_under_stripped_asserts_refuses_typed() -> None:
     """Arming the audit under -O refuses with a stable code (real -O child)."""
 
