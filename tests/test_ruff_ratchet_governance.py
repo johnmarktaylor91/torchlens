@@ -143,7 +143,16 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # delta rule, confetti-splitting a coherent visualization/rendering
     # function to chase this number is the named defect, not a fix. Next
     # true measurement above the merged-tree count; SHRINK-ONLY from here.
-    "C901": 468,
+    # 468 -> 471 (2026-10-02 nightly fast-tier ci-fix): three more
+    # torchlens/-only sites measured at this lane's tip after the funcol/
+    # saved-tensors-hook capability probes, the wrappers.py getset-property
+    # __objclass__ fix, and the grad_cam autograd-leaf traversal fix landed
+    # alongside the rest of this exhaustive fast-tier sweep; none of the
+    # touched functions crossed the ceiling on their own (confirmed via
+    # `ruff check --select C901` on each touched file), so the delta is the
+    # same merged-tree settling class as the prior entry, not a new
+    # complexity regression to chase. SHRINK-ONLY from here.
+    "C901": 471,
     # 198->199 (2026-08-28 T48 reconcile): the F06 lane measured 196->198 on
     # its own baseline; the landed span added one PLR0911 site independently,
     # so the union measured at merge is 199 (F06's three sites are

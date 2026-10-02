@@ -376,7 +376,12 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # registered in _LAZY_PROBE_FAMILIES) adds one more accessor at the same
     # chokepoint (measured 4788); next 50-line step. Debloat target
     # unchanged: 3450.
-    "torchlens/utils/_torch_compat.py": 4800,
+    # 4800 -> 4850 (2026-10-02 nightly fast-tier ci-fix): two new torch
+    # 2.7.1-specific OPTIONAL_CAPABILITY_FLAGS rows (HAS_FUNCOL_GROUP_
+    # RESOLUTION, HAS_SAVED_TENSORS_HOOK_INTROSPECTION) each need a dated,
+    # reasoned comment per the file's own convention; measured 4824; next
+    # 50-line step. Debloat target unchanged: 3450.
+    "torchlens/utils/_torch_compat.py": 4850,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     # 3300 -> 3320 (F24 observe): the device-memory bracket at the one
