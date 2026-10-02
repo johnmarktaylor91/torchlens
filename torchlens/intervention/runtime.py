@@ -701,7 +701,9 @@ def _apply_inplace_replacement_to_mutated_storage(
 def _armed_injection_state(trace: Any) -> dict[str, Any] | None:
     """The trace's consolidated injection state when ``log_injections`` is armed."""
 
-    state = getattr(trace, "_tl_injection_state", None)
+    from .injection import peek_injection_state
+
+    state = peek_injection_state(trace)
     if isinstance(state, dict) and state.get("armed", False):
         return state
     return None
@@ -1425,7 +1427,10 @@ class _LiveSiteMinter:
 
         events = getattr(getattr(trace, "capture_events", None), "op_events", None)
         if events is None:
-            workspace = getattr(trace, "_raw_graph_ws", None)
+            try:
+                workspace = trace._raw_graph_ws
+            except AttributeError:
+                workspace = None
             records = getattr(workspace, "raw_layer_dict", None) or {}
             events = [records[label] for label in list(records)]
         journal = list(events)

@@ -63,7 +63,10 @@ def _resolve_boundary_predicate(trace: Any) -> tuple[Any, Any] | None:
 
     if trace is None:
         return None
-    predicate_options = getattr(trace, "_predicate_save_options", None)
+    try:
+        predicate_options = trace._predicate_save_options
+    except AttributeError:
+        predicate_options = None
     predicate_intervene = getattr(predicate_options, "intervene", None)
     predicate_selector = getattr(predicate_intervene, "selector", None)
     if predicate_selector is None:
@@ -151,7 +154,7 @@ def _fire_boundary_predicate_hooks(
     with (
         _current_injection_rule(_armed_injection_state(trace), getattr(decision, "rule_id", None)),
         active_intervention_context(
-            intervention_spec=getattr(trace, "_intervention_spec", None),
+            intervention_spec=trace._intervention_spec,
             hook_plan=hook_entries,
         ),
     ):
@@ -163,9 +166,11 @@ def _fire_boundary_predicate_hooks(
             call_kwargs=boundary.call_kwargs,
         )
     if fire_results:
-        trace._tl_intervene_selector_fire_count = int(
-            getattr(trace, "_tl_intervene_selector_fire_count", 0)
-        ) + len(fire_results)
+        try:
+            previous_count = trace._tl_intervene_selector_fire_count
+        except AttributeError:
+            previous_count = 0
+        trace._tl_intervene_selector_fire_count = int(previous_count) + len(fire_results)
     return hooked, tuple(fire_results)
 
 
@@ -219,13 +224,16 @@ def _apply_module_boundary_live_hooks(
 
     from .runtime import _apply_live_hooks
 
-    trace = _state._active_trace
+    trace, _ = _state.active_capture()
     boundary = _BoundaryCall(
         trace=trace,
         call_args=call_args,
         call_kwargs=call_kwargs,
         predicate=_resolve_boundary_predicate(trace),
     )
+    # r43 class: `_active_hook_plan` has no accessor by design (same raw
+    # single-field hot-path load `runtime.py` keeps at six sites this split
+    # relocated from); reviewed and ledgered rather than converted.
     if not _state._active_hook_plan and boundary.predicate is None:
         return out_orig
     replacements: dict[tuple[Any, ...], torch.Tensor] = {}

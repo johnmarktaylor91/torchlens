@@ -548,7 +548,9 @@ def _apply_predicate_intervention(
     decision = _evaluate_intervene_op(ctx, options)
     if decision is None:
         return out, ()
-    injection_state = getattr(trace, "_tl_injection_state", None)
+    from ...intervention.injection import peek_injection_state
+
+    injection_state = peek_injection_state(trace)
     if injection_state is not None and injection_state.get("armed", False):
         # F01 injections: anchor this firing's injected ops to the PERSISTED
         # rule id when the intervene= operand is the public immutable spec
