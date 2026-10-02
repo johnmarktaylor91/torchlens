@@ -94,7 +94,6 @@ from ._completeness_types import (
 )
 from ._modes import _TorchLensDispatchMode
 from ._tl import (
-    DescriptorCompatProperty,
     get_buffer_address,
     get_tensor_label,
     get_tensor_meta,
