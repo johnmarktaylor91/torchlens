@@ -3685,12 +3685,29 @@ def warm_lazy_torch_imports() -> None:
 
     if _LAZY_TORCH_IMPORTS_WARMED:
         return
+    # The RNG-channel fix above (running this BEFORE the monitor's own
+    # patches install) only protects THAT one census. The broader capture
+    # logging/dispatch window is already armed by the time this runs (it
+    # fires from inside ``run_and_log_inputs_through_model``), so the
+    # cascade's own tensor ops -- torch._dynamo.variables.torch_function's
+    # module-level ``populate_builtin_to_tensor_fn_map()`` calls
+    # ``torch.ones`` plus several builtin unary ops (``abs``, ...) as an
+    # import side effect -- went through TorchLens's OWN wrapped functions
+    # and were recorded as unattributable "unmodeled_tensor_return" /
+    # "caught_exception_control" dispatch-census facts, permanently
+    # ceilinging the capture's witness completeness even though nothing in
+    # the user's model caused them. ``pause_logging()`` is the general
+    # mechanism for exactly this (critical invariant 2): it hides the
+    # cascade from every capture-time witness, not just the RNG monitor.
+    from .._state import pause_logging
+
     warmed = True
-    for module_name in ("torch._compile", "torch._dynamo"):
-        try:
-            importlib.import_module(module_name)
-        except Exception:
-            warmed = False
+    with pause_logging():
+        for module_name in ("torch._compile", "torch._dynamo"):
+            try:
+                importlib.import_module(module_name)
+            except Exception:
+                warmed = False
     _LAZY_TORCH_IMPORTS_WARMED = warmed
 
 
