@@ -32,6 +32,32 @@ VISUALIZATION_ALLOWLIST = (
     "__tl_graph_panel_anchor",
     "__tl_code_panel_node",
 )
+#: Exact attribute names that deliberately keep the "tl_" prefix as ruled
+#: public API -- not a retired name reappearing, and (for the bound-method
+#: root) not host-object metadata pollution at all, since the attribute
+#: lives on a TorchLens-AUTHORED class rather than a user's model/tensor.
+#:
+#: F41 bound-method root (foldA D11, ``torchlens/backends/torch/bound_root.py``):
+#: ``TLBoundMethodRoot`` is a TorchLens wrapper class, not a host object, and
+#: its properties are the ruled public surface consumed from
+#: ``model_prep.py``, ``_episode_ledger.py``, and ``user_funcs.py``.
+#:
+#: ``neuro/_rdms.py``'s ``tl_ledger`` IS attached to a foreign
+#: ``rsatoolbox.rdm.RDMs`` result, but it is a deliberate, documented,
+#: session-only exception (see that module's docstring) with its own
+#: regression coverage in ``tests/test_neuro_pkg_rdms.py``, which asserts
+#: the attribute's presence directly.
+ALLOWED_TL_PREFIXED_NAMES = frozenset(
+    {
+        "tl_owner",
+        "tl_method_name",
+        "tl_owner_class_name",
+        "tl_owner_class_qualname",
+        "tl_root_entry_point",
+        "tl_authored_root",
+        "tl_ledger",
+    }
+)
 
 
 def _is_docstring_constant(node: ast.Constant, parent: ast.AST | None) -> bool:
@@ -74,6 +100,8 @@ def test_no_retired_tl_host_object_attrs_in_source() -> None:
                 setattr(child, "_tl_parent", parent)
         for node in ast.walk(tree):
             if isinstance(node, ast.Attribute) and LEGACY_ATTR_RE.match(node.attr):
+                if node.attr in ALLOWED_TL_PREFIXED_NAMES:
+                    continue
                 if _is_allowed_visualization_name(path, node.attr):
                     continue
                 failures.append(f"{path.relative_to(ROOT)}:{node.lineno}: .{node.attr}")
