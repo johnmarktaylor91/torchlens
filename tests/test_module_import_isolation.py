@@ -40,7 +40,28 @@ FIXED_IMPORT_CYCLES = (
     "torchlens.bundle",
     "torchlens._chunking",
     "torchlens._user_public_impls",
+    # _episode_ledger re-exports _episode_fold's names (C07X split); the
+    # re-export is now a lazy module __getattr__ instead of an eager bottom-
+    # of-file import, so a cold import of _episode_fold first no longer
+    # catches _episode_ledger still mid-initialization.
+    "torchlens.capture._episode_fold",
 )
+
+#: Modules whose standalone import legitimately requires a THIRD-PARTY package
+#: that is, BY DESIGN, never installed alongside the rest of the test
+#: environment -- a genuinely absent optional dependency, not a circular
+#: import -- so neither FIXED_IMPORT_CYCLES nor PENDING_IMPORT_CYCLES (both
+#: about the import-cycle class) is the right ledger. Keyed to the exact
+#: top-level import whose absence explains the failure; checked structurally
+#: (``importlib.util.find_spec``) so an environment that DOES install the
+#: package still gets the real standalone-import proof.
+OPTIONAL_DEPENDENCY_MODULES: dict[str, str] = {
+    # pyproject.toml: lit-nlp 1.3 requires shap<0.46, conflicting with the
+    # shap~=0.46 pin, so [lit] stays permanently excluded from
+    # all/all-stretch (Batch-8 ruling) -- no CI leg ever installs it
+    # alongside the rest of the suite's extras.
+    "torchlens.bridge.lit._adapters": "lit_nlp",
+}
 
 # Modules that still fail a standalone import. Each lives outside this lane's write
 # territory (the r3 ops-split and IR packages), so the cycle is DISCLOSED here rather
@@ -64,6 +85,30 @@ PENDING_IMPORT_CYCLES = {
         "same _ops_* split-module back-edge as _ops_autograd"
     ),
 }
+
+
+def _optional_dependency_explains_failure(module_name: str) -> bool:
+    """Return whether ``module_name``'s declared optional package is absent.
+
+    Parameters
+    ----------
+    module_name:
+        Dotted module path looked up in ``OPTIONAL_DEPENDENCY_MODULES``.
+
+    Returns
+    -------
+    bool
+        True only when the module is registered AND its required package is
+        genuinely not installed in this environment -- an environment that
+        does install it still gets the real standalone-import proof.
+    """
+
+    required_package = OPTIONAL_DEPENDENCY_MODULES.get(module_name)
+    if required_package is None:
+        return False
+    import importlib.util
+
+    return importlib.util.find_spec(required_package) is None
 
 
 def _package_modules() -> list[str]:
@@ -237,6 +282,7 @@ def test_every_package_module_imports_standalone() -> None:
         name: error
         for name in modules
         if name not in PENDING_IMPORT_CYCLES
+        and not _optional_dependency_explains_failure(name)
         and (error := _standalone_import_error(name)) is not None
     }
     assert not failures, (
