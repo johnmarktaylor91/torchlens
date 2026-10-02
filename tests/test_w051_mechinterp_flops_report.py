@@ -26,7 +26,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens.report import flops_report
-from torchlens.utils._torch_compat import HAS_MHA_FASTPATH_SWITCH
+from torchlens.utils._torch_compat import get_mha_fastpath_switch_support
 
 pytestmark = pytest.mark.smoke
 
@@ -98,7 +98,7 @@ def test_model_door_counts_multihead_attention_completely() -> None:
 
 
 @pytest.mark.skipif(
-    not HAS_MHA_FASTPATH_SWITCH,
+    not get_mha_fastpath_switch_support(),
     reason="torch.backends.mha postdates the torch>=2.1 floor; on torch 2.1-2.2 the "
     "door's real fallback flips a per-module training flag instead of a public "
     "switch, which test_model_door_counts_multihead_attention_completely already "
@@ -119,7 +119,7 @@ def test_model_door_restores_the_fastpath_switch() -> None:
 
 
 @pytest.mark.skipif(
-    not HAS_MHA_FASTPATH_SWITCH,
+    not get_mha_fastpath_switch_support(),
     reason="torch.backends.mha postdates the torch>=2.1 floor; the real fallback's "
     "finally-path restore is exercised directly by force_mha_slow_path's own unit "
     "tests on torch 2.1-2.2",

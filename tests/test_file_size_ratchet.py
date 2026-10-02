@@ -369,7 +369,14 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE, the sibling of the existing
     # Parameter-to-Tensor probe) lands at the same chokepoint (measured 4628);
     # next 50-line step. Debloat target unchanged: 3450.
-    "torchlens/utils/_torch_compat.py": 4650,
+    # 4650 -> 4800 (2026-10-01 ratchet2 ci-fix): the MHA fastpath-switch probe
+    # (HAS_MHA_FASTPATH_SWITCH) was eager at import, tripping the import-
+    # hygiene duration budget on torch 2.1.2; converting it to the same
+    # lazy-latch pattern as its siblings (get_mha_fastpath_switch_support,
+    # registered in _LAZY_PROBE_FAMILIES) adds one more accessor at the same
+    # chokepoint (measured 4788); next 50-line step. Debloat target
+    # unchanged: 3450.
+    "torchlens/utils/_torch_compat.py": 4800,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     # 3300 -> 3320 (F24 observe): the device-memory bracket at the one

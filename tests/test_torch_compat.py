@@ -707,10 +707,9 @@ def test_force_eager_stance_scope_exit_owned_with_construction(
     class _Interrupt(KeyboardInterrupt):
         pass
 
-    with pytest.raises(_Interrupt):
-        with tc.force_eager_stance_scope() as active:
-            assert active is True
-            raise _Interrupt("body interrupted")
+    with pytest.raises(_Interrupt), tc.force_eager_stance_scope() as active:
+        assert active is True
+        raise _Interrupt("body interrupted")
 
     assert handle.exits == 1
 
@@ -791,6 +790,7 @@ def test_get_mha_fastpath_enabled_returns_none_when_absent(
 ) -> None:
     """The read degrades to ``None`` (never crashes) when the switch is absent."""
 
+    monkeypatch.setattr(tc, "_MHA_FASTPATH_SWITCH_PROBED", True)
     monkeypatch.setattr(tc, "HAS_MHA_FASTPATH_SWITCH", False)
     assert tc.get_mha_fastpath_enabled() is None
 
@@ -800,12 +800,14 @@ def test_set_mha_fastpath_enabled_noops_when_absent(
 ) -> None:
     """The write is a no-op (never crashes) when the switch is absent."""
 
+    monkeypatch.setattr(tc, "_MHA_FASTPATH_SWITCH_PROBED", True)
     monkeypatch.setattr(tc, "HAS_MHA_FASTPATH_SWITCH", False)
     tc.set_mha_fastpath_enabled(True)  # must not raise
 
 
 @pytest.mark.skipif(
-    not tc.HAS_MHA_FASTPATH_SWITCH, reason="torch.backends.mha postdates the torch>=2.1 floor"
+    not tc.get_mha_fastpath_switch_support(),
+    reason="torch.backends.mha postdates the torch>=2.1 floor",
 )
 def test_get_set_mha_fastpath_enabled_round_trips_when_present() -> None:
     """The read/write pair round-trips through the live public switch."""
@@ -821,7 +823,8 @@ def test_get_set_mha_fastpath_enabled_round_trips_when_present() -> None:
 
 
 @pytest.mark.skipif(
-    not tc.HAS_MHA_FASTPATH_SWITCH, reason="torch.backends.mha postdates the torch>=2.1 floor"
+    not tc.get_mha_fastpath_switch_support(),
+    reason="torch.backends.mha postdates the torch>=2.1 floor",
 )
 def test_force_mha_slow_path_uses_the_public_switch_when_present() -> None:
     """The switch is held off inside the block and restored after it."""
@@ -838,6 +841,7 @@ def test_force_mha_slow_path_falls_back_to_a_training_flip_when_switch_absent(
 ) -> None:
     """Absent the switch, the affected modules' own training flag is flipped."""
 
+    monkeypatch.setattr(tc, "_MHA_FASTPATH_SWITCH_PROBED", True)
     monkeypatch.setattr(tc, "HAS_MHA_FASTPATH_SWITCH", False)
     encoder_layer = torch.nn.TransformerEncoderLayer(4, 2, 8, batch_first=True).eval()
     bare_mha = torch.nn.MultiheadAttention(4, 2, batch_first=True).eval()
@@ -862,12 +866,12 @@ def test_force_mha_slow_path_restores_on_exception(
 ) -> None:
     """A block that raises still restores the prior state (finally-path pin)."""
 
+    monkeypatch.setattr(tc, "_MHA_FASTPATH_SWITCH_PROBED", True)
     monkeypatch.setattr(tc, "HAS_MHA_FASTPATH_SWITCH", False)
     model = torch.nn.MultiheadAttention(4, 2, batch_first=True).eval()
-    with pytest.raises(RuntimeError, match="boom"):
-        with tc.force_mha_slow_path(model):
-            assert model.training is True
-            raise RuntimeError("boom")
+    with pytest.raises(RuntimeError, match="boom"), tc.force_mha_slow_path(model):
+        assert model.training is True
+        raise RuntimeError("boom")
     assert model.training is False
 
 

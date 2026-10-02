@@ -1518,6 +1518,32 @@ def get_meta_item_guard_support(*, force_probe: bool = False) -> bool:
     return HAS_META_ITEM_GUARD
 
 
+def get_mha_fastpath_switch_support(*, force_probe: bool = False) -> bool:
+    """Return whether ``torch.backends.mha`` exposes the fastpath switch, lazily.
+
+    Parameters
+    ----------
+    force_probe:
+        Run the probe even on first call. Diagnostic surfaces set this;
+        :func:`get_mha_fastpath_enabled`, :func:`set_mha_fastpath_enabled`, and
+        :func:`force_mha_slow_path` (the only product consumers) do not, so a
+        plain ``import torchlens`` never pays for the ``find_spec`` /
+        submodule-attribute lookup against ``torch.backends.mha``.
+
+    Returns
+    -------
+    bool
+        See :func:`_probe_mha_fastpath_switch`. Cached after the first call.
+    """
+
+    global HAS_MHA_FASTPATH_SWITCH, _MHA_FASTPATH_SWITCH_PROBED
+
+    if not _MHA_FASTPATH_SWITCH_PROBED or force_probe:
+        HAS_MHA_FASTPATH_SWITCH = _probe_mha_fastpath_switch()
+        _MHA_FASTPATH_SWITCH_PROBED = True
+    return HAS_MHA_FASTPATH_SWITCH
+
+
 def _probe_node_prehook() -> bool:
     """Return whether autograd graph nodes support ``register_prehook``.
 
@@ -1804,7 +1830,8 @@ HAS_DETERMINISTIC_FILL_FLAG: bool = _probe_deterministic_fill_flag()
 HAS_AMP_GRADSCALER: bool = _probe_amp_gradscaler()
 HAS_NN_ATTENTION_MODULE: bool = _probe_nn_attention_module()
 HAS_RMSNORM_MODULE: bool = _probe_rmsnorm_module()
-HAS_MHA_FASTPATH_SWITCH: bool = _probe_mha_fastpath_switch()
+HAS_MHA_FASTPATH_SWITCH: bool = False
+_MHA_FASTPATH_SWITCH_PROBED: bool = False
 HAS_REDUCE_TUPLE_DIM: bool = False
 _REDUCE_TUPLE_DIM_PROBED: bool = False
 HAS_CPU_HALF_KERNELS: bool = False
@@ -2032,6 +2059,7 @@ _LAZY_PROBE_FAMILIES: dict[str, tuple[str, ...]] = {
     "_CPU_HALF_KERNELS_PROBED": ("HAS_CPU_HALF_KERNELS",),
     "_CPU_FLOAT8_DETERMINISTIC_FILL_PROBED": ("HAS_CPU_FLOAT8_DETERMINISTIC_FILL",),
     "_META_ITEM_GUARD_PROBED": ("HAS_META_ITEM_GUARD",),
+    "_MHA_FASTPATH_SWITCH_PROBED": ("HAS_MHA_FASTPATH_SWITCH",),
     "_FUNCOL_GROUP_RESOLUTION_PROBED": (
         "HAS_FUNCOL_GROUP_RESOLUTION",
         "_FUNCOL_GROUP_RESOLVERS",
@@ -4476,7 +4504,7 @@ def get_mha_fastpath_enabled() -> bool | None:
         ``False``) -- a healthy old install, not a degradation.
     """
 
-    if not HAS_MHA_FASTPATH_SWITCH:
+    if not get_mha_fastpath_switch_support():
         return None
     return bool(torch.backends.mha.get_fastpath_enabled())
 
@@ -4488,7 +4516,7 @@ def set_mha_fastpath_enabled(value: bool) -> None:
     (``HAS_MHA_FASTPATH_SWITCH`` is ``False``) -- there is nothing to set.
     """
 
-    if not HAS_MHA_FASTPATH_SWITCH:
+    if not get_mha_fastpath_switch_support():
         return
     torch.backends.mha.set_fastpath_enabled(bool(value))
 
