@@ -11,6 +11,7 @@ never a refactor.
 from __future__ import annotations
 
 from collections import Counter
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -29,6 +30,8 @@ from torchlens.postprocess._site_key import (
     site_axis,
     unescape_site_component,
 )
+from torchlens.validation._invariants_sites import _check_site_key_uniqueness
+from torchlens.validation.invariants import MetadataInvariantError
 
 
 class _Tied(nn.Module):
@@ -394,3 +397,93 @@ def test_witness_on_real_capture_is_operation_frame() -> None:
             assert witness != (context[0].file, context[0].line_number)
         checked += 1
     assert checked == 6
+
+
+# ---------------------------------------------------------------------------
+# I-S2 direct unit coverage: the no-module-stack carve-out (93ba1a033,
+# narrowed in 3e777a9de) has no regression test of its own -- the behavior
+# is exercised here directly against ``_check_site_key_uniqueness`` rather
+# than through a real capture, since no real backend forges a collision.
+# ---------------------------------------------------------------------------
+
+
+def _fake_op(**kwargs: object) -> SimpleNamespace:
+    kwargs.setdefault("module_call_stack", ())
+    kwargs.setdefault("equivalence_class", None)
+    return SimpleNamespace(**kwargs)
+
+
+@pytest.mark.smoke
+def test_is2_forged_singleton_collision_without_module_stack_still_raises() -> None:
+    """Two singleton ops (unique equivalence_class each) sharing one site_key,
+    with no module_call_stack, is a real forged collision -- the coarse
+    ROOT_CALL_INSTANCE identity must still catch it (the narrowing in
+    3e777a9de exists precisely so this case is never a false negative).
+    """
+
+    ops = [
+        _fake_op(
+            label="input_1_1",
+            _label_raw="input_1_1_raw",
+            equivalence_class="input",
+            site_key="s1||input||1",
+        ),
+        _fake_op(
+            label="output_1_1",
+            _label_raw="output_1_1_raw",
+            equivalence_class="output",
+            # Forged: a distinct singleton occurrence sharing the SAME key.
+            site_key="s1||input||1",
+        ),
+    ]
+
+    with pytest.raises(MetadataInvariantError, match="I-S2"):
+        _check_site_key_uniqueness(ops, "site_key_invariants")
+
+
+@pytest.mark.smoke
+def test_is2_jax_bare_function_root_multipass_group_is_not_a_false_positive() -> None:
+    """A genuine multi-occurrence equivalence group with no module_call_stack
+    (the JAX bare ``function_root`` recurrence case 93ba1a033 fixed) shares
+    one site_key across its passes by design and must not false-positive,
+    because each pass gets a distinct raw-label differentiator.
+    """
+
+    ops = [
+        _fake_op(
+            label=f"lt_{i}_1",
+            _label_raw=f"lt_{i}_1_raw",
+            equivalence_class="lt",
+            site_key="s1||lt||1",
+        )
+        for i in range(1, 4)
+    ]
+
+    _check_site_key_uniqueness(ops, "site_key_invariants")  # must not raise
+
+
+@pytest.mark.smoke
+def test_is2_jax_multipass_group_still_catches_a_genuine_duplicate() -> None:
+    """Within a genuine multi-occurrence group, two passes that collide on
+    BOTH site_key and raw label (not merely the shared equivalence_class)
+    must still raise -- the raw-label differentiator narrows the carve-out,
+    it does not disable I-S2 inside the group.
+    """
+
+    ops = [
+        _fake_op(
+            label="lt_1_1",
+            _label_raw="lt_1_1_raw",
+            equivalence_class="lt",
+            site_key="s1||lt||1",
+        ),
+        _fake_op(
+            label="lt_2_1",
+            _label_raw="lt_1_1_raw",  # forged duplicate raw label
+            equivalence_class="lt",
+            site_key="s1||lt||1",
+        ),
+    ]
+
+    with pytest.raises(MetadataInvariantError, match="I-S2"):
+        _check_site_key_uniqueness(ops, "site_key_invariants")
