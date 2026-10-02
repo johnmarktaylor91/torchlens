@@ -124,11 +124,15 @@ __all__ = [
     "HAS_AMP_GRADSCALER",
     "HAS_NN_ATTENTION_MODULE",
     "HAS_RMSNORM_MODULE",
+    "HAS_MHA_FASTPATH_SWITCH",
     "HAS_REDUCE_TUPLE_DIM",
     "HAS_CPU_HALF_KERNELS",
     "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
     "HAS_META_ITEM_GUARD",
     "tensor_any_over_dims",
+    "get_mha_fastpath_enabled",
+    "set_mha_fastpath_enabled",
+    "force_mha_slow_path",
     "HAS_CACHED_UNTYPED_STORAGE_WRAPPER",
     "HAS_TENSOR_SEQUENCE_SLOT_FIX",
     "HAS_TORCH_FUNC",
@@ -1608,6 +1612,33 @@ def _probe_rmsnorm_module() -> bool:
     return getattr(torch.nn, "RMSNorm", None) is not None
 
 
+def _probe_mha_fastpath_switch() -> bool:
+    """Return whether ``torch.backends.mha`` exposes the public fastpath switch.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``torch.backends.mha`` exposes both
+        ``get_fastpath_enabled`` and ``set_fastpath_enabled``. Absent on
+        torch 2.1-2.2 (the submodule postdates the 2.1 floor): a healthy old
+        install, not a degradation -- the fused ``nn.MultiheadAttention`` /
+        ``nn.TransformerEncoderLayer`` fast path has no public global switch
+        there, so :func:`force_mha_slow_path` falls back to flipping the
+        affected modules' own ``training`` flag (both fast paths check
+        ``self.training`` on every supported torch, switch or no switch).
+    """
+
+    try:
+        if importlib.util.find_spec("torch.backends.mha") is None:
+            return False
+    except (ImportError, AttributeError, ValueError):
+        return False
+    return (
+        _import_module_attr_or_none("torch.backends.mha", "get_fastpath_enabled") is not None
+        and _import_module_attr_or_none("torch.backends.mha", "set_fastpath_enabled") is not None
+    )
+
+
 def _probe_cpu_half_kernels() -> bool:
     """Return whether common CPU kernels accept the ``torch.float16`` dtype.
 
@@ -1768,6 +1799,7 @@ HAS_DETERMINISTIC_FILL_FLAG: bool = _probe_deterministic_fill_flag()
 HAS_AMP_GRADSCALER: bool = _probe_amp_gradscaler()
 HAS_NN_ATTENTION_MODULE: bool = _probe_nn_attention_module()
 HAS_RMSNORM_MODULE: bool = _probe_rmsnorm_module()
+HAS_MHA_FASTPATH_SWITCH: bool = _probe_mha_fastpath_switch()
 HAS_REDUCE_TUPLE_DIM: bool = False
 _REDUCE_TUPLE_DIM_PROBED: bool = False
 HAS_CPU_HALF_KERNELS: bool = False
@@ -1963,6 +1995,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_AMP_GRADSCALER",
     "HAS_NN_ATTENTION_MODULE",
     "HAS_RMSNORM_MODULE",
+    "HAS_MHA_FASTPATH_SWITCH",
     "HAS_REDUCE_TUPLE_DIM",
     "HAS_CPU_HALF_KERNELS",
     "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
@@ -2168,6 +2201,12 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         "HAS_NN_ATTENTION_MODULE",
         "HAS_RMSNORM_MODULE",
         "HAS_REDUCE_TUPLE_DIM",
+        # torch.backends.mha (the nn.MultiheadAttention / nn.TransformerEncoderLayer
+        # fused fast-path switch) postdates the torch>=2.1 floor: its absence is a
+        # healthy old install with a real fallback (force_mha_slow_path flips the
+        # affected modules' own training flag instead, since both fast paths check
+        # self.training on every supported torch).
+        "HAS_MHA_FASTPATH_SWITCH",
         # CPU Half-dtype kernel coverage (addmm/layer_norm/nextafter) and
         # Float8 empty-fill under deterministic mode both postdate the torch
         # 2.1 floor: genuine old-torch CPU limitations, not TorchLens
@@ -4411,6 +4450,88 @@ def tensor_any_over_dims(tensor: torch.Tensor, dims: tuple[int, ...]) -> torch.T
     for axis in sorted({axis % ndim for axis in dims}, reverse=True):
         result = result.any(dim=axis)
     return result
+
+
+def get_mha_fastpath_enabled() -> bool | None:
+    """Return the public MHA fastpath switch, or ``None`` if absent.
+
+    THE one sanctioned read of ``torch.backends.mha.get_fastpath_enabled()``.
+
+    Returns
+    -------
+    bool | None
+        The live switch value, or ``None`` on torch 2.1-2.2, where
+        ``torch.backends.mha`` does not exist (``HAS_MHA_FASTPATH_SWITCH`` is
+        ``False``) -- a healthy old install, not a degradation.
+    """
+
+    if not HAS_MHA_FASTPATH_SWITCH:
+        return None
+    return bool(torch.backends.mha.get_fastpath_enabled())
+
+
+def set_mha_fastpath_enabled(value: bool) -> None:
+    """Set the public MHA fastpath switch (caller checks the flag first).
+
+    No-ops on torch 2.1-2.2, where ``torch.backends.mha`` does not exist
+    (``HAS_MHA_FASTPATH_SWITCH`` is ``False``) -- there is nothing to set.
+    """
+
+    if not HAS_MHA_FASTPATH_SWITCH:
+        return
+    torch.backends.mha.set_fastpath_enabled(bool(value))
+
+
+@contextlib.contextmanager
+def force_mha_slow_path(model: torch.nn.Module) -> Iterator[None]:
+    """Hold the fused MHA/TransformerEncoderLayer fast path OFF for ``model``.
+
+    Uses the public ``torch.backends.mha`` switch when available
+    (``HAS_MHA_FASTPATH_SWITCH``); otherwise falls back to setting the
+    ``training`` ATTRIBUTE directly (never the recursive ``.train()``
+    method, which would also flip nested dropout/norm submodules and could
+    change their op counts) to ``True`` on every
+    ``torch.nn.MultiheadAttention`` and ``torch.nn.TransformerEncoderLayer``
+    instance reachable from ``model`` -- a REAL fallback, not a degradation:
+    both fused fast paths independently check their OWN module's
+    ``self.training`` on every supported torch version (the layer's native
+    op and its inner attention's native op gate separately), so the public
+    switch merely adds an earlier, version-independent gate on top. Every
+    flag this context manager touches is restored to its prior value on
+    exit, success or failure.
+
+    Parameters
+    ----------
+    model:
+        Module whose fused-attention submodules should run the unfused path
+        for the duration of the ``with`` block.
+
+    Yields
+    ------
+    None
+        Nothing; the context is entered for its side effect.
+    """
+
+    prior_switch = get_mha_fastpath_enabled()
+    fastpath_modules = [
+        module
+        for module in model.modules()
+        if isinstance(module, (torch.nn.MultiheadAttention, torch.nn.TransformerEncoderLayer))
+    ]
+    saved_training = [(module, module.training) for module in fastpath_modules]
+    try:
+        if prior_switch is not None:
+            set_mha_fastpath_enabled(False)
+        else:
+            for module in fastpath_modules:
+                module.training = True
+        yield
+    finally:
+        if prior_switch is not None:
+            set_mha_fastpath_enabled(prior_switch)
+        else:
+            for module, was_training in saved_training:
+                module.training = was_training
 
 
 def tensor_version_or_none(tensor: Any) -> int | None:

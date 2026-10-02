@@ -403,6 +403,12 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_AMP_GRADSCALER": tc.HAS_AMP_GRADSCALER,
         "HAS_NN_ATTENTION_MODULE": tc.HAS_NN_ATTENTION_MODULE,
         "HAS_RMSNORM_MODULE": tc.HAS_RMSNORM_MODULE,
+        # torch.backends.mha (the nn.MultiheadAttention / TransformerEncoderLayer
+        # fused fast-path switch) postdates the torch>=2.1 floor too: absence is a
+        # healthy old install with a real fallback (force_mha_slow_path flips the
+        # affected modules' own training flag instead). Build-dependent, so mirror
+        # the live post-snapshot capability.
+        "HAS_MHA_FASTPATH_SWITCH": tc.HAS_MHA_FASTPATH_SWITCH,
         "HAS_REDUCE_TUPLE_DIM": tc.HAS_REDUCE_TUPLE_DIM,
         # CPU Half-dtype kernel coverage (addmm/layer_norm/nextafter) and
         # Float8 empty-fill under deterministic mode both postdate the torch
@@ -744,6 +750,7 @@ def test_fill_uninitialized_memory_flag_visible_in_capability_snapshot() -> None
     assert snapshot["HAS_AMP_GRADSCALER"] == tc.HAS_AMP_GRADSCALER
     assert snapshot["HAS_NN_ATTENTION_MODULE"] == tc.HAS_NN_ATTENTION_MODULE
     assert snapshot["HAS_RMSNORM_MODULE"] == tc.HAS_RMSNORM_MODULE
+    assert snapshot["HAS_MHA_FASTPATH_SWITCH"] == tc.HAS_MHA_FASTPATH_SWITCH
     assert snapshot["HAS_REDUCE_TUPLE_DIM"] == tc.HAS_REDUCE_TUPLE_DIM
     assert snapshot["HAS_CPU_HALF_KERNELS"] == tc.HAS_CPU_HALF_KERNELS
     assert snapshot["HAS_CPU_FLOAT8_DETERMINISTIC_FILL"] == tc.HAS_CPU_FLOAT8_DETERMINISTIC_FILL
@@ -777,6 +784,91 @@ def test_read_fill_uninitialized_memory_reads_live_module_when_present(
     assert tc.read_fill_uninitialized_memory() is True
     tc.write_fill_uninitialized_memory(False)
     assert stub.fill_uninitialized_memory is False
+
+
+def test_get_mha_fastpath_enabled_returns_none_when_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The read degrades to ``None`` (never crashes) when the switch is absent."""
+
+    monkeypatch.setattr(tc, "HAS_MHA_FASTPATH_SWITCH", False)
+    assert tc.get_mha_fastpath_enabled() is None
+
+
+def test_set_mha_fastpath_enabled_noops_when_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The write is a no-op (never crashes) when the switch is absent."""
+
+    monkeypatch.setattr(tc, "HAS_MHA_FASTPATH_SWITCH", False)
+    tc.set_mha_fastpath_enabled(True)  # must not raise
+
+
+@pytest.mark.skipif(
+    not tc.HAS_MHA_FASTPATH_SWITCH, reason="torch.backends.mha postdates the torch>=2.1 floor"
+)
+def test_get_set_mha_fastpath_enabled_round_trips_when_present() -> None:
+    """The read/write pair round-trips through the live public switch."""
+
+    prior = tc.get_mha_fastpath_enabled()
+    try:
+        tc.set_mha_fastpath_enabled(False)
+        assert tc.get_mha_fastpath_enabled() is False
+        tc.set_mha_fastpath_enabled(True)
+        assert tc.get_mha_fastpath_enabled() is True
+    finally:
+        tc.set_mha_fastpath_enabled(bool(prior))
+
+
+@pytest.mark.skipif(
+    not tc.HAS_MHA_FASTPATH_SWITCH, reason="torch.backends.mha postdates the torch>=2.1 floor"
+)
+def test_force_mha_slow_path_uses_the_public_switch_when_present() -> None:
+    """The switch is held off inside the block and restored after it."""
+
+    model = torch.nn.MultiheadAttention(4, 2, batch_first=True)
+    prior = tc.get_mha_fastpath_enabled()
+    with tc.force_mha_slow_path(model):
+        assert tc.get_mha_fastpath_enabled() is False
+    assert tc.get_mha_fastpath_enabled() == prior
+
+
+def test_force_mha_slow_path_falls_back_to_a_training_flip_when_switch_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Absent the switch, the affected modules' own training flag is flipped."""
+
+    monkeypatch.setattr(tc, "HAS_MHA_FASTPATH_SWITCH", False)
+    encoder_layer = torch.nn.TransformerEncoderLayer(4, 2, 8, batch_first=True).eval()
+    bare_mha = torch.nn.MultiheadAttention(4, 2, batch_first=True).eval()
+    model = torch.nn.ModuleDict({"layer": encoder_layer, "mha": bare_mha})
+    assert encoder_layer.training is False
+    assert encoder_layer.self_attn.training is False
+    assert bare_mha.training is False
+    with tc.force_mha_slow_path(model):
+        assert encoder_layer.training is True
+        assert encoder_layer.self_attn.training is True
+        assert bare_mha.training is True
+        # Untouched siblings keep their eval state -- only the two fast-path
+        # gate classes flip, never a cascading .train() over every submodule.
+        assert encoder_layer.dropout1.training is False
+    assert encoder_layer.training is False
+    assert encoder_layer.self_attn.training is False
+    assert bare_mha.training is False
+
+
+def test_force_mha_slow_path_restores_on_exception(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A block that raises still restores the prior state (finally-path pin)."""
+
+    monkeypatch.setattr(tc, "HAS_MHA_FASTPATH_SWITCH", False)
+    model = torch.nn.MultiheadAttention(4, 2, batch_first=True).eval()
+    with pytest.raises(RuntimeError, match="boom"):
+        with tc.force_mha_slow_path(model):
+            assert model.training is True
+            raise RuntimeError("boom")
+    assert model.training is False
 
 
 def test_tensor_any_over_dims_matches_native_any_on_every_axis_combo() -> None:

@@ -368,40 +368,34 @@ def _capture_for_report(model: Any, input_args: Any, input_kwargs: dict[str, Any
     """Run the model door's ONE capture under the summary execution contract.
 
     The fused ``nn.MultiheadAttention`` / ``nn.TransformerEncoderLayer`` fast
-    path is held OFF for the capture through the public
-    ``torch.backends.mha.set_fastpath_enabled`` switch (prior value restored
-    afterwards). Under eval + ``no_grad`` those modules otherwise dispatch to
+    path is held OFF for the capture through
+    :func:`torchlens.utils._torch_compat.force_mha_slow_path`. Under eval +
+    ``no_grad`` those modules otherwise dispatch to
     ``_native_multi_head_attention`` / ``_transformer_encoder_layer_fwd``:
     ONE opaque op each with no cost rule, so the report read 0 FLOPs
     (lower bound) for exactly the matmuls the unfused path counts
     formula-exact (AUD-CODE 3.12a). The arithmetic is identical on both
-    paths; only its visibility to the cost rules differs. Without the
-    switch (torch builds predating it) the fused ops stay disclosed as
-    unknown-cost rows, never counted as zero.
+    paths; only its visibility to the cost rules differs. On torch builds
+    predating the public ``torch.backends.mha`` switch (2.1-2.2,
+    ``HAS_MHA_FASTPATH_SWITCH`` is ``False``), the helper falls back to
+    flipping the affected modules' own ``training`` flag -- a real fallback,
+    not a degradation, since both fused fast paths check ``self.training``
+    on every supported torch version.
     """
 
     import torch
 
     from ..user_funcs import trace as _trace
+    from ..utils._torch_compat import force_mha_slow_path
     from ..utils.rng import log_current_rng_states, set_rng_from_saved_states
 
     saved_training_flags = [(module, module.training) for module in model.modules()]
     rng_snapshot = log_current_rng_states()
-    mha_backend = getattr(torch.backends, "mha", None)
-    get_fastpath = getattr(mha_backend, "get_fastpath_enabled", None)
-    set_fastpath = getattr(mha_backend, "set_fastpath_enabled", None)
-    fastpath_was: bool | None = None
-    if callable(get_fastpath) and callable(set_fastpath):
-        fastpath_was = bool(get_fastpath())
     try:
         model.eval()
-        if set_fastpath is not None and fastpath_was is not None:
-            set_fastpath(False)
-        with torch.no_grad():
+        with force_mha_slow_path(model), torch.no_grad():
             return _trace(model, input_args, input_kwargs or {})
     finally:
-        if set_fastpath is not None and fastpath_was is not None:
-            set_fastpath(fastpath_was)
         for module, was_training in saved_training_flags:
             module.training = was_training
         set_rng_from_saved_states(rng_snapshot)

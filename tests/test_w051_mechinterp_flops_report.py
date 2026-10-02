@@ -5,8 +5,11 @@
 fast path (``_native_multi_head_attention`` / ``_transformer_encoder_layer_fwd``)
 -- one opaque op with no cost rule -- so a 2-layer TransformerEncoder read
 0 FLOPs (lower bound) from the model door against 29520 from the trace door.
-The door now holds the fused path off for the capture (public switch,
-restored afterwards).
+The door now holds the fused path off for the capture through
+``torchlens.utils._torch_compat.force_mha_slow_path`` (the public
+``torch.backends.mha`` switch when available, restored afterwards; a
+per-module ``training`` flip on torch 2.1-2.2, where the switch does not
+exist yet).
 
 (c) The breakdown block listed depth-1 EXCLUSIVE mass, so nested-module
 FLOPs silently vanished (136 of 2376 shown, no remainder). It now lists
@@ -23,6 +26,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens.report import flops_report
+from torchlens.utils._torch_compat import HAS_MHA_FASTPATH_SWITCH
 
 pytestmark = pytest.mark.smoke
 
@@ -93,6 +97,13 @@ def test_model_door_counts_multihead_attention_completely() -> None:
     assert "nativemultiheadattention" not in " ".join(report.unknown_op_names)
 
 
+@pytest.mark.skipif(
+    not HAS_MHA_FASTPATH_SWITCH,
+    reason="torch.backends.mha postdates the torch>=2.1 floor; on torch 2.1-2.2 the "
+    "door's real fallback flips a per-module training flag instead of a public "
+    "switch, which test_model_door_counts_multihead_attention_completely already "
+    "exercises end to end",
+)
 def test_model_door_restores_the_fastpath_switch() -> None:
     """The public switch is restored to its prior value, whatever it was."""
 
@@ -107,6 +118,12 @@ def test_model_door_restores_the_fastpath_switch() -> None:
         mha_backend.set_fastpath_enabled(prior)
 
 
+@pytest.mark.skipif(
+    not HAS_MHA_FASTPATH_SWITCH,
+    reason="torch.backends.mha postdates the torch>=2.1 floor; the real fallback's "
+    "finally-path restore is exercised directly by force_mha_slow_path's own unit "
+    "tests on torch 2.1-2.2",
+)
 def test_model_door_restores_the_fastpath_switch_after_a_failing_forward() -> None:
     """A forward that raises still restores the switch (finally-path pin)."""
 
