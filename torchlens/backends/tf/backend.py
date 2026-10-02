@@ -189,36 +189,30 @@ class TFBackend:
         module_identity_mode = resolve_optional_capture_field(
             capture, "module_identity_mode", module_identity_mode
         )
-        layers_to_save = default_if_missing(layers_to_save, "all")
-        keep_orphans = default_if_missing(keep_orphans, False)
-        output_device = default_if_missing(output_device, "same")
+        # layers_to_save/keep_orphans/output_device/detach_saved_activations/
+        # save_arg_values/save_code_context/save_rng_states/
+        # recurrence_detection/compute_input_output_distances/verbose/
+        # backward_ready/save_raw_input/batch_render/save_raw_output/
+        # save_visualizations are CaptureOptions-native fields: the
+        # ``capture_options.<field>`` reads above already resolved each one to
+        # its concrete (non-MISSING) default via ``merge_capture_options``,
+        # with the same backend-local defaults this block used to re-apply.
+        # Re-running ``default_if_missing`` on an already-concrete value was a
+        # no-op at runtime, but it widened mypy's view of the variable back to
+        # its MISSING-including parameter type (``default_if_missing`` returns
+        # ``Any``, which does not narrow); resolving once at the merge
+        # boundary is the fix, not a second pass here.
         activation_transform = default_if_missing(activation_transform, None)
         save_raw_activations = default_if_missing(save_raw_activations, True)
-        detach_saved_activations = default_if_missing(detach_saved_activations, False)
         save_grads = default_if_missing(save_grads, None)
         random_seed = default_if_missing(random_seed, None)
         num_context_lines = default_if_missing(num_context_lines, 7)
-        save_arg_values = default_if_missing(save_arg_values, False)
-        save_code_context = default_if_missing(save_code_context, False)
-        save_rng_states = default_if_missing(save_rng_states, False)
-        recurrence_detection = default_if_missing(recurrence_detection, True)
-        # Torch-parity default: the depth flood runs unless explicitly disabled.
-        # This line was the one omission from this normalization block, so the
-        # public MISSING sentinel reached bool() truthy and the flood was
-        # unconditionally on with no off switch.
-        compute_input_output_distances = default_if_missing(compute_input_output_distances, True)
-        verbose = default_if_missing(verbose, False)
-        backward_ready = default_if_missing(backward_ready, False)
         name = default_if_missing(name, None)
         module_filter = default_if_missing(module_filter, None)
         transform = default_if_missing(transform, None)
         raw_input = default_if_missing(raw_input, None)
-        save_raw_input = default_if_missing(save_raw_input, "small")
-        batch_render = default_if_missing(batch_render, "auto")
         output_transform = default_if_missing(output_transform, None)
-        save_raw_output = default_if_missing(save_raw_output, "small")
         layer_visualizers = default_if_missing(layer_visualizers, None)
-        save_visualizations = default_if_missing(save_visualizations, False)
         module_identity_mode = default_if_missing(module_identity_mode, None)
         grad_options = default_if_missing(grad_options, None)
         intervene = default_if_missing(intervene, None)

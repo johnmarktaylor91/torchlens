@@ -368,35 +368,32 @@ class PaddleBackend:
         module_identity_mode = _resolve_optional_capture_field(
             capture, "module_identity_mode", module_identity_mode
         )
-        layers_to_save = _default_if_missing(layers_to_save, "all")
-        keep_orphans = _default_if_missing(keep_orphans, False)
-        output_device = _default_if_missing(output_device, "same")
+        # layers_to_save/keep_orphans/output_device/detach_saved_activations/
+        # save_arg_values/save_code_context/save_rng_states/
+        # recurrence_detection/compute_input_output_distances/verbose/
+        # backward_ready/save_raw_input/batch_render/save_raw_output/
+        # save_visualizations are CaptureOptions-native fields: the
+        # ``capture_options.<field>`` reads above already resolved each one to
+        # its concrete (non-MISSING) default via ``merge_capture_options``,
+        # with the same backend-local defaults this block used to re-apply.
+        # Re-running ``_default_if_missing`` on an already-concrete value was
+        # a no-op at runtime, but it widened mypy's view of the variable back
+        # to its MISSING-including parameter type (``_default_if_missing``
+        # returns ``Any``, which does not narrow); resolving once at the
+        # merge boundary is the fix, not a second pass here.
         activation_transform = _default_if_missing(activation_transform, None)
         save_raw_activations = _default_if_missing(save_raw_activations, True)
-        detach_saved_activations = _default_if_missing(detach_saved_activations, False)
         save_grads = _default_if_missing(save_grads, None)
         random_seed = _default_if_missing(random_seed, None)
         num_context_lines = _default_if_missing(num_context_lines, 7)
-        save_arg_values = _default_if_missing(save_arg_values, False)
-        save_code_context = _default_if_missing(save_code_context, False)
-        save_rng_states = _default_if_missing(save_rng_states, False)
-        recurrence_detection = _default_if_missing(recurrence_detection, True)
-        verbose = _default_if_missing(verbose, False)
-        backward_ready = _default_if_missing(backward_ready, False)
         name = _default_if_missing(name, None)
         module_filter = _default_if_missing(module_filter, None)
         transform = _default_if_missing(transform, None)
         raw_input = _default_if_missing(raw_input, None)
-        save_raw_input = _default_if_missing(save_raw_input, "small")
-        batch_render = _default_if_missing(batch_render, "auto")
         output_transform = _default_if_missing(output_transform, None)
-        save_raw_output = _default_if_missing(save_raw_output, "small")
         layer_visualizers = _default_if_missing(layer_visualizers, None)
-        save_visualizations = _default_if_missing(save_visualizations, False)
         module_identity_mode = _default_if_missing(module_identity_mode, None)
         grad_options = _default_if_missing(grad_options, None)
-        # Torch-parity default: the depth flood runs unless explicitly disabled.
-        compute_input_output_distances = _default_if_missing(compute_input_output_distances, True)
         save_predicate = pop_static_label_save_predicate(extra_kwargs, backend_name="paddle")
         intervene = _default_if_missing(extra_kwargs.pop("intervene", None), None)
         halt = _default_if_missing(extra_kwargs.pop("halt", None), None)
