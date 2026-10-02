@@ -19,6 +19,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import torchlens as tl
+from torchlens.postprocess.graph_traversal import output_payload_aliases_parent
 from torchlens.receptive_field import ReceptiveFieldStatus, ReceptiveFieldValidationStatus
 
 torch.manual_seed(0)
@@ -240,13 +241,17 @@ def test_tensor_derived_shape_control_branch_preserves_exact_rf() -> None:
     # FINDING B1-19b: verify() emits one row per DIRECTION for the same
     # (op, unit), and the two directions are not interchangeable here. The
     # receptive direction is the property this test exists for and must PASS.
-    # The projective direction is structurally inapplicable: this op's only
-    # child is the structural OUTPUT MARKER, whose saved payload is an
-    # independent clone of the same captured value, so there is no autograd edge
-    # between the two saved tensors for a VJP to traverse. That stays
-    # INDETERMINATE -- fail-closed, never upgraded to a PASS it cannot prove --
-    # and its message must name the real cause instead of prescribing the
-    # save_mode the trace is ALREADY using (the SF-04 circular-remedy class).
+    # The projective direction depends on whether this op's only child, the
+    # structural OUTPUT MARKER, rides the SAME payload as its parent: HONESTY
+    # 13-R1 (postprocess.graph_traversal.output_payload_aliases_parent)
+    # deliberately shares one payload when the returned value IS the
+    # producer's retained value bit-for-bit, in which case there IS a real
+    # autograd edge (they are the same tensor) and PASS is the honest answer.
+    # Only when the two payloads are genuinely independent copies is there no
+    # VJP to traverse, so that case stays INDETERMINATE -- fail-closed, never
+    # upgraded to a PASS it cannot prove -- and its message must name the real
+    # cause instead of prescribing the save_mode the trace is ALREADY using
+    # (the SF-04 circular-remedy class).
     receptive_results = [
         result
         for result in target_results
@@ -259,12 +264,21 @@ def test_tensor_derived_shape_control_branch_preserves_exact_rf() -> None:
     ]
     assert receptive_results
     assert all(result.status is ReceptiveFieldValidationStatus.PASS for result in receptive_results)
+    output_children = [
+        label for label in verify_target.children if label in verify_trace.output_layers
+    ]
+    aliases_parent = bool(output_children) and output_payload_aliases_parent(
+        verify_trace[output_children[0]].out, verify_target.out
+    )
     for result in projective_results:
-        assert result.status is ReceptiveFieldValidationStatus.INDETERMINATE
-        assert "structural output marker" in result.message
-        assert "save_mode" not in result.message, (
-            "an INDETERMINATE remedy must not prescribe the save mode already in force"
-        )
+        if aliases_parent:
+            assert result.status is ReceptiveFieldValidationStatus.PASS
+        else:
+            assert result.status is ReceptiveFieldValidationStatus.INDETERMINATE
+            assert "structural output marker" in result.message
+            assert "save_mode" not in result.message, (
+                "an INDETERMINATE remedy must not prescribe the save mode already in force"
+            )
     assert verified.verdict is not ReceptiveFieldValidationStatus.FAIL
 
 
