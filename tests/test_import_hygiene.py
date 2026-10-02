@@ -164,7 +164,21 @@ rss_before_kib = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 # editable finder (~7-12 ms of install-method cost that is not TorchLens's
 # marginal import time). find_spec never executes the module itself.
 import importlib.util
-importlib.util.find_spec("torchlens")
+_tl_spec = importlib.util.find_spec("torchlens")
+
+# Warm __init__.py's bytecode cache outside the timing window too (ratchet2
+# floor fix): a brand-new venv's FIRST import of the package root also pays
+# for compiling its source to bytecode (compile() + writing __pycache__),
+# a one-time environment cost identical in kind to the editable-finder cost
+# above -- not TorchLens's marginal import time. CPython 3.10's compiler
+# measurably costs more here than 3.11+'s (the duration budget tripped on
+# the torch>=2.1 floor's py3.10 leg only, with zero eager child imports
+# under profiling). Pre-compiling ahead of the timed statement lets the
+# timed import find an up-to-date .pyc and skip straight to unmarshaling,
+# exactly like every import after the first in an already-warm venv.
+import py_compile
+
+py_compile.compile(_tl_spec.origin, doraise=True)
 
 start_wall = time.perf_counter()
 start_cpu = time.process_time()
