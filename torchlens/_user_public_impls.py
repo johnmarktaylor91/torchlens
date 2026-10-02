@@ -1864,6 +1864,35 @@ def _validate_forward_pass_torch(
         if retrace_outcome == "mismatch":
             _downgrade_retrace_mismatch_to_unverified(trace)
             outs_are_valid = False
+            from .validation.diagnostics import (
+                CHECK_RETRACE_MISMATCH,
+                ValidationFailure,
+                record_validation_failure,
+            )
+
+            retrace_diagnostic = next(
+                (
+                    diagnostic
+                    for diagnostic in get_validation_diagnostics(trace)
+                    if diagnostic.check == "trace_retrace_structure_mismatch"
+                ),
+                None,
+            )
+            record_validation_failure(
+                trace,
+                ValidationFailure(
+                    check=CHECK_RETRACE_MISMATCH,
+                    message=(
+                        retrace_diagnostic.message
+                        if retrace_diagnostic is not None
+                        else (
+                            "pristine re-trace diverged structurally after a "
+                            "replay that otherwise passed"
+                        )
+                    ),
+                    extra=dict(retrace_diagnostic.extra) if retrace_diagnostic is not None else {},
+                ),
+            )
         elif isinstance(validation_result, bool):
             outs_are_valid = validation_result
         else:

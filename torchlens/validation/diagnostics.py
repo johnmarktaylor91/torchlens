@@ -46,6 +46,18 @@ CHECK_METADATA_INVARIANT = "metadata_invariant"
 #: recorded with ``trace=None`` and read back through the process-level
 #: ``last_validation_failure()`` side channel via ``get_validation_failure(None)``.
 CHECK_PRECONDITION = "precondition_refusal"
+#: A pristine fresh re-trace (``_warn_if_validation_trace_not_reproducible``)
+#: diverged structurally from the first capture -- the model has a one-time
+#: side effect (commonly a lazily-populated cache attribute) that changes its
+#: op graph on a second call from the same state. ``_downgrade_retrace_mismatch_
+#: to_unverified`` forces the overall result to ``False`` even when the replay
+#: itself passed cleanly, but that downgrade previously only recorded a
+#: non-failing ``ValidationDiagnostic`` (``trace_retrace_structure_mismatch``,
+#: ADD-ONLY by the diagnostics module's own contract), never a
+#: ``ValidationFailure`` -- the one mechanism this decision-flipping downgrade
+#: actually needs. ``get_validation_failure(trace)`` returned ``None`` for a
+#: ``False`` result, the bare-``repr(False)`` menagerie's ``convit_*`` rows hit.
+CHECK_RETRACE_MISMATCH = "retrace_mismatch"
 
 
 @dataclass
