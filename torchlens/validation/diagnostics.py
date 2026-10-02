@@ -38,6 +38,14 @@ CHECK_PERTURBATION = "perturbation"
 CHECK_ARG_LOGGING = "argument_logging"
 CHECK_COMPLETENESS = "bfs_completeness"
 CHECK_METADATA_INVARIANT = "metadata_invariant"
+#: An early structural refusal in ``_validate_forward_pass_torch`` (an
+#: unreproducible input topology, an unsnapshotable plain attribute, a
+#: non-pristine ground truth, a dropped-output enumeration defect) that
+#: returns bare ``False`` BEFORE Step 2 builds a ``Trace``. These have no
+#: live ``Trace`` to attach a :class:`ValidationFailure` to, so they are
+#: recorded with ``trace=None`` and read back through the process-level
+#: ``last_validation_failure()`` side channel via ``get_validation_failure(None)``.
+CHECK_PRECONDITION = "precondition_refusal"
 
 
 @dataclass
@@ -249,8 +257,18 @@ def record_validation_failure(trace: Any, failure: ValidationFailure) -> None:
 
 
 def get_validation_failure(trace: Any) -> ValidationFailure | None:
-    """Return the recorded structured failure on a Trace, if any."""
+    """Return the recorded structured failure on a Trace, if any.
 
+    ``trace=None`` is the explicit signal that no ``Trace`` was ever built
+    (an early ``CHECK_PRECONDITION`` refusal in ``_validate_forward_pass_torch``)
+    rather than one that built cleanly and simply has no failure attached;
+    only that case falls back to the process-level ``last_validation_failure()``
+    side channel, so a Trace that genuinely passed never has a failure invented
+    for it.
+    """
+
+    if trace is None:
+        return last_validation_failure()
     try:
         failure = getattr(trace, TRACE_FAILURE_ATTR, None)
     except Exception:

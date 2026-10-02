@@ -1393,6 +1393,55 @@ def _downgrade_retrace_mismatch_to_unverified(trace: Trace) -> None:
     )
 
 
+def _refuse_validation_precondition(
+    message: str,
+    trace_observer: Callable[[Trace | None], None] | None = None,
+) -> Literal[False]:
+    """Warn, record a structured precondition-refusal diagnostic, and refuse.
+
+    ``_validate_forward_pass_torch`` has several early-exit sites (an
+    unreproducible input topology, an unsnapshotable plain attribute, a
+    non-pristine ground truth, a dropped-output enumeration defect) that
+    return bare ``False`` before Step 2 builds a ``Trace``. A ``Trace``-scoped
+    :class:`~.validation.diagnostics.ValidationFailure` (the mechanism every
+    later mismatch uses) has nothing to attach to at these sites, so a caller
+    reading only ``get_validation_failure(trace)`` saw nothing and fell back to
+    an uninformative ``repr(False)`` (menagerie's ``convit_*`` "replay failed
+    (False)" rows). Recording with ``trace=None`` makes the reason reachable
+    through ``get_validation_failure(None)`` / ``last_validation_failure()``;
+    invoking the caller's ``_trace_observer`` (with ``trace=None``, which every
+    known observer already treats as "nothing to summarize yet", the same as
+    a trace that never ran) at the SAME early-exit site it would otherwise
+    never see makes that reason reach an observer-based caller too, not just
+    one that happens to poll ``get_validation_failure`` directly.
+
+    Parameters
+    ----------
+    message:
+        Human-readable refusal reason, also emitted as a ``RuntimeWarning``.
+    trace_observer:
+        The caller's optional ``_trace_observer``, forwarded ``None`` in
+        place of a ``Trace`` so it still runs at this early exit.
+
+    Returns
+    -------
+    Literal[False]
+        Always ``False``, for ``return _refuse_validation_precondition(...)``.
+    """
+
+    warnings.warn(message, RuntimeWarning, stacklevel=3)
+    from .validation.diagnostics import (
+        CHECK_PRECONDITION,
+        ValidationFailure,
+        record_validation_failure,
+    )
+
+    record_validation_failure(None, ValidationFailure(check=CHECK_PRECONDITION, message=message))
+    if trace_observer is not None:
+        trace_observer(None)
+    return False
+
+
 def _validate_forward_pass_torch(
     model: nn.Module | Callable[..., Any],
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
@@ -1402,7 +1451,7 @@ def _validate_forward_pass_torch(
     validate_metadata: bool = True,
     *,
     num_threads: int | None = None,
-    _trace_observer: Callable[[Trace], None] | None = None,
+    _trace_observer: Callable[[Trace | None], None] | None = None,
 ) -> bool:
     """Validate that saved outs faithfully reproduce the model's output.
 
@@ -1450,7 +1499,12 @@ def _validate_forward_pass_torch(
         restores the previous thread count afterward.
     _trace_observer:
         Optional private callback invoked with the completed validation trace
-        after replay validation and before cleanup.
+        after replay validation and before cleanup. Also invoked with
+        ``None`` at an earlier CHECK_PRECONDITION refusal site (an
+        unreproducible input topology, an unsnapshotable plain attribute, a
+        non-pristine ground truth, a dropped-output enumeration defect) that
+        returns before any ``Trace`` exists, so a caller is never left with
+        no observer call at all and an uninformative bare ``False``.
 
     Returns
     -------
@@ -1458,6 +1512,12 @@ def _validate_forward_pass_torch(
         True if all validation checks pass, False otherwise.
     """
     warn_parallel()
+    from .validation.diagnostics import reset_validation_failure
+
+    # Clear any stale precondition-refusal failure from a prior call on this
+    # process (CHECK_PRECONDITION sites below have no Trace to reset against,
+    # unlike the Trace-scoped reset in core.validate_saved_outs).
+    reset_validation_failure(None)
     # F41 bound-method roots: validation captures through the same ruled root
     # contract as tl.trace -- a bound method of an nn.Module wraps into the
     # TL-authored synthetic root before the module-shaped preflights run;
@@ -1499,13 +1559,11 @@ def _validate_forward_pass_torch(
         input_kwargs,
     )
     if input_copy_gaps:
-        warnings.warn(
+        return _refuse_validation_precondition(
             "TorchLens validation cannot reproduce the caller's input topology: "
             f"{input_copy_gaps!r}. Returning False rather than validating altered semantics.",
-            RuntimeWarning,
-            stacklevel=2,
+            _trace_observer,
         )
-        return False
 
     # A META first parameter never pins the input device: offload-hooked
     # models (accelerate device_map / cpu/disk offload, lane F37) hold meta
@@ -1594,15 +1652,13 @@ def _validate_forward_pass_torch(
             torch.set_num_threads(num_threads)
         ground_truth_model, plain_attr_snapshot = _model_for_ground_truth_validation(model)
         if plain_attr_snapshot is not None and not plain_attr_snapshot.is_complete:
-            warnings.warn(
+            return _refuse_validation_precondition(
                 "TorchLens validation cannot prove model-state restoration after deepcopy "
                 "failed because these plain attributes are unsupported: "
                 f"{plain_attr_snapshot.unsupported_attr_paths!r}. Returning False rather "
                 "than reporting unverified success.",
-                RuntimeWarning,
-                stacklevel=2,
+                _trace_observer,
             )
-            return False
         from ._errors import CaptureContextError
         from .backends.torch.ops import _walk_output_tensors_with_paths
         from .validation._pristine import pristine_torch_oracle
@@ -1620,16 +1676,14 @@ def _validate_forward_pass_torch(
             with pristine_torch_oracle():
                 ground_truth_output = ground_truth_model(*input_args_copy, **input_kwargs_copy)
         except CaptureContextError:
-            warnings.warn(
+            return _refuse_validation_precondition(
                 "TorchLens validation could not compute a pristine-torch ground "
                 "truth (a capture is active in this process, or the unwrap "
                 "ledger is poisoned); the verdict would depend on the wrapper "
                 "installation it is meant to check. Returning False rather "
                 "than reporting unverified success.",
-                RuntimeWarning,
-                stacklevel=2,
+                _trace_observer,
             )
-            return False
         ground_truth_output_all = [
             (tensor, tuple(path))
             for tensor, path, _container_spec in _walk_output_tensors_with_paths(
@@ -1661,16 +1715,14 @@ def _validate_forward_pass_torch(
         # the independent walk found that the adapter MISSED are exactly the
         # dropped-output defect class.
         if missed_by_adapter:
-            warnings.warn(
+            return _refuse_validation_precondition(
                 "TorchLens validation found a ground-truth output-enumeration "
                 f"defect: {len(missed_by_adapter)} tensor leaf(ves) reachable in "
                 "the model output are missing from the capture-side walker's "
                 "enumeration. Validation fails rather than validating against "
                 "the same defective enumeration.",
-                RuntimeWarning,
-                stacklevel=2,
+                _trace_observer,
             )
-            return False
         # Deduplicate by structural address to match how capture/trace.py extracts
         # outputs (same tensor returned in multiple positions is counted once).
         addresses_used = []
@@ -1699,15 +1751,13 @@ def _validate_forward_pass_torch(
             validation_plain_attr_snapshot is not None
             and not validation_plain_attr_snapshot.is_complete
         ):
-            warnings.warn(
+            return _refuse_validation_precondition(
                 "TorchLens validation cannot prove replay-state restoration after deepcopy "
                 "failed because these plain attributes are unsupported: "
                 f"{validation_plain_attr_snapshot.unsupported_attr_paths!r}. Returning False "
                 "rather than reporting unverified success.",
-                RuntimeWarning,
-                stacklevel=2,
+                _trace_observer,
             )
-            return False
         validation_state_dict = _clone_state_dict_with_metadata(validation_model)
         (
             validation_input_args,
@@ -1721,13 +1771,11 @@ def _validate_forward_pass_torch(
         ) = safe_copy_input_tree(input_args, input_kwargs)
         if validation_input_gaps or reproducibility_input_gaps:
             copy_gaps = validation_input_gaps + reproducibility_input_gaps
-            warnings.warn(
+            return _refuse_validation_precondition(
                 "TorchLens validation cannot reproduce the caller's input topology: "
                 f"{copy_gaps!r}. Returning False rather than validating altered semantics.",
-                RuntimeWarning,
-                stacklevel=2,
+                _trace_observer,
             )
-            return False
         if model_device is not None:
             validation_input_args = _move_tensors_to_device(validation_input_args, model_device)
             validation_input_kwargs = _move_tensors_to_device(validation_input_kwargs, model_device)
