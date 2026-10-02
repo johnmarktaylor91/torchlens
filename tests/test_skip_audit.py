@@ -283,7 +283,13 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
     ),
     "torch_geometric": (TEST_EXTRA, "torch_geometric"),
     "torch_geometric.nn": (TEST_EXTRA, "torch_geometric"),
-    "torchaudio": (TEST_EXTRA, "torchaudio"),
+    "torchaudio": (
+        UNAVAILABLE_OK,
+        "deliberately NOT in the test extra (pyproject.toml): torchaudio's last "
+        "release (2.11.0) is built only for torch 2.11 and fails to load "
+        "(undefined symbol: torch_library_impl) against every other declared "
+        "torch; the model tests importorskip it by design",
+    ),
     "torchvision": (TEST_EXTRA, "torchvision"),
     "torchvision.models": (TEST_EXTRA, "torchvision"),
     "torchvision.models.resnet": (TEST_EXTRA, "torchvision"),
@@ -1175,21 +1181,25 @@ TRIPWIRE_GUARD_TARGETS: dict[str, str] = {
         "strict protobuf JSON parse inside the netron-export acceptance gate "
         "(same tests as the onnx target)"
     ),
-    "netron": (
-        "tests/test_netron_export_vendor.py (the executed netron 9.2.2 parser "
-        "harness -- what netron WOULD draw) and the serve round-trip in "
-        "tests/test_netron_export_serve.py; absence reverts both to the "
-        "transcribed-sniffer canary"
-    ),
-    "playwright.sync_api": (
-        "tests/test_netron_export_browser.py (T4 semantic smoke -- the ONLY "
-        "layer catching the silent-hang class: the function-cycle crash shows "
-        "a dialog, renders nothing, and logs no console error)"
-    ),
 }
 
 #: unavailable-ok target -> why its absence is breadth loss, not gate loss.
 OPTIONAL_INTEGRATION_TARGETS: dict[str, str] = {
+    "netron": (
+        "tests/test_netron_export_vendor.py (the executed netron 9.2.2 parser "
+        "harness) and the serve round-trip in tests/test_netron_export_serve.py; "
+        "netron is its OWN declared extra (not part of [test]) and the dedicated "
+        "nightly.yml netron-vendor job installs it and independently attests the "
+        "executed floor for both files, so the full-[test]-extra box never needs "
+        "it -- absence there costs nothing beyond the transcribed-sniffer canary"
+    ),
+    "playwright.sync_api": (
+        "tests/test_netron_export_browser.py (T4 semantic smoke); Playwright has "
+        "no declared extra and installs nowhere in CI -- the browser smoke stays "
+        "queued per the gate-law ruling in nightly.yml's netron-vendor job "
+        "comment, so its absence is the documented current state, not a silent "
+        "regression"
+    ),
     "clearml": (
         "T-RELAY-C relay-fidelity pin (F26); absence costs the vendor pin "
         "only -- the dep-free relay-law halves (detection + the G6 histogram "
@@ -1224,6 +1234,11 @@ OPTIONAL_INTEGRATION_TARGETS: dict[str, str] = {
     "torch.distributed.tensor": "torch build/version capability probe",
     "torch.distributed.tensor.parallel": "torch build/version capability probe",
     "torch.nn.attention.bias": "torch version capability probe",
+    "torchaudio": (
+        "deliberately undeclared in [test] (undefined-symbol load failure against "
+        "every torch except its own pinned 2.11.0); the model tests importorskip "
+        "it, costing breadth only"
+    ),
 }
 
 
