@@ -146,7 +146,10 @@ def resolve_raw_label(trace: Any, raw_label: Any) -> tuple[str | None, str]:
 
     if not isinstance(raw_label, str) or not raw_label:
         return None, LABEL_STATUS_UNAVAILABLE
-    mapping = getattr(trace, "_raw_to_final_layer_labels", None) if trace is not None else None
+    try:
+        mapping = trace._raw_to_final_layer_labels if trace is not None else None
+    except AttributeError:
+        mapping = None
     if isinstance(mapping, dict):
         final = mapping.get(raw_label)
         if isinstance(final, str) and final:

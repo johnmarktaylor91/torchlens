@@ -137,5 +137,8 @@ def read_peak_pair(trace: Any) -> dict[str, Any] | None:
         Read-only copy of the measured pair, or ``None``.
     """
 
-    pair = getattr(trace, "_forward_peak_memory_pair", None)
+    try:
+        pair = trace._forward_peak_memory_pair
+    except AttributeError:
+        pair = None
     return dict(pair) if pair is not None else None
