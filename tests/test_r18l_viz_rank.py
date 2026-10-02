@@ -290,3 +290,30 @@ def test_m10_rank_engine_applies_dpi_and_overrides(tmp_path):
         dpi=123,
     )
     assert "dpi=123" not in src_svg
+
+
+# ---------------------------------------------------------------------------
+# Rank engine creates its output directory (parity with the dot engine)
+# ---------------------------------------------------------------------------
+def test_rank_engine_creates_missing_output_directory(tmp_path):
+    """The rank layout path must create a non-existent nested container_path.
+
+    The dot-layout path (_render_utils.render_dot_to_file) always creates its
+    output directory first; the rank-layout path (chosen automatically for
+    large graphs -- e.g. detection models with many nodes) wrote straight to
+    ``f"{vis_outpath}.dot"`` with no such check, raising ``FileNotFoundError``
+    whenever ``container_path``'s directory did not already exist (weekly CI,
+    2026-10-02: keypointrcnn/fasterrcnn detection model tests).
+    """
+
+    outdir = tmp_path / "new" / "nested" / "dir"
+    assert not outdir.exists()
+    trace = tl.trace(_rank_model(), torch.ones(1, 2))
+    trace.draw(
+        vis_outpath=str(outdir / "graph"),
+        vis_fileformat="svg",
+        vis_save_only=True,
+        vis_node_placement="rank",
+    )
+    assert (outdir / "graph.dot").exists()
+    assert (outdir / "graph.svg").exists()
