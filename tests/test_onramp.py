@@ -160,7 +160,12 @@ def test_batched_extract_memory_and_disk_on_three_architectures(
     )
     assert len(container_paths) == 2
     assert all(path.exists() for path in container_paths)
-    assert label in torch.load(container_paths[0])
+    # extract_dataset's disk-mode shards default to safetensors (v2 default,
+    # torchlens/dataset_extraction.py), not torch.save pickle: read the shard
+    # with its actual writer format instead of assuming the legacy ``.pt`` codec.
+    from safetensors.torch import load_file
+
+    assert label in load_file(str(container_paths[0]))
 
 
 def test_list_modules_on_three_architectures(architecture: tuple[nn.Module, torch.Tensor]) -> None:
