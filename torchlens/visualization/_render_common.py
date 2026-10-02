@@ -321,7 +321,14 @@ _NOISE_BUFFER_NAMES = frozenset({"running_mean", "running_var", "num_batches_tra
 # argument-order labels exactly where they carry meaning (vizmech D14).
 COMMUTE_FUNCS = ["add", "mul", "eq", "ne"]
 SIBLING_ORDER_NODE_CAP = 2000
-SIBLING_ORDER_STRETCH_CAP = 4.5
+# Measured on torch 2.7.1+cpu / torchvision 0.22.1+cpu (nightly fast-tier leg,
+# 2026-10-02): GoogLeNet's nine genuine Inception sibling fanouts all measure a
+# local incident-edge stretch ratio of ~5.40-5.41 under this environment's dot
+# layout -- comfortably clustered, not marginal -- versus ~4.5 or below on the
+# canonical/newest-admitted torch+torchvision pins. 5.75 keeps headroom above
+# the measured cluster while remaining well below the >=9 (near-10x) ratios a
+# genuinely mismatched/non-sibling candidate produces.
+SIBLING_ORDER_STRETCH_CAP = 5.75
 SIBLING_ORDER_EPSILON = 1e-9
 # Worst-case number of full ``dot -Tplain`` layouts the sibling-ordering
 # verifier can run on top of the final render: baseline, injected, the
