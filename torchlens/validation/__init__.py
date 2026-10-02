@@ -101,6 +101,20 @@ def validate_tlspec(
         raise ValueError(f"Unrecognized TorchLens .tlspec format at {tlspec_path}.")
 
     manifest = inspect_tlspec(tlspec_path)
+    # A manifest with `tlspec_version` but no `kind` is ambiguous between two
+    # real shapes: a modern manifest whose `kind` was lost (routes here, below,
+    # as v2.0_unified and defaults `kind` to "trace"), and a genuinely old
+    # pre-"kind"-discriminator artifact whose tlspec_version is itself below
+    # the rehydration floor (a checked-in v2.16.0 fixture with tlspec_version=2
+    # and none of the modern schema fields -- R73 fast-tier finding, 2026-10).
+    # The numeric floor check must run BEFORE schema validation so the second
+    # case refuses with the floor named, not a generic missing-required-fields
+    # error; `_load_unified_tlspec`'s own preflight already does this (see
+    # `_preflight_unified_trace_manifest` in torchlens/_io/bundle.py) -- mirror
+    # it here so validate_tlspec() refuses the same way standalone.
+    from .._io.format_contract import raise_if_manifest_below_floor
+
+    raise_if_manifest_below_floor(manifest.get("tlspec_version"), str(tlspec_path))
     # `kind` is a ledgered legacy-manifest tolerance
     # (test_tlspec_parse_fuzz.py _OPTIONAL_KEYS): an absent `kind` means a
     # plain trace, the only kind that existed before the bundle/intervention
