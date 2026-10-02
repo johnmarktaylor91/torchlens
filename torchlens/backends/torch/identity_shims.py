@@ -556,7 +556,12 @@ def _install_causal_bias_shim(records: list[tuple[Any, str, Any]]) -> None:
         # multiple-dispatch TypeError). Call the underlying function with
         # the REAL ``cls`` received here instead of letting attribute
         # access rebind it.
-        return torch.Tensor.__torch_function__.__func__(cls, func, types, args, kwargs)
+        # ``torch.Tensor.__torch_function__`` is stub-typed as a plain bound
+        # callable with no ``__func__``; it is a classmethod at runtime, and
+        # ``__func__`` is how this unbinds it to call with the real ``cls``
+        # above instead of the implicit ``torch.Tensor`` binding.
+        unbound_torch_function = getattr(torch.Tensor.__torch_function__, "__func__")
+        return unbound_torch_function(cls, func, types, args, kwargs)
 
     _register_shim(causal_bias_shim)
     causal_bias.__torch_function__ = classmethod(causal_bias_shim)
