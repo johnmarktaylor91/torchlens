@@ -3048,7 +3048,20 @@ def _linear_zero_weight_input_decision(
     layers_to_perturb: list[str],
     args: tuple[Any, ...],
 ) -> PosthocPerturbDecision:
-    """Return a proof decision for a linear input under all-zero weights.
+    """Return a proof decision for a linear operand annihilated by its zero sibling.
+
+    ``linear(input, weight) = input @ weight.T`` is bilinear: an all-zero
+    ``weight`` annihilates sensitivity to ``input``, and symmetrically an
+    all-zero ``input`` annihilates sensitivity to ``weight`` -- the same
+    two-way symmetry ``_multiplicative_zero_annihilator_decision`` already
+    gives plain ``mul``. The weight-perturbed direction matters whenever
+    ``weight`` is itself a traced graph parent rather than a static leaf
+    parameter, for example ``nn.MultiheadAttention``'s combined in-projection,
+    which splits ``in_proj_weight`` into q/k/v chunks via ``split_with_sizes``
+    before the query projection's ``linear`` call -- a zero-initialized class
+    token (menagerie's compact CaiT reimplementation) makes that query
+    projection's INPUT all-zero, which would otherwise spuriously fail
+    perturbation on the (non-zero) weight chunk.
 
     Parameters
     ----------
@@ -3063,20 +3076,27 @@ def _linear_zero_weight_input_decision(
     -------
     PosthocPerturbDecision
         Exempt decision when the perturbed parent is the input and the saved
-        weight matrix is all zero.
+        weight matrix is all zero, or when the perturbed parent is the weight
+        and the saved input is all zero.
     """
 
     if len(layers_to_perturb) != 1:
         return PosthocPerturbDecision(False, "not_linear_zero_weight_input")
     arg_positions = layer.parent_arg_positions.get("args", {})
     perturbed_label = layers_to_perturb[0]
-    if arg_positions.get(0) != perturbed_label:
+    if arg_positions.get(0) == perturbed_label:
+        other_position = 1
+    elif arg_positions.get(1) == perturbed_label:
+        other_position = 0
+    else:
         return PosthocPerturbDecision(False, "not_linear_zero_weight_input")
-    if _is_all_zero_value(args[1]):
+    if len(args) <= other_position:
+        return PosthocPerturbDecision(False, "not_linear_zero_weight_input")
+    if _is_all_zero_value(args[other_position]):
         return PosthocPerturbDecision(
             True,
             "multiplicative_zero_annihilator",
-            "linear input is annihilated by an all-zero saved weight matrix",
+            f"non-perturbed linear operand at args[{other_position}] is all zero",
         )
     return PosthocPerturbDecision(False, "not_linear_zero_weight_input")
 

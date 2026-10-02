@@ -969,6 +969,54 @@ def test_sdpa_zero_query_decision_scoped_correctly() -> None:
     )
 
 
+def test_linear_zero_input_annihilates_weight_perturbation() -> None:
+    """``_linear_zero_weight_input_decision`` must also cover the MIRROR shape.
+
+    Found while taking the sdpa zero-query fix to a real end-to-end pass:
+    ``nn.MultiheadAttention``'s combined in-projection splits ``in_proj_weight`` into
+    q/k/v chunks via ``split_with_sizes``, so the query projection's WEIGHT (not just
+    its input) is a traced graph parent. The existing exemption only covered
+    "perturbed input, zero weight"; when the zero-initialized class token makes
+    ``linear``'s INPUT all-zero instead, perturbing the (non-zero, split-derived)
+    WEIGHT parent fell through to a spurious ``perturbation_insensitive`` failure --
+    the exact mirror of the already-proved shape (``linear`` is bilinear in
+    input/weight, so either operand being zero annihilates sensitivity to the
+    other, the same symmetry ``_multiplicative_zero_annihilator_decision`` already
+    gives plain ``mul``).
+    """
+
+    from torchlens.validation.exemptions import _linear_zero_weight_input_decision
+
+    class _FakeLinearOp:
+        def __init__(self, input_value, weight_value) -> None:
+            self.saved_args = (input_value, weight_value)
+            self.parent_arg_positions = {
+                "args": {0: "input_label", 1: "weight_label"},
+                "kwargs": {},
+            }
+
+    zero_input = torch.zeros(2, 4)
+    nonzero_weight = torch.randn(4, 4)
+
+    layer = _FakeLinearOp(zero_input, nonzero_weight)
+    assert (
+        _linear_zero_weight_input_decision(layer, ["weight_label"], layer.saved_args).exempt is True
+    )
+    # Perturbing the (zero) input itself is never exempted by this proof.
+    assert (
+        _linear_zero_weight_input_decision(layer, ["input_label"], layer.saved_args).exempt is False
+    )
+
+    nonzero_input = torch.randn(2, 4)
+    nonzero_layer = _FakeLinearOp(nonzero_input, nonzero_weight)
+    assert (
+        _linear_zero_weight_input_decision(
+            nonzero_layer, ["weight_label"], nonzero_layer.saved_args
+        ).exempt
+        is False
+    )
+
+
 def test_softmax_singleton_reduction_dim_validates() -> None:
     """A softmax reduced over a size-1 dim must not fail its perturbation check.
 
