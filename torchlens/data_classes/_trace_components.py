@@ -533,4 +533,26 @@ TRACE_EXTERNAL_WRITE_EXEMPTIONS: dict[str, str] = {
         "fastlog: predicate-pass grad RecordContexts keyed by public label; lives on the "
         "recorder's session trace only, never on a cooked to_trace() result"
     ),
+    # --- FLIP-2 grad_fn marker sink diagnostics (F27) ----------------------
+    "_tl_gradfn_marker_leaks": (
+        "torch backward: session-time leak counter for markers closed at a pass "
+        "boundary rather than their own posthook; read back with a dict.get "
+        "default by the test suite, never persisted"
+    ),
+    "_tl_gradfn_marker_gaps": (
+        "torch backward: session-time counter for marker registrations that "
+        "degraded to unmarkered; read back with a dict.get default by the test "
+        "suite, never persisted"
+    ),
+    # --- Accelerate offload/dispatch hook shims (F37, R5) ------------------
+    "_offload_hook_shims": (
+        "torch model prep: session-scoped shim list set only while an "
+        "accelerate offload hook exists, deleted at uninstall so no live-trace "
+        "attribute ever reaches the save-time portability spec check"
+    ),
+    "_offload_param_rebinds": (
+        "torch model prep: session-scoped weak-valued rebind map set only "
+        "while an accelerate offload hook exists, deleted at uninstall for the "
+        "same reason as _offload_hook_shims"
+    ),
 }
