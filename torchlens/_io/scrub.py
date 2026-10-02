@@ -461,6 +461,12 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
             equivalence_class_map.get(key) or canonical_equivalence_key(key): value
             for key, value in equivalence_groups.items()
         }
+        # Annotated as the common `dict` supertype: the two branches below
+        # construct a `defaultdict` and a plain `dict` respectively (a
+        # `defaultdict` is a `dict`, not the reverse), so the variable needs
+        # the wider declared type rather than inferring it from whichever
+        # branch happens to assign first.
+        remapped_groups: dict[Any, Any]
         if isinstance(equivalence_groups, defaultdict):
             # `type(groups)(generator)` treats the first positional arg as
             # `default_factory`, which must be callable or None: a generator
