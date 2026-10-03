@@ -32,7 +32,7 @@ pytest config excludes `rare` tests via `addopts = -m 'not rare'`.
 ```bash
 pytest tests/test_toy_models.py            # single file — targeted suites ARE the per-step gate
 pytest tests/test_toy_models.py::test_name # single test
-pytest tests/ -m smoke                     # commit-level gate (~20 min loaded; measured 2026-08-13)
+pytest tests/ -m smoke                     # commit-level gate (~1.4k coverage-chosen tests, ~3 min)
 pytest tests/ -m "not rare and not slow and not heavy" -x --tb=short  # mid backstop
 pytest tests/ -m "not rare and not slow"   # phase-boundary backstop (keeps rare excluded)
 pytest tests/                              # default suite excluding rare
@@ -46,7 +46,8 @@ Run memory-heavy real-world tests sequentially. Optional dependency tests should
 
 | Marker | Meaning |
 | --- | --- |
-| `smoke` | Critical-path checks, <5s each (measured); the commit-level gate, not per-step. |
+| `smoke` | Critical-path checks, <5s each (measured); the commit-level gate, not per-step. A coverage-chosen set of about 1,400 tests, capped at `SMOKE_TIER_SIZE_CEILING` (1,500) in `tests/conftest.py`. |
+| `smoke_cells` | `smoke_cells("test_x[a]", ...)` on a function, class or module applies `smoke` to exactly the named items, so a parametrized family keeps one or two representative smoke cells. |
 | `heavy` | Mid-cost (5-20s) tests, excluded from smoke and the mid backstop. |
 | `slow` | Long-running (>20s) real-world tests. |
 | `serial` | Load-sensitive tests that should run away from parallel worker load. NOT a budget exemption: serial items resolve their heavy/smoke/unmarked duration budget normally. |
@@ -82,6 +83,26 @@ runner, a busy hyperthread sibling) and ignores run-queue length, so it is corre
 core-pinned job runners and on CI runners. Test processes run torch with ONE intra-op thread
 (`OMP_NUM_THREADS`/`MKL_NUM_THREADS`/`OPENBLAS_NUM_THREADS` and `torch.set_num_threads(1)`);
 set `TORCHLENS_TEST_THREADS=N` to override. Tests in `tests/test_duration_tripwire_calibration.py`.
+
+## The smoke tier
+
+The smoke tier is a coverage-chosen subset (re-selected 2026-10-02 from about 9,900 tests):
+fastest tests that keep line coverage of `torchlens/` close to the old tier, every package
+file and public `tl.*` name smoke reaches, the Critical Invariant and validation-integrity
+tests, the classics smoke entries, enough tests to hold every package the nightly smoke-coverage
+job floors (`scripts/check_package_coverage_floors.py`) well above its floor, and every
+env-fingerprinted golden family (those enforce
+only on the canonical smoke CI row). Everything else that used to be smoke is unmarked or
+`heavy` and still runs in the backstops and the nightly and weekly CI tiers. A new test stays
+unmarked unless it covers a critical path nothing in smoke reaches; the size ceiling keeps the
+tier from regrowing.
+
+Under `-m smoke` (or `-m "smoke and ..."`) `tests/conftest.py` skips, before import, every
+test module whose source never spells `mark.smoke` or `mark.smoke_cells`; whole-tree
+collection otherwise costs 3-4 minutes. Spell smoke marks in the test file itself, never
+through an imported alias: `tests/test_marker_lint.py::test_smoke_prefilter_never_hides_a_smoke_test`
+fails any non-prefiltered session in which a smoke item sits in a file the pre-filter would
+skip. `TORCHLENS_SMOKE_PREFILTER=0` turns the pre-filter off.
 
 ## Fixtures
 `tests/conftest.py` owns deterministic seeding and common inputs such as image tensors,

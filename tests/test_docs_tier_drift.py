@@ -10,6 +10,7 @@ is refreshing AGENTS.md's dated tier record — never widening the tolerance.
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -51,6 +52,9 @@ def test_documented_smoke_count_tracks_live_collection() -> None:
         capture_output=True,
         text=True,
         cwd=_REPO_ROOT,
+        # The documented total is the WHOLE tree; the -m smoke collection
+        # pre-filter would otherwise count only the smoke-bearing files.
+        env={**os.environ, "TORCHLENS_SMOKE_PREFILTER": "0"},
     )
     match = re.search(r"(\d+)/(\d+) tests collected", proc.stdout)
     assert match is not None, f"could not parse collect-only output:\n{proc.stdout[-2000:]}"

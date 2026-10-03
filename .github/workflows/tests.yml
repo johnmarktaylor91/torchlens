@@ -239,8 +239,10 @@ jobs:
         # Executed-floor attestation on EVERY smoke row (previously only the
         # nightly preview-backend legs had one): a row where collection drift,
         # a conftest guard, or mass importorskip/oracle skipping hollows out
-        # the suite must go red, not green. The smoke tier selects ~9,220
-        # tests (re-trued 2026-09-01 to 4609 from 9218 collected, AUD-CODE 0.3:
+        # the suite must go red, not green. The smoke tier selects ~1,420
+        # tests (re-trued 2026-10-02 to 710 from 1,421 collected, when the tier
+        # was cut from ~9,900 to a coverage-chosen subset; 2026-09-01 it was
+        # 4609 from 9218, AUD-CODE 0.3:
         # the 2,830 literal sat at 30.7% of the live tier; before that,
         # 2026-08-26, megaplan D13: the 2,500 floor had lagged
         # the tier again, tolerating a silent 56% hollow-out against a comment
@@ -251,7 +253,7 @@ jobs:
         # RE-DERIVES the floor from the live selection count so this class
         # of drift goes red instead of waiting for the next audit.
         run: |
-          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/smoke.junit.xml" 4609 0.15
+          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/smoke.junit.xml" 710 0.15
 
       - name: R0 real-model gate (blocking; PASSED-count attested)
         if: matrix.transformers != ''

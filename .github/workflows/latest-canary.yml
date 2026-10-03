@@ -103,11 +103,12 @@ jobs:
         # Same executed-floor attestation as every tests.yml smoke row: an
         # unattended leg where a new torch mass-skips or hollows collection
         # must go red, not green (grind r3, R82). Floor is roughly half the
-        # ~5,026-test smoke selection (re-trued 2026-08-16, r7 R41); the
+        # ~1,420-test smoke selection (re-trued 2026-10-02 when the tier was cut
+        # to a coverage-chosen subset); the
         # canary runs an UNADMITTED torch, so no skip-fraction bound — extra
         # per-version skips are exactly what it exists to surface loudly.
         run: |
-          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/canary-smoke.junit.xml" 2500
+          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/canary-smoke.junit.xml" 710
 
       - name: R0 real-model sweep on latest transformers (PASSED-count attested)
         # Testing MEMO A6: the 14-family config-built sweep runs against the

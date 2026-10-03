@@ -121,16 +121,18 @@ specs, adversarial reviews, STATE/SUMMARY files, and the working task tracker ar
 ruff check . --fix
 mypy torchlens/
 pytest tests/<files for the code you touched> -x --tb=short     # per-step gate: targeted suites (seconds-minutes)
-pytest tests/ -m smoke -x --tb=short                            # commit-level gate (~20 min; measured 2026-08-13)
+pytest tests/ -m smoke -x --tb=short                            # commit-level gate (~3 min; measured 2026-10-02)
 pytest tests/ -m "not rare and not slow and not heavy" -x --tb=short  # mid backstop (heavy = 5-20s tests)
 pytest tests/ -m "not rare and not slow" -x --tb=short  # phase-boundary backstop; public API/boundaries
 ```
 
-Tiers by cost: `smoke` selects ~9.9k tests (9,910/20,079 collect-only, measured 2026-09-02).
-The last instrumented `--durations=0` smoke wall measurement (measured 2026-08-13, 4-core dev
-box under parallel sprint load) took 1194s (~20 min) against the then-selected ~3.2k tests
-(~500s on a quieter box earlier the same sprint); budget at least that at today's ~40%
-larger selection. Smoke is NOT
+Tiers by cost: `smoke` selects ~1.4k tests (1,421/20,445 collect-only, measured 2026-10-02),
+a coverage-chosen subset of the former ~9.9k-test tier (see `tests/AGENTS.md`, "The smoke
+tier"); under `-m smoke` the conftest skips test modules with no smoke mark before import.
+The instrumented smoke wall measurement (measured 2026-10-02, one 4-core Linux worker,
+serial, 4 torch threads) took 186s (~3 min), collection included; `-n 4` with one thread
+per worker took 236s on a busier worker. The size ceiling is `SMOKE_TIER_SIZE_CEILING`
+(1,500) in `tests/conftest.py`. Smoke is NOT
 sub-minute and NOT a per-step gate — per-step verification is the targeted test files for
 the code touched; smoke is the commit-level gate, `not rare and not slow and not heavy`
 the mid backstop, and `not slow` the phase-boundary backstop. Partition: `smoke` tests
