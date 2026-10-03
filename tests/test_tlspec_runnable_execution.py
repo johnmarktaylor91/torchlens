@@ -1128,7 +1128,8 @@ def test_analysis_only_loaded_trace_raises_typed_capability_error(tmp_path: Path
     assert captured.value.fields["readiness"] is loaded.readiness
 
 
-@pytest.mark.smoke
+# Heavy, not smoke: 9.0-11.1 s CPU on GitHub rows (2026-10-03), past the smoke tier's 5 s rule.
+@pytest.mark.heavy
 def test_witness_divergence_raises_and_rolls_back_by_default(honesty_artifact: Path) -> None:
     """Stop at the first flipped witness without exposing transactional updates."""
 

@@ -367,7 +367,8 @@ def test_rerun_honors_metadata_only_save_scope() -> None:
     assert log.last_run["engine"] == "rerun"
 
 
-@pytest.mark.smoke
+# Heavy, not smoke: 18.1-18.5 s CPU on the py3.13 GitHub rows (2026-10-03), past the smoke tier's 5 s rule.
+@pytest.mark.heavy
 def test_rerun_matching_graph_refreshes_existing_ops_without_full_swap() -> None:
     """Same-shape rerun updates existing Op payload fields in place."""
 
