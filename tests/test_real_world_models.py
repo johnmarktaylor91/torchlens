@@ -2330,45 +2330,6 @@ def test_taskonomy(default_input1):
 
 
 # =============================================================================
-# Graph Neural Networks (requires torch_geometric)
-# =============================================================================
-
-
-@pytest.mark.slow
-def test_dimenet():
-    torch_geometric_nn = pytest.importorskip("torch_geometric.nn")
-    # DimeNet's forward calls radius_graph(), which torch_geometric routes
-    # through the optional compiled pyg-lib extension; pyg-lib is not in
-    # pyproject.toml's declared test deps (notoriously hard to install, no
-    # pure-torch fallback torch_geometric ships here), so no CI leg installs
-    # it. Genuinely absent optional dependency, not a capture bug.
-    pytest.importorskip("pyg_lib")
-    DimeNet = torch_geometric_nn.DimeNet
-    model = DimeNet(6, 3, 4, 2, 6, 3)
-    z = torch.tensor([6, 1, 1, 1, 1])
-    pose = torch.tensor(
-        [
-            [-1.2700e-02, 1.0858e00, 8.0000e-03],
-            [2.2000e-03, -6.0000e-03, 2.0000e-03],
-            [1.0117e00, 1.4638e00, 3.0000e-04],
-            [-5.4080e-01, 1.4475e00, -8.7660e-01],
-            [-5.2380e-01, 1.4379e00, 9.0640e-01],
-        ]
-    )
-    batch = None
-    model_inputs = (z, pose, batch)
-    show_model_graph(
-        model,
-        model_inputs,
-        view="unrolled",
-        visualization=tl.options.VisualizationOptions(
-            save_only=True, container_path=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "dimenet")
-        ),
-    )
-    assert validate_forward_pass(model, model_inputs)
-
-
-# =============================================================================
 # Decoder-Only LLMs (requires transformers, small random-init configs)
 # =============================================================================
 

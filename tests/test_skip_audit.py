@@ -224,11 +224,6 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
     "pyarrow": (OPTIONAL_PREVIEW, "tabular extra"),
     "pyarrow.parquet": (OPTIONAL_PREVIEW, "tabular extra"),
     "pydot": (TEST_EXTRA, "pydot"),
-    "pyg_lib": (
-        UNAVAILABLE_OK,
-        "torch_geometric's optional compiled extension (DimeNet's radius_graph); "
-        "deliberately undeclared, no pure-torch fallback",
-    ),
     "pytorch_lightning": (TEST_EXTRA, "ships inside the 'lightning' distribution"),
     "rsatoolbox": (OPTIONAL_PREVIEW, "neuro extra"),
     "sae_lens": (OPTIONAL_PREVIEW, "sae extra"),
@@ -1226,7 +1221,6 @@ OPTIONAL_INTEGRATION_TARGETS: dict[str, str] = {
     "git": "release-environment-only (hash-locked release-defenses job installs it)",
     "model_explorer": "export-bridge integration target with no declared extra",
     "pennylane": "quantum-ML research-model coverage, deliberately undeclared",
-    "pyg_lib": "torch_geometric compiled extension for test_dimenet, deliberately undeclared",
     "semantic_release": "release-environment-only (release-defenses job)",
     "tensorboard": "export-bridge integration target with no declared extra",
     "tomli": "py<3.11 tomllib backport, only conditionally needed",
