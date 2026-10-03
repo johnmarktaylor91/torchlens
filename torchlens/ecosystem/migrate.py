@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Any
 
 from .._io import MIN_TLSPEC_VERSION, TLSPEC_VERSION, TorchLensIOError, above_ceiling_error
+from .._io._durability import fsync_file
 from .._io._json import read_bounded
 from .._io.compat_ledger import (
     MIGRATION_WITNESS_FILENAME,
@@ -165,13 +166,9 @@ def _sha256_of_path(path: Path) -> str:
 
 
 def _fsync_file(path: Path) -> None:
-    """fsync one file's contents to disk."""
+    """fsync one file's contents to disk (write-capable handle on Windows)."""
 
-    fd = os.open(path, os.O_RDONLY)
-    try:
-        os.fsync(fd)
-    finally:
-        os.close(fd)
+    fsync_file(path)
 
 
 def _classify_source(path: Path) -> dict[str, Any]:

@@ -57,16 +57,31 @@ def fsync_file(path: Path) -> None:
         os.close(fd)
 
 
-def fsync_dir(path: Path) -> None:
-    """Best-effort flush of a directory entry (new/renamed children) to disk.
+def fsync_dir(path: Path, *, strict: bool = False) -> None:
+    """Flush a directory's entries (new/renamed children) to disk.
+
+    Best-effort by default; ``strict=True`` propagates failures where possible.
 
     Parameters
     ----------
     path:
         Directory whose entries (created files, completed renames) should be
         durable. A platform that cannot open or fsync directories is skipped.
+    strict:
+        When True, open/fsync failures propagate on platforms that expose
+        directory handles (``os.O_DIRECTORY`` exists); platforms without them
+        (Windows) are still skipped, since the rename is all they offer.
     """
 
+    if strict:
+        if not hasattr(os, "O_DIRECTORY"):
+            return
+        fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        return
     try:
         fd = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
     except OSError:

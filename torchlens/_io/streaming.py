@@ -756,6 +756,8 @@ class BundleStreamWriter:
 
         with pause_logging():
             contiguous_tensor = tensor.resolve_conj().resolve_neg().contiguous()
+            if contiguous_tensor.device.type != "cpu":
+                contiguous_tensor = contiguous_tensor.cpu()
         return self._write_prepared_blob(
             blob_id=blob_id,
             prepared=_PreparedPayload(
