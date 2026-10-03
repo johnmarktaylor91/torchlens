@@ -381,6 +381,13 @@ def _sample_writeback_at_consumption(
         with _state.pause_logging():
             consumed_ptrs: set[int] = set()
             for operand in _iter_dispatch_tensors(args, kwargs):
+                if operand.is_meta:
+                    # Every meta storage reports ``data_ptr() == 0`` (no identity) and holds
+                    # no bytes, so no write is observable here; matching on 0 compared every
+                    # meta buffer and fabricated the opaque host-write flag (W1-FAB: only an
+                    # observed divergence may raise it). Reached once plane-P (distributed
+                    # arming) installs the dispatch mode around a weights-free capture.
+                    continue
                 try:
                     consumed_ptrs.add(operand.untyped_storage().data_ptr())
                 except (RuntimeError, TypeError, NotImplementedError):

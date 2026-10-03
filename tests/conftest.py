@@ -1302,6 +1302,28 @@ def _clear_capability_dependent_caches() -> None:
 
 
 @pytest.fixture(autouse=True)
+def _restore_distributed_arming() -> Iterator[None]:
+    """Disarm distributed capture a test armed, so it never reaches later tests.
+
+    Arming (``tl.distributed.arm()`` or the lazy arm at capture entry under an
+    initialized process group) is process-lifetime by design and survives
+    ``destroy_process_group``. A test that armed it used to leave plane-P's
+    dispatch mode around every later capture on the same xdist worker, which
+    turned unrelated weights-free and failure-origin tests red depending on
+    test order. Disarming restores the unarmed incoming state.
+    """
+
+    lifecycle = sys.modules.get("torchlens.distributed._lifecycle")
+    was_armed = lifecycle is not None and lifecycle.is_armed()
+    try:
+        yield
+    finally:
+        lifecycle = sys.modules.get("torchlens.distributed._lifecycle")
+        if not was_armed and lifecycle is not None and lifecycle.is_armed():
+            lifecycle.disarm()
+
+
+@pytest.fixture(autouse=True)
 def _restore_lazy_capability_probes() -> Iterator[None]:
     """Restore lazy ``HAS_*`` capability latches to their pre-test state.
 

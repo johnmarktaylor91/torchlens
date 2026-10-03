@@ -856,6 +856,11 @@ _TORCHLENS_PKG_DIR = Path(__file__).resolve().parent.parent
 # innermost Python frame; those lines execute the USER's op, so they classify
 # as USER_OP, not TORCHLENS. Matched on source text to survive line drift.
 _TRAMPOLINE_SOURCE_MARKER = "out_orig = func("
+# The completeness-witness dispatch mode's unchanged redispatch of the user's
+# aten op (installed for runnable census and for armed plane-P captures): an
+# exception raised there is the user's op failing, exactly like the trampoline.
+_WITNESS_REDISPATCH_FILE = "completeness_witness.py"
+_WITNESS_REDISPATCH_MARKER = "result = func(*args, **(kwargs or {}))"
 
 
 def _frame_zone(filename: str) -> str:
@@ -899,8 +904,8 @@ def classify_failure_origin(exc: BaseException) -> FailureOrigin:
 
     Walks the traceback from the innermost frame outward. The innermost
     attributable frame wins: user code -> USER_OP; a torchlens frame ->
-    TORCHLENS, except the wrapper trampoline (executing the user's op) ->
-    USER_OP. Interrupts classify INTERRUPT; no traceback or nothing
+    TORCHLENS, except the wrapper trampoline and the completeness-witness
+    redispatch (each executing the user's op) -> USER_OP. Interrupts classify INTERRUPT; no traceback or nothing
     attributable -> UNKNOWN. Misclassification is capability-safe by
     construction -- origin never steers a gate.
     """
@@ -933,7 +938,10 @@ def classify_failure_origin(exc: BaseException) -> FailureOrigin:
             return FailureOrigin.USER_OP
         if zone == "torchlens":
             line = frame.line or ""
-            if _TRAMPOLINE_SOURCE_MARKER in line:
+            if _TRAMPOLINE_SOURCE_MARKER in line or (
+                frame.filename.endswith(_WITNESS_REDISPATCH_FILE)
+                and _WITNESS_REDISPATCH_MARKER in line
+            ):
                 return FailureOrigin.USER_OP
             return FailureOrigin.TORCHLENS
     return FailureOrigin.UNKNOWN
