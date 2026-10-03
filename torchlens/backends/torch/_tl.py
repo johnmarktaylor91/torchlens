@@ -117,6 +117,10 @@ class DescriptorCompatProperty(property):
     """
 
     __slots__ = ("__objclass__", "__name__")
+    # Declared for the type checker: mypy does not derive attribute types from
+    # ``__slots__``, and every replacement site assigns both.
+    __objclass__: type
+    __name__: str
 
 
 @dataclass
