@@ -84,3 +84,30 @@ def test_mlx_save_raw_activations_false_drops_payloads_keeps_metadata() -> None:
         assert op.out is None
         assert op.shape is not None
         assert op.dtype is not None
+
+
+@pytest.mark.optional
+def test_mlx_capture_options_does_not_keyerror() -> None:
+    """N5: any ``capture=CaptureOptions(...)`` call must not ``KeyError``.
+
+    ``trace()``'s own public signature dropped every individual flat capture
+    kwarg (``layers_to_save``, ``activation_transform``, ``keep_orphans``,
+    ...) in favor of the single grouped ``capture=`` spelling, but
+    ``_trace_mlx_model_from_public_kwargs`` kept reading them with
+    ``kwargs["activation_transform"]`` etc. -- a plain dict subscript that
+    raised ``KeyError: 'activation_transform'`` on essentially every call
+    that supplied ``capture=`` (the key is never present in the registry
+    dispatch's keyword bundle anymore). This is the first such flat name
+    alphabetically reached, so it masked every other missing key behind it.
+    """
+
+    model = nn.Linear(4, 4)
+    x = mx.random.normal((2, 4))
+    log = tl.trace(
+        model,
+        x,
+        backend="mlx",
+        capture=tl.options.CaptureOptions(keep_orphans=True),
+    )
+
+    assert log.num_ops > 0

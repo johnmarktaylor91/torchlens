@@ -17,6 +17,7 @@ from ... import _state
 # value binding never sees runtime capability flips).
 from ...utils import _torch_compat
 from ...utils._torch_symbols import torch_attr
+from ._tl import DescriptorCompatProperty
 
 if TYPE_CHECKING:
     from .completeness_witness import (
@@ -327,7 +328,12 @@ def _make_input_metadata_grad_property(
         """
         descriptor.__set__(self, value)
 
-    return property(getter, setter if has_setter else None)
+    # doc= MUST be explicit (never defaulted): see DescriptorCompatProperty's
+    # constructor-landmine note in _tl.py.
+    replacement = DescriptorCompatProperty(getter, setter if has_setter else None, doc=name)
+    replacement.__objclass__ = getattr(descriptor, "__objclass__", torch.Tensor)
+    replacement.__name__ = name
+    return replacement
 
 
 @contextmanager
@@ -618,7 +624,9 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
                 continue
             shadowed = name in torch.Tensor.__dict__
             try:
-                setattr(torch.Tensor, name, _make_invisible_escape_property(descriptor, state))
+                setattr(
+                    torch.Tensor, name, _make_invisible_escape_property(descriptor, state, name)
+                )
             except (TypeError, AttributeError):
                 _HOST_ESCAPE_OBSERVER_FAILED.add(state.trace)
                 continue

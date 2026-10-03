@@ -41,11 +41,24 @@ from torchlens.semantic._norm_reconstruction import (
     reconstruct_norm,
 )
 from torchlens.semantic.tolerances import within_reconstruction_tolerance
+from torchlens.utils._torch_compat import HAS_RMSNORM_MODULE, get_cpu_half_kernels_support
 
 pytestmark = pytest.mark.smoke
 
+_requires_cpu_half_kernels = pytest.mark.skipif(
+    not get_cpu_half_kernels_support(),
+    reason="CPU addmm/layer_norm for float16 postdates the torch 2.1 floor",
+)
+
 D_MODEL = 768
 HALF_DTYPES = (torch.bfloat16, torch.float16)
+# fp16 needs the CPU addmm/layer_norm kernels that postdate the torch 2.1
+# floor; bf16 does not, so skip only the fp16 case rather than the whole
+# parametrized test.
+HALF_DTYPE_PARAMS = [
+    pytest.param(torch.bfloat16, id="bf16"),
+    pytest.param(torch.float16, id="fp16", marks=_requires_cpu_half_kernels),
+]
 
 
 def _norm_input(dtype: torch.dtype, seed: int = 0) -> torch.Tensor:
@@ -99,7 +112,7 @@ def _accumulate_recompute(
     return recon.to(x.dtype), magnitude
 
 
-@pytest.mark.parametrize("dtype", HALF_DTYPES, ids=["bf16", "fp16"])
+@pytest.mark.parametrize("dtype", HALF_DTYPE_PARAMS)
 def test_half_precision_layer_norm_reconstructs(dtype: torch.dtype) -> None:
     """bf16/fp16 LayerNorm reconstructs as layernorm_affine (was: refused)."""
 
@@ -131,7 +144,7 @@ def test_half_precision_layer_norm_reconstructs(dtype: torch.dtype) -> None:
     assert receipt["max_abs_residual"] <= one_ulp
 
 
-@pytest.mark.parametrize("dtype", HALF_DTYPES, ids=["bf16", "fp16"])
+@pytest.mark.parametrize("dtype", HALF_DTYPE_PARAMS)
 def test_accumulate_recompute_is_within_tolerance_payload_recompute_is_not(
     dtype: torch.dtype,
 ) -> None:
@@ -153,6 +166,10 @@ def test_accumulate_recompute_is_within_tolerance_payload_recompute_is_not(
     )
 
 
+@pytest.mark.skipif(
+    not HAS_RMSNORM_MODULE,
+    reason="torch.nn.functional.rms_norm postdates the torch 2.1 floor (added 2.4)",
+)
 @pytest.mark.parametrize("dtype", HALF_DTYPES, ids=["bf16", "fp16"])
 def test_half_precision_rms_norm_reconstructs(dtype: torch.dtype) -> None:
     """The uncentered affine form reconstructs in half precision as well."""
@@ -171,7 +188,7 @@ def test_half_precision_rms_norm_reconstructs(dtype: torch.dtype) -> None:
     assert record.scale.dtype == torch.float32
 
 
-@pytest.mark.parametrize("dtype", HALF_DTYPES, ids=["bf16", "fp16"])
+@pytest.mark.parametrize("dtype", HALF_DTYPE_PARAMS)
 def test_half_precision_affine_free_layer_norm_reconstructs(dtype: torch.dtype) -> None:
     """normalize_only stays EVIDENCED (a passing affine-free check), never defaulted."""
 

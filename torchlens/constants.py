@@ -1140,12 +1140,18 @@ IGNORED_FUNCS = [
             "nuttall",
         )
     ),
-    # The public FP8/MoE entry points. Each delegates to a wrapped ``torch._VF``
-    # interior, so capture stayed COMPLETE, but the op recorded under the private v2
-    # name rather than what the user called (mislabel only).
-    ("torch.nn.functional", "scaled_mm"),
-    ("torch.nn.functional", "grouped_mm"),
-    ("torch.nn.functional", "scaled_grouped_mm"),
+    # The public FP8/MoE entry points (torch 2.13+; absent on 2.8 and earlier,
+    # incl. the 2.1 floor and 2.8 canonical CI rows). Each delegates to a wrapped
+    # ``torch._VF`` interior, so capture stayed COMPLETE, but the op recorded
+    # under the private v2 name rather than what the user called (mislabel
+    # only). Feature-detected (never a bare row) so the curated-roster liveness
+    # gate never needs a ``_KNOWN_DEAD_ROSTER_ROWS`` entry for a not-yet-
+    # introduced spelling: absent means not listed, not "dead".
+    *(
+        ("torch.nn.functional", _fp8_moe_name)
+        for _fp8_moe_name in ("scaled_mm", "grouped_mm", "scaled_grouped_mm")
+        if hasattr(torch.nn.functional, _fp8_moe_name)
+    ),
     ("torch", "tril_indices"),
     ("torch", "triu_indices"),
     ("torch", "vander"),
@@ -1371,6 +1377,53 @@ def _get_torchvision_funcs() -> list[tuple[str, str]]:
     return _TORCHVISION_FUNCS_CACHE
 
 
+# Submodules that re-export (``from torch import X as Y``) a plain torch
+# function under a second name, lazily imported by torch itself rather than
+# eagerly by ``import torch`` -- so the one-time ``ORIG_TORCH_FUNCS`` scan at
+# ``import torchlens`` time can miss them. Each row is the (submodule, attr)
+# pair to track once that submodule has been imported by anyone. Dynamo's own
+# ``torch._dynamo.trace_rules`` resolves ``torch.onnx.operators.shape_as_tensor``
+# as a tracked overridable; if that submodule's FIRST import lands while
+# TorchLens wrappers are installed (e.g. the import happens from inside a
+# dynamo rule-table build mid-epoch), its module-level alias binds to the
+# wrapper, and -- absent this entry -- neither ``unwrap_torch`` nor the next
+# ``wrap_torch`` ever knew that namespace existed to restore or re-wrap it,
+# permanently poisoning dynamo's identity-keyed rule map for the rest of the
+# process (round-2 CI triage, 2026-10-01).
+_TORCH_SUBMODULE_ALIAS_TARGETS: tuple[tuple[str, str], ...] = (
+    ("torch.onnx.operators", "shape_as_tensor"),
+)
+
+
+def _get_torch_submodule_alias_funcs() -> list[tuple[str, str]]:
+    """Return alias targets whose declaring submodule is already imported.
+
+    Deliberately uncached (like :func:`_get_torchvision_funcs`): a submodule
+    imported after the last wrap is picked up on the very next
+    ``get_orig_torch_funcs()`` call, which both ``wrap_torch`` (decoration /
+    re-install) and ``unwrap_torch`` (restore) make on every invocation.
+
+    Returns
+    -------
+    list[tuple[str, str]]
+        ``(submodule_name, attr)`` pairs ready for ``_decorate_torch_func_pairs``
+        / restoration, limited to submodules already present in
+        ``sys.modules``.
+    """
+
+    found: list[tuple[str, str]] = []
+    for module_name, attr in _TORCH_SUBMODULE_ALIAS_TARGETS:
+        module = sys.modules.get(module_name)
+        if module is None:
+            continue
+        spec = getattr(module, "__spec__", None)
+        if spec is not None and getattr(spec, "_initializing", False):
+            continue  # mid-import (circular import): attribute may not exist yet
+        if hasattr(module, attr):
+            found.append((module_name, attr))
+    return found
+
+
 def get_orig_torch_funcs(*, include_torchvision: bool = True) -> list[tuple[str, str]]:
     """Return torch function targets for wrapper decoration.
 
@@ -1388,5 +1441,5 @@ def get_orig_torch_funcs(*, include_torchvision: bool = True) -> list[tuple[str,
     """
 
     if not include_torchvision:
-        return list(ORIG_TORCH_FUNCS)
-    return [*ORIG_TORCH_FUNCS, *_get_torchvision_funcs()]
+        return [*ORIG_TORCH_FUNCS, *_get_torch_submodule_alias_funcs()]
+    return [*ORIG_TORCH_FUNCS, *_get_torchvision_funcs(), *_get_torch_submodule_alias_funcs()]

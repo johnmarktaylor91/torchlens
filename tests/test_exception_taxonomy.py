@@ -568,6 +568,7 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "RankRenderEndpointError": ("RuntimeError",),
     "PluginLoadWarning": ("Warning",),
     "SynthesizedValueReadWarning": ("Warning",),
+    "SubclassConstructionUnderDispatchModeError": ("RuntimeError",),
 }
 
 

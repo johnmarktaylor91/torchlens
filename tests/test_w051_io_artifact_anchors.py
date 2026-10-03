@@ -21,9 +21,11 @@ from typing import Any
 import pytest
 import torch
 import torch.nn as nn
+from _oracle_env import expect_bundle_minor_version_mismatch
 
 import torchlens as tl
 from torchlens._io import TorchLensIOError
+from torchlens.utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
 
 pytestmark = pytest.mark.smoke
 
@@ -135,7 +137,7 @@ def test_migrated_artifact_keeps_its_witnessed_stamp_lineage(tmp_path: Path) -> 
     assert len(loaded.layer_list) == 151
     # Delete the witness: the same bytes now refuse (the lineage is unproven).
     (artifact / "tl_migration_provenance.json").unlink()
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with expect_bundle_minor_version_mismatch(), pytest.raises(TorchLensIOError) as excinfo:
         tl.load(artifact)
     assert excinfo.value.fields["code"] in {
         "bundle_manifest_metadata_mismatch",
@@ -198,6 +200,12 @@ def test_edge_carrier_without_matching_stamps_refuses(source_bundle: Path, tmp_p
     _assert_refuses(path, "artifact_edge_substitutions_invalid")
 
 
+@pytest.mark.skipif(
+    not HAS_SAFE_WEIGHTS_ONLY_LOAD,
+    reason="embedded-tensor bundles (the genuine edge-substitution carrier here) "
+    "are refused on torch<2.6 (CVE-2025-32434); the round-trip is a torch>=2.6 "
+    "feature (see test_io_mediated_allocation_bypass.py's same gate)",
+)
 def test_genuine_edge_intervention_round_trips(tmp_path: Path) -> None:
     torch.manual_seed(0)
     trace = tl.trace(

@@ -94,13 +94,14 @@ from ._completeness_types import (
 )
 from ._modes import _TorchLensDispatchMode
 from ._tl import (
+    DescriptorCompatProperty,
     get_buffer_address,
     get_tensor_label,
     get_tensor_meta,
     is_tensor_data_alias,
     session_meta_is_anchored,
 )
-from .buffer_writes import session_validated_buffer_address
+from .buffer_writes import peek_buffer_write_tracker, session_validated_buffer_address
 from .escape_detection import (
     ExpectedOriginalToken,
     _active_token,

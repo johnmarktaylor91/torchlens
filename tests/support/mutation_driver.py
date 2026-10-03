@@ -260,6 +260,46 @@ SUITE = [
     "tests/test_postprocess_contract_arming.py",
     "tests/test_postprocess_dag.py::test_read_enforcement_trips_on_undeclared_read",
     "tests/test_postprocess_dag.py::test_executor_seam_patched_step_executes_and_audits",
+    # W2 executor killers (lane L3 triage step 21, 2026-10-01): the bucket-name
+    # golden pins every _vtimed-wrapped step's timing bucket on a default
+    # capture, so a whole-function return-None disarm of _run_step_11_5,
+    # _run_step_11_75, _run_step_12, or _run_step_16_5 drops its bucket from
+    # the set and fails the exact-equality assert. Step 17.5 is deliberately
+    # unwrapped by _vtimed (and declares no op-store writes), so its own
+    # direct killer is test_step17_5_adopts_container_records_before_the_
+    # registry_clears; step 19
+    # and its gate are conditional (absent from the bucket golden's default
+    # axis either way), so their killer asserts the eviction effect directly
+    # on a streaming capture. (test_postprocess_enforcement.py's
+    # write-audit matrix test, test_matrix_union_reports, would independently
+    # prove several of these too, but its EXPECTED_PHANTOM_WRITES golden is
+    # red on its own in the CI mutation env's narrower EXTRAS=dev,tabular --
+    # confirmed red on main, unrelated to this change -- so it cannot be
+    # added here without breaking the pristine control.)
+    "tests/test_postprocess_dag.py::test_phase_timing_bucket_names_default_capture",
+    "tests/test_postprocess_dag.py::test_step17_5_adopts_container_records_before_the_registry_clears",
+    "tests/test_postprocess_dag.py::test_step19_and_gate_evict_streamed_outs_from_memory",
+    # W3 exempt killers (X02, X07): direct negative-case calls already proved
+    # the data parent/destination must stay strictly perturbed; they lived
+    # outside this suite. X05/X06 killers are in test_bug_fixes_phase14.py.
+    # Also hosts the new direct killers for X11/X12/X14 and the W4 registry
+    # survivors (branching_invariants, layer_pass_layer_log_xrefs,
+    # non_torch_backward_inert, non_torch_primitive_op_inert,
+    # receptive_field_metadata, site_key_invariants); backend_neutral_graph_
+    # topology and pass_count_consistency already had direct killers here too.
+    "tests/validation_goldens/test_validation_exemption_hardening.py",
+    "tests/test_bug_fixes_phase14.py",
+    # W4 registry killer for primitive_op_invariants: an in-memory FK
+    # corruption that a return-None disarm would let through silently.
+    "tests/test_aten_profile.py::test_live_fk_tamper_names_primitive_invariant",
+    # mutants2 lane (2026-10-01): direct per-arm killers for the shard-4 (and
+    # un-sharded family) survivor list -- one duck-typed-fake test per raise
+    # arm, each proving every earlier arm on the same checker stays silent.
+    "tests/validation_goldens/test_arm_campaign_killers_mutants2.py",
+    # mutants3 lane (2026-10-01): direct per-arm killers for the arm-shard
+    # 1/4, 2/4, and 3/4 survivor list measured against the mutants2 branch
+    # point (shard 4's own survivors are covered by the mutants2 file above).
+    "tests/validation_goldens/test_arm_campaign_killers_mutants3.py",
 ]
 
 #: Known baseline reds, deselected so a mutant verdict is never confounded.

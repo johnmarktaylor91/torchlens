@@ -1133,7 +1133,7 @@ class Layer(_SelectionOperand):
         if self.num_passes != 1 or len(self.ops) != 1:
             from ..receptive_field._errors import AmbiguousPassError
 
-            passes = ", ".join(f"layer.ops[{index}]" for index in self.ops.keys())
+            passes = ", ".join(f"layer.ops[{index}]" for index in self.ops)
             raise AmbiguousPassError(
                 f"Layer {self.layer_label!r} has {self.num_passes} passes: {passes}."
             )
@@ -1146,7 +1146,7 @@ class Layer(_SelectionOperand):
         if self.num_passes != 1 or len(self.ops) != 1:
             from ..receptive_field._errors import AmbiguousPassError
 
-            passes = ", ".join(f"layer.ops[{index}]" for index in self.ops.keys())
+            passes = ", ".join(f"layer.ops[{index}]" for index in self.ops)
             raise AmbiguousPassError(
                 f"Layer {self.layer_label!r} has {self.num_passes} passes: {passes}."
             )

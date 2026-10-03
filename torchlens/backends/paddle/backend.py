@@ -38,6 +38,7 @@ from ...ir.intervention import FireResult, FunctionEventInput
 from ...ir.predicate import RecordContext
 from ...ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
+from ...options import CaptureOptions, merge_capture_options
 from ...postprocess._materialize import materialize_from_events
 from ...postprocess._selective_save import (
     apply_static_label_save_policy,
@@ -63,6 +64,7 @@ from .._options import (
     PADDLE_PREVIEW_TRACE_OPTION_POLICY,
     reject_extra_trace_kwargs,
     reject_unsupported_trace_options,
+    resolve_optional_capture_field as _resolve_optional_capture_field,
 )
 from .interventions import PaddleInterventionCapture, PaddleInterventionRuntime
 from .model_prep import (
@@ -283,68 +285,115 @@ class PaddleBackend:
         input_args: object,
         input_kwargs: dict[Any, Any] | None = None,
         *,
-        layers_to_save: str | list[Any] | None = "all",
-        keep_orphans: bool = False,
-        output_device: str = "same",
+        layers_to_save: str | list[Any] | None | MissingType = MISSING,
+        keep_orphans: bool | MissingType = MISSING,
+        output_device: str | MissingType = MISSING,
         activation_transform: object | None = None,
         save_raw_activations: bool = True,
-        detach_saved_activations: bool = False,
+        detach_saved_activations: bool | MissingType = MISSING,
         save_grads: bool | str | list[Any] | object | None = None,
         random_seed: int | None = None,
         num_context_lines: int = 7,
-        save_arg_values: bool = False,
-        save_code_context: bool = False,
-        save_rng_states: bool = False,
-        recurrence_detection: bool = True,
-        verbose: bool = False,
-        backward_ready: bool = False,
+        save_arg_values: bool | MissingType = MISSING,
+        save_code_context: bool | MissingType = MISSING,
+        save_rng_states: bool | MissingType = MISSING,
+        recurrence_detection: bool | MissingType = MISSING,
+        verbose: bool | MissingType = MISSING,
+        backward_ready: bool | MissingType = MISSING,
         name: str | None = None,
         module_filter: object | None = None,
         transform: object | None = None,
         raw_input: object | None = None,
-        save_raw_input: str | bool = "small",
-        batch_render: str = "auto",
+        save_raw_input: str | bool | MissingType = MISSING,
+        batch_render: str | MissingType = MISSING,
         output_transform: object | None = None,
-        save_raw_output: str | bool = "small",
+        save_raw_output: str | bool | MissingType = MISSING,
         layer_visualizers: dict[Any, Any] | None = None,
-        save_visualizations: bool = False,
+        save_visualizations: bool | MissingType = MISSING,
         module_identity_mode: str | None = None,
         grad_options: GradOptions | None = None,
         compute_input_output_distances: bool | MissingType = MISSING,
+        capture: CaptureOptions | None = None,
         **extra_kwargs: Any,
     ) -> Trace:
         """Capture a Paddle forward pass into a structural Trace."""
 
         self._ensure_dynamic_runtime(self.paddle)
-        layers_to_save = _default_if_missing(layers_to_save, "all")
-        keep_orphans = _default_if_missing(keep_orphans, False)
-        output_device = _default_if_missing(output_device, "same")
+        # N5 fix: ``trace()`` no longer passes these as flat kwargs at all --
+        # see the matching comment in ``backends/jax/backend.py``.
+        capture_options = merge_capture_options(
+            capture=capture,
+            layers_to_save=layers_to_save,
+            keep_orphans=keep_orphans,
+            output_device=output_device,
+            detach_saved_activations=detach_saved_activations,
+            save_arg_values=save_arg_values,
+            save_code_context=save_code_context,
+            save_rng_states=save_rng_states,
+            recurrence_detection=recurrence_detection,
+            compute_input_output_distances=compute_input_output_distances,
+            verbose=verbose,
+            backward_ready=backward_ready,
+            save_raw_input=save_raw_input,
+            batch_render=batch_render,
+            save_raw_output=save_raw_output,
+            save_visualizations=save_visualizations,
+        )
+        layers_to_save = capture_options.layers_to_save
+        keep_orphans = capture_options.keep_orphans
+        output_device = capture_options.output_device
+        detach_saved_activations = capture_options.detach_saved_activations
+        save_arg_values = capture_options.save_arg_values
+        save_code_context = capture_options.save_code_context
+        save_rng_states = capture_options.save_rng_states
+        recurrence_detection = capture_options.recurrence_detection
+        compute_input_output_distances = capture_options.compute_input_output_distances
+        verbose = capture_options.verbose
+        backward_ready = capture_options.backward_ready
+        save_raw_input = capture_options.save_raw_input
+        batch_render = capture_options.batch_render
+        save_raw_output = capture_options.save_raw_output
+        save_visualizations = capture_options.save_visualizations
+        save_grads = _resolve_optional_capture_field(capture, "save_grads", save_grads)
+        random_seed = _resolve_optional_capture_field(capture, "random_seed", random_seed)
+        name = _resolve_optional_capture_field(capture, "name", name)
+        module_filter = _resolve_optional_capture_field(capture, "module_filter", module_filter)
+        transform = _resolve_optional_capture_field(capture, "transform", transform)
+        output_transform = _resolve_optional_capture_field(
+            capture, "output_transform", output_transform
+        )
+        layer_visualizers = _resolve_optional_capture_field(
+            capture, "layer_visualizers", layer_visualizers
+        )
+        module_identity_mode = _resolve_optional_capture_field(
+            capture, "module_identity_mode", module_identity_mode
+        )
+        # layers_to_save/keep_orphans/output_device/detach_saved_activations/
+        # save_arg_values/save_code_context/save_rng_states/
+        # recurrence_detection/compute_input_output_distances/verbose/
+        # backward_ready/save_raw_input/batch_render/save_raw_output/
+        # save_visualizations are CaptureOptions-native fields: the
+        # ``capture_options.<field>`` reads above already resolved each one to
+        # its concrete (non-MISSING) default via ``merge_capture_options``,
+        # with the same backend-local defaults this block used to re-apply.
+        # Re-running ``_default_if_missing`` on an already-concrete value was
+        # a no-op at runtime, but it widened mypy's view of the variable back
+        # to its MISSING-including parameter type (``_default_if_missing``
+        # returns ``Any``, which does not narrow); resolving once at the
+        # merge boundary is the fix, not a second pass here.
         activation_transform = _default_if_missing(activation_transform, None)
         save_raw_activations = _default_if_missing(save_raw_activations, True)
-        detach_saved_activations = _default_if_missing(detach_saved_activations, False)
         save_grads = _default_if_missing(save_grads, None)
         random_seed = _default_if_missing(random_seed, None)
         num_context_lines = _default_if_missing(num_context_lines, 7)
-        save_arg_values = _default_if_missing(save_arg_values, False)
-        save_code_context = _default_if_missing(save_code_context, False)
-        save_rng_states = _default_if_missing(save_rng_states, False)
-        recurrence_detection = _default_if_missing(recurrence_detection, True)
-        verbose = _default_if_missing(verbose, False)
-        backward_ready = _default_if_missing(backward_ready, False)
         name = _default_if_missing(name, None)
         module_filter = _default_if_missing(module_filter, None)
         transform = _default_if_missing(transform, None)
         raw_input = _default_if_missing(raw_input, None)
-        save_raw_input = _default_if_missing(save_raw_input, "small")
-        batch_render = _default_if_missing(batch_render, "auto")
         output_transform = _default_if_missing(output_transform, None)
-        save_raw_output = _default_if_missing(save_raw_output, "small")
         layer_visualizers = _default_if_missing(layer_visualizers, None)
-        save_visualizations = _default_if_missing(save_visualizations, False)
         module_identity_mode = _default_if_missing(module_identity_mode, None)
         grad_options = _default_if_missing(grad_options, None)
-        # Torch-parity default: the depth flood runs unless explicitly disabled.
-        compute_input_output_distances = _default_if_missing(compute_input_output_distances, True)
         save_predicate = pop_static_label_save_predicate(extra_kwargs, backend_name="paddle")
         intervene = _default_if_missing(extra_kwargs.pop("intervene", None), None)
         halt = _default_if_missing(extra_kwargs.pop("halt", None), None)
@@ -2430,15 +2479,25 @@ def _paddle_trace_intermediate_signatures(
     groups: dict[PaddleIntermediateSignature, list[Any]] = defaultdict(list)
     # Replay-side signatures speak RAW label space (the tap observer labels
     # values with ``_label_raw``). Recurrence grouping rewrites ``op.parents``
-    # to final pass-qualified labels, so parents are resolved back to raw
-    # space before signature construction; an unresolvable parent keeps its
-    # literal label and simply never matches.
-    final_to_raw = {
-        str(getattr(op, "label", "")): str(getattr(op, "_label_raw", ""))
-        for op in getattr(trace, "layer_list", ())
-        if isinstance(getattr(op, "label", None), str)
-        and isinstance(getattr(op, "_label_raw", None), str)
-    }
+    # to final labels -- pass-qualified for a multi-pass referenced layer,
+    # but the BARE layer label (torch parity) for a single-pass one -- so
+    # parents are resolved back to raw space before signature construction.
+    # Both final spellings must resolve: the pass-qualified ``op.label`` key
+    # always, and the bare ``op.layer_label`` key too for single-pass ops
+    # (unambiguous there; omitted for multi-pass ops, where the bare label
+    # would collide across passes and ``op.parents`` never uses it anyway).
+    # An unresolvable parent keeps its literal label and simply never matches.
+    final_to_raw: dict[str, str] = {}
+    for op in getattr(trace, "layer_list", ()):
+        raw_label = getattr(op, "_label_raw", None)
+        if not isinstance(raw_label, str):
+            continue
+        label = getattr(op, "label", None)
+        if isinstance(label, str):
+            final_to_raw[label] = raw_label
+        layer_label = getattr(op, "layer_label", None)
+        if isinstance(layer_label, str) and int(getattr(op, "num_passes", 1)) == 1:
+            final_to_raw[layer_label] = raw_label
     for op in getattr(trace, "layer_list", ()):
         if bool(getattr(op, "is_input", False)) or not bool(
             getattr(op, "has_saved_activation", False)

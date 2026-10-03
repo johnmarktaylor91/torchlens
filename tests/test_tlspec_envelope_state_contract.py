@@ -33,6 +33,7 @@ from pathlib import Path
 import pytest
 import torch
 import torch.nn as nn
+from _oracle_env import expect_bundle_minor_version_mismatch
 
 import torchlens as tl
 from torchlens._io import (
@@ -231,7 +232,10 @@ def test_new_writer_direction_end_to_end_on_disk(tampered_main_bundle: Path) -> 
     """D-ECO-10's on-disk cell + anti-laundering: the typed refusal survives
     the whole bundle load path with its stable code intact."""
 
-    with pytest.raises(UnknownPersistedFieldError) as excinfo:
+    with (
+        expect_bundle_minor_version_mismatch(),
+        pytest.raises(UnknownPersistedFieldError) as excinfo,
+    ):
         tl.load(tampered_main_bundle)
     assert excinfo.value.fields["code"] == "unknown_persisted_field"
     assert excinfo.value.fields["record_type"] == "Trace"

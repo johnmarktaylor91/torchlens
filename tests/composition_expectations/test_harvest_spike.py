@@ -26,10 +26,22 @@ _CLAIM_PATTERN = re.compile(
 
 
 def _doc_files() -> tuple[Path, ...]:
-    """The taught-surface corpus: docs/** markdown plus the README."""
+    """The taught-surface corpus: docs/** markdown plus the README.
+
+    ``docs/agent-reference/`` is excluded on purpose: the 2026-10-01 docs move
+    ("docs: move agent reference material out of startup instructions" / "docs:
+    reserve nested instruction budget for module rules") relocated AGENTS.md's
+    own working-notes content under ``docs/``, but that material is AGENT
+    reference, not the user-taught surface this spike measures (prose claims
+    and python fences aimed at a human reader of the shipped docs). Counting
+    it would inflate the baseline with a directory move that taught nothing
+    new to a user, not a genuine documentation change.
+    """
 
     files = sorted(
-        path for path in (REPO_ROOT / "docs").rglob("*.md") if "__pycache__" not in path.parts
+        path
+        for path in (REPO_ROOT / "docs").rglob("*.md")
+        if "__pycache__" not in path.parts and "agent-reference" not in path.parts
     )
     return (REPO_ROOT / "README.md", *files)
 

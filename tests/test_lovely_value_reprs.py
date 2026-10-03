@@ -46,6 +46,13 @@ def mixed_trace():
     """One finished capture; the MODEL is kept alive (Params render live
     version-checked cores only while the source model exists -- D30)."""
 
+    # Seeded (round-2 CI triage, 2026-10-01): an unseeded draw made the
+    # layernorm output's near-zero per-row mean's magnitude -- and so the
+    # "mean=" field's scientific-notation width in test_repr_is_one_bounded_line
+    # -- depend on the shared global RNG stream's position, which pytest-randomly
+    # varies with collection order. A fixed seed makes the fixture's data (and
+    # every line-length assertion over it) reproducible regardless of order.
+    torch.manual_seed(0)
     model = _Mixed().eval()
     trace = tl.trace(model, torch.randn(2, 8))
     trace._keepalive_model = model  # pin lifetime for the live-param tests
@@ -57,6 +64,7 @@ def mixed_trace():
 def recurrent_trace():
     """One finished multi-pass capture."""
 
+    torch.manual_seed(0)  # reproducible regardless of collection order; see mixed_trace
     trace = tl.trace(_Recurrent().eval(), torch.randn(2, 4))
     yield trace
     trace.cleanup()

@@ -87,7 +87,10 @@ def _restamp_materialized_params(trace: Trace, module: nn.Module, hook: Any) -> 
 
     recurse = bool(getattr(hook, "place_submodules", False))
     base = _module_address(module)
-    inventory = getattr(trace, "_session_param_inventory", None)
+    try:
+        inventory = trace._session_param_inventory
+    except AttributeError:
+        inventory = None
     for rel_name, param in module.named_parameters(recurse=recurse):
         if param is None or param.device.type == "meta":
             continue
@@ -108,7 +111,10 @@ def _restamp_materialized_params(trace: Trace, module: nn.Module, hook: Any) -> 
         )
         if inventory is not None:
             inventory.append(param)
-        rebinds = getattr(trace, "_offload_param_rebinds", None)
+        try:
+            rebinds = trace._offload_param_rebinds
+        except AttributeError:
+            rebinds = None
         if rebinds is not None:
             # Weak-valued: attribution needs the object only while the module
             # call is live; a strong ref here would pin every offloaded shard
@@ -126,7 +132,11 @@ def install_offload_hook_shims(trace: Trace, model: nn.Module) -> None:
             continue
         if getattr(hook, _SHIM_MARKER, False):
             continue  # nested capture safety: never double-shim
-        if getattr(trace, "_offload_param_rebinds", None) is None:
+        try:
+            has_rebinds = trace._offload_param_rebinds is not None
+        except AttributeError:
+            has_rebinds = False
+        if not has_rebinds:
             # Session-scoped, created only when a hook exists; dropped at
             # uninstall so no live-trace attr survives the session.
             trace._offload_param_rebinds = weakref.WeakValueDictionary()
@@ -183,7 +193,10 @@ def install_offload_hook_shims(trace: Trace, model: nn.Module) -> None:
 def uninstall_offload_hook_shims(trace: Trace) -> None:
     """Delete the session's instance-attribute shadows (restores class methods)."""
 
-    shims = getattr(trace, "_offload_hook_shims", None)
+    try:
+        shims = trace._offload_hook_shims
+    except AttributeError:
+        shims = None
     if not shims:
         return
     seen: set[int] = set()

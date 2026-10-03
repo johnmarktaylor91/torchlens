@@ -1151,6 +1151,23 @@ def install_buffer_write_tracker(trace: Trace, model: nn.Module) -> BufferWriteT
     return tracker
 
 
+def peek_buffer_write_tracker(trace: Any) -> BufferWriteTracker | None:
+    """Read the trace's session-scoped buffer-write tracker, if installed.
+
+    ``_buffer_write_tracker`` is a declared ``FieldPolicy.DROP`` Trace field
+    that is only installed for an exhaustive-capture session
+    (:func:`install_buffer_write_tracker`) and uninstalled (set back to
+    ``None``) at session end; a predicate-mode or finished/loaded trace
+    simply never had the attribute, so this is a direct private read
+    guarded by ``AttributeError`` rather than a string-literal default.
+    """
+
+    try:
+        return trace._buffer_write_tracker
+    except AttributeError:
+        return None
+
+
 def reconcile_buffer_writes(trace: Trace, trace_state: RawGraphWorkspace) -> None:
     """Run end-of-capture registered-buffer reconciliation.
 
@@ -1170,7 +1187,7 @@ def reconcile_buffer_writes(trace: Trace, trace_state: RawGraphWorkspace) -> Non
     if trace._raw_graph_ws is not trace_state:
         raise RuntimeError("Torch backend received a foreign raw-graph workspace owner.")
 
-    tracker = getattr(trace, "_buffer_write_tracker", None)
+    tracker = peek_buffer_write_tracker(trace)
     if isinstance(tracker, BufferWriteTracker):
         tracker.reconcile()
 
@@ -1180,7 +1197,7 @@ def uninstall_buffer_write_tracker(trace: Trace | None) -> None:
 
     if trace is None:
         return
-    tracker = getattr(trace, "_buffer_write_tracker", None)
+    tracker = peek_buffer_write_tracker(trace)
     if isinstance(tracker, BufferWriteTracker):
         tracker.uninstall()
         trace._buffer_write_tracker = None
@@ -1196,7 +1213,7 @@ def snapshot_buffer_args(
 
     if trace.capture_mode != "exhaustive":
         return []
-    tracker = getattr(trace, "_buffer_write_tracker", None)
+    tracker = peek_buffer_write_tracker(trace)
     if not isinstance(tracker, BufferWriteTracker):
         return []
     if not _is_fused_mutator(func_name) and not _could_mutate(func_name, kwargs):
@@ -1212,7 +1229,7 @@ def record_op_buffer_writes(
 ) -> None:
     """Record writes detected for one wrapped torch call."""
 
-    tracker = getattr(trace, "_buffer_write_tracker", None)
+    tracker = peek_buffer_write_tracker(trace)
     if isinstance(tracker, BufferWriteTracker):
         tracker.record_op_writes(func_name, snapshots, producer_label_raw)
 
@@ -1234,7 +1251,7 @@ def resolve_registered_buffer_address(trace: Trace, tensor: torch.Tensor) -> str
         otherwise ``None``.
     """
 
-    tracker = getattr(trace, "_buffer_write_tracker", None)
+    tracker = peek_buffer_write_tracker(trace)
     if not isinstance(tracker, BufferWriteTracker):
         # r81: no tracker (non-exhaustive session) -- never trust the raw
         # static stamp; require current-session identity + storage identity.
@@ -1621,7 +1638,7 @@ def resolve_or_late_index_buffer_address(trace: Trace, tensor: torch.Tensor) -> 
     if address is None:
         address = resolve_registered_buffer_address(trace, tensor)
     if address is None:
-        tracker = getattr(trace, "_buffer_write_tracker", None)
+        tracker = peek_buffer_write_tracker(trace)
         if tracker is not None:
             address = tracker.index_materialized_buffer(tensor)
     return address

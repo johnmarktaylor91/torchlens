@@ -185,7 +185,14 @@ def _solve_projective_uncached(
             descriptor = replace(
                 _descriptor(op, state),
                 direction=ReceptiveFieldDirection.PROJECTIVE,
-                unit_shape=tuple(op.shape),
+                # ``op.shape`` is legitimately ``None`` for a non-tensor-valued
+                # op (e.g. a JAX region boundary/projection pseudo-op whose
+                # captured output is a tuple of values, not one tensor) that
+                # is merely a pass-through ancestor on the walk to a real
+                # geometric target. Treat it as the op.py-documented
+                # shapeless default (``()``, zero spatial axes) instead of
+                # crashing on ``tuple(None)``.
+                unit_shape=tuple(op.shape) if op.shape is not None else (),
             )
             descriptors[(op.label, role)] = descriptor
             flattened_states[(op.label, role)] = state

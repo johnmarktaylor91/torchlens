@@ -85,7 +85,10 @@ class DeclaredPreprocessing:
     interpolation:
         Interpolation mode name, lower-cased (``"bilinear"``, ``"bicubic"``).
     antialias:
-        Whether resize applies antialiasing.
+        Whether resize applies antialiasing: ``True``/``False``, the literal
+        string ``"warn"`` (torchvision's own legacy sentinel -- antialiasing
+        differs by input type and torchvision warns once; declared as-is
+        rather than coerced into a guessed bool), or ``None`` (undeclared).
     channel_order:
         Channel convention (``"rgb"`` / ``"bgr"``).
     value_range:
@@ -103,7 +106,7 @@ class DeclaredPreprocessing:
     resize_size: Any = None
     crop_size: Any = None
     interpolation: str | None = None
-    antialias: bool | None = None
+    antialias: bool | str | None = None
     channel_order: str | None = None
     value_range: Any = None
     mean: Any = None

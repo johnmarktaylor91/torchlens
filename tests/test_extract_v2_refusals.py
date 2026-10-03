@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import pytest
 import torch
+from support.fp8_guard import permit_cpu_float8_allocation
 from torch import nn
 
 import torchlens as tl
@@ -270,7 +271,8 @@ def test_pool_mask_required_refuses_without_mask() -> None:
 def test_pool_fp8_compute_refuses_unit() -> None:
     """fp8 pool compute refuses typed rather than silently upcasting (D11)."""
 
-    tensor = torch.randn(2, 3, 4).to(torch.float8_e4m3fn)
+    with permit_cpu_float8_allocation():
+        tensor = torch.randn(2, 3, 4).to(torch.float8_e4m3fn)
     with pytest.raises(InvalidArgumentError) as excinfo:
         apply_pool("k", tensor, {"global": {"preset": "token_mean", "unmasked": True}}, None)
     assert _code(excinfo) == "extraction_pool_dtype_unsupported"

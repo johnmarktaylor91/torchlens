@@ -24,14 +24,26 @@ import pytest
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn.attention import SDPBackend, sdpa_kernel
 from torch.utils.flop_counter import FlopCounterMode
 
 import torchlens as tl
 from torchlens.debug import flops_vs_dispatch
 from torchlens.errors import TorchLensError
+from torchlens.utils._torch_compat import HAS_NN_ATTENTION_MODULE
 
-pytestmark = pytest.mark.smoke
+if HAS_NN_ATTENTION_MODULE:
+    from torch.nn.attention import SDPBackend, sdpa_kernel
+else:  # torch 2.1-2.2: torch.nn.attention postdates the floor.
+    SDPBackend = None  # type: ignore[assignment,misc]
+    sdpa_kernel = None  # type: ignore[assignment,misc]
+
+pytestmark = [
+    pytest.mark.smoke,
+    pytest.mark.skipif(
+        not HAS_NN_ATTENTION_MODULE,
+        reason="torch.nn.attention (SDPBackend/sdpa_kernel) postdates the torch 2.1 floor",
+    ),
+]
 
 
 class TinyAttention(nn.Module):

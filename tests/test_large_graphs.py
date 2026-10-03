@@ -6,6 +6,7 @@ import os
 import re
 import warnings
 from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 import pytest
@@ -14,6 +15,7 @@ from example_models import RandomGraphModel
 from torch import nn
 
 from torchlens import trace as trace_fn
+from torchlens.errors._base import TorchLensWarning
 from torchlens.user_funcs import validate_forward_pass
 from torchlens.visualization._rank_layout_internal import layout as rank_layout
 from torchlens.visualization._rank_layout_internal.layout import (
@@ -47,10 +49,33 @@ def _ensure_output_dir() -> Iterator[None]:
     yield
 
 
+@contextmanager
+def _tolerate_op_count_disclosure() -> Iterator[None]:
+    """Allow the intentional >=50k-op capture disclosure (R60-1) to pass.
+
+    These tests deliberately build >=50k-op ``RandomGraphModel`` instances to
+    exercise TorchLens at scale, so the capture-side op-count disclosure
+    (``torchlens/ir/capture_events.py``, fired once per journal at
+    ``OP_COUNT_DISCLOSURE_THRESHOLD``) is expected here, not a regression;
+    the default ``error::UserWarning:torchlens`` filter would otherwise turn
+    it into a test failure. ``tests/test_scaling_ladder.py`` owns the
+    dedicated regression coverage for the disclosure itself.
+    """
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "default",
+            message=r"TorchLens has recorded \d+ ops in this forward.*",
+            category=TorchLensWarning,
+        )
+        yield
+
+
 def _count_nodes(model: nn.Module, x: torch.Tensor) -> int:
     """Log a forward pass and return the number of captured layers."""
 
-    trace = trace_fn(model, x)
+    with _tolerate_op_count_disclosure():
+        trace = trace_fn(model, x)
     count = len(trace.layer_list)
     trace.cleanup()
     return count
@@ -251,7 +276,8 @@ class TestRandomGraphModel:
         """Validation succeeds for a 50k-node random model."""
 
         model = RandomGraphModel(target_nodes=50000, seed=42)
-        assert validate_forward_pass(model, torch.randn(2, 64))
+        with _tolerate_op_count_disclosure():
+            assert validate_forward_pass(model, torch.randn(2, 64))
 
     @pytest.mark.slow
     @pytest.mark.rare
@@ -259,7 +285,8 @@ class TestRandomGraphModel:
         """Validation succeeds for a 100k-node random model."""
 
         model = RandomGraphModel(target_nodes=100000, seed=42)
-        assert validate_forward_pass(model, torch.randn(2, 64))
+        with _tolerate_op_count_disclosure():
+            assert validate_forward_pass(model, torch.randn(2, 64))
 
     @pytest.mark.skipif(
         os.environ.get("TORCHLENS_RUN_250K") != "1",
@@ -273,7 +300,8 @@ class TestRandomGraphModel:
         """Validation for 250k-node random models is manual-only."""
 
         model = RandomGraphModel(target_nodes=250000, seed=42)
-        assert validate_forward_pass(model, torch.randn(2, 64))
+        with _tolerate_op_count_disclosure():
+            assert validate_forward_pass(model, torch.randn(2, 64))
 
 
 class TestRankLayoutUtilities:

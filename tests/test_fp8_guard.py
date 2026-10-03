@@ -17,9 +17,11 @@ tests below are no longer trustworthy.
 from __future__ import annotations
 
 import warnings
+from collections.abc import Iterator
 
 import pytest
 import torch
+from support.fp8_guard import permit_cpu_float8_allocation
 from torch import nn
 
 import torchlens as tl
@@ -31,6 +33,13 @@ from torchlens.utils.tensor_utils import (
     fp8_widen_for_numeric_ops,
     tensor_nanequal,
 )
+
+
+@pytest.fixture(autouse=True)
+def _permit_cpu_float8_allocation_in_module() -> Iterator[None]:
+    """Every test here creates fresh Float8 CPU tensors; see ``conftest.py``."""
+    with permit_cpu_float8_allocation():
+        yield
 
 
 def _fp8_dtypes() -> tuple[torch.dtype, ...]:
@@ -579,8 +588,13 @@ def test_no_fp8_variant_can_be_trusted_to_its_native_finiteness_kernel() -> None
             f"the widened check must see {dtype}'s non-finite pattern"
         )
         try:
+            # torch's exact exception type for a missing fp8 kernel is not
+            # stable across versions: some builds raise NotImplementedError,
+            # others a bare RuntimeError (NotImplementedError IS a
+            # RuntimeError, but not the reverse, so catching only the
+            # subclass misses the floor's bare-RuntimeError shape).
             native_ok = bool((~torch.isfinite(payload)).all())
-        except NotImplementedError:
+        except RuntimeError:
             continue
         if native_ok:
             trustworthy.append(str(dtype))

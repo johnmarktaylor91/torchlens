@@ -11,7 +11,7 @@ postprocess over the committed prefix and read every public label out of the
 produced step-8 raw-to-final map -- and when that map cannot be produced, the
 public label is ``None`` with an explicit status, never a raw spelling.
 
-Two doors live here:
+Three doors live here:
 
 - :func:`resolve_raw_label` -- the one resolver every public
   message/field-construction site uses to turn an internal raw label into a
@@ -25,12 +25,27 @@ Two doors live here:
   and the original ``CaptureError``'s public fields are rewritten through the
   identity map. Any finalization failure attaches as SECONDARY evidence on the
   primary error and never replaces it.
+- :func:`strip_raw_label_suffix` -- a DIFFERENT, deterministic concern: the
+  ``_raw`` sentinel appended at capture time to every raw node label is a
+  literal, constant suffix (unlike the raw-to-final ORDINAL offset above,
+  which is provably non-constant). Removing it is the same sanctioned
+  operation ``data_classes.op.Op.raw_label`` already performs on an op's own
+  ``_label_raw``; this free-function form exists for the preview/neutral
+  finishers (``backends._finalize``, ``backends.jax.backend``), which compute
+  a raw node's public ``layer_label`` directly from a bare string before any
+  ``Trace`` (and its step-8 identity map) exists to resolve against.
+
+This module is the one sanctioned home for ``RAW_LABEL_SUFFIX``-consuming
+logic outside its definition (``constants.py``) and ``Op.raw_label``
+(``data_classes/op.py``); see ``tests/test_observe_kit_labels.py``.
 """
 
 from __future__ import annotations
 
 import contextlib
 from typing import TYPE_CHECKING, Any
+
+from ..constants import RAW_LABEL_SUFFIX
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -79,6 +94,30 @@ def canonical_public_label(op: Any) -> str:
     return str(label) if isinstance(label, str) else ""
 
 
+def strip_raw_label_suffix(label: str) -> str:
+    """Strip the raw-capture ``_raw`` sentinel suffix from a leader label.
+
+    ``RecurrenceAssignment.layer_label`` is always a RAW node label (the
+    singleton fallback and the grouped leader are both drawn straight from
+    ``raw_layer_dict`` keys, e.g. ``"input_1_1_raw"``). Torch's own
+    postprocess renumbers every op into a pretty final label in a later,
+    torch-only step (``postprocess.labeling``), so its callers never expose
+    ``RecurrenceAssignment.layer_label`` directly. The preview/neutral
+    finishers (``backends._finalize``, ``backends.jax.backend``) have no such
+    later step: they set ``op_log.layer_label`` straight from this value, so
+    without stripping, the internal ``_raw`` sentinel leaked into the public
+    ``layer_label``/``trace.layer_labels`` surface and tripped the
+    ``graph_ordering`` "Raw label survived postprocessing" invariant.
+
+    This is the constant-suffix case, not the non-constant-ordinal case
+    :func:`resolve_raw_label` guards against: see the module docstring.
+    """
+
+    if label.endswith(RAW_LABEL_SUFFIX):
+        return label[: -len(RAW_LABEL_SUFFIX)]
+    return label
+
+
 def resolve_raw_label(trace: Any, raw_label: Any) -> tuple[str | None, str]:
     """Resolve one internal raw label to its public label through the map.
 
@@ -107,7 +146,10 @@ def resolve_raw_label(trace: Any, raw_label: Any) -> tuple[str | None, str]:
 
     if not isinstance(raw_label, str) or not raw_label:
         return None, LABEL_STATUS_UNAVAILABLE
-    mapping = getattr(trace, "_raw_to_final_layer_labels", None) if trace is not None else None
+    try:
+        mapping = trace._raw_to_final_layer_labels if trace is not None else None
+    except AttributeError:
+        mapping = None
     if isinstance(mapping, dict):
         final = mapping.get(raw_label)
         if isinstance(final, str) and final:

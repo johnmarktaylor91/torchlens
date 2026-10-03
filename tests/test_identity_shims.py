@@ -531,6 +531,17 @@ class TestAsSubclassOpIdentity:
                 return torch.tanh(s)
 
         torch.manual_seed(0)
+        if not _flag("HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE"):
+            # Floor-torch capability gap (torch 2.1/2.2): see
+            # SubclassConstructionUnderDispatchModeError.
+            from torchlens.backends.torch._modes import (
+                SubclassConstructionUnderDispatchModeError,
+            )
+
+            with pytest.raises(SubclassConstructionUnderDispatchModeError) as excinfo:
+                tl.validation.validate_forward_pass(Model(), torch.randn(2, 3))
+            assert excinfo.value.fields["code"] == "subclass_ctor_under_dispatch_mode_unsupported"
+            return
         assert tl.validation.validate_forward_pass(Model(), torch.randn(2, 3))
 
 

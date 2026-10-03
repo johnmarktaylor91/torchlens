@@ -177,7 +177,13 @@ def test_trace_docstring_has_no_self_referential_aliases():
     """
     import inspect
 
-    doc = tl.trace.__doc__ or ""
+    # Python 3.13 dedents docstrings at compile time (every leading-whitespace
+    # column that is common to every line is stripped from co_consts), so the
+    # raw __doc__ no longer carries the source's 4-space numpydoc indentation
+    # there -- `inspect.cleandoc` normalizes BOTH representations to the same
+    # canonical (zero-indent-for-the-first-level) form, so the check below is
+    # Python-version-agnostic rather than tied to the literal source spelling.
+    doc = inspect.cleandoc(tl.trace.__doc__ or "")
     signature_params = set(inspect.signature(tl.trace).parameters)
 
     # activation_transform and recurrence_detection moved into the grouped
@@ -187,11 +193,10 @@ def test_trace_docstring_has_no_self_referential_aliases():
         assert f"{name}: Alias for ``{name}``" not in doc
         assert f"{name}: Deprecated alias for ``{name}``" not in doc
         # The real canonical parameter still exists and stays documented
-        # exactly once. The count uses the 4-space numpydoc entry spelling
-        # (``    name:``), which also matches the historical 8-space inline
-        # spelling as a substring, so the check is style-agnostic.
+        # exactly once, as its own numpydoc entry (a line starting with
+        # "name:", after cleandoc normalization).
         assert name in signature_params
-        assert doc.count(f"    {name}:") == 1
+        assert doc.count(f"\n{name}:") == 1
     for removed in ("activation_transform", "recurrence_detection"):
         assert removed not in signature_params
 

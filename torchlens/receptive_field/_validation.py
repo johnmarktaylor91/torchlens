@@ -215,7 +215,9 @@ def _box_for_descriptor(
         empty=False,
         covers_input=all(axis.kind in {"pointwise", "full"} for axis in axes),
         direction=direction,
-        unit_shape=tuple(owner.shape),
+        # ``shape`` is legitimately ``None`` for a non-tensor-valued op (see
+        # the identical note in ``_indeterminate_unit``).
+        unit_shape=tuple(owner.shape) if owner.shape is not None else (),
     )
 
 
@@ -1101,8 +1103,12 @@ def _selectors(value: object | Sequence[object] | None) -> tuple[object | None, 
 def _indeterminate_unit(owner: Op, batch_index: int) -> tuple[int, ...]:
     """Return a deterministic complete unit when grid metadata is unavailable."""
 
-    unit = [int(extent) // 2 for extent in owner.shape]
-    if unit and 0 <= batch_index < int(owner.shape[0]):
+    # ``shape`` is legitimately ``None`` for a non-tensor-valued op (e.g. a
+    # JAX while/cond decision pseudo-op); treat it as the op.py-documented
+    # shapeless default (``()``) instead of crashing on an empty iteration.
+    owner_shape: tuple[int, ...] = owner.shape if owner.shape is not None else ()
+    unit = [int(extent) // 2 for extent in owner_shape]
+    if unit and 0 <= batch_index < int(owner_shape[0]):
         unit[0] = batch_index
     return tuple(unit)
 

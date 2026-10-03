@@ -16,9 +16,14 @@ pytestmark = pytest.mark.smoke
 # tests/oracles/test_oracle_w0_surface.py and the denominator 3-root lint in
 # tests/oracles/test_oracle_w0_lints.py -- one cites the other, never forks).
 PUBLIC_SURFACE_SIZE = 116
+#: Docs carrying a parseable ``__all__`` count claim. AGENTS.md and torchlens/AGENTS.md
+#: no longer carry this prose directly (2026-10-01 docs move: "docs: move agent
+#: reference material out of startup instructions" / "docs: reserve nested instruction
+#: budget for module rules") -- the claim now lives in their docs/agent-reference/
+#: pointer targets below.
 PUBLIC_SURFACE_DOCS = (
-    "AGENTS.md",
-    "torchlens/AGENTS.md",
+    "docs/agent-reference/current-2-x-surface.md",
+    "docs/agent-reference/package/public-surface.md",
     "docs/for-ai-agents.md",
     "docs/migration/v2.0_api_changes.md",
 )
@@ -335,7 +340,16 @@ CURATED_NAMESPACE_DOCS = {
     "torchlens.semantic": ("docs/facets.md",),
     "torchlens.debug": ("docs/reference/debug.md",),
 }
-CURATED_COMMON_VENUES = ("docs/reference/glossary.md", "AGENTS.md")
+#: ``docs/agent-reference/current-2-x-surface.md`` carries the "Current 2.x Surface"
+#: prose that used to live directly in AGENTS.md (2026-10-01 docs move: "docs: move
+#: agent reference material out of startup instructions"), e.g. the
+#: ``tl.debug.graph_breaks()`` mention -- its doc-of-record row stays
+#: docs/reference/debug.md, but this is the common venue a bare mention counts from.
+CURATED_COMMON_VENUES = (
+    "docs/reference/glossary.md",
+    "AGENTS.md",
+    "docs/agent-reference/current-2-x-surface.md",
+)
 
 
 def test_curated_namespace_callables_are_documented() -> None:

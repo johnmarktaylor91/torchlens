@@ -233,15 +233,30 @@ def _autograd_leaf_variable_ids(activations: tuple[Tensor, ...]) -> set[int]:
     """
 
     found: set[int] = {id(activation) for activation in activations}
-    seen: set[int] = set()
+    # ``grad_fn.next_functions`` mints a FRESH Python wrapper around the
+    # underlying autograd node on every access; nothing else keeps that
+    # wrapper alive once it is popped off ``stack`` and only its ``id()`` is
+    # retained. CPython is then free to recycle that exact address for the
+    # NEXT node constructed during the same walk (observed on torch 2.7.1
+    # for a 3+-hop chain such as Conv2d->ReLU->AvgPool2d: the freed
+    # ``ReluBackward0`` wrapper's address was reused by the input leaf's own
+    # ``AccumulateGrad`` wrapper), which makes an `id()`-keyed "seen" set
+    # falsely treat the brand-new node as already visited and silently
+    # prune the real leaf out of the walk. Keeping the node OBJECTS
+    # themselves (not their bare ids) in ``seen`` fixes both problems at
+    # once: it holds a strong reference for the rest of the traversal (no
+    # address can be recycled out from under it) and still deduplicates
+    # correctly, since these wrapper types use default identity-based
+    # ``__eq__``/``__hash__``.
+    seen: set[Any] = set()
     stack: list[Any] = [
         activation.grad_fn for activation in activations if activation.grad_fn is not None
     ]
     while stack:
         node = stack.pop()
-        if node is None or id(node) in seen:
+        if node is None or node in seen:
             continue
-        seen.add(id(node))
+        seen.add(node)
         variable = getattr(node, "variable", None)
         if isinstance(variable, Tensor):
             found.add(id(variable))

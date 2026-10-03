@@ -25,6 +25,7 @@ from torchlens.dataset_extraction import (
     extract_dataset,
     open_extraction,
 )
+from torchlens.utils._torch_compat import get_cpu_float8_deterministic_fill_support
 
 pytestmark = pytest.mark.smoke
 
@@ -182,7 +183,26 @@ def test_pool_kills_raggedness_across_batches(tmp_path: Path) -> None:
 # --- dtype routing (item 9 / T-FP8-BF16) --------------------------------------------
 
 
-@pytest.mark.parametrize("dtype_name", ["bfloat16", "float8_e4m3fn", "float8_e5m2"])
+@pytest.mark.parametrize(
+    "dtype_name",
+    [
+        "bfloat16",
+        pytest.param(
+            "float8_e4m3fn",
+            marks=pytest.mark.skipif(
+                not get_cpu_float8_deterministic_fill_support(),
+                reason="CPU Float8 empty-fill under deterministic mode postdates the torch 2.1 floor",
+            ),
+        ),
+        pytest.param(
+            "float8_e5m2",
+            marks=pytest.mark.skipif(
+                not get_cpu_float8_deterministic_fill_support(),
+                reason="CPU Float8 empty-fill under deterministic mode postdates the torch 2.1 floor",
+            ),
+        ),
+    ],
+)
 def test_bf16_fp8_store_byte_exact_roundtrip(tmp_path: Path, dtype_name: str) -> None:
     """bf16/fp8 shards round-trip BYTE-EXACT through safetensors (D11)."""
 

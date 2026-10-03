@@ -24,8 +24,14 @@ from torchlens.trackers._errors import (
     WatchConfigError,
     WatchRuntimeError,
 )
+from torchlens.utils._torch_compat import HAS_AMP_GRADSCALER
 
 pytestmark = pytest.mark.smoke
+
+_requires_gradscaler = pytest.mark.skipif(
+    not HAS_AMP_GRADSCALER,
+    reason="torch.amp.GradScaler (device-agnostic) postdates the torch 2.1 floor",
+)
 
 
 def _mlp() -> tuple[torch.nn.Module, torch.optim.Optimizer]:
@@ -127,6 +133,7 @@ class TestCloseSpine:
             session.close()
         assert info.value.fields["code"] == "watch_close_empty"
 
+    @_requires_gradscaler
     def test_all_steps_explained_by_named_skips_does_not_raise(self) -> None:
         """A run whose every step is AMP-skipped is explained, not empty."""
 

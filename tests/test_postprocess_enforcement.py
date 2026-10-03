@@ -34,6 +34,14 @@ EXPECTED_PHANTOM_WRITES = {
     ("9", "kwargs_template"),
     ("18", "grad_ref"),
     ("6", "address"),
+    # Reviewed widening (sol finding 6 in-place audit, see _contracts.py):
+    # steps 15 and 16 mutate the referenced Param rows' OWN fields
+    # (used_by_ops, co_parent_params, ...) rather than reassigning the Op's
+    # _param_logs column, so the column-reassignment write audit never
+    # observes either declared write. Mirrored in PHANTOM_WRITE_EXEMPTIONS,
+    # test_postprocess_dag.py.
+    ("15", "_param_logs"),
+    ("16", "_param_logs"),
 }
 
 #: Declared-but-never-observed READS, the read-side mirror of the table
@@ -515,7 +523,9 @@ def exc_code_line(stdout: str) -> str:
     return stdout.strip().split()[-1]
 
 
-@pytest.mark.smoke
+@pytest.mark.heavy  # measured 7.0-7.9s across CI rows (round-2/3 CI triage, 2026-10-01):
+# consistently over the smoke ceiling on every row (a real -O child-process spawn), not
+# a one-off load spike.
 def test_audit_armed_under_stripped_asserts_refuses_typed() -> None:
     """Arming the audit under -O refuses with a stable code (real -O child)."""
 

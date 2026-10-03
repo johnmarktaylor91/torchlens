@@ -11,6 +11,30 @@ from __future__ import annotations
 from typing import Any
 
 
+def psutil_available() -> bool:
+    """Whether ``psutil`` can be imported (capability probe, not torch-specific).
+
+    ``process_rss_bytes`` is the host-resident-set baseline the CPU/MPS forward-peak
+    bracket reads BEFORE the forward pass; without psutil that baseline is always 0,
+    so the bracket can never compute a resident delta no matter how the VmHWM
+    high-water mark itself behaves. Callers (the bracket's ``resident_basis``
+    disclosure, this module's test suite) use this probe to distinguish "psutil
+    missing" from "measured, zero growth" instead of reporting a misleading basis
+    label alongside an unexplained ``None``.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``import psutil`` succeeds.
+    """
+
+    try:
+        import psutil  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
 def process_rss_bytes() -> int:
     """Return the current process resident-set size in bytes, or 0 if unavailable.
 
@@ -94,7 +118,11 @@ def read_peak_pair(trace: Any) -> dict[str, Any] | None:
     or ``None``), ``backend`` (``"cuda:allocated+reserved"`` /
     ``"cpu:maxlive+rss"`` / ``"mps:allocated+rss"``), and
     ``resident_basis`` (``"per_capture"`` when the host high-water mark was
-    reset for this bracket, ``"process_lifetime"`` otherwise, or
+    reset for this bracket and a baseline was measured, ``"process_lifetime"``
+    when measured but the reset was unavailable, ``"unavailable"`` when
+    ``resident`` could not be computed at all (e.g. psutil is not installed,
+    so the pre-forward RSS baseline reads 0 regardless of the reset outcome
+    -- a typed disclosure, never a bare unexplained ``None``), or
     ``"prior_high_water_delta"`` on CUDA). Session-time only: ``None`` on
     loaded artifacts, which never re-measure.
 
@@ -109,5 +137,8 @@ def read_peak_pair(trace: Any) -> dict[str, Any] | None:
         Read-only copy of the measured pair, or ``None``.
     """
 
-    pair = getattr(trace, "_forward_peak_memory_pair", None)
+    try:
+        pair = trace._forward_peak_memory_pair
+    except AttributeError:
+        pair = None
     return dict(pair) if pair is not None else None

@@ -52,7 +52,11 @@ a buffer already present in the stream), ``collections.defaultdict`` (a stored
 ``default_factory`` is never invoked by any unpickle opcode), the pure-data builtin
 value/collection constructors, and the ``operator`` root (it resolves to an inert
 ``_DeferredForeignCallable`` that refuses execution, so ``operator.mul(b"A", N)`` cannot
-amplify).
+amplify). ``numpy._core.multiarray.scalar`` / ``numpy.core.multiarray.scalar`` (both
+spellings) is likewise assessed and NOT a mediator: ``scalar(dtype, bytes)`` rebuilds a
+SINGLE numpy scalar bounded by the fixed ``dtype.itemsize`` (at most a few dozen bytes for
+the largest numpy scalar types), with no attacker-controlled count/shape argument -- unlike
+``_reconstruct`` (an attacker-sized ``shape``) there is no size to amplify.
 
 Every gate here must refuse nothing legitimate: the honest-artifact round-trip at the end
 proves real ``.tlspec`` save/load is unaffected.
@@ -712,6 +716,8 @@ def test_safe_explicit_globals_surface_is_pinned() -> None:
                 ("numpy._core.numeric", "_frombuffer"),
                 ("numpy.core.multiarray", "_reconstruct"),
                 ("numpy._core.multiarray", "_reconstruct"),
+                ("numpy.core.multiarray", "scalar"),
+                ("numpy._core.multiarray", "scalar"),
             }
         )
         == _SAFE_EXPLICIT_GLOBALS

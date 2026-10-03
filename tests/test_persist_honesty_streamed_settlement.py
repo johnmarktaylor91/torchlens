@@ -83,12 +83,12 @@ def test_post_stage_failure_never_publishes(tmp_path):
     artifact; the staged temp bundle is aborted into PARTIAL debris."""
 
     path = tmp_path / "failed.tlspec"
-    with mock.patch.object(
-        Trace, "release_param_refs", side_effect=RuntimeError("boom in step 20")
+    # The streaming failure handler wraps the propagating step-20 error.
+    with (
+        mock.patch.object(Trace, "release_param_refs", side_effect=RuntimeError("boom in step 20")),
+        pytest.raises(TorchLensIOError),
     ):
-        # The streaming failure handler wraps the propagating step-20 error.
-        with pytest.raises(TorchLensIOError):
-            tl.trace(_model(), torch.randn(2, 4), storage=tl.to_disk(str(path)))
+        tl.trace(_model(), torch.randn(2, 4), storage=tl.to_disk(str(path)))
     assert not path.exists()
     debris = [p for p in tmp_path.iterdir() if p.name.startswith("failed.tlspec.tmp.")]
     assert debris, "expected the staged temp bundle to remain as sweepable debris"

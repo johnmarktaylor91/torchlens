@@ -87,7 +87,10 @@ def poison_facts(log: Any) -> dict[str, Any]:
         ``first_mismatch`` (stringified, bounded).
     """
 
-    runnable = getattr(log, "_runnable", None)
+    try:
+        runnable = log._runnable
+    except AttributeError:
+        runnable = None
     poisoned = bool(getattr(runnable, "poisoned", False))
     facts: dict[str, Any] = {"poisoned": poisoned}
     if poisoned:

@@ -23,6 +23,10 @@ from torchlens._extraction.dtype_policy import tensor_payload_bytes
 from torchlens._extraction.reader import open_extraction
 from torchlens._extraction.resume import model_structure_record
 from torchlens.dataset_extraction import DatasetExtractionResumeError, extract_dataset
+from torchlens.utils._torch_compat import (
+    get_cpu_float8_deterministic_fill_support,
+    get_cpu_half_kernels_support,
+)
 
 pytestmark = pytest.mark.smoke
 
@@ -233,6 +237,10 @@ def test_v1_callable_record_refuses_as_incomparable_not_as_behavior_change(
     assert "behavior changed" not in str(excinfo.value)
 
 
+@pytest.mark.skipif(
+    not get_cpu_float8_deterministic_fill_support(),
+    reason="CPU Float8 empty-fill under deterministic mode postdates the torch 2.1 floor",
+)
 def test_tensor_payload_bytes_covers_numpy_less_dtypes() -> None:
     bf16 = torch.tensor([1.0, -2.0, 3.5], dtype=torch.bfloat16)
     assert tensor_payload_bytes(bf16) == bf16.view(torch.int16).numpy().tobytes()
@@ -244,7 +252,19 @@ def test_tensor_payload_bytes_covers_numpy_less_dtypes() -> None:
         bf16.numpy()  # the historical crash site
 
 
-@pytest.mark.parametrize("dtype", [torch.bfloat16, torch.float16])
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        torch.bfloat16,
+        pytest.param(
+            torch.float16,
+            marks=pytest.mark.skipif(
+                not get_cpu_half_kernels_support(),
+                reason="CPU addmm for float16 postdates the torch 2.1 floor",
+            ),
+        ),
+    ],
+)
 def test_low_precision_stimuli_extract_on_both_paths(tmp_path: Path, dtype: torch.dtype) -> None:
     """p9b_bf16: tensor stimuli, item stimuli, disk and in-memory, plus a bf16 closure."""
 

@@ -132,7 +132,13 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # merged measurement (4794).
     "torchlens/data_classes/op.py": 4800,
     "torchlens/_io/runnable.py": 5000,
-    "torchlens/utils/rng.py": 4950,
+    # 4950 -> 5100 (2026-10-01 L8 floor2 fix): two find_spec-detected
+    # structural-extras rows (the vendored torch.distributed.pipeline
+    # checkpoint save/restore RNG pair, never eagerly imported by anything,
+    # so sys.modules-based detection missed them) land at the one
+    # TORCH_RNG_SURFACE chokepoint; next 50-line step above the measured
+    # 5065.
+    "torchlens/utils/rng.py": 5100,
     # 4600 -> 4350 (2026-08-27 C05 fix cycle): the segment descriptor/label
     # family split to _segment_descriptors.py under R43; re-keyed down to the
     # next 50-line step above the post-split measurement (4326).
@@ -140,7 +146,15 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 4400 -> 4403 (2026-08-27 C01 item 5): the _selective_save relocation
     # re-sorted one import into a 4-line parenthesized block (+3 mechanical
     # lines, zero behavior); the god file itself did not grow.
-    "torchlens/backends/jax/backend.py": 4403,
+    # 4403 -> 4650 (2026-10-01 ci-fix ratchet settle): "give the preview
+    # backends torch's label convention" (8e5f966d8) landed real reviewed
+    # fix mass here -- the conditional bare/pass-qualified relabel epilogue,
+    # module_call_stack normalization, identity-counted parameter totals,
+    # and co_parent_params alias-tracking fixes -- measuring 4607 on the
+    # merged tree; next 50-line step above it. Conscious raise, not drift;
+    # the duplicate relabel/module-building code this same commit removed
+    # already kept the net growth well under the commit's own diff size.
+    "torchlens/backends/jax/backend.py": 4650,
     # 4600 -> 4650: the L8 C2-recording settle above re-stepped bundle to 4600
     # but the merged file MEASURES 4603 -- the settle's own re-step was three
     # lines short, red on main since the merge. Reconciled to the next 50-line
@@ -249,8 +263,20 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # unions with the F43-side threading to 4330 on the merged tree; the
     # W051 capture-door event fix (record the lowered module-intervene spec
     # so the injected-op rule anchor has a witness) lands the union at 4351.
-    "torchlens/user_funcs.py": 4360,
-    "torchlens/backends/torch/backward.py": 4450,
+    # 4360 -> 4400 (2026-10-01 ci-fix ratchet settle): the round-1 feature
+    # lanes (numbers/FactCore surface, intervention tl.when/site() spec
+    # targets, extraction artifact v2 door, tlspec v9 coordinated bump) and
+    # the subsequent integration fix wave landed reviewed surface mass on
+    # the merged tree (measures 4376); next 50-line step above it. This
+    # entry-point registry grows with each reviewed public surface addition
+    # by design; the post-sprint debloat target is unchanged.
+    "torchlens/user_funcs.py": 4400,
+    # 4450 -> 4500 (2026-10-01 ci-fix ratchet settle): "preserve checkpoint
+    # hook identity across token swap" (8397d1469) plus the round-1 feature
+    # lanes landed reviewed fix mass on the merged tree (measures 4457);
+    # next 50-line step above it. PRE-SPRINT BASELINE 3800 unchanged; the
+    # post-features debloat pass keeps it as the target.
+    "torchlens/backends/torch/backward.py": 4500,
     # 3800 -> 3850: L1 adds the grouping knob mirror + grouping_policy stamp
     # settlement (~25 lines) on top of the re-stepped feature-sprint baseline.
     # 3850 -> 3900: L9 adds the two DROP-gated backward-residuals fields
@@ -300,7 +326,62 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # the F04 GradientEdge/Node-prehook probes and the F27 Kineto/scope/
     # memory-parity probes at the one sanctioned chokepoint (measured 4001);
     # next 50-line step. Debloat target unchanged: 3450.
-    "torchlens/utils/_torch_compat.py": 4050,
+    # 4050 -> 4250 (2026-10-01 L8 floor fix): five new capability probes
+    # (deterministic-fill, GradScaler, nn.attention, RMSNorm, tuple-dim
+    # any()/all()) plus the tensor_any_over_dims() helper land at the one
+    # sanctioned chokepoint (measured 4223); next 50-line step. Debloat
+    # target unchanged: 3450.
+    # 4250 -> 4300 (2026-10-01 L8 floor fix cont'd): two more capability
+    # probes (CPU Half-dtype kernel coverage, Float8 deterministic-fill)
+    # land at the same chokepoint (measured 4293); next 50-line step.
+    # Debloat target unchanged: 3450.
+    # 4300 -> 4350 (2026-10-01 L8 floor fix cont'd): _probe_gradient_edge()
+    # strengthened from bare attribute presence to a real functional probe
+    # (torch 2.2-2.3 ships the class but its own _make_grads crashes on a
+    # GradientEdge output; fixed by 2.4, matching the read's documented
+    # "2.4+" remedy) at the same chokepoint (measured 4315); next 50-line
+    # step. Debloat target unchanged: 3450.
+    # 4350 -> 4400 (2026-10-01 L8 floor fix cont'd): HAS_GRADIENT_EDGE moved
+    # onto the lazy-probe pattern (get_gradient_edge_support(), registered in
+    # _LAZY_PROBE_FAMILIES) so the real autograd.grad call -- which pays a
+    # one-time engine-init cost -- lands on the first real one-backward read,
+    # never on a plain import torchlens (measured 4357); next 50-line step.
+    # Debloat target unchanged: 3450.
+    # 4400 -> 4450 (2026-10-01 L8 floor fix cont'd): the three remaining
+    # real-tensor-op probes (tuple-dim any(), CPU Half kernels, CPU Float8
+    # deterministic-fill) moved onto the same lazy pattern -- their combined
+    # eager cost was still measurably over the import-hygiene budget even
+    # after GradientEdge alone went lazy (measured 4443); next 50-line step.
+    # Debloat target unchanged: 3450.
+    # 4450 -> 4550 (2026-10-01 L8 floor2 fix): the prior step's own doc
+    # comment already undercounted its landed diff (measured 4504 at that
+    # commit, not 4443); this step adds one more probed op (CPU aminmax,
+    # folded into the existing CPU-Half-kernels probe) and re-keys to the
+    # next 50-line step above the honest current measurement (4508).
+    # Debloat target unchanged: 3450.
+    # 4550 -> 4600 (2026-10-01 L8 floor2 fix cont'd): one more lazy capability
+    # probe (meta-tensor Tensor.item() guard, HAS_META_ITEM_GUARD, gating the
+    # structure-only layer-2 backstop's NotImplementedError-vs-RuntimeError
+    # classification) lands at the same chokepoint (measured 4576); next
+    # 50-line step. Debloat target unchanged: 3450.
+    # 4600 -> 4650 (2026-10-01 L8 floor-fix "last"): one more lazy capability
+    # probe (strict-subclass construction under an active dispatch mode,
+    # HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE, the sibling of the existing
+    # Parameter-to-Tensor probe) lands at the same chokepoint (measured 4628);
+    # next 50-line step. Debloat target unchanged: 3450.
+    # 4650 -> 4800 (2026-10-01 ratchet2 ci-fix): the MHA fastpath-switch probe
+    # (HAS_MHA_FASTPATH_SWITCH) was eager at import, tripping the import-
+    # hygiene duration budget on torch 2.1.2; converting it to the same
+    # lazy-latch pattern as its siblings (get_mha_fastpath_switch_support,
+    # registered in _LAZY_PROBE_FAMILIES) adds one more accessor at the same
+    # chokepoint (measured 4788); next 50-line step. Debloat target
+    # unchanged: 3450.
+    # 4800 -> 4850 (2026-10-02 nightly fast-tier ci-fix): two new torch
+    # 2.7.1-specific OPTIONAL_CAPABILITY_FLAGS rows (HAS_FUNCOL_GROUP_
+    # RESOLUTION, HAS_SAVED_TENSORS_HOOK_INTROSPECTION) each need a dated,
+    # reasoned comment per the file's own convention; measured 4824; next
+    # 50-line step. Debloat target unchanged: 3450.
+    "torchlens/utils/_torch_compat.py": 4850,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     # 3300 -> 3320 (F24 observe): the device-memory bracket at the one
@@ -321,9 +402,20 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # with the F24 device-memory bracket to 3302 on the merged tree; next
     # 50-line step above the merged measurement, never a hand-derived
     # subtotal. The post-sprint step-down target is unchanged.
-    "torchlens/backends/torch/wrappers.py": 3350,
+    # 3350 -> 3450 (2026-10-01 L8 floor-fix "last"): the subclass-construction
+    # capability gate (HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE, shared by the
+    # LOGGED path's extended __new__/_make_subclass/as_subclass pause and the
+    # FAST path's translate-on-failure refusal, SubclassConstructionUnder
+    # DispatchModeError) lands here across several iterations settling on the
+    # translate-on-failure design (measured 3435); next 50-line step above it.
+    "torchlens/backends/torch/wrappers.py": 3450,
     # 3300 -> 3301 (2026-08-27 C01 item 5): same relocation import re-sort (+1).
-    "torchlens/backends/tinygrad/backend.py": 3301,
+    # 3301 -> 3400 (2026-10-01 ci-fix ratchet settle): "give the preview
+    # backends torch's label convention" (8e5f966d8) landed the same
+    # conditional relabel epilogue and intermediate-grad dual-spelling
+    # resolution fixes here as on jax; merged tree measures 3375. Next
+    # 50-line step above it; conscious raise, not drift.
+    "torchlens/backends/tinygrad/backend.py": 3400,
     "torchlens/backends/mlx/backend.py": 3250,
     # A07 (2026-08-26): +9 lines -- the step-1 contract gains the
     # flops_forward/flops_backward boundary-reset writes and their pinned-pair
@@ -366,7 +458,12 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # lint-ratchet fix for this same bounce); doc mass, not code growth.
     "torchlens/visualization/auto_collapse.py": 2150,
     "torchlens/validation/exemptions.py": 3000,
-    "torchlens/backends/paddle/backend.py": 2700,
+    # 2700 -> 2800 (2026-10-01 ci-fix ratchet settle): "give the preview
+    # backends torch's label convention" (8e5f966d8) landed the same
+    # conditional relabel epilogue plus intervention/halt predicate
+    # intermediate-grad dual-spelling resolution here as on jax/tinygrad;
+    # merged tree measures 2753. Next 50-line step above it.
+    "torchlens/backends/paddle/backend.py": 2800,
     "torchlens/_runnable_state.py": 2850,
     "torchlens/capture/arg_positions.py": 2650,
     "torchlens/backends/jax/jaxpr.py": 2550,
@@ -434,7 +531,12 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     "torchlens/debug/_infer_input_shape.py": 2250,
     "torchlens/postprocess/ast_branches.py": 2250,
     "torchlens/visualization/_render_nodes.py": 2150,
-    "torchlens/_io/_safe_unpickle.py": 2100,
+    # 2100 -> 2150 (2026-10-02 ci-fix fast2 settle): the numpy bounded-scalar
+    # reconstructor trust fix (`fix(io): trust numpy's bounded scalar
+    # reconstructor during unpickle`) added +8 reviewed security-fix lines,
+    # landing the file at 2101. Reviewed raise with a stated reason; next
+    # 50-line step above the measurement.
+    "torchlens/_io/_safe_unpickle.py": 2150,
     "torchlens/visualization/_render_flow.py": 2100,
     # Raised 2250 -> 2300 at the A08 persistence-honesty lane (2026-08-26): the
     # +16 lines are the streamed-bundle settlement seam (WT1 A-IV item 18) --
@@ -511,7 +613,14 @@ _TEST_FILE_CEILINGS: dict[str, int] = {
     "tests/test_toy_models.py": 4500,
     "tests/test_auto_collapse_metrics.py": 3200,
     "tests/test_backward.py": 2550,
-    "tests/validation_goldens/test_validation_exemption_hardening.py": 2400,
+    # 2400 -> 2650 (2026-10-01 ci-fix ratchet settle): the M1 raise-arm
+    # mutation campaign landed direct arm-specific killers (W3/W4
+    # mutation-margin survivors, the pass_count_consistency#a00 killer) in
+    # the same file as the exemption hardening they close; merged tree
+    # measures 2608. Next 50-line step above it -- this file's purpose is
+    # exactly this kind of targeted regression addition, so the growth is
+    # the campaign's reviewed product, not drift.
+    "tests/validation_goldens/test_validation_exemption_hardening.py": 2650,
     "tests/test_conditional_branches.py": 2150,
     # 2050 -> 2100 (2026-09-01 W051-FLAKE): the held-ref recipe registry gained the
     # Python / legacy-NumPy GLOBAL-engine state rows (getstate/setstate/seed, W051

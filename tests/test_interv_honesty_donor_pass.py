@@ -117,7 +117,9 @@ class _SharedEncoder(nn.Module):
         return x
 
 
-@pytest.mark.smoke
+@pytest.mark.heavy  # measured 7.2-25.3s across CI rows (round-1/2/3 CI triage,
+# 2026-10-01): consistently over the smoke ceiling on a real weight-shared
+# transformer-encoder capture plus donor-pin round trip, not a one-off load spike.
 @pytest.mark.real_model
 def test_recurrent_model_donor_pin_shared_transformer_encoder() -> None:
     """ROW GATE (recurrent-model donor pin): pass-correct donors on a real

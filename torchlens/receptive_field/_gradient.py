@@ -14,6 +14,7 @@ import torch
 
 from .. import _state
 from ..backends import BackendUnsupportedError, get_backend_spec
+from ..utils._torch_compat import tensor_any_over_dims
 from . import _engine, _rules
 from ._errors import (
     ReceptiveFieldConfigurationError,
@@ -566,7 +567,7 @@ def _spatial_support(mask: torch.Tensor, layout: GridLayout | None) -> torch.Ten
     reduce_axes = tuple(axis for axis in range(mask.ndim) if axis not in layout.windowed_axes)
     if not reduce_axes:
         return mask.clone()
-    return mask.any(dim=reduce_axes)
+    return tensor_any_over_dims(mask, reduce_axes)
 
 
 def _batch_semantics(
@@ -632,7 +633,7 @@ def _batch_semantics(
     if mask_batch_axis is None or not 0 <= mask_batch_axis < mask.ndim:
         return None, False
     reduce_axes = tuple(axis for axis in range(mask.ndim) if axis != mask_batch_axis)
-    per_batch = mask if not reduce_axes else mask.any(dim=reduce_axes)
+    per_batch = mask if not reduce_axes else tensor_any_over_dims(mask, reduce_axes)
     batch_support = tuple(int(index) for index in torch.nonzero(per_batch).reshape(-1).tolist())
     if seed_axis is not None and 0 <= seed_axis < len(unit):
         seeded_batch = unit[seed_axis]

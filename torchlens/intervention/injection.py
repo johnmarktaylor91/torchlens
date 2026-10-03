@@ -369,6 +369,25 @@ def _snapshot_mapping(value: dict[Any, Any], tensor_type: type[Any]) -> tuple[bo
     return True, out
 
 
+def peek_injection_state(trace: Any) -> dict[str, Any] | None:
+    """Read the trace's ``_tl_injection_state`` seam without arming it.
+
+    ``_tl_injection_state`` is a declared ``FieldPolicy.DROP`` Trace field
+    (``data_classes/_trace_components.py``) that is created lazily, on
+    first use, by :func:`injection_state`; a trace that was never armed for
+    injection simply never got the attribute. Read-only callers must
+    tolerate that absence without materializing it (that mutation is
+    reserved for :func:`injection_state`/:func:`arm_injection_logging`), so
+    this is a direct private read guarded by ``AttributeError`` rather than
+    a string-literal ``getattr`` default.
+    """
+
+    try:
+        return trace._tl_injection_state
+    except AttributeError:
+        return None
+
+
 def injection_state(trace: Any) -> dict[str, Any]:
     """The trace's ONE consolidated session-transient injection state.
 
@@ -380,7 +399,7 @@ def injection_state(trace: Any) -> dict[str, Any]:
     ``resolved`` (the post-capture anchoring marker).
     """
 
-    state = getattr(trace, "_tl_injection_state", None)
+    state = peek_injection_state(trace)
     if state is None:
         state = {
             "armed": False,
@@ -423,7 +442,7 @@ def injected_ops(trace: Any) -> tuple[InjectedOp, ...]:
     change at resolution.
     """
 
-    state = getattr(trace, "_tl_injection_state", None) or {}
+    state = peek_injection_state(trace) or {}
     if state.get("pending_loaded_rows"):
         # Internal invariant: rehydrate_trace finalizes every split row; a
         # pending row here means a load path bypassed the finalize seam.
@@ -526,7 +545,7 @@ def refuse_injection_logged_runnable_save(trace: Any, save_level: str) -> None:
 
     if save_level != "runnable":
         return
-    state = getattr(trace, "_tl_injection_state", None) or {}
+    state = peek_injection_state(trace) or {}
     records = state.get("records") or ()
     if not records:
         return
@@ -563,7 +582,7 @@ def refuse_injection_logged_stream_finalize(trace: Any) -> None:
         ``injection_logged_stream_unsupported``.
     """
 
-    state = getattr(trace, "_tl_injection_state", None) or {}
+    state = peek_injection_state(trace) or {}
     records = state.get("records") or ()
     if not records:
         return

@@ -21,6 +21,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.utils._torch_compat import TorchCapabilityWarning
 
 pytestmark = pytest.mark.smoke
 
@@ -136,5 +137,10 @@ class TestBufferStampFailureIsDisclosed:
 
         with warnings.catch_warnings():
             warnings.simplefilter("error", UserWarning)
+            # A floor-torch install may fire a one-time TorchCapabilityWarning
+            # (itself a UserWarning) from an unrelated capability probe
+            # tripped by this capture; tolerate that category specifically
+            # without loosening the "no stamp-failure warning" guarantee.
+            warnings.simplefilter("ignore", TorchCapabilityWarning)
             log = tl.trace(WithBuffer(), torch.randn(2, 4))
         log.cleanup()

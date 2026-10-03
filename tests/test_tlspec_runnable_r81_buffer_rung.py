@@ -379,7 +379,7 @@ def _fresh_module_stash() -> types.ModuleType:
 
 
 @pytest.mark.smoke
-def test_r81_record_write_reassign_stamp_cleared() -> None:
+def test_record_write_reassign_stamp_cleared() -> None:
     """RED-now-fixed: the reassignment-stamped ModuleType-stashed external is cleaned.
 
     Pre-fix the external kept ``TensorMeta('buffer_2_raw', 'b', None)``: the
@@ -398,7 +398,7 @@ def test_r81_record_write_reassign_stamp_cleared() -> None:
 
 
 @pytest.mark.smoke
-def test_r81_record_write_opwrite_stamp_cleared() -> None:
+def test_record_write_opwrite_stamp_cleared() -> None:
     """RED-now-fixed: the in-place (``record_op_writes``) vehicle is cleaned too.
 
     Both ``_record_write`` entry points leaked pre-fix (hon1's second vehicle:
@@ -415,7 +415,7 @@ def test_r81_record_write_opwrite_stamp_cleared() -> None:
 
 
 @pytest.mark.smoke
-def test_r81_stale_reassign_stamp_launder_ceils(tmp_path: Path) -> None:
+def test_stale_reassign_stamp_launder_ceils(tmp_path: Path) -> None:
     """RED-now-fixed (F1a): the reuse launder twin must ceiling, never VERIFY.
 
     Pre-fix the surviving stamp rode the un-belted buffer rung: the
@@ -435,7 +435,7 @@ def test_r81_stale_reassign_stamp_launder_ceils(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
-def test_r81_stale_opwrite_stamp_launder_ceils(tmp_path: Path) -> None:
+def test_stale_opwrite_stamp_launder_ceils(tmp_path: Path) -> None:
     """RED-now-fixed (F1b): the op-write-stamped external's launder twin ceilings."""
 
     x = _nchw()
@@ -451,7 +451,7 @@ def test_r81_stale_opwrite_stamp_launder_ceils(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
-def test_r81_no_donor_control_ceils(tmp_path: Path) -> None:
+def test_no_donor_control_ceils(tmp_path: Path) -> None:
     """Control B: a fresh foreign tensor in the SAME holder always ceilinged.
 
     The stale stamp is the sole delta between this control and the F1 REDs.
@@ -473,7 +473,7 @@ def test_r81_no_donor_control_ceils(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
-def test_r81_forged_stale_buffer_stamp_launder_ceils(tmp_path: Path) -> None:
+def test_forged_stale_buffer_stamp_launder_ceils(tmp_path: Path) -> None:
     """White-box: a raw ``set_buffer_address`` stamp that DID survive never resolves.
 
     Simulates a hypothetical future tagging path that escapes both the
@@ -493,7 +493,7 @@ def test_r81_forged_stale_buffer_stamp_launder_ceils(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
-def test_r81_forged_stamp_address_collision_ceils(tmp_path: Path) -> None:
+def test_forged_stamp_address_collision_ceils(tmp_path: Path) -> None:
     """White-box: a forged stamp COLLIDING with a registered name cannot resolve.
 
     The launder model registers its OWN buffer ``'b'``; the foreign object's
@@ -514,7 +514,7 @@ def test_r81_forged_stamp_address_collision_ceils(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
-def test_r81_forged_stale_label_launder_ceils(tmp_path: Path) -> None:
+def test_forged_stale_label_launder_ceils(tmp_path: Path) -> None:
     """White-box: a bare stale ``label_raw`` no longer satisfies the rung.
 
     Pre-fix ANY non-None ``label_raw`` counted as provenance; post-fix the
@@ -539,7 +539,7 @@ def test_r81_forged_stale_label_launder_ceils(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
-def test_r81_plain_attr_data_rebind_launder_ceils(tmp_path: Path) -> None:
+def test_plain_attr_data_rebind_launder_ceils(tmp_path: Path) -> None:
     """RED-now-fixed (F2/M3): the direct plain-attr rebind twin must ceiling.
 
     Pre-fix the legit prep stamp resolved the rebound receiver -- and every
@@ -556,7 +556,7 @@ def test_r81_plain_attr_data_rebind_launder_ceils(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
-def test_r81_list_attr_data_rebind_launder_ceils(tmp_path: Path) -> None:
+def test_list_attr_data_rebind_launder_ceils(tmp_path: Path) -> None:
     """RED-now-fixed (F2/M1): the list-element spelling must ceiling too."""
 
     x = _nchw()
@@ -567,7 +567,7 @@ def test_r81_list_attr_data_rebind_launder_ceils(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
-def test_r81_underscore_attr_rebind_stays_ceiled(tmp_path: Path) -> None:
+def test_underscore_attr_rebind_stays_ceiled(tmp_path: Path) -> None:
     """Control (F2/M2): the unstamped underscore-attr spelling keeps ceiling."""
 
     x = _nchw()
@@ -578,7 +578,7 @@ def test_r81_underscore_attr_rebind_stays_ceiled(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
-def test_r81_registered_buffer_rebind_stays_ceiled(tmp_path: Path) -> None:
+def test_registered_buffer_rebind_stays_ceiled(tmp_path: Path) -> None:
     """Control (F2/M4): the registered-buffer spelling keeps ceiling.
 
     Registered buffers were always host-write-tracked; plain-attr spellings
@@ -598,7 +598,7 @@ def test_r81_registered_buffer_rebind_stays_ceiled(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
-def test_r81_plain_attr_state_layout_branch_stays_verified(tmp_path: Path) -> None:
+def test_plain_attr_state_layout_branch_stays_verified(tmp_path: Path) -> None:
     """Zero collateral: an UNREBOUND plain-attr state layout branch verifies.
 
     The belt passes for a stamp whose object and storage are unchanged, so the
@@ -619,7 +619,7 @@ def test_r81_plain_attr_state_layout_branch_stays_verified(tmp_path: Path) -> No
 
 
 @pytest.mark.smoke
-def test_r81_registered_buffer_layout_branch_stays_verified(tmp_path: Path) -> None:
+def test_registered_buffer_layout_branch_stays_verified(tmp_path: Path) -> None:
     """Zero collateral: a registered-buffer layout read verifies both ways."""
 
     x = _nchw()
@@ -635,7 +635,7 @@ def test_r81_registered_buffer_layout_branch_stays_verified(tmp_path: Path) -> N
 
 
 @pytest.mark.smoke
-def test_r81_param_data_read_branch_stays_verified(tmp_path: Path) -> None:
+def test_param_data_read_branch_stays_verified(tmp_path: Path) -> None:
     """Zero collateral: residual-(3) ``self.w.data`` READ-sourced layout verifies."""
 
     x = _nchw()
@@ -651,7 +651,7 @@ def test_r81_param_data_read_branch_stays_verified(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
-def test_r81_honest_conv_bn_stays_verified(tmp_path: Path) -> None:
+def test_honest_conv_bn_stays_verified(tmp_path: Path) -> None:
     """Zero collateral: honest conv+BN (params AND buffers on-path) verifies."""
 
     x = _nchw()
@@ -662,7 +662,7 @@ def test_r81_honest_conv_bn_stays_verified(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
-def test_r81_plain_attr_value_read_keeps_typed_refusal(tmp_path: Path) -> None:
+def test_plain_attr_value_read_keeps_typed_refusal(tmp_path: Path) -> None:
     """Boundary pin: plain-attr VALUE-path reads keep the pre-existing refusal.
 
     A plain-tensor attribute is not part of the declared runnable state model,
@@ -677,7 +677,7 @@ def test_r81_plain_attr_value_read_keeps_typed_refusal(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
-def test_r81_sequential_captures_registry_idempotent(tmp_path: Path) -> None:
+def test_sequential_captures_registry_idempotent(tmp_path: Path) -> None:
     """Zero collateral: back-to-back captures reset and re-clean the registry.
 
     The identity registry is rebuilt at prep and emptied at cleanup; two

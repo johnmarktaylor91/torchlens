@@ -491,6 +491,9 @@ def _path_tokens(path: tuple[object, ...]) -> tuple[tuple[str, object], ...]:
     return tuple(_path_token(component) for component in path)
 
 
+_CAPTURE_OPTIONS_FIELD_NAMES = frozenset(tl.options.CaptureOptions().as_dict())
+
+
 def _trace_jax(model: Callable[..., Any], args: tuple[Any, ...], **kwargs: Any) -> Any:
     """Trace a JAX callable through the public API.
 
@@ -501,7 +504,13 @@ def _trace_jax(model: Callable[..., Any], args: tuple[Any, ...], **kwargs: Any) 
     args
         Public positional input tuple.
     **kwargs
-        Additional public trace keyword arguments.
+        Additional public trace keyword arguments. Any name that is a
+        ``CaptureOptions`` field (``layers_to_save``, ``jax_control_flow``,
+        ``jax_max_control_flow_unroll``, ...) is routed through
+        ``capture=CaptureOptions(...)`` -- the sprint removed every such flat
+        kwarg from ``trace()``'s own signature, so passing one directly lands
+        in ``**forward_kwargs`` and raises an unrelated "keyword(s) it does
+        not route" error instead of exercising the backend option it names.
 
     Returns
     -------
@@ -509,6 +518,12 @@ def _trace_jax(model: Callable[..., Any], args: tuple[Any, ...], **kwargs: Any) 
         Captured JAX trace.
     """
 
+    capture_kwargs = {
+        name: kwargs.pop(name) for name in list(kwargs) if name in _CAPTURE_OPTIONS_FIELD_NAMES
+    }
+    if capture_kwargs:
+        assert "capture" not in kwargs, "combine capture= and flat capture kwargs by hand"
+        kwargs["capture"] = tl.options.CaptureOptions(**capture_kwargs)
     return tl.trace(cast(Any, model), args, backend="jax", **kwargs)
 
 
@@ -940,7 +955,11 @@ def test_jax_synthetic_control_parent_is_not_a_value_replay_parent() -> None:
 
     assert control_parent._label_raw in _control_parent_labels(mul_op)
     assert control_parent._label_raw not in _data_parent_labels(mul_op)
-    assert _data_parent_arg_positions(mul_op) == {0: add_op.label, 1: add_op.label}
+    # Torch parity: parent_arg_positions resolves through the CONDITIONAL
+    # label map (bare layer_label for a single-pass referenced op, like this
+    # add; pass-qualified only for a multi-pass one), matching parents/
+    # children and `postprocess/labeling.py`'s own arg-location rename.
+    assert _data_parent_arg_positions(mul_op) == {0: add_op.layer_label, 1: add_op.layer_label}
     assert trace.validate_forward_pass([], validate_metadata=False)
 
 
@@ -980,6 +999,8 @@ def test_synthetic_control_parent_is_retained_by_orphan_pruning() -> None:
             self.input_layers: list[str] = []
             self.output_layers = ["output"]
             self.buffer_layers: list[str] = []
+            self.internal_sink_ops: list[str] = []
+            self.internally_terminated_bool_ops: list[str] = []
             self.keep_orphans = False
             self._orphan_labels: list[str] = []
 
@@ -1648,7 +1669,13 @@ def test_jax_trace_unrolls_cond_executed_branch_with_control_edge() -> None:
     assert decisions[0].out.item() == 1
     assert branch_ops
     assert not other_branch_ops
-    assert {decisions[0].label} <= set().union(*(_control_parent_labels(op) for op in branch_ops))
+    # Torch parity: a control-parent reference resolves through the
+    # CONDITIONAL label map (bare ``layer_label`` for a single-pass
+    # referenced op, like this decision node; pass-qualified ``label`` only
+    # for a multi-pass one -- see dbfd72d51's identical fix).
+    assert {decisions[0].layer_label} <= set().union(
+        *(_control_parent_labels(op) for op in branch_ops)
+    )
     assert trace.validate_forward_pass([]) is True
 
 
@@ -1700,7 +1727,11 @@ def test_jax_trace_unrolls_while_and_groups_iterations() -> None:
     assert len(cond_ops) >= 4
     assert body_adds
     assert any(op.num_passes == 3 for op in body_adds)
-    assert all(decisions[0].label in _control_parent_labels(op) for op in (*cond_ops, *body_adds))
+    # Torch parity: see the identical fix for
+    # test_jax_trace_unrolls_cond_executed_branch_with_control_edge.
+    assert all(
+        decisions[0].layer_label in _control_parent_labels(op) for op in (*cond_ops, *body_adds)
+    )
     assert trace.validate_forward_pass([]) is True
 
 
@@ -1791,3 +1822,23 @@ def test_jax_trace_rejects_hidden_consts() -> None:
 
     with pytest.raises(ValueError, match="closed-jaxpr constants"):
         _trace_jax(uses_hidden, ({}, jnp.ones((2, 3))))
+
+
+def test_jax_capture_options_does_not_reject_the_whole_object() -> None:
+    """N5: ``capture=CaptureOptions(...)`` must not raise "does not support: capture".
+
+    ``JAXBackend.capture_trace`` had no ``capture`` parameter, so the grouped
+    object fell into its ``**kwargs`` catch-all and tripped the generic
+    extra-kwarg rejection naming the whole option, regardless of which (if
+    any) field was actually unsupported.
+    """
+
+    trace = tl.trace(
+        cast(Any, _mlp),
+        (_params(), jnp.ones((2, 3))),
+        backend="jax",
+        capture=tl.options.CaptureOptions(keep_orphans=True),
+    )
+
+    assert trace.backend == "jax"
+    assert trace.num_ops > 0

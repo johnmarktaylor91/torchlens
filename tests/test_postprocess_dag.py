@@ -10,6 +10,7 @@ pin both halves of the coordinated-reversal counterexample.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import pytest
 import torch
@@ -276,6 +277,20 @@ PHANTOM_WRITE_EXEMPTIONS = {
         "bounded empirical sweep: registered read, journal write, dynamic "
         "register_buffer, cooked recording, top-level read). Retires "
         "loudly the day a path produces one"
+    ),
+    ("15", "_param_logs"): (
+        "reviewed widening (sol finding 6 in-place audit): step 15 mutates "
+        "the Param records a layer's _param_logs list already POINTS AT "
+        "(used_by_ops/used_by_layers/co_parent_params on the Param rows "
+        "themselves) rather than reassigning the Op's _param_logs column, "
+        "so the column-reassignment write audit can never observe it; the "
+        "declared write documents ownership of that mutation, not an "
+        "assignment the matrix could witness"
+    ),
+    ("16", "_param_logs"): (
+        "same in-place-mutation shape as ('15', '_param_logs'): module-log "
+        "building reads and mutates the referenced Param rows without ever "
+        "reassigning the Op's _param_logs column"
     ),
 }
 
@@ -1130,5 +1145,68 @@ def test_phase_timing_bucket_names_default_capture() -> None:
             "postprocess:Step 17: Mark pass finished",
             "postprocess:Step 20: Release param refs",
         }
+    finally:
+        trace.cleanup()
+
+
+class _DictOutputModel(nn.Module):
+    """Model whose forward returns a dict output (populates container records)."""
+
+    def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
+        """Return a two-key dict so the output container registry has a record."""
+
+        return {"a": x.relu(), "b": x.sigmoid()}
+
+
+def test_step17_5_adopts_container_records_before_the_registry_clears() -> None:
+    """Step 17.5's one NON-redundant effect: adopt container records onto the trace.
+
+    Mutation-margin arming (W2, lane L3 triage step 21): a first version of
+    this test asserted the per-phase workspace attrs it also pops
+    (``_raw_graph_ws`` etc.) were gone -- but ``_drop_transient_capture_state``
+    (``postprocess/__init__.py``) unconditionally pops those SAME fields right
+    after ``run_pipeline`` returns, for every capture, step 17.5 included or
+    not. That made the first version vacuously true either way (empirically
+    proven: a whole-function return-None disarm of ``_run_step_17_5``
+    survived it). The one thing ONLY step 17.5 does is copy
+    ``container_registry.records`` into ``trace._containers`` BEFORE that
+    later scrub clears the registry's live state; skip step 17.5 and the
+    records are lost, never adopted, with no second chance to recover them.
+    """
+
+    trace = tl.trace(
+        _DictOutputModel().eval(),
+        torch.randn(2, 3),
+        capture=tl.options.CaptureOptions(capture_container_structure=True),
+    )
+    try:
+        containers = trace.__dict__.get("_containers")
+        assert containers, "container records were never adopted onto the trace"
+    finally:
+        trace.cleanup()
+
+
+def test_step19_and_gate_evict_streamed_outs_from_memory(tmp_path: Path) -> None:
+    """Step 19 (and its gate) must drop in-memory ``out`` once streamed.
+
+    Mutation-margin arming (W2): ``_run_step_19`` return-None and
+    ``_should_run_step_19`` forced-False both leave every streamed op's
+    ``out`` resident in memory despite ``out_ref`` already pointing at the
+    on-disk blob -- the exact observable effect this test pins. Neither
+    mutant is visible to the phase-timing bucket golden above (step 19 is
+    conditional and absent from that axis's expected set either way).
+    """
+
+    trace = tl.trace(
+        _TinyModel().eval(),
+        torch.randn(2, 3),
+        storage=tl.to_disk(tmp_path / "step19.tlspec"),
+    )
+    try:
+        streamed = [op for op in trace.layer_list if getattr(op, "out_ref", None) is not None]
+        assert streamed, "no op streamed an out_ref; the axis setup is not exercising step 19"
+        assert all(op.out is None for op in streamed), (
+            "a streamed op's out survived step 19's eviction"
+        )
     finally:
         trace.cleanup()

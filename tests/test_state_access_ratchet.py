@@ -76,7 +76,13 @@ _PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "torchlens"
 # bisected to the T38..T41 window). Reviewed raise to the landed truth,
 # not new growth from this merge; flagged to the sprint captain for the
 # convert-vs-keep call.
-_ACCESS_SITE_BASELINE = 289
+# 289 -> 290 (fast2 ci-fix reconcile): intervention/_module_boundary.py (the
+# T98 size-ratchet split out of runtime.py) landed two raw reads. The
+# `_active_trace` one converted to the sanctioned `_state.active_capture()`
+# snapshot; the `_active_hook_plan` one stays raw (r43 class: no accessor
+# by design, the same single-field hot-path load `runtime.py` already keeps
+# unconverted at six sites), net +1 reviewed and ledgered here.
+_ACCESS_SITE_BASELINE = 290
 
 
 def _state_access_sites() -> list[tuple[str, int]]:

@@ -46,6 +46,7 @@ from torchlens.backends.torch._ops_interventions import (
     _pop_tensor_live_fire_results,
     _set_tensor_live_fire_results,
 )
+from torchlens.distributed import has_vetted_snapshot
 from torchlens.utils import _torch_compat
 
 DISTRIBUTED_ROW_KEYS = ("dtensor", "device_mesh", "tensor_parallel", "pipeline_parallel")
@@ -911,11 +912,25 @@ def test_real_tensor_parallel_capture_refuses_instead_of_lying(
 def test_real_dense_model_still_captures_with_distributed_initialized(
     single_rank_cpu_mesh: object,
 ) -> None:
-    """An initialized process group must not disturb ordinary dense capture."""
+    """An initialized process group must not disturb ordinary dense capture.
+
+    ``tl.trace`` still succeeds either way. On a census-vetted torch build
+    ``maybe_auto_arm`` arms silently and no disclosure fires; on an unvetted
+    build (F1, Lead ruling 2026-10-01) it degrades to unarmed capture and
+    WARNS on every capture entry -- the correct, honest product behavior
+    (see ``test_distributed_boundary_gloo.py::TestUnvettedTorchRefusesArming``),
+    not a gap to route around. The suite's
+    ``error::UserWarning:torchlens`` filter promotes that warning to a hard
+    failure unless it is explicitly expected here.
+    """
 
     model = TinyModel()
     x = torch.randn(2, 4)
     assert detect_distributed_state(model, x) == ()
-    trace = tl.trace(model, x)
+    if has_vetted_snapshot():
+        trace = tl.trace(model, x)
+    else:
+        with pytest.warns(UserWarning, match="uncaptured_collective_op"):
+            trace = tl.trace(model, x)
     assert trace.num_params == sum(p.numel() for p in model.parameters())
     assert any("linear" in label for label in trace.layer_labels)

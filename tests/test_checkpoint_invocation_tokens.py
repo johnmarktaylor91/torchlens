@@ -236,6 +236,81 @@ def test_unmatched_backward_warn_sets_d4_and_warn_once_preserved() -> None:
     assert witness["verdict"] == "evidence_incomplete"
 
 
+def test_carry_foreign_hook_attrs_preserves_non_tl_state() -> None:
+    """The attribute-carry helper copies foreign state, never TorchLens's own.
+
+    torch >= 2.14's checkpoint internals stash a private ``_user_hooks``
+    attribute directly on the pack-hook callable (see
+    ``backward_mod._carry_foreign_hook_attrs``'s docstring); the token
+    wrapper replacing that callable must carry it forward verbatim.
+    """
+
+    def old_hook(x: int) -> int:
+        return x
+
+    old_hook._checkpoint_internal = True  # type: ignore[attr-defined]
+    old_hook._user_hooks = ("sentinel", "value")  # type: ignore[attr-defined]
+    old_hook.__tl_saved_tensors_hook_scoped__ = True  # type: ignore[attr-defined]
+
+    def new_hook(x: int) -> int:
+        return x
+
+    assert backward_mod._carry_foreign_hook_attrs(new_hook, old_hook) is True
+    assert new_hook._checkpoint_internal is True  # type: ignore[attr-defined]
+    assert new_hook._user_hooks == ("sentinel", "value")  # type: ignore[attr-defined]
+    assert not hasattr(new_hook, "__tl_saved_tensors_hook_scoped__")
+
+
+def test_hook_identity_attrs_preserved_when_simulated_in_play(monkeypatch) -> None:
+    """Forcing the torch-2.14 attribute-carry path engaged mints a token normally.
+
+    Simulates ``HAS_CHECKPOINT_INTERNAL_HOOK_CLASS`` being True on whatever
+    torch is actually installed, using the REAL ``_carry_foreign_hook_attrs``:
+    the generic copy-forward is a no-op when there is nothing foreign to
+    carry, so the capture must behave identically to the unsimulated path.
+    """
+
+    monkeypatch.setattr(backward_mod, "_checkpoint_hook_identity_attrs_in_play", lambda: True)
+    trace = _captured(_OneCheckpoint(), torch.randn(3, 4))
+    witness = trace.checkpoint_invocation_witness
+    assert witness["token_count"] == 1
+    assert "hook_identity_unpreserved" not in witness["degrade_flags"]
+    assert witness["verdict"] == "checkpoint_invocations_observed"
+
+
+def test_failed_hook_identity_preserve_sets_d7_and_does_not_leak(monkeypatch) -> None:
+    """A forced attribute-carry failure degrades D7 and never leaks into later captures.
+
+    Regression pin for the torch 2.14 cascade (261 ``CheckpointError`` failures):
+    installing a token wrapper that drops torch's private ``_user_hooks``
+    attribute makes torch's own ``__exit__`` raise ``AttributeError`` BEFORE it
+    can pop the hook off its global stack, permanently corrupting every later
+    checkpoint (and, eventually, every later saved-tensor capture) in the
+    process. The fix skips the swap instead of installing it, so this capture
+    must complete cleanly (no token, D7 flagged) and a later, unmocked capture
+    must mint normally -- proof the failure never escaped this one enter.
+    """
+
+    monkeypatch.setattr(backward_mod, "_checkpoint_hook_identity_attrs_in_play", lambda: True)
+    monkeypatch.setattr(backward_mod, "_carry_foreign_hook_attrs", lambda new, old: False)
+
+    trace = _captured(_OneCheckpoint(), torch.randn(3, 4))
+    witness = trace.checkpoint_invocation_witness
+    assert witness["token_count"] == 0
+    assert "hook_identity_unpreserved" in witness["degrade_flags"]
+    assert witness["verdict"] == "evidence_incomplete"
+
+    # Prove no leak: undo the forced failure and capture again. A corrupted
+    # global hook stack would make this (or a later) capture raise
+    # CheckpointError/AttributeError instead of minting a clean token.
+    monkeypatch.undo()
+    clean_trace = _captured(_OneCheckpoint(), torch.randn(3, 4))
+    clean_witness = clean_trace.checkpoint_invocation_witness
+    assert clean_witness["token_count"] == 1
+    assert "hook_identity_unpreserved" not in clean_witness["degrade_flags"]
+    assert clean_witness["verdict"] == "checkpoint_invocations_observed"
+
+
 def test_patch_unavailable_sets_d2(monkeypatch) -> None:
     trace = _captured(nn.Linear(4, 2), torch.randn(3, 4))
     monkeypatch.setattr(backward_mod, "_SAVED_TENSORS_HOOKS_INIT_PATCHED", False)

@@ -19,15 +19,18 @@ jobs:
     name: Slow and rare tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Install graphviz and cairo
         # libcairo2 is cairosvg's native half; without it the pixel layers
@@ -38,14 +41,35 @@ jobs:
 
       - name: Install torch and TorchLens
         run: |
+          # torch AND torchvision are pinned as a +cpu pair and resolved in ONE
+          # install against the CPU index plus PyPI: the former two-step install
+          # (torch from the CPU index, then the extras from PyPI only) pulled
+          # PyPI's CUDA torchvision build, whose compiled ops do not load
+          # against the CPU torch (lightning -> torchmetrics -> torchvision
+          # import failures in the bridge gate).
           cat > "${{ runner.temp }}/torch-2.7-constraints.txt" <<'EOF'
-          torch==2.7.*
+          torch==2.7.1+cpu
+          torchvision==0.22.1+cpu
           EOF
-          uv pip install --system -c "${{ runner.temp }}/torch-2.7-constraints.txt" "torch==2.7.*" \
-            --index-url https://download.pytorch.org/whl/cpu
-          uv pip install --system -c "${{ runner.temp }}/torch-2.7-constraints.txt" -e ".[dev,test,tabular]"
+          # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          uv pip install --system -c "${{ runner.temp }}/torch-2.7-constraints.txt" \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,test,tabular]" \
+            "torch==2.7.1+cpu" \
+            "torchvision==0.22.1+cpu"
           uv pip check
-          python -c 'import torch; assert torch.__version__.startswith("2.7."), torch.__version__; print(torch.__version__)'
+          python - <<'PY'
+          import torch
+          import torchvision
+          from torchvision.ops import nms
+
+          assert torch.__version__ == "2.7.1+cpu", torch.__version__
+          assert torchvision.__version__ == "0.22.1+cpu", torchvision.__version__
+          assert nms(torch.tensor([[0.0, 0.0, 1.0, 1.0]]), torch.tensor([1.0]), 0.5).tolist() == [0]
+          print(torch.__version__, torchvision.__version__)
+          PY
 
       - name: Install bridge adapters and cairosvg
         # r7 R79 (fable MED, wave-introduced): this gate's comment claimed
@@ -56,8 +80,12 @@ jobs:
         # families it names.
         run: |
           uv pip install --system -c "${{ runner.temp }}/torch-2.7-constraints.txt" \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
             captum sae-lens rsatoolbox cairosvg
           uv pip check
+          python -c 'import lightning, timm, torchvision.ops; print("bridge env imports OK")'
 
       - name: Bridge adapters and cairosvg collision gate (executed floor)
         # The whole point is that these STOP skipping here. Floors are
@@ -110,15 +138,18 @@ jobs:
       matrix:
         family: [registry, checks, corechecks, blocks, exempt, executor]
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Install graphviz
         run: |
@@ -146,7 +177,7 @@ jobs:
 
       - name: Upload the campaign log
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: mutation-${{ matrix.family }}
           path: ${{ runner.temp }}/mutation-${{ matrix.family }}.log
@@ -164,15 +195,18 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
 
       - run: uv pip install --system "pre-commit==4.6.2"
 
@@ -207,15 +241,18 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Install graphviz
         run: |
@@ -252,26 +289,36 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Install torch and TorchLens
         run: |
+          # Same +cpu torch/torchvision pair recipe as extended-tests above.
           cat > "${{ runner.temp }}/torch-2.7-constraints.txt" <<'EOF2'
-          torch==2.7.*
+          torch==2.7.1+cpu
+          torchvision==0.22.1+cpu
           EOF2
-          uv pip install --system -c "${{ runner.temp }}/torch-2.7-constraints.txt" "torch==2.7.*" \
-            --index-url https://download.pytorch.org/whl/cpu
-          uv pip install --system -c "${{ runner.temp }}/torch-2.7-constraints.txt" -e ".[dev,test,tabular]" netron
+          # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          uv pip install --system -c "${{ runner.temp }}/torch-2.7-constraints.txt" \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,test,tabular]" netron \
+            "torch==2.7.1+cpu" \
+            "torchvision==0.22.1+cpu"
           uv pip check
-          python -c 'import torch; assert torch.__version__.startswith("2.7."), torch.__version__; print(torch.__version__)'
+          python -c 'import torch, torchvision.ops; assert torch.__version__ == "2.7.1+cpu", torch.__version__; print(torch.__version__)'
 
       - name: Vendor-parser suite against latest netron (drift canary)
         continue-on-error: true

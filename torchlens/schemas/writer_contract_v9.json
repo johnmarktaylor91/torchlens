@@ -3162,6 +3162,7 @@
      "_grad_records": "drop",
      "_grad_shape": "keep",
      "_has_grad": "keep",
+     "_lazy_at_prep": "drop",
      "_param_ref": "drop",
      "_param_ref_released": "drop",
      "_source_trace_ref": "drop",
@@ -4044,5 +4045,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "e7e7b838378bb84fda0b7bfb1e5a57ca2c62ab12e6dff5bf852a406fb566edf4"
+ "writer_contract_digest": "409aa0c3b4f8f1100084857c63191715df5f7f061c44243cec75ec2f5ac31e5a"
 }

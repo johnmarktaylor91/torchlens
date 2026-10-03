@@ -657,7 +657,13 @@ class SaveBudget:
         """
 
         for payload in payloads:
-            if not isinstance(payload, torch.Tensor):
+            if not isinstance(payload, torch.Tensor) or payload.is_meta:
+                # A meta tensor has no physical storage to charge (see the
+                # is_meta short-circuit in _retained_storage_identities,
+                # which makes the identity loop below a no-op for it
+                # anyway); skip BEFORE ever opening its device's ledger, so
+                # a meta-only payload never spuriously creates (and warns
+                # on) an unmeasurable "meta" save-budget ledger.
                 continue
             ledger_key = str(payload.device)
             ledger = self._ledger_for(payload.device)
@@ -869,8 +875,24 @@ def _retained_storage_identities(tensor: torch.Tensor) -> list[tuple[tuple[Any, 
         double-charging it under one aggregate identity (r8 R34, sol 1).
         The historical fallback billed unreadable payloads at
         ``numel() * element_size()`` — LOGICAL dense bytes — under an
-        id-based identity.
+        id-based identity. A meta-device tensor has no physical storage at
+        all and always yields an empty list (see the ``is_meta`` note below).
     """
+
+    # A meta tensor carries no real bytes, ever -- ``retained_activation_bytes``
+    # already skips meta payloads explicitly for this reason. Without this
+    # early return, ``tensor.untyped_storage()`` is inconsistent for meta
+    # tensors across the torch>=2.1 floor: on torch 2.1/2.2 it either raises
+    # or hands back a storage whose ``nbytes()``/``data_ptr()`` are not
+    # reliably zero, so the ``except Exception`` fallback below bills the
+    # tensor's LOGICAL ``numel() * element_size()`` bytes against a device
+    # that never actually committed any memory -- a save-budget admission for
+    # "meta" that should never exist (observed: a save_arg_values capture
+    # over a meta-device argument spuriously creates and warns on a "meta"
+    # device ledger). Checking this up front is correct on every torch
+    # version, not a version-gated shim.
+    if tensor.is_meta:
+        return []
 
     from ._state import pause_logging
 

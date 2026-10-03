@@ -32,6 +32,7 @@ from torchlens.backends.torch.wrappers import (
     get_orig_torch_funcs,
     is_decorated_function,
 )
+from torchlens.distributed import has_vetted_snapshot
 from torchlens.utils.introspection import nested_getattr
 
 pytestmark = pytest.mark.smoke
@@ -143,6 +144,13 @@ def test_partial_first_time_decoration_completes_on_retry(monkeypatch) -> None:
     assert tl.trace(nn.Linear(4, 4), torch.randn(1, 4)).num_ops >= 1
 
 
+@pytest.mark.skipif(
+    not has_vetted_snapshot(),
+    reason="full collective arming requires a census-vetted torch build "
+    "(torchlens.distributed.has_vetted_snapshot() is False here); on an unvetted "
+    "torch, _arm's recognizer derivation refuses typed before reaching the second "
+    "install family this test provokes (F1 ruling, Lead, 2026-10-01).",
+)
 def test_distributed_arm_restores_its_wraps_when_the_second_install_fails(
     monkeypatch,
 ) -> None:
@@ -178,7 +186,20 @@ def test_distributed_arm_restores_its_wraps_when_the_second_install_fails(
 def test_escape_detector_teardown_frees_the_tool_id_and_clears_the_guard(
     monkeypatch,
 ) -> None:
-    """A raising uninstall step must still release the id and clear the guard."""
+    """A raising uninstall step must still release the id and clear the guard.
+
+    ``_uninstall_monitoring`` attempts every step independently, frees the tool
+    id in a ``finally``, and THEN re-raises as ``RuntimeError`` so a caller can
+    demote the capture's verdict instead of silently blessing a trace whose
+    detector may still be firing into a dead guard (``ac617c60b``,
+    "disclose and demote on detector teardown failure instead of swallowing").
+    This test predates that change and asserted a bare, non-raising call,
+    which went undetected because no CI leg ran Python 3.12 (grind-pyver R9);
+    the end-to-end demotion contract is separately pinned by
+    ``test_detector_teardown_failure_demotes_and_discloses`` in
+    ``tests/test_scoped_patching_escape_detection.py``. Expect the raise here
+    too and verify cleanup still happened around it.
+    """
 
     import sys
 
@@ -226,7 +247,8 @@ def test_escape_detector_teardown_frees_the_tool_id_and_clears_the_guard(
         raise RuntimeError("injected set_events failure")
 
     monkeypatch.setattr(monitoring, "set_events", _raise)
-    escape_detection._uninstall_monitoring(guard)
+    with pytest.raises(RuntimeError, match="detector teardown failed"):
+        escape_detection._uninstall_monitoring(guard)
     assert guard.monitoring_tool_id is None
     # Proof the id really was released: re-acquiring it must succeed.
     monkeypatch.undo()

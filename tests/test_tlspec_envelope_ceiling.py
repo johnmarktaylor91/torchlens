@@ -81,6 +81,56 @@ def test_manifest_policy_gate_raises_typed() -> None:
     assert drift.value.fields["code"] == "bundle_torch_incompatible"
 
 
+def test_manifest_policy_warns_not_raises_on_minor_mismatch() -> None:
+    """R6 (2026-10-01): a minor torch drift is advisory, never a load refusal.
+
+    The committed cross-env goldens (``tests/godobject_oracle/goldens/``,
+    ``tests/test_grouping_stamp.py``'s legacy fixture, and siblings) were
+    recorded on a torch 2.13 CUDA build; loading them under a different
+    torch MINOR raises no error -- only the advisory ``TorchLensWarning``
+    below -- which is correct by design (a same-major, different-minor
+    bundle is loadable). Those golden-loading tests expect/filter this exact
+    warning narrowly (``tests/_oracle_env.expect_bundle_minor_version_mismatch``);
+    this test pins that the warning still fires (never silently drops) and
+    that an EXACT match stays silent, independent of the runtime's own torch
+    build.
+    """
+
+    import warnings as warnings_module
+
+    import torch
+
+    from torchlens._io.manifest import Manifest, enforce_version_policy
+    from torchlens.errors import TorchLensWarning
+
+    base = _reference_manifest_dict()
+    runtime = torch.__version__.split("+", 1)[0]
+    major, minor, *_ = runtime.split(".")
+    drifted = f"{major}.{int(minor) + 1}.0+cu130"
+
+    def _is_minor_mismatch(item: warnings_module.WarningMessage) -> bool:
+        return issubclass(item.category, TorchLensWarning) and "minor version mismatch" in str(
+            item.message
+        )
+
+    # The reference manifest's own tlspec_version may also be older than this
+    # runtime's, which independently fires the unrelated ArtifactSchemaAgeWarning
+    # (also a TorchLensWarning subclass) -- filter by message, not just category,
+    # so that advisory never gets conflated with the one under test here.
+    with warnings_module.catch_warnings(record=True) as caught:
+        warnings_module.simplefilter("always")
+        enforce_version_policy(Manifest.from_dict({**base, "torch_version": drifted}))
+    mismatch_warnings = [item for item in caught if _is_minor_mismatch(item)]
+    assert len(mismatch_warnings) == 1
+    message = str(mismatch_warnings[0].message)
+    assert drifted in message
+
+    with warnings_module.catch_warnings(record=True) as caught_exact:
+        warnings_module.simplefilter("always")
+        enforce_version_policy(Manifest.from_dict({**base, "torch_version": torch.__version__}))
+    assert not any(_is_minor_mismatch(item) for item in caught_exact)
+
+
 def test_recover_reraises_governed_refusals() -> None:
     """recover() salvages corruption, never a governed compatibility refusal."""
 

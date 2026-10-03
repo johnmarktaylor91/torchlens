@@ -22,7 +22,7 @@ jobs:
     # not extend the PR-blocking path. Comparing adjacent commits on the same
     # runner avoids treating developer-machine absolute baselines as portable.
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           # Full history + tags: the cumulative leg anchors on the latest
@@ -30,11 +30,14 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Install exact canonical CPU benchmark environment
         run: |
@@ -102,7 +105,7 @@ jobs:
 
       - name: Upload performance evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: nightly-perf-gate
           path: |
@@ -116,15 +119,18 @@ jobs:
     name: Full fast tier
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Install graphviz
         run: |
@@ -133,14 +139,35 @@ jobs:
 
       - name: Install torch and TorchLens
         run: |
+          # torch AND torchvision are pinned as a +cpu pair from the CPU index
+          # in ONE resolve: installing torch from the CPU index and then the
+          # extras from PyPI alone pulled PyPI's CUDA torchvision build, whose
+          # compiled ops do not load against the CPU torch
+          # ("operator torchvision::nms does not exist").
           cat > "${{ runner.temp }}/torch-2.7-constraints.txt" <<'EOF'
-          torch==2.7.*
+          torch==2.7.1+cpu
+          torchvision==0.22.1+cpu
           EOF
-          uv pip install --system -c "${{ runner.temp }}/torch-2.7-constraints.txt" "torch==2.7.*" \
-            --index-url https://download.pytorch.org/whl/cpu
-          uv pip install --system -c "${{ runner.temp }}/torch-2.7-constraints.txt" -e ".[dev,test,tabular]"
+          # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          uv pip install --system -c "${{ runner.temp }}/torch-2.7-constraints.txt" \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,test,tabular]" \
+            "torch==2.7.1+cpu" \
+            "torchvision==0.22.1+cpu" \
+            "transformers==5.14.1"
           uv pip check
-          python -c 'import torch; assert torch.__version__.startswith("2.7."), torch.__version__; print(torch.__version__)'
+          python - <<'PY'
+          import torch
+          import torchvision
+          from torchvision.ops import nms
+
+          assert torch.__version__ == "2.7.1+cpu", torch.__version__
+          assert torchvision.__version__ == "0.22.1+cpu", torchvision.__version__
+          assert nms(torch.tensor([[0.0, 0.0, 1.0, 1.0]]), torch.tensor([1.0]), 0.5).tolist() == [0]
+          print(torch.__version__, torchvision.__version__)
+          PY
 
       - name: Run fast tests
         run: |
@@ -185,7 +212,7 @@ jobs:
 
       - name: Upload fast-tier junit (skip audit trail)
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: fast-tier-junit
           path: ${{ runner.temp }}/fast-tier.junit.xml
@@ -221,15 +248,18 @@ jobs:
     # or a package dropping out of the suite) always does. Raise the floor
     # deliberately as coverage grows; never lower it to pass (tripwire).
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Install graphviz
         run: |
@@ -245,7 +275,8 @@ jobs:
             --index-strategy unsafe-best-match \
             -e ".[dev,test,tabular]" \
             "torch==2.8.0+cpu" \
-            "torchvision==0.23.0+cpu"
+            "torchvision==0.23.0+cpu" \
+            "transformers==5.14.1"
           uv pip check
 
       - name: Run the smoke tier under coverage with a floor
@@ -254,7 +285,7 @@ jobs:
         # the old single --deselect here named a test that had been RENAMED,
         # so it silently excluded nothing while claiming the carve-out).
         run: |
-          pytest tests/ -m smoke --ignore-glob="*menagerie*" --ignore=tests/crawler \
+          pytest tests/ -m smoke \
             --cov=torchlens --cov-branch \
             --cov-report=term --cov-report=xml:"${{ runner.temp }}/coverage.xml" \
             --cov-report=json:"${{ runner.temp }}/coverage.json" \
@@ -270,7 +301,7 @@ jobs:
 
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: nightly-coverage
           path: ${{ runner.temp }}/coverage.xml
@@ -286,15 +317,18 @@ jobs:
     # PR-blocking. The executed-floor attestation proves the suite actually
     # ran instead of version-skipping to green (T13.2).
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.10"
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Install the goldens' recording-environment torch
         run: |
@@ -375,15 +409,25 @@ jobs:
             import_check: "import mlx.core, mlx.nn"
             executed_floor: 40
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install Graphviz
+        # draw() paths in this job need the dot binary (GraphvizUnavailableError
+        # otherwise); every other rendering job installs it the same way.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
 
       - name: Install TorchLens and the ${{ matrix.backend }} preview backend
         run: |
@@ -421,15 +465,25 @@ jobs:
     name: Extras resolvability and dependency floors
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install Graphviz
+        # draw() paths in this job need the dot binary (GraphvizUnavailableError
+        # otherwise); every other rendering job installs it the same way.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
 
       - name: Every declared extra resolves on every advertised interpreter
         # First leg that resolves ANY extra beyond dev/test/tabular (grind r4,
@@ -536,15 +590,18 @@ jobs:
     name: Wheel package smoke
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Build wheel and sdist with the release's exact builder
         # SINGLE PIN AUTHORITY (grind r4; hash-locked in R61): the builder
@@ -707,15 +764,18 @@ jobs:
               --index-strategy unsafe-best-match
               torch==2.13.0+cpu torchvision==0.28.0+cpu
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Install torchlens + torch
         shell: bash
@@ -784,15 +844,18 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Install Graphviz
         run: |
@@ -807,7 +870,8 @@ jobs:
             --index-strategy unsafe-best-match \
             -e ".[dev,test,tabular]" \
             "torch==2.8.0+cpu" \
-            "torchvision==0.23.0+cpu"
+            "torchvision==0.23.0+cpu" \
+            "transformers==5.14.1"
           uv pip check
 
       - name: Smoke tier under three fresh shuffle seeds
@@ -815,7 +879,7 @@ jobs:
           for offset in 1 2 3; do
             seed="$(( ${{ github.run_id }} % 1000000000 + offset ))"
             echo "== shuffle seed $seed =="
-            pytest tests/ -m smoke --ignore-glob="*menagerie*" --ignore=tests/crawler \
+            pytest tests/ -m smoke \
               -p randomly --randomly-seed="$seed" --tb=short -q
           done
 
@@ -850,15 +914,18 @@ jobs:
           - leg: hf_5_candidate
             python: "3.11"
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python }}
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Install Graphviz
         run: |
@@ -916,7 +983,7 @@ jobs:
 
       - name: Restore the pinned artifact cache (candidate leg only)
         if: matrix.leg == 'hf_5_candidate'
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .artifact-cache
           key: ${{ hashFiles('tests/real_model/artifact_registry.jsonl') }}-nightly-v1
@@ -950,15 +1017,18 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Resolve the [lit,hf] combination on every advertised interpreter; assert [lit,shap] unsatisfiable
         run: |
@@ -986,7 +1056,7 @@ jobs:
             "torch==2.13.0+cpu" \
             "numpy==1.26.4"
           uv pip check
-          python -c 'import lit_nlp, numpy, transformers; assert numpy.__version__.startswith("1."), numpy.__version__; print("lit-nlp", lit_nlp.__version__, "transformers", transformers.__version__)'
+          python -c 'import importlib.metadata, lit_nlp, numpy, transformers; assert numpy.__version__.startswith("1."), numpy.__version__; print("lit-nlp", importlib.metadata.version("lit-nlp"), "transformers", transformers.__version__)'
 
       - name: Warm the tiny-checkpoint cache (the test file itself runs OFFLINE)
         run: |
@@ -1019,15 +1089,18 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Install the Brain-Score seam
         run: |
@@ -1060,15 +1133,18 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Install the pinned TransformerLens oracle
         run: |
@@ -1101,15 +1177,18 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Install the test environment + pinned netron
         run: |
@@ -1146,15 +1225,18 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Install the test environment + pinned Model Explorer (no deps)
         run: |

@@ -24,8 +24,24 @@ from torchlens._io._portability_preflight import (
     sanitize_annotation_tensors,
 )
 from torchlens._io.bundle import _RenameAwareUnpickler
+from torchlens.utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
 
 pytestmark = pytest.mark.smoke
+
+#: The preflight's own load-preflight dry run round-trips the metadata bytes through
+#: the SAME default-deny unpickler a real tl.load() would use, so an embedded tensor
+#: value (tl.observers.log_value, or a plain/Parameter tensor stashed in annotations)
+#: trips the CVE-2025-32434 fail-closed gate on torch<2.6 before the mediated-allocation
+#: or portability checks ever run -- a correct refusal of a genuinely unsupported
+#: artifact shape there, not a bug (see test_io_mediated_allocation_bypass.py's and
+#: test_w051_io_artifact_anchors.py's identical gate / d04aa2d1f).
+_SKIP_BELOW_SAFE_WEIGHTS_ONLY_LOAD = pytest.mark.skipif(
+    not HAS_SAFE_WEIGHTS_ONLY_LOAD,
+    reason="embedded-tensor metadata (an annotation tensor logged via "
+    "tl.observers.log_value, or a plain/Parameter tensor under annotations) is refused "
+    "by the preflight's own load-preflight dry run on torch<2.6 (CVE-2025-32434); the "
+    "round-trip is a torch>=2.6 feature",
+)
 
 
 class _UserObject:
@@ -74,6 +90,7 @@ def test_user_object_in_op_annotation_refuses_naming_the_op(tmp_path: Path) -> N
     assert exc.fields["field"].endswith(".annotations['foo']")
 
 
+@_SKIP_BELOW_SAFE_WEIGHTS_ONLY_LOAD
 def test_log_value_tensor_round_trips(tmp_path: Path) -> None:
     class Model(nn.Module):
         def __init__(self) -> None:
@@ -102,6 +119,7 @@ def test_log_value_tensor_round_trips(tmp_path: Path) -> None:
     assert loaded.annotations["logged_values"]["count"] == 3
 
 
+@_SKIP_BELOW_SAFE_WEIGHTS_ONLY_LOAD
 def test_parameter_and_plain_tensor_annotations_round_trip(tmp_path: Path) -> None:
     trace = _tiny_trace()
     plain = torch.arange(3.0)
@@ -152,6 +170,7 @@ def test_preflight_names_metadata_paths_outside_annotations() -> None:
     assert excinfo.value.fields["field"] == "Trace.some_field[1]['deep']"
 
 
+@_SKIP_BELOW_SAFE_WEIGHTS_ONLY_LOAD
 def test_streamed_capture_with_logged_tensor_round_trips(tmp_path: Path) -> None:
     class Model(nn.Module):
         def __init__(self) -> None:

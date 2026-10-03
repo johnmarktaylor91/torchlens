@@ -524,13 +524,23 @@ def _store_annotation_tensor(trace: Any, key: str, tensor: torch.Tensor) -> None
             "Tensor annotation blobs are supported only for torch traces in this "
             f"release; this trace uses backend={backend_name!r}."
         )
-    validate_tensor = getattr(trace, "_validate_annotation_tensor", None)
+    try:
+        validate_tensor = trace._validate_annotation_tensor
+    except AttributeError:
+        validate_tensor = None
     if not callable(validate_tensor):
         raise ValueError("trace does not support validated tensor annotation blobs.")
     validate_tensor(tensor)
-    if getattr(trace, "_annotation_blobs", None) is None:
+    try:
+        blobs_absent = trace._annotation_blobs is None
+    except AttributeError:
+        blobs_absent = True
+    if blobs_absent:
         trace._annotation_blobs = {}
     trace._annotation_blobs[key] = tensor
-    mark_mutated = getattr(trace, "_mark_annotations_mutated", None)
+    try:
+        mark_mutated = trace._mark_annotations_mutated
+    except AttributeError:
+        mark_mutated = None
     if callable(mark_mutated):
         mark_mutated()

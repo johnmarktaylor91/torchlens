@@ -377,7 +377,10 @@ def _scree_eigenvalues_for_node(trace: Any, node: Any) -> tuple[str | None, np.n
         Base annotation key and one-dimensional eigenvalue vector when present.
     """
 
-    blobs = getattr(trace, "_annotation_blobs", None)
+    try:
+        blobs = trace._annotation_blobs
+    except AttributeError:
+        blobs = None
     if not isinstance(blobs, dict):
         return None, None
     candidates = []
@@ -483,7 +486,10 @@ def _rdm_matrix_for_node(trace: Any, node: Any) -> tuple[str | None, np.ndarray 
         Base annotation key and ``[N, N]`` matrix when present.
     """
 
-    blobs = getattr(trace, "_annotation_blobs", None)
+    try:
+        blobs = trace._annotation_blobs
+    except AttributeError:
+        blobs = None
     if not isinstance(blobs, dict):
         return None, None
     candidates = []
@@ -522,7 +528,10 @@ def _mds_scatter_coords_for_node(trace: Any, node: Any) -> tuple[str | None, np.
         Annotation key and ``[N, 2]`` coordinates when present.
     """
 
-    blobs = getattr(trace, "_annotation_blobs", None)
+    try:
+        blobs = trace._annotation_blobs
+    except AttributeError:
+        blobs = None
     if not isinstance(blobs, dict):
         return None, None
     candidates = []

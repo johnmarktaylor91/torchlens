@@ -29,6 +29,7 @@ import torchlens as tl
 from torchlens.errors._base import TorchLensWarning
 from torchlens.semantic import FacetSpec
 from torchlens.semantic.patching import PatchApplicationError
+from torchlens.utils._torch_compat import TorchCapabilityWarning
 
 pytestmark = pytest.mark.smoke
 
@@ -299,6 +300,11 @@ def test_partially_identical_campaign_stays_silent() -> None:
     clean, corrupted = _inputs()
     with warnings.catch_warnings():
         warnings.simplefilter("error", TorchLensWarning)
+        # A floor-torch install may fire a one-time TorchCapabilityWarning
+        # (itself a TorchLensWarning) from an unrelated capability probe
+        # tripped by this capture; tolerate that category specifically
+        # without loosening the "ordinary science stays silent" guarantee.
+        warnings.simplefilter("ignore", TorchCapabilityWarning)
         tl.facets.patching.activation_patch_attention_heads(model, clean, corrupted, _metric)
 
 

@@ -19,6 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.utils._torch_compat import get_cpu_float8_deterministic_fill_support
 
 pytestmark = pytest.mark.smoke
 
@@ -405,6 +406,10 @@ def test_bf16_state_flip_is_a_cache_miss(tmp_path) -> None:
     )
 
 
+@pytest.mark.skipif(
+    not get_cpu_float8_deterministic_fill_support(),
+    reason="CPU Float8 empty-fill under deterministic mode postdates the torch 2.1 floor",
+)
 def test_float8_attribute_tensors_key_by_content() -> None:
     """Exotic-dtype tensors hash by CONTENT via the uint8-view byte path.
 

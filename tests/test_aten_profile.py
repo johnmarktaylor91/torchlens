@@ -263,19 +263,32 @@ def test_recording_off_never_constructs_primitive_retention(
 
 
 def test_mode_paused_interior_is_one_lower_bound_gap_not_a_synthetic_row() -> None:
-    """Strict subclass construction records one typed gap with exact parentage."""
+    """Strict subclass construction records a typed gap, with exact parentage, per crossing.
+
+    A modern torch build (``HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE``) only needs the
+    pause for ``__new__`` -- one crossing. Torch 2.1/2.2 additionally needs it
+    for every ``__torch_function__`` return-conversion back into the subclass
+    (``as_subclass``; see ``SubclassConstructionUnderDispatchModeError``), and
+    this forward's ``scratch.sum() * 0`` then ``x + ...`` chain reconstructs the
+    subclass three more times -- four honest crossings there, not a regression.
+    """
+
+    from torchlens.utils._torch_compat import HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE
 
     with _activate_aten_recording_for_tests():
         trace = tl.trace(_SubclassCtorModel(), torch.ones(2, 3))
     profile = trace._primitive_op_profile
 
-    assert len(profile.mode_paused_interior) == 1
-    gap = profile.mode_paused_interior[0]
-    assert gap.kind == "mode_paused_interior"
-    assert gap.reason == "strict_subclass_constructor"
-    assert gap.sequence_after == gap.sequence_before + 1
-    assert gap.parent_op_refs
-    assert all(row.sequence != gap.sequence_after for row in profile.primitive_ops)
+    expected_gap_count = 1 if HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE else 4
+    assert len(profile.mode_paused_interior) == expected_gap_count
+    gap_sequences_after = set()
+    for gap in profile.mode_paused_interior:
+        assert gap.kind == "mode_paused_interior"
+        assert gap.reason == "strict_subclass_constructor"
+        assert gap.sequence_after == gap.sequence_before + 1
+        assert gap.parent_op_refs
+        gap_sequences_after.add(gap.sequence_after)
+    assert all(row.sequence not in gap_sequences_after for row in profile.primitive_ops)
     assert check_metadata_invariants(trace)
 
 

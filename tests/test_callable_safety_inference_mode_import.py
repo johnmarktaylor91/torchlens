@@ -43,7 +43,11 @@ _FIRST_CAPTURE_UNDER_INFERENCE = textwrap.dedent(
     # FIRST torchlens capture in this process, under an ambient inference_mode:
     # this triggers the lazy _callable_safety import + pure-view probe.
     with torch.inference_mode():
-        log = tl.trace(M().eval(), torch.randn(2, 4), intervention_ready=True)
+        log = tl.trace(
+            M().eval(),
+            torch.randn(2, 4),
+            capture=tl.options.CaptureOptions(intervention_ready=True),
+        )
     assert len(list(log)) > 0
     print("OK", len(list(log)))
     """

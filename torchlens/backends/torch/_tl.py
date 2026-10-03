@@ -62,11 +62,61 @@ __all__ = [
     "has_detached_saved_activations",
     "propagate_detached_saved_activation",
     "detached_saved_activation_label",
+    "DescriptorCompatProperty",
 ]
 
 
 class TorchLensMeta:
     """Branded base for TorchLens-owned ``._tl`` metadata."""
+
+
+class DescriptorCompatProperty(property):
+    """A ``property`` that can carry ``__objclass__``/``__name__`` like the C
+    descriptor it replaces.
+
+    A plain ``property`` has no ``__dict__`` and refuses an ``__objclass__``
+    or ``__name__`` assignment (it is a slots-only builtin type), unlike the
+    ``getset_descriptor`` / autograd-property it replaces on ``torch.Tensor``
+    at several sites (wrappers.py's ``Tensor.real``/``imag`` rewrap, the
+    completeness-witness ``requires_grad``/``grad_fn``/``is_leaf`` recording
+    properties, the invisible-escape and structure-only-belt escalated
+    properties). Third-party introspection over ``torch.Tensor``'s own
+    attributes may assume every property-shaped member is a genuine
+    descriptor with ``__objclass__``/``__name__`` and access them
+    unconditionally:
+
+    * torch 2.7.1's dynamo import-time ``populate_builtin_to_tensor_fn_map`` /
+      ``is_tensor_base_attr_getter`` raises ``AttributeError: 'property'
+      object has no attribute '__objclass__'`` the first time it runs after
+      ANY of these replacements is installed.
+    * torch 2.13+'s dynamo import-time ``variables/torch_function.py``
+      (``banned_attrs`` list comprehension) walks every overridable
+      function's bound ``__get__``, and for one whose ``__self__.__objclass__
+      is torch._C.TensorBase`` (true once ``__objclass__`` is set above)
+      unconditionally reads ``fn.__self__.__name__``, raising
+      ``AttributeError: '...' object has no attribute '__name__'``.
+
+    Every site that replaces a Tensor-level descriptor with a ``property``
+    should use this subclass and set BOTH ``__objclass__`` (normally
+    ``torch.Tensor`` or ``torch._C.TensorBase``) and ``__name__`` (the
+    attribute name being replaced) so the replacement stays a faithful
+    stand-in on every torch version.
+
+    CONSTRUCTOR LANDMINE: always pass an explicit ``doc=`` keyword. CPython's
+    ``property.__init__`` only stores an implicit ``fget.__doc__`` directly on
+    the C struct for the EXACT ``property`` type; for any subclass it instead
+    does ``self.__doc__ = fget.__doc__`` through the normal attribute-set
+    protocol (even when ``fget.__doc__`` is ``None``), which raises
+    ``AttributeError: '...' object attribute '__doc__' is read-only`` against
+    this slots-only subclass's missing ``__dict__``. A caller that omits
+    ``doc=`` gets that AttributeError on every construction -- indistinguishable
+    from (and commonly swallowed by) the same ``except (TypeError,
+    AttributeError)`` guards these replacements install under, silently
+    degrading the capture to observer-install-failed instead of installing the
+    replacement at all.
+    """
+
+    __slots__ = ("__objclass__", "__name__")
 
 
 @dataclass

@@ -17,6 +17,7 @@ import warnings
 from pathlib import Path
 
 import pytest
+from _oracle_env import expect_bundle_minor_version_mismatch
 
 import torchlens as tl
 from torchlens._io import TorchLensIOError
@@ -197,7 +198,7 @@ def test_tampered_witness_refuses_at_load(corpus_dir: Path, tmp_path: Path) -> N
     witness = json.loads(witness_path.read_text(encoding="utf-8"))
     witness["final_manifest_sha256"] = "0" * 64
     witness_path.write_text(json.dumps(witness), encoding="utf-8")
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with expect_bundle_minor_version_mismatch(), pytest.raises(TorchLensIOError) as excinfo:
         tl.load(str(path))
     # The digest cross-check fails the witness door, so the pair refuses.
     assert excinfo.value.fields["code"] == "artifact_producer_pair_ungoverned"

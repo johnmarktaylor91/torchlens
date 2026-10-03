@@ -26,6 +26,7 @@ from __future__ import annotations
 import io
 import pickle
 import re
+import sys
 import types
 from pathlib import Path
 from typing import Any
@@ -536,6 +537,49 @@ class TestDerivedCacheCensus:
             if not _state._is_decorated:
                 wrap_torch()
 
+    def test_submodule_alias_imported_mid_epoch_is_restored_by_unwrap(self):
+        # torch.onnx.operators re-exports torch._shape_as_tensor under a
+        # second name ("from torch import _shape_as_tensor as shape_as_tensor"),
+        # lazily imported by torch itself rather than eagerly by `import
+        # torch` -- so the one-time ORIG_TORCH_FUNCS scan at `import
+        # torchlens` time can miss it. If that submodule's FIRST import lands
+        # while wrappers are installed (simulated here by importing it
+        # mid-epoch, exactly as torch._dynamo.trace_rules's own rule-table
+        # build does when resolving "torch.onnx.operators.shape_as_tensor"),
+        # its module-level alias binds to the WRAPPER; without tracking this
+        # alias, unwrap_torch() never restores it and dynamo's identity-keyed
+        # rule map stays permanently poisoned for the rest of the process
+        # (round-2 CI triage, 2026-10-01).
+        import importlib
+
+        from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
+
+        sys.modules.pop("torch.onnx.operators", None)
+        _ensure_wrapped()
+        try:
+            onnx_operators = importlib.import_module("torch.onnx.operators")
+            if id(onnx_operators.shape_as_tensor) not in _state._decorated_to_orig:
+                # On some torch builds torch.onnx.operators.shape_as_tensor is
+                # its own plain function (or was already eagerly imported into
+                # the baseline ORIG_TORCH_FUNCS scan before this test ever
+                # ran), not a lazily-bound alias of the currently wrapped
+                # torch._shape_as_tensor -- the exact precondition this
+                # regression targets does not reproduce on this torch build.
+                pytest.skip(
+                    "torch.onnx.operators.shape_as_tensor did not bind to the "
+                    "current wrapper on mid-epoch import on this torch build "
+                    "(the aliasing precondition this test targets is absent here)"
+                )
+            unwrap_torch()
+            assert id(onnx_operators.shape_as_tensor) not in _state._decorated_to_orig, (
+                "torch.onnx.operators.shape_as_tensor survived unwrap_torch() as a "
+                "torchlens wrapper: the submodule-alias inventory did not track it"
+            )
+            assert onnx_operators.shape_as_tensor is torch._shape_as_tensor
+        finally:
+            if not _state._is_decorated:
+                wrap_torch()
+
 
 # ---------------------------------------------------------------------------
 # 4b. Unwrap safety: R54 admission-lock atomicity + B8-6 burial diagnostic
@@ -856,6 +900,25 @@ _MEMBERSHIP_TABLE_REVIEWED: dict[tuple[str, str], str] = {
         "Export serde sym-op table; consulted only while serializing an "
         "ExportedProgram, out of eager capture scope by contract."
     ),
+    # torch 2.14 additions.
+    ("torch._higher_order_ops.flex_gemm", "FLEX_GEMM_OP_ALIASES"): (
+        "FlexGEMM decomposition-pass alias table keyed by torch.mm/addmm/bmm/"
+        "baddbmm; eagerly imported with torch (torch/__init__.py imports "
+        "torch._higher_order_ops, whose __init__ imports flex_gemm), so keys "
+        "are pre-wrap originals. Consulted only while torch.compile/Inductor "
+        "lowers a FlexGEMM higher-order op to its underlying aten overload -- "
+        "out of eager capture scope by contract, the same class as the "
+        "torch._export sym-op tables above."
+    ),
+    ("torch.utils.dlpack", "ReadOnlyTensorWrapper._DLPACK_ALLOWED"): (
+        "DLPack read-only-export allowlist keyed by torch.Tensor.__dlpack__ / "
+        "__dlpack_device__; eagerly imported with torch (torch/__init__.py "
+        "imports torch.utils.dlpack), so keys are pre-wrap originals. "
+        "Membership is checked inside ReadOnlyTensorWrapper.__torch_function__, "
+        "where the C-level __torch_function__ protocol supplies the ORIGINAL "
+        "func operand -- same basis as UninitializedTensorMixin._allowed_methods "
+        "and the MaskedTensor reduce maps above."
+    ),
 }
 
 # Compiler/export/quantization namespaces are out of capture scope by contract
@@ -981,6 +1044,17 @@ _ORIGINAL_HOLDING_SITE_ALLOWLIST = {
     ("torch", "_sym_sqrt"),
     ("torch.functional", "_add_docstr"),
     ("torch.functional", "overload"),
+    # torch 2.1.2 floor only (the CI 2.1.2/2.2.2 rows): ``torch.obj`` is an
+    # undocumented module attribute whose underlying object IS, by identity,
+    # ``torch.zeros_like``'s own raw C callable (verified: id(torch.obj) ==
+    # id(torch.zeros_like) pre-wrap; absent from get_orig_torch_funcs()'s
+    # roster and from torch.overrides.get_testing_overrides(), so no torch
+    # release documents or exercises it as a real entry point -- a torch
+    # 2.1.2 build quirk, not a torchlens gap). Calling it post-wrap runs the
+    # identical raw zeros_like implementation either spelling would have run
+    # pre-wrap: a stronger composite-over-wrapped-interiors case than the
+    # entries above (not just interior-composite -- the SAME object).
+    ("torch", "obj"),
 }
 
 

@@ -789,6 +789,14 @@ def render_rank_layout(
         )
 
     source_path = f"{vis_outpath}.dot"
+    # The dot-layout path (_render_utils.render_dot_to_file) creates the
+    # output directory before writing; this rank-layout path (chosen
+    # automatically for large graphs, e.g. detection models with many nodes)
+    # did not, so a container_path whose directory did not exist yet raised
+    # FileNotFoundError here instead of writing the file.
+    parent = os.path.dirname(os.path.abspath(source_path))
+    if parent and not os.path.exists(parent):
+        os.makedirs(parent, exist_ok=True)
     with open(source_path, "w") as f:
         f.write(dot_source)
 

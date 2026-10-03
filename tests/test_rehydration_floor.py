@@ -126,6 +126,56 @@ def test_current_version_object_state_still_restores() -> None:
 
 
 @pytest.mark.smoke
+def test_manifest_missing_kind_still_loads_as_trace(tmp_path: Path) -> None:
+    """A manifest with ``kind`` deleted is NOT the legacy pre-tlspec format.
+
+    ``tlspec_version`` is itself a tlspec-schema-only marker (the genuine
+    v2.16 ModelLog format never carried it); a manifest that has it but lost
+    its ``kind`` key is an older-but-still-modern unified manifest, and
+    ``kind`` defaults to ``"trace"`` (the only kind that existed before the
+    discriminator). Fixes a fast-tier fuzz finding (2026-10,
+    ``test_tlspec_parse_fuzz.py::test_every_toplevel_key_deletion_is_adjudicated``):
+    this exact shape used to misclassify as ``v2.16_modellog_portable`` and
+    raise a false "pre-tlspec ModelLog format" ``ArtifactVersionBelowFloorError``.
+    """
+
+    trace = _build_trace()
+    path = tmp_path / "no_kind.tlspec"
+    tl.save(trace, path)
+    manifest_path = path / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["kind"] == "trace"
+    del manifest["kind"]
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    loaded = tl.load(path)
+    assert isinstance(loaded, tl.Trace)
+    loaded.cleanup()
+    trace.cleanup()
+
+
+@pytest.mark.smoke
+def test_manifest_missing_kind_and_below_floor_still_refuses_typed(tmp_path: Path) -> None:
+    """Losing ``kind`` must not dodge the real numeric floor check either."""
+
+    trace = _build_trace()
+    path = tmp_path / "no_kind_below_floor.tlspec"
+    tl.save(trace, path)
+    manifest_path = path / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    del manifest["kind"]
+    manifest["tlspec_version"] = MIN_TLSPEC_VERSION - 1
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ArtifactVersionBelowFloorError) as excinfo:
+        tl.load(path)
+    # The REAL numeric floor refusal, never the unrelated legacy
+    # "pre-tlspec ModelLog format" message a misclassification would give.
+    assert excinfo.value.fields["observed"] == f"tlspec_version={MIN_TLSPEC_VERSION - 1}"
+    trace.cleanup()
+
+
+@pytest.mark.smoke
 def test_pre_floor_bundle_manifest_refuses_typed(tmp_path: Path) -> None:
     """A bundle whose manifest claims a sub-floor tlspec_version refuses."""
 

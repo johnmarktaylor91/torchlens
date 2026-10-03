@@ -403,3 +403,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 88d59b16cdbda283f83de8238629fd8d059d12a3 (dirty)
 recorded: 2026-09-01T07:08:08.910751+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: F2: Trace.__getstate__ (trace.py:3002-3008, sprint integration fix) now serializes facet_registry_snapshot as None at the pickle boundary by design, pinned by tests/test_fw2b_pickle_recipe_globals.py (test_plain_pickle_carries_no_recipe_function_globals, test_deepcopy_follows_the_same_pickle_boundary). The golden was recorded 2026-09-01, before that fix landed; only the pickle-stage facet_registry_snapshot diverges (single-line diff per model, confirmed on job torchlens-l8-oracle-f2-1).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: baad948e186c57ddc930c346b71e77bc32d51f0d (dirty)
+recorded: 2026-10-01T10:47:20.700715+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: F2: Trace.__getstate__ (trace.py:3002-3008, sprint integration fix) now serializes facet_registry_snapshot as None at the pickle boundary by design, pinned by tests/test_fw2b_pickle_recipe_globals.py (test_plain_pickle_carries_no_recipe_function_globals, test_deepcopy_follows_the_same_pickle_boundary). The golden was recorded 2026-09-01, before that fix landed; only the pickle-stage facet_registry_snapshot diverges (single-line diff per model, confirmed on job torchlens-l8-oracle-f2-1).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: baad948e186c57ddc930c346b71e77bc32d51f0d (dirty)
+recorded: 2026-10-01T10:47:20.737278+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: F2: Trace.__getstate__ (trace.py:3002-3008, sprint integration fix) now serializes facet_registry_snapshot as None at the pickle boundary by design, pinned by tests/test_fw2b_pickle_recipe_globals.py (test_plain_pickle_carries_no_recipe_function_globals, test_deepcopy_follows_the_same_pickle_boundary). The golden was recorded 2026-09-01, before that fix landed; only the pickle-stage facet_registry_snapshot diverges (single-line diff per model, confirmed on job torchlens-l8-oracle-f2-1).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: baad948e186c57ddc930c346b71e77bc32d51f0d (dirty)
+recorded: 2026-10-01T10:47:20.790649+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: F2: Trace.__getstate__ (trace.py:3002-3008, sprint integration fix) now serializes facet_registry_snapshot as None at the pickle boundary by design, pinned by tests/test_fw2b_pickle_recipe_globals.py (test_plain_pickle_carries_no_recipe_function_globals, test_deepcopy_follows_the_same_pickle_boundary). The golden was recorded 2026-09-01, before that fix landed; only the pickle-stage facet_registry_snapshot diverges (single-line diff per model, confirmed on job torchlens-l8-oracle-f2-1).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: baad948e186c57ddc930c346b71e77bc32d51f0d (dirty)
+recorded: 2026-10-01T10:47:20.830670+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: F2: Trace.__getstate__ (trace.py:3002-3008, sprint integration fix) now serializes facet_registry_snapshot as None at the pickle boundary by design, pinned by tests/test_fw2b_pickle_recipe_globals.py (test_plain_pickle_carries_no_recipe_function_globals, test_deepcopy_follows_the_same_pickle_boundary). The golden was recorded 2026-09-01, before that fix landed; only the pickle-stage facet_registry_snapshot diverges (single-line diff per model, confirmed on job torchlens-l8-oracle-f2-1).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: baad948e186c57ddc930c346b71e77bc32d51f0d (dirty)
+recorded: 2026-10-01T10:47:20.872341+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: F2: Trace.__getstate__ (trace.py:3002-3008, sprint integration fix) now serializes facet_registry_snapshot as None at the pickle boundary by design, pinned by tests/test_fw2b_pickle_recipe_globals.py (test_plain_pickle_carries_no_recipe_function_globals, test_deepcopy_follows_the_same_pickle_boundary). The golden was recorded 2026-09-01, before that fix landed; only the pickle-stage facet_registry_snapshot diverges (single-line diff per model, confirmed on job torchlens-l8-oracle-f2-1).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: baad948e186c57ddc930c346b71e77bc32d51f0d (dirty)
+recorded: 2026-10-01T10:47:20.929493+00:00

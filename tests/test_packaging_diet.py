@@ -206,12 +206,19 @@ def test_ci_workflows_pin_torch_and_scope_lint_to_owned_paths() -> None:
     lint_text = project_root.joinpath(".github", "workflows", "lint.yml").read_text()
 
     for workflow_text in (nightly_text, weekly_text):
-        assert "torch==2.7.*" in workflow_text
+        # The torch 2.7 fast-tier leg pins torch AND torchvision as an exact
+        # +cpu pair from ONE resolve (R61): installing torch from the CPU
+        # index and then the extras from PyPI alone pulled PyPI's CUDA
+        # torchvision build, whose compiled ops do not load against the CPU
+        # torch ("operator torchvision::nms does not exist"). A loose
+        # "torch==2.7.*" prefix pin cannot express that pairing.
+        assert "torch==2.7.1+cpu" in workflow_text
+        assert "torchvision==0.22.1+cpu" in workflow_text
         assert 'uv pip install --system -c "${{ runner.temp }}/torch-2.7-constraints.txt"' in (
             workflow_text
         )
         assert "uv pip check" in workflow_text
-        assert 'assert torch.__version__.startswith("2.7.")' in workflow_text
+        assert 'assert torch.__version__ == "2.7.1+cpu"' in workflow_text
 
     # Pin the FULL widened scope (grind r3, R70 / OL#41), not a prefix of it: a
     # prefix assertion still passes when the contributor-facing trees are dropped

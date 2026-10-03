@@ -2006,12 +2006,23 @@ def _posthoc_discrete_output_decision(
                 "cross the predicate's decision boundary",
             )
         return PosthocPerturbDecision(True, "discrete_bool_output")
-    if layer.func_name in ("topk", "sort", "max", "min") and layer.dtype in (
+    if layer.func_name in ("topk", "sort", "max", "min", "multinomial") and layer.dtype in (
         torch.int,
         torch.long,
         torch.int32,
         torch.int64,
     ):
+        # multinomial draws ONE discrete category index from a normalized
+        # distribution via a single random number against the CDF; whether a
+        # perturbed distribution moves the draw across a bucket boundary
+        # depends on the specific draw, not on whether the recorded parent
+        # edge transmits value. By the time this decision runs, the unit-step
+        # and geometric-magnitude perturbation retries (same ladder the
+        # bool-comparison straddle probe rides) have already tried a wide
+        # range of magnitudes against the saved output and none flipped the
+        # sampled index -- same discrete-order-dependent shape as the
+        # topk/sort/max/min index family above, not a continuous value this
+        # validation pass can promise sensitivity for.
         return PosthocPerturbDecision(True, "discrete_index_output")
     if _check_one_arg_where_index_exempt(layer):
         return PosthocPerturbDecision(True, "discrete_index_output")

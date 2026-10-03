@@ -384,6 +384,7 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE": (
             tc.HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE
         ),
+        "HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE": tc.HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE,
         "HAS_DYNAMO_OPTIMIZED_MODULE": True,
         "HAS_DYNAMO_ORIG_CALLABLE_MARKER": tc.HAS_DYNAMO_ORIG_CALLABLE_MARKER,
         "HAS_DYNAMO_EXPLAIN": tc.HAS_DYNAMO_EXPLAIN,
@@ -393,6 +394,33 @@ def test_torch_capability_snapshot_contract() -> None:
         # values so floor legs stay green.
         "HAS_GRADIENT_EDGE": tc.HAS_GRADIENT_EDGE,
         "HAS_NODE_PREHOOK": tc.HAS_NODE_PREHOOK,
+        # L8 floor fixes: deterministic uninit-memory fill, device-agnostic
+        # GradScaler, torch.nn.attention, torch.nn.RMSNorm, and tuple-dim
+        # any()/all() all postdate the torch>=2.1 floor (OPTIONAL flags --
+        # absence is a healthy old install with a real fallback or nothing to
+        # shim). Build-dependent, so mirror the live post-snapshot capability.
+        "HAS_DETERMINISTIC_FILL_FLAG": tc.HAS_DETERMINISTIC_FILL_FLAG,
+        "HAS_AMP_GRADSCALER": tc.HAS_AMP_GRADSCALER,
+        "HAS_NN_ATTENTION_MODULE": tc.HAS_NN_ATTENTION_MODULE,
+        "HAS_RMSNORM_MODULE": tc.HAS_RMSNORM_MODULE,
+        # torch.backends.mha (the nn.MultiheadAttention / TransformerEncoderLayer
+        # fused fast-path switch) postdates the torch>=2.1 floor too: absence is a
+        # healthy old install with a real fallback (force_mha_slow_path flips the
+        # affected modules' own training flag instead). Build-dependent, so mirror
+        # the live post-snapshot capability.
+        "HAS_MHA_FASTPATH_SWITCH": tc.HAS_MHA_FASTPATH_SWITCH,
+        "HAS_REDUCE_TUPLE_DIM": tc.HAS_REDUCE_TUPLE_DIM,
+        # CPU Half-dtype kernel coverage (addmm/layer_norm/nextafter) and
+        # Float8 empty-fill under deterministic mode both postdate the torch
+        # 2.1 floor: genuine old-torch CPU limitations. Build-dependent, so
+        # mirror the live post-snapshot capability.
+        "HAS_CPU_HALF_KERNELS": tc.HAS_CPU_HALF_KERNELS,
+        "HAS_CPU_FLOAT8_DETERMINISTIC_FILL": tc.HAS_CPU_FLOAT8_DETERMINISTIC_FILL,
+        # Test-only structure-only-belt provenance signal: whether meta-tensor
+        # scalar extraction raises torch's own guard (torch 2.1-2.2 fall
+        # through to a generic NotImplementedError instead). Build-dependent,
+        # so mirror the live post-snapshot capability.
+        "HAS_META_ITEM_GUARD": tc.HAS_META_ITEM_GUARD,
         # W21 cold-start: FSDP wrapper detection is lazily probed (never imports
         # torch.distributed.fsdp on plain captures); distributed availability is
         # build-dependent, so mirror the live post-snapshot capability.
@@ -449,6 +477,10 @@ def test_torch_capability_snapshot_contract() -> None:
         # hardcoded True as a tripwire; the non-reentrant _checkpoint_hook
         # class is version-dependent, so mirror the live capability.
         "HAS_CHECKPOINT_HOOK_CLASS": tc.HAS_CHECKPOINT_HOOK_CLASS,
+        # torch 2.14 interposes _checkpoint_internal_hook between
+        # _checkpoint_hook/_recomputation_hook and saved_tensors_hooks;
+        # version-dependent, so mirror the live capability.
+        "HAS_CHECKPOINT_INTERNAL_HOOK_CLASS": tc.HAS_CHECKPOINT_INTERNAL_HOOK_CLASS,
         "HAS_AUTOGRAD_ENGINE_QUEUE_CALLBACK": True,
         "HAS_TRACING_TENSOR_TYPES": tc.HAS_TRACING_TENSOR_TYPES,
         # Compile rung-2 probes: set_stance (torch >= 2.6) lets capture run
@@ -469,6 +501,7 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_GENERATOR_CLONE_STATE": hasattr(torch.Generator, "clone_state"),
         "HAS_GENERATOR_GRAPHSAFE_GET_STATE": hasattr(torch.Generator, "graphsafe_get_state"),
         "HAS_GENERATOR_GRAPHSAFE_SET_STATE": hasattr(torch.Generator, "graphsafe_set_state"),
+        "HAS_GENERATOR_PHILOX_STATE": hasattr(torch.Generator, "philox_state"),
         # CVE-2025-32434 fix presence (feature-detected; version-dependent, so mirror
         # the live capability like AUTOCAST rather than hardcoding a boolean).
         "HAS_SAFE_WEIGHTS_ONLY_LOAD": tc.HAS_SAFE_WEIGHTS_ONLY_LOAD,
@@ -669,15 +702,14 @@ def test_force_eager_stance_scope_exit_owned_with_construction(
 
     handle = _RecordingStance()
     monkeypatch.setattr(tc, "HAS_SET_STANCE", True)
-    monkeypatch.setattr(torch.compiler, "set_stance", lambda mode: handle)
+    monkeypatch.setattr(torch.compiler, "set_stance", lambda mode: handle, raising=False)
 
     class _Interrupt(KeyboardInterrupt):
         pass
 
-    with pytest.raises(_Interrupt):
-        with tc.force_eager_stance_scope() as active:
-            assert active is True
-            raise _Interrupt("body interrupted")
+    with pytest.raises(_Interrupt), tc.force_eager_stance_scope() as active:
+        assert active is True
+        raise _Interrupt("body interrupted")
 
     assert handle.exits == 1
 
@@ -695,9 +727,290 @@ def test_force_eager_stance_scope_construction_failure_degrades_without_exit(
     def _refuse(mode: str) -> object:
         raise ValueError("stance refused")
 
-    monkeypatch.setattr(torch.compiler, "set_stance", _refuse)
+    monkeypatch.setattr(torch.compiler, "set_stance", _refuse, raising=False)
 
     with tc.force_eager_stance_scope() as active:
         assert active is False
     # The capability flag degraded (monkeypatch restores it at teardown).
     assert tc.HAS_SET_STANCE is False
+
+
+def test_fill_uninitialized_memory_flag_visible_in_capability_snapshot() -> None:
+    """``HAS_DETERMINISTIC_FILL_FLAG`` and friends are published, not silent.
+
+    L8 floor fix: a torch build whose ``torch.utils.deterministic`` submodule
+    is absent (torch 2.1.x) must still show the flag in the diagnostic
+    snapshot (``tl.compat.report()`` / ``tl.utils.doctor()``), mirroring the
+    live capability rather than dropping the key.
+    """
+
+    snapshot = tc.get_torch_capability_snapshot()
+    assert snapshot["HAS_DETERMINISTIC_FILL_FLAG"] == tc.HAS_DETERMINISTIC_FILL_FLAG
+    assert snapshot["HAS_AMP_GRADSCALER"] == tc.HAS_AMP_GRADSCALER
+    assert snapshot["HAS_NN_ATTENTION_MODULE"] == tc.HAS_NN_ATTENTION_MODULE
+    assert snapshot["HAS_RMSNORM_MODULE"] == tc.HAS_RMSNORM_MODULE
+    assert snapshot["HAS_MHA_FASTPATH_SWITCH"] == tc.HAS_MHA_FASTPATH_SWITCH
+    assert snapshot["HAS_REDUCE_TUPLE_DIM"] == tc.HAS_REDUCE_TUPLE_DIM
+    assert snapshot["HAS_CPU_HALF_KERNELS"] == tc.HAS_CPU_HALF_KERNELS
+    assert snapshot["HAS_CPU_FLOAT8_DETERMINISTIC_FILL"] == tc.HAS_CPU_FLOAT8_DETERMINISTIC_FILL
+
+
+def test_read_fill_uninitialized_memory_returns_none_when_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The read degrades to ``None`` (never crashes) when the submodule is absent."""
+
+    monkeypatch.setattr(tc, "_torch_deterministic_module", None)
+    assert tc.read_fill_uninitialized_memory() is None
+
+
+def test_write_fill_uninitialized_memory_noops_when_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The write is a no-op (never crashes) when the submodule is absent."""
+
+    monkeypatch.setattr(tc, "_torch_deterministic_module", None)
+    tc.write_fill_uninitialized_memory(True)  # must not raise
+
+
+def test_read_fill_uninitialized_memory_reads_live_module_when_present(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The read/write pair round-trips through a stubbed submodule when present."""
+
+    stub = SimpleNamespace(fill_uninitialized_memory=True)
+    monkeypatch.setattr(tc, "_torch_deterministic_module", stub)
+    assert tc.read_fill_uninitialized_memory() is True
+    tc.write_fill_uninitialized_memory(False)
+    assert stub.fill_uninitialized_memory is False
+
+
+def test_get_mha_fastpath_enabled_returns_none_when_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The read degrades to ``None`` (never crashes) when the switch is absent."""
+
+    monkeypatch.setattr(tc, "_MHA_FASTPATH_SWITCH_PROBED", True)
+    monkeypatch.setattr(tc, "HAS_MHA_FASTPATH_SWITCH", False)
+    assert tc.get_mha_fastpath_enabled() is None
+
+
+def test_set_mha_fastpath_enabled_noops_when_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The write is a no-op (never crashes) when the switch is absent."""
+
+    monkeypatch.setattr(tc, "_MHA_FASTPATH_SWITCH_PROBED", True)
+    monkeypatch.setattr(tc, "HAS_MHA_FASTPATH_SWITCH", False)
+    tc.set_mha_fastpath_enabled(True)  # must not raise
+
+
+@pytest.mark.skipif(
+    not tc.get_mha_fastpath_switch_support(),
+    reason="torch.backends.mha postdates the torch>=2.1 floor",
+)
+def test_get_set_mha_fastpath_enabled_round_trips_when_present() -> None:
+    """The read/write pair round-trips through the live public switch."""
+
+    prior = tc.get_mha_fastpath_enabled()
+    try:
+        tc.set_mha_fastpath_enabled(False)
+        assert tc.get_mha_fastpath_enabled() is False
+        tc.set_mha_fastpath_enabled(True)
+        assert tc.get_mha_fastpath_enabled() is True
+    finally:
+        tc.set_mha_fastpath_enabled(bool(prior))
+
+
+@pytest.mark.skipif(
+    not tc.get_mha_fastpath_switch_support(),
+    reason="torch.backends.mha postdates the torch>=2.1 floor",
+)
+def test_force_mha_slow_path_uses_the_public_switch_when_present() -> None:
+    """The switch is held off inside the block and restored after it."""
+
+    model = torch.nn.MultiheadAttention(4, 2, batch_first=True)
+    prior = tc.get_mha_fastpath_enabled()
+    with tc.force_mha_slow_path(model):
+        assert tc.get_mha_fastpath_enabled() is False
+    assert tc.get_mha_fastpath_enabled() == prior
+
+
+def test_force_mha_slow_path_falls_back_to_a_training_flip_when_switch_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Absent the switch, the affected modules' own training flag is flipped."""
+
+    monkeypatch.setattr(tc, "_MHA_FASTPATH_SWITCH_PROBED", True)
+    monkeypatch.setattr(tc, "HAS_MHA_FASTPATH_SWITCH", False)
+    encoder_layer = torch.nn.TransformerEncoderLayer(4, 2, 8, batch_first=True).eval()
+    bare_mha = torch.nn.MultiheadAttention(4, 2, batch_first=True).eval()
+    model = torch.nn.ModuleDict({"layer": encoder_layer, "mha": bare_mha})
+    assert encoder_layer.training is False
+    assert encoder_layer.self_attn.training is False
+    assert bare_mha.training is False
+    with tc.force_mha_slow_path(model):
+        assert encoder_layer.training is True
+        assert encoder_layer.self_attn.training is True
+        assert bare_mha.training is True
+        # Untouched siblings keep their eval state -- only the two fast-path
+        # gate classes flip, never a cascading .train() over every submodule.
+        assert encoder_layer.dropout1.training is False
+    assert encoder_layer.training is False
+    assert encoder_layer.self_attn.training is False
+    assert bare_mha.training is False
+
+
+def test_force_mha_slow_path_restores_on_exception(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A block that raises still restores the prior state (finally-path pin)."""
+
+    monkeypatch.setattr(tc, "_MHA_FASTPATH_SWITCH_PROBED", True)
+    monkeypatch.setattr(tc, "HAS_MHA_FASTPATH_SWITCH", False)
+    model = torch.nn.MultiheadAttention(4, 2, batch_first=True).eval()
+    with pytest.raises(RuntimeError, match="boom"), tc.force_mha_slow_path(model):
+        assert model.training is True
+        raise RuntimeError("boom")
+    assert model.training is False
+
+
+def test_tensor_any_over_dims_matches_native_any_on_every_axis_combo() -> None:
+    """The multi-axis ``any`` helper matches ``tensor.any(dim=<int>)`` chaining."""
+
+    mask = torch.zeros((2, 3, 4), dtype=torch.bool)
+    mask[1, 2, 3] = True
+    for dims in ((0,), (1, 2), (0, 2), (0, 1, 2), ()):
+        expected = mask
+        for axis in sorted(dims, reverse=True):
+            expected = expected.any(dim=axis)
+        assert torch.equal(tc.tensor_any_over_dims(mask, dims), expected)
+
+
+def test_tensor_any_over_dims_fallback_matches_native_tuple_dim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The torch-2.1 fallback path is byte-identical to the native tuple-dim call."""
+
+    if not tc.get_reduce_tuple_dim_support():
+        pytest.skip("native tuple-dim any() unavailable; nothing to compare against")
+    mask = torch.rand((3, 4, 5)) > 0.5
+    monkeypatch.setattr(tc, "get_reduce_tuple_dim_support", lambda: False)
+    fallback = tc.tensor_any_over_dims(mask, (0, 2))
+    monkeypatch.setattr(tc, "get_reduce_tuple_dim_support", lambda: True)
+    native = tc.tensor_any_over_dims(mask, (0, 2))
+    assert torch.equal(fallback, native)
+
+
+def test_probe_gradient_edge_is_functional_not_just_attribute_presence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The probe calls real autograd.grad, not just hasattr (torch 2.2-2.3 trap).
+
+    L8 floor fix: torch 2.2-2.3 ships ``torch.autograd.graph.GradientEdge``
+    but its OWN ``_make_grads`` internal crashes with
+    ``AttributeError: 'GradientEdge' object has no attribute 'is_nested'``
+    when a GradientEdge is used as an output with an explicit cotangent --
+    exactly what the one-backward read engine does. The probe must catch
+    this and return False on such a build.
+    """
+
+    def _broken_grad(*args: object, **kwargs: object) -> None:
+        raise AttributeError("'GradientEdge' object has no attribute 'is_nested'")
+
+    monkeypatch.setattr(torch.autograd, "grad", _broken_grad)
+    assert tc._probe_gradient_edge() is False
+
+
+def test_probe_gradient_edge_true_when_autograd_grad_succeeds() -> None:
+    """On a healthy torch build the functional probe reports True."""
+
+    if not tc.get_gradient_edge_support():
+        pytest.skip("this torch build genuinely lacks working GradientEdge support")
+    assert tc._probe_gradient_edge() is True
+
+
+def test_get_gradient_edge_support_is_lazy_and_caches(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The real autograd probe runs at most once per latch, not at import time.
+
+    L8 floor fix: the first ``torch.autograd.grad`` call in a process can pay
+    a one-time engine-initialization cost of tens of milliseconds, which must
+    land on the first real one-backward read (or the first forced diagnostic
+    probe), never on a plain ``import torchlens`` -- the import-hygiene
+    budget. This pins the latch/cache behavior independent of the real probe
+    result.
+    """
+
+    calls = 0
+    real_probe = tc._probe_gradient_edge
+
+    def _counting_probe() -> bool:
+        nonlocal calls
+        calls += 1
+        return real_probe()
+
+    monkeypatch.setattr(tc, "_probe_gradient_edge", _counting_probe)
+    monkeypatch.setattr(tc, "_GRADIENT_EDGE_PROBED", False)
+    monkeypatch.setattr(tc, "HAS_GRADIENT_EDGE", False)
+
+    first = tc.get_gradient_edge_support()
+    second = tc.get_gradient_edge_support()
+    assert calls == 1, "the probe must not re-run once latched"
+    assert first == second == tc.HAS_GRADIENT_EDGE
+
+
+@pytest.mark.parametrize(
+    "getter_name",
+    [
+        "get_reduce_tuple_dim_support",
+        "get_cpu_half_kernels_support",
+        "get_cpu_float8_deterministic_fill_support",
+    ],
+)
+def test_real_op_probe_getters_are_lazy_and_cache(
+    getter_name: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each real-tensor-op probe latches after one call (import-hygiene budget).
+
+    L8 floor fix: HAS_CPU_HALF_KERNELS, HAS_CPU_FLOAT8_DETERMINISTIC_FILL, and
+    HAS_REDUCE_TUPLE_DIM all run real tensor ops (addmm/layer_norm/nextafter,
+    a deterministic-mode empty-fill, a tuple-dim any()) that measurably
+    inflated a plain ``import torchlens``. Each is on the same lazy-probe
+    pattern as HAS_GRADIENT_EDGE: this pins that the underlying probe
+    function runs at most once per latch, independent of which real value it
+    returns on this torch build.
+    """
+
+    getter = getattr(tc, getter_name)
+    probe_name = {
+        "get_reduce_tuple_dim_support": "_probe_reduce_tuple_dim",
+        "get_cpu_half_kernels_support": "_probe_cpu_half_kernels",
+        "get_cpu_float8_deterministic_fill_support": "_probe_cpu_float8_deterministic_fill",
+    }[getter_name]
+    probed_name = {
+        "get_reduce_tuple_dim_support": "_REDUCE_TUPLE_DIM_PROBED",
+        "get_cpu_half_kernels_support": "_CPU_HALF_KERNELS_PROBED",
+        "get_cpu_float8_deterministic_fill_support": "_CPU_FLOAT8_DETERMINISTIC_FILL_PROBED",
+    }[getter_name]
+    flag_name = {
+        "get_reduce_tuple_dim_support": "HAS_REDUCE_TUPLE_DIM",
+        "get_cpu_half_kernels_support": "HAS_CPU_HALF_KERNELS",
+        "get_cpu_float8_deterministic_fill_support": "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
+    }[getter_name]
+
+    calls = 0
+    real_probe = getattr(tc, probe_name)
+
+    def _counting_probe() -> bool:
+        nonlocal calls
+        calls += 1
+        return real_probe()
+
+    monkeypatch.setattr(tc, probe_name, _counting_probe)
+    monkeypatch.setattr(tc, probed_name, False)
+    monkeypatch.setattr(tc, flag_name, False)
+
+    first = getter()
+    second = getter()
+    assert calls == 1, "the probe must not re-run once latched"
+    assert first == second == getattr(tc, flag_name)

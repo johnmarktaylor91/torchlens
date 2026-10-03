@@ -522,9 +522,9 @@ def save(
     # computation. Appended after (5); owners disjoint, nothing reordered.
     # The records-presence guard keeps level coercion at its historical
     # raise site for every unlogged trace (refusal order unchanged there).
-    if (getattr(trace, "_tl_injection_state", None) or {}).get("records"):
-        from ..intervention.injection import refuse_injection_logged_runnable_save
+    from ..intervention.injection import peek_injection_state, refuse_injection_logged_runnable_save
 
+    if (peek_injection_state(trace) or {}).get("records"):
         refuse_injection_logged_runnable_save(trace, coerce_tlspec_save_level(level))
     # A PartialTrace is a failed-capture inspection wrapper, never a savable
     # product (its FIELD_POLICY declares both fields session-time DROP). Every
@@ -2127,7 +2127,12 @@ def _load_unified_tlspec(
     _reject_symlink_path(bundle_path / "metadata.pkl", context="metadata")
     _reject_symlink_path(bundle_path / "blobs", context="blobs directory")
     manifest = _read_manifest_object(bundle_path / "manifest.json")
-    kind = manifest.get("kind")
+    # `kind` predates the "bundle"/"intervention" discriminator on some older
+    # unified manifests (ledgered legacy-manifest tolerance,
+    # test_tlspec_parse_fuzz.py::_OPTIONAL_KEYS): an absent `kind` means a
+    # plain trace, the only kind that existed before the discriminator was
+    # introduced, never an unsupported-kind refusal.
+    kind = manifest.get("kind", "trace")
     if kind == "intervention":
         from ..intervention.save import load_intervention_spec
 

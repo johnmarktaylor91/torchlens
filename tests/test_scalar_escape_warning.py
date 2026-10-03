@@ -57,8 +57,13 @@ def test_item_escape_warns_with_count_location_and_remediation() -> None:
     with pytest.warns(ScalarEscapeWarning) as warning_records:
         tl.trace(_ItemScale(), torch.ones(2))
 
-    assert len(warning_records) == 1
-    message = str(warning_records[0].message)
+    # Key on the warning's own category, not bare record count: a floor-torch
+    # install may also fire a one-time TorchCapabilityWarning from an
+    # unrelated capability probe tripped by this capture, which must not be
+    # mistaken for a second scalar-escape disclosure.
+    scalar_warnings = [w for w in warning_records if issubclass(w.category, ScalarEscapeWarning)]
+    assert len(scalar_warnings) == 1
+    message = str(scalar_warnings[0].message)
     assert "1 tensor-to-Python scalar escape(s)" in message
     assert f"{__file__}:" in message
     assert "keep it as a tensor or pass the value as an explicit input" in message.lower()
@@ -88,8 +93,12 @@ def test_many_escapes_emit_one_aggregate_warning() -> None:
     with pytest.warns(ScalarEscapeWarning) as warning_records:
         tl.trace(_ManyEscapes(), torch.tensor([1.0, 2.0]))
 
-    assert len(warning_records) == 1
-    assert "3 tensor-to-Python scalar escape(s)" in str(warning_records[0].message)
+    # See test_item_escape_warns_with_count_location_and_remediation: narrow
+    # to this warning's own category so an incidental floor-torch capability
+    # notice cannot masquerade as a second aggregate-count disclosure.
+    scalar_warnings = [w for w in warning_records if issubclass(w.category, ScalarEscapeWarning)]
+    assert len(scalar_warnings) == 1
+    assert "3 tensor-to-Python scalar escape(s)" in str(scalar_warnings[0].message)
 
 
 @pytest.mark.smoke
@@ -99,7 +108,10 @@ def test_warning_class_is_filterable() -> None:
         warnings.simplefilter("ignore", ScalarEscapeWarning)
         tl.trace(_ItemScale(), torch.ones(2))
 
-    assert not warning_records
+    # Narrow to this category: a floor-torch install may still record an
+    # unrelated one-time TorchCapabilityWarning here (this filter only
+    # ignores ScalarEscapeWarning), which is not what this test checks.
+    assert not [w for w in warning_records if issubclass(w.category, ScalarEscapeWarning)]
 
 
 @pytest.mark.smoke

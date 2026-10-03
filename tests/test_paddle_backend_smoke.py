@@ -41,7 +41,11 @@ def test_paddle_relu_single_op_smoke() -> None:
     assert trace.module_identity_mode == "function_root"
     assert trace.num_ops == 1
     assert any("relu" in label for label in trace.layer_labels)
-    assert trace.output_layers == ["functional.relu_1_2_raw"]
+    # Torch parity: output_layers resolves through the conditional label map
+    # -- the bare layer_label for this single-pass op, not the internal raw
+    # capture identifier (never exposed) nor an unconditionally pass-qualified
+    # label.
+    assert trace.output_layers == ["functional.relu_1_2"]
     capture = trace._paddle_op_captures[0]
     assert capture.op_name == "functional.relu"
     assert capture.tensor_inputs[0].label == "input.arg_0"
@@ -71,10 +75,18 @@ def test_paddle_two_layer_mlp_parents_and_labels() -> None:
 
     assert trace.backend == "paddle"
     assert "input.arg_0" in trace.layer_labels
+    linear1_label = next(label for label in trace.op_labels if "linear_1_" in label)
     relu_label = next(label for label in trace.op_labels if "relu" in label)
-    final_label = trace.output_layers[0] + ":1"
-    assert trace[relu_label].parents == ("functional.linear_1_2_raw",)
-    assert trace[final_label].parents == ("functional.relu_1_3_raw",)
+    # Torch parity: ``parents`` resolves through the CONDITIONAL label map --
+    # the bare ``layer_label`` for these single-pass referenced ops, not the
+    # pass-qualified op label (and never the internal raw ``_raw``-suffixed
+    # capture identifier) -- so the expected values are derived from each
+    # op's own ``layer_label`` rather than hardcoded or op-label strings.
+    linear1_bare = trace[linear1_label].layer_label
+    relu_bare = trace[relu_label].layer_label
+    final_label = trace.output_layers[0]
+    assert trace[relu_label].parents == (linear1_bare,)
+    assert trace[final_label].parents == (relu_bare,)
     assert all(capture.tensor_inputs for capture in trace._paddle_op_captures)
 
 
@@ -91,7 +103,16 @@ def test_paddle_source_input_labels_and_function_root() -> None:
     assert trace.module_identity_mode == "function_root"
     assert {"input.arg_0", "input.arg_1"} <= set(trace.layer_labels)
     add_label = next(label for label in trace.op_labels if "__add__" in label)
-    assert trace[add_label].parents == ("input.arg_0", "input.arg_1")
+    input0_label = next(label for label in trace.op_labels if label.startswith("input.arg_0"))
+    input1_label = next(label for label in trace.op_labels if label.startswith("input.arg_1"))
+    # Torch parity: ``parents`` resolves through the CONDITIONAL label map --
+    # the bare ``layer_label`` for these single-pass inputs (e.g.
+    # ``"input.arg_0"``, not ``"input.arg_0:1"``), derived here from each
+    # op's own ``layer_label`` rather than hardcoded or op-label strings.
+    assert trace[add_label].parents == (
+        trace[input0_label].layer_label,
+        trace[input1_label].layer_label,
+    )
 
 
 def test_paddle_recursion_guard_records_one_composite_op() -> None:
@@ -107,6 +128,26 @@ def test_paddle_recursion_guard_records_one_composite_op() -> None:
     op_labels = [label for label in trace.op_labels if not label.startswith("input.")]
     assert len(op_labels) == 1
     assert "linear" in op_labels[0]
+
+
+def test_paddle_capture_options_does_not_reject_the_whole_object() -> None:
+    """N5: ``capture=CaptureOptions(...)`` must not raise "does not support: capture".
+
+    ``PaddleBackend.capture_trace`` had no ``capture`` parameter, so the
+    grouped object fell into its ``**extra_kwargs`` catch-all and tripped the
+    generic extra-kwarg rejection naming the whole option, regardless of
+    which (if any) field was actually unsupported.
+    """
+
+    trace = tl.trace(
+        lambda x: x + 1,
+        _input(),
+        backend="paddle",
+        capture=tl.options.CaptureOptions(keep_orphans=True),
+    )
+
+    assert trace.backend == "paddle"
+    assert trace.num_ops > 0
 
 
 def test_paddle_dygraph_guard_rejects_static_or_pir(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -177,6 +218,15 @@ def test_paddle_same_dtype_astype_preserves_parent_label() -> None:
     trace = tl.trace(model, (x, weight), backend="paddle")
 
     matmul_label = next(label for label in trace.op_labels if "matmul" in label)
-    assert trace[matmul_label].parents == ("tensor.__add___1_3_raw", "input.arg_1")
+    add_label = next(label for label in trace.op_labels if "__add__" in label)
+    input1_label = next(label for label in trace.op_labels if label.startswith("input.arg_1"))
+    # Torch parity: ``parents`` resolves through the CONDITIONAL label map --
+    # the bare ``layer_label`` for these single-pass referenced ops, derived
+    # here from each op's own ``layer_label`` rather than hardcoded or
+    # op-label strings.
+    assert trace[matmul_label].parents == (
+        trace[add_label].layer_label,
+        trace[input1_label].layer_label,
+    )
     assert not any("astype" in label for label in trace.layer_labels)
     assert trace._paddle_alias_annotations[0]["preserved_label"] == "tensor.__add___1_3_raw"

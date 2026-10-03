@@ -37,6 +37,7 @@ from ...data_classes.func_call_location import FuncCallLocation
 from ...data_classes.internal_types import FuncExecutionContext
 from ...utils._torch_compat import (
     HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE,
+    HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE,
     dynamo_is_compiling,
     fix_tensor_sequence_slot,
     get_current_function_mode_stack,
@@ -63,10 +64,11 @@ from ...utils.tensor_utils import (
     print_override,
     safe_copy,
 )
-from ._modes import pause_own_dispatch_modes
+from ._modes import SubclassConstructionUnderDispatchModeError, pause_own_dispatch_modes
 from ._op_markers import _pop_op_markers, _push_op_markers
 from ._tl import (
     _DETACHED_ACTIVATION_PROPAGATION_FUNCS,
+    DescriptorCompatProperty,
     get_param_meta,
     get_tensor_label,
     has_detached_saved_activations,
@@ -1485,6 +1487,52 @@ def _setattr_ignoring_advisories(namespace: Any, name: str, value: Any) -> None:
         setattr(namespace, name, value)
 
 
+# Positional index of the target Tensor subclass ``cls`` argument for each
+# wrapped callable whose ORIGINAL can crash under an active python
+# TorchDispatchMode on torch 2.1/2.2 (``HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE``).
+# ``__new__``/``_make_subclass`` are called as ``cls(...)``/
+# ``cls._make_subclass(cls, ...)`` (class first); ``as_subclass`` is an
+# instance method, ``tensor.as_subclass(cls)`` (class second). Shared by the
+# LOGGED path's pause (see ``constructs_tensor_subclass`` below -- ``__new__``
+# unconditionally, ``_make_subclass``/``as_subclass`` only where the
+# capability is absent, so a modern torch build's LOGGED-path behavior for
+# those two is byte-for-byte unchanged) and the FAST-PATH gate just below,
+# which REFUSES typed instead of pausing: pausing a direct top-level
+# (non-reentrant) construction call was tried and reverted after it
+# corrupted interpreter state when exercised across several capture paths in
+# one process (segfault on torch 2.1.2) -- see
+# ``SubclassConstructionUnderDispatchModeError``.
+_SUBCLASS_CLS_ARG_INDEX: dict[str, int] = {
+    "__new__": 0,
+    "_make_subclass": 0,
+    "as_subclass": 1,
+}
+
+
+def _constructs_strict_subclass(args: tuple[Any, ...], idx: int | None) -> bool:
+    """Return whether ``args[idx]`` is a strict (non-``torch.Tensor``) subclass cls.
+
+    Parameters
+    ----------
+    args:
+        Positional call arguments.
+    idx:
+        Index of the candidate subclass ``cls`` argument, or ``None`` when the
+        caller has none (always ``False``; lets callers pass their own
+        ``... | None`` index constant without narrowing it themselves first).
+
+    Returns
+    -------
+    bool
+        ``True`` when ``args[idx]`` is a type strictly below ``torch.Tensor``.
+    """
+
+    if idx is None or len(args) <= idx:
+        return False
+    cls = args[idx]
+    return isinstance(cls, type) and cls is not torch.Tensor and issubclass(cls, torch.Tensor)
+
+
 _MUTATING_TENSOR_PROPERTY_SETTERS = frozenset({"real", "imag", "data"})
 
 # Setters that rebind the receiver to the RHS's storage instead of writing in
@@ -1560,8 +1608,34 @@ def torch_func_decorator(
     force_distinct_return = func_name == "identity"
     # ``TensorBase.__new__`` is the one wrapped callable whose ORIGINAL refuses
     # to run under any python TorchDispatchMode when handed a strict Tensor
-    # subclass cls (see pause_own_dispatch_modes); every other op pays nothing.
-    constructs_tensor_subclass = func_name == "__new__"
+    # subclass cls, on EVERY torch version (see pause_own_dispatch_modes);
+    # ``_make_subclass``/``as_subclass`` share the same original limitation but
+    # ONLY on a torch build lacking ``HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE`` --
+    # torch's own nested ``__torch_function__`` return-conversion reaches one
+    # of these TWO through the LOGGED path just as often as ``__new__`` (e.g.
+    # ``scratch.sum()`` on a subclass reconstructing via ``as_subclass``
+    # inside the SAME logged call), so they need the identical unconditional
+    # treatment there, narrowed to the torch versions that actually need it.
+    # Every other op pays nothing (dict lookup on a decoration-time constant).
+    _logged_subclass_cls_index = (
+        0
+        if func_name == "__new__"
+        else (
+            None if HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE else _SUBCLASS_CLS_ARG_INDEX.get(func_name)
+        )
+    )
+    constructs_tensor_subclass = _logged_subclass_cls_index is not None
+    # FAST-PATH-only gate (direct top-level ``__new__``/``_make_subclass``/
+    # ``as_subclass`` calls made with logging disabled -- e.g. a user model or
+    # intervention hook constructing a subclass during a replay/validation
+    # pass, or TorchLens's own paused internal calls): ``None`` whenever the
+    # active torch build tolerates subclass construction under a dispatch
+    # mode (``HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE``, the common case -- zero
+    # cost there) or ``func_name`` is not one of the three. A direct top-level
+    # call here REFUSES typed instead of pausing (see the table's own note).
+    _fast_path_subclass_cls_index = (
+        None if HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE else _SUBCLASS_CLS_ARG_INDEX.get(func_name)
+    )
     # Decoration-time constant: ``propagate_detached_saved_activation`` is a
     # guaranteed no-op for any name outside the propagation allowlist, but its
     # ARGUMENTS (two tensor collections, each with a BFS fall-back for nested
@@ -1606,7 +1680,36 @@ def torch_func_decorator(
                 materialize_deferred_for_call(_collect_tensor_args(args, kwargs))
             if needs_device_injection:
                 kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
-            out = func(*args, **kwargs)
+            if _fast_path_subclass_cls_index is not None and _constructs_strict_subclass(
+                args, _fast_path_subclass_cls_index
+            ):
+                # Translate-on-FAILURE, never a preemptive refusal: whether an
+                # active TorchLens mode actually makes THIS construction crash
+                # depends on details (e.g. torch.nn.Parameter construction via
+                # _make_subclass routinely succeeds here even under an active
+                # mode) this gate cannot cheaply predict, so it costs nothing
+                # extra on the common (succeeding) case and only replaces
+                # torch's own cryptic error with a typed one when it actually
+                # raises.
+                try:
+                    out = func(*args, **kwargs)
+                except RuntimeError as exc:
+                    if "already associated to a python object" in str(exc):
+                        raise SubclassConstructionUnderDispatchModeError(
+                            f"torchlens cannot construct the Tensor subclass "
+                            f"{args[_fast_path_subclass_cls_index]!r} via {func_name!r} "
+                            "while a TorchLens dispatch mode is active on this torch "
+                            "build. Remedy: upgrade torch "
+                            "(HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE reports False here) or "
+                            "avoid constructing/converting into a custom Tensor subclass "
+                            "inside a model forward, an intervention hook, or a "
+                            "validate_forward_pass replay on this build.",
+                            code="subclass_ctor_under_dispatch_mode_unsupported",
+                            func_name=func_name,
+                        ) from exc
+                    raise
+            else:
+                out = func(*args, **kwargs)
             fast_collector = _state._active_fast_run_collector
             if fast_collector is not None and fast_collector.wants_function(func_name):
                 fast_collector.capture_function(func_name, out)
@@ -1880,12 +1983,8 @@ def torch_func_decorator(
             func_call_id=func_call_id,
         )
         expected_token = None
-        pauses_owned_modes = (
-            constructs_tensor_subclass
-            and args
-            and isinstance(args[0], type)
-            and args[0] is not torch.Tensor
-            and issubclass(args[0], torch.Tensor)
+        pauses_owned_modes = constructs_tensor_subclass and _constructs_strict_subclass(
+            args, _logged_subclass_cls_index
         )
         # W3 F8: per-op duration must measure the USER op, not TorchLens
         # bookkeeping. The clock starts here -- after RNG/autocast snapshots
@@ -1930,6 +2029,31 @@ def torch_func_decorator(
                 from ...observe._device_memory import settle_op_bracket
 
                 settle_op_bracket(trace, func_name, func_call_id, device_memory_before, oom=True)
+            raise
+        except RuntimeError as exc:
+            # The LOGGED path's __new__ pause above is unconditional (every torch
+            # version) and normally suffices; it is known NOT to on torch 2.1/2.2
+            # when this forward is also observed by the private aten-profile
+            # recorder (a reentrant torch limitation reproduced on stock torch
+            # with a no-op mode -- popping TorchLens's OWN mode first did not
+            # help there, confirmed by direct instrumentation). Translate torch's
+            # own crash into the same typed, disclosed refusal the fast path
+            # raises, rather than let a cryptic RuntimeError escape.
+            if (
+                pauses_owned_modes
+                and not HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE
+                and "already associated to a python object" in str(exc)
+            ):
+                raise SubclassConstructionUnderDispatchModeError(
+                    f"torchlens could not construct the Tensor subclass via "
+                    f"{func_name!r} even after pausing its own dispatch mode on this "
+                    f"torch build (original torch error: {exc}). "
+                    "Remedy: upgrade torch (HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE reports "
+                    "False here), or avoid this construction while other TorchLens "
+                    "instrumentation observes the same forward on this build.",
+                    code="subclass_ctor_under_dispatch_mode_unsupported",
+                    func_name=func_name,
+                ) from exc
             raise
         finally:
             # Markers close FIRST so the range covers the user op, not the
@@ -2779,7 +2903,13 @@ def _decorate_torch_func_pairs(func_pairs: list[tuple[str, str]]) -> None:
             mark_decorated_function(getter_dec)
             mark_decorated_function(setter_dec)
             mark_decorated_function(deleter_dec)
-            new_property = property(getter_dec, setter_dec, deleter_dec, doc=func_name)
+            new_property = DescriptorCompatProperty(
+                getter_dec, setter_dec, deleter_dec, doc=func_name
+            )
+            new_property.__objclass__ = getattr(
+                orig_descriptor, "__objclass__", local_func_namespace
+            )
+            new_property.__name__ = func_name
             try:
                 _setattr_ignoring_advisories(local_func_namespace, func_name, new_property)
                 # #31: Only add mapper entries if setattr succeeded — otherwise

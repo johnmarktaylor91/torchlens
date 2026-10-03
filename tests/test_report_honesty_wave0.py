@@ -311,10 +311,33 @@ def test_capability_dump_moved_to_detail_accessor() -> None:
     report = tl.compat.report(nn.Linear(3, 4), torch.randn(2, 3))
     row = report.row("torch_capabilities")
     assert "capabilities present" in row.details
-    assert len(row.details) < 600
     snapshot = report.capability_snapshot()
     assert isinstance(snapshot, dict) and len(snapshot) > 10
     assert all(isinstance(value, bool) for value in snapshot.values())
+    # The compact absences-first format vs. the legacy full name=value dump
+    # (sumfam wave-0 item 2, ~1,900 chars for ALL ~70 flags with their
+    # values): a fixed byte budget doesn't scale across the declared
+    # torch>=2.1 matrix, where an old-floor build genuinely has far more
+    # absent (healthy-old-install) flags than current dev torch. Rebuild the
+    # cell's exact expected length from the same building blocks
+    # _torch_capabilities_row() uses (format_capability_summary plus the
+    # missing=/optional_absent= groupings), so the check tracks any honest
+    # absence count instead of a magic number -- it still catches a
+    # regression to the legacy verbose per-flag dump, which does not share
+    # this structure.
+    from torchlens.utils import format_capability_summary
+    from torchlens.utils._torch_compat import OPTIONAL_CAPABILITY_FLAGS
+
+    absent = [name for name, available in snapshot.items() if not available]
+    missing = [name for name in absent if name not in OPTIONAL_CAPABILITY_FLAGS]
+    optional_absent = [name for name in absent if name in OPTIONAL_CAPABILITY_FLAGS]
+    expected = "Runtime capabilities: " + format_capability_summary(snapshot)
+    if missing:
+        expected += "; missing=" + ", ".join(missing)
+    if optional_absent:
+        expected += "; optional_absent=" + ", ".join(optional_absent)
+    expected += "; full dump: report.capability_snapshot()"
+    assert len(row.details) == len(expected)
     # Absent flags stay NAMED in the cell (absences-first doctrine).
     for name, available in snapshot.items():
         if not available:

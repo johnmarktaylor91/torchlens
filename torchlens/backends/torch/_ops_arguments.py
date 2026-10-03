@@ -321,7 +321,10 @@ def _session_validated_parameter(trace: "Trace", value: torch.Tensor) -> bool:
     # r79 ``_param_ref`` rung provides; anything not rebound by the shim this
     # session (foreign params, stale leaked stamps, fresh in-forward
     # Parameters) still fails closed.
-    rebinds = getattr(trace, "_offload_param_rebinds", None)
+    try:
+        rebinds = trace._offload_param_rebinds
+    except AttributeError:
+        rebinds = None
     return rebinds is not None and rebinds.get(addr) is value
 
 

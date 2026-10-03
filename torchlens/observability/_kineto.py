@@ -100,11 +100,20 @@ class NormalizedEvent:
 
 @dataclass(frozen=True)
 class ExtractionResult:
-    """Normalized events plus the disclosure of which path produced them."""
+    """Normalized events plus the disclosure of which path produced them.
+
+    ``raw_chrome_bytes`` carries the exact bytes torch's profiler wrote when
+    the ``chrome_stream`` fallback path ran its one allowed
+    ``export_chrome_trace`` call (Kineto's own result object refuses a
+    second ``save`` with ``RuntimeError: Trace is already saved.``); a
+    native-chrome consumer reuses these bytes instead of re-exporting.
+    ``None`` on every other path (nothing to reuse).
+    """
 
     path: str
     events: tuple[NormalizedEvent, ...]
     notes: tuple[str, ...] = ()
+    raw_chrome_bytes: bytes | None = None
 
 
 def _normalize_inmemory_event(event: Any, *, has_scope: bool) -> NormalizedEvent | None:
@@ -220,6 +229,7 @@ def _extract_chrome_stream(profiler: Any) -> ExtractionResult:
         with TemporaryDirectory(prefix="torchlens-kineto-") as temp_dir:
             trace_path = Path(temp_dir) / "kineto.json"
             profiler.export_chrome_trace(str(trace_path))
+            raw_bytes = trace_path.read_bytes()
             raw = _json.read_bounded(trace_path)
     # The fallback path itself failing (export refusal, oversized trace,
     # parse refusal) is DISCLOSED as unavailable -- never a guess and never
@@ -236,7 +246,7 @@ def _extract_chrome_stream(profiler: Any) -> ExtractionResult:
         for event in raw_events
         if isinstance(event, Mapping) and (normalized := _normalize_chrome_event(event)) is not None
     )
-    return ExtractionResult(path="chrome_stream", events=events)
+    return ExtractionResult(path="chrome_stream", events=events, raw_chrome_bytes=raw_bytes)
 
 
 def extract_events(profiler: Any) -> ExtractionResult:

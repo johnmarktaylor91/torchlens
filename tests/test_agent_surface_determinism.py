@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from _oracle_env import expect_bundle_minor_version_mismatch
 
 from torchlens.agent import call_tool, canonical_dumps
 
@@ -79,8 +80,9 @@ def test_environment_sweep_is_byte_identical(tmp_path: Path) -> None:
 def test_repeated_calls_are_byte_identical() -> None:
     """In-process repetition is byte-stable (no clocks, no id() leakage)."""
 
-    for name, args in SWEEP_REQUESTS:
-        assert canonical_dumps(call_tool(name, args)) == canonical_dumps(call_tool(name, args))
+    with expect_bundle_minor_version_mismatch():
+        for name, args in SWEEP_REQUESTS:
+            assert canonical_dumps(call_tool(name, args)) == canonical_dumps(call_tool(name, args))
 
 
 @pytest.mark.smoke
@@ -108,7 +110,8 @@ def test_golden_files_pin_the_wire_format(golden_name: str, tool: str, args: dic
     change: bump the schema major or re-baseline consciously, never silently.
     """
 
-    envelope = call_tool(tool, args)
+    with expect_bundle_minor_version_mismatch():
+        envelope = call_tool(tool, args)
     envelope["torchlens_version"] = "GOLDEN"
     envelope["request"]["path"] = "<ARTIFACT>"  # the echo carries the caller's path
     golden = (GOLDEN_DIR / f"{golden_name}.golden.json").read_text()
@@ -121,7 +124,8 @@ def test_no_generation_timestamp_anywhere() -> None:
 
     import datetime
 
-    envelope = call_tool("torchlens_overview", {"path": str(ARTIFACT)})
+    with expect_bundle_minor_version_mismatch():
+        envelope = call_tool("torchlens_overview", {"path": str(ARTIFACT)})
     text = canonical_dumps(envelope)
     today = datetime.date.today().isoformat()
     saved_day = (envelope.get("artifact") or {}).get("created_at", "")[:10]

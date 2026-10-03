@@ -349,7 +349,11 @@ def trace_overview_card(trace: Any) -> Card:
 
     layers = len(getattr(trace, "layer_logs", {}) or {})
     ops = getattr(trace, "num_ops", 0)
-    save_level = "all" if getattr(trace, "_layers_saved", False) else "selected"
+    try:
+        layers_saved = trace._layers_saved
+    except AttributeError:
+        layers_saved = False
+    save_level = "all" if layers_saved else "selected"
     if getattr(trace, "num_saved_ops", 0) == 0:
         save_level = "metadata only"
     # Text links only: card leaves are DATA and escape at the leaf

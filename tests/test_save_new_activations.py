@@ -13,6 +13,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens import trace as trace_fn
+from torchlens.postprocess.graph_traversal import output_payload_aliases_parent
 from torchlens.validation import check_metadata_invariants
 
 # =============================================================================
@@ -418,7 +419,20 @@ class TestSaveNewActivationsStateReset:
 
 
 class TestOutputTensorIndependence:
-    """Fast-mode out shared reference."""
+    """Fast-mode out shared reference.
+
+    HONESTY 13-R1 (``postprocess.graph_traversal.output_payload_aliases_parent``,
+    mirrored for the fast refresh path in
+    ``capture.projectors._separate_output_payloads``) deliberately has the output
+    pseudo-row RIDE its producer's one retained payload when the refreshed value IS
+    that payload bit-for-bit (same shape/dtype/device, NaN-equal) -- a documented
+    memory-savings contract, not a bug. Independence is the guarantee only for the
+    OTHER case: a differing value always keeps its own physical copy. This test
+    checks that real guarantee instead of assuming every pair is independent
+    regardless of the contract (the historical bug class it exists to catch is an
+    UNDOCUMENTED alias outside that contract, e.g. a differing value that still
+    shares storage).
+    """
 
     def test_output_independent_of_parent(self) -> None:
         model = _SimpleLinear()
@@ -426,16 +440,27 @@ class TestOutputTensorIndependence:
         log = trace_fn(model, x)
         try:
             log.save_new_outs(model, torch.randn(2, 10))
+            checked = False
             for label in log.output_layers:
                 output_entry = log[label]
                 if output_entry.parents and output_entry.out is not None:
                     parent_label = output_entry.parents[0]
                     parent_entry = log[parent_label]
                     if parent_entry.out is not None:
-                        original_parent = parent_entry.out.clone()
-                        output_entry.out.fill_(999)
-                        assert torch.equal(parent_entry.out, original_parent)
+                        checked = True
+                        aliases_parent = output_payload_aliases_parent(
+                            output_entry.out, parent_entry.out
+                        )
+                        if aliases_parent:
+                            # The documented HONESTY 13-R1 case: one payload by
+                            # design, so a mutation is visible on both views.
+                            assert output_entry.out.data_ptr() == parent_entry.out.data_ptr()
+                        else:
+                            original_parent = parent_entry.out.clone()
+                            output_entry.out.fill_(999)
+                            assert torch.equal(parent_entry.out, original_parent)
                         break
+            assert checked, "no output/parent pair with saved outs to exercise"
         finally:
             log.cleanup()
 

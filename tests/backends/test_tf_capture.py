@@ -91,9 +91,40 @@ def test_tf_capture_hand_built_op_chain_edges_and_saved_values() -> None:
 
     assert trace.backend == "tf"
     assert {"AddV2", "Mul"} <= {op.func_name for op in trace.layer_list}
-    assert by_func["Mul"].parents == (by_func["AddV2"]._label_raw,)
+    # Torch parity: parents/children hold the FINAL label, not the internal
+    # raw capture identifier (``_label_raw``) -- the preview finalizer now
+    # relabels every op's edges. The final spelling is CONDITIONAL, exactly
+    # like torch (``postprocess/labeling.py``): a referenced op's bare
+    # ``layer_label`` when its own layer has a single pass (as here), and
+    # only a multi-pass referenced layer gets the pass-qualified ``label``.
+    assert by_func["Mul"].parents == (by_func["AddV2"].layer_label,)
     assert np.allclose(trace[by_func["Mul"].label].out, np.array([9.0, 20.0], dtype=np.float32))
     assert np.isfinite(trace[by_func["AddV2"].label].out).all()
+
+
+def test_tf_capture_options_does_not_reject_the_whole_object() -> None:
+    """N5: ``capture=CaptureOptions(...)`` must not raise "does not support: capture".
+
+    ``TFBackend.capture_trace`` had no ``capture`` parameter, so the grouped
+    object fell into its ``**extra_kwargs`` catch-all and tripped the generic
+    extra-kwarg rejection naming the whole option, regardless of which (if
+    any) field was actually unsupported.
+    """
+
+    def chain(x: Any) -> Any:
+        """Return a deterministic TensorFlow op chain."""
+
+        return x + tf.constant([1.0, 2.0])
+
+    trace = tl.trace(
+        chain,
+        tf.constant([2.0, 3.0]),
+        backend="tf",
+        capture=tl.options.CaptureOptions(keep_orphans=True),
+    )
+
+    assert trace.backend == "tf"
+    assert trace.num_ops > 0
 
 
 def test_tf_capture_small_keras_cnn_modules_params_and_warm_boundary() -> None:

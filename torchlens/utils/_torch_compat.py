@@ -81,6 +81,7 @@ __all__ = [
     "HAS_FUNCOL_MODULE",
     "HAS_ASYNC_COLLECTIVE_TENSOR",
     "HAS_CHECKPOINT_HOOK_CLASS",
+    "HAS_CHECKPOINT_INTERNAL_HOOK_CLASS",
     "HAS_AUTOGRAD_ENGINE_QUEUE_CALLBACK",
     "HAS_KINETO_INMEMORY_EVENTS",
     "HAS_KINETO_EVENT_SCOPE",
@@ -101,11 +102,13 @@ __all__ = [
     "HAS_GENERATOR_CLONE_STATE",
     "HAS_GENERATOR_GRAPHSAFE_GET_STATE",
     "HAS_GENERATOR_GRAPHSAFE_SET_STATE",
+    "HAS_GENERATOR_PHILOX_STATE",
     "HAS_JIT_BUILTIN_TABLE",
     "HAS_JIT_BOOLEAN_DISPATCH_TABLE",
     "HAS_JIT_OVERLOAD_RESOLVER",
     "HAS_NAMED_TENSOR_API",
     "HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE",
+    "HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE",
     "HAS_DYNAMO_OPTIMIZED_MODULE",
     "HAS_DYNAMO_ORIG_CALLABLE_MARKER",
     "HAS_FSDP_WRAPPER",
@@ -117,6 +120,19 @@ __all__ = [
     "HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG",
     "HAS_ATTENTION_CAUSAL_BIAS",
     "HAS_EXPANDED_WEIGHTS_CONV_PICKER",
+    "HAS_DETERMINISTIC_FILL_FLAG",
+    "HAS_AMP_GRADSCALER",
+    "HAS_NN_ATTENTION_MODULE",
+    "HAS_RMSNORM_MODULE",
+    "HAS_MHA_FASTPATH_SWITCH",
+    "HAS_REDUCE_TUPLE_DIM",
+    "HAS_CPU_HALF_KERNELS",
+    "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
+    "HAS_META_ITEM_GUARD",
+    "tensor_any_over_dims",
+    "get_mha_fastpath_enabled",
+    "set_mha_fastpath_enabled",
+    "force_mha_slow_path",
     "HAS_CACHED_UNTYPED_STORAGE_WRAPPER",
     "HAS_TENSOR_SEQUENCE_SLOT_FIX",
     "HAS_TORCH_FUNC",
@@ -141,6 +157,10 @@ __all__ = [
     "get_device_context_type",
     "get_device_mesh_type",
     "get_dtensor_type",
+    "get_gradient_edge_support",
+    "get_reduce_tuple_dim_support",
+    "get_cpu_half_kernels_support",
+    "get_cpu_float8_deterministic_fill_support",
     "get_pipelining_module_types",
     "get_fp8_dtypes",
     "get_tracing_tensor_types",
@@ -261,7 +281,7 @@ _RUNNABLE_TORCH_ALIASES: tuple[RunnableTorchAlias, ...] = (
         "linear",
         "private_to_public:_C._nn.linear->torch.nn.functional.linear",
         (2, 1),
-        (2, 13),
+        (2, 14),
     ),
     RunnableTorchAlias(
         "_C._nn.linear",
@@ -269,7 +289,7 @@ _RUNNABLE_TORCH_ALIASES: tuple[RunnableTorchAlias, ...] = (
         "linear",
         "private_to_public:_C._nn.linear->torch.nn.functional.linear",
         (2, 1),
-        (2, 13),
+        (2, 14),
     ),
     RunnableTorchAlias(
         "torch._VF.linear",
@@ -335,7 +355,7 @@ _RUNNABLE_TORCH_ALIASES: tuple[RunnableTorchAlias, ...] = (
         None,
         "private_to_public:_C._linalg.linalg_*->torch.linalg.*",
         (2, 1),
-        (2, 13),
+        (2, 14),
         "linalg_",
     ),
     RunnableTorchAlias(
@@ -994,6 +1014,41 @@ def _probe_parameter_as_subclass_in_dispatch_mode() -> bool:
     return type(plain_tensor) is torch.Tensor
 
 
+class _SubclassCtorProbe(torch.Tensor):
+    """Plain strict Tensor subclass used only by the ctor-in-mode probe below."""
+
+
+def _probe_subclass_ctor_in_dispatch_mode() -> bool:
+    """Return whether constructing a STRICT Tensor subclass works in a dispatch mode.
+
+    Torch 2.1 and 2.2 reject ``Tensor.as_subclass``/``_make_subclass`` (and the
+    equivalent ``__new__`` path) into a custom (non-``torch.Tensor``) subclass
+    while a :class:`TorchDispatchMode` is active: "Creating a new Tensor
+    subclass X but the raw Tensor object is already associated to a python
+    object of type Tensor." This reproduces on stock torch with a no-op mode
+    (TorchLens's own wrapping is not the cause); newer torch permits the
+    conversion. TorchLens's completeness witness and intervention-ready
+    captures are themselves dispatch modes, so call sites that construct or
+    convert into a strict subclass while one is active need this behavioral
+    probe rather than a parsed version string. Sibling probe (Parameter-to-
+    Tensor, the opposite direction, also version-gated but independently):
+    :func:`_probe_parameter_as_subclass_in_dispatch_mode`.
+
+    Returns
+    -------
+    bool
+        ``True`` when the conversion succeeds inside a redispatching mode.
+    """
+
+    base = torch.empty(0)
+    try:
+        with _ParameterAsSubclassProbeMode():
+            converted = base.as_subclass(_SubclassCtorProbe)
+    except (RuntimeError, TypeError):
+        return False
+    return type(converted) is _SubclassCtorProbe
+
+
 def _probe_roll_tensor_shifts() -> bool:
     """Return whether ``torch.roll`` accepts a bare 0-dim tensor ``shifts``.
 
@@ -1281,22 +1336,212 @@ def _probe_expanded_weights_conv_picker() -> bool:
 
 
 def _probe_gradient_edge() -> bool:
-    """Return whether the public autograd GradientEdge surface exists.
+    """Return whether torch's GradientEdge surface actually WORKS end to end.
 
     Returns
     -------
     bool
         ``True`` when ``torch.autograd.graph`` exposes both ``GradientEdge``
         and ``get_gradient_edge`` -- the ``(node, output slot)`` addressing
-        pair the one-backward read engine seeds ``autograd.grad`` with.
-        Absent on older torch (the surface postdates the 2.1 floor), which is
-        a healthy old install, not a degradation: the read refuses typed.
+        pair the one-backward read engine seeds ``autograd.grad`` with -- AND
+        a real ``autograd.grad`` call seeding an OUTPUT ``GradientEdge`` with
+        an explicit cotangent succeeds. Attribute presence alone is
+        insufficient: torch 2.2-2.3 ships the ``GradientEdge`` class, but its
+        own internal ``torch.autograd._make_grads`` calls ``out.is_nested`` on
+        every output -- including a bare ``GradientEdge``, which has no such
+        attribute -- and raises ``AttributeError`` (fixed upstream by 2.4,
+        matching this read's long-documented "2.4+" remedy text). Absent on
+        older torch or broken on this intermediate band is a healthy old
+        install either way, not a TorchLens degradation: the read refuses
+        typed.
     """
 
-    return (
-        _import_module_attr_or_none("torch.autograd.graph", "GradientEdge") is not None
-        and _import_module_attr_or_none("torch.autograd.graph", "get_gradient_edge") is not None
-    )
+    if (
+        _import_module_attr_or_none("torch.autograd.graph", "GradientEdge") is None
+        or _import_module_attr_or_none("torch.autograd.graph", "get_gradient_edge") is None
+    ):
+        return False
+    from torch.autograd.graph import GradientEdge
+
+    try:
+        x = torch.randn(1, requires_grad=True)
+        h = x * 2
+        if h.grad_fn is None:
+            # Never happens for a requires_grad leaf's product, but the
+            # static annotation is ``Node | None``; treat an impossible-in-
+            # practice None the same as any other probe failure below.
+            return False
+        torch.autograd.grad(
+            [GradientEdge(h.grad_fn, h.output_nr)],
+            [x],
+            grad_outputs=[torch.ones(1)],
+        )
+    except Exception:
+        return False
+    return True
+
+
+def get_gradient_edge_support(*, force_probe: bool = False) -> bool:
+    """Return whether one-backward reads can rely on GradientEdge, lazily.
+
+    Parameters
+    ----------
+    force_probe:
+        Run the (real, one-op autograd) probe even on first call. Diagnostic
+        surfaces set this to report the real build capability; the
+        one-backward read engine (the only product consumer) calls this
+        without it, so a plain ``import torchlens`` with no one-backward read
+        never pays for an autograd engine invocation.
+
+    Returns
+    -------
+    bool
+        ``True`` once a real ``autograd.grad`` call seeding an output
+        ``GradientEdge`` with an explicit cotangent has been verified to
+        succeed on this process's torch build (see :func:`_probe_gradient_edge`
+        for the torch 2.2-2.3 trap this guards against). Cached after the
+        first call (``force_probe`` included).
+
+    Notes
+    -----
+    Lazy by design: the first invocation of ``torch.autograd.grad`` in a
+    process can pay a one-time autograd-engine-thread-pool initialization
+    cost measured in tens of milliseconds, which must land on the first real
+    one-backward read, never on a plain ``import torchlens`` with no
+    autograd.grad call anywhere in the session (the import-hygiene budget).
+    """
+
+    global HAS_GRADIENT_EDGE, _GRADIENT_EDGE_PROBED
+
+    if not _GRADIENT_EDGE_PROBED or force_probe:
+        HAS_GRADIENT_EDGE = _probe_gradient_edge()
+        _GRADIENT_EDGE_PROBED = True
+    return HAS_GRADIENT_EDGE
+
+
+def get_reduce_tuple_dim_support(*, force_probe: bool = False) -> bool:
+    """Return whether ``Tensor.any``/``Tensor.all`` accept a tuple ``dim``, lazily.
+
+    Parameters
+    ----------
+    force_probe:
+        Run the probe even on first call. Diagnostic surfaces set this;
+        :func:`tensor_any_over_dims` (the only product consumer) does not, so
+        a plain ``import torchlens`` never pays for the tensor op.
+
+    Returns
+    -------
+    bool
+        See :func:`_probe_reduce_tuple_dim`. Cached after the first call.
+    """
+
+    global HAS_REDUCE_TUPLE_DIM, _REDUCE_TUPLE_DIM_PROBED
+
+    if not _REDUCE_TUPLE_DIM_PROBED or force_probe:
+        HAS_REDUCE_TUPLE_DIM = _probe_reduce_tuple_dim()
+        _REDUCE_TUPLE_DIM_PROBED = True
+    return HAS_REDUCE_TUPLE_DIM
+
+
+def get_cpu_half_kernels_support(*, force_probe: bool = False) -> bool:
+    """Return whether CPU addmm/layer_norm/nextafter accept float16, lazily.
+
+    Parameters
+    ----------
+    force_probe:
+        Run the probe even on first call. Diagnostic surfaces set this; no
+        product code consumes this flag today (test-only), so a plain
+        ``import torchlens`` never pays for the three tensor ops.
+
+    Returns
+    -------
+    bool
+        See :func:`_probe_cpu_half_kernels`. Cached after the first call.
+    """
+
+    global HAS_CPU_HALF_KERNELS, _CPU_HALF_KERNELS_PROBED
+
+    if not _CPU_HALF_KERNELS_PROBED or force_probe:
+        HAS_CPU_HALF_KERNELS = _probe_cpu_half_kernels()
+        _CPU_HALF_KERNELS_PROBED = True
+    return HAS_CPU_HALF_KERNELS
+
+
+def get_cpu_float8_deterministic_fill_support(*, force_probe: bool = False) -> bool:
+    """Return whether CPU empty-fill covers Float8 under determinism, lazily.
+
+    Parameters
+    ----------
+    force_probe:
+        Run the probe even on first call. Diagnostic surfaces set this; no
+        product code consumes this flag today (test-only), so a plain
+        ``import torchlens`` never pays for the transient global-determinism
+        toggle and allocation.
+
+    Returns
+    -------
+    bool
+        See :func:`_probe_cpu_float8_deterministic_fill`. Cached after the
+        first call.
+    """
+
+    global HAS_CPU_FLOAT8_DETERMINISTIC_FILL, _CPU_FLOAT8_DETERMINISTIC_FILL_PROBED
+
+    if not _CPU_FLOAT8_DETERMINISTIC_FILL_PROBED or force_probe:
+        HAS_CPU_FLOAT8_DETERMINISTIC_FILL = _probe_cpu_float8_deterministic_fill()
+        _CPU_FLOAT8_DETERMINISTIC_FILL_PROBED = True
+    return HAS_CPU_FLOAT8_DETERMINISTIC_FILL
+
+
+def get_meta_item_guard_support(*, force_probe: bool = False) -> bool:
+    """Return whether meta-tensor scalar extraction raises torch's own guard, lazily.
+
+    Parameters
+    ----------
+    force_probe:
+        Run the probe even on first call. Diagnostic surfaces set this; no
+        product code consumes this flag today (test-only), so a plain
+        ``import torchlens`` never pays for the transient meta-tensor
+        allocation and ``.item()`` call.
+
+    Returns
+    -------
+    bool
+        See :func:`_probe_meta_item_guard`. Cached after the first call.
+    """
+
+    global HAS_META_ITEM_GUARD, _META_ITEM_GUARD_PROBED
+
+    if not _META_ITEM_GUARD_PROBED or force_probe:
+        HAS_META_ITEM_GUARD = _probe_meta_item_guard()
+        _META_ITEM_GUARD_PROBED = True
+    return HAS_META_ITEM_GUARD
+
+
+def get_mha_fastpath_switch_support(*, force_probe: bool = False) -> bool:
+    """Return whether ``torch.backends.mha`` exposes the fastpath switch, lazily.
+
+    Parameters
+    ----------
+    force_probe:
+        Run the probe even on first call. Diagnostic surfaces set this;
+        :func:`get_mha_fastpath_enabled`, :func:`set_mha_fastpath_enabled`, and
+        :func:`force_mha_slow_path` (the only product consumers) do not, so a
+        plain ``import torchlens`` never pays for the ``find_spec`` /
+        submodule-attribute lookup against ``torch.backends.mha``.
+
+    Returns
+    -------
+    bool
+        See :func:`_probe_mha_fastpath_switch`. Cached after the first call.
+    """
+
+    global HAS_MHA_FASTPATH_SWITCH, _MHA_FASTPATH_SWITCH_PROBED
+
+    if not _MHA_FASTPATH_SWITCH_PROBED or force_probe:
+        HAS_MHA_FASTPATH_SWITCH = _probe_mha_fastpath_switch()
+        _MHA_FASTPATH_SWITCH_PROBED = True
+    return HAS_MHA_FASTPATH_SWITCH
 
 
 def _probe_node_prehook() -> bool:
@@ -1312,6 +1557,230 @@ def _probe_node_prehook() -> bool:
 
     node_cls = _import_module_attr_or_none("torch.autograd.graph", "Node")
     return node_cls is not None and hasattr(node_cls, "register_prehook")
+
+
+def _probe_deterministic_fill_flag() -> bool:
+    """Return whether ``torch.utils.deterministic.fill_uninitialized_memory`` exists.
+
+    Returns
+    -------
+    bool
+        ``True`` when the ``torch.utils.deterministic`` submodule is
+        discoverable (``find_spec``, never imported eagerly here to avoid
+        paying for a module nothing else needs). Absent on torch 2.1.x (the
+        submodule postdates the 2.1 floor), which is a healthy old install,
+        not a degradation: :func:`read_fill_uninitialized_memory` returns
+        ``None`` and :func:`write_fill_uninitialized_memory` no-ops.
+    """
+
+    try:
+        return importlib.util.find_spec("torch.utils.deterministic") is not None
+    except (ImportError, AttributeError, ValueError):
+        return False
+
+
+def _probe_amp_gradscaler() -> bool:
+    """Return whether the device-agnostic ``torch.amp.GradScaler`` exists.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``torch.amp`` exposes ``GradScaler`` directly (the
+        device-agnostic constructor; torch 2.1-2.2 only ship the CUDA-specific
+        ``torch.cuda.amp.GradScaler``). Absence is a healthy old install, not
+        a degradation -- TorchLens product code never constructs a scaler.
+    """
+
+    return _import_module_attr_or_none("torch.amp", "GradScaler") is not None
+
+
+def _probe_nn_attention_module() -> bool:
+    """Return whether ``torch.nn.attention`` (``SDPBackend``/``sdpa_kernel``) exists.
+
+    Returns
+    -------
+    bool
+        ``True`` when the ``torch.nn.attention`` namespace exposes
+        ``SDPBackend`` and ``sdpa_kernel``. The parent package body is
+        dynamo-free (unlike ``torch.nn.attention.bias``, see
+        :func:`_probe_attention_causal_bias`), so it is safe to import
+        directly. Absent on torch 2.1-2.2 (the namespace postdates the 2.1
+        floor), a healthy old install, not a degradation.
+
+    Notes
+    -----
+    The absent case checks with ``find_spec`` FIRST (proves non-existence
+    without executing anything) before ever calling
+    ``importlib.import_module``: two full failed-import attempts (one per
+    attribute) measurably inflated ``import torchlens`` on the torch
+    2.1/2.2 floor, where the namespace genuinely does not exist, well past
+    this module's own import-hygiene budget (``test_import_hygiene.py``).
+    """
+
+    try:
+        if importlib.util.find_spec("torch.nn.attention") is None:
+            return False
+    except (ImportError, AttributeError, ValueError):
+        return False
+    return (
+        _import_module_attr_or_none("torch.nn.attention", "SDPBackend") is not None
+        and _import_module_attr_or_none("torch.nn.attention", "sdpa_kernel") is not None
+    )
+
+
+def _probe_rmsnorm_module() -> bool:
+    """Return whether ``torch.nn.RMSNorm`` exists.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``torch.nn`` exposes the built-in ``RMSNorm`` module
+        (added torch 2.4). Absence is a healthy old install, not a
+        degradation -- TorchLens classifies RMSNorm-family modules by class
+        name, never by constructing ``torch.nn.RMSNorm`` itself.
+    """
+
+    return getattr(torch.nn, "RMSNorm", None) is not None
+
+
+def _probe_mha_fastpath_switch() -> bool:
+    """Return whether ``torch.backends.mha`` exposes the public fastpath switch.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``torch.backends.mha`` exposes both
+        ``get_fastpath_enabled`` and ``set_fastpath_enabled``. Absent on
+        torch 2.1-2.2 (the submodule postdates the 2.1 floor): a healthy old
+        install, not a degradation -- the fused ``nn.MultiheadAttention`` /
+        ``nn.TransformerEncoderLayer`` fast path has no public global switch
+        there, so :func:`force_mha_slow_path` falls back to flipping the
+        affected modules' own ``training`` flag (both fast paths check
+        ``self.training`` on every supported torch, switch or no switch).
+    """
+
+    try:
+        if importlib.util.find_spec("torch.backends.mha") is None:
+            return False
+    except (ImportError, AttributeError, ValueError):
+        return False
+    return (
+        _import_module_attr_or_none("torch.backends.mha", "get_fastpath_enabled") is not None
+        and _import_module_attr_or_none("torch.backends.mha", "set_fastpath_enabled") is not None
+    )
+
+
+def _probe_cpu_half_kernels() -> bool:
+    """Return whether common CPU kernels accept the ``torch.float16`` dtype.
+
+    Returns
+    -------
+    bool
+        ``True`` when CPU ``addmm``, ``layer_norm``, ``nextafter``, and
+        ``aminmax`` all accept float16 operands. torch 2.1-2.2's CPU backend
+        is missing these kernels for Half tensors (``addmm_impl_cpu_``,
+        ``LayerNormKernelImpl``, ``nextafter_cpu``, and ``aminmax_cpu`` all
+        raise ``"... not implemented for 'Half'"``); later torch ships them.
+        Absence is a genuine torch CPU limitation on the floor, not a
+        TorchLens degradation -- tests that exercise a half-precision CPU
+        forward, or TorchLens's own ULP-step validation machinery
+        (``torch.nextafter`` in ``validation/core.py`` and
+        ``validation/exemptions.py``) or dense tensor-stats kernel
+        (``torch.aminmax`` in ``stats/_stats_kernel.py``) on a Half-dtype
+        output, skip on it.
+    """
+
+    try:
+        half = torch.randn(2, 2, dtype=torch.float16)
+        torch.addmm(half, half, half)
+        torch.nn.functional.layer_norm(half, (2,))
+        torch.nextafter(half, half)
+        torch.aminmax(half)
+    except RuntimeError:
+        return False
+    return True
+
+
+def _probe_cpu_float8_deterministic_fill() -> bool:
+    """Return whether CPU tensor allocation fills Float8 dtypes under determinism.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``torch.empty(dtype=torch.float8_e4m3fn)`` succeeds with
+        ``torch.use_deterministic_algorithms(True)`` active. torch 2.1-2.2's
+        ``fill_empty_deterministic_`` CPU kernel does not cover Float8 dtypes,
+        so any empty-tensor allocation under deterministic mode (TorchLens's
+        own dtype-cast path included) raises
+        ``RuntimeError: "fill_empty_deterministic_" not implemented for
+        'Float8_e4m3fn'``. Absence is a genuine torch CPU limitation on the
+        floor, not a TorchLens degradation.
+    """
+
+    float8_dtype = getattr(torch, "float8_e4m3fn", None)
+    if float8_dtype is None:
+        return False
+    was_deterministic = torch.are_deterministic_algorithms_enabled()
+    was_warn_only = torch.is_deterministic_algorithms_warn_only_enabled()
+    try:
+        torch.use_deterministic_algorithms(True)
+        torch.empty((1,), dtype=float8_dtype)
+    except RuntimeError:
+        return False
+    finally:
+        torch.use_deterministic_algorithms(was_deterministic, warn_only=was_warn_only)
+    return True
+
+
+def _probe_reduce_tuple_dim() -> bool:
+    """Return whether ``Tensor.any``/``Tensor.all`` accept a tuple ``dim``.
+
+    Returns
+    -------
+    bool
+        ``True`` when a boolean tensor's ``.any(dim=(0, 1))`` accepts a tuple
+        of axes directly (added torch 2.2; torch 2.1 only accepts a single
+        int). Absence is a healthy old install: :func:`tensor_any_over_dims`
+        falls back to sequential single-axis reduction.
+    """
+
+    probe = torch.zeros((2, 2), dtype=torch.bool)
+    try:
+        probe.any(dim=(0, 1))
+    except TypeError:
+        return False
+    return True
+
+
+def _probe_meta_item_guard() -> bool:
+    """Return whether ``Tensor.item()`` raises its own guard on meta tensors.
+
+    Returns
+    -------
+    bool
+        ``True`` when calling ``.item()`` (or any other scalar extraction,
+        e.g. ``bool()``) on a meta tensor raises a plain ``RuntimeError``
+        carrying torch's own "Tensor.item() cannot be called on meta
+        tensors" guard. torch 2.1-2.2 have no such guard: the call instead
+        falls all the way through to the aten dispatcher's generic
+        ``NotImplementedError`` ("... not implemented for this backend").
+        TorchLens's structure-only forward-boundary backstop
+        (``backends/torch/structure_only_belt.py``) classifies a caught
+        ``NotImplementedError`` as ``meta_kernel_unavailable`` and a generic
+        ``RuntimeError`` as ``value_dependent_branch_unsupported`` by
+        raising-frame PROVENANCE, never message text -- correctly, since
+        the two exception FAMILIES genuinely differ here. Absence is a
+        healthy old install surfacing the honest alternate typed refusal,
+        not a TorchLens degradation.
+    """
+
+    try:
+        torch.ones((), device="meta").item()
+    except NotImplementedError:
+        return False
+    except RuntimeError:
+        return True
+    return False
 
 
 HAS_VARIABLE_FUNCTIONS: bool = _probe_variable_functions()
@@ -1336,9 +1805,11 @@ HAS_DYNAMO_EXPLAIN: bool = _probe_dynamo_explain_module()
 HAS_GENERATOR_CLONE_STATE: bool = hasattr(torch.Generator, "clone_state")
 HAS_GENERATOR_GRAPHSAFE_GET_STATE: bool = hasattr(torch.Generator, "graphsafe_get_state")
 HAS_GENERATOR_GRAPHSAFE_SET_STATE: bool = hasattr(torch.Generator, "graphsafe_set_state")
+HAS_GENERATOR_PHILOX_STATE: bool = hasattr(torch.Generator, "philox_state")
 HAS_SAFE_WEIGHTS_ONLY_LOAD: bool = _probe_safe_weights_only_load()
 HAS_TENSOR_SEQUENCE_SLOT_FIX: bool = _probe_tensor_sequence_slot_fix()
 HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE: bool = _probe_parameter_as_subclass_in_dispatch_mode()
+HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE: bool = _probe_subclass_ctor_in_dispatch_mode()
 # r-b4 R26-5a: ROLL_TENSOR_SHIFTS_SUPPORTED is a TEST HELPER, not a published
 # capability. It tracks a user-side torch spelling limitation (torch.roll with a
 # bare 0-dim tensor `shifts`: 2.8 rejects, 2.13 accepts) on which TorchLens does
@@ -1352,8 +1823,23 @@ HAS_CODE_QUALNAME: bool = _probe_code_qualname()
 HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG: bool = _probe_transformer_activation_fastpath_flag()
 HAS_ATTENTION_CAUSAL_BIAS: bool = _probe_attention_causal_bias()
 HAS_EXPANDED_WEIGHTS_CONV_PICKER: bool = _probe_expanded_weights_conv_picker()
-HAS_GRADIENT_EDGE: bool = _probe_gradient_edge()
+HAS_GRADIENT_EDGE: bool = False
+_GRADIENT_EDGE_PROBED: bool = False
 HAS_NODE_PREHOOK: bool = _probe_node_prehook()
+HAS_DETERMINISTIC_FILL_FLAG: bool = _probe_deterministic_fill_flag()
+HAS_AMP_GRADSCALER: bool = _probe_amp_gradscaler()
+HAS_NN_ATTENTION_MODULE: bool = _probe_nn_attention_module()
+HAS_RMSNORM_MODULE: bool = _probe_rmsnorm_module()
+HAS_MHA_FASTPATH_SWITCH: bool = False
+_MHA_FASTPATH_SWITCH_PROBED: bool = False
+HAS_REDUCE_TUPLE_DIM: bool = False
+_REDUCE_TUPLE_DIM_PROBED: bool = False
+HAS_CPU_HALF_KERNELS: bool = False
+_CPU_HALF_KERNELS_PROBED: bool = False
+HAS_CPU_FLOAT8_DETERMINISTIC_FILL: bool = False
+_CPU_FLOAT8_DETERMINISTIC_FILL_PROBED: bool = False
+HAS_META_ITEM_GUARD: bool = False
+_META_ITEM_GUARD_PROBED: bool = False
 _DYNAMO_OPTIMIZED_MODULE_TYPE: type[Any] | None = None
 _DYNAMO_OPTIMIZED_MODULE_PROBED: bool = False
 _DYNAMO_ORIG_CALLABLE_MARKER_PROBED: bool = False
@@ -1426,6 +1912,16 @@ _ASYNC_COLLECTIVE_TENSOR_PROBED: bool = False
 HAS_CHECKPOINT_HOOK_CLASS: bool = False
 _CHECKPOINT_HOOK_CLASS: type[Any] | None = None
 _CHECKPOINT_HOOK_CLASS_PROBED: bool = False
+#: torch >= 2.14 interposes ``_checkpoint_internal_hook`` between
+#: ``_checkpoint_hook``/``_recomputation_hook`` and ``saved_tensors_hooks``; its
+#: ``__enter__``/``__exit__`` stash private cross-call identity state
+#: (``_user_hooks``) directly on the pack-hook callable. Absence (torch 2.13 and
+#: earlier) means the checkpoint-token classifier's hook-object replacement needs
+#: no attribute preservation; presence means it must carry foreign attributes
+#: forward or skip the replacement (see ``backward.py::_carry_foreign_hook_attrs``).
+HAS_CHECKPOINT_INTERNAL_HOOK_CLASS: bool = False
+_CHECKPOINT_INTERNAL_HOOK_CLASS: type[Any] | None = None
+_CHECKPOINT_INTERNAL_HOOK_CLASS_PROBED: bool = False
 HAS_AUTOGRAD_ENGINE_QUEUE_CALLBACK: bool = False
 _AUTOGRAD_ENGINE_QUEUE_CALLBACK: Callable[..., Any] | None = None
 _AUTOGRAD_ENGINE_QUEUE_CALLBACK_PROBED: bool = False
@@ -1499,6 +1995,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_FUNCOL_MODULE",
     "HAS_ASYNC_COLLECTIVE_TENSOR",
     "HAS_CHECKPOINT_HOOK_CLASS",
+    "HAS_CHECKPOINT_INTERNAL_HOOK_CLASS",
     "HAS_AUTOGRAD_ENGINE_QUEUE_CALLBACK",
     "HAS_KINETO_INMEMORY_EVENTS",
     "HAS_KINETO_EVENT_SCOPE",
@@ -1512,9 +2009,11 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_GENERATOR_CLONE_STATE",
     "HAS_GENERATOR_GRAPHSAFE_GET_STATE",
     "HAS_GENERATOR_GRAPHSAFE_SET_STATE",
+    "HAS_GENERATOR_PHILOX_STATE",
     "HAS_SAFE_WEIGHTS_ONLY_LOAD",
     "HAS_TENSOR_SEQUENCE_SLOT_FIX",
     "HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE",
+    "HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE",
     "HAS_SAVED_TENSORS_HOOK_INTROSPECTION",
     "HAS_SAVED_TENSORS_HOOKS_PATCHABLE",
     "HAS_CODE_POSITIONS",
@@ -1524,6 +2023,15 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_EXPANDED_WEIGHTS_CONV_PICKER",
     "HAS_GRADIENT_EDGE",
     "HAS_NODE_PREHOOK",
+    "HAS_DETERMINISTIC_FILL_FLAG",
+    "HAS_AMP_GRADSCALER",
+    "HAS_NN_ATTENTION_MODULE",
+    "HAS_RMSNORM_MODULE",
+    "HAS_MHA_FASTPATH_SWITCH",
+    "HAS_REDUCE_TUPLE_DIM",
+    "HAS_CPU_HALF_KERNELS",
+    "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
+    "HAS_META_ITEM_GUARD",
 )
 
 
@@ -1546,6 +2054,12 @@ _LAZY_PROBE_FAMILIES: dict[str, tuple[str, ...]] = {
         "_DISPATCH_MODE_STACK_FN",
     ),
     "_DTENSOR_PROBED": ("HAS_DTENSOR", "_DTENSOR_TYPE"),
+    "_GRADIENT_EDGE_PROBED": ("HAS_GRADIENT_EDGE",),
+    "_REDUCE_TUPLE_DIM_PROBED": ("HAS_REDUCE_TUPLE_DIM",),
+    "_CPU_HALF_KERNELS_PROBED": ("HAS_CPU_HALF_KERNELS",),
+    "_CPU_FLOAT8_DETERMINISTIC_FILL_PROBED": ("HAS_CPU_FLOAT8_DETERMINISTIC_FILL",),
+    "_META_ITEM_GUARD_PROBED": ("HAS_META_ITEM_GUARD",),
+    "_MHA_FASTPATH_SWITCH_PROBED": ("HAS_MHA_FASTPATH_SWITCH",),
     "_FUNCOL_GROUP_RESOLUTION_PROBED": (
         "HAS_FUNCOL_GROUP_RESOLUTION",
         "_FUNCOL_GROUP_RESOLVERS",
@@ -1562,6 +2076,10 @@ _LAZY_PROBE_FAMILIES: dict[str, tuple[str, ...]] = {
     "_CHECKPOINT_HOOK_CLASS_PROBED": (
         "HAS_CHECKPOINT_HOOK_CLASS",
         "_CHECKPOINT_HOOK_CLASS",
+    ),
+    "_CHECKPOINT_INTERNAL_HOOK_CLASS_PROBED": (
+        "HAS_CHECKPOINT_INTERNAL_HOOK_CLASS",
+        "_CHECKPOINT_INTERNAL_HOOK_CLASS",
     ),
     "_AUTOGRAD_ENGINE_QUEUE_CALLBACK_PROBED": (
         "HAS_AUTOGRAD_ENGINE_QUEUE_CALLBACK",
@@ -1689,11 +2207,71 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         "HAS_GENERATOR_CLONE_STATE",
         "HAS_GENERATOR_GRAPHSAFE_GET_STATE",
         "HAS_GENERATOR_GRAPHSAFE_SET_STATE",
+        # torch.Generator.philox_state postdates the torch>=2.1 floor (added
+        # torch 2.14): its absence is a healthy older install with no method to
+        # drop a row for (same rationale as the three generator flags above).
+        "HAS_GENERATOR_PHILOX_STATE",
         # GradientEdge / Node.register_prehook postdate the torch>=2.1 floor:
         # their absence is a healthy old install with nothing to shim -- the
         # one-backward read refuses typed instead of degrading.
         "HAS_GRADIENT_EDGE",
         "HAS_NODE_PREHOOK",
+        # _checkpoint_internal_hook (torch.utils.checkpoint) postdates the
+        # torch>=2.1 floor (added torch 2.14): its absence on older torch means
+        # checkpoint hook objects carry no private cross-call identity state to
+        # preserve, not a degradation (backward.py's token-wrapper swap is
+        # unconditionally safe there).
+        "HAS_CHECKPOINT_INTERNAL_HOOK_CLASS",
+        # Deterministic uninit-memory fill, device-agnostic GradScaler,
+        # torch.nn.attention, torch.nn.RMSNorm, and tuple-dim any()/all() all
+        # postdate the torch>=2.1 floor: their absence is a healthy old
+        # install with a real fallback (fill flag) or nothing to shim
+        # (TorchLens product code never constructs a GradScaler/RMSNorm or
+        # calls sdpa_kernel itself; the tuple-dim reduction falls back to
+        # sequential single-axis reduction).
+        "HAS_DETERMINISTIC_FILL_FLAG",
+        "HAS_AMP_GRADSCALER",
+        "HAS_NN_ATTENTION_MODULE",
+        "HAS_RMSNORM_MODULE",
+        "HAS_REDUCE_TUPLE_DIM",
+        # torch.backends.mha (the nn.MultiheadAttention / nn.TransformerEncoderLayer
+        # fused fast-path switch) postdates the torch>=2.1 floor: its absence is a
+        # healthy old install with a real fallback (force_mha_slow_path flips the
+        # affected modules' own training flag instead, since both fast paths check
+        # self.training on every supported torch).
+        "HAS_MHA_FASTPATH_SWITCH",
+        # CPU Half-dtype kernel coverage (addmm/layer_norm/nextafter) and
+        # Float8 empty-fill under deterministic mode both postdate the torch
+        # 2.1 floor: genuine old-torch CPU limitations, not TorchLens
+        # degradations -- tests that need them skip on these flags.
+        "HAS_CPU_HALF_KERNELS",
+        "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
+        # torch's own "Tensor.item() cannot be called on meta tensors" guard
+        # postdates the torch 2.1/2.2 floor: its absence means the identical
+        # user situation (a value-dependent branch on a meta tensor) still
+        # refuses typed, just via the sibling meta_kernel_unavailable code
+        # instead of value_dependent_branch_unsupported -- a healthy old
+        # install classified by the honest alternate path, not a degradation.
+        "HAS_META_ITEM_GUARD",
+        # torch.distributed._functional_collectives._resolve_group /
+        # torch.distributed.distributed_c10d._resolve_process_group (funcol
+        # group resolution, merge-ranks C2 recording) are torch-private
+        # surfaces absent on torch 2.7.1 specifically (measured on the
+        # nightly fast-tier leg, 2026-10-02) though present on both the
+        # declared torch>=2.1 floor's neighbors and the canonical/newest
+        # pins: a healthy install with nothing to shim -- captured funcol
+        # calls refuse typed instead of recording correlated boundary nodes,
+        # the same honest degradation every other optional probe here takes.
+        "HAS_FUNCOL_GROUP_RESOLUTION",
+        # torch._C._autograd._top_saved_tensors_default_hooks (peeks the
+        # innermost installed default saved-tensors pack/unpack hook pair) is
+        # probed EAGERLY at import time with no lazy latch, so its absence is
+        # never merely "unprobed" -- on a torch build without it,
+        # saved_tensors_default_hooks_active() honestly answers None instead
+        # of degrading capture-time side-effect analysis; nothing shims it.
+        # Absent on torch 2.7.1 specifically (measured on the nightly
+        # fast-tier leg, 2026-10-02).
+        "HAS_SAVED_TENSORS_HOOK_INTROSPECTION",
     }
 )
 """Capability flags whose ``False`` is an absent OPTIONAL feature, not a degradation.
@@ -1773,6 +2351,10 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     get_dynamo_optimized_module_type(force_probe=True)
     get_fsdp_wrapper_type(force_probe=True)
     get_dtensor_type(force_probe=True)
+    get_gradient_edge_support(force_probe=True)
+    get_reduce_tuple_dim_support(force_probe=True)
+    get_cpu_half_kernels_support(force_probe=True)
+    get_cpu_float8_deterministic_fill_support(force_probe=True)
     get_device_mesh_type(force_probe=True)
     get_pipelining_module_types(force_probe=True)
     get_tracing_tensor_types(force_probe=True)
@@ -1801,6 +2383,7 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     get_async_collective_tensor_type(force_probe=True)
     probe_funcol_wait_interposition()
     get_checkpoint_hook_class()
+    get_checkpoint_internal_hook_class()
     get_autograd_engine_queue_callback()
     snapshot = {name: bool(globals()[name]) for name in _CAPABILITY_ATTRS}
     snapshot["AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED"] = bool(AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED)
@@ -2540,6 +3123,37 @@ def get_checkpoint_hook_class() -> type[Any] | None:
     return _CHECKPOINT_HOOK_CLASS
 
 
+def get_checkpoint_internal_hook_class() -> type[Any] | None:
+    """Return torch's private ``_checkpoint_internal_hook`` class, or ``None``.
+
+    New in torch 2.14 (``torch/utils/checkpoint.py``): ``_checkpoint_hook`` and
+    ``_recomputation_hook`` both subclass this intermediate class instead of
+    ``torch.autograd.graph.saved_tensors_hooks`` directly. Its ``__enter__`` sets
+    ``self.pack_hook._user_hooks`` (walked by ``_current_user_saved_tensors_hooks``
+    to resolve nested-checkpoint identity) and its ``__exit__`` deletes that same
+    attribute. Absence (torch 2.13 and earlier, or a torch without the private
+    name) means hook objects carry no such cross-call identity state, so a
+    hook-object replacement is always safe; presence means a replacement MUST
+    carry the attribute forward or skip the swap (fail-closed), or torch's own
+    ``__exit__`` raises reaching for state that moved to a different function
+    object -- an exception inside ``__exit__`` that skips the matching
+    ``_pop_saved_tensors_default_hooks()`` call and permanently corrupts torch's
+    global saved-tensors-hooks stack for the rest of the process.
+    """
+
+    global HAS_CHECKPOINT_INTERNAL_HOOK_CLASS, _CHECKPOINT_INTERNAL_HOOK_CLASS
+    global _CHECKPOINT_INTERNAL_HOOK_CLASS_PROBED
+
+    if not _CHECKPOINT_INTERNAL_HOOK_CLASS_PROBED:
+        resolved = _import_module_attr_or_none(
+            "torch.utils.checkpoint", "_checkpoint_internal_hook"
+        )
+        _CHECKPOINT_INTERNAL_HOOK_CLASS = resolved if isinstance(resolved, type) else None
+        HAS_CHECKPOINT_INTERNAL_HOOK_CLASS = _CHECKPOINT_INTERNAL_HOOK_CLASS is not None
+        _CHECKPOINT_INTERNAL_HOOK_CLASS_PROBED = True
+    return _CHECKPOINT_INTERNAL_HOOK_CLASS
+
+
 def get_autograd_engine_queue_callback() -> Callable[..., Any] | None:
     """Return the autograd engine's ``queue_callback`` binding, or ``None``.
 
@@ -3080,12 +3694,29 @@ def warm_lazy_torch_imports() -> None:
 
     if _LAZY_TORCH_IMPORTS_WARMED:
         return
+    # The RNG-channel fix above (running this BEFORE the monitor's own
+    # patches install) only protects THAT one census. The broader capture
+    # logging/dispatch window is already armed by the time this runs (it
+    # fires from inside ``run_and_log_inputs_through_model``), so the
+    # cascade's own tensor ops -- torch._dynamo.variables.torch_function's
+    # module-level ``populate_builtin_to_tensor_fn_map()`` calls
+    # ``torch.ones`` plus several builtin unary ops (``abs``, ...) as an
+    # import side effect -- went through TorchLens's OWN wrapped functions
+    # and were recorded as unattributable "unmodeled_tensor_return" /
+    # "caught_exception_control" dispatch-census facts, permanently
+    # ceilinging the capture's witness completeness even though nothing in
+    # the user's model caused them. ``pause_logging()`` is the general
+    # mechanism for exactly this (critical invariant 2): it hides the
+    # cascade from every capture-time witness, not just the RNG monitor.
+    from .._state import pause_logging
+
     warmed = True
-    for module_name in ("torch._compile", "torch._dynamo"):
-        try:
-            importlib.import_module(module_name)
-        except Exception:
-            warmed = False
+    with pause_logging():
+        for module_name in ("torch._compile", "torch._dynamo"):
+            try:
+                importlib.import_module(module_name)
+            except Exception:
+                warmed = False
     _LAZY_TORCH_IMPORTS_WARMED = warmed
 
 
@@ -3801,26 +4432,181 @@ else:
 # Every control below is a PUBLIC torch surface present since before the 2.1
 # support floor (r-b7 R42-1 retired the six HAS_* flags that used to guard
 # them: their False branches were unreachable on any supported torch, and the
-# CUDA-named ones read True even on CUDA-less wheels). Snapshots record every
-# control affirmatively; ``None`` survives only in the APPLY direction as
-# schema tolerance for artifacts recorded by older producers.
+# CUDA-named ones read True even on CUDA-less wheels) -- WITH ONE EXCEPTION:
+# ``torch.utils.deterministic.fill_uninitialized_memory`` (just below)
+# postdates the 2.1 floor -- the ``torch.utils.deterministic`` submodule does
+# not exist at all on torch 2.1.x -- and is feature-detected through
+# ``HAS_DETERMINISTIC_FILL_FLAG``. Snapshots record every control
+# affirmatively; ``None`` survives as the feature-detected absence of the
+# fill flag and, in the APPLY direction, as schema tolerance for artifacts
+# recorded by older producers.
+
+_torch_deterministic_module: types.ModuleType | None
+if HAS_DETERMINISTIC_FILL_FLAG:
+    import torch.utils.deterministic as _torch_deterministic_module
+else:
+    _torch_deterministic_module = None
 
 
 def read_fill_uninitialized_memory() -> bool | None:
-    """Return the deterministic uninit-memory fill flag.
+    """Return the deterministic uninit-memory fill flag, or ``None`` if absent.
 
     THE one sanctioned read of ``torch.utils.deterministic.fill_uninitialized_memory``
     (a module-``__getattr__`` property invisible to static typing): the ambient
     snapshot and the producer-side determinism refinement both route here.
+
+    Returns
+    -------
+    bool | None
+        The live flag value, or ``None`` on torch 2.1.x, where the
+        ``torch.utils.deterministic`` submodule does not exist
+        (``HAS_DETERMINISTIC_FILL_FLAG`` is ``False``) -- a healthy old
+        install, not a degradation.
     """
 
-    return bool(torch.utils.deterministic.fill_uninitialized_memory)  # type: ignore[attr-defined]
+    if _torch_deterministic_module is None:
+        return None
+    # ``fill_uninitialized_memory`` is a module-``__getattr__`` property;
+    # static typing has no stub for it, so read it dynamically rather than
+    # via attribute access (``getattr`` is accurate here, not a workaround).
+    return bool(getattr(_torch_deterministic_module, "fill_uninitialized_memory"))
 
 
 def write_fill_uninitialized_memory(value: bool) -> None:
-    """Set the deterministic uninit-memory fill flag (caller checks the flag)."""
+    """Set the deterministic uninit-memory fill flag (caller checks the flag).
 
-    torch.utils.deterministic.fill_uninitialized_memory = bool(value)  # type: ignore[attr-defined]
+    No-ops on torch 2.1.x, where the ``torch.utils.deterministic`` submodule
+    does not exist (``HAS_DETERMINISTIC_FILL_FLAG`` is ``False``) -- there is
+    nothing to set and nothing to degrade.
+    """
+
+    if _torch_deterministic_module is None:
+        return
+    # See the matching comment in ``read_fill_uninitialized_memory``: this is
+    # a module-``__getattr__`` property with no static stub.
+    setattr(_torch_deterministic_module, "fill_uninitialized_memory", bool(value))
+
+
+def tensor_any_over_dims(tensor: torch.Tensor, dims: tuple[int, ...]) -> torch.Tensor:
+    """Reduce a boolean tensor with ``any`` over multiple axes at once.
+
+    ``Tensor.any(dim=<tuple>)`` postdates the torch 2.1 floor (torch 2.1 only
+    accepts a single int axis). THE one sanctioned multi-axis ``any`` reduction:
+    product code that needs to OR-reduce several axes together routes here
+    instead of calling ``tensor.any(dim=dims)`` directly.
+
+    Parameters
+    ----------
+    tensor:
+        Tensor to reduce (typically boolean).
+    dims:
+        Axes to reduce over. An empty tuple returns ``tensor`` unchanged.
+
+    Returns
+    -------
+    torch.Tensor
+        ``tensor`` with every axis in ``dims`` reduced away, identical to
+        ``tensor.any(dim=dims)`` on torch>=2.2.
+
+    Notes
+    -----
+    On torch 2.1 (``HAS_REDUCE_TUPLE_DIM`` is ``False``), falls back to
+    sequential single-axis reduction, removing axes from highest to lowest so
+    an already-normalized smaller target axis never shifts as a larger one is
+    removed.
+    """
+
+    if not dims:
+        return tensor
+    if get_reduce_tuple_dim_support():
+        return tensor.any(dim=dims)
+    ndim = tensor.ndim
+    result = tensor
+    for axis in sorted({axis % ndim for axis in dims}, reverse=True):
+        result = result.any(dim=axis)
+    return result
+
+
+def get_mha_fastpath_enabled() -> bool | None:
+    """Return the public MHA fastpath switch, or ``None`` if absent.
+
+    THE one sanctioned read of ``torch.backends.mha.get_fastpath_enabled()``.
+
+    Returns
+    -------
+    bool | None
+        The live switch value, or ``None`` on torch 2.1-2.2, where
+        ``torch.backends.mha`` does not exist (``HAS_MHA_FASTPATH_SWITCH`` is
+        ``False``) -- a healthy old install, not a degradation.
+    """
+
+    if not get_mha_fastpath_switch_support():
+        return None
+    return bool(torch.backends.mha.get_fastpath_enabled())
+
+
+def set_mha_fastpath_enabled(value: bool) -> None:
+    """Set the public MHA fastpath switch (caller checks the flag first).
+
+    No-ops on torch 2.1-2.2, where ``torch.backends.mha`` does not exist
+    (``HAS_MHA_FASTPATH_SWITCH`` is ``False``) -- there is nothing to set.
+    """
+
+    if not get_mha_fastpath_switch_support():
+        return
+    torch.backends.mha.set_fastpath_enabled(bool(value))
+
+
+@contextlib.contextmanager
+def force_mha_slow_path(model: torch.nn.Module) -> Iterator[None]:
+    """Hold the fused MHA/TransformerEncoderLayer fast path OFF for ``model``.
+
+    Uses the public ``torch.backends.mha`` switch when available
+    (``HAS_MHA_FASTPATH_SWITCH``); otherwise falls back to setting the
+    ``training`` ATTRIBUTE directly (never the recursive ``.train()``
+    method, which would also flip nested dropout/norm submodules and could
+    change their op counts) to ``True`` on every
+    ``torch.nn.MultiheadAttention`` and ``torch.nn.TransformerEncoderLayer``
+    instance reachable from ``model`` -- a REAL fallback, not a degradation:
+    both fused fast paths independently check their OWN module's
+    ``self.training`` on every supported torch version (the layer's native
+    op and its inner attention's native op gate separately), so the public
+    switch merely adds an earlier, version-independent gate on top. Every
+    flag this context manager touches is restored to its prior value on
+    exit, success or failure.
+
+    Parameters
+    ----------
+    model:
+        Module whose fused-attention submodules should run the unfused path
+        for the duration of the ``with`` block.
+
+    Yields
+    ------
+    None
+        Nothing; the context is entered for its side effect.
+    """
+
+    prior_switch = get_mha_fastpath_enabled()
+    fastpath_modules = [
+        module
+        for module in model.modules()
+        if isinstance(module, (torch.nn.MultiheadAttention, torch.nn.TransformerEncoderLayer))
+    ]
+    saved_training = [(module, module.training) for module in fastpath_modules]
+    try:
+        if prior_switch is not None:
+            set_mha_fastpath_enabled(False)
+        else:
+            for module in fastpath_modules:
+                module.training = True
+        yield
+    finally:
+        if prior_switch is not None:
+            set_mha_fastpath_enabled(prior_switch)
+        else:
+            for module, was_training in saved_training:
+                module.training = was_training
 
 
 def tensor_version_or_none(tensor: Any) -> int | None:

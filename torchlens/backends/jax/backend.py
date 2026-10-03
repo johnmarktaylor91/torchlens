@@ -24,6 +24,7 @@ from ...backends._finalize import (
     session_callable_identity as _callable_identity,
     value_nbytes as _nbytes,
 )
+from ...capture._nonfinite_prefix import strip_raw_label_suffix
 from ...capture.outcome import stamp_backend_finalized
 from ...data_classes._compaction import compact_op_metadata
 from ...data_classes.derived_grad import (
@@ -52,6 +53,7 @@ from ...ir.predicate import RecordContext
 from ...ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
 from ...ir.workspaces import _init_module_hierarchy_data
+from ...options import CaptureOptions, merge_capture_options
 from ...postprocess._grouping_stamp import build_grouping_policy_stamp
 from ...postprocess._materialize import materialize_from_events
 from ...postprocess._selective_save import (
@@ -82,6 +84,7 @@ from .._options import (
     is_missing as _is_missing,
     reject_extra_trace_kwargs,
     reject_unsupported_trace_options,
+    resolve_optional_capture_field as _resolve_optional_capture_field,
 )
 from .._validation_shared import float_replay_tolerances
 from ._site_dialect import jax_site_keys
@@ -292,6 +295,7 @@ class JAXBackend:
         jax_max_control_flow_unroll: int | MissingType = MISSING,
         module_identity_mode: str | None | MissingType = MISSING,
         grad_options: GradOptions | None | MissingType = MISSING,
+        capture: CaptureOptions | None = None,
         **kwargs: Any,
     ) -> Trace:
         """Capture a JAX raw-function forward pass into a TorchLens ``Trace``.
@@ -380,6 +384,10 @@ class JAXBackend:
             Optional JAX derived-gradient configuration. This runs a second
             pure functional ``jax.value_and_grad`` pass and populates
             ``trace.derived_grads``.
+        capture
+            Grouped ``CaptureOptions``. The sole post-sprint spelling for the
+            flat capture kwargs above; an explicit field here is merged in
+            (``merge_capture_options``) ahead of this backend's own defaults.
         **kwargs
             Extra public trace kwargs rejected by this backend.
 
@@ -392,6 +400,67 @@ class JAXBackend:
         save_predicate = pop_static_label_save_predicate(kwargs, backend_name="JAX")
         self._reject_extra_kwargs(kwargs)
         _reject_transformed_callable(model)
+        # N5 fix: ``trace()`` no longer passes these as flat kwargs at all --
+        # the grouped ``capture=CaptureOptions(...)`` object is the only
+        # surviving spelling, so an explicit ``capture=`` value must reach
+        # these fields instead of being silently dropped (or, before this
+        # backend accepted ``capture`` as a named parameter, crashing the
+        # whole call with "does not support: capture"). MISSING-typed flat
+        # kwargs merge directly; the handful that default to a concrete
+        # ``None`` (merged below via ``_resolve_optional_capture_field``)
+        # cannot use ``merge_capture_options`` because ``None`` is not
+        # distinguishable from ``MISSING`` for them.
+        capture_options = merge_capture_options(
+            capture=capture,
+            layers_to_save=layers_to_save,
+            keep_orphans=keep_orphans,
+            output_device=output_device,
+            detach_saved_activations=detach_saved_activations,
+            save_arg_values=save_arg_values,
+            save_code_context=save_code_context,
+            save_rng_states=save_rng_states,
+            recurrence_detection=recurrence_detection,
+            compute_input_output_distances=compute_input_output_distances,
+            verbose=verbose,
+            backward_ready=backward_ready,
+            name=name,
+            save_raw_input=save_raw_input,
+            batch_render=batch_render,
+            save_raw_output=save_raw_output,
+            save_visualizations=save_visualizations,
+            jax_control_flow=jax_control_flow,
+            jax_max_control_flow_unroll=jax_max_control_flow_unroll,
+            module_identity_mode=module_identity_mode,
+        )
+        layers_to_save = capture_options.layers_to_save
+        keep_orphans = capture_options.keep_orphans
+        output_device = capture_options.output_device
+        detach_saved_activations = capture_options.detach_saved_activations
+        save_arg_values = capture_options.save_arg_values
+        save_code_context = capture_options.save_code_context
+        save_rng_states = capture_options.save_rng_states
+        recurrence_detection = capture_options.recurrence_detection
+        compute_input_output_distances = capture_options.compute_input_output_distances
+        verbose = capture_options.verbose
+        backward_ready = capture_options.backward_ready
+        name = capture_options.name
+        save_raw_input = capture_options.save_raw_input
+        batch_render = capture_options.batch_render
+        save_raw_output = capture_options.save_raw_output
+        save_visualizations = capture_options.save_visualizations
+        jax_control_flow = capture_options.jax_control_flow
+        jax_max_control_flow_unroll = capture_options.jax_max_control_flow_unroll
+        module_identity_mode = capture_options.module_identity_mode
+        save_grads = _resolve_optional_capture_field(capture, "save_grads", save_grads)
+        module_filter = _resolve_optional_capture_field(capture, "module_filter", module_filter)
+        transform = _resolve_optional_capture_field(capture, "transform", transform)
+        output_transform = _resolve_optional_capture_field(
+            capture, "output_transform", output_transform
+        )
+        layer_visualizers = _resolve_optional_capture_field(
+            capture, "layer_visualizers", layer_visualizers
+        )
+        random_seed = _resolve_optional_capture_field(capture, "random_seed", random_seed)
         layers_to_save = _default_if_missing(layers_to_save, "all")
         keep_orphans = _default_if_missing(keep_orphans, False)
         output_device = _default_if_missing(output_device, "same")
@@ -670,9 +739,18 @@ class JAXBackend:
         op_kind_counts = Counter(_jax_op_capture_kind(op) for op in equation_ops)
         if capture_kind_counts != op_kind_counts:
             return False
+        # TORCH PARITY: ``parent_arg_positions`` (and ``parents``/``children``)
+        # resolve through the CONDITIONAL label map -- a single-pass op's bare
+        # ``layer_label``, a multi-pass op's pass-qualified ``label`` -- so a
+        # lookup keyed only by raw/final-qualified labels misses every
+        # single-pass parent reference. Index the bare label too (safe: a
+        # single-pass op's bare label is unambiguous).
         ops_by_label: dict[str, Any] = {}
         for op in getattr(trace, "layer_list", []):
-            for label in (getattr(op, "_label_raw", None), getattr(op, "label", None)):
+            labels = [getattr(op, "_label_raw", None), getattr(op, "label", None)]
+            if getattr(op, "num_passes", 1) == 1:
+                labels.append(getattr(op, "layer_label", None))
+            for label in labels:
                 if isinstance(label, str):
                     ops_by_label[label] = op
         hidden_outputs_by_label: dict[str, tuple[Any, ...]] = {
@@ -723,9 +801,18 @@ class JAXBackend:
         region_ops = _jax_region_ops(trace)
         if len(captures) != len(region_ops):
             return False
+        # TORCH PARITY: ``parent_arg_positions`` (and ``parents``/``children``)
+        # resolve through the CONDITIONAL label map -- a single-pass op's bare
+        # ``layer_label``, a multi-pass op's pass-qualified ``label`` -- so a
+        # lookup keyed only by raw/final-qualified labels misses every
+        # single-pass parent reference. Index the bare label too (safe: a
+        # single-pass op's bare label is unambiguous).
         ops_by_label: dict[str, Any] = {}
         for op in getattr(trace, "layer_list", []):
-            for label in (getattr(op, "_label_raw", None), getattr(op, "label", None)):
+            labels = [getattr(op, "_label_raw", None), getattr(op, "label", None)]
+            if getattr(op, "num_passes", 1) == 1:
+                labels.append(getattr(op, "layer_label", None))
+            for label in labels:
                 if isinstance(label, str):
                     ops_by_label[label] = op
         hidden_outputs_by_label: dict[str, tuple[Any, ...]] = {
@@ -1858,6 +1945,15 @@ class JAXBackend:
         )
         raw_labels = tuple(trace._raw_graph_ws.raw_layer_labels_list)
         raw_to_final_op_label: dict[str, str] = {}
+        # TORCH PARITY: torch (``postprocess/labeling.py``) relabels graph-edge
+        # fields (``parents``/``children``/the lineage sets) through a
+        # CONDITIONAL mapping -- a referenced op's bare ``layer_label`` when its
+        # layer has a single pass, its pass-qualified ``label`` only when the
+        # layer is multi-pass -- never the unconditionally-qualified op label.
+        # ``raw_to_final_op_label`` stays the always-qualified mapping (used for
+        # ``recurrent_ops``/``equivalent_ops``/capture-index bookkeeping below);
+        # this sibling mapping feeds ``_relabel_jax_graph_edges`` instead.
+        raw_to_final_layer_label: dict[str, str] = {}
 
         trace.layer_list = []
         trace.layer_dict_main_keys.clear()
@@ -1881,13 +1977,14 @@ class JAXBackend:
                     equivalence_key=op_log.equivalence_class or label,
                 ),
             )
-            pass_label = f"{assignment.layer_label}:{assignment.pass_index}"
+            layer_label = strip_raw_label_suffix(assignment.layer_label)
+            pass_label = f"{layer_label}:{assignment.pass_index}"
             op_log._label_raw = label
             op_log._layer_label_raw = assignment.layer_label
             op_log.label = pass_label
             op_log.label_short = pass_label
-            op_log.layer_label = assignment.layer_label
-            op_log.layer_label_short = assignment.layer_label
+            op_log.layer_label = layer_label
+            op_log.layer_label_short = layer_label
             op_log.pass_index = assignment.pass_index
             op_log.num_passes = assignment.num_passes
             op_log.equivalence_class = assignment.equivalence_key
@@ -1897,8 +1994,11 @@ class JAXBackend:
             op_log.backend_address = f"jaxpr:{label}"
             op_log.resolver_status = "resolved"
             raw_to_final_op_label[label] = pass_label
+            raw_to_final_layer_label[label] = (
+                layer_label if assignment.num_passes == 1 else pass_label
+            )
 
-        self._relabel_jax_graph_edges(trace, raw_to_final_op_label)
+        self._relabel_jax_graph_edges(trace, raw_to_final_layer_label)
         raw_by_capture_index = getattr(trace, "_jax_capture_index_to_raw_op_label", {})
         trace.jax_capture_index_to_final_op_label = {
             capture_index: raw_to_final_op_label[raw_label]
@@ -1919,9 +2019,17 @@ class JAXBackend:
                 if member in raw_to_final_op_label
             ]
             op_log.equivalent_ops = equivalent_labels_by_key.get(op_log.equivalence_class, set())
-            op_log.lookup_keys = [label, op_log.label]
-            if op_log.num_passes > 1:
-                op_log.lookup_keys.append(op_log.layer_label)
+            # Torch parity (see the identical fix in
+            # ``backends/_finalize.py::_finalize_single_op``): always
+            # register the bare layer label, not just for multi-pass groups.
+            # For a single-pass op the bare key is unambiguous and resolves
+            # exactly that op; without it, ``postprocess/finalization.py``'s
+            # ``_build_module_logs`` -- which looks each module's recorded
+            # ops up by bare layer label through ``layer_dict_all_keys`` --
+            # silently dropped every single-pass op (the common case) from
+            # ``Module.layer_labels``, tripping the ``module_attribution``
+            # metadata invariant.
+            op_log.lookup_keys = [label, op_log.label, op_log.layer_label]
             trace.layer_list.append(op_log)
             trace.layer_dict_main_keys[op_log.label] = op_log
             for lookup_key in op_log.lookup_keys:
@@ -1976,6 +2084,12 @@ class JAXBackend:
             # whose graph ``parents`` include that source label -- i.e. the
             # op that actually took the param value as a computational
             # operand.
+            # Keyed by BOTH the pass-qualified ``op_log.label`` and (for a
+            # single-pass source, torch parity) the bare ``op_log.layer_label``:
+            # ``op_log.parents`` on the consuming op now holds whichever
+            # spelling matches this source's own pass count (see
+            # ``_relabel_jax_graph_edges``), and a source op is always
+            # single-pass, so both keys point at the one param.
             param_log_by_source_label: dict[str, Param] = {}
             for op_log in trace.layer_list:
                 path = getattr(op_log, "annotations", {}).get("jax_container_path")
@@ -1985,6 +2099,8 @@ class JAXBackend:
                 if param_address not in trace.param_logs:
                     continue
                 param_log_by_source_label[op_log.label] = trace.param_logs[param_address]
+                if op_log.num_passes == 1:
+                    param_log_by_source_label[op_log.layer_label] = trace.param_logs[param_address]
 
             if param_log_by_source_label:
                 from .._finalize import _attach_param_usage
@@ -2030,27 +2146,53 @@ class JAXBackend:
             trace.num_layers_with_params = len(
                 {op.layer_label for op in trace.layer_list if op.uses_params}
             )
-            seen_layers: set[str] = set()
-            num_param_tensors = 0
-            num_params = 0
-            num_params_trainable = 0
-            for op_log in trace.layer_list:
-                if op_log.layer_label in seen_layers:
-                    continue
-                seen_layers.add(op_log.layer_label)
-                num_param_tensors += op_log.num_param_tensors
-                num_params += op_log.num_params
-                num_params_trainable += op_log.num_params_trainable
-            trace.num_param_tensors = num_param_tensors
-            trace.num_params = num_params
-            trace.num_params_trainable = num_params_trainable
-            trace.num_params_frozen = num_params - num_params_trainable
-        trace.output_layers = [
-            trace._raw_graph_ws.raw_layer_dict[label].layer_label
-            if label in trace._raw_graph_ws.raw_layer_dict
-            else label
-            for label in trace.output_layers
-        ]
+            # Parameter-identity basis, not a per-layer-label dedup sum: a
+            # param reused across more than one op/layer (a tied weight, or a
+            # module shared across two sibling attributes) is attached to
+            # EACH referencing layer, so summing once per unique layer_label
+            # still double-counts the param itself and trips the
+            # ``trace_self_consistency`` invariant's
+            # ``num_param_tensors != len(param_logs)`` check (same fix as
+            # ``backends/_finalize.py``'s ``_update_param_totals_from_layers``).
+            trace.num_param_tensors = len(trace.param_logs)
+            trace.num_params = sum(param.num_params for param in trace.param_logs)
+            trace.num_params_trainable = sum(
+                param.num_params for param in trace.param_logs if param.is_trainable
+            )
+            trace.num_params_frozen = trace.num_params - trace.num_params_trainable
+
+        def _final_label(label: str) -> str:
+            """Resolve one raw label to its final CONDITIONAL label.
+
+            Torch parity: bare ``layer_label`` for a single-pass op, but the
+            pass-qualified ``label`` for a multi-pass one. Torch's own
+            ``input_layers``/``output_layers`` rename always uses the bare
+            label, but only because torch always wraps real computation in
+            single-pass input/output pseudo-ops -- the two mappings coincide
+            there. JAX does not always wrap this way (``trace.output_layers``
+            can name the real last-pass op of a multi-pass layer directly),
+            where a bare label would be ambiguous (multi-pass bare-label
+            lookups refuse typed), defeating the whole point of
+            ``output_layers`` as "the op that produced this output" (see the
+            identical ``backends/_finalize.py`` fix for the shared preview
+            path).
+            """
+
+            op_log = trace._raw_graph_ws.raw_layer_dict.get(label)
+            if op_log is None:
+                return label
+            return op_log.layer_label if op_log.num_passes == 1 else op_log.label
+
+        trace.output_layers = [_final_label(label) for label in trace.output_layers]
+        # ``trace.input_layers`` needs the identical raw -> final relabel:
+        # left raw, it seeded ``compute_preview_input_output_distances``'s
+        # "input" flood below with RAW labels (``input_1_1_raw``), which adds
+        # the raw string straight into every input op's ``input_ancestors``
+        # (`getattr(starting_op, "input_ancestors").add(starting_label)`),
+        # surviving postprocessing and tripping the ``graph_ordering``
+        # invariant on every capture with ``mark_layer_depths`` on (the
+        # default) -- i.e. nearly every JAX capture.
+        trace.input_layers = [_final_label(label) for label in trace.input_layers]
         trace._layers_logged = True
         trace._layers_saved = True
         trace.has_backward_pass = False
@@ -2131,21 +2273,16 @@ class JAXBackend:
         trace.num_layers_with_params = len(
             {op.layer_label for op in trace.layer_list if op.uses_params}
         )
-        seen_layers: set[str] = set()
-        num_param_tensors = 0
-        num_params = 0
-        num_params_trainable = 0
-        for op_log in trace.layer_list:
-            if op_log.layer_label in seen_layers:
-                continue
-            seen_layers.add(op_log.layer_label)
-            num_param_tensors += op_log.num_param_tensors
-            num_params += op_log.num_params
-            num_params_trainable += op_log.num_params_trainable
-        trace.num_param_tensors = num_param_tensors
-        trace.num_params = num_params
-        trace.num_params_trainable = num_params_trainable
-        trace.num_params_frozen = num_params - num_params_trainable
+        # Parameter-identity basis (see the identical note in
+        # ``_jax_recurrence_assignments``'s sibling counter block above):
+        # a per-layer-label dedup sum still double-counts a param shared
+        # across more than one layer.
+        trace.num_param_tensors = len(trace.param_logs)
+        trace.num_params = sum(param.num_params for param in trace.param_logs)
+        trace.num_params_trainable = sum(
+            param.num_params for param in trace.param_logs if param.is_trainable
+        )
+        trace.num_params_frozen = trace.num_params - trace.num_params_trainable
 
     def _attach_pytree_module_logs(
         self,
@@ -2219,9 +2356,35 @@ class JAXBackend:
             normalized_calls = normalize_op_module_calls(op_log.modules)
             op_log.modules = [f"{address}:{call_index}" for address, call_index in normalized_calls]
             op_log.module = op_log.modules[-1] if op_log.modules else None
+            # ``module_call_stack`` carries the same containment fact as
+            # ``modules`` and must get the identical raw-tuple -> "address:N"
+            # string normalization (torch does this in
+            # ``postprocess/labeling.py``'s ``_replace_layer_names_for_layer_entry``).
+            # Left as raw ``(address, call_index)`` tuples, ``str(item)``
+            # calls elsewhere (e.g. the ``module_attribution`` metadata
+            # invariant's claim collection) stringified them as literal
+            # ``"('fc1', 1)"`` tuple reprs instead of a parseable module
+            # address, so a JAX compute op's attribution never resolved.
+            module_call_stack_calls = normalize_op_module_calls(op_log.module_call_stack)
+            op_log.module_call_stack = [
+                f"{address}:{call_index}" for address, call_index in module_call_stack_calls
+            ]
             parent_call_label: str | None = None
             for module_index, (address, call_index) in enumerate(normalized_calls):
                 call_label = f"{address}:{call_index}"
+                # Torch parity (same population as
+                # ``backends/_finalize.py::populate_object_module_build_data``):
+                # each ModuleCall's own ancestor chain, read by
+                # ``_build_module_logs`` to build ``ModuleCall.module_call_stack``.
+                # Missing here, every JAX ModuleCall's stack stayed empty and
+                # tripped the ``module_hierarchy`` invariant's ancestor-prefix
+                # check for any module nested more than one level deep.
+                if call_label not in mbd["module_call_stacks"]:
+                    mbd["module_call_stacks"][call_label] = [
+                        f"{ancestor_address}:{ancestor_call_index}"
+                        for ancestor_address, ancestor_call_index in normalized_calls[:module_index]
+                        if ancestor_address != "self"
+                    ]
                 if mbd["module_num_calls"][address] < call_index:
                     mbd["module_num_calls"][address] = call_index
                 mbd["module_num_tensors"][address] += 1
@@ -2391,20 +2554,35 @@ class JAXBackend:
         )
 
     def _relabel_jax_graph_edges(self, trace: Trace, raw_to_final: Mapping[str, str]) -> None:
-        """Replace raw graph edge labels with final pass-qualified op labels.
+        """Replace raw graph edge labels with final op labels.
 
         Parameters
         ----------
         trace
             Trace containing materialized raw JAX ops.
         raw_to_final
-            Mapping from raw op labels to final op labels.
+            Mapping from raw op labels to final labels -- a referenced
+            single-pass layer's bare ``layer_label``, a multi-pass layer's
+            pass-qualified ``label`` (torch parity; see ``_finish_trace``).
 
         Returns
         -------
         None
-            Parent, child, parent-position, and edge-use labels are updated in
-            place.
+            Parent, child, lineage-set, parent-position, and edge-use labels
+            are updated in place.
+
+        Notes
+        -----
+        The lineage sets (``input_ancestors``, ``output_descendants``,
+        ``root_ancestors``, ``internal_source_ancestors``,
+        ``internal_source_parents``) are seeded with raw labels at capture
+        time and during the pre-relabel input/output depth flood, exactly
+        like ``parents``/``children``. Omitting them here left raw labels
+        (e.g. ``input_1_1_raw``) surviving postprocessing and tripping the
+        ``graph_ordering`` metadata invariant on every capture whose depth
+        flood touched an op's own lineage set (effectively every capture,
+        since ``_check_graph_ordering`` runs via ``validate_forward_pass`` ->
+        ``check_metadata_invariants``).
         """
 
         for op_log in trace._raw_graph_ws.raw_layer_dict.values():
@@ -2416,6 +2594,20 @@ class JAXBackend:
                 raw_to_final.get(child, child) if isinstance(child, str) else child
                 for child in op_log.children
             ]
+            for lineage_field in (
+                "input_ancestors",
+                "output_descendants",
+                "root_ancestors",
+                "internal_source_ancestors",
+                "internal_source_parents",
+            ):
+                lineage = getattr(op_log, lineage_field, None)
+                if lineage:
+                    relabeled = (
+                        raw_to_final.get(item, item) if isinstance(item, str) else item
+                        for item in lineage
+                    )
+                    setattr(op_log, lineage_field, type(lineage)(relabeled))
             op_log.parent_arg_positions = _relabel_jax_parent_arg_positions(
                 op_log.parent_arg_positions,
                 raw_to_final,
@@ -3804,9 +3996,21 @@ def _projection_has_boundary_parent(projection_op: Any, boundary_op: Any) -> boo
         True when the projection records a control edge from the boundary.
     """
 
+    # TORCH PARITY: ``projection_op``'s control-parent edge resolves through
+    # the CONDITIONAL label map -- the boundary's bare ``layer_label`` when
+    # it is single-pass (the common case; a region boundary is never
+    # recurrence-grouped), its pass-qualified ``label`` only if multi-pass --
+    # so matching only raw/always-qualified labels here permanently missed
+    # every single-pass boundary and reported no control parent at all.
     boundary_labels = {
         label
-        for label in (getattr(boundary_op, "_label_raw", None), getattr(boundary_op, "label", None))
+        for label in (
+            getattr(boundary_op, "_label_raw", None),
+            getattr(boundary_op, "label", None),
+            getattr(boundary_op, "layer_label", None)
+            if getattr(boundary_op, "num_passes", 1) == 1
+            else None,
+        )
         if isinstance(label, str)
     }
     control_parents = _control_parent_labels(projection_op)

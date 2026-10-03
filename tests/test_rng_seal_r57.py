@@ -151,6 +151,61 @@ def test_held_alias_localtime_bound_variable_stays_a_transform() -> None:
 
 
 @pytest.mark.smoke
+def test_call_site_time_arg_proof_skips_interposed_call_bookkeeping(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The bytecode walk-back must not mistake a call-bookkeeping opcode for
+    the last argument instruction (grind-pyver R8).
+
+    Python 3.11 alone splits a call into ``PRECALL`` (dispatch) followed by
+    ``CALL`` (the invocation), with ``PRECALL`` sitting directly before
+    ``CALL`` in the instruction stream -- after the real last argument
+    instruction. A fixed-width slice ending at the ``CALL`` position then
+    swallows ``PRECALL`` as if it were that argument, starving the decode of
+    the actual ``LOAD_CONST(None)`` and misclassifying every held-alias call
+    as monitor uncertainty ("unknown") instead of "now_read" -- the exact
+    3.11-only failure this test pins directly against FABRICATED
+    instructions, so it holds on every interpreter regardless of which
+    Python actually ships ``PRECALL`` today or reintroduces a similar
+    bookkeeping opcode tomorrow.
+    """
+
+    import torchlens.utils.rng as rng_module
+
+    class _FakeInstruction:
+        def __init__(self, offset: int, opname: str, argval: object = None) -> None:
+            self.offset = offset
+            self.opname = opname
+            self.argval = argval
+
+    class _FakeFrame:
+        f_lasti = 100  # the CALL instruction's offset, below
+        f_code = None  # unused by the stubbed get_instructions below
+        f_locals: dict = {}
+        f_globals: dict = {}
+
+    # Mirrors the real 3.11 shape for ``held_localtime(None)``: a LOAD_GLOBAL
+    # for the callable, a LOAD_CONST(None) argument, a PRECALL bookkeeping
+    # opcode, then the CALL at f_lasti.
+    fake_instructions = [
+        _FakeInstruction(0, "LOAD_GLOBAL", "held_localtime"),
+        _FakeInstruction(50, "LOAD_CONST", None),
+        _FakeInstruction(75, "PRECALL"),
+        _FakeInstruction(100, "CALL"),
+    ]
+
+    monkeypatch.setattr(
+        rng_module._dis_module, "get_instructions", lambda code: iter(fake_instructions)
+    )
+    proof = rng_module._call_site_time_arg_proof(_FakeFrame(), argcount=1, time_arg_index=0)
+
+    assert proof == "now_read", (
+        f"PRECALL-interposed call site misclassified as {proof!r}; the walk-back "
+        "must skip call-bookkeeping opcodes to find the real last argument"
+    )
+
+
+@pytest.mark.smoke
 def test_skip_retired_hooks_follows_the_dead_links_own_chain() -> None:
     """A dead THREADING hook found while restoring the sys slot must resolve
     through the dead owner's threading predecessor, not the sys one."""

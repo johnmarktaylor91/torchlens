@@ -3623,13 +3623,20 @@ thread (classifier condition 2), so the ordinal needs no lock; engine-thread
 unpack evidence appends go through the per-trace lock.
 """
 
-#: Degrade-flag vocabulary (provisional strings, E-L9-4 routing): D1-D6.
+#: Degrade-flag vocabulary (provisional strings, E-L9-4 routing): D1-D7.
 _CHECKPOINT_FLAG_CLASSIFIER_UNAVAILABLE = "classifier_unavailable"  # D1
 _CHECKPOINT_FLAG_PATCH_UNAVAILABLE = "patch_unavailable"  # D2
 _CHECKPOINT_FLAG_EXOTIC_SUBCLASS = "exotic_subclass"  # D3
 _CHECKPOINT_FLAG_UNMATCHED_BACKWARD_WARN = "unmatched_backward_warn"  # D4
 _CHECKPOINT_FLAG_REENTRANT_NODE_DISCOVERED = "reentrant_node_discovered"  # D5
 _CHECKPOINT_FLAG_UNWITNESSED_ENTER = "unwitnessed_checkpoint_enter"  # D6
+_CHECKPOINT_FLAG_HOOK_IDENTITY_UNPRESERVED = "hook_identity_unpreserved"  # D7
+
+#: Attribute-name prefix reserved for TorchLens's own hook-wrapper bookkeeping
+#: (``__tl_saved_tensors_hook_scoped__``, ``__tl_checkpoint_token__``,
+#: ``__tl_token_inner__``); every other attribute found on a pack/unpack hook
+#: callable is foreign state the token wrapper must carry forward verbatim.
+_TL_HOOK_ATTR_PREFIX = "__tl_"
 
 #: Reentrant checkpoint node qualname sentinel (venv-verified on torch 2.13,
 #: memo claim A22). GradFn class_qualname is stored module-qualified, so the
@@ -3649,6 +3656,58 @@ def _resolve_checkpoint_hook_cls() -> type | None:
     from ...utils._torch_compat import get_checkpoint_hook_class
 
     return get_checkpoint_hook_class()
+
+
+def _checkpoint_hook_identity_attrs_in_play() -> bool:
+    """Return whether this torch runtime's checkpoint hooks need attr carry-over.
+
+    torch >= 2.14 interposes ``_checkpoint_internal_hook`` (routed through the
+    named ``HAS_CHECKPOINT_INTERNAL_HOOK_CLASS`` capability flag): its
+    ``__enter__``/``__exit__`` stash a private ``_user_hooks`` attribute
+    directly on the pack-hook callable across the enter/exit pair. Absence
+    (torch 2.13 and earlier) means no such state exists to preserve.
+    """
+
+    from ...utils._torch_compat import get_checkpoint_internal_hook_class
+
+    return get_checkpoint_internal_hook_class() is not None
+
+
+def _carry_foreign_hook_attrs(new_hook: Callable[[Any], Any], old_hook: Any) -> bool:
+    """Copy non-TorchLens attributes from ``old_hook`` onto ``new_hook``.
+
+    The checkpoint-token classifier replaces ``context.pack_hook`` /
+    ``context.unpack_hook`` with freshly built token-bearing wrappers. On
+    torch >= 2.14, torch's own ``_checkpoint_internal_hook.__enter__`` has
+    already stashed a private ``_user_hooks`` attribute on the hook object
+    BEFORE the classifier runs (memo 2.3 addendum); dropping it by installing
+    an unrelated wrapper object would make the matching ``__exit__`` raise
+    ``AttributeError`` reaching for state that moved to a different function
+    object -- an exception INSIDE ``__exit__`` that skips torch's own
+    ``_pop_saved_tensors_default_hooks()`` call and permanently corrupts the
+    global saved-tensors-hooks stack for the rest of the process (the
+    261-test cascade this guards against). Returns ``True`` once every
+    foreign attribute copied cleanly; ``False`` means the caller must skip
+    the hook-object replacement entirely (fail closed) rather than install a
+    wrapper torch's own internals cannot find their state on.
+    """
+
+    try:
+        foreign_items = [
+            (key, value)
+            for key, value in vars(old_hook).items()
+            if not key.startswith(_TL_HOOK_ATTR_PREFIX)
+        ]
+    except TypeError:
+        # No __dict__ to read (e.g. a C-level callable): nothing to carry, and
+        # nothing torch's chain could have stashed either -- safe to proceed.
+        return True
+    try:
+        for key, value in foreign_items:
+            setattr(new_hook, key, value)
+    except AttributeError:
+        return False
+    return True
 
 
 def _checkpoint_token_state(trace: Any) -> dict[str, Any]:
@@ -3800,14 +3859,31 @@ def _observe_saved_tensors_hooks_enter(context: Any) -> None:
     # fresh token and installs FRESH wrappers: unwrap any prior token layer
     # through its declared inner so counts never stack across invocations.
     hook_owner: Any = context
-    hook_owner.pack_hook = _token_bearing_pack_hook(
-        trace, token, getattr(hook_owner.pack_hook, "__tl_token_inner__", hook_owner.pack_hook)
+    old_pack_hook = hook_owner.pack_hook
+    old_unpack_hook = hook_owner.unpack_hook
+    new_pack_hook = _token_bearing_pack_hook(
+        trace, token, getattr(old_pack_hook, "__tl_token_inner__", old_pack_hook)
     )
-    hook_owner.unpack_hook = _token_bearing_unpack_hook(
-        trace,
-        token,
-        getattr(hook_owner.unpack_hook, "__tl_token_inner__", hook_owner.unpack_hook),
+    new_unpack_hook = _token_bearing_unpack_hook(
+        trace, token, getattr(old_unpack_hook, "__tl_token_inner__", old_unpack_hook)
     )
+    if _checkpoint_hook_identity_attrs_in_play() and not (
+        _carry_foreign_hook_attrs(new_pack_hook, old_pack_hook)
+        and _carry_foreign_hook_attrs(new_unpack_hook, old_unpack_hook)
+    ):
+        # Fail closed (memo 2.3 addendum, torch >= 2.14): this torch runtime's
+        # checkpoint internals keep private cross-call identity state
+        # directly on the hook callable that the token wrapper could not
+        # carry forward safely. Installing it anyway would desync torch's
+        # own __exit__ accounting and corrupt its global hook stack for the
+        # rest of the process. Roll back the mint and leave the already-
+        # scoped hooks untouched: no token for this enter, degrade instead.
+        del state["tokens"][token]
+        state["next_ordinal"] = token
+        _flag_checkpoint_degrade(trace, _CHECKPOINT_FLAG_HOOK_IDENTITY_UNPRESERVED)
+        return
+    hook_owner.pack_hook = new_pack_hook
+    hook_owner.unpack_hook = new_unpack_hook
     _ensure_backward_event_stream(trace).append_backward(
         CheckpointInvocationObserved(token=token, timestamp=time.time())
     )

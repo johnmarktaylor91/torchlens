@@ -11,6 +11,7 @@ import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is
 
 from ... import _state
 from ...utils._torch_compat import tensor_version_or_none
+from .buffer_writes import peek_buffer_write_tracker
 from .escape_detection import (
     ExpectedOriginalToken,
 )
@@ -416,7 +417,7 @@ def _has_state_toctou_watch(trace: Any) -> bool:
         ``True`` when buffer/parameter write tracking has live state snapshots.
     """
 
-    tracker = getattr(trace, "_buffer_write_tracker", None)
+    tracker = peek_buffer_write_tracker(trace)
     if tracker is None:
         return False
     param_snapshots = getattr(tracker, "address_to_param_snapshot", None)
@@ -440,7 +441,7 @@ def _sample_state_toctou_at_consumption(state: _WitnessState, consumed_ptrs: set
         ``True`` when an opaque state write-back was detected and recorded.
     """
 
-    tracker = getattr(state.trace, "_buffer_write_tracker", None)
+    tracker = peek_buffer_write_tracker(state.trace)
     if tracker is None:
         return False
     if _sample_param_toctou_at_consumption(state, tracker, consumed_ptrs):

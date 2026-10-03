@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, cast
 
 from ... import _state
+from ..._deprecations import MISSING, MissingType
 from ..._trace_core.relation_views import freeze_trace_relation_views
 from ...backends import BackendName
 from ...capture.outcome import stamp_backend_finalized
@@ -16,6 +17,7 @@ from ...data_classes.param import ParamAccessor
 from ...data_classes.trace import Trace
 from ...intervention.selectors import BaseSelector
 from ...ir.capture_events import CaptureEvents
+from ...options import CaptureOptions, merge_capture_options
 from ...postprocess._materialize import materialize_from_events
 from ...postprocess._selective_save import (
     _STATIC_SELECTOR_KINDS,
@@ -38,6 +40,7 @@ from .._options import (
     is_missing,
     reject_extra_trace_kwargs,
     reject_unsupported_trace_options,
+    resolve_optional_capture_field,
 )
 from ..registry import BackendUnsupportedError, get_backend_spec
 from .funcgraph import capture_static_funcgraph
@@ -86,35 +89,36 @@ class TFBackend:
         input_args: object,
         input_kwargs: dict[Any, Any] | None = None,
         *,
-        layers_to_save: str | list[Any] | None = "all",
-        keep_orphans: bool = False,
-        output_device: str = "same",
+        layers_to_save: str | list[Any] | None | MissingType = MISSING,
+        keep_orphans: bool | MissingType = MISSING,
+        output_device: str | MissingType = MISSING,
         activation_transform: object | None = None,
         save_raw_activations: bool = True,
-        detach_saved_activations: bool = False,
+        detach_saved_activations: bool | MissingType = MISSING,
         save_grads: bool | str | list[Any] | object | None = None,
         random_seed: int | None = None,
         num_context_lines: int = 7,
-        save_arg_values: bool = False,
-        save_code_context: bool = False,
-        save_rng_states: bool = False,
-        recurrence_detection: bool = True,
-        compute_input_output_distances: bool = True,
-        verbose: bool = False,
-        backward_ready: bool = False,
+        save_arg_values: bool | MissingType = MISSING,
+        save_code_context: bool | MissingType = MISSING,
+        save_rng_states: bool | MissingType = MISSING,
+        recurrence_detection: bool | MissingType = MISSING,
+        compute_input_output_distances: bool | MissingType = MISSING,
+        verbose: bool | MissingType = MISSING,
+        backward_ready: bool | MissingType = MISSING,
         name: str | None = None,
         module_filter: object | None = None,
         transform: object | None = None,
         raw_input: object | None = None,
-        save_raw_input: str | bool = "small",
-        batch_render: str = "auto",
+        save_raw_input: str | bool | MissingType = MISSING,
+        batch_render: str | MissingType = MISSING,
         output_transform: object | None = None,
-        save_raw_output: str | bool = "small",
+        save_raw_output: str | bool | MissingType = MISSING,
         layer_visualizers: dict[Any, Any] | None = None,
-        save_visualizations: bool = False,
+        save_visualizations: bool | MissingType = MISSING,
         module_identity_mode: str | None = None,
         grad_options: Any | None = None,
         intervene: Any | None = None,
+        capture: CaptureOptions | None = None,
         **extra_kwargs: Any,
     ) -> Trace:
         """Capture one TensorFlow eager forward into a ``Trace``.
@@ -136,36 +140,79 @@ class TFBackend:
             Materialized TensorFlow trace.
         """
 
-        layers_to_save = default_if_missing(layers_to_save, "all")
-        keep_orphans = default_if_missing(keep_orphans, False)
-        output_device = default_if_missing(output_device, "same")
+        # N5 fix: ``trace()`` no longer passes these as flat kwargs at all --
+        # see the matching comment in ``backends/jax/backend.py``.
+        capture_options = merge_capture_options(
+            capture=capture,
+            layers_to_save=layers_to_save,
+            keep_orphans=keep_orphans,
+            output_device=output_device,
+            detach_saved_activations=detach_saved_activations,
+            save_arg_values=save_arg_values,
+            save_code_context=save_code_context,
+            save_rng_states=save_rng_states,
+            recurrence_detection=recurrence_detection,
+            compute_input_output_distances=compute_input_output_distances,
+            verbose=verbose,
+            backward_ready=backward_ready,
+            save_raw_input=save_raw_input,
+            batch_render=batch_render,
+            save_raw_output=save_raw_output,
+            save_visualizations=save_visualizations,
+        )
+        layers_to_save = capture_options.layers_to_save
+        keep_orphans = capture_options.keep_orphans
+        output_device = capture_options.output_device
+        detach_saved_activations = capture_options.detach_saved_activations
+        save_arg_values = capture_options.save_arg_values
+        save_code_context = capture_options.save_code_context
+        save_rng_states = capture_options.save_rng_states
+        recurrence_detection = capture_options.recurrence_detection
+        compute_input_output_distances = capture_options.compute_input_output_distances
+        verbose = capture_options.verbose
+        backward_ready = capture_options.backward_ready
+        save_raw_input = capture_options.save_raw_input
+        batch_render = capture_options.batch_render
+        save_raw_output = capture_options.save_raw_output
+        save_visualizations = capture_options.save_visualizations
+        save_grads = resolve_optional_capture_field(capture, "save_grads", save_grads)
+        random_seed = resolve_optional_capture_field(capture, "random_seed", random_seed)
+        name = resolve_optional_capture_field(capture, "name", name)
+        module_filter = resolve_optional_capture_field(capture, "module_filter", module_filter)
+        transform = resolve_optional_capture_field(capture, "transform", transform)
+        output_transform = resolve_optional_capture_field(
+            capture, "output_transform", output_transform
+        )
+        layer_visualizers = resolve_optional_capture_field(
+            capture, "layer_visualizers", layer_visualizers
+        )
+        module_identity_mode = resolve_optional_capture_field(
+            capture, "module_identity_mode", module_identity_mode
+        )
+        # layers_to_save/keep_orphans/output_device/detach_saved_activations/
+        # save_arg_values/save_code_context/save_rng_states/
+        # recurrence_detection/compute_input_output_distances/verbose/
+        # backward_ready/save_raw_input/batch_render/save_raw_output/
+        # save_visualizations are CaptureOptions-native fields: the
+        # ``capture_options.<field>`` reads above already resolved each one to
+        # its concrete (non-MISSING) default via ``merge_capture_options``,
+        # with the same backend-local defaults this block used to re-apply.
+        # Re-running ``default_if_missing`` on an already-concrete value was a
+        # no-op at runtime, but it widened mypy's view of the variable back to
+        # its MISSING-including parameter type (``default_if_missing`` returns
+        # ``Any``, which does not narrow); resolving once at the merge
+        # boundary is the fix, not a second pass here.
         activation_transform = default_if_missing(activation_transform, None)
         save_raw_activations = default_if_missing(save_raw_activations, True)
-        detach_saved_activations = default_if_missing(detach_saved_activations, False)
         save_grads = default_if_missing(save_grads, None)
         random_seed = default_if_missing(random_seed, None)
         num_context_lines = default_if_missing(num_context_lines, 7)
-        save_arg_values = default_if_missing(save_arg_values, False)
-        save_code_context = default_if_missing(save_code_context, False)
-        save_rng_states = default_if_missing(save_rng_states, False)
-        recurrence_detection = default_if_missing(recurrence_detection, True)
-        # Torch-parity default: the depth flood runs unless explicitly disabled.
-        # This line was the one omission from this normalization block, so the
-        # public MISSING sentinel reached bool() truthy and the flood was
-        # unconditionally on with no off switch.
-        compute_input_output_distances = default_if_missing(compute_input_output_distances, True)
-        verbose = default_if_missing(verbose, False)
-        backward_ready = default_if_missing(backward_ready, False)
         name = default_if_missing(name, None)
         module_filter = default_if_missing(module_filter, None)
         transform = default_if_missing(transform, None)
         raw_input = default_if_missing(raw_input, None)
-        save_raw_input = default_if_missing(save_raw_input, "small")
-        batch_render = default_if_missing(batch_render, "auto")
         output_transform = default_if_missing(output_transform, None)
-        save_raw_output = default_if_missing(save_raw_output, "small")
         layer_visualizers = default_if_missing(layer_visualizers, None)
-        save_visualizations = default_if_missing(save_visualizations, False)
         module_identity_mode = default_if_missing(module_identity_mode, None)
         grad_options = default_if_missing(grad_options, None)
         intervene = default_if_missing(intervene, None)

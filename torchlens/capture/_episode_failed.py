@@ -103,7 +103,11 @@ def _failed_step_counts(
 
     started = 0
     returned: int | None = None
-    events = getattr(trace, "_capture_events", None) or getattr(trace, "capture_events", None)
+    try:
+        events = trace._capture_events
+    except AttributeError:
+        events = None
+    events = events or getattr(trace, "capture_events", None)
     enter_events = getattr(events, "module_enter_events", None) if events else None
     if enter_events:
         started = sum(
@@ -114,7 +118,10 @@ def _failed_step_counts(
             1 for event in exit_events if getattr(event, "address", None) == resolved.address
         )
     else:
-        raw_ws = getattr(trace, "_raw_graph_ws", None)
+        try:
+            raw_ws = trace._raw_graph_ws
+        except AttributeError:
+            raw_ws = None
         raw_layers = getattr(raw_ws, "raw_layer_dict", None) or {}
         for raw_op in raw_layers.values():
             for entry in getattr(raw_op, "modules", ()) or ():

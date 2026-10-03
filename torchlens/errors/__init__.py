@@ -57,6 +57,10 @@ _LEGACY_EXCEPTION_PATHS = {
         "torchlens._robustness",
         "UnsupportedTensorVariantError",
     ),
+    "SubclassConstructionUnderDispatchModeError": (
+        "torchlens.backends.torch._modes",
+        "SubclassConstructionUnderDispatchModeError",
+    ),
     "TrainingModeConfigError": ("torchlens._training_validation", "TrainingModeConfigError"),
     "RecordingConfigError": ("torchlens.fastlog.exceptions", "RecordingConfigError"),
     "InvalidStorageError": ("torchlens.fastlog.exceptions", "InvalidStorageError"),

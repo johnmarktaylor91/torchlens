@@ -26,8 +26,20 @@ pytestmark = pytest.mark.skipif(
     reason="torch.distributed gloo unavailable",
 )
 
-from torchlens.distributed import _lifecycle as lifecycle  # noqa: E402
+from torchlens.distributed import _lifecycle as lifecycle, has_vetted_snapshot  # noqa: E402
 from torchlens.distributed._lifecycle import AmbiguousGroupLifetimeError  # noqa: E402
+
+# F1 ruling (Lead, 2026-10-01): full collective arming only runs where a
+# census-vetted torch build exists (torchlens.distributed.has_vetted_snapshot());
+# on an unvetted torch, arm() fails closed with UncapturedCollectiveOpError.
+# Only the two classes below call a real arm() expecting success;
+# TestAutoArmProbeDisclosure exercises the lazy auto-arm probe-failure path,
+# which is unrelated to vetting and must keep running everywhere.
+requires_vetted_snapshot = pytest.mark.skipif(
+    not has_vetted_snapshot(),
+    reason="full collective arming requires a census-vetted torch build "
+    "(torchlens.distributed.has_vetted_snapshot() is False here)",
+)
 
 
 @pytest.fixture()
@@ -59,6 +71,7 @@ def gloo_world(tmp_path, clean_lifecycle):
             dist.destroy_process_group()
 
 
+@requires_vetted_snapshot
 class TestArmEpochProbeFailClosed:
     def test_probe_exception_stamps_seeded_not_complete_witness(self, clean_lifecycle, monkeypatch):
         def raising_is_initialized() -> bool:
@@ -84,6 +97,7 @@ class TestArmEpochProbeFailClosed:
         assert record.install_epoch == "armed_before_any_group"
 
 
+@requires_vetted_snapshot
 class TestEnumerationGapsFailClosed:
     def test_unenumerable_creation_poisons_identities_and_seeding(self, gloo_world, monkeypatch):
         dist = gloo_world

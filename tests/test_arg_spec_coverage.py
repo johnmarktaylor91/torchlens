@@ -236,7 +236,6 @@ _KNOWN_UNSUPPORTED_ARG_SPEC_REASONS = {
     "standardgammagrad": "demoted fragment: schema mismatch: missing_positions=[], extra_positions=[1], missing_names=[]",
     "symite": "Python/operator protocol helper with nonstandard callable metadata",
     "symsqrt": "Python/operator protocol helper with nonstandard callable metadata",
-    "symsum": "Python/operator protocol helper with nonstandard callable metadata",
     "testautogradmultipledispatch": "autograd/backward helper left on dynamic fallback pending gradient schema audit",
     "testautogradmultipledispatchview": "autograd/backward helper left on dynamic fallback pending gradient schema audit",
     "testautogradmultipledispatchviewcopy": "autograd/backward helper left on dynamic fallback pending gradient schema audit",
@@ -305,6 +304,12 @@ _TORCH_VERSION_VARYING_UNSUPPORTED = frozenset(
         "expandsinglevalue",
         "jitunused",
         "listorempty",
+        # Decorated on the other pinned CI legs but absent on torch 2.7.1 (the
+        # Nightly fast-tier leg, discovered 2026-10): internal fan-mode /
+        # nonlinearity-type helpers used by torch.nn.init's kaiming
+        # calculations, torch-version-varying like the rest of this ledger.
+        "fanmode",
+        "nonlinearitytype",
     }
 )
 

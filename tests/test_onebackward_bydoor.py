@@ -18,8 +18,14 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens.attribution import onebackward as ob
 from torchlens.selection import SelectionError
+from torchlens.utils._torch_compat import get_gradient_edge_support
 
 pytestmark = pytest.mark.smoke
+
+_requires_gradient_edge = pytest.mark.skipif(
+    not get_gradient_edge_support(),
+    reason="one-backward reads require torch.autograd.graph.GradientEdge (2.4+)",
+)
 
 
 def _trace(**kwargs) -> tl.Trace:
@@ -44,6 +50,7 @@ def _site_table(trace: tl.Trace) -> ob.ReadTable:
 class TestSiteGrainRanking:
     """Site-grain: k counts SITES; a win selects the whole existing mask."""
 
+    @_requires_gradient_edge
     def test_top_k_selects_highest_scored_sites(self) -> None:
         trace = _trace()
         table = _site_table(trace)
@@ -60,6 +67,7 @@ class TestSiteGrainRanking:
                 "a site-grain win must select the complete site mask"
             )
 
+    @_requires_gradient_edge
     def test_top_fraction_and_largest_false(self) -> None:
         trace = _trace()
         table = _site_table(trace)
@@ -70,6 +78,7 @@ class TestSiteGrainRanking:
         (winner,) = [entry for entry in bottom if entry.selected_count]
         assert winner.site_key == lowest[1]
 
+    @_requires_gradient_edge
     def test_threshold_site_grain(self) -> None:
         trace = _trace()
         table = _site_table(trace)
@@ -79,6 +88,7 @@ class TestSiteGrainRanking:
             row.address for row in table.rows() if row.score > cut
         }
 
+    @_requires_gradient_edge
     def test_k_over_population_refuses(self) -> None:
         trace = _trace()
         table = _site_table(trace)
@@ -86,6 +96,7 @@ class TestSiteGrainRanking:
             tl.top_k(k=99, by=table).resolve(trace)
         assert excinfo.value.fields["reason"] == "population_too_small"
 
+    @_requires_gradient_edge
     def test_provenance_carries_metric_and_counts(self) -> None:
         trace = _trace()
         table = _site_table(trace)
@@ -98,12 +109,14 @@ class TestSiteGrainRanking:
 class TestElementGrainRanking:
     """Element-grain: dense values rank globally; k counts elements."""
 
+    @_requires_gradient_edge
     def test_top_k_elements(self) -> None:
         trace = _trace()
         table = ob.read(trace, target=ob.seed("output_1", index=(0, 0)), method="grad", reduce=None)
         resolved = tl.top_k(k=3, by=table).resolve(trace)
         assert sum(entry.selected_count for entry in resolved) == 3
 
+    @_requires_gradient_edge
     def test_element_threshold(self) -> None:
         trace = _trace()
         table = ob.read(trace, target=ob.seed("output_1", index=(0, 0)), method="grad", reduce=None)
@@ -115,6 +128,7 @@ class TestElementGrainRanking:
 class TestByDoorContract:
     """D9 at the door: foreign/stale/multi-target/coverage refusals."""
 
+    @_requires_gradient_edge
     def test_foreign_table_refuses(self) -> None:
         trace_a, trace_b = _trace(), _trace()
         table = _site_table(trace_a)
@@ -123,6 +137,7 @@ class TestByDoorContract:
         assert excinfo.value.fields["code"] == "by_score_invalid"
         assert excinfo.value.fields["reason"] == "by_table_foreign"
 
+    @_requires_gradient_edge
     def test_stale_table_refuses_after_cleanup(self) -> None:
         trace = _trace()
         table = _site_table(trace)
@@ -132,6 +147,7 @@ class TestByDoorContract:
             selection.resolve(trace)
         assert excinfo.value.fields["reason"] in ("by_table_foreign", "by_table_stale")
 
+    @_requires_gradient_edge
     def test_multi_target_requires_explicit_fold(self) -> None:
         trace = _trace()
         table = ob.read(
@@ -152,6 +168,7 @@ class TestByDoorContract:
         folded = tl.top_k(k=1, by=folded_table).resolve(trace)
         assert any(entry.selected_count for entry in folded)
 
+    @_requires_gradient_edge
     def test_explicit_population_not_covered(self) -> None:
         trace = _trace()
         table = ob.read(
@@ -180,6 +197,7 @@ class TestByDoorContract:
 class TestCompositionRows:
     """M(reads) section 6 composition rows at toy scale."""
 
+    @_requires_gradient_edge
     def test_table_selection_composes_with_algebra(self) -> None:
         trace = _trace()
         table = _site_table(trace)
@@ -189,6 +207,7 @@ class TestCompositionRows:
         narrowed = tl.top_k(k=2, by=table) - tl.units("gelu_1_2", [(0, 0)])
         assert narrowed.resolve(trace) is not None
 
+    @_requires_gradient_edge
     def test_closed_loop_read_select_intervene_reread(self) -> None:
         """read -> top-k -> zero_ablate -> re-score: the R16 flagship loop."""
 
@@ -208,6 +227,7 @@ class TestCompositionRows:
         assert len(rescored) > 0
         assert rescored.trace is fork
 
+    @_requires_gradient_edge
     def test_within_and_frozen_on_one_call(self) -> None:
         """Composition row: within= x frozen= on one read."""
 
@@ -224,6 +244,7 @@ class TestCompositionRows:
         assert row.address == ("linear_1_1", 1)
         assert table.provenance.frozen_policy == "explicit"
 
+    @_requires_gradient_edge
     def test_multipass_addresses_rank_distinctly(self) -> None:
         """Recurrence row: pass-qualified addresses are distinct table rows."""
 

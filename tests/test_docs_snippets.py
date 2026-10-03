@@ -4,8 +4,13 @@ Two gates live here:
 
 * the per-block gate over the P2 ``docs/`` pages (``DOC_FILES``), and
 * the canonical-page gate that EXECUTES every non-sketch Python fence in
-  ``README.md`` and ``AGENTS.md`` (``CLAUDE.md`` only imports it) top to bottom, statement by
-  statement, in one shared namespace per page.
+  ``README.md`` plus AGENTS.md's former "Common Patterns" and "Architecture" code
+  (``CLAUDE.md`` only imports AGENTS.md) top to bottom, statement by statement, in one
+  shared namespace per page. The 2026-10-01 docs move ("docs: move agent reference
+  material out of startup instructions") relocated those two fences out of AGENTS.md
+  into ``docs/agent-reference/common-patterns.md`` and
+  ``docs/agent-reference/architecture.md``, which this gate now reads directly;
+  AGENTS.md itself carries no fences any more (just "Required reading" pointers).
 
 The canonical-page ambient contract is deliberately tiny: the harness injects
 only the names the pages' prose treats as application-supplied -- ``model`` and
@@ -194,7 +199,13 @@ def test_doc_python_blocks_run_reference_views(
     _run_doc_block(file_name, block_index, code, tmp_path)
 
 
-CANONICAL_PAGES = ("README.md", "AGENTS.md")
+#: AGENTS.md's own fences moved during the 2026-10-01 docs move (see the module
+#: docstring); these two pages carry the content "AGENTS.md" used to name here.
+CANONICAL_PAGES = (
+    "README.md",
+    "docs/agent-reference/common-patterns.md",
+    "docs/agent-reference/architecture.md",
+)
 _SKETCH_MARKER_RE = re.compile(r"^\s*#.*\bAPI sketch\b", re.IGNORECASE)
 _OPTIONAL_AMBIENT_NAMES = frozenset({"tf_model", "tf_x"})
 
@@ -375,6 +386,32 @@ def test_collapse_reference_gallery_exists_and_is_regenerable() -> None:
 #: coverage; a NEW page must either join DOC_FILES or take a reasoned row
 #: here in the same change.
 DOC_FENCE_EXEMPT: dict[str, str] = {
+    # 2026-10-01 docs move ("docs: move agent reference material out of startup
+    # instructions"): these two pages carry the fences the canonical AGENTS.md gate
+    # used to execute directly; CANONICAL_PAGES now reads them by this path, so they
+    # are covered there, not by the per-block DOC_FILES mechanism.
+    "agent-reference/common-patterns.md": (
+        "executed end-to-end by test_canonical_page_python_blocks_execute "
+        "(moved from AGENTS.md's Common Patterns section)"
+    ),
+    "agent-reference/architecture.md": (
+        "executed end-to-end by test_canonical_page_python_blocks_execute "
+        "(moved from AGENTS.md's Architecture section's "
+        "'Common unified capture patterns' fence)"
+    ),
+    # Same docs move relocated torchlens/AGENTS.md's "Current 2.x Surface" prose
+    # (never itself part of CANONICAL_PAGES or DOC_FILES, so never executed) into
+    # docs/, where this lint sees it for the first time. The fences are illustrative
+    # sketches over backends/inputs the canonical ambient does not provide
+    # (paddle_model/paddle_x, raw_text/text_to_tensor, block1/block2 submodules).
+    "agent-reference/package/public-surface.md": (
+        "illustrative surface-listing fragments (paddle/raw_text/block1-block2 "
+        "ambient names undefined), not runnable programs"
+    ),
+    "agent-reference/package/architecture-overview.md": (
+        "illustrative surface-listing fragments (paddle/raw_text/block1-block2 "
+        "ambient names undefined), not runnable programs"
+    ),
     "reference/stats.md": (
         "executed end-to-end by tests/test_unhide_surfaces.py::"
         "test_stats_doc_python_fences_execute (needs the ambient demo model)"

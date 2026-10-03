@@ -483,3 +483,35 @@ def test_grad_cam_without_any_spatial_input_keeps_original_error() -> None:
         match="requires an input tensor with spatial dimensions",
     ):
         attribution.grad_cam(model, decoy, target=0, layer="conv")
+
+
+def test_autograd_leaf_variable_ids_survives_a_long_chain() -> None:
+    """A multi-hop autograd walk must not lose the leaf to a recycled id().
+
+    ``grad_fn.next_functions`` mints a FRESH Python wrapper around the
+    underlying autograd node on every access. ``_autograd_leaf_variable_ids``
+    walks that graph with a "seen" set; if the set only remembers each
+    node's bare ``id()`` instead of the node object itself, nothing keeps a
+    just-processed wrapper alive once it is popped off the stack, and
+    CPython is free to recycle its exact address for the NEXT node minted
+    during the same walk. A long enough chain (observed on torch 2.7.1 for
+    as few as 3 hops: Conv2d -> ReLU -> AvgPool2d) then has a later node's
+    address alias an earlier, already-"seen" one, which makes the walk
+    falsely stop before ever reaching the real input leaf's
+    ``AccumulateGrad`` node -- silently losing dependency-proven feeders.
+    """
+
+    from torchlens.attribution._layer import _autograd_leaf_variable_ids
+
+    leaf = torch.randn(1, 2, 4, 4).requires_grad_(True)
+    value = leaf
+    # Chain enough distinct autograd nodes that an id()-only "seen" set has
+    # room to alias a freed wrapper's address against a later one.
+    for _ in range(8):
+        value = torch.relu(value)
+        value = value * 1.0
+    activation = value
+
+    found = _autograd_leaf_variable_ids((activation,))
+
+    assert id(leaf) in found

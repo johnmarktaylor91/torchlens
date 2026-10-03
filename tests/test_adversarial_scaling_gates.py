@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import sys
 import warnings
+from collections.abc import Callable
 
 import pytest
 import torch
@@ -286,12 +287,56 @@ def _stack_depth() -> int:
     return depth
 
 
-#: Recursion headroom PINNED for the depth-overflow gate, measured 2026-08-19 at
-#: ``NEST_DEPTH_OVERFLOW == 400``: the untraced forward needs 1608 frames and the
-#: captured one needs 2032 (the ~1 extra decorated_forward frame per module call,
-#: x400). Any value strictly inside that window makes the gate mean what it says.
-#: It must NOT be inherited from the ambient limit -- see the test docstring.
-NEST_OVERFLOW_HEADROOM = 1800
+#: Safety margin ADDED to the measured minimal-working untraced recursion limit
+#: (see ``_minimal_recursion_limit`` below) to pick the gate's pinned test limit.
+#: TorchLens adds one ``decorated_forward`` frame per module call, so capturing
+#: ``NEST_DEPTH_OVERFLOW`` nested modules needs roughly ``NEST_DEPTH_OVERFLOW``
+#: more frames than running them untraced -- a window of several hundred frames
+#: at the current ``NEST_DEPTH_OVERFLOW == 400``. This margin must stay small
+#: relative to that window so the chosen limit always lands strictly between
+#: the untraced and captured requirements; it must NOT be a fixed ABSOLUTE
+#: frame count for either requirement, because those shift with interpreter
+#: internals (grind-pyver R9: Python 3.12 shrank the untraced requirement from
+#: 1608 to 1210 measured frames at this depth, a fixed 1800-frame headroom off
+#: the old calibration then exceeded the new ~1666-frame captured requirement
+#: too, and the gate stopped raising RecursionError at all). Measuring the
+#: untraced minimum live, every run, is interpreter-version-agnostic by
+#: construction.
+NEST_RECURSION_SAFETY_MARGIN = 150
+
+
+def _minimal_recursion_limit(fn: Callable[[], None], lo: int, hi: int) -> int:
+    """Binary-search the minimal ``sys.setrecursionlimit()`` value at which
+    ``fn()`` completes without ``RecursionError``.
+
+    ``hi`` must already be a known-working ceiling (asserted here so a too-low
+    caller-supplied bracket fails loudly instead of silently returning a wrong
+    answer). CPython additionally refuses to LOWER the limit below the
+    caller's current actual stack depth, itself raising ``RecursionError`` at
+    the ``sys.setrecursionlimit()`` call rather than at ``fn()`` -- both cases
+    mean "this limit does not work" and are treated identically here.
+    """
+
+    original_limit = sys.getrecursionlimit()
+
+    def _works(limit: int) -> bool:
+        try:
+            sys.setrecursionlimit(limit)
+            fn()
+            return True
+        except RecursionError:
+            return False
+        finally:
+            sys.setrecursionlimit(original_limit)
+
+    assert _works(hi), f"search ceiling {hi} does not work; widen the bracket"
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if _works(mid):
+            hi = mid
+        else:
+            lo = mid + 1
+    return lo
 
 
 @pytest.mark.smoke
@@ -303,25 +348,35 @@ def test_depth_overflow_fails_clean_and_restores() -> None:
     RecursionError propagates, the typed CaptureAttemptFailedWarning discloses
     the restore, and an immediate follow-up capture is fully sane.
 
-    The limit is PINNED rather than inherited, and the untraced premise is
-    ASSERTED, because relying on the ambient limit made this gate both fragile
-    and tautological (2026-08-19):
+    The limit is MEASURED rather than inherited or pinned to a fixed absolute
+    frame count, and the untraced premise is ASSERTED, because relying on the
+    ambient limit made this gate both fragile and tautological (2026-08-19):
 
-    * At the default 1000 the untraced forward ALSO overflows (it needs 1608),
-      so the test passed while proving only "400 nesting levels overflow",
-      never "capture is what tips it".
+    * At the default 1000 the untraced forward ALSO overflows, so the test
+      passed while proving only "400 nesting levels overflow", never "capture
+      is what tips it".
     * ``jedi/api/__init__.py`` calls ``sys.setrecursionlimit(3000)`` at import
       time and never restores it. Any earlier test importing IPython (jedi is a
-      dependency) silently raised the ceiling above the captured requirement of
-      2032, so the gate could not fire at all -- it passed alone and failed in
-      a full session, which is the wrong way round for an adversarial gate.
+      dependency) silently raised the ceiling above the captured requirement,
+      so the gate could not fire at all -- it passed alone and failed in a
+      full session, which is the wrong way round for an adversarial gate.
+
+    A fixed PINNED absolute frame count has the same failure mode one level up
+    (grind-pyver R9): it is calibrated against whichever interpreter happened
+    to run the calibration, and a later interpreter that needs a different
+    number of frames per call silently drifts the gate out of its window
+    (Python 3.12 did exactly this). Measuring the untraced minimum fresh, every
+    run, is immune to that by construction.
     """
 
     model = _nested_sequential(NEST_DEPTH_OVERFLOW)
     inputs = torch.randn(1, 4)
     original_limit = sys.getrecursionlimit()
-    sys.setrecursionlimit(_stack_depth() + NEST_OVERFLOW_HEADROOM)
+    search_floor = _stack_depth() + 50
+    search_ceiling = _stack_depth() + 6000
     try:
+        untraced_min = _minimal_recursion_limit(lambda: model(inputs), search_floor, search_ceiling)
+        sys.setrecursionlimit(untraced_min + NEST_RECURSION_SAFETY_MARGIN)
         # The premise, asserted: without capture this model runs fine at this
         # limit. If this ever raises, the gate below proves nothing.
         model(inputs)

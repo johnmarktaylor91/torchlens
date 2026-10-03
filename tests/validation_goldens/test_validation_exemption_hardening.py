@@ -17,8 +17,11 @@ from torchlens.validation.exemptions import (
     SKIP_VALIDATION_ENTIRELY,
     _binary_extrema_nonperturbed_arg_dominates,
     _check_getitem_exempt,
+    _check_norm_running_stat_exempt,
     _check_scatter_exempt,
+    _check_scatter_or_index_domain_exempt,
     _check_setitem_exempt,
+    _check_zipped_sibling_exempt,
     _posthoc_overwrite_decision,
     _scatter_index_fully_overwrites_dim,
     perturbed_layer_at_structural_position,
@@ -26,7 +29,13 @@ from torchlens.validation.exemptions import (
 from torchlens.validation.invariants import (
     MetadataInvariantError,
     _check_backend_neutral_graph_topology,
+    _check_branching_invariants,
+    _check_layer_pass_to_layer_log_xrefs,
+    _check_non_torch_backward_inert,
+    _check_non_torch_primitive_op_inert,
     _check_pass_count_consistency,
+    _check_receptive_field_metadata_invariants,
+    _check_site_key_invariants,
     check_metadata_invariants,
 )
 from torchlens.validation.status import ValidationReplayStatus
@@ -2341,3 +2350,259 @@ def test_pass_count_consistency_invariant_fires_on_op_count_mismatch() -> None:
 
     with pytest.raises(MetadataInvariantError, match="pass_count_consistency"):
         _check_pass_count_consistency(trace)
+
+
+# ---------------------------------------------------------------------------
+# Mutation-margin arming: registry survivors W4 (killing tests, not CI repair;
+# each kills the whole-function "return None" disarm mutant_driver.py plants
+# on the named METADATA_INVARIANT_CONTRACTS entry). Each check is a duck-typed
+# pure function of its argument, so a synthetic SimpleNamespace fake proves
+# the real violation path without needing a real capture to coincidentally
+# reach it.
+# ---------------------------------------------------------------------------
+
+
+def test_branching_invariant_fires_on_stale_is_branching_flag() -> None:
+    """A trace claiming ``is_branching`` with no multi-child layer must raise."""
+
+    fake_trace = SimpleNamespace(
+        is_branching=True,
+        layer_list=[SimpleNamespace(children=[]), SimpleNamespace(children=["only_child"])],
+    )
+
+    with pytest.raises(MetadataInvariantError, match="branching_invariants"):
+        _check_branching_invariants(fake_trace)  # type: ignore[arg-type]
+
+
+def test_layer_pass_layer_log_xrefs_fires_on_label_key_mismatch() -> None:
+    """A layer_logs entry whose key disagrees with its own label must raise."""
+
+    mismatched_layer = SimpleNamespace(
+        layer_label="real_label_1_1",
+        num_passes=1,
+        ops={1: SimpleNamespace(pass_index=1, layer_label="real_label_1_1")},
+    )
+    fake_trace = SimpleNamespace(layer_logs={"stale_key_1_1": mismatched_layer})
+
+    with pytest.raises(MetadataInvariantError, match="layer_pass_layer_log_xrefs"):
+        _check_layer_pass_to_layer_log_xrefs(fake_trace)  # type: ignore[arg-type]
+
+
+def test_layer_pass_layer_log_xrefs_fires_on_ops_key_mismatch() -> None:
+    """Arm 1: a layer's ``ops`` keys must match ``range(1, num_passes + 1)``.
+
+    (M1 raise-arm campaign: ``layer_pass_layer_log_xrefs#a01`` survivor --
+    the label-mismatch killer above trips arm 0 first, leaving this arm
+    unexercised.)
+    """
+
+    matching_label = "real_label_1_1"
+    layer_with_wrong_keys = SimpleNamespace(
+        layer_label=matching_label,
+        num_passes=1,
+        ops={2: SimpleNamespace(pass_index=2, layer_label=matching_label)},
+    )
+    fake_trace = SimpleNamespace(layer_logs={matching_label: layer_with_wrong_keys})
+
+    with pytest.raises(MetadataInvariantError, match="layer_pass_layer_log_xrefs"):
+        _check_layer_pass_to_layer_log_xrefs(fake_trace)  # type: ignore[arg-type]
+
+
+def test_pass_count_consistency_fires_on_ops_key_mismatch() -> None:
+    """Arm 0: a layer's ``ops`` keys must match ``range(1, num_passes + 1)``.
+
+    (M1 raise-arm campaign: ``pass_count_consistency#a00`` survivor. The
+    real-capture killer bumping ``layer.num_passes`` on an Op pulled from
+    ``trace.layer_list`` does NOT reach the ``Layer`` record this checker
+    actually reads from ``trace.layer_logs`` -- empirically proven: it kept
+    this arm a SURVIVOR. A duck-typed fake of the exact object the checker
+    consumes avoids that real-capture aliasing gap.
+    """
+
+    fake_trace = SimpleNamespace(
+        layer_logs={
+            "layer_1_1": SimpleNamespace(
+                ops={1: SimpleNamespace(pass_index=1, num_passes=2)},
+                num_passes=2,
+            ),
+        },
+    )
+
+    with pytest.raises(MetadataInvariantError, match="pass_count_consistency"):
+        _check_pass_count_consistency(fake_trace)  # type: ignore[arg-type]
+
+
+def test_non_torch_backward_inert_fires_on_populated_backward_flag() -> None:
+    """A non-torch trace declaring ``has_backward_pass`` must raise."""
+
+    fake_trace = SimpleNamespace(has_backward_pass=True)
+
+    with pytest.raises(MetadataInvariantError, match="non_torch_backward_inert"):
+        _check_non_torch_backward_inert(fake_trace)  # type: ignore[arg-type]
+
+
+def test_non_torch_backward_inert_fires_on_populated_grad_fn_logs() -> None:
+    """Arm 1: ``grad_fn_logs`` alone (no other backward field) must raise.
+
+    Mutation-margin arming (M1 raise-arm campaign, run 36309580288):
+    ``non_torch_backward_inert#a01`` survived because the whole-function
+    killer above only ever trips the first ``has_backward_pass`` arm; every
+    later arm needs its own scenario where every EARLIER arm stays silent.
+    """
+
+    fake_trace = SimpleNamespace(has_backward_pass=False, grad_fn_logs={"relu_1_1": object()})
+
+    with pytest.raises(MetadataInvariantError, match="non_torch_backward_inert"):
+        _check_non_torch_backward_inert(fake_trace)  # type: ignore[arg-type]
+
+
+def test_non_torch_backward_inert_fires_on_nonzero_backward_pass_count() -> None:
+    """Arm 5 (last): a nonzero ``num_backward_passes`` alone must raise.
+
+    (M1 raise-arm campaign: ``non_torch_backward_inert#a05`` survivor.)
+    """
+
+    fake_trace = SimpleNamespace(
+        has_backward_pass=False,
+        grad_fn_logs=None,
+        grad_fn_order=None,
+        backward_pass_logs=None,
+        backward_root_grad_fn_object_ids=None,
+        num_backward_passes=2,
+    )
+
+    with pytest.raises(MetadataInvariantError, match="non_torch_backward_inert"):
+        _check_non_torch_backward_inert(fake_trace)  # type: ignore[arg-type]
+
+
+def test_non_torch_primitive_op_inert_fires_on_populated_profile() -> None:
+    """A non-torch trace carrying a primitive-op profile must raise."""
+
+    fake_trace = SimpleNamespace(_primitive_op_profile=object())
+
+    with pytest.raises(MetadataInvariantError, match="non_torch_primitive_op_inert"):
+        _check_non_torch_primitive_op_inert(fake_trace)  # type: ignore[arg-type]
+
+
+def test_site_key_invariants_fires_on_malformed_key() -> None:
+    """A retained op's non-``None`` site_key must be well-formed and prefixed."""
+
+    fake_trace = SimpleNamespace(
+        layer_list=[SimpleNamespace(site_key="not-a-real-site-key", label="op_1_1")],
+    )
+
+    with pytest.raises(MetadataInvariantError, match="site_key_invariants"):
+        _check_site_key_invariants(fake_trace)  # type: ignore[arg-type]
+
+
+def test_receptive_field_metadata_invariant_wraps_geometry_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A geometric-contract violation must surface as MetadataInvariantError.
+
+    The registry entry's own job (independent of the real RF geometry math,
+    which is exercised elsewhere) is the ReceptiveFieldError ->
+    MetadataInvariantError translation; a whole-function ``return None``
+    mutant skips the call entirely, so forcing the inner checker to raise
+    proves the translation still runs.
+    """
+
+    from torchlens.receptive_field._errors import ReceptiveFieldError
+
+    def _raise_geometry_violation(trace: Any) -> None:
+        del trace
+        raise ReceptiveFieldError("synthetic geometry violation")
+
+    monkeypatch.setattr(
+        "torchlens.receptive_field._validation.check_geometric_metadata_invariants",
+        _raise_geometry_violation,
+    )
+
+    with pytest.raises(MetadataInvariantError, match="synthetic geometry violation"):
+        _check_receptive_field_metadata_invariants(SimpleNamespace())  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# Mutation-margin arming: exempt survivors W3 (X11, X12, X14 -- the
+# ``return True`` exempt-everything disarm). X02/X05/X06/X07 already have
+# direct killers (test_bug_fixes_phase14.py, and the scatter test above);
+# these three custom exemption gates had none.
+# ---------------------------------------------------------------------------
+
+
+def test_norm_running_stat_exemption_uses_position_and_training_flag() -> None:
+    """Only running_mean/running_var in TRAINING mode are exempt."""
+
+    layer = _fake_layer(
+        saved_args=(
+            torch.zeros(4),  # 0: input
+            torch.ones(4),  # 1: weight
+            torch.zeros(4),  # 2: bias
+            torch.zeros(4),  # 3: running_mean
+            torch.ones(4),  # 4: running_var
+            True,  # 5: training
+        ),
+        parent_arg_positions={
+            "args": {
+                0: "input",
+                1: "weight",
+                2: "bias",
+                3: "running_mean",
+                4: "running_var",
+            },
+            "kwargs": {},
+        },
+    )
+
+    assert _check_norm_running_stat_exempt(None, layer, ["running_mean"])  # type: ignore[arg-type]
+    assert not _check_norm_running_stat_exempt(None, layer, ["input"])  # type: ignore[arg-type]
+
+    eval_layer = _fake_layer(
+        saved_args=layer.saved_args[:5] + (False,),
+        parent_arg_positions=layer.parent_arg_positions,
+    )
+    assert not _check_norm_running_stat_exempt(  # type: ignore[arg-type]
+        None, eval_layer, ["running_mean"]
+    )
+
+
+def test_scatter_or_index_domain_exemption_uses_destination_position() -> None:
+    """The combined scatter/index-domain gate must stay strict for the src parent.
+
+    Mirrors ``test_scatter_exemption_uses_destination_position_not_equal_value``
+    but calls the wrapping gate X12 actually plants on, which a bare
+    ``_check_scatter_exempt`` killer cannot reach.
+    """
+
+    class EqualValuedParentTrace:
+        """Minimal trace resolving parent outputs by label."""
+
+        def __getitem__(self, label: str) -> Any:
+            del label
+            return _fake_layer(out=torch.zeros(3))
+
+    layer = _fake_layer(
+        saved_args=(torch.zeros(3), 0, torch.arange(3), torch.zeros(3)),
+        saved_kwargs={},
+        parent_arg_positions={"args": {0: "dest_parent", 3: "src_parent"}, "kwargs": {}},
+    )
+    trace = EqualValuedParentTrace()
+
+    assert not _check_scatter_or_index_domain_exempt(  # type: ignore[arg-type]
+        trace, layer, ["src_parent"]
+    )
+    assert _check_scatter_or_index_domain_exempt(  # type: ignore[arg-type]
+        trace, layer, ["dest_parent"]
+    )
+
+
+def test_zipped_sibling_exemption_stays_strict_on_own_output_index() -> None:
+    """A perturbed parent at this output's OWN zipped index must stay strict."""
+
+    layer = _fake_layer(
+        multi_output_index=0,
+        parent_arg_positions={"args": {0: "input_0", 1: "input_1"}, "kwargs": {}},
+    )
+
+    assert _check_zipped_sibling_exempt(None, layer, ["input_1"])  # type: ignore[arg-type]
+    assert not _check_zipped_sibling_exempt(None, layer, ["input_0"])  # type: ignore[arg-type]

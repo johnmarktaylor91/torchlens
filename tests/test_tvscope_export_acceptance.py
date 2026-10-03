@@ -258,13 +258,35 @@ class TestTorchlensFreeReload:
     """Composition row 6 mechanics: the artifact reads with json + torch only."""
 
     def test_manifest_ledger_shards_reload_without_torchlens_apis(self, artifact) -> None:
-        """The BYO-alignment file round trip: plain reads, exact rows."""
+        """The BYO-alignment file round trip: plain reads, exact rows.
+
+        The default shard codec is safetensors (extract D1); a plain reader
+        loads it with the ``safetensors`` package (a core torchlens
+        dependency, not a torchlens API) rather than ``torch.load``, whose
+        OWN native safetensors recognition is a newer-torch capability --
+        on older builds it misreads the safetensors length-prefixed header
+        bytes as a pickle opcode stream and raises a weights-only
+        unpickling error. Dispatching on the manifest's declared
+        ``storage.shard_format`` keeps this reader correct for an explicit
+        ``shard_format="pt"`` artifact too.
+        """
 
         out_dir, trace = artifact
         manifest = json.loads((out_dir / "manifest.json").read_text())
         ids = json.loads((out_dir / "stimulus_ids.json").read_text())["ids"]
+        shard_format = manifest["storage"]["shard_format"]
+        if shard_format == "safetensors":
+            from safetensors.torch import load_file
+
+            def _load_conv(path):
+                return load_file(str(path))["conv"]
+        else:
+
+            def _load_conv(path):
+                return torch.load(path, weights_only=True)["conv"]
+
         rows = [
-            torch.load(out_dir / json.loads(line)["file"], weights_only=True)["conv"]
+            _load_conv(out_dir / json.loads(line)["file"])
             for line in (out_dir / "ledger.jsonl").read_text().splitlines()
         ]
         matrix = torch.cat(rows).reshape(len(ids), -1)

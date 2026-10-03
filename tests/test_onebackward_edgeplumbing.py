@@ -16,8 +16,14 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens.attribution import onebackward as ob
+from torchlens.utils._torch_compat import get_gradient_edge_support
 
 pytestmark = pytest.mark.smoke
+
+_requires_gradient_edge = pytest.mark.skipif(
+    not get_gradient_edge_support(),
+    reason="one-backward reads require torch.autograd.graph.GradientEdge (2.4+)",
+)
 
 
 def _trace(intervention_ready: bool = True) -> tl.Trace:
@@ -35,6 +41,7 @@ def _trace(intervention_ready: bool = True) -> tl.Trace:
 class TestGradInputUseMap:
     """The fail-closed correspondence contract."""
 
+    @_requires_gradient_edge
     def test_statuses_are_closed_and_fail_closed(self) -> None:
         trace = _trace()
         use_map = ob.mint_grad_input_use_map(trace)
@@ -46,6 +53,7 @@ class TestGradInputUseMap:
             elif use.status == "unsupported":
                 assert use.addresses == ()
 
+    @_requires_gradient_edge
     def test_no_positional_zipping_census(self) -> None:
         """Multi-input nodes stay unmated -- the census that kills zipping.
 
@@ -60,6 +68,7 @@ class TestGradInputUseMap:
         assert use_map.unmated_sites, "every node force-mated: positional zipping risk"
         assert use_map.census["unsupported"] > 0
 
+    @_requires_gradient_edge
     def test_provenance_gate_refuses_typed(self) -> None:
         trace = _trace(intervention_ready=False)
         with pytest.raises(ob.ReadError) as excinfo:
@@ -105,6 +114,7 @@ class TestPassOriginStamps:
 class TestDeferredSiblingSeams:
     """Item 9: the seams later waves land on without redesign."""
 
+    @_requires_gradient_edge
     def test_sample_id_is_nullable_from_day_one(self) -> None:
         trace = _trace()
         table = ob.read(

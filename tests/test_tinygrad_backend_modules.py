@@ -180,7 +180,7 @@ def test_tinygrad_simple_linear_uses_object_module_hierarchy() -> None:
     with pytest.warns(MultiMatchWarning, match="will fan out"):
         fc_labels = trace.resolve_sites(tl.in_module("fc"), max_fanout=16).labels()
     assert fc_labels
-    assert all(("fc", 1) in trace[label].modules for label in fc_labels)
+    assert all("fc:1" in trace[label].modules for label in fc_labels)
     assert check_metadata_invariants(trace) is True
     assert trace.validate_forward_pass([]) is True
 
@@ -207,7 +207,7 @@ def test_tinygrad_nested_modules_preserve_address_tree_and_selectors() -> None:
     with pytest.warns(MultiMatchWarning, match="will fan out"):
         encoder_labels = trace.resolve_sites(tl.in_module("encoder"), max_fanout=32).labels()
     assert set(proj_labels) < set(encoder_labels)
-    assert all(("encoder.proj", 1) in trace[label].modules for label in proj_labels)
+    assert all("encoder.proj:1" in trace[label].modules for label in proj_labels)
     assert check_metadata_invariants(trace) is True
     assert trace.validate_forward_pass([]) is True
 
@@ -230,8 +230,8 @@ def test_tinygrad_shared_submodule_aliases_and_multicall() -> None:
     assert {tuple(param.all_module_addresses) for param in shared.params} == {("left", "right")}
     with pytest.warns(MultiMatchWarning, match="will fan out"):
         left_labels = trace.resolve_sites(tl.in_module("left"), max_fanout=32).labels()
-    assert any(("left", 1) in trace[label].modules for label in left_labels)
-    assert any(("left", 2) in trace[label].modules for label in left_labels)
+    assert any("left:1" in trace[label].modules for label in left_labels)
+    assert any("left:2" in trace[label].modules for label in left_labels)
     assert check_metadata_invariants(trace) is True
     assert trace.validate_forward_pass([]) is True
 
@@ -246,7 +246,7 @@ def test_tinygrad_reused_uop_keeps_first_construction_attribution() -> None:
         fc_labels = trace.resolve_sites(tl.in_module("fc"), max_fanout=16).labels()
     assert fc_labels
     assert trace.modules["fc"].num_calls == 1
-    assert all(("fc", 1) in trace[label].modules for label in fc_labels)
+    assert all("fc:1" in trace[label].modules for label in fc_labels)
     root_only = [
         op.label
         for op in trace.layer_list

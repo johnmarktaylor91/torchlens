@@ -158,7 +158,11 @@ def run_c1_cases(adapter: Any, roster: tuple[RosterModel, ...]) -> list[CaseResu
         except Exception as exc:  # noqa: BLE001 - provider failures become red cells, never crashes
             results.append(_failed("c1_capture_completes", "C1", str(exc)[:300], model))
             continue
-        if getattr(trace, "_conformance_dropped_ops", False) or not len(trace.ops):
+        try:
+            dropped_ops = trace._conformance_dropped_ops
+        except AttributeError:
+            dropped_ops = False
+        if dropped_ops or not len(trace.ops):
             results.append(
                 _failed("c1_capture_completes", "C1", "capture dropped recorded ops", model)
             )

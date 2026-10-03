@@ -603,7 +603,10 @@ def _save_activation_fields(
             # No source-sized admission happened (no clone allocated); the
             # retained summary output is charged directly so a reduce-only
             # capture stays visible to a tight save_budget.
-            accountant = getattr(trace, "_save_budget_accountant", None)
+            try:
+                accountant = trace._save_budget_accountant
+            except AttributeError:
+                accountant = None
             if accountant is not None:
                 accountant.charge_retained(
                     str(fields_dict.get("_layer_label_raw") or "<reduce_only>"),

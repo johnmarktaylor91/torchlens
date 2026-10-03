@@ -105,10 +105,20 @@ def test_tf_static_captures_loaded_saved_model_structure_values_and_modules(
         assert relu.parents
         assert relu.out is not None
         assert np.allclose(relu.out, np.array([[5.25, 0.0]], dtype=np.float32))
+        # Previews never wrap the real output-producing op in a separate
+        # single-pass ``is_output`` pseudo-op (unlike torch): they mark the
+        # real producer with ``is_output_parent`` instead
+        # (backends/_finalize.py::mark_output_label). The trailing boundary
+        # Identity this loaded SavedModel wraps its output in is exactly
+        # such a producer, so it must be excluded by that flag, not
+        # ``is_output`` (which previews never set).
         assert all(
             op.out is None
             for op in trace.layer_list
-            if not op.is_input and not op.is_output and op.func_name not in {"Relu"}
+            if not op.is_input
+            and not op.is_output
+            and not op.is_output_parent
+            and op.func_name not in {"Relu"}
         )
     else:
         regions = [op for op in trace.layer_list if str(op.func_name).startswith("region:")]

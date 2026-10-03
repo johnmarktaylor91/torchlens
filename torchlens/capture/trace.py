@@ -335,11 +335,23 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
             peak_rss_after = peak_rss_bytes()
             if peak_rss_after > 0 and rss_before > 0:
                 resident_growth = max(0, peak_rss_after - rss_before)
+        # ``resident_basis`` must disclose WHY ``resident`` is ``None`` rather than
+        # silently repeating whatever ``rss_peak_scoped`` says: the pre-forward RSS
+        # baseline (``rss_before``, read via ``psutil``) is 0 whenever psutil is not
+        # installed, which zeroes ``resident_growth`` REGARDLESS of whether the VmHWM
+        # reset succeeded -- reporting "per_capture"/"process_lifetime" there would
+        # claim a scoped-or-unscoped MEASUREMENT that never happened. "unavailable"
+        # is the typed disclosure for that case (see ``psutil_available``); it is
+        # reported whenever ``resident`` could not be computed, from any cause.
+        if resident_growth is None:
+            resident_basis = "unavailable"
+        else:
+            resident_basis = "per_capture" if rss_peak_scoped else "process_lifetime"
         trace._forward_peak_memory_pair = {
             "live": int(traced_peak) if tracemalloc_module is not None else None,
             "resident": resident_growth,
             "backend": ("mps:allocated+rss" if backend_label == "mps" else "cpu:maxlive+rss"),
-            "resident_basis": ("per_capture" if rss_peak_scoped else "process_lifetime"),
+            "resident_basis": resident_basis,
         }
 
 

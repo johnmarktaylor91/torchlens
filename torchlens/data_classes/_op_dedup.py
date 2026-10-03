@@ -110,9 +110,16 @@ def _dedup_cached_identity_out(
 
     if trace is None or save_arg_values or source_tensor.is_meta:
         return None
-    if getattr(trace, "_out_dedup_mode", "identity") != "identity":
+    try:
+        dedup_mode = trace._out_dedup_mode
+    except AttributeError:
+        dedup_mode = "identity"
+    if dedup_mode != "identity":
         return None
-    identity_cache = getattr(trace, "_out_identity_cache", None)
+    try:
+        identity_cache = trace._out_identity_cache
+    except AttributeError:
+        identity_cache = None
     if identity_cache is None:
         return None
     source_key = id(source_tensor)
@@ -176,15 +183,21 @@ def _dedup_saved_activation_out(
     if trace is None or save_arg_values or raw_out.is_meta:
         return raw_out
 
-    mode = getattr(trace, "_out_dedup_mode", "identity")
+    try:
+        mode = trace._out_dedup_mode
+    except AttributeError:
+        mode = "identity"
     if mode == "none":
         return raw_out
 
     if mode == "content":
-        hash_cache = getattr(trace, "_out_hash_cache", None)
+        try:
+            hash_cache = trace._out_hash_cache
+        except AttributeError:
+            hash_cache = None
         if hash_cache is None:
             hash_cache = {}
-            setattr(trace, "_out_hash_cache", hash_cache)
+            trace._out_hash_cache = hash_cache
         # R36: the content digest is a host-side byte read; a cpu_async
         # payload may still be an in-flight pinned buffer. No-op unless
         # async fence events are pending.
@@ -199,10 +212,13 @@ def _dedup_saved_activation_out(
         hash_cache[out_hash] = (label, raw_out)
         return raw_out
 
-    identity_cache = getattr(trace, "_out_identity_cache", None)
+    try:
+        identity_cache = trace._out_identity_cache
+    except AttributeError:
+        identity_cache = None
     if identity_cache is None:
         identity_cache = {}
-        setattr(trace, "_out_identity_cache", identity_cache)
+        trace._out_identity_cache = identity_cache
 
     source_key = id(source_tensor)
     # r65: TorchLens's OWN dedup-bookkeeping ``_version`` read runs under the explicit

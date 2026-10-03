@@ -31,6 +31,7 @@ import datetime as _datetime_module
 import dis as _dis_module
 import functools as _functools_module
 import gc as _gc_module
+import importlib.util as _importlib_util
 import os as _os_module
 import random
 import sys as _sys_module
@@ -73,6 +74,7 @@ from ._torch_compat import (
     HAS_GENERATOR_CLONE_STATE,
     HAS_GENERATOR_GRAPHSAFE_GET_STATE,
     HAS_GENERATOR_GRAPHSAFE_SET_STATE,
+    HAS_GENERATOR_PHILOX_STATE,
     autocast_get_dtype,
     autocast_is_enabled,
     warm_lazy_torch_imports,
@@ -909,6 +911,24 @@ _TORCH_RNG_DEVICE_SPEC: tuple[tuple[str, str, str], ...] = _TORCH_RNG_CORE_SPEC 
     ("set_rng_state_all", "mutation", "in-forward host mutation of every device engine"),
     ("get_rng_state_all", "structurally_covered", "state-tensor return; r39 escape belt"),
 )
+_TORCH_ACCELERATOR_RNG_SPEC: tuple[tuple[str, str, str], ...] = (
+    ("initial_seed", "replayable_read", "scalar read fully determined by the capture seed"),
+    ("get_rng_state", "structurally_covered", "state-tensor return; r39 escape belt"),
+    ("get_rng_state_all", "structurally_covered", "state-tensor return; r39 escape belt"),
+)
+"""torch 2.14's generic accelerator-agnostic RNG surface (``torch.accelerator.random``).
+
+A DELIBERATELY SEPARATE object from :data:`_TORCH_RNG_DEVICE_SPEC`, even though every
+row's content is a subset of it: ``torch.accelerator`` is a cross-backend ROUTER (it
+defers to whichever concrete accelerator -- cuda/xpu/mtia -- is current) and holds no
+``default_generators`` list of its own, so it must NOT join
+:data:`_DEFAULT_GENERATOR_HOLDER_MODULES`'s identity-matched module set the way
+``torch.cuda``/``torch.xpu``/``torch.mtia`` do (``test_default_generator_resolver_covers_
+every_device_spec_module`` asserts that set is EXACTLY the device-spec holder modules).
+It also has no ``seed``/``manual_seed``/``set_rng_state``/``*_all`` setters at all, so
+reusing the full device spec here would also be a content mismatch, not just an identity
+one.
+"""
 _TORCH_RNG_MODULE_SPECS: tuple[tuple[str, tuple[tuple[str, str, str], ...]], ...] = (
     ("torch", _TORCH_RNG_CORE_SPEC),
     ("torch.random", _TORCH_RNG_CORE_SPEC),
@@ -925,6 +945,11 @@ _TORCH_RNG_MODULE_SPECS: tuple[tuple[str, tuple[tuple[str, str, str], ...]], ...
     # ``torch.cuda.random`` does for cuda; found by the independent no-list module
     # discovery immunizer (the same shared-blind-spot class as mtia).
     ("torch.xpu.random", _TORCH_RNG_DEVICE_SPEC),
+    # torch 2.14 adds ``torch.accelerator.random`` (generic accelerator-agnostic
+    # RNG surface, eagerly imported by ``torch.accelerator``, itself eagerly
+    # imported by ``torch/__init__.py``). Its own dedicated spec (not the
+    # shared device spec -- see that spec's docstring).
+    ("torch.accelerator.random", _TORCH_ACCELERATOR_RNG_SPEC),
 )
 # Non-function endpoints the enumeration meta-test still demands dispositions for.
 _TORCH_RNG_STRUCTURAL_EXTRAS: tuple[tuple[str, str], ...] = (
@@ -984,6 +1009,54 @@ _TORCH_RNG_STRUCTURAL_EXTRAS: tuple[tuple[str, str], ...] = (
         "deprecated alias delegating to apply_random_seed (same structural coverage)",
     ),
 )
+# Structural extras whose MODULE is never eagerly imported by torch or torchlens
+# (unlike every _TORCH_RNG_STRUCTURAL_EXTRAS target above, all already sitting in
+# sys.modules by the time torch/torchlens finish their own imports): requiring
+# sys.modules presence here would make coverage depend on which OTHER test
+# happened to import the module first in the session. find_spec proves existence
+# without paying the module's own import cost (W21 cold-start guarantee).
+_TORCH_RNG_UNIMPORTED_MODULE_EXTRAS: tuple[tuple[str, str], ...] = (
+    (
+        "torch.distributed.tensor.parallel.api.TensorParallelRNGTracker",
+        "tensor-parallel distributed-training RNG tracker (torch 2.2 re-export of "
+        "torch.distributed._tensor.random.TensorParallelRNGTracker). NOT eagerly "
+        "imported by bare `import torch`/`import torchlens` -- it only lands in "
+        "sys.modules when some OTHER already-collected test imports "
+        "torch.distributed.tensor.parallel, so it belongs in this find_spec-checked "
+        "group, not the sys.modules-checked one above (the exact failure mode this "
+        "group exists to avoid). Construction only READS the device engine's state "
+        "(get_rng_state); its seeding/region methods compose "
+        "set_seed -> fork_rng -> device get/set_rng_state, transiting the same "
+        "module-patched mutation rows torch.random.fork_rng already covers above. "
+        "Active tensor_parallel usage is independently refused at capture entry by "
+        "DistributedCaptureUnsupportedError (the tensor_parallel finding) before this "
+        "tracker's state could ever reach a captured forward",
+    ),
+    (
+        "torch.distributed.tensor.parallel.api.is_rng_supported_mesh",
+        "pure capability predicate (torch 2.2): reads the device handle and returns "
+        "whether it exposes set_rng_state, at most warning on an unsupported device "
+        "mesh -- no entropy draw, no engine mutation, nothing that could desync a "
+        "replay",
+    ),
+    (
+        "torch.distributed.pipeline.sync.checkpoint.restore_rng_states",
+        "torch.distributed.pipeline was removed from torch (gone by the 2.3 era; only "
+        "the torch>=2.1 floor still carries it). Its checkpoint recomputation pairs "
+        "save_rng_states/restore_rng_states exactly like torchgpipe's upstream "
+        "implementation, whose restore calls torch.set_rng_state/torch.cuda.set_rng_state "
+        "on the saved snapshot -- its in-forward RESTORE transits the module-patched "
+        "set_rng_state/cuda.set_rng_state mutation rows, same composition as "
+        "torch.random.fork_rng above (behaviorally pinned)",
+    ),
+    (
+        "torch.distributed.pipeline.sync.checkpoint.save_rng_states",
+        "the SAVE half of the same torchgpipe-derived pair above: calls "
+        "torch.get_rng_state/torch.cuda.get_rng_state and returns the state "
+        "tensor(s) -- structurally covered the same way those module-patched "
+        "get_rng_state rows already are (r39 tensor->host escape belt)",
+    ),
+)
 
 
 def _torch_rng_holder_module(module_path: str) -> ModuleType | None:
@@ -996,6 +1069,26 @@ def _torch_rng_holder_module(module_path: str) -> ModuleType | None:
 
     module = _sys_module.modules.get(module_path)
     return module if isinstance(module, ModuleType) else None
+
+
+def _module_exists_without_importing(module_path: str) -> bool:
+    """Return whether ``module_path`` resolves, without importing a new ancestor.
+
+    ``find_spec`` is import-free ONLY when ``module_path``'s ancestor is
+    already in ``sys.modules`` (importlib auto-imports a missing one to read
+    its ``__path__`` first): resolving "torch.distributed.tensor.parallel.
+    api" this way imports "...tensor.parallel" if absent, which eagerly
+    imports torch._dynamo on torch 2.7.1 (2026-10 cold-start regression).
+    Degrade to "not found" instead of paying a missing ancestor's import.
+    """
+
+    ancestor, _, _leaf = module_path.rpartition(".")
+    if ancestor and ancestor not in _sys_module.modules:
+        return False
+    try:
+        return _importlib_util.find_spec(module_path) is not None
+    except (ImportError, AttributeError, ValueError):
+        return False
 
 
 def _build_torch_rng_surface() -> tuple[TorchRngSurfaceRow, ...]:
@@ -1013,6 +1106,16 @@ def _build_torch_rng_surface() -> tuple[TorchRngSurfaceRow, ...]:
         module_path, _, name = target.rpartition(".")
         module = _torch_rng_holder_module(module_path)
         if module is not None and hasattr(module, name):
+            rows.append(TorchRngSurfaceRow(target, "structurally_covered", note))
+    for target, note in _TORCH_RNG_UNIMPORTED_MODULE_EXTRAS:
+        # Unlike _TORCH_RNG_STRUCTURAL_EXTRAS's targets (already imported by
+        # the time torch/torchlens finish their own imports), these modules
+        # are never eagerly imported by anything; sys.modules-gating them
+        # would make coverage depend on which OTHER test imported them first
+        # (W21). _module_exists_without_importing proves existence instead,
+        # import-free; the attribute itself is trusted present.
+        module_path, _, _name = target.rpartition(".")
+        if _module_exists_without_importing(module_path):
             rows.append(TorchRngSurfaceRow(target, "structurally_covered", note))
     return tuple(rows)
 
@@ -1065,13 +1168,22 @@ structurally covered there (the row's ``note`` names the covering mechanism).
 """
 
 GENERATOR_RETURN_FAMILIES: frozenset[str] = frozenset(
-    {"host_scalar", "state_tensor", "generator", "self_generator", "device_attr"}
+    {
+        "host_scalar",
+        "state_tensor",
+        "generator",
+        "self_generator",
+        "device_attr",
+        "state_tensor_tuple",
+    }
 )
 """Closed return-family vocabulary for :data:`GENERATOR_METHOD_TABLE` rows.
 
 ``host_scalar`` -- Python int; ``state_tensor`` -- ``torch.Tensor`` engine state;
 ``generator`` -- a NEW ``torch.Generator``; ``self_generator`` -- returns the
-receiver (fluent setter); ``device_attr`` -- non-callable getset attribute.
+receiver (fluent setter); ``device_attr`` -- non-callable getset attribute;
+``state_tensor_tuple`` -- a fixed tuple of freshly-minted ``torch.Tensor``
+engine-state values (``philox_state``'s ``(seed, offset, intragraph_offset)``).
 """
 
 
@@ -1158,6 +1270,20 @@ _GENERATOR_METHOD_ROWS: tuple[GeneratorMethodRow, ...] = (
         "capability-raise still marks fail-closed (r66 hon1-F5)",
     ),
     GeneratorMethodRow(
+        "philox_state",
+        "state_tensor_tuple",
+        "mutation",
+        "mutation",
+        "torch 2.14: reserves `increment` Philox outputs, ADVANCING the engine's "
+        "internal offset on every receiver (c10::GeneratorImpl::philox_state; only "
+        "Philox-based engines implement it, so CPU's default mt19937 generator "
+        "raises NotImplementedError -- capability-gated like get_offset/set_offset). "
+        "Marks mutation on BOTH columns (never structural): unlike get_state, this "
+        "call changes engine state as a side effect, so a non-default receiver's "
+        "mutation is still a real, honestly-marked consumption, not inert instance "
+        "state (r67 C1 honesty-first: unknown consumption must ceiling)",
+    ),
+    GeneratorMethodRow(
         "get_state",
         "state_tensor",
         None,
@@ -1197,6 +1323,7 @@ _OPTIONAL_GENERATOR_METHOD_CAPABILITIES: dict[str, bool] = {
     "clone_state": HAS_GENERATOR_CLONE_STATE,
     "graphsafe_get_state": HAS_GENERATOR_GRAPHSAFE_GET_STATE,
     "graphsafe_set_state": HAS_GENERATOR_GRAPHSAFE_SET_STATE,
+    "philox_state": HAS_GENERATOR_PHILOX_STATE,
 }
 
 GENERATOR_METHOD_TABLE: tuple[GeneratorMethodRow, ...] = tuple(
@@ -1771,6 +1898,19 @@ _SINGLE_PUSH_LOAD_OPNAMES = frozenset(
     {"LOAD_CONST", "LOAD_FAST", "LOAD_NAME", "LOAD_DEREF", "LOAD_GLOBAL"}
 )
 
+#: Call-sequence bookkeeping opcodes that carry no argument push of their own and can
+#: sit between the last argument-push instruction and the ``CALL``/``CALL_FUNCTION``/
+#: ``CALL_METHOD`` instruction, depending on interpreter. Python 3.11 alone splits the
+#: call into ``PRECALL`` (argument-count/shape dispatch) followed by ``CALL`` (the
+#: actual invocation); 3.10 has no such opcode (``CALL_FUNCTION``/``CALL_METHOD``
+#: follow the arguments directly) and 3.12+ folded ``PRECALL`` back into ``CALL``. A
+#: naive fixed-width slice ending at the ``CALL`` position silently swallows
+#: ``PRECALL`` as if it were the last argument instruction on 3.11, which starves the
+#: decode of its real last argument and misclassifies every held-alias call on that
+#: interpreter as "unknown" (grind-pyver R8). Walking backward and skipping opcodes in
+#: this set keeps the decode interpreter-shape-agnostic.
+_CALL_BOOKKEEPING_OPNAMES = frozenset({"PRECALL"})
+
 
 def _call_site_argcount(frame: Any) -> int | None:
     """Decode the positional argument count of a profile-observed ``c_call`` site.
@@ -1890,9 +2030,28 @@ def _call_site_time_arg_proof(frame: Any, argcount: int, time_arg_index: int) ->
             (index for index, ins in enumerate(instructions) if ins.offset == lasti),
             None,
         )
-        if call_position is None or call_position < argcount:
+        if call_position is None:
             return "unknown"
-        arg_instructions = instructions[call_position - argcount : call_position]
+        # Walk backward from the CALL instruction collecting exactly ``argcount``
+        # single-push argument loads, skipping any interposed call-bookkeeping
+        # opcode (``PRECALL`` on Python 3.11 -- see _CALL_BOOKKEEPING_OPNAMES).
+        # A fixed-width slice ending at ``call_position`` assumes the ``argcount``
+        # instructions immediately preceding CALL are all argument pushes, which
+        # is false on 3.11: ``PRECALL`` sits there instead of the real last
+        # argument instruction, starving the decode and misclassifying every
+        # held-alias call on that interpreter as "unknown" (grind-pyver R8).
+        cursor = call_position - 1
+        arg_instructions: list[Any] = []
+        while cursor >= 0 and len(arg_instructions) < argcount:
+            candidate = instructions[cursor]
+            if candidate.opname in _CALL_BOOKKEEPING_OPNAMES:
+                cursor -= 1
+                continue
+            arg_instructions.append(candidate)
+            cursor -= 1
+        if len(arg_instructions) != argcount:
+            return "unknown"
+        arg_instructions.reverse()
         if any(ins.opname not in _SINGLE_PUSH_LOAD_OPNAMES for ins in arg_instructions):
             return "unknown"
         time_instruction = arg_instructions[time_arg_index]

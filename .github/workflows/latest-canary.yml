@@ -26,15 +26,18 @@ jobs:
     name: Latest Torch canary
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Install Graphviz
         run: |
@@ -44,13 +47,19 @@ jobs:
       - name: Install latest CPU test environment
         run: |
           # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          # torchvision is floored so torch and torchvision resolve as a PAIR: on
+          # a day the CPU index has a new torch before its matching torchvision,
+          # an unfloored request backtracks torchvision to the ancient 0.2.0
+          # (no torch pin, no torchvision.ops) instead of picking the newest
+          # torch that has a matching torchvision. The validate step prints the
+          # resolved pair.
           uv pip install --system \
             --index-url https://download.pytorch.org/whl/cpu \
             --extra-index-url https://pypi.org/simple \
             --index-strategy unsafe-best-match \
-            -e ".[dev,tabular]" \
+            -e ".[dev,tabular,viz]" \
             torch \
-            torchvision \
+            "torchvision>=0.18" \
             transformers \
             timm \
             "pydot==4.0.1" \
@@ -79,15 +88,7 @@ jobs:
 
       - name: Run smoke tests and compatibility coverage
         run: |
-          # Exclude the menagerie build subsystem from smoke, matching tests.yml:
-          # tests/test_menagerie_*.py hard-imports pydantic (via
-          # menagerie/schema.py) and tests/crawler/ is the crawler corpus -- both
-          # absent from this .[dev,tabular] env (pydantic is only in .[test]).
-          # This is a py3.11 leg, so it is past the tests/conftest.py < 3.11
-          # auto-skip and needs these explicit --ignore flags to avoid a
-          # collection ModuleNotFoundError. No smoke coverage is lost (no
-          # menagerie or crawler test is smoke-marked).
-          pytest tests/ -m smoke --ignore-glob="*menagerie*" --ignore=tests/crawler --tb=short -q \
+          pytest tests/ -m smoke --tb=short -q \
             --junitxml="${{ runner.temp }}/canary-smoke.junit.xml"
           pytest tests/test_torch_compat.py --tb=short -q
 
@@ -114,7 +115,7 @@ jobs:
 
       - name: Restore the pinned artifact cache (exact key, no prefix fallback)
         id: artifact-cache
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .artifact-cache
           key: ${{ hashFiles('tests/real_model/artifact_registry.jsonl') }}-canary-v1

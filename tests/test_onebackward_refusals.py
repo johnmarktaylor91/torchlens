@@ -15,8 +15,14 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens.attribution import onebackward as ob
+from torchlens.utils._torch_compat import get_gradient_edge_support
 
 pytestmark = pytest.mark.smoke
+
+_requires_gradient_edge = pytest.mark.skipif(
+    not get_gradient_edge_support(),
+    reason="one-backward reads require torch.autograd.graph.GradientEdge (2.4+)",
+)
 
 
 def _trace(**capture_kwargs) -> tl.Trace:
@@ -52,6 +58,7 @@ def _grad_table(trace: tl.Trace) -> ob.ReadTable:
 class TestLivenessGate:
     """The closed trace-level addressing gate (D1/D14)."""
 
+    @_requires_gradient_edge
     def test_inference_only_refuses(self) -> None:
         trace = _trace(capture=tl.options.CaptureOptions(inference_only=True))
         _read_error(
@@ -60,6 +67,7 @@ class TestLivenessGate:
             reason="inference_only",
         )
 
+    @_requires_gradient_edge
     def test_structure_only_refuses(self) -> None:
         trace = _trace(capture=tl.options.CaptureOptions(structure_only=True))
         _read_error(
@@ -68,6 +76,7 @@ class TestLivenessGate:
             reason="structure_only",
         )
 
+    @_requires_gradient_edge
     def test_loaded_trace_refuses_not_live(self, tmp_path) -> None:
         trace = _trace()
         path = tmp_path / "artifact.tlspec"
@@ -79,6 +88,7 @@ class TestLivenessGate:
             reason="not_live",
         )
 
+    @_requires_gradient_edge
     def test_graph_freed_refuses_typed(self) -> None:
         trace = _trace(
             capture=tl.options.CaptureOptions(backward_ready=True),
@@ -101,6 +111,7 @@ class TestLivenessGate:
 class TestTargetNormalizer:
     """Memo test 10: teaching refusals, never a bare TypeError."""
 
+    @_requires_gradient_edge
     def test_detached_tensor_target_teaches_edge_seeding(self) -> None:
         """A graph-disconnected tensor target refuses naming seed(...).
 
@@ -117,6 +128,7 @@ class TestTargetNormalizer:
         )
         assert "seed(" in str(error), "the refusal must name the edge-seeded spelling"
 
+    @_requires_gradient_edge
     def test_unsaved_payload_spelling_never_reaches_a_bare_typeerror(self) -> None:
         """On a selectively-retained trace the payload route dies before the
         read; the read-level refusal for a non-tensor target is typed."""
@@ -130,6 +142,7 @@ class TestTargetNormalizer:
         )
         assert "seed(" in str(error)
 
+    @_requires_gradient_edge
     def test_wrong_shape_cotangent_names_recorded_shape(self) -> None:
         trace = _trace(capture=tl.options.CaptureOptions(layers_to_save=[]))
         error = _read_error(
@@ -144,6 +157,7 @@ class TestTargetNormalizer:
         )
         assert "(2, 3)" in str(error)
 
+    @_requires_gradient_edge
     def test_bare_site_without_index_or_cotangent(self) -> None:
         trace = _trace()
         _read_error(
@@ -151,6 +165,7 @@ class TestTargetNormalizer:
             "read_target_invalid",
         )
 
+    @_requires_gradient_edge
     def test_out_of_range_index_names_axis_and_shape(self) -> None:
         trace = _trace()
         _read_error(
@@ -164,6 +179,7 @@ class TestTargetNormalizer:
             axis=1,
         )
 
+    @_requires_gradient_edge
     def test_unknown_site_refuses(self) -> None:
         trace = _trace()
         _read_error(
@@ -171,6 +187,7 @@ class TestTargetNormalizer:
             "read_target_invalid",
         )
 
+    @_requires_gradient_edge
     def test_input_site_is_unaddressable(self) -> None:
         trace = _trace()
         _read_error(
@@ -209,6 +226,7 @@ class TestOptionVocabularies:
             option="reduce",
         )
 
+    @_requires_gradient_edge
     def test_bad_batch_size(self) -> None:
         trace = _trace()
         _read_error(
@@ -223,6 +241,7 @@ class TestOptionVocabularies:
             option="target_batch_size",
         )
 
+    @_requires_gradient_edge
     def test_activation_method_rejects_target_and_frozen(self) -> None:
         trace = _trace()
         _read_error(
@@ -236,6 +255,7 @@ class TestOptionVocabularies:
             option="frozen",
         )
 
+    @_requires_gradient_edge
     def test_missing_target_for_gradient_method(self) -> None:
         trace = _trace()
         _read_error(
@@ -247,6 +267,7 @@ class TestOptionVocabularies:
 class TestPopulationContract:
     """D9: explicit enumeration is a contract; implicit is a filter."""
 
+    @_requires_gradient_edge
     def test_explicit_unretained_site_preflight_refusal(self) -> None:
         trace = _trace(capture=tl.options.CaptureOptions(layers_to_save=[]))
         error = _read_error(
@@ -261,6 +282,7 @@ class TestPopulationContract:
         )
         assert "save=" in str(error), "the remedy must carry a concrete recapture recipe"
 
+    @_requires_gradient_edge
     def test_explicit_unknown_site_refuses(self) -> None:
         trace = _trace()
         # A site absent from the trace is normally refused by the selection
@@ -277,6 +299,7 @@ class TestPopulationContract:
             _explicit_preflight(index, payloads, {"phantom_1_1:1": None}, "grad")
         assert excinfo.value.fields["code"] == "read_population_invalid"
 
+    @_requires_gradient_edge
     def test_param_population_refuses_kind(self) -> None:
         trace = _trace()
         with pytest.raises(Exception) as excinfo:
@@ -293,6 +316,7 @@ class TestPopulationContract:
 class TestBudgetAndSaveModes:
     """Result-byte budget and save-mode honesty."""
 
+    @_requires_gradient_edge
     def test_multi_target_element_grain_requires_budget(self) -> None:
         trace = _trace()
         targets = [ob.seed("output_1", index=(0, 0)), ob.seed("output_1", index=(0, 1))]
@@ -302,6 +326,7 @@ class TestBudgetAndSaveModes:
         )
         assert error.fields["estimated_bytes"] > 0
 
+    @_requires_gradient_edge
     def test_budget_exceeded_refuses_with_estimate(self) -> None:
         trace = _trace()
         targets = [ob.seed("output_1", index=(0, 0)), ob.seed("output_1", index=(0, 1))]
@@ -313,6 +338,7 @@ class TestBudgetAndSaveModes:
             budget=8,
         )
 
+    @_requires_gradient_edge
     def test_view_save_mode_fails_closed_for_activation_methods(self) -> None:
         trace = _trace(save_mode="view")
         _read_error(
@@ -335,6 +361,7 @@ class TestBudgetAndSaveModes:
 class TestTableRefusals:
     """Carrier-side typed refusals."""
 
+    @_requires_gradient_edge
     def test_dense_table_not_portable(self, tmp_path) -> None:
         trace = _trace()
         table = ob.read(trace, target=ob.seed("output_1", index=(0, 0)), method="grad", reduce=None)
@@ -343,6 +370,7 @@ class TestTableRefusals:
             "read_table_not_portable",
         )
 
+    @_requires_gradient_edge
     def test_scalar_roundtrip_is_not_rescorable(self, tmp_path) -> None:
         trace = _trace()
         table = ob.read(
@@ -356,6 +384,7 @@ class TestTableRefusals:
         for key, row in table.items():
             assert loaded[key].score == row.score
 
+    @_requires_gradient_edge
     def test_tampered_artifact_fails_closed(self, tmp_path) -> None:
         trace = _trace()
         table = ob.read(
@@ -369,6 +398,7 @@ class TestTableRefusals:
             "read_table_artifact_invalid",
         )
 
+    @_requires_gradient_edge
     def test_unknown_target_and_column(self) -> None:
         trace = _trace()
         table = ob.read(
@@ -378,6 +408,7 @@ class TestTableRefusals:
         _read_error(lambda: table.column("nonexistent"), "read_table_column_unknown")
         _read_error(lambda: table.to_pandas(values="all"), "read_table_values_mode_invalid")
 
+    @_requires_gradient_edge
     def test_table_is_immutable(self) -> None:
         trace = _trace()
         table = ob.read(
@@ -393,7 +424,7 @@ class TestTorchBandGate:
     def test_refusal_when_flag_is_off(self, monkeypatch) -> None:
         from torchlens.attribution.onebackward import _accessor
 
-        monkeypatch.setattr(_accessor, "HAS_GRADIENT_EDGE", False)
+        monkeypatch.setattr(_accessor, "get_gradient_edge_support", lambda: False)
         trace = _trace()
         _read_error(
             lambda: ob.read_edge_index(trace),
@@ -412,7 +443,7 @@ class TestTypedDoorProvocations:
     def test_onebackward_torch_unsupported(self, monkeypatch) -> None:
         from torchlens.attribution.onebackward import _accessor
 
-        monkeypatch.setattr(_accessor, "HAS_GRADIENT_EDGE", False)
+        monkeypatch.setattr(_accessor, "get_gradient_edge_support", lambda: False)
         trace = _trace()
         with pytest.raises(ob.ReadError) as excinfo:
             ob.read_edge_index(trace)
@@ -424,12 +455,14 @@ class TestTypedDoorProvocations:
             ob.read(trace, target=ob.seed("output_1", index=(0, 0)), method="magic")
         assert excinfo.value.fields["code"] == "read_option_invalid"
 
+    @_requires_gradient_edge
     def test_read_site_unaddressable(self) -> None:
         trace = _trace()
         with pytest.raises(ob.ReadError) as excinfo:
             ob.read(trace, target=ob.seed("input_1", index=(0, 0)), method="grad", reduce="sum")
         assert excinfo.value.fields["code"] == "read_site_unaddressable"
 
+    @_requires_gradient_edge
     def test_read_payload_untrustworthy(self) -> None:
         trace = _trace(save_mode="view")
         with pytest.raises(ob.ReadError) as excinfo:
@@ -441,6 +474,7 @@ class TestTypedDoorProvocations:
             )
         assert excinfo.value.fields["code"] == "read_payload_untrustworthy"
 
+    @_requires_gradient_edge
     def test_read_frozen_selection_invalid(self) -> None:
         trace = _trace()
         with pytest.raises(ob.ReadError) as excinfo:
@@ -453,6 +487,7 @@ class TestTypedDoorProvocations:
             )
         assert excinfo.value.fields["code"] == "read_frozen_selection_invalid"
 
+    @_requires_gradient_edge
     def test_read_row_vocabulary_invalid(self) -> None:
         table = _grad_table(_trace())
         row = next(iter(table.rows()))
@@ -462,6 +497,7 @@ class TestTypedDoorProvocations:
             replace(row, status="blessed")
         assert excinfo.value.fields["code"] == "read_row_vocabulary_invalid"
 
+    @_requires_gradient_edge
     def test_read_table_key_ambiguous(self) -> None:
         trace = _trace()
         table = ob.read(
@@ -474,24 +510,28 @@ class TestTypedDoorProvocations:
             table["linear_1_1:1"]
         assert excinfo.value.fields["code"] == "read_table_key_ambiguous"
 
+    @_requires_gradient_edge
     def test_read_table_target_unknown(self) -> None:
         table = _grad_table(_trace())
         with pytest.raises(ob.ReadError) as excinfo:
             table.for_target("t99")
         assert excinfo.value.fields["code"] == "read_table_target_unknown"
 
+    @_requires_gradient_edge
     def test_read_table_column_unknown(self) -> None:
         table = _grad_table(_trace())
         with pytest.raises(ob.ReadError) as excinfo:
             table.column("nonexistent")
         assert excinfo.value.fields["code"] == "read_table_column_unknown"
 
+    @_requires_gradient_edge
     def test_read_table_values_mode_invalid(self) -> None:
         table = _grad_table(_trace())
         with pytest.raises(ob.ReadError) as excinfo:
             table.to_pandas(values="all")
         assert excinfo.value.fields["code"] == "read_table_values_mode_invalid"
 
+    @_requires_gradient_edge
     def test_read_table_grain_unaggregatable(self) -> None:
         trace = _trace()
         table = ob.read(
@@ -505,6 +545,7 @@ class TestTypedDoorProvocations:
             table.aggregate_targets(lambda scores: sum(scores))
         assert excinfo.value.fields["code"] == "read_table_grain_unaggregatable"
 
+    @_requires_gradient_edge
     def test_read_table_not_portable(self, tmp_path) -> None:
         trace = _trace()
         table = ob.read(trace, target=ob.seed("output_1", index=(0, 0)), method="grad", reduce=None)
@@ -512,6 +553,7 @@ class TestTypedDoorProvocations:
             table.save(tmp_path / "dense.json")
         assert excinfo.value.fields["code"] == "read_table_not_portable"
 
+    @_requires_gradient_edge
     def test_read_table_artifact_invalid(self, tmp_path) -> None:
         table = _grad_table(_trace())
         path = table.save(tmp_path / "scalar.json")
@@ -520,6 +562,7 @@ class TestTypedDoorProvocations:
             ob.load_read_table(path)
         assert excinfo.value.fields["code"] == "read_table_artifact_invalid"
 
+    @_requires_gradient_edge
     def test_read_alias_conflict(self) -> None:
         from dataclasses import replace
 
@@ -547,6 +590,7 @@ class TestTypedDoorProvocations:
         assert excinfo.value.fields["code"] == "read_suppression_leak"
         refs.pop()
 
+    @_requires_gradient_edge
     def test_read_engine_call_drift(self, monkeypatch) -> None:
         from torchlens.attribution.onebackward import _engine
 

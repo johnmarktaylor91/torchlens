@@ -520,14 +520,48 @@ def _install_causal_bias_shim(records: list[tuple[Any, str, Any]]) -> None:
         args: tuple[Any, ...] = (),
         kwargs: dict[str, Any] | None = None,
     ) -> Any:
-        """Normalize a stale SDPA reference to the live namespace basis."""
+        """Normalize a stale SDPA reference; defer everything else to Tensor.
+
+        CausalBias's real ``__torch_function__`` raises ``NotImplementedError``
+        for any ``func`` other than ``scaled_dot_product_attention`` -- by
+        design, it supports nothing else when a USER calls it directly. But a
+        CausalBias instance captured as a torchlens op argument or output
+        (``causal_lower_right`` et al. are ordinary wrapped functions) is also
+        touched by torchlens's OWN generic per-op bookkeeping -- autograd-stats
+        partitioning reads ``.grad_fn``, payload cloning reads ``.numel()`` /
+        ``.untyped_storage()``, and so on -- plain introspection CausalBias's
+        restriction cannot distinguish from genuine misuse, since torch's
+        ``__torch_function__`` protocol dispatches ALL of it here regardless
+        of torchlens's own wrap/pause-logging state. Once the call is
+        confirmed to NOT be (a stale-reference-normalized) sdpa, there is no
+        reliable per-call signal left to tell "torchlens bookkeeping" apart
+        from "user misuse"; deferring to ``torch.Tensor``'s own permissive
+        handler trades away that one user-facing guardrail while a capture is
+        instrumenting everything anyway, in exchange for CausalBias working
+        as an sdpa argument under capture at all.
+        """
 
         import torch.nn.functional as F
 
         target = getattr(F, "scaled_dot_product_attention", None)
         if target is not None and func is not target and _resolve(func) is _resolve(target):
             func = target
-        return orig_tf(cls, func, types, args, kwargs)
+        if target is not None and func is target:
+            return orig_tf(cls, func, types, args, kwargs)
+        # torch.Tensor's own __torch_function__ self-checks
+        # ``all(issubclass(cls, t) for t in types)``; binding it to
+        # ``torch.Tensor`` (the ordinary ``Tensor.__torch_function__``
+        # bound-classmethod spelling) fails that check against
+        # ``types=(CausalBias,)`` and degrades to ``NotImplemented`` (a
+        # multiple-dispatch TypeError). Call the underlying function with
+        # the REAL ``cls`` received here instead of letting attribute
+        # access rebind it.
+        # ``torch.Tensor.__torch_function__`` is stub-typed as a plain bound
+        # callable with no ``__func__``; it is a classmethod at runtime, and
+        # ``__func__`` is how this unbinds it to call with the real ``cls``
+        # above instead of the implicit ``torch.Tensor`` binding.
+        unbound_torch_function = getattr(torch.Tensor.__torch_function__, "__func__")
+        return unbound_torch_function(cls, func, types, args, kwargs)
 
     _register_shim(causal_bias_shim)
     causal_bias.__torch_function__ = classmethod(causal_bias_shim)

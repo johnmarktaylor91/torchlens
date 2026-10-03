@@ -281,8 +281,10 @@ def relabel_edge_metadata(
     Returns
     -------
     None
-        ``parents``, ``children``, ``parent_arg_positions``, and ``_edge_uses``
-        are updated in place.
+        ``parents``, ``children``, ``parent_arg_positions``, ``_edge_uses``,
+        and the raw-label-bearing lineage fields (``input_ancestors``,
+        ``output_descendants``, ``root_ancestors``, ``internal_source_ancestors``,
+        ``internal_source_parents``) are updated in place.
     """
 
     op_log.parents = [
@@ -293,6 +295,33 @@ def relabel_edge_metadata(
         raw_to_final.get(child, child) if isinstance(child, str) else child
         for child in op_log.children
     ]
+    # N5: lineage sets are seeded with raw labels at capture time
+    # (``root_ancestors={reserved.label_raw}``) or during the pre-relabel
+    # input/output depth flood (``input_ancestors``/``output_descendants``
+    # add the still-raw ``trace.input_layers``/``output_layers`` seeds) --
+    # both must follow every other raw-label-bearing field through this
+    # same raw-to-final substitution, or they survive postprocessing and
+    # trip the ``graph_ordering`` invariant. ``internal_source_parents``
+    # carries the same raw-label-bearing shape (torch relabels it through
+    # the identical conditional mapping, see ``labeling._LIST_FIELDS_TO_RENAME``)
+    # and was missing here, letting a raw label like ``const_1_2_raw`` survive
+    # postprocessing uncaught.
+    for lineage_field in (
+        "input_ancestors",
+        "output_descendants",
+        "root_ancestors",
+        "internal_source_ancestors",
+        "internal_source_parents",
+    ):
+        lineage = getattr(op_log, lineage_field, None)
+        if lineage:
+            # Reconstruct via the ORIGINAL container type (set or frozenset)
+            # rather than always a plain set: callers may rely on the
+            # existing type (e.g. frozenset hashability).
+            relabeled = (
+                raw_to_final.get(item, item) if isinstance(item, str) else item for item in lineage
+            )
+            setattr(op_log, lineage_field, type(lineage)(relabeled))
     parent_arg_positions = getattr(op_log, "parent_arg_positions", None)
     if parent_arg_positions:
         op_log.parent_arg_positions = {
