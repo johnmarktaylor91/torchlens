@@ -19,7 +19,7 @@ llama/mamba/t5).
 
 ``tests.yml`` already pins every row's install to
 ``transformers==5.14.1`` and ``nightly.yml``'s ``hf-band-legs`` job pins
-through the named ``hf_5_candidate`` constraints leg. The three jobs below
+through the named ``hf_5_candidate`` constraints leg. The four jobs below
 run a smoke-tier-or-wider pytest selection with NO deselect of the R0 deep
 sweep, so they must pin the SAME exact version those legs use; letting the
 resolver pick a transformers release ad hoc inside the open band is
@@ -53,7 +53,7 @@ CANDIDATE_CONSTRAINTS = (
 #: non-candidate legs explicitly ``--deselect`` the sweep file by name
 #: (nightly.yml, band-keyed-rows comment), and its candidate leg already
 #: pins through ``-c .../hf_5_candidate.txt``.
-JOBS_RUNNING_R0_BROAD_SELECTION = ("fast-tier", "coverage", "shuffle-stress")
+JOBS_RUNNING_R0_BROAD_SELECTION = ("fast-tier", "canonical-tier", "coverage", "shuffle-stress")
 
 _JOB_BLOCK_RE_TEMPLATE = r"\n  {job}:\n(.*?)(?=\n  [A-Za-z][A-Za-z0-9_-]*:\n|\Z)"
 

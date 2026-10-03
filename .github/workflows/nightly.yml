@@ -244,6 +244,78 @@ jobs:
                 -m '' -q --tb=short -p no:randomly
           done
 
+  canonical-tier:
+    # The smoke tier is a coverage-chosen subset; everything demoted out of it
+    # is unmarked and runs in the mid tier. fast-tier above runs on torch
+    # 2.7.1, so without this job the demoted tests would run on the canonical
+    # torch (the newest-admitted tests.yml row, py3.10 + torch 2.13.0) on no
+    # scheduled leg. Demoting must never mean "runs nowhere on the main torch".
+    name: Mid tier on the canonical torch
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.10"
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+
+      - name: Install torch and TorchLens
+        run: |
+          # Same exact pins as the newest-admitted tests.yml smoke row, as a
+          # +cpu torch/torchvision pair from the CPU index in ONE resolve.
+          cat > "${{ runner.temp }}/torch-2.13-constraints.txt" <<'EOF'
+          torch==2.13.0+cpu
+          torchvision==0.28.0+cpu
+          EOF
+          # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          uv pip install --system -c "${{ runner.temp }}/torch-2.13-constraints.txt" \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,test,tabular]" \
+            "torch==2.13.0+cpu" \
+            "torchvision==0.28.0+cpu" \
+            "transformers==5.14.1"
+          uv pip check
+          python -c "import torch, torchvision; assert torch.__version__ == '2.13.0+cpu', torch.__version__; print(torch.__version__, torchvision.__version__)"
+
+      - name: Run the mid tier
+        env:
+          # One torch thread per xdist worker (see tests.yml smoke step).
+          OMP_NUM_THREADS: "1"
+        run: |
+          # A command-line -m REPLACES the pyproject addopts "-m 'not rare'";
+          # conjoin `not rare` to keep rare tests excluded.
+          pytest tests/ -m "not slow and not heavy and not rare" -n 4 --tb=short \
+            --junitxml="${{ runner.temp }}/canonical-tier.junit.xml"
+
+      - name: Fail on an under-executed canonical tier
+        # Executed-floor attestation: the mid tier executed ~18,300 tests on
+        # 2026-10-02; the floor is roughly half so collection drift or an
+        # importorskip cascade goes red while normal churn never trips.
+        run: |
+          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/canonical-tier.junit.xml" 9000
+
+      - name: Upload canonical-tier junit (skip audit trail)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: canonical-tier-junit
+          path: ${{ runner.temp }}/canonical-tier.junit.xml
+          retention-days: 30
+
   coverage:
     name: Coverage floor (smoke tier)
     runs-on: ubuntu-latest
