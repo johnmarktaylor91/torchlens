@@ -184,7 +184,9 @@ def capture_armed_state() -> _ArmedState | None:
     try:
         if not torch.distributed.is_initialized():
             return None
-    except Exception:
+    except (AttributeError, RuntimeError):
+        # A build without a usable c10d registry cannot prove "no group":
+        # stay armed (fail closed).
         return state
     return state
 
