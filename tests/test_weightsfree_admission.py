@@ -22,8 +22,6 @@ from test_weightsfree_fixtures import (
 import torchlens as tl
 from torchlens._robustness import UnsupportedTensorVariantError
 
-pytestmark = pytest.mark.smoke
-
 
 def _meta_model() -> nn.Module:
     with torch.device("meta"):

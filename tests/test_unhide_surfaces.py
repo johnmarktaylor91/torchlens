@@ -25,7 +25,6 @@ import torchlens as tl
 _REPO = Path(__file__).resolve().parents[1]
 
 
-@pytest.mark.smoke
 def test_stats_and_aggregate_are_declared_surface() -> None:
     """The five-memo promotion: both names in ``__all__`` and resolving."""
 
@@ -37,7 +36,6 @@ def test_stats_and_aggregate_are_declared_surface() -> None:
     assert tl.aggregate is stats_module.aggregate
 
 
-@pytest.mark.smoke
 def test_stats_namespace_serves_the_advertised_accumulators() -> None:
     """Every accumulator the stats doc tables advertises resolves."""
 
@@ -61,7 +59,6 @@ def test_stats_namespace_serves_the_advertised_accumulators() -> None:
         assert hasattr(tl.stats, name), name
 
 
-@pytest.mark.smoke
 def test_readme_keeps_the_unhidden_surfaces_visible() -> None:
     """The unhide ratchet: README must keep naming each surfaced capability.
 
@@ -161,7 +158,6 @@ def test_stats_doc_python_fences_execute() -> None:
         exec(code, namespace)  # noqa: S102 -- executing our own documentation
 
 
-@pytest.mark.smoke
 def test_stats_doc_is_linked_from_readme_and_glossary() -> None:
     """The doc of record is reachable from both teaching entry points."""
 

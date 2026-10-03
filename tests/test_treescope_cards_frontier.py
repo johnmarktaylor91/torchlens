@@ -7,7 +7,6 @@ clean parent and first dirty child, in deterministic order.
 
 from __future__ import annotations
 
-import pytest
 import torch
 from torch import nn
 
@@ -32,7 +31,6 @@ class _Poisoned(nn.Module):
         return self.c(h)
 
 
-@pytest.mark.smoke
 def test_frontier_is_the_clean_to_dirty_transition() -> None:
     """Exactly one first-dirty site; parent clean; child flagged."""
 
@@ -51,7 +49,6 @@ def test_frontier_is_the_clean_to_dirty_transition() -> None:
     assert len(frontier.sites) < frontier.flagged_total
 
 
-@pytest.mark.smoke
 def test_clean_capture_has_empty_frontier_with_coverage() -> None:
     """No flags -> empty frontier, and the coverage basis is disclosed."""
 
@@ -61,7 +58,6 @@ def test_clean_capture_has_empty_frontier_with_coverage() -> None:
     assert frontier.coverage  # never an undisclosed empty answer
 
 
-@pytest.mark.smoke
 def test_frontier_query_is_side_effect_free() -> None:
     """A pure graph query: no payload reads, no trace mutation."""
 

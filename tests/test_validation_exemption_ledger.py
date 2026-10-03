@@ -53,8 +53,6 @@ from _source_corpus import package_files, package_source
 
 from torchlens.validation import exemptions as ex
 
-pytestmark = pytest.mark.smoke
-
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _EXEMPTIONS_SRC = _REPO_ROOT / "torchlens" / "validation" / "exemptions.py"
 _CORE_SRC = _REPO_ROOT / "torchlens" / "validation" / "core.py"

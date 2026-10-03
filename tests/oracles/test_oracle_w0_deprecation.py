@@ -24,8 +24,6 @@ from ._deprecation import (
 )
 from ._invocation_templates import SEED_TEMPLATES
 
-pytestmark = pytest.mark.smoke
-
 
 def test_registry_is_empty_and_loads() -> None:
     """The package is deprecation-free; the registry says so as DATA."""

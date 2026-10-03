@@ -17,10 +17,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-import pytest
-
-pytestmark = pytest.mark.smoke
-
 _GOLDEN = Path(__file__).with_name("goldens") / "plain_cnn.json"
 
 

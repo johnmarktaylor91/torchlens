@@ -27,8 +27,6 @@ from torchlens.observability._artifact import CommittedBlock
 from torchlens.trackers._errors import TagGrammarError, TrackersError
 from torchlens.utils._torch_compat import HAS_AMP_GRADSCALER
 
-pytestmark = pytest.mark.smoke
-
 _requires_gradscaler = pytest.mark.skipif(
     not HAS_AMP_GRADSCALER,
     reason="torch.amp.GradScaler (device-agnostic) postdates the torch 2.1 floor",

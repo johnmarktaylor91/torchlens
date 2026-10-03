@@ -19,8 +19,6 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens import observability as obs
 
-pytestmark = pytest.mark.smoke
-
 
 def _backward_session(model: nn.Module, x: torch.Tensor, **backward_kwargs):
     """One armed capture + log_backward inside one owned session."""
@@ -89,6 +87,7 @@ def test_second_pass_markers_carry_pass_index() -> None:
     log.cleanup()
 
 
+@pytest.mark.smoke
 def test_raising_node_leaks_are_drained_and_disclosed() -> None:
     """TN-D17: a raising node's open marker closes at the pass boundary."""
 

@@ -90,7 +90,6 @@ def _capture_multi_output() -> tl.Trace:
     return tl.trace(_MultiOutput(), torch.linspace(-1.0, 1.0, 4).reshape(1, 4))
 
 
-@pytest.mark.smoke
 def test_repeated_lookup_identity() -> None:
     """Row 1: repeated lookups return the SAME object, across every accessor."""
 
@@ -128,7 +127,6 @@ def test_record_lifetime_pinned_by_trace() -> None:
     assert layer_ref() is None, "record outlived its collected Trace (leak)"
 
 
-@pytest.mark.smoke
 def test_group_fields_return_live_immutable_views() -> None:
     """Row 2 (FORK-1, decided 2026-08-12): live immutable group views.
 
@@ -160,7 +158,6 @@ def test_group_fields_return_live_immutable_views() -> None:
         rec_first.append("__aliases_v1_sentinel__")
 
 
-@pytest.mark.smoke
 def test_relation_reads_are_immutable_views() -> None:
     """Row 3 (FORK-1, decided 2026-08-12): relation reads are views.
 
@@ -196,7 +193,6 @@ def test_relation_reads_are_immutable_views() -> None:
     assert op.children == original
 
 
-@pytest.mark.smoke
 def test_plain_mutable_containers_are_observably_mutable() -> None:
     """Row 3b: NON-relation container fields keep the stored-container contract.
 
@@ -215,7 +211,6 @@ def test_plain_mutable_containers_are_observably_mutable() -> None:
     assert "__aliases_v1_domain__" not in op.parent_arg_positions
 
 
-@pytest.mark.smoke
 def test_multi_output_siblings_share_call_facts_not_identity() -> None:
     """Row 4: multi-output siblings agree on call facts, stay distinct rows."""
 
@@ -241,7 +236,6 @@ def test_multi_output_siblings_share_call_facts_not_identity() -> None:
         first.children = original_first
 
 
-@pytest.mark.smoke
 def test_payload_identity_and_distinctness() -> None:
     """Row 5: payload reads are identity-stable; equal values stay distinct."""
 
@@ -260,7 +254,6 @@ def test_payload_identity_and_distinctness() -> None:
     assert op.out is not other_op.out
 
 
-@pytest.mark.smoke
 def test_op_copy_selective_depth() -> None:
     """Row 6: Op.copy() honors the documented share/deep split, field by field."""
 
@@ -289,7 +282,6 @@ def test_op_copy_selective_depth() -> None:
     assert "__aliases_v1_copy__" not in op.children
 
 
-@pytest.mark.smoke
 def test_fork_isolation() -> None:
     """Row 7: forked traces are fully isolated record graphs."""
 
@@ -307,7 +299,6 @@ def test_fork_isolation() -> None:
     assert "__aliases_v1_parent__" not in fork.ops[label].children
 
 
-@pytest.mark.smoke
 def test_direct_write_warning_and_dirty_transition() -> None:
     """Row 8: guarded direct writes warn ONCE and mark the trace dirty.
 
@@ -336,7 +327,6 @@ def test_direct_write_warning_and_dirty_transition() -> None:
     assert repeat == []
 
 
-@pytest.mark.smoke
 def test_source_trace_weakref_lifetime() -> None:
     """Row 9: op->trace is weak; a collected Trace is not resurrected.
 
@@ -357,7 +347,6 @@ def test_source_trace_weakref_lifetime() -> None:
     assert exc_info.value.fields["code"] == "trace_reference_collected"
 
 
-@pytest.mark.smoke
 def test_equivalence_group_shared_live_view() -> None:
     """Row 10 (FORK-1): one shared LIVE view per group, mutation impossible.
 

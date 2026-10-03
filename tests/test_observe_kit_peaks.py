@@ -4,14 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
 from torchlens.observe import format_pass_peak, pass_peak_facts
-
-pytestmark = pytest.mark.smoke
 
 TORCHLENS_DIR = Path(tl.__file__).resolve().parent
 

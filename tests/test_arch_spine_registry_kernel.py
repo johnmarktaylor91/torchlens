@@ -23,8 +23,6 @@ from torchlens._registry import (
     kernel_universe_rows,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 def _fresh_registry(name: str = "test-domain") -> Registry[object]:
     """Return an unenrolled registry (kernel inventory stays clean)."""

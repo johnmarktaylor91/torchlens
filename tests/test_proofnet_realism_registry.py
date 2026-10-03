@@ -12,10 +12,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
-pytestmark = [pytest.mark.smoke]
-
 REGISTRY_PATH = Path(__file__).resolve().parent / "support" / "proofnet" / "realism_registry.tsv"
 
 REALISM_TIERS = {"R1", "R0", "toy", "NONE"}

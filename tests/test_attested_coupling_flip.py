@@ -22,8 +22,6 @@ from torchlens.errors.episode import EpisodeCaptureError
 from torchlens.intervention import at_step
 from torchlens.options import EpisodeSpec
 
-pytestmark = pytest.mark.smoke
-
 SEED = 1234
 
 
@@ -394,6 +392,7 @@ def test_halt_mid_episode_keeps_measured_fire_counts():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_selective_save_couples_and_keeps_evidence():
     """save= narrows retention; the coupling evidence still settles whole."""
 

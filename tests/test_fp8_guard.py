@@ -230,7 +230,6 @@ def test_tensor_nanequal_rejects_adjacent_tiny_fp8_values_with_tolerance(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_fp8_capture_records_the_cast_activation() -> None:
     """Capture logs the fp8 op and reports its real dtype."""
 

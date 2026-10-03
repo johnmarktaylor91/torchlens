@@ -54,7 +54,6 @@ def test_bundle_output_delta_refuses_output_arity_mismatch() -> None:
         bundle.output_delta("baseline")
 
 
-@pytest.mark.smoke
 def test_bundle_output_delta_still_works_on_matching_arity() -> None:
     """Equal output arity keeps the comparison green."""
 
@@ -73,7 +72,6 @@ def test_bundle_output_delta_still_works_on_matching_arity() -> None:
     assert len(delta["other"]) == 2, "expected one delta row per output"
 
 
-@pytest.mark.smoke
 def test_fast_run_refuses_slot_label_parity_tamper(tmp_path) -> None:
     """A descriptor with fewer op_labels than output slots must refuse the
     fast iteration typed instead of silently skipping the trailing guards."""

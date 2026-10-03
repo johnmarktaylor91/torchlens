@@ -19,15 +19,12 @@ from __future__ import annotations
 
 import gc
 
-import pytest
 import torch
 import torch.nn as nn
 
 import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens.validation.diagnostics import TRACE_FAILURE_ATTR
-
-pytestmark = pytest.mark.smoke
 
 
 def _capture(model: nn.Module, x: torch.Tensor):

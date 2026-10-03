@@ -18,8 +18,6 @@ import torch.nn as nn
 
 import torchlens.checks as tc
 
-pytestmark = pytest.mark.smoke
-
 
 class _DeadNet(nn.Module):
     """A trunk whose `dead` layer is cut from the loss (graph-preserving)."""
@@ -42,6 +40,7 @@ class _DeadNet(nn.Module):
         return self.head(cut + 1.0)
 
 
+@pytest.mark.smoke
 @pytest.mark.parametrize("mechanism", ["graph_preserving", "graph_cut"])
 def test_dead_layer_gradient_fact_fires_and_naive_change_is_vacuous(mechanism: str) -> None:
     """The D2 demonstration: gradient fact catches what movement cannot.
@@ -134,6 +133,7 @@ def test_no_grad_findings_distinguish_none_from_zero() -> None:
     assert "grad is None" in kinds["dead.weight"]
 
 
+@pytest.mark.smoke
 def test_frozen_clone_raises_with_delta_evidence_and_aliases() -> None:
     """The frozen invariant (D5): clone evidence names every alias."""
 
@@ -175,6 +175,7 @@ def test_frozen_clone_raises_with_delta_evidence_and_aliases() -> None:
     assert exc.value.fields["report"]["schema_version"] == 1
 
 
+@pytest.mark.smoke
 def test_frozen_digest_optin_raises_on_proof_never_exact_pass() -> None:
     """The digest opt-in (D5/DR-3): differing digest proves; equality never
     emits an exact pass -- a healthy run records zero raises and the
@@ -236,6 +237,7 @@ def test_update_ratio_raw_and_lr_normalized_with_zero_baseline() -> None:
     assert zero_baseline[0].values["update_ratio"] is None
 
 
+@pytest.mark.smoke
 def test_update_ratio_bounds_warn_and_lr_zero_unavailable() -> None:
     """Explicit per-registration bounds warn; lr=0 companion is unavailable."""
 
@@ -320,6 +322,7 @@ def test_unknown_optimizer_band_unavailable_with_reason() -> None:
     assert "no adapter" in unavailable["param_movement_decay_band"]
 
 
+@pytest.mark.smoke
 def test_decay_band_movement_fact_carries_betas() -> None:
     """The corroborating decay fact rides adapter facts incl. betas (D2)."""
 
@@ -348,6 +351,7 @@ def test_decay_band_movement_fact_carries_betas() -> None:
         assert "lags" in fact.message
 
 
+@pytest.mark.smoke
 def test_registration_refusals_are_typed() -> None:
     """Unknown names / junk windows / junk actions refuse typed."""
 

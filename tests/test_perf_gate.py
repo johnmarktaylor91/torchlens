@@ -307,7 +307,6 @@ def _profile_call_count(callback: Callable[[], object]) -> int:
     return sum(entry.callcount for entry in profiler.getstats())
 
 
-@pytest.mark.smoke
 def test_module_calls_accessor_is_cached_with_profiled_rebuild_reduction(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -361,6 +360,7 @@ def test_module_calls_cache_invalidates_on_supported_call_mutation() -> None:
     assert refreshed["shared:replacement"] is replacement
 
 
+@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("dtype", "shape"),
     [

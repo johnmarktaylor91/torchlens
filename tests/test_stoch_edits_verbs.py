@@ -70,7 +70,6 @@ def _toy_trace() -> tl.Trace:
     return tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
 
 
-@pytest.mark.smoke
 def test_permute_batch_oracle_reproducibility_and_extent() -> None:
     """A2 core: recorded-permutation oracle + seed law + extent refusal."""
 
@@ -100,7 +99,6 @@ def test_permute_batch_oracle_reproducibility_and_extent() -> None:
     assert excinfo.value.fields["code"] == "permute_batch_extent_invalid"
 
 
-@pytest.mark.smoke
 def test_permute_batch_axis_law() -> None:
     """A2b: no axis refuses at construction; wrong-rank axis refuses at fire."""
 
@@ -139,7 +137,6 @@ def test_permute_batch_gradients_route_to_permuted_sources() -> None:
     assert x.grad is not None and torch.equal(x.grad, expected)
 
 
-@pytest.mark.smoke
 def test_draw_independence_matrix_on_real_two_pass_recurrence() -> None:
     """A4b analog: per_firing pass draws DIFFER, per_rule draws are EQUAL.
 
@@ -180,7 +177,6 @@ def test_draw_independence_matrix_on_real_two_pass_recurrence() -> None:
     assert after[-2:] == before[-2:]
 
 
-@pytest.mark.smoke
 def test_derived_seed_is_rederivable_from_recorded_facts() -> None:
     """A8: the recorded derived seed equals the eager re-derivation."""
 
@@ -198,7 +194,6 @@ def test_derived_seed_is_rederivable_from_recorded_facts() -> None:
     assert rederived == record["derived_seed"]
 
 
-@pytest.mark.smoke
 def test_seed_is_required_and_auto_derives_from_trace_seed() -> None:
     """D4/D5: seed=None refuses; 'auto' canonicalizes against trace.random_seed."""
 
@@ -223,7 +218,6 @@ def test_seed_is_required_and_auto_derives_from_trace_seed() -> None:
     assert excinfo.value.fields["code"] == "sampling_trace_seed_unavailable"
 
 
-@pytest.mark.smoke
 def test_mask_equivariance_law() -> None:
     """A3: uniform span masks pass with recorded facts; ragged masks refuse."""
 
@@ -251,7 +245,6 @@ def test_mask_equivariance_law() -> None:
         assert excinfo.value.fields["code"] == "mask_not_row_equivariant"
 
 
-@pytest.mark.smoke
 def test_resample_rows_from_per_row_coherent_draws() -> None:
     """Whole-row coherent donor sampling with replacement, agreement-aware."""
 
@@ -285,7 +278,6 @@ def test_resample_rows_from_per_row_coherent_draws() -> None:
     assert excinfo.value.fields["code"] == "sampling_geometry_mismatch"
 
 
-@pytest.mark.smoke
 def test_singleton_agreement_class_discloses_and_strict_refuses() -> None:
     """D15: class of one -> coded warning by default, refusal under strict."""
 
@@ -311,7 +303,6 @@ def test_singleton_agreement_class_discloses_and_strict_refuses() -> None:
     assert excinfo.value.fields["code"] == "sampling_agreement_class_too_small"
 
 
-@pytest.mark.smoke
 def test_mean_fill_axis_semantics_and_derived_flag() -> None:
     """A1/A1b analog: real over= vocabulary; batch_independent DERIVED."""
 
@@ -348,7 +339,6 @@ def test_mean_fill_axis_semantics_and_derived_flag() -> None:
     ), "the S-18 alias disclosure carries its contract code"
 
 
-@pytest.mark.smoke
 def test_trace_backed_population_reduce_refuses() -> None:
     """D3: reductions need a tensor stack; trace members have none to reduce."""
 
@@ -359,7 +349,6 @@ def test_trace_backed_population_reduce_refuses() -> None:
     assert excinfo.value.fields["code"] == "population_reduce_unsupported"
 
 
-@pytest.mark.smoke
 def test_mean_from_evidence_set_fill() -> None:
     """Deterministic elementwise evidence mean; stochastic=False recorded."""
 
@@ -398,7 +387,6 @@ def test_set_direction_mean_projects_and_recenters() -> None:
     assert excinfo.value.fields["code"] == "sampling_geometry_mismatch"
 
 
-@pytest.mark.smoke
 def test_patch_from_plan_geometry_and_matching_laws() -> None:
     """D9 whole-event geometry proof + whole-event matching carrier law."""
 
@@ -421,7 +409,6 @@ def test_patch_from_plan_geometry_and_matching_laws() -> None:
     assert excinfo.value.fields["code"] == "sampling_share_draw_invalid"
 
 
-@pytest.mark.smoke
 def test_chunked_capture_refuses_batch_coherent_edits() -> None:
     """D34: a chunked-forward capture refuses whole-batch edits at attach."""
 
@@ -439,7 +426,6 @@ def test_chunked_capture_refuses_batch_coherent_edits() -> None:
     fork.do(tl.label("relu_1_2"), resample_rows_from(rows, seed=1, axis=0))
 
 
-@pytest.mark.smoke
 def test_fire_record_carries_the_sampling_note_via_one_builder() -> None:
     """D12: realized draws ride determinism_note through the ONE builder."""
 

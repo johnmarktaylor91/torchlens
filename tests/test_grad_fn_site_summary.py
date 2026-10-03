@@ -17,8 +17,6 @@ import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens.quantities import Duration
 
-pytestmark = pytest.mark.smoke
-
 
 class _ReusedModule(nn.Module):
     """One Linear called twice: both calls share a site key."""
@@ -63,6 +61,7 @@ def test_rollup_groups_reused_module_calls_under_one_site() -> None:
         assert entry["pass_coverage"] == tuple(sorted(entry["pass_coverage"]))
 
 
+@pytest.mark.smoke
 def test_rollup_carries_live_timing_evidence() -> None:
     trace = _backward_trace()
     summary = trace.grad_fn_site_summary

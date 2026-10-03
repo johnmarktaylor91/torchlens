@@ -39,8 +39,6 @@ from torchlens.visualization.themes import (
     theme_node_attrs,
 )
 
-pytestmark = pytest.mark.smoke
-
 _VIZ_PACKAGE = Path(tl.visualization.__file__).parent
 
 

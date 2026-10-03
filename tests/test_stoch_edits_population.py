@@ -13,7 +13,6 @@ import torch
 from torchlens.intervention import OneDatum, PerRowDatums, reference
 
 
-@pytest.mark.smoke
 def test_origin_is_required_and_nonempty() -> None:
     """D2/DIS-3: a population without recorded provenance refuses typed."""
 
@@ -25,7 +24,6 @@ def test_origin_is_required_and_nonempty() -> None:
     assert excinfo.value.fields["code"] == "population_origin_required"
 
 
-@pytest.mark.smoke
 def test_tensor_stack_members_are_axis0_slices_with_content_digest() -> None:
     """The noun's documented stacking contract + the mandatory D11 digest."""
 
@@ -42,7 +40,6 @@ def test_tensor_stack_members_are_axis0_slices_with_content_digest() -> None:
     assert other.population_identity != ref.population_identity
 
 
-@pytest.mark.smoke
 def test_member_sequence_heterogeneous_refuses() -> None:
     """A donor population is one homogeneous stack."""
 
@@ -54,7 +51,6 @@ def test_member_sequence_heterogeneous_refuses() -> None:
     assert excinfo.value.fields["code"] == "population_heterogeneous"
 
 
-@pytest.mark.smoke
 def test_datum_count_mismatch_refuses() -> None:
     """Every member carries exactly one datum, aligned by order."""
 
@@ -90,7 +86,6 @@ def test_reducers_are_deterministic_tensors() -> None:
     assert tuple(reduced.shape) == (1,)
 
 
-@pytest.mark.smoke
 def test_reducer_accumulates_reduced_precision_in_float32() -> None:
     """A11: bf16 members accumulate in float32 and cast back."""
 
@@ -126,7 +121,6 @@ def test_reducer_agreement_and_refusals() -> None:
     assert excinfo.value.fields["code"] == "population_reduce_underdetermined"
 
 
-@pytest.mark.smoke
 def test_trace_backed_population_records_address_identity() -> None:
     """D11: trace-backed populations default to the ADDRESS digest kind."""
 

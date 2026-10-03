@@ -47,7 +47,6 @@ def test_real_names_and_dir_contract() -> None:
     assert callable(neuro.rdms)
 
 
-@pytest.mark.smoke
 def test_brain_score_adapters_gate_on_brainscore_vision() -> None:
     """The D14 alias pair resolves iff brainscore_vision is installed."""
 
@@ -65,7 +64,6 @@ def test_brain_score_adapters_gate_on_brainscore_vision() -> None:
         assert callable(neuro.get_activations_fn)
 
 
-@pytest.mark.smoke
 def test_hasattr_answers_and_underscore_short_circuit() -> None:
     """hasattr never raises; underscore probes get plain AttributeError."""
 
@@ -80,7 +78,6 @@ def test_hasattr_answers_and_underscore_short_circuit() -> None:
     assert getattr(neuro, "no_such_name", None) is None
 
 
-@pytest.mark.smoke
 def test_redirect_rows_are_typed_teaching_attribute_errors() -> None:
     """Redirect rows raise FacadeTeachingError (AttributeError lineage)."""
 
@@ -93,7 +90,6 @@ def test_redirect_rows_are_typed_teaching_attribute_errors() -> None:
         assert error.fields["attribute"] == name
 
 
-@pytest.mark.smoke
 def test_refusal_rows_are_typed_teaching_attribute_errors() -> None:
     """Refusal rows raise FacadeTeachingError with the refusal code."""
 
@@ -106,7 +102,6 @@ def test_refusal_rows_are_typed_teaching_attribute_errors() -> None:
         assert error.fields["attribute"] == name
 
 
-@pytest.mark.smoke
 def test_brain_score_redirect_names_verified_adapters() -> None:
     """D14 alias branch: the redirect names the two verified spellings."""
 
@@ -148,7 +143,6 @@ def test_redirect_table_walk_every_target_resolves() -> None:
         assert target is not None, f"redirect {name!r} names a dead spelling {dotted!r}"
 
 
-@pytest.mark.smoke
 def test_refusal_rows_name_an_owner() -> None:
     """Each refusal names an owning neighbour or the feeding spelling."""
 
@@ -165,7 +159,6 @@ def test_refusal_rows_name_an_owner() -> None:
         assert any(owner in message for owner in owners), name
 
 
-@pytest.mark.smoke
 def test_dependency_gate_teaches_install_when_absent(monkeypatch: pytest.MonkeyPatch) -> None:
     """An absent dependency raises AttributeError with install semantics."""
 
@@ -190,7 +183,6 @@ def test_dependency_gate_teaches_install_when_absent(monkeypatch: pytest.MonkeyP
     monkeypatch.undo()
 
 
-@pytest.mark.smoke
 def test_module_docstring_is_the_five_section_map() -> None:
     """The docstring carries the extract->geometry->handoff->score->refusal map."""
 

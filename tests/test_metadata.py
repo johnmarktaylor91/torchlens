@@ -49,7 +49,6 @@ class _SharedMultiOutputModel(nn.Module):
 # =============================================================================
 
 
-@pytest.mark.smoke
 def test_general_info_fields(small_input):
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input)
@@ -60,7 +59,6 @@ def test_general_info_fields(small_input):
     assert mh.num_ops > 0
 
 
-@pytest.mark.smoke
 def test_model_structure_non_recurrent(small_input: torch.Tensor) -> None:
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input)
@@ -117,7 +115,6 @@ def test_layer_tracking_fields(small_input):
     assert isinstance(mh.layer_dict_all_keys, dict)
 
 
-@pytest.mark.smoke
 def test_input_output_layers(small_input):
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input)

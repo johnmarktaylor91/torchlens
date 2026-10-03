@@ -17,7 +17,7 @@ import pytest
 
 import torchlens as tl
 
-pytestmark = [pytest.mark.backend_parity, pytest.mark.smoke]
+pytestmark = pytest.mark.backend_parity
 
 _REPO_ROOT = Path(tl.__file__).resolve().parent.parent
 _GUARD = _REPO_ROOT / "scripts" / "check_ci_executed_tests.py"

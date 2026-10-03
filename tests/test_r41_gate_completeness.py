@@ -143,7 +143,6 @@ def _iter_fixed_root_callables() -> list[tuple[str, str, Callable[..., Any]]]:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_immunizer_no_callable_annotation_op_passes_gate() -> None:
     """No ``Callable``-annotated op may pass the purity gate (enforced, not asserted)."""
 
@@ -155,7 +154,6 @@ def test_immunizer_no_callable_annotation_op_passes_gate() -> None:
     assert not leaks, f"Callable-annotated ops still admitted by the gate: {sorted(set(leaks))}"
 
 
-@pytest.mark.smoke
 def test_immunizer_no_callable_named_param_op_passes_gate() -> None:
     """No higher-order op with a callable-named parameter may pass the gate.
 
@@ -172,7 +170,6 @@ def test_immunizer_no_callable_named_param_op_passes_gate() -> None:
     assert not leaks, f"Callable-named-param ops still admitted by the gate: {sorted(set(leaks))}"
 
 
-@pytest.mark.smoke
 def test_immunizer_no_global_mutator_verb_passes_gate() -> None:
     """No callable whose name matches a global-mutator verb may pass the gate."""
 
@@ -222,7 +219,6 @@ def _resolve_attr(ref: str) -> Callable[..., Any]:
     return getattr(_FIXED_ROOTS[namespace], qualname)
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("ref", _ALL_SECE_R40_REFS)
 def test_secE_r40_targets_fail_purity_gate(ref: str) -> None:
     """Every secE-r40-1 op is refused by the purity gate."""
@@ -230,7 +226,6 @@ def test_secE_r40_targets_fail_purity_gate(ref: str) -> None:
     assert not is_pure_forward_callable(_resolve_attr(ref))
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("ref", _ALL_SECE_R40_REFS)
 def test_secE_r40_targets_denied_at_resolver_even_under_trust(ref: str) -> None:
     """Fixed-root refs for the secE-r40-1 ops never resolve, even with trust satisfied."""
@@ -255,7 +250,6 @@ def _named(name: str) -> Callable[..., Any]:
     return _f
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "name",
     [
@@ -291,7 +285,6 @@ def _higher_order(param_annotation: Any, param_name: str = "fn") -> Callable[...
     return _f
 
 
-@pytest.mark.smoke
 def test_secE_r40_future_higher_order_ops_denied_by_signature() -> None:
     """A future callable-taking op is denied by SIGNATURE shape (annotation OR name)."""
 
@@ -328,7 +321,6 @@ _MUTATOR_LOOKALIKE_PURE_REFS = [
 ]
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("ref", _MUTATOR_LOOKALIKE_PURE_REFS)
 def test_secE_r40_mutator_lookalikes_not_over_denied(ref: str) -> None:
     """The verb close preserves pure ops that merely contain a mutator token."""
@@ -336,7 +328,6 @@ def test_secE_r40_mutator_lookalikes_not_over_denied(ref: str) -> None:
     assert is_pure_forward_callable(_resolve_attr(ref))
 
 
-@pytest.mark.smoke
 def test_secE_r40_pure_forward_surface_resolves() -> None:
     """The r41 additions do not over-deny the legitimate pure forward surface."""
 
@@ -368,7 +359,6 @@ def test_secE_r40_pure_forward_surface_resolves() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_secE_r40_prior_controls_still_denied() -> None:
     """The r39 (invoke) and r6 (mutator) controls remain refused (no regression)."""
 

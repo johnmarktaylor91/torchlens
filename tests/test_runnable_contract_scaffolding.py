@@ -5,6 +5,8 @@ from __future__ import annotations
 import inspect
 from dataclasses import fields
 
+import pytest
+
 from torchlens.errors import ReattachError, RunnableTLSPECError, StateBindingError
 from torchlens.runnable import (
     CANONICAL_INITIALIZER_BY_ROLE,
@@ -29,6 +31,7 @@ from torchlens.runnable import (
 )
 
 
+@pytest.mark.smoke
 def test_frozen_runnable_schema_values() -> None:
     """Keep the v2 schema versions and key enum values frozen."""
 

@@ -114,7 +114,6 @@ def _slot_universe(path: Path) -> list[str]:
     )
 
 
-@pytest.mark.smoke
 def test_r77_dead_extra_state_universe_matches_live_and_binds(tmp_path: Path) -> None:
     """RED-now-fixed: dead-save universe == live-save universe; honest bind succeeds.
 
@@ -163,7 +162,6 @@ def test_r77_dead_extra_state_universe_matches_live_and_binds(tmp_path: Path) ->
     assert dead_result.report.poisoned == live_result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_r77_plain_bn_dead_universe_unchanged(tmp_path: Path) -> None:
     """Zero collateral: the tensor-only-state dead lane (r75 F2) declares identically."""
 
@@ -185,7 +183,6 @@ def test_r77_plain_bn_dead_universe_unchanged(tmp_path: Path) -> None:
     assert "bn.num_batches_tracked" in live_universe
 
 
-@pytest.mark.smoke
 def test_r77_unknown_universe_refuses_loudly(tmp_path: Path) -> None:
     """No capture-time record at all: the dead save refuses TYPED, never under-declares.
 

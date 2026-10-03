@@ -195,13 +195,11 @@ class TestLazyDecoration:
         yield
         wrap_torch()
 
-    @pytest.mark.smoke
     def test_import_does_not_decorate(self):
         """After import torchlens (with unwrapped state), torch functions are originals."""
         assert _state._is_decorated is False
         assert not is_decorated_function(torch.cos)
 
-    @pytest.mark.smoke
     def test_trace_triggers_wrapping(self):
         """First trace should auto-wrap torch functions."""
         assert _state._is_decorated is False
@@ -210,6 +208,7 @@ class TestLazyDecoration:
         assert _state._is_decorated is True
         assert is_decorated_function(torch.cos)
 
+    @pytest.mark.smoke
     def test_stays_wrapped_after_trace(self):
         """After trace, torch stays wrapped for subsequent calls."""
         model = SimpleModel()
@@ -295,13 +294,11 @@ class TestToggleState:
         """Ensure torch functions are wrapped for these tests."""
         wrap_torch()
 
-    @pytest.mark.smoke
     def test_toggle_off_by_default(self):
         """After import, logging toggle should be off."""
         assert _state._logging_enabled is False
         assert _state._active_trace is None
 
-    @pytest.mark.smoke
     def test_toggle_on_during_logging(self):
         """Inside trace, toggle should be True."""
         observed = {}
@@ -418,12 +415,10 @@ class TestSequenceSlotFix:
         assert result.shape == (2,), f"wrong shape {msg}"
         assert torch.allclose(result, torch.stack([D[0, 0], D[1, 1]])), msg
 
-    @pytest.mark.smoke
     def test_tensor_from_0d_while_wrapped(self):
         """torch.tensor([0-d, 0-d]) must work while decoration is active."""
         self._check_tensor_from_0d("while wrapped")
 
-    @pytest.mark.smoke
     def test_tensor_from_0d_after_unwrap(self):
         """torch.tensor([0-d, 0-d]) must work after unwrap_torch()."""
         unwrap_torch()
@@ -681,6 +676,7 @@ class TestPauseLogging:
         finally:
             _state._logging_enabled = False
 
+    @pytest.mark.smoke
     def test_operations_during_pause_not_logged(self):
         """Torch ops inside pause_logging should not appear in graph."""
 
@@ -699,6 +695,7 @@ class TestPauseLogging:
         cos_layers = [lbl for lbl in result.layer_labels if "cos" in lbl.lower()]
         assert len(cos_layers) == 0, f"cos appeared in graph during pause: {cos_layers}"
 
+    @pytest.mark.smoke
     def test_activation_transform_not_logged(self):
         """activation_transform runs inside pause_logging, ops should not appear."""
         model = SimpleModel()

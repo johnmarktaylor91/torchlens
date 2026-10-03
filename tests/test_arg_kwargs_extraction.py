@@ -330,7 +330,6 @@ def _trace_with_args_templates(
     )
 
 
-@pytest.mark.smoke
 def test_traced_where_kwargs_recorded_as_parents() -> None:
     """torch.where(cond, input=a, other=b) records a and b as parents."""
 
@@ -348,7 +347,6 @@ def test_traced_where_kwargs_recorded_as_parents() -> None:
     assert any("gt" in p for p in parents), parents
 
 
-@pytest.mark.smoke
 def test_traced_linear_weight_kwarg_recorded_as_parent() -> None:
     """F.linear(x, weight=w) with a derived (non-Parameter) weight records w."""
 
@@ -364,7 +362,6 @@ def test_traced_linear_weight_kwarg_recorded_as_parent() -> None:
     assert any("add" in p for p in parents), parents
 
 
-@pytest.mark.smoke
 def test_traced_bmm_mat2_kwarg_recorded_as_parent() -> None:
     """torch.bmm(a, mat2=b) records b as a parent."""
 
@@ -381,7 +378,6 @@ def test_traced_bmm_mat2_kwarg_recorded_as_parent() -> None:
     assert any("transpose" in p for p in parents), parents
 
 
-@pytest.mark.smoke
 def test_traced_addmm_kwargs_recorded_as_parents() -> None:
     """torch.addmm(bias, m1, mat2=m2) records the kwarg matrix as a parent."""
 
@@ -400,7 +396,6 @@ def test_traced_addmm_kwargs_recorded_as_parents() -> None:
     assert any("mul" in p for p in parents), parents
 
 
-@pytest.mark.smoke
 def test_traced_normal_mean_std_kwargs_recorded_as_parents() -> None:
     """torch.normal(mean=m, std=s) records both kwarg tensors as parents.
 
@@ -422,7 +417,6 @@ def test_traced_normal_mean_std_kwargs_recorded_as_parents() -> None:
     assert not normal_layer.is_internal_source
 
 
-@pytest.mark.smoke
 def test_traced_zeros_like_source_recorded_as_parent() -> None:
     """torch.zeros_like(y) records y as a shape/source parent."""
 
@@ -440,7 +434,6 @@ def test_traced_zeros_like_source_recorded_as_parent() -> None:
     assert not zeros_like_layer.is_internal_source
 
 
-@pytest.mark.smoke
 def test_traced_new_zeros_source_recorded_as_parent() -> None:
     """x.new_zeros(...) records x as the source tensor parent."""
 
@@ -458,7 +451,6 @@ def test_traced_new_zeros_source_recorded_as_parent() -> None:
     assert not new_zeros_layer.is_internal_source
 
 
-@pytest.mark.smoke
 def test_traced_gradient_spacing_tensor_recorded_as_parent() -> None:
     """torch.gradient records a tensor supplied through ``spacing`` as a parent."""
 
@@ -497,7 +489,6 @@ def test_traced_gradient_spacing_tensor_recorded_as_parent() -> None:
 
 @pytest.mark.parametrize("call_style", ["positional", "keyword"])
 @pytest.mark.parametrize("func_name", ["quantile", "nanquantile"])
-@pytest.mark.smoke
 def test_traced_quantile_tensor_q_recorded_as_parent(call_style: str, func_name: str) -> None:
     """Tensor ``q`` is a parent for positional and keyword quantile calls.
 
@@ -579,7 +570,6 @@ def test_traced_quantile_tensor_q_recorded_as_parent(call_style: str, func_name:
     ids=lambda case: case.__name__ if callable(case) else None,
 )
 @pytest.mark.parametrize("call_style", ["positional", "keyword"])
-@pytest.mark.smoke
 def test_traced_three_input_losses_record_all_tensor_parents(
     func: Any,
     kwarg_names: tuple[str, str, str],
@@ -632,7 +622,6 @@ def test_traced_three_input_losses_record_all_tensor_parents(
 
 
 @pytest.mark.parametrize("bound_style", ["positional", "keyword", "mixed"])
-@pytest.mark.smoke
 def test_traced_clamp_tensor_bounds_recorded_as_parents(bound_style: str) -> None:
     """torch.clamp records tensor bounds in every supported calling style.
 
@@ -683,7 +672,6 @@ def test_traced_clamp_tensor_bounds_recorded_as_parents(bound_style: str) -> Non
     _assert_parents_match_args_template(clamp)
 
 
-@pytest.mark.smoke
 def test_traced_histogram_tensor_bins_recorded_as_parent() -> None:
     """torch.histogram records tensor ``bins`` supplied by keyword as a parent."""
 
@@ -721,7 +709,6 @@ def test_traced_histogram_tensor_bins_recorded_as_parent() -> None:
     _assert_parents_match_args_template(histogram)
 
 
-@pytest.mark.smoke
 def test_traced_histogramdd_tensor_bins_recorded_as_parents() -> None:
     """torch.histogramdd records every tensor in keyword ``bins`` as a parent."""
 

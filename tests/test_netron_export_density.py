@@ -23,8 +23,6 @@ from torch import nn
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke
-
 
 @pytest.fixture(scope="module")
 def train_bn_log() -> Any:
@@ -80,6 +78,7 @@ def test_always_is_the_forensic_escape_hatch(train_bn_log: Any, tmp_path: Path) 
     assert props["torchlens.hidden_op_count"] == "0"
 
 
+@pytest.mark.smoke
 def test_never_hides_all_buffers(train_bn_log: Any, tmp_path: Path) -> None:
     """``never`` hides every buffer plus the then-dead counter chain."""
 
@@ -90,6 +89,7 @@ def test_never_hides_all_buffers(train_bn_log: Any, tmp_path: Path) -> None:
     assert props["torchlens.hidden_buffer_count"] == "6"
 
 
+@pytest.mark.smoke
 def test_module_projection_discloses_hidden_buffers_on_owner(
     train_bn_log: Any, tmp_path: Path
 ) -> None:

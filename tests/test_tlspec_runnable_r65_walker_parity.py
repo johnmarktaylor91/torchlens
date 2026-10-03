@@ -177,7 +177,6 @@ def _function_identifiers(func: Any) -> set[str]:
     return identifiers
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("walker_name", sorted(_WALKER_FUNCTIONS))
 def test_walker_bodies_have_no_private_container_dispatch(walker_name: str) -> None:
     """T-Y1: every input-boundary walker routes through the shared traversal ONLY."""
@@ -200,7 +199,6 @@ def test_walker_bodies_have_no_private_container_dispatch(walker_name: str) -> N
 # ======================================================================================
 
 
-@pytest.mark.smoke
 class _RegisteredProbe:
     """r67 C2: registered-container probe for the closed kind vocabulary."""
 
@@ -269,7 +267,6 @@ _EXPECTED_LEAF_PATHS: dict[str, set[tuple[Any, ...]]] = {
 }
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("kind", sorted(_PARITY_CASES))
 def test_three_walker_container_kind_parity(kind: str) -> None:
     """Every supported container kind is descended by ALL THREE walkers.
@@ -291,7 +288,6 @@ def test_three_walker_container_kind_parity(kind: str) -> None:
     )
 
 
-@pytest.mark.smoke
 def test_empty_container_and_opaque_leaf_parity() -> None:
     """EMPTY containers and opaque leaves are handled consistently by all walkers."""
 
@@ -305,7 +301,6 @@ def test_empty_container_and_opaque_leaf_parity() -> None:
     assert _w2_paths(opaque) == set()
 
 
-@pytest.mark.smoke
 def test_dual_mapping_key_vocabulary_declared_and_pinned() -> None:
     """r67 C2: residual R6 CLOSED -- ONE type-strict canonical key codec everywhere.
 
@@ -347,7 +342,6 @@ def test_dual_mapping_key_vocabulary_declared_and_pinned() -> None:
     assert _w2_paths({True: torch.zeros(1)}) == {(encode_mapping_key(True),)}
 
 
-@pytest.mark.smoke
 def test_opaque_mapping_key_subtree_parity() -> None:
     """A non-representable key collapses the literal subtree to ONE opaque parent leaf.
 
@@ -423,7 +417,6 @@ def _layout_twin(x: torch.Tensor) -> torch.Tensor:
     return twin
 
 
-@pytest.mark.smoke
 def test_r64_dataclass_metadata_read_witnessed_and_layout_twin_diverges(
     tmp_path: Path,
 ) -> None:
@@ -458,7 +451,6 @@ def test_r64_dataclass_metadata_read_witnessed_and_layout_twin_diverges(
     assert torch.equal(fresh, twin - 10)
 
 
-@pytest.mark.smoke
 def test_r64_dataclass_original_input_still_verifies_and_attests(tmp_path: Path) -> None:
     """Honest original-input dataclass metadata run stays VERIFIED + ATTESTED."""
 
@@ -472,7 +464,6 @@ def test_r64_dataclass_original_input_still_verifies_and_attests(tmp_path: Path)
     torch.testing.assert_close(result.output, x + 10)
 
 
-@pytest.mark.smoke
 def test_tensor_only_dataclass_without_metadata_read_stays_verified(
     tmp_path: Path,
 ) -> None:

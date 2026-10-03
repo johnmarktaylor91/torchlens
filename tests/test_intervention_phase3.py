@@ -154,7 +154,6 @@ def test_project_onto_uses_batch_independent_feature_axis_projection() -> None:
     assert not torch.allclose(changed_projected[1], expected[1])
 
 
-@pytest.mark.smoke
 def test_hook_context_uses_mapping_proxy_and_frozen_fields() -> None:
     """HookContext exposes metadata as snapshots rather than live logs."""
 
@@ -168,7 +167,6 @@ def test_hook_context_uses_mapping_proxy_and_frozen_fields() -> None:
         context.name = "mutated"  # type: ignore[misc]
 
 
-@pytest.mark.smoke
 def test_normalizer_accepts_supported_shapes_in_order() -> None:
     """Hook normalization covers callable, helper, mapping, list, and pair shapes."""
 
@@ -315,7 +313,6 @@ def test_seeded_noise_is_deterministic_and_unseeded_records_note() -> None:
     assert any("noise used unseeded" in note for note in context.run_ctx["ledger_notes"])
 
 
-@pytest.mark.smoke
 def test_splice_module_dtype_error_is_specific() -> None:
     """splice_module reports dtype mismatches with its specific error type."""
 

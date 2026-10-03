@@ -15,11 +15,7 @@ from __future__ import annotations
 
 import inspect
 
-import pytest
-
 import torchlens as tl
-
-pytestmark = pytest.mark.smoke
 
 #: name -> the stated reason it may mention Trace without being a second
 #: live-capture door.

@@ -18,8 +18,6 @@ import pytest
 import torchlens as tl
 from torchlens.postprocess._selective_save import apply_static_label_save_policy
 
-pytestmark = pytest.mark.smoke
-
 
 def _stub_trace() -> Any:
     """Return a minimal trace-like object the resolver can filter."""
@@ -60,6 +58,7 @@ def test_zero_match_save_predicate_warns() -> None:
     assert trace.num_saved_ops == 0
 
 
+@pytest.mark.smoke
 def test_matching_save_predicate_does_not_warn() -> None:
     """A predicate matching at least one op stays silent."""
 
@@ -98,6 +97,7 @@ def test_shared_zero_match_warning_names_the_backend() -> None:
         warn_zero_match_save_predicate("tf")
 
 
+@pytest.mark.smoke
 def test_tf_eager_session_counts_save_predicate_matches() -> None:
     """The eager retention gate counts matches for the entry-level disclosure.
 

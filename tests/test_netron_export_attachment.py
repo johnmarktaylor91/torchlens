@@ -24,8 +24,6 @@ import torchlens as tl
 from torchlens.export._netron_attachment import write_attachment
 from torchlens.export._netron_records import project_op
 
-pytestmark = pytest.mark.smoke
-
 
 class _Block(nn.Module):
     """Two-op module for module-projection target coverage."""
@@ -92,6 +90,7 @@ def test_companion_lands_beside_the_artifact(log: Any, tmp_path: Path) -> None:
             assert "\n" not in item["name"] and "\n" not in item["target"]
 
 
+@pytest.mark.smoke
 def test_targets_resolve_in_the_module_projection(log: Any, tmp_path: Path) -> None:
     """Compo row C11: function-body node targets resolve in the module view."""
 
@@ -122,6 +121,7 @@ def test_per_target_unique_names_guard(log: Any, tmp_path: Path) -> None:
     assert "duplicate" in str(excinfo.value)
 
 
+@pytest.mark.smoke_cells("test_vendor_drop_rules_refuse_typed[row1-missing its string target]")
 @pytest.mark.parametrize(
     ("row", "problem"),
     [

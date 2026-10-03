@@ -12,14 +12,12 @@
    mirroring the ``torch.Tensor`` fast path.
 """
 
-import pytest
 import torch
 import torch.nn as nn
 
 import torchlens as tl
 
 
-@pytest.mark.smoke
 def test_int_dtype_parameter_traces_without_crash():
     """A model with a non-float fixed Parameter must trace, and its
     requires_grad must be preserved (never force-flipped to True)."""

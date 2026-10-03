@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import os
 
-import pytest
 import torch
 import torch.nn as nn
 
@@ -26,8 +25,6 @@ import torchlens as tl
 from torchlens.visualization._render_flow import _get_max_call_depth
 
 os.environ.setdefault("MPLBACKEND", "Agg")
-
-pytestmark = pytest.mark.smoke
 
 
 class RecurrentLinear(nn.Module):

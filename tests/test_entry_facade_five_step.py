@@ -22,9 +22,6 @@ import torchlens as tl
 from torchlens._errors import FacadeTeachingError, MissingDependencyError
 from torchlens.utils.facade import DependencyGate, facade_dir, resolve_facade_attr
 
-pytestmark = pytest.mark.smoke
-
-
 # ---------------------------------------------------------------------------
 # The mechanism, exercised through a synthetic namespace (every step).
 # ---------------------------------------------------------------------------
@@ -132,6 +129,7 @@ def test_step5_unknown_name_is_plain_attributeerror() -> None:
     assert type(excinfo.value) is AttributeError
 
 
+@pytest.mark.smoke
 def test_typed_errors_pickle_with_fields() -> None:
     """The typed facade errors survive pickling with their structured fields."""
 
@@ -167,6 +165,7 @@ def test_root_underscore_rows_are_gone() -> None:
         tl._trace  # noqa: B018 - attribute access IS the assertion.
 
 
+@pytest.mark.smoke
 def test_hasattr_never_explodes_across_namespaces() -> None:
     """hasattr answers False (never raises) on every facade namespace."""
 
@@ -199,6 +198,7 @@ def test_appliance_probes_import_nothing_foreign() -> None:
     assert after == before, f"appliance probes imported foreign packages: {after - before}"
 
 
+@pytest.mark.smoke
 def test_dir_lists_real_public_names_and_nothing_else() -> None:
     """dir() stops advertising implementation imports on every facade."""
 

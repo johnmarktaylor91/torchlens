@@ -27,7 +27,6 @@ def clean(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return save_clean_artifact(tmp_path_factory.mktemp("w051_overview"))
 
 
-@pytest.mark.smoke
 def test_clean_capture_has_no_anomalies(clean: Path) -> None:
     """A COMPLETE capture with capture_verified=None (no ceiling) is HEALTHY."""
 
@@ -37,7 +36,6 @@ def test_clean_capture_has_no_anomalies(clean: Path) -> None:
     assert envelope["data"]["anomalies"] == []
 
 
-@pytest.mark.smoke
 def test_anomaly_block_reads_the_tri_state() -> None:
     """None never flags; an explicit False flags with its recorded reason."""
 
@@ -66,7 +64,6 @@ def _expected_edges(log: tl.Trace, fold_membership: dict[str, str]) -> dict[str,
     return expected
 
 
-@pytest.mark.smoke
 def test_fold_edges_resolve_on_single_pass_traces() -> None:
     """Bare single-pass edge labels resolve: parent/child classes are populated and exact."""
 
@@ -84,7 +81,6 @@ def test_fold_edges_resolve_on_single_pass_traces() -> None:
             assert cls.class_id in target.parent_classes
 
 
-@pytest.mark.smoke
 def test_fold_keeps_input_and_output_in_distinct_classes() -> None:
     """Same shape, same func_name='none', empty stack -- still two classes."""
 

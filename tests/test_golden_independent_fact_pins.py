@@ -28,10 +28,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-import pytest
-
-pytestmark = pytest.mark.smoke
-
 _GOLDEN_DIR = Path(__file__).parent / "golden"
 
 #: TinyConvNet's full op-label universe, written down from its forward source

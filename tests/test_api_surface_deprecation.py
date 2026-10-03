@@ -14,8 +14,6 @@ import pytest
 
 import torchlens
 
-pytestmark = pytest.mark.smoke
-
 #: (removed top-level name, canonical module, canonical attribute).
 REMOVED_TOP_LEVEL_CASES = [
     ("ActivationPostfunc", "torchlens.types", "ActivationPostfunc"),
@@ -98,6 +96,10 @@ REMOVED_PAPER_ERA_NAMES = [
 ]
 
 
+@pytest.mark.smoke_cells(
+    "test_moved_name_is_gone_and_canonical_resolves[NodeSpec-torchlens.experimental.dagua-NodeSpec]",
+    "test_moved_name_is_gone_and_canonical_resolves[preview_fastlog-torchlens.fastlog-preview]",
+)
 @pytest.mark.parametrize(("old_name", "module_name", "new_name"), REMOVED_TOP_LEVEL_CASES)
 def test_moved_name_is_gone_and_canonical_resolves(
     old_name: str, module_name: str, new_name: str

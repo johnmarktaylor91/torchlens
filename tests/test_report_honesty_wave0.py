@@ -47,7 +47,6 @@ def _clean_trace() -> tl.Trace:
 # --- SF1: escape-free publishable text (LAUNCH BLOCKER) ---------------------
 
 
-@pytest.mark.smoke
 def test_first_nonfinite_default_is_plain_text() -> None:
     """The default register carries no ESC byte and no file:// / vscode:// URI."""
 
@@ -83,7 +82,6 @@ def test_explain_text_and_json_are_escape_free() -> None:
     assert "truediv" in payload["first_nonfinite"]
 
 
-@pytest.mark.smoke
 def test_str_trace_is_escape_free() -> None:
     """print(trace) inherits the plain-text default (OSC 8 leak regression)."""
 
@@ -108,7 +106,6 @@ def test_str_trace_is_escape_free() -> None:
     ],
     ids=["clean", "nan", "inf", "neginf", "zeros", "int", "bool", "complex", "empty"],
 )
-@pytest.mark.smoke
 def test_one_pass_predicate_matches_two_pass_reference(tensor: torch.Tensor) -> None:
     """not all(isfinite) is pinned equivalent to the historical any(~isfinite)."""
 
@@ -116,7 +113,6 @@ def test_one_pass_predicate_matches_two_pass_reference(tensor: torch.Tensor) -> 
     assert _has_nonfinite(tensor) is reference
 
 
-@pytest.mark.smoke
 def test_predicate_unrunnable_dtype_returns_none() -> None:
     """Dtypes with no isfinite kernel stay None (no evidence), never False."""
 
@@ -127,7 +123,6 @@ def test_predicate_unrunnable_dtype_returns_none() -> None:
 # --- SF4: log_value canonical home + read-back ------------------------------
 
 
-@pytest.mark.smoke
 def test_log_value_canonical_home_and_alias() -> None:
     """observers owns log_value; tl.report keeps the identical compat alias."""
 
@@ -159,7 +154,6 @@ def test_log_value_read_back_and_renders() -> None:
     assert "logged_values" in dump["guide"]["next_steps"]
 
 
-@pytest.mark.smoke
 def test_logged_values_render_is_bounded() -> None:
     """Arbitrary logged objects render bounded: caps disclosed, never a spew."""
 
@@ -180,7 +174,6 @@ def test_logged_values_render_is_bounded() -> None:
 # --- SF3: agent-guide triage -------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_guide_next_steps_are_reader_executable() -> None:
     """No guide entry requires live objects the dump's reader does not hold."""
 
@@ -196,7 +189,6 @@ def test_guide_next_steps_are_reader_executable() -> None:
     assert steps["environment_diagnosis"] == "tl.utils.doctor()"
 
 
-@pytest.mark.smoke
 def test_guide_next_steps_are_conditional_on_state() -> None:
     """State-dependent entries appear only when the trace can honor them."""
 
@@ -216,7 +208,6 @@ def test_guide_next_steps_are_conditional_on_state() -> None:
 # --- WT23: presenter refusals + poisoned/episode banners ---------------------
 
 
-@pytest.mark.smoke
 def test_explain_and_agent_json_refuse_trace_slice_typed() -> None:
     """A TraceSlice subject refuses typed instead of a hollow wrong report."""
 
@@ -229,7 +220,6 @@ def test_explain_and_agent_json_refuse_trace_slice_typed() -> None:
         tl.Trace.to_agent_json(trace_slice)
 
 
-@pytest.mark.smoke
 def test_explain_refuses_recording_typed() -> None:
     """A sparse Recording subject is refused with the to_trace() remedy."""
 
@@ -241,7 +231,6 @@ def test_explain_refuses_recording_typed() -> None:
     assert "to_trace" in str(exc_info.value)
 
 
-@pytest.mark.smoke
 def test_poisoned_trace_stops_rendering_clean() -> None:
     """Poison facts surface on explain, agent_json, and the honesty banner."""
 
@@ -260,7 +249,6 @@ def test_poisoned_trace_stops_rendering_clean() -> None:
     assert facts["poisoned"] is True
 
 
-@pytest.mark.smoke
 def test_poisoned_trace_draw_caption_carries_banner() -> None:
     """draw() DOT source of a poisoned trace names the poison."""
 
@@ -304,7 +292,6 @@ def test_compat_report_repr_is_designed_and_bounded() -> None:
     assert max(len(line) for line in report.show().splitlines()) < 500
 
 
-@pytest.mark.smoke
 def test_capability_dump_moved_to_detail_accessor() -> None:
     """The row cell carries the grouped summary; the accessor the full dump."""
 

@@ -200,7 +200,6 @@ def test_exemption_ledger_is_shrink_only() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_exemptions_and_declared_ownership_are_disjoint() -> None:
     """A name is either a declared Trace field or an exemption, never both."""
 
@@ -212,7 +211,6 @@ def test_exemptions_and_declared_ownership_are_disjoint() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_every_exemption_carries_a_reason() -> None:
     """Exemption values are real sentences, not placeholders."""
 
@@ -245,7 +243,6 @@ def test_declared_writes_still_dominate_the_census() -> None:
     assert len(declared) >= 60, f"only {len(declared)} declared writes seen; scanner may be blind"
 
 
-@pytest.mark.smoke
 def test_gate_scanner_detects_planted_offenders() -> None:
     """Planted positives/negatives across assign, augassign, setattr, delattr."""
 
@@ -272,7 +269,6 @@ def test_gate_scanner_detects_planted_offenders() -> None:
     ]
 
 
-@pytest.mark.smoke
 def test_gate_scanner_detects_dict_spellings_and_loaded_trace() -> None:
     """grind-r6 b5 R45/R50: the ``__dict__`` spellings and the local-name gap.
 

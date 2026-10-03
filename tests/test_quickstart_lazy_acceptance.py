@@ -22,8 +22,6 @@ from torch.nn.parameter import UninitializedBuffer, UninitializedParameter
 import torchlens as tl
 from torchlens.validation import check_metadata_invariants
 
-pytestmark = pytest.mark.smoke
-
 
 def _lazy_head_model() -> nn.Sequential:
     """Backbone + two-layer lazy probe head (the memo's fixture shape)."""
@@ -122,6 +120,7 @@ class TestFlipSignal:
 class TestLazyBoundaries:
     """Refusals that stay in place around the completion unit."""
 
+    @pytest.mark.smoke
     def test_zero_arg_rung_refuses_before_probing(self) -> None:
         """Memo 4.2: inference on pending lazy state refuses structurally --
         a lazy module accepts any width, so a probe has no error signal and
@@ -135,6 +134,7 @@ class TestLazyBoundaries:
             "the refusal must fire BEFORE any probe touches the model"
         )
 
+    @pytest.mark.smoke
     def test_armed_lane_refuses_typed_before_mutation(self) -> None:
         """Memo 4.5: intervention-ready capture on pending state refuses
         state_baseline_unavailable (a pending parameter has no bytes to
@@ -160,6 +160,7 @@ class TestLazyBoundaries:
         log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
         assert log.num_params == sum(p.numel() for p in model.parameters())
 
+    @pytest.mark.smoke
     def test_lazy_buffer_entry_captures_without_prematerialization(self) -> None:
         """Pending lazy BUFFERS capture directly (F20 buffer-side completion).
 

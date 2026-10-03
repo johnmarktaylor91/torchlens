@@ -13,8 +13,6 @@ import pytest
 
 from torchlens.backends.torch import completeness_witness as witness_module
 
-pytestmark = pytest.mark.smoke
-
 
 def _call_dispatch_callsite_from(filename: str) -> None:
     """Invoke ``_dispatch_callsite`` with ``filename`` as the walked frame."""

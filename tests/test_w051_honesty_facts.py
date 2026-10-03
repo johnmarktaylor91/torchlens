@@ -24,8 +24,6 @@ from torchlens._capture_honesty import (
 )
 from torchlens.options import CaptureOptions
 
-pytestmark = pytest.mark.smoke
-
 
 class _MLP(nn.Module):
     def __init__(self) -> None:

@@ -19,8 +19,6 @@ from torch import nn
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke
-
 
 class _Block(nn.Module):
     """Multi-op child block (linear + relu)."""

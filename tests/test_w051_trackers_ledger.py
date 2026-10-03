@@ -12,8 +12,6 @@ import torch
 
 import torchlens.trackers as trk
 
-pytestmark = pytest.mark.smoke
-
 
 def _mlp() -> tuple[torch.nn.Module, torch.optim.Optimizer]:
     torch.manual_seed(0)

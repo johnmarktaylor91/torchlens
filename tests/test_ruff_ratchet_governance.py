@@ -26,10 +26,6 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-import pytest
-
-pytestmark = pytest.mark.smoke
-
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 #: The family ratchet floor. GROW-ONLY: entries are never removed; new

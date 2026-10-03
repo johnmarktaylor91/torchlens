@@ -17,8 +17,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.debug import check_determinism
 
-pytestmark = pytest.mark.smoke
-
 
 class _DropoutModel(nn.Module):
     """Linear + dropout: same-seed repeatable, different-seed sensitive."""
@@ -107,6 +105,7 @@ def test_batchnorm_train_buffer_writes_are_not_nondeterminism() -> None:
     assert report.verdict == "repeatable_under_test"
 
 
+@pytest.mark.smoke
 def test_host_entropy_observed_as_divergence() -> None:
     """OS-entropy consumption inside forward yields an observed divergence."""
 
@@ -175,6 +174,7 @@ def test_runs_below_two_refuse_typed() -> None:
     assert excinfo.value.fields["code"] == "determinism_runs_invalid"
 
 
+@pytest.mark.smoke
 def test_undeepcopyable_model_is_inconclusive_with_factory_remedy() -> None:
     """A deepcopy-refusing model returns inconclusive, never a crash."""
 

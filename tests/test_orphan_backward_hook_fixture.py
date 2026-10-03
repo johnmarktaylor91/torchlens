@@ -37,8 +37,6 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens.ir.events import BackwardCoverageGap, GradFnDiscovered, GradFnFired
 
-pytestmark = pytest.mark.smoke
-
 
 class _TwoHead(nn.Module):
     def __init__(self) -> None:

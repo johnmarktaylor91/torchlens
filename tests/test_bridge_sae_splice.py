@@ -15,8 +15,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.bridge import sae as sae_bridge
 
-pytestmark = pytest.mark.smoke
-
 
 class _TinyMLP(nn.Module):
     """Two-layer MLP with one ReLU splice site."""
@@ -104,6 +102,7 @@ def test_splice_latents_edit_is_causal(splice_setup) -> None:
     assert not torch.allclose(ablated.spliced_outputs[0], full.spliced_outputs[0])
 
 
+@pytest.mark.smoke
 def test_splice_accepts_existing_trace_and_refuses_double_inputs(splice_setup) -> None:
     """A ready trace works directly; passing inputs alongside it refuses."""
 

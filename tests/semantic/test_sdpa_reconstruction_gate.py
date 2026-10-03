@@ -17,8 +17,6 @@ import torch
 from torchlens.semantic.reconstruction import _allclose_sdpa
 from torchlens.utils._torch_compat import get_cpu_half_kernels_support
 
-pytestmark = pytest.mark.smoke
-
 _SKIP_FLOAT16_NEXTAFTER = pytest.mark.skipif(
     not get_cpu_half_kernels_support(),
     reason='torch 2.1-2.2\'s CPU nextafter_cpu kernel does not cover float16 ("nextafter_cpu" '

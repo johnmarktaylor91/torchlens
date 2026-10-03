@@ -18,8 +18,6 @@ import torchlens as tl
 from torchlens.fastlog import CaptureSpec
 from torchlens.ir.summary_role import summary
 
-pytestmark = pytest.mark.smoke
-
 
 def _model() -> torch.nn.Module:
     torch.manual_seed(0)
@@ -185,6 +183,7 @@ class TestReduceOnlyBudget:
         )
         assert log["linear_1_1"].transformed_out is not None
 
+    @pytest.mark.smoke
     def test_budget_below_summary_refuses(self) -> None:
         from torchlens.errors import SaveBudgetExceededError
 

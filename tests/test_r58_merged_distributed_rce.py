@@ -42,8 +42,6 @@ from torchlens.merged._enums import (
 )
 from torchlens.merged._errors import MergedArtifactError, MergeInputError
 
-pytestmark = pytest.mark.smoke
-
 _DIGEST = membership_digest_for_ranks([0, 1])
 
 
@@ -70,6 +68,7 @@ def _event_payload(**overrides: Any) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 
 
+@pytest.mark.smoke
 def test_valid_ledger_payload_round_trips() -> None:
     """The tightened parser still accepts what ``to_payload`` emits."""
 
@@ -318,6 +317,7 @@ def test_merged_manifest_vocabulary_violations_refuse_typed(
     assert caught.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
 
+@pytest.mark.smoke
 def test_missing_merged_members_refuse_typed(tmp_path: Path) -> None:
     """A descriptor naming a rank core that is absent refuses as tamper."""
 

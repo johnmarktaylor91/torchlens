@@ -88,7 +88,6 @@ def test_category_vocabulary_is_fully_mapped(parity_counts: dict[str, int]) -> N
     assert set(report["never_emitted"]) == set(NEVER_EMITTED_CATEGORIES)
 
 
-@pytest.mark.smoke
 def test_contract_tables_are_disjoint_and_documented() -> None:
     """The emitted / never-emitted tables partition cleanly with reasons."""
 
@@ -97,7 +96,6 @@ def test_contract_tables_are_disjoint_and_documented() -> None:
         assert reason.strip()
 
 
-@pytest.mark.smoke
 def test_golden_fixture_shape() -> None:
     """The frozen fixture stays self-describing and version-stamped."""
 

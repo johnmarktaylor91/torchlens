@@ -76,7 +76,6 @@ def _key_multiset(log: tl.Trace) -> Counter:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_reference_encoder_vectors() -> None:
     # Exact vectors from the design memo / reference encoder.
     assert render_site_key(("a|b",), "relu", None, 1) == "s1|a%7Cb|relu||1"
@@ -100,14 +99,12 @@ def test_parse_is_exact_inverse() -> None:
         assert parse_site_key(key) == (site, layer_type, slot, ordinal)
 
 
-@pytest.mark.smoke
 def test_parse_refuses_malformed_keys() -> None:
     for bad in ("", "s2|a|relu||1", "s1|a|relu|1", "s1|a|relu||0", "s1|a|relu|x|1"):
         with pytest.raises(ValueError):
             parse_site_key(bad)
 
 
-@pytest.mark.smoke
 def test_site_axis_representation_parity() -> None:
     # The canonical normalizer is defined on BOTH live representations:
     # build-time (address, pass) pairs and serialized "address:pass" strings.
@@ -118,7 +115,6 @@ def test_site_axis_representation_parity() -> None:
     assert call_instance_id(()) == ROOT_CALL_INSTANCE
 
 
-@pytest.mark.smoke
 def test_minter_ordinals_restart_per_call_instance() -> None:
     minter = SiteKeyMinter()
     first = minter.mint((("m", 1),), "relu", None)
@@ -134,7 +130,6 @@ def test_minter_ordinals_restart_per_call_instance() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_tied_loop_exact_key_pins() -> None:
     # Ground-truth pin: reused-module ops share ONE key across call
     # instances (P2) and the ordinal counter restarts per call instance.
@@ -148,7 +143,6 @@ def test_tied_loop_exact_key_pins() -> None:
     assert len(set(keys.values())) == 4
 
 
-@pytest.mark.smoke
 def test_multi_output_slots_split_sites() -> None:
     # Co-outputs of one call occupy distinct output slots => distinct keys;
     # both slots stay call-instance-stable across the two cell calls.
@@ -158,7 +152,6 @@ def test_multi_output_slots_split_sites() -> None:
     assert slot_keys == {"s1|cell|lstmcell|0|1", "s1|cell|lstmcell|1|1"}
 
 
-@pytest.mark.smoke
 def test_every_retained_op_has_prefixed_key() -> None:
     # I-S1 capture-time totality on a fresh capture.
     for model, x in ((_Tied(), torch.randn(2, 8)), (_CellLoop(), torch.randn(2, 4))):
@@ -171,7 +164,6 @@ def test_every_retained_op_has_prefixed_key() -> None:
             )
 
 
-@pytest.mark.smoke
 def test_uniqueness_per_key_and_call_instance() -> None:
     log = tl.trace(_Tied(), torch.randn(2, 8))
     seen: Counter = Counter()
@@ -182,7 +174,6 @@ def test_uniqueness_per_key_and_call_instance() -> None:
     assert all(count == 1 for count in seen.values())
 
 
-@pytest.mark.smoke
 def test_degraded_path_key_parity() -> None:
     # recurrence_detection=False mints byte-identical key multisets: the key
     # is policy-independent (P4).
@@ -198,7 +189,6 @@ def test_degraded_path_key_parity() -> None:
         assert _key_multiset(default_log) == _key_multiset(degraded_log)
 
 
-@pytest.mark.smoke
 def test_cross_capture_key_stability() -> None:
     # The bridging property: two captures of the same program agree on keys
     # even though process-local identity (barcodes, ids) differs.
@@ -223,7 +213,6 @@ class _HostileInner(nn.Module):
         return self.r(x)
 
 
-@pytest.mark.smoke
 def test_hostile_module_names_roundtrip_through_capture() -> None:
     hostile_names = ("a|b", "a/b", "a:b", "unicodé", "x_raw", "100%")
 
@@ -252,7 +241,6 @@ def test_hostile_module_names_roundtrip_through_capture() -> None:
     assert relu_keys[1] == "s1|mods.a%2Fb/mods.a%2Fb.r|relu||1"
 
 
-@pytest.mark.smoke
 def test_build_vs_serialized_axis_parity_on_real_capture() -> None:
     # I-S4's core: recomputing the site axis from the SERIALIZED
     # module_call_stack reproduces the build-time (op.modules) axis.
@@ -279,7 +267,6 @@ def _site_spanning_recurrent_groups(log: tl.Trace) -> tuple[int, int]:
     return spanning, len(groups)
 
 
-@pytest.mark.smoke
 def test_tied_loop_structural_facts() -> None:
     # Pinned census fact: tied_loop mints 2 recurrent groups, 0 site-spanning
     # (across-call-instance recurrence shares keys).
@@ -309,7 +296,6 @@ def test_gpt2_4l_structural_facts() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_bare_label_lookup_referents_pinned_by_site() -> None:
     # The census's silent-alias hazard: after any future grouping change a
     # stale bare label may keep resolving while denoting a DIFFERENT op.
@@ -327,7 +313,6 @@ def test_bare_label_lookup_referents_pinned_by_site() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_site_key_reaches_to_pandas() -> None:
     pytest.importorskip("pandas")
     log = tl.trace(_Tied(), torch.randn(2, 8))
@@ -357,7 +342,6 @@ class _StubOp:
         self.code_context = code_context
 
 
-@pytest.mark.smoke
 def test_witness_selects_deepest_operation_frame() -> None:
     outer = _Frame("model.py", 10)
     inner = _Frame("model.py", 42)
@@ -374,7 +358,6 @@ def test_witness_selects_deepest_operation_frame() -> None:
     assert operation_witness(_StubOp(None)) is None
 
 
-@pytest.mark.smoke
 def test_witness_on_real_capture_is_operation_frame() -> None:
     log = tl.trace(_Tied(), torch.randn(2, 8))
     checked = 0

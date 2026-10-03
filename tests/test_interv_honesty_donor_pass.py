@@ -52,7 +52,7 @@ def _pair() -> tuple[tl.Trace, tl.Trace]:
     return donor, base
 
 
-@pytest.mark.smoke
+@pytest.mark.smoke_cells("test_patch_from_delivers_the_addressed_pass[2]")
 @pytest.mark.parametrize("pass_index", [1, 2])
 def test_patch_from_delivers_the_addressed_pass(pass_index: int) -> None:
     """Each addressed pass receives ITS donor value, never the last pass's."""
@@ -66,7 +66,6 @@ def test_patch_from_delivers_the_addressed_pass(pass_index: int) -> None:
     assert not torch.equal(patched, donor[f"relu_1_2:{other}"].out)
 
 
-@pytest.mark.smoke
 def test_bare_multipass_donor_lookup_refuses_instead_of_guessing() -> None:
     """A fire context without a pass on a multi-pass donor site refuses typed
     and teaches every pass-qualified spelling."""
@@ -91,7 +90,6 @@ def test_bare_multipass_donor_lookup_refuses_instead_of_guessing() -> None:
     assert remedy and message.rstrip(".").endswith(remedy)
 
 
-@pytest.mark.smoke
 def test_single_pass_donor_still_resolves() -> None:
     """Single-pass sites keep resolving (bare or qualified spellings)."""
 

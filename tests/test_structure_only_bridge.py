@@ -31,8 +31,6 @@ from torchlens.capture.structure_only import (
 from torchlens.errors.runnable import StateBindingError
 from torchlens.options import CaptureOptions
 
-smoke = pytest.mark.smoke
-
 _SENTINEL_GRAMMAR = re.compile(r"^unavailable:[A-Za-z_][A-Za-z0-9_]*$")
 
 
@@ -54,7 +52,6 @@ class _NonPersistentBufferModel(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-@smoke
 def test_bridge_is_entry_dark_and_rows_still_refuse() -> None:
     """The gate is False AND the L7b rows refuse — coupled in one pin so the
     gate can never flip without this test (and the row flips) moving too."""
@@ -74,7 +71,6 @@ def test_bridge_is_entry_dark_and_rows_still_refuse() -> None:
         assert excinfo.value.fields["code"] == code
 
 
-@smoke
 def test_bridge_module_is_imported_nowhere_in_the_package() -> None:
     """Entry-dark means entry-dark: no torchlens module IMPORTS the bridge;
     it becomes reachable only through the L7b amendment implementation PR.
@@ -105,7 +101,7 @@ def test_bridge_module_is_imported_nowhere_in_the_package() -> None:
 # ---------------------------------------------------------------------------
 
 
-@smoke
+@pytest.mark.smoke
 def test_l7b_row_refusals_teach_the_boundary_and_the_remedy() -> None:
     """House rule: the L7b refusals name the flip boundary (declared
     late-bind posture) and what to do INSTEAD, not just the code."""
@@ -126,7 +122,6 @@ def test_l7b_row_refusals_teach_the_boundary_and_the_remedy() -> None:
     assert "discharge_against" in str(replay_exc.value)
 
 
-@smoke
 def test_entry_conflict_teaches_the_runnable_ready_flip_event() -> None:
     """The structure_only + intervention_ready entry conflict names its
     capability row and the L7b amendment as the flip event."""
@@ -150,7 +145,6 @@ def test_entry_conflict_teaches_the_runnable_ready_flip_event() -> None:
 # ---------------------------------------------------------------------------
 
 
-@smoke
 def test_bound_digests_route_through_the_one_content_authority() -> None:
     """Bind digests ARE tl.hash.content byte digests — one authority, and
     same-geometry different-bytes values digest differently."""
@@ -164,7 +158,6 @@ def test_bound_digests_route_through_the_one_content_authority() -> None:
     assert digests["a"] != digests["b"]
 
 
-@smoke
 def test_bound_digest_refuses_meta_values_typed() -> None:
     """A meta value at bind time refuses typed: no bytes exist, and geometry
     digests belong to the declared slot, never the bound value (G2)."""
@@ -177,7 +170,6 @@ def test_bound_digest_refuses_meta_values_typed() -> None:
     assert "remedy" in excinfo.value.fields
 
 
-@smoke
 def test_bound_digest_failure_refuses_and_chains_never_skips(monkeypatch) -> None:
     """Digest failure is a typed refusal with the cause chained — the memo's
     'never a silent skip' arm."""
@@ -197,7 +189,6 @@ def test_bound_digest_failure_refuses_and_chains_never_skips(monkeypatch) -> Non
 # ---------------------------------------------------------------------------
 
 
-@smoke
 def test_declared_digest_is_geometry_only_and_substrate_independent() -> None:
     """A real tensor, its meta twin, and a same-geometry different-values
     tensor all share ONE declared digest — geometry only, by construction."""
@@ -213,7 +204,7 @@ def test_declared_digest_is_geometry_only_and_substrate_independent() -> None:
     assert declared_slot_geometry_digest(real) != declared_slot_geometry_digest(torch.randn(2, 4))
 
 
-@smoke
+@pytest.mark.smoke
 def test_declared_and_bound_digests_never_cross_domains() -> None:
     """G2 at the bind boundary: the geometry digest of a tensor never equals
     its byte digest — the meta domain tag separates them by construction."""
@@ -222,7 +213,6 @@ def test_declared_and_bound_digests_never_cross_domains() -> None:
     assert declared_slot_geometry_digest(value) != compute_bound_state_digests({"v": value})["v"]
 
 
-@smoke
 def test_declared_digest_failure_degrades_to_the_sentinel_grammar(monkeypatch) -> None:
     """Genuine failure yields ``unavailable:<ExceptionName>`` — never None,
     never absent (manifest sentinel grammar)."""
@@ -262,7 +252,6 @@ def loaded_runnable_trace(tmp_path):
     return tl.load(str(path))
 
 
-@smoke
 def test_late_bound_values_validate_through_the_s1_surface(loaded_runnable_trace) -> None:
     """The bridge binds through the EXISTING validator and every staged slot
     gets both digest families — present for every slot, never skipped."""
@@ -283,7 +272,6 @@ def test_late_bound_values_validate_through_the_s1_surface(loaded_runnable_trace
     assert binding.bind_digests[slot_key] != binding.declared_digests[slot_key]
 
 
-@smoke
 def test_late_bound_geometry_violations_refuse_via_the_s1_validator(
     loaded_runnable_trace,
 ) -> None:

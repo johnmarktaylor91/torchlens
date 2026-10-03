@@ -19,8 +19,6 @@ import torchlens as tl
 from torchlens.errors._base import TorchLensWarning
 from torchlens.selection_subspace import DENSE_SUPPORT_NOTE
 
-pytestmark = pytest.mark.smoke
-
 _D = 8
 
 
@@ -76,6 +74,7 @@ def test_dense_direction_do_warns_and_stamps_the_audit() -> None:
     )
 
 
+@pytest.mark.smoke
 def test_dense_resolution_source_carries_the_marker() -> None:
     log = _trace()
     resolved = tl.subspace("relu_1_2", torch.ones(_D), origin="dense probe").resolve(log)

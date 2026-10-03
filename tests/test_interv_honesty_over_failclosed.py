@@ -23,8 +23,6 @@ from torchlens._errors import InvalidArgumentError
 from torchlens.intervention.errors import AppendBatchDependenceError
 from torchlens.options import ReplayOptions
 
-pytestmark = pytest.mark.smoke
-
 
 class _TwoLinear(nn.Module):
     """Small real-module stack for append-gate pins."""

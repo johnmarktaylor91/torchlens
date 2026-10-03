@@ -60,7 +60,6 @@ class DirectMutateModel(nn.Module):
         return a + b
 
 
-@pytest.mark.smoke
 def test_r29_view_mediated_input_mutation_aliased_fails_closed(tmp_path: Path) -> None:
     """``a[0].add_()`` with ``a is b`` at runtime must fail closed (F2-hon gap)."""
 
@@ -82,7 +81,6 @@ def test_r29_view_mediated_input_mutation_aliased_fails_closed(tmp_path: Path) -
     assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
-@pytest.mark.smoke
 def test_r29_disjoint_views_of_one_base_do_not_over_trigger(tmp_path: Path) -> None:
     """Two disjoint views of the same base storage must NOT falsely diverge (codex-F4)."""
 
@@ -96,7 +94,6 @@ def test_r29_disjoint_views_of_one_base_do_not_over_trigger(tmp_path: Path) -> N
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
-@pytest.mark.smoke
 def test_r29_overlapping_views_still_fail_closed(tmp_path: Path) -> None:
     """Two OVERLAPPING views of one base with an in-place input mutation must fail closed."""
 
@@ -128,7 +125,6 @@ def _run_pair(tmp_path: Path, name: str, a: torch.Tensor, b: torch.Tensor):
     return tl.load(path).run(inputs=(a, b))
 
 
-@pytest.mark.smoke
 def test_r35_even_odd_interleaves_are_proved_disjoint(tmp_path: Path) -> None:
     """corr2_1: ``base[::2]`` / ``base[1::2]`` share no element byte -> VERIFIED."""
 
@@ -139,7 +135,6 @@ def test_r35_even_odd_interleaves_are_proved_disjoint(tmp_path: Path) -> None:
     assert torch.equal(result.output, a + b)
 
 
-@pytest.mark.smoke
 def test_r35_step3_interleaves_and_offsets_are_proved_disjoint(tmp_path: Path) -> None:
     """Step-3 interleaves with distinct residues are disjoint -> VERIFIED."""
 
@@ -148,7 +143,6 @@ def test_r35_step3_interleaves_and_offsets_are_proved_disjoint(tmp_path: Path) -
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
-@pytest.mark.smoke
 def test_r35_disjoint_2d_tiles_with_overlapping_boxes_are_disjoint(tmp_path: Path) -> None:
     """Disjoint 2-D tiles whose bounding byte intervals overlap -> VERIFIED."""
 
@@ -159,7 +153,6 @@ def test_r35_disjoint_2d_tiles_with_overlapping_boxes_are_disjoint(tmp_path: Pat
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
-@pytest.mark.smoke
 def test_r35_large_residue_provable_interleaves_stay_verified(tmp_path: Path) -> None:
     """Above the enumeration cap, the residue proof still proves disjointness."""
 
@@ -168,7 +161,6 @@ def test_r35_large_residue_provable_interleaves_stay_verified(tmp_path: Path) ->
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
-@pytest.mark.smoke
 def test_r35_genuine_partial_overlap_fails_closed(tmp_path: Path) -> None:
     """``base[:3]`` / ``base[2:]`` genuinely share an element -> fail closed."""
 
@@ -177,7 +169,6 @@ def test_r35_genuine_partial_overlap_fails_closed(tmp_path: Path) -> None:
         _run_pair(tmp_path, "overlap.tlspec", base[:4], base[2:6])
 
 
-@pytest.mark.smoke
 def test_r35_broadcast_zero_stride_overlap_fails_closed(tmp_path: Path) -> None:
     """A zero-stride broadcast view over a consumed element -> fail closed."""
 
@@ -187,7 +178,6 @@ def test_r35_broadcast_zero_stride_overlap_fails_closed(tmp_path: Path) -> None:
         _run_pair(tmp_path, "broadcast.tlspec", expanded, base)
 
 
-@pytest.mark.smoke
 def test_r35_same_object_identity_fails_closed(tmp_path: Path) -> None:
     """``forward(a, b)`` with ``a is b`` stays an observed contradiction."""
 
@@ -196,7 +186,6 @@ def test_r35_same_object_identity_fails_closed(tmp_path: Path) -> None:
         _run_pair(tmp_path, "identity.tlspec", shared, shared)
 
 
-@pytest.mark.smoke
 def test_r35_unprovable_topology_is_unverifiable_never_attested(tmp_path: Path) -> None:
     """Above the cap with no residue proof: unknown -> UNVERIFIABLE, never DIVERGED."""
 
@@ -211,7 +200,6 @@ def test_r35_unprovable_topology_is_unverifiable_never_attested(tmp_path: Path) 
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
-@pytest.mark.smoke
 def test_r35_zero_length_views_are_trivially_disjoint(tmp_path: Path) -> None:
     """An empty view shares no bytes with anything -> engine proves disjoint."""
 
@@ -222,7 +210,6 @@ def test_r35_zero_length_views_are_trivially_disjoint(tmp_path: Path) -> None:
     assert _touched_bytes_relation(base[2:2], base) == "disjoint"
 
 
-@pytest.mark.smoke
 def test_r35_engine_unit_matrix() -> None:
     """Unit rows for the three-valued engine (proof, not assumption)."""
 

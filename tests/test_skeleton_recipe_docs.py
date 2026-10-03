@@ -163,7 +163,6 @@ def test_reauthored_recipe_checks_exact(recipe_namespace: dict[str, Any]) -> Non
     assert compat_v2.targets_resolve_identically is True
 
 
-@pytest.mark.smoke
 def test_page_states_no_torchlens_verb_edits_the_model() -> None:
     """The page keeps its core honesty sentence and its executable-page pledge."""
 

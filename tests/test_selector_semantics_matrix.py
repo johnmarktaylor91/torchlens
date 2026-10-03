@@ -785,9 +785,7 @@ _HEAVY_CELLS = {"live/split/split_contains_mul"}
 @pytest.mark.parametrize(
     "cell_key",
     [
-        pytest.param(k, marks=pytest.mark.heavy)
-        if k in _HEAVY_CELLS
-        else pytest.param(k, marks=pytest.mark.smoke)
+        pytest.param(k, marks=pytest.mark.heavy) if k in _HEAVY_CELLS else pytest.param(k)
         for k in _CELL_KEYS
     ],
 )

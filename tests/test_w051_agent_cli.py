@@ -69,7 +69,6 @@ def test_fail_on_predicates_read_every_record_shape() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_explain_and_diff_gates_are_live(clean: Path, nonfinite: Path) -> None:
     """explain/diff carry the blocks the gates read, so the gates can trip."""
 
@@ -103,7 +102,6 @@ def test_explain_and_diff_gates_are_live(clean: Path, nonfinite: Path) -> None:
     )
 
 
-@pytest.mark.smoke
 def test_incomplete_gate_trips_on_a_halted_capture(tmp_path: Path) -> None:
     """A HALTED capture is not complete: --fail-on incomplete exits 1."""
 
@@ -118,7 +116,6 @@ def test_incomplete_gate_trips_on_a_halted_capture(tmp_path: Path) -> None:
     assert cli.main(["overview", str(path), "--json", "--fail-on", "unverified"]) == cli.EXIT_OK
 
 
-@pytest.mark.smoke
 def test_tier0_info_on_a_non_directory_path_stays_torch_free(tmp_path: Path) -> None:
     """A plain file (or any non-.tlspec path) hashes with the stdlib only."""
 
@@ -138,7 +135,6 @@ def test_tier0_info_on_a_non_directory_path_stays_torch_free(tmp_path: Path) -> 
     assert result.returncode == 0, result.stderr[-800:]
 
 
-@pytest.mark.smoke
 def test_local_sha256_matches_the_io_authority(clean: Path) -> None:
     """The tier-0 streaming hash cannot drift from the _io authority."""
 

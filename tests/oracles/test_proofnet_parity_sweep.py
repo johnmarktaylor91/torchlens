@@ -14,8 +14,6 @@ from typing import Any
 import pytest
 import torch
 
-pytestmark = [pytest.mark.smoke]
-
 BANNED_TOKENS = ("TODO", "FIXME", "XXX-", "lorem ipsum", "placeholder text")
 
 

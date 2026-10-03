@@ -16,8 +16,6 @@ from torch import nn
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke
-
 
 class _FeedForward(nn.Module):
     """No module reuse, no recurrence: rolled must NOT be emitted."""

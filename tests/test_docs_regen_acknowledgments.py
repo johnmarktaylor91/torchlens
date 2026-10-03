@@ -18,8 +18,6 @@ make the test pass.
 import re
 from pathlib import Path
 
-import pytest
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ACK_PATH = REPO_ROOT / "docs" / "acknowledgments.md"
 README_PATH = REPO_ROOT / "README.md"
@@ -139,7 +137,6 @@ REQUIRED_CREDITS = {
 }
 
 
-@pytest.mark.smoke
 def test_acknowledgments_page_exists_and_is_substantial():
     assert ACK_PATH.is_file(), "docs/acknowledgments.md is missing"
     text = ACK_PATH.read_text(encoding="utf-8")
@@ -148,7 +145,6 @@ def test_acknowledgments_page_exists_and_is_substantial():
     assert "Maintenance rule" in text, "maintenance rule missing"
 
 
-@pytest.mark.smoke
 def test_readme_links_to_acknowledgments_page():
     readme = README_PATH.read_text(encoding="utf-8")
     assert re.search(r"docs/acknowledgments\.md", readme), (
@@ -156,7 +152,6 @@ def test_readme_links_to_acknowledgments_page():
     )
 
 
-@pytest.mark.smoke
 def test_every_required_credit_is_present():
     text = ACK_PATH.read_text(encoding="utf-8").lower()
     missing = sorted(name for name in REQUIRED_CREDITS if name.lower() not in text)

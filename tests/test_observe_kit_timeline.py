@@ -25,8 +25,6 @@ from torchlens.observe import (
     render_timeline_svg,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 class _DeterministicBlock(nn.Module):
     """Value-deterministic model: constant weights, no RNG anywhere."""
@@ -92,6 +90,7 @@ def test_output_pseudo_rows_are_excluded() -> None:
     assert not any(row["label"].startswith("output") for row in artifact["events"])
 
 
+@pytest.mark.smoke
 def test_tied_parameters_count_once_with_alias_rows() -> None:
     """Weight tying: one counted parameter row, one alias row with zero bytes."""
 
@@ -124,6 +123,7 @@ def test_saved_band_is_not_stacked_and_carries_decomposition() -> None:
     assert artifact["cumulative_produced_bytes"] == produced
 
 
+@pytest.mark.smoke
 def test_module_rollup_conservation() -> None:
     """Root total equals the sum of exclusive displayed rows at every depth."""
 
@@ -170,6 +170,7 @@ def test_svg_renders_byte_exact_and_deterministic() -> None:
     )
 
 
+@pytest.mark.smoke
 def test_svg_binning_is_disclosed_never_truncating() -> None:
     """Over-budget traces bin contiguous ordinals and disclose the bin size."""
 
@@ -180,6 +181,7 @@ def test_svg_binning_is_disclosed_never_truncating() -> None:
     assert "binned x" not in unbinned
 
 
+@pytest.mark.smoke
 def test_liveness_view_is_estimated_scoped_and_total_preserving() -> None:
     """Death rules printed; autograd_saved excluded; totals untouched."""
 
@@ -210,6 +212,7 @@ def test_recording_input_refuses_with_metadata_remedy() -> None:
     assert "to_trace" in str(excinfo.value)
 
 
+@pytest.mark.smoke
 def test_export_door_writes_v2_and_v1_stays_compatible(tmp_path) -> None:
     """The export registry serves both v1 (one-release) and v2."""
 

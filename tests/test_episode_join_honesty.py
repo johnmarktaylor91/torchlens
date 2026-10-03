@@ -8,7 +8,6 @@ token never upgrades an artifact's own evidence.
 
 from __future__ import annotations
 
-import pytest
 import torch
 import torch.nn as nn
 
@@ -17,8 +16,6 @@ from torchlens import _capture_honesty
 from torchlens.capture import _episode_ledger as episode_ledger_module
 from torchlens.capture._episode_ledger import episode_step_join_claim
 from torchlens.options import EpisodeSpec
-
-pytestmark = pytest.mark.smoke
 
 
 class TinyLM(nn.Module):

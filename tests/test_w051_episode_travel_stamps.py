@@ -24,8 +24,6 @@ from torchlens.errors import TorchLensError
 from torchlens.intervention import at_step
 from torchlens.options import EpisodeSpec
 
-pytestmark = pytest.mark.smoke
-
 V = 16
 N_STEPS = 3
 

@@ -626,7 +626,6 @@ class TestSplineModeHeuristic:
     case) and degrade to straight lines for large OR edge-dense graphs.
     """
 
-    @pytest.mark.smoke
     def test_small_sparse_graph_keeps_splines(self) -> None:
         """A small, sparse (sequential) graph keeps curved splines."""
 
@@ -636,7 +635,6 @@ class TestSplineModeHeuristic:
         # Just under the node ceiling and sparse -> still pretty.
         assert _choose_spline_mode(num_nodes=600, num_edges=650) == "true"
 
-    @pytest.mark.smoke
     def test_repro_models_all_degrade_to_line(self) -> None:
         """The three real repro graphs (real node/edge counts) all use line.
 
@@ -650,7 +648,6 @@ class TestSplineModeHeuristic:
         assert _choose_spline_mode(num_nodes=772, num_edges=2578) == "line"
         assert _choose_spline_mode(num_nodes=2359, num_edges=2598) == "line"
 
-    @pytest.mark.smoke
     def test_dense_midsize_graph_degrades_to_line(self) -> None:
         """An edge-dense mid-size graph (below the node ceiling) uses line.
 
@@ -661,7 +658,6 @@ class TestSplineModeHeuristic:
         # 500 nodes, ratio 1.8 (> density ratio) -> "line".
         assert _choose_spline_mode(num_nodes=500, num_edges=900) == "line"
 
-    @pytest.mark.smoke
     def test_tiny_dense_graph_keeps_splines(self) -> None:
         """A tiny graph keeps splines even when proportionally dense.
 
@@ -680,7 +676,6 @@ class TestRtreeRescale:
     pinned coordinates so the canvas fits, preserving geometry.
     """
 
-    @pytest.mark.smoke
     def test_below_ceiling_returns_none(self) -> None:
         """A layout already within range needs no rescale."""
 

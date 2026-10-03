@@ -61,7 +61,6 @@ def _traced_return_capture() -> tl.Trace:
         handle.remove()
 
 
-@pytest.mark.smoke
 def test_traced_return_keeps_disclosure_stamp_and_validates() -> None:
     """The honest capture keeps the intervened disclosure and still validates."""
 
@@ -76,7 +75,6 @@ def test_traced_return_keeps_disclosure_stamp_and_validates() -> None:
     check_metadata_invariants(trace)
 
 
-@pytest.mark.smoke
 def test_traced_return_does_not_bless_functionless_op() -> None:
     """A functionless op whose only credential is 'a hook returned it' FAILS.
 

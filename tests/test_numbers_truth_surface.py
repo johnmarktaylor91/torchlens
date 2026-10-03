@@ -40,7 +40,6 @@ def small_log() -> Generator[tl.Trace, None, None]:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_tl_summary_is_a_first_class_front_door() -> None:
     """tl.summary exists, is exported, RETURNS the text, and never warns (A8)."""
 
@@ -55,7 +54,6 @@ def test_tl_summary_is_a_first_class_front_door() -> None:
     assert "Linear" in text
 
 
-@pytest.mark.smoke
 def test_visualization_summary_alias_resolves() -> None:
     """The historically-taught torchlens.visualization.summary spelling resolves (A8)."""
 
@@ -110,7 +108,6 @@ def test_control_flow_summary_has_no_escape_bytes() -> None:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_memory_footer_reports_measured_peak(small_log: tl.Trace) -> None:
     """The memory footer prints the measured peak + backend, never 'not tracked' (A7)."""
 
@@ -129,7 +126,6 @@ def test_memory_footer_reports_measured_peak(small_log: tl.Trace) -> None:
         assert "measured" in text
 
 
-@pytest.mark.smoke
 def test_memory_footer_unavailable_is_distinct(small_log: tl.Trace) -> None:
     """A capture with no recorded backend reports unavailable, never a fake zero (A7)."""
 

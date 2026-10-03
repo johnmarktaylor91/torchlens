@@ -137,7 +137,6 @@ def _tanh_key(profile) -> str:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_flat_branch_refused_by_witness_not_guard() -> None:
     left = tl.trace(_FlatBranch(True), torch.randn(2, 4))
     right = tl.trace(_FlatBranch(False), torch.randn(2, 4))
@@ -149,7 +148,6 @@ def test_flat_branch_refused_by_witness_not_guard() -> None:
     assert not row.joined
 
 
-@pytest.mark.smoke
 def test_nested_branch_witness_oracle_then_refusal() -> None:
     left = tl.trace(_NestedOuter(True), torch.randn(2, 4))
     right = tl.trace(_NestedOuter(False), torch.randn(2, 4))
@@ -178,7 +176,6 @@ def test_nested_branch_witness_oracle_then_refusal() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_permuted_cardinality_weak_passes_strong_refuses() -> None:
     left = tl.trace(_Perm((1, 3)), torch.randn(2, 4))
     right = tl.trace(_Perm((3, 1)), torch.randn(2, 4))
@@ -196,7 +193,6 @@ def test_permuted_cardinality_weak_passes_strong_refuses() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_same_line_reorder_residual_stays_disclosed() -> None:
     left = tl.trace(_SameLineLoop(), torch.randn(2, 4))
     right = tl.trace(_SameLineLoop(), torch.randn(2, 4))
@@ -216,7 +212,6 @@ def test_same_line_reorder_residual_stays_disclosed() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_every_joined_key_carries_exactly_one_tier() -> None:
     left = tl.trace(_Perm((1, 3)), torch.randn(2, 4))
     right = tl.trace(_Perm((3, 1)), torch.randn(2, 4))
@@ -229,7 +224,6 @@ def test_every_joined_key_carries_exactly_one_tier() -> None:
         )
 
 
-@pytest.mark.smoke
 def test_io_boundary_ops_join_positional() -> None:
     # Input/output ops carry no code_context: witness-absent, never refused.
     left = tl.trace(_SameLineLoop(), torch.randn(2, 4))
@@ -239,7 +233,6 @@ def test_io_boundary_ops_join_positional() -> None:
     assert rows["s1||output||1"].verdict is _SiteJoinVerdict.POSITIONAL
 
 
-@pytest.mark.smoke
 def test_site_profile_refuses_typed_on_keyless_trace() -> None:
     log = tl.trace(_SameLineLoop(), torch.randn(2, 4))
     for label in log.op_labels:
@@ -279,7 +272,6 @@ def test_gpt2_cross_length_alignment_pins() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_closure_is_identity_when_recurrence_already_grouped() -> None:
     log = tl.trace(_Tied(), torch.randn(2, 8))
     groups = fold_site_groups(fold_rows_from_trace(log))
@@ -303,7 +295,6 @@ def test_closure_reunites_degraded_same_site_cohorts() -> None:
     assert len(next(iter(relu_groups))) == 3
 
 
-@pytest.mark.smoke
 def test_closure_equivalence_guard_refuses_cross_shape_folds() -> None:
     # The reused relu spans three shapes -> three distinct (shape-bearing)
     # equivalence classes: the NORMATIVE guard keeps them separate. An
@@ -316,7 +307,6 @@ def test_closure_equivalence_guard_refuses_cross_shape_folds() -> None:
     assert all(len(group) == 1 for group in relu_groups)
 
 
-@pytest.mark.smoke
 def test_closure_never_splits_and_stays_equivalence_uniform() -> None:
     for build in (
         lambda: tl.trace(_Tied(), torch.randn(2, 8)),
@@ -333,7 +323,6 @@ def test_closure_never_splits_and_stays_equivalence_uniform() -> None:
             assert len({ops[member].equivalence_class for member in group}) == 1
 
 
-@pytest.mark.smoke
 def test_closure_keyless_rows_never_fold() -> None:
     rows = [
         FoldRow("a_1_1:1", None, "tanh_x", ()),

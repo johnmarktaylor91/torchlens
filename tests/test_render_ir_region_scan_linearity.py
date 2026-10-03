@@ -34,8 +34,6 @@ from torchlens.visualization import render_ir
 
 os.environ.setdefault("MPLBACKEND", "Agg")
 
-pytestmark = pytest.mark.smoke
-
 
 class ModuleRichModel(nn.Module):
     """Many small nested modules -- the shape that made the rescans quadratic."""

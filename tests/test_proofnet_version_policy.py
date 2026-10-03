@@ -13,12 +13,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
 from packaging.requirements import Requirement
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
-
-pytestmark = [pytest.mark.smoke]
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 POLICY_PATH = REPO_ROOT / "tests" / "support" / "proofnet" / "support_policy.tsv"

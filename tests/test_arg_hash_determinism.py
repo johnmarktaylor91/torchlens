@@ -23,7 +23,6 @@ import torchlens as tl
 from torchlens.backends.torch.tensor_tracking import _get_hash_from_args
 
 
-@pytest.mark.smoke
 def test_object_arg_hash_is_address_free() -> None:
     """Two semantically identical fresh objects must hash identically."""
 
@@ -36,7 +35,6 @@ def test_object_arg_hash_is_address_free() -> None:
     assert first == second, "the arg-hash tail still folds the object's memory address"
 
 
-@pytest.mark.smoke
 def test_object_arg_hash_distinguishes_types() -> None:
     """The address-free token still separates different argument types."""
 
@@ -92,7 +90,6 @@ class _BackwardModel(nn.Module):
         return torch.relu(self.lin(x))
 
 
-@pytest.mark.smoke
 def test_backward_pass_root_ids_persist_as_dense_ordinals(tmp_path) -> None:
     """Loaded root_grad_fn_ids must be trace-local ordinals inside
     grad_fn_logs, never raw process addresses."""

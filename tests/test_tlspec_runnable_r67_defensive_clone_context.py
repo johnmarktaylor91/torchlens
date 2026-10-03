@@ -77,7 +77,6 @@ _CALLER_CONTEXTS = {
 # ======================================================================================
 
 
-@pytest.mark.smoke
 def test_r67_defensive_materialization_source_scan() -> None:
     """Every defensive phase routes through the helper; every snapshot site stays outside.
 

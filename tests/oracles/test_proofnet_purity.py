@@ -23,8 +23,6 @@ import torch
 
 from tests.oracles._invocation_templates import SEED_TEMPLATES, InvocationTemplate
 
-pytestmark = [pytest.mark.smoke]
-
 
 def _state_digest(model: torch.nn.Module) -> str:
     """Byte digest of every parameter and buffer, name-keyed."""
@@ -50,6 +48,7 @@ def _shared_fixture_model() -> torch.nn.Module:
     return torch.nn.Sequential(torch.nn.Linear(4, 8), torch.nn.ReLU(), torch.nn.Linear(8, 2)).eval()
 
 
+@pytest.mark.smoke_cells("test_template_positive_control_channel_is_alive[TPL-003]")
 @pytest.mark.parametrize("template", SEED_TEMPLATES, ids=lambda t: t.template_id)
 def test_template_positive_control_channel_is_alive(template: InvocationTemplate) -> None:
     """D7: the measurement channel must prove itself before any verdict."""
@@ -86,6 +85,7 @@ def test_template_invocation_restores_model_and_global_state(
         assert torch.equal(reference_model(example), forward_before)
 
 
+@pytest.mark.smoke
 def test_exception_stage_injection_restores_state_and_reads_stay_sane() -> None:
     """A mid-forward failure leaves the model restored AND still usable
     (read-after-failure: the next capture of the same model is COMPLETE)."""

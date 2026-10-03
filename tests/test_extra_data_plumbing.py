@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-import pytest
 import torch
 from torch import nn
 
@@ -53,7 +52,6 @@ def _first_logs(trace: Trace) -> tuple[Op, Layer]:
     return op_log, layer_log
 
 
-@pytest.mark.smoke
 def test_annotations_fields_default_to_empty_dicts() -> None:
     """New annotation fields should default to independent empty dictionaries."""
     trace = _fresh_log()

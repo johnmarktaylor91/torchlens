@@ -17,8 +17,6 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens.options import CaptureOptions
 
-pytestmark = [pytest.mark.smoke]
-
 
 class ThreeStep(nn.Module):
     """fc1 -> relu -> fc2."""
@@ -41,6 +39,7 @@ def _backward(trace: object) -> None:
     list(trace)[-1].out.sum().backward()  # type: ignore[attr-defined,call-overload]
 
 
+@pytest.mark.smoke
 def test_save_grads_callable_restricts_retention() -> None:
     """A bare callable keeps gradients ONLY on matching ops."""
 
@@ -57,6 +56,7 @@ def test_save_grads_callable_restricts_retention() -> None:
     assert _grad_labels(log) == ["relu_1_2"]
 
 
+@pytest.mark.smoke
 def test_save_grads_selector_restricts_retention() -> None:
     """A tl.* selector keeps gradients ONLY on matching ops."""
 

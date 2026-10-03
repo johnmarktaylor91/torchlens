@@ -133,7 +133,6 @@ def toy() -> tuple[_Toy, torch.Tensor]:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_bind_op_level_edit_correct_and_transparent(toy) -> None:
     """An op-level zero-ablate edits the live value; the model stays untouched."""
 
@@ -148,7 +147,6 @@ def test_bind_op_level_edit_correct_and_transparent(toy) -> None:
     assert not any(m._forward_hooks or m._forward_pre_hooks for m in model.modules())
 
 
-@pytest.mark.smoke
 def test_bind_boundary_rule_module_output(toy) -> None:
     """A plain tl.module rule substitutes the module's OUTPUT boundary value."""
 
@@ -160,7 +158,6 @@ def test_bind_boundary_rule_module_output(toy) -> None:
     assert not any(m._forward_hooks or m._forward_pre_hooks for m in model.modules())
 
 
-@pytest.mark.smoke
 def test_bind_report_contents(toy) -> None:
     """The out-of-band ledger carries stamps, counts, effects, and cleanup."""
 
@@ -214,7 +211,6 @@ def test_bind_pass_qualified_boundary_target() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_bind_zero_fire_fail_closed_default(toy) -> None:
     """A never-firing rule raises AFTER the call; the report is retained."""
 
@@ -229,7 +225,6 @@ def test_bind_zero_fire_fail_closed_default(toy) -> None:
     assert report.zero_fire_rule_ids == (bound.spec.rules[0].rule_id,)
 
 
-@pytest.mark.smoke
 def test_bind_zero_fire_disclose_policy(toy) -> None:
     """``on_zero_fire='disclose'`` records zero-fire rules without raising."""
 
@@ -304,7 +299,6 @@ def test_bind_preflight_refusals(toy) -> None:
     assert "nope.blocks.7" in str(excinfo.value)
 
 
-@pytest.mark.smoke
 def test_bind_rule_unsupported_composite_boundary(toy) -> None:
     """A module OUTPUT-boundary term composed with op-level terms refuses."""
 
@@ -356,7 +350,6 @@ def test_binding_read_only_surface_and_serialization_refusal(toy) -> None:
     assert "read-only" in repr(bound)
 
 
-@pytest.mark.smoke
 def test_binding_reentrant_call_refuses(toy) -> None:
     """A hook that re-enters the binding hits the serial/non-reentrant wall."""
 
@@ -374,7 +367,6 @@ def test_binding_reentrant_call_refuses(toy) -> None:
     assert excinfo.value.fields["code"] == "binding_reentrant_call"
 
 
-@pytest.mark.smoke
 def test_bind_exception_cleanup_is_atomic() -> None:
     """A mid-forward user exception propagates; runtime state is fully removed."""
 
@@ -398,7 +390,6 @@ def test_bind_exception_cleanup_is_atomic() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_model_door_refuse_arm_is_default(toy) -> None:
     """Arm (a): doors refuse a binding with the canonical spelling printed."""
 
@@ -415,7 +406,6 @@ def test_model_door_refuse_arm_is_default(toy) -> None:
     assert excinfo.value.fields["code"] == "model_door_binding_refused"
 
 
-@pytest.mark.smoke
 def test_model_door_normalize_arm_matches_canonical_spelling(toy) -> None:
     """Arm (b): the funnel normalizes to base model + intervene=spec."""
 
@@ -433,7 +423,6 @@ def test_model_door_normalize_arm_matches_canonical_spelling(toy) -> None:
     assert torch.allclose(via_door["relu_1_2"].out, canonical["relu_1_2"].out)
 
 
-@pytest.mark.smoke
 def test_model_door_normalize_arm_intervene_conflict(toy) -> None:
     """Arm (b) never merges the binding's spec with an explicit intervene=."""
 
@@ -445,7 +434,6 @@ def test_model_door_normalize_arm_intervene_conflict(toy) -> None:
     assert excinfo.value.fields["code"] == "model_door_intervene_conflict"
 
 
-@pytest.mark.smoke
 def test_model_door_policy_switch_is_closed_and_scoped() -> None:
     """The OP2 switch takes exactly two arms and restores itself on exit."""
 
@@ -491,7 +479,6 @@ def test_model_door_funnel_coverage_inventory(toy) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_execution_effect_vocabulary_is_closed() -> None:
     """The audit chokepoint refuses effects outside the closed two-value set."""
 
@@ -505,7 +492,6 @@ def test_execution_effect_vocabulary_is_closed() -> None:
         assert banned not in EXECUTION_EFFECTS
 
 
-@pytest.mark.smoke
 def test_execution_effect_chokepoint_refuses_invalid(toy) -> None:
     """``record_intervention_event`` refuses a non-vocabulary effect typed."""
 
@@ -536,7 +522,6 @@ def test_execution_effect_chokepoint_refuses_invalid(toy) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_bind_generate_unavailable_refuses(toy) -> None:
     """``generate()`` on a generate-less base model refuses typed."""
 

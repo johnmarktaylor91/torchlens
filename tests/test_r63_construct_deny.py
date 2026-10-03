@@ -132,7 +132,6 @@ _ALLOC_TARGETS = (
 )
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("module,name,arg", _ALLOC_TARGETS)
 def test_reduce_construction_of_tensor_ndarray_refused(module: str, name: str, arg: bytes) -> None:
     """A PROTO2 GLOBAL+REDUCE of Tensor/FloatTensor/ndarray RAISES (never allocates)."""
@@ -142,7 +141,6 @@ def test_reduce_construction_of_tensor_ndarray_refused(module: str, name: str, a
         SafeBundleUnpickler(io.BytesIO(payload)).load()
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("module,name,arg", _ALLOC_TARGETS)
 def test_newobj_construction_of_tensor_ndarray_refused(module: str, name: str, arg: bytes) -> None:
     """A PROTO2 NEWOBJ of Tensor/FloatTensor/ndarray RAISES (never allocates)."""
@@ -152,7 +150,6 @@ def test_newobj_construction_of_tensor_ndarray_refused(module: str, name: str, a
         SafeBundleUnpickler(io.BytesIO(payload)).load()
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("module,name,arg", _ALLOC_TARGETS)
 def test_newobj_ex_construction_of_tensor_ndarray_refused(
     module: str, name: str, arg: bytes
@@ -197,7 +194,6 @@ def _resolve_or_none(module: str, name: str) -> object:
         return None
 
 
-@pytest.mark.smoke
 def test_tensor_ndarray_types_still_resolve_as_inert_references() -> None:
     """``find_class`` still hands back the tensor/ndarray/param TYPE objects (metadata needs them)."""
 
@@ -207,7 +203,6 @@ def test_tensor_ndarray_types_still_resolve_as_inert_references() -> None:
     assert _resolve_or_none("numpy", "ndarray") is np.ndarray
 
 
-@pytest.mark.smoke
 def test_legit_reconstructors_are_not_alloc_types_and_reduce_is_allowed() -> None:
     """The FUNCTION reconstructors resolve and are NOT flagged as alloc constructors."""
 
@@ -296,7 +291,6 @@ def test_admitted_constructable_alloc_set_is_empty_over_baseline_and_allowlists(
     )
 
 
-@pytest.mark.smoke
 def test_baseline_lists_tensor_classes_that_resolve_but_do_not_construct() -> None:
     """Non-vacuity: the baseline lists a TENSOR class; it resolves inertly yet cannot construct."""
 
@@ -337,7 +331,6 @@ class _StatefulLinear(nn.Module):
         return torch.relu(self.lin(value)) * self.scale + self.tmp
 
 
-@pytest.mark.smoke
 def test_embedded_weights_tlspec_round_trips_with_zero_alloc_constructions(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

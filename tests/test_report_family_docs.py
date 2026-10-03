@@ -24,8 +24,6 @@ import torch.nn as nn
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke
-
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 DOC_PAGE = REPO_ROOT / "docs" / "reference" / "device_attribution.md"
 

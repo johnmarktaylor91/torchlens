@@ -35,8 +35,6 @@ from torchlens._architecture import (
     layer_for_module,
 )
 
-pytestmark = pytest.mark.smoke
-
 REPO = Path(__file__).resolve().parent.parent
 PACKAGE_ROOT = REPO / "torchlens"
 BASELINE_PATH = Path(__file__).with_name("test_arch_spine_layer_baseline.tsv")
@@ -215,6 +213,7 @@ def _baseline_counts() -> dict[str, int]:
     return counts
 
 
+@pytest.mark.smoke
 def test_eager_upward_inversions_never_increase() -> None:
     findings = _compute_inversions()
     live = {module: len(rows) for module, rows in findings.items()}

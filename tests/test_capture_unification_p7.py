@@ -294,6 +294,7 @@ def test_recording_to_trace_module_tree_matches_exhaustive(model_factory) -> Non
     assert _module_call_stacks(cooked) == _module_call_stacks(exhaustive)
 
 
+@pytest.mark.smoke
 def test_removed_keep_aliases_raise_type_error() -> None:
     """The removed keep_op=/keep_module= aliases fail loudly, never silently."""
 

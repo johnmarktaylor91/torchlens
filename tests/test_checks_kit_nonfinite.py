@@ -23,13 +23,10 @@ if HAS_AMP_GRADSCALER:
 else:  # torch 2.1-2.2: the device-agnostic GradScaler postdates the floor.
     GradScaler = None  # type: ignore[assignment,misc]
 
-pytestmark = [
-    pytest.mark.smoke,
-    pytest.mark.skipif(
-        not HAS_AMP_GRADSCALER,
-        reason="torch.amp.GradScaler (device-agnostic) postdates the torch 2.1 floor",
-    ),
-]
+pytestmark = pytest.mark.skipif(
+    not HAS_AMP_GRADSCALER,
+    reason="torch.amp.GradScaler (device-agnostic) postdates the torch 2.1 floor",
+)
 
 
 def _model(dtype: torch.dtype = torch.float32) -> nn.Module:
@@ -192,6 +189,7 @@ def test_scaler_makes_the_event_a_harmless_skip(kind: str) -> None:
     assert report.ledgers["scale"]["skipped_attempts"] == 1
 
 
+@pytest.mark.smoke
 def test_param_space_nonfinite_routes_to_scheduled_scan() -> None:
     """D7 + routing separation: corrupt WEIGHTS raise at S-C, named."""
 
@@ -217,6 +215,7 @@ def test_param_space_nonfinite_routes_to_scheduled_scan() -> None:
     assert exc.value.fields["accepted_step_id"] == 1
 
 
+@pytest.mark.smoke
 def test_actions_demote_per_registration() -> None:
     """The raise stays demotable (D6): action='collect' collects, no raise."""
 

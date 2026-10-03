@@ -85,7 +85,10 @@ def test_repeated_calls_are_byte_identical() -> None:
             assert canonical_dumps(call_tool(name, args)) == canonical_dumps(call_tool(name, args))
 
 
-@pytest.mark.smoke
+@pytest.mark.smoke_cells(
+    "test_golden_files_pin_the_wire_format[payload_stats-torchlens_payload_stats-args2]",
+    "test_golden_files_pin_the_wire_format[query_sites-torchlens_query_sites-args1]",
+)
 @pytest.mark.parametrize(
     ("golden_name", "tool", "args"),
     [
@@ -118,7 +121,6 @@ def test_golden_files_pin_the_wire_format(golden_name: str, tool: str, args: dic
     assert canonical_dumps(envelope) + "\n" == golden
 
 
-@pytest.mark.smoke
 def test_no_generation_timestamp_anywhere() -> None:
     """Artifact created_at is data; report-generation time is forbidden."""
 

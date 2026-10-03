@@ -17,8 +17,6 @@ import torchlens as tl
 from torchlens.attribution import onebackward as ob
 from torchlens.utils._torch_compat import get_gradient_edge_support
 
-pytestmark = pytest.mark.smoke
-
 _requires_gradient_edge = pytest.mark.skipif(
     not get_gradient_edge_support(),
     reason="one-backward reads require torch.autograd.graph.GradientEdge (2.4+)",
@@ -247,6 +245,7 @@ class TestReadCore:
         )
         assert table.target_ids() == ("t0", "t1")
 
+    @pytest.mark.smoke
     @_requires_gradient_edge
     def test_callable_1d_target_is_a_batch_never_summed(self) -> None:
         """A 1-D callable result expands to per-element targets."""
@@ -340,6 +339,7 @@ class TestReadCore:
 class TestActivationMethods:
     """Item 2 activation paths and retention honesty (D14)."""
 
+    @pytest.mark.smoke
     @_requires_gradient_edge
     def test_activation_x_grad_equals_manual_product(self) -> None:
         """act x grad rows equal payload * gradient elementwise."""
@@ -382,6 +382,7 @@ class TestActivationMethods:
         assert statuses == {"unavailable"}
         assert {row.status_reason for row in axg.rows()} == {"payload_unretained"}
 
+    @pytest.mark.smoke
     @_requires_gradient_edge
     def test_activation_method_reads_payloads_without_backward(self) -> None:
         """method='activation' takes no target and runs no backward."""

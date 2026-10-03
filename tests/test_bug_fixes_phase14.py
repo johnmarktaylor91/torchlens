@@ -560,7 +560,6 @@ def test_interpolate_exemption_uses_scale_factor_position_not_content() -> None:
     assert not _check_interpolate_exempt(trace, layer, ["equal_data"])  # type: ignore[arg-type]
 
 
-@pytest.mark.smoke
 def test_validate_forward_pass_handles_identity_output_layer() -> None:
     """Validation perturbs through synthetic output identity nodes."""
 

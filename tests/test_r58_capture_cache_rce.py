@@ -75,7 +75,6 @@ def cache_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_authenticated_cache_still_hits(cache_root: Path) -> None:
     """An entry this process wrote authenticates and is reused.
 
@@ -100,7 +99,6 @@ def test_authenticated_cache_still_hits(cache_root: Path) -> None:
     assert not entry.with_name(entry.name + ".hmac").exists()
 
 
-@pytest.mark.smoke
 def test_cache_secret_is_private(cache_root: Path) -> None:
     """The HMAC secret is created 0600, so its tags actually prove something."""
 
@@ -119,7 +117,6 @@ def test_cache_secret_is_private(cache_root: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_planted_code_exec_pickle_is_never_unpickled(cache_root: Path, tmp_path: Path) -> None:
     """A substituted entry does NOT execute and does NOT become a cache hit.
 
@@ -142,7 +139,6 @@ def test_planted_code_exec_pickle_is_never_unpickled(cache_root: Path, tmp_path:
     assert isinstance(refreshed, tl.Trace)
 
 
-@pytest.mark.smoke
 def test_headerless_entry_is_a_miss_not_a_load(cache_root: Path, tmp_path: Path) -> None:
     """An entry without the authenticated header is refilled, not trusted.
 
@@ -174,7 +170,6 @@ def test_headerless_entry_is_a_miss_not_a_load(cache_root: Path, tmp_path: Path)
     )
 
 
-@pytest.mark.smoke
 def test_tag_from_a_foreign_secret_does_not_authenticate(cache_root: Path, tmp_path: Path) -> None:
     """An attacker who can write the entry AND a tag still cannot forge one."""
 
@@ -200,7 +195,6 @@ def test_tag_from_a_foreign_secret_does_not_authenticate(cache_root: Path, tmp_p
     assert not marker.exists()
 
 
-@pytest.mark.smoke
 def test_symlinked_entry_is_never_followed(cache_root: Path, tmp_path: Path) -> None:
     """A symlinked entry redirecting out of the cache is refused, not read."""
 
@@ -224,7 +218,6 @@ def test_symlinked_entry_is_never_followed(cache_root: Path, tmp_path: Path) -> 
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.skipif(os.name != "posix", reason="POSIX mode bits are the checked signal")
 def test_cache_dirs_are_created_private() -> None:
     """Both torchlens-owned cache levels end up with no group/other write bits.
@@ -244,7 +237,6 @@ def test_cache_dirs_are_created_private() -> None:
         assert stat.S_IMODE(directory.stat().st_mode) & 0o022 == 0, directory
 
 
-@pytest.mark.smoke
 @pytest.mark.skipif(os.name != "posix", reason="POSIX mode bits are the checked signal")
 def test_world_writable_cache_dir_is_tightened_not_trusted(cache_root: Path) -> None:
     """A world-writable cache directory is made private before any entry is read.
@@ -261,7 +253,6 @@ def test_world_writable_cache_dir_is_tightened_not_trusted(cache_root: Path) -> 
     assert stat.S_IMODE(cache_root.stat().st_mode) & 0o022 == 0
 
 
-@pytest.mark.smoke
 @pytest.mark.skipif(os.name != "posix", reason="POSIX mode bits are the checked signal")
 def test_group_readable_secret_refuses_typed(cache_root: Path) -> None:
     """A secret other users can read cannot key a meaningful tag, so it refuses."""
@@ -336,7 +327,6 @@ class _OpenCountingSwapHook:
                 self._swapping = False
 
 
-@pytest.mark.smoke
 def test_authenticated_bytes_are_the_bytes_unpickled(cache_root: Path, tmp_path: Path) -> None:
     """The entry is read ONCE: what the tag authenticates is what gets unpickled.
 
@@ -376,7 +366,6 @@ def test_authenticated_bytes_are_the_bytes_unpickled(cache_root: Path, tmp_path:
     assert isinstance(refreshed, tl.Trace)
 
 
-@pytest.mark.smoke
 def test_no_bare_pickle_read_in_the_package() -> None:
     """Standing gate: no bare ``pickle.load``/``loads`` outside the guarded readers.
 

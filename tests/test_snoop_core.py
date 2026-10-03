@@ -17,8 +17,6 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens.options import EchoOptions
 
-pytestmark = pytest.mark.smoke
-
 
 class TwoBlock(nn.Module):
     """Tiny two-block MLP with real module structure."""
@@ -128,6 +126,7 @@ def test_echo_modules_is_structure_only() -> None:
     assert all(line.lstrip().startswith((">", "<")) for line in body)
 
 
+@pytest.mark.smoke
 def test_multi_output_op_narrates_one_line_per_output() -> None:
     """Memo test 1: one line per output on multi-output ops."""
 
@@ -147,6 +146,7 @@ def test_multi_output_op_narrates_one_line_per_output() -> None:
     assert any("out=1" in line for line in split_lines)
 
 
+@pytest.mark.smoke
 def test_followed_by_releases_are_marked_late() -> None:
     """Bounded followed_by releases buffered matches marked late=N."""
 

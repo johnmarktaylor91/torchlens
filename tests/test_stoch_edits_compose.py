@@ -35,7 +35,6 @@ def _toy_trace() -> tl.Trace:
     )
 
 
-@pytest.mark.smoke
 def test_left_to_right_order_and_noncommutativity() -> None:
     """compose(a, b)(x) == b(a(x)); scale/clamp do not commute."""
 
@@ -50,7 +49,6 @@ def test_left_to_right_order_and_noncommutativity() -> None:
     assert not torch.equal(fork_lr["relu_1_2"].out, fork_rl["relu_1_2"].out)
 
 
-@pytest.mark.smoke
 def test_flattening_is_syntactic_and_audit_visible() -> None:
     """compose(a, compose(b, c)) and compose(a, b, c) are ONE identity."""
 
@@ -61,7 +59,6 @@ def test_flattening_is_syntactic_and_audit_visible() -> None:
     assert dict(nested.metadata)["compose_leaves"] == "scale|clamp|scale"
 
 
-@pytest.mark.smoke
 def test_construction_refusals() -> None:
     """D20/D21: empty, non-helper, unseeded-stochastic, shape-change, backward."""
 
@@ -82,7 +79,6 @@ def test_construction_refusals() -> None:
     assert excinfo.value.fields["code"] == "compose_kind_mismatch"
 
 
-@pytest.mark.smoke
 def test_one_fire_one_record_with_ordered_leaves() -> None:
     """ONE FireRecord per firing; the ordered leaf identities ride the spec."""
 
@@ -96,7 +92,6 @@ def test_one_fire_one_record_with_ordered_leaves() -> None:
     assert dict(fires[0].helper.metadata)["compose_leaves"] == "scale|clamp"
 
 
-@pytest.mark.smoke
 def test_flags_and_combine_and_seeded_stochastic_leaf_allowed() -> None:
     """Flags AND-combine; a SEEDED stochastic leaf composes (granularity mixing legal)."""
 
@@ -107,7 +102,6 @@ def test_flags_and_combine_and_seeded_stochastic_leaf_allowed() -> None:
     assert baseline_flags.batch_independent is False, "mean_ablate self-mean couples the batch"
 
 
-@pytest.mark.smoke
 def test_matches_explicit_sequential_hooks_bytewise() -> None:
     """A5: the composed value equals explicit sequential edits, byte for byte."""
 
@@ -120,7 +114,6 @@ def test_matches_explicit_sequential_hooks_bytewise() -> None:
     assert torch.equal(fork_composed["relu_1_2"].out, fork_sequential["relu_1_2"].out)
 
 
-@pytest.mark.smoke
 def test_pickle_round_trip_preserves_leaf_order() -> None:
     """The builtin registry rebuilds the chain with leaf order intact."""
 
@@ -131,7 +124,6 @@ def test_pickle_round_trip_preserves_leaf_order() -> None:
     assert restored.factory is not None, "the registry re-derives the runtime factory"
 
 
-@pytest.mark.smoke
 def test_leaf_failure_is_atomic_and_named() -> None:
     """A failing leaf aborts the whole fire naming compose[i]."""
 
@@ -152,7 +144,6 @@ def test_leaf_failure_is_atomic_and_named() -> None:
     assert torch.equal(fork["relu_1_2"].out, baseline), "no half-applied chain"
 
 
-@pytest.mark.smoke
 def test_compose_threads_leaf_path_into_derived_seeds() -> None:
     """D6: two stochastic leaves inside one compose cannot collide."""
 

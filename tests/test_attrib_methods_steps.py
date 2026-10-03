@@ -17,8 +17,6 @@ import torchlens.attribution as attribution
 from torchlens.attribution import AttributionError
 from torchlens.attribution._steps import _midpoint_alphas, _midpoint_schedule
 
-pytestmark = pytest.mark.smoke
-
 
 class _SmoothMlp(nn.Module):
     """Small smooth MLP whose IG integrals converge quickly."""
@@ -129,6 +127,7 @@ def test_step_batching_matches_sequential_input_ig(chunk: int) -> None:
     assert audit["worst_deviation"] <= audit["rtol"]
 
 
+@pytest.mark.smoke
 def test_step_batching_callable_target_tree_split() -> None:
     """Callable targets are applied per logical path point via the tree split."""
 
@@ -214,6 +213,7 @@ def test_audit_catches_rows_tail_coupling_adversary() -> None:
     assert "step_batch_size=1" in str(excinfo.value)
 
 
+@pytest.mark.smoke
 def test_audit_catches_row_mean_coupling_positive_control() -> None:
     """The realistic full-coupling class is caught even by per_call auditing."""
 
@@ -244,6 +244,7 @@ def test_audit_off_is_disclosed_not_silent() -> None:
     assert result.extra["step_audit"]["audited_pairs"] == []
 
 
+@pytest.mark.smoke_cells("test_step_batching_matches_sequential_layer_ig_and_conductance[8]")
 @pytest.mark.parametrize("chunk", [2, 8])
 def test_step_batching_matches_sequential_layer_ig_and_conductance(chunk: int) -> None:
     """Chunked LIG and conductance match sequential at rtol 1e-4."""

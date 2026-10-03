@@ -26,8 +26,6 @@ from torchlens._io._portability_preflight import (
 from torchlens._io.bundle import _RenameAwareUnpickler
 from torchlens.utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
 
-pytestmark = pytest.mark.smoke
-
 #: The preflight's own load-preflight dry run round-trips the metadata bytes through
 #: the SAME default-deny unpickler a real tl.load() would use, so an embedded tensor
 #: value (tl.observers.log_value, or a plain/Parameter tensor stashed in annotations)
@@ -134,6 +132,7 @@ def test_parameter_and_plain_tensor_annotations_round_trip(tmp_path: Path) -> No
     torch.testing.assert_close(restored, torch.ones(2))
 
 
+@pytest.mark.smoke
 def test_sanitize_rebuilds_containers_and_keeps_plain_tensors_by_identity() -> None:
     plain = torch.zeros(2)
     tagged = torch.ones(2)
@@ -160,6 +159,7 @@ def test_preflight_returns_bytes_the_loader_reads() -> None:
     assert _RenameAwareUnpickler(io.BytesIO(data)).load() == state
 
 
+@pytest.mark.smoke
 def test_preflight_names_metadata_paths_outside_annotations() -> None:
     state = {"tlspec_version": 9, "some_field": [1, {"deep": _UserObject()}]}
     with pytest.raises(TorchLensIOError) as excinfo:

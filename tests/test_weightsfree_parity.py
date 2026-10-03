@@ -12,7 +12,6 @@ have all landed.
 
 from __future__ import annotations
 
-import pytest
 import torch
 from test_weightsfree_fixtures import (
     ConvBnPool,
@@ -28,8 +27,6 @@ from test_weightsfree_fixtures import (
 )
 
 import torchlens as tl
-
-pytestmark = pytest.mark.smoke
 
 
 def test_functional_chain_parity() -> None:

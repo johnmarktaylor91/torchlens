@@ -122,7 +122,6 @@ def _assert_no_banned_verbs(text: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_fire_mark_is_fact_and_solid(chain_capture) -> None:
     """A recorded FireRecord yields a FACT mark: solid border, penwidth 3."""
 
@@ -142,7 +141,6 @@ def test_fire_mark_is_fact_and_solid(chain_capture) -> None:
     assert any("zero_ablate" in line for line in spec.lines)
 
 
-@pytest.mark.smoke
 def test_cohort_mark_is_heuristic_and_dashed() -> None:
     """A targeted site's un-fired sibling pass gets a DASHED heuristic mark."""
 
@@ -168,7 +166,6 @@ def test_cohort_mark_is_heuristic_and_dashed() -> None:
     assert "dashed" not in (fact_spec.style or "")
 
 
-@pytest.mark.smoke
 def test_mark_vocabularies_are_closed(chain_capture) -> None:
     """Every derived mark uses the closed kind and basis vocabularies."""
 
@@ -179,7 +176,6 @@ def test_mark_vocabularies_are_closed(chain_capture) -> None:
         assert mark.basis in MARK_BASES
 
 
-@pytest.mark.smoke
 def test_staged_set_only_attributes_no_marks(chain_capture) -> None:
     """A staged envelope with no recorded site refs mints NO marks.
 
@@ -208,7 +204,6 @@ def test_staged_set_only_attributes_no_marks(chain_capture) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_replay_lane_wording_never_borrows_live_text(chain_capture) -> None:
     """The replay fork's box carries ONLY the replay lane's wording."""
 
@@ -220,7 +215,6 @@ def test_replay_lane_wording_never_borrows_live_text(chain_capture) -> None:
     _assert_no_banned_verbs(text)
 
 
-@pytest.mark.smoke
 def test_live_lane_wording_never_borrows_replay_text() -> None:
     """The live-intervened capture's box carries ONLY the live wording."""
 
@@ -239,7 +233,6 @@ def test_live_lane_wording_never_borrows_replay_text() -> None:
     _assert_no_banned_verbs(text)
 
 
-@pytest.mark.smoke
 def test_zero_fire_rule_is_disclosed(chain_capture) -> None:
     """A declared rule that never fired is census DATA, never silence."""
 
@@ -274,7 +267,6 @@ def test_region_do_marks_carry_recorded_effect(chain_capture) -> None:
     assert _REPLAY_WORDING in text
 
 
-@pytest.mark.smoke
 def test_injection_hosts_mark_and_census_count() -> None:
     """F01 stage-1 injected ops mark their host and count in the census."""
 
@@ -303,7 +295,6 @@ def test_injection_hosts_mark_and_census_count() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_surgery_lens_registered_over_c05_registry() -> None:
     """The surgery row rides C05's lens registry, never a new view kind."""
 
@@ -316,7 +307,6 @@ def test_surgery_lens_registered_over_c05_registry() -> None:
         _assert_no_banned_verbs(line)
 
 
-@pytest.mark.smoke
 def test_surgery_lens_refuses_without_audit_evidence(chain_capture) -> None:
     """Missing headline evidence refuses typed, naming the capture remedy."""
 
@@ -355,7 +345,6 @@ def test_render_surgery_census_travels_with_figure(chain_capture, tmp_path) -> N
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_diff_joins_site_key_first_and_marks_travel(chain_capture) -> None:
     """Site-key joins are FACT rows; subject-side marks ride the rows."""
 
@@ -369,7 +358,6 @@ def test_diff_joins_site_key_first_and_marks_travel(chain_capture) -> None:
     assert diff.counts()["only_in_subject"] == 0
 
 
-@pytest.mark.smoke
 def test_diff_positional_cohort_join_is_heuristic() -> None:
     """Equal cohorts under one shared site key pair positionally: HEURISTIC."""
 
@@ -406,7 +394,6 @@ def test_diff_absence_is_disclosed_never_ghosted(chain_capture) -> None:
     assert "ghost" not in text.lower()
 
 
-@pytest.mark.smoke
 def test_diff_refuses_self_and_empty_operands(chain_capture) -> None:
     """Self-diff and an op-free operand refuse surgery_diff_incomparable."""
 

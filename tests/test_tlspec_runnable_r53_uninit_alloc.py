@@ -182,7 +182,6 @@ class ResizeShrinkModel(nn.Module):
         return x + t.mean()
 
 
-@pytest.mark.smoke
 def test_empty_escape_is_declared_verified_path_only(tmp_path: Path) -> None:
     """Consequence A closed: the output escape stays path-only VERIFIED but is
     now DECLARED -- distinguishable from a deterministic run by the report."""
@@ -194,7 +193,6 @@ def test_empty_escape_is_declared_verified_path_only(tmp_path: Path) -> None:
     assert report.nondeterministic_sources == ("uninitialized_alloc",)
 
 
-@pytest.mark.smoke
 def test_archived_empty_activation_is_not_applicable_never_raises(tmp_path: Path) -> None:
     """The r52 inconsistency: an archived family slot must report
     ``not_applicable`` upfront (like a declared RNG source), never raise."""
@@ -206,7 +204,6 @@ def test_archived_empty_activation_is_not_applicable_never_raises(tmp_path: Path
     assert "uninitialized_alloc" in report.nondeterministic_sources
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "model_cls", (EmptyCopyModel, EmptyZeroModel, EmptyFillModel, EmptyOutModel)
 )
@@ -230,7 +227,6 @@ def test_empty_then_rng_fill_reclassifies_as_seeded(tmp_path: Path) -> None:
     assert report.nondeterministic_sources == ("seeded_rng",)
 
 
-@pytest.mark.smoke
 def test_empty_driven_branch_in_dag_is_unverifiable(tmp_path: Path) -> None:
     """Consequence B closed (in-DAG layer): a control fact fed by surviving
     uninit taint ceilings structurally -- parity with the RNG-driven branch --
@@ -243,7 +239,6 @@ def test_empty_driven_branch_in_dag_is_unverifiable(tmp_path: Path) -> None:
     assert "uninitialized_alloc" in report.nondeterministic_sources
 
 
-@pytest.mark.smoke
 def test_pruned_empty_driven_branch_is_unverifiable(tmp_path: Path) -> None:
     """Consequence B closed (pruned layer): the orphan-pruned empty-driven
     predicate chain is recorded by the shared pruned-nondeterministic-control
@@ -280,7 +275,6 @@ def test_pruned_empty_then_fill_walk_is_sanitized(tmp_path: Path) -> None:
     assert pruned_rng_control_source_labels(trace) == frozenset()
 
 
-@pytest.mark.smoke
 def test_zero_numel_empty_stays_clean_and_attested(tmp_path: Path) -> None:
     """A zero-element family product exposes no bytes: fully clean."""
 
@@ -335,7 +329,6 @@ def test_archive_pair_honest_asymmetry_and_no_raise(tmp_path: Path) -> None:
     assert control_report.nondeterministic_sources == ()
 
 
-@pytest.mark.smoke
 def test_untainted_archived_mismatch_still_raises(tmp_path: Path) -> None:
     """LOCKED tripwire: a byte mismatch on an UNTAINTED slot still raises
     ``numeric_attestation_failed`` -- the uninit gate is never a tolerance."""

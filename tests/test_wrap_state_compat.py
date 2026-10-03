@@ -39,8 +39,6 @@ import torch.nn.functional as F
 import torchlens as tl
 from torchlens import _state
 
-pytestmark = pytest.mark.smoke
-
 
 def _ensure_wrapped() -> None:
     """Force the lazy torch wrap through the public capture path."""
@@ -243,6 +241,7 @@ class TestMetaApiSmokePostWrap:
         batched = torch.vmap(torch.dot)(torch.randn(4, 3), torch.randn(4, 3))
         assert batched.shape == (4,)
 
+    @pytest.mark.smoke
     def test_flop_counter_mode(self):
         from torch.utils.flop_counter import FlopCounterMode
 

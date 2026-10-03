@@ -526,6 +526,7 @@ class TwoVmapBoundaryModel(nn.Module):
         return first + second
 
 
+@pytest.mark.smoke
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
 def test_vmap_boundary_node_has_clean_parent_edge() -> None:
     """Instrumented vmap emits one boundary node consumed by downstream ops."""

@@ -50,7 +50,6 @@ class _NaNInjector(torch.nn.Module):
         return x
 
 
-@pytest.mark.smoke
 class TestNumbersRightAndObservationInert:
     """Matrix row 3: exact counts vs direct torch; NaN at the coordinate."""
 
@@ -112,7 +111,6 @@ class TestNumbersRightAndObservationInert:
         assert all(p.observation.spine.count_nan == 0 for p in view.series(upstream))
 
 
-@pytest.mark.smoke
 class TestResumeSegments:
     """Matrix row 8: a restart appends a NEW segment, boundary preserved."""
 
@@ -142,7 +140,6 @@ class TestResumeSegments:
         assert "segment" in render_fan(view, site)
 
 
-@pytest.mark.smoke
 class TestReusedModuleTruth:
     """Matrix row 9: a module called twice per step -- current truth pinned.
 
@@ -153,6 +150,7 @@ class TestReusedModuleTruth:
     module-tier fold so it can never silently change meaning.
     """
 
+    @pytest.mark.smoke
     def test_double_call_folds_exactly(self) -> None:
         torch.manual_seed(3)
 
@@ -179,10 +177,10 @@ class TestReusedModuleTruth:
         assert spine.count_total == 2 * (2 * 4), "both calls' populations folded exactly"
 
 
-@pytest.mark.smoke
 class TestFailOpenReducer:
     """Matrix row 11: a raising reducer records capture_failed; step survives."""
 
+    @pytest.mark.smoke
     def test_op_tier_raising_facet_fails_open(self) -> None:
         torch.manual_seed(4)
         model = torch.nn.Sequential(torch.nn.Linear(4, 4), torch.nn.ReLU())
@@ -207,7 +205,6 @@ class TestFailOpenReducer:
         assert "boom" in (observations[0].reason or "")
 
 
-@pytest.mark.smoke
 class TestCrossSiteRollupRefused:
     """Matrix row 15: no rollup door exists; cross-site merge refuses typed."""
 

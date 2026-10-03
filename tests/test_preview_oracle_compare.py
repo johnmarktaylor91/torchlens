@@ -15,8 +15,6 @@ import pytest
 from torchlens.backends.mlx.validation import _payloads_close as mlx_payloads_close
 from torchlens.backends.tf.validation import _payloads_close as tf_payloads_close
 
-pytestmark = pytest.mark.smoke
-
 
 def test_tf_oracle_treats_identical_nan_patterns_as_agreement() -> None:
     """TF was the one sibling omitting equal_nan: NaN payloads false-FAILED."""
@@ -73,6 +71,7 @@ def test_paddle_oracle_source_matches_nan_doctrine() -> None:
     assert "equal_nan=True" in float_branch.split("return")[1]
 
 
+@pytest.mark.smoke
 def test_blas_layout_band_rejects_beyond_64_ulp() -> None:
     """R13-8a: the benign-layout band is 64 ULP (16x the observed ~4 ULP).
 

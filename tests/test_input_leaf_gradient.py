@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import copy
 
-import pytest
 import torch
 from torch import nn
 
@@ -25,7 +24,6 @@ class _InputGradientModel(nn.Module):
         return self.second(torch.tanh(self.first(inputs)))
 
 
-@pytest.mark.smoke
 def test_backward_ready_input_leaf_gradient_is_bit_exact_to_eager() -> None:
     """Backward-ready capture preserves the exact eager input-leaf gradient."""
     torch.manual_seed(314159)

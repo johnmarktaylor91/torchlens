@@ -23,8 +23,6 @@ from test_weightsfree_fixtures import (
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke
-
 
 def _write_rows(trace) -> list[tuple[str, str, object]]:
     """(kind, source_func_name, value_changed) per recorded buffer write."""

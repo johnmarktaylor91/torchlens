@@ -153,7 +153,6 @@ def test_host_headroom_is_measurable_on_this_platform() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_default_budget_does_not_fire_on_an_ordinary_model() -> None:
     """The shipped default must never refuse a normal capture."""
 
@@ -162,7 +161,6 @@ def test_default_budget_does_not_fire_on_an_ordinary_model() -> None:
     assert int(trace.saved_activation_memory) > 0
 
 
-@pytest.mark.smoke
 def test_default_capture_is_unchanged_by_the_budget() -> None:
     """A default capture and an unbudgeted capture agree on what was saved."""
 

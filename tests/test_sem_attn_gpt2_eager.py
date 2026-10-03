@@ -20,8 +20,6 @@ pytest.importorskip("transformers")
 
 from tests.real_model.r0.families import FAMILY_BY_NAME  # noqa: E402
 
-pytestmark = [pytest.mark.smoke]
-
 ATTN_ADDRESS = "transformer.h.0.attn"
 
 

@@ -18,8 +18,6 @@ import torchlens as tl
 from torchlens.options import CaptureOptions
 from torchlens.runnable import PathFaithfulness, StateSource
 
-pytestmark = pytest.mark.smoke
-
 
 def _capture(model: nn.Module, args: Any) -> Any:
     return tl.trace(

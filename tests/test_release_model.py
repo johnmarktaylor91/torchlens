@@ -34,7 +34,6 @@ def _new_model() -> _ReleaseModel:
     return _ReleaseModel().eval()
 
 
-@pytest.mark.smoke
 def test_whole_model_pickle_and_torch_save_require_release() -> None:
     """Persistent child wrappers fail whole-model serialization until release."""
     model = _new_model()
@@ -63,7 +62,6 @@ def test_whole_model_pickle_and_torch_save_require_release() -> None:
     assert buffer.tell() > 0
 
 
-@pytest.mark.smoke
 def test_release_is_idempotent_and_never_traced_model_is_a_noop() -> None:
     """Repeated release and release before tracing leave forward behavior intact."""
     model = _new_model()
@@ -85,7 +83,6 @@ def test_release_is_idempotent_and_never_traced_model_is_a_noop() -> None:
     assert all(not name.startswith("tl_") for module in model.modules() for name in vars(module))
 
 
-@pytest.mark.smoke
 def test_retrace_after_release_matches_fresh_model() -> None:
     """A released model is fully re-prepared and captures like a fresh twin."""
     model = _new_model()
@@ -103,7 +100,6 @@ def test_retrace_after_release_matches_fresh_model() -> None:
     ]
 
 
-@pytest.mark.smoke
 def test_releasing_one_model_preserves_an_independent_prepared_model() -> None:
     """Release does not disturb persistent preparation for another model tree."""
     first = _new_model()
@@ -138,7 +134,6 @@ class _HeldActivationModel(nn.Module):
         return self.act_table["tanh"](y)
 
 
-@pytest.mark.smoke
 def test_release_normalizes_prewrap_function_attrs_for_torch_save() -> None:
     """grind-r4 b8 R56 direction 1: a model built BEFORE wrapping holds
     pristine originals; pickled WHILE wrapped, every held ref fails pickle's
@@ -161,7 +156,6 @@ def test_release_normalizes_prewrap_function_attrs_for_torch_save() -> None:
     assert out.shape == (1, 4)
 
 
-@pytest.mark.smoke
 def test_release_normalizes_wrapper_attrs_after_unwrap() -> None:
     """R56 direction 2: a model built WHILE wrapped holds epoch wrappers;
     after unwrap_torch() those refs fail pickle. release_model normalizes
@@ -184,7 +178,6 @@ def test_release_normalizes_wrapper_attrs_after_unwrap() -> None:
         wrap_torch()
 
 
-@pytest.mark.smoke
 def test_release_leaves_foreign_and_user_callables_alone() -> None:
     """The normalization is ledger-fenced: user callables never swap."""
 
@@ -263,7 +256,6 @@ class _FrozensetModel(nn.Module):
         return torch.relu(self.lin(x))
 
 
-@pytest.mark.smoke
 def test_release_preserves_namedtuple_attribute_type() -> None:
     """grind-r5 P1 (b3/b8 x3 labs): release_model must not rebuild a namedtuple
     attribute as a plain tuple -- that breaks attribute access and the model's
@@ -279,7 +271,6 @@ def test_release_preserves_namedtuple_attribute_type() -> None:
     torch.save(model, io.BytesIO())  # and the stated goal still holds
 
 
-@pytest.mark.smoke
 def test_release_skips_non_namedtuple_tuple_subclasses() -> None:
     """A tuple subclass with instance state is left untouched (disclosed
     residual) rather than corrupted by a blind rebuild."""
@@ -294,7 +285,6 @@ def test_release_skips_non_namedtuple_tuple_subclasses() -> None:
     assert model.tagged.tag == "keep-me"
 
 
-@pytest.mark.smoke
 def test_release_normalizes_dict_keys_for_torch_save() -> None:
     """grind-r5 P1 (b3 sol / b8 sol): function-KEYED dict attrs are inside the
     documented one-level coverage; keys must normalize or torch.save still
@@ -309,7 +299,6 @@ def test_release_normalizes_dict_keys_for_torch_save() -> None:
     assert set(model.table.values()) == {0.5, 1.0}
 
 
-@pytest.mark.smoke
 def test_release_normalizes_frozenset_members() -> None:
     """frozenset attrs are one level of builtin nesting too; members must
     normalize so pickle's identity check passes."""
@@ -339,7 +328,6 @@ def test_release_set_holding_both_epochs_never_loses_a_member() -> None:
     assert len(model.both) == 2, "release_model silently dropped a set member"
 
 
-@pytest.mark.smoke
 def test_release_then_unwrap_keeps_model_serializable() -> None:
     """grind-r5 P1 (b8 opus F1 MED-HIGH): the documented remedy must not be a
     one-way trip. release_model normalizes to the wrapped epoch's values; a
@@ -366,7 +354,6 @@ def test_release_then_unwrap_keeps_model_serializable() -> None:
     torch.save(model, io.BytesIO())
 
 
-@pytest.mark.smoke
 def test_faulted_release_evicts_preparation_bookkeeping(monkeypatch) -> None:
     """grind-r5 P1 (b3 opus R07-2): a fault mid-release must not leave a
     half-stripped tree the registry still certifies as prepared -- the next
@@ -408,7 +395,6 @@ def test_faulted_release_evicts_preparation_bookkeeping(monkeypatch) -> None:
     assert retraced_modules == control_modules
 
 
-@pytest.mark.smoke
 def test_release_leaves_no_instance_forward_on_plain_modules() -> None:
     """grind-r5 P1 (b4 fable): restoring forward as an INSTANCE attribute
     churns the implementation fingerprint; when the original is the plain

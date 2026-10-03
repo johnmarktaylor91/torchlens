@@ -27,8 +27,6 @@ from torchlens.semantic.recipes.attention import (
     _projection_orientation,
 )
 
-pytestmark = [pytest.mark.smoke]
-
 
 class _TupleOut(nn.Module):
     """Module returning (primary, secondary) with distinct shapes."""
@@ -139,6 +137,7 @@ def test_flash_attention_absence_teaches_both_remedies():
     assert "eager" in reason.detail
 
 
+@pytest.mark.smoke
 def test_no_evidence_absence_is_structural_and_names_the_gap():
     module = SimpleNamespace(address="blk.attn", custom_attributes={})
     reason = _no_attention_evidence(module)
@@ -146,6 +145,7 @@ def test_no_evidence_absence_is_structural_and_names_the_gap():
     assert "no attention score computation was captured" in reason.detail
 
 
+@pytest.mark.smoke
 def test_projection_orientation_class_table_and_shape_proof():
     """Conv1D/Linear key the table; unknown classes need a shape proof; square refuses."""
 

@@ -17,8 +17,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.stats import degrade, glance, render_core_line, tensor_stats
 
-pytestmark = pytest.mark.smoke
-
 
 def _arange(*shape: int, offset: float = 0.0) -> torch.Tensor:
     """Fully deterministic float tensor (no RNG, no reductions)."""
@@ -75,6 +73,7 @@ _CORE_SPECIMENS = [
 ]
 
 
+@pytest.mark.smoke_cells("test_core_line_golden[bool_all_true]", "test_core_line_golden[scalar]")
 @pytest.mark.parametrize(
     "name,factory,expected", _CORE_SPECIMENS, ids=[s[0] for s in _CORE_SPECIMENS]
 )
@@ -153,6 +152,7 @@ def test_trace_and_records_ascii_sweep() -> None:
     trace.cleanup()
 
 
+@pytest.mark.smoke
 def test_stats_record_repr_is_the_core_line() -> None:
     """TensorStats reprs as its own grammar (records show)."""
 

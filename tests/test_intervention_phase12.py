@@ -151,7 +151,6 @@ def _first_batch_out(log: tl.Trace) -> torch.Tensor:
     raise AssertionError("no batch out found")
 
 
-@pytest.mark.smoke
 def test_append_success_grows_batch_and_sets_state() -> None:
     """Compatible append concatenates saved outs and records state."""
 

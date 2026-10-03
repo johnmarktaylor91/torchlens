@@ -112,7 +112,6 @@ def _log_two_backward_passes(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     return trace
 
 
-@pytest.mark.smoke
 def test_draw_combined_tinymlp_smoke(tmp_path: Path) -> None:
     """draw_combined returns DOT with forward and backward nodes."""
     trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))

@@ -174,7 +174,6 @@ class _Nested(nn.Module):
         return self.child(x) + self.top
 
 
-@pytest.mark.smoke
 def test_plain_attribute_does_not_steal_a_registered_buffer_address() -> None:
     """The recorded address must survive postprocess, registered or not.
 
@@ -187,7 +186,6 @@ def test_plain_attribute_does_not_steal_a_registered_buffer_address() -> None:
     assert _buffer_addresses(trace) == [("buffer_1", "q"), ("buffer_2", "top")]
 
 
-@pytest.mark.smoke
 def test_list_element_does_not_steal_a_registered_buffer_address() -> None:
     """Matrix case F: the list-element spelling must resolve honestly too."""
 
@@ -198,7 +196,6 @@ def test_list_element_does_not_steal_a_registered_buffer_address() -> None:
     assert "h.0" in addresses.values(), f"list element lost its address: {addresses}"
 
 
-@pytest.mark.smoke
 def test_nested_plain_attribute_keeps_its_own_address() -> None:
     """The nested case that hid inside the r82 over-trigger battery.
 
@@ -323,7 +320,6 @@ class _NestedRegistered(nn.Module):
         return self.bn(x) * self.scale
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("train", [False, True], ids=["eval", "train"])
 def test_registered_buffers_resolve_to_their_own_addresses(train: bool) -> None:
     """Every registered buffer must still resolve to its OWN dotted address.
@@ -342,7 +338,6 @@ def test_registered_buffers_resolve_to_their_own_addresses(train: bool) -> None:
     assert "scale" in addresses
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("train", [False, True], ids=["eval", "train"])
 def test_convbn_still_replays_verified(tmp_path: Path, train: bool) -> None:
     """ConvBN must stay VERIFIED in both modes -- no new ceiling, no refusal."""

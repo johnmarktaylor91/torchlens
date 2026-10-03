@@ -7,9 +7,8 @@ import pytest
 from torchlens.backends.registry import BackendUnsupportedError
 from torchlens.backends.tf import _tf_compat as tfc
 
-pytestmark = pytest.mark.smoke
 
-
+@pytest.mark.smoke
 def test_op_callbacks_absence_marks_capability(monkeypatch: pytest.MonkeyPatch) -> None:
     """Missing TensorFlow op callbacks raise the public unsupported-backend error."""
 

@@ -215,7 +215,6 @@ def _lstm_trace() -> Any:
     return tl.trace(LSTMModel(), torch.randn(7, 4, 5))
 
 
-@pytest.mark.smoke
 def test_lstm_three_outputs_distinct_layers() -> None:
     """LSTM outputs are distinct layers, not recurrent calls."""
 
@@ -270,7 +269,6 @@ def test_bilstm_outputs_preserve_single_call_structure() -> None:
     assert outputs[1].shape == (2, 4, 4)
 
 
-@pytest.mark.smoke
 def test_mha_attention_outputs_are_selectable() -> None:
     """MultiheadAttention output roles distinguish weights from activations."""
 

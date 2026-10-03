@@ -670,7 +670,6 @@ def _dot_node_shapes(dot: str) -> dict[str, str]:
     return shapes
 
 
-@pytest.mark.smoke
 def test_reused_single_op_module_count_is_depth_invariant(tmp_path: Path) -> None:
     """A reused single-op module keeps the honest count at shallow and deep depth."""
 

@@ -39,8 +39,6 @@ from torchlens.transforms import (
     with_context,
 )
 
-pytestmark = pytest.mark.smoke
-
 _LAYERS = {"relu": "relu", "logits": "output_1"}
 
 

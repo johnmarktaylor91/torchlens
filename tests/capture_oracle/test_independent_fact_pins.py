@@ -18,12 +18,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-import pytest
 import torch
 
 from ._models import PlainCNN, build_model_case
-
-pytestmark = pytest.mark.smoke
 
 _GOLDEN = Path(__file__).with_name("goldens") / "plain_cnn__exhaustive.json"
 

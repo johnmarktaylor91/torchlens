@@ -23,8 +23,6 @@ from tests.transforms_corpus.loader import (
     verify_vendored_integrity,
 )
 
-pytestmark = pytest.mark.smoke
-
 pytest.importorskip("PIL", reason="the corpus loader decodes JPEG via PIL")
 
 

@@ -12,10 +12,6 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-import pytest
-
-pytestmark = pytest.mark.smoke
-
 _GATE = Path(__file__).resolve().parent / "test_quickstart_readme_gate.py"
 
 

@@ -1364,7 +1364,6 @@ def _make_match_guard_model() -> nn.Module:
     return namespace["MatchGuardModel"]()
 
 
-@pytest.mark.smoke
 def test_simple_if_else_model_cross_verifies_invariants_rendering_and_lifecycle() -> None:
     """Simple ``if``/``else`` cross-verifies event, invariant, and rendering surfaces."""
     positive_log = _log_model(SimpleIfElseModel(), torch.ones(2, 2))
@@ -1405,7 +1404,6 @@ def test_simple_if_else_model_cross_verifies_invariants_rendering_and_lifecycle(
     _assert_derived_views_consistent(negative_log)
 
 
-@pytest.mark.smoke
 def test_elif_ladder_model_cross_verifies_all_arms_and_render_labels() -> None:
     """Elif ladder cross-verifies every arm with invariants and rendering labels."""
     cases = [

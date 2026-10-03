@@ -6,16 +6,12 @@ via MRO) and carry their code on ``fields``.
 
 from __future__ import annotations
 
-import pytest
-
 from torchlens._io.runnable_load import (
     ContextFieldInvalidError,
     DescriptorStructuralBoundError,
 )
 from torchlens.errors._base import TorchLensError
 from torchlens.runnable import RunnableErrorCode
-
-pytestmark = pytest.mark.smoke
 
 
 def test_context_field_invalid_is_torchlens_error_with_code() -> None:

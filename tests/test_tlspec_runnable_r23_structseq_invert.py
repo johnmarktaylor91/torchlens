@@ -205,7 +205,7 @@ def _plain_tuple_sort(value: torch.Tensor, *args: Any, **kwargs: Any) -> tuple[t
     return tuple(torch.sort(value, *args, **kwargs))
 
 
-@pytest.mark.smoke
+@pytest.mark.smoke_cells("test_structseq_named_runtime_paths_match_positional_saved_paths[topk]")
 @pytest.mark.parametrize("operation", ["sort", "topk", "max", "min", "median"])
 def test_structseq_named_runtime_paths_match_positional_saved_paths(
     operation: str, tmp_path: Path
@@ -225,7 +225,6 @@ def test_structseq_named_runtime_paths_match_positional_saved_paths(
     assert torch.equal(result.output.indices, live.indices)
 
 
-@pytest.mark.smoke
 def test_plain_tuple_is_not_accepted_as_structseq_under_positional_paths(tmp_path: Path) -> None:
     """A plain tuple with right tensors but wrong structseq type must diverge."""
 
@@ -238,7 +237,6 @@ def test_plain_tuple_is_not_accepted_as_structseq_under_positional_paths(tmp_pat
         loaded.run(inputs=value.clone(), seed=0)
 
 
-@pytest.mark.smoke
 def test_unary_invert_is_not_classified_as_inplace_and_runs_verified(tmp_path: Path) -> None:
     """Unary ``~tensor`` must replay without an in-place mutation contract."""
 
@@ -257,7 +255,6 @@ def test_unary_invert_is_not_classified_as_inplace_and_runs_verified(tmp_path: P
     assert torch.equal(result.output, model(value))
 
 
-@pytest.mark.smoke
 def test_genuine_inplace_ops_stay_inplace_and_replay_verified(tmp_path: Path) -> None:
     """In-place op names and augmented dunders must remain in-place."""
 

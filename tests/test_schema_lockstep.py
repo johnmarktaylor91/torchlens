@@ -66,7 +66,6 @@ from torchlens.data_classes.param import Param
 from torchlens.data_classes.trace import Trace
 
 #: Applied per test (not module-wide) so the heavy gallery gate can opt out.
-smoke = pytest.mark.smoke
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -164,7 +163,6 @@ def catalog_registration_gaps(
     return declared - registered, registered - declared
 
 
-@smoke
 def test_every_field_catalog_is_registered() -> None:
     """Every ``*_FIELD_ORDER`` in constants has a lockstep registry entry."""
 
@@ -204,7 +202,6 @@ _PRIMARY_CATALOGS = tuple(c for c in CATALOGS if c.owner is not None)
 _ALIAS_CATALOGS = tuple(c for c in CATALOGS if c.alias_of is not None)
 
 
-@smoke
 @pytest.mark.parametrize("catalog", _PRIMARY_CATALOGS, ids=lambda c: c.constant)
 def test_catalog_is_generated_from_its_owning_field_policy(catalog: Catalog) -> None:
     """The checked-in catalog equals the view generated from ``FIELD_POLICY``."""
@@ -221,7 +218,6 @@ def test_catalog_is_generated_from_its_owning_field_policy(catalog: Catalog) -> 
     assert len(declared) == len(set(declared)), f"{catalog.constant} has duplicates"
 
 
-@smoke
 @pytest.mark.parametrize("catalog", _ALIAS_CATALOGS, ids=lambda c: c.constant)
 def test_alias_catalogs_share_the_primary_object(catalog: Catalog) -> None:
     """An alias catalog IS its primary, so the spellings cannot diverge."""
@@ -369,7 +365,7 @@ def private_ordered_field_gaps(
     return live - declared, declared - live
 
 
-@smoke
+@pytest.mark.smoke
 def test_private_named_ordered_drop_fields_are_ledgered() -> None:
     """An ordered private DROP field must state why it is on the surface."""
 
@@ -381,7 +377,6 @@ def test_private_named_ordered_drop_fields_are_ledgered() -> None:
     assert not phantom, f"ledgered private ordered fields that no longer exist: {sorted(phantom)}"
 
 
-@smoke
 def test_private_named_ordered_persisted_fields_are_registered() -> None:
     """Ordering a private persisted field stays a reviewed one-line diff."""
 
@@ -393,7 +388,6 @@ def test_private_named_ordered_persisted_fields_are_registered() -> None:
     )
 
 
-@smoke
 def test_private_ordered_field_reasons_are_nonempty() -> None:
     """Every tier-A ledger entry carries a real reason, not a placeholder."""
 
@@ -764,7 +758,6 @@ def artifact_registration_gaps(
     return found - registered, registered - found
 
 
-@smoke
 def test_every_generated_module_is_registered() -> None:
     """Every self-declared generated module has a regenerate-and-diff entry.
 
@@ -789,7 +782,6 @@ def test_every_generated_module_is_registered() -> None:
     assert not phantom, f"registered generated modules that no longer exist: {sorted(phantom)}"
 
 
-@smoke
 def test_ruff_excludes_every_generated_artifact() -> None:
     """Ruff must not touch a generated module, and must not exclude a hand-written one.
 
@@ -827,7 +819,7 @@ def test_ruff_excludes_every_generated_artifact() -> None:
     )
 
 
-@smoke
+@pytest.mark.smoke_cells("test_generated_artifact_is_current[docs/method_x_model_compatibility.md]")
 @pytest.mark.parametrize("artifact", GENERATED_ARTIFACTS, ids=lambda a: a.path)
 def test_generated_artifact_is_current(artifact: GeneratedArtifact) -> None:
     """The checked-in generated module matches a fresh in-process generation.
@@ -1050,7 +1042,10 @@ _RECORD_NAMES = (
 )
 
 
-@smoke
+@pytest.mark.smoke_cells(
+    "test_live_record_attributes_are_all_declared[Layer]",
+    "test_live_record_attributes_are_all_declared[Param]",
+)
 @pytest.mark.parametrize("record_name", _RECORD_NAMES)
 def test_live_record_attributes_are_all_declared(lockstep_trace: Trace, record_name: str) -> None:
     """Every attribute a captured record carries is declared in FIELD_POLICY.
@@ -1075,7 +1070,6 @@ def test_live_record_attributes_are_all_declared(lockstep_trace: Trace, record_n
     )
 
 
-@smoke
 def test_runtime_attribute_derivation_catches_an_undeclared_op_slot(lockstep_trace: Trace) -> None:
     """The AUD-CODE 3.0c non-vacuity pin: an undeclared Op column IS reported."""
 
@@ -1095,7 +1089,10 @@ def _postprocess_axis_names() -> list[str]:
     return [name for name, _ in iter_axes()]
 
 
-@smoke
+@pytest.mark.smoke_cells(
+    "test_live_record_attributes_are_declared_on_every_capture_axis[cooked_recording_halted]",
+    "test_live_record_attributes_are_declared_on_every_capture_axis[transform]",
+)
 @pytest.mark.parametrize("axis_name", _postprocess_axis_names())
 def test_live_record_attributes_are_declared_on_every_capture_axis(axis_name: str) -> None:
     """The runtime-declaration gate runs on EVERY capture axis (B1-17).
@@ -1143,7 +1140,6 @@ def test_live_record_attributes_are_declared_on_every_capture_axis(axis_name: st
         trace.cleanup()
 
 
-@smoke
 def test_the_axis_sweep_is_not_vacuous() -> None:
     """The widened gate really covers the axes that carried the leaks.
 
@@ -1158,7 +1154,6 @@ def test_the_axis_sweep_is_not_vacuous() -> None:
     assert len(names) >= 20
 
 
-@smoke
 def test_all_live_records_sweeps_more_than_one_instance_per_family(
     lockstep_trace: Trace,
 ) -> None:
@@ -1176,7 +1171,6 @@ def test_all_live_records_sweeps_more_than_one_instance_per_family(
         assert any(instance is representative for instance in families[family]), family
 
 
-@smoke
 def test_facade_plumbing_allowance_stays_minimal() -> None:
     """The undeclared-attribute allowance stays the two facade handles.
 
@@ -1262,7 +1256,6 @@ def version_pin_drift(live: dict[str, int], pins: dict[str, int]) -> dict[str, t
     }
 
 
-@smoke
 def test_version_authorities_match_their_reviewed_pins() -> None:
     """A persistence version bump is a reviewed diff, never a silent one."""
 
@@ -1293,7 +1286,6 @@ def documented_merged_versions(text: str) -> set[int]:
     return {int(match) for match in re.findall(r"tlspec_version[:`\s]+(\d+)", text)}
 
 
-@smoke
 def test_merged_contract_doc_states_the_shipped_version() -> None:
     """The merged contract doc's stated version tracks the code constant."""
 
@@ -1312,7 +1304,6 @@ def test_merged_contract_doc_states_the_shipped_version() -> None:
 # ---------------------------------------------------------------------------
 
 
-@smoke
 class TestMechanismIsRedCapable:
     """Plant drift into each checker and prove it is reported.
 
@@ -1467,7 +1458,6 @@ class TestMechanismIsRedCapable:
         assert documented_merged_versions("nothing here") == set()
 
 
-@smoke
 def test_field_policy_entries_declare_a_portable_policy() -> None:
     """Every declared field carries a real portable policy value.
 
@@ -1483,7 +1473,7 @@ def test_field_policy_entries_declare_a_portable_policy() -> None:
             )
 
 
-@smoke
+@pytest.mark.smoke
 def test_schema_generator_renders_unions_identically_on_every_python() -> None:
     """Evaluated union annotations render the same text on 3.10 and 3.11+.
 

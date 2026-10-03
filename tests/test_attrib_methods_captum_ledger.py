@@ -107,7 +107,6 @@ def shared_case() -> tuple[nn.Module, Tensor]:
     return model, x
 
 
-@pytest.mark.smoke
 def test_row_integrated_gradients_riemann_middle(shared_case: tuple[nn.Module, Tensor]) -> None:
     """IG parity, EXACT: ours == captum under matched midpoint semantics."""
 
@@ -126,7 +125,6 @@ def test_row_integrated_gradients_riemann_middle(shared_case: tuple[nn.Module, T
     assert row["captum"] == "0.9.0" or row["captum"] >= "0.7"
 
 
-@pytest.mark.smoke
 def test_row_saliency_and_input_x_grad(shared_case: tuple[nn.Module, Tensor]) -> None:
     """Saliency (absolute) and input-x-gradient parity, EXACT."""
 
@@ -146,7 +144,6 @@ def test_row_saliency_and_input_x_grad(shared_case: tuple[nn.Module, Tensor]) ->
     )
 
 
-@pytest.mark.smoke
 def test_row_guided_and_deconv_module_sites(shared_case: tuple[nn.Module, Tensor]) -> None:
     """Guided backprop + deconvolution parity on module-dispatched coverage.
 
@@ -176,7 +173,6 @@ def test_row_guided_and_deconv_module_sites(shared_case: tuple[nn.Module, Tensor
     )
 
 
-@pytest.mark.smoke
 def test_row_lrp_epsilon_shared_mlp(shared_case: tuple[nn.Module, Tensor]) -> None:
     """The captum LRP(EpsilonRule) shared-MLP exact row (memo D32)."""
 
@@ -191,7 +187,6 @@ def test_row_lrp_epsilon_shared_mlp(shared_case: tuple[nn.Module, Tensor]) -> No
     assert all(row["nonfinite"] is False for row in ledger)
 
 
-@pytest.mark.smoke
 def test_row_occlusion_map_shared_grid(shared_case: tuple[nn.Module, Tensor]) -> None:
     """Occlusion parity on an identical grid/baseline/target, incl. clipping."""
 
@@ -225,7 +220,6 @@ def test_row_occlusion_map_shared_grid(shared_case: tuple[nn.Module, Tensor]) ->
     torch.testing.assert_close(ours.values, theirs.to(torch.float64), rtol=1e-5, atol=1e-6)
 
 
-@pytest.mark.smoke
 def test_row_noise_tunnel_zero_noise_degenerate(shared_case: tuple[nn.Module, Tensor]) -> None:
     """Zero-noise NT == captum NT == the direct child (no randomness left).
 
@@ -251,7 +245,6 @@ def test_row_noise_tunnel_zero_noise_degenerate(shared_case: tuple[nn.Module, Te
     torch.testing.assert_close(ours.values, theirs, rtol=1e-6, atol=1e-9)
 
 
-@pytest.mark.smoke
 def test_row_infidelity_identical_stored_perturbations(
     shared_case: tuple[nn.Module, Tensor],
 ) -> None:

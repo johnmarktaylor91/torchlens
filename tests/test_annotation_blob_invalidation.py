@@ -18,8 +18,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.viz.feature_maps import feature_map_evolution
 
-pytestmark = pytest.mark.smoke
-
 
 class _TinyConv(nn.Module):
     """Small deterministic conv model producing spatial activations."""
@@ -91,6 +89,7 @@ def test_rerun_same_shape_drops_annotation_blobs() -> None:
     )
 
 
+@pytest.mark.smoke
 def test_replace_state_from_drops_annotation_blobs() -> None:
     """The atomic run-state swap takes the fresh log's (empty) blob state."""
 

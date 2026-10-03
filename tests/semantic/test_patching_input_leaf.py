@@ -202,7 +202,6 @@ def _mixed_tree(value: float) -> tuple[tuple[torch.Tensor, list[torch.Tensor]], 
     return ((leaf(), [leaf()]), leaf())
 
 
-@pytest.mark.smoke
 def test_input_facet_patch_binds_recorded_address_not_ordinal() -> None:
     """Patching the facet homed on leaf ``c`` must change ``c``, not leaf ``a``.
 
@@ -223,7 +222,6 @@ def test_input_facet_patch_binds_recorded_address_not_ordinal() -> None:
     assert torch.isclose(scores[0], torch.tensor(86.0)), scores
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("facet_name", "expected"),
     [
@@ -297,7 +295,6 @@ def test_mapping_input_container_type_is_preserved() -> None:
     assert torch.isclose(scores[0], torch.tensor(30.0)), scores
 
 
-@pytest.mark.smoke
 def test_teardown_restores_state_when_cleanup_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

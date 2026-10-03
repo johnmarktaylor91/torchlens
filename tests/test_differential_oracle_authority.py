@@ -12,10 +12,6 @@ import importlib.util
 import sys
 from pathlib import Path
 
-import pytest
-
-pytestmark = pytest.mark.smoke
-
 _TOOL = Path(__file__).resolve().parent.parent / "tools" / "differential_capture.py"
 _spec = importlib.util.spec_from_file_location("differential_capture", _TOOL)
 dc = importlib.util.module_from_spec(_spec)

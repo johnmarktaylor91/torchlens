@@ -18,8 +18,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.options import CaptureOptions
 
-pytestmark = pytest.mark.smoke
-
 
 class AutocastGuardModel(nn.Module):
     """The HF 4.x LlamaRotaryEmbedding shape: a disabled autocast scope
@@ -61,6 +59,7 @@ def test_shim_unlocks_disabled_autocast_on_admitted_meta() -> None:
     assert "linear" in funcs and "relu" in funcs
 
 
+@pytest.mark.smoke
 def test_enabled_autocast_on_meta_still_refuses() -> None:
     """``enabled=True`` on meta is NOT nullified: torch's own refusal stands,
     classified into the substrate family by W1-CLS (torch/amp provenance)."""

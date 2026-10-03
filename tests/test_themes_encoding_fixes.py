@@ -29,8 +29,6 @@ from torchlens.visualization._encoding import (
     resolve_color_by,
 )
 
-pytestmark = pytest.mark.smoke  # measured <0.5s per test (W051-GATE, AUD-CODE 0.1)
-
 
 def _state_for(transform: str) -> EncodingState:
     """Build a populated-enough state carrying one transform."""
@@ -97,6 +95,7 @@ def test_legend_carries_the_coverage_line() -> None:
     assert "encoded 2 of 5 eligible nodes" in joined
 
 
+@pytest.mark.smoke
 def test_log_transform_discloses_the_floor() -> None:
     """Non-positive values unencode under log with the disclosed note."""
 

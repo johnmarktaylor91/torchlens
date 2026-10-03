@@ -45,7 +45,6 @@ def _wrapped_torch() -> Iterator[None]:
     yield
 
 
-@pytest.mark.smoke
 def test_belt_membership_is_derived_and_pinned() -> None:
     """The measured protocol-invisible set on this build, exactly."""
 
@@ -60,7 +59,6 @@ def test_belt_membership_is_derived_and_pinned() -> None:
         assert ("torch", "from_file") not in report.members
 
 
-@pytest.mark.smoke
 def test_belt_members_fire_zero_mode_callbacks() -> None:
     """Independent re-measurement: no mode can see a belt member's call."""
 
@@ -103,7 +101,6 @@ def test_belt_sweep_patches_stale_module_ref_and_restores() -> None:
         belt.restore_belt_references()
 
 
-@pytest.mark.smoke
 def test_belt_restore_preserves_user_reassignment() -> None:
     """Reversal is conditional: a slot the user rewrote is left alone."""
 
@@ -123,7 +120,6 @@ def test_belt_restore_preserves_user_reassignment() -> None:
         belt.restore_belt_references()
 
 
-@pytest.mark.smoke
 def test_belt_sweep_is_epoch_incremental() -> None:
     """A module identity is scanned once; new imports are picked up later."""
 
@@ -140,7 +136,6 @@ def test_belt_sweep_is_epoch_incremental() -> None:
         belt.restore_belt_references()
 
 
-@pytest.mark.smoke
 def test_belt_sweep_prefilter_evicts_dead_module_ids() -> None:
     """The O(new) pre-filter never turns a reused id into a silent skip.
 
@@ -175,7 +170,6 @@ def test_belt_sweep_prefilter_evicts_dead_module_ids() -> None:
         belt.restore_belt_references()
 
 
-@pytest.mark.smoke
 def test_probe_rng_bracket_restores_global_seed() -> None:
     """The probe framework is RNG-neutral by construction (b8-fable R56).
 
@@ -197,7 +191,6 @@ def test_probe_rng_bracket_restores_global_seed() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_belt_derivation_is_rng_neutral() -> None:
     """End-to-end: a full ``_derive()`` pass leaves the global RNG untouched."""
 
@@ -243,7 +236,6 @@ def test_probe_failure_reaches_doctor_row(monkeypatch: pytest.MonkeyPatch) -> No
     assert "unprobed_candidates=2" in row.detail
 
 
-@pytest.mark.smoke
 def test_probe_failure_reaches_compat_row(monkeypatch: pytest.MonkeyPatch) -> None:
     """grind-r6 b3 R02 (sol MED): compat.report() must carry the belt row."""
 

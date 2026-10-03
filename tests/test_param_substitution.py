@@ -23,8 +23,6 @@ import torchlens as tl
 from torchlens.selection import SelectionError
 from torchlens.validation.core import _check_edge_intervention_boundary
 
-pytestmark = pytest.mark.smoke
-
 
 class _Net(nn.Module):
     def __init__(self) -> None:
@@ -91,6 +89,7 @@ def test_live_parameter_bit_identical(capture):
     )
 
 
+@pytest.mark.smoke
 def test_masked_param_edit_scatters_only_selected_rows(capture):
     model, x, trace = capture
     mask = torch.zeros_like(model.fc1.weight, dtype=torch.bool)
@@ -215,6 +214,7 @@ def test_recurrent_reused_param_substitutes_every_pass(recurrent_capture):
     assert len(audit["occurrences"]) == 3
 
 
+@pytest.mark.smoke
 def test_recurrent_bias_param_substitutes_every_pass(recurrent_capture):
     model, x, trace = recurrent_capture
     replacement = torch.randn(4)
@@ -374,6 +374,7 @@ def test_multipass_incomplete_pass_coverage_refuses():
         trace.cleanup()
 
 
+@pytest.mark.smoke
 def test_zero_mask_is_disclosure_not_error(capture):
     model, x, trace = capture
     fork = trace.fork()
@@ -429,6 +430,7 @@ def test_validation_boundary_corroborates(capture):
     assert not verdict.failed
 
 
+@pytest.mark.smoke
 def test_validation_tamper_strip_fire_record_fails(capture):
     """Tripwire intact: an uncorroborated param entry FAILS validation."""
 

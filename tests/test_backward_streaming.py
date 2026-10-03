@@ -79,7 +79,6 @@ def _logged_backward_stream(
     return trace, expected
 
 
-@pytest.mark.smoke
 def test_log_backward_streams_grads_to_disk(tmp_path: Path) -> None:
     """Gradient streaming should write grad blobs into the bundle."""
 
@@ -128,7 +127,6 @@ def test_lazy_load_grad_from_bundle(tmp_path: Path) -> None:
     assert isinstance(layer._slot("grad"), torch.Tensor)
 
 
-@pytest.mark.smoke
 def test_bundle_save_load_roundtrip_with_backward(tmp_path: Path) -> None:
     """Bundle save/load should preserve backward metadata and cross-references."""
 
@@ -156,7 +154,6 @@ def test_bundle_save_load_roundtrip_with_backward(tmp_path: Path) -> None:
     assert torch.equal(restored[label].grad, expected[label])
 
 
-@pytest.mark.smoke
 def test_train_mode_disk_save_rejected_for_grads(tmp_path: Path) -> None:
     """Training mode should reject grad disk streaming."""
 
@@ -176,7 +173,6 @@ def test_train_mode_disk_save_rejected_for_grads(tmp_path: Path) -> None:
         )
 
 
-@pytest.mark.smoke
 def test_retain_in_memory_false_for_grad_streaming(tmp_path: Path) -> None:
     """Explicit grad eviction should keep lazy refs and drop live tensors."""
 

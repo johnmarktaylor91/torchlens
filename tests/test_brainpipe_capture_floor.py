@@ -67,7 +67,6 @@ class _MidForwardCounter(nn.Module):
         return x.mean()
 
 
-@pytest.mark.smoke
 def test_save_all_releases_live_sources_at_emission() -> None:
     """Retention holds copies; bookkeeping must not also pin live sources.
 
@@ -94,7 +93,6 @@ def test_save_all_releases_live_sources_at_emission() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_selective_save_holds_no_live_population_mid_forward() -> None:
     """A one-site selection must not pin the whole live activation set.
 
@@ -119,7 +117,6 @@ def test_selective_save_holds_no_live_population_mid_forward() -> None:
     assert model.mid_forward_live <= ceiling
 
 
-@pytest.mark.smoke
 def test_module_forward_arg_stash_carries_stubs_not_payloads() -> None:
     """The module-arg stash and enter events carry payload-free stubs.
 
@@ -204,7 +201,6 @@ def test_selective_capture_peak_is_bounded_multiple_of_bare() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_structure_only_pins_are_trace_scoped_not_process_leaks() -> None:
     """W1b narrowing (F20): structure_only's real-tensor pins die with the log.
 

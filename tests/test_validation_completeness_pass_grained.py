@@ -12,14 +12,11 @@ from __future__ import annotations
 
 import copy
 
-import pytest
 import torch
 import torch.nn as nn
 
 import torchlens as tl
 from torchlens.validation.diagnostics import CHECK_COMPLETENESS, TRACE_FAILURE_ATTR
-
-pytestmark = pytest.mark.smoke
 
 
 class Loop(nn.Module):

@@ -22,8 +22,6 @@ from torch import nn
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke
-
 _CANARY_TOKEN = "hf_fake_canary_token_2468"
 _CANARY_PATH = "/home/fake-owner/secret-project/config.yaml"
 _CANARY_OWNER = "fake-owner-name"

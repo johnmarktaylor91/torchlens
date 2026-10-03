@@ -34,7 +34,6 @@ from torchlens.utils.rng import (
 )
 
 
-@pytest.mark.smoke
 def test_uuid1_c_path_is_marked_and_restored() -> None:
     """In-window ``uuid.uuid1()`` marks its channel through the C funnel too."""
 
@@ -63,7 +62,6 @@ def test_uuid4_still_marks_through_os_urandom() -> None:
     assert "os.urandom" in result.channels
 
 
-@pytest.mark.smoke
 def test_raw_thread_spawned_in_window_is_profile_hooked() -> None:
     """A raw ``_thread.start_new_thread`` thread's host draws are witnessed."""
 
@@ -133,7 +131,6 @@ def test_flag_uncertain_detail_is_deduped_and_capped() -> None:
     assert monitor.result.uncertain is True
 
 
-@pytest.mark.smoke
 def test_rng_state_digest_is_printoptions_independent() -> None:
     """The verdict-steering RandomState digest never rides np.set_printoptions.
 
@@ -162,7 +159,6 @@ def test_rng_state_digest_is_printoptions_independent() -> None:
         np.set_printoptions(**saved_printoptions)
 
 
-@pytest.mark.smoke
 def test_flag_uncertain_hot_loop_is_fast() -> None:
     """1e5 repeated flags finish in well under a second (was O(N^2) copies)."""
 
@@ -177,7 +173,6 @@ def test_flag_uncertain_hot_loop_is_fast() -> None:
     assert torch is not None
 
 
-@pytest.mark.smoke
 def test_random_subclass_draw_override_fail_closes_to_uncertain() -> None:
     """A user ``random.Random`` subclass overriding a draw method cannot read clean.
 
@@ -232,7 +227,6 @@ def test_random_subclass_draw_override_fail_closes_to_uncertain() -> None:
     ), trace._runnable.rng_monitor_uncertain_detail
 
 
-@pytest.mark.smoke
 def test_library_rng_subclasses_do_not_over_trigger() -> None:
     """Held library engines stay clean: the override check trusts library definers.
 
@@ -271,7 +265,6 @@ def test_library_rng_subclasses_do_not_over_trigger() -> None:
     assert trace._runnable.rng_monitor_uncertain_detail == ()
 
 
-@pytest.mark.smoke
 def test_balanced_in_window_setprofile_swap_flags_uncertain() -> None:
     """grind-r4 b8 R57: a balanced in-window profile swap must not stay silent.
 
@@ -301,7 +294,6 @@ def test_balanced_in_window_setprofile_swap_flags_uncertain() -> None:
     assert "torchlens" not in getattr(sys.setprofile, "__module__", "")
 
 
-@pytest.mark.smoke
 def test_balanced_threading_setprofile_swap_flags_uncertain() -> None:
     """Sibling slot: threading.setprofile blinds threads started after it."""
 
@@ -316,7 +308,6 @@ def test_balanced_threading_setprofile_swap_flags_uncertain() -> None:
     ), sorted(result.uncertain_detail)
 
 
-@pytest.mark.smoke
 def test_swap_free_window_stays_certain() -> None:
     """Control: the monitor's own installs/restores never trip the detector."""
 
@@ -327,7 +318,6 @@ def test_swap_free_window_stays_certain() -> None:
     ), sorted(result.uncertain_detail)
 
 
-@pytest.mark.smoke
 def test_raw_thread_hook_install_does_not_trip_swap_detector() -> None:
     """The in-window raw-thread hook install is monitor-internal: no flag."""
 
@@ -343,7 +333,6 @@ def test_raw_thread_hook_install_does_not_trip_swap_detector() -> None:
     ), sorted(result.uncertain_detail)
 
 
-@pytest.mark.smoke
 def test_in_window_thread_start_does_not_trip_swap_detector() -> None:
     """Thread._bootstrap_inner re-installs the window's own threading hook via
     sys.setprofile on every in-window thread start: machinery, never a swap."""
@@ -357,7 +346,6 @@ def test_in_window_thread_start_does_not_trip_swap_detector() -> None:
     ), sorted(result.uncertain_detail)
 
 
-@pytest.mark.smoke
 def test_generator_spawn_is_witnessed_as_consumption() -> None:
     """``Generator.spawn()`` + child draw must not settle a clean window (R57).
 
@@ -414,7 +402,6 @@ def test_bitgenerator_and_seedsequence_spawn_are_witnessed() -> None:
     assert not clean_result.channels and not clean_result.uncertain
 
 
-@pytest.mark.smoke
 def test_held_implicit_now_converter_with_explicit_none_marks() -> None:
     """A held ``localtime(None)`` reads the clock NOW and must mark (R57).
 

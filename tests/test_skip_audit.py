@@ -509,7 +509,6 @@ def collect_unconditional_skips(root: Path) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_ledger_tiers_are_valid() -> None:
     """Every ledger row uses a closed tier vocabulary and a non-empty note."""
 
@@ -520,7 +519,6 @@ def test_ledger_tiers_are_valid() -> None:
     assert sentinel_tier == TEST_EXTRA, "the full-extra sentinel must itself be test-extra"
 
 
-@pytest.mark.smoke
 def test_importorskip_inventory_matches_ledger() -> None:
     """Every importorskip target is ledgered; every ledger row is still used."""
 
@@ -540,7 +538,6 @@ def test_importorskip_inventory_matches_ledger() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_dynamic_importorskip_sites_are_allowlisted() -> None:
     """Non-literal importorskip calls stay confined to the known dynamic sites."""
 
@@ -557,7 +554,6 @@ def test_dynamic_importorskip_sites_are_allowlisted() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_importorskip_scanner_is_red_capable(tmp_path: Path) -> None:
     """The inventory scanner catches a planted unledgered target and dynamic site."""
 
@@ -573,7 +569,6 @@ def test_importorskip_scanner_is_red_capable(tmp_path: Path) -> None:
     assert dynamic == ["test_planted_offender.py"]
 
 
-@pytest.mark.smoke
 def test_test_extra_targets_import_in_full_env() -> None:
     """When the env claims the full [test] extra, every test-extra target resolves.
 
@@ -608,7 +603,6 @@ def test_test_extra_targets_import_in_full_env() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_no_unledgered_unconditional_skips() -> None:
     """Every unconditional skip in tests/ is a consciously ledgered placeholder."""
 
@@ -627,7 +621,6 @@ def test_no_unledgered_unconditional_skips() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_unconditional_skip_scanner_is_red_capable(tmp_path: Path) -> None:
     """The scanner catches all three planted offender shapes and no decoys."""
 
@@ -912,7 +905,6 @@ def collect_repo_unsatisfiable_skipifs(root: Path, repo_root: Path) -> dict[str,
     return findings
 
 
-@pytest.mark.smoke
 def test_no_unledgered_repo_unsatisfiable_skipifs() -> None:
     """Every provably-always-firing skipif is ledgered; no ledger row is stale."""
 
@@ -1086,7 +1078,6 @@ def collect_device_gated_skipifs(root: Path) -> dict[str, str]:
     return findings
 
 
-@pytest.mark.smoke
 def test_no_unledgered_device_gated_skipifs() -> None:
     """Every CUDA-gated skip is ledgered as dark coverage; no row is stale."""
 
@@ -1249,7 +1240,6 @@ def _unresolved_tripwire_targets(targets: dict[str, str]) -> list[str]:
     )
 
 
-@pytest.mark.smoke
 def test_unavailable_ok_targets_are_all_classified() -> None:
     """Every unavailable-ok target is consciously tripwire XOR optional.
 
@@ -1281,7 +1271,6 @@ def test_unavailable_ok_targets_are_all_classified() -> None:
         assert reason.strip(), f"{target}: empty classification reason"
 
 
-@pytest.mark.smoke
 def test_tripwire_guard_deps_resolve_in_full_env() -> None:
     """A full-[test]-extra box may not silently disarm a tripwire gate.
 
@@ -1307,7 +1296,6 @@ def test_tripwire_guard_deps_resolve_in_full_env() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_tripwire_resolution_check_is_red_capable() -> None:
     """A planted unresolvable tripwire target is reported missing."""
 
@@ -1323,7 +1311,6 @@ def test_tripwire_resolution_check_is_red_capable() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_o_leg_sentinel_executes() -> None:
     """Trivial sentinel proving the ``-O`` subprocess really executes tests.
 

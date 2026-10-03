@@ -60,7 +60,6 @@ def test_quantized_capture_has_value_parity_and_discloses(kind: str) -> None:
     assert final_ops and torch.allclose(final_ops[-1].out, reference, atol=1e-6)
 
 
-@pytest.mark.smoke
 def test_bitsandbytes_compat_row_reads_pass_warning() -> None:
     """Detection reads pass/warning (verified capture, disclosed degradation)."""
 
@@ -101,7 +100,6 @@ class _RefusesRoundTrip(nn.Module):
         raise RuntimeError("loading a quantized checkpoint is not supported")
 
 
-@pytest.mark.smoke
 def test_resilient_restore_copies_in_place_when_load_refuses() -> None:
     """Fallback restores by exact-slot copy when load_state_dict refuses."""
 
@@ -113,7 +111,6 @@ def test_resilient_restore_copies_in_place_when_load_refuses() -> None:
     assert torch.equal(model.linear.weight, saved["linear.weight"])
 
 
-@pytest.mark.smoke
 def test_resilient_restore_reraises_on_unrestorable_drift() -> None:
     """A saved key with no live slot and a drifted current value re-raises."""
 

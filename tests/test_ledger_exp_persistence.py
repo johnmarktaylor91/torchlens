@@ -21,8 +21,6 @@ import torchlens as tl
 from torchlens.bundle._lineage import MemberEffectRow, MemberEffectTable
 from torchlens.errors.episode import BundleRelationError
 
-pytestmark = pytest.mark.smoke
-
 
 class _Tiny(nn.Module):
     def __init__(self, offset: float = 0.0) -> None:

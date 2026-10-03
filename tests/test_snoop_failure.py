@@ -19,8 +19,6 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens.options import EchoOptions
 
-pytestmark = pytest.mark.smoke
-
 
 class ShapeCrash(nn.Module):
     """Real shape crash: (2,8) activations reach LayerNorm(768)."""
@@ -89,6 +87,7 @@ def test_on_error_only_narrates_nothing_until_failure() -> None:
     assert "!! forward failed" in tail_sink.getvalue()
 
 
+@pytest.mark.smoke
 def test_record_tier_disposition_trio_flushes_the_tail() -> None:
     """Memo test 7 shape: raise / attach_partial / return_partial all flush."""
 
@@ -115,6 +114,7 @@ def test_record_tier_disposition_trio_flushes_the_tail() -> None:
         assert "attempted call=layer_norm" in sink.getvalue()
 
 
+@pytest.mark.smoke
 def test_partial_narrate_works_with_echo_off() -> None:
     """Tail 1, the headline: post-hoc narration needs no foresight."""
 
@@ -128,6 +128,7 @@ def test_partial_narrate_works_with_echo_off() -> None:
     assert "the raising call is not in the record" in rendered
 
 
+@pytest.mark.smoke
 def test_trace_and_recording_narrate_render_the_same_grammar() -> None:
     """One renderer, three carriers: tail idiom on finished products."""
 
@@ -142,6 +143,7 @@ def test_trace_and_recording_narrate_render_the_same_grammar() -> None:
     assert "relu" in filtered and "linear" not in filtered
 
 
+@pytest.mark.smoke
 def test_broken_sink_disables_narrator_and_capture_continues() -> None:
     """Observer failures are instrumentation failures: warn once, continue."""
 
@@ -166,6 +168,7 @@ def test_broken_sink_disables_narrator_and_capture_continues() -> None:
     assert codes.count("echo_sink_disabled") == 1
 
 
+@pytest.mark.smoke
 def test_double_fault_original_exception_wins() -> None:
     """A sink that dies during the crash tail never outranks the model error."""
 
@@ -209,6 +212,7 @@ def test_keyboard_interrupt_stays_an_interrupt() -> None:
             )
 
 
+@pytest.mark.smoke
 def test_raise_on_nan_minting_op_is_last_narrated_and_census_exact() -> None:
     """Memo crash D shape: tripwire reuse -- the crash line has the tensor."""
 

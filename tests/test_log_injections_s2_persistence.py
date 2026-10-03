@@ -69,7 +69,6 @@ def _logged_trace(chain, hook=_sae_like):
     return tl.trace(model, x, intervene=tl.when(tl.func("relu"), hook), capture=_LOGGED)
 
 
-@pytest.mark.smoke
 def test_round_trip_preserves_identity_payloads_and_query_split(chain, tmp_path) -> None:
     """Analysis save/load round-trips the injected family verbatim.
 
@@ -109,7 +108,6 @@ def test_round_trip_preserves_identity_payloads_and_query_split(chain, tmp_path)
             loaded[record.label]
 
 
-@pytest.mark.smoke
 def test_load_degrades_to_unattested_and_replay_attests(chain, tmp_path) -> None:
     """Loading NEVER attests; the replay door promotes trusted matches.
 
@@ -135,7 +133,6 @@ def test_load_degrades_to_unattested_and_replay_attests(chain, tmp_path) -> None
     assert {record.attestation for record in loaded.injected_ops} == {"attested"}
 
 
-@pytest.mark.smoke
 def test_resave_of_loaded_logged_trace_round_trips(chain, tmp_path) -> None:
     """A loaded logged trace re-saves with its injected family intact."""
 
@@ -153,7 +150,6 @@ def test_resave_of_loaded_logged_trace_round_trips(chain, tmp_path) -> None:
     assert report.passed and len(report.attested) == 5
 
 
-@pytest.mark.smoke
 def test_runnable_save_refuses_typed(chain, tmp_path) -> None:
     """The runnable level cannot carry the injected family and refuses."""
 
@@ -167,7 +163,6 @@ def test_runnable_save_refuses_typed(chain, tmp_path) -> None:
     tl.save(plain, str(tmp_path / "plain_run.tlspec"), level="runnable")
 
 
-@pytest.mark.smoke
 def test_untrusted_and_missing_callable_arms_degrade_never_refuse(chain, tmp_path) -> None:
     """Foreign and unresolvable callables load fine, disclosed unattested.
 
@@ -225,7 +220,6 @@ def test_untrusted_and_missing_callable_arms_degrade_never_refuse(chain, tmp_pat
         sys.modules.pop("f44_fake_user_module", None)
 
 
-@pytest.mark.smoke
 def test_replay_divergence_is_the_tripwire_verdict(chain, tmp_path) -> None:
     """A trusted replay contradicting the recorded output fails the report."""
 
@@ -244,7 +238,6 @@ def test_replay_divergence_is_the_tripwire_verdict(chain, tmp_path) -> None:
     assert not loaded_report.passed
 
 
-@pytest.mark.smoke
 def test_include_outs_false_persists_identity_only(chain, tmp_path) -> None:
     """A payload-free save keeps the identity family, disclosed unattested."""
 
@@ -261,7 +254,6 @@ def test_include_outs_false_persists_identity_only(chain, tmp_path) -> None:
     assert {row.reason for row in report.rows} == {"payload_unavailable"}
 
 
-@pytest.mark.smoke
 def test_nondeterministic_injected_callable_never_reads_diverged(chain) -> None:
     """RNG-consuming injected calls disclose unattested, not diverged."""
 
@@ -277,7 +269,6 @@ def test_nondeterministic_injected_callable_never_reads_diverged(chain) -> None:
     assert [row.reason for row in report.rows] == ["nondeterministic_callable"]
 
 
-@pytest.mark.smoke
 def test_multi_output_slots_round_trip_and_attest(chain, tmp_path) -> None:
     """A multi-output injected call keeps per-slot records through the codec."""
 
@@ -301,7 +292,6 @@ def test_multi_output_slots_round_trip_and_attest(chain, tmp_path) -> None:
     assert chunk_rows
 
 
-@pytest.mark.smoke
 def test_ordinary_validation_unchanged_after_round_trip(chain, tmp_path) -> None:
     """RELEASE GATE: forward validation identical for logged vs unlogged saves."""
 
@@ -318,7 +308,6 @@ def test_ordinary_validation_unchanged_after_round_trip(chain, tmp_path) -> None
     assert str(logged_verdict) == str(base_verdict)
 
 
-@pytest.mark.smoke
 def test_unanchored_record_refuses_at_save(chain, tmp_path) -> None:
     """A record with no resolved host site key cannot persist (typed)."""
 
@@ -334,7 +323,6 @@ def test_unanchored_record_refuses_at_save(chain, tmp_path) -> None:
     assert excinfo.value.fields["code"] == "injection_persist_unanchored"
 
 
-@pytest.mark.smoke
 def test_loaded_record_types_are_the_live_types(chain, tmp_path) -> None:
     """Loaded records are ordinary InjectedOp values (one surface, two origins)."""
 

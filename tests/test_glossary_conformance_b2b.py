@@ -2,7 +2,6 @@
 
 from typing import Any
 
-import pytest
 import torch
 from torch import nn
 
@@ -42,7 +41,6 @@ def _make_trace() -> Any:
     )
 
 
-@pytest.mark.smoke
 def test_trace_derived_counts_match_accessors() -> None:
     """Trace count properties are derived from their documented accessors."""
 
@@ -69,7 +67,6 @@ def test_trace_derived_counts_match_accessors() -> None:
     assert trace.has_frozen_params is True
 
 
-@pytest.mark.smoke
 def test_op_and_layer_convenience_properties() -> None:
     """Op and Layer convenience properties aggregate already captured data."""
 
@@ -117,7 +114,6 @@ def test_op_and_layer_convenience_properties() -> None:
         assert trace[op.fx_label] is op
 
 
-@pytest.mark.smoke
 def test_record_trace_aliases_and_ordinal_indexes_round_trip() -> None:
     """Records expose the owning Trace through the universal trace alias."""
 

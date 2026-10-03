@@ -84,7 +84,6 @@ class DataStorageBytesBranch(nn.Module):
         return x + 3 if exact else x - 3
 
 
-@pytest.mark.smoke
 def test_r31_data_alias_storage_offset_diverges(tmp_path: Path) -> None:
     """A ``.data`` storage-offset branch must diverge on a differently-offset twin (was VERIFIED)."""
 
@@ -100,7 +99,6 @@ def test_r31_data_alias_storage_offset_diverges(tmp_path: Path) -> None:
         tl.load(path).run(inputs=xn)
 
 
-@pytest.mark.smoke
 def test_r31_detach_alias_storage_offset_diverges(tmp_path: Path) -> None:
     """A ``.detach()`` storage-offset branch must diverge on a differently-offset twin."""
 
@@ -116,7 +114,6 @@ def test_r31_detach_alias_storage_offset_diverges(tmp_path: Path) -> None:
         tl.load(path).run(inputs=xn)
 
 
-@pytest.mark.smoke
 def test_r31_data_alias_storage_bytes_diverges(tmp_path: Path) -> None:
     """A ``.data`` storage-geometry branch must diverge on a slice-of-larger-buffer twin."""
 
@@ -141,7 +138,6 @@ class DataContiguityBranch(nn.Module):
         return x + 1 if x.data.is_contiguous() else x - 1
 
 
-@pytest.mark.smoke
 def test_r31_data_alias_contiguity_diverges(tmp_path: Path) -> None:
     """A ``.data`` contiguity branch verifies on the original and diverges on a transposed twin."""
 
@@ -166,7 +162,6 @@ class ConjBranch(nn.Module):
         return (x + 1).real if not x.is_conj() else (x - 1).real
 
 
-@pytest.mark.smoke
 def test_r31_is_conj_diverges(tmp_path: Path) -> None:
     """A conjugated same-shape/same-dtype input on an ``is_conj`` model must diverge."""
 
@@ -187,7 +182,6 @@ class NegBranch(nn.Module):
         return x + 1 if not x.is_neg() else x - 1
 
 
-@pytest.mark.smoke
 def test_r31_is_neg_diverges(tmp_path: Path) -> None:
     """A ``torch._neg_view`` same-shape input on an ``is_neg`` model must diverge."""
 
@@ -208,7 +202,6 @@ class InferenceBranch(nn.Module):
         return x + 1 if not x.is_inference() else x - 1
 
 
-@pytest.mark.smoke
 def test_r31_is_inference_diverges(tmp_path: Path) -> None:
     """An inference-mode runtime input on an ``is_inference`` model must diverge."""
 
@@ -231,7 +224,6 @@ class IsSharedBranch(nn.Module):
         return x + 1 if not x.is_shared() else x - 1
 
 
-@pytest.mark.smoke
 def test_r31_is_shared_diverges(tmp_path: Path) -> None:
     """A shared-memory runtime input on an ``is_shared`` model must diverge."""
 
@@ -254,7 +246,6 @@ class BasePresenceBranch(nn.Module):
         return x + 1 if x._base is None else x - 1
 
 
-@pytest.mark.smoke
 def test_r31_base_presence_diverges(tmp_path: Path) -> None:
     """A view runtime input on a ``_base``-presence model must diverge."""
 
@@ -276,7 +267,6 @@ class RetainsGradLeafBranch(nn.Module):
         return x + 1 if not x.retains_grad else x - 1
 
 
-@pytest.mark.smoke
 def test_r31_retains_grad_leaf_diverges(tmp_path: Path) -> None:
     """A runtime input with ``retains_grad`` set on a retains_grad model must diverge."""
 
@@ -321,7 +311,6 @@ class IsViewViewBranch(nn.Module):
         return x + 1 if not x.view(-1)._is_view() else x - 1
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "model_cls",
     [RetainsGradViewBranch, IsLeafViewBranch, IsViewViewBranch],
@@ -342,7 +331,6 @@ def test_r31_autograd_structural_view_read_is_unverifiable(
 # --- Over-trigger guards (the two-sided balance) --------------------------------------------
 
 
-@pytest.mark.smoke
 @pytest.mark.filterwarnings(
     # A08 random-role-init disclosure (runnable_random_init_run): this test
     # exercises a weight-free runnable run DELIBERATELY; the warning is the
@@ -378,7 +366,6 @@ class DisjointStorageViews(nn.Module):
         return left.sum() + right.sum()
 
 
-@pytest.mark.smoke
 def test_r31_disjoint_storage_view_model_verifies(tmp_path: Path) -> None:
     """A view-heavy model with no user metadata reads stays VERIFIED (no internal over-trigger)."""
 
@@ -389,7 +376,6 @@ def test_r31_disjoint_storage_view_model_verifies(tmp_path: Path) -> None:
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
-@pytest.mark.smoke
 @pytest.mark.filterwarnings(
     # A08 random-role-init disclosure (runnable_random_init_run): this test
     # exercises a weight-free runnable run DELIBERATELY; the warning is the

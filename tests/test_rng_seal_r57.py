@@ -40,7 +40,6 @@ class _SpawningModel(nn.Module):
         return x
 
 
-@pytest.mark.smoke
 def test_generator_spawn_changes_state_digest() -> None:
     """The digest must witness spawn(): it is verdict-steering hidden state."""
 
@@ -51,7 +50,6 @@ def test_generator_spawn_changes_state_digest() -> None:
     assert before != after, "Generator.spawn() left the state digest unchanged"
 
 
-@pytest.mark.smoke
 def test_bit_generator_spawn_changes_state_digest() -> None:
     """Same seal for a bare model-held BitGenerator."""
 
@@ -62,7 +60,6 @@ def test_bit_generator_spawn_changes_state_digest() -> None:
     assert before != after, "BitGenerator.spawn() left the state digest unchanged"
 
 
-@pytest.mark.smoke
 def test_seed_sequence_holder_is_digestable_and_spawn_witnessed() -> None:
     """A bare model-held SeedSequence is a spawnable entropy root."""
 
@@ -73,7 +70,6 @@ def test_seed_sequence_holder_is_digestable_and_spawn_witnessed() -> None:
     assert before != after, "SeedSequence.spawn() left the state digest unchanged"
 
 
-@pytest.mark.smoke
 def test_model_held_generator_spawn_draw_is_witnessed_in_window() -> None:
     """The r5 probe scenario: spawn a child from a model-held generator and
     draw from it inside the window -- the window must NOT settle clean."""
@@ -88,7 +84,6 @@ def test_model_held_generator_spawn_draw_is_witnessed_in_window() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_held_alias_localtime_none_is_marked() -> None:
     """``held_localtime(None)`` reads the clock exactly like ``held_localtime()``."""
 
@@ -99,7 +94,6 @@ def test_held_alias_localtime_none_is_marked() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_held_alias_localtime_literal_timestamp_stays_a_transform() -> None:
     """A provably non-None literal keeps the pure-transform classification."""
 
@@ -109,7 +103,6 @@ def test_held_alias_localtime_literal_timestamp_stays_a_transform() -> None:
     assert not result.uncertain
 
 
-@pytest.mark.smoke
 def test_held_alias_localtime_unresolvable_argument_flags_uncertainty() -> None:
     """An UNRESOLVABLE argument is runtime-dependent: neither a clock-draw
     claim nor a clean pass is provable, so the window flags uncertainty.
@@ -133,7 +126,6 @@ def test_held_alias_localtime_unresolvable_argument_flags_uncertainty() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_held_alias_localtime_bound_variable_stays_a_transform() -> None:
     """A bound non-None local resolves at ``c_call`` time: pure transform.
 
@@ -265,7 +257,6 @@ def _global_rng_fingerprint() -> tuple[bytes, bytes, bytes]:
     )
 
 
-@pytest.mark.smoke
 def test_capture_restores_user_global_rng_streams() -> None:
     """``tl.trace`` must not leave the process reseeded (r7 restore half).
 
@@ -288,7 +279,6 @@ def test_capture_restores_user_global_rng_streams() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_failed_capture_restores_user_global_rng_streams() -> None:
     """A capture failing mid-forward restores the streams on the unwind."""
 
@@ -304,7 +294,6 @@ def test_failed_capture_restores_user_global_rng_streams() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_auto_seed_freshness_survives_the_restore() -> None:
     """Auto-seeded captures still draw FRESH seeds after the restore.
 
@@ -322,7 +311,6 @@ def test_auto_seed_freshness_survives_the_restore() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_torch_generator_draw_changes_state_digest() -> None:
     """A model-held ``torch.Generator`` is digestable like the numpy analog.
 
@@ -379,7 +367,6 @@ def test_model_held_torch_generator_pre_existing_thread_draw_is_witnessed() -> N
     )
 
 
-@pytest.mark.smoke
 def test_seeded_global_torch_draw_stays_clean() -> None:
     """The replayable global torch engine stays identity-exempt (no
     over-trigger): a seeded ``torch.randn`` model draw must not ceiling."""
@@ -392,7 +379,6 @@ def test_seeded_global_torch_draw_stays_clean() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_capture_is_rng_neutral_to_the_host_process() -> None:
     """grind-r6 b8 R57 (opus MED, measured): capture restores all engines.
 

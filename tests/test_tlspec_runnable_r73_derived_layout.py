@@ -136,7 +136,6 @@ def _nchw() -> torch.Tensor:
     return torch.randn(2, 4, 8, 8)
 
 
-@pytest.mark.smoke
 def test_r73_intermediate_layout_branch_ceilings_on_changed_layout(tmp_path: Path) -> None:
     """The F1 repro must ceiling UNVERIFIABLE on a channels_last twin (was VERIFIED)."""
 
@@ -149,7 +148,6 @@ def test_r73_intermediate_layout_branch_ceilings_on_changed_layout(tmp_path: Pat
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
-@pytest.mark.smoke
 def test_r73_deep_intermediate_layout_read_ceilings(tmp_path: Path) -> None:
     """Ancestry attribution reaches reads two traced ops away from the input."""
 
@@ -164,7 +162,6 @@ def test_r73_deep_intermediate_layout_read_ceilings(tmp_path: Path) -> None:
     assert result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_r73_same_layout_run_stays_verified(tmp_path: Path) -> None:
     """Zero collateral: the SAME-layout replay of a layout-reading model stays VERIFIED."""
 
@@ -176,7 +173,6 @@ def test_r73_same_layout_run_stays_verified(tmp_path: Path) -> None:
     assert not result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_r73_honest_channels_last_model_stays_verified(tmp_path: Path) -> None:
     """Zero collateral: channels_last capture + channels_last run stays VERIFIED."""
 
@@ -189,7 +185,6 @@ def test_r73_honest_channels_last_model_stays_verified(tmp_path: Path) -> None:
     assert not result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_r73_layout_oblivious_model_never_triggers(tmp_path: Path) -> None:
     """Zero over-trigger: a model with NO layout read stays VERIFIED on a changed-layout input.
 
@@ -207,7 +202,6 @@ def test_r73_layout_oblivious_model_never_triggers(tmp_path: Path) -> None:
     assert not result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_r73_state_rooted_read_does_not_couple_to_input_layout(tmp_path: Path) -> None:
     """Residual (3) stays untouched: a STATE-rooted intermediate read records no input fact.
 
@@ -225,7 +219,6 @@ def test_r73_state_rooted_read_does_not_couple_to_input_layout(tmp_path: Path) -
     assert not result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_r73_direct_leaf_read_still_diverges(tmp_path: Path) -> None:
     """The DIRECT-leaf spelling keeps its stricter witnessed-fact semantics (DIVERGED)."""
 
@@ -250,7 +243,6 @@ class TwoInputOneRooted(nn.Module):
         return z - y
 
 
-@pytest.mark.smoke
 def test_r73_fact_scopes_to_the_rooting_input_only(tmp_path: Path) -> None:
     """Per-ancestor precision: only the ROOTING input's layout change ceilings the run.
 
@@ -291,7 +283,6 @@ def test_r73_fact_scopes_to_the_rooting_input_only(tmp_path: Path) -> None:
     assert rooting.report.poisoned
 
 
-@pytest.mark.smoke
 def test_r73_derived_fact_rides_the_metadata_envelope(tmp_path: Path) -> None:
     """The fact is declared on the boundary record AND carried by the site envelope.
 

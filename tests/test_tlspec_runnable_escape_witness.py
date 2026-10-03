@@ -121,7 +121,6 @@ def _assert_not_blessed(report) -> None:
 # --------------------------------------------------------------------------- #
 # H1-H4: input-derived escapes. Changed input -> UNVERIFIABLE; original -> VERIFIED.
 # --------------------------------------------------------------------------- #
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("model_cls", "capture_x", "changed_x"),
     [
@@ -155,7 +154,6 @@ def test_changed_input_escape_is_unverifiable(
     assert not torch.allclose(result.output, live)
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("model_cls", "capture_x"),
     [
@@ -185,7 +183,6 @@ def test_original_input_escape_still_verified_attested(
 # --------------------------------------------------------------------------- #
 # H5: state-derived escape. Changed staged buffer -> UNVERIFIABLE; original -> VERIFIED.
 # --------------------------------------------------------------------------- #
-@pytest.mark.smoke
 def test_buffer_branch_changed_state_is_unverifiable(tmp_path: Path) -> None:
     x = torch.tensor([4.0])
     path = _save(BufferBranch(), x, tmp_path / "b.tlspec", include_weights=True)
@@ -200,7 +197,6 @@ def test_buffer_branch_changed_state_is_unverifiable(tmp_path: Path) -> None:
     assert not torch.allclose(result.output, x - 1)
 
 
-@pytest.mark.smoke
 def test_buffer_branch_original_state_still_verified(tmp_path: Path) -> None:
     x = torch.tensor([4.0])
     path = _save(BufferBranch(), x, tmp_path / "b.tlspec", include_weights=True)
@@ -276,7 +272,6 @@ class RawInputBoolBranch(nn.Module):
         return x + 7.0
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("model_cls", "capture_x", "changed_x"),
     [
@@ -298,7 +293,6 @@ def test_r10_input_escape_changed_is_unverifiable(
     assert not torch.allclose(result.output, model_cls()(changed_x.clone()))
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("model_cls", "capture_x"),
     [

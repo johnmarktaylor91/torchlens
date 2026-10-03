@@ -40,7 +40,6 @@ def cost_trace() -> Iterator[tl.Trace]:
         trace.cleanup()
 
 
-@pytest.mark.smoke
 def test_hot_path_ranks_source_lines_with_full_percentages(cost_trace) -> None:
     """hot_path() groups ops by source line, sorts by cost, and sums to 100%."""
 
@@ -55,7 +54,6 @@ def test_hot_path_ranks_source_lines_with_full_percentages(cost_trace) -> None:
     assert "test_debug_cost_audit_behaviors" in str(frame["source_file:line"].iloc[0])
 
 
-@pytest.mark.smoke
 def test_hot_path_rejects_unknown_metric(cost_trace) -> None:
     """An unsupported cost metric fails fast."""
 

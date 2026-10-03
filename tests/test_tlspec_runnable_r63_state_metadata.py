@@ -161,7 +161,6 @@ _READ_CASES = (
 )
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "model_cls, state_name, read_kind, x",
     _READ_CASES,
@@ -187,7 +186,7 @@ def test_r63_state_metadata_read_emits_escape_witness(
     assert read_kind in host_escape_state_metadata_reads(trace).get(state_name, frozenset())
 
 
-@pytest.mark.smoke
+@pytest.mark.smoke_cells("test_r63_read_noncanonical_capture_refuses_at_save[is_neg]")
 @pytest.mark.parametrize(
     "model_cls, state_name, read_kind, x",
     _READ_CASES,
@@ -270,7 +269,6 @@ _UNREAD_CASES = (
 )
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "model_cls, x",
     _UNREAD_CASES,
@@ -377,7 +375,6 @@ def _exotic_sources() -> dict[str, torch.Tensor]:
     return sources
 
 
-@pytest.mark.smoke
 @pytest.mark.skipif(not HAS_NAMED_TENSOR_API, reason="native named-tensor API is unavailable")
 def test_r63_named_user_state_refuses_before_staging(tmp_path: Path) -> None:
     """Named source into an unnamed capture refuses at bind (the review's 321-vs-3.0 repro class).
@@ -421,7 +418,6 @@ def test_r63_hostile_subclass_observes_zero_reads(tmp_path: Path) -> None:
     assert _CountingSubclass.reads == 0
 
 
-@pytest.mark.smoke
 def test_r63_physical_form_user_sources_still_bind_and_verify(tmp_path: Path) -> None:
     """Non-contiguous and offset USER sources bind + VERIFIED (excluded dims stay excluded).
 
@@ -496,7 +492,6 @@ class CanonicalIsContiguousRead(nn.Module):
         return x + self.w.sum() if self.w.is_contiguous() else x - self.w.sum()
 
 
-@pytest.mark.smoke
 def test_r63_canonical_read_saves_verified_and_digest_witnesses(tmp_path: Path) -> None:
     """A metadata read on CANONICAL state saves + VERIFIED; changed staged state ceilings.
 
@@ -582,7 +577,6 @@ def test_r63_signatures_stamped_pre_clone() -> None:
     assert not capture_state["c"].is_conj()
 
 
-@pytest.mark.smoke
 def test_r63_runtime_tripwire_catches_mutated_staged_state(tmp_path: Path) -> None:
     """Force-mutated staged state metadata fails ``state_metadata:<slot_id>`` typed."""
 

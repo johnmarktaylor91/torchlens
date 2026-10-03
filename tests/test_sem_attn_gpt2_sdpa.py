@@ -19,8 +19,6 @@ pytest.importorskip("transformers")
 
 from tests.real_model.r0.families import FAMILY_BY_NAME  # noqa: E402
 
-pytestmark = [pytest.mark.smoke]
-
 ATTN_ADDRESS = "transformer.h.0.attn"
 
 
@@ -56,6 +54,7 @@ def test_plain_sdpa_capture_declares_actionable_absences(sdpa_captures):
         assert view.has(facet), facet
 
 
+@pytest.mark.smoke
 def test_reconstruction_ready_serves_checked_read_only_facets(sdpa_captures):
     """scores/pattern/z reconstruct, validate against the SDPA op, read-only."""
 

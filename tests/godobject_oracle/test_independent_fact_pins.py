@@ -15,11 +15,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 import torch
 from torch import nn
-
-pytestmark = pytest.mark.smoke
 
 _GOLDENS = Path(__file__).with_name("goldens")
 

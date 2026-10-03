@@ -44,9 +44,6 @@ class _UnreadableNamesSentinel:
         raise AssertionError("names must not be read when the capability is absent")
 
 
-pytestmark = pytest.mark.smoke
-
-
 def test_modern_branch_matches_torch_directly() -> None:
     """On torch>=2.4 the shim must equal torch's own per-device query exactly."""
     if not tc.AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED:
@@ -64,6 +61,7 @@ def test_modern_branch_observes_active_autocast() -> None:
         assert tc.autocast_get_dtype("cpu") == torch.bfloat16
 
 
+@pytest.mark.smoke
 def test_legacy_branch_logic_matches_modern() -> None:
     """Lock in the torch 2.1-2.3 fallback path correctness.
 
@@ -592,6 +590,7 @@ def test_completeness_census_check_reads_live_stack(
     assert cw._completeness_census_active() is False
 
 
+@pytest.mark.smoke
 def test_dispatch_mode_stack_probe_demotes_on_raise(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -617,6 +616,7 @@ def test_dispatch_mode_stack_probe_resolves_on_supported_torch() -> None:
     assert tc.HAS_DISPATCH_MODE_STACK_QUERY is True
 
 
+@pytest.mark.smoke
 def test_dynamo_is_compiling_raising_probe_discloses_possibly_compiling(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -653,6 +653,7 @@ def test_capability_warning_category_is_typed(monkeypatch: pytest.MonkeyPatch) -
     assert issubclass(tc.TorchCapabilityWarning, UserWarning)
 
 
+@pytest.mark.smoke
 def test_tf_runtime_support_is_feature_probed() -> None:
     """r-b4 R26-6b: an odd version string no longer disables backend='tf'."""
 
@@ -716,6 +717,7 @@ def test_force_eager_stance_scope_exit_owned_with_construction(
     assert handle.exits == 1
 
 
+@pytest.mark.smoke
 def test_force_eager_stance_scope_construction_failure_degrades_without_exit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -737,6 +739,7 @@ def test_force_eager_stance_scope_construction_failure_degrades_without_exit(
     assert tc.HAS_SET_STANCE is False
 
 
+@pytest.mark.smoke
 def test_fill_uninitialized_memory_flag_visible_in_capability_snapshot() -> None:
     """``HAS_DETERMINISTIC_FILL_FLAG`` and friends are published, not silent.
 
@@ -757,6 +760,7 @@ def test_fill_uninitialized_memory_flag_visible_in_capability_snapshot() -> None
     assert snapshot["HAS_CPU_FLOAT8_DETERMINISTIC_FILL"] == tc.HAS_CPU_FLOAT8_DETERMINISTIC_FILL
 
 
+@pytest.mark.smoke
 def test_read_fill_uninitialized_memory_returns_none_when_absent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -766,6 +770,7 @@ def test_read_fill_uninitialized_memory_returns_none_when_absent(
     assert tc.read_fill_uninitialized_memory() is None
 
 
+@pytest.mark.smoke
 def test_write_fill_uninitialized_memory_noops_when_absent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -775,6 +780,7 @@ def test_write_fill_uninitialized_memory_noops_when_absent(
     tc.write_fill_uninitialized_memory(True)  # must not raise
 
 
+@pytest.mark.smoke
 def test_read_fill_uninitialized_memory_reads_live_module_when_present(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -787,6 +793,7 @@ def test_read_fill_uninitialized_memory_reads_live_module_when_present(
     assert stub.fill_uninitialized_memory is False
 
 
+@pytest.mark.smoke
 def test_get_mha_fastpath_enabled_returns_none_when_absent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -797,6 +804,7 @@ def test_get_mha_fastpath_enabled_returns_none_when_absent(
     assert tc.get_mha_fastpath_enabled() is None
 
 
+@pytest.mark.smoke
 def test_set_mha_fastpath_enabled_noops_when_absent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -807,6 +815,7 @@ def test_set_mha_fastpath_enabled_noops_when_absent(
     tc.set_mha_fastpath_enabled(True)  # must not raise
 
 
+@pytest.mark.smoke
 @pytest.mark.skipif(
     not tc.get_mha_fastpath_switch_support(),
     reason="torch.backends.mha postdates the torch>=2.1 floor",
@@ -824,6 +833,7 @@ def test_get_set_mha_fastpath_enabled_round_trips_when_present() -> None:
         tc.set_mha_fastpath_enabled(bool(prior))
 
 
+@pytest.mark.smoke
 @pytest.mark.skipif(
     not tc.get_mha_fastpath_switch_support(),
     reason="torch.backends.mha postdates the torch>=2.1 floor",
@@ -838,6 +848,7 @@ def test_force_mha_slow_path_uses_the_public_switch_when_present() -> None:
     assert tc.get_mha_fastpath_enabled() == prior
 
 
+@pytest.mark.smoke
 def test_force_mha_slow_path_falls_back_to_a_training_flip_when_switch_absent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -863,6 +874,7 @@ def test_force_mha_slow_path_falls_back_to_a_training_flip_when_switch_absent(
     assert bare_mha.training is False
 
 
+@pytest.mark.smoke
 def test_force_mha_slow_path_restores_on_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -877,6 +889,7 @@ def test_force_mha_slow_path_restores_on_exception(
     assert model.training is False
 
 
+@pytest.mark.smoke
 def test_tensor_any_over_dims_matches_native_any_on_every_axis_combo() -> None:
     """The multi-axis ``any`` helper matches ``tensor.any(dim=<int>)`` chaining."""
 
@@ -889,6 +902,7 @@ def test_tensor_any_over_dims_matches_native_any_on_every_axis_combo() -> None:
         assert torch.equal(tc.tensor_any_over_dims(mask, dims), expected)
 
 
+@pytest.mark.smoke
 def test_tensor_any_over_dims_fallback_matches_native_tuple_dim(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -904,6 +918,7 @@ def test_tensor_any_over_dims_fallback_matches_native_tuple_dim(
     assert torch.equal(fallback, native)
 
 
+@pytest.mark.smoke
 def test_probe_gradient_edge_is_functional_not_just_attribute_presence(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -924,6 +939,7 @@ def test_probe_gradient_edge_is_functional_not_just_attribute_presence(
     assert tc._probe_gradient_edge() is False
 
 
+@pytest.mark.smoke
 def test_probe_gradient_edge_true_when_autograd_grad_succeeds() -> None:
     """On a healthy torch build the functional probe reports True."""
 
@@ -932,6 +948,7 @@ def test_probe_gradient_edge_true_when_autograd_grad_succeeds() -> None:
     assert tc._probe_gradient_edge() is True
 
 
+@pytest.mark.smoke
 def test_get_gradient_edge_support_is_lazy_and_caches(monkeypatch: pytest.MonkeyPatch) -> None:
     """The real autograd probe runs at most once per latch, not at import time.
 
@@ -961,6 +978,10 @@ def test_get_gradient_edge_support_is_lazy_and_caches(monkeypatch: pytest.Monkey
     assert first == second == tc.HAS_GRADIENT_EDGE
 
 
+@pytest.mark.smoke_cells(
+    "test_real_op_probe_getters_are_lazy_and_cache[get_cpu_half_kernels_support]",
+    "test_real_op_probe_getters_are_lazy_and_cache[get_reduce_tuple_dim_support]",
+)
 @pytest.mark.parametrize(
     "getter_name",
     [

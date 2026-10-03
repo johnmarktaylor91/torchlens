@@ -47,7 +47,6 @@ def _relu_trace(n_stimuli: int = 6) -> tl.Trace:
     return tl.trace(model, x, save=tl.func("relu"))
 
 
-@pytest.mark.smoke
 def test_t6_version_recording_via_importlib_metadata() -> None:
     """Neither validated version exposes __version__; metadata serves."""
 
@@ -88,7 +87,6 @@ def test_t6_condensed_ordering_matches_rsatoolbox() -> None:
     assert np.allclose(theirs.dissimilarities[0], ours.dissimilarities[0], atol=1e-6)
 
 
-@pytest.mark.smoke
 def test_t6_hand_built_rdms_construction() -> None:
     """Matrix mode's RDMs constructor contract holds at this version."""
 

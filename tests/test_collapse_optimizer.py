@@ -901,7 +901,6 @@ def _role_stub_inputs(
     return SimpleNamespace(modules=modules), SimpleNamespace(signals=signals)
 
 
-@pytest.mark.smoke
 def test_role_components_match_pairwise_union_property() -> None:
     """Sorted-run role components byte-match the all-pairs ``_same_role`` union."""
 
@@ -928,7 +927,6 @@ def test_role_components_match_pairwise_union_property() -> None:
         assert fast == reference, f"trial={trial}"
 
 
-@pytest.mark.smoke
 def test_role_components_chain_connects_beyond_tolerance() -> None:
     """Adjacent-in-mass siblings chain one component past the 1.5 pair tolerance."""
 

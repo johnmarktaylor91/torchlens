@@ -23,8 +23,6 @@ from torchlens.capture.outcome import CapturePhase, CaptureStatus, FailureOrigin
 from torchlens.fastlog import Recorder
 from torchlens.fastlog._halt import HaltSignal
 
-pytestmark = pytest.mark.smoke
-
 TORCHLENS_DIR = pathlib.Path(tl.__file__).resolve().parent
 
 

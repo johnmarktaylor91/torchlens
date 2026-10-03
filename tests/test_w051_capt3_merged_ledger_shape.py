@@ -20,8 +20,6 @@ from test_merged_engine import boundary, seeded_ledger, trace_for_boundaries
 from torchlens.merged import MergedErrorCode, merge_ranks
 from torchlens.merged._errors import MergeInputError
 
-pytestmark = pytest.mark.smoke
-
 
 def _core(mutate) -> Any:
     trace = trace_for_boundaries([boundary(0, 0)], seeded_ledger())
@@ -67,6 +65,7 @@ def test_mapping_or_string_boundaries_refuse_typed_naming_the_container(shape) -
     _assert_schema_refusal(mutate, detail="is not a list of boundary records")
 
 
+@pytest.mark.smoke
 def test_tuple_boundaries_are_a_sequence_and_merge() -> None:
     """A tuple is a legitimate sequence container (loaders may rebuild one)."""
 
@@ -127,6 +126,7 @@ def test_tuple_ledger_refuses_typed() -> None:
     )
 
 
+@pytest.mark.smoke_cells("test_malformed_ledger_events_refuse_typed[epoch-vocab]")
 @pytest.mark.parametrize(
     "mutate",
     [

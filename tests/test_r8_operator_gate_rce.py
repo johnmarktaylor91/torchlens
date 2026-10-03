@@ -152,7 +152,6 @@ def test_pure_operators_admitted_by_policy() -> None:
         assert is_pure_forward_callable(getattr(operator, name)) is True, name
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "name",
     ["call", "attrgetter", "methodcaller", "itemgetter", "setitem", "delitem", "iadd"],
@@ -227,7 +226,7 @@ def test_decode_literal_admits_torch_device() -> None:
     assert _decode_literal(LiteralTorchSymbol("torch.device(cpu)")) == torch.device("cpu")
 
 
-@pytest.mark.smoke
+@pytest.mark.smoke_cells("test_decode_literal_device_malformed_payload_typed[torch.device()]")
 @pytest.mark.parametrize(
     "qualname",
     [
@@ -273,7 +272,6 @@ def test_decode_literal_denies_modules_and_arbitrary_attrs(qualname: str) -> Non
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_operator_and_float32_forward_saves_loads_runs_verified(tmp_path: Path) -> None:
     """A forward using operator.add/getitem + a torch.float32 literal replays exactly."""
 

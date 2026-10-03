@@ -1039,6 +1039,7 @@ def test_index_put_overwrite_proof_rejects_negative_index_aliasing() -> None:
     assert _index_put_destination_is_fully_overwritten(dest, negative_full_layer)
 
 
+@pytest.mark.smoke
 def test_equivalence_symmetry_catches_suffixed_in_module_group_corruption() -> None:
     """Symmetric group corruption on a suffixed in-module layer must FAIL.
 
@@ -1157,6 +1158,7 @@ def test_forward_only_trace_keeps_empty_backward_registry_valid() -> None:
     check_metadata_invariants(trace)
 
 
+@pytest.mark.smoke
 def test_forged_placeholder_still_fails_func_call_id_after_save_load(
     tmp_path: Any,
 ) -> None:

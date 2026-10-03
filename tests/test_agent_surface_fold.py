@@ -25,7 +25,6 @@ def _clean_trace() -> tl.Trace:
     return tl.trace(RepeatedBlockNet().eval(), deterministic_input(), save=tl.func("relu"))
 
 
-@pytest.mark.smoke
 def test_normalize_module_path_wildcards_numeric_components() -> None:
     """Call qualifiers strip; numeric dotted components wildcard."""
 
@@ -34,7 +33,6 @@ def test_normalize_module_path_wildcards_numeric_components() -> None:
     assert normalize_module_path("head:1") == "head"
 
 
-@pytest.mark.smoke
 def test_fold_membership_reassembles_exactly() -> None:
     """Criterion (v): the union of class members IS the op-row set, disjoint."""
 
@@ -47,7 +45,6 @@ def test_fold_membership_reassembles_exactly() -> None:
     assert sum(cls.n_instances for cls in fold.classes) == len(labels)
 
 
-@pytest.mark.smoke
 def test_fold_classes_are_field_uniform() -> None:
     """Criterion (ii): every emitted class is uniform on shape/dtype/num_params."""
 
@@ -61,7 +58,6 @@ def test_fold_classes_are_field_uniform() -> None:
         assert len(shapes) == 1 and len(dtypes) == 1 and len(params) == 1, cls.class_id
 
 
-@pytest.mark.smoke
 def test_fold_folds_the_repeated_blocks_once() -> None:
     """Three identical blocks state ONCE with n_instances=3."""
 
@@ -72,7 +68,6 @@ def test_fold_folds_the_repeated_blocks_once() -> None:
     assert relu_classes[0].module_path == ("blocks.*", "blocks.*.*")
 
 
-@pytest.mark.smoke
 def test_fold_splits_on_shape_disagreement() -> None:
     """A class whose members disagree on shape SPLITS, never averages."""
 
@@ -96,7 +91,6 @@ def test_fold_splits_on_shape_disagreement() -> None:
     assert {cls.fields["shape"][-1] for cls in relu_classes} == {8, 4}
 
 
-@pytest.mark.smoke
 def test_fold_never_declines_on_multipass() -> None:
     """Criterion (iv): recurrent multi-pass traces fold, pass-qualified."""
 
@@ -121,7 +115,6 @@ def test_fold_never_declines_on_multipass() -> None:
         assert all(cls.pass_index >= 1 for cls in multipass)
 
 
-@pytest.mark.smoke
 def test_fold_key_has_zero_render_context_inputs() -> None:
     """Criterion (vi): folding twice, and after a draw-free reload, is identical."""
 
@@ -131,7 +124,6 @@ def test_fold_key_has_zero_render_context_inputs() -> None:
     assert [cls.members for cls in first.classes] == [cls.members for cls in second.classes]
 
 
-@pytest.mark.smoke
 def test_fold_coherence_with_the_collapse_plan(tmp_path: Path) -> None:
     """The FOLD COHERENCE TEST: fold and collapse plan agree on MEMBERSHIP.
 

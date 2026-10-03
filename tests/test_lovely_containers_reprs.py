@@ -17,8 +17,6 @@ from torch import nn
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke
-
 
 class _Deep(nn.Module):
     """Deep sequential + a buffer so print(trace) exercises every rung."""
@@ -64,6 +62,7 @@ def test_trace_str_is_bounded_with_folds(deep_trace) -> None:
     assert any("more layers (see .layer_list)" in line for line in lines)
 
 
+@pytest.mark.smoke
 def test_trace_str_honesty_header_on_not_checked() -> None:
     """State precedes detail: a NOT-CHECKED capture says so up front."""
 
@@ -93,6 +92,7 @@ def test_accessors_point_never_dump(deep_trace) -> None:
     assert "... " in view  # exact remainder, never a silent cut
 
 
+@pytest.mark.smoke
 def test_accessor_head_and_find(deep_trace) -> None:
     """head()/find() are the named exits and return records."""
 
@@ -102,6 +102,7 @@ def test_accessor_head_and_find(deep_trace) -> None:
     assert found and all("weight" in p.address for p in found)
 
 
+@pytest.mark.smoke
 def test_partial_trace_badge_first() -> None:
     """PartialTrace: the badge leads; the card names the failure."""
 
@@ -120,6 +121,7 @@ def test_partial_trace_badge_first() -> None:
     assert "error:" in card and "More:" in card
 
 
+@pytest.mark.smoke
 def test_bundle_repr_distribution_and_member_lines() -> None:
     """Bundle: outcome distribution above the fold; members one-line each."""
 
@@ -157,6 +159,7 @@ def test_edge_record_repr_designed() -> None:
     trace.cleanup()
 
 
+@pytest.mark.smoke
 def test_report_protocol_card_shape() -> None:
     """The common report lead + bounded findings + exact remainder."""
 
@@ -179,6 +182,7 @@ def test_report_protocol_card_shape() -> None:
 _ANSI_OSC = re.compile(r"\x1b|\x9b|\x07")
 
 
+@pytest.mark.smoke
 def test_no_terminal_bytes_in_container_strings(deep_trace) -> None:
     """No ANSI/OSC-8/terminal bytes in ANY returned container string."""
 

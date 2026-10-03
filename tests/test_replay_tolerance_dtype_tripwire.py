@@ -31,8 +31,6 @@ from torchlens.utils.tensor_utils import (
     tensor_nanequal,
 )
 
-pytestmark = pytest.mark.smoke
-
 #: No replay row may ever reach this: bf16 (the loosest shipped row) is
 #: 4 * eps = 3.125e-2, and anything approaching O(1) blesses gross corruption
 #: (the accidental 512-ULP derivation for a storage-rounding dtype produced

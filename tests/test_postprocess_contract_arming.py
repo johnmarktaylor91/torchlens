@@ -18,7 +18,7 @@ import pytest
 from torchlens._trace_core.op_store import StepAuditResult
 from torchlens.postprocess import _check_postprocess_contract
 
-pytestmark = [pytest.mark.smoke, pytest.mark.requires_assertions]
+pytestmark = pytest.mark.requires_assertions
 
 
 def _audit(

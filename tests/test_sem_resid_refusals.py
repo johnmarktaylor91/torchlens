@@ -24,8 +24,6 @@ from torch import nn
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke
-
 
 class _Block(nn.Module):
     """Minimal block that classifies as a transformer block (attn + mlp)."""
@@ -45,6 +43,7 @@ class _Block(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_resid_pre_refuses_on_ambiguous_streams() -> None:
     """Two same-shaped floating inputs that both feed the output refuse:
     resid_pre is never guessed from input order."""
@@ -132,6 +131,7 @@ def test_final_norm_walk_hops_inert_dropout_in_eval_mode() -> None:
     assert torch.equal(facets.final_norm_gamma.value, model.ln.weight)
 
 
+@pytest.mark.smoke
 def test_final_norm_walk_refuses_train_mode_dropout() -> None:
     """Train-mode dropout is NOT value-preserving: the value grammar fails
     closed and the norm facets are typed-absent, naming the hop rule."""
@@ -180,6 +180,7 @@ def test_final_norm_walk_refuses_dimension_dropping_subscript() -> None:
     assert menu["final_norm_kind"].status == "structurally_absent"
 
 
+@pytest.mark.smoke
 def test_hop_walk_payload_identity_tripwire_fires_on_corruption() -> None:
     """A corrupted anchor payload FAILS the endpoint verification: the walk
     refuses instead of anchoring -- the tripwire is armed, not decorative."""
@@ -241,6 +242,7 @@ def _make_fake_bridge_class() -> type:
     return TransformerBridge
 
 
+@pytest.mark.smoke
 def test_transformer_bridge_refuses_typed_with_pristine_copy_remedy() -> None:
     from torchlens._model_wrappers import UninstrumentableModelWrapperError
     from torchlens.errors import CompatibilityError

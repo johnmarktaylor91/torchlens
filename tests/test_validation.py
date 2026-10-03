@@ -324,7 +324,6 @@ def test_validation_positive_replay_coverage_can_still_pass() -> None:
     assert bool(status) is True
 
 
-@pytest.mark.smoke
 def test_validate_forward_pass_importable():
     """validate_forward_pass is importable from torchlens top-level."""
     assert callable(validate_forward_pass)
@@ -3147,7 +3146,6 @@ def test_perturbation_response_gate_treats_one_ulp_change_as_unequal() -> None:
     assert tensor_nanequal(saved, saved.clone(), allow_tolerance=False)
 
 
-@pytest.mark.smoke
 def test_perturbation_changes_float_tensor() -> None:
     """Floating-point perturbation changes ordinary tensor values."""
 
@@ -3221,7 +3219,6 @@ def test_perturbation_changes_int_tensor() -> None:
     assert perturbed.dtype == parent.dtype
 
 
-@pytest.mark.smoke
 def test_perturbation_int64_saturated_max_does_not_overflow() -> None:
     """C1 regression: an int64 parent holding INT64_MAX must not crash randint.
 
@@ -7210,7 +7207,6 @@ class _CanaryTupleOut(nn.Module):
         return y, y + 1
 
 
-@pytest.mark.smoke
 def test_smoke_canary_plain_captures_trip_no_invariants():
     """Plain captures of one-line models pass every invariant and replay.
 

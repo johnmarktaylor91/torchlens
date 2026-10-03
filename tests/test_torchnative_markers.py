@@ -19,8 +19,6 @@ import torch.nn as nn
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke
-
 
 @pytest.fixture()
 def nvtx_calls(monkeypatch) -> list[str]:
@@ -108,6 +106,7 @@ def test_session_records_op_join_markers() -> None:
     log.cleanup()
 
 
+@pytest.mark.smoke
 def test_native_chrome_artifact_and_sidecar(tmp_path) -> None:
     """The NATIVE chrome trace is preserved with the exact-ID mapping sidecar."""
 

@@ -29,8 +29,6 @@ from torchlens.intervention.save import (
 )
 from torchlens.intervention.types import FireRecord
 
-pytestmark = pytest.mark.smoke
-
 
 def _spec_dir(tmp_path):
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())

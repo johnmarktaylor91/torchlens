@@ -24,8 +24,6 @@ from torch import nn
 import torchlens as tl
 from torchlens._io import TorchLensIOError
 
-pytestmark = [pytest.mark.smoke]
-
 
 def _traced():
     torch.manual_seed(0)

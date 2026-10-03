@@ -18,8 +18,6 @@ from torchlens._save_budget import SaveBudgetExceededError
 from torchlens.capture.preflight import address_preflight
 from torchlens.errors._base import TorchLensWarning
 
-pytestmark = pytest.mark.smoke
-
 _SAVE_ALL = {"capture": tl.options.CaptureOptions(layers_to_save="all")}
 
 
@@ -35,6 +33,7 @@ def _traced_toy():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_overlay_zero_match_refuses(tmp_path):
     """A mapping that paints nothing refuses typed — never a blank success."""
 
@@ -65,6 +64,7 @@ def test_overlay_full_match_renders_silently(tmp_path, recwarn):
     assert "node_overlay_partial_match" not in codes
 
 
+@pytest.mark.smoke
 def test_overlay_selection_source_lowers_to_selected_counts(tmp_path):
     """Element-mask law: a Selection paints selected COUNTS, never membership."""
 
@@ -114,6 +114,7 @@ def test_do_accepts_find_sites_output():
     assert fork.intervention_audit  # fire evidence, never silence
 
 
+@pytest.mark.smoke
 def test_do_empty_site_table_refuses():
     from torchlens.intervention.errors import SiteResolutionError
     from torchlens.intervention.resolver import SiteTable
@@ -138,6 +139,7 @@ def test_when_refuses_raw_string_at_build():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_escrow_spill_budget_refuses_typed():
     """Crossing the declared spill bound refuses with the accounting on fields."""
 
@@ -174,6 +176,7 @@ def test_escrow_budget_none_disables_bound(tmp_path):
     assert profile.escrow_spill_budget_bytes is None
 
 
+@pytest.mark.smoke
 def test_address_preflight_classifies_and_names_equivalent():
     """The preflight prices the address and NAMES the cheap spelling."""
 
@@ -189,6 +192,7 @@ def test_address_preflight_classifies_and_names_equivalent():
     assert not live_only.escrowing
 
 
+@pytest.mark.smoke
 def test_address_preflight_output_and_ordinal_deferred():
     report = address_preflight(["output", 5])
     assert all(v.resolution == "deferred" for v in report.verdicts)

@@ -61,7 +61,6 @@ class _TwoLinear(nn.Module):
         return self.b(x)
 
 
-@pytest.mark.smoke
 def test_swap_with_string_label_raises_immediately() -> None:
     """A bare string label must raise HookValueError at construction time.
 

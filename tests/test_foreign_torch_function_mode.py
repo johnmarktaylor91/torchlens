@@ -27,7 +27,6 @@ residual is out of scope here and covered by the safety-net corpus.)
 
 from __future__ import annotations
 
-import pytest
 import torch
 from torch import nn
 from torch.overrides import TorchFunctionMode
@@ -87,7 +86,6 @@ def _op_names(trace: tl.Trace) -> list[str]:
     return [op.func_name for op in trace.ops]
 
 
-@pytest.mark.smoke
 def test_handle_torch_function_is_not_decorated() -> None:
     """The protocol plumbing entry must never be wrapped or tag-carrying."""
     from torchlens.backends.torch._tl import is_decorated_function
@@ -100,7 +98,6 @@ def test_handle_torch_function_is_not_decorated() -> None:
     assert not is_decorated_function(getattr(inner, "__func__", inner))
 
 
-@pytest.mark.smoke
 def test_batchnorm_capture_green_under_foreign_mode_outside() -> None:
     """Nesting order A: foreign mode armed around the whole trace call."""
     torch.manual_seed(0)
@@ -115,7 +112,6 @@ def test_batchnorm_capture_green_under_foreign_mode_outside() -> None:
     assert _op_names(traced) == _op_names(baseline)
 
 
-@pytest.mark.smoke
 def test_batchnorm_capture_green_under_foreign_mode_inside_forward() -> None:
     """Nesting order B: foreign mode entered inside the model's forward."""
     torch.manual_seed(0)
@@ -127,7 +123,6 @@ def test_batchnorm_capture_green_under_foreign_mode_inside_forward() -> None:
     assert _op_names(traced) == _op_names(baseline)
 
 
-@pytest.mark.smoke
 def test_mixed_ops_capture_green_and_output_exact_under_foreign_mode() -> None:
     """Composite/leaf/factory mix: green, byte-equal output, pinned vocabulary.
 

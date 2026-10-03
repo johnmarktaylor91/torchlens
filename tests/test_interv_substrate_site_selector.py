@@ -85,7 +85,6 @@ def test_site_selector_construction_refusals() -> None:
     assert excinfo.value.fields["code"] == "site_selector_key_invalid"
 
 
-@pytest.mark.smoke
 def test_site_classifies_structural() -> None:
     from torchlens.intervention.spec import classify_where
 
@@ -97,7 +96,6 @@ def test_site_classifies_structural() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_post_hoc_resolution_by_components_and_key() -> None:
     log = _ready(_TinyModel())
     by_type = log.resolve_sites(site(op_type="relu"))
@@ -108,7 +106,6 @@ def test_post_hoc_resolution_by_components_and_key() -> None:
     assert "linear_1_1" in by_module.labels()
 
 
-@pytest.mark.smoke
 def test_reused_module_calls_share_one_site_key_family() -> None:
     """Module reuse COLLIDES the bare structural key (the documented L1 fact).
 
@@ -135,7 +132,6 @@ def test_reused_module_calls_share_one_site_key_family() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_live_site_intervention_fires_at_the_right_site() -> None:
     model = _TinyModel()
     log = tl.trace(model, torch.randn(2, 4), intervene=tl.when(site(op_type="relu"), tl.scale(0.0)))
@@ -166,7 +162,6 @@ def test_live_minted_keys_match_posthoc_keys() -> None:
     assert events[-1]["site_keys"] == [log["relu_1_2"].site_key]
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("model_cls", [_TinyModel, _ReusedModule, _Recurrent])
 def test_streaming_minter_reproduces_postprocess_keys(model_cls: type[nn.Module]) -> None:
     """The streaming minter, fed retained ops in execution order, reproduces
@@ -182,7 +177,6 @@ def test_streaming_minter_reproduces_postprocess_keys(model_cls: type[nn.Module]
     assert not mismatches, f"streaming/postprocess key drift: {mismatches}"
 
 
-@pytest.mark.smoke
 def test_recurrent_pass_qualified_ordinals_stay_distinct() -> None:
     """Pass-qualified call instances restart ordinals: three timestep relus
     (root instance) count 1..3, and each key resolves exactly one op."""
@@ -198,7 +192,6 @@ def test_recurrent_pass_qualified_ordinals_stay_distinct() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_unarmed_capture_surface_refuses_typed() -> None:
     """tl.record does not arm the live minter: site() there refuses typed.
 
@@ -218,7 +211,6 @@ def test_unarmed_capture_surface_refuses_typed() -> None:
     assert "site" in str(excinfo.value)
 
 
-@pytest.mark.smoke
 def test_do_accepts_site_spec_on_the_replay_engine() -> None:
     log = _ready(_TinyModel())
     fork = log.fork()
@@ -226,7 +218,6 @@ def test_do_accepts_site_spec_on_the_replay_engine() -> None:
     assert torch.count_nonzero(fork["relu_1_2"].out) == 0
 
 
-@pytest.mark.smoke
 def test_rerun_with_sticky_site_hook_refuses_at_preflight() -> None:
     """Live-forward engines cannot serve structural site targets mid-forward:
     the refusal fires at the rerun PREFLIGHT, before any forward runs."""

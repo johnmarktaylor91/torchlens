@@ -689,7 +689,6 @@ def test_zero_parameter_grads_fail_independently_of_layer_grad_flag() -> None:
     assert verdicts == [False, False]
 
 
-@pytest.mark.smoke
 def test_layer_grad_default_runs_captured_grad_oracle(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

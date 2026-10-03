@@ -10,8 +10,6 @@ from __future__ import annotations
 
 from collections import Counter
 
-import pytest
-
 from torchlens import constants as tl_constants
 from torchlens.data_classes._trace_components import (
     TRACE_COMPONENT_VOCABULARY,
@@ -20,7 +18,6 @@ from torchlens.data_classes._trace_components import (
 from torchlens.data_classes.trace import Trace
 
 
-@pytest.mark.smoke
 def test_ownership_covers_exactly_the_declared_policy() -> None:
     """Ownership keys == Trace.FIELD_POLICY keys, both directions."""
 
@@ -32,7 +29,6 @@ def test_ownership_covers_exactly_the_declared_policy() -> None:
     assert not stale, f"ownership entries for retired fields: {sorted(stale)}"
 
 
-@pytest.mark.smoke
 def test_owners_come_from_the_closed_vocabulary() -> None:
     """Every owner is one of the declared components."""
 
@@ -44,7 +40,6 @@ def test_owners_come_from_the_closed_vocabulary() -> None:
     assert not unknown, unknown
 
 
-@pytest.mark.smoke
 def test_component_sizes_respect_the_design_bound() -> None:
     """No owned component (except the graph core) exceeds ~60 fields.
 
@@ -71,7 +66,6 @@ def test_component_sizes_respect_the_design_bound() -> None:
         assert size <= 63, f"component {component} holds {size} fields (> 63)"
 
 
-@pytest.mark.smoke
 def test_every_field_order_entry_is_owned() -> None:
     """All 220 public FIELD_ORDER names are covered (subset of policy)."""
 

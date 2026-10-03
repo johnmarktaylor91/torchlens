@@ -47,8 +47,6 @@ from torchlens.ir.op_record import (
 
 from ._journal_probe import grab_journal_events
 
-pytestmark = pytest.mark.smoke
-
 # Journal SHAPES, not producers (P7 deleted the legacy torch producer):
 # "decomposed" = captured OpRecord rows; "legacy" = genuine compat OpEvent
 # rows (the preview-journal stand-in until S15), synthesized by the probe
@@ -126,6 +124,7 @@ def test_last_wins_per_path_in_amendment_order(
     assert journal.amended_op_record(target.label_raw).intervention_replaced is False
 
 
+@pytest.mark.smoke_cells("test_validation_refusals[decomposed]")
 @pytest.mark.parametrize("leg", _LEGS)
 def test_validation_refusals(leg: str, leg_templates: dict[str, list[Any]]) -> None:
     journal = _fresh_journal(leg_templates[leg])
@@ -323,6 +322,7 @@ def test_multi_domain_resolves_by_label_last_occurrence(
     # Single-domain journals DO cross-check (established by the refusal test).
 
 
+@pytest.mark.smoke_cells("test_merged_multi_pass_journal_binds_amendments_by_seq[legacy]")
 @pytest.mark.parametrize("leg", _LEGS)
 def test_merged_multi_pass_journal_binds_amendments_by_seq(
     leg: str, leg_templates: dict[str, list[Any]]
@@ -505,6 +505,10 @@ class _DummyEvent:
     seq: int = 0
 
 
+@pytest.mark.smoke_cells(
+    "test_sealed_journal_refuses_every_forward_lane_append[append-op_events]",
+    "test_sealed_journal_refuses_every_forward_lane_append[append_module_prep-module_prep_events]",
+)
 @pytest.mark.parametrize(("appender", "lane"), _FENCED_APPENDERS, ids=lambda value: str(value))
 def test_sealed_journal_refuses_every_forward_lane_append(
     appender: str, lane: str, leg_templates: dict[str, list[Any]]

@@ -13,8 +13,6 @@ import pytest
 from torchlens.visualization import lenses
 from torchlens.visualization.theme_registry import describe_lens, get_lens, list_lenses
 
-pytestmark = pytest.mark.smoke  # measured <0.5s per test (W051-GATE, AUD-CODE 0.1)
-
 
 def test_roster_has_exactly_nine_rows() -> None:
     """The inclusion rule produced exactly nine rows; the tier split is 6+3."""

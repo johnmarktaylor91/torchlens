@@ -23,8 +23,6 @@ from torchlens.runnable import (
     PathFaithfulness,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 class _AddOneModel(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:

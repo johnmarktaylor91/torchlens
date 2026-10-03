@@ -210,7 +210,6 @@ class ConvBN(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_r79_popped_param_stamp_cleared_after_capture() -> None:
     """RED-now-fixed: a param popped mid-forward keeps NO session stamp.
 
@@ -236,7 +235,6 @@ def test_r79_popped_param_stamp_cleared_after_capture() -> None:
     assert cmeta is None or not cmeta.param_address
 
 
-@pytest.mark.smoke
 def test_r79_popped_buffer_stamp_cleared_after_capture() -> None:
     """RED-now-fixed: a buffer popped mid-forward keeps NO session tensor-meta.
 
@@ -261,7 +259,6 @@ def test_r79_popped_buffer_stamp_cleared_after_capture() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_r79_leaked_param_launder_ceils_on_layout_twin(tmp_path: Path) -> None:
     """RED-now-fixed (a): the popped-donor param launder twin must ceiling.
 
@@ -282,7 +279,6 @@ def test_r79_leaked_param_launder_ceils_on_layout_twin(tmp_path: Path) -> None:
     assert result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_r79_leaked_buffer_launder_ceils_on_layout_twin(tmp_path: Path) -> None:
     """RED-now-fixed (b): the popped-donor BUFFER launder twin must ceiling.
 
@@ -301,7 +297,6 @@ def test_r79_leaked_buffer_launder_ceils_on_layout_twin(tmp_path: Path) -> None:
     assert result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_r79_wrong_bind_refuses_at_save(tmp_path: Path) -> None:
     """RED-now-fixed (c): the address-collision wrong-bind must never save clean.
 
@@ -330,7 +325,6 @@ def test_r79_wrong_bind_refuses_at_save(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_r79_forged_stale_param_stamp_launder_ceils(tmp_path: Path) -> None:
     """White-box: even a stamp that DID survive (forged) never resolves.
 
@@ -351,7 +345,6 @@ def test_r79_forged_stale_param_stamp_launder_ceils(tmp_path: Path) -> None:
     assert result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_r79_forged_stale_param_stamp_wrong_bind_refuses(tmp_path: Path) -> None:
     """White-box: the forged-stamp address collision cannot wrong-bind.
 
@@ -376,7 +369,6 @@ def test_r79_forged_stale_param_stamp_wrong_bind_refuses(tmp_path: Path) -> None
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_r79_registered_param_layout_read_stays_verified(tmp_path: Path) -> None:
     """Zero collateral: a REGISTERED/PREPPED param layout read stays VERIFIED.
 
@@ -397,7 +389,6 @@ def test_r79_registered_param_layout_read_stays_verified(tmp_path: Path) -> None
     assert not twin.report.poisoned
 
 
-@pytest.mark.smoke
 def test_r79_honest_conv_bn_stays_verified(tmp_path: Path) -> None:
     """Zero collateral: honest conv+BN (params AND buffers on-path) verifies."""
 
@@ -409,7 +400,6 @@ def test_r79_honest_conv_bn_stays_verified(tmp_path: Path) -> None:
     assert not result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_r79_non_popped_cross_session_reuse_stays_blocked(tmp_path: Path) -> None:
     """Zero collateral (hon1's case): non-popped cross-session reuse stays blocked.
 
@@ -429,7 +419,6 @@ def test_r79_non_popped_cross_session_reuse_stays_blocked(tmp_path: Path) -> Non
     assert result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_r79_sequential_captures_cleanup_idempotent(tmp_path: Path) -> None:
     """Zero collateral: normal sequential captures double-clean without errors.
 

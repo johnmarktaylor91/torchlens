@@ -83,7 +83,6 @@ def _stack_global_ref_pickle(module: str, name: str) -> bytes:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("import_path", _STDLIB_REFS)
 def test_resolver_denies_stdlib_even_under_trust(import_path: str) -> None:
     """A stdlib/builtin ref never resolves, default / trust / allowlist alike."""
@@ -97,7 +96,6 @@ def test_resolver_denies_stdlib_even_under_trust(import_path: str) -> None:
         resolve_import_ref(import_path, allowed_custom_callable_modules={module_name})
 
 
-@pytest.mark.smoke
 def test_resolver_allowlist_cannot_reenable_stdlib_module() -> None:
     """Naming a stdlib module in the allowlist does not re-enable it (the contract)."""
 
@@ -107,7 +105,6 @@ def test_resolver_allowlist_cannot_reenable_stdlib_module() -> None:
         resolve_import_ref("gc:get_referrers", allowed_custom_callable_modules={"gc"})
 
 
-@pytest.mark.smoke
 def test_resolver_stdlib_reached_by_dotted_walk_denied_under_trust() -> None:
     """A dotted qualname walking off a trusted torch root into stdlib is denied."""
 
@@ -128,7 +125,6 @@ def test_resolver_stdlib_reached_by_dotted_walk_denied_under_trust() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("import_path", _STDLIB_REFS)
 @pytest.mark.parametrize("builder", [_global_ref_pickle, _stack_global_ref_pickle])
 def test_unpickler_denies_stdlib_even_under_trust(import_path: str, builder) -> None:
@@ -149,7 +145,6 @@ def test_unpickler_denies_stdlib_even_under_trust(import_path: str, builder) -> 
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_operator_root_still_resolves() -> None:
     """``operator:neg`` (real module ``_operator``) is carved out and resolves."""
 
@@ -168,7 +163,6 @@ def test_operator_root_still_resolves() -> None:
     )
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "import_path",
     ["torch:relu", "torch.nn.functional:relu"],
@@ -180,7 +174,6 @@ def test_torch_ops_still_resolve(import_path: str) -> None:
     assert callable(resolved)
 
 
-@pytest.mark.smoke
 def test_first_party_inert_callable_still_resolves() -> None:
     """A vetted-inert first-party callable (``identity``) resolves without trust."""
 
@@ -189,7 +182,6 @@ def test_first_party_inert_callable_still_resolves() -> None:
     assert resolved(7) == 7
 
 
-@pytest.mark.smoke
 def test_operator_neg_via_unpickler_under_trust_resolves() -> None:
     """Unpickling ``operator.neg`` under trust yields the real callable (carve-out)."""
 
@@ -203,7 +195,6 @@ def test_operator_neg_via_unpickler_under_trust_resolves() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "module",
     ["io", "_io", "os", "os.path", "gc", "mmap", "importlib.util", "zipimport", "_imp"],
@@ -214,7 +205,6 @@ def test_detector_flags_stdlib(module: str) -> None:
     assert is_denied_stdlib_or_builtin_module(module) is True
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "module",
     ["operator", "_operator", "torch", "torch.nn.functional", "torchlens.neuro", "numpy", "mymod"],
@@ -231,7 +221,6 @@ def test_torch_module_is_not_stdlib() -> None:
     assert is_denied_stdlib_or_builtin_module(str(torch.relu.__module__)) is False
 
 
-@pytest.mark.smoke
 def test_custom_key_missing_import_path_refuses_typed() -> None:
     """A custom key without ``import_path`` refuses through the typed door.
 

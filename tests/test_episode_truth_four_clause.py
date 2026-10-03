@@ -35,8 +35,6 @@ from torchlens.capture._episode_ledger import (
 )
 from torchlens.options import CaptureOptions, EpisodeSpec
 
-pytestmark = pytest.mark.smoke
-
 V = 16
 N_STEPS = 3
 
@@ -150,6 +148,7 @@ def test_settlement_cost_is_exactly_the_priced_dispatcher_reads():
     assert counter.counts["aten.view.default"] == N_STEPS
 
 
+@pytest.mark.smoke
 def test_step_join_claim_is_per_artifact_never_the_build_switch():
     """F40c flipped the claim-off switch WITH the measurement behind it; the
     honesty invariant survives per-artifact: an artifact without a measured

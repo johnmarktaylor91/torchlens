@@ -24,8 +24,6 @@ from torchlens._io import TorchLensIOError
 from torchlens.capture.outcome import CaptureStatus
 from torchlens.data_classes.trace import Trace
 
-pytestmark = pytest.mark.smoke
-
 
 def _model():
     return nn.Sequential(nn.Linear(4, 3), nn.ReLU())

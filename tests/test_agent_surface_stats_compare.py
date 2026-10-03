@@ -25,8 +25,6 @@ from tests.test_agent_surface_helpers import (
 )
 from torchlens.agent import _budgets, call_tool, canonical_dumps
 
-pytestmark = pytest.mark.smoke
-
 
 @pytest.fixture()
 def clean(tmp_path: Path) -> Path:

@@ -24,8 +24,6 @@ import torchlens as tl
 from torchlens.backends._finalize import _apply_recurrence_relabel_epilogue, _finalize_single_op
 from torchlens.postprocess.loop_grouping_adapter import RecurrenceAssignment
 
-pytestmark = pytest.mark.smoke
-
 
 def _stub_trace() -> SimpleNamespace:
     """Return a minimal trace stub with the lookup indexes finalize touches."""
@@ -110,6 +108,7 @@ def test_torch_bare_label_artifact_is_last_pass() -> None:
         )
 
 
+@pytest.mark.smoke
 def test_singleton_fallback_strips_raw_capture_sentinel() -> None:
     """N5: the ``assignment=None`` singleton fallback must not leak ``_raw``.
 
@@ -142,6 +141,7 @@ def test_singleton_fallback_strips_raw_capture_sentinel() -> None:
     assert trace.layer_dict_all_keys["input_1_1_raw"] is op_log
 
 
+@pytest.mark.smoke
 def test_grouped_leader_strips_raw_capture_sentinel() -> None:
     """A multi-pass group's leader label must also lose its ``_raw`` suffix.
 
@@ -168,6 +168,7 @@ def test_grouped_leader_strips_raw_capture_sentinel() -> None:
     assert trace.layer_labels == ["cell_1_1"]
 
 
+@pytest.mark.smoke
 def test_relabel_epilogue_fixes_children_even_without_grouping() -> None:
     """N5: every op's edges must be relabeled, not just multi-pass members.
 

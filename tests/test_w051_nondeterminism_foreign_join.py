@@ -102,7 +102,6 @@ def _uncertain_reasons(result: Any, prefix: str) -> set[str]:
 # ---- 2.16 malicious topologies FAIL -----------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_prepool_clock_feed_in_settles_uncertain(warm_pool: ThreadPoolExecutor) -> None:
     """``PRE_POOL.submit(time.time).result()``: the unhooked join and the foreign read
     are both named; the capture is INCOMPLETE, never verified."""
@@ -125,7 +124,6 @@ _UNHOOKED_JOIN_ALONE_FORK = (
 
 
 @pytest.mark.xfail(strict=True, reason=_UNHOOKED_JOIN_ALONE_FORK)
-@pytest.mark.smoke
 def test_prepool_datetime_now_feed_in_settles_uncertain(warm_pool: ThreadPoolExecutor) -> None:
     """``datetime.now`` is an unpatchable C classmethod invisible on an unhooked thread:
     only the join evidence exists (no foreign read can be disclosed). Strict xfail: the
@@ -138,7 +136,6 @@ def test_prepool_datetime_now_feed_in_settles_uncertain(warm_pool: ThreadPoolExe
     assert result.uncertain
 
 
-@pytest.mark.smoke
 def test_prepool_datetime_now_join_is_disclosed(warm_pool: ThreadPoolExecutor) -> None:
     """The residual is DISCLOSED even while it does not settle: the unhooked join is named."""
 
@@ -148,7 +145,6 @@ def test_prepool_datetime_now_join_is_disclosed(warm_pool: ThreadPoolExecutor) -
     assert not result.channels
 
 
-@pytest.mark.smoke
 def test_preexisting_loop_thread_feed_in_settles_uncertain(running_loop: Any) -> None:
     """``run_coroutine_threadsafe(...).result()`` on a pre-existing loop thread joins it."""
 
@@ -171,7 +167,6 @@ def test_preexisting_loop_thread_feed_in_settles_uncertain(running_loop: Any) ->
         ("_random.Random.random", lambda: random.Random().random()),
     ],
 )
-@pytest.mark.smoke
 def test_prepool_entropy_and_instance_feed_ins_settle_uncertain(
     warm_pool: ThreadPoolExecutor, channel: str, reader: Callable[[], Any]
 ) -> None:
@@ -186,7 +181,6 @@ def test_prepool_entropy_and_instance_feed_ins_settle_uncertain(
 
 
 @pytest.mark.xfail(strict=True, reason=_UNHOOKED_JOIN_ALONE_FORK)
-@pytest.mark.smoke
 def test_held_builtin_on_unhooked_worker_is_caught_by_the_join_alone(
     warm_pool: ThreadPoolExecutor,
 ) -> None:
@@ -202,7 +196,6 @@ def test_held_builtin_on_unhooked_worker_is_caught_by_the_join_alone(
     assert result.uncertain
 
 
-@pytest.mark.smoke
 def test_relay_through_in_window_worker_is_not_laundered(warm_pool: ThreadPoolExecutor) -> None:
     """An in-window worker fetches from the pre-existing pool and the owner joins ONLY the
     hooked worker: the worker's own unhooked join carries the promotion."""
@@ -221,7 +214,6 @@ def test_relay_through_in_window_worker_is_not_laundered(warm_pool: ThreadPoolEx
     assert "foreign_thread_read_joined:time.time" in result.uncertain_detail
 
 
-@pytest.mark.smoke
 def test_event_handshake_with_reading_thread_is_a_join() -> None:
     """A pre-existing thread that reads the clock and then signals an Event the owner
     blocks on is indistinguishable from value feed-in: the owner's wait resolves to the
@@ -247,7 +239,6 @@ def test_event_handshake_with_reading_thread_is_a_join() -> None:
     assert "foreign_thread_read_joined:time.time" in result.uncertain_detail
 
 
-@pytest.mark.smoke
 def test_queue_get_from_preexisting_producer_is_a_join() -> None:
     """``queue.Queue.get`` resolves its counterpart through the queue's Condition stamp."""
 
@@ -270,7 +261,6 @@ def test_queue_get_from_preexisting_producer_is_a_join() -> None:
     assert "queue.Queue.get" in result.owner_unhooked_joins
 
 
-@pytest.mark.smoke
 def test_prebound_wait_alias_bypassing_class_patch_is_still_witnessed() -> None:
     """A pre-window bound method (``wait = event.wait``) calls the ORIGINAL function and
     bypasses the class patch; the held-code ``call`` layer records an unattributed wait, and
@@ -309,7 +299,6 @@ def _spin_until(predicate: Callable[[], bool], budget_s: float = 30.0) -> None:
             raise AssertionError("background reader never ran in-window")
 
 
-@pytest.mark.smoke
 def test_unjoined_background_reader_never_ceilings() -> None:
     """The FLAKEHUNT contract case, with the owner NEVER blocking on the reader: reads are
     disclosed only, no channel, no uncertainty."""
@@ -339,7 +328,6 @@ def test_unjoined_background_reader_never_ceilings() -> None:
     assert result.channels == {"time.monotonic"}
 
 
-@pytest.mark.smoke
 def test_background_tempfile_loop_never_ceilings(tmp_path: Path) -> None:
     """2.18: stdlib ``tempfile`` draws from a process-global private ``random.Random``; a
     background thread making temp files in-window is disclosed, never a ceiling."""
@@ -368,7 +356,6 @@ def test_background_tempfile_loop_never_ceilings(tmp_path: Path) -> None:
     assert result.foreign_thread_reads & {"_random.Random.random", "_random.Random.getrandbits"}
 
 
-@pytest.mark.smoke
 def test_owner_and_in_window_instance_draws_still_ceiling() -> None:
     """The 2.18 routing narrows ONLY foreign threads: owner-thread and in-window-thread
     private instance draws keep ceiling (the tripwire is not weakened)."""
@@ -384,7 +371,6 @@ def test_owner_and_in_window_instance_draws_still_ceiling() -> None:
     assert "_random.Random.random" in worker_result.channels
 
 
-@pytest.mark.smoke
 def test_join_on_own_in_window_worker_promotes_nothing() -> None:
     """Hooked-only counterparts (the model's OWN in-window worker) are disclosure only: a
     concurrent unjoined flusher's reads are NOT promoted through such a join."""
@@ -417,7 +403,6 @@ def test_join_on_own_in_window_worker_promotes_nothing() -> None:
     assert "time.time" in result.foreign_thread_reads
 
 
-@pytest.mark.smoke
 def test_torchlens_initiated_waits_are_not_joins() -> None:
     """A wait whose initiator frame is TorchLens-owned is machinery, never a join."""
 
@@ -443,7 +428,6 @@ def test_torchlens_initiated_waits_are_not_joins() -> None:
 # ---- end to end through the runnable seam --------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_prepool_feed_in_capture_is_not_verified(
     tmp_path: Path, warm_pool: ThreadPoolExecutor
 ) -> None:
@@ -465,7 +449,6 @@ def test_prepool_feed_in_capture_is_not_verified(
     assert result.report.path_faithfulness.value == "unverifiable"
 
 
-@pytest.mark.smoke
 def test_lazy_pool_captures_never_verify_across_repeats() -> None:
     """The order-dependence corollary: a module that lazily builds a module-held pool was
     ceilinged on capture 0 (worker born in-window) and VERIFIED on captures 1 and 2 (same
@@ -532,7 +515,6 @@ def test_unjoined_flusher_capture_replays_verified(tmp_path: Path) -> None:
 # ---- vocabulary tripwires ---------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_owner_sync_vocabulary_resolves_completely() -> None:
     """Every owner-sync row resolves to a real stdlib function on this Python -- a stdlib
     rename is a failing test, never a silent under-witness."""
@@ -552,7 +534,6 @@ def test_owner_sync_vocabulary_resolves_completely() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_owner_sync_patches_restore_exactly() -> None:
     """The class patches on the wait/notify primitives restore identity-exact after the window."""
 
@@ -572,7 +553,6 @@ def test_owner_sync_patches_restore_exactly() -> None:
     assert not result.uncertain
 
 
-@pytest.mark.smoke
 def test_registry_keeps_pure_read_rows_thread_agnostic_in_declaration() -> None:
     """Registry rows are unchanged by the join: the clock/entropy rows still declare
     thread scope ``any`` (observation is process-wide; routing is a settlement concern)."""

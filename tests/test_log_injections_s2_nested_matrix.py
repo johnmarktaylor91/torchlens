@@ -80,7 +80,6 @@ def test_nested_trace_inside_hook_refuses_reentrant(chain) -> None:
     assert plain.injected_ops == ()
 
 
-@pytest.mark.smoke
 def test_hook_calls_never_fire_other_rules_nesting_path_flat(chain) -> None:
     """Torch calls inside a hook never fire a second rule's hook.
 
@@ -114,7 +113,6 @@ def test_hook_calls_never_fire_other_rules_nesting_path_flat(chain) -> None:
     assert {record.provenance.nesting_path for record in records} == {()}
 
 
-@pytest.mark.smoke
 def test_replay_fork_do_records_nothing_and_preserves_records(chain) -> None:
     """Replay-side hooks record nothing; captured records stay intact."""
 
@@ -152,7 +150,6 @@ def test_record_has_no_injection_spelling_and_cooked_traces_are_empty(chain) -> 
     assert cooked.injected_ops == ()
 
 
-@pytest.mark.smoke
 def test_episode_intervene_refusal_keeps_injections_unreachable(chain) -> None:
     """episode= + intervene= refuses pre-execution (F40a), logged or not."""
 

@@ -66,7 +66,6 @@ def _tuple_literal(path: Path, name: str) -> frozenset[str]:
     raise AssertionError(f"{name} tuple not found in {path}")
 
 
-@pytest.mark.smoke
 def test_mlx_adapter_table_admits_no_new_family_name() -> None:
     """The MLX closed helper table stays disjoint from the stochastic family."""
 
@@ -78,7 +77,6 @@ def test_mlx_adapter_table_admits_no_new_family_name() -> None:
     assert not (table & _NEW_FAMILY_NAMES)
 
 
-@pytest.mark.smoke
 def test_paddle_adapter_table_admits_no_new_family_name() -> None:
     """The Paddle closed helper table stays disjoint from the stochastic family."""
 
@@ -90,7 +88,6 @@ def test_paddle_adapter_table_admits_no_new_family_name() -> None:
     assert not (table & _NEW_FAMILY_NAMES)
 
 
-@pytest.mark.smoke
 def test_tf_curated_chain_admits_no_new_family_name() -> None:
     """The TF curated helper if-chain stays disjoint from the stochastic family."""
 
@@ -125,7 +122,6 @@ def test_construction_and_identity_are_backend_free() -> None:
         assert pickle.loads(pickle.dumps(spec)) == spec
 
 
-@pytest.mark.smoke
 def test_mlx_live_leg_refuses_new_family() -> None:
     """Live A6 leg (runs only where MLX is installed): typed refusal, no forward."""
 

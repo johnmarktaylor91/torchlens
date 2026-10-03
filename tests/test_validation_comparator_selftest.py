@@ -18,8 +18,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.validation import core as validation_core
 
-pytestmark = pytest.mark.smoke
-
 
 def _traced_linear() -> tuple[tl.Trace, list[torch.Tensor], nn.Module]:
     """Capture a tiny linear model with full saves for replay validation.

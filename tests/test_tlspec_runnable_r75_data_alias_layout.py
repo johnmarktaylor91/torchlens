@@ -205,7 +205,6 @@ class MixedCatDirectConsumption(nn.Module):
         return y - 10.0
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "model_cls",
     [
@@ -231,7 +230,6 @@ def test_r75_data_alias_spellings_ceiling_on_changed_layout(
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "model_cls",
     [DataDirectBranch, DataTransitiveGetitemBranch, DataOrphanedMulBranch],
@@ -255,7 +253,6 @@ def test_r75_data_alias_spellings_stay_verified_on_same_layout(
     assert not result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_r75_detach_control_still_ceiled(tmp_path: Path) -> None:
     """The logged ``.detach()`` spelling keeps its r73 witnessed/ceiled behavior."""
 
@@ -267,7 +264,6 @@ def test_r75_detach_control_still_ceiled(tmp_path: Path) -> None:
     assert result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_r75_layout_oblivious_model_still_never_triggers(tmp_path: Path) -> None:
     """Zero over-trigger: a model with NO layout read stays VERIFIED on a twin."""
 
@@ -279,7 +275,6 @@ def test_r75_layout_oblivious_model_still_never_triggers(tmp_path: Path) -> None
     assert not result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_r75_state_data_rooted_read_stays_residual_three(tmp_path: Path) -> None:
     """Residual (3) untouched THROUGH the alias: ``self.w.data`` roots at state, records nothing.
 
@@ -296,7 +291,6 @@ def test_r75_state_data_rooted_read_stays_residual_three(tmp_path: Path) -> None
     assert not result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_r75_unresolvable_receiver_fails_closed(tmp_path: Path) -> None:
     """The fail-closed floor: an unresolvable unlabeled receiver downgrades completeness.
 
@@ -315,7 +309,6 @@ def test_r75_unresolvable_receiver_fails_closed(tmp_path: Path) -> None:
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
-@pytest.mark.smoke
 def test_r75_direct_alias_consumption_is_replayable(tmp_path: Path) -> None:
     """A logged op directly consuming ``.data`` retains complete replay provenance.
 
@@ -332,7 +325,6 @@ def test_r75_direct_alias_consumption_is_replayable(tmp_path: Path) -> None:
     assert not result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_r75_storage_identity_rung_resolves_when_ledger_missing(tmp_path: Path) -> None:
     """Storage-rung precision pin (r31/r63 precedent): live captured-storage identity.
 

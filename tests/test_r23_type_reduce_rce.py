@@ -104,7 +104,6 @@ class _LazyImportRefTypeReduceGadget:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_lazyimportref_type_reduce_rce_denied_through_tl_load(tmp_path: Path) -> None:
     """A forged LazyImportRef REDUCE in metadata.pkl raises + never runs os.system."""
 
@@ -131,7 +130,6 @@ def test_lazyimportref_type_reduce_rce_denied_through_tl_load(tmp_path: Path) ->
     assert not marker.exists(), "os.system marker written -> RCE via type-reduce"
 
 
-@pytest.mark.smoke
 def test_lazyimportref_type_denied_at_unpickler() -> None:
     """The LazyImportRef TYPE is denied at find_class (the reduce callable is unresolvable)."""
 
@@ -140,7 +138,6 @@ def test_lazyimportref_type_denied_at_unpickler() -> None:
         unpickler.find_class("torchlens.intervention.save", "LazyImportRef")
 
 
-@pytest.mark.smoke
 def test_legit_data_types_and_snapshot_still_admit() -> None:
     """Vetted-inert data types + FacetRegistrySnapshot + rename targets still resolve."""
 
@@ -161,7 +158,6 @@ def test_legit_data_types_and_snapshot_still_admit() -> None:
         assert isinstance(resolved, type), f"{module}:{name} should admit as a type"
 
 
-@pytest.mark.smoke
 def test_r21_and_import_sink_gadgets_still_denied() -> None:
     """The r21 private import gadget and other torchlens callables stay denied."""
 
@@ -180,7 +176,6 @@ def test_r21_and_import_sink_gadgets_still_denied() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_lazyimportref_setstate_sanitizes_forged_trust() -> None:
     """Any unpickle reconstruction forces trust off, ignoring pickled trust fields."""
 
@@ -225,7 +220,6 @@ def test_lazyimportref_normal_init_preserves_trust(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "import_path",
     [

@@ -63,7 +63,6 @@ def _payload(module: Any, rows: list[dict[str, Any]]) -> dict[str, Any]:
     return {"schema": module.SCHEMA, "environment": {"synthetic": True}, "rows": rows}
 
 
-@pytest.mark.smoke
 def test_perf_gate_committed_baselines_parse(perf_gate: Any) -> None:
     """Every committed baseline file passes the gate's own schema validation."""
 
@@ -74,7 +73,6 @@ def test_perf_gate_committed_baselines_parse(perf_gate: Any) -> None:
         assert payload["rows"], f"baseline {path.name} carries no rows"
 
 
-@pytest.mark.smoke
 def test_perf_gate_synthetic_regression_trips(perf_gate: Any) -> None:
     """A synthetic 2x slowdown on a TorchLens-owned row FAILS the gate."""
 
@@ -89,7 +87,6 @@ def test_perf_gate_synthetic_regression_trips(perf_gate: Any) -> None:
     assert check["delta_ms"] == pytest.approx(100.0)
 
 
-@pytest.mark.smoke
 def test_perf_gate_within_tolerance_passes(perf_gate: Any) -> None:
     """A within-tolerance drift passes; the tolerance formula is honored.
 
@@ -104,7 +101,6 @@ def test_perf_gate_within_tolerance_passes(perf_gate: Any) -> None:
     assert perf_gate.compare_gate_payloads(baseline, just_over)["passed"] is False
 
 
-@pytest.mark.smoke
 def test_perf_gate_blocks_vanished_and_failed_torchlens_rows(perf_gate: Any) -> None:
     """Missing and non-ok TorchLens-owned rows block the gate, not just slowdowns."""
 
@@ -137,7 +133,6 @@ def test_perf_gate_blocks_vanished_and_failed_torchlens_rows(perf_gate: Any) -> 
     ]
 
 
-@pytest.mark.smoke
 def test_perf_gate_wall_clock_fallback_is_not_authoritative(perf_gate: Any) -> None:
     """A TorchLens row judged on wall clock BLOCKS the gate by default.
 
@@ -169,7 +164,6 @@ def test_perf_gate_wall_clock_fallback_is_not_authoritative(perf_gate: Any) -> N
     assert legacy["wall_clock_fallback_blocking_rows"] == []
 
 
-@pytest.mark.smoke
 def test_perf_gate_wall_clock_fallback_on_foreign_rows_does_not_block(perf_gate: Any) -> None:
     """Non-TorchLens comparison rows (raw torch baselines) may stay wall-only."""
 

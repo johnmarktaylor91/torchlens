@@ -90,7 +90,6 @@ def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     return tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=None))
 
 
-@pytest.mark.smoke
 def test_tied_params_counted_once_by_object_identity() -> None:
     """A2: tied params are ONE identity; total matches torch's own sum."""
 
@@ -126,7 +125,6 @@ def test_tie_is_named_and_per_path_total_printed() -> None:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_shared_storage_views_stay_distinct_parameters() -> None:
     """A2: storage-pointer overlap never merges distinct Parameters (24 not 20)."""
 
@@ -163,7 +161,6 @@ def test_declared_executed_unexecuted_split_named() -> None:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_trainability_is_a_tri_state() -> None:
     """A12: a mixed module reads 'partial', never a boolean OR 'yes'."""
 
@@ -183,7 +180,6 @@ def test_trainability_is_a_tri_state() -> None:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_headline_matches_torch_on_plain_models() -> None:
     """The identity rule reproduces torch's count on an untied model too."""
 

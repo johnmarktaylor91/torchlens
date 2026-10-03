@@ -12,11 +12,7 @@ from __future__ import annotations
 import dataclasses
 import typing
 
-import pytest
-
 from ._fields import ANNOTATION_NAMESPACE, TIER_CLASSIFICATION, WALKER_ROOTS
-
-pytestmark = pytest.mark.smoke
 
 
 def _dataclass_types(annotation: object) -> list[type]:

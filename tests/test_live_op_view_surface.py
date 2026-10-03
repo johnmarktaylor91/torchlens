@@ -27,8 +27,6 @@ from torchlens.capture.projections import (
 )
 from torchlens.constants import OP_LOG_FIELD_ORDER
 
-pytestmark = pytest.mark.smoke
-
 # The documented LiveOpView field surface: live getter-table keys plus the
 # known-late names. Any change here is a reviewed contract diff — declare a new
 # Op field in exactly one branch and update this list in the same change.

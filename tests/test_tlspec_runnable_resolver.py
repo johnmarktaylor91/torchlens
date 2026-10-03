@@ -292,7 +292,6 @@ def test_resolver_namespace_table_and_exact_binding_monotonicity() -> None:
     assert record.provenance.startswith("exact_getattr:")
 
 
-@pytest.mark.smoke
 def test_attachment_is_all_or_none_and_resolution_runs_under_pause_logging(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -335,7 +334,6 @@ def test_attachment_is_all_or_none_and_resolution_runs_under_pause_logging(
     assert attachments is None
 
 
-@pytest.mark.smoke
 def test_safe_load_survives_unresolved_key_and_run_fails_once_with_full_report(
     tmp_path: Path,
 ) -> None:

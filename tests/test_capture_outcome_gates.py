@@ -24,8 +24,6 @@ from torchlens.capture.outcome import (
 from torchlens.data_classes.trace import Trace
 from torchlens.fastlog._halt import HaltSignal
 
-pytestmark = pytest.mark.smoke
-
 
 class ExplodingModel(nn.Module):
     def __init__(self) -> None:

@@ -20,8 +20,6 @@ import torchlens.trackers as trk
 from torchlens.trackers._amp import unscale_stage
 from torchlens.utils._torch_compat import HAS_AMP_GRADSCALER
 
-pytestmark = pytest.mark.smoke
-
 _requires_gradscaler = pytest.mark.skipif(
     not HAS_AMP_GRADSCALER,
     reason="torch.amp.GradScaler (device-agnostic) postdates the torch 2.1 floor",
@@ -39,6 +37,7 @@ def _norm(sink: trk.MemorySink, leaf: str = "0.weight") -> float:
 
 
 class TestUnscaleStage:
+    @pytest.mark.smoke
     @_requires_gradscaler
     def test_ready_then_unscaled_then_stepped(self) -> None:
         model, opt = _mlp()
@@ -65,6 +64,7 @@ class TestUnscaleStage:
 
 
 class TestBoundaryTruth:
+    @pytest.mark.smoke
     @_requires_gradscaler
     def test_plain_optimizer_step_on_scaled_grads_is_corrected_and_disclosed(self) -> None:
         """The emitted norm equals the UNSCALED norm; the record says 'no'."""
@@ -135,6 +135,7 @@ class TestBoundaryTruth:
         assert {o.grad_scale for o in block.observations if o.stream == "param_grad"} == {"unknown"}
         assert not any(p.tag == "torchlens/run/amp_unscale_derived" for p in sink.scalars)
 
+    @pytest.mark.smoke
     @_requires_gradscaler
     def test_forced_final_gradient_sample_is_corrected_when_derived(self) -> None:
         """The close-time forced sample applies the same correction."""

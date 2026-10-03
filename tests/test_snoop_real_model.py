@@ -31,7 +31,6 @@ def _tiny_gpt2() -> tuple[torch.nn.Module, torch.Tensor]:
     return model, input_ids
 
 
-@pytest.mark.smoke
 @pytest.mark.real_model
 def test_gpt2_full_narration_line_count_and_label_resolution() -> None:
     """Memo test 1: line count == narrated events; labels resolve on record."""
@@ -59,7 +58,6 @@ def test_gpt2_full_narration_line_count_and_label_resolution() -> None:
     assert op_only and op_only <= resolvable
 
 
-@pytest.mark.smoke
 @pytest.mark.real_model
 def test_gpt2_scoped_narration_stays_inside_the_block() -> None:
     """Memo test 2: tl.in_module scoping on a transformer block."""
@@ -86,7 +84,6 @@ def test_gpt2_scoped_narration_stays_inside_the_block() -> None:
     assert not any("h.0" in line for line in body)
 
 
-@pytest.mark.smoke
 @pytest.mark.real_model
 def test_gpt2_position_overflow_crash_narrates_post_hoc() -> None:
     """Memo crash B: tokens beyond n_positions raise inside the embedding."""

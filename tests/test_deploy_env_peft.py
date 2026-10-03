@@ -70,7 +70,6 @@ def test_peft_compat_row_detects_adapters() -> None:
     assert (row.detected, row.status, row.severity) == (True, "pass", "info")
 
 
-@pytest.mark.smoke
 def test_peft_compat_row_absent_reads_pass_ok() -> None:
     """No adapters: undetected pass/ok."""
 

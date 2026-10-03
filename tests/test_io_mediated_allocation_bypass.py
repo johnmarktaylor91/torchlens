@@ -232,7 +232,6 @@ def _builtin_size_pickle(name: str, count: int) -> bytes:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_numpy_reconstruct_helpers_resolve_for_the_guard() -> None:
     """The identity set the guard matches on is non-empty and covers the allowlist."""
 
@@ -241,7 +240,6 @@ def test_numpy_reconstruct_helpers_resolve_for_the_guard() -> None:
     assert allowlisted == {"numpy.core.multiarray", "numpy._core.multiarray"}
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("module", ["numpy._core.multiarray", "numpy.core.multiarray"])
 def test_reconstruct_mediated_ndarray_allocation_refused(module: str) -> None:
     """A tiny ``_reconstruct`` REDUCE no longer allocates an attacker-sized array."""
@@ -254,7 +252,6 @@ def test_reconstruct_mediated_ndarray_allocation_refused(module: str) -> None:
         SafeBundleUnpickler(io.BytesIO(payload)).load()
 
 
-@pytest.mark.smoke
 def test_reconstruct_belt_fires_white_box_and_fails_closed() -> None:
     """``load_reduce`` refuses the mediator on the stack, and on a malformed arg tuple."""
 
@@ -268,7 +265,6 @@ def test_reconstruct_belt_fires_white_box_and_fails_closed() -> None:
     assert _alloc_refusal_reason(helper, "not-a-tuple") is not None
 
 
-@pytest.mark.smoke
 def test_reconstruct_gadget_refused_end_to_end_through_tl_load(tmp_path: Path) -> None:
     """The gadget planted in a REAL artifact's metadata.pkl is refused by ``tl.load``."""
 
@@ -288,7 +284,7 @@ def test_reconstruct_gadget_refused_end_to_end_through_tl_load(tmp_path: Path) -
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
+@pytest.mark.smoke_cells("test_torch_tensor_factory_reduce_refused[arange]")
 @pytest.mark.parametrize(
     "factory", ["empty", "empty_strided", "zeros", "ones", "rand", "randn", "arange"]
 )
@@ -301,7 +297,6 @@ def test_torch_tensor_factory_reduce_refused(factory: str) -> None:
         _RenameAwareUnpickler(io.BytesIO(payload)).load()
 
 
-@pytest.mark.smoke
 def test_torch_reference_still_resolves_as_an_inert_value() -> None:
     """Resolution of a torch callable REFERENCE stays allowed -- only CALLING it is refused.
 
@@ -374,7 +369,6 @@ def test_tensor_constructor_method_descriptor_reduce_refused() -> None:
         _RenameAwareUnpickler(io.BytesIO(payload)).load()
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("method", ["new_empty", "new_zeros", "new_ones", "new_full"])
 def test_tensor_constructor_methods_are_all_refused(method: str) -> None:
     """Ownership is read off the descriptor, so the whole ``new_*`` family is covered."""
@@ -410,7 +404,6 @@ def test_ownership_probe_decides_instead_of_crashing_on_a_hostile_owner() -> Non
     assert _alloc_refusal_reason(_UnhashableObjclass(), ()) is None
 
 
-@pytest.mark.smoke
 def test_vetted_rebuild_reconstructors_are_still_invocable() -> None:
     """The ``torch._utils._rebuild*`` family stays REDUCE-invocable (it is the legit path)."""
 
@@ -477,7 +470,6 @@ def _rebuild_amplification_pickle(blob: bytes, count: int) -> bytes:
 
 
 @_requires_safe_weights_only_load
-@pytest.mark.smoke
 @pytest.mark.parametrize("legacy", [False, True])
 def test_embedded_storage_is_never_resizable(legacy: bool) -> None:
     """Both ``torch.save`` formats yield a NON-resizable storage through the wrapper.
@@ -500,8 +492,8 @@ def test_embedded_storage_is_never_resizable(legacy: bool) -> None:
         assert not storage.resizable(), f"{type(loaded).__name__} stayed growable"
 
 
+@pytest.mark.smoke_cells("test_rebuild_tensor_v2_cannot_amplify_an_embedded_storage[True]")
 @_requires_safe_weights_only_load
-@pytest.mark.smoke
 @pytest.mark.parametrize("legacy", [False, True])
 def test_rebuild_tensor_v2_cannot_amplify_an_embedded_storage(legacy: bool) -> None:
     """A vetted ``_rebuild_tensor_v2`` may not GROW the storage it was handed.
@@ -532,8 +524,8 @@ def test_rebuild_amplification_refused_end_to_end_through_tl_load(tmp_path: Path
     assert "resiz" in (str(caught.value) + str(caught.value.__cause__)).lower()
 
 
+@pytest.mark.smoke_cells("test_embedded_blob_round_trips_exactly_after_freezing[True]")
 @_requires_safe_weights_only_load
-@pytest.mark.smoke
 @pytest.mark.parametrize("legacy", [False, True])
 def test_embedded_blob_round_trips_exactly_after_freezing(legacy: bool) -> None:
     """Freezing preserves value, shape, stride, dtype and ``requires_grad`` exactly.
@@ -566,7 +558,6 @@ def test_embedded_blob_round_trips_exactly_after_freezing(legacy: bool) -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("module", "name", "args"),
     [
@@ -583,7 +574,6 @@ def test_nn_module_construction_refused(module: str, name: str, args: tuple[int,
         _RenameAwareUnpickler(io.BytesIO(payload)).load()
 
 
-@pytest.mark.smoke
 def test_nn_module_rule_is_argument_bearing_only() -> None:
     """A ZERO-ARGUMENT module construction stays allowed -- real artifacts do exactly that.
 
@@ -604,7 +594,6 @@ def test_nn_module_rule_is_argument_bearing_only() -> None:
     assert unpickler.find_class("torch.nn.modules.linear", "Linear") is nn.Linear
 
 
-@pytest.mark.smoke
 def test_zero_argument_module_newobj_round_trips() -> None:
     """The exact honest shape -- ``NEWOBJ(nn.Identity, ())`` -- still loads."""
 
@@ -625,7 +614,6 @@ def test_zero_argument_module_newobj_round_trips() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("name", ["bytes", "bytearray"])
 def test_integer_sized_buffer_allocation_refused(name: str) -> None:
     """``bytes(N)`` / ``bytearray(N)`` allocate N zero bytes from ~30 pickle bytes."""
@@ -636,7 +624,6 @@ def test_integer_sized_buffer_allocation_refused(name: str) -> None:
         _RenameAwareUnpickler(io.BytesIO(payload)).load()
 
 
-@pytest.mark.smoke
 def test_buffer_copy_construction_still_allowed() -> None:
     """A ``bytes``/``bytearray`` built from a buffer ALREADY in the stream stays allowed."""
 
@@ -651,7 +638,6 @@ def test_buffer_copy_construction_still_allowed() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_assessed_non_mediators_are_not_refused() -> None:
     """Entries whose audit verdict is "cannot mediate" keep loading."""
 
@@ -677,7 +663,6 @@ def test_assessed_non_mediators_are_not_refused() -> None:
         assert _alloc_refusal_reason(func, args) is None, f"{func!r} wrongly refused"
 
 
-@pytest.mark.smoke
 def test_safe_explicit_globals_surface_is_pinned() -> None:
     """Pin the allowlist so a NEW entry forces an explicit mediation verdict.
 
@@ -748,7 +733,6 @@ class _RoundTripNet(nn.Module):
         return self.fc(value.flatten(1))
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("level", "include_weights", "include_activations"),
     [

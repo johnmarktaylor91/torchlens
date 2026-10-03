@@ -85,7 +85,6 @@ def partial_trace():
 # SurfaceRegistry (D22) + executable-spelling CI
 
 
-@pytest.mark.smoke
 def test_registry_vocabularies_are_closed() -> None:
     """Every row uses the closed subject/register/invariant/cost vocab."""
 
@@ -137,7 +136,6 @@ def test_which_do_i_use_docs_page_is_lockstepped() -> None:
 # Capability card (D24)
 
 
-@pytest.mark.smoke
 def test_capability_card_is_metadata_only(family_trace, monkeypatch) -> None:
     """D24: building the card never scans, captures, or runs a forward."""
 
@@ -153,7 +151,6 @@ def test_capability_card_is_metadata_only(family_trace, monkeypatch) -> None:
     assert any(row.available for row in card.rows)
 
 
-@pytest.mark.smoke
 def test_capability_card_on_partial_names_remedies(partial_trace) -> None:
     """D24 x D25: the card tells a partial-capture user where to go."""
 
@@ -227,7 +224,6 @@ def test_bom_is_a_factcore_projection(family_trace) -> None:
 # Family gate rows (item 19)
 
 
-@pytest.mark.smoke
 def test_count_vocabulary_one_value_per_grain(family_trace) -> None:
     """D3 (composition row 3): each grain has exactly ONE value across
     summary counts, agent_json, BOM, and profile row counts."""
@@ -288,7 +284,6 @@ def test_family_non_mutation(family_trace) -> None:
     assert torch.equal(torch.get_rng_state(), rng_before)
 
 
-@pytest.mark.smoke
 def test_shared_facts_object_equal_before_render(family_trace) -> None:
     """Composition row 1: every surface reads THE one FactCore instance."""
 
@@ -299,7 +294,6 @@ def test_shared_facts_object_equal_before_render(family_trace) -> None:
     assert report.params_unique == core.params.total
 
 
-@pytest.mark.smoke
 def test_health_evidence_survives_annotations_roundtrip(family_trace) -> None:
     """Composition row 8 (session form): a derived health record persists
     on the annotations channel and is served back as the authority."""

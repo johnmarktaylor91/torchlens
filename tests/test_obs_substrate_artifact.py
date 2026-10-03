@@ -24,8 +24,6 @@ from torchlens.observability import (
     coarsen_pair,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 def _run(run_id: str = "run-a", segment_id: str = "seg-a") -> RunRecord:
     return RunRecord(run_id=run_id, segment_id=segment_id)
@@ -59,6 +57,7 @@ def _block(step: int, *, with_sketch: bool = False, value: float = 1.0) -> Commi
 class TestRoundTrip:
     """Write -> read equality, incl. sketch payloads and nullable cells."""
 
+    @pytest.mark.smoke
     def test_full_round_trip(self, tmp_path: Path) -> None:
         writer = HistoryWriter(tmp_path / "hist", _run())
         writer.add_site(_site())
@@ -76,6 +75,7 @@ class TestRoundTrip:
         no_sketch = reader.observations(step=0)[0]
         assert no_sketch.sketch is None
 
+    @pytest.mark.smoke
     def test_readable_without_model_and_indexed_by_site_stream(self, tmp_path: Path) -> None:
         writer = HistoryWriter(tmp_path / "hist", _run())
         writer.add_site(_site())
@@ -172,6 +172,7 @@ class TestRamRing:
         assert "drop_oldest" in excinfo.value.fields["remedy"]  # remedies named
         assert len(ring) == 2  # nothing dropped or degraded
 
+    @pytest.mark.smoke
     def test_drop_oldest_counts(self) -> None:
         ring = RamRing(capacity=2, policy="drop_oldest")
         for step in range(5):
@@ -181,6 +182,7 @@ class TestRamRing:
         assert ring.dropped_blocks == 3
         assert [b.block.global_step for b in ring.blocks] == [3, 4]
 
+    @pytest.mark.smoke
     def test_coarsen_preserves_counts_with_spans(self) -> None:
         ring = RamRing(capacity=2, policy="coarsen")
         for step in range(4):

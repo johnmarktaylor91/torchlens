@@ -16,8 +16,6 @@ import torchlens as tl
 from torchlens._robustness import UnsupportedTensorVariantError
 from torchlens.options import CaptureOptions
 
-smoke = pytest.mark.smoke
-
 
 class TwoLayer(nn.Module):
     def __init__(self) -> None:
@@ -37,7 +35,6 @@ def _structure_trace():
 # ---------------------------------------------------------------------------
 
 
-@smoke
 def test_meta_and_real_tensors_of_identical_geometry_never_collide() -> None:
     """hash.py digests meta under a DISTINCT domain tag: a structure-only
     artifact can never masquerade as a value-bearing one BY CONSTRUCTION."""
@@ -53,7 +50,6 @@ def test_meta_and_real_tensors_of_identical_geometry_never_collide() -> None:
     assert tl.hash.content(meta) == tl.hash.content(meta_twin)
 
 
-@smoke
 def test_structure_digests_always_computed() -> None:
     log = _structure_trace()
     digest = tl.hash.trace(log)
@@ -65,7 +61,6 @@ def test_structure_digests_always_computed() -> None:
 # ---------------------------------------------------------------------------
 
 
-@smoke
 def test_summary_carries_the_structure_only_banner() -> None:
     log = _structure_trace()
     text = log.summary()
@@ -76,7 +71,7 @@ def test_summary_carries_the_structure_only_banner() -> None:
     assert "structure-only" not in plain
 
 
-@smoke
+@pytest.mark.smoke
 def test_profile_repr_carries_the_banner() -> None:
     log = _structure_trace()
     profile = log.profile()
@@ -99,7 +94,6 @@ def test_profile_repr_carries_the_banner() -> None:
     assert "hypothesis" in set(honesty["flops"].unique())
 
 
-@smoke
 def test_explain_carries_the_hypothesis_line() -> None:
     log = _structure_trace()
     text = tl.report.explain(log)
@@ -117,7 +111,7 @@ def _meta_model() -> nn.Module:
         return nn.Linear(4, 4)
 
 
-@smoke
+@pytest.mark.smoke
 def test_meta_init_model_still_refuses_at_the_gate_with_enriched_teaching() -> None:
     """Baseline pin (becomes the D8 carve-through test): the DEFAULT path and
     the D8-default flag-on path both refuse meta state unchanged, now naming
@@ -135,7 +129,7 @@ def test_meta_init_model_still_refuses_at_the_gate_with_enriched_teaching() -> N
     assert f"{__file__}:" in str(err)
 
 
-@smoke
+@pytest.mark.smoke
 def test_meta_model_real_input_mixed_cell_refuses_post_flip() -> None:
     """Entry-matrix E-3 under the D8 GRANT: structure_only=True admits meta
     only with a UNIFORM substrate — a meta model with a REAL input is a mixed
@@ -152,7 +146,6 @@ def test_meta_model_real_input_mixed_cell_refuses_post_flip() -> None:
     assert excinfo.value.fields["real_side"]
 
 
-@smoke
 def test_real_model_meta_input_mixed_cell_refuses_post_flip() -> None:
     """Entry-matrix E-4 under the D8 GRANT: meta INPUTS against real state
     are the other mixed direction — the same typed substrate-mismatch code."""
@@ -164,7 +157,7 @@ def test_real_model_meta_input_mixed_cell_refuses_post_flip() -> None:
     assert excinfo.value.fields["code"] == "structure_only_substrate_mismatch"
 
 
-@smoke
+@pytest.mark.smoke
 def test_fake_tensor_still_refuses_under_the_flag() -> None:
     """Tamper pin t2 (D8-default form): the flag narrows NOTHING at the
     variant gate — FakeTensor offenses refuse under structure_only=True."""

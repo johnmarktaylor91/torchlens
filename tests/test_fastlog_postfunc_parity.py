@@ -65,7 +65,6 @@ def _disk_out_records(
     ]
 
 
-@pytest.mark.smoke
 def test_transform_replaces_transformed_payload_with_raw_kept() -> None:
     """Postfunc populates transformed RAM payload while keeping raw."""
 

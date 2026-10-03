@@ -30,8 +30,6 @@ from torchlens.postprocess._contracts import (
     iter_corpus_violations,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 class _TinyModel(nn.Module):
     """Minimal linear+relu model for dynamic audit tests."""
@@ -670,6 +668,7 @@ def test_registry_swap_refused_by_r1_and_r2() -> None:
     assert any("(R2)" in violation for violation in violations)
 
 
+@pytest.mark.smoke
 def test_coordinated_reversal_refused_by_corpus() -> None:
     """Rank AND registry swapped together: R1/R2 pass, K1 refuses.
 
@@ -693,6 +692,7 @@ def test_coordinated_reversal_refused_by_corpus() -> None:
     assert any("('7', '8')" in violation for violation in violations)
 
 
+@pytest.mark.smoke
 def test_derived_pairs_pinned_in_corpus() -> None:
     """K2: every derived RAW/WW pair is pinned with its exact carriers.
 
@@ -853,6 +853,7 @@ def test_all_edges_rank_ascending() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_classifier_non_vacuity_synthetic_finding(monkeypatch: pytest.MonkeyPatch) -> None:
     """A read of a non-baseline/no-writer/non-probe column IS a finding."""
 
@@ -944,6 +945,7 @@ def test_read_enforcement_green_on_default_capture(
     trace.cleanup()
 
 
+@pytest.mark.smoke
 @pytest.mark.requires_assertions
 def test_read_enforcement_trips_on_undeclared_read(
     monkeypatch: pytest.MonkeyPatch,
@@ -1158,6 +1160,7 @@ class _DictOutputModel(nn.Module):
         return {"a": x.relu(), "b": x.sigmoid()}
 
 
+@pytest.mark.smoke
 def test_step17_5_adopts_container_records_before_the_registry_clears() -> None:
     """Step 17.5's one NON-redundant effect: adopt container records onto the trace.
 
@@ -1186,6 +1189,7 @@ def test_step17_5_adopts_container_records_before_the_registry_clears() -> None:
         trace.cleanup()
 
 
+@pytest.mark.smoke
 def test_step19_and_gate_evict_streamed_outs_from_memory(tmp_path: Path) -> None:
     """Step 19 (and its gate) must drop in-memory ``out`` once streamed.
 

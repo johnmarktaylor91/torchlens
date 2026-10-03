@@ -63,7 +63,6 @@ def _saved(tmp_path: Path, x: torch.Tensor) -> Path:
     return path
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "bad_seed",
     [True, False, 2**64, -(2**64) - 1, TORCH_MANUAL_SEED_MAX + 1, TORCH_MANUAL_SEED_MIN - 1],
@@ -93,7 +92,6 @@ def test_r79_bool_and_out_of_range_seed_refuse_typed(tmp_path: Path, bad_seed: o
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "good_seed",
     [0, None, 17, TORCH_MANUAL_SEED_MIN, TORCH_MANUAL_SEED_MAX],
@@ -110,7 +108,6 @@ def test_r79_valid_seed_still_verifies(tmp_path: Path, good_seed: int | None) ->
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
-@pytest.mark.smoke
 def test_r79_validate_run_seed_guard_boundaries() -> None:
     """Unit pin for the ONE canonical guard shared by all three manual_seed sites.
 

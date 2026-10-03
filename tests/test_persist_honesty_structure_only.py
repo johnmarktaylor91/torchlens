@@ -29,8 +29,6 @@ import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens.options import CaptureOptions
 
-pytestmark = pytest.mark.smoke
-
 
 @pytest.fixture(scope="module")
 def buffer_structure_trace():

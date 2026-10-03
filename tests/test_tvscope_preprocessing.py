@@ -55,7 +55,6 @@ class TestResolver:
         assert resnet50_v2_resolution.status == pp.STATUS_AUTHORITATIVE
         assert resnet50_v2_resolution.transform is not None
 
-    @pytest.mark.smoke
     def test_detection_authority_declares_nothing(self, detection_resolution) -> None:
         """A real shipped family declares NO fields; resolution stays honest."""
 
@@ -63,7 +62,6 @@ class TestResolver:
         assert detection_resolution.record.config.get("declares") == "nothing"
         assert detection_resolution.transform is not None
 
-    @pytest.mark.smoke
     def test_explicit_mapping_resolves_with_aliases(self) -> None:
         """Explicit declarations accept canonical + alias keys, disclose the rest."""
 
@@ -114,7 +112,6 @@ class TestResolver:
         assert resolution.declared.crop_size == 224
         assert resolution.declared.value_range == (0.0, 1.0)
 
-    @pytest.mark.smoke
     def test_unrecognized_authority_refuses_typed(self) -> None:
         """A non-authority object refuses with the teaching code."""
 
@@ -133,7 +130,6 @@ class TestResolver:
         assert resolution.declared is None
         assert resolution.transform is not None
 
-    @pytest.mark.smoke
     def test_no_metadata_model_resolves_unknown(self) -> None:
         """A plain nn.Module resolves unknown -- never a TorchLens recipe."""
 
@@ -142,7 +138,6 @@ class TestResolver:
         assert resolution.record.source == "unknown"
         assert resolution.transform is None
 
-    @pytest.mark.smoke
     def test_registry_extension_wins_over_builtins(self) -> None:
         """register_authority_adapter probes before the builtin mapping adapter."""
 
@@ -223,7 +218,6 @@ class TestAntialiasCoercion:
 class TestAuditOracle:
     """B3 oracle assertions: configuration comparison is the verdict."""
 
-    @pytest.mark.smoke
     def test_audit_names_mismatched_fields(self, resnet50_v2_resolution) -> None:
         """Wrong constants are named per field, before any extraction."""
 
@@ -251,14 +245,12 @@ class TestAuditOracle:
             pp.audit(detection_resolution, None, strict=True)
         assert unknown_info.value.fields["code"] == "preprocessing_audit_unknown"
 
-    @pytest.mark.smoke
     def test_permissive_stamps_mismatch_never_raises(self, resnet50_v2_resolution) -> None:
         """Default mode reports; it never raises and never says verified."""
 
         report = pp.audit(resnet50_v2_resolution, {"mean": [0.5] * 3, "std": [0.5] * 3})
         assert report.verdict == "mismatch"
 
-    @pytest.mark.smoke
     def test_fallback_record_never_yields_verified(self) -> None:
         """The demoted ImageNet default can never anchor a verified verdict."""
 
@@ -275,7 +267,6 @@ class TestAuditOracle:
         assert report.verdict == "unknown"
         assert "authority_status_unverified_fallback" in report.unknown_reasons
 
-    @pytest.mark.smoke
     def test_opaque_applied_side_never_matches(self, resnet50_v2_resolution) -> None:
         """An opaque callable's fields are unknown -- never match (memo D4)."""
 
@@ -303,7 +294,6 @@ class TestAuditOracle:
         assert payload["verdict"] == report.verdict
         assert len(payload["findings"]) == len(pp.COMPARABLE_FIELDS)
 
-    @pytest.mark.smoke
     def test_status_property_serves_legacy_records(self) -> None:
         """The derived status is read-time: legacy-shaped records serve it."""
 
@@ -320,7 +310,6 @@ class TestAuditOracle:
 class TestDiagnosticsNeverMatch:
     """The tensor arm may contradict or fail-to-contradict, never verify."""
 
-    @pytest.mark.smoke
     def test_outcome_vocabulary_has_no_match_member(self) -> None:
         """The type itself forbids a match-shaped outcome (memo D4)."""
 
@@ -335,14 +324,12 @@ class TestDiagnosticsNeverMatch:
         assert "verified" not in vocabulary
         assert not hasattr(pp.InputDiagnostics(findings=()), "verified")
 
-    @pytest.mark.smoke
     def test_nonfinite_contradicts(self) -> None:
         """NaNs are an intrinsic contradiction."""
 
         result = pp.diagnose(torch.full((2, 3, 4, 4), float("nan")))
         assert any(f.check == "nonfinite" and f.outcome == "contradiction" for f in result.findings)
 
-    @pytest.mark.smoke
     def test_uint8_under_float_declaration_contradicts(self) -> None:
         """An integer batch cannot have passed a declared float normalization."""
 
@@ -354,7 +341,6 @@ class TestDiagnosticsNeverMatch:
             f.check == "dtype_regime" and f.outcome == "contradiction" for f in result.findings
         )
 
-    @pytest.mark.smoke
     def test_unknown_check_refuses_typed(self) -> None:
         """The check vocabulary is closed and teaches the valid set."""
 
@@ -364,7 +350,6 @@ class TestDiagnosticsNeverMatch:
             pp.diagnose(torch.randn(2, 3, 4, 4), checks=("telepathy",))
         assert excinfo.value.fields["code"] == "preprocessing_diagnostic_unknown_check"
 
-    @pytest.mark.smoke
     def test_confinement_is_opt_in_and_prints_blind_spots(self) -> None:
         """The measured-weak arm never runs by default; both blind spots print."""
 
@@ -418,7 +403,6 @@ class TestFalsePositiveSuite:
         assert contradictions == [], [f.detail for f in contradictions]
 
     @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
-    @pytest.mark.smoke
     def test_correct_pipeline_across_dtypes(self, dtype) -> None:
         """A plain reduced-precision cast is a legitimate pipeline."""
 
@@ -426,7 +410,6 @@ class TestFalsePositiveSuite:
             self._correct_normalized_batch(dtype), self._declared_imagenet()
         )
 
-    @pytest.mark.smoke
     def test_correct_plus_post_normalization_noise(self) -> None:
         """Routine robustness noise is a legitimate pipeline."""
 
@@ -435,7 +418,6 @@ class TestFalsePositiveSuite:
         result = pp.diagnose(batch, declared=self._declared_imagenet())
         assert list(result.contradictions) == []
 
-    @pytest.mark.smoke
     def test_per_image_standardized_stimuli(self) -> None:
         """Per-image standardization (routine luminance control) never alarms
         on the default checks."""
@@ -448,7 +430,6 @@ class TestFalsePositiveSuite:
         result = pp.diagnose(batch, declared=self._declared_imagenet())
         assert list(result.contradictions) == []
 
-    @pytest.mark.smoke
     def test_detection_checkpoint_correct_unit_range_batch(self, detection_resolution) -> None:
         """The declares-nothing family: [0,1] input, verdict unknown, no alarm."""
 

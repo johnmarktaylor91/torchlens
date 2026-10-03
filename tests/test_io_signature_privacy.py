@@ -21,8 +21,6 @@ from torch import nn
 import torchlens as tl
 from torchlens._io._source_privacy import _scrub_signature_string
 
-pytestmark = pytest.mark.smoke
-
 _CANARY_DEFAULT = "canary-sig-default-value-r62"
 _HOME = os.path.expanduser("~")
 _CFG = f"{_HOME}/private/torchlens_r62_config.yaml"
@@ -85,6 +83,7 @@ def test_signature_nested_default_bracket_is_not_split() -> None:
     assert stubbed == "(self, opts=..., xs=...)"
 
 
+@pytest.mark.smoke
 def test_func_signature_scrubbed_in_manifest_sites(tmp_path: Path) -> None:
     trace = tl.trace(_SignatureModel(), torch.randn(2, 4))
     bundle = tmp_path / "sites.tlspec"

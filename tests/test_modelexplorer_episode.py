@@ -18,8 +18,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.export._model_explorer._ids import PROXY_ID_PREFIX
 
-pytestmark = pytest.mark.smoke
-
 
 class _TinyLM(nn.Module):
     """Minimal stepped module."""
@@ -87,6 +85,7 @@ def episode_payload(episode_log: Any) -> dict[str, Any]:
     return tl.export.to_model_explorer_dict(episode_log)
 
 
+@pytest.mark.smoke
 def test_full_graph_first_then_zero_padded_steps(episode_payload: dict[str, Any]) -> None:
     """ONE collection: full exact episode graph, then per-step graphs (D11)."""
 
@@ -152,6 +151,7 @@ def test_boundary_proxies_are_reserved_prefix_and_valueless(
         assert graph["groupNodeAttributes"][""].get("boundary_proxies")
 
 
+@pytest.mark.smoke
 def test_boundary_proxies_false_drops_and_discloses(episode_log: Any) -> None:
     """boundary_proxies=False gives drop-plus-disclose (D12)."""
 
@@ -164,6 +164,7 @@ def test_boundary_proxies_false_drops_and_discloses(episode_log: Any) -> None:
     assert any(disclosures), "dropped cross-step edges must be counted"
 
 
+@pytest.mark.smoke
 def test_budget_omits_step_graphs_with_disclosure(episode_log: Any) -> None:
     """The bytes/count budget binds per-step graphs; omissions are listed."""
 
@@ -175,6 +176,7 @@ def test_budget_omits_step_graphs_with_disclosure(episode_log: Any) -> None:
     assert "max_step_graphs" in disclosure or "budget" in disclosure
 
 
+@pytest.mark.smoke
 def test_step_output_rides_local_rows_and_public_drops_it(episode_log: Any) -> None:
     """Step output lands on local step rows and never on public exports (D14).
 
@@ -227,6 +229,7 @@ def test_episode_payload_round_trips_as_json(episode_payload: dict[str, Any]) ->
     assert json.loads(json.dumps(episode_payload)) == episode_payload
 
 
+@pytest.mark.smoke
 def test_ledger_missing_stepped_address_refuses_typed(episode_log: Any) -> None:
     """A ledger without its stepped-module address refuses teaching (D11)."""
 

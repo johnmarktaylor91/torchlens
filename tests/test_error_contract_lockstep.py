@@ -26,8 +26,6 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.smoke
-
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _CONTRACT_DOC = _REPO_ROOT / "docs" / "reference" / "error_refusal_contract.md"
 _PACKAGE_ROOT = _REPO_ROOT / "torchlens"

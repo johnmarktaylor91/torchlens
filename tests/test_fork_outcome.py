@@ -48,7 +48,6 @@ def parent_trace() -> Iterator[tl.Trace]:
         trace.cleanup()
 
 
-@pytest.mark.smoke
 def test_fork_outcome_is_derived_never_aliased(parent_trace: tl.Trace) -> None:
     """A fork's outcome is a fresh DERIVED record, not the parent's stamp."""
 
@@ -61,7 +60,6 @@ def test_fork_outcome_is_derived_never_aliased(parent_trace: tl.Trace) -> None:
     assert fork.outcome.settlement_note == "forked_from=complete"
 
 
-@pytest.mark.smoke
 def test_mutated_fork_cannot_save_as_attested_complete(parent_trace: tl.Trace, tmp_path) -> None:
     """The RED-capable masquerade case.
 
@@ -83,7 +81,6 @@ def test_mutated_fork_cannot_save_as_attested_complete(parent_trace: tl.Trace, t
     assert restored.outcome.derived is True
 
 
-@pytest.mark.smoke
 def test_fork_outcome_survives_pickle_coherently(parent_trace: tl.Trace) -> None:
     """The derived UNATTESTED record round-trips pickle without degrading."""
 
@@ -94,7 +91,6 @@ def test_fork_outcome_survives_pickle_coherently(parent_trace: tl.Trace) -> None
     assert restored.outcome.settlement_note == "forked_from=complete"
 
 
-@pytest.mark.smoke
 def test_fork_of_fork_records_unattested_provenance(parent_trace: tl.Trace) -> None:
     """A fork chain derives at every level and names its immediate parent."""
 
@@ -104,7 +100,6 @@ def test_fork_of_fork_records_unattested_provenance(parent_trace: tl.Trace) -> N
     assert grandfork.outcome.settlement_note == "forked_from=unattested"
 
 
-@pytest.mark.smoke
 def test_fork_keeps_analysis_capabilities(parent_trace: tl.Trace, tmp_path) -> None:
     """Capability parity: UNATTESTED loses nothing a fork could do before."""
 

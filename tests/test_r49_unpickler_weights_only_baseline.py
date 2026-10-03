@@ -84,7 +84,6 @@ def _all_storage_classes() -> list[type]:
     return sorted(classes, key=lambda c: f"{c.__module__}.{c.__qualname__}")
 
 
-@pytest.mark.smoke
 def test_every_storage_class_is_identity_denied() -> None:
     """Every torch storage class is recognized by the identity helper (surface-complete)."""
 
@@ -94,7 +93,6 @@ def test_every_storage_class_is_identity_denied() -> None:
         assert _is_torch_storage_type(cls), f"{cls!r} not recognized as a storage type"
 
 
-@pytest.mark.smoke
 def test_storage_construction_denied_end_to_end() -> None:
     """A REDUCE pickle of each resolvable storage class RAISES (never allocates)."""
 
@@ -112,7 +110,6 @@ def test_storage_construction_denied_end_to_end() -> None:
     assert checked >= 2, "expected at least Typed/Untyped storage to be exercised"
 
 
-@pytest.mark.smoke
 def test_canonical_storage_ctors_denied_at_find_class() -> None:
     """The two real baseline storage classes are denied at ``find_class`` (Layer 1)."""
 
@@ -132,7 +129,6 @@ def test_canonical_storage_ctors_denied_at_find_class() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_reduce_belt_denies_storage_ctor_bypassing_find_class() -> None:
     """``load_reduce`` refuses constructing a storage placed directly on the stack."""
 
@@ -142,7 +138,6 @@ def test_reduce_belt_denies_storage_ctor_bypassing_find_class() -> None:
         u.load_reduce()
 
 
-@pytest.mark.smoke
 def test_newobj_belts_deny_storage_ctor_bypassing_find_class() -> None:
     """``load_newobj`` / ``load_newobj_ex`` refuse ``storage.__new__`` on the stack."""
 
@@ -160,7 +155,6 @@ def test_newobj_belts_deny_storage_ctor_bypassing_find_class() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_build_belt_denies_tensor_rebind_white_box() -> None:
     """``load_build`` refuses a BUILD whose target is a torch Tensor / Storage."""
 
@@ -177,7 +171,6 @@ def test_build_belt_denies_tensor_rebind_white_box() -> None:
         u.load_build()
 
 
-@pytest.mark.smoke
 def test_build_rebind_denied_end_to_end_no_setstate() -> None:
     """A crafted ``_load_from_bytes -> Tensor -> BUILD`` load RAISES; ``__setstate__`` never runs."""
 
@@ -218,7 +211,6 @@ def test_build_rebind_denied_end_to_end_no_setstate() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_dispatch_table_repointed_to_subclass_overrides() -> None:
     """The subclass ``dispatch`` targets its OWN opcode handlers, not the base ones."""
 
@@ -254,7 +246,6 @@ def _resolve_or_none(module: str, name: str) -> object:
         return None
 
 
-@pytest.mark.smoke
 def test_admit_set_constructs_no_storage_strict_subset_of_baseline() -> None:
     """No (module,name) the unpickler admits resolves to a CONSTRUCTABLE storage.
 
@@ -291,7 +282,6 @@ def test_admit_set_constructs_no_storage_strict_subset_of_baseline() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_intentional_inert_resolution_set_still_admitted() -> None:
     """Documented intentional inert resolutions still work (the delta is storage-only)."""
 
@@ -339,7 +329,6 @@ class _ControlFlow(nn.Module):
         return torch.sigmoid(value) - 1
 
 
-@pytest.mark.smoke
 @pytest.mark.filterwarnings(
     # A08 random-role-init disclosure (runnable_random_init_run): this test
     # exercises a weight-free runnable run DELIBERATELY; the warning is the

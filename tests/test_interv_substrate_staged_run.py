@@ -32,7 +32,6 @@ def _capture(model: nn.Module) -> tl.Trace:
     return tl.trace(model, torch.randn(2, 4), save=tl.func("relu"))
 
 
-@pytest.mark.smoke
 def test_run_inputs_refuses_with_staged_hooks() -> None:
     """A staged sticky hook makes run(inputs=) a typed refusal, not a silent drop."""
 
@@ -49,7 +48,6 @@ def test_run_inputs_refuses_with_staged_hooks() -> None:
     assert "clear_hooks" in message
 
 
-@pytest.mark.smoke
 def test_run_inputs_refuses_with_staged_value_replacement() -> None:
     """A staged set() value replacement also trips the gate."""
 
@@ -61,7 +59,6 @@ def test_run_inputs_refuses_with_staged_value_replacement() -> None:
     assert excinfo.value.fields["code"] == "run_staged_spec_unapplied"
 
 
-@pytest.mark.smoke
 def test_run_inputs_allowed_after_hooks_detached() -> None:
     """clear_hooks() (the taught remedy) re-opens the unified surface."""
 
@@ -73,7 +70,6 @@ def test_run_inputs_allowed_after_hooks_detached() -> None:
     assert result is not None
 
 
-@pytest.mark.smoke
 def test_run_inputs_allowed_without_staged_spec() -> None:
     """No staged spec: the unified surface is untouched by the gate."""
 
@@ -83,7 +79,6 @@ def test_run_inputs_allowed_without_staged_spec() -> None:
     assert result is not None
 
 
-@pytest.mark.smoke
 def test_legacy_run_still_applies_staged_spec() -> None:
     """The legacy run(model, x) surface keeps INSTALLING the staged spec.
 

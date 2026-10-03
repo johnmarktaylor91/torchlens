@@ -337,7 +337,6 @@ def test_safe_copy_detach_preserves_channels_last() -> None:
     assert not copied.requires_grad
 
 
-@pytest.mark.smoke
 def test_safe_copy_contiguous_tensors_untouched() -> None:
     """Non-special-layout tensors behave as before (regression guard)."""
     t = torch.randn(3, 5)
@@ -351,7 +350,6 @@ def test_safe_copy_contiguous_tensors_untouched() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_standard_model_still_logs_cleanly() -> None:
     """Nothing in PR 2 should regress the golden path."""
     model = _Tiny()
@@ -360,7 +358,6 @@ def test_standard_model_still_logs_cleanly() -> None:
     assert len(log.layer_logs) > 0
 
 
-@pytest.mark.smoke
 def test_check_model_and_input_variants_clean_model_is_noop() -> None:
     """With no offending variants, the guard must neither raise nor warn."""
     model = _Tiny()
@@ -503,7 +500,6 @@ def test_cuda_channels_last_safe_copy() -> None:
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA")
-@pytest.mark.smoke
 def test_cuda_forward_pass_still_logs() -> None:
     """Regression: standard CUDA model logging is unaffected."""
     model = _Tiny().cuda()

@@ -298,7 +298,6 @@ def _resolve_attr(namespace: str, qualname: str) -> Any:
     return getattr(root, qualname, None)
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("namespace,qualname", _AUDITED_LEGIT_FORWARD_ALLOW_SET)
 def test_immunizer_audited_allow_set_admitted(namespace: str, qualname: str) -> None:
     """No op in the audited legit-forward allow-set may be denied by the structural gate."""
@@ -311,7 +310,6 @@ def test_immunizer_audited_allow_set_admitted(namespace: str, qualname: str) -> 
     )
 
 
-@pytest.mark.smoke
 def test_immunizer_allow_set_is_non_vacuous() -> None:
     """The frozen allow-set overwhelmingly resolves on this torch (guards vacuity)."""
 
@@ -380,7 +378,6 @@ _OPTIONAL_FUNCTIONALIZATION_FLIP_SET = frozenset(
 )
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("namespace,qualname", _KNOWN_NON_FORWARD_FLIP_SET)
 def test_immunizer_known_flip_set_denied(namespace: str, qualname: str) -> None:
     """No op in the known non-forward flip set may be admitted by the structural gate."""
@@ -393,7 +390,6 @@ def test_immunizer_known_flip_set_denied(namespace: str, qualname: str) -> None:
     )
 
 
-@pytest.mark.smoke
 def test_immunizer_flip_set_is_non_vacuous() -> None:
     """The frozen flip-set overwhelmingly resolves on this torch (guards vacuity)."""
 
@@ -412,7 +408,6 @@ def test_immunizer_flip_set_is_non_vacuous() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_secE_1_whole_functionalization_family_denied() -> None:
     """The ENTIRE functionalization family is denied -- enumerated LIVE from dir(torch).
 
@@ -430,7 +425,6 @@ def test_secE_1_whole_functionalization_family_denied() -> None:
     assert not admitted, f"functionalization ops WRONGLY ADMITTED: {sorted(admitted)}"
 
 
-@pytest.mark.smoke
 def test_secE_2_share_memory_denied_reader_resolves() -> None:
     """``share_memory_`` (storage rebind) is denied though it is torch-overridable; the
     pure ``is_shared`` reader stays resolvable."""
@@ -442,7 +436,6 @@ def test_secE_2_share_memory_denied_reader_resolves() -> None:
     assert is_pure_forward_callable(torch.Tensor.is_shared)
 
 
-@pytest.mark.smoke
 def test_secE_3_sobol_admitted_as_documented_residual() -> None:
     """``torch._sobol_engine_initialize_state_`` is a genuine aten op -> ADMITTED residual.
 
@@ -455,7 +448,6 @@ def test_secE_3_sobol_admitted_as_documented_residual() -> None:
     assert is_pure_forward_callable(obj)
 
 
-@pytest.mark.smoke
 def test_to_sparse_coo_wrapper_rescue_admitted() -> None:
     """The narrow ``to_sparse_coo`` wrapper (neither overridable nor aten by name) admits."""
 
@@ -523,7 +515,6 @@ _SECE_DENIED_REFS = [
 ]
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("ref", _SECE_DENIED_REFS)
 def test_secE_ops_denied_at_resolver_even_under_trust(ref: str) -> None:
     """The secE gate closures hold through the resolver call site, even under trust."""
@@ -534,7 +525,6 @@ def test_secE_ops_denied_at_resolver_even_under_trust(ref: str) -> None:
         resolve_import_ref(ref, trust_custom_callables=True)
 
 
-@pytest.mark.smoke
 def test_legit_and_residual_resolve_at_resolver() -> None:
     """Legit forward ops, the wrapper rescue, and the sobol residual resolve through the
     real resolver (the gate does not over-deny the run path)."""
@@ -550,7 +540,6 @@ def test_legit_and_residual_resolve_at_resolver() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_prior_round_controls_still_denied() -> None:
     """All prior-round denials remain refused (no regression from the r43 inversion)."""
 
@@ -580,7 +569,6 @@ def test_prior_round_controls_still_denied() -> None:
         assert not is_pure_forward_callable(obj)
 
 
-@pytest.mark.smoke
 def test_pure_forward_surface_still_resolves() -> None:
     """The r43 inversion does not over-deny the legitimate pure forward surface."""
 

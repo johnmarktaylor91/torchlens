@@ -107,7 +107,6 @@ def _relu_registry_id(run: dict, index: int) -> str:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("qualname", ["load", "save"])
 def test_intervention_resolver_denies_torch_serialization(qualname: str) -> None:
     """torch.load / torch.save must be refused with a typed security error."""
@@ -186,7 +185,6 @@ def test_callable_safety_helper_allows_forward_ops() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_runnable_load_blocks_torch_save_file_write(tmp_path: Path) -> None:
     """Repointing an op to torch.save must not write an attacker-chosen file."""
 
@@ -223,7 +221,6 @@ def test_runnable_load_blocks_torch_save_file_write(tmp_path: Path) -> None:
     assert not target.exists()
 
 
-@pytest.mark.smoke
 def test_runnable_load_blocks_torch_load_rce(tmp_path: Path) -> None:
     """Repointing an op to torch.load(weights_only=False) must not execute code."""
 
@@ -277,7 +274,6 @@ def test_runnable_load_blocks_torch_load_rce(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_genuine_cnn_runnable_still_verified(tmp_path: Path) -> None:
     """A real CNN round-trips through the runnable path and verifies its path."""
 
@@ -287,7 +283,6 @@ def test_genuine_cnn_runnable_still_verified(tmp_path: Path) -> None:
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
-@pytest.mark.smoke
 def test_genuine_attention_runnable_still_verified(tmp_path: Path) -> None:
     """A real attention block round-trips through the runnable path and verifies."""
 

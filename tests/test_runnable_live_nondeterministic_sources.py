@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import random
 
-import pytest
 import torch
 from torch import nn
 
@@ -36,7 +35,6 @@ class DeterministicModel(nn.Module):
         return value * 2.0
 
 
-@pytest.mark.smoke
 def test_live_run_declares_host_rng_source() -> None:
     """A host-RNG capture's live-refresh report names ('host_rng',)."""
 
@@ -48,7 +46,6 @@ def test_live_run_declares_host_rng_source() -> None:
     assert result.report.nondeterministic_sources == ("host_rng",)
 
 
-@pytest.mark.smoke
 def test_live_run_deterministic_model_declares_no_sources() -> None:
     """A deterministic capture's live-refresh report stays empty."""
 
@@ -60,7 +57,6 @@ def test_live_run_deterministic_model_declares_no_sources() -> None:
     assert result.report.nondeterministic_sources == ()
 
 
-@pytest.mark.smoke
 def test_fast_live_run_declares_host_rng_source() -> None:
     """fast=True carries the same host-RNG declaration as the ordinary provider.
 
@@ -78,7 +74,6 @@ def test_fast_live_run_declares_host_rng_source() -> None:
     assert result.report.nondeterministic_sources == ("host_rng",)
 
 
-@pytest.mark.smoke
 def test_fast_live_run_deterministic_model_declares_no_sources() -> None:
     """A deterministic capture's fast-live report stays empty."""
 

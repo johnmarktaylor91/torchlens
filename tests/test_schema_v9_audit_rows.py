@@ -29,8 +29,6 @@ import torchlens as tl
 from torchlens._io import TorchLensIOError
 from torchlens._io.forgery_validation import _validate_audit_row
 
-pytestmark = [pytest.mark.smoke]
-
 _DIGEST = hashlib.sha256(b"schema-v9-audit").hexdigest()
 _CHAIN_DIGEST = hashlib.sha256(b"schema-v9-chain").hexdigest()
 
@@ -80,6 +78,7 @@ def test_selection_intervened_artifact_loads_its_own_save(log, tmp_path):
     assert any("source" in site for row in loaded_rows for site in row.get("sites", ()))
 
 
+@pytest.mark.smoke
 def test_param_intervened_artifact_loads_its_own_save(log, tmp_path):
     """PARAM rows (parameter substitution) round-trip through load."""
 
@@ -170,6 +169,7 @@ def test_act_site_source_is_optional_and_string_typed():
         _validate_audit_row(0, _act_row(unexpected="x"))
 
 
+@pytest.mark.smoke
 def test_param_row_grammar_is_closed():
     digest, edit, targets = _validate_audit_row(0, _param_row())
     assert digest == _DIGEST and edit == "scale"
@@ -190,6 +190,7 @@ def test_param_row_grammar_is_closed():
         _validate_audit_row(0, bad)
 
 
+@pytest.mark.smoke
 def test_event_row_grammar_and_chain_extension():
     assert _validate_audit_row(0, _event_row()) is None, (
         "EVENT rows are transaction envelopes: they stay outside the "
@@ -215,6 +216,7 @@ def test_event_row_grammar_and_chain_extension():
             _validate_audit_row(0, _event_row(**mutation))
 
 
+@pytest.mark.smoke
 def test_param_selection_recipe_form_is_admitted_and_closed():
     """The shipped param-substitution FireRecord recipe loads; malformed refuses.
 

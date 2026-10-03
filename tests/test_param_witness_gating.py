@@ -14,7 +14,6 @@ the armed-lane baseline coalescing onto the ``_runnable_capture_state`` clones.
 
 from __future__ import annotations
 
-import pytest
 import torch
 from torch import nn
 
@@ -73,7 +72,6 @@ class _ParamWritingModel(nn.Module):
         return out
 
 
-@pytest.mark.smoke
 def test_plain_trace_skips_param_snapshot_and_stamps_fail_closed():
     model = _TrackerProbeModel()
     trace = tl.trace(model, torch.randn(2, 4))
@@ -87,7 +85,6 @@ def test_plain_trace_skips_param_snapshot_and_stamps_fail_closed():
     assert trace.__dict__.get("_param_storage_addresses")
 
 
-@pytest.mark.smoke
 def test_armed_trace_still_flags_in_forward_param_write():
     model = _ParamWritingModel()
     trace = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(**_RUNNABLE_CAP))
@@ -95,7 +92,6 @@ def test_armed_trace_still_flags_in_forward_param_write():
     assert host_escape_has_mutable_writeback(trace) is True
 
 
-@pytest.mark.smoke
 def test_armed_clean_trace_stays_unflagged():
     model = _PlainModel()
     trace = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(**_RUNNABLE_CAP))
@@ -103,7 +99,6 @@ def test_armed_clean_trace_stays_unflagged():
     assert host_escape_has_mutable_writeback(trace) is False
 
 
-@pytest.mark.smoke
 def test_armed_baseline_coalesces_onto_capture_state_clone():
     # Eligible (dense, storage-identical-in-state_dict) params store a shared sentinel,
     # not a second whole-storage clone; resolution yields a view over the
@@ -127,7 +122,6 @@ def test_armed_baseline_coalesces_onto_capture_state_clone():
     assert torch.equal(clone, pre_forward_weight)
 
 
-@pytest.mark.smoke
 def test_plain_trace_cannot_pass_runnable_preflight():
     # The gate predicate invariant: descriptor.preflight.passed implies
     # trace.intervention_ready, so "was-witnessed" and "can-claim" never diverge.
@@ -139,7 +133,6 @@ def test_plain_trace_cannot_pass_runnable_preflight():
     assert descriptor.preflight.passed is False
 
 
-@pytest.mark.smoke
 def test_disarmed_stamp_ceilings_descriptor_build():
     # Simulate the unforeseen path: a runnable-capable capture carrying the disarmed
     # fail-closed stamp reaches descriptor build. The ESCAPE_OBSERVER_UNCERTAIN gap

@@ -9,14 +9,11 @@ aggregation.
 
 import gc
 
-import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
 from torchlens.report import EVIDENCE_VALUES, SummaryReport, compute_aggregation
-
-pytestmark = pytest.mark.smoke
 
 
 def _model() -> nn.Module:

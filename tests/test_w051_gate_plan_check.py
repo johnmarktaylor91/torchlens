@@ -19,8 +19,6 @@ import torchlens as tl
 from torchlens.intervention.errors import MultiMatchWarning
 from torchlens.options import CaptureOptions
 
-pytestmark = pytest.mark.smoke
-
 
 class _TwoPass(nn.Module):
     """One Linear+ReLU pair called twice: relu_1_2 and linear_1_1 run 2 passes."""

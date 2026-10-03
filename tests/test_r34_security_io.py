@@ -82,7 +82,6 @@ _SIDE_EFFECTING_WALKED = [
 ]
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("terminal", _SIDE_EFFECTING_WALKED)
 def test_secE1_torchlens_walk_denies_side_effecting_even_under_trust(terminal: str) -> None:
     """A side-effecting torch callable walked off a torchlens module never resolves."""
@@ -99,7 +98,6 @@ def test_secE1_torchlens_walk_denies_side_effecting_even_under_trust(terminal: s
         resolve_import_ref(path, allowed_custom_callable_modules={"torch"})
 
 
-@pytest.mark.smoke
 def test_secE1_pure_torch_op_walk_still_resolves_under_trust() -> None:
     """A PURE torch op walked off a torchlens module still resolves under trust.
 
@@ -110,7 +108,6 @@ def test_secE1_pure_torch_op_walk_still_resolves_under_trust() -> None:
     assert fn is torch.relu
 
 
-@pytest.mark.smoke
 def test_secE1_purity_gate_denies_the_walked_surface_directly() -> None:
     """The purity gate itself refuses every side-effecting walked callable."""
 
@@ -152,7 +149,6 @@ def _png_bytes(width: int, height: int) -> bytes:
     return sig + chunk(b"IHDR", ihdr) + chunk(b"IDAT", idat) + chunk(b"IEND", b"")
 
 
-@pytest.mark.smoke
 def test_secF1_malformed_raw_image_degrades_without_raising() -> None:
     """Malformed sentinel bytes degrade to the inert dict instead of crashing load."""
 
@@ -162,7 +158,6 @@ def test_secF1_malformed_raw_image_degrades_without_raising() -> None:
     assert _rehydrate_small_raw_images(bad) is bad
 
 
-@pytest.mark.smoke
 def test_secF1_decompression_bomb_rejected() -> None:
     """A tiny blob declaring huge dimensions is refused before ``.load()`` allocates."""
 
@@ -172,7 +167,6 @@ def test_secF1_decompression_bomb_rejected() -> None:
     assert _rehydrate_small_raw_images(bomb) is bomb
 
 
-@pytest.mark.smoke
 def test_secF1_oversized_bytes_rejected() -> None:
     """Bytes over the canonical save-time cap never reach the decoder."""
 
@@ -185,7 +179,6 @@ def test_secF1_oversized_bytes_rejected() -> None:
     assert _rehydrate_small_raw_images(huge) is huge
 
 
-@pytest.mark.smoke
 def test_secF1_oversized_declared_dimensions_rejected() -> None:
     """A declared edge over the save-time max is refused (even within the byte cap)."""
 
@@ -227,7 +220,6 @@ def _write_unified_bundle(directory: Path, members: list[dict[str, str]]) -> Non
     (directory / "bundle.json").write_text(json.dumps({"members": members}))
 
 
-@pytest.mark.smoke
 def test_secF2_self_referential_bundle_member_rejected(tmp_path: Path) -> None:
     """A ``path='.'`` self-referential member raises instead of recursing forever."""
 
@@ -237,7 +229,6 @@ def test_secF2_self_referential_bundle_member_rejected(tmp_path: Path) -> None:
         tl.load(str(bundle))
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("selfref", [".", "", "./"])
 def test_secF2_member_path_resolving_to_root_rejected(tmp_path: Path, selfref: str) -> None:
     """The member-path resolver rejects any path collapsing onto the bundle root."""
@@ -246,7 +237,6 @@ def test_secF2_member_path_resolving_to_root_rejected(tmp_path: Path, selfref: s
         _resolve_bundle_member_path(tmp_path, selfref)
 
 
-@pytest.mark.smoke
 def test_secF2_nesting_depth_cap_enforced(tmp_path: Path) -> None:
     """A member chain deeper than the cap is refused before the stack is exhausted."""
 
@@ -263,7 +253,6 @@ def test_secF2_nesting_depth_cap_enforced(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "kind,bad_value",
     [
@@ -289,7 +278,6 @@ def test_secC_atom_value_type_mismatch_rejected(kind: str, bad_value: object) ->
         _parse_literal({"kind": kind, "value": bad_value})
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "kind,good_value",
     [
@@ -316,7 +304,6 @@ def test_secC_legit_atoms_still_parse(kind: str, good_value: object) -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_fastlog_dtype_from_name_resolves_real_dtypes() -> None:
     """A real dtype name (or ``None``) resolves as before."""
 
@@ -325,7 +312,6 @@ def test_fastlog_dtype_from_name_resolves_real_dtypes() -> None:
     assert _dtype_from_name("int64") is torch.int64
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "bad_name",
     ["load", "save", "compile", "nn", "__class__", "os", "system"],

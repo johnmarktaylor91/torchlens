@@ -505,7 +505,6 @@ class _PreWrapVmapModel(nn.Module):
         return self.vectorized(x)
 
 
-@pytest.mark.smoke
 def test_wrapped_ops_have_zero_unaccounted_dispatches() -> None:
     """Every ordinarily wrapped operation is owned by a captured leaf token."""
 
@@ -521,7 +520,6 @@ def test_wrapped_ops_have_zero_unaccounted_dispatches() -> None:
     assert trace.capture_verification_reason == "dispatch_witness_verified"
 
 
-@pytest.mark.smoke
 def test_input_copy_preserves_alias_mutation_semantics_and_validation() -> None:
     """Caller protection preserves repeated tensor identity across model sites."""
 
@@ -548,7 +546,6 @@ def test_input_copy_preserves_alias_mutation_semantics_and_validation() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_input_copy_preserves_nonzero_storage_offset_semantics() -> None:
     """A copied tensor view retains its physical storage offset."""
 
@@ -564,7 +561,6 @@ def test_input_copy_preserves_nonzero_storage_offset_semantics() -> None:
     assert trace.completeness_witness_verified is True
 
 
-@pytest.mark.smoke
 def test_deep_input_tensor_is_captured_and_witnessed() -> None:
     """A seven-level tensor input remains a represented graph source."""
 
@@ -581,7 +577,6 @@ def test_deep_input_tensor_is_captured_and_witnessed() -> None:
     assert trace.capture_verification_reason == "dispatch_witness_verified"
 
 
-@pytest.mark.smoke
 def test_mid_band_container_depth_is_captured_and_witnessed() -> None:
     """Container nesting in the once-dropped 65-200 band is fully captured.
 
@@ -603,7 +598,6 @@ def test_mid_band_container_depth_is_captured_and_witnessed() -> None:
     assert trace.capture_verification_reason == "dispatch_witness_verified"
 
 
-@pytest.mark.smoke
 def test_input_depth_limit_fails_closed_with_unresolved_path() -> None:
     """The retained safety ceiling names its frontier and forbids verification.
 
@@ -634,7 +628,6 @@ def test_input_depth_limit_fails_closed_with_unresolved_path() -> None:
     assert input_gap["input_path"].startswith("input.nested.inner.inner")
 
 
-@pytest.mark.smoke
 def test_direct_aten_call_trips_non_vacuous_witness() -> None:
     """A direct aten call is loudly and machine-readably unaccounted."""
 
@@ -657,7 +650,6 @@ def test_direct_aten_call_trips_non_vacuous_witness() -> None:
     assert report["in_replacement_hook"] is False
 
 
-@pytest.mark.smoke
 def test_genuine_replacement_hook_dispatch_is_tagged_in_replacement_hook() -> None:
     """A raw replacement hook's dispatches belong to its explicit boundary Op.
 
@@ -705,7 +697,6 @@ def test_genuine_replacement_hook_dispatch_is_tagged_in_replacement_hook() -> No
     )
 
 
-@pytest.mark.smoke
 def test_direct_aten_submodule_output_is_owned_by_internal_source() -> None:
     """A child module's untraceable output is owned by its internal-source boundary."""
 
@@ -731,7 +722,6 @@ def test_direct_aten_submodule_output_is_owned_by_internal_source() -> None:
     assert any(op.func_name == "none" and op.is_internal_source for op in trace.ops)
 
 
-@pytest.mark.smoke
 def test_direct_aten_child_intermediate_still_trips_witness() -> None:
     """A child raw dispatch not represented by its output boundary fails closed."""
 
@@ -752,7 +742,6 @@ def test_direct_aten_child_intermediate_still_trips_witness() -> None:
     assert report["function"] == "forward"
 
 
-@pytest.mark.smoke
 def test_untraceable_child_output_does_not_mask_observable_mutation() -> None:
     """ATTACK4 mutation remains unaccounted beside an owned output boundary."""
 
@@ -785,7 +774,6 @@ def test_untraceable_child_output_does_not_mask_observable_mutation() -> None:
     assert any(op.func_name == "none" and op.is_internal_source for op in trace.ops)
 
 
-@pytest.mark.smoke
 def test_record_wrapped_ops_have_zero_unaccounted_dispatches() -> None:
     """Fastlog accounting uses capture emission rather than Trace-only events."""
 
@@ -803,7 +791,6 @@ def test_record_wrapped_ops_have_zero_unaccounted_dispatches() -> None:
     assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
 
 
-@pytest.mark.smoke
 def test_record_direct_aten_call_trips_non_vacuous_witness() -> None:
     """A direct aten gap remains loud on the fastlog capture path."""
 
@@ -823,7 +810,6 @@ def test_record_direct_aten_call_trips_non_vacuous_witness() -> None:
     assert report["reason"] == "unowned_dispatch"
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("owner_name", "pool"),
     [
@@ -860,7 +846,6 @@ def test_logged_nested_wrapper_calls_are_accounted(
     assert any(op.func_call_id == row["owner_func_call_id"] for op in trace.ops)
 
 
-@pytest.mark.smoke
 def test_scalar_extraction_boundaries_are_narrowly_accounted() -> None:
     """Python scalar conversions remain intentional scalar-output boundaries."""
 
@@ -884,7 +869,6 @@ def test_scalar_extraction_boundaries_are_narrowly_accounted() -> None:
     assert all(row["aten_ops"] == ("aten._local_scalar_dense.default",) for row in scalar_rows)
 
 
-@pytest.mark.smoke
 def test_linear_decomposition_is_owned_by_one_captured_call() -> None:
     """Multiple aten events owned by one linear call do not false-alarm."""
 
@@ -903,7 +887,6 @@ def test_linear_decomposition_is_owned_by_one_captured_call() -> None:
     assert any(op.func_call_id == linear_row["owner_func_call_id"] for op in trace.ops)
 
 
-@pytest.mark.smoke
 def test_vmap_interior_is_expected_opaque() -> None:
     """Documented vmap interiors remain outside the active dispatch census."""
 
@@ -919,7 +902,6 @@ def test_vmap_interior_is_expected_opaque() -> None:
     assert "vmap" in {op.func_name for op in trace.ops}
 
 
-@pytest.mark.smoke
 @pytest.mark.skipif(
     not HAS_FUNCTORCH_LEVEL_API,
     reason=(
@@ -947,7 +929,6 @@ def test_pre_wrap_vmap_is_witness_only_not_capture_verified() -> None:
     assert "vmap" not in {op.func_name for op in trace.ops}
 
 
-@pytest.mark.smoke
 def test_escape_detector_and_witness_compose_on_shared_tokens() -> None:
     """Both diagnostics can run together and independently verify a clean call."""
 
@@ -1168,7 +1149,6 @@ def test_finalize_census_keeps_dispatch_reason_across_later_guard_passes() -> No
     assert len(trace.completeness_diagnostics) == 1
 
 
-@pytest.mark.smoke
 def test_dynamic_parameter_initializers_are_captured_without_hiding_state_mutations() -> None:
     """Capture temporary Parameter initialization while registered-state writes fail closed."""
 
@@ -1195,7 +1175,6 @@ def test_dynamic_parameter_initializers_are_captured_without_hiding_state_mutati
     ] == [("aten.uniform_.default", "owner_not_captured", True)]
 
 
-@pytest.mark.smoke
 def test_mid_forward_autograd_grad_is_an_exact_backward_boundary() -> None:
     """Exclude only engine dispatches represented by the captured backward pass."""
 
@@ -1214,7 +1193,6 @@ def test_mid_forward_autograd_grad_is_an_exact_backward_boundary() -> None:
     assert trace.capture_verified is True
 
 
-@pytest.mark.smoke
 def test_tensor_data_getter_dispatch_is_captured() -> None:
     """Represent the C-level data getter's detach dispatch as an ordinary op."""
 
@@ -1259,7 +1237,6 @@ class _DirectMutatingAtenModel(nn.Module):
         return torch.sigmoid(y)
 
 
-@pytest.mark.smoke
 def test_observable_uncaptured_mutation_is_flagged_mutates() -> None:
     """An observable uncaptured in-place aten op is tripped AND tagged mutates.
 

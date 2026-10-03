@@ -36,7 +36,6 @@ class _TinyModel(nn.Module):
         return out + y if y is not None else out
 
 
-@pytest.mark.smoke
 def test_tensor_input_kwargs_refuses_typed_naming_the_tuple_spelling() -> None:
     """The natural multi-input misspelling must refuse at entry, typed."""
 
@@ -46,7 +45,6 @@ def test_tensor_input_kwargs_refuses_typed_naming_the_tuple_spelling() -> None:
         tl.trace(model, q, k)
 
 
-@pytest.mark.smoke
 def test_tensor_in_layers_to_save_slot_refuses_typed() -> None:
     """A third positional tensor lands in layers_to_save: name the mistake."""
 
@@ -56,7 +54,6 @@ def test_tensor_in_layers_to_save_slot_refuses_typed() -> None:
         tl.trace(model, q, {"y": k}, v)  # dict kwargs fine; tensor in 4th slot
 
 
-@pytest.mark.smoke
 def test_tuple_spelling_still_works() -> None:
     """The documented multi-input spelling stays green."""
 
@@ -114,7 +111,6 @@ def test_out_of_order_context_unwind_never_resurrects_a_dead_plan() -> None:
     assert _state._active_hook_plan is base_plan
 
 
-@pytest.mark.smoke
 def test_lifo_context_nesting_still_restores_exactly() -> None:
     """Ordinary nested publication keeps exact save/restore semantics."""
 

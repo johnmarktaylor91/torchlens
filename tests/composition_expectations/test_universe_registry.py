@@ -22,7 +22,7 @@ from tests.composition_expectations.universes import (
     derived_cardinalities,
 )
 
-pytestmark = [pytest.mark.smoke, pytest.mark.compo]
+pytestmark = pytest.mark.compo
 
 
 def _parse(module: str, source: str) -> dict[str, ast.Module]:

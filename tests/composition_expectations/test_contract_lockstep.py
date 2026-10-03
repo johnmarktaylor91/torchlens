@@ -23,7 +23,7 @@ from tests.composition_expectations.ledger import (
     row_violations,
 )
 
-pytestmark = [pytest.mark.smoke, pytest.mark.compo]
+pytestmark = pytest.mark.compo
 
 TREE_ROOT = Path(__file__).resolve().parent
 

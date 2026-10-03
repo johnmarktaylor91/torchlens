@@ -24,8 +24,6 @@ from torch import nn
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke
-
 
 def _props(payload: dict[str, Any]) -> dict[str, str]:
     """Model metadataProps rows as a dict."""
@@ -33,6 +31,7 @@ def _props(payload: dict[str, Any]) -> dict[str, str]:
     return {row["key"]: row["value"] for row in payload["metadataProps"]}
 
 
+@pytest.mark.smoke
 def test_c2_intervened_ops_visibly_marked(tmp_path: Path) -> None:
     """Ablated ops carry the ``intervened`` attribute and the model marker."""
 

@@ -220,6 +220,7 @@ def test_phase0_dtype_device_refs_round_trip(monkeypatch: pytest.MonkeyPatch) ->
     assert output_event.output.tensor.device == str(output_op.out.device)
 
 
+@pytest.mark.smoke
 def test_phase0_trace_param_source_and_neutral_param_refs() -> None:
     """Assert torch traces expose native-module params with neutral mirror fields."""
 

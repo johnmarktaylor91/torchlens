@@ -45,7 +45,6 @@ def _loss(trace: tl.Trace) -> torch.Tensor:
     return trace[trace.output_layers[0]].out.sum()
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("save_mode", ["reference", "view"])
 def test_second_backward_does_not_rewrite_recorded_grads(save_mode: str) -> None:
     """Recorded pass-1 grad payloads stay frozen when a second backward runs.
@@ -80,7 +79,6 @@ def test_second_backward_does_not_rewrite_recorded_grads(save_mode: str) -> None
         )
 
 
-@pytest.mark.smoke
 def test_reentered_recording_backward_restores_tensor_backward() -> None:
     """Re-entering one RecordingBackward context leaves no persistent wrapper.
 
@@ -105,7 +103,6 @@ def test_reentered_recording_backward_restores_tensor_backward() -> None:
     assert trace.num_backward_passes == 1
 
 
-@pytest.mark.smoke
 def test_op_grad_payloads_charge_the_save_budget() -> None:
     """Retained op-gradient payloads charge the save-budget accountant.
 
@@ -182,7 +179,6 @@ def test_selective_save_grads_consults_predicate_for_params() -> None:
     assert all(not isinstance(p, torch.Tensor) for p in op_payloads)
 
 
-@pytest.mark.smoke
 def test_backward_finalize_drains_pending_cpu_async_copies() -> None:
     """The backward finalize seam fences pending cpu_async D2H copies.
 
@@ -220,7 +216,6 @@ def test_backward_finalize_drains_pending_cpu_async_copies() -> None:
             tensor_utils._CPU_ASYNC_PENDING_EVENTS.remove(fence)
 
 
-@pytest.mark.smoke
 def test_backward_graph_task_id_routes_through_torch_compat(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -245,7 +240,6 @@ def test_backward_graph_task_id_routes_through_torch_compat(
     assert tensor_tracking._current_backward_graph_task_id() is None
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("save_mode", ["reference", "view"])
 def test_legacy_grad_slot_stores_snapshot_not_alias(save_mode: str) -> None:
     """``Op.log_tensor_grad`` snapshots the observed gradient under all modes.
@@ -284,7 +278,6 @@ def test_legacy_grad_slot_stores_snapshot_not_alias(save_mode: str) -> None:
     assert rewritten == [], f"seed mutation rewrote recorded grads: {rewritten}"
 
 
-@pytest.mark.smoke
 def test_per_call_save_grads_false_gates_legacy_layer_slot() -> None:
     """``log_backward(..., save_grads=False)`` disables legacy slot retention.
 
@@ -304,7 +297,6 @@ def test_per_call_save_grads_false_gates_legacy_layer_slot() -> None:
     assert retained == [], f"save_grads=False call retained legacy grad payloads: {retained}"
 
 
-@pytest.mark.smoke
 def test_saved_grad_hook_clones_once_and_transforms_once() -> None:
     """grind-r6 b5 R34-N1/R35-N1 (fable+opus, probe-corroborated).
 

@@ -28,8 +28,6 @@ import re
 import sys
 from pathlib import Path
 
-import pytest
-
 if sys.version_info >= (3, 11):
     import tomllib
 else:  # pragma: no cover - py3.10 fallback used by the repo's own tooling
@@ -58,7 +56,6 @@ def _extras() -> dict[str, list[str]]:
     return _load_pyproject()["project"]["optional-dependencies"]
 
 
-@pytest.mark.smoke
 def test_extras_composition_repairs_hold() -> None:
     """The A12 extras repairs cannot silently regress."""
 
@@ -98,7 +95,6 @@ def test_extras_composition_repairs_hold() -> None:
     assert not any(req.startswith("brainscore_core") for req in extras["brainscore"])
 
 
-@pytest.mark.smoke
 def test_transformers_band_coherence() -> None:
     """The hf extra and test extra carry the SAME transformers band.
 
@@ -126,14 +122,12 @@ def test_transformers_band_coherence() -> None:
     assert not bands["hf"].contains("6.0.0"), "the band must stay bounded below 6"
 
 
-@pytest.mark.smoke
 def test_requires_python_floor() -> None:
     """requires-python stays at the real (slots=True) 3.10 floor."""
 
     assert _load_pyproject()["project"]["requires-python"] == ">=3.10"
 
 
-@pytest.mark.smoke
 def test_readme_renders_on_pypi() -> None:
     """Every README image reference is absolute (PyPI cannot resolve relative
     paths -- all 22 rendered broken there) and the post-trace pickling remedy
@@ -153,7 +147,6 @@ def test_readme_renders_on_pypi() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_security_md_documents_the_waiver_surface() -> None:
     """SECURITY.md exists, names the transformers 4.x advisory set, and stays
     in lockstep with every --ignore-vuln waiver in the workflows."""
@@ -180,7 +173,6 @@ def test_security_md_documents_the_waiver_surface() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_claims_registry_seed_is_well_formed() -> None:
     """docs/migration/_claims.json: D6 schema, verbatim-template registry."""
 
@@ -219,7 +211,6 @@ def test_claims_registry_seed_is_well_formed() -> None:
         assert spec["status"] in {"open", "closed"}, (gate, spec["status"])
 
 
-@pytest.mark.smoke
 def test_migration_ledger_seed_is_well_formed() -> None:
     """docs/migration/_migration_ledger.json: the D01/F30 work queue parses."""
 

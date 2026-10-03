@@ -39,8 +39,6 @@ from torchlens.capture._episode_ledger import (
 )
 from torchlens.errors import TorchLensWarning
 
-pytestmark = pytest.mark.smoke
-
 
 class _Greedy(torch.nn.Module):
     """Minimal stepped generator: embeds, projects, argmaxes, appends."""
@@ -183,6 +181,7 @@ def test_carried_state_witness_slots_default_not_measured() -> None:
     assert row.exit_state_digest is None
 
 
+@pytest.mark.smoke
 def test_carried_state_witness_channel_keyed_shape() -> None:
     row = _row(
         0, entry_state_digest={"kv_cache": "sha256:aa"}, exit_state_digest={"kv_cache": "sha256:bb"}

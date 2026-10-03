@@ -106,7 +106,6 @@ _CALLABLE_DUNDERS = _iter_callable_dunders()
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_immunizer_dunder_gate_iff_allowlist() -> None:
     """Every callable dunder on the fixed roots: admitted IFF in ``_ALLOWED_FORWARD_DUNDERS``.
 
@@ -137,7 +136,6 @@ def test_immunizer_dunder_gate_iff_allowlist() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_immunizer_sweep_is_non_vacuous_on_tensor() -> None:
     """torch.Tensor exposes BOTH allowlisted forward dunders AND denied non-forward dunders.
 
@@ -172,7 +170,6 @@ _DANGEROUS_DUNDERS: tuple[str, ...] = (
 )
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("name", _DANGEROUS_DUNDERS)
 def test_immunizer_dangerous_dunder_denied(name: str) -> None:
     """A non-forward dunder is DENIED and is not in the forward allowlist."""
@@ -184,7 +181,6 @@ def test_immunizer_dangerous_dunder_denied(name: str) -> None:
     assert not is_pure_forward_callable(obj), f"dangerous dunder WRONGLY ADMITTED: {name}"
 
 
-@pytest.mark.smoke
 def test_immunizer_setstate_and_siblings_are_dunder_gate_load_bearing() -> None:
     """The dangerous dunders slip the name/verb belt; ONLY the r47 dunder gate closes them.
 
@@ -230,7 +226,6 @@ _FORWARD_DUNDERS_ADMITTED: tuple[str, ...] = (
 )
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("name", _FORWARD_DUNDERS_ADMITTED)
 def test_immunizer_forward_dunder_admitted(name: str) -> None:
     """A genuine forward-operator dunder resolves through the gate (zero forward regression)."""
@@ -247,7 +242,6 @@ def test_immunizer_forward_dunder_admitted(name: str) -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_denied_forward_dunder_name_helper() -> None:
     """``_is_denied_forward_dunder_name`` denies non-allowlisted dunders, spares the rest."""
 
@@ -269,7 +263,6 @@ def test_denied_forward_dunder_name_helper() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("name", ("__setstate__", "__reduce_ex__", "__array__", "__deepcopy__"))
 def test_setstate_class_denied_at_resolver_even_under_trust(name: str) -> None:
     """The dangerous dunders are refused through the real resolver, in BOTH trust modes."""
@@ -301,7 +294,6 @@ class _ForwardDunderModel(nn.Module):
         return a
 
 
-@pytest.mark.smoke
 def test_forward_dunder_model_runnable_round_trip_verified(tmp_path: Path) -> None:
     """A forward-dunder model saves, loads, and runs VERIFIED (behavioral zero-regression)."""
 

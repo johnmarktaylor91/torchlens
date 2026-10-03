@@ -261,7 +261,6 @@ def test_ledger_mechanics_pickle_copy_equality() -> None:
         assert clone.ledger == result.ledger
 
 
-@pytest.mark.smoke
 def test_unsupported_source_refuses_typed() -> None:
     """Unsupported source types refuse with neuro_source_invalid."""
 

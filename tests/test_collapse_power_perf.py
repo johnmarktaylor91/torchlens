@@ -23,8 +23,6 @@ from torchlens.visualization.auto_collapse import (
 from torchlens.visualization.collapse_optimizer import select_collapse_plan
 from torchlens.visualization.collapse_plan import RenderContext
 
-pytestmark = pytest.mark.smoke
-
 
 class _Block(nn.Module):
     """One linear+activation block; ``odd=True`` swaps ReLU for Tanh."""
@@ -77,6 +75,7 @@ def _count_wiring_walks(monkeypatch, fn) -> int:
     return calls["n"]
 
 
+@pytest.mark.smoke
 def test_fingerprint_memo_walks_each_member_once_then_zero(monkeypatch) -> None:
     """One fold sweep walks each member at most once; a rerun walks zero.
 
@@ -102,6 +101,7 @@ def test_fingerprint_memo_walks_each_member_once_then_zero(monkeypatch) -> None:
     assert second == 0, f"warm sweep must be pure cache hits, walked {second} times"
 
 
+@pytest.mark.smoke
 def test_cached_fingerprints_match_direct_computation() -> None:
     """Memoized signature/bindings equal the direct uncached functions.
 

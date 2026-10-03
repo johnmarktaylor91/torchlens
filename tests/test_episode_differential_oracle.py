@@ -28,8 +28,6 @@ from torchlens.capture._episode_ledger import (
 )
 from torchlens.options import EpisodeSpec
 
-pytestmark = pytest.mark.smoke
-
 
 class TinyLM(nn.Module):
     """Minimal stepped model with deterministic parameters."""

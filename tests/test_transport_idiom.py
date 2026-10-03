@@ -17,8 +17,6 @@ import torch
 
 from torchlens._transport import to_cpu_contiguous
 
-pytestmark = pytest.mark.smoke
-
 
 def _assert_equivalent_to_old_idiom(source: torch.Tensor) -> torch.Tensor:
     """Assert helper output matches the historical idiom exactly; return it."""

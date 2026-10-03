@@ -15,8 +15,6 @@ import torch
 import torchlens as tl
 from torchlens.options import EchoOptions
 
-pytestmark = pytest.mark.smoke
-
 
 def _model_and_input() -> tuple[torch.nn.Module, torch.Tensor]:
     torch.manual_seed(0)

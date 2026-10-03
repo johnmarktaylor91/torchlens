@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pickle
 
-import pytest
 import torch
 
 import torchlens as tl
@@ -16,7 +15,6 @@ from torchlens.intervention.types import (
 )
 
 
-@pytest.mark.smoke
 def test_freeze_cache_hit_is_byte_identical() -> None:
     """Repeated freezes of a stable spec reuse one identical frozen view."""
 
@@ -27,7 +25,6 @@ def test_freeze_cache_hit_is_byte_identical() -> None:
     assert first == TargetSpec("label", "relu_1_1").freeze()
 
 
-@pytest.mark.smoke
 def test_freeze_cache_invalidates_on_field_reassignment() -> None:
     """Reassigned fields always produce a freshly computed frozen view."""
 
@@ -49,7 +46,6 @@ def test_freeze_cache_invalidates_on_field_reassignment() -> None:
     assert baseline == TargetSpec("label", "relu_1_1").freeze()
 
 
-@pytest.mark.smoke
 def test_freeze_reflects_in_place_metadata_mutation() -> None:
     """Metadata added after a cached freeze appears in the next freeze."""
 
@@ -65,7 +61,6 @@ def test_freeze_reflects_in_place_metadata_mutation() -> None:
     assert target.freeze() == TargetSpec("label", "relu_1_1").freeze()
 
 
-@pytest.mark.smoke
 def test_freeze_snapshots_mutable_selector_values_per_call() -> None:
     """Container selector values are never cached and track in-place edits."""
 
@@ -84,7 +79,6 @@ def test_freeze_snapshots_mutable_selector_values_per_call() -> None:
     assert second.selector_value == ("outer", ("inner", "added"))
 
 
-@pytest.mark.smoke
 def test_freeze_cache_is_not_pickled() -> None:
     """Pickled specs carry no cache slot and freeze correctly after load."""
 
@@ -98,7 +92,6 @@ def test_freeze_cache_is_not_pickled() -> None:
     assert restored.freeze() == frozen
 
 
-@pytest.mark.smoke
 def test_dedup_scan_semantics_unchanged() -> None:
     """The call-site dedup pattern keeps first-seen order and drops repeats."""
 
@@ -118,7 +111,6 @@ def test_dedup_scan_semantics_unchanged() -> None:
     assert tuple(added) == spec.freeze().targets
 
 
-@pytest.mark.smoke
 def test_predicate_intervention_targets_unchanged() -> None:
     """Dense predicate interventions produce one ordered target per site."""
 

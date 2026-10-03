@@ -16,12 +16,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
-
 from benchmarks import op_ownership, perf_gate, perf_suite
 from benchmarks.op_ownership import classify_operation, is_torchlens_operation
-
-pytestmark = pytest.mark.smoke
 
 _BENCHMARKS_DIR = Path(__file__).resolve().parent.parent / "benchmarks"
 

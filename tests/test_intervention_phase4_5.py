@@ -63,7 +63,6 @@ def _bad_hook(out: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
     raise ValueError("boom")
 
 
-@pytest.mark.smoke
 def test_non_ready_capture_matches_baseline_runtime_fields() -> None:
     """Default captures populate baseline fields and persist edge-use metadata."""
 
@@ -93,7 +92,6 @@ def test_non_ready_capture_matches_baseline_runtime_fields() -> None:
     assert all(layer.container_path == () for layer in log.layer_list)
 
 
-@pytest.mark.smoke
 def test_intervention_ready_without_hooks_preserves_returned_values() -> None:
     """Intervention-ready path-aware traversal does not alter no-hook outputs."""
 
@@ -121,7 +119,6 @@ def test_intervention_ready_without_hooks_preserves_returned_values() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_live_hook_exception_resets_runtime_state_and_allows_next_capture() -> None:
     """Hook-raised exceptions leave no active capture state behind."""
 
@@ -148,7 +145,6 @@ def test_live_hook_exception_resets_runtime_state_and_allows_next_capture() -> N
     assert followup_log.layer_list
 
 
-@pytest.mark.smoke
 def test_live_hook_exception_resets_reentrancy_depth() -> None:
     """Hook-raised exceptions reset the hook reentrancy guard."""
 

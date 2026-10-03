@@ -18,8 +18,6 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens.intervention.errors import PendingValueEditsWarning
 
-pytestmark = pytest.mark.smoke
-
 
 class Small(nn.Module):
     """Linear -> ReLU -> Linear."""

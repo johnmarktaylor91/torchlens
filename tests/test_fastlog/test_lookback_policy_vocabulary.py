@@ -19,8 +19,6 @@ from torchlens.fastlog.options import (
     RecordingOptions,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 def test_runtime_tuple_derives_from_the_canonical_literal() -> None:
     """The runtime vocabulary is the literal's args, in the literal's order."""

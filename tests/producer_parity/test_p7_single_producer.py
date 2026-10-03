@@ -22,8 +22,6 @@ import torchlens as tl
 from torchlens.ir.events import OpEvent
 from torchlens.ir.op_record import OpRecord
 
-pytestmark = pytest.mark.smoke
-
 
 def test_torch_capture_journals_records_unconditionally() -> None:
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())

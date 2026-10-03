@@ -35,9 +35,6 @@ from torchlens.backends.torch.wrappers import (
 from torchlens.distributed import has_vetted_snapshot
 from torchlens.utils.introspection import nested_getattr
 
-pytestmark = pytest.mark.smoke
-
-
 # Strong refs to superseded wrapper generations. Wrapper objects minted before a
 # forced regeneration stay reachable for the whole session (other test modules'
 # import-time ``getattr`` snapshots, torch's overridable-registry lru_cache), and

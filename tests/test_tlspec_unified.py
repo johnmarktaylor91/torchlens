@@ -374,7 +374,6 @@ def test_schema_v2_accepts_array_payload_policy_and_codec_body_fields(tmp_path: 
     validate_tlspec(path)
 
 
-@pytest.mark.smoke
 def test_validate_tlspec_accepts_pre_hook_input_body_payloads(tmp_path: Path) -> None:
     """The validator accepts the v6 pre-hook provenance schema extension."""
 
@@ -386,7 +385,6 @@ def test_validate_tlspec_accepts_pre_hook_input_body_payloads(tmp_path: Path) ->
     validate_tlspec(path)
 
 
-@pytest.mark.smoke
 def test_validate_tlspec_rejects_unknown_body_intended_use(tmp_path: Path) -> None:
     """Extending the v6 vocabulary does not disarm unknown-kind validation."""
 
@@ -405,7 +403,6 @@ def test_validate_tlspec_rejects_unknown_body_intended_use(tmp_path: Path) -> No
         tl.load(path)
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("mutation", ["ghost", "filename"])
 def test_unified_load_rejects_desynchronized_body_index(
     tmp_path: Path,
@@ -428,7 +425,6 @@ def test_unified_load_rejects_desynchronized_body_index(
         tl.load(path)
 
 
-@pytest.mark.smoke
 def test_validate_tlspec_rejects_missing_path(tmp_path: Path) -> None:
     """A nonexistent path is not a legacy bundle."""
 
@@ -438,7 +434,6 @@ def test_validate_tlspec_rejects_missing_path(tmp_path: Path) -> None:
         validate_tlspec(path)
 
 
-@pytest.mark.smoke
 def test_validate_tlspec_rejects_unparseable_manifest(tmp_path: Path) -> None:
     """A present corrupt manifest is rejected instead of treated as legacy."""
 
@@ -450,7 +445,6 @@ def test_validate_tlspec_rejects_unparseable_manifest(tmp_path: Path) -> None:
         validate_tlspec(path)
 
 
-@pytest.mark.smoke
 def test_validate_tlspec_refuses_pre_floor_legacy_modellog_bundle() -> None:
     """A checked-in v2.16 model-log fixture refuses at the 2.33 floor.
 
@@ -470,7 +464,6 @@ def test_validate_tlspec_refuses_pre_floor_legacy_modellog_bundle() -> None:
         tl.load(fixture_path)
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("level", ["audit", "executable_with_callables", "portable"])
 def test_unified_modellog_round_trips_per_save_level(tmp_path: Path, level: str) -> None:
     """Trace.save writes unified manifests that load polymorphically."""
@@ -492,7 +485,6 @@ def test_unified_modellog_round_trips_per_save_level(tmp_path: Path, level: str)
     ]
 
 
-@pytest.mark.smoke
 def test_current_bundle_preserves_none_backend_address(tmp_path: Path) -> None:
     """Current manifests must not apply the v4 backend-address repair."""
 
@@ -510,7 +502,6 @@ def test_current_bundle_preserves_none_backend_address(tmp_path: Path) -> None:
     assert loaded[plain_buffer_op.layer_label].backend_address is None
 
 
-@pytest.mark.smoke
 def test_unified_round_trip_preserves_requires_grad(tmp_path: Path) -> None:
     """Safetensors sidecars restore each tensor's autograd participation bit."""
 
@@ -538,7 +529,6 @@ def test_unified_round_trip_preserves_requires_grad(tmp_path: Path) -> None:
     assert lazy_out.requires_grad is True
 
 
-@pytest.mark.smoke
 def test_fresh_unified_save_reports_current_version_with_no_schema_age_warning(
     tmp_path: Path,
 ) -> None:
@@ -568,7 +558,6 @@ def test_fresh_unified_save_reports_current_version_with_no_schema_age_warning(
     assert isinstance(loaded, tl.Trace)
 
 
-@pytest.mark.smoke
 def test_unified_manifest_forward_compat_hard_fail_for_newer_bundle(tmp_path: Path) -> None:
     """A genuinely newer on-disk ``tlspec_version`` must still hard-fail at load."""
 
@@ -584,7 +573,6 @@ def test_unified_manifest_forward_compat_hard_fail_for_newer_bundle(tmp_path: Pa
         tl.load(path)
 
 
-@pytest.mark.smoke
 def test_validate_tlspec_rejects_newer_portable_version(tmp_path: Path) -> None:
     """Validation enforces the same portable-version ceiling as loading."""
 
@@ -607,7 +595,6 @@ def test_validate_tlspec_rejects_newer_portable_version(tmp_path: Path) -> None:
     assert excinfo.value.fields["code"] == "artifact_version_above_runtime"
 
 
-@pytest.mark.smoke
 def test_unified_trace_save_load_preserves_forward_intervention_records(tmp_path: Path) -> None:
     """Trace.save preserves per-op intervention fire records."""
 
@@ -635,7 +622,6 @@ def test_unified_trace_save_load_preserves_forward_intervention_records(tmp_path
     assert records[0].direction == "forward"
 
 
-@pytest.mark.smoke
 def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_path: Path) -> None:
     """Trace.save preserves backward GradFnCall intervention fire refs."""
 
@@ -665,7 +651,6 @@ def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_pat
     assert isinstance(refs[0].helper, HelperSpec)
 
 
-@pytest.mark.smoke
 def test_unified_portable_round_trips_orphan_records(tmp_path: Path) -> None:
     """Portable saves preserve orphan record payload tensors."""
 
@@ -713,7 +698,6 @@ def test_full_resnet18_default_trace_bundle_validates_and_loads(tmp_path: Path) 
     assert any(entry["intended_use"] == "buffer_initial_value" for entry in manifest["body_index"])
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("level", ["audit", "executable_with_callables", "portable"])
 def test_unified_bundle_round_trips_per_save_level(tmp_path: Path, level: str) -> None:
     """Bundle.save writes unified manifests that load as Bundle objects."""
@@ -734,7 +718,6 @@ def test_unified_bundle_round_trips_per_save_level(tmp_path: Path, level: str) -
     assert isinstance(loaded["baseline"], tl.Trace)
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("level", ["audit", "executable_with_callables", "portable"])
 def test_unified_intervention_round_trips_per_save_level(tmp_path: Path, level: str) -> None:
     """Intervention saves now emit the full unified manifest field set."""
@@ -756,7 +739,6 @@ def test_unified_intervention_round_trips_per_save_level(tmp_path: Path, level: 
     assert loaded.metadata["save_level"] == level
 
 
-@pytest.mark.smoke
 def test_inspect_tlspec_returns_unified_manifest(tmp_path: Path) -> None:
     """Manifest inspection returns parsed unified metadata."""
 
@@ -770,7 +752,6 @@ def test_inspect_tlspec_returns_unified_manifest(tmp_path: Path) -> None:
     assert isinstance(manifest["sites"], list)
 
 
-@pytest.mark.smoke
 def test_validate_tlspec_rejects_missing_unified_field(tmp_path: Path) -> None:
     """Schema validation fails closed for malformed unified manifests."""
 
@@ -784,7 +765,6 @@ def test_validate_tlspec_rejects_missing_unified_field(tmp_path: Path) -> None:
         validate_tlspec(path)
 
 
-@pytest.mark.smoke
 def test_unified_manifest_records_backward_summary(tmp_path: Path) -> None:
     """Trace.save records backward fields and gradient blob kinds in the manifest."""
 
@@ -815,7 +795,6 @@ def test_unified_manifest_records_backward_summary(tmp_path: Path) -> None:
     )
 
 
-@pytest.mark.smoke
 def test_validate_tlspec_rejects_bad_backward_blob_kind(tmp_path: Path) -> None:
     """Schema validation rejects malformed backward blob kinds."""
 
@@ -834,7 +813,6 @@ def test_validate_tlspec_rejects_bad_backward_blob_kind(tmp_path: Path) -> None:
         validate_tlspec(path)
 
 
-@pytest.mark.smoke
 def test_validate_tlspec_enforces_shipped_schema_properties_pattern(tmp_path: Path) -> None:
     """The shipped JSON schema's ``properties`` block must be load-bearing, not decorative.
 
@@ -893,7 +871,6 @@ def test_shipped_tlspec_schema_keywords_are_all_walker_supported() -> None:
     assert observed <= _SUPPORTED_JSON_SCHEMA_KEYWORDS
 
 
-@pytest.mark.smoke
 def test_validate_tlspec_enforces_schema_v2_python_version_pattern(tmp_path: Path) -> None:
     """Schema v2 (every non-torch backend) must reject malformed ``python_version`` too.
 
@@ -918,7 +895,6 @@ def test_validate_tlspec_enforces_schema_v2_python_version_pattern(tmp_path: Pat
         validate_tlspec(path)
 
 
-@pytest.mark.smoke
 def test_schema_v2_mlx_materialized_manifest_validates(tmp_path: Path) -> None:
     """Schema v2 accepts MLX materialized backend/runtime and body fields."""
 
@@ -930,7 +906,6 @@ def test_schema_v2_mlx_materialized_manifest_validates(tmp_path: Path) -> None:
     validate_tlspec(path)
 
 
-@pytest.mark.smoke
 def test_schema_v2_mlx_materialized_loads_payloads(tmp_path: Path) -> None:
     """MLX schema v2 materialized traces load body entries as MLX arrays."""
 
@@ -953,7 +928,6 @@ def test_schema_v2_mlx_materialized_loads_payloads(tmp_path: Path) -> None:
     assert loaded.validation_replay_status.reason == "loaded_trace_runtime_capture_stripped"
 
 
-@pytest.mark.smoke
 def test_schema_v2_mlx_old_audit_only_fixture_loads_metadata_only(tmp_path: Path) -> None:
     """Old MLX audit-only schema-v2 bundles should still load metadata-only."""
 
@@ -1024,7 +998,6 @@ def test_mlx_public_save_writes_materialized_manifest_body(tmp_path: Path) -> No
     assert all(entry["codec"] == "numpy_safetensors_v1" for entry in manifest["body_index"])
 
 
-@pytest.mark.smoke
 def test_schema_v2_materialized_unknown_codec_fails_closed(tmp_path: Path) -> None:
     """Materialized schema-v2 manifests with unknown codecs fail before loading."""
 
@@ -1052,7 +1025,6 @@ def test_schema_v2_materialized_unknown_codec_fails_closed(tmp_path: Path) -> No
         tl.load(path)
 
 
-@pytest.mark.smoke
 def test_schema_v2_materialized_unknown_tensors_entry_codec_fails_closed(tmp_path: Path) -> None:
     """Tensors entries with unknown codecs fail preflight even when body_index is clean."""
 
@@ -1066,7 +1038,6 @@ def test_schema_v2_materialized_unknown_tensors_entry_codec_fails_closed(tmp_pat
         tl.load(path)
 
 
-@pytest.mark.smoke
 def test_schema_v2_materialized_missing_tensors_entry_codec_fails_closed(tmp_path: Path) -> None:
     """Tensors entries missing a codec fail preflight with the typed IO error."""
 
@@ -1080,7 +1051,6 @@ def test_schema_v2_materialized_missing_tensors_entry_codec_fails_closed(tmp_pat
         tl.load(path)
 
 
-@pytest.mark.smoke
 def test_schema_v2_codec_preflight_wraps_registry_errors(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1102,7 +1072,6 @@ def test_schema_v2_codec_preflight_wraps_registry_errors(
         tl.load(path)
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("mutation", "match"),
     [
@@ -1133,7 +1102,6 @@ def test_schema_v2_non_torch_corruptions_fail_closed(
         validate_tlspec(path)
 
 
-@pytest.mark.smoke
 def test_schema_v1_rejects_schema_v2_body_uses(tmp_path: Path) -> None:
     """Schema v1 fixtures stay torch-only and reject v2 intended-use literals."""
 

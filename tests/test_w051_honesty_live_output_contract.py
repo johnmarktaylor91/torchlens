@@ -26,8 +26,6 @@ from torchlens.ir.container import ContainerSpec, DictKey, HFKey, TupleIndex, de
 from torchlens.options import CaptureOptions
 from torchlens.runnable import DivergencePolicy, PathFaithfulness, RunnableErrorCode
 
-pytestmark = pytest.mark.smoke
-
 
 class _TupleOut(nn.Module):
     def __init__(self) -> None:
@@ -98,6 +96,10 @@ def test_default_capture_container_output_settles_verified_live(name, factory, s
     assert type(result.output) is type(live)
 
 
+@pytest.mark.smoke_cells(
+    "test_container_contract_capture_settles_verified_live[dict--]",
+    "test_container_contract_capture_settles_verified_live[lstm--]",
+)
 @pytest.mark.parametrize(
     ("name", "factory", "shape"), _CONTAINER_ROWS, ids=lambda v: v if isinstance(v, str) else ""
 )
@@ -118,6 +120,7 @@ def test_container_contract_capture_settles_verified_live(name, factory, shape) 
     assert type(result.output) is type(live)
 
 
+@pytest.mark.smoke
 def test_opaque_root_output_names_its_reason() -> None:
     """corr2_5 parity: an unordered-set output keeps the UNVERIFIABLE verdict and now
     names the ``opaque_root`` reason (not the unrecorded-contract remedy)."""
@@ -140,6 +143,7 @@ def test_opaque_root_output_names_its_reason() -> None:
     assert dict(check.diagnostic.details)["reason"] == "opaque_root"
 
 
+@pytest.mark.smoke
 def test_declared_leaf_slots_counts_every_leaf_slot() -> None:
     """The opaque-leaf arm's measuring stick: slots = declared components without a
     child spec, recursively; literal children consume nothing."""
@@ -173,6 +177,7 @@ def test_rebuild_arity_error_names_the_dry_slot() -> None:
     assert "opaque non-tensor object" in str(excinfo.value)
 
 
+@pytest.mark.smoke
 def test_live_graph_change_raise_policy_is_structured() -> None:
     """H3 (RAISE): a refresh graph change surfaces through the divergence spine --
     ``fields["code"] == call_structure_mismatch``, DIVERGED, the failed contract check

@@ -100,7 +100,6 @@ def _x() -> torch.Tensor:
     return torch.randn(2, 4, 4)
 
 
-@pytest.mark.smoke
 def test_r79_empty_name_param_refuses_at_save(tmp_path: Path) -> None:
     """RED-now-fixed: the empty-name param save refuses typed, never stillborn.
 
@@ -121,7 +120,6 @@ def test_r79_empty_name_param_refuses_at_save(tmp_path: Path) -> None:
     assert not path.exists()
 
 
-@pytest.mark.smoke
 def test_r79_named_param_still_saves_and_loads(tmp_path: Path) -> None:
     """Zero collateral: a normal named param round-trips and verifies."""
 
@@ -135,7 +133,6 @@ def test_r79_named_param_still_saves_and_loads(tmp_path: Path) -> None:
     assert not result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_r79_weightless_empty_name_lane_unchanged(tmp_path: Path) -> None:
     """Zero collateral: the weightless empty-name lane keeps its current parity.
 
@@ -154,7 +151,6 @@ def test_r79_weightless_empty_name_lane_unchanged(tmp_path: Path) -> None:
     tl.load(path)
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "model_cls",
     [EmptyNamePersistentBuffer, EmptyNameNonPersistentBuffer],

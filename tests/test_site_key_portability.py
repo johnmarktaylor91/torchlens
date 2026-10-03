@@ -38,7 +38,6 @@ def _keys(trace: tl.Trace) -> dict[str, str | None]:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_g1_roundtrip_bundle_writer(tmp_path) -> None:
     trace = tl.trace(_Tied(), torch.randn(2, 8))
     saved_keys = _keys(trace)
@@ -50,7 +49,6 @@ def test_g1_roundtrip_bundle_writer(tmp_path) -> None:
     assert _keys(loaded) == saved_keys
 
 
-@pytest.mark.smoke
 def test_g1_roundtrip_streaming_writer(tmp_path) -> None:
     path = tmp_path / "sites_stream.tlspec"
     with activate_prerelease_fields():
@@ -68,7 +66,6 @@ def test_g1_roundtrip_streaming_writer(tmp_path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_g2_loaded_recompute_byte_parity(tmp_path) -> None:
     trace = tl.trace(_Tied(), torch.randn(2, 8))
     path = tmp_path / "parity.tlspec"
@@ -91,7 +88,6 @@ def test_g2_loaded_recompute_byte_parity(tmp_path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_g3_forged_key_fails_is1_and_is2(tmp_path) -> None:
     trace = tl.trace(_Tied(), torch.randn(2, 8))
     path = tmp_path / "forged.tlspec"
@@ -112,7 +108,6 @@ def test_g3_forged_key_fails_is1_and_is2(tmp_path) -> None:
         check_metadata_invariants(collided)
 
 
-@pytest.mark.smoke
 def test_g3_label_bearing_forged_key_fails_sweep(tmp_path) -> None:
     trace = tl.trace(_Tied(), torch.randn(2, 8))
     path = tmp_path / "label_forged.tlspec"
@@ -131,7 +126,6 @@ def test_g3_label_bearing_forged_key_fails_sweep(tmp_path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_g4_marked_bundle_refuses_switch_off(tmp_path) -> None:
     trace = tl.trace(_Tied(), torch.randn(2, 8))
     path = tmp_path / "marked.tlspec"
@@ -141,7 +135,6 @@ def test_g4_marked_bundle_refuses_switch_off(tmp_path) -> None:
         tl.load(str(path))
 
 
-@pytest.mark.smoke
 def test_g4_marked_streaming_artifact_refuses_switch_off(tmp_path) -> None:
     # The (c)-residual named by the memo: the streaming writer's
     # manifest/sidecar path must not yield usable data without
@@ -159,7 +152,6 @@ def test_g4_marked_streaming_artifact_refuses_switch_off(tmp_path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_g5_legacy_v7_artifact_loads_keyless_and_refuses_typed() -> None:
     import warnings
     from pathlib import Path

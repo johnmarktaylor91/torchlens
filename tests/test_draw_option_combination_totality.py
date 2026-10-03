@@ -199,7 +199,6 @@ def expected_refusal(combo: frozenset[str]) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_draw_signature_is_fully_declared() -> None:
     """Every ``Trace.draw`` parameter is classified in ``DECLARED``.
 
@@ -226,7 +225,6 @@ def test_draw_signature_is_fully_declared() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_refusal_table_only_names_declared_paired_options() -> None:
     """Every refusal row references PAIRED options actually being exercised."""
 
@@ -329,7 +327,6 @@ def test_draw_core_option_pairs(combo: tuple[str, ...], sweep_trace: Any, tmp_pa
     _exercise_combo(combo, sweep_trace, tmp_path)
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("combo", _REFUSAL_COMBOS, ids=["+".join(c) for c in _REFUSAL_COMBOS])
 def test_draw_pinned_refusals(combo: tuple[str, ...], sweep_trace: Any, tmp_path: Path) -> None:
     """Every pinned refusing combination raises exactly its declared code."""

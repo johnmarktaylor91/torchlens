@@ -44,8 +44,6 @@ from torchlens.capture.outcome import (
     resolve_loaded_outcome,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 class _Small(nn.Module):
     def __init__(self) -> None:

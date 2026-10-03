@@ -33,8 +33,6 @@ import functools
 import importlib
 from pathlib import Path
 
-import pytest
-
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
 #: DEMOTED names per public module: dropped from ``__all__``, still
@@ -204,7 +202,6 @@ def _iter_static_all_lists() -> tuple[tuple[str, tuple[str, ...]], ...]:
     return tuple(rows)
 
 
-@pytest.mark.smoke
 def test_removed_dead_rename_is_gone() -> None:
     """The zero-reference rename re-export is deleted, not just unadvertised."""
 
@@ -213,7 +210,6 @@ def test_removed_dead_rename_is_gone() -> None:
     assert not hasattr(validation, "validate_trace_saved_outs")
 
 
-@pytest.mark.smoke
 def test_demoted_names_unadvertised_but_importable() -> None:
     """Every demoted name left ``__all__`` and stayed importable."""
 
@@ -229,7 +225,6 @@ def test_demoted_names_unadvertised_but_importable() -> None:
     assert not problems, "demotion contract violated:\n    " + "\n    ".join(problems)
 
 
-@pytest.mark.smoke
 def test_kept_rows_stay_advertised() -> None:
     """Audit rows kept for cause stay advertised until re-adjudicated."""
 
@@ -242,7 +237,6 @@ def test_kept_rows_stay_advertised() -> None:
             )
 
 
-@pytest.mark.smoke
 def test_no_all_list_carries_duplicates() -> None:
     """No statically-declared ``__all__`` in the package has a duplicate row."""
 
@@ -256,7 +250,6 @@ def test_no_all_list_carries_duplicates() -> None:
     assert not offenders, "\n    ".join(offenders)
 
 
-@pytest.mark.smoke
 def test_retired_spellings_stay_unadvertised() -> None:
     """No ``__all__`` re-advertises a Batch-8-retired alias spelling."""
 
@@ -272,7 +265,6 @@ def test_retired_spellings_stay_unadvertised() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_canonical_replacement_verbs_stay_advertised() -> None:
     """The retirement tail's canonical verbs remain the advertised surface."""
 

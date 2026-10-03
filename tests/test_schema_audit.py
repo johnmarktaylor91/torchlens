@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
 import torch
 
 import torchlens as tl
@@ -52,7 +51,6 @@ def _capture_tiny_log() -> Trace:
     return tl.trace(_TinyModel(), torch.randn(2, 3))
 
 
-@pytest.mark.smoke
 def test_ordered_fields_have_phase1_lifecycle_policies() -> None:
     """Every ordered field has portable, fork, and default-fill policy coverage."""
 
@@ -64,7 +62,6 @@ def test_ordered_fields_have_phase1_lifecycle_policies() -> None:
     assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(Op.DEFAULT_FILL_STATE)
 
 
-@pytest.mark.smoke
 def test_phase1_defaults_are_per_instance_and_fork_copy() -> None:
     """Container defaults are per-instance and interventions forks by copy."""
 
@@ -82,7 +79,6 @@ def test_phase1_defaults_are_per_instance_and_fork_copy() -> None:
     assert LAYER_PASS_LOG_FIELD_FORK_POLICY["interventions"] is ForkFieldPolicy.FORK_COPY
 
 
-@pytest.mark.smoke
 def test_layer_pass_construction_guard_and_direct_write_flag() -> None:
     """Construction is internal, but user out writes dirty the owning Trace."""
 
@@ -102,7 +98,6 @@ def test_layer_pass_construction_guard_and_direct_write_flag() -> None:
     assert log._has_direct_writes is True
 
 
-@pytest.mark.smoke
 def test_postprocess_internal_writes_do_not_mark_direct_write_dirty() -> None:
     """A normal capture leaves the direct-write flag unset after all postprocess steps."""
 

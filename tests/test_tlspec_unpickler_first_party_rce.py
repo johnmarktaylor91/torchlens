@@ -92,7 +92,6 @@ def _has_unpickling_error(exc: BaseException | None) -> bool:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_module_is_installed_reduce_gadget_denied_through_tl_load(tmp_path: Path) -> None:
     """A crafted bundle whose metadata REDUCE is the import gadget raises + no import."""
 
@@ -130,7 +129,6 @@ def test_module_is_installed_reduce_gadget_denied_through_tl_load(tmp_path: Path
         sys.modules.pop(attacker_name, None)
 
 
-@pytest.mark.smoke
 def test_module_is_installed_denied_by_direct_unpickler() -> None:
     """The restricted unpickler refuses the private import gadget as a bare GLOBAL."""
 
@@ -143,7 +141,6 @@ def test_module_is_installed_denied_by_direct_unpickler() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_vetted_facet_recipe_admitted() -> None:
     """A genuine public first-party facet recipe still resolves to the real callable."""
 
@@ -152,7 +149,6 @@ def test_vetted_facet_recipe_admitted() -> None:
     assert _load_ref("torchlens.semantic.recipes.norm", "layer_norm") is layer_norm
 
 
-@pytest.mark.smoke
 def test_vetted_transform_helper_admitted() -> None:
     """A public first-party transform (identity) still resolves (prior r4 contract)."""
 
@@ -161,7 +157,6 @@ def test_vetted_transform_helper_admitted() -> None:
     assert _load_ref("torchlens.utils.display", "identity") is identity
 
 
-@pytest.mark.smoke
 def test_full_facet_registry_snapshot_round_trips_through_unpickler() -> None:
     """A FacetRegistrySnapshot embedding a real registered recipe survives the door.
 
@@ -235,7 +230,6 @@ class _OsSystemGadget:
         return (os.system, ("true",))
 
 
-@pytest.mark.smoke
 def test_os_system_still_denied() -> None:
     """The r1-r20 closure holds: an os.system REDUCE / bare ref is still refused."""
 
@@ -293,7 +287,6 @@ class _CleanupPartialGadget:
         return (cleanup_partial, (self._victim,))
 
 
-@pytest.mark.smoke
 def test_fs_mutation_gadget_denied_through_tl_load(tmp_path: Path) -> None:
     """A crafted bundle whose REDUCE is cleanup_partial must NOT delete the victim dir."""
 
@@ -321,7 +314,6 @@ def test_fs_mutation_gadget_denied_through_tl_load(tmp_path: Path) -> None:
     assert (victim / "important.txt").exists(), "victim contents destroyed -> rmtree ran"
 
 
-@pytest.mark.smoke
 def test_state_poison_gadget_denied_through_tl_load(tmp_path: Path) -> None:
     """A REDUCE flipping a global HAS_* capability flag must leave the flag unchanged."""
 
@@ -350,7 +342,6 @@ def test_state_poison_gadget_denied_through_tl_load(tmp_path: Path) -> None:
     assert getattr(tc, cap) == before, "untrusted bundle flipped a global capability flag"
 
 
-@pytest.mark.smoke
 def test_public_side_effecting_first_party_callables_denied() -> None:
     """The public-name fallthrough is GONE: fs / state mutators fail the gate + door."""
 

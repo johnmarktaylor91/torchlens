@@ -71,7 +71,6 @@ def test_floor_error_is_typed_and_public() -> None:
     assert MIN_TLSPEC_VERSION == 6
 
 
-@pytest.mark.smoke
 def test_current_artifacts_load_clean(tmp_path: Path) -> None:
     """A 2.33+ save round-trips with no floor refusal and no version warning."""
 
@@ -89,7 +88,6 @@ def test_current_artifacts_load_clean(tmp_path: Path) -> None:
     ]
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("cls_and_state", ["trace", "op", "layer"])
 @pytest.mark.parametrize("version", [None, 0, 2, 5])
 def test_pre_floor_object_states_refuse_typed(cls_and_state: str, version: int | None) -> None:
@@ -112,7 +110,6 @@ def test_pre_floor_object_states_refuse_typed(cls_and_state: str, version: int |
         restored.__setstate__(state)
 
 
-@pytest.mark.smoke
 def test_current_version_object_state_still_restores() -> None:
     """The same forged-state path succeeds at exactly the floor version."""
 
@@ -191,7 +188,6 @@ def test_pre_floor_bundle_manifest_refuses_typed(tmp_path: Path) -> None:
         tl.load(path)
 
 
-@pytest.mark.smoke
 def test_below_floor_refusal_carries_structured_fields(tmp_path: Path) -> None:
     """The below-floor refusal must carry a branchable code, path, and remedy (R65).
 
@@ -218,7 +214,6 @@ def test_below_floor_refusal_carries_structured_fields(tmp_path: Path) -> None:
     assert fields["path"] == str(path)
 
 
-@pytest.mark.smoke
 def test_between_floor_advisory_is_a_visible_user_warning(tmp_path: Path) -> None:
     """The between-floor artifact-age advisory is visible, not a ``DeprecationWarning``.
 
@@ -252,7 +247,6 @@ def test_between_floor_advisory_is_a_visible_user_warning(tmp_path: Path) -> Non
     assert "older than runtime tlspec_version" in str(advisories[0].message)
 
 
-@pytest.mark.smoke
 def test_inconsistent_producer_pair_refuses_typed(tmp_path: Path) -> None:
     """A (writer, stamp) pair no governed ledger window covers refuses typed.
 
@@ -280,7 +274,6 @@ def test_inconsistent_producer_pair_refuses_typed(tmp_path: Path) -> None:
     assert excinfo.value.fields["code"] == "artifact_producer_pair_ungoverned"
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "fixture",
     [

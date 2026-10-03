@@ -20,8 +20,6 @@ from torchlens.intervention.errors import MultiMatchWarning
 from torchlens.intervention.selectors import CompositeSelector, LabelSelector
 from torchlens.ir.selector_eval import normalize_selector_like
 
-pytestmark = pytest.mark.smoke
-
 _N_PASSES = 3
 
 
@@ -80,6 +78,7 @@ def test_set_door_op_record_edits_exactly_its_pass(loop) -> None:
     assert torch.allclose(fork["relu_1_2:3"].out, _truth(model, x, {2})["relu_1_2:3"], atol=1e-6)
 
 
+@pytest.mark.smoke
 def test_set_door_layer_record_is_the_all_passes_spelling(loop) -> None:
     model, x, trace = loop
     fork = trace.fork()

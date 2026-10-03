@@ -10,8 +10,6 @@ import pytest
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke
-
 # DECLARED-surface constant (cited by the reachable-surface gate in
 # tests/oracles/test_oracle_w0_surface.py and the denominator 3-root lint in
 # tests/oracles/test_oracle_w0_lints.py -- one cites the other, never forks).
@@ -287,6 +285,7 @@ GLOSSARY_FUTURE_SPELLINGS: dict[str, str] = {}
 DOTTED_SPELLING_RE = re.compile(r"`(?:tl|torchlens)((?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
 
 
+@pytest.mark.smoke
 def test_documented_dotted_spellings_resolve() -> None:
     """Every backticked `tl.*`/`torchlens.*` glossary spelling resolves in code.
 

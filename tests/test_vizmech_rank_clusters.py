@@ -20,8 +20,6 @@ from torch import nn
 import torchlens as tl
 import torchlens.visualization._rank_layout_internal.layout as layout_mod
 
-pytestmark = pytest.mark.smoke
-
 
 class _LeafAndBlock(nn.Module):
     """One single-op leaf module beside a multi-op block."""

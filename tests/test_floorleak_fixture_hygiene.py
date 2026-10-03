@@ -21,13 +21,10 @@ from __future__ import annotations
 import gc
 import weakref
 
-import pytest
 import torch
 import torch.nn as nn
 
 import torchlens as tl
-
-pytestmark = [pytest.mark.smoke]
 
 
 class _TinyConv(nn.Module):

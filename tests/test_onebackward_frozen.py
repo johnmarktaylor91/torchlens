@@ -21,8 +21,6 @@ from torchlens.attribution import onebackward as ob
 
 transformers = pytest.importorskip("transformers")
 
-pytestmark = [pytest.mark.smoke]
-
 
 @pytest.fixture(scope="module")
 def gpt2_trace():
@@ -233,6 +231,7 @@ class TestDisclosureBranches:
         codes = [getattr(warning.message, "fields", {}).get("code") for warning in second]
         assert "read_frozen_default_linearization" not in codes
 
+    @pytest.mark.smoke
     def test_branch_r_refuses_until_chosen(
         self, gpt2_trace: tl.Trace, monkeypatch: pytest.MonkeyPatch
     ) -> None:

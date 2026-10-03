@@ -57,8 +57,6 @@ from torchlens.ir.op_record import (
     apply_patch_items,
 )
 
-pytestmark = pytest.mark.smoke
-
 # Journal SHAPES for the fold-routing tests (P7 deleted the legacy torch
 # producer): "decomposed" = captured OpRecord rows; "legacy" = genuine compat
 # OpEvent rows (preview stand-in until S15), synthesized via the retained
@@ -340,6 +338,7 @@ _BATTERY: tuple[tuple[str, Callable[[], tuple[nn.Module, Any]], Callable[..., An
 )
 
 
+@pytest.mark.smoke
 def test_live_legacy_sites_completeness() -> None:
     """Layers 1-3: pair-wise identity, value round-trip, reached-family >= 1."""
 
@@ -426,6 +425,7 @@ def _sentinel_for(path: str, value_types: tuple[type, ...], template: Any, flip:
 _BOOL_PATTERNS = (False, True)
 
 
+@pytest.mark.smoke_cells("test_distinct_sentinel_fold_routing[decomposed]")
 @pytest.mark.parametrize("producer", _LEGS)
 def test_distinct_sentinel_fold_routing(monkeypatch: pytest.MonkeyPatch, producer: str) -> None:
     """Every registry path routes to its OWN destination on both fold legs.

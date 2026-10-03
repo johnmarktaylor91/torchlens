@@ -25,10 +25,6 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
-import pytest
-
-pytestmark = pytest.mark.smoke
-
 _TESTS_DIR = Path(__file__).resolve().parent
 
 #: Matches the round-token vocabulary measured by the r7 b10 audit.

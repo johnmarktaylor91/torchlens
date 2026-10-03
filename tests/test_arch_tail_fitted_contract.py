@@ -28,8 +28,6 @@ import ast
 import re
 from pathlib import Path
 
-import pytest
-
 REPO = Path(__file__).resolve().parent.parent
 PACKAGE_ROOT = REPO / "torchlens"
 
@@ -69,7 +67,6 @@ def _is_optimizer_construction(node: ast.Call) -> bool:
     return "optim" in dotted
 
 
-@pytest.mark.smoke
 def test_no_optimizer_construction_or_step_in_package() -> None:
     """Item 20's lint: torchlens never trains, true by construction."""
 
@@ -101,7 +98,6 @@ def test_no_optimizer_construction_or_step_in_package() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_exemption_ledger_rows_still_exist() -> None:
     """The ledger is shrink-only: a stale row must be deleted, not kept."""
 
@@ -109,7 +105,6 @@ def test_exemption_ledger_rows_still_exist() -> None:
     assert stale == [], f"exemption rows for deleted files: {stale}"
 
 
-@pytest.mark.smoke
 def test_fitted_seam_spec_carries_the_provenance_field_set() -> None:
     """The accepting seam's emitted spec is FittedProvenance-shaped."""
 

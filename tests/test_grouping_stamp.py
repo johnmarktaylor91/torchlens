@@ -43,7 +43,6 @@ def _healthy() -> dict:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_grouping_kwarg_is_keyword_only_and_structural_proceeds() -> None:
     log = _tiny_trace(grouping="structural")
     assert log.grouping == "structural"
@@ -69,7 +68,6 @@ def test_grouping_entry_refusals() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_stamp_written_on_default_and_degraded_paths() -> None:
     default_log = _tiny_trace()
     assert default_log.grouping_policy == {
@@ -170,7 +168,6 @@ def test_validation_rule_matrix() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_g1_stamp_roundtrip_under_switch(tmp_path) -> None:
     trace = _tiny_trace()
     path = tmp_path / "stamp.tlspec"
@@ -201,7 +198,6 @@ def _tampered_reload(tmp_path, mutate, name: str) -> tl.Trace:
             return tl.load(str(repath))
 
 
-@pytest.mark.smoke
 def test_g3_tampered_unknown_key_refuses_and_settles(tmp_path) -> None:
     def plant_unknown_key(trace: tl.Trace) -> None:
         trace.grouping_policy = {**trace.grouping_policy, "forged": True}
@@ -210,7 +206,6 @@ def test_g3_tampered_unknown_key_refuses_and_settles(tmp_path) -> None:
     assert reloaded.grouping_policy == degraded_grouping_policy_stamp("unknown_key")
 
 
-@pytest.mark.smoke
 def test_g3_forged_policy_degrades_with_rule_name(tmp_path) -> None:
     def forge_policy(trace: tl.Trace) -> None:
         trace.grouping_policy = {**trace.grouping_policy, "policy": "greedy"}
@@ -219,7 +214,6 @@ def test_g3_forged_policy_degrades_with_rule_name(tmp_path) -> None:
     assert reloaded.grouping_policy == degraded_grouping_policy_stamp("vocabulary")
 
 
-@pytest.mark.smoke
 def test_g3_mirror_incoherence_degrades_c6(tmp_path) -> None:
     def forge_requested(trace: tl.Trace) -> None:
         trace.grouping_policy = {**trace.grouping_policy, "requested": "fold_sites"}
@@ -228,7 +222,6 @@ def test_g3_mirror_incoherence_degrades_c6(tmp_path) -> None:
     assert reloaded.grouping_policy == degraded_grouping_policy_stamp("c6")
 
 
-@pytest.mark.smoke
 def test_g3_degraded_settlement_roundtrips_byte_stable(tmp_path) -> None:
     def forge_policy(trace: tl.Trace) -> None:
         trace.grouping_policy = {**trace.grouping_policy, "policy": "greedy"}
@@ -252,7 +245,6 @@ def test_g3_degraded_settlement_roundtrips_byte_stable(tmp_path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_g5_legacy_v7_artifact_settles_silently() -> None:
     from pathlib import Path
 

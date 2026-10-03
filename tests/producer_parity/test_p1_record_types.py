@@ -48,7 +48,6 @@ from torchlens.ir.op_record_scatter import (
 # in the `-m smoke` tier, so the smoke mark is applied per test instead.
 
 
-@pytest.mark.smoke
 def test_three_way_manifest_closure() -> None:
     from torchlens.data_classes.op import _OP_SLOT_NAMES
 
@@ -61,7 +60,6 @@ def test_three_way_manifest_closure() -> None:
     assert not stale, f"manifest rows without a store cell: {sorted(stale)}"
 
 
-@pytest.mark.smoke
 def test_manifest_regenerate_and_diff() -> None:
     from tools.generate_op_record_manifest import generate
 
@@ -109,7 +107,6 @@ def test_manifest_check_cli_works_as_a_subprocess(invocation: str) -> None:
     assert result.stdout.strip().startswith("ok:"), result.stdout
 
 
-@pytest.mark.smoke
 def test_amendment_registry_exact_sets() -> None:
     union = {path for schema in AMENDMENT_FAMILIES.values() for path, _ in schema}
     assert union == set(PATH_TO_FLAT), "PATH_TO_FLAT must cover exactly the path union"
@@ -287,7 +284,6 @@ def test_scatter_is_the_single_ingest_truth(tmp_path: Path) -> None:
                 assert cells["type_index"] is not None
 
 
-@pytest.mark.smoke
 def test_ingest_inputs_v1_reserves_aten_lane_and_covers_step0_reads() -> None:
     import json
 

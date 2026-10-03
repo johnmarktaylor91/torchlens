@@ -60,7 +60,6 @@ class _BranchingModel(nn.Module):
 # =============================================================================
 
 
-@pytest.mark.smoke
 def test_save_new_outs_basic():
     """save_new_outs replaces outs on a simple model."""
     model = _SimpleFF()
@@ -648,7 +647,6 @@ def _tamper_recorded_training_literal(log, sink, value):
     source.non_tensor_pos_args = args
 
 
-@pytest.mark.smoke
 def test_eval_mode_batchnorm_refresh_allowed_default_path():
     """D18 NEW capability: eval-mode BatchNorm is refresh-eligible by default."""
 
@@ -672,7 +670,6 @@ def test_eval_mode_batchnorm_refresh_allowed_default_path():
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_eval_mode_batchnorm_run_default_path_verified():
     """D18 end-to-end: run() on an eval-BN model settles VERIFIED by default."""
 
@@ -693,7 +690,6 @@ def test_eval_mode_batchnorm_run_default_path_verified():
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_train_mode_batchnorm_refresh_still_refuses():
     """O3 PINNED FOREVER: train-mode BatchNorm refresh refuses, typed."""
 
@@ -711,7 +707,6 @@ def test_train_mode_batchnorm_refresh_still_refuses():
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_train_mode_counter_only_still_refuses():
     """O3: a lone inplace buffer counter (num_batches_tracked shape) refuses."""
 
@@ -729,7 +724,6 @@ def test_train_mode_counter_only_still_refuses():
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_tampered_buffer_value_changed_claim_refuses_typed():
     """Tamper: a stored write-evidence bit flipped to False cannot buy a pass.
 
@@ -756,7 +750,6 @@ def test_tampered_buffer_value_changed_claim_refuses_typed():
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_train_claim_with_unchanged_values_refuses():
     """7.2 belt, other direction: a train claim over unchanged values refuses."""
 
@@ -777,7 +770,6 @@ def test_train_claim_with_unchanged_values_refuses():
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_tampered_training_literal_claim_refuses_typed():
     """Direct tamper of the recorded literal training argument refuses typed."""
 
@@ -798,7 +790,6 @@ def test_tampered_training_literal_claim_refuses_typed():
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_tampered_module_mode_record_refuses_typed():
     """Direct tamper of the module_training_modes record refuses typed."""
 
@@ -818,7 +809,6 @@ def test_tampered_module_mode_record_refuses_typed():
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_mode_flip_between_runs_refuses():
     """O1 live tripwire: eval capture, model.train() before refresh, typed."""
 
@@ -836,7 +826,6 @@ def test_mode_flip_between_runs_refuses():
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_buffer_value_changed_none_fails_closed():
     """Unproven write evidence (None) refuses typed -- never widens past evidence."""
 
@@ -856,7 +845,6 @@ def test_buffer_value_changed_none_fails_closed():
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_state_restore_does_not_loosen_projector():
     """5.2 red-stays-red: snapshot-restore never loosens the buffer-sink refusal.
 
@@ -898,7 +886,6 @@ class _RoutingFlipModel(nn.Module):
         return out
 
 
-@pytest.mark.smoke
 def test_carry_state_then_routing_change_still_refuses():
     """5.3 red-stays-red: carried state that changes routing refuses next run.
 

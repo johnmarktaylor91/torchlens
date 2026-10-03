@@ -27,8 +27,6 @@ import torchlens as tl
 from torchlens._io import ArtifactVersionBelowFloorError
 from torchlens.capture.outcome import CaptureStatus
 
-pytestmark = [pytest.mark.smoke]
-
 _CORPUS_SHA256 = (  # content digest, not a credential
     "3429a84fbd406d374afde5b50f6a8be0867ada77b728d6e88309713c6eadcdb3"  # pragma: allowlist secret
 )

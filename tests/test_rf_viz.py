@@ -191,7 +191,6 @@ def test_show_3d_requires_explicit_slice() -> None:
         show(_View(descriptor), (0, 0, 3, 3, 3), image=Image.new("RGB", (80, 60)))
 
 
-@pytest.mark.smoke
 def test_show_rejects_ambiguous_input() -> None:
     """Reject multi-input display requests unless the IO role is selected."""
 

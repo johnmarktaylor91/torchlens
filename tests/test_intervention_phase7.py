@@ -125,7 +125,6 @@ def _capture(model: torch.nn.Module, x: torch.Tensor) -> tl.Trace:
     return tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
 
 
-@pytest.mark.smoke
 def test_rerun_baseline_matches_original_graph_hash_and_sets_state() -> None:
     """No-op rerun re-captures the same graph and updates run state."""
 
@@ -148,7 +147,6 @@ def test_rerun_baseline_matches_original_graph_hash_and_sets_state() -> None:
     assert log.state_history[-1]["engine"] == "rerun"
 
 
-@pytest.mark.smoke
 def test_rerun_with_hook_updates_downstream_out() -> None:
     """Rerun installs the active spec so live hooks affect downstream output."""
 
@@ -269,7 +267,6 @@ def test_rerun_colliding_hook_identifiers_do_not_hide_misses() -> None:
     assert unfired == (plan_ids[1],)
 
 
-@pytest.mark.smoke
 def test_rerun_failure_leaves_original_log_unchanged() -> None:
     """Fresh-capture failures happen before atomic swap."""
 
@@ -289,7 +286,6 @@ def test_rerun_failure_leaves_original_log_unchanged() -> None:
     assert log.state_history == history_after_success
 
 
-@pytest.mark.smoke
 def test_rerun_keyboard_interrupt_during_build_leaves_original_log_unchanged(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -371,6 +367,7 @@ def test_rerun_honors_metadata_only_save_scope() -> None:
     assert log.last_run["engine"] == "rerun"
 
 
+@pytest.mark.smoke
 def test_rerun_matching_graph_refreshes_existing_ops_without_full_swap() -> None:
     """Same-shape rerun updates existing Op payload fields in place."""
 

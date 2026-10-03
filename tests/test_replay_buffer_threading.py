@@ -39,8 +39,6 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens.intervention.errors import BufferThreadGapWarning
 
-pytestmark = pytest.mark.smoke
-
 ATOL = 1e-6
 
 
@@ -184,6 +182,7 @@ def test_inplace_activation_op_does_not_corrupt_origin_readback() -> None:
     assert torch.equal(final, torch.full((2, 4), 12.0))
 
 
+@pytest.mark.smoke
 def test_unprovable_buffer_thread_warns_and_keeps_captured_value() -> None:
     """A write kind outside the provable set keeps capture and discloses."""
 

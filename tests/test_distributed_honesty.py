@@ -196,7 +196,6 @@ def _find(findings: tuple[DistributedFinding, ...], kind: str) -> DistributedFin
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_dense_model_reports_no_distributed_findings() -> None:
     """An ordinary dense model must produce no findings at all."""
 
@@ -204,7 +203,6 @@ def test_dense_model_reports_no_distributed_findings() -> None:
     assert detect_distributed_state(model, torch.randn(2, 4)) == ()
 
 
-@pytest.mark.smoke
 def test_dense_model_rows_all_pass_and_capture_succeeds() -> None:
     """All four rows read ``pass``/``ok`` and capture is unaffected."""
 

@@ -20,8 +20,6 @@ from torch import nn
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke
-
 
 class _TinyModel(nn.Module):
     def __init__(self) -> None:

@@ -8,10 +8,7 @@ once per IDENTITY, never once per consumption.
 
 from __future__ import annotations
 
-import pytest
 import torch
-
-pytestmark = [pytest.mark.smoke]
 
 
 def _mlp() -> torch.nn.Module:

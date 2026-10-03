@@ -23,8 +23,6 @@ from torchlens.ir.events import _AtenExecutionContext, _AtenTensorFact
 from torchlens.validation._invariants_primitive_ops import _check_primitive_op_invariants
 from torchlens.validation.invariants import MetadataInvariantError, check_metadata_invariants
 
-pytestmark = pytest.mark.smoke
-
 _DOCUMENTED_UNSTABLE_ATEN_TOKENS = {
     "AtenOp",
     "OpRef",
@@ -262,6 +260,7 @@ def test_recording_off_never_constructs_primitive_retention(
     assert trace._primitive_op_profile is None
 
 
+@pytest.mark.smoke
 def test_mode_paused_interior_is_one_lower_bound_gap_not_a_synthetic_row() -> None:
     """Strict subclass construction records a typed gap, with exact parentage, per crossing.
 
@@ -292,6 +291,7 @@ def test_mode_paused_interior_is_one_lower_bound_gap_not_a_synthetic_row() -> No
     assert check_metadata_invariants(trace)
 
 
+@pytest.mark.smoke
 def test_backward_rows_resolve_to_grad_fn_calls() -> None:
     """The shared observer attributes engine dispatches to active GradFn calls."""
 
@@ -308,6 +308,9 @@ def test_backward_rows_resolve_to_grad_fn_calls() -> None:
     assert check_metadata_invariants(trace)
 
 
+@pytest.mark.smoke_cells(
+    "test_delayed_grad_fn_lineage_covers_required_mutation_breakers[model3-index_put_]"
+)
 @pytest.mark.parametrize(
     ("model", "expected_operator"),
     [
@@ -422,6 +425,7 @@ def test_plain_v8_round_trip_persists_the_profile(tmp_path: Path) -> None:
     assert check_metadata_invariants(loaded)
 
 
+@pytest.mark.smoke_cells("test_prerelease_load_refuses_dangling_and_forged_op_fks[dangling]")
 @pytest.mark.parametrize("tamper_kind", ["dangling", "forged"])
 def test_prerelease_load_refuses_dangling_and_forged_op_fks(
     tmp_path: Path,
@@ -478,6 +482,9 @@ def test_live_fk_tamper_names_primitive_invariant() -> None:
     assert exc_info.value.check_name == "primitive_op_invariants"
 
 
+@pytest.mark.smoke_cells(
+    "test_super_aten_op_alignment_statuses[members1-member_names1-False-sparse]"
+)
 @pytest.mark.parametrize(
     ("members", "member_names", "incomplete", "expected"),
     [

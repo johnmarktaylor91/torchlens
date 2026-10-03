@@ -40,7 +40,6 @@ def test_a1_save_new_outs_output_layer_keeps_grad(two_layer_mlp: TwoLayerMlp) ->
     trace.cleanup()
 
 
-@pytest.mark.smoke
 def test_a1_two_pass_selective_save_output_layer_keeps_grad(two_layer_mlp: TwoLayerMlp) -> None:
     """Selective two-pass capture keeps the output-layer out attached."""
 

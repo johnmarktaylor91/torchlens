@@ -21,7 +21,6 @@ GPT2_DECLARED_UNIQUE_PARAMS = 124_439_808
 GPT2_PER_PATH_PARAMS = 163_037_184  # wte/lm_head tie counted per path
 
 
-@pytest.mark.smoke
 def test_one_linear_closed_form_pins() -> None:
     """one-Linear(8,16,bias) batch 2: 544 FLOPs / 192 B tracked; alias owns 0."""
 

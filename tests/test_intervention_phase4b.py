@@ -164,7 +164,6 @@ def test_hf_model_output_replacement_preserves_concrete_type_and_attributes() ->
     assert replaced.last_hidden_state is hidden
 
 
-@pytest.mark.smoke
 def test_intervention_ready_records_unique_container_paths_for_multi_output_op() -> None:
     """Multi-output torch calls share call id while preserving per-output paths."""
 
@@ -202,7 +201,6 @@ def test_intervention_ready_records_unique_container_paths_for_multi_output_op()
     assert all(layer.container_spec is not None for layer in split_layers)
 
 
-@pytest.mark.smoke
 def test_replay_templates_classify_parent_literals_and_literal_tensors() -> None:
     """Captured templates classify parent refs, literal values, and tensor literals."""
 
@@ -245,7 +243,6 @@ def test_replay_templates_classify_parent_literals_and_literal_tensors() -> None
     assert any(isinstance(component, LiteralValue) for component in flattened)
 
 
-@pytest.mark.smoke
 def test_internal_edge_uses_extend_parent_arg_locs_without_replacing_them() -> None:
     """Edge provenance agrees with existing parent-layer arg locations."""
 
@@ -293,7 +290,6 @@ def test_internal_edge_uses_extend_parent_arg_locs_without_replacing_them() -> N
         assert all(edge.child_func_call_id == layer.func_call_id for edge in layer._edge_uses)
 
 
-@pytest.mark.smoke
 def test_non_intervention_ready_capture_leaves_templates_empty_and_edges_persisted() -> None:
     """Default capture avoids templates but keeps graph edge provenance."""
 

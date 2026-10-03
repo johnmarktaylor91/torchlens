@@ -77,7 +77,6 @@ def chain():
     return _Chain().eval(), torch.randn(3, 4)
 
 
-@pytest.mark.smoke
 def test_injection_misfire_two_edit_labels_never_shift(chain) -> None:
     """THE MISFIRE TEST: early-site injections never move a later target.
 
@@ -101,7 +100,6 @@ def test_injection_misfire_two_edit_labels_never_shift(chain) -> None:
     assert len(base.injected_ops) == 0
 
 
-@pytest.mark.smoke
 def test_injection_anchored_provenance_c07_grammar(chain) -> None:
     """Provenance is verbatim the C07 slot: anchored key + display label."""
 
@@ -138,7 +136,6 @@ def test_injection_anchored_provenance_c07_grammar(chain) -> None:
     assert isinstance(first.out, torch.Tensor)
 
 
-@pytest.mark.smoke
 def test_injection_firing_index_advances_per_fire() -> None:
     """A rule firing at two sites gets firing_index 1 then 2."""
 
@@ -171,7 +168,6 @@ def test_injection_query_split_and_model_family_untouched(chain) -> None:
             logged[record.label]
 
 
-@pytest.mark.smoke
 def test_injection_selectors_never_fire_on_injected_ops(chain) -> None:
     """A save= selector's selection is identical with injections logged.
 
@@ -207,7 +203,6 @@ def test_injection_selectors_never_fire_on_injected_ops(chain) -> None:
     assert any(r.func_name == "relu" for r in logged.injected_ops)
 
 
-@pytest.mark.smoke
 def test_injection_save_persists_at_analysis_level(chain, tmp_path) -> None:
     """Stage 2 (F44): analysis saves persist the injected family; runnable refuses.
 
@@ -233,7 +228,6 @@ def test_injection_save_persists_at_analysis_level(chain, tmp_path) -> None:
     tl.save(clean, str(tmp_path / "clean.tlspec"))
 
 
-@pytest.mark.smoke
 def test_injection_validation_tripwire_unchanged(chain) -> None:
     """RELEASE GATE: ordinary validation identical on logged vs unlogged.
 
@@ -260,7 +254,6 @@ def test_injection_validation_tripwire_unchanged(chain) -> None:
     assert str(logged_verdict) == str(base_verdict)
 
 
-@pytest.mark.smoke
 def test_injection_hook_exception_cleans_recorder(chain) -> None:
     """A raising hook tears the recorder down; later torch ops stay clean."""
 
@@ -278,7 +271,6 @@ def test_injection_hook_exception_cleans_recorder(chain) -> None:
     assert torch.relu(torch.tensor([-1.0, 2.0])).tolist() == [0.0, 2.0]
 
 
-@pytest.mark.smoke
 def test_injection_off_by_default_and_plain_capture_unaffected(chain) -> None:
     """The option defaults OFF; plain captures carry an empty injected family."""
 
@@ -289,7 +281,6 @@ def test_injection_off_by_default_and_plain_capture_unaffected(chain) -> None:
     assert [op.label for op in plain.model_ops] == [op.label for op in plain.layer_list]
 
 
-@pytest.mark.smoke
 def test_intervene_fire_counter_is_a_declared_session_transient() -> None:
     """FIX-2 enrollment pin: the intervene fire counter has a real scrub policy.
 
@@ -317,7 +308,6 @@ def test_intervene_fire_counter_is_a_declared_session_transient() -> None:
     assert name not in TRACE_EXTERNAL_WRITE_EXEMPTIONS
 
 
-@pytest.mark.smoke
 def test_streamed_to_disk_intervene_capture_settles_and_loads(chain, tmp_path) -> None:
     """FIX-2 regression: streamed ``to_disk`` + ``intervene=`` captures save.
 

@@ -27,8 +27,6 @@ import torchlens as tl
 from torchlens._io import tlspec as tlspec_mod
 from torchlens.io import cleanup_tmp
 
-pytestmark = pytest.mark.smoke
-
 
 def _trace(seed: int = 0) -> tl.Trace:
     torch.manual_seed(seed)

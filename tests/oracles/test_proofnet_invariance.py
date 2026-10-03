@@ -15,13 +15,10 @@ import re
 from pathlib import Path
 from typing import Any
 
-import pytest
 import torch
 
 from tests.oracles._known_gaps import load_known_gaps
 from tests.oracles._lints import load_dont_care
-
-pytestmark = [pytest.mark.smoke]
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 

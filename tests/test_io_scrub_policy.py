@@ -614,7 +614,6 @@ def _public_methods(cls: type) -> set[str]:
     return names
 
 
-@pytest.mark.smoke
 def test_public_method_sweep_tables_are_total(tmp_path: Path) -> None:
     """Every public method is either swept or excluded with a reason -- exactly.
 
@@ -707,7 +706,6 @@ def test_public_method_reads_never_poison_save(tmp_path: Path) -> None:
     pickle.dumps(live_log)
 
 
-@pytest.mark.smoke
 def test_draw_then_save_and_pickle_regression(tmp_path: Path) -> None:
     """Focused fail-before pin: draw() must not poison tl.save or pickle.
 
@@ -725,7 +723,6 @@ def test_draw_then_save_and_pickle_regression(tmp_path: Path) -> None:
     pickle.dumps(log)
 
 
-@pytest.mark.smoke
 def test_ledgered_undeclared_trace_field_refusal_teaches(tmp_path: Path) -> None:
     """The completeness refusal quotes the external-write ledger row.
 
@@ -757,7 +754,6 @@ def test_ledgered_undeclared_trace_field_refusal_teaches(tmp_path: Path) -> None
     assert "not a scrub policy" in message
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("raw_policy", [True, "small"], ids=["true", "small"])
 def test_r69_sparse_runnable_save_always_drops_raw_fields(tmp_path: Path, raw_policy) -> None:
     """r69 E: effective DROP wins before the Trace raw-value special case.

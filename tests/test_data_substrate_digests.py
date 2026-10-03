@@ -25,8 +25,6 @@ from torchlens._data_substrate import (
 )
 from torchlens._errors import InvalidArgumentError
 
-pytestmark = pytest.mark.smoke
-
 
 def _entries(n: int = 4, seed: int = 0) -> list[tuple[str, torch.Tensor]]:
     """Build deterministic named-tensor entries.

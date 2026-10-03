@@ -75,7 +75,6 @@ def _assert_trace_structure(trace: tl.Trace) -> None:
             assert op.layer_label in trace[child].parents or op.label in trace[child].parents
 
 
-@pytest.mark.smoke
 def test_phase1_event_materializer_small_cnn() -> None:
     """Trace a CNN and validate graph, metadata, modules, and replay."""
 
@@ -91,7 +90,6 @@ def test_phase1_event_materializer_small_cnn() -> None:
     assert validate_forward_pass(model, x)
 
 
-@pytest.mark.smoke
 def test_phase1_event_materializer_recurrent_params() -> None:
     """Trace a recurrent parameter model and validate pass grouping."""
 

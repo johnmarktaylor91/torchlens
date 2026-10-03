@@ -33,7 +33,6 @@ EPS32 = float(torch.finfo(torch.float32).eps)
 # pure-logic pins (smoke)
 
 
-@pytest.mark.smoke
 def test_budget_is_per_element_and_scales_with_the_elements_own_magnitude() -> None:
     magnitude = torch.tensor([[1.0, 100.0]])
     budget = _dla._identity_budget(magnitude, n_addends=28, eps=EPS32)
@@ -45,7 +44,6 @@ def test_budget_is_per_element_and_scales_with_the_elements_own_magnitude() -> N
     assert budget[0, 1].item() / budget[0, 0].item() == pytest.approx(100.0, rel=1e-5)
 
 
-@pytest.mark.smoke
 def test_budget_depth_term_is_monotone_and_floored_at_two_addends() -> None:
     magnitude = torch.ones(1)
     b1 = _dla._identity_budget(magnitude, n_addends=1, eps=EPS32)
@@ -69,7 +67,6 @@ def test_identity_eps_takes_the_coarsest_floating_dtype_in_the_chain() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_check_identity_receipt_discloses_the_budget_model() -> None:
     native = torch.tensor([[[50.0, 0.01]]])
     magnitude = torch.tensor([[[400.0, 0.05]]])
@@ -104,7 +101,6 @@ def test_check_identity_catches_a_small_error_on_a_low_magnitude_element() -> No
     assert info.value.fields["tolerance"] == pytest.approx(small_budget)
 
 
-@pytest.mark.smoke
 def test_check_identity_worst_element_is_the_largest_budget_fraction() -> None:
     """The receipt's tolerance is the budget AT the worst-fraction element."""
 
@@ -131,7 +127,6 @@ def test_direction_terms_and_difference_keep_the_served_value() -> None:
     assert torch.equal(_dla._difference((only,)), w_u[:, 2:3])
 
 
-@pytest.mark.smoke
 def test_unravel_matches_row_major_flattening() -> None:
     shape = (2, 3, 4)
     flat = torch.arange(24).reshape(shape)

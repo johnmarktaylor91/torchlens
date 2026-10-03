@@ -32,7 +32,6 @@ _HEADER = (
 )
 
 
-@pytest.mark.smoke
 def test_frozen_table_hygiene() -> None:
     """Sorted, duplicate-free, exact header: hand edits cannot hide."""
 
@@ -43,7 +42,6 @@ def test_frozen_table_hygiene() -> None:
     assert len(paths) == len(set(paths)), "frozen table holds duplicate canonical_path rows"
 
 
-@pytest.mark.smoke
 def test_dir_advertises_every_surface_row() -> None:
     """The five-step ``__getattr__``'s ``dir()`` covers the whole table."""
 

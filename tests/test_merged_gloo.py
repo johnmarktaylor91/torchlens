@@ -94,8 +94,6 @@ def _capture(witness: str = "digest"):
 
 
 class TestLiveMerge:
-    pytestmark = pytest.mark.smoke
-
     def test_live_merge_aligned_and_attested(self, gloo_world):
         merged = tl.merge_ranks([_capture()])
         assert merged.alignment.value == "aligned"
@@ -105,6 +103,7 @@ class TestLiveMerge:
         assert merged.rank_ids == (0,)
         assert "witness coverage" in merged.summary()
 
+    @pytest.mark.smoke
     def test_merge_report_matches_merge(self, gloo_world):
         log = _capture()
         report = tl.merge_report([log])
@@ -117,6 +116,7 @@ class TestLiveMerge:
         ops = merged.join_ops(merged.joins[0])
         assert len(ops[0]) == 1 and ops[0][0].type == "allreduce"
 
+    @pytest.mark.smoke
     def test_rank_qualified_sugar_and_super_op(self, gloo_world):
         merged = tl.merge_ranks([_capture()])
         label = merged.join_ops(merged.joins[0])[0][0].label
@@ -151,6 +151,7 @@ class TestLiveMerge:
             tl.merge_ranks([log, log])
         assert excinfo.value.fields["code"] == "merge_input_invalid"
 
+    @pytest.mark.smoke
     def test_happens_before_orders_sequential_joins(self, gloo_world):
         class TwoCollectives(nn.Module):
             def __init__(self):
@@ -173,8 +174,6 @@ class TestLiveMerge:
 
 
 class TestArtifact:
-    pytestmark = pytest.mark.smoke
-
     def test_round_trip_rederives_and_exposes_ranks(self, gloo_world, tmp_path):
         merged = tl.merge_ranks([_capture()])
         art = tmp_path / "merged.tlspec"
@@ -269,7 +268,6 @@ class TestArtifact:
 
 
 class TestTamperMatrix:
-    pytestmark = pytest.mark.smoke
     """The descriptor is a CACHE; edits refuse typed, never degrade to gaps."""
 
     def _saved(self, tmp_path):
@@ -366,7 +364,6 @@ def _append_unparseable_member(art: Path) -> Path:
 
 
 class TestDegradedLoadCoherence:
-    pytestmark = pytest.mark.smoke
     """R18-5: the degraded branch is typed and demote-only, never cache-trusting."""
 
     def _degraded(self, tmp_path: Path) -> Path:
@@ -476,6 +473,7 @@ class TestDegradedLoadCoherence:
             tl.load(art)
         assert excinfo.value.fields["code"] == "merged_descriptor_tamper"
 
+    @pytest.mark.smoke
     def test_honest_unwitnessed_degraded_load_still_loads(self, gloo_world, tmp_path):
         """The coherence checks refuse forgery, never the honest degraded load."""
 
@@ -545,7 +543,6 @@ class TestDegradedLoadCoherence:
 
 
 class TestArtifactHardening:
-    pytestmark = pytest.mark.smoke
     """b4-P slice items: platform coarsening and double-fault disclosure."""
 
     def test_manifest_platform_is_coarse(self, gloo_world, tmp_path):
@@ -593,7 +590,6 @@ class TestArtifactHardening:
 
 
 class TestRefusedSurfacesTyped:
-    pytestmark = pytest.mark.smoke
     """R18-9 presenter half: contract-promised refusals are typed, never bare."""
 
     @pytest.mark.parametrize(

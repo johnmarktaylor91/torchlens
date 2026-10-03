@@ -26,9 +26,6 @@ from torchlens.postprocess import (
     _write_audit_record_mode,
 )
 
-pytestmark = pytest.mark.smoke
-
-
 INERT_OPTION_KWARGS = [
     (tl.options.InterventionOptions, "helper_validation", "default"),
     (tl.options.InterventionOptions, "auto_promote", False),

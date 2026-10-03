@@ -15,8 +15,6 @@ from torch import nn
 import torchlens as tl
 from torchlens._errors import ArgumentConflictError, InvalidArgumentError, ShapeInferenceError
 
-pytestmark = pytest.mark.smoke
-
 
 class _Toy(nn.Module):
     """Two-Linear toy with an orphan relu."""
@@ -110,6 +108,7 @@ def test_legacy_spellings_stay_byte_stable(toy_trace) -> None:
     )
 
 
+@pytest.mark.smoke
 def test_columns_bundle_exact_and_deltas(toy_trace) -> None:
     """columns= accepts a bundle name, an exact list, or +/- deltas."""
 
@@ -124,6 +123,7 @@ def test_columns_bundle_exact_and_deltas(toy_trace) -> None:
     assert excinfo.value.fields["code"] == "summary_option_invalid"
 
 
+@pytest.mark.smoke
 def test_filter_discloses_coverage_and_preserves_totals(toy_trace) -> None:
     """Filters are presentation-only: coverage named, totals whole-model."""
 

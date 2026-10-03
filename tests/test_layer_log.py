@@ -82,7 +82,6 @@ def _assert_layer_labels_are_not_doubled(trace: Trace) -> None:
 
 
 class TestLayerLogConstruction:
-    @pytest.mark.smoke
     def test_layer_logs_populated(self, simple_log):
         """layer_logs dict is populated after postprocessing."""
         assert len(simple_log.layer_logs) > 0
@@ -93,7 +92,6 @@ class TestLayerLogConstruction:
             assert ":" not in key
             assert isinstance(layer_log, Layer)
 
-    @pytest.mark.smoke
     def test_trace_layer_labels_not_doubled_for_recurrent_model(
         self: "TestLayerLogConstruction",
         recurrent_log: Trace,
@@ -139,7 +137,6 @@ class TestLayerLogConstruction:
 
 
 class TestSinglePassDelegation:
-    @pytest.mark.smoke
     def test_tensor_contents_delegation(self, simple_log):
         """out delegates to ops[0] for single-pass."""
         for layer_log in simple_log.layer_logs.values():
@@ -221,7 +218,6 @@ class TestAggregateFields:
 
 
 class TestMultiPassLayerLog:
-    @pytest.mark.smoke
     def test_recurrent_layer_has_multiple_ops(self, recurrent_log):
         """The repeated fc layer should have 2 ops."""
         multi_pass_found = False

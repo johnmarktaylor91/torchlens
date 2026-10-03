@@ -23,8 +23,6 @@ import torchlens as tl
 from torchlens.errors import TorchLensError
 from torchlens.observability import ArmSpec, RefusalPredicate, measure_overhead
 
-pytestmark = pytest.mark.smoke
-
 
 def test_admissible_measurement_produces_full_artifact() -> None:
     """A clean paired run yields statistics plus the declared scope."""
@@ -51,6 +49,7 @@ def test_admissible_measurement_produces_full_artifact() -> None:
     assert len(result.pair_ratios) == 7
 
 
+@pytest.mark.smoke
 def test_physically_impossible_ratio_is_refused() -> None:
     """An 'instrument' faster than its baseline refuses the point estimate."""
 
@@ -66,6 +65,7 @@ def test_physically_impossible_ratio_is_refused() -> None:
     assert any("physically_impossible_ratio" in reason for reason in result.refusals)
 
 
+@pytest.mark.smoke
 def test_witness_divergence_refuses_the_measurement() -> None:
     """Composition row: mismatched arms -- the harness must refuse itself."""
 

@@ -6,8 +6,6 @@ from collections.abc import Collection
 from dataclasses import dataclass
 from typing import Any
 
-import pytest
-
 from torchlens import constants
 from torchlens._io import FieldPolicy
 from torchlens.data_classes.buffer import Buffer
@@ -23,7 +21,6 @@ from torchlens.data_classes.trace import Trace
 # Static contract checks over constants only: cheap enough for the commit-level
 # gate, which is exactly where a schema drift has to become visible (the
 # 00bc67d3 KEEP->DROP flips were invisible to -m smoke for want of a marker).
-pytestmark = pytest.mark.smoke
 
 
 @dataclass(frozen=True)

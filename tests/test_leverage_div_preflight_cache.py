@@ -11,14 +11,11 @@ from __future__ import annotations
 
 from dataclasses import fields as dataclass_fields
 
-import pytest
 import torch
 from test_leverage_div_fixtures import ReusedReluNet
 
 import torchlens as tl
 from torchlens.capture.preflight import cone_preflight
-
-pytestmark = pytest.mark.smoke
 
 
 def _armed_trace():

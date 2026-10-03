@@ -37,8 +37,6 @@ from torchlens.errors import (
 from torchlens.options import CaptureOptions
 from torchlens.runnable import PathFaithfulness, RunnableErrorCode
 
-pytestmark = pytest.mark.smoke
-
 
 def _capture_options() -> CaptureOptions:
     """Return the standard runnable-capable capture options."""

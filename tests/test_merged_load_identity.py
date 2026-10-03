@@ -39,8 +39,6 @@ from torchlens.merged._artifact import canonical_json_bytes, load_merged, tree_h
 from torchlens.merged._enums import MergedErrorCode
 from torchlens.merged._errors import MergedArtifactError
 
-pytestmark = pytest.mark.smoke
-
 WORLD = membership_digest_for_ranks([0, 1])
 _CC = hashlib.sha256(b"cc").hexdigest()
 _AA = hashlib.sha256(b"aa").hexdigest()

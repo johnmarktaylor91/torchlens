@@ -14,7 +14,7 @@ from tinygrad import Tensor  # noqa: E402
 import torchlens as tl  # noqa: E402
 from torchlens.backends.tinygrad import TinygradBackend  # noqa: E402
 
-pytestmark = [pytest.mark.backend_tinygrad, pytest.mark.smoke]
+pytestmark = pytest.mark.backend_tinygrad
 
 
 def _weight() -> Any:

@@ -10,8 +10,6 @@ from torchlens._trace_core.op_store import (
     OpStoreLayout,
 )
 
-pytestmark = pytest.mark.smoke
-
 LAYOUT = OpStoreLayout(("alpha", "beta", "gamma", "delta"))
 
 
@@ -112,6 +110,7 @@ class TestFrozenPhase:
         store.cell_set(0, 0, "over")
         assert store.cell_get(0, 0) == "over"
 
+    @pytest.mark.smoke
     def test_post_freeze_object_delete_releases_the_cell(self):
         store = _store_with_rows(2)
         big = object()

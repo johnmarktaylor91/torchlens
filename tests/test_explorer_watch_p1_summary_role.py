@@ -24,8 +24,6 @@ from torchlens.ir.summary_role import (
     transform_role,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 def _histo64(t: torch.Tensor) -> torch.Tensor:
     return torch.histc(t.float(), bins=8).to(torch.int64)
@@ -136,6 +134,7 @@ class TestTraceTrainModeCarveOut:
         # The refusal teaches the new remedy at the point of failure.
         assert "summary(" in str(excinfo.value)
 
+    @pytest.mark.smoke
     def test_summary_grad_transform_passes(self) -> None:
         model = _model()
         x = torch.randn(2, 4, requires_grad=True)
@@ -211,6 +210,7 @@ class TestFastlogCarveOut:
 class TestStreamingTripwireUnchanged:
     """The streaming serialization validator is NOT relaxed by the role."""
 
+    @pytest.mark.smoke
     def test_summary_non_tensor_output_refuses_under_streaming(self, tmp_path) -> None:
         from torchlens._io import TorchLensIOError
 

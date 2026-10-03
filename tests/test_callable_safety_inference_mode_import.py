@@ -72,7 +72,6 @@ def test_first_capture_under_inference_mode_succeeds_fresh_process() -> None:
     assert "OK" in completed.stdout
 
 
-@pytest.mark.smoke
 def test_pure_view_classification_identical_inside_and_outside_inference_mode() -> None:
     """The pure-view classification is unchanged whether or not inference mode is active."""
 
@@ -86,7 +85,6 @@ def test_pure_view_classification_identical_inside_and_outside_inference_mode() 
     assert torch.is_grad_enabled()
 
 
-@pytest.mark.smoke
 def test_mode_free_probe_context_neutralizes_inference_and_grad() -> None:
     """Inside the probe context, inference mode is off and grad is on, regardless of ambient."""
 

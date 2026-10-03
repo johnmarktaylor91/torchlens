@@ -25,8 +25,6 @@ from torchlens.runnable import (
     StateSource,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 class _MixedBufferModel(nn.Module):
     """One persistent and one used NON-persistent registered buffer."""

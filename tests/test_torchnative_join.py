@@ -28,8 +28,6 @@ import pytest
 from torchlens.observability import join_events
 from torchlens.observability._kineto import NormalizedEvent
 
-pytestmark = pytest.mark.smoke
-
 _US = 1_000  # ns per microsecond for readable fixture literals
 
 
@@ -132,6 +130,7 @@ def test_one_to_many_and_union_not_sum() -> None:
     assert result.op_device_ns["9"] == 200 * _US
 
 
+@pytest.mark.smoke
 def test_fused_many_owner_launch_group_is_ambiguous() -> None:
     """Several owners of ONE launch form a group -- never split or doubled."""
 
@@ -178,6 +177,7 @@ def test_innermost_owner_nesting() -> None:
     assert row.owner_labels == ("11",)
 
 
+@pytest.mark.smoke
 def test_kinds_stay_separate_and_internal_is_typed() -> None:
     """Copies/memsets are separate rows; internal work is excluded in (a)."""
 
@@ -233,6 +233,7 @@ def test_unavailable_extraction_is_disclosed() -> None:
     assert "unavailable" in (result.coverage.reason or "")
 
 
+@pytest.mark.smoke
 def test_explicit_device_time_request_refuses_typed() -> None:
     """Ladder rung 3: an inapplicable column raises typed with remedy."""
 

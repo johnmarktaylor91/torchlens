@@ -22,7 +22,7 @@ pytest.importorskip("transformers")
 
 from tests.real_model.r0.families import _token_ids, build_bert, build_gpt2  # noqa: E402
 
-pytestmark = [pytest.mark.smoke, pytest.mark.real_model]
+pytestmark = pytest.mark.real_model
 
 
 @pytest.fixture(scope="module")

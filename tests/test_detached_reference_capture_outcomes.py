@@ -67,8 +67,6 @@ import torchlens as tl
 from torchlens.backends.torch._tl import is_decorated_function
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 
-pytestmark = pytest.mark.smoke
-
 # ---------------------------------------------------------------------------
 # Environment: pristine originals, holder construction, rewrap
 # ---------------------------------------------------------------------------

@@ -13,8 +13,6 @@ import torch
 import torchlens.trackers as trk
 from torchlens.observability import EventStream, ObserverEvent
 
-pytestmark = pytest.mark.smoke
-
 
 def _mlp() -> tuple[torch.nn.Module, torch.optim.Optimizer]:
     torch.manual_seed(0)
@@ -58,6 +56,7 @@ def test_verdicts_after_the_first_drain_serialize_at_their_step() -> None:
     assert session._pending_events == []
 
 
+@pytest.mark.smoke
 def test_verdicts_pending_at_close_are_flushed_not_dropped() -> None:
     """A verdict published after the last step still reaches the sink."""
 

@@ -25,8 +25,6 @@ from torchlens.backends.registry import get_backend_spec
 from torchlens.data_classes.trace import Trace
 from torchlens.options import CaptureOptions
 
-smoke = pytest.mark.smoke
-
 
 class TwoLayer(nn.Module):
     def __init__(self) -> None:
@@ -52,7 +50,6 @@ def _structure_capture(**trace_kwargs):
 # ---------------------------------------------------------------------------
 
 
-@smoke
 def test_structure_only_defaults_false_and_validates_bool() -> None:
     assert CaptureOptions().structure_only is False
     assert CaptureOptions(structure_only=True).structure_only is True
@@ -61,7 +58,6 @@ def test_structure_only_defaults_false_and_validates_bool() -> None:
     assert excinfo.value.fields["code"] == "structure_only_type_invalid"
 
 
-@smoke
 def test_grouped_structure_only_reaches_the_field() -> None:
     from torchlens.options import CaptureOptions
 
@@ -70,7 +66,6 @@ def test_grouped_structure_only_reaches_the_field() -> None:
     assert merged.is_field_explicit("structure_only")
 
 
-@smoke
 def test_non_torch_backend_refuses_explicit_structure_only_typed() -> None:
     """The capability-gate row: a backend without structure_only_capture
     refuses the explicit option instead of silently ignoring it."""
@@ -84,7 +79,6 @@ def test_non_torch_backend_refuses_explicit_structure_only_typed() -> None:
         _enforce_capability_option_gates({"structure_only": True}, mlx_spec)
 
 
-@smoke
 def test_torch_declares_and_binds_the_structure_only_capability() -> None:
     spec = get_backend_spec("torch")
     assert spec.capabilities.structure_only_capture is True
@@ -98,7 +92,6 @@ def test_torch_declares_and_binds_the_structure_only_capability() -> None:
 # ---------------------------------------------------------------------------
 
 
-@smoke
 def test_e1_all_real_flag_on_capture_is_marked_gated_and_payload_free() -> None:
     log = _structure_capture()
     assert log.structure_only is True
@@ -111,7 +104,6 @@ def test_e1_all_real_flag_on_capture_is_marked_gated_and_payload_free() -> None:
     assert tuple(log["relu_1_2"].shape) == (2, 4)
 
 
-@smoke
 def test_e6_flag_off_default_capture_is_zero_diff() -> None:
     log = tl.trace(TwoLayer(), torch.randn(2, 4))
     assert log.structure_only is False
@@ -123,7 +115,6 @@ def test_e6_flag_off_default_capture_is_zero_diff() -> None:
 # ---------------------------------------------------------------------------
 
 
-@smoke
 def test_raise_on_nan_conflicts_at_entry() -> None:
     with pytest.raises(StructureOnlyOptionConflictError) as excinfo:
         tl.trace(
@@ -135,7 +126,6 @@ def test_raise_on_nan_conflicts_at_entry() -> None:
     assert "raise_on_nan" in excinfo.value.fields["arguments"]
 
 
-@smoke
 def test_intervention_ready_conflicts_at_entry() -> None:
     """The opus B3a row: runnable eligibility would disable the plain escape
     belt, so the combination must be unreachable, not quietly belt-less."""
@@ -150,7 +140,6 @@ def test_intervention_ready_conflicts_at_entry() -> None:
     assert "intervention_ready" in excinfo.value.fields["arguments"]
 
 
-@smoke
 def test_value_touching_halt_predicates_conflict_at_entry() -> None:
     # A bare callable's value use is unprovable: fail closed.
     with pytest.raises(StructureOnlyOptionConflictError) as excinfo:
@@ -161,7 +150,6 @@ def test_value_touching_halt_predicates_conflict_at_entry() -> None:
         _structure_capture(halt=tl.where(lambda ctx: False))
 
 
-@smoke
 def test_value_free_structured_halt_stays_legal() -> None:
     """Memo 4.2: truncation composes when the predicate is provably
     value-free (structured selectors)."""
@@ -188,7 +176,6 @@ def test_value_free_structured_halt_stays_legal() -> None:
         ("lookback payloads", {"lookback": 4, "lookback_payload_policy": "detached_raw"}, {}),
     ],
 )
-@smoke
 def test_explicit_value_payload_requests_refuse_typed(
     description: str, trace_kwargs: dict, capture_kwargs: dict
 ) -> None:
@@ -202,14 +189,12 @@ def test_explicit_value_payload_requests_refuse_typed(
     assert excinfo.value.fields["code"] == "structure_only_values_unsupported", description
 
 
-@smoke
 def test_streaming_sink_refuses_typed(tmp_path) -> None:
     with pytest.raises(InvalidArgumentError) as excinfo:
         _structure_capture(storage=tl.to_disk(str(tmp_path / "run.tlspec")))
     assert excinfo.value.fields["code"] == "structure_only_values_unsupported"
 
 
-@smoke
 def test_explicit_metadata_only_save_stays_legal() -> None:
     log = tl.trace(
         TwoLayer(),
@@ -224,7 +209,6 @@ def test_explicit_metadata_only_save_stays_legal() -> None:
 # ---------------------------------------------------------------------------
 
 
-@smoke
 def test_mode_marker_persists_and_left_the_prerelease_registrar() -> None:
     """The marker is a live persisted field now, not a DROP-gated one.
 

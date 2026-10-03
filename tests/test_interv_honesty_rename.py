@@ -20,8 +20,6 @@ import torchlens as tl
 from torchlens.intervention import scramble_elements
 from torchlens.intervention.helpers import rebuild_builtin_helper
 
-pytestmark = pytest.mark.smoke
-
 
 def test_old_binding_is_the_same_function() -> None:
     """The transitional binding aliases the canonical constructor exactly."""
@@ -41,6 +39,7 @@ def test_both_spellings_mint_the_honest_name() -> None:
     assert via_old.helper_name == "scramble_elements"
 
 
+@pytest.mark.smoke
 def test_seeded_draws_identical_across_spellings() -> None:
     """Same bytes: the rename changes no behavior."""
 

@@ -25,8 +25,6 @@ from torchlens.capture._episode_join import (
 from torchlens.capture._episode_ledger import ResolvedEpisode
 from torchlens.options import EpisodeSpec
 
-pytestmark = pytest.mark.smoke
-
 V = 16
 
 
@@ -152,6 +150,7 @@ def test_timestep_first_denoiser_grades_the_sample() -> None:
     assert info.value.fields["code"] == "episode_feed_closed_violation"
 
 
+@pytest.mark.smoke
 def test_declared_step_input_from_is_honored_and_misses_disclose() -> None:
     torch.manual_seed(0)
     resolved_kwargs = {

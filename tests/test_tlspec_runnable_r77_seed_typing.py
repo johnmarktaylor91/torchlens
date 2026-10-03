@@ -46,7 +46,6 @@ def _saved(tmp_path: Path, x: torch.Tensor) -> Path:
     return path
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "bad_seed",
     ["x", 1.5, (), object()],
@@ -73,7 +72,6 @@ def test_r77_non_int_seed_refuses_typed_and_transactional(tmp_path: Path, bad_se
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("good_seed", [0, None], ids=["zero", "none"])
 def test_r77_valid_seed_still_verifies(tmp_path: Path, good_seed: int | None) -> None:
     """Zero collateral: ``seed=0`` and ``seed=None`` keep their verified runs."""

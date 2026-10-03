@@ -20,7 +20,7 @@ from torchlens.options import CaptureOptions
 
 accelerate = pytest.importorskip("accelerate")
 
-pytestmark = [pytest.mark.smoke, pytest.mark.optional]
+pytestmark = pytest.mark.optional
 
 
 class Toy(nn.Module):

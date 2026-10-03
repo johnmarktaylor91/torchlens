@@ -19,8 +19,6 @@ import torch.nn as nn
 
 from torchlens import brainpipe as bp
 
-pytestmark = pytest.mark.smoke  # measured <0.5s per test (W051-GATE, AUD-CODE 0.1)
-
 
 class _BatchInvariantModel(nn.Module):
     """Model with one batch-invariant site (a broadcast constant)."""
@@ -46,6 +44,7 @@ def _plan(**overrides):
     return bp.extraction_plan(_model(), torch.randn(4, 16), **kwargs)
 
 
+@pytest.mark.smoke
 def test_parse_bytes_units_and_refusals() -> None:
     """D-26 human-unit budgets: decimal and binary units, typed refusals."""
 
@@ -83,6 +82,7 @@ def test_batch_invariant_site_is_detected_not_total_scaled() -> None:
     assert site.bytes_at_batch(16) == site.bytes_at_batch(4)
 
 
+@pytest.mark.smoke
 def test_plan_table_prints_measured_footer() -> None:
     """The table carries passes, the peak pair, and budget lines."""
 
@@ -128,6 +128,7 @@ def test_over_budget_plan_refuses_with_arithmetic() -> None:
     assert "batch" in str(err)
 
 
+@pytest.mark.smoke
 def test_plan_run_executes_through_the_artifact_runner() -> None:
     """D-8 single-pass-primary: run() extracts every included site once."""
 
@@ -171,6 +172,7 @@ def test_unknown_requested_site_is_excluded_actionably() -> None:
     assert "not observed" in by_label["nonexistent_9"].exclusion_reason
 
 
+@pytest.mark.smoke
 def test_npz_per_stimulus_net2brain_naming_contract(tmp_path) -> None:
     """D-21: filenames sort lexicographically in stimulus order + sidecar."""
 
@@ -199,6 +201,7 @@ def test_npz_per_stimulus_net2brain_naming_contract(tmp_path) -> None:
     assert sidecar["compatibility"] == "net2brain"
 
 
+@pytest.mark.smoke
 def test_npz_consolidated_roundtrip(tmp_path) -> None:
     """Consolidated layout: one npz per run plus a provenance sidecar."""
 
@@ -210,6 +213,7 @@ def test_npz_consolidated_roundtrip(tmp_path) -> None:
     assert sidecar["sites"] == ["siteA"]
 
 
+@pytest.mark.smoke
 def test_npz_refusals_are_typed(tmp_path) -> None:
     """Object arrays, bad layouts, and cardinality mismatches refuse."""
 
@@ -249,6 +253,7 @@ def test_probe_invalid_refusals_are_typed() -> None:
     assert excinfo.value.fields["code"] == "extraction_probe_invalid"
 
 
+@pytest.mark.smoke
 def test_dead_model_run_refuses_extraction_plan_model_gone() -> None:
     """run() on a plan whose model died refuses extraction_plan_model_gone."""
 

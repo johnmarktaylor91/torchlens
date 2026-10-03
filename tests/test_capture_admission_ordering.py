@@ -23,8 +23,6 @@ import torchlens as tl
 from torchlens import _state
 from torchlens.errors import ReentrantTraceError
 
-pytestmark = pytest.mark.smoke
-
 
 def _refused_trace_in_thread(
     model: nn.Module | None = None,
@@ -76,6 +74,7 @@ def test_refused_capture_does_not_reset_winner_runtime_context() -> None:
         _state.reset_capture_runtime_context()
 
 
+@pytest.mark.smoke
 def test_refused_capture_does_not_reseed_global_rng() -> None:
     """The refusal settles BEFORE capture seeding touches the user's engines."""
 
@@ -100,6 +99,7 @@ def test_refused_capture_does_not_reseed_global_rng() -> None:
         _state.reset_capture_runtime_context()
 
 
+@pytest.mark.smoke
 def test_admitted_capture_still_restores_user_rng() -> None:
     """R57 regression: the winning path keeps its every-settlement restore."""
 

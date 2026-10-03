@@ -23,13 +23,10 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
-
-pytestmark = pytest.mark.smoke
 
 
 def _gradient_truth(

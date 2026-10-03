@@ -10,13 +10,10 @@ to prevent, through a different door.
 
 from __future__ import annotations
 
-import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
-
-pytestmark = pytest.mark.smoke
 
 
 class _TwoBranchModel(nn.Module):

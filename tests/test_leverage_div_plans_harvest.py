@@ -31,8 +31,6 @@ from torchlens.visualization.collapse_plan import (
     reapply_collapse_plan,
 )
 
-pytestmark = pytest.mark.smoke
-
 _SAVE_ALL = {"capture": tl.options.CaptureOptions(layers_to_save="all")}
 
 
@@ -53,6 +51,7 @@ def test_collapse_plan_roundtrips_and_reapplies_on_clean_recapture():
     assert report.collapsed_addresses  # the plan's units survived the trip
 
 
+@pytest.mark.smoke
 def test_collapse_plan_reapply_refuses_across_insertion():
     """Strict reapply refuses on the join's changed cohorts, teaching."""
 
@@ -73,6 +72,7 @@ def test_collapse_plan_reapply_refuses_across_insertion():
     )
 
 
+@pytest.mark.smoke
 def test_collapse_plan_payload_fail_closed():
     baseline_model, _, x = make_insertion_pair()
     trace = tl.trace(baseline_model, x, **_SAVE_ALL)
@@ -91,6 +91,7 @@ def test_collapse_plan_payload_fail_closed():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_harvest_clean_policy_is_explicit_and_roundtrips():
     spec = HarvestSpec()
     block = harvest_block(spec)
@@ -122,6 +123,7 @@ def test_harvest_clean_policy_refuses_intervention_fields():
     assert excinfo.value.fields["code"] == "harvest_schema_invalid"
 
 
+@pytest.mark.smoke
 def test_harvest_execution_gated_per_address_class_never_coarsens():
     spec = HarvestSpec(
         policy="intervened",

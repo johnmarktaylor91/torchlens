@@ -8,8 +8,6 @@ from torch import nn
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke
-
 
 class CancellingModel(nn.Module):
     """Model with an engineered fp32 catastrophic-cancellation site."""
@@ -121,6 +119,7 @@ def test_bisect_precision_flags_stochastic_first_divergence() -> None:
         assert "eval mode" in result.message
 
 
+@pytest.mark.smoke
 def test_bisect_precision_explicit_tolerances_override_dtype_defaults() -> None:
     """Explicit rtol/atol replace per-dtype derivation on every row."""
 

@@ -24,8 +24,6 @@ from torchlens.intervention.audit import (
 )
 from torchlens.intervention.errors import BaselineUndeterminedError
 
-pytestmark = pytest.mark.smoke
-
 
 class _Tiny(nn.Module):
     def __init__(self) -> None:
@@ -137,6 +135,7 @@ def test_sweep_default_keeps_cardinality_and_discloses() -> None:
         bundle.most_changed()
 
 
+@pytest.mark.smoke
 def test_sweep_include_baseline_mints_pristine_first() -> None:
     torch.manual_seed(0)
     model = _Tiny()

@@ -971,7 +971,6 @@ def test_public_trace_dispatches_through_backend_spec() -> None:
     assert "resolved_spec.name" not in source
 
 
-@pytest.mark.smoke
 def test_public_backend_literal_branches_stay_in_registry_or_backends() -> None:
     """Public code has no new hard-coded backend literal branches."""
 

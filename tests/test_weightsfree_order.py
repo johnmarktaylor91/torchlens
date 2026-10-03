@@ -41,7 +41,6 @@ class Toy(nn.Module):
         return torch.relu(self.fc(x))
 
 
-@pytest.mark.smoke
 def test_every_capture_is_generation_stamped() -> None:
     """W1-ORD plumbing: ordinary and structure-only captures both carry the
     session wrap-generation stamp the discharge preflight keys on."""
@@ -56,7 +55,6 @@ def test_every_capture_is_generation_stamped() -> None:
     assert envelope["wrap_generation"] == wrap_generation_of(structure)
 
 
-@pytest.mark.smoke
 def test_generation_mismatch_refuses_before_any_verdict() -> None:
     """The D8 condition as a stamp fact (the full factorial rides the
     subprocess leg): mismatched generations refuse typed pre-digest."""

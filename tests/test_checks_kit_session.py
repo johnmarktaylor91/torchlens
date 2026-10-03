@@ -19,8 +19,6 @@ import torch.nn as nn
 
 import torchlens.checks as tc
 
-pytestmark = pytest.mark.smoke
-
 
 def _net() -> nn.Module:
     torch.manual_seed(0)
@@ -118,6 +116,7 @@ def test_step_family_without_optimizer_refuses_typed() -> None:
     assert exc.value.fields["code"] == "check_optimizer_required"
 
 
+@pytest.mark.smoke
 def test_optimizer_overlap_refuses_typed() -> None:
     """One parameter owned by two optimizers refuses at attach (memo 4.2)."""
 
@@ -131,6 +130,7 @@ def test_optimizer_overlap_refuses_typed() -> None:
     assert "0.weight" in str(exc.value)
 
 
+@pytest.mark.smoke
 def test_paused_and_disable_suppress_checks() -> None:
     """paused()/disable() suspend collection; enable() resumes it."""
 
@@ -263,6 +263,7 @@ def test_no_per_param_item_in_sa_callback_paths() -> None:
     assert not offenders, f".item() found in _session.py at lines {offenders}"
 
 
+@pytest.mark.smoke
 def test_profile_reports_measured_numbers() -> None:
     """profile() returns min-of-N data with the load recorded (D21)."""
 

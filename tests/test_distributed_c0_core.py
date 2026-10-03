@@ -12,12 +12,9 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-pytestmark = [
-    pytest.mark.smoke,
-    pytest.mark.skipif(
-        not torch.distributed.is_available(), reason="torch.distributed unavailable"
-    ),
-]
+pytestmark = pytest.mark.skipif(
+    not torch.distributed.is_available(), reason="torch.distributed unavailable"
+)
 
 from torchlens.distributed import (  # noqa: E402
     AmbiguousGroupLifetimeError,
@@ -240,6 +237,7 @@ class TestPreJoinLineageAudit:
         # Structural: the audit names the conflict; it never renders gaps.
         assert "presence" not in verdict.detail.lower()
 
+    @pytest.mark.smoke
     def test_seed_discharges_against_one_generation_complete_witness(self):
         rank0 = _ledger([("create", M, 0, "wrapped", "armed_before_any_group")])
         rank1 = _ledger([("seed", M, 0, "seeded", "seeded")])
@@ -304,6 +302,7 @@ class TestPreJoinLineageAudit:
         )
         assert M not in verdicts
 
+    @pytest.mark.smoke
     def test_destroy_mark_disagreement_conflicts(self):
         rank0 = _ledger(
             [
@@ -504,6 +503,7 @@ class TestArmingAndSeeding:
         assert first_identity.group_uid == (digest, 0)
         assert second_identity.group_uid == (digest, 1)
 
+    @pytest.mark.smoke
     def test_seq_counters_key_on_full_group_uid(self, gloo_world):
         dist = gloo_world
         lifecycle.arm()
@@ -732,6 +732,7 @@ class TestBrokenArmPoisoning:
     omitted -- precisely the fail-open arming exists to prevent.
     """
 
+    @pytest.mark.smoke
     @requires_vetted_snapshot
     def test_failed_arm_with_failed_restore_poisons_state(self, unarmed, monkeypatch):
         from torchlens.errors._base import CompatibilityError

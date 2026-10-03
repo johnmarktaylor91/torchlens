@@ -36,8 +36,6 @@ import torchlens as tl
 from torchlens import _state
 from torchlens.utils import _torch_compat
 
-pytestmark = pytest.mark.smoke
-
 
 def _flag(name: str) -> bool:
     """Read a capability flag, defaulting to True on pre-fix trees."""
@@ -159,6 +157,7 @@ class TestTransformerFastpathFlag:
     reason="torch build lacks torch.nn.attention.bias.CausalBias",
 )
 class TestCausalBiasDispatch:
+    @pytest.mark.smoke
     def test_causal_bias_sdpa_matches_materialized_truth(self):
         from torch.nn.attention.bias import causal_lower_right
 
@@ -189,6 +188,7 @@ class TestCausalBiasDispatch:
     reason="torch build lacks the private expanded-weights machinery",
 )
 class TestExpandedWeightsDispatch:
+    @pytest.mark.smoke
     def test_per_sample_grads_conv_post_wrap(self):
         from torch.nn.utils._per_sample_grad import call_for_per_sample_grads
 
@@ -474,6 +474,7 @@ class TestSubclassCtorUnderWitness:
         with owned, foreign, pause_own_dispatch_modes() as exited:
             assert exited == ()
 
+    @pytest.mark.smoke
     def test_owned_modes_restore_when_paused_call_raises(self) -> None:
         """The pause bracket restores owned modes before propagating an exception."""
         from torchlens.backends.torch._modes import (
@@ -546,6 +547,7 @@ class TestAsSubclassOpIdentity:
 
 
 class TestOverloadShimLedgerKeying:
+    @pytest.mark.smoke
     def test_overload_shim_keys_on_ledger_identity_not_marker_presence(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:

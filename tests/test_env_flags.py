@@ -7,8 +7,6 @@ import pytest
 from torchlens._errors import InvalidArgumentError
 from torchlens.utils.env_flags import closed_bool_env
 
-pytestmark = pytest.mark.smoke
-
 _KNOB = "TORCHLENS_TEST_ENV_FLAG"
 
 

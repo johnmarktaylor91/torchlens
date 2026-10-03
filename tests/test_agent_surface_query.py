@@ -22,8 +22,6 @@ from torchlens.agent._query import (
     validate_query,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 @pytest.fixture()
 def artifact(tmp_path: Path) -> Path:
@@ -46,6 +44,7 @@ def test_refused_kinds_name_the_python_path() -> None:
         assert exc.value.fields["code"] == "agent_query_invalid"
 
 
+@pytest.mark.smoke
 def test_decoder_ceilings_trip_before_resolution() -> None:
     """Depth, node-count, and string ceilings refuse with the DoS rationale."""
 
@@ -79,6 +78,7 @@ def test_listing_resolves_the_full_population(artifact: Path) -> None:
     assert labels == ["relu_1_2:1", "relu_2_4:1", "relu_3_6:1"]  # execution order
 
 
+@pytest.mark.smoke
 def test_combinators_and_closure_semantics(artifact: Path) -> None:
     """and/not and the followed_by transitive closure match the graph truth."""
 

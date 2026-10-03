@@ -16,8 +16,6 @@ import torch.nn as nn
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke  # measured <0.5s per test (W051-GATE, AUD-CODE 0.1)
-
 
 def _model() -> nn.Module:
     torch.manual_seed(0)

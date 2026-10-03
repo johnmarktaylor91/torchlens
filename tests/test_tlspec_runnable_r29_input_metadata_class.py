@@ -91,7 +91,6 @@ class ViewContiguityBranch(nn.Module):
         return x + 1 if x.t().is_contiguous() else x - 1
 
 
-@pytest.mark.smoke
 def test_r29_storage_offset_twin_diverges(tmp_path: Path) -> None:
     """A same-shape input with a different storage_offset must diverge, never false VERIFIED."""
 
@@ -111,7 +110,6 @@ def test_r29_storage_offset_twin_diverges(tmp_path: Path) -> None:
     assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
-@pytest.mark.smoke
 def test_r29_is_leaf_flip_diverges(tmp_path: Path) -> None:
     """A non-leaf runtime input on a ``is_leaf``-branching model must diverge."""
 
@@ -124,7 +122,6 @@ def test_r29_is_leaf_flip_diverges(tmp_path: Path) -> None:
         tl.load(path).run(inputs=nonleaf)
 
 
-@pytest.mark.smoke
 def test_r29_grad_fn_presence_diverges(tmp_path: Path) -> None:
     """A runtime input carrying a grad_fn on a grad_fn-branching model must diverge."""
 
@@ -137,7 +134,6 @@ def test_r29_grad_fn_presence_diverges(tmp_path: Path) -> None:
         tl.load(path).run(inputs=with_grad_fn)
 
 
-@pytest.mark.smoke
 def test_r29_storage_geometry_view_diverges(tmp_path: Path) -> None:
     """A same-shape input that is a view of a larger storage must diverge on a geometry read."""
 
@@ -153,7 +149,6 @@ def test_r29_storage_geometry_view_diverges(tmp_path: Path) -> None:
         tl.load(path).run(inputs=x_view)
 
 
-@pytest.mark.smoke
 def test_r29_derived_view_layout_read_is_unverifiable(tmp_path: Path) -> None:
     """A layout read on an input-derived VIEW fails closed to UNVERIFIABLE (cannot re-verify)."""
 
@@ -165,7 +160,6 @@ def test_r29_derived_view_layout_read_is_unverifiable(tmp_path: Path) -> None:
     assert report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
-@pytest.mark.smoke
 @pytest.mark.filterwarnings(
     # A08 random-role-init disclosure (runnable_random_init_run): this test
     # exercises a weight-free runnable run DELIBERATELY; the warning is the
@@ -204,7 +198,6 @@ class LoopAccumScalarView(nn.Module):
         return x * total
 
 
-@pytest.mark.smoke
 def test_r29_autograd_reads_on_input_view_do_not_over_trigger(tmp_path: Path) -> None:
     """Framework autograd reads on an input-derived view must stay VERIFIED+ATTESTED."""
 

@@ -58,7 +58,6 @@ def _trace(model: nn.Module, x: torch.Tensor, cache_dir: str, **fields: Any) -> 
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_cache_key_ledgers_partition_capture_options() -> None:
     """Curated and neutral ledgers name real fields and never overlap."""
 
@@ -71,7 +70,6 @@ def test_cache_key_ledgers_partition_capture_options() -> None:
     assert not overlap, f"fields both curated and neutral: {sorted(overlap)}"
 
 
-@pytest.mark.smoke
 def test_cache_key_neutral_ledger_reasons_are_written() -> None:
     """Every declared dont-care carries a non-empty written reason."""
 
@@ -82,7 +80,6 @@ def test_cache_key_neutral_ledger_reasons_are_written() -> None:
         )
 
 
-@pytest.mark.smoke
 def test_cache_key_curated_fields_have_hand_built_entries() -> None:
     """Each curated name appears as a literal config key at the assembly site.
 
@@ -105,7 +102,6 @@ def test_cache_key_curated_fields_have_hand_built_entries() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_warm_cache_identical_config_hits(tmp_path: Path) -> None:
     """H-WARM baseline: the second identical capture is served from cache."""
 
@@ -117,7 +113,6 @@ def test_warm_cache_identical_config_hits(tmp_path: Path) -> None:
     assert warm.capture_cache_hit is True
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "field_name,flip_value",
     [
@@ -141,7 +136,6 @@ def test_warm_cache_semantic_flip_recaptures(
     )
 
 
-@pytest.mark.smoke
 def test_warm_cache_neutral_flip_still_hits(tmp_path: Path) -> None:
     """Declared session-neutral knobs do not fragment the cache."""
 
@@ -152,7 +146,6 @@ def test_warm_cache_neutral_flip_still_hits(tmp_path: Path) -> None:
     assert warm.capture_cache_hit is True
 
 
-@pytest.mark.smoke
 def test_warm_cache_restamps_batch_render(tmp_path: Path) -> None:
     """batch_render is neutral BECAUSE the hit path re-stamps the request."""
 
@@ -164,7 +157,6 @@ def test_warm_cache_restamps_batch_render(tmp_path: Path) -> None:
     assert warm.batch_render == "grid"
 
 
-@pytest.mark.smoke
 def test_failed_capture_never_seeds_the_cache(tmp_path: Path) -> None:
     """H-FAILED: an aborted capture leaves nothing a later call can be served."""
 
@@ -186,7 +178,6 @@ def test_failed_capture_never_seeds_the_cache(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_plant_neutralized_semantic_field_reopens_wrong_serve(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

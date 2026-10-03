@@ -44,7 +44,6 @@ def _envelopes(log: tl.Trace) -> list[dict]:
     ]
 
 
-@pytest.mark.smoke
 def test_batch_applies_every_pair_in_one_transaction() -> None:
     """Two ACT pairs, one push, one envelope, per-pair ACT rows."""
 
@@ -73,7 +72,6 @@ def test_batch_applies_every_pair_in_one_transaction() -> None:
     assert len(act_rows) == 2, "per-pair ACT disclosure rows"
 
 
-@pytest.mark.smoke
 def test_shared_plan_identity_shares_one_donor_group() -> None:
     """D8: ONE plan reused across clauses = one donor_group_id; per_group shares the draw."""
 
@@ -125,7 +123,6 @@ def test_shared_plan_identity_shares_one_donor_group() -> None:
     assert reversed_ids == group_ids, "clause order never moves a donor group"
 
 
-@pytest.mark.smoke
 def test_leaf_site_pair_refuses_typed() -> None:
     """D33 v1: leaf sites (inputs/buffers) cannot join one hook transaction."""
 
@@ -140,7 +137,6 @@ def test_leaf_site_pair_refuses_typed() -> None:
     assert excinfo.value.fields["code"] == "selection_batch_leaf_unsupported"
 
 
-@pytest.mark.smoke
 def test_cross_kind_batch_refuses_with_capability_report() -> None:
     """D33: PARAM/EDGE selections in a batch refuse typed, naming the v1 scope."""
 
@@ -157,7 +153,6 @@ def test_cross_kind_batch_refuses_with_capability_report() -> None:
     assert "ACT-only" in str(excinfo.value)
 
 
-@pytest.mark.smoke
 def test_mixed_selection_and_legacy_pairs_refuse() -> None:
     """A batch mixing Selections with legacy selector sites refuses typed."""
 
@@ -175,7 +170,6 @@ def test_mixed_selection_and_legacy_pairs_refuse() -> None:
     assert excinfo.value.fields["code"] == "selection_batch_pair_invalid"
 
 
-@pytest.mark.smoke
 def test_abort_leaves_pre_call_state_with_one_error_record() -> None:
     """B6 analog: one valid + one invalid clause rolls back everything."""
 

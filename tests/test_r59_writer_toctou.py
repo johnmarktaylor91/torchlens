@@ -23,8 +23,6 @@ from torch import nn
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke
-
 _SENTINEL = "concurrent-artifact-do-not-destroy"
 
 
@@ -90,6 +88,7 @@ def test_intervention_save_overwrite_false_does_not_destroy_concurrent(
     assert (target / "MARKER").read_text(encoding="utf-8") == _SENTINEL
 
 
+@pytest.mark.smoke
 def test_streaming_finalize_does_not_destroy_concurrent(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

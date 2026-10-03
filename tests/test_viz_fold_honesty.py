@@ -25,8 +25,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.visualization.auto_collapse import _run_fold_members_uniform
 
-pytestmark = pytest.mark.smoke
-
 
 class _ConvBlock(nn.Module):
     """Conv+activation block whose output shape is dilation-invariant."""
@@ -140,6 +138,7 @@ class _ResidualStack(nn.Module):
         return self.out(x)
 
 
+@pytest.mark.smoke
 def test_fold_honesty_uniform_plateau_dot_differs(tmp_path) -> None:
     """A uniformly-changed hidden plateau never renders byte-identical DOT.
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-pytestmark = [pytest.mark.smoke, pytest.mark.compo]
+pytestmark = pytest.mark.compo
 
 
 def test_receipt_covers_every_public_field_in_order() -> None:
@@ -68,6 +68,7 @@ def test_receipt_adjustments_disclose_forcing() -> None:
     assert entry.reason == "forced"
 
 
+@pytest.mark.smoke
 def test_receipt_refusals_are_typed_teaching() -> None:
     """The three receipt refusals carry stable codes and remedies."""
 

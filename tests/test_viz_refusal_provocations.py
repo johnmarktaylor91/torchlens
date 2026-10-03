@@ -19,8 +19,6 @@ from torch import nn
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 
-pytestmark = pytest.mark.smoke
-
 
 @pytest.fixture(scope="module")
 def small_trace() -> Iterator[object]:
@@ -60,6 +58,7 @@ def test_backward_graph_unavailable_refuses_typed(small_trace) -> None:
     assert getattr(exc_info.value, "fields", {}).get("code") == "backward_graph_unavailable"
 
 
+@pytest.mark.smoke
 def test_graphviz_render_failure_refuses_typed(
     small_trace, tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

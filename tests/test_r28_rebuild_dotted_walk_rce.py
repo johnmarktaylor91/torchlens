@@ -114,7 +114,6 @@ def _reduce_global_pickle(module: str, name: str, str_args: list[str]) -> bytes:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("unpickler_cls", _UNPICKLERS)
 def test_rebuild_dotted_walk_to_globals_get_denied_no_exec(
     unpickler_cls: type[pickle.Unpickler],
@@ -138,7 +137,6 @@ def test_rebuild_dotted_walk_to_globals_get_denied_no_exec(
     assert not sentinel.exists()
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("unpickler_cls", _UNPICKLERS)
 def test_rebuild_dotted_name_refused_before_walk(
     unpickler_cls: type[pickle.Unpickler],
@@ -150,7 +148,6 @@ def test_rebuild_dotted_name_refused_before_walk(
         unpickler_cls(io.BytesIO(payload)).load()
 
 
-@pytest.mark.smoke
 def test_legit_rebuild_reconstructors_still_admit() -> None:
     """Genuine ``_rebuild_*`` reconstructors (single-segment names) still resolve."""
 
@@ -181,7 +178,6 @@ def _trusted_os_module(tmp_path: Path) -> str:
         sys.modules.pop(mod_name, None)
 
 
-@pytest.mark.smoke
 def test_trusted_globals_walk_to_os_system_denied(_trusted_os_module: str, tmp_path: Path) -> None:
     """Under trust, ``<trusted>.hook.__globals__.get`` -> module globals is denied.
 
@@ -207,7 +203,6 @@ def test_trusted_globals_walk_to_os_system_denied(_trusted_os_module: str, tmp_p
         ).load()
 
 
-@pytest.mark.smoke
 def test_trusted_globals_mapping_return_denied(_trusted_os_module: str) -> None:
     """A trusted dotted name resolving to the bare ``__globals__`` mapping is denied."""
 
@@ -216,7 +211,6 @@ def test_trusted_globals_mapping_return_denied(_trusted_os_module: str) -> None:
         SafeBundleUnpickler(io.BytesIO(payload), trust_custom_callables=True).load()
 
 
-@pytest.mark.smoke
 def test_trusted_legit_single_name_still_resolves(_trusted_os_module: str) -> None:
     """A genuine (single-name) trusted callable still resolves (no regression)."""
 
@@ -225,7 +219,6 @@ def test_trusted_legit_single_name_still_resolves(_trusted_os_module: str) -> No
     assert getattr(resolved, "__name__", None) == "hook"
 
 
-@pytest.mark.smoke
 def test_name_has_dunder_walk_helper() -> None:
     """The dunder-walk predicate flags every walk vector and passes legit qualnames."""
 
@@ -247,7 +240,6 @@ def test_name_has_dunder_walk_helper() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("module", ["_frozen_importlib", "_frozen_importlib_external"])
 def test_frozen_importlib_in_both_denylists(module: str) -> None:
     """Both frozen import modules are hard-denied in both denylists (incl. submodules)."""
@@ -258,7 +250,6 @@ def test_frozen_importlib_in_both_denylists(module: str) -> None:
     assert _module_denied(module + ".SourceFileLoader")
 
 
-@pytest.mark.smoke
 def test_resolve_import_ref_frozen_importlib_denied_under_trust() -> None:
     """``resolve_import_ref('_frozen_importlib:__import__', trust=True)`` is DENIED."""
 
@@ -275,7 +266,6 @@ def test_resolve_import_ref_frozen_importlib_denied_under_trust() -> None:
         )
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("unpickler_cls", _UNPICKLERS)
 def test_frozen_importlib_unpickle_denied_under_trust(
     unpickler_cls: type[pickle.Unpickler],
@@ -299,7 +289,6 @@ def _write_bundle_manifest(bundle: Path, obj: dict) -> None:
     (bundle / "manifest.json").write_text(json.dumps(obj), encoding="utf-8")
 
 
-@pytest.mark.smoke
 def test_detect_tlspec_format_rejects_symlinked_manifest(tmp_path: Path) -> None:
     """A symlinked ``manifest.json`` child is refused during format detection."""
 
@@ -314,7 +303,6 @@ def test_detect_tlspec_format_rejects_symlinked_manifest(tmp_path: Path) -> None
         detect_tlspec_format(bundle)
 
 
-@pytest.mark.smoke
 def test_detect_tlspec_format_rejects_symlinked_root(tmp_path: Path) -> None:
     """A symlinked bundle ROOT directory is refused during format detection."""
 
@@ -328,7 +316,6 @@ def test_detect_tlspec_format_rejects_symlinked_root(tmp_path: Path) -> None:
         detect_tlspec_format(link)
 
 
-@pytest.mark.smoke
 def test_inspect_tlspec_rejects_symlinked_spec(tmp_path: Path) -> None:
     """A symlinked ``spec.json`` child is refused by ``inspect_tlspec``."""
 
@@ -343,7 +330,6 @@ def test_inspect_tlspec_rejects_symlinked_spec(tmp_path: Path) -> None:
         inspect_tlspec(bundle)
 
 
-@pytest.mark.smoke
 def test_detect_tlspec_format_regular_bundle_unaffected(tmp_path: Path) -> None:
     """A regular (non-symlinked) bundle still classifies normally (no regression)."""
 

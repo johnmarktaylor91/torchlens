@@ -70,7 +70,6 @@ class BoolKeyBranch(nn.Module):
         return x + 2 if has_bool else x - 2
 
 
-@pytest.mark.smoke
 def test_r29_extra_empty_container_diverges(tmp_path: Path) -> None:
     """Removing an empty-valued dict key must diverge, never false VERIFIED."""
 
@@ -84,7 +83,6 @@ def test_r29_extra_empty_container_diverges(tmp_path: Path) -> None:
         tl.load(path).run(inputs=(x.clone(), {}))
 
 
-@pytest.mark.smoke
 def test_r29_empty_list_to_nonempty_diverges(tmp_path: Path) -> None:
     """A captured empty list becoming non-empty at runtime must diverge."""
 
@@ -98,7 +96,6 @@ def test_r29_empty_list_to_nonempty_diverges(tmp_path: Path) -> None:
         tl.load(path).run(inputs=(x.clone(), [5.0]))
 
 
-@pytest.mark.smoke
 def test_r29_empty_container_kind_change_diverges(tmp_path: Path) -> None:
     """An empty dict replaced by an empty list at the same path must diverge (kind change)."""
 
@@ -110,7 +107,6 @@ def test_r29_empty_container_kind_change_diverges(tmp_path: Path) -> None:
         tl.load(path).run(inputs=(x.clone(), {"flag": []}))
 
 
-@pytest.mark.smoke
 def test_r29_bool_int_key_twin_diverges(tmp_path: Path) -> None:
     """A bool dict key twinned to the equal-valued int key must diverge (F6)."""
 
@@ -124,7 +120,6 @@ def test_r29_bool_int_key_twin_diverges(tmp_path: Path) -> None:
         tl.load(path).run(inputs=(x.clone(), {1: 2.0}))
 
 
-@pytest.mark.smoke
 def test_r29_same_empty_structure_verifies(tmp_path: Path) -> None:
     """Identical empty-container structure on the same input must stay VERIFIED (no over-trigger)."""
 

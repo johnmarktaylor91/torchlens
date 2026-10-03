@@ -26,7 +26,6 @@ def _write_json(path: Path, data: dict[str, Any]) -> None:
     path.write_text(json.dumps(data), encoding="utf-8")
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("manifest", "spec", "expected"),
     [

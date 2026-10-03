@@ -76,6 +76,7 @@ def test_default_capture_retains_saved_output_grad_fn() -> None:
         trace.cleanup()
 
 
+@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("kwargs", "flag_name"),
     [

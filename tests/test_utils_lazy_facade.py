@@ -94,7 +94,6 @@ assert not loaded, loaded
     subprocess.run([sys.executable, "-c", code], check=True)
 
 
-@pytest.mark.smoke
 def test_every_previous_utils_export_resolves_to_identical_object() -> None:
     """Every frozen facade name resolves and re-exports preserve identity."""
 

@@ -25,8 +25,6 @@ import torchlens.user_funcs as user_funcs
 from torchlens.errors import TorchLensWarning
 from torchlens.options import CaptureOptions
 
-pytestmark = [pytest.mark.smoke]
-
 
 class BNNet(nn.Module):
     """conv -> bn -> relu."""

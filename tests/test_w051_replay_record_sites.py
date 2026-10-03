@@ -18,8 +18,6 @@ from torchlens.intervention.errors import MultiMatchWarning
 from torchlens.intervention.hooks import lower_record_site_target
 from torchlens.intervention.selectors import CompositeSelector, LabelSelector
 
-pytestmark = pytest.mark.smoke
-
 _N_PASSES = 3
 
 

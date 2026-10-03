@@ -31,8 +31,6 @@ from torchlens.intervention.selectors import (
 from torchlens.intervention.types import TargetSpec
 from torchlens.ir.selector_eval import ensure_supported, selector_from_spec
 
-pytestmark = pytest.mark.smoke
-
 
 class TinyConvNet(nn.Module):
     """Nested-module CNN matching the selector-matrix oracle model."""
@@ -402,6 +400,7 @@ _KIND_PAYLOADS: dict[str, Any] = {
 }
 
 
+@pytest.mark.smoke
 def test_site_upfront_refusal_set_matches_evaluator_contract() -> None:
     """Every kind the site evaluator refuses must refuse upfront, and only those.
 

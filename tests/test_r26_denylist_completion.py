@@ -65,7 +65,6 @@ def _global_ref_pickle(module: str, name: str) -> bytes:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("import_path", _EXEC_SPAWN_INSTALL_REFS)
 def test_exec_spawn_install_modules_denied_even_under_trust(import_path: str) -> None:
     """An exec/spawn/install stdlib module never resolves, even with trust satisfied."""
@@ -87,7 +86,6 @@ def test_exec_spawn_install_modules_denied_even_under_trust(import_path: str) ->
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("import_path", _EXEC_SPAWN_INSTALL_REFS)
 def test_unpickler_denies_exec_spawn_install_globals_even_under_trust(
     import_path: str,
@@ -109,7 +107,9 @@ def test_unpickler_denies_exec_spawn_install_globals_even_under_trust(
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
+@pytest.mark.smoke_cells(
+    "test_code_exec_torch_callables_denied_even_under_trust[torch.Tensor:apply_]"
+)
 @pytest.mark.parametrize(
     "import_path",
     ["torch:compile", "torch.Tensor:apply_", "torch.Tensor:map_"],
@@ -123,7 +123,6 @@ def test_code_exec_torch_callables_denied_even_under_trust(import_path: str) -> 
         resolve_import_ref(import_path, trust_custom_callables=True)
 
 
-@pytest.mark.smoke
 def test_code_exec_torch_callables_fail_purity_gate() -> None:
     """The purity gate itself refuses the three r26 code-exec vectors."""
 
@@ -132,7 +131,6 @@ def test_code_exec_torch_callables_fail_purity_gate() -> None:
     assert not is_pure_forward_callable(torch.Tensor.map_)
 
 
-@pytest.mark.smoke
 def test_pure_forward_surface_not_over_denied() -> None:
     """The r26 additions do not over-deny the legitimate pure forward surface."""
 

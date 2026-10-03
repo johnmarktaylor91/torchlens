@@ -119,7 +119,6 @@ def _capture(
     return log, capture_x
 
 
-@pytest.mark.smoke
 def test_mutate_warning_fires_once_and_can_be_suppressed() -> None:
     """Root mutators warn once, with call-level and session-level suppression."""
 
@@ -158,7 +157,6 @@ def test_mutate_warning_fires_once_and_can_be_suppressed() -> None:
         suppress_mutate_warnings(False)
 
 
-@pytest.mark.smoke
 def test_fork_mutation_does_not_warn_or_mutate_parent_interventions() -> None:
     """Forked logs have independent specs and per-pass intervention logs."""
 
@@ -186,7 +184,6 @@ def test_fork_mutation_does_not_warn_or_mutate_parent_interventions() -> None:
     assert len(parent._intervention_spec.target_value_specs) == 0
 
 
-@pytest.mark.smoke
 def test_direct_out_write_warns_once_and_marks_dirty() -> None:
     """Direct out writes emit a warning and mark the owning log dirty."""
 
@@ -250,7 +247,6 @@ def test_do_dispatch_replay_rerun_set_only_and_top_level_alias() -> None:
     ]
 
 
-@pytest.mark.smoke
 def test_do_ambiguous_dispatch_and_model_mismatch_errors() -> None:
     """``do`` raises targeted errors for ambiguous dispatch and model mismatch."""
 
@@ -283,7 +279,6 @@ def test_do_ambiguous_dispatch_and_model_mismatch_errors() -> None:
     assert log._spec_revision == spec_revision
 
 
-@pytest.mark.smoke
 def test_direct_write_propagation_warning_is_one_time() -> None:
     """Replay warns once when propagation overlays direct writes."""
 

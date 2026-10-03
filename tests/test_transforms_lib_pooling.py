@@ -32,8 +32,6 @@ from torchlens.transforms import (
     unit_norm,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 def _right_padded() -> tuple[torch.Tensor, torch.Tensor]:
     """A (3, 5, 8) batch with a right-padded validity mask."""
@@ -96,6 +94,7 @@ def test_missing_mask_refuses_without_the_recorded_assertion() -> None:
     assert "mask" in str(err)
 
 
+@pytest.mark.smoke
 def test_assume_no_padding_is_recorded_and_licenses_physical_endpoints() -> None:
     """The assertion rides the spec params (manifest-visible) and unlocks [:, -1]."""
 
@@ -211,6 +210,7 @@ def test_cls_refuses_a_recorded_no_cls_tokenizer() -> None:
     assert excinfo.value.fields["code"] == "transform_special_tokens_unavailable"
 
 
+@pytest.mark.smoke
 def test_cls_gathers_first_valid_under_both_paddings() -> None:
     """With recorded facts, CLS is the first VALID index (both padding sides)."""
 
@@ -245,6 +245,7 @@ def test_pool_spatial_and_channel_mean_match_manual() -> None:
     assert torch.allclose(channel_mean().apply(img, ctx), img.mean(dim=1))
 
 
+@pytest.mark.smoke
 def test_spatial_plan_predicts_apply() -> None:
     """T-C6: the plan's output spec matches the applied result."""
 
@@ -258,6 +259,7 @@ def test_spatial_plan_predicts_apply() -> None:
         assert plan.context_capable is True
 
 
+@pytest.mark.smoke
 def test_token_plan_predicts_apply() -> None:
     """T-C6 for token pooling: plan output matches apply under the mask."""
 
@@ -321,6 +323,7 @@ def test_batch_composition_independence_for_masked_pooling() -> None:
 # --- chains + records -------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_pooling_steps_ride_chains_and_records() -> None:
     """Pooling composes in chains; the pipeline record round-trips it."""
 
@@ -339,6 +342,7 @@ def test_pooling_steps_ride_chains_and_records() -> None:
     )
 
 
+@pytest.mark.smoke
 def test_pool_tokens_op_vocabulary_is_closed() -> None:
     """Unknown ops and non-bool assertions refuse typed."""
 

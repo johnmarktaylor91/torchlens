@@ -32,8 +32,6 @@ from torchlens.intervention.replay import _splice_param_substitutions
 from torchlens.selection import SelectionError
 from torchlens.validation.core import _check_edge_intervention_boundary
 
-pytestmark = pytest.mark.smoke
-
 
 class _Net(nn.Module):
     def __init__(self) -> None:

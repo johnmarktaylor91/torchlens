@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import types
 
-import pytest
 import torch
 from torch import nn
 
@@ -36,8 +35,6 @@ from torchlens._capture_fingerprint import (
 from torchlens._capture_state_helpers import _capture_cache_key
 from torchlens._runnable_state import runnable_tensor_byte_digest
 from torchlens._transport import digest_byte_view, to_cpu_contiguous
-
-pytestmark = pytest.mark.smoke
 
 
 def _cache_capture(tmp_path):

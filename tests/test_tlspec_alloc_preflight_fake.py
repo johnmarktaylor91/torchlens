@@ -49,8 +49,6 @@ from torchlens._runnable_execution import (
 from torchlens.errors import RunCapabilityUnavailableError, RuntimeSignatureDriftError
 from torchlens.runnable import LiteralAtom, LiteralAtomKind, LiteralSequence, LiteralSequenceKind
 
-pytestmark = pytest.mark.smoke
-
 _CAPTURE = {"capture": tl.options.CaptureOptions(intervention_ready=True)}
 
 
@@ -379,6 +377,7 @@ def test_preflight_excludes_views_and_inplace_by_storage_alias() -> None:
         _preflight_call_allocation(None, func, args, kwargs, call)
 
 
+@pytest.mark.smoke
 def test_preflight_fails_open_on_data_dependent_op() -> None:
     """A data-dependent op with no fake impl (``nonzero``) fails open -- not refused."""
 

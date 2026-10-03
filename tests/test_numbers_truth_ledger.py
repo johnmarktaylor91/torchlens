@@ -40,7 +40,6 @@ class _AmbiguousModel(nn.Module):
         return x + noise + ramp
 
 
-@pytest.mark.smoke
 def test_witness_side_one_constructions_are_zero_by_rule() -> None:
     """arange/tensor/zeros/ones_like classify zero_by_rule with 0 FLOPs."""
 
@@ -65,7 +64,6 @@ def test_witness_side_one_constructions_are_zero_by_rule() -> None:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_witness_side_two_ambiguous_names_stay_unknown() -> None:
     """rand (RNG) and linspace (interpolating fill) STAY unknown, never 0."""
 
@@ -117,7 +115,6 @@ def test_unknown_ledger_names_reasons_and_remedies() -> None:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_four_way_classification_is_total() -> None:
     """Every layer-list row lands in exactly one coverage class."""
 

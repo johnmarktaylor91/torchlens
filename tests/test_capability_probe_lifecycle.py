@@ -25,7 +25,6 @@ class _FakeDTensor:
     """Stand-in DTensor type whose identity marks a poisoned latch."""
 
 
-@pytest.mark.smoke
 def test_lazy_probe_registry_is_complete() -> None:
     """Every ``*_PROBED`` latch and its family attrs live in the registry.
 
@@ -48,7 +47,6 @@ def test_lazy_probe_registry_is_complete() -> None:
         assert probed_attr in snapshot
 
 
-@pytest.mark.smoke
 def test_stubbed_probe_poison_is_undone_by_restore(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -81,7 +79,6 @@ def test_stubbed_probe_poison_is_undone_by_restore(
     assert _torch_compat._DTENSOR_TYPE is not _FakeDTensor
 
 
-@pytest.mark.smoke
 def test_poison_a_latch_and_lean_on_the_autouse_fixture(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -98,7 +95,6 @@ def test_poison_a_latch_and_lean_on_the_autouse_fixture(
     # NO manual restore: teardown must undo this or the next test fails.
 
 
-@pytest.mark.smoke
 def test_autouse_fixture_unpoisoned_the_prior_test() -> None:
     """Runs after the poisoning test above; the fake type must be gone."""
 

@@ -24,8 +24,6 @@ from torchlens.data_classes.op import (
     _pool_container_cells,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 class _Stack(nn.Module):
     def __init__(self, blocks: int = 6) -> None:

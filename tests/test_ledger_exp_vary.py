@@ -18,8 +18,6 @@ import torchlens as tl
 from torchlens.errors.episode import BundleExperimentError
 from torchlens.intervention.audit import event_audit_rows
 
-pytestmark = pytest.mark.smoke
-
 
 class _Tiny(nn.Module):
     def __init__(self) -> None:
@@ -107,6 +105,7 @@ def test_vary_duplicate_after_normalization_refuses() -> None:
     assert excinfo.value.fields["code"] == "vary_member_duplicate"
 
 
+@pytest.mark.smoke
 def test_vary_partial_failure_disclosed_no_rollback() -> None:
     bundle = _pair()
     good = tl.when(tl.func("relu"), tl.scale(0.0))
@@ -124,6 +123,7 @@ def test_vary_partial_failure_disclosed_no_rollback() -> None:
     assert bundle.operations[-1].params["outcomes"]["b"] == "failed"
 
 
+@pytest.mark.smoke
 def test_vary_shared_plan_keeps_one_donor_group() -> None:
     bundle = _pair()
     population = tl.intervention.reference(

@@ -19,8 +19,6 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens.receptive_field import ReceptiveFieldValidationStatus
 
-pytestmark = pytest.mark.smoke
-
 torch.manual_seed(0)
 
 

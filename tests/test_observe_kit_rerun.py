@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import random
 
-import pytest
 import torch
 from torch import nn
 
@@ -22,8 +21,6 @@ from torchlens.debug import (
     isolated_capture,
     preserved_rng_state,
 )
-
-pytestmark = pytest.mark.smoke
 
 
 class _TanhThenAdd(nn.Module):

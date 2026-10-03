@@ -158,7 +158,6 @@ class _ReboundActivation(nn.Module):
         return state_rooted * 1.0
 
 
-@pytest.mark.smoke
 def test_sol1_state_activation_data_rebind_never_false_verified(tmp_path: Path) -> None:
     """SOL-1 RED: a ``.data``-rebound state activation must not replay as VERIFIED.
 
@@ -267,7 +266,6 @@ class _StateActInplace(nn.Module):
         return y + x
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "factory, capture_input, train",
     [
@@ -303,7 +301,6 @@ def test_inplace_own_storage_writes_stay_verified(
     assert not result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_convbn_eval_running_stats_stay_verified(tmp_path: Path) -> None:
     """Zero-collateral: ConvBN in eval reads frozen running stats -> VERIFIED."""
 
@@ -381,7 +378,6 @@ class _ViewAfterRebind(nn.Module):
         return v * 1.0
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "factory",
     [_ParamReboundActivation, _SetReboundActivation, _ViewAfterRebind],
@@ -474,7 +470,6 @@ class _SameStorageOwnViewRebind(nn.Module):
         return y * 1.0
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "factory",
     [_ViewBeforeRebind, _SameStorageOwnViewRebind],
@@ -576,7 +571,6 @@ class _ConvBNAddress(nn.Module):
         return self.bn(self.c(x))
 
 
-@pytest.mark.smoke
 def test_backend_address_op_node_and_output_layer_agree() -> None:
     """free FINDING-1: an op node and the output layer for the SAME module agree.
 
@@ -607,7 +601,6 @@ def test_backend_address_op_node_and_output_layer_agree() -> None:
     assert out.backend_address == bn.backend_address == "bn"
 
 
-@pytest.mark.smoke
 def test_backend_address_registered_vs_plain_attr_decoupling_preserved() -> None:
     """The C2 buffer decoupling is preserved: registered keeps its addr, plain-attr None.
 

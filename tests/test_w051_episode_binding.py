@@ -36,8 +36,6 @@ from torchlens.capture._episode_ledger import episode_ledger_for
 from torchlens.errors import TorchLensError, TorchLensWarning
 from torchlens.options import CaptureOptions, EpisodeSpec
 
-pytestmark = pytest.mark.smoke
-
 V = 16
 N_STEPS = 3
 

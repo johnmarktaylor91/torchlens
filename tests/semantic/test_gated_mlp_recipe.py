@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import pytest
 import torch
 import torch.nn.functional as F
 from torch import nn
 
 import torchlens as tl
-
-pytestmark = pytest.mark.smoke
 
 
 class LlamaMLP(nn.Module):

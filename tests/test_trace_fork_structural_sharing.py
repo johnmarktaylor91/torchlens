@@ -64,7 +64,6 @@ def _owned_object_ids(trace: tl.Trace) -> set[int]:
     return owned
 
 
-@pytest.mark.smoke
 def test_fork_shares_no_owned_object_with_parent(cond_trace: tl.Trace) -> None:
     """No fork-owned child object may be the parent's own object."""
 
@@ -72,7 +71,6 @@ def test_fork_shares_no_owned_object_with_parent(cond_trace: tl.Trace) -> None:
     assert not (_owned_object_ids(fork) & _owned_object_ids(cond_trace))
 
 
-@pytest.mark.smoke
 def test_fork_back_references_point_at_the_fork(cond_trace: tl.Trace) -> None:
     """Owner back-references inside the fork resolve to the fork itself."""
 
@@ -86,7 +84,6 @@ def test_fork_back_references_point_at_the_fork(cond_trace: tl.Trace) -> None:
             assert arm._trace is fork
 
 
-@pytest.mark.smoke
 def test_fork_lookup_containers_agree_on_identity(cond_trace: tl.Trace) -> None:
     """Every lookup container hands back the same fork Op object."""
 
@@ -99,7 +96,6 @@ def test_fork_lookup_containers_agree_on_identity(cond_trace: tl.Trace) -> None:
             assert any(op is candidate for candidate in by_position)
 
 
-@pytest.mark.smoke
 def test_fork_mutation_does_not_reach_parent(cond_trace: tl.Trace) -> None:
     """Mutating fork state leaves every parent-visible value untouched."""
 
@@ -119,7 +115,6 @@ def test_fork_mutation_does_not_reach_parent(cond_trace: tl.Trace) -> None:
     ] == before_arms
 
 
-@pytest.mark.smoke
 def test_fork_memo_rollback_discards_partial_entries() -> None:
     """A field copy that raises must not leave half-built objects in the memo."""
 

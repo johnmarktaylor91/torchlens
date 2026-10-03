@@ -23,8 +23,6 @@ from torch import nn
 import torchlens as tl
 from torchlens import debug as dbg
 
-pytestmark = pytest.mark.smoke
-
 
 @pytest.fixture(scope="module")
 def grad_trace() -> Iterator[tl.Trace]:

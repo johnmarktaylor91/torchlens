@@ -100,7 +100,6 @@ def trusted_evilmod():
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("name", _GADGET_NAMES)
 def test_detector_flags_operator_gadget(name: str) -> None:
     """The operator-gadget detector flags generic gadgets / mutators (DENY)."""
@@ -112,7 +111,6 @@ def test_detector_flags_operator_gadget(name: str) -> None:
     assert is_denied_operator_gadget(gadget) is True
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("name", _PURE_NAMES)
 def test_detector_allows_pure_operators(name: str) -> None:
     """The operator-gadget detector never flags a pure forward operator (ALLOW)."""
@@ -120,7 +118,6 @@ def test_detector_allows_pure_operators(name: str) -> None:
     assert is_denied_operator_gadget(getattr(operator, name)) is False
 
 
-@pytest.mark.smoke
 def test_detector_ignores_non_operator_callables() -> None:
     """Non-operator callables are not this gate's concern (returns False)."""
 
@@ -135,7 +132,6 @@ def test_detector_ignores_non_operator_callables() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("name", _GADGET_NAMES)
 def test_resolver_denies_operator_gadget_via_dotted_walk(trusted_evilmod, name: str) -> None:
     """A dotted qualname walking off a trusted module into an operator gadget is denied."""
@@ -153,7 +149,6 @@ def test_resolver_denies_operator_gadget_via_dotted_walk(trusted_evilmod, name: 
         resolve_function_registry_key(key, allowed_custom_callable_modules={trusted_evilmod})
 
 
-@pytest.mark.smoke
 def test_resolver_allows_pure_operator_via_dotted_walk(trusted_evilmod) -> None:
     """A pure operator reached by a dotted walk off a trusted module still resolves."""
 
@@ -166,7 +161,7 @@ def test_resolver_allows_pure_operator_via_dotted_walk(trusted_evilmod) -> None:
     assert resolve_function_registry_key(key, trust_custom_callables=True) is operator.neg
 
 
-@pytest.mark.smoke
+@pytest.mark.smoke_cells("test_resolver_denies_operator_gadget_direct_ref[delitem]")
 @pytest.mark.parametrize("name", _GADGET_NAMES)
 def test_resolver_denies_operator_gadget_direct_ref(name: str) -> None:
     """``operator:<gadget>`` (routed to the fixed root) is denied under any trust."""
@@ -181,7 +176,6 @@ def test_resolver_denies_operator_gadget_direct_ref(name: str) -> None:
         resolve_import_ref(path, allowed_custom_callable_modules={"operator"})
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("name", _GADGET_NAMES)
 def test_resolver_denies_underscore_operator_gadget(name: str) -> None:
     """``_operator:<gadget>`` now routes to the fixed root and is denied under trust."""
@@ -194,7 +188,6 @@ def test_resolver_denies_underscore_operator_gadget(name: str) -> None:
         resolve_import_ref(path, allowed_custom_callable_modules={"_operator"})
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("name", _PURE_NAMES)
 def test_resolver_allows_underscore_operator_pure(name: str) -> None:
     """``_operator:<pure>`` routes to the fixed operator root and resolves."""
@@ -207,7 +200,6 @@ def test_resolver_allows_underscore_operator_pure(name: str) -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("name", _GADGET_NAMES)
 @pytest.mark.parametrize("builder", [_global_ref_pickle, _stack_global_ref_pickle])
 def test_unpickler_denies_operator_gadget(name: str, builder) -> None:
@@ -221,7 +213,6 @@ def test_unpickler_denies_operator_gadget(name: str, builder) -> None:
             SafeBundleUnpickler(io.BytesIO(blob), allowed_custom_callable_modules={mod}).load()
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("name", _PURE_NAMES)
 def test_unpickler_allows_pure_operator_under_trust(name: str) -> None:
     """Pure operators still resolve through the unpickler under trust (carve-out)."""
@@ -256,7 +247,6 @@ def test_unpickler_attrgetter_globals_rce_chain_blocked() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_unpickler_denies_bare_module_object(trusted_evilmod) -> None:
     """A dotted name resolving a bare module object is refused (mirrors dict refusal)."""
 

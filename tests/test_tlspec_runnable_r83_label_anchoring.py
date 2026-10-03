@@ -191,7 +191,6 @@ class _Consumer(nn.Module):
         return x * 1.0 + self._f[0] + s * 0.0
 
 
-@pytest.mark.smoke
 def test_hook_collected_stale_label_is_not_current_session_provenance(
     tmp_path: Path,
 ) -> None:
@@ -227,7 +226,6 @@ def test_hook_collected_stale_label_is_not_current_session_provenance(
     _assert_not_falsely_verified(result, oracle)
 
 
-@pytest.mark.smoke
 def test_hook_vehicle_leaves_the_unattributed_break_marker() -> None:
     """The positive signal: the foreign tensor must leave the break marker.
 
@@ -248,7 +246,6 @@ def test_hook_vehicle_leaves_the_unattributed_break_marker() -> None:
         tl.trace(_Consumer(harvested), x, capture=_CAPTURE)
 
 
-@pytest.mark.smoke
 def test_hook_collected_control_without_stale_label_refuses(tmp_path: Path) -> None:
     """The isolating control: identical bytes with no stale label must refuse.
 
@@ -596,7 +593,6 @@ def test_unanchored_stamp_is_never_provenance(
     _assert_not_falsely_verified(result, oracle)
 
 
-@pytest.mark.smoke
 def test_label_session_token_advances_and_anchors_per_capture() -> None:
     """The anchor itself: each capture issues a fresh token, retired at cleanup.
 
@@ -629,7 +625,6 @@ def test_label_session_token_advances_and_anchors_per_capture() -> None:
     assert _tl.active_label_session_token() is None, "session must retire at cleanup"
 
 
-@pytest.mark.smoke
 def test_stale_label_is_invisible_to_the_next_capture() -> None:
     """A prior capture's label must not be readable as provenance in a new one.
 
@@ -857,7 +852,6 @@ class _ConvBN(nn.Module):
         return self.bn(self.conv(x))
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "factory, train",
     [
@@ -884,7 +878,6 @@ def test_honest_models_stay_verified(
     assert not result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_repeat_captures_of_one_instance_stay_verified(tmp_path: Path) -> None:
     """Three consecutive captures of ONE instance must all stay VERIFIED.
 
@@ -899,7 +892,6 @@ def test_repeat_captures_of_one_instance_stay_verified(tmp_path: Path) -> None:
         assert not result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_shared_buffer_object_across_instances_stays_verified(tmp_path: Path) -> None:
     """Three instances sharing ONE buffer object across captures stay VERIFIED."""
 
@@ -914,7 +906,6 @@ def test_shared_buffer_object_across_instances_stays_verified(tmp_path: Path) ->
         assert not result.report.poisoned
 
 
-@pytest.mark.smoke
 def test_live_capture_labels_are_anchored_and_readable() -> None:
     """A capture's OWN labels must read through the gate during that capture.
 
@@ -943,7 +934,6 @@ def test_live_capture_labels_are_anchored_and_readable() -> None:
     assert gated == ungated, "a live capture's own label must read as provenance"
 
 
-@pytest.mark.smoke
 def test_meta_carries_the_session_anchor() -> None:
     """``TensorMeta`` must expose the anchor written alongside every label."""
 

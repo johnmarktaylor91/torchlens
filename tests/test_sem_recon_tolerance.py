@@ -24,8 +24,6 @@ from torchlens.semantic.tolerances import (
     within_reconstruction_tolerance,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 def _sdpa_case(seed: int, scale: float, shape: tuple[int, int, int, int]):
     """Return (fused output, honest recomputation, magnitude bound, k_len)."""

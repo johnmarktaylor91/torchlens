@@ -17,8 +17,6 @@ import torchlens as tl
 import torchlens.preprocessing as pp
 from torchlens.data_classes.trace import ResolvedPreprocessing
 
-pytestmark = [pytest.mark.smoke]
-
 
 class _Tiny(nn.Module):
     """Two-layer module for cheap captures."""
@@ -33,6 +31,7 @@ class _Tiny(nn.Module):
         return torch.relu(self.proj(x))
 
 
+@pytest.mark.smoke
 def test_transform_capture_stamps_user_transform_record() -> None:
     """A plain trace with transform= carries honest unknown provenance."""
 

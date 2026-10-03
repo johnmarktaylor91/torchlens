@@ -17,8 +17,6 @@ from torch import nn
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke
-
 #: Result / report / context / aggregate dataclasses on the C02 surface
 #: (D31): none may inherit the dataclass auto-repr. F10 extends this sweep
 #: to the whole exported surface with its value-record conversion.
@@ -153,6 +151,7 @@ def test_repr_purity_no_rng_no_mutation(swept_trace) -> None:
         assert payload._version == version_before
 
 
+@pytest.mark.smoke
 def test_nesting_bound_for_context_records() -> None:
     """A 10-record container reprs within the nesting bound (<= 12 lines)."""
 

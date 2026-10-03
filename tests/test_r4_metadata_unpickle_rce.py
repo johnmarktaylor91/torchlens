@@ -170,7 +170,6 @@ def _save_all_levels(tmp_path: Path) -> dict[str, Path]:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_all_save_levels_still_load(tmp_path: Path) -> None:
     """Every legitimately-saved bundle at every level loads under the allowlist."""
 
@@ -179,7 +178,6 @@ def test_all_save_levels_still_load(tmp_path: Path) -> None:
         assert loaded is not None, name
 
 
-@pytest.mark.smoke
 @pytest.mark.filterwarnings(
     # A08 random-role-init disclosure (runnable_random_init_run): this test
     # exercises a weight-free runnable run DELIBERATELY; the warning is the
@@ -197,7 +195,6 @@ def test_runnable_levels_still_run(tmp_path: Path) -> None:
         assert tuple(result.output.shape) == (2, 4), name
 
 
-@pytest.mark.smoke
 def test_control_flow_bundle_round_trips(tmp_path: Path) -> None:
     """A control-flow bundle keeps tensors out of metadata and restores arm bindings."""
 
@@ -219,7 +216,6 @@ def test_control_flow_bundle_round_trips(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "gadget_factory",
     [
@@ -247,7 +243,6 @@ def test_malicious_metadata_is_denied_and_executes_nothing(tmp_path: Path, gadge
     assert not marker.exists(), "load-time gadget executed"
 
 
-@pytest.mark.smoke
 def test_direct_unpickler_denies_os_system(tmp_path: Path) -> None:
     """The restricted unpickler raises ``UnpicklingError`` on an os.system gadget."""
 

@@ -31,8 +31,6 @@ from torchlens.semantic import FacetSpec
 from torchlens.semantic.patching import PatchApplicationError
 from torchlens.utils._torch_compat import TorchCapabilityWarning
 
-pytestmark = pytest.mark.smoke
-
 
 class ParamHeads(nn.Module):
     """Two-head result source with REAL parameters (one important, one inert)."""
@@ -153,6 +151,7 @@ def test_attribution_patch_works_on_parameterized_model() -> None:
         assert param.grad is None, name
 
 
+@pytest.mark.smoke
 def test_guard_restores_preexisting_param_grads() -> None:
     """A caller's pre-existing .grad survives the helper unchanged."""
 
@@ -223,6 +222,7 @@ def test_fire_ledger_refuses_never_fired() -> None:
     assert never_fired_exc.value.fields["code"] == "patch_ineffective"
 
 
+@pytest.mark.smoke
 def test_fire_ledger_refuses_all_refused_replacements() -> None:
     """Fires whose every replacement was refused (replaced=False) must refuse.
 
@@ -308,6 +308,7 @@ def test_partially_identical_campaign_stays_silent() -> None:
         tl.facets.patching.activation_patch_attention_heads(model, clean, corrupted, _metric)
 
 
+@pytest.mark.smoke
 def test_user_capture_composes_required_fields() -> None:
     """mikit F7: a user capture= no longer drops the helper's required fields.
 
@@ -328,6 +329,7 @@ def test_user_capture_composes_required_fields() -> None:
     assert table.shape == (1,)
 
 
+@pytest.mark.smoke
 def test_explicitly_conflicting_capture_refuses_typed() -> None:
     with pytest.raises(ValueError, match="require capture options"):
         tl.facets.patching.activation_patch_attention_output(

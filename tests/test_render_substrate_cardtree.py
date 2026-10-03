@@ -28,8 +28,6 @@ from torchlens.notebook.cardtree import (
     safe_card_html,
 )
 
-pytestmark = pytest.mark.smoke
-
 
 def test_typed_leaf_escaping_happens_exactly_once() -> None:
     html = render_card_html(
@@ -44,6 +42,7 @@ def test_typed_leaf_escaping_happens_exactly_once() -> None:
     assert "a &lt; b &amp; c &gt; d" in html
 
 
+@pytest.mark.smoke
 def test_never_raise_boundary_degrades_to_one_line() -> None:
     def exploding_build() -> Card:
         raise ValueError("user data: <boom>")
@@ -131,6 +130,7 @@ def test_trace_repr_html_stays_bounded() -> None:
     assert len(html) < 50_000
 
 
+@pytest.mark.smoke
 def test_partial_trace_repr_html_is_failure_first() -> None:
     class Exploding(torch.nn.Module):
         def forward(self, x: torch.Tensor) -> torch.Tensor:

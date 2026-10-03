@@ -27,13 +27,9 @@ the seed shrinks as they land.
 
 from __future__ import annotations
 
-import pytest
-
 from torchlens._io import FieldPolicy
 from torchlens._io.scrub import _is_runtime_only_trace_field
 from torchlens.data_classes.trace import Trace
-
-pytestmark = pytest.mark.smoke
 
 #: Names in BOTH the runtime-only allowance and ``Trace.PORTABLE_STATE_SPEC``,
 #: seeded from the tree at b5 fixplan time (2026-08-14). Every one is ``DROP``
