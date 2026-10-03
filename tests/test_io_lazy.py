@@ -417,6 +417,8 @@ def test_portable_loaded_logs_reject_validation_entry_points(
         restored.validate_forward_pass([])
 
 
+@pytest.mark.serial  # counts /proc/self/fd, which is process-global: under xdist a
+# worker's other activity (execnet channel, background writers) moves the count
 def test_lazy_materialize_does_not_leak_file_descriptors(tmp_path: Path) -> None:
     """Repeated materialization should not leave extra file descriptors open."""
 

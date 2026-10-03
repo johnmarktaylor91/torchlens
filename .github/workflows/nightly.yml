@@ -300,9 +300,12 @@ jobs:
           OMP_NUM_THREADS: "1"
         run: |
           # A command-line -m REPLACES the pyproject addopts "-m 'not rare'";
-          # conjoin `not rare` to keep rare tests excluded.
-          pytest tests/ -m "not slow and not heavy and not rare" -n 4 --tb=short \
+          # conjoin `not rare` to keep rare tests excluded. `serial` tests
+          # (load-, memory- or process-global-state-sensitive) are excluded
+          # from the xdist run and run afterwards without it, as in fast-tier.
+          pytest tests/ -m "not slow and not heavy and not rare and not serial" -n 4 --tb=short \
             --junitxml="${{ runner.temp }}/canonical-tier.junit.xml"
+          pytest $(grep -rlE --include="test_*.py" "mark\.serial" tests) -m "serial and not slow and not heavy and not rare" --tb=short -q
 
       - name: Fail on an under-executed canonical tier
         # Executed-floor attestation: the mid tier executed ~18,300 tests on
@@ -358,6 +361,9 @@ jobs:
           # though ALL merged-related tests together cap at 80.0% statements
           # there, versus 83.5% on 2.13. The floor is never lowered; the
           # coverage job measures on the stack where the package's tests run.
+          # The merged floor is measured on 2.13 because live-merge tests need
+          # a census-vetted distributed snapshot; snapshots for 2.8 and 2.14
+          # are the open F1 follow-up (round 2).
           # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
           uv pip install --system \
             --index-url https://download.pytorch.org/whl/cpu \
