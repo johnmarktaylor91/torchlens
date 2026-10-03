@@ -305,7 +305,8 @@ jobs:
           # from the xdist run and run afterwards without it, as in fast-tier.
           pytest tests/ -m "not slow and not heavy and not rare and not serial" -n 4 --tb=short \
             --junitxml="${{ runner.temp }}/canonical-tier.junit.xml"
-          pytest $(grep -rlE --include="test_*.py" "mark\.serial" tests) -m "serial and not slow and not heavy and not rare" --tb=short -q
+          mapfile -t serial_files < <(grep -rlE --include="test_*.py" "mark\.serial" tests)
+          pytest "${serial_files[@]}" -m "serial and not slow and not heavy and not rare" --tb=short -q
 
       - name: Fail on an under-executed canonical tier
         # Executed-floor attestation: the mid tier executed ~18,300 tests on
