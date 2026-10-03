@@ -1347,6 +1347,10 @@ _FACTORY_FUNCS = [
     "eye",
     "full",
     "empty",
+    # Size/stride/layout-only allocators (no tensor operand): torch.empty_strided
+    # and torch.empty_permuted, seen in real captures on the nightly fast tier.
+    "emptystrided",
+    "emptypermuted",
     # NOTE: "tensor" (torch.tensor) is NOT a pure factory -- ``torch.tensor(data)``
     # accepts an existing tensor as ``data`` (torch warns but executes), a real
     # data-lineage edge. It gets an explicit spec below (round-22 F6).
