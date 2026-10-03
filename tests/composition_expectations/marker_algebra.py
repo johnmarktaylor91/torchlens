@@ -34,7 +34,7 @@ The two selection markers this sprint adds:
 - ``compo``: the test is a composition-expectation ledger row (consumed by
   ``-m compo`` sweeps and the pair-coverage auditor).
 - ``real_model``: the test exercises a real-architecture or real-checkpoint
-  fixture (the R0 gate selects ``-m 'smoke or real_model'``).
+  fixture (the R0 gates select ``tests/real_model/r0`` by path).
 """
 
 from __future__ import annotations

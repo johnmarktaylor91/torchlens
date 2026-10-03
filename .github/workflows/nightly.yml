@@ -1050,10 +1050,14 @@ jobs:
 
       - name: R0 real-model gate (PASSED-count attested; candidate leg runs every row)
         if: matrix.leg == 'hf_5_candidate'
+        # Selected by PATH (every non-rare test under the two directories), not
+        # by `-m 'smoke or real_model'`: after the smoke tier was cut to a
+        # coverage-chosen subset (2026-10-02) the marker selection fell from
+        # 71+ passed to 33 on the 4.x legs. The passed floor is unchanged.
         env:
           TORCHLENS_REQUIRE_R0: "1"
         run: |
-          pytest tests/real_model/r0 tests/composition_expectations -m 'smoke or real_model' \
+          pytest tests/real_model/r0 tests/composition_expectations -m 'not rare' \
             -p no:randomly --tb=short -q --junitxml="${{ runner.temp }}/r0.junit.xml"
           python scripts/check_ci_executed_tests.py "${{ runner.temp }}/r0.junit.xml" 0 --min-passed 71
 
@@ -1072,7 +1076,7 @@ jobs:
         env:
           TORCHLENS_REQUIRE_R0: "1"
         run: |
-          pytest tests/real_model/r0 tests/composition_expectations -m 'smoke or real_model' \
+          pytest tests/real_model/r0 tests/composition_expectations -m 'not rare' \
             -p no:randomly --tb=short -q --junitxml="${{ runner.temp }}/r0.junit.xml" \
             --deselect tests/real_model/r0/test_realism_randinit_sweep.py \
             --deselect tests/real_model/r0/test_realism_randinit_axes.py::test_config_fingerprint_use_cache_row \

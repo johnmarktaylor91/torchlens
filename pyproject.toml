@@ -401,7 +401,7 @@ markers = [
     # ONCE in tests/composition_expectations/marker_algebra.py and lockstep-enforced
     # by tests/test_marker_lint.py -- a new marker lands in both places or goes red.
     "compo: composition-expectation ledger row (orthogonal selection marker, never a cost tier)",
-    "real_model: exercises a real-architecture or real-checkpoint fixture (orthogonal selection marker; the R0 gate selects -m 'smoke or real_model')",
+    "real_model: exercises a real-architecture or real-checkpoint fixture (orthogonal selection marker; the R0 gates select tests/real_model/r0 by path)",
 ]
 addopts = "-m 'not rare'"
 xfail_strict = true
