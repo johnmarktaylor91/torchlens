@@ -173,7 +173,9 @@ EXTRA_TEMPLATE_DOORS: tuple[tuple[str, Any], ...] = (
 )
 
 
-@pytest.mark.parametrize("door_name,invoke", EXTRA_TEMPLATE_DOORS, ids=lambda v: str(v))
+@pytest.mark.parametrize(
+    "door_name,invoke", EXTRA_TEMPLATE_DOORS, ids=[name for name, _ in EXTRA_TEMPLATE_DOORS]
+)
 def test_wave1_extra_doors_restore_model_state(door_name: str, invoke: Any) -> None:
     """Wave-1 template growth (item 7): summary/sweep/validate doors under
     the same postconditions the seed templates carry."""
