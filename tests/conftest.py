@@ -1,3 +1,4 @@
+import fnmatch
 import gc
 import os
 import random
@@ -461,6 +462,116 @@ def _enforce_duration_budget_at_sessionfinish(session: pytest.Session, exitstatu
     else:  # pragma: no cover - headless embedding without a terminal reporter
         print(header + "\n  " + "\n  ".join(lines))
     session.exitstatus = 1
+
+
+# ---------------------------------------------------------------------------
+# Smoke tier: collection pre-filter and per-cell smoke selection
+# ---------------------------------------------------------------------------
+# Collecting the whole tree costs 3-4 minutes before `-m smoke` deselects most
+# of it (measured 2026-10-02: 255s of a 28 min smoke run). Under a mark
+# expression that REQUIRES smoke, a test module whose source never spells
+# `mark.smoke` / `mark.smoke_cells` cannot hold a smoke item, so it is skipped
+# before import. Soundness is proven, not assumed:
+# `tests/test_marker_lint.py::test_smoke_prefilter_never_hides_a_smoke_test`
+# fails any non-prefiltered session in which a smoke item lives in a file the
+# pre-filter would skip. `TORCHLENS_SMOKE_PREFILTER=0` turns it off.
+
+#: Source token every smoke mark in the tree is spelled through.
+SMOKE_MARK_TOKEN = re.compile(rb"\bmark\.smoke(?:_cells)?\b")
+
+#: Most items the smoke tier may select. The tier was cut from ~9,900 tests
+#: (28 min) to a coverage-chosen ~1,200 (under 3 min) on 2026-10-02; this
+#: ceiling keeps it from regrowing unnoticed. Enforced by
+#: `tests/test_marker_lint.py::test_smoke_tier_stays_under_its_size_ceiling`
+#: and `tests/test_gate_infra_floor_drift.py`. Raise it only with a measured
+#: smoke wall time still under 5 minutes on 4 cores.
+SMOKE_TIER_SIZE_CEILING = 1500
+
+#: Mark expressions that select only smoke items (the pre-filter's trigger).
+_SMOKE_ONLY_MARKEXPR = re.compile(r"^\s*smoke\s*(?:$|and\s)")
+
+
+def smoke_prefilter_active(config: pytest.Config) -> bool:
+    """Return whether this session's mark expression selects only smoke items.
+
+    Parameters
+    ----------
+    config:
+        Active pytest configuration.
+
+    Returns
+    -------
+    bool
+        True for ``-m smoke`` and ``-m "smoke and ..."`` unless
+        ``TORCHLENS_SMOKE_PREFILTER=0`` is set.
+    """
+    if os.environ.get("TORCHLENS_SMOKE_PREFILTER", "1") == "0":
+        return False
+    markexpr = config.getoption("markexpr", default="") or ""
+    return bool(_SMOKE_ONLY_MARKEXPR.match(markexpr))
+
+
+def source_may_hold_smoke_items(path: Path) -> bool:
+    """Return whether a test module's source spells a smoke mark.
+
+    Parameters
+    ----------
+    path:
+        Test module path.
+
+    Returns
+    -------
+    bool
+        True when the file contains ``mark.smoke`` or ``mark.smoke_cells``, or
+        cannot be read (fail open: an unreadable file is collected).
+    """
+    try:
+        return SMOKE_MARK_TOKEN.search(path.read_bytes()) is not None
+    except OSError:
+        return True
+
+
+def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool | None:
+    """Skip test modules with no smoke mark when the session selects only smoke.
+
+    Parameters
+    ----------
+    collection_path:
+        Path pytest is about to collect.
+    config:
+        Active pytest configuration.
+
+    Returns
+    -------
+    bool | None
+        True to skip the module; None to defer to pytest's normal rules.
+    """
+    if collection_path.suffix != ".py" or not smoke_prefilter_active(config):
+        return None
+    patterns = config.getini("python_files")
+    if not any(fnmatch.fnmatch(collection_path.name, pattern) for pattern in patterns):
+        return None
+    return None if source_may_hold_smoke_items(collection_path) else True
+
+
+def pytest_itemcollected(item: pytest.Item) -> None:
+    """Apply ``smoke`` to the cells a ``smoke_cells(...)`` mark names.
+
+    ``@pytest.mark.smoke_cells("test_x[a]", "test_x[b]")`` on a function, class
+    or module (``pytestmark``) puts exactly the named items (matched on
+    ``item.name``) in the smoke tier, so a parametrized family keeps one or two
+    representative cells while the rest run in the backstops. Applied at item
+    collection, before any ``-m`` deselection.
+
+    Parameters
+    ----------
+    item:
+        Item just collected.
+    """
+    for mark in item.iter_markers("smoke_cells"):
+        if item.name in mark.args:
+            item.add_marker(pytest.mark.smoke)
+            return
 
 
 @pytest.hookimpl(wrapper=True)

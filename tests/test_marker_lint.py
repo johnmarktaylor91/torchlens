@@ -1475,3 +1475,139 @@ def test_sessionfinish_budget_tripwire_flips_exit_status(
     )
     _enforce_duration_budget_at_sessionfinish(session, 1)  # type: ignore[arg-type]
     assert session.exitstatus == 0
+
+
+def test_smoke_prefilter_never_hides_a_smoke_test(request: pytest.FixtureRequest) -> None:
+    """Every smoke item lives in a file the ``-m smoke`` collection pre-filter keeps.
+
+    The pre-filter (``tests/conftest.py::pytest_ignore_collect``) skips test
+    modules whose source never spells ``mark.smoke`` / ``mark.smoke_cells``. A
+    smoke mark applied any other way (an alias imported from a helper, a hook
+    adding it) would silently drop out of the commit gate. Every session the
+    pre-filter did NOT narrow (the backstops, full runs, targeted runs) checks
+    each collected smoke item here; inside a pre-filtered smoke session the check
+    holds by construction.
+    """
+
+    from tests.conftest import source_may_hold_smoke_items
+
+    hidden = sorted(
+        {
+            str(item.path)
+            for item in request.session.items
+            if item.get_closest_marker("smoke") is not None
+            and not source_may_hold_smoke_items(Path(item.path))
+        }
+    )
+    assert not hidden, (
+        "Smoke items live in files the -m smoke collection pre-filter would skip "
+        "(their source never spells `mark.smoke` or `mark.smoke_cells`). Spell the "
+        "mark through `pytest.mark.smoke` in the test file itself:\n  " + "\n  ".join(hidden)
+    )
+
+
+@pytest.mark.parametrize(
+    ("markexpr", "disabled", "expected"),
+    [
+        pytest.param("smoke", False, True, id="smoke"),
+        pytest.param("  smoke ", False, True, id="smoke-padded"),
+        pytest.param("smoke and not slow", False, True, id="smoke-and"),
+        pytest.param("smoke or real_model", False, False, id="smoke-or"),
+        pytest.param("not smoke", False, False, id="not-smoke"),
+        pytest.param("smokey", False, False, id="prefix-word"),
+        pytest.param("not rare", False, False, id="default-addopts"),
+        pytest.param("", False, False, id="empty"),
+        pytest.param("smoke", True, False, id="env-opt-out"),
+    ],
+)
+def test_smoke_prefilter_triggers_only_on_smoke_only_expressions(
+    monkeypatch: pytest.MonkeyPatch, markexpr: str, disabled: bool, expected: bool
+) -> None:
+    """The pre-filter arms only when the mark expression requires ``smoke``."""
+
+    from tests.conftest import smoke_prefilter_active
+
+    class _FakeConfig:
+        def getoption(self, name: str, default: object = None) -> object:
+            assert name == "markexpr"
+            return markexpr
+
+    if disabled:
+        monkeypatch.setenv("TORCHLENS_SMOKE_PREFILTER", "0")
+    else:
+        monkeypatch.delenv("TORCHLENS_SMOKE_PREFILTER", raising=False)
+    assert smoke_prefilter_active(_FakeConfig()) is expected  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        pytest.param("pytestmark = pytest.mark.smoke\n", True, id="module-mark"),
+        pytest.param("@pytest.mark.smoke\ndef test_x(): ...\n", True, id="decorator"),
+        pytest.param("pytest.param(1, marks=pytest.mark.smoke)\n", True, id="cell"),
+        pytest.param("@pytest.mark.smoke_cells('test_x[a]')\n", True, id="smoke-cells"),
+        pytest.param("# a smoke test in prose only\n", False, id="prose"),
+        pytest.param("@pytest.mark.smoker\ndef test_x(): ...\n", False, id="longer-name"),
+    ],
+)
+def test_smoke_prefilter_token_detection(tmp_path: Path, source: str, expected: bool) -> None:
+    """The pre-filter's source token matches every smoke-mark spelling and nothing else."""
+
+    from tests.conftest import source_may_hold_smoke_items
+
+    path = tmp_path / "test_planted.py"
+    path.write_text(source, encoding="utf-8")
+    assert source_may_hold_smoke_items(path) is expected
+
+
+@pytest.mark.parametrize(
+    ("item_name", "expected"),
+    [
+        pytest.param("test_cell[2]", True, id="named-cell"),
+        pytest.param("test_cell[1]", False, id="other-cell"),
+        pytest.param("test_cell", False, id="bare-name"),
+    ],
+)
+def test_smoke_cells_marks_exactly_the_named_items(item_name: str, expected: bool) -> None:
+    """``smoke_cells`` applies ``smoke`` to exactly the items it names."""
+
+    from tests.conftest import pytest_itemcollected
+
+    class _FakeItem:
+        def __init__(self, name: str) -> None:
+            self.name = name
+            self.added: list[str] = []
+
+        def iter_markers(self, name: str) -> list[pytest.Mark]:
+            assert name == "smoke_cells"
+            return [pytest.mark.smoke_cells("test_cell[2]", "test_other[a]").mark]
+
+        def add_marker(self, marker: pytest.MarkDecorator) -> None:
+            self.added.append(marker.name)
+
+    item = _FakeItem(item_name)
+    pytest_itemcollected(item)  # type: ignore[arg-type]
+    assert item.added == (["smoke"] if expected else [])
+
+
+def test_smoke_tier_stays_under_its_size_ceiling(request: pytest.FixtureRequest) -> None:
+    """A pre-filtered smoke session selects at most ``SMOKE_TIER_SIZE_CEILING`` items.
+
+    Passes vacuously outside a smoke-only session (targeted and backstop runs
+    select something else); the weekly floor-drift test re-checks the live
+    whole-tree selection.
+    """
+
+    from tests.conftest import SMOKE_TIER_SIZE_CEILING, smoke_prefilter_active
+
+    if not smoke_prefilter_active(request.config):
+        return
+    selected = sum(
+        1 for item in request.session.items if item.get_closest_marker("smoke") is not None
+    )
+    assert selected <= SMOKE_TIER_SIZE_CEILING, (
+        f"the smoke tier selects {selected} items, above its ceiling of "
+        f"{SMOKE_TIER_SIZE_CEILING} (tests/conftest.py). Keep new tests unmarked unless "
+        "they cover a critical path nothing in smoke reaches, or demote a smoke test "
+        "they make redundant."
+    )
