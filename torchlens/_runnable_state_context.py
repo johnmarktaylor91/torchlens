@@ -311,7 +311,9 @@ def _ambient_execution_context_restored(ambient: Any) -> Any:
 
     from .utils._torch_compat import (
         apply_ambient_execution_context,
+        restore_fp32_precision_controls,
         snapshot_ambient_execution_context,
+        snapshot_fp32_precision_controls,
     )
 
     recorded = {
@@ -333,6 +335,10 @@ def _ambient_execution_context_restored(ambient: Any) -> Any:
         "fill_uninitialized_memory": ambient.fill_uninitialized_memory,
     }
     saved = snapshot_ambient_execution_context()
+    # The legacy precision setters also write torch's ``fp32_precision`` fields
+    # (torch >= 2.9), which re-applying ``saved`` cannot restore ('none' reads
+    # back as 'ieee'): snapshot them separately and re-pin them after ``saved``.
+    saved_fp32_precision = snapshot_fp32_precision_controls()
     # r37 R4 (corr2-3/corr2-2): the recorded DEFAULT DEVICE is entered as a SCOPED
     # ``with torch.device(recorded)`` mode nested above the caller's existing mode
     # stack -- never via ``torch.set_default_device`` (which mutates process-global
@@ -357,6 +363,7 @@ def _ambient_execution_context_restored(ambient: Any) -> Any:
     except RuntimeError as exc:
         try:
             apply_ambient_execution_context(saved)
+            restore_fp32_precision_controls(saved_fp32_precision)
         except RuntimeError:  # pragma: no cover - saved values came from this runtime
             pass
         raise _context_unavailable_error("ambient_context", str(exc)) from exc
@@ -391,6 +398,10 @@ def _ambient_execution_context_restored(ambient: Any) -> Any:
             apply_ambient_execution_context(saved)
         except BaseException as error:  # noqa: BLE001 - re-raised below, never swallowed
             restore_error = error
+        try:
+            restore_fp32_precision_controls(saved_fp32_precision)
+        except BaseException as error:  # noqa: BLE001 - re-raised below, never swallowed
+            restore_error = restore_error or error
         if depth_before is not None and sys.exc_info()[0] is None:
             stack_after = get_current_function_mode_stack()
             depth_after = len(list(stack_after)) if stack_after is not None else None

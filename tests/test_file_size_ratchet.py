@@ -377,7 +377,11 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # RESOLUTION, HAS_SAVED_TENSORS_HOOK_INTROSPECTION) each need a dated,
     # reasoned comment per the file's own convention; measured 4824; next
     # 50-line step. Debloat target unchanged: 3450.
-    "torchlens/utils/_torch_compat.py": 4850,
+    # 4850 -> 4950 (2026-10-03 fix/fe-misc): the HAS_FP32_PRECISION_CONTROLS
+    # probe plus the fp32_precision snapshot/restore pair that stops runnable
+    # replay leaking torch's matmul precision fields; measured 4930. Debloat
+    # target unchanged: 3450.
+    "torchlens/utils/_torch_compat.py": 4950,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     # 3300 -> 3320 (F24 observe): the device-memory bracket at the one

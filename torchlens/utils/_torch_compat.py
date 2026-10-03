@@ -64,6 +64,8 @@ __all__ = [
     "HAS_CURRENT_GRAPH_TASK_ID",
     "HAS_DYNAMO_EXPLAIN",
     "apply_ambient_execution_context",
+    "restore_fp32_precision_controls",
+    "snapshot_fp32_precision_controls",
     "read_fill_uninitialized_memory",
     "snapshot_ambient_execution_context",
     "write_fill_uninitialized_memory",
@@ -122,6 +124,7 @@ __all__ = [
     "HAS_ATTENTION_CAUSAL_BIAS",
     "HAS_EXPANDED_WEIGHTS_CONV_PICKER",
     "HAS_DETERMINISTIC_FILL_FLAG",
+    "HAS_FP32_PRECISION_CONTROLS",
     "HAS_AMP_GRADSCALER",
     "HAS_NN_ATTENTION_MODULE",
     "HAS_RMSNORM_MODULE",
@@ -1585,6 +1588,22 @@ def _probe_node_prehook() -> bool:
     return node_cls is not None and hasattr(node_cls, "register_prehook")
 
 
+def _probe_fp32_precision_controls() -> bool:
+    """Return whether torch exposes the ``fp32_precision`` backend controls.
+
+    Returns
+    -------
+    bool
+        ``True`` on torch >= 2.9, where ``torch.backends.fp32_precision`` and
+        its per-backend children exist and the legacy
+        ``set_float32_matmul_precision`` / ``allow_tf32`` setters write them.
+        Absent on older torch, which is a healthy install: there is no
+        second representation to leak, so nothing degrades.
+    """
+
+    return hasattr(torch.backends, "fp32_precision")
+
+
 def _probe_deterministic_fill_flag() -> bool:
     """Return whether ``torch.utils.deterministic.fill_uninitialized_memory`` exists.
 
@@ -1853,6 +1872,7 @@ HAS_GRADIENT_EDGE: bool = False
 _GRADIENT_EDGE_PROBED: bool = False
 HAS_NODE_PREHOOK: bool = _probe_node_prehook()
 HAS_DETERMINISTIC_FILL_FLAG: bool = _probe_deterministic_fill_flag()
+HAS_FP32_PRECISION_CONTROLS: bool = _probe_fp32_precision_controls()
 HAS_AMP_GRADSCALER: bool = _probe_amp_gradscaler()
 HAS_NN_ATTENTION_MODULE: bool = _probe_nn_attention_module()
 HAS_RMSNORM_MODULE: bool = _probe_rmsnorm_module()
@@ -2050,6 +2070,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_GRADIENT_EDGE",
     "HAS_NODE_PREHOOK",
     "HAS_DETERMINISTIC_FILL_FLAG",
+    "HAS_FP32_PRECISION_CONTROLS",
     "HAS_AMP_GRADSCALER",
     "HAS_NN_ATTENTION_MODULE",
     "HAS_RMSNORM_MODULE",
@@ -2256,6 +2277,9 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # calls sdpa_kernel itself; the tuple-dim reduction falls back to
         # sequential single-axis reduction).
         "HAS_DETERMINISTIC_FILL_FLAG",
+        # fp32_precision controls (torch >= 2.9): absent means no second
+        # precision representation exists to snapshot, not a degradation.
+        "HAS_FP32_PRECISION_CONTROLS",
         "HAS_AMP_GRADSCALER",
         "HAS_NN_ATTENTION_MODULE",
         "HAS_RMSNORM_MODULE",
@@ -4511,6 +4535,62 @@ def write_fill_uninitialized_memory(value: bool) -> None:
     # See the matching comment in ``read_fill_uninitialized_memory``: this is
     # a module-``__getattr__`` property with no static stub.
     setattr(_torch_deterministic_module, "fill_uninitialized_memory", bool(value))
+
+
+#: The ``fp32_precision`` controls (``HAS_FP32_PRECISION_CONTROLS``), root
+#: first: restoring the children after the root pins every leaf exactly.
+_FP32_PRECISION_OWNERS: tuple[str, ...] = (
+    "",
+    "cuda.matmul",
+    "cudnn",
+    "cudnn.conv",
+    "cudnn.rnn",
+    "mkldnn",
+    "mkldnn.matmul",
+    "mkldnn.conv",
+    "mkldnn.rnn",
+)
+
+
+def _fp32_precision_owner(path: str) -> Any:
+    """Return the ``torch.backends`` object owning ``path``'s control, or ``None``."""
+
+    owner: Any = torch.backends
+    for part in filter(None, path.split(".")):
+        owner = getattr(owner, part, None)
+    return owner if hasattr(owner, "fp32_precision") else None
+
+
+def snapshot_fp32_precision_controls() -> dict[str, str]:
+    """Return every ``fp32_precision`` control value, keyed by backend path.
+
+    The legacy ``set_float32_matmul_precision`` and ``allow_tf32`` setters
+    write these fields on torch >= 2.9, so re-applying a legacy snapshot does
+    not restore them (``'none'`` reads back as ``'ieee'``). Callers that set
+    the legacy controls transactionally snapshot these too. Empty when
+    ``HAS_FP32_PRECISION_CONTROLS`` is ``False``.
+    """
+
+    if not HAS_FP32_PRECISION_CONTROLS:
+        return {}
+    snapshot: dict[str, str] = {}
+    for path in _FP32_PRECISION_OWNERS:
+        owner = _fp32_precision_owner(path)
+        if owner is not None:
+            snapshot[path] = str(owner.fp32_precision)
+    return snapshot
+
+
+def restore_fp32_precision_controls(snapshot: dict[str, str]) -> None:
+    """Re-apply a :func:`snapshot_fp32_precision_controls` result exactly.
+
+    Writes only the fields whose value changed, root first.
+    """
+
+    for path in _FP32_PRECISION_OWNERS:
+        owner = _fp32_precision_owner(path) if path in snapshot else None
+        if owner is not None and str(owner.fp32_precision) != snapshot[path]:
+            owner.fp32_precision = snapshot[path]
 
 
 def tensor_any_over_dims(tensor: torch.Tensor, dims: tuple[int, ...]) -> torch.Tensor:
