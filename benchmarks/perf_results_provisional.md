@@ -15,7 +15,7 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
   "cpu_model": "Intel(R) Core(TM) i9-9900X CPU @ 3.50GHz",
   "cuda": "12.8",
   "cuda_available": true,
-  "hostname": "zmachine",
+  "hostname": "benchmark-host",
   "install_notes": {
     "baukit": "pip install baukit failed: no matching distribution found",
     "transformer_lens": "installed separately after baukit failed the combined install"

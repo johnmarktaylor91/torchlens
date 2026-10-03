@@ -13,7 +13,7 @@ Each row traces an inline deterministic PyTorch fixture with `tl.trace(model, in
 ## Environment
 
 - Before checkout: `/tmp/preslots`
-- After checkout: `/home/jtaylor/projects/torchlens`
+- After checkout: the repository working tree
 - Python: `3.11.6`
 - Torch: `2.8.0+cu128`
 - TorchLens before: `2.18.0`

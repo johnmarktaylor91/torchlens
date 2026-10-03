@@ -9,7 +9,7 @@ Tolerance policy (R28-2). The per-row tolerance is::
 Only the BASELINE spread widens the tolerance: a noisy current run must never
 widen the bar it is judged against (the pre-R28 ``max(baseline_iqr,
 current_iqr)`` term let a contaminated run pass its own regressions). Two
-candidate targets are drafted for the JMT fork on the default ``rel_tolerance``:
+candidate targets are drafted for the maintainer fork on the default ``rel_tolerance``:
 
 - **Strict 2%** (``rel_tolerance=0.02``): catches real per-op regressions on
   quiet, thread-pinned hosts (R28 F5 measured <=5.2% worst-row same-commit

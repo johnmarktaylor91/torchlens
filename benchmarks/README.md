@@ -6,7 +6,7 @@ artifacts.
 ## Performance benchmark suite
 
 `perf_suite.py` drives the 2026-05-14 performance benchmark matrix described in
-`.research/perf-benchmarks_PLAN.md`. It launches `perf_runner.py` in a fresh
+a private benchmark plan. It launches `perf_runner.py` in a fresh
 subprocess for each operation/model/device/pass cell, writes
 `perf_results_2026-05-14.json`, and renders `perf_results_2026-05-14.md`.
 
