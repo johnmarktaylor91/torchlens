@@ -2,3 +2,7 @@
 tests/agent_surface_goldens/overview_folded.golden.json:generic-api-key:1
 tests/agent_surface_goldens/payload_stats.golden.json:generic-api-key:1
 tests/agent_surface_goldens/query_sites.golden.json:generic-api-key:1
+
+# Structurally verified scanner hashes and code/document identifiers.
+4b2fccb808c9ca838b84ac2ea389c6de61b984b9:torchlens/agent/_apimap.py:generic-api-key:190
+4b2fccb808c9ca838b84ac2ea389c6de61b984b9:torchlens/agent/_budgets.py:generic-api-key:37
