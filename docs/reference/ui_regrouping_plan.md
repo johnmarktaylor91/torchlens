@@ -1,6 +1,6 @@
-# Op surface regrouping plan (JMT-FORK-2 — PLAN ONLY, no implementation)
+# Op surface regrouping plan (FORK-2 — PLAN ONLY, no implementation)
 
-Status: decided PLAN-ONLY (JMT, 2026-07); this document is the M13
+Status: decided PLAN-ONLY (2026-07); this document is the M13
 deliverable of docs/reference/trace_core_design.md section 5. Nothing here
 is implemented, scheduled, or authorized for implementation — it is the
 design of record for the day the fork is exercised.

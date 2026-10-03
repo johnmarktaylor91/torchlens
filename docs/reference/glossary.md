@@ -589,7 +589,7 @@ attribution-target alias. See the [attribution reference](attribution.md).
 ## Unstable surfaces (documented-unstable; no deprecation shim owed)
 
 Spellings below shipped ahead of their naming-session/S2 ratification under
-the megasprint provisional-name protocol: they may rename WITHOUT deprecation
+the provisional-name protocol: they may rename WITHOUT deprecation
 shims, by declared contract. Each carries the same tag at its definition.
 
 **site_key (`Op.site_key`)** — *unstable — no deprecation shim owed*
@@ -979,7 +979,7 @@ default-keep); mask-application semantics documented-unstable*
   `selection_apply_invalid` (closed reason set
   `shape | dtype | device | broadcast | not_maskable`). Learned-parameter
   edits route through PARAMETER SUBSTITUTION on the replay engine (see the
-  entry below; the JMT 2026-08-17 ruling supersedes the D3 typed-refusal
+  entry below; the 2026-08-17 decision supersedes the D3 typed-refusal
   default there — rerun/set_only keep refusing typed). Each
   Selection-targeted do() appends an audit record (query repr + resolve
   digest + per-site relations) to `trace.intervention_audit` (persisted as
@@ -1155,7 +1155,7 @@ shim owed*
   the armed owner thread outside any engine invocation; reentrant
   checkpointing is token-free and affirmatively sentinel-flagged.
   Persists as of tlspec v8 with closed-vocabulary load validation. The
-  typed checkpoint-ambiguity refusal is S2-authored (R-L9-1) and not yet
+  typed checkpoint-ambiguity refusal awaits a pending contract amendment and is not yet
   shipped.
 
 **trace.grad_fn_site_summary** — *unstable — no deprecation shim owed*

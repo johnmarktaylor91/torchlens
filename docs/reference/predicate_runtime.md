@@ -1,6 +1,6 @@
 # Predicate runtime extension point (S4 contract)
 
-Status: DOCUMENTED-UNSTABLE (megasprint provisional-name protocol) — every
+Status: DOCUMENTED-UNSTABLE (provisional-name protocol) — every
 public spelling on this page may rename without a deprecation shim until its
 naming-session ratification. The SEMANTICS below are the frozen S4 seam
 contract; consumers build against them now.

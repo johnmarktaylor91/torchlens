@@ -334,7 +334,7 @@ activation and gradient substrate.
 
 ## Measured numbers (canonical bench host)
 
-Measured on the canonical bench host (`zmachine`, Intel i9-9900X) at SHA `712a4e5` on
+Measured on the canonical bench host (Intel i9-9900X) at SHA `712a4e5` on
 `2026-06-16`, from a full non-smoke run (`baseline_status: "canonical"`). The complete 196-row
 table (CPU + CUDA, every model and row) lives in
 [`docs/_perf_numbers.md`](_perf_numbers.md) and the raw baseline in

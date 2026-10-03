@@ -3,7 +3,7 @@
 - Top-level `torchlens.__all__` has 116 names: capture, save/load, intervention,
   selectors, helper transforms, observers, validation, and the three main log classes.
 - Relation accessors on FINISHED traces return IMMUTABLE views (authorized public type
-  break, JMT 2026-08-12): label sequences (`op.parents`, `op.children`, `op.modules`,
+  break, decided 2026-08-12): label sequences (`op.parents`, `op.children`, `op.modules`,
   `op.module_call_stack`, conditional child lists, `Layer.parents`/`Layer.children`, ...)
   are `tuple`; label sets (`input_ancestors`, `output_descendants`, `root_ancestors`,
   `internal_source_ancestors`) are `frozenset`. Reads are identity-stable, in-place
@@ -83,7 +83,7 @@
   `torchlens.user_funcs.render`; `tl.render` root spelling awaits the F35 registration
   sweep) is a curated facade over the resolver + `Trace.draw`: metadata-only pinned
   eval/no-grad capture with flags/RNG/norm-buffers restored and state-dict-hash
-  verified, `collapse="auto"` as its default (JMT-ruled: THERE ONLY -- `Trace.draw`
+  verified, `collapse="auto"` as its default (by design: THERE ONLY -- `Trace.draw`
   keeps `"none"`), detached `RenderResult` (owns DOT/bytes/path/provenance/receipt,
   `save()` re-renders without the trace), never auto-opens a viewer, collision-safe
   `<ModelClass>-graph.<fmt>` default filename in scripts (fork F1 branch A constant).
@@ -91,7 +91,7 @@
   captured forward with truthful totals (the metadata-invariant flip signal passes);
   zero-arg refuses before probing; armed captures refuse `state_baseline_unavailable`.
   Doc of record: `docs/quickstart.md`.
-- BOUND-METHOD ROOTS (F41, a direct JMT ruling; spellings DOCUMENTED-UNSTABLE): `tl.trace`
+- BOUND-METHOD ROOTS (F41, by design; spellings DOCUMENTED-UNSTABLE): `tl.trace`
   (and `tl.validate`) accept an `nn.Module` OR a bound method of one — `tl.trace(model.generate,
   ids, ...)`. The owner resolves via `method.__self__` and registers as the `owner` submodule of
   a TL-authored wrapper root (`torchlens/backends/torch/bound_root.py`) whose forward calls the
@@ -504,7 +504,7 @@
   `Op.injection_provenance` (F01 log_injections), `Trace.source_snapshots` (F30),
   `Trace.structure_evidence` (F33). Contract of record:
   `torchlens/schemas/writer_contract_v9.json` (v8 pinned under `tests/release_goldens/`);
-  the C07-adjudicated field-intent census is kept with the internal sprint records. The C07X
+  the C07-adjudicated field-intent census is maintained privately. The C07X
   AMENDMENT rides the SAME v9 window (TLSPEC_VERSION stays 9; JF-9 ratified): bundle
   relation grammar v2 (required/optional split; `successor_of` admits the optional
   evidence envelope `{schema, items[], facts_digest}` + `carry_mode`/`state_source`;
@@ -737,7 +737,7 @@
   not silently reorder another owner's refusal). `tap(resolved_selection)`
   stores per-site masks on TapRecords; `values(masked=True)` returns fresh
   masked copies.
-- PARAMETER SUBSTITUTION (param-operand, JMT-ruled 2026-08-17, supersedes the
+- PARAMETER SUBSTITUTION (param-operand, decided 2026-08-17, supersedes the
   D3 typed-refusal default on the replay path; DOCUMENTED-UNSTABLE):
   `fork.do(tl.params(name, mask=None), edit)` applies the edit "AS IF" the
   parameter were changed, for replay only — the value each consuming op sees
@@ -762,7 +762,7 @@
   Replay/push engine ONLY: rerun/set_only refuse
   `param_substitution_engine_unsupported`. The audit record (kind `PARAM`)
   discloses "substituted at consumption ... live parameters unchanged".
-- PASS-QUALIFIED REPLAY (JMT-ruled 2026-08-17; refusal spelling
+- PASS-QUALIFIED REPLAY (decided 2026-08-17; refusal spelling
   DOCUMENTED-UNSTABLE): the replay/push engine operates on pass-qualified
   op labels (`Op.label`, the `label:pass` spelling — single-pass ops carry
   `:1`). Cone traversal, the replay overlay, hook targets, origin sets, and
@@ -793,7 +793,7 @@
   fail-closed on bare pass-ambiguous consumer spellings and
   pass-incomplete consumer inventories.
 - BACKWARD RESIDUALS (L9; every spelling DOCUMENTED-UNSTABLE pending
-  naming-session/E-L9-4 routing): PER-FIRE TIMING -- every hooked grad_fn
+  naming-session routing): PER-FIRE TIMING -- every hooked grad_fn
   gets a timing prehook; ONE clock (`perf_counter`) paired at capture by a
   per-node keyed LIFO (stale entries discarded, untimed fires `(None,
   None)`, never a cross-clock pair); stamps ride the runtime `GradFnFired`
@@ -810,7 +810,7 @@
   NOT claimed), unpack evidence backward-derived (fire bracket -> user-op
   pairing -> L1 site keys); persisted `Trace.checkpoint_invocation_witness`
   carries counts/candidates/degrade-flags D1-D6/evidence-scoped verdict; the
-  ambiguity REFUSAL is S2-authored (R-L9-1 filed) -- identity-read accessors
+  ambiguity REFUSAL awaits a pending contract amendment -- identity-read accessors
   are NOT shipped until it lands. IMPLICIT-BOUNDARY --
   `_close_implicit_backward_pass_if_open` is a journal/scavenge/finalize
   split with the finalize guard IN-ROUTINE (D2H fence + projection never run
@@ -831,7 +831,7 @@
   on the user's object, stamps no loader-consulted attribute). The registry
   is INERT until consumers adopt name acceptance. `intervene=`/grad slots are
   outside the contract. Contract: `docs/reference/predicate_runtime.md`.
-- NETRON EXPORT v2 (lane F14; every kwarg spelling DOCUMENTED-UNSTABLE pending the
+- NETRON EXPORT v2 (F14; every kwarg spelling DOCUMENTED-UNSTABLE pending the
   naming sprint): `tl.export.netron(log, path=None, *, granularity="module"|"op"|"rolled",
   depth=1, show_buffers="never"|"meaningful"|"always", attachment=False, open=False,
   baseline=None)` emits schema-v2 ONNX protobuf-JSON (irVersion 10, custom domains

@@ -110,7 +110,7 @@ shadows for merged/overwritten values (`_LAYER_MIRROR_SPEC` in `_layer_spec.py`;
 These classes are row facades over per-trace kind tables
 (`_trace_core/record_rows.py`): declared stored fields are row-cell
 descriptors; the instance `__dict__` keeps only the store binding, user
-extras (JMT-FORK-7), and the few names whose properties hardcode `__dict__`
+extras (FORK-7), and the few names whose properties hardcode `__dict__`
 access (template/source-trace/facets slots). Torch build passes adopt records
 into `TraceCore.kind_rows`; direct construction, preview backends, pickle
 restore, and fork shells stay detached single-row stores.

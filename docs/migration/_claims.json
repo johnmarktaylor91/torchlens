@@ -1,7 +1,7 @@
 {
   "schema": "torchlens.migration_claims.v1",
   "seeded": "2026-08-26",
-  "seeded_by": "megasprint lane A12 (convert-panel memo D6 / wave-0 item 5). Claim rows transcribe PARITY-INTERVENTIONS launch-copy-safe phrasings verbatim; lint rows transcribe the CLAIM-LINT-SEED ledger rows 1-12. F30 owns lint enforcement; new rows append whenever a check pass refutes a claim.",
+  "seeded_by": "maintainers (claims registry seed; claim rows transcribe the approved launch-copy phrasings verbatim)",
   "wording_states": [
     "full",
     "narrowed_scope",
@@ -18,8 +18,8 @@
     "gate-d1-hf-lm-replay-crash": {
       "statement": "The replay/push engine crashes on HF causal-LM outputs (Cache container-path mis-indexing, intervention/replay.py:669,820,1519; reproduced on distilgpt2/gpt2/Qwen2.5/OPT under transformers 5.14.1). Blocks all LLM replay-economics copy and region advertising.",
       "status": "closed",
-      "fix_lane": "megasprint A05 (FIX-A: replay output-contract fix)",
-      "closed_by": "megasprint A05 (FIX-A replay output-contract fix), merged on sprint/megasprint-2026-08-27; in the D05 release commit lineage (base 0537becb799d)",
+      "fix_lane": "A05 (FIX-A: replay output-contract fix)",
+      "closed_by": "A05 (FIX-A replay output-contract fix); in the D05 release commit lineage (base 0537becb799d)",
       "closure_evidence": [
         "tests/test_fixa_escrow_replay_output_contract.py (5 arms)",
         "tests/real_model/r0/test_realism_randinit_axes.py::test_container_output_do_lands_through_model_output_container (real distilgpt2 nested cache)"
@@ -29,8 +29,8 @@
     "gate-fork-run-silent-unedited": {
       "statement": "fork.attach_hooks(...) followed by fork.run(inputs=x) returns the UNEDITED output with zero warnings. Blocks every 'never silently inert' formulation.",
       "status": "closed",
-      "fix_lane": "megasprint phase 1 (intervention honesty cluster)",
-      "closed_by": "megasprint A04 (intervention honesty cluster) + the run/attach contract: fork.run(inputs=...) after attach_hooks now REFUSES typed",
+      "fix_lane": "phase 1 (intervention honesty cluster)",
+      "closed_by": "A04 (intervention honesty cluster) + the run/attach contract: fork.run(inputs=...) after attach_hooks now REFUSES typed",
       "closure_evidence": [
         "probe 2026-09-02 at 0537becb799d: fork.attach_hooks(zero_ablate relu) then fork.run(inputs=x) raises EngineDispatchError code=run_staged_spec_unapplied naming the staged hook count and the intervened-rerun spelling; no un-intervened result is ever returned",
         "tests/test_interv_honesty_failed_do_cleanup.py::test_explicit_attach_hooks_stays_sticky_by_contract",
@@ -41,8 +41,8 @@
     "gate-appliance-replaced-false": {
       "statement": "The semantic appliances never check fire-record replaced=False, so activation_patch_residual_stream can emit publishable-looking flat tables as a SILENT NO-OP on real HF models. Blocks the same 'never silently inert' class.",
       "status": "closed",
-      "fix_lane": "megasprint A01-A03 (semantic slices)",
-      "closed_by": "megasprint A03 (semantic RECONSTRUCTION slice): fire ledger refuses never-fired and all-refused (replaced=False) campaigns typed (PatchApplicationError)",
+      "fix_lane": "A01-A03 (semantic slices)",
+      "closed_by": "A03 (semantic RECONSTRUCTION slice): fire ledger refuses never-fired and all-refused (replaced=False) campaigns typed (PatchApplicationError)",
       "closure_evidence": [
         "tests/test_sem_recon_patching.py::test_fire_ledger_refuses_all_refused_replacements",
         "tests/test_sem_recon_patching.py::test_fire_ledger_refuses_never_fired",
@@ -69,15 +69,15 @@
       "required_credit": "TransformerLens start_at_layer partial forwards; gradient attribution patching's ~2-forward cost.",
       "evidence_refs": [
         "PARITY-INTERVENTIONS claim 1",
-        "DIGEST-A A08",
-        "DIGEST-G D1"
+        "maintainer review record (private)",
+        "maintainer review record (private)"
       ],
       "scenario_ids": [],
       "tl_side_gates": [
         "gate-d1-hf-lm-replay-crash"
       ],
       "last_verified": "2026-08-21",
-      "owner": "A12 (row custody); F30 (lint enforcement)"
+      "owner": "maintainers"
     },
     {
       "id": "claim-2-intervention-as-object",
@@ -90,12 +90,12 @@
       "required_credit": "pyvene intervention-as-artifact + trainable interventions + Hub culture.",
       "evidence_refs": [
         "PARITY-INTERVENTIONS claim 2",
-        "DIGEST-A A09"
+        "maintainer review record (private)"
       ],
       "scenario_ids": [],
       "tl_side_gates": [],
       "last_verified": "2026-08-21",
-      "owner": "A12 (row custody); F30 (lint enforcement)"
+      "owner": "maintainers"
     },
     {
       "id": "claim-3-where-algebra-audit-inert",
@@ -108,8 +108,8 @@
       "required_credit": "nnsight scan/validate pre-run shape checking.",
       "evidence_refs": [
         "PARITY-INTERVENTIONS claim 3",
-        "DIGEST-A A07-A10",
-        "DIGEST-G D1",
+        "maintainer review record (private)",
+        "maintainer review record (private)",
         "PROBE-r1b"
       ],
       "scenario_ids": [],
@@ -119,7 +119,7 @@
         "gate-d1-hf-lm-replay-crash"
       ],
       "last_verified": "2026-08-21",
-      "owner": "A12 (row custody); F30 (lint enforcement)"
+      "owner": "maintainers"
     },
     {
       "id": "claim-4-generation-episode",
@@ -134,12 +134,12 @@
         "PARITY-INTERVENTIONS claim 4",
         "docs/reference/episode_capture.md:42",
         "PROBE-r1b",
-        "DIGEST-A A08"
+        "maintainer review record (private)"
       ],
       "scenario_ids": [],
       "tl_side_gates": [],
       "last_verified": "2026-08-21",
-      "owner": "A12 (row custody); F30 (lint enforcement)"
+      "owner": "maintainers"
     },
     {
       "id": "claim-5-tlens-cache-kit",
@@ -152,12 +152,12 @@
       "required_credit": "TLens ActivationCache kit + QK/OV + ARENA/SAELens gravity.",
       "evidence_refs": [
         "PARITY-INTERVENTIONS claim 5",
-        "DIGEST-A A07 (incl. r2 corrections)"
+        "maintainer review record (private)"
       ],
       "scenario_ids": [],
       "tl_side_gates": [],
       "last_verified": "2026-08-21",
-      "owner": "A12 (row custody); F30 (lint enforcement)"
+      "owner": "maintainers"
     }
   ],
   "lints": [
@@ -170,14 +170,14 @@
       "limitation_wording": "Trace overhead is model- and device-dependent; see the benchmark table. (No multiplier in copy.)",
       "required_credit": null,
       "evidence_refs": [
-        "DIGEST-A s4 #24",
+        "maintainer review record (private)",
         "docs/_perf_numbers.md",
         "A01-r2 measurement"
       ],
       "tl_side_gates": [],
       "lint": "FAIL any sentence publishing a single '<N>x' overhead multiplier as 'the' overhead; FAIL any multiplier not traceable to a benchmark artifact carrying (model, device, N). Also enforces N2: no number without surface/device/model/n and the query that produced it.",
       "last_verified": "2026-08-20",
-      "owner": "A12 (row custody); F30 (lint enforcement)"
+      "owner": "maintainers"
     },
     {
       "id": "perf-fastlog-attribution",
@@ -188,14 +188,14 @@
       "limitation_wording": "Sub-forward-cost capture is available in a restricted mode; see the benchmark table.",
       "required_credit": null,
       "evidence_refs": [
-        "DIGEST-A s4 #13",
+        "maintainer review record (private)",
         "A17-r2 (GPU fastlog-halt 4.9-10.4x)",
         "docs/_perf_numbers.md"
       ],
       "tl_side_gates": [],
       "lint": "FAIL any attribution of a sub-1x (0.8x-class) number to tl.trace or to GPU; FAIL any 'faster than the forward pass' copy without engine=fastlog and device=CPU attached. Cross-check with halt-selector-shape.",
       "last_verified": "2026-08-20",
-      "owner": "A12 (row custody); F30 (lint enforcement)"
+      "owner": "maintainers"
     },
     {
       "id": "episode-capture-caveats",
@@ -206,7 +206,7 @@
       "limitation_wording": "No episode-capture-based capability claims.",
       "required_credit": null,
       "evidence_refs": [
-        "DIGEST-A s4 #27",
+        "maintainer review record (private)",
         "A13-r2"
       ],
       "tl_side_gates": [
@@ -214,45 +214,45 @@
       ],
       "lint": "While the promotion gate is open, FAIL any episode-capture claim missing any one of the three caveats.",
       "last_verified": "2026-08-20",
-      "owner": "A12 (row custody); F30 (lint enforcement)"
+      "owner": "maintainers"
     },
     {
       "id": "menagerie-phrasing",
       "competitor": "none (self-claim about the menagerie catalog)",
-      "neutral_fact": "The menagerie README's own claim is '11,600+ cataloged, ~89% algorithmically verified'. Several lanes compressed this to 'verified entries' -- an overclaim corrected fleet-wide.",
-      "allowed_public_wording": "The RULINGS.md:51 hedge: 'verified on thousands of models across all major architecture families'; the menagerie catalog counts may be stated once with their measurement date (8,533 rows / 3,637 families, measured 2026-08-16; '8,500+ across ~3,600 families').",
+      "neutral_fact": "The menagerie README's own claim is '11,600+ cataloged, ~89% algorithmically verified'. Some summaries compressed this to 'verified entries' -- an overclaim, since corrected.",
+      "allowed_public_wording": "The approved hedge: 'verified on thousands of models across all major architecture families'; the menagerie catalog counts may be stated once with their measurement date (8,533 rows / 3,637 families, measured 2026-08-16; '8,500+ across ~3,600 families').",
       "narrowed_scope_wording": "none -- the hedge is the ceiling; no percentage paraphrase is approved.",
       "limitation_wording": "State the menagerie catalog counts with their measurement date; never a verification percentage until the campaign closes (the verification ledger is not in the public checkout, so no percentage is reproducible from the tree).",
       "required_credit": null,
       "evidence_refs": [
-        "DIGEST-A s4 #28",
+        "maintainer review record (private)",
         "A03-r2 correction"
       ],
       "tl_side_gates": [],
       "lint": "FAIL any menagerie verification percentage (the retired '~89%' / '11,600+' figures included) and compressions of the class '11,600 verified' / 'verified entries'; catalog counts must carry their measurement date.",
       "last_verified": "2026-08-20",
-      "owner": "A12 (row custody); F30 (lint enforcement)"
+      "owner": "maintainers"
     },
     {
       "id": "macs-unit-suffix",
       "competitor": "none (self-claim; unit confusion is the most-reported issue class across FLOPs-counter competitors)",
       "neutral_fact": "total_macs_forward is rendered through _human_flops and prints a FLOPs suffix ('718.9 MFLOPs') at _builder.py:1214-1215 (also 1386, 1401, 1526; README.md:122), with the FLOPs//2 disclosure line adjacent. MAC records must never render with a FLOPs suffix.",
-      "allowed_public_wording": "(post-fix) MAC quantities carry MAC units; FLOPs quantities carry FLOPs units; compute magnitude is stated via the two-term compute record (lane A07's vocabulary).",
+      "allowed_public_wording": "(post-fix) MAC quantities carry MAC units; FLOPs quantities carry FLOPs units; compute magnitude is stated via the two-term compute record (A07's vocabulary).",
       "narrowed_scope_wording": "(gate open) Compute magnitudes are quoted from the raw field (total_macs_forward, unit: MACs), never from the rendered string; the rendering defect is named when the rendered output is shown.",
       "limitation_wording": "No compute-magnitude numbers quoted from rendered summaries until the A07 fix merges.",
       "required_credit": null,
       "evidence_refs": [
-        "DIGEST-A s4 #5",
+        "maintainer review record (private)",
         "s2a bug 2",
         "_builder.py:1214-1215,1386,1401,1526",
         "README.md:122"
       ],
       "tl_side_gates": [
-        "megasprint lane A07 merge (two-term compute record) -- while open, wording degrades per D6"
+        "A07 merge (two-term compute record) -- while open, wording degrades per D6"
       ],
       "lint": "FAIL any rendering, doc, or dossier line where a MAC-derived quantity carries a FLOPs suffix; after the A07 merge, FAIL any quotation of the old mislabeled rendered strings.",
       "last_verified": "2026-08-20",
-      "owner": "lane A07 owns the fix; A12 (row custody); F30 (lint enforcement)"
+      "owner": "maintainers"
     },
     {
       "id": "timing-uniqueness-scope",
@@ -263,14 +263,14 @@
       "limitation_wording": "No uniqueness claim about timing.",
       "required_credit": "DeepSpeed's flops profiler prints per-module latency.",
       "evidence_refs": [
-        "DIGEST-A s4 #26",
+        "maintainer review record (private)",
         "A01 row 37",
         "A18"
       ],
       "tl_side_gates": [],
       "lint": "FAIL 'no competitor has timing' or any timing family-absolute lacking the summary-tools scope; FAIL the scoped claim when the DeepSpeed credit is absent (credit-required class; never a family absolute -- say the precise thing).",
       "last_verified": "2026-08-20",
-      "owner": "A12 (row custody); F30 (lint enforcement)"
+      "owner": "maintainers"
     },
     {
       "id": "halt-selector-shape",
@@ -281,7 +281,7 @@
       "limitation_wording": "No early-halt capability claims.",
       "required_credit": null,
       "evidence_refs": [
-        "DIGEST-A s4 #25",
+        "maintainer review record (private)",
         "s2a bug 6",
         "_runnable_transaction.py:819-1023"
       ],
@@ -291,7 +291,7 @@
       "lint": "FAIL any unqualified 'halt= works' / 'stop_after works' claim; require the op-shaped/module-shaped split in every halt claim; cross-check engine and device attribution against perf-fastlog-attribution.",
       "scope_note": "Refinement (2026-08-26, CHECK-T00 fix cycle): the split requirement binds CAPABILITY claims (sentences asserting halt/stop_after WORKS). A DEFECT report (an underclaim) does not fail the lint for lacking the split, though it should still name the selector shape where known.",
       "last_verified": "2026-08-20 (adjudication); refinement 2026-08-26",
-      "owner": "A12 (row custody); F30 (lint enforcement); fix rides s2a bug 6"
+      "owner": "maintainers"
     },
     {
       "id": "attribution-self-check-scope",
@@ -310,7 +310,7 @@
       ],
       "lint": "FAIL any UNSCOPED/generalized completeness or self-check phrasing -- 'every result', 'all our methods', or any always-on claim that does not name the method in the same breath (an IG-scoped 'always-on' that names integrated_gradients PASSES); FAIL any attribution self-check claim that does not name integrated_gradients.",
       "last_verified": "2026-08-26",
-      "owner": "A12 (row custody); F30 (lint enforcement); scope fix rides F06"
+      "owner": "maintainers"
     },
     {
       "id": "attention-picture-scope",
@@ -330,7 +330,7 @@
       ],
       "lint": "FAIL any claim that TorchLens can or cannot draw an attention pattern that does not name the attention implementation (eager vs fused) and the route (facet vs captured op).",
       "last_verified": "2026-08-26",
-      "owner": "A12 (row custody); F30 (lint enforcement)"
+      "owner": "maintainers"
     },
     {
       "id": "halt-module-selector-named",
@@ -350,7 +350,7 @@
       ],
       "lint": "FAIL any module-halt claim that does not name WHICH module-shaped selector, since tl.module matches zero sites while tl.in_module halts exclusive of the requested site. Cross-check with halt-selector-shape.",
       "last_verified": "2026-08-26",
-      "owner": "A12 (row custody); F30 (lint enforcement); fix rides A06"
+      "owner": "maintainers"
     },
     {
       "id": "public-spelling-disclosure",
@@ -368,7 +368,7 @@
       ],
       "lint": "FAIL any capability claim whose spelling is absent from tl.__all__ or emits a deprecation warning, unless the claim says so.",
       "last_verified": "2026-08-26",
-      "owner": "A12 (row custody); F30 (lint enforcement)"
+      "owner": "maintainers"
     },
     {
       "id": "provenance-scope-matches-number",
@@ -384,13 +384,13 @@
       "tl_side_gates": [],
       "lint": "FAIL any attached query whose stated scope, executed literally, yields a different number than the one it labels.",
       "last_verified": "2026-08-26",
-      "owner": "A12 (row custody); F30 (lint enforcement)"
+      "owner": "maintainers"
     }
   ],
   "check_block_line": "Every check pass over dossiers/boundary copy emits exactly one line: 'CLAIM-LINT: <n_run> run / <n_fail> fail [ids: ...]' (N5).",
   "gates_last_reviewed": {
     "date": "2026-09-02",
-    "by": "megasprint lane D05 (release artifacts)",
+    "by": "maintainers (release artifacts)",
     "rule": "A gate reads closed ONLY when its pin tests are GREEN on the exact release commit AND on the venv-installed wheel (D05 FULL gate); a red pin re-opens the gate and the claim renders in its narrowed_scope_wording again."
   }
 }

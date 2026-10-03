@@ -32,14 +32,14 @@
   multi-step generation run as ONE product with a per-step status ledger at
   `trace.annotations["episode"]` (disclosure, never a settlement authority; persists
   plainly as of the tlspec v8 coordinated bump, load-validated fail-closed). Cross-step
-  joins are MEASURED (lane F40c): per-row `step_join` grades (continuous/forced/
+  joins are MEASURED (F40c): per-row `step_join` grades (continuous/forced/
   transformed/declared/exogenous/unchecked) in the `episode_step_join_v1` header envelope; a
   measured break refuses episode-dependent claims (series reads, whole-episode replay,
   the blessing fold, escalation) while ops/values/graph/per-segment reads stay usable;
   `EpisodeSpec(feed="closed")` is the strict halt-at-next-entry arm,
   `on_feed_break="refuse"` the built FORK-4 typed-refusal arm, `crossings=(k,...)` the
   declared tool-call crossings; envelope-less artifacts read unmeasured, never
-  measured. ATTESTED COUPLING (lane F42): `episode=` x `intervene=` runs COUPLED —
+  measured. ATTESTED COUPLING (F42): `episode=` x `intervene=` runs COUPLED —
   per-row measured `fire_count` (zero and multiple fires first-class), the
   deterministic header `intervention_digest`, `fidelity_basis="perturbed"` on
   replacing fires, the step-qualified selector `torchlens.intervention.at_step(...)`

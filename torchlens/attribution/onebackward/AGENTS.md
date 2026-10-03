@@ -1,9 +1,9 @@
-# attribution/onebackward/ -- one-backward reads (lane F04)
+# attribution/onebackward/ -- one-backward reads (F04)
 
 One suppressed `autograd.grad` over alias-deduped GradientEdges resolved
 from EXISTING op fields; results ride the immutable `ReadTable` with honesty
 as columns. Doc of record: `docs/reference/onebackward_reads.md`; design of
-record: the M(reads) tri-lab memo. Spellings DOCUMENTED-UNSTABLE pending the
+record: the M(reads) design memo. Spellings DOCUMENTED-UNSTABLE pending the
 naming sprint; error codes are the contract.
 
 | Module | Owns |

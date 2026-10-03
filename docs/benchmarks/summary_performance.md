@@ -24,5 +24,5 @@ Notes:
   and the capture inflate together under load, compressing the ratio
   less than either absolute); regenerate on a quiet host with
   `python tools/benchmark_summary.py` and commit the page.
-- F1 disposition (memo 3.12): a second hook-based capture engine goes
-  to JMT only if the optimized single-engine ratio stays above ~5x.
+- F1 disposition: a second hook-based capture engine goes
+  to a maintainer decision only if the optimized single-engine ratio stays above ~5x.

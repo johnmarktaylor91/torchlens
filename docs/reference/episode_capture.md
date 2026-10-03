@@ -82,7 +82,7 @@ episode-declared and undeclared runs of the same seeded fixture.
 `EpisodeSpec(stepped_module=...)` declares the STEPPED MODULE — the
 `nn.Module` whose successive top-level calls define step boundaries. It must
 be a PROPER submodule of the traced episode root. On a BOUND-METHOD root
-(lane F41, the ruled root contract: `tl.trace(model.generate, ids,
+(F41, the ruled root contract: `tl.trace(model.generate, ids,
 episode=EpisodeSpec(n_steps=N))` — the owner resolves via
 `method.__self__` and registers as a submodule of the TL-authored wrapper
 root) `stepped_module` DEFAULTS to the owner; on a module root it is
@@ -199,13 +199,13 @@ unretained payload — and a mismatch refuses/quarantines). The historical
 v1 form hashed identity alone, so two equal-length prompts minted identical
 digests and a rewritten ledger still attested bound; a persisted v1 digest
 now reads as PRE-BINDING (`episode_coupling_unmintable`, re-capture to
-bind), never as foreign. The attested-coupling lane (F42) consumes the
+bind), never as foreign. The attested-coupling work (F42) consumes the
 binding; the travel policy below stays the negative guarantee it
 complements.
 
 ## Attested coupling (`episode=` x `intervene=`)
 
-The combination runs COUPLED (lane F42; the foldA D5 flip — the historical
+The combination runs COUPLED (F42; the foldA D5 flip — the historical
 pre-execution refusal retired when the verdict's evidence bar was met, and
 every spelling here is DOCUMENTED-UNSTABLE pending the naming session):
 
@@ -284,11 +284,11 @@ never presents another execution's step evidence. Plain `trace.fork()` is
 not a fresh execution and carries the ledger until an engine re-executes.
 Re-capture with `episode=` to derive step evidence for new inputs.
 
-## Cross-step continuity: the measured `step_join` (lane F40c)
+## Cross-step continuity: the measured `step_join` (F40c)
 
 The header's `token_feed` reflects the user's DECLARATION of how step inputs
 were fed. The step JOIN — that step k+1's input actually CONTINUED step k's
-output — is MEASURED (lane F40c, the trace-verb verdict's mid-call oracle
+output — is MEASURED (F40c, the trace-verb verdict's mid-call oracle
 break contract): live boundary hooks on the stepped module snapshot each
 step's entry/exit under `pause_logging` (invisible to the recorded graph;
 the four-clause declaration invariant holds), and settlement re-grades every
@@ -387,8 +387,8 @@ disclosures, the declared `step_output_kind` — `tokens` (default) /
 `digest` / `none` — with the `step_output_from` source disclosure, the
 declared `step_axis`, and the minted `capture_digest` binding (all written
 by the declared derivation above), plus the measured `step_join` envelope
-(lane F40c, the section above) and the `intervention_digest` coupling slot
-written on intervened captures (lane F42, the attested-coupling section
+(F40c, the section above) and the `intervention_digest` coupling slot
+written on intervened captures (F42, the attested-coupling section
 above)) and one row per step
 (`episode_step`, `role`, `status`, coordinates, the generic `step_output`
 under the declared kind, the carried-state witness slots
@@ -418,7 +418,7 @@ witness (the SV-6 semantic ruling): `entry_state_digest` /
 `exit_state_digest` are channel-keyed digests of the carried state at the
 step's boundaries, `None` means NOT MEASURED — the only value any shipped
 writer emits — and no field may imply an unmeasured cache fact. The
-F-WITNESS lane designs the full witness schema after the F20 retention seam
+F-WITNESS work designs the full witness schema after the F20 retention seam
 and writes real digests; until then absence is the honest disclosure.
 
 Loads validate fail-closed: an episode ledger on a capture without the

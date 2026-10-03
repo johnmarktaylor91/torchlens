@@ -5,7 +5,7 @@ postprocess pipeline, render, and cleanup -- against a plain uninstrumented
 forward (min-of-N), and regenerates the published benchmarks page
 (``docs/benchmarks/summary_performance.md``). The page is the forcing
 function ("we will not publish 63x"): the ratio feeds the memo's F1
-engine-floor trigger (a second capture engine goes to JMT only if the
+engine-floor trigger (a second capture engine goes to a maintainer decision only if the
 optimized single-engine summary stays above ~5x a plain forward).
 
 Run:  python tools/benchmark_summary.py [--models resnet18,toy] [--repeats 5]
@@ -172,8 +172,8 @@ def write_page(rows: dict[str, dict[str, float]]) -> None:
         "  and the capture inflate together under load, compressing the ratio",
         "  less than either absolute); regenerate on a quiet host with",
         "  `python tools/benchmark_summary.py` and commit the page.",
-        "- F1 disposition (memo 3.12): a second hook-based capture engine goes",
-        "  to JMT only if the optimized single-engine ratio stays above ~5x.",
+        "- F1 disposition: a second hook-based capture engine goes",
+        "  to a maintainer decision only if the optimized single-engine ratio stays above ~5x.",
         "",
     ]
     _PAGE.parent.mkdir(parents=True, exist_ok=True)

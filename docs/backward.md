@@ -172,7 +172,7 @@ fail-closed — the classifier mints NO tokens, never a false one. The sibling
 `HAS_CHECKPOINT_INTERNAL_HOOK_CLASS` flag (same visibility) tracks whether this torch runtime's
 checkpoint hooks carry that private identity state at all; its absence (torch 2.13 and earlier)
 means the token wrapper's hook-object replacement is unconditionally safe. The typed
-checkpoint-ambiguity refusal is an S2 amendment (R-L9-1) and lands with the identity-read
+checkpoint-ambiguity refusal is a pending contract amendment and lands with the identity-read
 accessors once the amendment is ratified.
 
 ## Validation

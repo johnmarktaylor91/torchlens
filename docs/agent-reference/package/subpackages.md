@@ -16,7 +16,7 @@
   views — `tuple` for label sequences (`parents`, `children`, `modules`,
   `module_call_stack`, conditional child lists, ...), `frozenset` for label sets
   (`input_ancestors`, `output_descendants`, `root_ancestors`,
-  `internal_source_ancestors`) — an authorized public type break (JMT 2026-08-12):
+  `internal_source_ancestors`) — an authorized public type break (decided 2026-08-12):
   in-place mutation raises, assignment still works and normalizes to the view type,
   and equal views may be shared across records. `parents`/`children` live in the
   core's canonical dataflow edge-occurrence table (CSR by edge id) and rematerialize

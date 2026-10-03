@@ -186,7 +186,7 @@ Key entry points:
   `param_substitution_occurrence_underivable` (fail-closed): nested container
   positions, released legacy captures, bare pass-ambiguous consumer
   spellings, and consumer inventories omitting a pass.
-- Pass-qualified replay (JMT-ruled 2026-08-17; refusal spelling
+- Pass-qualified replay (decided 2026-08-17; refusal spelling
   DOCUMENTED-UNSTABLE): the replay/push engine keys cone traversal, the
   overlay, hook targets, and commits by pass-qualified op labels
   (`Op.label`, `label:pass`), so multi-pass edits touch exactly the
@@ -218,7 +218,7 @@ Key entry points:
   tokens: classified non-reentrant `_checkpoint_hook` enters mint per-trace
   ordinal tokens; pack evidence count-only, unpack evidence backward-derived
   to L1 site keys; persisted `Trace.checkpoint_invocation_witness` with
-  degrade flags D1-D6; the ambiguity refusal is S2-authored (R-L9-1) and its
+  degrade flags D1-D6; the ambiguity refusal awaits a pending contract amendment and its
   identity-read accessors are unshipped until the amendment lands.
   Implicit-boundary: journal/scavenge/finalize split with the finalize guard
   in-routine (never inside an engine invocation), identity-checked

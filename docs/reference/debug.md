@@ -614,7 +614,7 @@ input-cloning primitive. The caller's model, inputs, and RNG streams are untouch
 
 ## `walk_grad_fn` / `sketch_grad_fn`
 
-The post-hoc autograd-graph walker (DOCUMENTED-UNSTABLE spellings, lane F37): draw the
+The post-hoc autograd-graph walker (DOCUMENTED-UNSTABLE spellings, F37): draw the
 `grad_fn` graph of a tensor you ALREADY HAVE — computed in an earlier notebook cell or
 inside someone else's training loop — with no re-execution and no capture context (the
 `make_dot(y)`-class torchviz capability). Both are explicitly STRUCTURE-ONLY: the walk

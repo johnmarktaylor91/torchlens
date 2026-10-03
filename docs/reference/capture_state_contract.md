@@ -2,7 +2,7 @@
 
 Normative spec for what a `tl.trace` call may leave changed on the user's
 model and process, what it restores, and what it discloses. This is the
-lane-A06 deliverable of M(oracles) item 8 ("instance-forward cleanup +
+A06 deliverable of M(oracles) item 8 ("instance-forward cleanup +
 entry-surface state restoration"): the settled cells are implemented and
 pinned by tests; the one genuinely open cell (the success-path default state
 relation, FORK-A) is specified here for both branches so the ruling lands as
@@ -29,9 +29,9 @@ a default flip plus tests, not a design.
 | Session tensor labels | Stripped from model/buffer/input tensors at session cleanup. | `model_prep._undecorate_model_tensors` |
 | Train-mode running statistics | NOT restored on the default path (the forward really runs; `torch.no_grad` does not stop running-stat updates). Disclosed once per process with warning code `batchnorm_train_stats_mutated`. | `torchlens/user_funcs.py::_warn_once_train_mode_running_stats`; pinned by `tests/test_capopts_truth_batchnorm_warn.py` |
 | Successful `tl.trace` instrumentation | Persistent by design until `tl.release_model(model)` (re-capture speed; the release door restores pickling and is the documented workflow). Dissolve-on-teardown is List-B feature work, not part of this contract. | `model_prep.release_model` |
-| Observational surfaces (summary, render/read/validate/export) | PURE under either FORK-A branch (3/3 panel agreement). The summary eval/no_grad default with full state restoration is lane A07's implementation (summary A4); extraction's no_grad/eval wrap with exact restore is lane A11's. Both consume the same inventory below. | A07 / A11 lanes |
+| Observational surfaces (summary, render/read/validate/export) | PURE under either FORK-A branch (3/3 panel agreement). The summary eval/no_grad default with full state restoration is A07's implementation (summary A4); extraction's no_grad/eval wrap with exact restore is A11's. Both consume the same inventory below. | A07 / A11 |
 
-## FORK-A (open; JMT ruling pending): the success-path default
+## FORK-A (open; decision pending): the success-path default
 
 Both branches are fully designed in the oracles memo (section 11). The
 harness, registry, and every other cell above are identical under both;

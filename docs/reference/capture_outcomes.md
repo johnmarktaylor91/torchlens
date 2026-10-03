@@ -175,7 +175,7 @@ Two evidence bases:
   at the capture finalize seam, so the forward is never synchronized per op.
 
 Measured cost of `track_nonfinite=True` relative to a default capture
-(min-of-reps, 2026-08-19): CPU (devbox) resnet18-b8 +5.8%, transformer-enc
+(min-of-reps, 2026-08-19): CPU resnet18-b8 +5.8%, transformer-enc
 +14.5%, gpt2 +3.4%; H200 (cu128) resnet18-b8 +4.9%, transformer-enc +6.7%,
 gpt2 +4.3%, with an eager per-op read variant costing +6.9%/+9.3%/+7.3% —
 the deferral is why a device capture never pays a per-op synchronization.

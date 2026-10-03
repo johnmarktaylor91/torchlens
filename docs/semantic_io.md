@@ -5,7 +5,7 @@ graph. The current review-day surface covers decoded classifier outputs,
 output provenance, original input display, and preprocessing provenance.
 
 These names are **provisional until review-day signoff**. Do not add them to
-the vault glossary yet.
+the canonical glossary yet.
 
 ## Output Decode
 

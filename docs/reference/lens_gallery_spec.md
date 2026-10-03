@@ -68,7 +68,7 @@ helpers/tests and run per stratum.
 
 ## 4. The battery (Stage 1) and beauty pass (Stage 2)
 
-Evaluators are fresh Fable instances with no repo, docs, TorchLens name,
+Evaluators are fresh model instances with no repo, docs, TorchLens name,
 lens name, or channel vocabulary; filenames masked; one evaluator, one
 image. Packets (`lenses.audit.build_packet`) fix the question order (free
 response -> free inventory -> forced choice -> RenderIR task probes ->

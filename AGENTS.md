@@ -85,33 +85,35 @@ capture is a capture gap to fix, never to exempt.
 
 ## Keep the glossary + docs in lockstep with code (LOCKED)
 
-The glossary is the canonical API spec; code conforms to it. Renaming, adding or removing any
+The glossary is the canonical API spec (maintained privately; `docs/reference/glossary.md` is
+the public copy); code conforms to it. Renaming, adding or removing any
 PUBLIC name (dataclass field, `@property`, method, top-level `tl.*` name, kwarg) updates, in the
 SAME change, the glossary entry, the examples in `docs/agent-reference/`, and the audit notebooks
 (`notebooks/audit/`) and `examples/` that use it. A change that leaves them stale is INCOMPLETE.
-Required reading for the full rule (vault re-file, old-name grep) and the runnable-state
+Required reading for the full rule (canonical re-file, old-name grep) and the runnable-state
 contracts filed with it: [lockstep reference](docs/agent-reference/keep-the-glossary-docs-in-lockstep-with-code-locked.md).
 
 ## Internal notes stay PRIVATE (LOCKED — this repo is PUBLIC)
 
 `johnmarktaylor91/torchlens` is a **public** GitHub repo. Internal planning, riffing, sprint
-specs, adversarial reviews, STATE/SUMMARY files, and the working task tracker are **JMT's eyes
-only** and must NEVER be committed.
+specs, adversarial reviews, STATE/SUMMARY files, and the working task tracker are
+**maintainer-only** and must NEVER be committed.
 
 - **Private (gitignored, never commit):** all of `.research/`, and `.project-context` EXCEPT the
   two whitelisted curated docs. The agent task tracker `todos.md` in `.project-context` and the
-  agent-facing `torchlens_glossary.md` in `.project-context` (canonical lives in the vault) are private.
+  agent-facing glossary copy `torchlens_glossary.md` beside it are private (the canonical glossary
+  is maintained privately).
 - **Public (the only tracked `.project-context` files):** `architecture.md`,
   `state_of_torchlens.md`. The user-facing glossary is `docs/reference/glossary.md` (shipped)
   — a separate, curated artifact, NOT the agent copy.
 - **Enforcement:** `.gitignore` excludes them and a `no-internal-notes` pre-commit hook
   (`.pre-commit-config.yaml`) HARD-FAILS any commit that stages a private path. Never `git add -f`
   to bypass it; never `git rm` the local files (they are your working notes). Long-form
-  reports go to the fleet research home named in the global rules, not the repo.
+  reports go to the maintainer's private research location, not the repo.
 - **Agent knowledge (private, hub only):** the `knowledge` folder in `.project-context` holds
   `torchlens_ui_api_sprint_inputs.md` (read first when the UI/API sprint starts),
-  `torchlens_hardening_protocol.md` (the TorchLens hardening run record; general rules are the
-  fleet's `hardening_protocol.md`), `torchlens_memory_lifetime.md` and `torchlens_test_isolation.md`.
+  `torchlens_hardening_protocol.md` (the TorchLens hardening run record; general rules live in the
+  maintainer's private hardening protocol), `torchlens_memory_lifetime.md` and `torchlens_test_isolation.md`.
 
 ## Testing Tiers
 

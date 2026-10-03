@@ -15,8 +15,8 @@ NAMING: every spelling below is DOCUMENTED-UNSTABLE pending naming-session
 ratification, and every refusal code is additionally S2-gated (no
 deprecation shim owed on rename). The D8 decision point (meta-tensor
 admission scoped to structure-only captures) is QUEUED; every cell below is
-the D8-DEFAULT state — the entry-gate refusal stands until an explicit JMT
-ruling.
+the D8-DEFAULT state — the entry-gate refusal stands until an explicit
+decision.
 
 Grammar of `status_v1` (closed, five members): `supported_structural` |
 `supported_hypothesis` | `refuse:<code>` | `verify:<Vn>` |
@@ -30,7 +30,7 @@ Grammar of `status_v1` (closed, five members): `supported_structural` |
 | `flops_estimates` | FLOPs/MACs are derived from hypothesis shapes; they inherit hypothesis status and are labelled estimated, never measured. | `supported_hypothesis` | discharge | tests/test_structure_only_honesty.py | L7a | — |
 | `memory_estimates` | Memory figures are geometry estimates; measured-memory columns render unknown, never zero. | `supported_hypothesis` | discharge | tests/test_structure_only_honesty.py | L7a | — |
 | `taken_path_conditionals` | Conditional structure of the taken path is recorded; any VALUE-dependent branch through the enumerated escape surface refuses typed at the user's source line REGARDLESS of the tensor's device; unenumerated meta deaths refuse typed via the backstop; unenumerated REAL-value escapes in form (b) are undetectable and are priced by hypothesis status (coverage claim exactly per memo sec 2.1 C-ENUM/C-BACKSTOP/C-RESIDUAL). | `supported_structural` | never | tests/test_structure_only_teaching.py | L7a | — |
-| `meta_admission` | Meta-materialized models (form (a)) are ADMITTED under the D8 grant (JMT 2026-08-26), if and only if structure-only is in force (scoped admission, W2): the graph, module nesting, parameter geometry, and shape/dtype HYPOTHESES are recorded with no tensor values. Without structure_only the entry gate refuses meta unchanged. | `supported_structural` | D8 granted 2026-08-26 (this row IS the flip; last merge) | tests/test_weightsfree_admission.py; parity gate: tests/test_weightsfree_parity.py (real digest == meta digest AND discharge CORROBORATED on every fixture) | S2-amendment | — |
+| `meta_admission` | Meta-materialized models (form (a)) are ADMITTED under the D8 grant (decided 2026-08-26), if and only if structure-only is in force (scoped admission, W2): the graph, module nesting, parameter geometry, and shape/dtype HYPOTHESES are recorded with no tensor values. Without structure_only the entry gate refuses meta unchanged. | `supported_structural` | D8 granted 2026-08-26 (this row IS the flip; last merge) | tests/test_weightsfree_admission.py; parity gate: tests/test_weightsfree_parity.py (real digest == meta digest AND discharge CORROBORATED on every fixture) | S2-amendment | — |
 | `value_payloads` | Activations, argument values, output values are never recorded; requests refuse typed. | `refuse:structure_only_values_unsupported` | never | tests/test_structure_only_entry.py | L7a | `structure_only_values_unsupported` |
 | `previews` | Value previews/thumbnails require values; refused. | `refuse:structure_only_values_unsupported` | never | tests/test_structure_only_entry.py | L7a | `structure_only_values_unsupported` |
 | `nonfinite_predicates` | raise_on_nan and nonfinite halt predicates have no values to test; the combination refuses typed at entry. | `refuse:structure_only_option_conflict` | never | tests/test_structure_only_entry.py | L7a | `structure_only_option_conflict` |

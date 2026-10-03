@@ -6,7 +6,7 @@ common result carrier, and a `by=` door so "select the k most important
 sites" is one line. Every SPELLING on this page is DOCUMENTED-UNSTABLE
 pending the naming sprint; the semantics and the stable error codes
 (`docs/reference/error_refusal_contract.md`) are the contract. Design of
-record: the M(reads) tri-lab memo (F04).
+record: the M(reads) design memo (F04).
 
 ```python
 import torchlens as tl

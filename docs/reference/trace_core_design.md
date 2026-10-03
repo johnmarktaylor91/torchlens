@@ -1,6 +1,6 @@
 # Trace core design — the converged god-object columnar re-plumbing
 
-Status: CONVERGED (tri-lab, round 2), now HISTORICAL. Basis tree `781a7559`. Every
+Status: CONVERGED (round 2), now HISTORICAL. Basis tree `781a7559`. Every
 schema statement below is as-of that pre-v8 tree: the tlspec v8 coordinated bump has
 since shipped, so "no `TLSPEC_VERSION` bump" and "rows remain `RUNTIME`/DROP-gated"
 sentences describe the sprint's scope at the time, not the current tree — the runtime
@@ -9,7 +9,7 @@ This document is the
 architecture of record for the columnar re-plumbing sprint: it synthesizes the three
 independent round-1 designs and the three round-2 reconciles into ONE plan. Where the
 round-2 documents state a 2-1 HOLD, the majority position is the plan and the minority's
-reopening conditions are recorded verbatim. User-visible choices are reserved as JMT
+reopening conditions are recorded verbatim. User-visible choices are reserved as maintainer
 forks, never resolved here.
 
 Sources (private sprint records, not in-repo): `godobject-r2-fable.md` (merged M0-M13
@@ -243,7 +243,7 @@ private; computed collapse metadata stays out of serialization.
   state byte-identically; `_internal_set` remains the unstamped path. Sanctioned
   writers: backward epoch append; sparse `annotations` sidecar; intervention/
   direct-write overlay; the step 18-20 payload plane.
-- **Relation accessors — immutable views (JMT-DECIDED 2026-08-12, supersedes the
+- **Relation accessors — immutable views (DECIDED 2026-08-12, supersedes the
   lazy-hydration default for relation fields).** The label-sequence and label-set
   relation accessors (`parents`, `children`, `modules`, `module_call_stack`,
   `input_to_module_calls`, `output_of_modules`, `output_of_module_calls`,
@@ -263,7 +263,7 @@ private; computed collapse metadata stays out of serialization.
   compact storage; the first PUBLIC access materializes the exact builtin into that
   row's overlay, which becomes authoritative for that row; uninspected rows stay
   compact.
-- **The two group-membership fields** (`equivalent_ops`, `recurrent_ops`): JMT-DECIDED
+- **The two group-membership fields** (`equivalent_ops`, `recurrent_ops`): DECIDED
   2026-08-12 — LIVE group-membership views (immutable, backed by the shared group row;
   reads reflect group state, caller mutation impossible), replacing the historical
   fresh-mutable-copy-per-read barrier. Lands in M7 with the group tables.
@@ -271,7 +271,7 @@ private; computed collapse metadata stays out of serialization.
   the source row; public `.copy()` is a detached one-row core honoring today's EXACT
   selective share/deep policy (deep metadata; share func/handles/source_trace/RNG
   snapshots/saved args/params/payloads per the documented policy). Copies never share
-  overlays or group-membership mutation state. The subclass contract is JMT-FORK-6.
+  overlays or group-membership mutation state. The subclass contract is FORK-6.
 - **`Trace.fork()`**: core-level COW — share frozen base + pools; new facade cache, new
   overlay, detached backward epochs, independent intervention/history state, payload
   handles per today's fork policy. Transactions checkpoint overlay + epochs; rollback
@@ -449,10 +449,10 @@ OUT (documented handoffs, never silent):
   cursor/range restructure waits for the C1 contract to soak.
 - **No-journal capture writer** (capture writes semantic columns directly): OUT
   permanently, per section 3.3.
-- New physical columnar `.tlspec` (JMT-FORK-3); Arrow core dependency; global interning;
+- New physical columnar `.tlspec` (FORK-3); Arrow core dependency; global interning;
   `torchlens/projection/` package (the 26 declared steps' order is load-bearing; the substance —
   declared per-step read/write sets — lands without the relocation); UI regrouping
-  implementation (plan-only, JMT-FORK-2); `intervention_ready` rename (separate
+  implementation (plan-only, FORK-2); `intervention_ready` rename (separate
   authorization).
 
 Any capacity cut happens at a completed wave boundary, named plainly — never mid-fan-out,
@@ -533,27 +533,27 @@ record translator uses weakref guards for id-recycling protection instead
 of pinning parent records (only non-weakref-able ``Op`` facades, which
 hold no strong trace reference, are pinned).
 
-## 5. JMT forks (reserved decisions; the plan assumes every default)
+## 5. Maintainer forks (reserved decisions; the plan assumes every default)
 
-1. **JMT-FORK-1 — DECIDED 2026-08-12: immutable views.** Relation accessors
+1. **FORK-1 — DECIDED 2026-08-12: immutable views.** Relation accessors
    (`child_ops` family: the label-sequence/label-set relation fields) return immutable
    views (`tuple`/`frozenset`), and `equivalent_ops`/`recurrent_ops` become LIVE
    group-membership views (`frozenset`/`tuple` backed by the shared group row): O(1)
    reads vs the old O(N)-per-read copies (O(N^2) over loops). PUBLIC TYPE CHANGE,
    authorized; aliases-v1 rows updated in the same waves (M6 relations / M7 groups).
-2. **JMT-FORK-2 — external UI regrouping** (`op.timing.*` etc.): already decided
-   PLAN-ONLY by JMT; the plan document ships in M13 (everyday fields top-level;
+2. **FORK-2 — external UI regrouping** (`op.timing.*` etc.): already decided
+   PLAN-ONLY; the plan document ships in M13 (everyday fields top-level;
    specialist facts under timing/autograd/geometry/provenance/storage/control_flow/
    module_context). No implementation.
-3. **JMT-FORK-3 — native columnar `.tlspec` physical format**, separately versioned;
+3. **FORK-3 — native columnar `.tlspec` physical format**, separately versioned;
    the follow-on where a `TLSPEC_VERSION` bump becomes meaningful. Out of this sprint.
-4. **JMT-FORK-4 — public immutability of finished records** (raise instead of warn).
+4. **FORK-4 — public immutability of finished records** (raise instead of warn).
    Default: keep `DirectActivationWriteWarning` + `DIRECT_WRITE_DIRTY`.
-5. **JMT-FORK-5 — `layer_list` + sibling list fields as lazy sequence views.**
+5. **FORK-5 — `layer_list` + sibling list fields as lazy sequence views.**
    Default: materialize a real list on public access.
-6. **JMT-FORK-6 — `Op`/`Layer`/`Trace` subclassing contract** — currently unstated;
+6. **FORK-6 — `Op`/`Layer`/`Trace` subclassing contract** — currently unstated;
    support or refuse explicitly. Needs a decision either way.
-7. **JMT-FORK-7 — arbitrary user attributes on dict-backed records.**
+7. **FORK-7 — arbitrary user attributes on dict-backed records.**
    Default: preserved via `__slots__` + `"__dict__"`.
 
 ## 6. The P0 oracle (merged; union of all three)
@@ -611,14 +611,14 @@ final acceptance.
 | **M3** (parallel lanes) | (a) slot dict-backed classes from the table with `__slots__`+`"__dict__"` (laziness measured); (b) `FunctionCallRef`/`ArgTemplateRef` identity-assumption grep (precondition for M7) | byte-identical |
 | **M4** | `_trace_core/` substrate, zero consumers: ids, columns, pools, edge-occurrence + CSR, ancestor-closure pool, groups, overlays, payload arena, facade cache. Executable prototypes immediately: `Op.copy` policy, COW fork + rollback, payload identity, parallel-edge order, partial capture, mutable-container hydration, GC lifetime | standalone unit suite |
 | **M5** | **The seam**: `_materialize.py` switches to builder ingress; Op facades authoritative (strong cache); scalars columnar, relations staged mutable; per-plane freeze lands; pools absorb `_compact_op_metadata`, bitsets absorb `_compact_ancestor_sets`; kills the `fields_dict` + 39-container transient; partial/no-op/error paths facade-backed. Shadow dual-write parity oracle runs one full CI cycle INSIDE this wave, then is deleted | dual-path parity, deletion proof, scale benchmark, classics corpus spot-check |
-| **M6** | Relations family-by-family: parents/children + arg positions -> module membership/stacks -> conditionals -> param uses/aliases; each family compared old-vs-new before its legacy container dies; ancestor closures wired; relation accessors become IMMUTABLE views (JMT-FORK-1 decided) | aliases-v1 green per family |
-| **M7** | Groups: FunctionCall/Equivalence/Recurrence/ParamAlias/conditional group blocks + group_id columns; delete `_copy_shared_fields_for_output`; journal-side shared `FunctionCallRef` per call; `equivalent_ops`/`recurrent_ops` become LIVE group-membership views (JMT-FORK-1 decided) | byte-identical |
+| **M6** | Relations family-by-family: parents/children + arg positions -> module membership/stacks -> conditionals -> param uses/aliases; each family compared old-vs-new before its legacy container dies; ancestor closures wired; relation accessors become IMMUTABLE views (FORK-1 decided) | aliases-v1 green per family |
+| **M7** | Groups: FunctionCall/Equivalence/Recurrence/ParamAlias/conditional group blocks + group_id columns; delete `_copy_shared_fields_for_output`; journal-side shared `FunctionCallRef` per call; `equivalent_ops`/`recurrent_ops` become LIVE group-membership views (FORK-1 decided) | byte-identical |
 | **M8** | Layer as aggregate facade over layer->op relations (kills the ~78-field per-pass copy); Module/ModuleCall/Param/Buffer/FuncCallLocation tables + facades; live-handle/lazy-grad/version/release semantics preserved; Module responsibility decomposition; Trace label maps -> core indexes | per-class oracle |
 | **M9** | **Backward, last**: GradFn/GradFnCall/BackwardPass tables; atomic backward EPOCHS preserving the exact watermark/revision invalidation; projection + validation consumers migrate in ONE commit; no mixed object/core backward state survives | repeated-backward oracle cases |
 | **M10** (parallel from M2) | **Trace decomposition — the deliverable**: 220 fields -> header + owned components; `TraceBuildState` -> named per-phase workspaces; POSTPROCESS_STEP_CONTRACTS become enforced declared read/write sets; C2-style private-family collapses only as lockstep table diffs if needed | <=~60 fields per component |
 | **M11** | Cutover + deletions: COW `Trace.fork()` + transactions; exact public `Op.copy()`; direct semantic serialization (byte-identical artifacts; old-golden loads); facade cache flips strong -> weak-valued (per the M0 lifetime evidence); DELETE forkcopier, standalone compaction passes, legacy writers, the generic core-record state walker | artifacts-v1 + old-golden matrix |
 | **M12** | Reserved for the streaming lane ONLY if capacity remains (see section 4; the r2 majority ships it separately). Cut-first, by name | additive only |
-| **M13** | De-bloat with LOC delta reported first-class; docs lockstep (glossary -> vault, CLAUDE.md, AGENTS.md, notebooks/audit, examples); JMT-FORK-2 UI-regrouping plan doc; full classics corpus plus downstream Model Menagerie validation; final real-IDE gate | grep-clean of retired names |
+| **M13** | De-bloat with LOC delta reported first-class; docs lockstep (glossary -> canonical copy, CLAUDE.md, AGENTS.md, notebooks/audit, examples); FORK-2 UI-regrouping plan doc; full classics corpus plus downstream Model Menagerie validation; final real-IDE gate | grep-clean of retired names |
 
 Sequencing rules baked in: keystone/compiler enablers before anything structural; the
 ONE seam riskiest-first-at-narrowest (Op has one construction site and the largest

@@ -19,7 +19,7 @@ tier rows: `present` native emitters, `bridge` foreign-peer writers).
   this package never imports tracker SDKs itself.
 - Model viewers: `model_explorer`, `netron`.
 
-## The netron subsystem (lane F14; kwarg spellings DOCUMENTED-UNSTABLE)
+## The netron subsystem (F14; kwarg spellings DOCUMENTED-UNSTABLE)
 
 `netron(log, path=None, *, granularity="module", depth=1,
 show_buffers="meaningful", attachment=False, open=False, baseline=None)`

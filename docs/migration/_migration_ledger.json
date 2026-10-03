@@ -1,7 +1,7 @@
 {
   "schema": "torchlens.migration_ledger.v1",
   "seeded": "2026-08-26",
-  "seeded_by": "megasprint lane A12 ('claims + migration ledgers seeded'). Rows transcribe the convert-panel memo section-2 receipts, RE-VERIFIED against this checkout on 2026-08-26 (rows the earlier fix waves already closed are recorded as fixed, not dropped). The prose truth sweep is lane D01's; doc consolidation and the executable harness are lane F30's; this ledger is the work queue both consume.",
+  "seeded_by": "maintainers (migration ledger seed). Rows were re-verified against this checkout on 2026-08-26 (rows earlier fixes already closed are recorded as fixed, not dropped). This ledger is the work queue for the prose truth sweep, doc consolidation, and the executable docs harness.",
   "companion": "docs/migration/_claims.json (wording rules + lints for every comparative sentence)",
   "rows": [
     {

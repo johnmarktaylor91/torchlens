@@ -128,7 +128,7 @@ contract. Physical journal storage, private class layout, object identity, and t
 are not compatibility surfaces. Events do not serialize into `.tlspec` under this
 contract.
 
-## Implementation status (2026-08-13, backend megasprint phases 0-6 + producer unification P0-P7)
+## Implementation status (2026-08-13, backend phases 0-6 + producer unification P0-P7)
 
 | Clause | Status |
 |---|---|

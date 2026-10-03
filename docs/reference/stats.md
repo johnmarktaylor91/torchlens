@@ -4,7 +4,7 @@
 constant memory: each accumulator folds one batch at a time and never retains
 per-batch tensors. `tl.aggregate` is the one-call door that drives those
 accumulators across a whole dataloader. Both are shipped, tested surface --
-promoted into `torchlens.__all__` by the completeness megasprint (they were
+promoted into `torchlens.__all__` by the completeness work (they were
 previously reachable but undeclared). Spellings are DOCUMENTED-UNSTABLE
 pending naming-session ratification.
 
