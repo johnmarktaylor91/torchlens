@@ -9,7 +9,8 @@ durability helpers' Windows branch runs on the Linux suite.
 
 macOS: payloads living on MPS must round-trip through ``tl.save``/``tl.load``
 (the canary's HARD Apple-silicon assertion); that test runs only where MPS is
-available.
+available. macOS also has no ``/proc/meminfo`` and no ``SC_AVPHYS_PAGES``, so
+the default ``save_budget="auto"`` must measure host memory through ``psutil``.
 """
 
 from __future__ import annotations
@@ -158,3 +159,29 @@ def test_mps_trace_save_load_round_trip(tmp_path: Path) -> None:
     loaded_out = loaded["relu_1_2"].out
     assert loaded_out.device.type == "cpu"
     assert torch.equal(loaded_out, relu_out.cpu())
+
+
+def test_host_memory_probe_falls_back_to_psutil_without_procfs_or_sysconf(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """macOS-like host: no procfs, no SC_AVPHYS_PAGES, psutil still measures."""
+
+    psutil = pytest.importorskip("psutil")
+    from torchlens import _save_budget
+
+    real_open = open
+
+    def open_(file: Any, *args: Any, **kwargs: Any) -> Any:
+        if str(file) == "/proc/meminfo":
+            raise FileNotFoundError(errno.ENOENT, "No such file or directory", str(file))
+        return real_open(file, *args, **kwargs)
+
+    def sysconf(name: Any) -> int:
+        raise ValueError("unrecognized configuration name")
+
+    # Shadow ``open`` in the probe's module only: psutil itself reads procfs on Linux.
+    monkeypatch.setattr(_save_budget, "open", open_, raising=False)
+    monkeypatch.setattr(_save_budget.os, "sysconf", sysconf)
+    available = _save_budget._available_host_bytes()
+    assert available is not None and available > 0
+    assert available <= int(psutil.virtual_memory().total)
