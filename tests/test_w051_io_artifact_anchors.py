@@ -280,6 +280,111 @@ def test_owned_annotation_families_refuse_off_shape(
     _assert_refuses(path, "artifact_annotations_invalid", field=field)
 
 
+def _boundary_payload(schema: str) -> dict[str, Any]:
+    """A shape-complete boundary payload of the named family (plain data)."""
+
+    payload: dict[str, Any] = {
+        "schema": schema,
+        "kind": "all_reduce",
+        "func": "torch.distributed.all_reduce",
+        "correlation": {"membership_digest": "d", "lifetime_ordinal": 0, "channel": "coll"},
+        "group": {"global_ranks": [0, 1], "size": 2},
+        "events": {"async_op": False, "completion_binding": "synchronous"},
+        "roles": [],
+        "witness": {"policy_resolved": "none"},
+        "disclosures": [],
+    }
+    if schema == "functional_collective_boundary_v0":
+        payload["func"] = "torch.distributed._functional_collectives.all_reduce"
+        payload["events"] = {
+            "async_op": True,
+            "event_model": "funcol_issue_is_launch",
+            "completion_binding": "observed_wait",
+        }
+        payload["disclosures"] = ["read_of_inflight_destination"]
+    return payload
+
+
+def _with_boundary(payload: dict[str, Any]) -> Callable[[dict[str, Any]], None]:
+    def apply(state: dict[str, Any]) -> None:
+        state.setdefault("annotations", {})["distributed"] = {"boundaries": [dict(payload)]}
+        op = state["layer_list"][2]
+        if getattr(op, "annotations", None) is None:
+            op.annotations = {}
+        op.annotations["collective"] = dict(payload)
+
+    return apply
+
+
+@pytest.mark.parametrize("schema", ["collective_boundary_v1", "functional_collective_boundary_v0"])
+def test_owned_boundary_families_round_trip(
+    source_bundle: Path, tmp_path: Path, schema: str
+) -> None:
+    """Both closed boundary families load, in the journal and on the op."""
+
+    path = _tampered(
+        source_bundle, tmp_path / "boundary.tlspec", _with_boundary(_boundary_payload(schema))
+    )
+    loaded = tl.load(path)
+    assert loaded.annotations["distributed"]["boundaries"][0]["schema"] == schema
+    assert loaded.layer_list[2].annotations["collective"]["schema"] == schema
+
+
+def _drop_event_model(payload: dict[str, Any]) -> None:
+    payload["events"] = {"async_op": True, "completion_binding": "observed_wait"}
+
+
+@pytest.mark.parametrize(
+    ("schema", "corrupt"),
+    [
+        ("functional_collective_boundary_v1", None),
+        ("functional_collective_boundary_v0", _drop_event_model),
+        ("functional_collective_boundary_v0", lambda p: p.pop("disclosures")),
+        ("functional_collective_boundary_v0", lambda p: p.__setitem__("disclosures", "x")),
+        ("functional_collective_boundary_v0", lambda p: p.pop("witness")),
+        ("collective_boundary_v1", lambda p: p.pop("roles")),
+    ],
+    ids=[
+        "unknown_schema",
+        "v0_without_event_model",
+        "v0_without_disclosures",
+        "v0_string_disclosures",
+        "v0_without_witness",
+        "v1_without_roles",
+    ],
+)
+@pytest.mark.parametrize("where", ["journal", "op"])
+def test_malformed_boundary_payload_refuses(
+    source_bundle: Path,
+    tmp_path: Path,
+    schema: str,
+    corrupt: Callable[[dict[str, Any]], Any] | None,
+    where: str,
+) -> None:
+    """Off-shape rows of either family (or an unknown family) still refuse."""
+
+    good_schema = (
+        "functional_collective_boundary_v0" if "v0" in schema else "collective_boundary_v1"
+    )
+    bad = _boundary_payload(good_schema)
+    bad["schema"] = schema
+    if corrupt is not None:
+        corrupt(bad)
+
+    def apply(state: dict[str, Any]) -> None:
+        _with_boundary(_boundary_payload(good_schema))(state)
+        if where == "journal":
+            state["annotations"]["distributed"]["boundaries"] = [bad]
+        else:
+            state["layer_list"][2].annotations["collective"] = bad
+
+    path = _tampered(source_bundle, tmp_path / "bad_boundary.tlspec", apply)
+    field = (
+        'Trace.annotations["distributed"]' if where == "journal" else 'Op.annotations["collective"]'
+    )
+    _assert_refuses(path, "artifact_annotations_invalid", field=field)
+
+
 def test_user_annotation_keys_stay_open(source_bundle: Path, tmp_path: Path) -> None:
     def user_key(state: dict[str, Any]) -> None:
         state.setdefault("annotations", {})["my_experiment"] = {"seed": 7, "tags": ["a", "b"]}

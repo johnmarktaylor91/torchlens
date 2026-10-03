@@ -301,10 +301,19 @@ _ANNOTATIONS_REMEDY = (
     "hand-edited"
 )
 _SAVE_MODES = frozenset({"copy", "reference", "view", "cpu_async"})
-_COLLECTIVE_SCHEMA = "collective_boundary_v1"
 _COLLECTIVE_REQUIRED = frozenset(
     {"schema", "kind", "func", "correlation", "group", "events", "roles", "witness"}
 )
+# The closed boundary-payload families capture journals: the frozen c10d
+# ``collective_boundary_v1`` and its documented-unstable functional-collective
+# sibling ``functional_collective_boundary_v0`` (``backends/torch/funcol.py``),
+# which shares the journal and the per-op key. A v0 row must also carry the
+# funcol event mapping and its disclosure list, which its builder always writes.
+_FUNCOL_EVENT_MODEL = "funcol_issue_is_launch"
+_COLLECTIVE_SCHEMAS: dict[str, frozenset[str]] = {
+    "collective_boundary_v1": _COLLECTIVE_REQUIRED,
+    "functional_collective_boundary_v0": _COLLECTIVE_REQUIRED | {"disclosures"},
+}
 
 
 def _annotations_invalid(message: str, field: str, reason: str) -> NoReturn:
@@ -325,7 +334,8 @@ def _validate_annotation_families(trace: Trace) -> None:
     User annotation keys stay OPEN (any key, plain data); the families
     TorchLens itself writes are closed: ``logged_values`` (str-keyed mapping),
     ``distributed`` (mapping; ``boundaries`` rows are ``collective_boundary_v1``
-    payloads), per-op ``collective`` (the same payload), ``save_mode`` (the
+    or ``functional_collective_boundary_v0`` payloads), per-op ``collective``
+    (the same payload families), ``save_mode`` (the
     closed ``SaveMode`` vocabulary), ``saved_out_version`` (int/None),
     ``varying_across_passes`` (str-keyed mapping), and the dedup trio.
     """
@@ -361,7 +371,8 @@ def _validate_annotation_families(trace: Trace) -> None:
                 or any(not _is_collective_payload(row) for row in boundaries)
             ):
                 _annotations_invalid(
-                    "distributed.boundaries rows must be collective_boundary_v1 payloads",
+                    "distributed.boundaries rows must be collective_boundary_v1 or "
+                    "functional_collective_boundary_v0 payloads",
                     'Trace.annotations["distributed"]',
                     "boundaries_shape",
                 )
@@ -370,12 +381,26 @@ def _validate_annotation_families(trace: Trace) -> None:
 
 
 def _is_collective_payload(row: Any) -> bool:
-    """True iff ``row`` is a ``collective_boundary_v1`` payload mapping."""
+    """True iff ``row`` is a payload mapping of one closed boundary family.
 
+    The family is chosen by the row's ``schema`` and every key that family
+    requires must be present; a functional-collective row must also carry the
+    funcol event mapping (``events.event_model``) and a disclosure list.
+    """
+
+    if not isinstance(row, Mapping):
+        return False
+    schema = row.get("schema")
+    required = _COLLECTIVE_SCHEMAS.get(schema) if isinstance(schema, str) else None
+    if required is None or not set(row) >= required:
+        return False
+    if row["schema"] != "functional_collective_boundary_v0":
+        return True
+    events = row["events"]
     return (
-        isinstance(row, Mapping)
-        and row.get("schema") == _COLLECTIVE_SCHEMA
-        and set(row) >= _COLLECTIVE_REQUIRED
+        isinstance(events, Mapping)
+        and events.get("event_model") == _FUNCOL_EVENT_MODEL
+        and _is_sequence(row["disclosures"])
     )
 
 
@@ -395,7 +420,8 @@ def _validate_op_annotations(op: Any) -> None:
     collective = annotations.get("collective")
     if collective is not None and not _is_collective_payload(collective):
         _annotations_invalid(
-            f"op {label!r} collective annotation is not a collective_boundary_v1 payload",
+            f"op {label!r} collective annotation is not a collective_boundary_v1 or "
+            "functional_collective_boundary_v0 payload",
             'Op.annotations["collective"]',
             "collective_shape",
         )
