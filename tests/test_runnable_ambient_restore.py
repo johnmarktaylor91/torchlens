@@ -34,27 +34,26 @@ def _globals() -> dict[str, Any]:
 
 
 @pytest.fixture
-def caller_precision() -> Iterator[str]:
-    """Run with a caller precision that differs from the capture's recorded one."""
+def unset_fp32_precision_children() -> Iterator[None]:
+    """Put every per-backend ``fp32_precision`` child at torch's 'none' default.
 
-    previous = torch.get_float32_matmul_precision()
+    'none' (inherit from the root) is the state a process that never touched
+    the precision controls is in, and the one the legacy setters overwrite.
+    """
+
     fields = _torch_compat.snapshot_fp32_precision_controls()
-    torch.set_float32_matmul_precision("medium")
+    _torch_compat.restore_fp32_precision_controls(
+        {path: ("none" if path else value) for path, value in fields.items()}
+    )
     try:
-        yield "medium"
+        yield
     finally:
-        torch.set_float32_matmul_precision(previous)
         _torch_compat.restore_fp32_precision_controls(fields)
 
 
-def test_loaded_runnable_run_leaves_globals_unchanged(
-    tmp_path: Path, caller_precision: str
-) -> None:
-    """A loaded sparse run restores the caller's exact globals afterwards.
-
-    The capture records ``medium`` too; the run still writes the recorded
-    value through the legacy setter, which is what rewrote the fields.
-    """
+@pytest.mark.usefixtures("unset_fp32_precision_children")
+def test_loaded_runnable_run_leaves_globals_unchanged(tmp_path: Path) -> None:
+    """A loaded sparse run restores the caller's exact globals afterwards."""
 
     torch.manual_seed(0)
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
@@ -65,11 +64,11 @@ def test_loaded_runnable_run_leaves_globals_unchanged(
     loaded = tl.load(path)
 
     before = _globals()
-    assert before["legacy"]["float32_matmul_precision"] == caller_precision
     loaded.run(inputs=x, seed=0)
     assert _globals() == before
 
 
+@pytest.mark.usefixtures("unset_fp32_precision_children")
 def test_ambient_context_restores_globals_when_the_run_raises() -> None:
     """The restore runs on the error path too, fp32_precision fields included."""
 
