@@ -193,6 +193,38 @@ def merge_junit_reports(report_paths: list[Path], combined_path: Path) -> None:
     )
 
 
+def parse_file_batch_sizes(specs: list[str]) -> dict[str, int]:
+    """Parse ``--file-batch-size PATH=N`` overrides into a mapping.
+
+    Parameters
+    ----------
+    specs:
+        Raw ``PATH=N`` strings, ``PATH`` relative to the repo root as pytest
+        node ids spell it (``tests/test_x.py``).
+
+    Returns
+    -------
+    dict[str, int]
+        Per-file batch sizes, each at least 1.
+
+    Raises
+    ------
+    ValueError
+        For a malformed spec or a size below 1.
+    """
+
+    overrides: dict[str, int] = {}
+    for spec in specs:
+        path, sep, size_text = spec.rpartition("=")
+        if not sep or not path:
+            raise ValueError(f"--file-batch-size expects PATH=N, got {spec!r}")
+        size = int(size_text)
+        if size < 1:
+            raise ValueError(f"--file-batch-size size must be >= 1, got {spec!r}")
+        overrides[path] = size
+    return overrides
+
+
 def run_sharded(
     roots: list[str],
     markexpr: str,
@@ -200,6 +232,7 @@ def run_sharded(
     combined_junit: Path,
     extra_pytest_args: list[str],
     max_batch_size: int,
+    file_batch_sizes: dict[str, int] | None = None,
 ) -> int:
     """Run the marker selection in small batches per file and merge the reports.
 
@@ -216,8 +249,13 @@ def run_sharded(
         return 1
 
     units: list[_RunUnit] = []
+    overrides = file_batch_sizes or {}
+    unknown = sorted(set(overrides) - set(files))
+    if unknown:
+        print(f"--file-batch-size names files with no selected tests: {unknown}", file=sys.stderr)
+        return 1
     for file_path in files:
-        units.extend(plan_run_units(markexpr, file_path, max_batch_size))
+        units.extend(plan_run_units(markexpr, file_path, overrides.get(file_path, max_batch_size)))
 
     print(
         f"running {len(units)} unit(s) from {len(files)} file(s) matching "
@@ -286,6 +324,14 @@ def main(argv: list[str]) -> int:
         ),
     )
     parser.add_argument(
+        "--file-batch-size",
+        action="append",
+        dest="file_batch_sizes",
+        default=[],
+        metavar="PATH=N",
+        help="Per-file override of --max-batch-size, e.g. tests/test_x.py=1 (repeatable)",
+    )
+    parser.add_argument(
         "--pytest-arg",
         action="append",
         dest="pytest_args",
@@ -295,6 +341,10 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     if args.max_batch_size < 1:
         parser.error("--max-batch-size must be >= 1")
+    try:
+        file_batch_sizes = parse_file_batch_sizes(args.file_batch_sizes)
+    except ValueError as error:
+        parser.error(str(error))
     return run_sharded(
         args.roots,
         args.marker,
@@ -302,6 +352,7 @@ def main(argv: list[str]) -> int:
         args.combined_junit,
         args.pytest_args,
         args.max_batch_size,
+        file_batch_sizes,
     )
 
 
