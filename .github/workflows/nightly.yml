@@ -1261,9 +1261,13 @@ jobs:
             "torch==2.13.0+cpu" \
             "torchvision==0.28.0+cpu"
           uv pip install --system --no-deps "ai-edge-model-explorer==0.1.32"
-          # model_explorer/server.py imports portpicker at package import time;
-          # it no longer arrives transitively through the [test] extra.
-          uv pip install --system "portpicker==1.6.0"
+          # `import model_explorer` imports server.py, whose module-level imports
+          # (flask, portpicker, IPython, termcolor, watchdog; dacite via
+          # ndp_runner) no longer arrive transitively through the [test] extra.
+          # Install exactly those light runtime deps; the native
+          # ai-edge-model-explorer-adapter stays out (imported lazily, not part
+          # of the contract).
+          uv pip install --system flask portpicker ipython termcolor watchdog dacite
           node --version
           python -c 'import model_explorer; print("model_explorer imported")'
 
