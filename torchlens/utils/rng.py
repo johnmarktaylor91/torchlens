@@ -31,7 +31,6 @@ import datetime as _datetime_module
 import dis as _dis_module
 import functools as _functools_module
 import gc as _gc_module
-import importlib.util as _importlib_util
 import os as _os_module
 import random
 import sys as _sys_module
@@ -77,6 +76,7 @@ from ._torch_compat import (
     HAS_GENERATOR_PHILOX_STATE,
     autocast_get_dtype,
     autocast_is_enabled,
+    torch_module_exists_without_importing,
     warm_lazy_torch_imports,
 )
 
@@ -1071,26 +1071,6 @@ def _torch_rng_holder_module(module_path: str) -> ModuleType | None:
     return module if isinstance(module, ModuleType) else None
 
 
-def _module_exists_without_importing(module_path: str) -> bool:
-    """Return whether ``module_path`` resolves, without importing a new ancestor.
-
-    ``find_spec`` is import-free ONLY when ``module_path``'s ancestor is
-    already in ``sys.modules`` (importlib auto-imports a missing one to read
-    its ``__path__`` first): resolving "torch.distributed.tensor.parallel.
-    api" this way imports "...tensor.parallel" if absent, which eagerly
-    imports torch._dynamo on torch 2.7.1 (2026-10 cold-start regression).
-    Degrade to "not found" instead of paying a missing ancestor's import.
-    """
-
-    ancestor, _, _leaf = module_path.rpartition(".")
-    if ancestor and ancestor not in _sys_module.modules:
-        return False
-    try:
-        return _importlib_util.find_spec(module_path) is not None
-    except (ImportError, AttributeError, ValueError):
-        return False
-
-
 def _build_torch_rng_surface() -> tuple[TorchRngSurfaceRow, ...]:
     """Assemble the frozen torch RNG API disposition table (feature-detected)."""
 
@@ -1112,10 +1092,12 @@ def _build_torch_rng_surface() -> tuple[TorchRngSurfaceRow, ...]:
         # the time torch/torchlens finish their own imports), these modules
         # are never eagerly imported by anything; sys.modules-gating them
         # would make coverage depend on which OTHER test imported them first
-        # (W21). _module_exists_without_importing proves existence instead,
-        # import-free; the attribute itself is trusted present.
+        # (W21). The spec walk proves existence without importing the module
+        # or a missing ancestor (find_spec would import the ancestor, and an
+        # ancestor guard would bring the order dependence back); the
+        # attribute itself is trusted present.
         module_path, _, _name = target.rpartition(".")
-        if _module_exists_without_importing(module_path):
+        if torch_module_exists_without_importing(module_path):
             rows.append(TorchRngSurfaceRow(target, "structurally_covered", note))
     return tuple(rows)
 

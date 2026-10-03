@@ -46,6 +46,7 @@ import types
 import warnings
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
+from importlib.machinery import PathFinder
 from typing import Any
 
 import torch
@@ -1309,6 +1310,31 @@ def _probe_attention_causal_bias() -> bool:
         return importlib.util.find_spec("torch.nn.attention.bias") is not None
     except (ImportError, AttributeError, ValueError):
         return False
+
+
+def torch_module_exists_without_importing(module_path: str) -> bool:
+    """Return whether ``module_path`` exists without importing it or any missing ancestor.
+
+    Parameters
+    ----------
+    module_path:
+        Dotted module path, e.g. ``"torch.distributed.pipeline.sync"``.
+
+    Returns
+    -------
+    bool
+        ``True`` when the module is imported or resolvable on disk.
+    """
+
+    parts = module_path.split(".")
+    depth = next((d for d in range(len(parts), 0, -1) if ".".join(parts[:d]) in sys.modules), 0)
+    search = getattr(sys.modules[".".join(parts[:depth])], "__path__", None) if depth else sys.path
+    for index in range(depth, len(parts)):
+        spec = PathFinder.find_spec(".".join(parts[: index + 1]), search) if search else None
+        if spec is None:
+            return False
+        search = spec.submodule_search_locations
+    return True
 
 
 def _probe_expanded_weights_conv_picker() -> bool:

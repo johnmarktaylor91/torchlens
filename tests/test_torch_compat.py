@@ -12,7 +12,9 @@ when we cannot install an actual torch-2.1 environment.
 
 from __future__ import annotations
 
+import sys
 import warnings
+from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
 
@@ -1014,3 +1016,60 @@ def test_real_op_probe_getters_are_lazy_and_cache(
     second = getter()
     assert calls == 1, "the probe must not re-run once latched"
     assert first == second == getattr(tc, flag_name)
+
+
+def test_module_existence_probe_imports_no_missing_ancestor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The probe resolves a nested module whose ancestors were never imported.
+
+    ``find_spec`` would import ``fd_probe_pkg`` and ``fd_probe_pkg.sub`` to read their
+    ``__path__``; the probe must answer from disk and leave ``sys.modules`` untouched.
+    """
+
+    leaf_dir = tmp_path / "fd_probe_pkg" / "sub"
+    leaf_dir.mkdir(parents=True)
+    (tmp_path / "fd_probe_pkg" / "__init__.py").write_text("raise RuntimeError('imported')\n")
+    (leaf_dir / "__init__.py").write_text("raise RuntimeError('imported')\n")
+    (leaf_dir / "leaf.py").write_text("")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    before = set(sys.modules)
+
+    assert tc.torch_module_exists_without_importing("fd_probe_pkg.sub.leaf")
+    assert tc.torch_module_exists_without_importing("fd_probe_pkg.sub")
+    assert not tc.torch_module_exists_without_importing("fd_probe_pkg.sub.missing")
+    assert not tc.torch_module_exists_without_importing("fd_probe_pkg.missing.leaf")
+    assert not {name for name in sys.modules if name.startswith("fd_probe_pkg")}
+    assert set(sys.modules) - before == set()
+
+
+def test_module_existence_probe_matches_imported_torch_modules() -> None:
+    """Imported modules count as existing; a non-package leaf has no children."""
+
+    assert tc.torch_module_exists_without_importing("torch")
+    assert tc.torch_module_exists_without_importing("torch.nn.functional")
+    assert not tc.torch_module_exists_without_importing("torch.nn.functional.no_such_child")
+    assert not tc.torch_module_exists_without_importing("torch.no_such_module_fd")
+
+
+def test_unimported_rng_extras_are_classified_whatever_was_imported_first() -> None:
+    """A find_spec-detected RNG endpoint has its row even if its ancestor is unimported.
+
+    The torch 2.1/2.2 floor carries ``torch.distributed.pipeline.sync.checkpoint``,
+    which nothing imports eagerly. The surface table is built at ``torchlens`` import;
+    if the row depended on the ancestor already being imported, a later import of the
+    pipeline package (by any other test or user code) would expose an unclassified
+    RNG endpoint. On torch without the module the row must be absent.
+    """
+
+    from torchlens.utils.rng import _TORCH_RNG_UNIMPORTED_MODULE_EXTRAS, TORCH_RNG_SURFACE
+
+    targets = {row.target for row in TORCH_RNG_SURFACE}
+    torch_root = Path(torch.__file__).parent
+    for target, _note in _TORCH_RNG_UNIMPORTED_MODULE_EXTRAS:
+        # Independent oracle: the module's source file in the installed torch tree.
+        relative = Path(*target.rpartition(".")[0].split(".")[1:])
+        on_disk = (torch_root / relative).with_suffix(".py").is_file() or (
+            torch_root / relative / "__init__.py"
+        ).is_file()
+        assert (target in targets) is on_disk, target
