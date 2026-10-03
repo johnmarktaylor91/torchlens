@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 from types import ModuleType
 
@@ -17,6 +18,8 @@ def _load_runner() -> ModuleType:
     spec = importlib.util.spec_from_file_location("run_pytest_per_file_sharded", _SCRIPT)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
+    # Register before executing: the script's dataclasses resolve their module via sys.modules.
+    sys.modules.setdefault(spec.name, module)
     spec.loader.exec_module(module)
     return module
 
