@@ -149,7 +149,10 @@ def test_mps_trace_save_load_round_trip(tmp_path: Path) -> None:
 
     torch.manual_seed(0)
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU()).to("mps")
-    trace = tl.trace(model, torch.randn(2, 4, device="mps"), save=tl.func("relu"))
+    # MPS exposes no headroom query, so save_budget="auto" disables itself there
+    # with the documented warning (tests/test_save_budget.py pins the policy).
+    with pytest.warns(UserWarning, match="cannot measure available memory for device mps"):
+        trace = tl.trace(model, torch.randn(2, 4, device="mps"), save=tl.func("relu"))
     relu_out = trace["relu_1_2"].out
     assert relu_out.device.type == "mps"
     path = tmp_path / "canary-mps.tlspec"
