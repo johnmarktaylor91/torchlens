@@ -408,7 +408,11 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # FAST path's translate-on-failure refusal, SubclassConstructionUnder
     # DispatchModeError) lands here across several iterations settling on the
     # translate-on-failure design (measured 3435); next 50-line step above it.
-    "torchlens/backends/torch/wrappers.py": 3450,
+    # 3450 -> 3500 (2026-10-02 L17 integration): cleanup/resolver-gate's
+    # inplace=True functional mutation stamp (+10) on top of ci-fix's
+    # DescriptorCompatProperty __name__ fix lands the merged tree at 3454;
+    # next 50-line step above the merged measurement.
+    "torchlens/backends/torch/wrappers.py": 3500,
     # 3300 -> 3301 (2026-08-27 C01 item 5): same relocation import re-sort (+1).
     # 3301 -> 3400 (2026-10-01 ci-fix ratchet settle): "give the preview
     # backends torch's label convention" (8e5f966d8) landed the same
@@ -606,10 +610,15 @@ _MAX_LEDGER_SLACK = 100
 #: call, so the growth is mechanical spelling verbosity, not new test content.
 #: Next 50-line step above the post-codemod measure; the debloat pass owns
 #: shrinking these back via helper extraction.
+#: 2026-10-02 L17 integration: test_validation 8700->8750 (ci-fix b6a5d958d
+#: warms the float8-fill probe before the teardown fence test, measured 8715),
+#: test_real_world_models 5150->5200 (ci-fix's pyg-lib skip, deberta jit gap
+#: and documented-limitation acknowledgements, measured 5193). Next 50-line
+#: step above each measurement.
 _TEST_FILE_CEILINGS: dict[str, int] = {
-    "tests/test_validation.py": 8700,
+    "tests/test_validation.py": 8750,
     "tests/example_models.py": 5500,
-    "tests/test_real_world_models.py": 5150,
+    "tests/test_real_world_models.py": 5200,
     "tests/test_toy_models.py": 4500,
     "tests/test_auto_collapse_metrics.py": 3200,
     "tests/test_backward.py": 2550,
