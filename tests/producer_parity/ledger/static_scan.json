@@ -8156,7 +8156,7 @@
   "field": "modules",
   "file": "torchlens/utils/_torch_compat.py",
   "has_default": false,
-  "sites": 13,
+  "sites": 15,
   "via_getattr": false
  },
  {
@@ -8252,7 +8252,7 @@
   "field": "modules",
   "file": "torchlens/utils/rng.py",
   "has_default": false,
-  "sites": 5,
+  "sites": 4,
   "via_getattr": false
  },
  {

@@ -2095,3 +2095,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: db54b56bbfbb266e40e1971348be16c9ea8a3597 (clean)
 recorded: 2026-09-02T12:30:45.596051+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: FD-floor import-free RNG endpoint check moved sys.modules reads between torchlens/utils/_torch_compat.py (13 -> 15) and torchlens/utils/rng.py (5 -> 4); no producer/consumer field semantics changed
+env: py3.11-torch2.13.0
+torch: 2.13.0+cpu
+source: ce8f2479b2b780ba52bc95453b4ea24ebaa0049f (clean)
+recorded: 2026-10-03T05:57:22.738896+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: FD-floor import-free RNG endpoint check moved sys.modules reads between torchlens/utils/_torch_compat.py (13 -> 15) and torchlens/utils/rng.py (5 -> 4); no producer/consumer field semantics changed
+env: py3.11-torch2.13.0
+torch: 2.13.0+cpu
+source: ce8f2479b2b780ba52bc95453b4ea24ebaa0049f (clean)
+recorded: 2026-10-03T05:57:26.931312+00:00
