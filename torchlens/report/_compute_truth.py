@@ -1,6 +1,6 @@
 """Canonical forward-compute aggregation (the ONE numbers source).
 
-Lane A07 (megasprint 2026-08-27); costreport memo D1-D3 seed. Every reporting
+Lane A07 (2026-08-27); costreport memo D1-D3 seed. Every reporting
 surface (summary footer, profile, flop_count) derives its forward compute
 totals from this ONE walk over the identity partition -- never from a private
 re-sum -- so two surfaces can no longer agree by sharing a bug. The C02

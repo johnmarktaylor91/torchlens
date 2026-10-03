@@ -72,7 +72,7 @@ MEASURED_ENVELOPE_MAX_U = 1_500
 #: raw ops decline smart collapse outright before any universe build.
 PATHOLOGICAL_OP_MULTIPLIER = 20
 
-#: Frontier-record allocation cap (memo D5(iii)): the budget unit Sol
+#: Frontier-record allocation cap (memo D5(iii)): the budget unit the review
 #: proposed as a clock is measured to be an ALLOCATION meter (98x per-record
 #: cost spread, tiering backwards on exactly the two models the ceiling
 #: exists for), so it survives as memory defence only. The constant is

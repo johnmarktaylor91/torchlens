@@ -8,7 +8,7 @@ and m2 (``register_predicate`` + name acceptance inside ``coerce_predicate``).
 
 Contract of record: ``docs/reference/predicate_runtime.md``. Every public
 spelling here is DOCUMENTED-UNSTABLE pending its naming-session ratification
-(megasprint provisional-name protocol): it may rename without a deprecation
+(provisional-name protocol): it may rename without a deprecation
 shim.
 
 Scope (frozen):

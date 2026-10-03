@@ -5,7 +5,7 @@ TorchLens's own model doors (``tl.trace``, ``tl.record``, ``tl.validate``,
 intervention executor as a plain model. Whether they refuse with the canonical
 spelling printed (arm a), or normalize through this one shared audited funnel
 (arm b), is open parameter OP2 (FORK-2, unruled): BOTH arms are built behind
-ONE switch and both stay tested until JMT rules. Under either arm the outcome
+ONE switch and both stay tested until it is ruled. Under either arm the outcome
 is identical audit and artifact identity, and no door can quietly capture the
 UNMODIFIED model.
 
@@ -55,7 +55,7 @@ def model_door_policy() -> DoorPolicy:
 
 @contextmanager
 def door_policy(policy: str) -> Iterator[None]:
-    """Scoped OP2 door-policy switch (both arms tested until JMT rules).
+    """Scoped OP2 door-policy switch (both arms tested until ruled).
 
     Parameters
     ----------

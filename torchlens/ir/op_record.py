@@ -644,7 +644,7 @@ AMENDMENT_FAMILIES: dict[str, tuple[tuple[str, tuple[type, ...]], ...]] = {
         ("recording.capture_spec", (object,)),
     ),
     "late_buffer_output_parent": (("graph.is_output_parent", (bool,)),),
-    # the six preview promotion sites (Opus C6): two families because the
+    # the six preview promotion sites (review C6): two families because the
     # registry is exact-set — jax/tinygrad also rebind the output.
     "preview_output_parent_mark": (("graph.is_output_parent", (bool,)),),
     "preview_output_parent_rebind": (

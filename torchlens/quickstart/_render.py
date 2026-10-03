@@ -3,12 +3,12 @@
 ``render`` is a curated facade over the input resolver, the concrete capture
 primitive, the theme registry, and the EXISTING renderer -- never a second
 renderer. It is the ONLY default route to ``collapse="auto"`` anywhere
-(JMT-ruled: here and only here); ``Trace.draw()`` keeps ``collapse="none"``
+(decided: here and only here); ``Trace.draw()`` keeps ``collapse="none"``
 and the legacy wrapper keeps its own defaults.
 
 Viewer policy (D14): never auto-open, anywhere, by default -- ``view=True``
 is explicit opt-in. Notebook policy (settled 3:0): inline display, no
-implicit file, no viewer. Script policy is JMT fork F1; branch A (the panel's
+implicit file, no viewer. Script policy is maintainer fork F1; branch A (the panel's
 2:1 recommendation) ships as the default, switched by ONE constant below.
 
 Every spelling is DOCUMENTED-UNSTABLE pending the naming sprint.
@@ -31,7 +31,7 @@ from ._resolve import attach_provenance, resolve_inputs
 
 __tl_layer__ = "FACADE"
 
-#: FORK F1 (JMT; both branches designed, this one constant switches them).
+#: FORK F1 (both branches designed, this one constant switches them).
 #: True = branch A: a bare render call in a plain script writes a
 #: collision-safe ``<ModelClass>-graph.<format>`` and prints the path on one
 #: line. False = branch B: no implicit filesystem action ever; the caller
@@ -289,7 +289,7 @@ def render(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input l
         ``"overview"`` default ships once the themes panel's visible-unit
         budget lands.)
     collapse:
-        Smart-collapse mode. Defaults to ``"auto"`` -- the one JMT-ruled
+        Smart-collapse mode. Defaults to ``"auto"`` -- the one decided
         default route to auto-collapse; ``Trace.draw()`` keeps ``"none"``.
         An explicit value wins and is disclosed in the result policy.
     module:

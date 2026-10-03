@@ -88,7 +88,7 @@ jobs:
 
       # NO file is LFS-tracked at HEAD (r7 R82: the dead .gitattributes rules
       # that once justified this block are deleted -- they leaked private
-      # .research/ filenames in a PUBLIC repo). LFS objects from that era
+      # internal-notes filenames in a PUBLIC repo). LFS objects from that era
       # remain only in REMOTE history, so git-lfs can still activate on ref
       # pushes that traverse those commits from a checkout with lfs disabled
       # (pointers only, no LFS content locally); the objects already live on

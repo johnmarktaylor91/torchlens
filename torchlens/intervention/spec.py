@@ -401,7 +401,7 @@ class InterventionSpec:
             The base ``nn.Module`` (validated through the one audited
             model-door funnel; bindings do not nest).
         on_zero_fire:
-            Zero-fire settlement policy (JMT-FOLD-A3 default): ``"error"``
+            Zero-fire settlement policy (FOLD-A3 default): ``"error"``
             fails closed after the call when any rule never fired (the report
             is retained on ``.last_report``); ``"disclose"`` records the
             zero-fire rules in the report without raising.

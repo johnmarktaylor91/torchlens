@@ -1,4 +1,4 @@
-"""One-backward attribution reads (megasprint lane F04; M(reads) memo).
+"""One-backward attribution reads (workstream F04; M(reads) memo).
 
 One backward pass, a table of "how much does each site matter": the read
 seeds ``autograd.grad`` at GradientEdges resolved from EXISTING op fields,

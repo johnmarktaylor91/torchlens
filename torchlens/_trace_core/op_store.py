@@ -1242,7 +1242,7 @@ class StepAuditResult(NamedTuple):
 def begin_cell_write_audit(store: OpRowStore, *, record_reads: bool = False) -> None:
     """Start recording column writes (and optionally reads) on ``store``.
 
-    Ordering is load-bearing (design-ppdag-v3 §2.5, Opus 5): the
+    Ordering is load-bearing (design-ppdag-v3 §2.5, review 5): the
     mutable-container fingerprint sweep runs arbitrary ``__repr__`` code at
     the leaves, so the snapshot is built FIRST and the class swap happens
     LAST — arming before fingerprinting would let any repr path reaching

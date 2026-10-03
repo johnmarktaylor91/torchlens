@@ -2,7 +2,7 @@
 
 Runs the correlation-ID join on pinned real checkpoints on a REAL
 CUDA/CUPTI host and emits a JSON artifact per cell; gate prose is GENERATED
-from the artifact, never typed. The gate law (memo 4.2, Sol's two-part
+from the artifact, never typed. The gate law (memo 4.2, the review's two-part
 accounting, per model per phase separately):
 
   (a) exact model attribution / (phase device activity - typed TL-internal)

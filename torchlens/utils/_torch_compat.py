@@ -3762,7 +3762,7 @@ def force_eager_stance_scope() -> Iterator[bool]:
     Notes
     -----
     The stance (public API, torch >= 2.6; verified experimentally in the
-    2026-08-12 tri-lab compile reconcile) runs the ORIGINAL Python inside every
+    2026-08-12 design-review compile reconcile) runs the ORIGINAL Python inside every
     compiled callable reached in the scope, triggers zero new compiles during
     the scope (including on never-seen input shapes), and leaves every warm
     compiled artifact reproduced bitwise after exit. Reading the probe never

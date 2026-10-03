@@ -65,7 +65,7 @@ def validate_run_seed(seed: Any) -> int | None:
     """Validate a user-supplied run seed before any generator work.
 
     The r77 run door rejected non-``int`` seeds, but two values still escaped
-    to raw torch ``RuntimeError`` (r78, hon1 + Sol): ``bool`` (an ``int``
+    to raw torch ``RuntimeError`` (r78, hon1 + review): ``bool`` (an ``int``
     subclass, so it passed the type check but ``Generator.manual_seed``
     rejects it) and an ``int`` outside torch's accepted
     ``[-0x8000_0000_0000_0000, 0xFFFF_FFFF_FFFF_FFFF]`` long range (pybind

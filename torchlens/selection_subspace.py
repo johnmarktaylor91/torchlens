@@ -44,7 +44,7 @@ value producers). Masks are exact as sets about the stated criterion
 the normative JOIN table.
 
 Every spelling here ships DOCUMENTED-UNSTABLE pending naming-session
-ratification (megasprint provisional-name protocol). ACT-kind only:
+ratification (provisional-name protocol). ACT-kind only:
 PARAM/EDGE populations refuse ``selection_kind_incompatible`` (a parameter-
 space direction — e.g. a task vector — is a named possibility, not a
 promise).

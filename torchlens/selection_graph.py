@@ -36,7 +36,7 @@ RELATIVE TO the seed's touched-site family; the seed's own inexactness is
 disclosed on the seed, not silently re-graded here.
 
 Every spelling here ships DOCUMENTED-UNSTABLE pending naming-session
-ratification (megasprint provisional-name protocol). Producers are
+ratification (provisional-name protocol). Producers are
 ACT-kind only: PARAM/EDGE operands refuse ``selection_kind_incompatible``
 (parameters and edge occurrences are not nodes of the op DAG; a
 param-aware graph query is a named possibility, not a promise).

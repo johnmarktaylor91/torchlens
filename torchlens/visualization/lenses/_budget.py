@@ -33,7 +33,7 @@ __all__ = [
     "resolve_budget",
 ]
 
-#: The two-sided readability band (memo s13 item 7: Sol's spec, adopted).
+#: The two-sided readability band (memo s13 item 7: the review's spec, adopted).
 BAND_FLOOR = 100
 BAND_TARGET = 160
 BAND_CEILING = 220

@@ -96,7 +96,7 @@ def assert_tag_safe(tag: str, *, site: str | None = None) -> str:
     a silent rewrite would break the pasteable-leaf property (the leaf must
     paste back into ``trace[...]`` / ``named_modules()`` verbatim), so the
     only honest behavior is a typed refusal naming the site (D4 majority;
-    Sol's reversible-escape minority is recorded, not implemented).
+    The review's reversible-escape minority is recorded, not implemented).
     """
 
     bad = sorted({ch for ch in tag if ord(ch) < 0x20 or ord(ch) > 0x7E or ch in _TAG_FORBIDDEN})

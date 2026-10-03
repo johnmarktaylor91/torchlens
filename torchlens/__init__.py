@@ -30,7 +30,7 @@ if _TYPE_CHECKING:
     from .intervention import Bundle
 
 _LAZY_ATTRS = {
-    # Import cold-start laziness (P4, JMT-rebaselined 2026-08-19): the former
+    # Import cold-start laziness (P4, rebaselined 2026-08-19): the former
     # eager import block (options/captured_run+ir/observers/quantities/errors
     # and their transitive chains) is fully deferred behind these rows -- the
     # marginal-import guard in tests/test_import_hygiene.py holds the line.
@@ -78,7 +78,7 @@ _LAZY_ATTRS = {
     # was missing -- the documented spelling resolved only after a separate
     # `import torchlens.autoroute` (import-order side effect).
     "autoroute": ("torchlens.autoroute", None),
-    # Entry/facade repair (megasprint A10; WT1 A-VI item 27, neuro memo item
+    # Entry/facade repair (workstream A10; WT1 A-VI item 27, neuro memo item
     # 2): the integration and appliance namespaces were absent from this map,
     # so `tl.bridge` resolved only after an unrelated capture side effect
     # imported it and `tl.callbacks` never resolved at all. All four package
@@ -187,14 +187,14 @@ _LAZY_ATTRS = {
     "Edit": ("torchlens.intervention", "Edit"),
     "patch_from": ("torchlens.intervention", "patch_from"),
     # L6 selection algebra (DOCUMENTED-UNSTABLE pending naming-session
-    # ratification; megasprint provisional-name protocol).
+    # ratification; provisional-name protocol).
     "Selection": ("torchlens.selection", "Selection"),
     "ResolvedSelection": ("torchlens.selection", "ResolvedSelection"),
     "units": ("torchlens.selection", "units"),
     "params": ("torchlens.selection", "params"),
     "random_selection": ("torchlens.selection", "random_selection"),
     # L6 value-based + statistical producers (DOCUMENTED-UNSTABLE pending
-    # naming-session ratification; megasprint provisional-name protocol).
+    # naming-session ratification; provisional-name protocol).
     "top_k": ("torchlens.selection_values", "top_k"),
     "top_fraction": ("torchlens.selection_values", "top_fraction"),
     "threshold": ("torchlens.selection_values", "threshold"),
@@ -203,17 +203,17 @@ _LAZY_ATTRS = {
     "saturated": ("torchlens.selection_values", "saturated"),
     "low_variance": ("torchlens.selection_values", "low_variance"),
     # L6 graph-structural producers (DOCUMENTED-UNSTABLE pending
-    # naming-session ratification; megasprint provisional-name protocol).
+    # naming-session ratification; provisional-name protocol).
     "neighborhood": ("torchlens.selection_graph", "neighborhood"),
     "between": ("torchlens.selection_graph", "between"),
     # L6 comparative producers: differential + cross-pass (DOCUMENTED-UNSTABLE
-    # pending naming-session ratification; megasprint provisional-name protocol).
+    # pending naming-session ratification; provisional-name protocol).
     "changed": ("torchlens.selection_compare", "changed"),
     "top_changed": ("torchlens.selection_compare", "top_changed"),
     "stable_across_passes": ("torchlens.selection_compare", "stable_across_passes"),
     "pass_variance": ("torchlens.selection_compare", "pass_variance"),
     # L6 subspace producer (DOCUMENTED-UNSTABLE pending naming-session
-    # ratification; megasprint provisional-name protocol).
+    # ratification; provisional-name protocol).
     "subspace": ("torchlens.selection_subspace", "subspace"),
 }
 

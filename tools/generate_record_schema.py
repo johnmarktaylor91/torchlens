@@ -64,7 +64,7 @@ _GROUP_FIELDS = {"equivalent_ops", "recurrent_ops"}
 #: result depends on whether the backend module is imported.
 _OVERLAY_EDGE_FIELDS = {"input_ancestors", "output_descendants"}
 
-#: Copy-on-read alias-barrier fields (JMT-FORK-1 default: fresh copies).
+#: Copy-on-read alias-barrier fields (FORK-1 default: fresh copies).
 _COPY_ON_READ_FIELDS = {"equivalent_ops", "recurrent_ops"}
 
 #: Variable-cardinality relation fields destined for the edge-occurrence

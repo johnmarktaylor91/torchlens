@@ -1,6 +1,6 @@
 """Rescue re-run: recover escaped ops with a TorchFunctionMode net.
 
-Stage-2 safety net (tri-lab verdict, 2026-08-12). The primary capture is
+Stage-2 safety net (design-review verdict, 2026-08-12). The primary capture is
 ALWAYS mode-free: an armed ``TorchFunctionMode`` flips torch's fused fast
 paths (eval MultiheadAttention 3 ops -> 27 ops, output no longer
 byte-identical), so arming during a normal capture would change what

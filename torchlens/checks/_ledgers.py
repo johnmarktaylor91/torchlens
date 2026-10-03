@@ -12,7 +12,7 @@ Preconditions ship as first-class disclosures, never assumptions: a
 ``scaler=`` handle, canonical ``update()`` cadence, and static accumulation.
 Hook-only evidence labels attempt GROUPING ``inferred``; caller
 ``global_step`` and exact grouping remain the explicit boundary's unique
-property (memo D18, Sol's standing distinction in DR-4).
+property (memo D18, the review's standing distinction in DR-4).
 """
 
 from __future__ import annotations

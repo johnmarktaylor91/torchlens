@@ -14,7 +14,7 @@ This module is the single authority those channels consult:
   (base / annotation / secondary / emphasis) with the ratios derivable, so a
   future scaled theme changes one number instead of six literals.
 - ``DEFAULT_TYPOGRAPHY`` pins the family to ``"Helvetica"`` -- the family the
-  non-default presets already used. WHICH family ships long-term is JMT fork
+  non-default presets already used. WHICH family ships long-term is maintainer fork
   FK3 ([UI-SPRINT]); THAT a family is pinned everywhere, including the default
   theme, is decided (D29) and implemented here.
 

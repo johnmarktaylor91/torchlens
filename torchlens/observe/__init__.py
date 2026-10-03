@@ -1,4 +1,4 @@
-"""Observe kit (megasprint lane F24): memory truth + diagnostics substrates.
+"""Observe kit (workstream F24): memory truth + diagnostics substrates.
 
 Built on TorchLens's OWN captured records (the sibling ``torchlens.debug``
 kit holds the tool-shaped diagnostics: ``check_determinism``,

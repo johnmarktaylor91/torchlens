@@ -19,7 +19,7 @@ To intentionally cut a major release, use:
 
     semantic-release version --force-level major
 
-(with explicit JMT authorization in the same turn).
+(with explicit maintainer authorization in the same turn).
 
 Discovery (grind r4 correction -- the old paragraph here described sys.path
 "conftest-style machinery" that has never existed): ``[tool.semantic_release]

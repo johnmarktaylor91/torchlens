@@ -35,7 +35,7 @@ from ._errors import TrackersError
 
 __tl_layer__ = "L8"
 
-#: Scale-evidence vocabulary (memo 3.11, Sol's field). ``unscaled_observed``
+#: Scale-evidence vocabulary (memo 3.11, the review's field). ``unscaled_observed``
 #: = the value was reduced after the scaler's own unscale (the optimizer
 #: pre-step site); ``unscaled_derived`` = the tracker applied the closed-form
 #: correction; ``scaled_unknown_factor`` = known scaled, factor unobserved;

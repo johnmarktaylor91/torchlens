@@ -12,7 +12,7 @@ otherwise:
   (hand-maintained keys are prohibited).
 - ``battery``: the naive-evaluator packet builder, scorer, and the
   anchor-midpoint threshold-freezing arithmetic. The harness produces
-  packets and scores responses; RUNNING evaluators (fresh Fable instances)
+  packets and scores responses; RUNNING evaluators (fresh model instances)
   is D03's delegated job.
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming session.

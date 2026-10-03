@@ -1,6 +1,6 @@
 """Parameter substitution: apply edits "as if" a parameter were changed.
 
-JMT ruling 2026-08-17 (supersedes the D3 typed-refusal default on the replay
+Decided 2026-08-17 (supersedes the D3 typed-refusal default on the replay
 path): do not change the weights at all — substitute the VALUE THE OPERATION
 CONSUMES at each parameter->op occurrence, leaving the parameter object
 untouched. Nothing mutates persistent model state, so there is nothing to

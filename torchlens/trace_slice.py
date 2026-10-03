@@ -28,7 +28,7 @@ which presents ANY ACT region — an n-hop neighborhood, a hand-built
 selection, or a future motif matcher's hits — as the same view.
 
 Every spelling here ships DOCUMENTED-UNSTABLE pending naming-session
-ratification (megasprint provisional-name protocol).
+ratification (provisional-name protocol).
 """
 
 from __future__ import annotations

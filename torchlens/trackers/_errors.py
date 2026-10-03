@@ -1,4 +1,4 @@
-"""Typed refusal classes for the tracker family (megasprint lane F26).
+"""Typed refusal classes for the tracker family (workstream F26).
 
 Every raise site in ``torchlens.trackers`` carries a stable
 ``fields["code"]`` plus a non-empty ``fields["remedy"]`` and is ledgered in

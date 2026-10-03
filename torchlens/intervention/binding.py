@@ -850,7 +850,7 @@ class BoundInterventionExecutor:
     pass-qualified rule semantics; the ledger is out-of-band on
     ``.last_report``; ``.spec``/``.base_model`` are read-only; runtime state
     installs and removes atomically on success or exception; zero-fire rules
-    fail closed after the call by default (JMT-FOLD-A3); there is no binding
+    fail closed after the call by default (FOLD-A3); there is no binding
     serialization.
     """
 
@@ -1120,7 +1120,7 @@ def bind_spec_to_model(
         re-bind the same base model, which is refused here explicitly --
         bindings never nest.
     on_zero_fire:
-        Zero-fire settlement policy (``"error"`` default per JMT-FOLD-A3).
+        Zero-fire settlement policy (``"error"`` default per FOLD-A3).
     """
 
     resolution = resolve_model_operand(model, door="bind")

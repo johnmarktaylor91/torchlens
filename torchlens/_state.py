@@ -511,7 +511,7 @@ bill) and host escapes only the census can see (``from_numpy``/``as_tensor``/
 storage writes) leave no ceiling. The ``tl.validate`` paths flip it to ``"shadow"``
 for their own run, and ``wrap_torch(completeness_witness=True)`` arms it for every
 capture; only an armed census can produce ``capture_verified=True``. Flipping the
-default on is a JMT fork (cost + observer-effect trade), not a lane decision.
+default on is a maintainer fork (cost + observer-effect trade), not a lane decision.
 """
 
 _runnable_ledger_armed: bool = False

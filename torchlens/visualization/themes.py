@@ -9,7 +9,7 @@ ramp (low/mid/high, so a diverging map is later a mapping change, not a
 schema change), and the declared NEUTRAL "aggregate, not encoded" fill
 (N17) for collapsed boxes under an active channel.
 
-FORK-2 (the palette flip to Okabe-Ito) is JMT's: EVERY shipped skin keeps
+FORK-2 (the palette flip to Okabe-Ito) is a maintainer fork: EVERY shipped skin keeps
 its pixel-identical historical palette until the fork is resolved (the
 render-identity golden pins this); the Okabe-Ito set ships as data with its
 accessibility evidence attached, so the flip is a one-line palette swap.
@@ -26,7 +26,7 @@ from ._typography import DEFAULT_TYPOGRAPHY, HIGH_CONTRAST_TYPOGRAPHY, Typograph
 from .node_spec import NodeSpec
 
 #: The Okabe-Ito semantic role palette (memo FORK-2 branch A set). Shipped
-#: as DATA only: the flip of any live skin onto this set is JMT's fork
+#: as DATA only: the flip of any live skin onto this set is a maintainer fork
 #: (FORK-2); the CVD accessibility gate measures it now so the fork decision
 #: has its evidence attached.
 OKABE_ITO_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
@@ -161,7 +161,7 @@ THEME_PRESETS: dict[str, VisualizationTheme] = {
         default_border="#222222",
         default_font="#111111",
         semantic_palette=LEGACY_SEMANTIC_PALETTE,
-        # Grayscale ramp (Sol r3 working anchors): print-safe by design.
+        # Grayscale ramp (review r3 working anchors): print-safe by design.
         ramp=("#F0F0F0", "#969696", "#252525"),
         neutral_aggregate_fill="#E8EEF2",
     ),
@@ -373,7 +373,7 @@ def apply_theme_to_spec(spec: NodeSpec, theme: VisualizationTheme) -> NodeSpec:
     through the skin's LIVE palette here -- the N4 wiring: every rendered
     node spec passes through this seam, so a skin actually themes the
     colours that matter. The default skin's palette is the identity mapping
-    of the historical constants (FORK-2, the flip, is JMT's).
+    of the historical constants (FORK-2, the flip, is a maintainer fork).
 
     Parameters
     ----------

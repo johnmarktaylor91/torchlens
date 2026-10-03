@@ -1,6 +1,6 @@
 """TorchLens ecosystem runtime: compat window, migration, providers.
 
-The ecosystem surface (megasprint lane F32; ecosystem MEMO build items
+The ecosystem surface (workstream F32; ecosystem MEMO build items
 B1-B3) packages the artifact-compatibility promise machinery for users:
 
 - :func:`compat_window` renders the governed compatibility ledger

@@ -1,6 +1,6 @@
 """TorchLens quickstart: one input ladder, one provenance record, one render door.
 
-The quickstart package (megasprint lane F17; quickstart panel memo of record
+The quickstart package (workstream F17; quickstart panel memo of record
 2026-08-26) owns the three-rung input ladder shared by ``tl.summary``,
 ``tl.render``, and ``tl.trace``:
 

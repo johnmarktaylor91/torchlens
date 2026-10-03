@@ -1,4 +1,4 @@
-"""Observability substrates (megasprint lane C06).
+"""Observability substrates (workstream C06).
 
 The shared substrate the observe / checks / trackers / explorer / snoop /
 torchnative feature families build on:

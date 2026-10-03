@@ -27,7 +27,7 @@ accepts a (writer, current-stamp) pair exactly when a VALID witness chains
 the artifact from a governed origin pair through adjacent upgrade steps to
 the observed stamp. An invalid witness refuses typed -- never a silent gap.
 
-The public promise window number is FORK F1 (JMT, unadjudicated):
+The public promise window number is FORK F1 (unadjudicated):
 ``PROMISE_WINDOW_MONTHS`` ships ``None`` and ``promised_until`` renders the
 honest pending state. The mechanism is complete under both fork branches.
 
@@ -53,7 +53,7 @@ __tl_layer__ = "L1"
 
 #: FORK F1 (ecosystem MEMO section 9): the public analysis-load window in
 #: months from exact-writer-contract retirement. ``None`` means the number is
-#: pending JMT adjudication; the ledger mechanism is identical under both
+#: pending adjudication; the ledger mechanism is identical under both
 #: branches (60 for LONG, 24 for MID) and only the rendered prose changes.
 PROMISE_WINDOW_MONTHS: int | None = None
 

@@ -3,7 +3,7 @@
 Both are EXPLICIT wrappers the user constructs in their own source -- that
 construction is the enablement act; no environment variable ever activates
 instrumentation (the TORCHLENS_AUTO refusal is the governing precedent, and
-FORK #2's env-CONFIG question is JMT's -- neither branch is implemented
+FORK #2's env-CONFIG question is a maintainer's -- neither branch is implemented
 until it rules, so these callbacks read no env var except the off-only kill
 switch, which the engine itself honors).
 

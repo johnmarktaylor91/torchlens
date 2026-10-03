@@ -251,7 +251,7 @@ CAPTURE_OUTCOME_CAPABILITIES: dict[str, dict[CaptureStatus, str]] = {
         CaptureStatus.UNATTESTED: _ALLOW,
         CaptureStatus.UNKNOWN: "refuse:N1",
     },
-    # N4 -- runnable-save refusal for HALTED (fail-closed default, JMT veto).
+    # N4 -- runnable-save refusal for HALTED (fail-closed default, maintainer veto).
     # ABORTED/FAILED/UNKNOWN are subsumed by N1 at the same entry.
     "save_runnable": {
         CaptureStatus.COMPLETE: _ALLOW,

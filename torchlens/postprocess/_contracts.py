@@ -455,7 +455,7 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
         # flooded member — standard torch ops cannot produce it (siblings
         # share the call's inputs) — and if it ever fires, the write audit
         # fails LOUD on the undeclared column; declaring parents/children
-        # today would be phantom declarations (the Opus-4 anti-laundering
+        # today would be phantom declarations (the review-4 anti-laundering
         # guard). recurrent_ops additionally cannot fire: recurrence groups
         # are not built until step 7.
         writes=frozenset(
@@ -534,7 +534,7 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
         # DATA — the pinned day-1 category-(c) finding (design-ppdag-v3
         # §2.4), reported for root-cause, never silenced; the root-cause
         # fix (record _label_raw instead) changes a serialized public
-        # field's content and is deferred to JMT by name.
+        # field's content and is deferred to a maintainer decision by name.
         placeholder_probes=frozenset(
             (
                 "conditional_arm_children",

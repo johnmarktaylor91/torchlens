@@ -303,7 +303,7 @@ class BindingPreflightError(ConfigurationError, ValueError):
 class BindingRuntimeError(InterventionError, RuntimeError):
     """Raised by a bound intervention executor at or after call time.
 
-    Covers the serial/non-reentrancy refusal, the JMT-FOLD-A3 zero-fire
+    Covers the serial/non-reentrancy refusal, the FOLD-A3 zero-fire
     fail-closed default (raised AFTER the call with ``.last_report``
     retained), the missing-``generate`` capability refusal, serialization
     refusal, and training-surface teaching refusals. Branch on

@@ -215,7 +215,7 @@ class _AncestorBitset:
     ``_compact_ancestor_sets``), so the lazily cached frozen view is also
     one-per-closure: the first public read of any member materializes the
     ``frozenset`` once and every sibling read shares it (M6 immutable-view
-    contract, JMT-FORK-1).
+    contract, FORK-1).
 
     Parameters
     ----------

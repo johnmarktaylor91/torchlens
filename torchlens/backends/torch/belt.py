@@ -1,6 +1,6 @@
 """The mechanical BELT: protocol-invisible stale-reference coverage.
 
-Stage-2 safety net, part 2 (tri-lab verdict). A small class of wrapped torch
+Stage-2 safety net, part 2 (design-review verdict). A small class of wrapped torch
 functions is invisible to EVERY ``TorchFunctionMode`` — their C
 implementations never enter the override-protocol dispatch (measured: zero
 callbacks), so a stale pre-wrap reference to one of them produces NO signal

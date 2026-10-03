@@ -62,7 +62,7 @@ def steer_generate(
     spec:
         The immutable intervention spec to hold across the generation.
     on_zero_fire:
-        Zero-fire settlement policy forwarded to ``spec.bind`` (JMT-FOLD-A3
+        Zero-fire settlement policy forwarded to ``spec.bind`` (FOLD-A3
         fail-closed default).
     **generate_kwargs:
         Forwarded verbatim to the model's ``generate``.

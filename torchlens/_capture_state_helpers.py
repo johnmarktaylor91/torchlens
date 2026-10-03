@@ -512,7 +512,7 @@ def prepare_compiled_capture(model: nn.Module) -> Iterator[CompiledCapturePrep]:
     Notes
     -----
     Compiled child ``nn.Module`` slots are unwrapped to their eager sources in
-    both regimes (the conservative design confirmed by the 2026-08-12 tri-lab
+    both regimes (the conservative design confirmed by the 2026-08-12 design-review
     compile reconcile). On torch >= 2.6 the capture then runs under
     ``torch.compiler.set_stance("force_eager")``: every compiled callable
     (plain attribute or free function) executes its original eager Python, so

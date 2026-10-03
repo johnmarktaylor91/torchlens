@@ -3607,7 +3607,7 @@ def _capture_autograd_engine_call(
 
 # ---------------------------------------------------------------------------
 # Checkpoint invocation tokens (L9 memo 2.3). Every spelling below is
-# DOCUMENTED-UNSTABLE; the typed ambiguity REFUSAL is S2-authored (R-L9-1) and
+# DOCUMENTED-UNSTABLE; the typed ambiguity REFUSAL awaits a pending contract amendment and
 # NOT raised anywhere in this module -- only the capture machinery (classifier,
 # per-instance token-bearing closures, witness bookkeeping) ships pre-amendment.
 # ---------------------------------------------------------------------------

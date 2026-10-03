@@ -1408,7 +1408,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         The edit is applied "as if" the parameter were changed: every
         consumption of the parameter is substituted at its derived occurrence
         address on the replay engine, and the live parameter object is never
-        written (JMT ruling 2026-08-17, superseding the D3 typed-refusal
+        written (decided 2026-08-17, superseding the D3 typed-refusal
         default on the replay path; rerun/set_only keep refusing typed).
         """
 

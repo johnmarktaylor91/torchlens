@@ -5,7 +5,7 @@ Converts a dict-backed record class (``Param``, ``Buffer``,
 columnar row stores: every declared stored field becomes a class-level data
 descriptor reading and writing one row cell, so the per-record ``__dict__``
 survives only for the two store-binding keys and undeclared user attributes
-(JMT-FORK-7 default: arbitrary user attributes stay supported).
+(FORK-7 default: arbitrary user attributes stay supported).
 
 Storage reuses the M5 machinery verbatim: ``OpRowStore`` (layout-agnostic row
 store, row-major while building, sealed after postprocess) holds the

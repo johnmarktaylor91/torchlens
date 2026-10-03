@@ -299,7 +299,7 @@ def validate_prerelease_state(state: dict[str, Any], *, cls_name: str) -> None:
 # ---------------------------------------------------------------------------
 # Live sprint-gated registrations (S3 registrar inventory rows). Each row is
 # retired at the coordinated tlspec version bump that activates its family.
-# The tlspec v8 bump (2026-08-17) retired every feature-megasprint row; the
+# The tlspec v8 bump (2026-08-17) retired every feature-work row; the
 # tlspec v9 bump (2026-08-27, lane C07) retired the C01 "sidecar" annotations
 # row. The registry is empty again until the next sprint gates a new family
 # here.

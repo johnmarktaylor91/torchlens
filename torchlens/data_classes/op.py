@@ -234,7 +234,7 @@ _LAYER_PASS_LOG_CONTAINER_DEFAULTS: dict[str, Any] = {
     "transform_config": {},
     "unattributed_tensor_args": (),
     "dropped_edge_tensor_args": (),
-    # Relation view fields (M6, JMT-FORK-1): the declared restore type is the
+    # Relation view fields (M6, FORK-1): the declared restore type is the
     # IMMUTABLE view — ``coerce_container_typed_state`` normalizes legacy
     # list/set state to tuple/frozenset on load, so loaded traces present the
     # same immutable relation surface as live finished captures.
@@ -4547,7 +4547,7 @@ def register_relation_cell_encoding(encoding_type: type) -> None:
 
 
 class _RelationViewField(_OpField):
-    """Descriptor for one immutable-view relation field (M6, JMT-FORK-1).
+    """Descriptor for one immutable-view relation field (M6, FORK-1).
 
     While a shared ``OpRowStore`` is BUILDING, writes stage raw mutable
     containers (postprocess mutates them in place). Once the store is sealed
@@ -4600,7 +4600,7 @@ class _RelationViewField(_OpField):
 
 
 class _GroupViewField(_RelationViewField):
-    """Descriptor for the two group-membership fields (M7, JMT-FORK-1).
+    """Descriptor for the two group-membership fields (M7, FORK-1).
 
     A finished cell holds THE one shared ``GroupRef`` of its membership
     group; reads resolve to the group's cached immutable view (``frozenset``

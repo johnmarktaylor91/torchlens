@@ -220,7 +220,7 @@ _ROWS: Final[tuple[CapabilityRow, ...]] = (
         key="meta_admission",
         claim=(
             "Meta-materialized models (form (a)) are ADMITTED under the D8 "
-            "grant (JMT 2026-08-26), if and only if structure-only is in "
+            "grant (decided 2026-08-26), if and only if structure-only is in "
             "force (scoped admission, W2): the graph, module nesting, "
             "parameter geometry, and shape/dtype HYPOTHESES are recorded "
             "with no tensor values. Without structure_only the entry gate "

@@ -3,7 +3,7 @@
 ``compat_window()`` is the ``tl.compat_window()``-shaped surface: it renders
 the ledger rows, the rehydration floor facts, and the promise status as one
 frozen report. The report never asserts anything the ledger cannot back --
-the promise window NUMBER is FORK F1 (JMT) and renders as pending until
+the promise window NUMBER is FORK F1 and renders as pending until
 adjudicated, and every named remedy release is covered by the
 remedy-actually-loads CI test.
 """

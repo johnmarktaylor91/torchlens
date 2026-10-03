@@ -4090,7 +4090,7 @@ class host_nondeterminism_monitor:
             return exact(bit_generator.state) + spawn_fragment(bit_generator)
         if isinstance(holder, np.random.RandomState):
             return exact(holder.get_state())
-        # r41 (Sol): a BARE model-held BitGenerator (``self.bg = PCG64(...)`` drawn
+        # r41 (review): a BARE model-held BitGenerator (``self.bg = PCG64(...)`` drawn
         # through a wrapping Generator) advances its own ``state``; digest it directly
         # so the registry's BitGenerator claim is digest-true.
         if isinstance(holder, np.random.BitGenerator):

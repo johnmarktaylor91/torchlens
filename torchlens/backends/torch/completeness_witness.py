@@ -15,7 +15,7 @@ re-entry, so the nested op is genuinely invisible to the witness and cannot be
 detected. This is an adversarial construction, not a capture bug -- a normal
 model validating its own forward pass cannot trigger it. See docs/LIMITATIONS.md.
 
-Thread posture (r43, JMT-locked): the aten census is OWNER-thread-scoped (a
+Thread posture (r43, locked by design): the aten census is OWNER-thread-scoped (a
 ``TorchDispatchMode`` is thread-local), while the mode-independent tensor->host
 escape belt (method/module/property/storage patches) fires on EVERY thread and is
 the designated CROSS-thread observer. The belt collapses to ONE fail-closed
@@ -1015,7 +1015,7 @@ over-triggers at ~zero cost. TorchLens's own capture-internal ``data_ptr`` reads
 
 # --- r43 CLASS 2: non-owner captured-tensor touch (ONE fail-closed rule) --------------------
 #
-# JMT-locked: ANY non-owner thread that TOUCHES A CAPTURED TENSOR during the armed forward
+# Locked by design: ANY non-owner thread that TOUCHES A CAPTURED TENSOR during the armed forward
 # window permanently ceilings the artifact to UNVERIFIABLE (+ NOT_APPLICABLE). This subsumes
 # the whole r41 in-window/foreign 3-class distinction (which let raw ``_thread`` and
 # pre-existing workers slip through). Captured membership is decided by
@@ -1025,7 +1025,7 @@ over-triggers at ~zero cost. TorchLens's own capture-internal ``data_ptr`` reads
 _HOST_ESCAPE_CROSS_THREAD_CAPTURED: weakref.WeakSet[Any] = weakref.WeakSet()
 """Traces where a NON-OWNER thread touched a CAPTURED tensor during the armed window (r43).
 
-The single JMT-locked concurrency ceiling: a captured tensor's Python-visible value/pointer/
+The single locked-by-design concurrency ceiling: a captured tensor's Python-visible value/pointer/
 string/metadata escape (or a positively-known captured-derived alias) observed on any thread
 other than the capture owner is outside the single-owner-thread replay model, so the runnable
 producer folds it into an INCOMPLETE witness downgrade -> UNVERIFIABLE + NOT_APPLICABLE.

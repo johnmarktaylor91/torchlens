@@ -39,7 +39,7 @@ class JournalView:
     module_prep_events: tuple[Any, ...]
     module_enter_events: tuple[Any, ...]
     module_exit_events: tuple[Any, ...]
-    pre_hook_events: tuple[Any, ...]  # module provenance (Sol round-3 omission)
+    pre_hook_events: tuple[Any, ...]  # module provenance (review round-3 omission)
     buffer_write_events: tuple[Any, ...]
     output_version_events: tuple[Any, ...]
     grad_fn_handles_by_label_raw: Mapping[str, Any]

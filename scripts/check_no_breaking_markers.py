@@ -12,7 +12,7 @@ mechanically impossible by scanning every commit message at commit time
 (``commit-msg`` stage) and every outgoing commit at push time (``pre-push``
 stage), and exiting non-zero if any major-bump trigger is present.
 
-Override (use ONLY when JMT explicitly authorizes a major bump in this turn):
+Override (use ONLY when the maintainer explicitly authorizes a major bump in this turn):
 
     TORCHLENS_ALLOW_MAJOR_BUMP=1 git commit ...
     TORCHLENS_ALLOW_MAJOR_BUMP=1 git push ...
@@ -83,7 +83,7 @@ ERROR_BANNER = """
      instead. semantic-release will not bump major.
 
  If you ACTUALLY mean to cut a major release this turn (extremely rare;
- requires JMT's explicit, in-turn authorisation), re-run the same git command
+ requires the maintainer's explicit, in-turn authorisation), re-run the same git command
  with the override:
    {override}=1 <your git command>
 

@@ -74,7 +74,7 @@ DESCENT = 0.22
 PEN_EPS = 0.25
 SPLINE_SAMPLES = 24
 ELLIPSE_SAMPLES = 64
-#: Grid cell size for the candidate-pair prefilter (Fable r4: a 200 pt grid
+#: Grid cell size for the candidate-pair prefilter (review r4: a 200 pt grid
 #: cut 825k candidate pairs to 21k on full rolled gpt2).
 GRID_CELL_PT = 200.0
 #: Arrowhead health floor (D15): min within-node arrowhead gap measured

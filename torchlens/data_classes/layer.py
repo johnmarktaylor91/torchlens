@@ -94,7 +94,7 @@ _MULTI_PASS_PER_CALL_LAYER_FIELDS: frozenset[str] = frozenset(
 _LAYER_LOG_CONTAINER_DEFAULTS: dict[str, Any] = {
     "arg_names": (),
     "param_shapes": [],
-    # Relation view fields (M6, JMT-FORK-1): declared restore type is the
+    # Relation view fields (M6, FORK-1): declared restore type is the
     # IMMUTABLE view; ``coerce_container_typed_state`` normalizes legacy
     # list/set state on load so loaded Layers present the same immutable
     # relation surface as live finished captures.
@@ -987,7 +987,7 @@ class Layer(_SelectionOperand):
         Declared fields come first in the exact ``__dict__`` insertion order
         of the dict-era ``__init__`` (the order every pickle golden was frozen
         against); mirror fields resolve through the representative op. Extra
-        instance attributes (user-set names, JMT-FORK-7) follow in insertion
+        instance attributes (user-set names, FORK-7) follow in insertion
         order. Tombstoned fields are omitted, matching dict-era deletion.
         """
 
@@ -1368,7 +1368,7 @@ class Layer(_SelectionOperand):
     def children(self) -> tuple[str, ...]:
         """Union of child layers (no-pass labels) across all ops.
 
-        Immutable view (M6, JMT-FORK-1): computed per read, so mutating the
+        Immutable view (M6, FORK-1): computed per read, so mutating the
         returned container could never reach stored state anyway; the tuple
         makes that contract explicit and matches the Op relation surface.
         """
@@ -1386,7 +1386,7 @@ class Layer(_SelectionOperand):
     def parents(self) -> tuple[str, ...]:
         """Union of parent layers (no-pass labels) across all ops.
 
-        Immutable view (M6, JMT-FORK-1); see ``children``.
+        Immutable view (M6, FORK-1); see ``children``.
         """
         result = []
         seen = set()

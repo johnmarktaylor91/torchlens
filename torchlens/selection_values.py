@@ -30,7 +30,7 @@ declares ``relation="exact"`` with the sample count disclosed in
 JOIN table, never by overwriting a relation.
 
 Every spelling here ships DOCUMENTED-UNSTABLE pending naming-session
-ratification (megasprint provisional-name protocol). Producers are ACT-kind
+ratification (provisional-name protocol). Producers are ACT-kind
 only in v1: a PARAM/EDGE ``within`` refuses ``selection_kind_incompatible``
 (``Param`` records carry no tensor payload to read; a PARAM value producer
 is a named possibility, not a promise).

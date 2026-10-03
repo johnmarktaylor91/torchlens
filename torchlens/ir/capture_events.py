@@ -682,7 +682,7 @@ class CaptureEvents:
         resolution is by ``target_label_raw`` and the fold lands on the LAST
         occurrence, matching the live index's last-wins label semantics.
         Every amendment re-validates against the closed registry at fold
-        (Sol 2.4). The cache keys on both lane lengths: each lane is
+        (review 2.4). The cache keys on both lane lengths: each lane is
         append-only, so growth is the only invalidation signal.
         """
 

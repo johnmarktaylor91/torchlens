@@ -41,7 +41,7 @@ is deliberately not spelled here). Population restriction composes through
 the normative JOIN table, never by overwriting a relation.
 
 Every spelling here ships DOCUMENTED-UNSTABLE pending naming-session
-ratification (megasprint provisional-name protocol), with the interface
+ratification (provisional-name protocol), with the interface
 flagged for the UI-sprint review. Producers are ACT-kind only: PARAM
 populations refuse ``selection_kind_incompatible`` — ``Param`` records hold
 only a LIVE parameter reference, never capture-time payloads, so a

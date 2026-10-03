@@ -1,6 +1,6 @@
 """Freeze-time conversion of relation staging containers to immutable views.
 
-The M6 relations wave (trace_core_design.md sections 3.2/3.5, JMT-FORK-1
+The M6 relations wave (trace_core_design.md sections 3.2/3.5, FORK-1
 decided 2026-08-12). During postprocess (steps 0-20) relation fields are real
 mutable builtins — the staging plane. At the core freeze point each family
 converts exactly once:

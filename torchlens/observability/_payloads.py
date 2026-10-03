@@ -4,7 +4,7 @@ The explorer owns the record and the CONVERSION; tracker sinks own the
 native emission call (D26). The completed dashboard histogram payload is
 the spine's five verbatim ``add_histogram_raw`` fields plus the canonical
 ``bucket_limits`` / ``bucket_counts`` derived from the immutable signed
-log2 grid (Sol r3's correction to D8's "zero translation" shorthand).
+log2 grid (review r3's correction to D8's "zero translation" shorthand).
 
 Nonfinite counts (NaN, +/-inf) are NOT representable in a dashboard
 bucket axis: they are excluded from the buckets, ``num`` counts the

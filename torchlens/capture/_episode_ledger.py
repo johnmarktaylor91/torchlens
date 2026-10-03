@@ -287,7 +287,7 @@ def _parse_state_digest(payload: Mapping[str, Any], key: str) -> dict[str, str] 
     """Parse one channel-keyed carried-state digest field, FAIL-CLOSED.
 
     The MEASURED GENERIC carried-state witness slots (SV-6 = generic, the
-    JMT semantic ruling; persisted spellings ``entry_state_digest`` /
+    maintainer semantic ruling; persisted spellings ``entry_state_digest`` /
     ``exit_state_digest`` per foldB D16 — "witness" is triple-booked).
     ``None`` = NOT MEASURED (the only writer-free value; nothing may imply
     an unmeasured cache fact); a present value maps channel names to digest

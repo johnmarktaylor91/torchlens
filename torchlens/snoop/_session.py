@@ -468,7 +468,7 @@ class EchoSession:
                 self._module_stack.append(frame)
                 if self._select_all:
                     # Unscoped narration prints structure lines immediately
-                    # (default ON with echo=True; Sol's op-only default is a
+                    # (default ON with echo=True; the review's op-only default is a
                     # recorded dissent, snoop s10 D3).
                     frame.printed = True
                     self._deliver(

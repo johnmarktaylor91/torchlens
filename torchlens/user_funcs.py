@@ -2982,7 +2982,7 @@ def _trace_torch_model(
     # `model.named_modules()` (FSDP/ScriptModule checks), which only makes sense on a real
     # nn.Module. A non-Module input previously leaked an AttributeError from that call
     # instead of the documented "Unsupported model type" ValueError.
-    # The ruled root contract (foldA MEMO s5 item 9, a direct JMT ruling) is
+    # The ruled root contract (foldA MEMO s5 item 9, a direct maintainer ruling) is
     # nn.Module OR a bound method of one (owner resolved via ``__self__``):
     # a bound method wraps into the TL-authored synthetic root (owner
     # registered as a submodule; method called exactly once); anything else

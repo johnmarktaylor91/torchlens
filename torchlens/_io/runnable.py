@@ -2555,7 +2555,7 @@ def _build_control_witnesses(
             site_label = control_dependency_site_label(edge)
             child_call_id = call_by_op_label.get(str(child))
             if child_call_id is None:
-                # Sol A2: an arm edge that cannot attach to a surviving call is an
+                # Review A2: an arm edge that cannot attach to a surviving call is an
                 # anchored incompleteness gap (UNVERIFIABLE floor), never silently
                 # dropped and never an orphan witness.
                 gap(WitnessGapKind.UNANCHORABLE_ARM_EDGE, site_label)
@@ -3135,7 +3135,7 @@ def _escape_witnesses(
     # value escape could have gone unwitnessed this forward -- coverage is unknowable, fail closed.
     if host_escape_observer_install_failed(trace):
         gap(WitnessGapKind.ESCAPE_OBSERVER_UNCERTAIN, "capture")
-    # r43 CLASS 2 (JMT-locked): any NON-OWNER thread that touched a CAPTURED tensor during the
+    # r43 CLASS 2 (locked by design): any NON-OWNER thread that touched a CAPTURED tensor during the
     # armed forward window is outside the single-owner-thread replay model -- the escape is not
     # witnessable as a precise source, so the run must fail closed to UNVERIFIABLE + NOT_APPLICABLE
     # rather than a false VERIFIED. Subsumes the r42 hon2_1/hon2_2/hon2_3/hon2_4 findings.
@@ -4098,7 +4098,7 @@ def _preflight_state_alias_topology(
 def _preflight_state_metadata(trace: Any) -> list[RunnableDiagnostic]:
     """Refuse a runnable save whose READ captured-state physical metadata is lossy (r63 C1).
 
-    Escape-GATED (JMT Option-A ruling): a captured param/buffer with a non-canonical PHYSICAL
+    Escape-GATED (Option-A ruling): a captured param/buffer with a non-canonical PHYSICAL
     form (non-default stride/contiguity, nonzero storage offset, conj/neg lazy bit) refuses at
     save ONLY when the model actually READ that physical dim on the slot during the captured
     forward (the r63-closed ``is_contiguous`` / ``stride`` / ``storage_offset`` / ``is_conj`` /

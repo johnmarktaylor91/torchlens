@@ -1,6 +1,6 @@
 """TL-authored synthetic root for bound-method capture (lane F41).
 
-The ruled root contract (foldA MEMO s5 item 9 + D11, a direct JMT ruling):
+The ruled root contract (foldA MEMO s5 item 9 + D11, a direct maintainer ruling):
 ``tl.trace`` accepts an ``nn.Module`` OR a bound method of one. The owner
 is resolved via ``method.__self__`` and registered as a submodule of this
 TorchLens-authored wrapper root, whose ``forward`` calls the bound method

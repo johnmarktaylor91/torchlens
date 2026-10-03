@@ -36,7 +36,7 @@ __tl_layer__ = "L1"
 # structure_only marker, the L3 primitive-op profile + kernel telemetry, the
 # S6 Bundle member_relations key, and the S7 episode annotations ledger),
 # with their load-validation rows live on real artifacts.
-# v9 is the completeness-megasprint coordinated schema write (C07): the audit
+# v9 is the completeness-work coordinated schema write (C07): the audit
 # row grammar admits the shipped ACT per-site "source" disclosure, PARAM
 # rows/recipes, and the EVENT (intervention_event_v2) row family with its
 # optional hash-chain extension; the "sidecar" annotations namespace flips

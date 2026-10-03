@@ -6,7 +6,7 @@ boolean combinators, model/trace-independent; resolving it is explicit.
 concrete, trace-bound: an ordered tuple of :class:`SiteEntry` rows.
 
 Every public spelling here ships DOCUMENTED-UNSTABLE pending its
-naming-session ratification (megasprint provisional-name protocol).
+naming-session ratification (provisional-name protocol).
 
 TWO-LEVEL DENOTATION (normative): a selection denotes the pair
 (TOUCHED-SITE FAMILY, SELECTED-ELEMENT SET). Zero-mask entries are retained,
