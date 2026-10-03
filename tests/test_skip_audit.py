@@ -138,6 +138,11 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         "PyMuPDF PDF-render inspection helper, undeclared; extras-gap candidate reported 2026-08-15",
     ),
     "flax.nnx": (OPTIONAL_PREVIEW, "jax extra"),
+    "fcntl": (
+        TEST_EXTRA,
+        "POSIX standard-library module: present on every Linux and macOS leg, absent only "
+        "on Windows (tests/test_io_platform_save_paths.py)",
+    ),
     "git": (
         UNAVAILABLE_OK,
         "gitpython, a python-semantic-release dependency; release-environment-only "
@@ -223,6 +228,7 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
     ),
     "pyarrow": (OPTIONAL_PREVIEW, "tabular extra"),
     "pyarrow.parquet": (OPTIONAL_PREVIEW, "tabular extra"),
+    "psutil": (TEST_EXTRA, "psutil"),
     "pydot": (TEST_EXTRA, "pydot"),
     "pytorch_lightning": (TEST_EXTRA, "ships inside the 'lightning' distribution"),
     "rsatoolbox": (OPTIONAL_PREVIEW, "neuro extra"),
