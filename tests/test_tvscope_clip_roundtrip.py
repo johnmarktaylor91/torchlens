@@ -72,24 +72,60 @@ def test_every_module_origin_selector_round_trips(clip_setup) -> None:
     assert missing == [], missing
 
 
+def _clip_l2_normalize(tensor: torch.Tensor) -> torch.Tensor:
+    """Normalize exactly as transformers' CLIP forward does, op for op.
+
+    ``Tensor.norm`` and transformers' ``pow -> sum -> pow(0.5)`` are different
+    kernels whose results can differ in the last bit, so an exact comparison
+    must replay the forward's own formula, never an equivalent one.
+    """
+
+    try:
+        from transformers.models.clip.modeling_clip import _get_vector_norm
+    except ImportError:  # the formula transformers 5.x ships under that name
+
+        def _get_vector_norm(t: torch.Tensor) -> torch.Tensor:
+            return torch.pow(torch.sum(torch.pow(t, 2), dim=-1, keepdim=True), 0.5)
+
+    return tensor / _get_vector_norm(tensor)
+
+
 def test_manual_projection_matches_forward_image_embeds(clip_setup) -> None:
     """post_layernorm -> visual_projection == image_embeds, exactly.
 
     Version-adaptive: transformers 5.x L2-normalizes ``image_embeds`` on the
     forward output (and ``get_image_features`` no longer returns the raw
     tensor), so the comparison normalizes iff the reference is normalized.
+    Each stage is first compared with the forward's own intermediate, so a
+    mismatch names where it entered: the captured activation, the projection,
+    or the normalization.
     """
 
     model, input_ids, pixel_values, _inventory = clip_setup
     out = tl.extract(model, [input_ids.clone(), pixel_values.clone()], [_PROJECTED_SITE])
-    with torch.no_grad():
-        manual = model.visual_projection(out[_PROJECTED_SITE])
-        reference = model(
-            input_ids=input_ids.clone(), pixel_values=pixel_values.clone()
-        ).image_embeds
+    forward_seen: dict[str, torch.Tensor] = {}
+    handles = [
+        model.vision_model.post_layernorm.register_forward_hook(
+            lambda _m, _i, o: forward_seen.__setitem__("post_layernorm", o.detach().clone())
+        ),
+        model.visual_projection.register_forward_hook(
+            lambda _m, _i, o: forward_seen.__setitem__("projection", o.detach().clone())
+        ),
+    ]
+    try:
+        with torch.no_grad():
+            manual = model.visual_projection(out[_PROJECTED_SITE])
+            reference = model(
+                input_ids=input_ids.clone(), pixel_values=pixel_values.clone()
+            ).image_embeds
+    finally:
+        for handle in handles:
+            handle.remove()
+    assert torch.equal(out[_PROJECTED_SITE], forward_seen["post_layernorm"])
+    assert torch.equal(manual, forward_seen["projection"])
     norms = reference.norm(p=2, dim=-1)
     if torch.allclose(norms, torch.ones_like(norms), atol=1e-4):
-        manual = manual / manual.norm(p=2, dim=-1, keepdim=True)
+        manual = _clip_l2_normalize(manual)
     assert (manual - reference).abs().max().item() == 0.0
 
 
