@@ -213,6 +213,7 @@ def test_unpickler_denies_operator_gadget(name: str, builder) -> None:
             SafeBundleUnpickler(io.BytesIO(blob), allowed_custom_callable_modules={mod}).load()
 
 
+@pytest.mark.smoke_cells("test_unpickler_allows_pure_operator_under_trust[neg]")
 @pytest.mark.parametrize("name", _PURE_NAMES)
 def test_unpickler_allows_pure_operator_under_trust(name: str) -> None:
     """Pure operators still resolve through the unpickler under trust (carve-out)."""
@@ -247,6 +248,7 @@ def test_unpickler_attrgetter_globals_rce_chain_blocked() -> None:
 # --------------------------------------------------------------------------- #
 
 
+@pytest.mark.smoke
 def test_unpickler_denies_bare_module_object(trusted_evilmod) -> None:
     """A dotted name resolving a bare module object is refused (mirrors dict refusal)."""
 

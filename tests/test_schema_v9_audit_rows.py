@@ -160,6 +160,7 @@ def _event_row(**overrides):
     return row
 
 
+@pytest.mark.smoke
 def test_act_site_source_is_optional_and_string_typed():
     assert _validate_audit_row(0, _act_row()) is not None
     assert _validate_audit_row(0, _act_row(source="subspace basis sha256:ab")) is not None

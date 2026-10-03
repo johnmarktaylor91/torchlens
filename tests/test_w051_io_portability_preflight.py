@@ -220,6 +220,7 @@ def test_hostile_tensor_subclass_passes_through_sanitizer_and_refuses_typed(
     assert exc.fields["field"] == "Trace.annotations['user']['t']"
 
 
+@pytest.mark.smoke
 def test_locate_names_whole_state_when_every_part_is_portable_alone() -> None:
     """The culprit walk's fallback: no single part fails, so the whole state is named."""
 

@@ -137,6 +137,7 @@ def test_assign_rehydrated_field_uses_genuine_class_setter() -> None:
 # --------------------------------------------------------------------------- #
 
 
+@pytest.mark.smoke_cells("test_state_key_shadowing_trace_method_is_refused[run]")
 @pytest.mark.parametrize("method_name", ["save", "run", "draw"])
 def test_state_key_shadowing_trace_method_is_refused(method_name: str) -> None:
     """A state key shadowing a real ``Trace`` method is refused, typed."""

@@ -150,6 +150,7 @@ def _rank_trace(rank: int, *, kind: str, reduce_op: str | None) -> SimpleNamespa
     )
 
 
+@pytest.mark.smoke
 def test_structural_kind_conflict_raises_merge_conflict_code() -> None:
     """Contradicting collective kinds at one joined key refuse ``merge_conflict``.
 

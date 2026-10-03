@@ -378,6 +378,7 @@ def test_fresh_seed_leg_stays_wired_into_ci() -> None:
     )
 
 
+@pytest.mark.smoke
 def test_canonical_json_bytes_refuses_noncanonical_inputs_typed() -> None:
     """R73: the canonical encoder is an integrity surface -- refuse, never coerce.
 

@@ -246,6 +246,7 @@ class TestDeltaAlignment:
 class TestAuditMatrix:
     """Merge-side rows of the v5 1.3 PRE-JOIN audit matrix."""
 
+    @pytest.mark.smoke
     def test_asymmetric_arming_conflicts_with_zero_gaps_and_zero_joins(self):
         # The review's repro shape: rank 0 evidences {0: seeded (destroyed), 1: wrapped}
         # and captured the recreated group as uid (digest, 1); late-arming
@@ -336,12 +337,14 @@ class TestAuditMatrix:
 
 
 class TestScopeAndInputRefusals:
+    @pytest.mark.smoke
     def test_p2p_kind_refuses_typed(self):
         core = evidence(0, [boundary(0, 0, kind="send", channel="p2p/0->1", reduce_op=None)])
         with pytest.raises(MergeInputError) as excinfo:
             derive_merge({0: core})
         assert excinfo.value.fields["code"] == MergedErrorCode.MERGE_SCOPE_UNSUPPORTED.value
 
+    @pytest.mark.smoke
     def test_dtensor_dual_geometry_refuses_typed(self):
         roles = [
             {
@@ -357,6 +360,7 @@ class TestScopeAndInputRefusals:
             derive_merge({0: core})
         assert excinfo.value.fields["code"] == MergedErrorCode.MERGE_SCOPE_UNSUPPORTED.value
 
+    @pytest.mark.smoke
     def test_parse_refuses_rank_outside_recorded_membership(self) -> None:
         """A rank core cannot claim evidence for a group it does not belong to."""
 
@@ -368,6 +372,7 @@ class TestScopeAndInputRefusals:
             )
         assert excinfo.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
+    @pytest.mark.smoke
     def test_join_refuses_presence_outside_recorded_membership(self) -> None:
         """Direct engine callers receive the same presence-subset refusal."""
 
@@ -380,6 +385,7 @@ class TestScopeAndInputRefusals:
             )
         assert excinfo.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
+    @pytest.mark.smoke
     def test_parse_refuses_duplicate_rank_local_sequence(self) -> None:
         """Duplicate absolute sequence keys cannot overwrite a boundary silently."""
 
@@ -391,6 +397,7 @@ class TestScopeAndInputRefusals:
             )
         assert excinfo.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
+    @pytest.mark.smoke
     def test_join_refuses_duplicate_rank_local_sequence(self) -> None:
         """Direct engine evidence cannot exploit duplicate-sequence overwrite."""
 
@@ -425,19 +432,23 @@ class TestBoundaryParseValidation:
             self._extract(entry)
         assert excinfo.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
+    @pytest.mark.smoke
     def test_role_entry_missing_shape_refuses_typed(self):
         self._assert_refuses(
             boundary(0, 0, roles=[{"role": "contribution_destination", "index": 0}])
         )
 
+    @pytest.mark.smoke
     def test_role_entry_not_a_mapping_refuses_typed(self):
         self._assert_refuses(boundary(0, 0, roles=["contribution"]))
 
+    @pytest.mark.smoke
     def test_roles_not_a_list_refuses_typed(self):
         entry = boundary(0, 0)
         entry["roles"] = {"role": "contribution"}
         self._assert_refuses(entry)
 
+    @pytest.mark.smoke
     def test_role_name_outside_vocabulary_refuses_typed(self):
         self._assert_refuses(
             boundary(0, 0, roles=[{"role": "spectator", "index": 0, "shape": [2]}])
@@ -448,22 +459,26 @@ class TestBoundaryParseValidation:
             boundary(0, 0, roles=[{"role": "contribution", "index": 0, "shape": [2, "x"]}])
         )
 
+    @pytest.mark.smoke
     def test_string_digest_field_refuses_typed(self):
         entry = boundary(0, 0, witness_policy="digest")
         entry["witness"]["contribution_digests"] = "ccdd"
         entry["witness"]["destination_digests"] = "aabb"
         self._assert_refuses(entry)
 
+    @pytest.mark.smoke
     def test_non_hex_digest_element_refuses_typed(self):
         entry = boundary(0, 0, witness_policy="digest")
         entry["witness"]["destination_digests"] = ["not-a-digest"]
         self._assert_refuses(entry)
 
+    @pytest.mark.smoke
     def test_non_string_op_label_refuses_typed(self):
         entry = boundary(0, 0)
         entry["op_labels_raw"] = ["fine", 7]
         self._assert_refuses(entry)
 
+    @pytest.mark.smoke
     def test_non_integer_my_group_rank_refuses_typed(self):
         entry = boundary(0, 0)
         entry["group"]["my_group_rank"] = "0"
@@ -474,6 +489,7 @@ class TestBoundaryParseValidation:
         entry["group"]["backend"] = 7
         self._assert_refuses(entry)
 
+    @pytest.mark.smoke
     def test_non_string_channel_refuses_typed(self):
         entry = boundary(0, 0)
         entry["correlation"]["channel"] = 0
@@ -487,6 +503,7 @@ class TestBoundaryParseValidation:
         entry["correlation"]["channel"] = ["coll"]
         self._assert_refuses(entry)
 
+    @pytest.mark.smoke
     def test_negative_seq_refuses_typed(self):
         self._assert_refuses(boundary(0, -1))
 
@@ -500,6 +517,7 @@ class TestBoundaryParseValidation:
         )
         self._extract(entry)  # must not raise
 
+    @pytest.mark.smoke
     def test_parse_refuses_membership_digest_ranks_incoherence(self):
         """Deep-hunt F3: the digest must equal sha256(sorted(global_ranks)).
 
@@ -512,6 +530,7 @@ class TestBoundaryParseValidation:
         fake = membership_digest_for_ranks([5, 6, 7])
         self._assert_refuses(boundary(0, 0, digest=fake))
 
+    @pytest.mark.smoke
     def test_engine_refuses_membership_digest_ranks_incoherence(self):
         """Direct-engine evidence receives the same digest-coherence refusal."""
 
@@ -525,6 +544,7 @@ class TestBoundaryParseValidation:
             )
         assert excinfo.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
+    @pytest.mark.smoke
     def test_engine_belt_refuses_string_digests_typed(self):
         """Direct-engine evidence cannot fabricate ATTESTED via char-split.
 
@@ -569,6 +589,7 @@ class TestRolesDeletionVacuousTruth:
         del entry["roles"]
         self._assert_refuses(entry)
 
+    @pytest.mark.smoke
     def test_tensor_kind_with_empty_roles_refuses_typed(self):
         self._assert_refuses(boundary(0, 0, roles=[]))
 
@@ -589,6 +610,7 @@ class TestRolesDeletionVacuousTruth:
                 )
             assert excinfo.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
+    @pytest.mark.smoke
     def test_engine_belt_flags_zero_role_entries_per_rank(self):
         """Direct ``derive_merge`` callers bypass evidence parse; the relation
         table still names every rank presenting zero roles for a
@@ -634,6 +656,7 @@ class TestSweepFieldValidation:
             )
         assert excinfo.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
+    @pytest.mark.smoke
     def test_reduce_op_deleted_on_reduce_kind_refuses_typed(self):
         entry = boundary(0, 0)  # all_reduce
         del entry["reduce_op"]
@@ -650,6 +673,7 @@ class TestSweepFieldValidation:
             "clean-broadcast",
         )
 
+    @pytest.mark.smoke
     def test_non_integer_c10d_group_seq_refuses_typed(self):
         entry = boundary(0, 0)
         entry["c10d_group_seq"] = "5"
@@ -773,6 +797,7 @@ class TestReleaseContract:
         self._assert_released_refusal(lambda: merged.super_op("anything"))
         self._assert_released_refusal(lambda: merged.save(tmp_path / "released"))
 
+    @pytest.mark.smoke
     def test_join_ops_refuses_typed_after_release(self):
         merged = self._merged()
         (join,) = merged.joins
@@ -790,6 +815,7 @@ class TestReleaseContract:
             MergedErrorCode.MERGED_MEMBER_RELEASED.value
         )
 
+    @pytest.mark.smoke
     def test_verdicts_stay_readable_after_release(self):
         merged = self._merged()
         before = (merged.alignment, merged.value_status, merged.rank_ids)
@@ -841,6 +867,7 @@ class TestWitnessCompletionCoherence:
 
     # --- the headline forgery: async destination digests -------------------
 
+    @pytest.mark.smoke
     def test_forged_destination_digests_on_unobserved_completion_refuse(self):
         entry = boundary(
             0,
@@ -865,6 +892,7 @@ class TestWitnessCompletionCoherence:
 
     # --- digests under witness policy "none" -------------------------------
 
+    @pytest.mark.smoke
     def test_contribution_digests_under_policy_none_refuse(self):
         entry = boundary(0, 0)
         entry["witness"]["contribution_digests"] = ["c" * 64]
@@ -877,6 +905,7 @@ class TestWitnessCompletionCoherence:
 
     # --- events coherence ---------------------------------------------------
 
+    @pytest.mark.smoke
     def test_async_op_flag_contradicting_completion_binding_refuses(self):
         entry = boundary(0, 0, async_op=True)
         entry["events"]["async_op"] = False
@@ -887,6 +916,7 @@ class TestWitnessCompletionCoherence:
         entry["events"]["completion_binding"] = "unobserved"
         self._assert_refuses(entry)
 
+    @pytest.mark.smoke
     def test_non_boolean_async_op_refuses(self):
         entry = boundary(0, 0)
         entry["events"]["async_op"] = "no"
@@ -894,6 +924,7 @@ class TestWitnessCompletionCoherence:
 
     # --- disclosure coherence -----------------------------------------------
 
+    @pytest.mark.smoke
     def test_stripped_inflight_read_disclosure_refuses(self):
         entry = boundary(0, 0, async_op=True)
         entry["disclosures"] = []
@@ -960,6 +991,7 @@ class TestWitnessCompletionCoherence:
         entry["peer"] = {"canonical": {"src": 0, "dst": 1}}
         self._assert_refuses(entry)
 
+    @pytest.mark.smoke
     def test_missing_peer_record_on_p2p_kind_refuses(self):
         entry = boundary(0, 0, kind="send", channel="p2p/0->1", reduce_op=None)
         entry["peer"] = None
@@ -1036,6 +1068,7 @@ class TestRelationsAndCrossChecks:
         )
         assert d.stored_alignment is MergeAlignment.CONFLICTED
 
+    @pytest.mark.smoke
     def test_backend_disagreement_conflicts_and_demotes_witness(self):
         """Deep-hunt F4: cross-rank backend disagreement is never silent.
 
@@ -1083,6 +1116,7 @@ class TestRelationsAndCrossChecks:
         assert d.stored_alignment is MergeAlignment.CONFLICTED
         assert any(f.kind == "correlation_delta_mismatch" for f in d.findings)
 
+    @pytest.mark.smoke
     def test_armed_rank_base_misalignment_is_a_correlation_conflict(self):
         """Deep-hunt F5: differing capture windows cannot fabricate a join.
 
@@ -1161,6 +1195,7 @@ class TestRelationsAndCrossChecks:
         )
         assert d.stored_alignment is MergeAlignment.ALIGNED
 
+    @pytest.mark.smoke
     def test_interleaved_group_orders_are_an_order_contradiction(self):
         # Two generations of the same membership, both wrapped by complete
         # witnesses (identical lineage vectors -> audit-compatible), but the
@@ -1269,6 +1304,7 @@ class TestWitnessDerivation:
         assert d.joins[0].consistency is BoundaryConsistency.NOT_PRESENT
         assert d.stored_value_status is MergeValueStatus.UNWITNESSED
 
+    @pytest.mark.smoke
     def test_reduce_is_not_applicable_at_every_level(self):
         roles_root = [
             {
@@ -1422,12 +1458,14 @@ class TestPresenterLookupNarrowing:
         with pytest.raises(RuntimeError, match="corrupt core"):
             merged["relu_1_2"]
 
+    @pytest.mark.smoke
     def test_lookup_miss_still_reads_as_a_miss(self):
         merged = self._merged(self._MissTrace(), self._GoodTrace())
         assert merged["relu_1_2"] == "op<relu_1_2>"
 
 
 class TestExpectedRanksWidenOnly:
+    @pytest.mark.smoke
     def test_declared_ranks_without_cores_are_gaps(self):
         d = derive_merge(
             {

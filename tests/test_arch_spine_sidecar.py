@@ -57,6 +57,7 @@ def traced():
 
 
 class TestRegistrationLaw:
+    @pytest.mark.smoke
     def test_family_id_must_be_namespaced(self) -> None:
         for bad_id in ("saliency", "", "Bad.Case", ".leading"):
             with pytest.raises(SidecarError) as excinfo:
@@ -65,6 +66,7 @@ class TestRegistrationLaw:
                 )
             assert excinfo.value.fields["code"] == "sidecar_family_id_invalid"
 
+    @pytest.mark.smoke
     def test_schema_contract_validated(self) -> None:
         with pytest.raises(SidecarError) as excinfo:
             register_sidecar_family(
@@ -84,6 +86,7 @@ class TestRegistrationLaw:
             )
         assert excinfo.value.fields["code"] == "sidecar_schema_invalid"
 
+    @pytest.mark.smoke
     def test_non_family_registration_refuses(self) -> None:
         with pytest.raises(SidecarError) as excinfo:
             register_sidecar_family({"family_id": "a.b"})  # type: ignore[arg-type]
@@ -98,6 +101,7 @@ class TestRegistrationLaw:
 
 
 class TestAttachAndRead:
+    @pytest.mark.smoke
     def test_round_trip_on_a_real_trace(self, registered_family, traced) -> None:
         attach_sidecar(traced, FAMILY.family_id, {"scores": [0.5, 0.25]})
         assert read_sidecar(traced, FAMILY.family_id) == {"scores": [0.5, 0.25]}
@@ -113,16 +117,19 @@ class TestAttachAndRead:
             attach_sidecar(traced, "nobody.registered", {"x": 1})
         assert excinfo.value.fields["code"] == "registry_entry_unknown"
 
+    @pytest.mark.smoke
     def test_non_trace_target_refuses(self, registered_family) -> None:
         with pytest.raises(SidecarError) as excinfo:
             attach_sidecar(object(), FAMILY.family_id, {"x": 1})
         assert excinfo.value.fields["code"] == "sidecar_trace_invalid"
 
+    @pytest.mark.smoke
     def test_non_json_payload_refuses(self, registered_family, traced) -> None:
         with pytest.raises(SidecarError) as excinfo:
             attach_sidecar(traced, FAMILY.family_id, {"tensor": torch.randn(2)})
         assert excinfo.value.fields["code"] == "sidecar_payload_invalid"
 
+    @pytest.mark.smoke
     def test_size_budget_enforced(self, registered_family, traced) -> None:
         with pytest.raises(SidecarError) as excinfo:
             attach_sidecar(traced, FAMILY.family_id, {"big": "x" * 8192})
@@ -135,6 +142,7 @@ class TestAttachAndRead:
             read_sidecar(fresh, FAMILY.family_id)
         assert excinfo.value.fields["code"] == "sidecar_absent"
 
+    @pytest.mark.smoke
     def test_malformed_envelope_refuses(self, registered_family, traced) -> None:
         traced.annotations.setdefault(SIDECAR_ANNOTATIONS_KEY, {})["testorg.saliency"] = "junk"
         try:
@@ -158,6 +166,7 @@ class TestAttachAndRead:
 
 
 class TestMissingProviderAnalysisOnly:
+    @pytest.mark.smoke
     def test_provider_absent_read_degrades_analysis_only(self, traced) -> None:
         register_sidecar_family(FAMILY)
         attach_sidecar(traced, FAMILY.family_id, {"scores": [1.0]})

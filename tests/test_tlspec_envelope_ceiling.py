@@ -35,6 +35,7 @@ def test_chokepoint_builds_structured_refusal() -> None:
     assert err.fields["remedy"]
 
 
+@pytest.mark.smoke
 def test_pickle_state_gate_raises_typed() -> None:
     with pytest.raises(ArtifactVersionAboveRuntimeError) as excinfo:
         read_tlspec_version({"tlspec_version": FUTURE_VERSION}, cls_name="Trace")

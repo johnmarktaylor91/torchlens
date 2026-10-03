@@ -126,6 +126,7 @@ def test_reuse_rung_never_reads_deferred_evidence() -> None:
     assert reuse_stats(FakeTrace(), "missing_raw", 10) is None
 
 
+@pytest.mark.smoke_cells("test_two_stage_tripwire_verdict_identity[nan]")
 @pytest.mark.parametrize(
     "case",
     [

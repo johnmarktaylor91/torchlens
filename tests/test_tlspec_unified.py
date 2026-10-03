@@ -928,6 +928,7 @@ def test_schema_v2_mlx_materialized_loads_payloads(tmp_path: Path) -> None:
     assert loaded.validation_replay_status.reason == "loaded_trace_runtime_capture_stripped"
 
 
+@pytest.mark.smoke
 def test_schema_v2_mlx_old_audit_only_fixture_loads_metadata_only(tmp_path: Path) -> None:
     """Old MLX audit-only schema-v2 bundles should still load metadata-only."""
 

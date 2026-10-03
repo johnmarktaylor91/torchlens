@@ -86,6 +86,9 @@ def test_exec_spawn_install_modules_denied_even_under_trust(import_path: str) ->
 # --------------------------------------------------------------------------- #
 
 
+@pytest.mark.smoke_cells(
+    "test_unpickler_denies_exec_spawn_install_globals_even_under_trust[pdb:run]"
+)
 @pytest.mark.parametrize("import_path", _EXEC_SPAWN_INSTALL_REFS)
 def test_unpickler_denies_exec_spawn_install_globals_even_under_trust(
     import_path: str,

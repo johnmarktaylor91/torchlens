@@ -107,6 +107,10 @@ _ATTACKER_TOKENS = [
 ]
 
 
+@pytest.mark.smoke_cells(
+    "test_grammar_only_backends_admit_device_tokens_unchanged[Device(cpu)-paddle]",
+    "test_grammar_only_backends_admit_device_tokens_unchanged[DeviceType.gpu-paddle]",
+)
 @pytest.mark.parametrize("backend_name", ["paddle", "mlx", "jax", "tf"])
 @pytest.mark.parametrize("token", _LEGIT_GRAMMAR_TOKENS)
 def test_grammar_only_backends_admit_device_tokens_unchanged(backend_name: str, token: str) -> None:
@@ -120,6 +124,9 @@ def test_grammar_only_backends_admit_device_tokens_unchanged(backend_name: str, 
     assert _sanitize_artifact_device_token(token, backend_name) == token
 
 
+@pytest.mark.smoke_cells(
+    "test_attacker_device_tokens_refused_to_default[disk:/tmp/tl_sentinel-tinygrad]"
+)
 @pytest.mark.parametrize("backend_name", ["tinygrad", "paddle"])
 @pytest.mark.parametrize("token", _ATTACKER_TOKENS)
 def test_attacker_device_tokens_refused_to_default(backend_name: str, token: str) -> None:
@@ -128,6 +135,7 @@ def test_attacker_device_tokens_refused_to_default(backend_name: str, token: str
     assert _sanitize_artifact_device_token(token, backend_name) is None
 
 
+@pytest.mark.smoke
 def test_unknown_and_empty_tokens_resolve_default() -> None:
     """The sentinel ``unknown``/empty strings and non-strings resolve to default."""
 
@@ -226,6 +234,7 @@ _SINK_TOKENS = [
 ]
 
 
+@pytest.mark.smoke_cells("test_tinygrad_io_sink_bases_refused[disk]")
 @pytest.mark.parametrize("token", _SINK_TOKENS)
 def test_tinygrad_io_sink_bases_refused(token: str) -> None:
     """Every file/socket/fabric sink base is refused, index suffix or not.

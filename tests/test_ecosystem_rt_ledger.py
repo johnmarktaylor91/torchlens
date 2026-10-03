@@ -118,6 +118,7 @@ def test_lawful_released_artifacts_load(corpus_dir: Path) -> None:
         assert isinstance(loaded, tl.Trace), name
 
 
+@pytest.mark.smoke
 def test_governed_windows() -> None:
     """The governed (writer, stamp) relation matches the measured history."""
 

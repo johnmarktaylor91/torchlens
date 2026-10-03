@@ -300,6 +300,7 @@ def test_dtype_vocabulary_refuses() -> None:
     assert _code(excinfo) == "extraction_dtype_invalid"
 
 
+@pytest.mark.smoke
 def test_dtype_unstorable_refuses_unit() -> None:
     """A cast the safetensors shard codec cannot store refuses typed."""
 
