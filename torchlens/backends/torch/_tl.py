@@ -29,6 +29,8 @@ __all__ = [
     "get_tensor_label",
     "mark_tensor_data_alias",
     "is_tensor_data_alias",
+    "set_same_object_mutation",
+    "pop_same_object_mutation",
     "raw_tensor_label",
     "get_live_tensor_label",
     "get_live_label_list",
@@ -155,6 +157,10 @@ class TensorMeta(TorchLensMeta):
     # as a canonical detach op, but a later write through this alias family must
     # still ceiling runnable faithfulness.
     data_alias: bool = False
+    # Transient handoff for a same-object return: the wrapper stamps the call's
+    # mutation verdict on the fresh copy it logs, and activation logging pops it
+    # immediately (``set_same_object_mutation`` / ``pop_same_object_mutation``).
+    same_object_mutation: bool | None = None
 
 
 @dataclass
@@ -1155,6 +1161,42 @@ def is_tensor_data_alias(t: Any) -> bool:
 
     meta = get_tensor_meta(t)
     return bool(meta is not None and meta.data_alias and get_tensor_label(t) is not None)
+
+
+def set_same_object_mutation(t: Any, verdict: bool) -> None:
+    """Stamp a same-object return's mutation verdict on the tensor that gets logged.
+
+    Parameters
+    ----------
+    t : Any
+        Fresh copy of the same-object return that activation logging will see.
+    verdict : bool
+        Whether the wrapped call mutated its receiver.
+    """
+
+    _ensure_tensor_meta(t).same_object_mutation = verdict
+
+
+def pop_same_object_mutation(t: Any) -> bool | None:
+    """Return and clear a stamped same-object mutation verdict.
+
+    Parameters
+    ----------
+    t : Any
+        Tensor being logged.
+
+    Returns
+    -------
+    bool | None
+        The stamped verdict, or ``None`` when no verdict was stamped.
+    """
+
+    meta = get_tensor_meta(t)
+    if meta is None:
+        return None
+    verdict = meta.same_object_mutation
+    meta.same_object_mutation = None
+    return verdict
 
 
 def raw_tensor_label(t: Any) -> str | None:

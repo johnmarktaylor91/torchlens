@@ -1,6 +1,5 @@
 """Output tensor metadata and activation persistence."""
 
-import contextlib
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -33,6 +32,7 @@ from ...utils.tensor_utils import (
 from ._tl import (
     get_tensor_label,
     mark_detached_saved_activation,
+    pop_same_object_mutation,
 )
 from .completeness_witness import internal_scalar_read, record_alias_mutation_candidate
 from .tensor_tracking import (
@@ -236,10 +236,7 @@ def _log_output_tensor_info(
     # A same-object return is logged against a fresh copy; the wrapper stamps the
     # call's mutation verdict on it (signature incl. ``inplace=True``, refined by the
     # live receiver's version counter). Consume it so it never leaks onto the copy.
-    same_object_mutation = getattr(t, "tl_same_object_mutation", None)
-    if same_object_mutation is not None:
-        with contextlib.suppress(AttributeError):
-            delattr(t, "tl_same_object_mutation")
+    same_object_mutation = pop_same_object_mutation(t)
     if not _should_keep_alias_mutation_contract(self):
         # Default forward-only capture: preserve the historical label-based flag exactly (no
         # runnable replay consumes it, so identity returns are harmless and goldens stay unchanged).

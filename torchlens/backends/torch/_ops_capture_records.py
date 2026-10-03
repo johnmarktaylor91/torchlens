@@ -25,6 +25,7 @@ from . import module_stack as _mstack
 from ._tl import (
     active_label_session_token,
     get_param_meta,
+    set_same_object_mutation,
 )
 from .completeness_witness import internal_scalar_read
 
@@ -275,7 +276,7 @@ def _stamp_same_object_mutation(logged: Any, receiver: Any, mutation_signature: 
             current = tensor_version_or_none(receiver)
         verdict = current is None or current != baseline
     with contextlib.suppress(AttributeError):
-        cast(Any, logged).tl_same_object_mutation = verdict
+        set_same_object_mutation(logged, verdict)
 
 
 def get_capture_producer_policy(mode: CaptureProducerMode) -> CaptureProducerPolicy:
