@@ -187,13 +187,16 @@ jobs:
           # The heavy (5-20 s) tests run in their own invocation with fresh,
           # fewer workers: one long -n 4 session over the whole tier grew the
           # workers' memory until the runner was shut down (85-99% through,
-          # twice, 2026-10-03).
+          # twice, 2026-10-03). All three sessions always run, so a failure in
+          # one never hides the others' evidence; the step fails if any did.
+          status=0
           pytest tests/ -m "not slow and not rare and not serial and not heavy" -n 4 --tb=short \
-            --junitxml="${{ runner.temp }}/fast-tier.junit.xml"
+            --junitxml="${{ runner.temp }}/fast-tier.junit.xml" || status=1
           pytest tests/ -m "heavy and not slow and not rare and not serial" -n 2 --tb=short \
-            --junitxml="${{ runner.temp }}/fast-tier-heavy.junit.xml"
+            --junitxml="${{ runner.temp }}/fast-tier-heavy.junit.xml" || status=1
           mapfile -t serial_files < <(grep -rlE --include="test_*.py" "mark\.serial" tests)
-          pytest "${serial_files[@]}" -m "serial and not slow and not rare" --tb=short -q
+          pytest "${serial_files[@]}" -m "serial and not slow and not rare" --tb=short -q || status=1
+          exit "$status"
 
       - name: Fail on an under-executed fast tier
         # Executed-floor attestation (grind r3, R82): the full fast tier is
