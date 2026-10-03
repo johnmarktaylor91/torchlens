@@ -97,6 +97,8 @@ jobs:
         run: |
           pytest tests/ -m smoke -n 4 --tb=short -q \
             --junitxml="${{ runner.temp }}/canary-smoke.junit.xml"
+          # `serial` tests run without xdist (see tests.yml smoke step).
+          pytest tests/ -m "serial and not slow and not rare and not heavy" --tb=short -q
           pytest tests/test_torch_compat.py --tb=short -q
 
       - name: Fail on an under-executed canary suite

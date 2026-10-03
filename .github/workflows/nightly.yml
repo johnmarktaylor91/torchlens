@@ -182,9 +182,11 @@ jobs:
           # addopts "-m 'not rare'", so a bare -m "not slow" would silently
           # re-select rare-but-not-slow tests that the `rare` marker documents as
           # "always excluded unless explicitly requested". Conjoin `not rare` to
-          # preserve that contract.
-          pytest tests/ -m "not slow and not rare" -n 4 --tb=short \
+          # preserve that contract. `serial` tests (load- or memory-sensitive)
+          # are excluded from the xdist run and run afterwards without it.
+          pytest tests/ -m "not slow and not rare and not serial" -n 4 --tb=short \
             --junitxml="${{ runner.temp }}/fast-tier.junit.xml"
+          pytest tests/ -m "serial and not slow and not rare" --tb=short -q
 
       - name: Fail on an under-executed fast tier
         # Executed-floor attestation (grind r3, R82): the full fast tier is

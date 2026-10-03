@@ -15,8 +15,9 @@ This immunizer is ENUMERATION-FREE: it asserts the projection RAN and BOUNDED th
 refusal, with no allowlist behind it), never "op in a list". A broad op sample DELIBERATELY not
 the old allowlist -- including every r56-missed op -- is refused; a huge PURE VIEW / input-return
 / in-place op is NOT over-refused (storage-alias -> 0 new bytes); a data-dependent op fails open;
-benign models round-trip verified. Also covers the defensive run-side ``_decode_literal``
-nesting-depth guard (C4).
+benign models round-trip verified. (The huge-pure-view guard lives in the serial-tier
+``test_tlspec_alloc_preflight_huge_view.py``: it retains ~1.6 GB.) Also covers the
+defensive run-side ``_decode_literal`` nesting-depth guard (C4).
 """
 
 from __future__ import annotations
@@ -68,18 +69,6 @@ class _Nonzero(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         idx = torch.nonzero(x > 0.0)
         return idx.float().sum() + x.sum()
-
-
-class _HugeView(nn.Module):
-    """A genuinely huge PURE VIEW (``expand`` of a size-1 dim) that allocates nothing.
-
-    Its logical numel is enormous, but storage aliases the input, so the alloc
-    preflight must charge ZERO new bytes and never over-refuse it (r51 anti-pattern).
-    """
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (1, 4)
-        wide = x.expand(10**8, 4)  # 4e8-element view, no allocation
-        return wide[0].sum() + x.sum()
 
 
 def _build(tmp_path: Path, name: str, model: nn.Module, x: torch.Tensor) -> Path:
@@ -446,16 +435,6 @@ def test_untampered_factory_model_runs_verified(tmp_path: Path) -> None:
 
     bundle = _build(tmp_path, "clean_factory.tlspec", _Factory(), torch.randn(4))
     result = tl.load(str(bundle)).run(inputs=torch.randn(4))
-    assert result.report.path_faithfulness.value == "verified"
-
-
-def test_genuinely_huge_view_model_runs_verified(tmp_path: Path) -> None:
-    """A model whose real forward produces a HUGE view (4e8-element ``expand``) runs
-    VERIFIED -- the alloc preflight charges 0 new bytes for it (r51 over-catch avoided)."""
-
-    x = torch.randn(1, 4)
-    bundle = _build(tmp_path, "huge_view.tlspec", _HugeView(), x)
-    result = tl.load(str(bundle)).run(inputs=x.clone())
     assert result.report.path_faithfulness.value == "verified"
 
 
