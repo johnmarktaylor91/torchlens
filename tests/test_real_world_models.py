@@ -2275,17 +2275,7 @@ def test_opticflow_raftsmall():
             container_path=opj(VIS_OUTPUT_DIR, "torchvision-opticflow", "opticflow_raftsmall"),
         ),
     )
-    # RAFT's CorrBlock caches its correlation pyramid as a large plain
-    # attribute (millions of elements); TorchLens's deepcopy-based ground-
-    # truth/restoration snapshot cannot prove it restores, so validation
-    # fails CLOSED (returns False with a disclosed reason) rather than
-    # report unverified success. Known, documented capability boundary, not
-    # a capture bug -- if this ever returns True, the deepcopy fallback
-    # gained support for this attribute shape and this guard should be
-    # relaxed back to a plain assert.
-    with pytest.warns(RuntimeWarning, match="cannot prove model-state restoration"):
-        result = validate_forward_pass(model, model_input)
-    assert result is False
+    assert validate_forward_pass(model, model_input)
 
 
 @pytest.mark.slow
@@ -2303,10 +2293,7 @@ def test_opticflow_raftlarge():
             container_path=opj(VIS_OUTPUT_DIR, "torchvision-opticflow", "opticflow_raftlarge"),
         ),
     )
-    # Same CorrBlock deepcopy limitation as test_opticflow_raftsmall above.
-    with pytest.warns(RuntimeWarning, match="cannot prove model-state restoration"):
-        result = validate_forward_pass(model, model_input, random_seed=1)
-    assert result is False
+    assert validate_forward_pass(model, model_input, random_seed=1)
 
 
 # =============================================================================
@@ -3115,15 +3102,7 @@ def test_timm_levit_128():
             save_only=True, container_path=opj(VIS_OUTPUT_DIR, "timm", "levit_128")
         ),
     )
-    # LeViT's attention modules cache per-resolution attention_bias_cache
-    # entries as a plain (non-parameter) attribute; TorchLens's deepcopy-
-    # based ground-truth/restoration snapshot cannot prove it restores, so
-    # validation fails CLOSED rather than report unverified success. Known,
-    # documented capability boundary (same class as RAFT's CorrBlock, see
-    # test_opticflow_raftsmall), not a capture bug.
-    with pytest.warns(RuntimeWarning, match="cannot prove model-state restoration"):
-        result = validate_forward_pass(model, model_input)
-    assert result is False
+    assert validate_forward_pass(model, model_input)
 
 
 @pytest.mark.slow
@@ -4656,11 +4635,7 @@ def test_timm_efficientformer():
             save_only=True, container_path=opj(VIS_OUTPUT_DIR, "timm", "efficientformer_l1")
         ),
     )
-    # Same attention_bias_cache deepcopy limitation as test_timm_levit_128
-    # above.
-    with pytest.warns(RuntimeWarning, match="cannot prove model-state restoration"):
-        result = validate_forward_pass(model, x)
-    assert result is False
+    assert validate_forward_pass(model, x)
 
 
 @pytest.mark.slow
