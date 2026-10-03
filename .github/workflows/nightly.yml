@@ -1123,7 +1123,8 @@ jobs:
             "torch==2.13.0+cpu" \
             "torchvision==0.28.0+cpu"
           uv pip check
-          python -c 'import brainscore_vision; print("brainscore_vision", brainscore_vision.__version__)'
+          # brainscore_vision defines no __version__; read the installed distribution.
+          python -c 'import brainscore_vision; from importlib.metadata import version; print("brainscore_vision", version("brainscore_vision"))'
 
       - name: Brain-Score extractor seam gates (PASSED-count attested)
         # 6 rows in the file; the refusal-path row self-skips when the package
@@ -1167,7 +1168,8 @@ jobs:
             "torch==2.13.0+cpu" \
             "torchvision==0.28.0+cpu"
           uv pip check
-          python -c 'import transformer_lens, transformers; print("transformer_lens", transformer_lens.__version__, "transformers", transformers.__version__)'
+          # transformer_lens defines no __version__; read the installed distribution.
+          python -c 'import transformer_lens, transformers; from importlib.metadata import version; print("transformer_lens", version("transformer_lens"), "transformers", transformers.__version__)'
 
       - name: TransformerLens oracle rows (executed floor; canary)
         run: |
@@ -1259,6 +1261,9 @@ jobs:
             "torch==2.13.0+cpu" \
             "torchvision==0.28.0+cpu"
           uv pip install --system --no-deps "ai-edge-model-explorer==0.1.32"
+          # model_explorer/server.py imports portpicker at package import time;
+          # it no longer arrives transitively through the [test] extra.
+          uv pip install --system "portpicker==1.6.0"
           node --version
           python -c 'import model_explorer; print("model_explorer imported")'
 
