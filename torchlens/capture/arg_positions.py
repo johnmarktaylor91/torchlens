@@ -2389,6 +2389,9 @@ _PHASE5B_VALIDATED_ARG_SPECS = {
     "registerpostaccumulategradhook": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
     "reshapealiascopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
     "reshapefromtensor": ArgSpec(positions=(0, 1), tensor_kwargs=("self", "shape")),
+    # torch.onnx.operators.reshape_from_tensor_shape: an alias of
+    # torch._reshape_from_tensor on torch >= 2.8, a ``def (x, shape)`` wrapper before.
+    "reshapefromtensorshape": ArgSpec(positions=(0, 1), tensor_kwargs=("self", "x", "shape")),
     "resizeas": ArgSpec(positions=(0, 1), tensor_kwargs=("self", "the_template")),
     "resizeassparse": ArgSpec(positions=(0, 1), tensor_kwargs=("self", "the_template")),
     "resizeoutput": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
