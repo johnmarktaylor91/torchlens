@@ -181,11 +181,11 @@ Rung 1 retains the existing `FunctionRegistryKey` shape exactly:
 
 | Field | Type | Contract |
 |---|---|---|
-| `namespace` | `torch | torch.Tensor | torch.nn.functional | operator | custom` | existing vocabulary; runnable preflight rejects `custom` |
+| `namespace` | `torch | torch.Tensor | torch.nn.functional | operator | custom` | existing vocabulary; runnable preflight rejects `custom` except the section 6 rung-1 exact forms (an enumerated torch namespace import path, or the TorchLens synthetic-op table) |
 | `qualname` | `str` | qualified name below the namespace |
 | `dispatch_kind` | `function | method | dunder | namespace_alias` | receiver/dispatch contract |
 | `version` | `int` | must equal `1` |
-| `import_path` | `str | null` | must be null; non-null is `untrusted_custom_import` |
+| `import_path` | `str | null` | null for the fixed namespaces; on `custom`, any path outside the section 6 rung-1 exact forms is `untrusted_custom_import` and is never imported |
 
 `callable_registry` deduplicates keys as `CallableRegistryEntry(registry_id: str,
 key: FunctionRegistryKey)`. IDs are unique; every computational call names one; unused entries are
@@ -1056,7 +1056,19 @@ readiness report.
 The torch ladder is fixed:
 
 1. Exact `getattr` on allowlisted roots only: `torch`, `torch.Tensor`, `torch.nn.functional`,
-   `operator`, and explicitly enumerated stock namespaces; prefer public surfaces.
+   `operator`, and explicitly enumerated stock namespaces; prefer public surfaces. The enumerated
+   namespaces include the private builtin modules `torch._C._fft`, `torch._C._linalg`, and
+   `torch._C._special`, whose callables torch re-exports under `torch.fft` / `torch.linalg` /
+   `torch.special` with the namespace prefix dropped (`torch.fft.rfft is
+   torch._C._fft.fft_rfft`); capture keys them by the private module, so exact resolution returns
+   the recorded callable on every torch version. Registry coherence accepts the public binding
+   name (`rfft`) that the op records for such a key, and no other name.
+   The one non-torch exact entry is the closed TorchLens synthetic-op table: the module-boundary
+   identity op (`nn.Identity` and pass-through module outputs, minted by
+   `_state._decorated_identity`) is keyed `custom` / `identity` /
+   `torchlens.utils.display:identity` and resolves, by that exact key only, to the in-memory
+   `torchlens.utils.display.identity` (a pure pass-through; provenance
+   `torchlens_synthetic:torchlens.utils.display.identity`). No module is imported for it.
 2. Explicit producer-version-bounded aliases in `utils/_torch_compat.py`, including
    `Tensor`/`_TensorBase`/`TensorBase` and enumerated private-to-public mappings. Aliases never
    reinterpret exact matches. Current-runtime target availability remains capability-detected.
@@ -3099,10 +3111,25 @@ here with a bounded compatibility disposition; filtering, skipping, or reporting
 is forbidden.
 
 The checked-in fast gate covers linear, convolution, normalization, pooling, embedding, recurrent,
-attention, Tensor-method, operator, and special-function families. Every classics corpus entry is
+attention, Tensor-method, operator, special-function, FFT, and `nn.Identity` boundary families. Every classics corpus entry is
 gated individually by `tests/test_classics_corpus.py` (smoke subset per commit, the comprehensive
 tier with the slow suite), and `classics_resolver_coverage_report` in
 `tests/test_tlspec_resolver_coverage.py` produces the release report over the whole corpus, including
 all unsuccessful model attempts as well as every unavailable unique key. A sweep of the full model
 catalog (the Model Menagerie battery) is deliberately separate and runs downstream; the classics
 corpus plus test-suite corpus is the runnable release gate.
+
+**Documented bounded dispositions.** Exactly one key holds one, and nothing broader is excused:
+
+- `FunctionRegistryKey("torch.Tensor", "__new__", "method")`, the legacy `torch.Tensor(...)`
+  constructor called inside `forward`. Observable behavior: runnable save refuses typed at the
+  producer (`unsupported_literal`, detection stage `producer_literal`), because the constructor's
+  class argument is outside the section 2 literal grammar; the resolver also keeps the raw callable
+  `unavailable` (`untrusted_custom_import`, provenance `nonforward_callable_denied`), because its
+  hidden `cdata=` overload wraps a raw pointer as a tensor and would be a memory-safety hole for an
+  untrusted bundle. Bound: only forwards that call the legacy constructor; analysis saves and loads
+  are unaffected, and `torch.tensor(...)` / `Tensor.new(...)` stay runnable. The remedy is a
+  guarded legacy-constructor adapter (capture recipe without the class argument, producer support,
+  size-form uninitialized-memory taint); until it ships, the refusal is pinned by
+  `tests/test_runnable_resolver_release_keys.py`, which fails if the refusal goes silent or the key
+  starts resolving.

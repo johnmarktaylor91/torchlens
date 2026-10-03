@@ -112,6 +112,33 @@ class _SpecialFamily(nn.Module):
         return torch.special.erf(value) + torch.special.gammaln(value.abs() + 1.0)
 
 
+class _FFTFamily(nn.Module):
+    """Spectral family recorded as private ``torch._C._fft`` builtins."""
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Round-trip real and complex FFTs and shift the spectrum."""
+
+        real = torch.fft.irfft(torch.fft.rfft(value), n=value.shape[-1])
+        spectral = torch.fft.ifft2(torch.fft.fftshift(torch.fft.fft2(value))).real
+        return real + spectral
+
+
+class _IdentityBoundaryFamily(nn.Module):
+    """``nn.Identity`` boundary family recorded as TorchLens's identity op."""
+
+    def __init__(self) -> None:
+        """Initialize an affine layer around an identity module."""
+
+        super().__init__()
+        self.linear = nn.Linear(4, 4)
+        self.skip = nn.Identity()
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Route the affine output through the identity module."""
+
+        return torch.relu(self.skip(self.linear(value)))
+
+
 class _LinearFamily(nn.Module):
     """Linear, dropout, softmax, and matrix arithmetic family."""
 
@@ -146,6 +173,8 @@ def _representative_cases() -> tuple[tuple[str, nn.Module, Any], ...]:
         ("attention", _AttentionFamily().eval(), torch.randn(2, 4, 8)),
         ("tensor_methods", _TensorMethodFamily().eval(), torch.randn(2, 3, 4)),
         ("special", _SpecialFamily().eval(), torch.rand(2, 4)),
+        ("fft", _FFTFamily().eval(), torch.randn(2, 4, 6)),
+        ("identity_boundary", _IdentityBoundaryFamily().eval(), torch.randn(2, 4)),
     )
 
 
