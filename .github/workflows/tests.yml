@@ -236,7 +236,8 @@ jobs:
           # xdist so parallel workers never starve them (marker contract).
           # Only files carrying the marker are collected: a whole-suite
           # single-process collection costs ~95 s.
-          pytest $(grep -rlE --include="test_*.py" "mark\.serial" tests) -m "serial and not slow and not rare and not heavy" --tb=short -q
+          mapfile -t serial_files < <(grep -rlE --include="test_*.py" "mark\.serial" tests)
+          pytest "${serial_files[@]}" -m "serial and not slow and not rare and not heavy" --tb=short -q
           pytest tests/test_torch_compat.py --tb=short -q
 
       - name: Fail on an under-executed smoke suite

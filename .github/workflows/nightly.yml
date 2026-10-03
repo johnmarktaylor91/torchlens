@@ -186,7 +186,8 @@ jobs:
           # are excluded from the xdist run and run afterwards without it.
           pytest tests/ -m "not slow and not rare and not serial" -n 4 --tb=short \
             --junitxml="${{ runner.temp }}/fast-tier.junit.xml"
-          pytest $(grep -rlE --include="test_*.py" "mark\.serial" tests) -m "serial and not slow and not rare" --tb=short -q
+          mapfile -t serial_files < <(grep -rlE --include="test_*.py" "mark\.serial" tests)
+          pytest "${serial_files[@]}" -m "serial and not slow and not rare" --tb=short -q
 
       - name: Fail on an under-executed fast tier
         # Executed-floor attestation (grind r3, R82): the full fast tier is
