@@ -2,7 +2,7 @@
 
 Roles are functional: the coordinator owns design and integration, implementers own scoped changes, and reviewers verify evidence. The same rules apply to every harness.
 
-TorchLens logs backend-resolved execution into a `Trace`. The stable default is PyTorch
+TorchLens logs backend-resolved execution into `Trace`, `Layer`, and `Op` objects. The stable default is PyTorch
 eager capture: run a normal forward pass, record operation metadata and activations, then
 inspect the result. Torch function wrapping is lazy in 2.x: `import torchlens` keeps torch
 clean, and the first torch capture calls `wrap_torch()` through model preparation. The
@@ -12,7 +12,7 @@ wrappers then stay installed until an explicit
 
 ## Required reference reading
 
-The referenced sections below are part of these instructions and retain their obligations. Before any code change, read conventions, critical invariants, known gotchas, and the glossary/docs contract. Before changing an API, feature, or module boundary, also read the corresponding surface, architecture, and feature reference. Paths in reference text are relative to the repository root. Update examples in `docs/agent-reference/` alongside the glossary and other documentation whenever public names change.
+The referenced sections below are part of these instructions and retain their obligations. Before any code change, read conventions, critical invariants, known gotchas, and the glossary/docs contract. Before changing an API, feature, or module boundary, also read the corresponding surface, architecture, and feature reference. Paths in reference text are relative to the repository root.
 
 ## Install
 
@@ -85,7 +85,12 @@ capture is a capture gap to fix, never to exempt.
 
 ## Keep the glossary + docs in lockstep with code (LOCKED)
 
-Required reading for this area: [Keep the glossary + docs in lockstep with code (LOCKED)](docs/agent-reference/keep-the-glossary-docs-in-lockstep-with-code-locked.md).
+The glossary is the canonical API spec; code conforms to it. Renaming, adding or removing any
+PUBLIC name (dataclass field, `@property`, method, top-level `tl.*` name, kwarg) updates, in the
+SAME change, the glossary entry, the examples in `docs/agent-reference/`, and the audit notebooks
+(`notebooks/audit/`) and `examples/` that use it. A change that leaves them stale is INCOMPLETE.
+Required reading for the full rule (vault re-file, old-name grep) and the runnable-state
+contracts filed with it: [lockstep reference](docs/agent-reference/keep-the-glossary-docs-in-lockstep-with-code-locked.md).
 
 ## Internal notes stay PRIVATE (LOCKED — this repo is PUBLIC)
 
@@ -140,13 +145,6 @@ still fires.
 
 Use `pytest.importorskip()` for optional migration dependencies. Keep tests
 deterministic and run documentation examples when they are meant to be executable.
-
-## Project Overview
-
-TorchLens extracts activations and computational graph metadata from backend-resolved
-captures into `Trace`, `Layer`, and `Op` objects. The stable default is PyTorch eager
-capture: it lazily wraps PyTorch functions with toggle-gated wrappers on first torch
-capture, runs forward passes with the logging toggle enabled, and records operations.
 
 ## Architecture
 

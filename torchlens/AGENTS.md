@@ -5,7 +5,7 @@ Roles are functional: the coordinator owns design and integration, implementers 
 
 ## Reference obligations
 
-Referenced sections retain their instructions. Before changes, read the relevant module, subsystem, public surface and architecture reference. Paths in reference text are relative to the repository root.
+Referenced sections retain their instructions. Before changes, read the relevant module, subsystem, public surface and architecture reference. Package reference paths are relative to `torchlens/` unless they start with `tests/`, `tools/` or `docs/`.
 
 ## What This Is
 

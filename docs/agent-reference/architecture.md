@@ -350,7 +350,7 @@ patched = tl.trace(
     save=tl.func("relu"),
     intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
 )
-streamed = tl.trace(model, x, save=tl.in_module("encoder"), storage=tl.to_disk("run.tlspec"))
+streamed = tl.trace(model, x, save=tl.in_module("encoder"), storage=tl.to_disk("streamed.tlspec"))
 recording = tl.record(model, x, save=tl.func("relu"))
 trace_from_recording = recording.to_trace()
 # D18: eval-mode BatchNorm is runnable on the default live path (no value-changing

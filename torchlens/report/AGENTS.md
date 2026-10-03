@@ -55,4 +55,4 @@ Reporting helpers over finished captures and observer metadata (`tl.report`).
   ceilinged capture (`capture_verified=False`) must stay visible in profile/explain
   output; never present an unverified capture as clean.
 - `forward_peak_memory` is a runtime measurement that legitimately reads `0` on the
-  default CPU path — never present it as a portable fact (root `AGENTS.md` rule).
+  default CPU path — never present it as a portable fact (root rule, `docs/agent-reference/known-gotchas.md`).

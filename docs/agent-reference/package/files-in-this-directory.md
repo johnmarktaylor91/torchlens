@@ -1,5 +1,7 @@
 ## Files in This Directory
 
+The directory is the `torchlens/` package (this text moved out of `torchlens/AGENTS.md`).
+
 KEY files only, NOT exhaustive (the package holds ~48 top-level modules; notable
 omissions include `runnable.py` — home of the 7 frozen runnable enums cited
 below — `captured_run.py`, `hash.py`, `facets.py`, `_capture_fingerprint.py`,
