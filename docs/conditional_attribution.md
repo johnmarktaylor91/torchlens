@@ -56,4 +56,4 @@ The sprint intentionally deferred a few follow-on items:
 - dagua conditional-edge rendering
 - while-loop body attribution
 
-Reference: `.project-context/plans/if-else-attribution/plan.md` (v7).
+Reference: the private if-else attribution design plan (v7).
