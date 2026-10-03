@@ -282,7 +282,6 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         "torch version capability probe (newer-torch namespace)",
     ),
     "torch_geometric": (TEST_EXTRA, "torch_geometric"),
-    "torch_geometric.nn": (TEST_EXTRA, "torch_geometric"),
     "torchaudio": (
         UNAVAILABLE_OK,
         "deliberately NOT in the test extra (pyproject.toml): torchaudio's last "
