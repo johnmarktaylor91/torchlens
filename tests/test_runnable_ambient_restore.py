@@ -35,16 +35,17 @@ def _globals() -> dict[str, Any]:
 
 @pytest.fixture
 def unset_fp32_precision_children() -> Iterator[None]:
-    """Put every per-backend ``fp32_precision`` child at torch's 'none' default.
+    """Put the oneDNN matmul ``fp32_precision`` control at torch's 'none' default.
 
-    'none' (inherit from the root) is the state a process that never touched
-    the precision controls is in, and the one the legacy setters overwrite.
+    'none' (inherit from the parent) is the state of a process that never
+    touched the precision controls, and the one the legacy matmul setter
+    overwrites. Only this control is reset: forcing the cuDNN children too
+    would build a mixed conv/RNN state the legacy ``allow_tf32`` getter refuses.
     """
 
     fields = _torch_compat.snapshot_fp32_precision_controls()
-    _torch_compat.restore_fp32_precision_controls(
-        {path: ("none" if path else value) for path, value in fields.items()}
-    )
+    if "mkldnn.matmul" in fields:
+        _torch_compat.restore_fp32_precision_controls({**fields, "mkldnn.matmul": "none"})
     try:
         yield
     finally:
