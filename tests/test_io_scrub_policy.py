@@ -645,7 +645,6 @@ def test_public_method_sweep_tables_are_total(tmp_path: Path) -> None:
     )
 
 
-@pytest.mark.smoke
 def test_public_method_reads_never_poison_save(tmp_path: Path) -> None:
     """Read-only presentation/analysis methods must leave the trace saveable.
 

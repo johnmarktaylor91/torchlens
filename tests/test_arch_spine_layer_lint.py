@@ -213,7 +213,6 @@ def _baseline_counts() -> dict[str, int]:
     return counts
 
 
-@pytest.mark.smoke
 def test_eager_upward_inversions_never_increase() -> None:
     findings = _compute_inversions()
     live = {module: len(rows) for module, rows in findings.items()}

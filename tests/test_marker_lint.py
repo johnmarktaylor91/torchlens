@@ -34,9 +34,6 @@ from pathlib import Path
 import pytest
 from _source_corpus import package_ast, package_files, package_source
 
-pytestmark = pytest.mark.smoke
-
-
 #: Markers that may never combine with ``smoke`` on one resolved item.
 #: ``heavy``/``slow``: additive markers keep the item in `-m smoke` despite the
 #: heavier tier. ``rare`` (R41-2) is a duration-budget EXEMPTION channel, so a
@@ -103,6 +100,7 @@ def _item_combo_violations(item: pytest.Item) -> list[str]:
     return _tier_combo_violations(marker_names, callspec_marker_names, item.nodeid)
 
 
+@pytest.mark.smoke
 def test_no_smoke_test_carries_a_heavier_tier_marker(request: pytest.FixtureRequest) -> None:
     """No collected item may carry a contradictory tier-marker combination."""
 
@@ -116,6 +114,7 @@ def test_no_smoke_test_carries_a_heavier_tier_marker(request: pytest.FixtureRequ
     )
 
 
+@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("markers", "callspec_markers", "expected_fragments"),
     [
@@ -140,6 +139,7 @@ def test_tier_combo_policy_is_red_capable(
         assert any(fragment in violation for violation in violations), (fragment, violations)
 
 
+@pytest.mark.smoke
 def test_bounded_tier_tests_stay_within_duration_budget(
     request: pytest.FixtureRequest,
 ) -> None:
@@ -192,6 +192,7 @@ def test_bounded_tier_tests_stay_within_duration_budget(
     )
 
 
+@pytest.mark.smoke
 def test_smoke_parametrized_families_stay_within_duration_budget(
     request: pytest.FixtureRequest,
 ) -> None:
@@ -222,6 +223,7 @@ def test_smoke_parametrized_families_stay_within_duration_budget(
     )
 
 
+@pytest.mark.smoke
 def test_smoke_module_imports_stay_within_duration_budget(
     request: pytest.FixtureRequest,
 ) -> None:
@@ -253,6 +255,7 @@ def test_smoke_module_imports_stay_within_duration_budget(
     )
 
 
+@pytest.mark.smoke
 def test_every_collected_module_imports_within_the_heavy_boundary(
     request: pytest.FixtureRequest,
 ) -> None:
@@ -413,6 +416,7 @@ def _warn_once_declarations(package_root: Path) -> set[tuple[str, str]]:
     return declarations
 
 
+@pytest.mark.smoke
 def test_warn_once_sentinel_census_matches_autouse_reset(
     request: pytest.FixtureRequest,
 ) -> None:
@@ -540,6 +544,7 @@ def _module_trace_fixtures_without_yield(tests_root: Path) -> list[str]:
     return violations
 
 
+@pytest.mark.smoke
 def test_module_scoped_trace_fixtures_have_teardown() -> None:
     """Module-scoped fixtures retaining Traces must yield for explicit cleanup."""
 
@@ -551,6 +556,7 @@ def test_module_scoped_trace_fixtures_have_teardown() -> None:
     )
 
 
+@pytest.mark.smoke
 def test_root_conftest_does_not_inject_repo_into_sys_path() -> None:
     """The suite must not hide an unusable editable install via path mutation."""
 
@@ -1081,6 +1087,7 @@ def per_test_trace():
 """
 
 
+@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("snippet", "expected"),
     [
@@ -1139,6 +1146,7 @@ def _lru_cached_functions(package_root: Path) -> dict[tuple[str, str], str]:
     return cached
 
 
+@pytest.mark.smoke
 def test_capability_dependent_caches_are_cleared() -> None:
     """Every probe-derived lru_cache must be in the conftest clear list.
 
@@ -1186,6 +1194,7 @@ def test_capability_dependent_caches_are_cleared() -> None:
     )
 
 
+@pytest.mark.smoke
 def test_capability_dependent_cache_clear_actually_clears() -> None:
     """The conftest clear helper empties every declared probe-derived cache."""
 
@@ -1204,6 +1213,7 @@ def test_capability_dependent_cache_clear_actually_clears() -> None:
         assert function.cache_info().currsize == 0, f"{function} survived the probe restore"
 
 
+@pytest.mark.smoke
 def test_usage_stats_gate_arms_on_documented_backstop_spellings() -> None:
     """Every documented broad tier spelling arms the ArgSpec usage gate.
 
@@ -1238,6 +1248,7 @@ def test_usage_stats_gate_arms_on_documented_backstop_spellings() -> None:
     assert not _is_full_usage_stats_run(config("", args=[str(Path(TESTS_DIR) / "sub")]))
 
 
+@pytest.mark.smoke
 def test_serial_marker_is_not_a_budget_exemption() -> None:
     """A serial item resolves its tier budget; only slow/rare stay exempt.
 
@@ -1306,6 +1317,7 @@ def _pyproject_declared_markers() -> dict[str, str]:
     return declared
 
 
+@pytest.mark.smoke
 def test_marker_algebra_lockstep_with_pyproject() -> None:
     """Every pyproject marker has exactly one algebra role, and vice versa."""
 
@@ -1321,6 +1333,7 @@ def test_marker_algebra_lockstep_with_pyproject() -> None:
     )
 
 
+@pytest.mark.smoke
 def test_marker_algebra_lockstep_is_red_capable() -> None:
     """A planted undeclared/unroled/unknown-role marker each goes red."""
 
@@ -1343,6 +1356,7 @@ def test_marker_algebra_lockstep_is_red_capable() -> None:
     )
 
 
+@pytest.mark.smoke
 def test_selection_markers_are_orthogonal_to_every_tier() -> None:
     """`compo`/`real_model` combine with any tier without a combo violation.
 
@@ -1367,6 +1381,7 @@ def test_selection_markers_are_orthogonal_to_every_tier() -> None:
         assert _tier_combo_violations(SELECTION_MARKERS | {"smoke"}, set(), "planted::node") == []
 
 
+@pytest.mark.smoke
 def test_selection_markers_do_not_alter_tier_resolution() -> None:
     """Tier/budget resolution is blind to selection markers (never an exemption).
 
@@ -1407,6 +1422,7 @@ def test_selection_markers_do_not_alter_tier_resolution() -> None:
         assert _duration_budget_tier(_FakeItem({selection, "slow"})) is None
 
 
+@pytest.mark.smoke
 def test_sessionfinish_budget_tripwire_flips_exit_status(
     request: pytest.FixtureRequest,
 ) -> None:
@@ -1477,6 +1493,7 @@ def test_sessionfinish_budget_tripwire_flips_exit_status(
     assert session.exitstatus == 0
 
 
+@pytest.mark.smoke
 def test_smoke_prefilter_never_hides_a_smoke_test(request: pytest.FixtureRequest) -> None:
     """Every smoke item lives in a file the ``-m smoke`` collection pre-filter keeps.
 
@@ -1506,6 +1523,7 @@ def test_smoke_prefilter_never_hides_a_smoke_test(request: pytest.FixtureRequest
     )
 
 
+@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("markexpr", "disabled", "expected"),
     [
@@ -1539,6 +1557,7 @@ def test_smoke_prefilter_triggers_only_on_smoke_only_expressions(
     assert smoke_prefilter_active(_FakeConfig()) is expected  # type: ignore[arg-type]
 
 
+@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("source", "expected"),
     [
@@ -1560,6 +1579,7 @@ def test_smoke_prefilter_token_detection(tmp_path: Path, source: str, expected: 
     assert source_may_hold_smoke_items(path) is expected
 
 
+@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("item_name", "expected"),
     [
@@ -1590,6 +1610,7 @@ def test_smoke_cells_marks_exactly_the_named_items(item_name: str, expected: boo
     assert item.added == (["smoke"] if expected else [])
 
 
+@pytest.mark.smoke
 def test_smoke_tier_stays_under_its_size_ceiling(request: pytest.FixtureRequest) -> None:
     """A pre-filtered smoke session selects at most ``SMOKE_TIER_SIZE_CEILING`` items.
 

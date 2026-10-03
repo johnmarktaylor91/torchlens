@@ -372,7 +372,6 @@ def _relative(path: Path) -> str:
     return path.relative_to(_REPO_ROOT).as_posix()
 
 
-@pytest.mark.smoke
 def test_no_removed_spelling_creeps_back() -> None:
     """Every hit outside the audited ledger is a resurrection defect."""
 
