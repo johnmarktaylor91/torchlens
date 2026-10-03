@@ -13,6 +13,12 @@ while its backup/restore machinery is still armed); directory fsyncs are
 best-effort because some platforms/filesystems cannot open or fsync a
 directory handle (for example Windows), where the rename itself is the best
 available guarantee.
+
+On Windows ``os.fsync`` is ``_commit`` -> ``FlushFileBuffers``, which requires a
+handle opened with write access: fsyncing a read-only descriptor fails with
+``EBADF`` ("Bad file descriptor"). Files are therefore reopened read-write
+there (binary mode, no truncation); POSIX keeps the read-only open, which also
+works on files whose mode bits forbid writing.
 """
 
 from __future__ import annotations
@@ -21,6 +27,25 @@ import os
 from pathlib import Path
 
 __all__ = ["fsync_file", "fsync_dir", "fsync_tree"]
+
+# Module attribute (not an inline ``os.name`` check) so Linux regression tests can
+# exercise the Windows open semantics without patching ``os.name`` process-wide.
+_FLUSH_NEEDS_WRITE_HANDLE = os.name == "nt"
+
+
+def _fsync_open_flags() -> int:
+    """Return the ``os.open`` flags for a descriptor that ``os.fsync`` accepts.
+
+    Returns
+    -------
+    int
+        ``O_RDWR | O_BINARY`` where flushing needs a write handle (Windows),
+        else ``O_RDONLY``.
+    """
+
+    if _FLUSH_NEEDS_WRITE_HANDLE:
+        return os.O_RDWR | getattr(os, "O_BINARY", 0)
+    return os.O_RDONLY
 
 
 def fsync_file(path: Path) -> None:
@@ -32,23 +57,38 @@ def fsync_file(path: Path) -> None:
         File whose contents must be durable. Failures propagate as ``OSError``.
     """
 
-    fd = os.open(path, os.O_RDONLY)
+    fd = os.open(path, _fsync_open_flags())
     try:
         os.fsync(fd)
     finally:
         os.close(fd)
 
 
-def fsync_dir(path: Path) -> None:
-    """Best-effort flush of a directory entry (new/renamed children) to disk.
+def fsync_dir(path: Path, *, strict: bool = False) -> None:
+    """Flush a directory's entries (new/renamed children) to disk.
+
+    Best-effort by default; ``strict=True`` propagates failures where possible.
 
     Parameters
     ----------
     path:
         Directory whose entries (created files, completed renames) should be
         durable. A platform that cannot open or fsync directories is skipped.
+    strict:
+        When True, open/fsync failures propagate on platforms that expose
+        directory handles (``os.O_DIRECTORY`` exists); platforms without them
+        (Windows) are still skipped, since the rename is all they offer.
     """
 
+    if strict:
+        if not hasattr(os, "O_DIRECTORY"):
+            return
+        fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        return
     try:
         fd = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
     except OSError:

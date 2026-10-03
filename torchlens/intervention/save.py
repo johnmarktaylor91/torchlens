@@ -17,6 +17,7 @@ import torch
 from safetensors.torch import load_file, save_file
 
 from .._errors import InvalidArgumentError
+from .._io._durability import fsync_dir, fsync_file
 from .._io._json import read_bounded
 from .._io.manifest import TensorEntry, sha256_of_file
 from .._io.paths import reject_symlink_path
@@ -1921,6 +1922,8 @@ def _write_tlspec_tensor_blob(
     """
 
     contiguous = tensor.contiguous()
+    if contiguous.device.type != "cpu":
+        contiguous = contiguous.cpu()
     relative_path = Path(_TENSOR_DIR) / f"{blob_id}.safetensors"
     blob_path = tmp_path / relative_path
     save_file({_BLOB_TENSOR_KEY: contiguous}, str(blob_path))
@@ -2223,7 +2226,7 @@ def _read_json_file(path: Path) -> dict[str, Any]:
 
 
 def _fsync_file(path: Path) -> None:
-    """Fsync an existing file.
+    """Fsync an existing file (write-capable handle on Windows; see ``_durability``).
 
     Parameters
     ----------
@@ -2231,15 +2234,14 @@ def _fsync_file(path: Path) -> None:
         File path.
     """
 
-    fd = os.open(path, os.O_RDONLY)
-    try:
-        os.fsync(fd)
-    finally:
-        os.close(fd)
+    fsync_file(path)
 
 
 def _fsync_directory(path: Path) -> None:
     """Fsync a directory when the platform allows it.
+
+    Failures propagate where directory handles exist; Windows has none and is
+    skipped (``fsync_dir(strict=True)``).
 
     Parameters
     ----------
@@ -2247,11 +2249,7 @@ def _fsync_directory(path: Path) -> None:
         Directory path.
     """
 
-    fd = os.open(path, os.O_RDONLY)
-    try:
-        os.fsync(fd)
-    finally:
-        os.close(fd)
+    fsync_dir(path, strict=True)
 
 
 def _readme_text(spec_json: dict[str, Any], tensor_entries: list[TensorEntry]) -> str:

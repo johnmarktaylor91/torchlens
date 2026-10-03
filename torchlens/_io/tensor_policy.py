@@ -41,6 +41,12 @@ _SPARSE_LAYOUTS = {
     getattr(torch, "sparse_bsr", object()),
     getattr(torch, "sparse_bsc", object()),
 }
+# Device types whose payloads the writers move to host memory before
+# ``safetensors.torch.save_file`` (blobs are always host bytes; ``device_at_save``
+# records the origin and load places by ``map_location``). MPS is the device the
+# macOS platform canary exercises; every writer copies non-CPU tensors to CPU
+# explicitly rather than relying on the third-party writer's internal move.
+_SUPPORTED_DEVICE_TYPES = frozenset({"cpu", "cuda", "mps"})
 _SUPPORTED_DTYPES = {
     torch.float16,
     torch.bfloat16,
@@ -126,7 +132,7 @@ def _unsupported_reason(tensor: torch.Tensor) -> str | None:
     complex32_dtype = getattr(torch, "complex32", None)
     if complex32_dtype is not None and tensor.dtype == complex32_dtype:
         return "complex32 tensors are not supported this release"
-    if tensor.device.type not in {"cpu", "cuda"}:
+    if tensor.device.type not in _SUPPORTED_DEVICE_TYPES:
         return f"{tensor.device.type} tensors are not supported this release"
     if tensor.dtype not in _SUPPORTED_DTYPES:
         return f"dtype {tensor.dtype} is not supported this release"
