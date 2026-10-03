@@ -201,7 +201,9 @@ def test_direct_out_write_warns_once_and_marks_dirty() -> None:
     assert warnings_record == []
 
 
-@pytest.mark.smoke
+# Heavy, not smoke: 11.3-12.4 s CPU on GitHub rows (2026-10-03), about 6 s at
+# reference speed, past the smoke tier's 5 s rule.
+@pytest.mark.heavy
 def test_do_dispatch_replay_rerun_set_only_and_top_level_alias() -> None:
     """``do`` dispatches to replay, rerun, set-only, and top-level alias paths."""
 
