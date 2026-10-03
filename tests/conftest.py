@@ -1428,7 +1428,7 @@ def _defaults_with_replacement(func: Any, param_name: str, value: object) -> tup
 
 
 @pytest.fixture(autouse=True)
-def _draw_default_outpath_in_tmp_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def _draw_default_outpath_in_tmp_path(tmp_path: Path) -> Iterator[None]:
     """Redirect every ``vis_outpath``-defaulting draw entrypoint into ``tmp_path``.
 
     ``Trace.draw`` / ``draw_backward`` / ``draw_combined`` /
@@ -1449,15 +1449,26 @@ def _draw_default_outpath_in_tmp_path(tmp_path: Path, monkeypatch: pytest.Monkey
     this only changes what a test gets when it supplies nothing.
     ``tests/test_draw_default_outpath_repo_root_guard.py`` is the regression
     test for this fixture.
+
+    The defaults are swapped and restored by hand rather than through the
+    shared ``monkeypatch`` fixture: requesting ``monkeypatch`` from an autouse
+    fixture instantiates it before the later autouse fixtures, so a test's
+    own ``monkeypatch`` undo would then run after their teardown (it made
+    ``_restore_distributed_arming`` disarm a test's monkeypatched state).
     """
 
-    for owner, method_name, basename in _DRAW_DEFAULT_OUTPATH_TARGETS:
-        func = getattr(owner, method_name)
-        monkeypatch.setattr(
-            func,
-            "__defaults__",
-            _defaults_with_replacement(func, "vis_outpath", str(tmp_path / basename)),
-        )
+    saved: list[tuple[Any, tuple[object, ...] | None]] = []
+    try:
+        for owner, method_name, basename in _DRAW_DEFAULT_OUTPATH_TARGETS:
+            func = getattr(owner, method_name)
+            saved.append((func, func.__defaults__))
+            func.__defaults__ = _defaults_with_replacement(
+                func, "vis_outpath", str(tmp_path / basename)
+            )
+        yield
+    finally:
+        for func, defaults in reversed(saved):
+            func.__defaults__ = defaults
 
 
 @pytest.fixture
