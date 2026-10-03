@@ -27,6 +27,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from benchmarks.host_label import benchmark_host_label  # noqa: E402
 from benchmarks.perf_models import (  # noqa: E402
     build_tiny_dummy,
     input_summary,
@@ -153,7 +154,7 @@ def _env_metadata(device: str) -> dict[str, Any]:
     return {
         "python": sys.version.replace("\n", " "),
         "platform": platform.platform(),
-        "hostname": platform.node(),
+        "hostname": benchmark_host_label(),
         "cpu_model": _cpu_model(),
         "cpu_count": os.cpu_count(),
         "load_average_1m": load_average_1m,

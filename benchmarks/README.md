@@ -24,6 +24,9 @@ Supporting files:
 - `perf_peers.py` contains peer-tool hook/capture implementations and structured
   import skips.
 - `perf_runner.py` executes one timing or memory pass cell and writes JSON.
+- `host_label.py` names the machine in every record: the `hostname` field holds
+  `TORCHLENS_BENCH_HOST_LABEL` (default `benchmark-host`), never the real hostname, and
+  captured output spells the checkout as `<repo>`.
 
 ## Intervention overhead
 

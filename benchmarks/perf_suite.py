@@ -21,6 +21,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from benchmarks.host_label import benchmark_host_label, redact_local_paths  # noqa: E402
 from benchmarks.op_ownership import is_torchlens_operation  # noqa: E402
 from benchmarks.perf_gate import (  # noqa: E402
     compare_gate_payloads,
@@ -174,7 +175,7 @@ def _git_sha() -> str | None:
 
 
 def _redact_subprocess_tail(text: str) -> str:
-    """Redact long hex strings from subprocess output tails.
+    """Redact long hex strings and local paths from subprocess output tails.
 
     Parameters
     ----------
@@ -184,10 +185,10 @@ def _redact_subprocess_tail(text: str) -> str:
     Returns
     -------
     str
-        Output with high-entropy hashes replaced.
+        Output with high-entropy hashes replaced and the checkout spelled ``<repo>``.
     """
 
-    return LONG_HEX_RE.sub("<hex-redacted>", text)
+    return redact_local_paths(LONG_HEX_RE.sub("<hex-redacted>", text), REPO_ROOT)
 
 
 def _cuda_core_models() -> list[str]:
@@ -1018,7 +1019,7 @@ def _hooked_smoke(timeout: int, threads: int) -> dict[str, Any]:
         timeout=timeout,
         tag="hooked_smoke",
         threads=threads,
-    ) | {"smoke": "hooked_transformer_tl_capture", "out": str(out)}
+    ) | {"smoke": "hooked_transformer_tl_capture", "out": redact_local_paths(str(out), REPO_ROOT)}
 
 
 def parse_args() -> argparse.Namespace:
@@ -1205,7 +1206,7 @@ def main() -> None:
             "smoke": args.smoke,
             "wall_clock_s": addendum_wall_clock_s,
             "environment": {
-                "hostname": platform.node(),
+                "hostname": benchmark_host_label(),
                 "os": f"{platform.system()} {platform.release()}",
                 "cpu_model": _cpu_model(),
                 "torch_threads_pin": args.threads,
