@@ -560,26 +560,11 @@ def _sample_param_toctou_at_consumption(
     return False
 
 
-def _has_no_host_bytes(source: torch.Tensor) -> bool:
-    """Whether ``source`` is storage-less (meta), so no host write can reach it.
-
-    A meta tensor has no bytes: no host alias of it can exist and no byte
-    comparison can run on it. A failed comparison there is "cannot know",
-    never an observed write, and only an observed divergence may raise the
-    opaque host-write flag (W1-FAB, the rule ``_reconcile_journaled_buffer``
-    already follows). Real tensors keep the fail-closed comparison.
-    """
-
-    return source.device.type == "meta"
-
-
 def _param_baseline_differs(
     state: _WitnessState, snapshots: dict[str, Any], address: str, source: torch.Tensor
 ) -> bool:
     """Compare one consumed param's whole-storage bytes against its pre-forward baseline."""
 
-    if _has_no_host_bytes(source):
-        return False
     baseline = snapshots.get(address)
     if not isinstance(baseline, tuple) or not baseline:
         return False
@@ -642,8 +627,6 @@ def _buffer_expected_differs(
 ) -> bool:
     """Compare one consumed buffer's whole-storage bytes against its journal-advanced bytes."""
 
-    if _has_no_host_bytes(source):
-        return False
     expected = snapshots.get(address)
     if not isinstance(expected, torch.Tensor):
         return False

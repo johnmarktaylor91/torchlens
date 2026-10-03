@@ -317,7 +317,13 @@ def _trace_shape_summary(log) -> list[tuple[str, object]]:
 class TestZeroInterferenceGate:
     @requires_vetted_snapshot
     def test_zi1_armed_on_vs_off_dense_capture_identical(self):
-        """ZI-1: arming changes NOTHING about a dense non-distributed capture."""
+        """ZI-1: arming changes NOTHING about a dense non-distributed capture.
+
+        The armed leg runs inside a single-rank gloo group on purpose: armed state is
+        dormant by design while no process group is initialized (plane-P observes only
+        captures that could issue collectives), so a groupless armed leg would measure
+        the unarmed path.
+        """
 
         from torchlens._capture_fingerprint import _fingerprint_model_content
 
@@ -442,6 +448,14 @@ class TestZeroInterferenceSuiteAndPerf:
         return summaries
 
     def test_zi2_named_subset_identical_armed_off_then_on(self, tmp_path):
+        """ZI-2: the named subset is identical armed off, then on.
+
+        The armed leg runs inside a single-rank gloo group on purpose: armed state is
+        dormant by design while no process group is initialized (plane-P observes only
+        captures that could issue collectives), so a groupless armed leg would measure
+        the unarmed path.
+        """
+
         lifecycle.disarm()
         off = self._zi2_run_subset(tmp_path, "off")
         with _single_rank_group():
@@ -451,7 +465,12 @@ class TestZeroInterferenceSuiteAndPerf:
 
     def test_zi3_armed_overhead_inside_p2_gate(self):
         """ZI-3: armed-ON overhead on the A1 workload stays inside P2's
-        blocking 10% gate (P2 owns the ceiling; asserted, not invented)."""
+        blocking 10% gate (P2 owns the ceiling; asserted, not invented).
+
+        The armed leg runs inside a single-rank gloo group on purpose: armed state is
+        dormant by design while no process group is initialized (plane-P observes only
+        captures that could issue collectives), so a groupless armed leg would measure
+        the unarmed path."""
 
         from tests.test_perf_capture_ab import GATE_CEILING_FRACTION
 
@@ -498,6 +517,14 @@ class TestZeroInterferenceSuiteAndPerf:
 @requires_vetted_snapshot
 class TestGroupAControlsWave0:
     def test_a1_dense_armed_on_zi_baseline_criterion1_green(self, single_rank_world):
+        """A1 wave 0: the armed dense anchor is criterion-1 green, never row green.
+
+        The armed leg runs inside a single-rank gloo group on purpose: armed state is
+        dormant by design while no process group is initialized (plane-P observes only
+        captures that could issue collectives), so a groupless armed leg would measure
+        the unarmed path.
+        """
+
         lifecycle.disarm()
         lifecycle.arm()
         try:
@@ -921,7 +948,12 @@ class TestGroupCRefusalParity:
 class TestWave1FullCriteria:
     def test_a1_full_criteria_is_the_first_row_green(self, single_rank_world):
         """A1 re-run to FULL criteria: the zero-interference anchor must be
-        row green (all four criteria, floors, ZI conjunct)."""
+        row green (all four criteria, floors, ZI conjunct).
+
+        The armed leg runs inside a single-rank gloo group on purpose: armed state is
+        dormant by design while no process group is initialized (plane-P observes only
+        captures that could issue collectives), so a groupless armed leg would measure
+        the unarmed path."""
 
         lifecycle.disarm()
         lifecycle.arm()
@@ -1164,6 +1196,14 @@ class TestGroupNSelfHonesty:
 @requires_vetted_snapshot
 class TestWave0ReportEmission:
     def test_wave0_report_end_to_end(self, tmp_path):
+        """The wave-0 report emits end to end; its A1 row is armed in a live group.
+
+        The armed leg runs inside a single-rank gloo group on purpose: armed state is
+        dormant by design while no process group is initialized (plane-P observes only
+        captures that could issue collectives), so a groupless armed leg would measure
+        the unarmed path.
+        """
+
         with _single_rank_group():
             lifecycle.arm()
             a1 = run_census_row(

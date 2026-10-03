@@ -37,7 +37,12 @@ from torchlens.types import FailureOrigin
 
 @pytest.fixture
 def armed_process(tmp_path: Path) -> Iterator[None]:
-    """Arm distributed capture lazily under a one-rank gloo group, then drop the group."""
+    """Arm distributed capture lazily under a LIVE one-rank gloo group.
+
+    The group stays initialized for the whole test: armed state is dormant
+    without one (plane-P only observes captures that could issue collectives),
+    so only a live group puts the dispatch mode around the captures under test.
+    """
 
     if not torch.distributed.is_available() or torch.distributed.is_initialized():
         pytest.skip("needs torch.distributed and no pre-existing process group")
@@ -50,14 +55,14 @@ def armed_process(tmp_path: Path) -> Iterator[None]:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             tl.trace(nn.Linear(2, 2), torch.randn(1, 2))
-    finally:
-        torch.distributed.destroy_process_group()
-    if not _lifecycle.is_armed():
-        pytest.skip("lazy arming refused on this torch build (unvetted recognizer)")
-    try:
+        if not _lifecycle.is_armed():
+            pytest.skip("lazy arming refused on this torch build (unvetted recognizer)")
+        assert _lifecycle.capture_armed_state() is not None
         yield
     finally:
         _lifecycle.disarm()
+        if torch.distributed.is_initialized():
+            torch.distributed.destroy_process_group()
 
 
 @pytest.mark.usefixtures("armed_process")
@@ -66,6 +71,7 @@ def test_weightsfree_capture_with_buffers_settles_while_armed() -> None:
     x = torch.randn(1, 3, 8, 8)
     tr_real = tl.trace(real, x)
     tr_meta = weightsfree_trace(meta, meta_like(x))
+    assert tr_meta._distributed_plane_p is not None, "the dispatch mode must be exercised"
     assert_gate(tr_real, tr_meta, "conv_bn_pool")
 
 

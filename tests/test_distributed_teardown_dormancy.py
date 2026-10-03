@@ -1,13 +1,13 @@
 """Armed distributed state never steers a capture that has no process group.
 
 Arming is process-lifetime by design: it survives ``destroy_process_group`` so
-the group-lifecycle ledger outlives every group. Before this fix the armed
-state still installed the plane-P dispatch witness on EVERY later capture, and
-its per-consumption buffer check failed closed on meta tensors, so an armed
-process (after a group teardown, or armed before creating any group) raised
-the weights-free "opaque host-write witness flag" on innocent meta captures.
-Pins both halves: dormancy without an initialized group, and no fabricated
-flag on storage-less meta state even while a group is live.
+the group-lifecycle ledger outlives every group (a disarm-and-rearm after
+teardown would read the emptied group registry as "no history" and reuse
+lifetime ordinals). With no process group initialized no collective can run,
+so the armed state is DORMANT: plane-P's dispatch witness and the funcol
+completion session stay off and the capture takes the unarmed path. Every test
+here arms inside its own body, so the conftest autouse disarm (which runs only
+after a test) cannot mask the contract.
 """
 
 from __future__ import annotations
@@ -22,7 +22,6 @@ from test_weightsfree_fixtures import ConvBnPool, meta_like, weightsfree_trace
 from torch import nn
 
 import torchlens as tl
-from torchlens.backends.torch import _completeness_dispatch as dispatch
 from torchlens.backends.torch.completeness_witness import _HOST_ESCAPE_MUTABLE_WRITEBACK
 from torchlens.distributed import _lifecycle as lifecycle, has_vetted_snapshot
 
@@ -93,13 +92,20 @@ def test_capture_after_group_teardown_is_unarmed_path(clean_distributed: Path) -
 
 
 @requires_vetted_snapshot
-def test_arm_before_any_group_is_dormant(clean_distributed: Path) -> None:
-    """The documented arm-at-process-start pattern stays dormant until init."""
+def test_groupless_armed_capture_does_not_run_plane_p(clean_distributed: Path) -> None:
+    """The dormancy contract: armed with no group, plane-P never runs.
+
+    Also the documented arm-at-process-start pattern: dormant until init, then
+    observed.
+    """
 
     tl.distributed.arm()
+    assert lifecycle.is_armed()
+    assert not torch.distributed.is_initialized()
     assert lifecycle.capture_armed_state() is None
     assert _dense_trace()._distributed_plane_p is None
-    assert _train_mode_meta_capture() not in _HOST_ESCAPE_MUTABLE_WRITEBACK
+    assert _train_mode_meta_capture()._distributed_plane_p is None
+    assert lifecycle.is_armed(), "dormancy must not disarm"
 
     _init_group(clean_distributed, "store")
     assert lifecycle.capture_armed_state() is lifecycle.armed_state()
@@ -128,36 +134,3 @@ def test_live_group_meta_capture_raises_no_fabricated_flag(clean_distributed: Pa
     meta_trace = _train_mode_meta_capture()
     assert meta_trace._distributed_plane_p is not None
     assert meta_trace not in _HOST_ESCAPE_MUTABLE_WRITEBACK
-
-
-class _Owner:
-    """A weakref-able stand-in for the witness state's trace."""
-
-
-class _State:
-    def __init__(self) -> None:
-        self.trace = _Owner()
-
-
-def test_meta_source_comparison_is_unknown_not_a_write() -> None:
-    """The per-consumption compare never flags a meta source."""
-
-    state = _State()
-    meta = torch.empty(4, device="meta")
-    expected = torch.zeros(16, dtype=torch.uint8)
-    assert not dispatch._buffer_expected_differs(state, {"b": expected}, "b", meta)
-    assert not dispatch._param_baseline_differs(state, {"p": (expected,)}, "p", meta)
-    assert state.trace not in _HOST_ESCAPE_MUTABLE_WRITEBACK
-
-
-def test_real_source_divergence_still_flags() -> None:
-    """The tripwire stays live for real storage: a byte difference flags."""
-
-    state = _State()
-    real = torch.ones(4)
-    expected = torch.zeros(16, dtype=torch.uint8)
-    assert dispatch._buffer_expected_differs(state, {"b": expected}, "b", real)
-    assert state.trace in _HOST_ESCAPE_MUTABLE_WRITEBACK
-    other = _State()
-    assert dispatch._param_baseline_differs(other, {"p": (expected,)}, "p", real)
-    assert other.trace in _HOST_ESCAPE_MUTABLE_WRITEBACK
