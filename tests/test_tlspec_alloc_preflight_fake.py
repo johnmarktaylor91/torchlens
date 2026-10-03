@@ -82,8 +82,10 @@ class _HugeView(nn.Module):
         return wide[0].sum() + x.sum()
 
 
-def _build(tmp_path: Path, name: str, model: nn.Module, x: torch.Tensor) -> Path:
-    trace = tl.trace(model.eval(), x, **_CAPTURE)
+def _build(
+    tmp_path: Path, name: str, model: nn.Module, x: torch.Tensor, **trace_kwargs: Any
+) -> Path:
+    trace = tl.trace(model.eval(), x, **_CAPTURE, **trace_kwargs)
     bundle = tmp_path / name
     tl.save(trace, str(bundle), level="runnable", include_weights=True)
     return bundle
@@ -454,7 +456,11 @@ def test_genuinely_huge_view_model_runs_verified(tmp_path: Path) -> None:
     VERIFIED -- the alloc preflight charges 0 new bytes for it (r51 over-catch avoided)."""
 
     x = torch.randn(1, 4)
-    bundle = _build(tmp_path, "huge_view.tlspec", _HugeView(), x)
+    # Retain no activations: the runnable save is tensor-value-free, and the default
+    # exhaustive capture would materialize a contiguous copy of the 4e8-element view
+    # (~1.6 GB), which trips the host-dependent save budget on a busy CI runner.
+    # The subject here is the RUN-time alloc preflight, not capture retention.
+    bundle = _build(tmp_path, "huge_view.tlspec", _HugeView(), x, save=tl.func("relu"))
     result = tl.load(str(bundle)).run(inputs=x.clone())
     assert result.report.path_faithfulness.value == "verified"
 
