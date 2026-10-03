@@ -350,6 +350,9 @@ def _big_slot(shape: tuple[int, ...], dtype: str) -> TensorSlotDescriptor:
     )
 
 
+# Serial: the preflight reads process- and machine-wide available memory, so
+# parallel xdist workers holding memory can starve this 2.20 GiB slot.
+@pytest.mark.serial
 def test_legit_large_model_slot_passes_preflight() -> None:
     """A 2.20 GiB slot (Gemma-2-27B embed) passes the preflight -- pins no-static-cap."""
 
