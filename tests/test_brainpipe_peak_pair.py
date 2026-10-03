@@ -76,9 +76,8 @@ def test_peak_pair_is_session_time_only() -> None:
 
 
 # ``serial``, not ``smoke``: the resident delta is the process RSS high-water
-# mark, and under xdist the other workers' memory pressure makes the kernel
-# reclaim this worker's cold pages mid-capture, so RSS can fall by more than
-# the capture adds and the honest per-capture delta reads 0.
+# mark, which only another process's memory pressure can disturb (kernel
+# reclaim of this process's cold pages mid-capture can offset the growth).
 @pytest.mark.serial
 @pytest.mark.skipif(sys.platform != "linux", reason="VmHWM reset is procfs-only")
 def test_multi_capture_resident_peak_is_non_degenerate() -> None:
