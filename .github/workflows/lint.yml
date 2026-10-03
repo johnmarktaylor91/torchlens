@@ -4,6 +4,11 @@ on:
   workflow_call:
   pull_request:
     branches: [main]
+  # Work branches named ci/** run the full workflow on push (and any branch
+  # on manual dispatch) so GitHub's own runners test a branch before main.
+  push:
+    branches: ["ci/**"]
+  workflow_dispatch:
 
 # Default-deny token scope (grind r3, R61/b2:D1): every job in this
 # workflow only reads the repo, so the GITHUB_TOKEN gets exactly that.

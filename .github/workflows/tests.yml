@@ -4,6 +4,11 @@ on:
   workflow_call:
   pull_request:
     branches: [main]
+  # Work branches named ci/** run the full workflow on push (and any branch
+  # on manual dispatch) so GitHub's own runners test a branch before main.
+  push:
+    branches: ["ci/**"]
+  workflow_dispatch:
 
 # Default-deny token scope (grind r3, R61/b2:D1): every job in this
 # workflow only reads the repo, so the GITHUB_TOKEN gets exactly that.
@@ -219,8 +224,13 @@ jobs:
         if: matrix.scope == 'smoke'
         env:
           TORCHLENS_ORACLE_ENFORCE: ${{ matrix.oracle_enforce }}
+          # One torch thread per xdist worker: intra-op threads on top of
+          # four workers oversubscribe the runner and inflate the duration
+          # tripwire's measurements (lane L15). The tripwire aggregates
+          # across workers, so it stays armed under -n.
+          OMP_NUM_THREADS: "1"
         run: |
-          pytest tests/ -m smoke --tb=short -q \
+          pytest tests/ -m smoke -n 4 --tb=short -q \
             --junitxml="${{ runner.temp }}/smoke.junit.xml"
           pytest tests/test_torch_compat.py --tb=short -q
 
