@@ -180,8 +180,10 @@ from ._tl import (
     get_tensor_meta,
     is_tensor_data_alias,
     mark_detached_saved_activation,
+    pop_same_object_mutation,
     session_label_storage_intact,
     session_meta_is_anchored,
+    set_same_object_mutation,
     set_tensor_label,
 )
 from .aliasing import (
