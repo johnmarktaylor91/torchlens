@@ -15,7 +15,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from collections.abc import Sequence
+
+# Pin the CPU kernel paths BEFORE torch loads (ATen reads its capability and
+# MKL its reproducibility branch at first use), exactly as the sibling
+# capture-oracle worker does. The dumps hash raw float bytes, and conv/linear
+# results otherwise follow the host's ISA: goldens recorded on AVX-512 Xeons
+# failed the enforcing Tests row on GitHub's runners with identical inputs and
+# code. AVX2 is the common floor of every x86 runner; MKL_CBWR=COMPATIBLE is
+# MKL's cross-processor reproducible branch.
+os.environ["ATEN_CPU_CAPABILITY"] = "avx2"
+os.environ["MKL_CBWR"] = "COMPATIBLE"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -46,6 +57,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     torch.set_num_threads(1)
     torch.use_deterministic_algorithms(True, warn_only=True)
+    # oneDNN JIT-selects its ISA per host and ignores ATEN_CPU_CAPABILITY;
+    # route conv through the ATen/MKL path the pins above make reproducible.
+    torch.backends.mkldnn.enabled = False
 
     from surface_oracle._snapshot import canonical_dump
     from surface_oracle._stages import build_stage_snapshots, prebuild_model_cases
