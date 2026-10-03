@@ -3160,11 +3160,8 @@ def _write_tensor_blob(
         Manifest tensor entry for the written blob.
     """
 
-    contiguous_tensor = tensor.resolve_conj().resolve_neg().contiguous()
-    if contiguous_tensor.device.type != "cpu":
-        # Blobs are host bytes: move accelerator payloads (cuda, mps) to CPU here
-        # instead of relying on the safetensors writer to do it.
-        contiguous_tensor = contiguous_tensor.cpu()
+    # Blobs are host bytes: ``.cpu()`` moves cuda/mps payloads (no-op on CPU).
+    contiguous_tensor = tensor.resolve_conj().resolve_neg().contiguous().cpu()
     relative_path = Path("blobs") / f"{blob_id}.safetensors"
     blob_path = tmp_path / relative_path
     save_file({_BLOB_TENSOR_KEY: contiguous_tensor}, str(blob_path))
