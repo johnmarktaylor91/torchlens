@@ -107,11 +107,23 @@ jobs:
       - name: Run slow tests
         # `not rare`: a command-line -m replaces pyproject's `-m 'not rare'`, so a
         # bare `-m slow` also ran every rare+slow test (the 20k-50k node graphs)
-        # here and again in the rare step; the runner was shut down inside
-        # tests/test_large_graphs.py on three consecutive runs (2026-10-03).
+        # here and again in the rare step.
+        #
+        # One pytest process per file (not one process for the whole tier):
+        # a single long-lived process running every slow test accumulates
+        # memory across the whole run, and the runner was killed by the host
+        # partway through tests/test_real_world_models.py on three
+        # consecutive runs (2026-10-03). A fresh interpreter per file lets
+        # the OS reclaim that memory between files; the per-file junit
+        # reports are merged into one file so the executed-test floor check
+        # below is unchanged. Known real-world-model failures are a round-2
+        # item -- this only bounds memory, it does not mask them (a failing
+        # file still fails this step).
         run: |
-          pytest tests/ -m "slow and not rare" --tb=short \
-            --junitxml="${{ runner.temp }}/weekly-slow.junit.xml"
+          python scripts/run_pytest_per_file_sharded.py tests/ \
+            --marker "slow and not rare" \
+            --junit-dir "${{ runner.temp }}/weekly-slow-per-file" \
+            --combined-junit "${{ runner.temp }}/weekly-slow.junit.xml"
 
       - name: Run rare tests
         run: |
