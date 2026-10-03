@@ -184,8 +184,14 @@ jobs:
           # "always excluded unless explicitly requested". Conjoin `not rare` to
           # preserve that contract. `serial` tests (load- or memory-sensitive)
           # are excluded from the xdist run and run afterwards without it.
-          pytest tests/ -m "not slow and not rare and not serial" -n 4 --tb=short \
+          # The heavy (5-20 s) tests run in their own invocation with fresh,
+          # fewer workers: one long -n 4 session over the whole tier grew the
+          # workers' memory until the runner was shut down (85-99% through,
+          # twice, 2026-10-03).
+          pytest tests/ -m "not slow and not rare and not serial and not heavy" -n 4 --tb=short \
             --junitxml="${{ runner.temp }}/fast-tier.junit.xml"
+          pytest tests/ -m "heavy and not slow and not rare and not serial" -n 2 --tb=short \
+            --junitxml="${{ runner.temp }}/fast-tier-heavy.junit.xml"
           mapfile -t serial_files < <(grep -rlE --include="test_*.py" "mark\.serial" tests)
           pytest "${serial_files[@]}" -m "serial and not slow and not rare" --tb=short -q
 
@@ -196,6 +202,8 @@ jobs:
         # importorskip cascade goes red while normal churn never trips.
         run: |
           python scripts/check_ci_executed_tests.py "${{ runner.temp }}/fast-tier.junit.xml" 6000
+          # Heavy half: ~1,500 tests selected (2026-10-03); floor roughly half.
+          python scripts/check_ci_executed_tests.py "${{ runner.temp }}/fast-tier-heavy.junit.xml" 700
 
       - name: Record skip outcomes
         # r7 R79: skips were invisible in CI output -- an importorskip
