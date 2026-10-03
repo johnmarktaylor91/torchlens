@@ -19,6 +19,9 @@ import json
 import os
 import time
 import warnings
+from collections.abc import Iterator
+from contextlib import contextmanager
+from typing import Any
 
 import pytest
 import torch
@@ -76,9 +79,14 @@ def _dense_input() -> torch.Tensor:
     return torch.randn(2, 4)
 
 
-@pytest.fixture()
-def single_rank_world():
-    """Single-rank CPU gloo world with guaranteed disarm + teardown."""
+@contextmanager
+def _single_rank_group() -> Iterator[Any]:
+    """Single-rank CPU gloo world with guaranteed disarm + teardown.
+
+    Armed state is dormant while no process group is initialized (plane-P and
+    the funcol session only observe captures that could issue collectives), so
+    every armed leg that must exercise the real plane-P path runs inside one.
+    """
 
     import socket
 
@@ -95,10 +103,10 @@ def single_rank_world():
         probe.bind(("127.0.0.1", 0))
         os.environ["MASTER_PORT"] = str(probe.getsockname()[1])
     try:
-        dist.init_process_group(backend="gloo", rank=0, world_size=1)
-    except (OSError, RuntimeError, ValueError) as error:  # pragma: no cover - environment dependent
-        pytest.skip(f"gloo init failed: {error}")
-    try:
+        try:
+            dist.init_process_group(backend="gloo", rank=0, world_size=1)
+        except (OSError, RuntimeError, ValueError) as error:  # pragma: no cover - env dependent
+            pytest.skip(f"gloo init failed: {error}")
         yield dist
     finally:
         lifecycle.disarm()
@@ -109,6 +117,14 @@ def single_rank_world():
                 os.environ.pop(key, None)
             else:
                 os.environ[key] = value
+
+
+@pytest.fixture()
+def single_rank_world() -> Iterator[Any]:
+    """Single-rank CPU gloo world with guaranteed disarm + teardown."""
+
+    with _single_rank_group() as dist:
+        yield dist
 
 
 @pytest.fixture()
@@ -312,11 +328,10 @@ class TestZeroInterferenceGate:
         content_before = _fingerprint_model_content(model)
 
         log_off = tl.trace(model, x)
-        lifecycle.arm()
-        try:
+        with _single_rank_group():
+            lifecycle.arm()
             log_on = tl.trace(model, x)
-        finally:
-            lifecycle.disarm()
+            assert log_on._distributed_plane_p is not None, "armed leg must run plane-P"
 
         assert _trace_shape_summary(log_off) == _trace_shape_summary(log_on)
         assert torch.equal(log_off.output_ops[0].out, log_on.output_ops[0].out)
@@ -429,11 +444,9 @@ class TestZeroInterferenceSuiteAndPerf:
     def test_zi2_named_subset_identical_armed_off_then_on(self, tmp_path):
         lifecycle.disarm()
         off = self._zi2_run_subset(tmp_path, "off")
-        lifecycle.arm()
-        try:
+        with _single_rank_group():
+            lifecycle.arm()
             on = self._zi2_run_subset(tmp_path, "on")
-        finally:
-            lifecycle.disarm()
         assert off == on
 
     def test_zi3_armed_overhead_inside_p2_gate(self):
@@ -460,11 +473,9 @@ class TestZeroInterferenceSuiteAndPerf:
             lifecycle.disarm()
             tl.trace(model, x)  # warmup
             off = median_capture_seconds(reps)
-            lifecycle.arm()
-            try:
+            with _single_rank_group():
+                lifecycle.arm()
                 on = median_capture_seconds(reps)
-            finally:
-                lifecycle.disarm()
             return off, on
 
         off, on = measure(reps=7)
@@ -486,7 +497,7 @@ class TestZeroInterferenceSuiteAndPerf:
 @pytest.mark.heavy
 @requires_vetted_snapshot
 class TestGroupAControlsWave0:
-    def test_a1_dense_armed_on_zi_baseline_criterion1_green(self):
+    def test_a1_dense_armed_on_zi_baseline_criterion1_green(self, single_rank_world):
         lifecycle.disarm()
         lifecycle.arm()
         try:
@@ -908,7 +919,7 @@ class TestGroupCRefusalParity:
 @pytest.mark.heavy
 @requires_vetted_snapshot
 class TestWave1FullCriteria:
-    def test_a1_full_criteria_is_the_first_row_green(self):
+    def test_a1_full_criteria_is_the_first_row_green(self, single_rank_world):
         """A1 re-run to FULL criteria: the zero-interference anchor must be
         row green (all four criteria, floors, ZI conjunct)."""
 
@@ -1153,9 +1164,8 @@ class TestGroupNSelfHonesty:
 @requires_vetted_snapshot
 class TestWave0ReportEmission:
     def test_wave0_report_end_to_end(self, tmp_path):
-        lifecycle.disarm()
-        lifecycle.arm()
-        try:
+        with _single_rank_group():
+            lifecycle.arm()
             a1 = run_census_row(
                 "A1",
                 _dense_model,
@@ -1163,8 +1173,6 @@ class TestWave0ReportEmission:
                 content_floor=lambda ops: any("mm" in op for op in ops),
                 zi_gate_passed=True,
             )
-        finally:
-            lifecycle.disarm()
         n1_calls = {"n": 0}
 
         def perturbing_factory():
