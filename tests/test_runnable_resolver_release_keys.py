@@ -151,8 +151,41 @@ def test_private_linalg_key_resolves_exactly() -> None:
 
 
 @pytest.mark.smoke
+@pytest.mark.parametrize("name", _FFT_NAMES)
+def test_public_fft_key_resolves_to_the_public_callable(name: str) -> None:
+    """The ``torch.fft`` key form resolves exactly to the same object.
+
+    Producers on torch <= 2.12 mint this public form (the private-to-public alias row
+    applies at capture); torch >= 2.13 mints the private ``torch._C._fft`` form. Both
+    must resolve on every running torch, so artifacts load across the whole range.
+    """
+
+    key = FunctionRegistryKey("torch.fft", name, "function")
+    resolved = runnable_load._resolve_exact_key(key, runnable_load._stock_path_from_key(key))
+    assert resolved is not None
+    func, qualname = resolved
+    # The public attribute may be the installed capture wrapper; compare originals.
+    original = runnable_load._unwrap_decorated(getattr(torch.fft, name))
+    assert runnable_load._unwrap_decorated(func) is original
+    assert qualname == f"torch.fft.{name}"
+
+
+def _minted_fft_key(name: str) -> FunctionRegistryKey:
+    """Return the key the running torch mints for ``torch.fft.<name>`` at capture."""
+
+    return function_registry_key_from_callable(
+        runnable_load._unwrap_decorated(getattr(torch.fft, name))
+    )
+
+
+@pytest.mark.smoke
 def test_fft_keys_resolve_exactly_whatever_the_producer_torch_version() -> None:
-    """FFT readiness does not depend on the recorded producer torch minor."""
+    """FFT readiness does not depend on the recorded producer torch minor.
+
+    The key form is the one the running torch mints (public ``torch.fft`` on torch
+    <= 2.12, private ``torch._C._fft`` on torch >= 2.13); either must resolve exactly
+    whatever producer version the descriptor claims.
+    """
 
     descriptor = build_sparse_run_descriptor(_capture(_FFTFamily().eval(), torch.randn(2, 4, 6)))
     for version in ("2.1.0", descriptor.compatibility.backend_version, "2.99.0"):
@@ -162,9 +195,12 @@ def test_fft_keys_resolve_exactly_whatever_the_producer_torch_version() -> None:
         )
         records = _records_by_qualname(stamped)
         for name in _FFT_NAMES:
-            record = records[f"fft_{name}"]
+            key = _minted_fft_key(name)
+            assert key.qualname in {name, f"fft_{name}"}, key
+            record = records[key.qualname]
             assert record.status is ResolverStatus.RESOLVED_EXACT, (version, record)
-            assert record.provenance == f"exact_getattr:torch._C._fft.fft_{name}"
+            stock_path = runnable_load._stock_path_from_key(key)
+            assert record.provenance == f"exact_getattr:{stock_path}", (version, record)
 
 
 def test_fft_model_loaded_run_is_verified(tmp_path: Path) -> None:
