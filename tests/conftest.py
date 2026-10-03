@@ -782,18 +782,81 @@ def pytest_collection_finish(session: pytest.Session) -> None:
     land post-freeze and are simply scanned as normal.
 
     The shared package-source corpus (``tests/_source_corpus.py``) is
-    prewarmed here, before the freeze, iff a consumer test module was
-    imported during collection: built lazily mid-session its ~270 MB of AST
+    prewarmed here, before the freeze, iff a consumer test module holds a
+    selected test (whole-tree scanners' ``warm_scan_caches()`` likewise run
+    only for modules with a selected test): built lazily mid-session its ~270 MB of AST
     nodes would be scanned by every later gen-2 collection — exactly the
     per-test gc drag this freeze exists to kill.
     """
 
-    del session
+    selected_modules = _selected_test_modules(session)
+    _warm_selected_scan_caches(selected_modules)
     corpus = sys.modules.get("_source_corpus")
-    if corpus is not None:
+    if corpus is not None and any(_uses_source_corpus(m) for m in selected_modules):
         corpus.prewarm()
     gc.collect()
     gc.freeze()
+
+
+def _selected_test_modules(session: pytest.Session) -> list[ModuleType]:
+    """Return each distinct test module that holds at least one SELECTED item.
+
+    Parameters
+    ----------
+    session:
+        Session whose ``items`` are final (after ``-m``/``-k`` deselection).
+
+    Returns
+    -------
+    list[ModuleType]
+        Modules in first-seen order.
+    """
+    seen: dict[int, ModuleType] = {}
+    for item in session.items:
+        module = getattr(item, "module", None)
+        if module is not None:
+            seen.setdefault(id(module), module)
+    return list(seen.values())
+
+
+def _warm_selected_scan_caches(modules: list[ModuleType]) -> None:
+    """Pre-fill whole-tree scan caches for selected modules (uncharged time).
+
+    A module may expose ``warm_scan_caches()`` when its scanners' one-time
+    parse cost (~5-20s of genuine CPU) would otherwise land in whichever of its
+    tests runs first and sit on the duration-budget boundary. Every session
+    that SELECTS a test from such a module warms it (the budget tripwire
+    enforces in every session, targeted runs included); a module whose items
+    were all deselected (e.g. by ``-m smoke``) costs nothing. Runs before
+    ``gc.freeze()`` so the caches land in the frozen generation.
+
+    Parameters
+    ----------
+    modules:
+        Modules holding at least one selected item.
+    """
+    for module in modules:
+        warm = getattr(module, "warm_scan_caches", None)
+        if warm is not None:
+            warm()
+
+
+def _uses_source_corpus(module: ModuleType) -> bool:
+    """Return whether a test module imported names from ``tests/_source_corpus.py``.
+
+    Parameters
+    ----------
+    module:
+        Test module.
+
+    Returns
+    -------
+    bool
+        True when any module global was defined in ``_source_corpus``.
+    """
+    return any(
+        getattr(value, "__module__", None) == "_source_corpus" for value in vars(module).values()
+    )
 
 
 #: A test id embedding an object address (the default repr of a lambda or a
@@ -868,22 +931,6 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         else:
             other_tests.append(item)
     items[:] = other_tests + coverage_tests + lint_tests
-    # Pre-fill whole-tree scan caches during collection (uncharged time): a
-    # module may expose `warm_scan_caches()` when its scanners' one-time parse
-    # cost (~5-8s of genuine CPU) would otherwise land in whichever of its
-    # tests runs first and sit on the duration-budget boundary. UNCONDITIONAL:
-    # the budget tripwire enforces at sessionfinish in EVERY session, so a
-    # targeted run of a scanner module (no marker-lint collected) must warm
-    # too or its first test eats the parse cost and trips the always-on gate.
-    # Only sessions that collected a warm-capable module pay the cost, and
-    # they would pay it inside a charged test window otherwise.
-    warmed: set[int] = set()
-    for item in items:
-        module = getattr(item, "module", None)
-        warm = getattr(module, "warm_scan_caches", None)
-        if warm is not None and id(module) not in warmed:
-            warmed.add(id(module))
-            warm()
 
 
 def _coverage_requested(config: pytest.Config) -> bool:
