@@ -480,7 +480,7 @@ def _enforce_duration_budget_at_sessionfinish(session: pytest.Session, exitstatu
 SMOKE_MARK_TOKEN = re.compile(rb"\bmark\.smoke(?:_cells)?\b")
 
 #: Most items the smoke tier may select. The tier was cut from ~9,900 tests
-#: (28 min) to a coverage-chosen ~1,200 (under 3 min) on 2026-10-02; this
+#: (28 min) to a coverage-chosen ~1,400 (about 3 min) on 2026-10-02; this
 #: ceiling keeps it from regrowing unnoticed. Enforced by
 #: `tests/test_marker_lint.py::test_smoke_tier_stays_under_its_size_ceiling`
 #: and `tests/test_gate_infra_floor_drift.py`. Raise it only with a measured
