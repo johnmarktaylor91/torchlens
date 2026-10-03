@@ -245,6 +245,11 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         ("torchlens/backends/torch/wrappers.py", "_AT_FORK_HYGIENE_INSTALLED"),
         ("torchlens/backends/torch/wrappers.py", "_torchvision_ops_ensured"),
         ("torchlens/capture/arg_positions.py", "_schema_corrections_applied"),
+        # Armed distributed state: process-lifetime by design, it survives
+        # destroy_process_group so the lifecycle ledger outlives every group.
+        # It must not steer a capture with no initialized group: per-capture
+        # consumers read it through capture_armed_state(), which is None then
+        # (tests/test_distributed_teardown_dormancy.py pins it).
         ("torchlens/distributed/_lifecycle.py", "_STATE"),
     }
 )

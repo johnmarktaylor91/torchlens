@@ -156,6 +156,39 @@ def armed_state() -> _ArmedState | None:
     return _STATE
 
 
+def capture_armed_state() -> _ArmedState | None:
+    """Return the armed state when it should observe a capture starting now.
+
+    Arming is process-lifetime by design and survives ``destroy_process_group``:
+    the group-lifecycle ledger must outlive every group so a re-initialized
+    group gets a fresh lifetime ordinal, and a disarm-and-rearm after teardown
+    would read the emptied group registry as "no history" and claim the
+    ``armed_before_any_group`` epoch. But with no process group initialized no
+    collective can run, so the per-capture machinery (plane-P dispatch
+    observation, the funcol completion session) has nothing to observe; it
+    stays dormant and the capture takes the unarmed zero-interference path. An
+    armed process that tore its group down (or armed before creating one) must
+    capture exactly like an unarmed one. A probe failure reads as initialized
+    (fail closed to observing).
+
+    Returns
+    -------
+    _ArmedState | None
+        The live armed state when armed AND a process group is initialized,
+        else ``None``.
+    """
+
+    state = _STATE
+    if state is None:
+        return None
+    try:
+        if not torch.distributed.is_initialized():
+            return None
+    except Exception:
+        return state
+    return state
+
+
 def _refuse_if_broken(state: _ArmedState) -> None:
     """Refuse typed on a poisoned half-armed state (deep-hunt F9).
 

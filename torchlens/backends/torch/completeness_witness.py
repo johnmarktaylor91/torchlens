@@ -1968,6 +1968,7 @@ _split_consumed_state_items = _rebind_function(
 _sample_param_toctou_at_consumption = _rebind_function(
     _completeness_dispatch._sample_param_toctou_at_consumption, globals()
 )
+_has_no_host_bytes = _rebind_function(_completeness_dispatch._has_no_host_bytes, globals())
 _param_baseline_differs = _rebind_function(
     _completeness_dispatch._param_baseline_differs, globals()
 )

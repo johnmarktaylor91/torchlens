@@ -574,8 +574,9 @@ def active_funcol_session() -> _FuncolCaptureSession | None:
 def distributed_recording_session(trace: Any) -> Iterator[None]:
     """Install the plane-W completion authority around one armed capture.
 
-    A no-op context for unarmed captures (zero-interference: the plain dense
-    path is untouched). For armed captures it registers the capture-scoped
+    A no-op context for unarmed captures and for armed captures with no
+    initialized process group (zero-interference: the plain dense path is
+    untouched). For armed captures it registers the capture-scoped
     ``wait_tensor`` interposition, publishes the session for the funcol wraps,
     and settles every pending boundary on exit -- teardown and settlement run
     on the failure path too, so an aborted forward never leaks a dispatcher
@@ -592,10 +593,10 @@ def distributed_recording_session(trace: Any) -> Iterator[None]:
         The capture runs with the completion authority installed.
     """
 
-    from torchlens.distributed._lifecycle import armed_state
+    from torchlens.distributed._lifecycle import capture_armed_state
 
     global _ACTIVE_FUNCOL_SESSION
-    if armed_state() is None:
+    if capture_armed_state() is None:
         yield
         return
     session = _FuncolCaptureSession(trace)

@@ -396,13 +396,16 @@ def _plane_p_requested() -> bool:
 
     Merge-ranks C2: plane-P physical dispatch observation rides the shared
     TorchLens dispatch mode for ARMED captures only, so unarmed dense capture
-    keeps its exact pre-C2 dispatch-mode-free path (zero interference).
+    keeps its exact pre-C2 dispatch-mode-free path (zero interference). An
+    armed process with no initialized process group (armed before creating
+    one, or after ``destroy_process_group``) is dormant: no collective can run,
+    so the capture takes the same unarmed path.
     """
 
     try:
-        from torchlens.distributed._lifecycle import armed_state
+        from torchlens.distributed._lifecycle import capture_armed_state
 
-        return armed_state() is not None
+        return capture_armed_state() is not None
     except Exception:
         return False
 
