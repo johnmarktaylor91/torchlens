@@ -797,3 +797,251 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: e7f22529bd7bec6027947d15a3d6e1f0a1d33f50 (dirty)
 recorded: 2026-08-29T17:12:16.852176+00:00
+---
+generator: tests/capture_oracle (plain_cnn__halt_trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:37:55.906513+00:00
+---
+generator: tests/capture_oracle (recurrent__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:38:01.525128+00:00
+---
+generator: tests/capture_oracle (plain_cnn__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:38:07.086820+00:00
+---
+generator: tests/capture_oracle (recurrent__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:38:12.645099+00:00
+---
+generator: tests/capture_oracle (plain_cnn__intervene_trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:38:18.296706+00:00
+---
+generator: tests/capture_oracle (failing_conditional__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:38:23.305866+00:00
+---
+generator: tests/capture_oracle (failing_conditional__trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:38:28.536850+00:00
+---
+generator: tests/capture_oracle (recurrent__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:38:33.513730+00:00
+---
+generator: tests/capture_oracle (train_batchnorm__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:38:39.259860+00:00
+---
+generator: tests/capture_oracle (mutating_pre_hook__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:38:45.041258+00:00
+---
+generator: tests/capture_oracle (plain_cnn__backward_trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:38:50.750627+00:00
+---
+generator: tests/capture_oracle (plain_cnn__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:38:56.411184+00:00
+---
+generator: tests/capture_oracle (plain_cnn__mixed_selector)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:39:01.984263+00:00
+---
+generator: tests/capture_oracle (plain_cnn__intervene_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:39:07.062371+00:00
+---
+generator: tests/capture_oracle (mutating_pre_hook__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:39:12.790043+00:00
+---
+generator: tests/capture_oracle (plain_cnn__backward_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:39:17.856868+00:00
+---
+generator: tests/capture_oracle (plain_cnn__lookback)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:39:23.512940+00:00
+---
+generator: tests/capture_oracle (in_place__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:39:28.926066+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_predicate)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:39:35.099098+00:00
+---
+generator: tests/capture_oracle (train_batchnorm__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:39:40.820136+00:00
+---
+generator: tests/capture_oracle (conditional__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:39:46.503551+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:39:52.431599+00:00
+---
+generator: tests/capture_oracle (conditional__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:39:57.942033+00:00
+---
+generator: tests/capture_oracle (plain_cnn__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:40:02.872870+00:00
+---
+generator: tests/capture_oracle (train_batchnorm__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:40:08.484499+00:00
+---
+generator: tests/capture_oracle (in_place__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:40:14.178373+00:00
+---
+generator: tests/capture_oracle (tiny_transformer__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:40:19.588721+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:40:24.575735+00:00
+---
+generator: tests/capture_oracle (tiny_transformer__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:40:31.325590+00:00
+---
+generator: tests/capture_oracle (plain_cnn__halt_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:40:36.070558+00:00
+---
+generator: tests/capture_oracle (plain_cnn__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: capture-oracle CPU-kernel pin (ATEN avx2, MKL_CBWR COMPATIBLE, oneDNN off in the worker): goldens recorded on AVX-512 Xeons failed the Nightly on GitHub Xeon 6973P-C runners with identical inputs and capture code; tip 98bb6d6a2 reproduced all 31 old goldens byte-exact on the recording hosts before this rebaseline, so only kernel float bytes change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 36da1a80bb446d8d980884eb0d4c84ef8f6e2562 (dirty)
+recorded: 2026-10-03T04:40:41.423061+00:00

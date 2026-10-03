@@ -459,14 +459,14 @@
           "tensor": {
             "dtype": "float32",
             "sha256_chunks": [
-              "aa516d91",
-              "fc9069ca",
-              "6483162d",
-              "68babf8f",
-              "616b627d",
-              "8a1da11b",
-              "0a7b53c8",
-              "520c8cc6"
+              "9639e0ed",
+              "88dc68df",
+              "91f927a9",
+              "c22b3f08",
+              "4b04aeb4",
+              "42bece83",
+              "6b0e7434",
+              "5a305167"
             ],
             "shape": [
               1,
@@ -482,14 +482,14 @@
           "tensor": {
             "dtype": "float32",
             "sha256_chunks": [
-              "8cc25ce6",
-              "664b80e8",
-              "85b998e5",
-              "3a58d7ec",
-              "54e253ae",
-              "852487d3",
-              "b95ea486",
-              "961ef686"
+              "e6f9ac31",
+              "f283d96e",
+              "868c9a9c",
+              "c94c36bb",
+              "ee9c0cf2",
+              "7da2267a",
+              "e29e97e3",
+              "cd1cd4b9"
             ],
             "shape": [
               1,
@@ -505,14 +505,14 @@
           "tensor": {
             "dtype": "float32",
             "sha256_chunks": [
-              "8cc25ce6",
-              "664b80e8",
-              "85b998e5",
-              "3a58d7ec",
-              "54e253ae",
-              "852487d3",
-              "b95ea486",
-              "961ef686"
+              "e6f9ac31",
+              "f283d96e",
+              "868c9a9c",
+              "c94c36bb",
+              "ee9c0cf2",
+              "7da2267a",
+              "e29e97e3",
+              "cd1cd4b9"
             ],
             "shape": [
               1,
@@ -595,20 +595,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 472356,
+      "python_peak_memory_median_bytes": 487814,
       "sample_count": 3,
-      "torch_version": "2.13.0+cu130",
-      "wall_time_median_ms": 108.9219069108367
+      "torch_version": "2.13.0+cpu",
+      "wall_time_median_ms": 58.27042204327881
     }
   },
   "sha256_chunks": [
-    "84d18987",
-    "4a7836d6",
-    "4fc11663",
-    "16902f57",
-    "30245180",
-    "a9fa07e4",
-    "e8f5481c",
-    "bb8e100a"
+    "6c3d2620",
+    "0e44f161",
+    "fcd84512",
+    "31ade1e4",
+    "f682baf2",
+    "38031b08",
+    "463a686c",
+    "616c6730"
   ]
 }
