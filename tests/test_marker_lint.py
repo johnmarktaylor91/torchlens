@@ -1239,6 +1239,8 @@ def test_usage_stats_gate_arms_on_documented_backstop_spellings() -> None:
         "not slow and not rare",
         "not rare and not slow",
         "not rare and not slow and not heavy",
+        "not slow and not rare and not serial",
+        "not slow and not rare and not serial and not heavy",
         "(not rare) and (not slow)",
     ):
         assert _is_full_usage_stats_run(config(spelling)), spelling

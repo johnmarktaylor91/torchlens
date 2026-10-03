@@ -803,7 +803,9 @@ def _is_full_usage_stats_run(config: pytest.Config) -> bool:
     clauses = frozenset(
         clause.strip() for clause in mark_expression.split(" and ") if clause.strip()
     )
-    if not clauses <= {"not rare", "not slow", "not heavy"}:
+    # ``not serial`` too: CI runs the serial tests in a separate non-xdist step,
+    # and excluding them from the xdist session must not disarm the gate.
+    if not clauses <= {"not rare", "not slow", "not heavy", "not serial"}:
         return False
     requested_paths = [Path(str(arg).split("::", maxsplit=1)[0]).resolve() for arg in config.args]
     return requested_paths == [Path(TESTS_DIR).resolve()]
